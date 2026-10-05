@@ -39,8 +39,8 @@
 //! cargo run -p oag-render --example hd_ship_class_census -- data/images/hdfury-ps3-eu-dec.iso /data/ships/feisar_c1/ship.vex
 //! ```
 
+use oag_mesh::mesh;
 use oag_rcs::{rcsmaterial, rcsmodel};
-use oag_render::mesh;
 
 // Copied from `oag_hd::archives::ALL` - `oag-render` does not depend on
 // `oag-hd` and an example may not add one (see `hd_mode2_alpha.rs`'s own

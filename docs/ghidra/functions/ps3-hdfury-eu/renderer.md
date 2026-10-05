@@ -711,7 +711,7 @@ breakpoint on `RenderManager_FlushDrawQueue` (`0x002d6300`) hit mid-race and
   **What this does not establish**: whether anything else in the queue draws a
   HUD element - the second live-observed object family (`0x00867e58`) is
   still unidentified, and the 2026-08-26 trace inspected 16 of that
-  frame's 118 entries, so the `oag_render::mesh::rcs`/`LAYER_DEFAULT`
+  frame's 118 entries, so the `oag_mesh::mesh::rcs`/`LAYER_DEFAULT`
   question this lead was chasing narrows, it doesn't close.
 - A `Z2` (write watchpoint) armed on `instance+0x630` to try to catch the
   enqueue site's own PC got back an **empty reply**, not `OK` - RPCS3's GDB
@@ -1770,7 +1770,7 @@ Sweeping the literal `li r6, N` at all 39 call sites of `FUN_005a6ce0`:
 **So the gate is an LDR bright pass.** Its `dot` weights are
 `(0.3, 0.59, 0.11) * 3`, which puts the knee at luma ~1/3 of the surface's own
 range; a white texel gives `3^4 * 0.03 = 2.43`. The `* 3` on the weights is
-what places the knee there. `oag_render::post::hd_bloom` draws into a float
+what places the knee there. `oag_post::hd_bloom` draws into a float
 target for precision and applies the hardware's clamp where the chain samples
 the scene; before that clamp its gate was being handed arguments around
 `1.6e5`, which is the whole of why an HD race rendered as a wall of glow.
@@ -1904,7 +1904,7 @@ float` (inert at the authored default 0), and the resolve ending on its
 `finalBias` parameters whose fill is a render-context field this reading
 did not chase.
 
-All of the above is implemented verbatim in `oag_render::post::hd_bloom`;
+All of the above is implemented verbatim in `oag_post::hd_bloom`;
 its module header lists the four things that are deliberately *not* modelled
 (GPU-side adaptation in place of the readback, the event flash, the feedback
 mix and tint, and the final display encode).
@@ -2190,7 +2190,7 @@ every tick measured - see the defect below for why.
 
 **The defect: the player's bloom switch never reached this chain.**
 `race::Scene` gated the bloom on `bloom_enabled && hd.is_none()`, so
-`[graphics] bloom` reached only the PSP chain (`oag_render::post::bloom`) and
+`[graphics] bloom` reached only the PSP chain (`oag_post::bloom`) and
 Wipeout HD - the only title *this* chain draws for - bloomed regardless.
 
 | title | `bloom = true` -> `false` |
@@ -2314,10 +2314,10 @@ per-material `.envsettings` value read short, a texture decoded a shade too
 dark, or one of the still-unread terms this page's own "Left unread" line
 already names: `shadowMapTex`'s `1 - shadow` factor, `prelitBias`, and the
 RGBE `k`/`b` at `c464` for materials other than `track_surface`). Settling
-which needs `mesh.wgsl`/`crates/render/src/mesh/` and
+which needs `mesh.wgsl`/`crates/mesh/src/mesh/` and
 `crates/rcs/` - `lane-ship-hull`'s files this session, not this one's.
 `sky_cube.rs`'s smaller, separate under-clip gap is the same territory
-(`crates/render/src/mesh/sky_cube.rs`).
+(`crates/mesh/src/mesh/sky_cube.rs`).
 
 **Fixed here**: the `fs_blur` tap-offset defect two sections above, now that
 a measurement exists to check it against (see that section's own updated
@@ -2430,7 +2430,7 @@ should carry.** `render()` wrote only `[graphics] bloom` into its scratch
 enough to look like a rounding error", the enum's own comment says of the
 same number - but it is not zero: `oag_display::display::viewport` fits a
 1270.6-wide rectangle centred in the 1280-wide canvas and hands the *fitted
-size* to `oag_render::post::hd_bloom::Chain::run` without its *offset*
+size* to `oag_post::hd_bloom::Chain::run` without its *offset*
 (`crates/game/src/race/scene/frame.rs`'s `hd.run(..., (viewport.2 as u32,
 viewport.3 as u32), ...)`, dropping `viewport.0`/`.1`). The chain's own final
 encode pass then writes `set_viewport(0.0, 0.0, rect.0, rect.1, ...)` -
@@ -2448,11 +2448,11 @@ at pose `00`, reproduced on all three) makes the letterbox offset zero and
 the defect inert, matching what a corrected `frame.rs` caller would draw at
 this exact canvas size. **Filed, not fixed, at the engine level**: the
 general case needs `Chain::run`'s signature to carry an offset alongside
-`(width, height)`, plus the same check against `oag_render::post::bloom`'s
+`(width, height)`, plus the same check against `oag_post::bloom`'s
 matching call in the same function (same drop-offset shape, not observed to
 manifest as a literal-black strip in the one Pulse capture checked, not
 independently verified clean either) - `lane-ship-hull`'s files
-(`crates/render/src/post/`, `crates/game/src/race/scene/frame.rs`), not a
+(`crates/post/src/`, `crates/game/src/race/scene/frame.rs`), not a
 comparison script's.
 
 **Net effect on the darkness reading: negligible, as the strip's size
@@ -2481,7 +2481,7 @@ column is `zero_pct` in the per-region table above it.
 Picking up the previous section's two "filed, not fixed" items.
 
 **The letterbox-offset drop is fixed, generally, at both call sites.**
-`oag_render::post::hd_bloom::Chain::run` and `oag_render::post::bloom::Bloom::render`
+`oag_post::hd_bloom::Chain::run` and `oag_post::bloom::Bloom::render`
 now take the scene's own drawn `origin: (f32, f32)` alongside its size, and
 each chain's own final write-back pass (`hd_bloom`'s "hd encode", `bloom`'s
 "composite" - the only stage in either chain that writes into the caller's
@@ -2504,7 +2504,7 @@ own comparison surface, so no pose-00 tone number in this file moves.
 **The per-material probe (`scripts/hd-material-probe.py`,
 `crates/render/examples/hd_material_probe_dump.rs`) ran, and it does not
 locate a single fixable term.** Method: `OAG_TINT_MATERIALS=1
-OAG_OPAQUE_ONLY=1` (`crates/render/src/mesh/rcs/isolate.rs`) renders pose
+OAG_OPAQUE_ONLY=1` (`crates/mesh/src/mesh/rcs/isolate.rs`) renders pose
 `00` with every opaque material replaced by a flat, unlit colour keyed to
 its slot ordinal, segmenting the frame by material without touching the lit
 render at all; `hd_material_probe_dump` is the join key from slot to
@@ -2664,7 +2664,7 @@ game: `RUST_LOG=info oag-game --race --track
 and the parallel run on Talon's Junction and Amphiseum logs the full
 `exposure 4 - min(adapted x20, 3)` line instead. `scene.rs`'s own
 `hd_bloom.map(...).transpose()` then never constructs
-`oag_render::post::hd_bloom::Chain` at all for Sol 2 - not a bloom that runs
+`oag_post::hd_bloom::Chain` at all for Sol 2 - not a bloom that runs
 unbloomed, but **no gate, no blur, no exposure resolve and no HDR encode
 pass of any kind**; the frame renders straight into the caller's own
 (non-linear) target. **This is the whole `hds-frame-was-too-bright-and-too-bloomy.md`
@@ -4539,7 +4539,7 @@ Three of the seven draws target them, `0x3b5350` is inside the loop that begins
 at `0x3b5318`, and the pair ping-pongs (`+0xdc` and `+0xe0` swap roles between
 `0x3b5318` and `0x3b58a4`, alongside a matching swap of `+0xec`/`+0xf0`). That
 is exactly the "halved iteratively to a handful of pixels, then read back"
-adaptation this page already documents, and which `oag_render::post::hd_bloom`
+adaptation this page already documents, and which `oag_post::hd_bloom`
 deliberately replaces with a GPU 1x1 ping-pong. **So the pass gap is a
 substitution this project already declares, not missing work** - and a coarser
 blur level would have had the wrong sign for the defect that prompted the read:
@@ -4615,7 +4615,7 @@ That is what the vertex-colour census in [`HANDOVER.md`](../../../../HANDOVER.md
 found without being able to name: of Talon's Junction's 983 chunks, 327 declare
 `lightmapUV` and no colour set and 351 the reverse, **0 both**. A chunk carries
 its baked light in the atlas or in its vertices, the shader adds whichever it
-has to `f[TC1]`, and `crates/render/src/mesh/rcs.rs` writes `[1, 1, 1, 1]` for
+has to `f[TC1]`, and `crates/mesh/src/mesh/rcs.rs` writes `[1, 1, 1, 1]` for
 every HD vertex - which is why wiring that attribute in as a *multiplied* tint
 blacked out the banner quads and the ship hulls when it was tried.
 
@@ -5594,7 +5594,7 @@ decode the colour set's alpha as the mask and restore the sun behind it.
 
 **Wired 2026-08-20, same day.** `oag_rcs::rcsmodel::Mesh::vertex_light`
 now reads all four bytes (`[r, g, b, mask]`), a new
-`oag_render::mesh::GpuVertex::sun_mask` field carries it into the shader
+`oag_mesh::mesh::GpuVertex::sun_mask` field carries it into the shader
 (not `colour.a`, which is already the PSP/PS2 boost plume's baked falloff and
 this project's own bloom glow mask - a third meaning would have collided with
 both), and `mesh.wgsl`'s `lit_texel` restores `sun * ndl * mask` in the
@@ -5984,7 +5984,7 @@ text segment. It cannot speak for the four overlay spaces Ghidra reports on this
 program, nor for an SPU module DMA-ing into PPU memory - neither was checked,
 and both are implausible for a tint but neither is excluded.
 
-A consequence worth recording for the reimplementation: `oag_render::post::hd_bloom`'s
+A consequence worth recording for the reimplementation: `oag_post::hd_bloom`'s
 module header lists the feedback mix and tint among the things it deliberately
 does not model. For the tint half that is now **provably correct** rather than a
 deferral.
@@ -7025,13 +7025,13 @@ The two sections above were written in parallel by two members who could not see
 
 ### Implementation note: the engine light is wired, the capture is Talon's Junction, and the count is 37 (2026-09-20, implementation lane)
 
-Three corrections from wiring `EngineFlare_SubmitSpuLight` into `mesh.wgsl` (`oag_game::race::engine_light`, `oag_render::mesh_render::spu_light`), none of which changes the reading above:
+Three corrections from wiring `EngineFlare_SubmitSpuLight` into `mesh.wgsl` (`oag_game::race::engine_light`, `oag_mesh::mesh_render::spu_light`), none of which changes the reading above:
 
 1. **`EngineLightData.xml` ships 37 times, not 36.** `scripts/psarc.py list` over all seven archives: 9 directories in `DATA02` (eight teams and `zone`), 4 in `DATA03`, and all **24** `_c1`/`_n1` variants in `DATA06` - the load-site entry's "22 variants" undercounted by two. `detonator`, `zone battle` and `test` ship none. `crates/tables/tests/enginelight_ground_truth.rs` asserts the count and the spans (`Distance` `-0.4`..`1.5`, `Radius` `0.7`..`2.0`, both as read above). Four float spellings occur (`0.4f`, `1f`, `0.3`, `-0.4f`); the reader strips one trailing `f`.
 2. **The companion capture (`data/traces/hd-spu-light-companion/`) is Talon's Junction, not Amphiseum.** Every one of its 40 records was scored against the collision soup of each of the sixteen circuits (`crates/game/examples/hd_engine_light_which_circuit.rs`): Talon's Junction places all 40 between 2.98 and 4.41 units (mean 4.03) from the nearest triangle - a ride height, `5.5 * 0.75 = 4.1` - while Amphiseum places 3 of 40 within 5 units and the rest 10-147 away. The `+0x2084` and `EdgeGeom` entries above that say "Amphiseum" describe the same capture; nothing in them depends on which circuit it was. `rpcs3-capture.md`'s own note that the Racebox nav plan "landed on Talon's Junction this session, not Amphiseum" is the likely cause.
 3. **The light never reaches the floor at ride height, in the original or here.** With `D` at `0.62`-`2.05` and every record a ride height off the surface, the term is zero on the track under a craft in level flight - and bound to the track chunks alone it changed zero pixels of a 1280x720 Amphiseum frame. This project's records on Talon's Junction sit 2.85-4.53 units (mean 4.09) off the surface over a 1,200-tick race, so the placement matches the original's to within the ride-height spread. The surfaces within `D` are the craft's own engine housing (`Distance` runs to `-0.4`, inside the nozzle) and whatever the craft is within a unit or two of - walls on a scrape, the floor on a landing. 74 of the ship materials compile `SVC1` twins (`scripts/ps3-sho.py svc-twins <image> materials/ships`: 1,776 pairs, 888 vertex blocks all carrying the `(255, 128)` decode and `0x868f8229`), so the list is bound to the hulls as well as the track. **Chosen, not measured: the hull binding.** The supporting evidence is static only - the material census and the geometry - with no live read of a hull chunk's `SVC1` bit, so it carries no score; the track binding and the record's arithmetic carry the sections above's own 80-88. Boosted, the `1 + 10 * blend` gain puts a 440-unit light a hand's breadth from the housing and the whole rear of the hull washes warm (`data/scratch/hd-engine-light/talons-t487.png` against `talons-t470.png` at rest); whether the original's hull does the same is the live check that would settle the binding either way.
 
-Not wired: the `t`/`+0x2b4` blue-to-orange transition branch (arming unread) and the other 23 producers. Code: `crates/tables/src/enginelight.rs`, `crates/game/src/livery/engine_light.rs`, `crates/game/src/race/engine_light.rs`, `crates/game/src/race/load/engine_light.rs`, `crates/render/src/mesh_render/spu_light.rs`, `crates/render/src/mesh.wgsl` (`spu_light_sum`).
+Not wired: the `t`/`+0x2b4` blue-to-orange transition branch (arming unread) and the other 23 producers. Code: `crates/tables/src/enginelight.rs`, `crates/game/src/livery/engine_light.rs`, `crates/game/src/race/engine_light.rs`, `crates/game/src/race/load/engine_light.rs`, `crates/mesh/src/mesh_render/spu_light.rs`, `crates/mesh/src/mesh.wgsl` (`spu_light_sum`).
 
 ### `Ship_DrawModels` carries the same per-object `0x800`/`SVC1` gate the track's Zone-Stage compilers do - narrows, but does not close, whether the original's hull is ever a real receiver (2026-09-25, confidence 80 for the gate's existence, unscored for whether it ever fires)
 

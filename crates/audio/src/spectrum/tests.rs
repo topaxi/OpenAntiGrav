@@ -103,7 +103,7 @@ fn spectrum_starts_silent_and_reflects_the_latest_publish() {
 /// This is the recovered shape and it replaces the opposite assertion. The
 /// decay this file used to test for was an invention in the wrong layer; the
 /// original decays in the *visualiser*, per frame, and that is ported as
-/// `oag_render::mesh_render::zone::Hold`.
+/// `oag_mesh::mesh_render::zone::Hold`.
 #[test]
 fn a_silent_chunk_reads_zero_because_the_hold_lives_in_the_visualiser() {
     let sample_rate = 44_100;

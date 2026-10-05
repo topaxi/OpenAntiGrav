@@ -17,7 +17,7 @@
 //! notice - a missing flap draws perfectly well.
 
 use oag_core::math::Vec3;
-use oag_render::mesh::{Model, rcs::psp2};
+use oag_mesh::mesh::{Model, rcs::psp2};
 
 fn build(blob: &[u8]) -> Model {
     psp2::build("hull", blob, None, &mut |_| None)

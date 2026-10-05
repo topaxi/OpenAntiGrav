@@ -12,7 +12,7 @@
 //!     -E 'binary(lod_switch_ground_truth)'
 //! ```
 //!
-//! `oag_render::mesh::LodGroups` reads each group's position and switch
+//! `oag_mesh::mesh::LodGroups` reads each group's position and switch
 //! distances from the payload offsets `LodGroup_SelectChild` (`0x0890be68`)
 //! reads on the PSP binary - see `docs/formats/vex.md`, "the switch is found".
 //! This pins what those offsets give on every title whose geometry goes
@@ -21,7 +21,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 use oag_vex::vex;
 
 fn image(name: &str) -> Option<PathBuf> {

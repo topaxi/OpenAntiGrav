@@ -178,7 +178,7 @@ fn the_surfaces_past_the_first_carry_forty_percent_more_geometry() {
 ///
 /// The field `rcsmodel` carried for months as "takes the values `01` and `02`
 /// for a reason nothing here has distinguished", and which
-/// `oag_render::mesh::rcs::is_world_baked` used to guess with an invented
+/// `oag_mesh::mesh::rcs::is_world_baked` used to guess with an invented
 /// one-unit tolerance. Three independent things are asserted here, because no
 /// one of them would settle it alone:
 ///

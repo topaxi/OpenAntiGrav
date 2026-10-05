@@ -93,7 +93,7 @@ pub struct Scene {
     ///
     /// Separate drawables over a cloned mesh rather than instancing: a
     /// `Drawable` owns its uniform buffer, and eight craft need eight matrices a
-    /// frame. See `oag_render::mesh::Model`'s note on the trade.
+    /// frame. See `oag_mesh::mesh::Model`'s note on the trade.
     ships: Vec<Drawable>,
     /// One boost plume per craft: ordinary `Drawable`s with their blend pipeline
     /// overridden to [`exhaust::BLEND`] instead of
@@ -278,11 +278,11 @@ pub struct Scene {
     ///
     /// **Not exhaust-specific**, even though the exhaust is currently its only
     /// writer: it blooms the glow mask, and any surface that opts into the mask
-    /// is handled by the same three passes. See `oag_render::post::bloom`.
-    bloom: Option<oag_render::post::bloom::Bloom>,
+    /// is handled by the same three passes. See `oag_post::bloom`.
+    bloom: Option<oag_post::bloom::Bloom>,
     /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's
-    /// glow mask. See `oag_render::post::ps2_bloom`.
-    ps2_bloom: Option<oag_render::post::ps2_bloom::Ps2Bloom>,
+    /// glow mask. See `oag_post::ps2_bloom`.
+    ps2_bloom: Option<oag_post::ps2_bloom::Ps2Bloom>,
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
@@ -290,12 +290,12 @@ pub struct Scene {
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
     /// scene draws straight into the caller's target as it always has. See
-    /// `oag_render::post::hd_bloom` and [`Scene::render`].
-    hd: Option<oag_render::post::hd_bloom::Chain>,
+    /// `oag_post::hd_bloom` and [`Scene::render`].
+    hd: Option<oag_post::hd_bloom::Chain>,
     /// Omega's tone map: the same linear float scene target, then the
     /// executable's adaptive exposure and cubic curve, and the encode. `None`
-    /// for every other title. See `oag_render::post::omega_tonemap`.
-    omega: Option<oag_render::post::omega_tonemap::Chain>,
+    /// for every other title. See `oag_post::omega_tonemap`.
+    omega: Option<oag_post::omega_tonemap::Chain>,
     /// Per-object motion blur, run last over the finished frame - an
     /// enhancement of this project's, not a reading of the original. Built
     /// with the scene whatever `[graphics] motion_blur` says, because that
@@ -308,15 +308,15 @@ pub struct Scene {
     /// It reads [`Self::velocity`] and the depth attachment; under MSAA both
     /// are multisampled and the pass's prepare stage reads sample 0, so
     /// unlike the camera-reprojection tier this replaced there is no MSAA
-    /// gate. See `oag_render::post::motion_blur` and ADR-0030.
-    motion_blur: Option<std::cell::RefCell<oag_render::post::motion_blur::MotionBlur>>,
+    /// gate. See `oag_post::motion_blur` and ADR-0030.
+    motion_blur: Option<std::cell::RefCell<oag_post::motion_blur::MotionBlur>>,
     /// Whether that blur gathers at half resolution - the profile's
     /// `motion_blur_resolution`, handed in before each frame by
     /// [`Scene::set_blur_resolution`].
     blur_half: std::cell::Cell<bool>,
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
-    /// `oag_render::mesh_render::VELOCITY_FORMAT`, at the scene's own sample
+    /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
     /// count. **Always written in the game path**, whatever the blur setting
     /// says, per the design: the buffer is an FSR 3.1/TAA prerequisite as
     /// much as a blur input, and gating it on a setting would make it a
@@ -367,7 +367,7 @@ pub struct Scene {
     /// and the three textures behind these move only in [`Self::new`] and
     /// [`Self::resize`], so a per-frame rebuild was three allocations and three
     /// driver calls producing the same three handles every time. They are also
-    /// what lets `oag_render::post::motion_blur` cache its own bind groups:
+    /// what lets `oag_post::motion_blur` cache its own bind groups:
     /// a group is only reusable while the views inside it are, and views made
     /// fresh each frame are never the same views twice.
     attachment_views: Attachments,
@@ -438,8 +438,8 @@ impl Scene {
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
         authored_fog: Option<mesh_render::Fog>,
-        hd_bloom: Option<oag_render::post::hd_bloom::Params>,
-        omega_tonemap: Option<oag_render::post::omega_tonemap::Params>,
+        hd_bloom: Option<oag_post::hd_bloom::Params>,
+        omega_tonemap: Option<oag_post::omega_tonemap::Params>,
         zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
@@ -832,7 +832,7 @@ impl Scene {
         // runs only over a mask stamped as Pulse PSP's is measured to be -
         // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
         let bloom = match (hd.is_none() && omega.is_none() && measured_mask && !ps2_mask)
-            .then(|| oag_render::post::bloom::Bloom::new(device, format))
+            .then(|| oag_post::bloom::Bloom::new(device, format))
             .transpose()
         {
             Ok(bloom) => bloom,
@@ -842,7 +842,7 @@ impl Scene {
             }
         };
         let ps2_bloom = match (hd.is_none() && omega.is_none() && ps2_mask)
-            .then(|| oag_render::post::ps2_bloom::Ps2Bloom::new(device, format))
+            .then(|| oag_post::ps2_bloom::Ps2Bloom::new(device, format))
             .transpose()
         {
             Ok(bloom) => bloom,
@@ -858,14 +858,13 @@ impl Scene {
         // composite. A failure is reported and dropped the way the bloom's
         // is: a race without motion blur is a sharper race, not a broken one.
         // See `Self::motion_blur` for why this is not gated on the setting.
-        let motion_blur =
-            match oag_render::post::motion_blur::MotionBlur::new(device, caller_format) {
-                Ok(pass) => Some(std::cell::RefCell::new(pass)),
-                Err(e) => {
-                    warn!("motion blur unavailable ({e}) - the frame draws without it");
-                    None
-                }
-            };
+        let motion_blur = match oag_post::motion_blur::MotionBlur::new(device, caller_format) {
+            Ok(pass) => Some(std::cell::RefCell::new(pass)),
+            Err(e) => {
+                warn!("motion blur unavailable ({e}) - the frame draws without it");
+                None
+            }
+        };
 
         let depth = depth_texture(device, size, sample_count);
         let velocity = motion::velocity_texture(device, size, sample_count);

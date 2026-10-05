@@ -2,7 +2,7 @@
 
 **What this is.** AMD FidelityFX Super Resolution 3.1's *upscaler* - the
 temporal one - transliterated into WGSL compute shaders under
-`crates/render/src/post/fsr3/`. Frame generation is deliberately not part of it
+`crates/post/src/fsr3/`. Frame generation is deliberately not part of it
 and never will be; [modern-features.md](../overview/modern-features.md) says why.
 
 **Why a port and not the SDK.**
@@ -14,7 +14,7 @@ native Linux build.
 
 **Status: all eight passes are ported, the chain produces a frame, and the
 RECONSTRUCTION row selects it.** `upscale::Framebuffer::resolve_scene` reads
-`oag_render::post::fsr3::Fsr3::output` on a race frame whose adapter has compute
+`oag_post::fsr3::Fsr3::output` on a race frame whose adapter has compute
 shaders, and falls one rung to FSR 1 otherwise. It is off by default. What has
 not happened is anybody looking at a *moving* frame it produced;
 `HANDOVER.md`'s open-threads index points at the thread carrying that and the
@@ -52,11 +52,11 @@ reason, and each is documented where it landed:
 
 **The jitter turned out to already be upstream's own function.**
 `ffxFsr3UpscalerGetJitterOffset` is `halton(index % phaseCount + 1, 2) - 0.5`
-on x and base 3 on y - which is `oag_render::jitter::offset_pixels` line for
+on x and base 3 on y - which is `oag_post::jitter::offset_pixels` line for
 line, written before anybody had read the SDK. Only the phase *count* was ours;
 `jitter::PHASES` documented itself as a plain sixteen standing in for a
 ratio-derived count, and the port replaced it with
-[`jitter::phases`](../../crates/render/src/jitter.rs), which is upstream's
+[`jitter::phases`](../../crates/post/src/jitter.rs), which is upstream's
 `8 * (display_width / render_width)^2`.
 
 ## The passes
@@ -64,7 +64,7 @@ ratio-derived count, and the port replaced it with
 Upstream's dispatch order, which is also the order they must be ported in: a
 pass reads what the ones before it wrote.
 
-`Pass::ALL` in [`oag_render::post::fsr3`](../../crates/render/src/post/fsr3.rs)
+`Pass::ALL` in [`oag_post::fsr3`](../../crates/post/src/fsr3.rs)
 is the same list and `the_pass_list_is_upstream_s_dispatch_order` asserts the
 order, so this table and the code cannot drift apart silently.
 
@@ -165,7 +165,7 @@ tests could not see it, and there is now one that can.
 
 `ffx_fsr3upscaler_rcas.h` is a thin wrapper around `FsrRcasF` from
 `fsr1/ffx_fsr1.h` - the same routine
-[`oag_render::post::fsr1`](../../crates/render/src/post/fsr1.rs) already ports.
+[`oag_post::fsr1`](../../crates/post/src/fsr1.rs) already ports.
 It is ported a second time rather than shared, because the two sit in different
 scaffolding entirely (a fragment pass over a full-screen triangle against a
 compute dispatch over a storage texture) and folding them together would mean
@@ -310,7 +310,7 @@ is the one both readers want, per
 [ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md):
 a person deciding whether the widened formats or the missing FP16 path is
 worth attacking, and a dynamic-resolution controller that has to know which
-half of the cost it can lower. `oag_render::timing::PassTimer` already existed
+half of the cost it can lower. `oag_gpu::timing::PassTimer` already existed
 for the scene pass ([dynamic resolution](dynamic-resolution.md)); FSR 3.1 gets
 two rings of its own rather than a share of that one, because a slot spent
 here is a frame the resolution controller does not get a scene reading for.
@@ -494,7 +494,7 @@ boot**. With no features requested, the ladder has one real rung to check:
 3. **The blit's own bilinear tap**, if FSR 1's shaders will not compile either.
 
 The decision is a pure function of the adapter's reported capabilities -
-`oag_render::post::fsr3::supported` - and a player who selected `fsr3` on a
+`oag_post::fsr3::supported` - and a player who selected `fsr3` on a
 machine that cannot run it gets FSR 1 and a log line, with the setting still
 saying `fsr3` so that the same settings file does the right thing on a machine
 that can.
@@ -510,7 +510,7 @@ the missing-`TIMESTAMP_QUERY` case in
 **FSR 3.1 accumulates linear light upstream, and cannot here.** The reasoning
 for upstream's choice is sound - averaging several frames of one surface in an
 encoded space weights a dark sample as brighter than it is, and the
-reconstruction is doing arithmetic on light. [`post`](../../crates/render/src/post/mod.rs)'s
+reconstruction is doing arithmetic on light. [`post`](../../crates/post/src/lib.rs)'s
 own table anticipated it and listed FSR 3.1 as wanting "a fourth thing", linear
 light with its own tonemapping either side of accumulation.
 

@@ -12,7 +12,7 @@ open question about what should move it.
 ## Context
 
 Dynamic resolution is a closed loop. The measurement is
-`oag_render::timing::PassTimer`, which times the `race` pass on the GPU every
+`oag_gpu::timing::PassTimer`, which times the `race` pass on the GPU every
 frame and hands back a reading that names the frame it was taken on. What the
 loop needs beside that is a **budget**: the number the measurement is divided
 by to say whether this frame had room.

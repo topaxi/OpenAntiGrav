@@ -234,7 +234,7 @@ impl Analyzer {
     /// original's sound system publishes an *instantaneous* normalised level
     /// (see [`Range`]) and the ballistics live one layer out, in the
     /// visualiser's own per-frame peak-hold -
-    /// `oag_render::mesh_render::zone::Hold`, itself recovered. Holding here
+    /// `oag_mesh::mesh_render::zone::Hold`, itself recovered. Holding here
     /// too would smear the attack the hold is supposed to catch.
     pub(crate) fn process(&mut self, stereo: &[f32], sample_rate: u32) -> [f32; BANDS] {
         #[expect(

@@ -434,7 +434,7 @@ def render(game, camera, track, out_path, bloom, cfg_root):
     by this script's own `zero_pct` column reading a 100%-black, full-height,
     10-column strip at the frame's right edge on every pose, present with
     `--bloom` on or off, absent on a non-HD (Pulse) capture at the same size -
-    `oag_render::post::hd_bloom::Chain::run`'s caller
+    `oag_post::hd_bloom::Chain::run`'s caller
     (`crates/game/src/race/scene/frame.rs`) passes the *fitted* width/height
     to the chain but not the *offset* `oag_display::display::viewport`
     computes alongside it, so the encode pass's own `set_viewport(0.0, 0.0,

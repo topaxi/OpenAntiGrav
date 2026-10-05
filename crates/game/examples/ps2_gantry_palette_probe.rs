@@ -14,7 +14,7 @@
 //! OAG_IMAGE=data/images/pulse-ps2-eu.chd cargo run -p oag-game --example ps2_gantry_palette_probe
 //! ```
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 const GANTRY: &str = r"Data\Environments\321_Go\321Go_StartFinish.vex";

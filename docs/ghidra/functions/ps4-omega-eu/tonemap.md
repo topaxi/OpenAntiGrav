@@ -148,7 +148,7 @@ its four siblings was not traced).
 
 ## Wired
 
-`oag_render::post::omega_tonemap` (2026-10-05) runs this law on an Omega race, with
+`oag_post::omega_tonemap` (2026-10-05) runs this law on an Omega race, with
 the choices listed in its module docs and in
 [`omega-status.md`](../../../formats/omega-status.md). Its test
 `the_law_reproduces_the_original_coefficient_shader` holds the Rust law to the

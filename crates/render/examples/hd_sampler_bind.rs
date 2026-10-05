@@ -7,8 +7,8 @@
 //! is what the renderer would bind.
 
 use oag_assets::Container;
+use oag_mesh::mesh;
 use oag_rcs::{rcsmaterial, rcsmodel};
-use oag_render::mesh;
 
 /// Where each circuit's `track.vex` lives, archive by archive.
 const ARCHIVES: &[&str] = &[

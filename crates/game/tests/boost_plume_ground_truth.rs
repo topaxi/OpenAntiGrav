@@ -43,7 +43,7 @@
 //! ship space rather than mounted on a locator, see `Loaded::boost_model`'s
 //! doc comment. This file checks the same shape holds for every team rather
 //! than the one that happened to be looked at, through the same
-//! `oag_render::mesh::build_with_textures` path `oag_game::race::load` uses.
+//! `oag_mesh::mesh::build_with_textures` path `oag_game::race::load` uses.
 //!
 //! It also pins that those transparent-draw batches are what they need to be
 //! for `race::Scene`'s additive blend override to matter at all: if the
@@ -91,8 +91,8 @@
 
 use std::path::PathBuf;
 
+use oag_mesh::mesh;
 use oag_pulse as pulse;
-use oag_render::mesh;
 use oag_vex::vex;
 
 /// The PS2 release, Europe-only, `SCES-54748` - the same image
@@ -206,7 +206,7 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
 /// re-breaking the falloff `mesh.wgsl`'s `lit_texel` alpha fix depends on.
 ///
 /// Exact float equality is safe here: `GpuVertex::colour` is decoded as
-/// `byte as f32 / 255.0` (`oag_render::mesh`'s batch builder), which is
+/// `byte as f32 / 255.0` (`oag_mesh::mesh`'s batch builder), which is
 /// exact at both `0` and `255`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -635,7 +635,7 @@ fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
             for (index, anim) in model.anim_nodes.iter().enumerate() {
                 // A PS2 plume is a `.vex` node; the rig form is 2048's and
                 // has no business here.
-                let oag_render::mesh::Motion::Vex(transform) = &anim.transform else {
+                let oag_mesh::mesh::Motion::Vex(transform) = &anim.transform else {
                     panic!("{name}: anchor {index} is not a .vex Anim Transform");
                 };
                 assert!(

@@ -92,11 +92,11 @@ impl Scene {
     /// boost, flares, shields and weapon models are not among them: their
     /// materials carry no Zone block at all, so their stage art is never
     /// sampled and rebuilding it would be wasted uploads for no picture
-    /// change - see `oag_render::mesh_render::Zone`'s own census.
+    /// change - see `oag_mesh::mesh_render::Zone`'s own census.
     ///
     /// **Call this once, right after [`Self::sync_zone_grade`] answers
     /// `true`** - the stage-change edge, never every frame. See
-    /// `oag_render::mesh_render::zone::rebind`'s own doc comment for why a
+    /// `oag_mesh::mesh_render::zone::rebind`'s own doc comment for why a
     /// per-frame call would still draw correctly and why it would still be
     /// the wrong thing to do.
     pub fn rebind_zone_art(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -129,7 +129,7 @@ impl Scene {
         // linear float format, so the MSAA attachment has to match it, and
         // the chain's own targets track the viewport.
         let format = if self.draws_linear() {
-            oag_render::post::hd_bloom::SCENE_FORMAT
+            oag_gpu::formats::SCENE_FORMAT
         } else {
             format
         };

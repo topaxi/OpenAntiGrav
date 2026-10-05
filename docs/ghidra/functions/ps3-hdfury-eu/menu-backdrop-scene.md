@@ -126,7 +126,7 @@ is **byte-identical in `data00` and `data08`**, and is HD's file re-exported: th
 PS4 `.rcsmodel` (9,184 triangles, 56 mesh objects, one material, `Basic_Emissive`) and the
 motion is in the `.vex` beside it, not in a `.rcsskeleton`/`.rcsanimclip` pair. The shape names
 of the two files agree, which is how
-`oag_render::mesh::rcs::psp2::placement::plan_from_vex` binds them: 54 of the 56 meshes hang
+`oag_mesh::mesh::rcs::psp2::placement::plan_from_vex` binds them: 54 of the 56 meshes hang
 under one of the seven `Anim Transform` nodes.
 
 **The boot screens have no backdrop, by the skin's own structure.** `Language Selection`,

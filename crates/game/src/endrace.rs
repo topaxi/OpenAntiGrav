@@ -81,7 +81,7 @@ pub struct EndRaceScreens {
 pub struct Trophy {
     pub medal: oag_tables::race_campaign::Medal,
     pub placement: oag_ui::screen::Mode3dModel,
-    pub mesh: oag_render::mesh::Model,
+    pub mesh: oag_mesh::mesh::Model,
 }
 
 impl std::fmt::Debug for Trophy {

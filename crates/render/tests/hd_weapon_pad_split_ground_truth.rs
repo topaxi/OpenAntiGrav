@@ -19,7 +19,7 @@
 //! weapon pads were never routed through it at all, because they were baked
 //! into the circuit's own `track_model` alongside the road, walls and
 //! scenery. See `docs/gameplay/race-modes.md` and
-//! `crates/render/src/mesh/rcs.rs`'s own doc comment on `build_scene`.
+//! `crates/mesh/src/mesh/rcs.rs`'s own doc comment on `build_scene`.
 //!
 //! This checks the fix at the layer it belongs to: the decode, not the
 //! render. `crates/render/examples/hd_pads.rs` already established that
@@ -40,7 +40,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {

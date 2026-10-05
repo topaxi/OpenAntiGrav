@@ -5,7 +5,7 @@
 //! model load: the hull is built exactly as it always was, and four of its
 //! texture slots are then replaced from a `.dat` the *definition* names. The
 //! format half is [`oag_texture::ship_skin`] and the applier half is
-//! [`oag_render::mesh::ship_skin::apply`]; both landed with unit and
+//! [`oag_mesh::mesh::ship_skin::apply`]; both landed with unit and
 //! ground-truth coverage and neither had a caller until this module. See
 //! `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`.
 //!
@@ -54,8 +54,8 @@
 //! Feisar and Harimau it differs from the atlas the hull already wears, so
 //! applying it on a guess would change every PS2 race's picture.
 
+use oag_mesh::mesh::{self, Model};
 use oag_race::Mode;
-use oag_render::mesh::{self, Model};
 
 /// The archive entry holding the skin `team` should fly, or nothing.
 ///

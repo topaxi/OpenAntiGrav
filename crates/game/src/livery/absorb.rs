@@ -82,12 +82,12 @@ pub(super) const LEACH: (&str, &str) = (LEACH_OVERLAY_TEXTURE, "LeachBeam");
 /// resolve, or when the hull's batches share no one scale (every PS2 hull).
 pub(super) fn overlay(
     archives: &mut oag_assets::Archives,
-    hull: &oag_render::mesh::Model,
+    hull: &oag_mesh::mesh::Model,
     blob: &[u8],
     (entry, what): (&str, &str),
     wanted: bool,
     report: &mut Vec<String>,
-) -> Option<oag_render::mesh::Model> {
+) -> Option<oag_mesh::mesh::Model> {
     if !wanted {
         return None;
     }
@@ -120,7 +120,7 @@ pub(super) fn overlay(
     };
     let mut texels = texture.to_rgba();
     oag_render::hull_overlay::glow_texels(&mut texels);
-    let texture = oag_render::mesh::ModelTexture::rgba8(
+    let texture = oag_mesh::mesh::ModelTexture::rgba8(
         entry.to_string(),
         u32::from(texture.width),
         u32::from(texture.height),
@@ -160,20 +160,20 @@ pub(super) fn shell(
     ship_dir: &str,
     wanted: bool,
     report: &mut Vec<String>,
-) -> Option<oag_render::mesh::Model> {
+) -> Option<oag_mesh::mesh::Model> {
     if !wanted {
         return None;
     }
     let name = oag_pulse::race::ships::entry_name_in(ship_dir, team, SHELL_STEM);
     let pair = archives.read_name(&name).ok().and_then(|blob| {
-        let sibling = oag_render::mesh::rcs::sibling_name(&name)?;
+        let sibling = oag_mesh::mesh::rcs::sibling_name(&name)?;
         Some((blob, archives.read_name(&sibling).ok()?))
     });
     let Some((blob, geometry)) = pair else {
         report.push(format!("{name}: no .vex/.rcsmodel pair - no absorb shell"));
         return None;
     };
-    let built = oag_render::mesh::rcs::build(
+    let built = oag_mesh::mesh::rcs::build(
         &name,
         &blob,
         &geometry,

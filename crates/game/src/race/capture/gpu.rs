@@ -29,7 +29,7 @@ impl CaptureGpu {
         let instance = crate::adapter::instance();
         let adapter = crate::adapter::choose(&instance, None, renderer)?.adapter;
         let (device, queue) = pollster::block_on(adapter.request_device(
-            &oag_render::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
+            &oag_mesh::mesh_render::device_descriptor("oag-game race offscreen", &adapter),
         ))
         .context("requesting the device")?;
         Ok(Self {

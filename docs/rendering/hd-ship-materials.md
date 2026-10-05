@@ -35,7 +35,7 @@ exponent path every other resolved HD material does. `diffuse_vcol` (6 of 12
 chunks - the majority of the hull) genuinely has no specular chain at all,
 which the existing `DEFAULT_SPECULAR_EXPONENT` fallback already treats
 correctly (it still draws a specular term at the shared exponent, a documented,
-tested prior decision - see `crates/render/src/mesh/vertex.rs`'s own doc
+tested prior decision - see `crates/mesh/src/mesh/vertex.rs`'s own doc
 comment - not revisited here).
 
 `detonator_emissive_bloom`'s texture is worth flagging rather than acting on:
@@ -195,7 +195,7 @@ refused (`Report::emissive_surface_map_excluded`); where the role is a named
 glow, or cannot be settled at all, the material is left exactly as it drew
 before this fix (`Report::emissive_role_unresolved` for the second case).
 Confidence 90 on the mechanism and the fix (read directly in
-`crates/render/src/mesh/rcs/emissive.rs`, cross-checked against the disc-wide
+`crates/mesh/src/mesh/rcs/emissive.rs`, cross-checked against the disc-wide
 census below and guarded by `hd_hull_glow_role_ground_truth.rs`).
 
 **The role table itself is narrower than a preimage name suggests, and that
@@ -209,7 +209,7 @@ trusted on the name alone. Four further, per-material-family hashes with no
 preimage at all (`0x436d3929`, `0xc8f18561`, `0x0617f872`, `0xc78c9866`) are
 included because each was independently measured to bind only a normal map,
 disc-wide, with zero exceptions. Full evidence table:
-`crates/render/src/mesh/rcs/emissive.rs`'s own doc comment and
+`crates/mesh/src/mesh/rcs/emissive.rs`'s own doc comment and
 `crates/render/examples/hd_emissive_role_census.rs`.
 
 **The nitro_body_new claim above was itself measured off the wrong

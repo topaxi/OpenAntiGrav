@@ -10,7 +10,7 @@
 //! candidates.** What is measured: `emissive`'s tint parameter
 //! (`0xe8bcd7f5`) is absent from both pads' material records and is never
 //! patched into either pad's fragment microcode either (`hd_pad_ne_tint_probe`),
-//! so `oag_render::mesh::rcs::emissive` would fall back to its own default,
+//! so `oag_mesh::mesh::rcs::emissive` would fall back to its own default,
 //! `[1.0, 1.0, 1.0]` white - the tint used below is that fallback, **not a
 //! disc-authored value**. What is genuinely **not** measured: which of unit
 //! 1's channels the accumulate instruction actually reads (sampled RGB,
@@ -25,7 +25,7 @@
 //! treat this PNG as a measured fact, and see `pads.md` for the full set of
 //! open readings.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_texture::gtf;
 
 fn decode(spec: &str, path: &str) -> anyhow::Result<(u32, u32, Vec<[u8; 4]>)> {

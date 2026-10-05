@@ -300,7 +300,7 @@ fn hd_grade() -> ZoneGrade {
             label: "stage".into(),
             width: 1,
             height: 1,
-            texels: oag_render::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
+            texels: oag_mesh::mesh::Texels::Rgba8(vec![255, 255, 255, 255]),
             mip_count: None,
         }))
     };

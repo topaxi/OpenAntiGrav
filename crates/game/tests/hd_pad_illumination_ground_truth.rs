@@ -27,7 +27,7 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")

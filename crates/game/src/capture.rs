@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 use log::debug;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
 use crate::input::Input;
@@ -872,7 +872,7 @@ pub fn run(
     let adapter =
         crate::adapter::choose(&instance, None, &options.settings.graphics.renderer)?.adapter;
     let (device, queue) = pollster::block_on(adapter.request_device(
-        &oag_render::mesh_render::device_descriptor("oag-game offscreen", &adapter),
+        &oag_mesh::mesh_render::device_descriptor("oag-game offscreen", &adapter),
     ))
     .context("requesting the device")?;
 

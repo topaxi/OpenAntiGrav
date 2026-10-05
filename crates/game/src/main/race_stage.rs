@@ -177,8 +177,8 @@ impl RaceStage {
         camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
-        blur_timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
-        hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
+        blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> race::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs

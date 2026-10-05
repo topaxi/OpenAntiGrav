@@ -118,7 +118,7 @@ pub mod camera {
 /// at all.
 ///
 /// Pure and GPU-free on purpose - the same reasoning [`camera`] and
-/// `oag_render::mesh_render::matrices` already follow: this is arithmetic a
+/// `oag_mesh::mesh_render::matrices` already follow: this is arithmetic a
 /// test can check directly, not something only a screenshot can verify.
 pub mod frustum {
     use super::{Mat4, Vec3, Vec4};

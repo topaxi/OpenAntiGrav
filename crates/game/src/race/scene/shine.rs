@@ -128,25 +128,25 @@ impl Scene {
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
     ) -> SceneStats {
-        oag_render::perfprobe::marks::mark(pass, "track solid");
+        oag_gpu::perfprobe::marks::mark(pass, "track solid");
         let order = self.opaque_order.borrow();
         let order = (!order.is_empty()).then_some(&order[..]);
         let mut stats =
             self.track
                 .draw_lists(pass, sections, set, chunks, frustum, Lists::Solid { order });
-        oag_render::perfprobe::marks::mark(pass, "sky");
+        oag_gpu::perfprobe::marks::mark(pass, "sky");
         if let Some(sky) = &self.sky {
             let (x, y, w, h) = viewport;
             pass.set_viewport(x, y, w, h, 1.0, 1.0);
             let _ = sky.draw(pass, None, None, None, None);
             pass.set_viewport(x, y, w, h, 0.0, 1.0);
         }
-        oag_render::perfprobe::marks::mark(pass, "track blended");
+        oag_gpu::perfprobe::marks::mark(pass, "track blended");
         stats.add(
             self.track
                 .draw_lists(pass, sections, set, chunks, frustum, Lists::Blended),
         );
-        oag_render::perfprobe::marks::mark(pass, "track shine");
+        oag_gpu::perfprobe::marks::mark(pass, "track shine");
         if let Some(shine) = &self.track_shine {
             stats.add(shine.drawable.draw_track_shine(
                 pass,

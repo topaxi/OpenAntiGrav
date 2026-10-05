@@ -1,4 +1,4 @@
-//! Scratch probe: does `oag_render::mesh::rcs::psp2::build` actually paint a
+//! Scratch probe: does `oag_mesh::mesh::rcs::psp2::build` actually paint a
 //! real GXT onto a single-material 2048 model, end to end - not just
 //! compile?
 //!
@@ -9,8 +9,8 @@
 //! cargo run -q -p oag-game --example vita_rcsmodel_render_e2e_check
 //! ```
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel::psp2;
-use oag_render::mesh;
 
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 

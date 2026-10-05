@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         };
         println!("  bytes: {}", blob.len());
-        let external = oag_render::mesh::geometry_is_external(&blob);
+        let external = oag_mesh::mesh::geometry_is_external(&blob);
         println!("  geometry_is_external: {external}");
         let nodes = match vex::nodes(&blob) {
             Ok(n) => n,
@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         // The sibling .rcsmodel, if the archive has it.
-        if let Some(sibling) = oag_render::mesh::rcs::sibling_name(candidate) {
+        if let Some(sibling) = oag_mesh::mesh::rcs::sibling_name(candidate) {
             match archive.read_path(&sibling) {
                 Ok(rcs_blob) => {
                     println!("  sibling {sibling}: {} byte(s)", rcs_blob.len());

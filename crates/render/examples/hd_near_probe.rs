@@ -5,7 +5,7 @@
 //! reimplementation - so what it reports is what the race actually submits.
 
 use oag_core::math::Vec3;
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 /// The distance from `p` to the nearest point of triangle `abc`.
 ///

@@ -11,7 +11,7 @@
 //! `hd_amphiseum_ceiling_vertex_light.rs` already reads `m.parameters`
 //! through by hash rather than going via `mesh::rcs::skin`'s pick logic.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 const EMISSIVE_TEXTURE: u32 = 0xb1f2_a176;
 /// `emissive.rs`'s `TINT`: the float3 the emissive sample is multiplied by.

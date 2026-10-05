@@ -58,7 +58,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
 mod race;

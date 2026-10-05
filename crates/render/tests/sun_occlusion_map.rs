@@ -11,10 +11,11 @@
 //! Skips when there is no adapter, like `velocity_target.rs`.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, slots};
-use oag_render::mesh_render::material_bind_group_layout;
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, slots};
+use oag_mesh::mesh_render::OCCLUSION_LAYERS;
+use oag_mesh::mesh_render::material_bind_group_layout;
 use oag_render::shadow::map::Fit;
-use oag_render::shadow::occlusion::{LAYERS, Maps, RADIUS, SIZE, Track};
+use oag_render::shadow::occlusion::{Maps, RADIUS, SIZE, Track};
 
 fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots: u32) -> GpuVertex {
     GpuVertex {
@@ -28,7 +29,7 @@ fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots:
         xform: 0,
         sun_mask,
         slots,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }
@@ -265,5 +266,5 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         untouched.iter().all(|texel| *texel == 0),
         "layer 0 untouched"
     );
-    const { assert!(LAYERS > 3) };
+    const { assert!(OCCLUSION_LAYERS > 3) };
 }

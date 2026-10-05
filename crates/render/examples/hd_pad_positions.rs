@@ -9,7 +9,7 @@
 //! `mesh::build_pads`/`build_weapon_pads`, which is how a Pulse pad is aimed
 //! at to check it did not move.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()

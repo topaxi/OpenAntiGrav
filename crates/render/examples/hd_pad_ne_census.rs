@@ -3,7 +3,7 @@
 //! `_ne` mask bound and a colour, rather than some circuits' pads drawing
 //! without. `cargo run -p oag-render --example hd_pad_ne_census`
 
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 const CIRCUITS: &[(&str, &str)] = &[
     ("DATA00", "talons_junction"),

@@ -17,7 +17,7 @@
 //! the images are shipped content - see
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

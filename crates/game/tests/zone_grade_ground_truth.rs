@@ -499,6 +499,6 @@ fn a_title_with_no_zone_table_leaves_every_albedo_alone() {
         loaded.zone_grade.is_none(),
         "Pulse ships no .effectSettings table"
     );
-    let zone = oag_render::mesh_render::Zone::default();
+    let zone = oag_mesh::mesh_render::Zone::default();
     assert_eq!(zone.enabled, 0.0, "so nothing is added to any albedo");
 }

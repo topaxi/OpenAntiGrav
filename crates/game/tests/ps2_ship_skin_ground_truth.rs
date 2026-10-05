@@ -18,7 +18,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-ps2-eu.chd")

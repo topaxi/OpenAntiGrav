@@ -11,7 +11,7 @@
 //! adapter (they skip without one).
 
 use oag_game::race::{self, LoadWorker, Loaded, TextureSink};
-use oag_render::mesh::{Model, Texels};
+use oag_mesh::mesh::{Model, Texels};
 
 /// A sink on a device that asks for wgpu's **default** limits, whose
 /// `max_texture_dimension_2d` is 8,192 - whatever the adapter could do.
@@ -192,7 +192,7 @@ fn talons_junction_floor_goes_up_whole_on_the_renderers_own_device() {
         return;
     };
     let (device, queue) = pollster::block_on(adapter.request_device(
-        &oag_render::mesh_render::device_descriptor("talon floor", &adapter),
+        &oag_mesh::mesh_render::device_descriptor("talon floor", &adapter),
     ))
     .expect("requesting the device");
     let limit = device.limits().max_texture_dimension_2d;

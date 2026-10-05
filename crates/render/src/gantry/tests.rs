@@ -99,7 +99,7 @@ fn too_few_points_is_no_plane() {
 /// are - which is the case the real asset reduces to once its node table is
 /// sampled.
 fn two_draws(a: f32, b: f32) -> Model {
-    use crate::mesh::{Bounds, DrawCall, GpuVertex};
+    use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex};
 
     let vertex = |x: f32| GpuVertex {
         position: [x, 0.0, 0.0],
@@ -112,7 +112,7 @@ fn two_draws(a: f32, b: f32) -> Model {
         xform: 0,
         sun_mask: 1.0,
         slots: 0,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     let mut model = Model::none("two draws");
@@ -202,7 +202,7 @@ fn a_full_archive_path_is_a_placeholder_by_its_own_file_name() {
 /// `strip_slot_placeholders` is checked against the same shape
 /// `clip_to_panel`'s own tests use.
 fn textured_draws(placeholder_label: &str) -> Model {
-    use crate::mesh::{Bounds, DrawCall, GpuVertex, ModelTexture, Texels};
+    use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, ModelTexture, Texels};
 
     let vertex = || GpuVertex {
         position: [0.0; 3],
@@ -215,7 +215,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         xform: 0,
         sun_mask: 1.0,
         slots: 0,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     let mut model = Model::none("placeholder + art");

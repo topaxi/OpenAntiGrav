@@ -53,7 +53,7 @@ impl Drawable {
                     .texture
                     .and_then(|index| self.model.material_slots.get(index))
                     .copied()
-                    .unwrap_or(oag_render::mesh::slots::DEFAULT);
+                    .unwrap_or(oag_mesh::mesh::slots::DEFAULT);
                 let variant = draw
                     .texture
                     .and_then(|index| self.model.material_variants.get(index))

@@ -1636,7 +1636,7 @@ never resolves regardless of the fix above -
 `data/fe/frontendscene/frontendscene_hd_atg.vex`'s
 `basic_vertexemissive.rcsmaterial` (56 chunks) is exactly that case, a
 front-end consumer of the same gap tracked separately under `HANDOVER.md`'s
-open threads. `crates/render/src/mesh/rcs/skin.rs`'s `variants()` now tries
+open threads. `crates/mesh/src/mesh/rcs/skin.rs`'s `variants()` now tries
 every `Class`
 in `Class::ALL`'s order (`Static` first, since it is what most materials
 ship), which resolves that one material and, per the paragraph above, changes
@@ -1783,7 +1783,7 @@ resolved variant exactly the way they do for a genuinely-unused one: `packed
 runs.
 
 **Fixed**: both maps now walk `model.meshes.iter().flat_map(rcsmodel::Mesh::surfaces)`
-instead of `&model.meshes` (`crates/render/src/mesh/rcs/skin.rs`). This is a
+instead of `&model.meshes` (`crates/mesh/src/mesh/rcs/skin.rs`). This is a
 resolver-counting fix, not a shading addition - it lets `variants()` attempt
 the lookup it already knows how to do, using the class/feature fallback and
 `Static`-first order this page's "What selects a variant" section already
@@ -1841,7 +1841,7 @@ the chunk without it. Left for whoever routes the remaining sampler units, if
 it turns out to matter which collision class the same chunk carries.
 
 **Confidence 95** on the root cause and the fix (read directly in
-`crates/render/src/mesh/rcs/skin.rs`, confirmed by `hd_slot_check`'s
+`crates/mesh/src/mesh/rcs/skin.rs`, confirmed by `hd_slot_check`'s
 before/after and by the disc-wide report-line count change, gated by
 `just`/`just test-data` both green - 3,452 and 4,242 tests, 0 failures,
 `hd_ship_hull_material_ground_truth` and
@@ -1903,7 +1903,7 @@ the panel's real diffuse.
 
 **Fixed by excluding the hash, the same way the glass family's ramps and
 normal maps already are.** `EmissiveTexture` joins
-`crates/render/src/mesh/rcs/skin.rs`'s `NOT_A_PICTURE` list - it is one of
+`crates/mesh/src/mesh/rcs/skin.rs`'s `NOT_A_PICTURE` list - it is one of
 the 38 preimages this page's own "sampler names, by preimage" table above
 already carries, grouped there under "Light" beside `lightmap` and
 `shadowMapTex`, and a disc-wide binding census
@@ -2043,7 +2043,7 @@ mismatch.** This material's colour lane traces to more than one unit (`Texel::Mi
 fallback (`NOT_A_PICTURE`, above) picked the grid - the one entry not on that list - for **both** of this
 renderer's bindings: the alpha lane also resolves to the grid's own unit, so `aux` collapsed onto `albedo`
 (`.filter(|&i| i != albedo)` clears it, then `.or(default.aux)` puts it right back on the same entry), and the
-ramp - the material's own primary `Material::texture` - was never bound to anything. `crates/render/src/mesh/rcs/glass_sheen.rs`
+ramp - the material's own primary `Material::texture` - was never bound to anything. `crates/mesh/src/mesh/rcs/glass_sheen.rs`
 is the fix: a fact-based classifier (exactly `{Texture1, one facing-ramp hash, paraboloidReflectionTex}`
 declared, colour `Mixed`, alpha at `Texture1`'s own unit - none of it a material name) that routes `picks()` to
 `albedo = ` the ramp entry, `aux = ` the grid entry instead, ahead of the generic fallback. Swept disc-wide

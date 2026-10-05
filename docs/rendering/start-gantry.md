@@ -38,7 +38,7 @@ countdown mechanism entirely - a manifest reaches only two of the eight.
 > since 2026-09-17, its own glyph *reveal* plays too: one Edge Animation
 > curve, on the digit board's own material, walking across a shared texture
 > the same way Pulse's own shared offset does - wired generically
-> (`oag_render::mesh::rcs::curve_track`) and confirmed by direct capture to
+> (`oag_mesh::mesh::rcs::curve_track`) and confirmed by direct capture to
 > read `3`, `2`, `1`, `GO` in order. **PS2 Pulse joined them on 2026-09-25**:
 > reported from play as entirely absent, it was in fact placed and animated
 > correctly and only the palette texture was missing - the PS2 disc's
@@ -1327,7 +1327,7 @@ runtime looks like - the same role HD's `billboard8.gtf` plays there.
 
 Node 74's parent is node 34, a `Transform` with a **zero-byte payload** - a pure
 grouping node with no matrix - whose own parent is the `World`. No `Anim
-Transform` is anywhere in the chain, so [`mesh`](../../crates/render/src/mesh.rs)'s
+Transform` is anywhere in the chain, so [`mesh`](../../crates/mesh/src/mesh.rs)'s
 "anchored, not absolute" caveat does not apply here and the composed centres are
 in the track's own space. That the numbers are track-space and not node-local is
 confirmed by their range across the file: **x `-1273..952`, z `-1817..683`** over
@@ -1508,11 +1508,11 @@ hold themselves to.
 
 `oag_render::gantry::mount`'s texture match used to compare a draw's whole
 texture label against `321backplate.tga`/`billboard8.tga`. That is exactly
-right for Pulse, where [`mesh.rs`](../../crates/render/src/mesh.rs) reduces an
+right for Pulse, where [`mesh.rs`](../../crates/mesh/src/mesh.rs) reduces an
 embedded `Texture` node to its bare file name before it ever reaches
-[`Model::textures`](../../crates/render/src/mesh.rs) - but an HD (or Wipeout
+[`Model::textures`](../../crates/mesh/src/mesh.rs) - but an HD (or Wipeout
 2048) `.rcsmodel` material names its `.gtf` by the **full archive path** the
-sampler table carries (`crates/render/src/mesh/rcs/skin.rs`'s `path`
+sampler table carries (`crates/mesh/src/mesh/rcs/skin.rs`'s `path`
 argument, passed to `ModelTexture::from_gtf` unchanged):
 `data/environments/talons_junction/textures/dds/billboard8.gtf`, not
 `billboard8.gtf`. Matching the whole label never found an HD surface by name
@@ -1562,8 +1562,8 @@ render geometry" - correct, and the reason is the same one
 gives above: `321Go_StartFinish.vex`'s own `Mesh` payloads are a bounding box
 and a hash, and the real vertices are in `321go_startfinish.rcsmodel` beside
 it. `load` now detects an external PS3 `.vex`
-(`oag_render::mesh::geometry_is_external`) and builds through
-`oag_render::mesh::rcs::build` with that sibling - the same function a craft's
+(`oag_mesh::mesh::geometry_is_external`) and builds through
+`oag_mesh::mesh::rcs::build` with that sibling - the same function a craft's
 own livery loads through, not `build_scene`: the gantry has no world-baked
 second pass of its own to justify `build_scene`'s extra skip, the identical
 reasoning that function's own doc comment gives for every non-track caller.
@@ -1598,7 +1598,7 @@ placed matrix's own space once, at load.
 
 ### The digit board's own teleport plays correctly, confirmed through this project's pipeline
 
-`oag_render::mesh::Model::write_node_anims`/`CLOCK_LIMIT` already replay an
+`oag_mesh::mesh::Model::write_node_anims`/`CLOCK_LIMIT` already replay an
 `Anim Transform` track off the race clock - nothing new was needed for the
 mechanism itself, only for a HD model to reach it. Sampling the loaded
 model's own digit-board node at `t = 5.9` and `t = 6.0` through
@@ -1670,7 +1670,7 @@ material carries no such track at all
 (["What is not proven: whether anything ever changes it"](#what-is-not-proven-whether-anything-ever-changes-it---confidence-40-and-this-is-where-hds-answer-genuinely-differs-from-pulses)),
 confidence 40, deliberately not raised by this pass: nothing here traced a
 runtime write, and the render pipeline that would carry one
-(`crates/render/src/mesh/rcs.rs`'s own material/shader-variant resolution) is
+(`crates/mesh/src/mesh/rcs.rs`'s own material/shader-variant resolution) is
 outside this lane's own boundary while `lane-hd-material-curve` is active.
 Writing a synthetic UV offset here to make a digit appear would be inventing
 the mechanism `CLAUDE.md`'s own "never invent what the assets already
@@ -1759,7 +1759,7 @@ curve's own content (`target+0x20+0xc`) was not decoded, and the resource it
 hangs off is the loaded `.rcsmodel`'s own in-memory object - very likely
 authored in that file, in a section `oag-rcs` does not parse yet. Playing it
 back needs that decode first, then a replay hook in
-`crates/render/src/mesh/rcs.rs` (owned by `lane-hd-material-curve` while that
+`crates/mesh/src/mesh/rcs.rs` (owned by `lane-hd-material-curve` while that
 lane runs) - see `billboards.md`'s own closing paragraph for the exact two
 steps. **The confidence-40 score for "HD's material carries no `TEXOFFSET`
 track" is unchanged and still correct** - it is a finding about the
@@ -1789,7 +1789,7 @@ than between a thread and the code.
   measuring one curve at a time, read each of the four as "a per-material
   wipe/reveal ramp... not four discrete glyph states" - true of any one curve
   in isolation. This lane wired the replay generically
-  (`oag_render::mesh::rcs::curve_track`, every `.rcsmodel` material with a
+  (`oag_mesh::mesh::rcs::curve_track`, every `.rcsmodel` material with a
   curve, the same per-model race clock every other animation already rides,
   no new time base), actually played it, and then checked *which* of the
   four curved materials' own geometry was actually on screen: only material

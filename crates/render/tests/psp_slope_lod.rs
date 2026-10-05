@@ -29,8 +29,8 @@
 
 use std::sync::Arc;
 
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, TextureDetail, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -50,7 +50,7 @@ fn vertex(position: [f32; 3], texcoord: [f32; 2]) -> GpuVertex {
         // pixel measures the discard alone - the same reason
         // `zone_recolour.rs` uses it.
         slots: slots::DEFAULT | slots::EMISSIVE,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

@@ -2,7 +2,7 @@
 //! `vec4` its record carries, by name hash - so a value the renderer ignores
 //! can be told from one the record never had.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

@@ -25,7 +25,7 @@ pub mod random;
 #[cfg(test)]
 mod tests;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// How many live rounds this pipeline's buffers are sized for.
 ///
@@ -149,7 +149,7 @@ impl Pipeline {
         bolt: &FlareTexture,
         flash: &FlareTexture,
         sample_count: u32,
-        velocity: crate::mesh_render::Velocity,
+        velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("weapon quads"),
@@ -233,14 +233,14 @@ impl Pipeline {
                     targets.extend(velocity.target(true));
                     targets
                 },
-                compilation_options: crate::mesh_render::fragment_options(format),
+                compilation_options: oag_mesh::mesh_render::fragment_options(format),
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: None,
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: crate::mesh_render::DEPTH_FORMAT,
+                format: oag_mesh::mesh_render::DEPTH_FORMAT,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
@@ -256,7 +256,7 @@ impl Pipeline {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("weapon quads uniforms"),
-            size: crate::mesh_render::UNIFORMS_SIZE,
+            size: oag_mesh::mesh_render::UNIFORMS_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

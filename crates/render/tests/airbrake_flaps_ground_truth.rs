@@ -11,7 +11,7 @@
 //!
 //! # What this is for
 //!
-//! `oag_render::mesh` finds a flap by shape - a `Mesh` whose parent is an
+//! `oag_mesh::mesh` finds a flap by shape - a `Mesh` whose parent is an
 //! `Airbrake` (`0x3c5`) whose parent is the hinge `Transform` - and by the
 //! artists' node names, `Airbrake_Left` and `Airbrake_Right`. Both halves are
 //! assumptions about how the files are authored, taken from reading **one**
@@ -34,8 +34,8 @@
 
 use std::path::PathBuf;
 
+use oag_mesh::mesh;
 use oag_pulse::race::TEAMS;
-use oag_render::mesh;
 
 /// The archive entry name for a team's ship model, assembled the way
 /// `oag_game::race::ship_entry_name` assembles it. Not shared from there: no

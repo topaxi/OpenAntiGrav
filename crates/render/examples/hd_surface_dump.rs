@@ -3,8 +3,8 @@
 //! correlated. See `docs/formats/rcsmodel.md`, "A chunk names ONE material
 //! here and the engine reads SEVERAL".
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

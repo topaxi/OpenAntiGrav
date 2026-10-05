@@ -19,7 +19,7 @@ use log::debug;
 
 use oag_game::{race, settings};
 use oag_gameplay::ControlScheme;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 use crate::gpu::Handles;
 use crate::loading_stage::RaceBuildError;

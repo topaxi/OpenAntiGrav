@@ -28,8 +28,8 @@
 use std::path::PathBuf;
 
 use oag_core::math::{Mat4, Vec3};
+use oag_mesh::mesh;
 use oag_render::gantry::{self, BACKPLATE_TEXTURE, SLOT8_TEXTURE};
-use oag_render::mesh;
 use oag_vex::vex;
 
 /// The gantry model slot 8 names on every circuit that authors a manifest.

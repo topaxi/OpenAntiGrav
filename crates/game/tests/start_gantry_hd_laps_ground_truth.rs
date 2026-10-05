@@ -25,7 +25,7 @@
 //! window's bounds and a different board shows there.
 
 use oag_game::race::{self, gantry};
-use oag_render::mesh::{DrawCall, Model};
+use oag_mesh::mesh::{DrawCall, Model};
 
 fn placed() -> Option<gantry::Placed> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
@@ -76,7 +76,7 @@ fn shown(cull: &gantry::PanelCull, keys: &[u32], seconds: f32) -> usize {
 /// The lit white a set of draws samples at `seconds`, as the clock test
 /// measures `GO`.
 fn lit_white(model: &Model, keys: &[u32], seconds: f32) -> u32 {
-    let table = oag_render::mesh_render::TexAnims::sample(model, seconds);
+    let table = oag_mesh::mesh_render::TexAnims::sample(model, seconds);
     let mut total = 0;
     for draw in draws(model).filter(|d| keys.contains(&gantry_key(d))) {
         let Some(texture) = draw.texture.and_then(|t| model.textures.get(t)?.as_ref()) else {

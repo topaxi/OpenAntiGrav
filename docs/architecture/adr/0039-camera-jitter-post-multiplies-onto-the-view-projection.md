@@ -45,7 +45,7 @@ view-projection**, and onto the previous tick's matrix with the same phase:
 ```
 let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
 // everything above reads the unjittered camera, everything below the jittered
-let jitter = oag_render::jitter::matrix(frame, (viewport.2, viewport.3));
+let jitter = oag_post::jitter::matrix(frame, (viewport.2, viewport.3));
 let (view_projection, prev_vp) = (jitter * view_projection, jitter * prev_vp);
 ```
 
@@ -137,6 +137,6 @@ precedent.
   --screenshot` captures differing only by the flag: 674,047 of 1,175,040 pixels
   differ, mean absolute channel delta 2.95 over those, peak 190 at
   high-contrast edges - the signature of a sub-pixel shift rather than a whole
-  one. `crates/render/src/jitter/tests.rs` carries the nine unit tests,
+  one. `crates/post/src/jitter/tests.rs` carries the nine unit tests,
   including the velocity cancellation, which was checked non-vacuous by giving
   the previous matrix a different phase.

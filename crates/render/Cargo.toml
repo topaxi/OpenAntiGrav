@@ -14,17 +14,17 @@ oag-texture.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
+oag-gpu.workspace = true
+oag-mesh.workspace = true
+oag-post.workspace = true
 oag-pulse.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
 pollster.workspace = true
-serde.workspace = true
-toml.workspace = true
-log.workspace = true
 
 [features]
-# Off by default. Turns on `oag_render::perfprobe`'s counters, its `mark`
+# Off by default. Turns on `oag_gpu::perfprobe`'s counters, its `mark`
 # and `report_frame` printing, `oag-game`'s counting global allocator and its
 # `OAG_RENDER_BENCH` loop.
 #
@@ -32,7 +32,7 @@ log.workspace = true
 # to nothing without this - the counters are behind `cfg!`, not `#[cfg]`, so
 # the code cannot rot while the flag is off, which is the failure a debug
 # affordance nobody builds actually has.
-perf-probe = []
+perf-probe = ["oag-gpu/perf-probe", "oag-mesh/perf-probe"]
 
 [lints]
 workspace = true

@@ -89,11 +89,11 @@ impl Shell {
     }
 
     fn from_surfaces(
-        card: &[[oag_render::mesh::GpuVertex; 3]],
-        reflect: &[[oag_render::mesh::GpuVertex; 3]],
+        card: &[[oag_mesh::mesh::GpuVertex; 3]],
+        reflect: &[[oag_mesh::mesh::GpuVertex; 3]],
         reflect_alphas: (f32, f32),
     ) -> Result<Self> {
-        let front = |triangle: &&[oag_render::mesh::GpuVertex; 3]| {
+        let front = |triangle: &&[oag_mesh::mesh::GpuVertex; 3]| {
             triangle.iter().all(|v| v.position[2] > 0.0)
         };
         let corners = card.iter().flatten();
@@ -143,7 +143,7 @@ fn reflect_alphas(
     vex: &[u8],
     nodes: &[oag_vex::vex::Node],
 ) -> Result<(f32, f32)> {
-    let sibling = oag_render::mesh::rcs::sibling_name(ENTRY)
+    let sibling = oag_mesh::mesh::rcs::sibling_name(ENTRY)
         .with_context(|| format!("{ENTRY} names no .rcsmodel"))?;
     let geometry = archives
         .read_name(&sibling)

@@ -3,7 +3,7 @@
 //! Split out of `main.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 /// Draws a PS3 circuit's `Speedup Pad`/`Weapon Pad` geometry back into
 /// `model`, which `mesh::rcs::scene_from` built without them.

@@ -56,7 +56,7 @@
 //! `TEXMAPMODE` 2 PRIM carries the same world matrix as its ordinary twin and
 //! not `shipShape`'s, so the pass rides the flap's own node and follows its
 //! deflection: [`write`] swings the flap's vertices through the same
-//! [`crate::mesh::Flap::swung`] the hull's base draw uses. The *deflected*
+//! [`oag_mesh::mesh::Flap::swung`] the hull's base draw uses. The *deflected*
 //! state itself was not recorded (stowed only); that the original's pass
 //! follows is the structure of `Mesh_CompileExtraPass`, which replays inside
 //! the mesh's own node, not a read of a deflected frame.
@@ -74,8 +74,8 @@
 
 use oag_core::math::{Mat4, Vec3};
 
-use crate::mesh::{DrawCall, GpuVertex, Model};
 use crate::texgen;
+use oag_mesh::mesh::{DrawCall, GpuVertex, Model};
 
 /// Whether a race draws the pass at all: **on**, because the original draws it
 /// in play (six batches of a live Assegai hull were read in the recorded GE
@@ -285,7 +285,7 @@ pub fn write_view(model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f
 ///
 /// **`flaps` are the two airbrake angles, left then right, radians** - the pass
 /// rides its flap's node as the original's does, so each flap's vertices are
-/// swung by [`crate::mesh::Flap::swung`], the same call the hull's base draw
+/// swung by [`oag_mesh::mesh::Flap::swung`], the same call the hull's base draw
 /// makes, *before* the coordinates are generated: the swung normal is what the
 /// glint reads. `[0.0, 0.0]` leaves every vertex where the file put it.
 pub fn write(model: &Model, out: &mut Vec<GpuVertex>, ship: Mat4, flaps: [f32; 2]) {

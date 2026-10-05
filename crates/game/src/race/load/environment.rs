@@ -436,7 +436,7 @@ pub(super) fn envsettings_fog(
 ///
 /// These are the parameters the engine patches into the read
 /// `FunkLayerBloom` gate and blur programs - the formulas live in
-/// `oag_render::post::hd_bloom`, every one of them the microcode's own.
+/// `oag_post::hd_bloom`, every one of them the microcode's own.
 ///
 /// **Reads through [`staged_envsettings`], so a circuit's own file only has
 /// to declare what it changes.** Every Fury/DLC circuit's own file authors
@@ -455,7 +455,7 @@ pub(super) fn envsettings_bloom(
     archives: &mut oag_assets::Archives,
     track: &str,
     report: &mut Vec<String>,
-) -> Option<oag_render::post::hd_bloom::Params> {
+) -> Option<oag_post::hd_bloom::Params> {
     use oag_tables::envsettings::{
         BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION,
         BLOOM_FRAME_CONTRIBUTION, BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE,
@@ -523,7 +523,7 @@ pub(super) fn envsettings_bloom(
          {tone_darkening_clamp}) - formulas read from the executable's own \
          FunkLayerBloom microcode and its PPU chain runner{provenance}"
     ));
-    Some(oag_render::post::hd_bloom::Params {
+    Some(oag_post::hd_bloom::Params {
         alpha_contribution,
         frame_contribution,
         frame_exponent,
@@ -552,9 +552,9 @@ pub(super) struct Staging {
     /// The circuit's authored distance fog, where it authors one.
     pub(super) authored_fog: Option<mesh_render::Fog>,
     /// The circuit's `HDR and Bloom` block, where it authors one.
-    pub(super) hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    pub(super) hd_bloom: Option<oag_post::hd_bloom::Params>,
     /// Omega's `Tonemap` block, where the circuit authors one.
-    pub(super) omega_tonemap: Option<oag_render::post::omega_tonemap::Params>,
+    pub(super) omega_tonemap: Option<oag_post::omega_tonemap::Params>,
     /// The Zone stage grade this title lays over the two above, in a Zone
     /// race on a title that ships a table. See [`zone_grade`].
     pub(super) zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
@@ -659,7 +659,7 @@ pub(super) fn staging(
         .flatten();
     // The circuit's `HDR and Bloom` block, which is what turns the HD race
     // onto the linear float scene target and the read FunkLayerBloom chain -
-    // see `oag_render::post::hd_bloom` for what of that is the microcode's
+    // see `oag_post::hd_bloom` for what of that is the microcode's
     // and what is this project's. Gated to the PS3 path like the fog above.
     let hd_bloom = ps3_geometry
         .then(|| envsettings_bloom(archives, track, report))
@@ -683,7 +683,7 @@ pub(super) fn staging(
 /// set carries the art and is sampled by a chunk whose render-block flags
 /// carry the track bit; the general set, fifteen byte-identical flat whites,
 /// by every other chunk, whose surface is then its `Scene.Texture Colour`
-/// flat. See `oag_render::mesh_render::zone::StageArt` and
+/// flat. See `oag_mesh::mesh_render::zone::StageArt` and
 /// [`oag_title::ZoneStageTextures`] for the trap the general set used to be.
 /// A stage whose entry is missing or will not decode leaves its slot `None`
 /// and says so in the report rather than substituting a neighbour's.
@@ -691,10 +691,7 @@ fn zone_stage_art(
     archives: &mut oag_assets::Archives,
     textures: &'static oag_title::ZoneStageTextures,
     report: &mut Vec<String>,
-) -> (
-    oag_render::mesh::TextureSlots,
-    oag_render::mesh::TextureSlots,
-) {
+) -> (oag_mesh::mesh::TextureSlots, oag_mesh::mesh::TextureSlots) {
     let mut load = |set: &str, entry: &dyn Fn(u32) -> String| {
         let mut decoded = 0_u32;
         let mut art = Vec::with_capacity(textures.stages as usize);
@@ -703,7 +700,7 @@ fn zone_stage_art(
             let slot = archives
                 .read_name(&name)
                 .ok()
-                .and_then(|blob| oag_render::mesh::ModelTexture::from_gtf(&name, &blob))
+                .and_then(|blob| oag_mesh::mesh::ModelTexture::from_gtf(&name, &blob))
                 .map(std::sync::Arc::new);
             if slot.is_some() {
                 decoded += 1;

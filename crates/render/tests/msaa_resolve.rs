@@ -19,9 +19,9 @@
 //! picture rather than a black or garbage target. This is the only place that
 //! runs the resolve at all.
 
-use oag_render::camera::orbit::Orbit;
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model};
-use oag_render::mesh_render::{self, Anisotropy, UNIFORMS_SIZE, write_uniforms};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model};
+use oag_mesh::mesh_render::{self, Anisotropy, UNIFORMS_SIZE, write_uniforms};
+use oag_mesh::orbit::Orbit;
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -43,8 +43,8 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: oag_render::mesh::slots::DEFAULT,
-            specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         },
         GpuVertex {
@@ -57,8 +57,8 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: oag_render::mesh::slots::DEFAULT,
-            specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         },
         GpuVertex {
@@ -71,8 +71,8 @@ fn triangle_model() -> Model {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: oag_render::mesh::slots::DEFAULT,
-            specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         },
     ];

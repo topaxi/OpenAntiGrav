@@ -98,7 +98,7 @@
 use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_gameplay::MAX_SHIPS;
-use oag_render::mesh_render::SpuLight;
+use oag_mesh::mesh_render::SpuLight;
 
 use super::Race;
 use super::drawable::model_matrix_of;

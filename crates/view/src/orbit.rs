@@ -6,7 +6,7 @@
 //! of one fixed angle passed on the command line.
 //!
 //! Only the window is here. The camera maths is
-//! [`oag_render::camera::orbit`], which knows nothing about `winit` and is
+//! [`oag_mesh::orbit`], which knows nothing about `winit` and is
 //! tested without one; this module just maps real keys onto its [`Held`] and
 //! feeds it the elapsed time.
 
@@ -22,9 +22,9 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
-use oag_render::camera::orbit::{Held, Orbit, PITCH_LIMIT, ZOOM_RANGE, advance};
-use oag_render::mesh::Model;
-use oag_render::mesh_render::{self, Anisotropy, DEPTH_FORMAT, UNIFORMS_SIZE};
+use oag_mesh::mesh::Model;
+use oag_mesh::mesh_render::{self, Anisotropy, DEPTH_FORMAT, UNIFORMS_SIZE};
+use oag_mesh::orbit::{Held, Orbit, PITCH_LIMIT, ZOOM_RANGE, advance};
 
 /// What a drag of one window height turns the camera through, in radians.
 ///
@@ -257,7 +257,7 @@ impl Session {
         }))
         .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
         let (device, queue) = pollster::block_on(adapter.request_device(
-            &oag_render::mesh_render::device_descriptor("oag-view orbit", &adapter),
+            &oag_mesh::mesh_render::device_descriptor("oag-view orbit", &adapter),
         ))
         .context("requesting the device")?;
 

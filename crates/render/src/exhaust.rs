@@ -62,7 +62,7 @@
 
 use oag_core::{Rng, math::Vec3};
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// Trail layers.
 ///
@@ -940,7 +940,7 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
     // so each fragment *stamps* the ribbon's glow value instead of adding to
     // what is there. Additive alpha would saturate the mask almost immediately -
     // twelve quads overlap at the nozzle - and the bloom reads that channel as
-    // its bright-pass weight. See `crate::post::bloom`.
+    // its bright-pass weight. See `oag_post::bloom`.
     alpha: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::One,
         dst_factor: wgpu::BlendFactor::Zero,
@@ -954,7 +954,7 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
 /// every frame (live-confirmed at `0.2233` for an intensity of `0.497`), and
 /// `Trail_DrawRibbon` stamps it into the framebuffer's alpha. That channel is
 /// the bloom's bright-pass mask, so this is what makes the exhaust glow at all -
-/// see [`crate::post::bloom`].
+/// see [`oag_post::bloom`].
 ///
 /// **An earlier reading called this value "visually inert".** It is not; nothing
 /// in the ribbon's own draw reads it, but the post-process does. See
@@ -1084,9 +1084,9 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
 ///
 /// Everything else matches `mesh_render`'s pipeline exactly, because the exhaust
 /// is a third `set_pipeline` inside that pass rather than a pass of its own:
-/// same target format, same [`crate::mesh_render::DEPTH_FORMAT`], sample count 1,
+/// same target format, same [`oag_mesh::mesh_render::DEPTH_FORMAT`], sample count 1,
 /// and the same 128-byte uniform block so
-/// [`crate::mesh_render::UNIFORMS_SIZE`] describes both.
+/// [`oag_mesh::mesh_render::UNIFORMS_SIZE`] describes both.
 pub mod hd;
 mod texture;
 pub use texture::FlareTexture;
@@ -1131,7 +1131,7 @@ impl Pipeline {
         trail_shape: Option<&FlareTexture>,
         trail_blend: wgpu::BlendState,
         sample_count: u32,
-        velocity: crate::mesh_render::Velocity,
+        velocity: oag_mesh::mesh_render::Velocity,
         trail_stamps_mask: bool,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1196,7 +1196,7 @@ impl Pipeline {
         // shader reads slot 2 is a property of that title's asset rather than
         // of the frame - the same shape as `linear_out` beside it. A pipeline
         // built without one never samples the view bound there.
-        let mut trail_constants = crate::mesh_render::linear_constants(format).to_vec();
+        let mut trail_constants = oag_mesh::mesh_render::linear_constants(format).to_vec();
         if trail_shape.is_some() {
             trail_constants.push(("trail_shape", 1.0));
         }
@@ -1253,7 +1253,7 @@ impl Pipeline {
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
-                    format: crate::mesh_render::DEPTH_FORMAT,
+                    format: oag_mesh::mesh_render::DEPTH_FORMAT,
                     depth_write_enabled: Some(false),
                     depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: Default::default(),
@@ -1285,7 +1285,7 @@ impl Pipeline {
             "exhaust",
             BLEND,
             wgpu::ColorWrites::COLOR,
-            crate::mesh_render::linear_constants(format),
+            oag_mesh::mesh_render::linear_constants(format),
         );
         // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
         // passes its material's own pair - `race::Loaded::trail_blend`.
@@ -1300,7 +1300,7 @@ impl Pipeline {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("exhaust uniforms"),
-            size: crate::mesh_render::UNIFORMS_SIZE,
+            size: oag_mesh::mesh_render::UNIFORMS_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

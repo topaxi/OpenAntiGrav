@@ -172,7 +172,7 @@ whole attachment either way - see ADR-0037's consequences.
 ## The cost signal, which exists now
 
 **The scene pass is timed on the GPU, every frame, in the window.**
-`oag_render::timing::PassTimer` is a ring of four timestamp pairs;
+`oag_gpu::timing::PassTimer` is a ring of four timestamp pairs;
 `Session::frame` claims one before the race stage encodes, hands it to the
 scene pass through the pass descriptor's own `timestamp_writes`, resolves it
 into the same encoder and reads it back after the submit without ever blocking.

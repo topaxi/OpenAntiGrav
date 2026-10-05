@@ -51,7 +51,7 @@ pub(super) fn load(
         }
     };
     // **A PS3 entry's geometry is in the `.rcsmodel` beside it** - see
-    // `oag_render::mesh::rcs` for what is decoded and what is not, and this
+    // `oag_mesh::mesh::rcs` for what is decoded and what is not, and this
     // module's own doc comment for why the branch lives here rather than
     // being duplicated per caller.
     if mesh::geometry_is_external(&blob) {

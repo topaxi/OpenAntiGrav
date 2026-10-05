@@ -14,7 +14,7 @@ use oag_game::{
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::strings;
 
 use winit::application::ApplicationHandler;
@@ -325,20 +325,20 @@ impl App {
         // so a device that lacks it still boots and simply cannot be asked.
         // Said out loud either way: which of the two happened decides whether
         // the eventual DRS row can be offered at all.
-        let pass_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        let pass_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // A ring of its own, for the reason `Session::upscale_timer` gives:
         // sharing the scene pass's would cost the resolution controller a
         // reading every frame the upscaler took a slot.
-        let upscale_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        let upscale_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And one more beside it, for the *other* half of that chain: the two
         // presentation-resolution dispatches are a cost the resolution
         // controller cannot lower, and telling them apart from the six that
         // shrink is the whole of ADR-0045.
-        let upscale_presented_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        let upscale_presented_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a third, for the same reason again - see `Session::blur_cost`.
-        let blur_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        let blur_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         // And a fourth - see `Session::hd_bloom_cost`.
-        let hd_bloom_timer = oag_render::timing::PassTimer::new(&gpu.device, &gpu.queue);
+        let hd_bloom_timer = oag_gpu::timing::PassTimer::new(&gpu.device, &gpu.queue);
         debug!(
             "GPU timing: {}",
             if pass_timer.is_some() {
@@ -396,7 +396,7 @@ impl App {
             anim_seconds: self.anim_seconds,
             pvs_culling: self.pvs_culling,
             camera_jitter: self.camera_jitter,
-            zone_hold: oag_render::mesh_render::zone::Hold::default(),
+            zone_hold: oag_mesh::mesh_render::zone::Hold::default(),
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,

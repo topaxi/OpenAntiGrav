@@ -10,11 +10,11 @@ impl Scene {
     pub(super) fn draw_effects(
         &self,
         race: &Race,
-        eye: oag_render::mesh::LodEye,
+        eye: oag_mesh::mesh::LodEye,
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
-        oag_render::perfprobe::marks::mark(pass, "exhaust, sparks, clouds, ghost");
+        oag_gpu::perfprobe::marks::mark(pass, "exhaust, sparks, clouds, ghost");
         self.exhaust.borrow().draw(pass);
         self.sparks.borrow().draw(pass);
         self.draw_beam(pass);
@@ -27,6 +27,6 @@ impl Scene {
             mist.draw(pass);
         }
         self.sparks.borrow().draw_flash(pass);
-        oag_render::perfprobe::marks::mark(pass, "end");
+        oag_gpu::perfprobe::marks::mark(pass, "end");
     }
 }

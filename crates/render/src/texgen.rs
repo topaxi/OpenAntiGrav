@@ -75,7 +75,7 @@
 
 use oag_core::math::{Mat4, Vec3};
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// The light-0 direction of the fixed environment-map basis - the `u` axis.
 /// Named for the plume while it was the only known user; it is
@@ -233,8 +233,8 @@ mod tests {
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: crate::mesh::slots::DEFAULT,
-            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         }
     }

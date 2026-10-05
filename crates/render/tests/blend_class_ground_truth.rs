@@ -38,8 +38,8 @@
 
 use std::path::PathBuf;
 
+use oag_mesh::mesh;
 use oag_pulse as pulse;
-use oag_render::mesh;
 use oag_vex::vex::BlendClass;
 
 fn image() -> Option<PathBuf> {

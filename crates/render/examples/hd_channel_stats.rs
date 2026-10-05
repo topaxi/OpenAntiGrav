@@ -2,7 +2,7 @@
 //! names, for deciding whether a texture carries a silhouette or a flat plate.
 
 use oag_assets::Container;
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn stats(name: &str, blob: &[u8]) -> anyhow::Result<()> {
     let parsed = oag_texture::gtf::Gtf::parse(blob)?;

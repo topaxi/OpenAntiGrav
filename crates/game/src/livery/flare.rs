@@ -185,7 +185,7 @@ fn shading(model: &mut Model, geometry: &[u8], report: &mut Vec<String>) {
         }
         None => report.push(format!(
             "{}: declares {} parameter(s) and not the set the flame program reads, so \
-             this flare is shaded the ordinary way - see oag_render::mesh::Flame",
+             this flare is shaded the ordinary way - see oag_mesh::mesh::Flame",
             material.name,
             material.parameters.len()
         )),

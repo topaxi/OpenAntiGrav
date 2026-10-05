@@ -7,7 +7,7 @@
 //! transform per group with the `section` as one child and the group's
 //! geometry as the rest. [`oag_vex::pvs::governing_sections`] derives it;
 //! each draw call carries its source node
-//! ([`crate::mesh::DrawCall::node`]), so its mask is the single bit of its
+//! ([`oag_mesh::mesh::DrawCall::node`]), so its mask is the single bit of its
 //! group's section. A draw call whose node no section governs - or that has
 //! no node at all - gets [`ALWAYS`] and draws every frame, because the error
 //! has to point towards drawing too much.
@@ -62,7 +62,7 @@ use oag_core::math::frustum::Frustum;
 use oag_vex::pvs::{ALL_VISIBLE, MAX_SECTIONS, TrackPvs};
 use oag_vex::track::AiTrack;
 
-use crate::mesh::{DrawCall, Model};
+use oag_mesh::mesh::{DrawCall, Model};
 
 /// The per-draw-call mask for geometry no authored box touches.
 ///
@@ -608,7 +608,7 @@ impl ChunkSet {
 ///
 /// `visible_set` is `None` when PVS culling is off, `frustum` is `None` when
 /// frustum culling is off or when the model carries a transform its bounds are
-/// not valid against - see [`crate::mesh::Bounds`]. Both off is the default and
+/// not valid against - see [`oag_mesh::mesh::Bounds`]. Both off is the default and
 /// draws everything.
 #[must_use]
 pub fn visible(

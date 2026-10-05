@@ -28,7 +28,7 @@ fn effect() -> Option<Effect> {
 /// roll turns it.
 fn extents(system: &System, effect: &Effect) -> Vec<(f32, f32)> {
     let (additive, _) = system.vertices(effect, Vec3::X, Vec3::Y);
-    let half = |quad: &[oag_render::mesh::GpuVertex], axis: usize| {
+    let half = |quad: &[oag_mesh::mesh::GpuVertex], axis: usize| {
         let values = quad.iter().map(|v| v.position[axis]);
         (values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)) * 0.5
     };

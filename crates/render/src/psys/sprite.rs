@@ -229,7 +229,7 @@ impl super::EmitterSpec {
 /// they are emissive and never lit - so `psys.wgsl` can tell a sprite from
 /// the procedural profile in one pipeline: `1.0` samples the sheet, `0.0`
 /// (what `psys::quad` writes) keeps the falloff.
-pub fn map_to_cell(corners: &mut [crate::mesh::GpuVertex], cell: [f32; 4]) {
+pub fn map_to_cell(corners: &mut [oag_mesh::mesh::GpuVertex], cell: [f32; 4]) {
     for corner in corners {
         let [u, v] = corner.texcoord;
         corner.texcoord = [

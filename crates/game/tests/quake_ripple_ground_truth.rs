@@ -88,7 +88,7 @@ fn residuals(c: &Circuit) -> Vec<f32> {
         |c| c.speedup_pad,
         |c| c.weapon_pad,
     ] {
-        let placed = oag_render::mesh::batch_placements(&c.blob, pick).expect("placements");
+        let placed = oag_mesh::mesh::batch_placements(&c.blob, pick).expect("placements");
         let class = pick(classes).expect("class id");
         let decoded = nodes.iter().filter(|n| n.class_id == class).flat_map(|n| {
             let payload = &c.blob[n.payload()];
@@ -255,12 +255,12 @@ fn neighbouring_spans_agree_across_every_seam() {
     });
 }
 
-/// `oag_render::mesh::batch_placements` walks the batches in exactly the order
+/// `oag_mesh::mesh::batch_placements` walks the batches in exactly the order
 /// the model builder lays their vertices down: its ranges tile each node's own
 /// range in the built model, end to end, and reach the model's last vertex.
 /// The load path refuses a model whose total disagrees; this is the stronger,
 /// per-node statement, on the road and both pad models of two circuits.
-type Build = fn(&str, &[u8]) -> oag_render::mesh::Model;
+type Build = fn(&str, &[u8]) -> oag_mesh::mesh::Model;
 type Pick = fn(vex::classes::Classes) -> Option<u32>;
 
 #[test]
@@ -274,23 +274,23 @@ fn batch_placements_tile_each_node() {
         let builds: [(&str, Build, Pick); 3] = [
             (
                 "road",
-                |n, b| oag_render::mesh::build_with_textures(n, b, None).expect("road"),
+                |n, b| oag_mesh::mesh::build_with_textures(n, b, None).expect("road"),
                 |c| c.mesh,
             ),
             (
                 "speedup pads",
-                |n, b| oag_render::mesh::build_pads(n, b, None).expect("pads"),
+                |n, b| oag_mesh::mesh::build_pads(n, b, None).expect("pads"),
                 |c| c.speedup_pad,
             ),
             (
                 "weapon pads",
-                |n, b| oag_render::mesh::build_weapon_pads(n, b, None).expect("pads"),
+                |n, b| oag_mesh::mesh::build_weapon_pads(n, b, None).expect("pads"),
                 |c| c.weapon_pad,
             ),
         ];
         for (what, build, pick) in builds {
             let model = build(&name, &blob);
-            let placements = oag_render::mesh::batch_placements(&blob, pick).expect("placements");
+            let placements = oag_mesh::mesh::batch_placements(&blob, pick).expect("placements");
             let mut next = placements.iter().peekable();
             for node in &model.node_vertex_ranges {
                 let mut at = node.start;
@@ -337,7 +337,7 @@ fn level_road_rises_in_world_space() {
             |c| c.speedup_pad,
             |c| c.weapon_pad,
         ] {
-            let placed = oag_render::mesh::batch_placements(&c.blob, pick).expect("placements");
+            let placed = oag_mesh::mesh::batch_placements(&c.blob, pick).expect("placements");
             for span in &c.spans {
                 let Some(batch) = placed.iter().find(|p| p.header == span.batch) else {
                     continue;

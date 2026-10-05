@@ -1,7 +1,7 @@
 //! The Quake's road ripple on one drawable: which of its vertices move this
 //! frame, uploaded - see [`oag_render::ripple`] for what moves and why.
 
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 use oag_render::ripple::{Ripple, Wave};
 
 use super::Drawable;

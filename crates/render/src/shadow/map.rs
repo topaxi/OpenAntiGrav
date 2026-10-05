@@ -7,7 +7,7 @@
 //! holds is settled by the receiving side rather than by either job's name:
 //! the track material samples it projectively and uses the sample as
 //! `1 - shadow` with no compare, so it is **coverage**, not depth. See
-//! [`crate::mesh_render::ShadowMap`].
+//! [`oag_mesh::mesh_render::ShadowMap`].
 //!
 //! # What is the original's and what is ours
 //!
@@ -24,14 +24,8 @@
 
 use oag_core::math::{Mat4, Vec3, camera};
 
-use crate::mesh::GpuVertex;
-
-/// The map's texel format.
-///
-/// One channel, because the receiver reads one - `TXP R1.x` takes `.x` and
-/// nothing else. Unorm rather than float: a coverage value is `0..1` by
-/// construction and the sampler filters it for free.
-pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+use oag_mesh::mesh::GpuVertex;
+use oag_mesh::mesh_render::{COVERAGE_FORMAT, SHADOW_DEPTH_FORMAT};
 
 /// The map's resolution, square.
 ///
@@ -62,7 +56,7 @@ pub struct Fit {
     /// Radius of the same, in world units.
     pub radius: f32,
     /// Unit vector **towards** the light, matching
-    /// [`crate::mesh_render::Light::direction`].
+    /// [`oag_mesh::mesh_render::Light::direction`].
     pub towards_light: Vec3,
 }
 
@@ -216,16 +210,6 @@ pub struct Caster<'a> {
     pub model: Mat4,
 }
 
-/// The depth map's format, for the `mapped` tier.
-///
-/// **A second target rather than a second meaning for the first.** The
-/// coverage map answers "is anything between this point and the light", which
-/// is all Wipeout HD's own track shadows need; a cascaded shadow map answers
-/// "what is the *nearest* thing", which needs real depth and a depth test to
-/// resolve overlapping casters. Storing depth in the `R8Unorm` target would
-/// quantise a whole circuit's depth range to 256 steps.
-pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-
 /// The depth map's resolution, square.
 ///
 /// **Ours, and larger than [`SIZE`] on purpose**: the coverage map is fitted
@@ -284,7 +268,7 @@ impl Map {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: FORMAT,
+            format: COVERAGE_FORMAT,
             // `COPY_SRC` so the map can be read back: a shadow map's only
             // other observable is a sampler inside another shader, and a pass
             // that draws nothing looks exactly like one that draws correctly.
@@ -337,7 +321,7 @@ impl Map {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: FORMAT,
+                    format: COVERAGE_FORMAT,
                     // **No blend, and that is the point**: a texel is covered
                     // or it is not, so two craft overlapping in the light's
                     // view darken the ground once rather than twice.
@@ -395,7 +379,7 @@ impl Map {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
+            format: SHADOW_DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
@@ -438,7 +422,7 @@ impl Map {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
+                format: SHADOW_DEPTH_FORMAT,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),

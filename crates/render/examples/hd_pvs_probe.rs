@@ -12,8 +12,8 @@
 //! each one hides - which is how "a wall disappears as I approach it" becomes
 //! a number rather than an impression.
 
+use oag_mesh::mesh;
 use oag_rcs::{hd_pvs, rcsmodel};
-use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

@@ -14,7 +14,7 @@ use log::info;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, boot, loading, movie, race, settings};
 use oag_gameplay::ControlScheme;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 use crate::frontend_stage::{FrontendStage, PendingMovie};
 use crate::gpu::{Gpu, GpuContext};

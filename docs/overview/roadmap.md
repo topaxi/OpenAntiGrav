@@ -943,7 +943,7 @@ change how this list should be read:
 - [x] `LodGroup` `0x2ee` - **switched per frame, as the original does.**
       `LodGroup_SelectChild` (`0x0890be68`, confidence 85) picks a child from
       the group's FOV-scaled view depth against the authored distances, and
-      `oag_render::mesh::LodGroups` does the same for the circuit and every
+      `oag_mesh::mesh::LodGroups` does the same for the circuit and every
       craft each frame - opponents past 30 units draw their `lodShape`, the
       player's hull never passes it in either chase view. A per-title
       `model_detail` setting scales the distances (`original` measured,
@@ -1082,7 +1082,7 @@ change how this list should be read:
 - [x] `Skycube` `0x3c6` - **done at confidence 90**, and cheaper than expected:
       the payload turned out to be a `Mesh` `0x125` payload, so
       `vex::mesh_materials`/`mesh_batches` read it unchanged and
-      `oag_render::mesh::build_sky` is the mesh builder pointed at a different
+      `oag_mesh::mesh::build_sky` is the mesh builder pointed at a different
       class id. Every circuit authors exactly one, parented to the world node,
       with its geometry and texture ordinals inline; material counts are 1, 5 or
       6 and are **not** face counts - geometry is 474-553 triangles whichever it
@@ -1271,7 +1271,7 @@ recipe and its three traps.
       **Spatial upscaling is in**: FSR 1 (EASU then RCAS), ported to WGSL from
       AMD's MIT source, behind `[graphics] upscaler` and off by default until a
       wider screenshot comparison earns the change. It runs only where it is
-      magnifying. `oag_render::post::fsr1`.
+      magnifying. `oag_post::fsr1`.
       HDR, VRR, temporal upscaling and Steam Input are still open -
       [modern features](modern-features.md).
 - [ ] Save data
@@ -1458,7 +1458,7 @@ there, each with a ground-truth test against the disc:
    `oag_assets::source::Layout` states.
 3. **`oag_assets::psarc::Archive` and `oag_assets::Container`** - the runtime
    half, and the dispatch that picks WAD or PSARC off the archive's magic.
-4. `oag_render::mesh::read_blob` goes through that dispatch, so every existing
+4. `oag_mesh::mesh::read_blob` goes through that dispatch, so every existing
    viewer mode is pointed at a PS3 archive by changing the spec alone.
 
 Then the three format layers a *driveable* circuit needs, each measured against

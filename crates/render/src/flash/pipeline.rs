@@ -1,6 +1,6 @@
 //! The flash's draw: one full-screen quad, additive, colour only.
 
-use crate::mesh_render::{DEPTH_FORMAT, Velocity, fragment_options};
+use oag_mesh::mesh_render::{DEPTH_FORMAT, Velocity, fragment_options};
 
 /// The flash pipeline and its one-colour uniform.
 #[derive(Debug)]

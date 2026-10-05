@@ -333,7 +333,7 @@ impl Sheet {
     /// **It exists for art that is not in an image file.** The lock-on
     /// reticle's three pieces and Pure's ten weapon-icon pieces are `.vex`
     /// *models* whose texture is embedded in the model, so there is no `.mip`
-    /// for [`Image::decode`] to read - `oag_render::mesh` is what unpacks
+    /// for [`Image::decode`] to read - `oag_mesh::mesh` is what unpacks
     /// them, and it hands back pixels rather than a blob. See
     /// `oag_race::sight` and `crate::race::hud::model_art`.
     #[must_use]

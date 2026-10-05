@@ -123,7 +123,7 @@ pub(super) fn build(
         // A 2048-lineage model's `.pvs` is indexed by its mesh objects, whose
         // count is the check that the file belongs to it; HD's is not asked.
         let model_chunks = ps3_geometry
-            .filter(|blob| oag_render::mesh::rcs::psp2::is_psp2(blob))
+            .filter(|blob| oag_mesh::mesh::rcs::psp2::is_psp2(blob))
             .and_then(|blob| oag_rcs::rcsmodel::psp2::parse(blob).ok())
             .map(|model| model.scene.meshes.len());
         TrackVisibility::from_hd_pvs(archives, track, geometry_name, model_chunks, report)

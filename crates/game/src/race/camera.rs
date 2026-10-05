@@ -458,14 +458,14 @@ impl Race {
 
     /// The camera the per-frame `LodGroup` switch runs from this frame: the
     /// unjittered view, the field [`Self::projection`] is built from in
-    /// degrees, and the player's preset. See `oag_render::mesh::LodEye`.
+    /// degrees, and the player's preset. See `oag_mesh::mesh::LodEye`.
     #[must_use]
     pub fn lod_eye(
         &self,
         aspect: f32,
         setting: oag_display::display::Fov,
-    ) -> oag_render::mesh::LodEye {
-        oag_render::mesh::LodEye {
+    ) -> oag_mesh::mesh::LodEye {
+        oag_mesh::mesh::LodEye {
             view: self.view(),
             fov_degrees: self.vertical_fov(aspect, setting).to_degrees(),
             detail: self.view.model_detail,
@@ -479,7 +479,7 @@ impl Race {
     /// field the picture is drawn at: `LodGroup_SelectChild` scales a
     /// group's depth by `g_camera_fov_degrees / 65`, which at the default
     /// setting and the authored aspect is this value in degrees. See
-    /// `oag_render::mesh::LodGroups::child_at`.
+    /// `oag_mesh::mesh::LodGroups::child_at`.
     #[must_use]
     pub fn vertical_fov(&self, aspect: f32, setting: oag_display::display::Fov) -> f32 {
         // An overridden fov stands in for the authored one and still passes

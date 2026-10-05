@@ -43,7 +43,7 @@
 //! cannot show, so it is never narrower than the picture and agrees with the
 //! original at 480x272.
 //!
-//! [`DrawCall::moving`]: crate::mesh::DrawCall::moving
+//! [`DrawCall::moving`]: oag_mesh::mesh::DrawCall::moving
 
 use oag_core::math::{Mat4, Vec3, Vec4};
 use oag_vex::pvs::{MAX_SECTIONS, TrackPvs};

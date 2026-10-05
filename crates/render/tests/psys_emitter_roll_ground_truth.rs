@@ -8,7 +8,7 @@
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 use oag_render::psys::{ColourScale, Effect, System, TICK_HZ};
 use oag_vex::pob;
 

@@ -8,8 +8,8 @@
 //! already carries the answer, off `mesh::rcs::skin::roles`, so this is a
 //! dump of public fields rather than a second reading of the microcode.
 
-use oag_render::mesh;
-use oag_render::mesh::slots;
+use oag_mesh::mesh;
+use oag_mesh::mesh::slots;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

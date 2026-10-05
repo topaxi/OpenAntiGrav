@@ -29,7 +29,7 @@ that stood here - "what is missing is the class that makes scenery move" - is
 answered rather than merely amended: the class is read at instruction level in
 [`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md) and
 replayed by `oag_vex::vex::anim_transform` and
-`oag_render::mesh::AnimNode`.
+`oag_mesh::mesh::AnimNode`.
 
 **One recommendation this page used to make is withdrawn.** It said to recover
 the rest pose first and leave the animation for later. There is no separate rest
@@ -79,7 +79,7 @@ file to a drawn batch, on each circuit:
 
 Nothing is dropped anywhere in the chain: no gated material fails to parse, no
 parsed block belongs to a material no batch names, and the worst circuit
-authors 18 distinct tracks against the 63 `oag_render::mesh::ANIM_TRACK_LIMIT`
+authors 18 distinct tracks against the 63 `oag_mesh::mesh::ANIM_TRACK_LIMIT`
 allows. **The ceiling is not the constraint it looks like** - `mesh::build`
 deduplicates tracks by value, and a circuit's 104 animated materials collapse
 to 18 curves.

@@ -10,11 +10,11 @@
 //! With a third argument (a material's leaf file name), only that one
 //! material prints its full instruction listing; otherwise every resolved
 //! material on the `.vex` prints its summary row only.
+use oag_mesh::mesh;
 use oag_rcs::{
     rcsmaterial::{self, Class, Declared, LIT_RACE_PASS, fragment::Program, vertex},
     rcsmodel,
 };
-use oag_render::mesh;
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

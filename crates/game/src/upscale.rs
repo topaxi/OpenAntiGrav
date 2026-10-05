@@ -70,7 +70,7 @@
 use anyhow::Result;
 use log::{debug, warn};
 
-use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
+use oag_post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
 use oag_display::display::{Brightness, Gamma, Reconstruction};
 
@@ -127,7 +127,7 @@ pub struct Framebuffer {
     /// as it would onto a window. An upscaler reads through this one instead,
     /// which returns those encoded bytes without the hardware's decode -
     /// perceptual space, which is what FSR 1's edge detection wants. See
-    /// [`oag_render::post`].
+    /// [`oag_post`].
     perceptual: wgpu::TextureView,
     bind_group: wgpu::BindGroup,
     /// The grade the shader reads, and the copy of it that says whether a write
@@ -392,8 +392,8 @@ impl Framebuffer {
     /// **Returns whether the FSR 3.1 pass actually wrote both halves of
     /// `upscale_timestamps`.** A caller claims its slots before knowing
     /// whether the pipelines will build, the same as
-    /// [`oag_render::post::motion_blur::MotionBlur::render`] and
-    /// [`oag_render::post::hd_bloom::Chain::run`] both do for their own
+    /// [`oag_post::motion_blur::MotionBlur::render`] and
+    /// [`oag_post::hd_bloom::Chain::run`] both do for their own
     /// chains - and, like both of those, needs a way to give an unwritten
     /// claim back rather than let it resolve to an unspecified value. `false`
     /// on every path that returns before `fsr.render` runs: no temporal

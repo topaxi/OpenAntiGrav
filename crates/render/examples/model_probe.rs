@@ -21,9 +21,9 @@
 //! change landed and the citation outlived it - which is the failure this file
 //! exists to stop repeating.
 
-use oag_render::capture::make_opaque;
-use oag_render::mesh;
-use oag_render::mesh_render::{Anisotropy, capture_pixels_from};
+use oag_mesh::capture::make_opaque;
+use oag_mesh::mesh;
+use oag_mesh::mesh_render::{Anisotropy, capture_pixels_from};
 
 /// Wide enough to show a track's structure, small enough to run in a second.
 const WIDTH: u32 = 1024;

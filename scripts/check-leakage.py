@@ -43,9 +43,9 @@ EXTENSIONS = [
 ALLOWED_TRACKED = {
     "crates/video/tests/data/testsrc-64x64.ivf",
     # SMAA's own precomputed AreaTex/SearchTex, MIT-licensed - see
-    # crates/render/src/post/smaa.rs's module docs and licences/SMAA-MIT.txt.
-    "crates/render/src/post/smaa_area.bin",
-    "crates/render/src/post/smaa_search.bin",
+    # crates/post/src/smaa.rs's module docs and licences/SMAA-MIT.txt.
+    "crates/post/src/smaa_area.bin",
+    "crates/post/src/smaa_search.bin",
 }
 
 ROOT = Path(__file__).resolve().parent.parent

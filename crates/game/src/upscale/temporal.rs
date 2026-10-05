@@ -7,7 +7,7 @@
 //! one, which is the whole distinction `Upscaler::is_temporal` names.
 
 use oag_display::display::Reconstruction;
-use oag_render::post::fsr3;
+use oag_post::fsr3;
 
 /// What a temporal upscaler needs that a spatial one does not.
 ///
@@ -18,7 +18,7 @@ use oag_render::post::fsr3;
 /// `Upscaler::Fsr1` does.
 ///
 /// **It is also where the adapter probe lands.** A caller supplies `Some` only
-/// when `oag_render::post::fsr3::supported` said yes about the adapter it
+/// when `oag_post::fsr3::supported` said yes about the adapter it
 /// built its device from - which is the one place that knows, and which is not
 /// [`Framebuffer`]. So `None` covers three different "no"s with one shape: no
 /// scene, no compute shaders, and no history yet. All three fall the same rung
@@ -48,7 +48,7 @@ pub struct Temporal<'a> {
     pub camera: fsr3::Camera,
     /// The sub-pixel offset this frame was drawn with, in pixels.
     pub jitter: (f32, f32),
-    /// The jitter sequence's length - `oag_render::jitter::phases`.
+    /// The jitter sequence's length - `oag_post::jitter::phases`.
     pub phase_count: u32,
     /// Whether the history is meaningless: the first frame of a race, or a
     /// camera cut.
@@ -68,7 +68,7 @@ pub struct Temporal<'a> {
 /// leaves it to the flag.
 ///
 /// `flag` is `--camera-jitter`, which stays an override for looking at jitter on
-/// its own. It gets [`oag_render::jitter::DEFAULT_PHASES`] rather than a
+/// its own. It gets [`oag_post::jitter::DEFAULT_PHASES`] rather than a
 /// ratio-derived count, because with no upscaler behind it there is no ratio -
 /// nothing is resolving the frames it jitters.
 ///
@@ -88,9 +88,9 @@ pub fn jitter_phases(
     // spatial resolve is the one combination ADR-0039 says is strictly worse
     // than not jittering at all.
     if reconstruction.is_temporal() && supported {
-        return Some(oag_render::jitter::phases(extent.0, output.0));
+        return Some(oag_post::jitter::phases(extent.0, output.0));
     }
-    flag.then_some(oag_render::jitter::DEFAULT_PHASES)
+    flag.then_some(oag_post::jitter::DEFAULT_PHASES)
 }
 
 #[cfg(test)]

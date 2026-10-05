@@ -1,7 +1,7 @@
 //! What `build_scene` now binds `_ne` on: PAD_NE vertex count, its glow
 //! colours and the bound/unread tally, per circuit.
 //! `cargo run -p oag-render --example hd_speed_pad_scene`
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 fn main() -> anyhow::Result<()> {
     let image = "data/images/hdfury-ps3-eu-dec.iso";

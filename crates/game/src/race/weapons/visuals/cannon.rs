@@ -105,8 +105,8 @@ impl Race {
         draw: &CannonDraw,
         right: Vec3,
         up: Vec3,
-        bolt: &mut Vec<oag_render::mesh::GpuVertex>,
-        flash: &mut Vec<oag_render::mesh::GpuVertex>,
+        bolt: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        flash: &mut Vec<oag_mesh::mesh::GpuVertex>,
     ) {
         use oag_render::weapon_quads::{geometry, random};
         let dt = TickRate::DEFAULT.dt();

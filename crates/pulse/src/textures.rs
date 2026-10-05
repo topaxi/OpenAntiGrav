@@ -14,7 +14,7 @@
 //! It was the renderer's animation source while nothing on the disc was known
 //! to say which surfaces animate or how fast. Something does: each animated
 //! material carries its own keyframed `TEXSCALE`/`TEXOFFSET` block, and
-//! `oag_render::mesh_render::TexAnims` replays those instead - see
+//! `oag_mesh::mesh_render::TexAnims` replays those instead - see
 //! `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
 //!
 //! **Where the two disagree, this table is the one that is wrong.** Its rates

@@ -94,6 +94,10 @@ use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls,
 };
+use oag_mesh::mesh;
+use oag_mesh::mesh::{DrawCall, Model};
+use oag_mesh::mesh_render;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_pulse::race::ships;
 use oag_race::recovery::{
@@ -106,14 +110,12 @@ use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::camera::internal::InternalParams;
 use oag_render::collision as render_collision;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
-use oag_render::mesh::{DrawCall, Model};
-use oag_render::mesh_render::Anisotropy;
 use oag_render::psys;
 use oag_render::pvs::{
     ChunkSet, DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
 use oag_render::sparks;
-use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};
+use oag_render::{shield::ShipShield, track as track_render};
 use oag_tables::handling;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
 use oag_vex::vex;
@@ -277,7 +279,7 @@ pub use oag_pulse::race::DEFAULT_TEAM;
 /// asset, but it is an inference from the hull's shape: nothing in the executable has
 /// been read that states the convention, and only one team's model was measured.
 /// Applied here, at the boundary between a gameplay body and a drawn model, and
-/// deliberately **not** in `oag_render::mesh` - `oag-view --mesh` shows a model in its
+/// deliberately **not** in `oag_mesh::mesh` - `oag-view --mesh` shows a model in its
 /// own space and must keep doing so.
 pub const MODEL_YAW: f32 = std::f32::consts::PI;
 

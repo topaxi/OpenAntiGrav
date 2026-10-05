@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetches AMD's FidelityFX SDK shader sources, which the FSR 1 and FSR 3.1
-# ports under crates/render/src/post/ are transliterations of.
+# ports under crates/post/src/ are transliterations of.
 #
 # **Into ~/.cache, never into the repository.** ADR-0012 chose a WGSL port over
 # linking or vendoring the SDK, and the port's only defence against silently

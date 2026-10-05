@@ -7,7 +7,7 @@
 bounding-box pair and a 32-bit word, and the vertices are here.
 
 Implemented in [`oag_rcs::rcsmodel`](../../crates/rcs/src/rcsmodel.rs),
-drawn by [`oag_render::mesh::rcs`](../../crates/render/src/mesh/rcs.rs), and
+drawn by [`oag_mesh::mesh::rcs`](../../crates/mesh/src/mesh/rcs.rs), and
 checked against the disc by
 [`rcsmodel_ground_truth.rs`](../../crates/rcs/tests/rcsmodel_ground_truth.rs)
 for the container and
@@ -1069,7 +1069,7 @@ into the register that becomes output alpha, and that hash is exactly
 
 **`Material::blend()` answers `Blend::AlphaTest` now**, a variant of its own
 rather than the `Blend::Factors` it shared with `Transparency::Blended`, and
-`oag_render::mesh::rcs` puts those chunks in `Model::alpha_tested_draws` -
+`oag_mesh::mesh::rcs` puts those chunks in `Model::alpha_tested_draws` -
 depth write on, blending off, drawn between the opaque pass and the blended
 one. `wgpu` has no fixed-function alpha test, so the comparison is a
 shader-side `discard` in `mesh.wgsl`; the **reference travels as a pipeline
@@ -1163,7 +1163,7 @@ come back `Blend::Unmapped`; **none is**, on all 15,762 materials
 unmapped - so that every see-through surface arrived at a renderer as one of
 Pulse's three `vex::BlendClass` members. Saying `BlendClass` has no member for
 the source distinction was correct; *dropping* the source because of it was not.
-`oag_render::mesh_render`'s two transparent pipelines both hardcode a source
+`oag_mesh::mesh_render`'s two transparent pipelines both hardcode a source
 factor of `SrcAlpha`, so every material that authors something else was drawn
 with an equation the file does not ask for.
 
@@ -1198,7 +1198,7 @@ not in the drawn set at all, so what actually moves is the *equation* on chunks
 that were already blended: Talon's Junction's isolated advert boards move 5,819
 pixels and get brighter.
 
-`oag_render::mesh::rcs::blend_state` translates a pair into a
+`oag_mesh::mesh::rcs::blend_state` translates a pair into a
 `wgpu::BlendState` - the identity mapping on the four names, `Add` for the
 operation because the RSX's blend-equation register is a separate field nothing
 here has read and `GL_FUNC_ADD` is what it holds at reset. `mesh_render::build`
@@ -1295,7 +1295,7 @@ here to name.
 ### What the renderer does with it
 
 **A see-through chunk is drawn blended, with the equation its material names.**
-`oag_render::mesh::rcs` puts it in `Model::transparent_draws` and sets
+`oag_mesh::mesh::rcs` puts it in `Model::transparent_draws` and sets
 `DrawCall::blend`, and the alpha comes from the `.gtf`'s own RGBA.
 
 That was not possible when this table was first read. With no texture there was
@@ -1435,7 +1435,7 @@ Amphiseum's chunk 9 declares eleven surfaces naming materials
 `[6, 7, 626, 633, 10, 635, 12, 13, 14, 15, 16]`.
 
 **Drawing them is what the renderer now does**, in both of
-`oag_render::mesh::rcs`' passes. On Talon's Junction that took the scene from
+`oag_mesh::mesh::rcs`' passes. On Talon's Junction that took the scene from
 471,024 triangles to **809,247** and 871 draw calls to 1,792; on Anulpha Pass
 44% of the start-line frame changed, and the barrier hex panelling and the
 silver structure on the right of the reference frame appeared for the first
@@ -1493,7 +1493,7 @@ Pinned by `the_space_byte_separates_world_baked_geometry_from_node_local` in
 
 ### It replaces a heuristic this project invented, and the heuristic was wrong
 
-`oag_render::mesh::rcs::is_world_baked` decided the same question by carrying a
+`oag_mesh::mesh::rcs::is_world_baked` decided the same question by carrying a
 node's authored box through its transform and asking whether it landed within
 **one world unit** of the chunk's bias - a tolerance chosen here, documented at
 confidence 88, with a long note attached about the cluster gap that justified

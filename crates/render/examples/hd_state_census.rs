@@ -6,7 +6,7 @@
 //! that separates the cutout materials from the rest can be found by what
 //! carries it rather than guessed.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use std::collections::BTreeMap;
 
 /// The circuit directories, copied from `oag_hd::names::ENVIRONMENTS` because

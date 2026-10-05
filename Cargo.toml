@@ -11,10 +11,13 @@ members = [
   "crates/formats",
   "crates/game",
   "crates/gameplay",
+  "crates/gpu",
   "crates/hd",
   "crates/input",
+  "crates/mesh",
   "crates/omega",
   "crates/physics",
+  "crates/post",
   "crates/pulse",
   "crates/pure",
   "crates/race",
@@ -50,11 +53,14 @@ oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }
 oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
+oag-gpu = { path = "crates/gpu" }
 oag-hd = { path = "crates/hd" }
 oag-input = { path = "crates/input" }
+oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }
 oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
+oag-post = { path = "crates/post" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
@@ -300,4 +306,12 @@ opt-level = 2
 [profile.dev.package.oag-game]
 opt-level = 2
 [profile.dev.package.oag-render]
+opt-level = 2
+
+# The mesh pipeline and the post-processing chain were `oag-render`'s two
+# hottest modules; the ground-truth tests that decode a whole model and run a
+# pass over it keep the same opt-level they had there.
+[profile.dev.package.oag-mesh]
+opt-level = 2
+[profile.dev.package.oag-post]
 opt-level = 2

@@ -30,8 +30,10 @@ use std::sync::Arc;
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
 use oag_assets::Archive;
-use oag_render::mesh_render::Anisotropy;
-use oag_render::{collision, mesh, mesh_render, track};
+use oag_mesh::mesh;
+use oag_mesh::mesh_render;
+use oag_mesh::mesh_render::Anisotropy;
+use oag_render::{collision, track};
 use oag_vex::vex;
 
 use winit::application::ApplicationHandler;
@@ -883,7 +885,7 @@ impl Renderer {
         .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
 
         let (device, queue) = pollster::block_on(adapter.request_device(
-            &oag_render::mesh_render::device_descriptor("oag-view", &adapter),
+            &oag_mesh::mesh_render::device_descriptor("oag-view", &adapter),
         ))
         .context("requesting the device")?;
 

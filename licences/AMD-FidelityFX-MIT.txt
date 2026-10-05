@@ -1,6 +1,6 @@
 AMD FidelityFX Super Resolution 1 (FSR 1)
 
-`crates/render/src/post/fsr1.wgsl` is a transliteration of the EASU and RCAS
+`crates/post/src/fsr1.wgsl` is a transliteration of the EASU and RCAS
 routines of `ffx_fsr1.h`, together with the approximate reciprocal helpers of
 `ffx_a.h`, from AMD's FidelityFX-FSR:
 

@@ -36,7 +36,7 @@
 //!
 //! # Shape
 //!
-//! One `R8Unorm` array texture of [`LAYERS`] layers rather than eight
+//! One `R8Unorm` array texture of [`OCCLUSION_LAYERS`] layers rather than eight
 //! textures, because the hull pipeline reads it through the shared scene
 //! bind group (group 2) with a per-drawable layer index - a fifth bind group
 //! is not available on the downlevel limit `mesh_render` already sits at.
@@ -45,11 +45,8 @@ use oag_core::math::{Mat4, Vec3};
 
 use super::map::{Caster, Fit};
 use super::self_shadow;
-use crate::mesh::{DrawCall, GpuVertex};
-
-/// The maps' texel format: one channel, `0..1`, filtered. What the receiver
-/// reads is one channel (`TXP R0.z ... unit2` takes `.z` alone).
-pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+use oag_mesh::mesh::{DrawCall, GpuVertex};
+use oag_mesh::mesh_render::{OCCLUSION_FORMAT, OCCLUSION_LAYERS};
 
 /// Each layer's resolution, square.
 ///
@@ -58,11 +55,6 @@ pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 /// slot is unread, so every layer here gets the largest - 512 KiB for the
 /// whole array.
 pub const SIZE: u32 = 256;
-
-/// One layer per craft the grid can hold - `oag_gameplay::MAX_SHIPS`, stated
-/// as a literal because this crate depends on no gameplay crate; the same
-/// number [`super::map::MAX_CASTERS`] is.
-pub const LAYERS: u32 = 8;
 
 /// How far from the **sun's line through the craft** a track chunk's
 /// bounding sphere may sit and still be drawn into its map, in world units.
@@ -135,10 +127,10 @@ pub struct Maps {
     uniforms: wgpu::Buffer,
     binds: Vec<wgpu::BindGroup>,
     /// The projection each layer was last rendered with, for the receiver.
-    matrices: [Mat4; LAYERS as usize],
+    matrices: [Mat4; OCCLUSION_LAYERS as usize],
     /// How many draw calls each layer's last pass drew - a cleared layer and
     /// a never-rendered one look identical otherwise.
-    drawn: [usize; LAYERS as usize],
+    drawn: [usize; OCCLUSION_LAYERS as usize],
     /// The craft's own depth map per layer, rendered through the same
     /// matrix as its occlusion layer - see [`Self::render_self_shadow`].
     self_shadow: self_shadow::Maps,
@@ -149,7 +141,7 @@ impl Maps {
     ///
     /// `material_layout` is `mesh_render`'s own "albedo" bind group layout,
     /// so the track drawable's material bind groups can be set on this
-    /// pipeline directly - see [`crate::mesh_render::material_bind_group_layout`].
+    /// pipeline directly - see [`oag_mesh::mesh_render::material_bind_group_layout`].
     #[must_use]
     pub fn new(device: &wgpu::Device, material_layout: &wgpu::BindGroupLayout) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -157,12 +149,12 @@ impl Maps {
             size: wgpu::Extent3d {
                 width: SIZE,
                 height: SIZE,
-                depth_or_array_layers: LAYERS,
+                depth_or_array_layers: OCCLUSION_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: FORMAT,
+            format: OCCLUSION_FORMAT,
             // `COPY_SRC` so a test can read a layer back: the map's only
             // other observable is a sampler inside the hull's shader.
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
@@ -175,7 +167,7 @@ impl Maps {
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             ..Default::default()
         });
-        let layer_views = (0..LAYERS)
+        let layer_views = (0..OCCLUSION_LAYERS)
             .map(|layer| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     label: Some("sun occlusion map layer"),
@@ -232,7 +224,7 @@ impl Maps {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: FORMAT,
+                    format: OCCLUSION_FORMAT,
                     // No blend: the original writes each chunk's mask over
                     // whatever was there, in chunk order, with no depth test.
                     blend: None,
@@ -257,11 +249,11 @@ impl Maps {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("sun occlusion uniforms"),
-            size: UNIFORM_STRIDE * u64::from(LAYERS),
+            size: UNIFORM_STRIDE * u64::from(OCCLUSION_LAYERS),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let binds = (0..LAYERS)
+        let binds = (0..OCCLUSION_LAYERS)
             .map(|layer| {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("sun occlusion"),
@@ -285,8 +277,8 @@ impl Maps {
             pipeline,
             uniforms,
             binds,
-            matrices: [Mat4::IDENTITY; LAYERS as usize],
-            drawn: [0; LAYERS as usize],
+            matrices: [Mat4::IDENTITY; OCCLUSION_LAYERS as usize],
+            drawn: [0; OCCLUSION_LAYERS as usize],
             self_shadow: self_shadow::Maps::new(device),
         }
     }
@@ -473,7 +465,7 @@ impl Maps {
                 origin: wgpu::Origin3d {
                     x: 0,
                     y: 0,
-                    z: layer.min(LAYERS - 1),
+                    z: layer.min(OCCLUSION_LAYERS - 1),
                 },
                 aspect: wgpu::TextureAspect::All,
             },
@@ -532,7 +524,7 @@ pub fn within(draw: &DrawCall, centre: Vec3, sun: Vec3) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh::Bounds;
+    use oag_mesh::mesh::Bounds;
 
     fn draw(centre: [f32; 3], radius: f32, moving: bool) -> DrawCall {
         DrawCall {

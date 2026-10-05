@@ -34,8 +34,8 @@ use super::Session;
 /// readings by frame. A ring claimed without its partner is a frame the
 /// controller cannot assemble a `Cost` for.
 pub(super) fn claim_upscale(
-    scaled: Option<&mut oag_render::timing::PassTimer>,
-    presented: Option<&mut oag_render::timing::PassTimer>,
+    scaled: Option<&mut oag_gpu::timing::PassTimer>,
+    presented: Option<&mut oag_gpu::timing::PassTimer>,
     frame: u64,
 ) {
     let mut rings = [scaled, presented];
@@ -70,8 +70,8 @@ pub(super) fn claim_upscale(
 /// unwritten claim has to be abandoned rather than resolved. See
 /// `Framebuffer::resolve_scene`'s return value, which is what gates this.
 pub(super) fn abandon_upscale(
-    scaled: Option<&mut oag_render::timing::PassTimer>,
-    presented: Option<&mut oag_render::timing::PassTimer>,
+    scaled: Option<&mut oag_gpu::timing::PassTimer>,
+    presented: Option<&mut oag_gpu::timing::PassTimer>,
 ) {
     for timer in [scaled, presented].into_iter().flatten() {
         timer.abandon();
@@ -91,8 +91,8 @@ pub(super) fn abandon_upscale(
 /// One function that takes both is what makes that edit impossible rather
 /// than merely unlikely.
 pub(super) fn resolve_upscale(
-    scaled: Option<&mut oag_render::timing::PassTimer>,
-    presented: Option<&mut oag_render::timing::PassTimer>,
+    scaled: Option<&mut oag_gpu::timing::PassTimer>,
+    presented: Option<&mut oag_gpu::timing::PassTimer>,
     encoder: &mut wgpu::CommandEncoder,
 ) {
     for timer in [scaled, presented].into_iter().flatten() {
@@ -112,12 +112,12 @@ pub(super) fn resolve_upscale(
 /// their own regardless, because this is the function the chain's timing
 /// actually flows through.
 pub(super) fn upscale_timestamps<'a>(
-    scaled: Option<&'a oag_render::timing::PassTimer>,
-    presented: Option<&'a oag_render::timing::PassTimer>,
-) -> Option<oag_render::post::fsr3::ChainTimestamps<'a>> {
+    scaled: Option<&'a oag_gpu::timing::PassTimer>,
+    presented: Option<&'a oag_gpu::timing::PassTimer>,
+) -> Option<oag_post::fsr3::ChainTimestamps<'a>> {
     let scaled = scaled?.compute_writes()?;
     let presented = presented?.compute_writes()?;
-    Some(oag_render::post::fsr3::ChainTimestamps { scaled, presented })
+    Some(oag_post::fsr3::ChainTimestamps { scaled, presented })
 }
 
 impl Session {
@@ -179,8 +179,8 @@ impl Session {
         // everything that is ready, so no ring can carry a backlog and two
         // rings can disagree by at most the one frame the race itself costs.
         // See `PassTimer::drain`.
-        let drain = |timer: &mut Option<oag_render::timing::PassTimer>, device| {
-            let mut readings = [None; oag_render::timing::PassTimer::SLOTS];
+        let drain = |timer: &mut Option<oag_gpu::timing::PassTimer>, device| {
+            let mut readings = [None; oag_gpu::timing::PassTimer::SLOTS];
             if let Some(timer) = timer.as_mut() {
                 timer.drain(device, &mut readings);
             }
@@ -276,11 +276,11 @@ impl Session {
     )]
     fn feed_drs(
         &mut self,
-        reading: &oag_render::timing::Reading,
-        blur_readings: &[Option<oag_render::timing::Reading>],
-        hd_bloom_readings: &[Option<oag_render::timing::Reading>],
-        upscale_readings: &[Option<oag_render::timing::Reading>],
-        upscale_presented_readings: &[Option<oag_render::timing::Reading>],
+        reading: &oag_gpu::timing::Reading,
+        blur_readings: &[Option<oag_gpu::timing::Reading>],
+        hd_bloom_readings: &[Option<oag_gpu::timing::Reading>],
+        upscale_readings: &[Option<oag_gpu::timing::Reading>],
+        upscale_presented_readings: &[Option<oag_gpu::timing::Reading>],
         has_hd_bloom: bool,
         render_profile: &settings::RenderProfile,
         frame_seconds: Option<f32>,
@@ -293,7 +293,7 @@ impl Session {
             // the same encoder, so in a running race they come back together;
             // a mismatch means one of them skipped a slot, and a `Cost`
             // assembled across two frames is not a frame's cost.
-            let matching = |others: &[Option<oag_render::timing::Reading>]| {
+            let matching = |others: &[Option<oag_gpu::timing::Reading>]| {
                 others
                     .iter()
                     .flatten()

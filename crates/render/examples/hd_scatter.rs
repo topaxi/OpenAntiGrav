@@ -6,7 +6,7 @@
 //! spread evenly through its radius, while a mis-decoded one is a tight
 //! cluster with a handful of outliers thrown across the world.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

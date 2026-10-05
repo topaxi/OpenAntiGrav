@@ -32,8 +32,8 @@
 
 use std::path::PathBuf;
 
+use oag_mesh::mesh::rcs::psp2::{self, Animation};
 use oag_rcs::rcsmaterial::name_hash;
-use oag_render::mesh::rcs::psp2::{self, Animation};
 use oag_vex::vex;
 
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -118,7 +118,7 @@ fn package(name: &str) -> Option<PathBuf> {
 
 struct Loaded {
     hd_data: Vec<u8>,
-    model: oag_render::mesh::Model,
+    model: oag_mesh::mesh::Model,
     plan_xform: Vec<u32>,
     animation: Animation,
     decoded: oag_rcs::rcsmodel::psp2::Model,

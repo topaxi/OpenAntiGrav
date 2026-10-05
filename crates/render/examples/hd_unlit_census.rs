@@ -18,9 +18,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmaterial::{self, Class, Declared, Features, LIT_RACE_PASS, fragment::Program};
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",

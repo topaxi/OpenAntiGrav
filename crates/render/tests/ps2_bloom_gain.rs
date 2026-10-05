@@ -11,8 +11,8 @@
 //! `#[ignore]`d because it needs a GPU adapter:
 //! `cargo nextest run -p oag-render --run-ignored all -E 'test(ps2_bloom_gain)'`
 
-use oag_render::post::bloom::Frame;
-use oag_render::post::ps2_bloom::{
+use oag_post::bloom::Frame;
+use oag_post::ps2_bloom::{
     BLOOM_HEIGHT, BLOOM_WIDTH, BLUR_WEIGHTS, COMPOSITE_COLOUR, COMPOSITE_FIX, COMPOSITE_OFFSET,
     FRAME_SIZE, Ps2Bloom,
 };

@@ -273,7 +273,7 @@ impl VertexDecl {
     /// `oag_game::livery::flare`'s `alpha_ramp` repurposing the same
     /// mechanism to pull `VertexColour1.w` as the engine flame's own alpha
     /// ramp - see `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md` and
-    /// `crates/render/src/mesh/flame.rs`), while [`Self::light_colour_set`]
+    /// `crates/mesh/src/mesh/flame.rs`), while [`Self::light_colour_set`]
     /// below answers the narrower, semantic question of whether the chunk
     /// has the *specific* attribute a lit-race shader treats as a baked
     /// light term. Narrowing this method to that same hash set once broke

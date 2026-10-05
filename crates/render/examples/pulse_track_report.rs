@@ -2,7 +2,7 @@
 //! from it - node classes, batches, triangles and draw calls - so "meshes are
 //! missing" can be answered with a count before it is answered with a picture.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

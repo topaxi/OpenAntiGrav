@@ -22,7 +22,7 @@
 //! it outward, on both sides of every team, in world space.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 const TEAMS: [&str; 12] = [

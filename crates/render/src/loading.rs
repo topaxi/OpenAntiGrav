@@ -282,7 +282,7 @@ impl Wave {
 /// Two floats of position rather than three, and no normal, colour or `lit`
 /// flag: this is a screen-space overlay, so there is nothing for a light rig or
 /// a camera to do. That is why it does not reuse
-/// [`crate::mesh::GpuVertex`] the way [`crate::exhaust`] and [`crate::sparks`]
+/// [`oag_mesh::mesh::GpuVertex`] the way [`crate::exhaust`] and [`crate::sparks`]
 /// do - they draw in the world and this does not.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -538,7 +538,7 @@ const TINT_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
 /// differences, both because this is a 2D overlay:
 ///
 /// - **No depth.** `depth_stencil` is `None` here, where the world-space
-///   effects share [`crate::mesh_render::DEPTH_FORMAT`]. The overlay is drawn
+///   effects share [`oag_mesh::mesh_render::DEPTH_FORMAT`]. The overlay is drawn
 ///   over a finished frame and there is nothing for it to be occluded by. A
 ///   pass drawing it must therefore not attach a depth target either.
 /// - **No view-projection.** The vertices arrive in normalised screen space, so

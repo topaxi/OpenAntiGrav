@@ -4,7 +4,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// One camera-facing additive sprite at a world point, in the flare's own shape.
 ///

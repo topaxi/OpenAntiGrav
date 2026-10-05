@@ -13,7 +13,7 @@
 //! pipeline every mesh in this project draws through. The difference is the
 //! camera: the countdown's is orthographic over the HUD grid, `Team
 //! Selection`'s ship still frames the model from its own bounding sphere the
-//! way the asset viewer does (`oag_render::mesh_render::write_uniforms`) and
+//! way the asset viewer does (`oag_mesh::mesh_render::write_uniforms`) and
 //! confines the pass to a rectangle given in the screen's own grid, and
 //! `Track Creation`'s outline ribbon uses the disc's own fixed `<Mode3D>`
 //! camera instead - see [`mode3d_view_projection`].
@@ -21,13 +21,13 @@
 use anyhow::{Context, Result};
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
-use oag_render::camera::orbit::Orbit;
-use oag_render::mesh::Model;
-use oag_render::mesh_render::{
+use oag_mesh::mesh::Model;
+use oag_mesh::mesh_render::{
     Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
     TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
     write_uniforms, write_uniforms_raw,
 };
+use oag_mesh::orbit::Orbit;
 use oag_ui::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
@@ -308,17 +308,17 @@ pub fn model_named(
     // materials and textures in other entries of the same archive set - which
     // is why this takes `Archives` rather than a blob. `build` below is the
     // PSP/PS2 path and cannot draw one.
-    if oag_render::mesh::geometry_is_external(&blob) {
+    if oag_mesh::mesh::geometry_is_external(&blob) {
         return ps3_model(archives, entry, &blob);
     }
     let named = |model| (model, Vec::new());
-    let model = oag_render::mesh::build(entry, &blob)
+    let model = oag_mesh::mesh::build(entry, &blob)
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
     if !model.textures.is_empty()
         && model.textures.iter().all(Option::is_none)
         && let Some(external) = crate::race::ps2_texture_set(archives, entry)
     {
-        return oag_render::mesh::build_with_textures(entry, &blob, Some(&external))
+        return oag_mesh::mesh::build_with_textures(entry, &blob, Some(&external))
             .map(|mut model| {
                 model.keep_nearest();
                 named(model)
@@ -341,7 +341,7 @@ fn ps3_model(
     entry: &str,
     blob: &[u8],
 ) -> Result<(Model, Vec<String>)> {
-    let sibling = oag_render::mesh::rcs::sibling_name(entry)
+    let sibling = oag_mesh::mesh::rcs::sibling_name(entry)
         .with_context(|| format!("{entry} names no .rcsmodel"))?;
     let geometry = archives
         .read_name(&sibling)
@@ -350,7 +350,7 @@ fn ps3_model(
     // names its texture.
     let mut textures = Vec::new();
     let (mut model, report) =
-        oag_render::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
+        oag_mesh::mesh::rcs::build_scene(entry, blob, &geometry, &mut |path| {
             if path.to_ascii_lowercase().ends_with(".gtf") {
                 textures.push(path.to_string());
             }
@@ -448,8 +448,8 @@ impl Preview {
             // velocity. No Zone stage, no shadow map, nothing receiving one.
             GlowMask::Protected,
             Velocity::None,
-            &oag_render::mesh_render::zone::StageArt::NONE,
-            oag_render::mesh_render::ShadowMaps::NONE,
+            &oag_mesh::mesh_render::zone::StageArt::NONE,
+            oag_mesh::mesh_render::ShadowMaps::NONE,
             ShadowReceiver::Never,
         )?;
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -772,7 +772,7 @@ impl Preview {
         pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-        let bind = |draw: &oag_render::mesh::DrawCall| {
+        let bind = |draw: &oag_mesh::mesh::DrawCall| {
             let slot = draw.texture.map_or(0, |t| t + 1);
             &self.built.texture_binds[if slot < self.built.texture_binds.len() {
                 slot

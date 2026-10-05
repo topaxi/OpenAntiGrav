@@ -148,7 +148,7 @@ fn the_declared_stride_is_the_one_the_search_finds() {
 ///
 /// Both readings are counted, because the number that matters is the
 /// difference: judging every declared vertex condemns submeshes the file draws
-/// perfectly well, and `oag_render::mesh::rcs` dropped 17 of Talon's Junction's
+/// perfectly well, and `oag_mesh::mesh::rcs` dropped 17 of Talon's Junction's
 /// 117 on that basis.
 ///
 /// **324 submeshes are still outside after that, and this test pins the number

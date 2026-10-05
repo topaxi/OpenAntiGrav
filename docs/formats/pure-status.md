@@ -255,7 +255,7 @@ table the way Pulse's was read is what would take this to 100.
 arithmetic gives `0x377`, and `Anim Transform` at index 8 gives `0x372` - both
 checked against Pure's own files now (six ships and all 16 circuits
 respectively; see the table above), and both in
-[`vex::classes::V4`](../../crates/vex/src/vex.rs). `crates/render/src/mesh.rs`
+[`vex::classes::V4`](../../crates/vex/src/vex.rs). `crates/mesh/src/mesh.rs`
 already reads `classes.airbrake` to animate a ship's flap geometry, so this is
 not bookkeeping: before it, a Pure ship's flaps rendered in their base pose
 with no deflection at all, on every team, because the field it needed was

@@ -1,7 +1,7 @@
 //! Scratch probe: which materials a model's chunks name, and what each chunk
 //! declares - the question being what lights an HD ship.
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()
         .nth(1)

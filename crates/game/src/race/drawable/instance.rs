@@ -79,7 +79,7 @@ impl Drawable {
             zone_vis: self.zone_vis.clone(),
             zone_rebind: self.zone_rebind.clone(),
             opaque_ranges: self.opaque_ranges.clone(),
-            lod: oag_render::mesh::LodSwitch::new(&self.model.lod_groups),
+            lod: oag_mesh::mesh::LodSwitch::new(&self.model.lod_groups),
             ripple: std::cell::RefCell::new(None),
         }
     }

@@ -118,7 +118,7 @@ fn tri(points: [[f32; 2]; 3]) -> Model {
     model.draws = vec![DrawCall {
         range: 0..3,
         texture: None,
-        bounds: oag_render::mesh::Bounds {
+        bounds: oag_mesh::mesh::Bounds {
             centre: [0.0; 3],
             radius: 1.0,
         },

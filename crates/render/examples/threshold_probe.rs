@@ -16,8 +16,8 @@
 //!     data/images/pulse-psp-usa.chd 'Data\Environments\16_Track\track.vex'
 //! ```
 
-use oag_render::mesh;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh;
+use oag_mesh::mesh_render::Anisotropy;
 
 const SIZE: u32 = 1024;
 
@@ -95,7 +95,7 @@ fn main() -> anyhow::Result<()> {
     let mut total_after = 0usize;
     let mut total_changed = 0usize;
     for yaw in YAWS {
-        let before = oag_render::mesh_render::capture_pixels_from(
+        let before = oag_mesh::mesh_render::capture_pixels_from(
             &flat,
             SIZE,
             SIZE,
@@ -104,7 +104,7 @@ fn main() -> anyhow::Result<()> {
             Anisotropy::default(),
             0.0,
         )?;
-        let after = oag_render::mesh_render::capture_pixels_from(
+        let after = oag_mesh::mesh_render::capture_pixels_from(
             &recovered,
             SIZE,
             SIZE,
@@ -120,7 +120,7 @@ fn main() -> anyhow::Result<()> {
             .zip(after.as_chunks::<4>().0)
             .filter(|(a, b)| a != b)
             .count();
-        let strict = oag_render::mesh_render::capture_pixels_from(
+        let strict = oag_mesh::mesh_render::capture_pixels_from(
             &strict_only,
             SIZE,
             SIZE,

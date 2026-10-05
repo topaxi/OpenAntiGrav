@@ -21,8 +21,8 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_mesh::mesh_render::DEPTH_FORMAT;
 use oag_render::exhaust::{self, Exhaust, FlareTexture};
-use oag_render::mesh_render::DEPTH_FORMAT;
 
 /// The colour format the headless capture path uses, so this matches it.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -60,7 +60,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         None,
         exhaust::TRAIL_BLEND,
         1,
-        oag_render::mesh_render::Velocity::None,
+        oag_mesh::mesh_render::Velocity::None,
         true,
     );
 

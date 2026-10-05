@@ -1,6 +1,6 @@
 use super::*;
-use crate::mesh::{Bounds, DrawCall, slots};
 use oag_core::math::Vec3;
+use oag_mesh::mesh::{Bounds, DrawCall, slots};
 
 fn vertex(normal: [f32; 3]) -> GpuVertex {
     GpuVertex {
@@ -14,7 +14,7 @@ fn vertex(normal: [f32; 3]) -> GpuVertex {
         xform: 0,
         sun_mask: 1.0,
         slots: slots::DEFAULT,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 1.0,
     }
 }
@@ -205,7 +205,7 @@ fn a_circuit_vertex_keeps_the_colour_it_authors() {
 /// coordinate is generated, so the highlight rides the moving mesh.
 #[test]
 fn an_animated_nodes_normal_is_turned_by_its_matrix() {
-    use crate::mesh::{AnimNode, Motion};
+    use oag_mesh::mesh::{AnimNode, Motion};
     let mut track = circuit();
     track.vertices[3].xform = 1;
     track.vertices[3].normal = [1.0, 0.0, 0.0];
@@ -246,7 +246,7 @@ fn flapped() -> Model {
         v.position = [i as f32, 1.0, -2.0];
         v.normal = [0.0, 1.0, 0.0];
     }
-    model.airbrakes[0] = Some(crate::mesh::Flap {
+    model.airbrakes[0] = Some(oag_mesh::mesh::Flap {
         vertices: 3..6,
         hinge: Mat4::from_translation(Vec3::new(1.5, -0.5, -6.0)),
     });

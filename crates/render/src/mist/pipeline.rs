@@ -1,7 +1,7 @@
 //! The mist's draw: two textured screen quads, additive, colour only.
 
 use crate::exhaust::FlareTexture;
-use crate::mesh_render::{DEPTH_FORMAT, Velocity, fragment_options};
+use oag_mesh::mesh_render::{DEPTH_FORMAT, Velocity, fragment_options};
 
 /// Two quads of two triangles each.
 const VERTICES: usize = 12;

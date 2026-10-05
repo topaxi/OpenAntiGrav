@@ -9,7 +9,7 @@
 use super::*;
 
 use oag_display::display::FilterStrength;
-use oag_render::post::screen::Preset;
+use oag_post::screen::Preset;
 
 /// One 4x4 frame through `composite`, filtered by `preset` at `strength`,
 /// with the presentation target cleared to `color` first. Returns the

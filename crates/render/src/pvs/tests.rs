@@ -19,7 +19,7 @@ fn vex_header() -> Vec<u8> {
 }
 
 use super::*;
-use crate::mesh::Bounds;
+use oag_mesh::mesh::Bounds;
 
 fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
     DrawCall {
@@ -277,7 +277,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         draw_of_node(Some(2)),
         draw_of_node(Some(3)),
     ]);
-    let vertex = |x: f32| crate::mesh::GpuVertex {
+    let vertex = |x: f32| oag_mesh::mesh::GpuVertex {
         position: [x, 0.0, 0.0],
         normal: [0.0, 1.0, 0.0],
         colour: [1.0; 4],
@@ -287,8 +287,8 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: crate::mesh::slots::DEFAULT,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     model.indices.clear();

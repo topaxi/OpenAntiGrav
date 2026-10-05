@@ -118,7 +118,7 @@ fn census(blobs: &[Vec<u8>]) -> Census {
             continue;
         };
         // A `Speedup Pad`/`Weapon Pad` node's payload is a mesh payload - see
-        // `oag_render::mesh::build_pads` - and the pads are where the third
+        // `oag_mesh::mesh::build_pads` - and the pads are where the third
         // selector pattern lives, so leaving them out of the walk is what made
         // an earlier version of this file report only two.
         let drawn: Vec<u32> = [classes.mesh, classes.speedup_pad, classes.weapon_pad]

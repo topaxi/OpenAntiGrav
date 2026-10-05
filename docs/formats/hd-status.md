@@ -410,7 +410,7 @@ puts it on a circuit.
 **Found 2026-08-25, wiring pad illumination.** The trigger volumes above are
 one thing; the *drawable* chunk each pad node names at its mesh payload's own
 `+0x30` is another, and on this one circuit the two diverge for one class
-only. `oag_render::mesh::rcs::build_pads` (the PS3 counterpart of
+only. `oag_mesh::mesh::rcs::build_pads` (the PS3 counterpart of
 `mesh::build_pads`, added the same day) walks all 18 `Speedup Pad` nodes,
 reads a well-formed, non-zero chunk hash off every one, and finds **none of
 the 18** in `talons_junction/track.rcsmodel` - `model.mesh(hash)` returns

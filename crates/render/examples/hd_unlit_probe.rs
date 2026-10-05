@@ -14,8 +14,8 @@
 //! attribute or a mesh that really authors one coordinate for every vertex.
 //! This prints the declaration beside it so the two are told apart.
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {
     if std::env::args().nth(1).as_deref() == Some("--program") {

@@ -13,14 +13,15 @@
 //!
 //! Modules:
 //!
-//! - [`mesh`] decodes a `.vex` model into one portable vertex and index buffer.
+//! - `oag_mesh::mesh` decodes a `.vex` model into one portable vertex and index
+//!   buffer, and `oag_mesh::mesh_render` is the pipeline that draws it; both live
+//!   in `oag-mesh`, as `oag-post` holds the post-processing chain and `oag-gpu`
+//!   what the two share.
 //! - [`exhaust`] is the ship's engine flare: the recovered state machine, and the
 //!   one blended pipeline in the crate.
 //! - [`track`] builds the driveable ribbon from a decoded track spline.
 //! - [`collision`] builds a debug view of the collision soup the physics world
 //!   is made of.
-//! - [`mesh_render`] is the pipeline that draws either of those, offscreen or
-//!   into a surface.
 //! - [`camera`] is the camera maths: orbit, free and the chase spring.
 //! - [`pvs`] places draw calls into the track's authored visibility sections,
 //!   and is the first tier of the two-tier cull the draw loop runs.
@@ -37,7 +38,6 @@
 pub mod absorb_shell;
 pub mod beam;
 pub mod camera;
-pub mod capture;
 pub mod cloud;
 pub mod collision;
 pub mod exhaust;
@@ -45,13 +45,8 @@ pub mod flash;
 pub mod gantry;
 pub mod ghost;
 pub mod hull_overlay;
-pub mod jitter;
 pub mod loading;
-pub mod mesh;
-pub mod mesh_render;
 pub mod mist;
-pub mod perfprobe;
-pub mod post;
 pub mod psys;
 pub mod pvs;
 pub mod ranrot;
@@ -62,7 +57,6 @@ pub mod shield;
 pub mod shine;
 pub mod sparks;
 pub mod texgen;
-pub mod timing;
 pub mod track;
 pub mod weapon_pad;
 pub mod weapon_quads;

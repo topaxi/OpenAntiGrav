@@ -73,7 +73,7 @@ fn load(mode: oag_race::Mode) -> Option<race::Loaded> {
 }
 
 /// The six faces of a loaded sky, as raw RGBA, with their size.
-fn faces(sky: &oag_render::mesh::Model) -> (u32, u32, Vec<Vec<u8>>) {
+fn faces(sky: &oag_mesh::mesh::Model) -> (u32, u32, Vec<Vec<u8>>) {
     let textures: Vec<_> = sky
         .textures
         .iter()

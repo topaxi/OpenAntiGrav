@@ -16,10 +16,10 @@ beside `track.rcsmodel`:
 All three share the `0xca5caded` container [2048-rcsmodel.md](2048-rcsmodel.md)
 describes (`oag_rcs::rcsmodel::psp2::container`, factored out the day the
 other two were read). `oag_rcs::rig` evaluates a node under its track, and
-`oag_render::mesh::rcs::psp2::placement` decides which nodes bake and which
+`oag_mesh::mesh::rcs::psp2::placement` decides which nodes bake and which
 take a slot of the shader's node table - the same table, upload and shader
 path Pulse's and HD's `Anim Transform`s already ride
-(`oag_render::mesh::Motion` is the two-variant enum that lets it).
+(`oag_mesh::mesh::Motion` is the two-variant enum that lets it).
 
 **The reading rests on a cross-title oracle**, the same method
 [track.md](track.md#wipeout-2048-authors-version-0x107-and-the-control-point-shrank-to-96-bytes)
@@ -30,7 +30,7 @@ HD's evaluator is ground truth for 2048's rig - node by node, at four times,
 established, in order of what a renderer needs:
 
 1. **A node-bound mesh's vertices are in its node's space**, not the world's
-   (confidence 92). Before this page `oag_render::mesh::rcs::psp2` drew every
+   (confidence 92). Before this page `oag_mesh::mesh::rcs::psp2` drew every
    submesh as-is; the 130 node-bound meshes of `altima`'s 1,153 were a median
    1,086 units (max 5,765) from where the original puts them, and every one
    of them was. On Anulpha Pass, 73 of 78 node-bound meshes have a vertex box
@@ -421,7 +421,7 @@ pit bots, and nothing about it is a view. **Slot 7 is a scalar on that root**
 (`0.66` falling to `0.03` over the loop on the full clip, `0.2` to `0.35` on the
 `_sp` one) whose meaning is not read.
 
-**Not wired.** The model builds through `oag_render::mesh::rcs::psp2::build`
+**Not wired.** The model builds through `oag_mesh::mesh::rcs::psp2::build`
 with its skeleton and clip (116 moving submeshes on 120 animated nodes), but
 **nothing says when it plays or where it is drawn**: the circuit's own model
 already contains a start grid, so drawing it unconditionally would double the

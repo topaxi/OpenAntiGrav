@@ -8,8 +8,9 @@
 //! `docs/rendering/motion-blur.md` calls this test out by name. Skips when
 //! there is no adapter, like `msaa_resolve.rs`.
 
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model};
-use oag_render::mesh_render::{self, Anisotropy, UNIFORMS_SIZE, VELOCITY_FORMAT};
+use oag_gpu::formats::VELOCITY_FORMAT;
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model};
+use oag_mesh::mesh_render::{self, Anisotropy, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -25,8 +26,8 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: oag_render::mesh::slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

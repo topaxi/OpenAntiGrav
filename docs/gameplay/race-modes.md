@@ -66,13 +66,13 @@ Two consequences in `crates/game/src/race.rs`:
   **In this build, `Scene::new`'s gate never reached HD's own pads, and that
   was a bug this report caught (fixed 2026-08-31).** `Mode::weapons_enabled`
   is title-agnostic, but the PS3 path never fed it anything to gate: HD's
-  circuits load through `oag_render::mesh::rcs::build_scene`, which used to
+  circuits load through `oag_mesh::mesh::rcs::build_scene`, which used to
   draw weapon-pad geometry as part of the track's own world-space chunk pass
   rather than through a separate `Weapon Pad` node the way the PSP-shaped path
   does, so `oag_game::race::load` set `weapon_pad_model` to `None` on that
   path and the mode gate had nothing to act on - HD weapon pads drew in every
   mode. `build_scene` now splits `Weapon Pad` chunks into their own model
-  (`crates/render/src/mesh/rcs/pads.rs`), and `geometry::track_model`
+  (`crates/mesh/src/mesh/rcs/pads.rs`), and `geometry::track_model`
   (`crates/game/src/race/load/geometry.rs`) hands that model to the same
   `weapon_pad_model` slot the PSP-shaped path already fills, so the existing
   gate covers HD for free. Pinned on the real disc by

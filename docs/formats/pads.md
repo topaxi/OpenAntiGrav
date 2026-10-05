@@ -3,7 +3,7 @@
 `Speedup Pad` (`0x3bd`) and `Weapon Pad` (`0x3be`): the plates on the track
 surface that boost a craft or hand it a pickup.
 
-Decoded by `crates/vex/src/pads.rs`, drawn by `oag_render::mesh::build_pads`,
+Decoded by `crates/vex/src/pads.rs`, drawn by `oag_mesh::mesh::build_pads`,
 asserted against the disc by `crates/vex/tests/pads_ground_truth.rs`. The
 runtime side - bind, containment, the swept test - is
 [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md);
@@ -13,7 +13,7 @@ the force is in [`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md).
 
 `Weapon Pad` `0x3be` is a `Mesh` subclass exactly as `Speedup Pad` `0x3bd` is, so
 its geometry ships inside the track file and drawing it is the mesh builder
-pointed at a different class id - `oag_render::mesh::build_weapon_pads`. On
+pointed at a different class id - `oag_mesh::mesh::build_weapon_pads`. On
 `16_Track` that is **738 triangles across 27 materials** against the speed pads'
 612 and 51.
 

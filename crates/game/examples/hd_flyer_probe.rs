@@ -6,7 +6,7 @@
 //!     /data/fe/flyers/01_uplift/flyer.vex
 //! ```
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

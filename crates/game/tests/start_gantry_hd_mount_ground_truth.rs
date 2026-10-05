@@ -17,7 +17,7 @@
 //! own bytes directly - the asset's own claims, independent of this project's
 //! model builder. This file is the other half: that `oag_render::gantry::mount`
 //! actually finds HD's `billboard8.gtf`-bound chunk on a real track model built
-//! through this project's own `oag_render::mesh::rcs` pipeline, and that
+//! through this project's own `oag_mesh::mesh::rcs` pipeline, and that
 //! `race::load` places a gantry there rather than reporting an absence -
 //! `crates/game/tests/start_gantry_report_ground_truth.rs`'s own shape, for
 //! Pulse, ported to HD's differently-packaged disc.
@@ -51,19 +51,19 @@ fn image() -> Option<PathBuf> {
 }
 
 /// The circuit's own track model, built exactly as `race::load` builds it -
-/// through `oag_render::mesh::rcs::build_scene` off the `.vex` and its sibling
+/// through `oag_mesh::mesh::rcs::build_scene` off the `.vex` and its sibling
 /// `.rcsmodel` - so the mount is measured on the same geometry a race draws,
 /// not a hand-rolled stand-in.
-fn track_model(image: &std::path::Path) -> oag_render::mesh::Model {
+fn track_model(image: &std::path::Path) -> oag_mesh::mesh::Model {
     let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
     let track_blob = archives.read_name(TRACK).expect("the track .vex reads");
     let sibling =
-        oag_render::mesh::rcs::sibling_name(TRACK).expect("a .vex name has an .rcsmodel sibling");
+        oag_mesh::mesh::rcs::sibling_name(TRACK).expect("a .vex name has an .rcsmodel sibling");
     let geometry = archives
         .read_name(&sibling)
         .expect("the sibling .rcsmodel reads");
     let (model, _report) =
-        oag_render::mesh::rcs::build_scene(TRACK, &track_blob, &geometry, &mut |path| {
+        oag_mesh::mesh::rcs::build_scene(TRACK, &track_blob, &geometry, &mut |path| {
             archives.read_name(path).ok()
         })
         .expect("the track model builds");
@@ -201,7 +201,7 @@ fn race_load_places_a_gantry_on_talons_junction() {
 
 /// The digit board's own `Anim Transform` teleports it +10 in world Y at the
 /// 6.000 s loop close, sampled through this project's own model builder
-/// (`oag_render::mesh::rcs::build` + `Model::sample_anim_nodes`) rather than
+/// (`oag_mesh::mesh::rcs::build` + `Model::sample_anim_nodes`) rather than
 /// the raw `.vex` track `crates/hd/tests/start_gantry_hd_ground_truth.rs`
 /// already pins - this is the integration half, that the pipeline `race::gantry`
 /// actually calls reproduces the same number.
@@ -215,11 +215,11 @@ fn the_digit_board_teleports_through_this_projects_own_pipeline() {
     let blob = archives
         .read_name(gantry_name)
         .expect("the gantry .vex reads");
-    let sibling = oag_render::mesh::rcs::sibling_name(gantry_name).expect("an .rcsmodel sibling");
+    let sibling = oag_mesh::mesh::rcs::sibling_name(gantry_name).expect("an .rcsmodel sibling");
     let geometry = archives
         .read_name(&sibling)
         .expect("the sibling .rcsmodel reads");
-    let (model, _report) = oag_render::mesh::rcs::build(
+    let (model, _report) = oag_mesh::mesh::rcs::build(
         gantry_name,
         &blob,
         &geometry,
@@ -231,7 +231,7 @@ fn the_digit_board_teleports_through_this_projects_own_pipeline() {
     // `pasted__Go_HD_start_light_321go` (`crates/hd/tests/start_gantry_hd_ground_truth.rs`'s
     // own `GLYPH_NODE`) is found here by which texture it binds and by being
     // the *largest* such draw, rather than by node index -
-    // `oag_render::mesh::rcs::build`'s own node numbering is an implementation
+    // `oag_mesh::mesh::rcs::build`'s own node numbering is an implementation
     // detail this test should not have to track. Several small letter-shaped
     // meshes elsewhere in this file bind the same `321_go_64.gtf` texture at a
     // different material slot; the glyph board's own draw is roughly four

@@ -26,7 +26,7 @@ pub(crate) fn depth_texture(
         format: mesh_render::DEPTH_FORMAT,
         // `TEXTURE_BINDING` because the motion blur pass reads the depth the
         // scene just wrote to reproject each pixel against the previous
-        // camera - see `oag_render::post::motion_blur`. Declared even at MSAA
+        // camera - see `oag_post::motion_blur`. Declared even at MSAA
         // sample counts, where that pass does not run: the flag costs
         // nothing, and a conditional usage would be one more thing the two
         // call sites could disagree about.

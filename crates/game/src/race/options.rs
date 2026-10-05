@@ -805,11 +805,11 @@ pub struct Loaded {
     ///
     /// Wipeout HD's, and `None` everywhere else. `Some` is what switches the
     /// race onto the linear float scene target and the read `FunkLayerBloom`
-    /// chain - see `oag_render::post::hd_bloom`.
-    pub hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    /// chain - see `oag_post::hd_bloom`.
+    pub hd_bloom: Option<oag_post::hd_bloom::Params>,
     /// Omega's `Tonemap` block, read into the curve its executable applies -
-    /// see `oag_render::post::omega_tonemap`. `None` for every other title.
-    pub omega_tonemap: Option<oag_render::post::omega_tonemap::Params>,
+    /// see `oag_post::omega_tonemap`. `None` for every other title.
+    pub omega_tonemap: Option<oag_post::omega_tonemap::Params>,
     /// The Zone colour grade this title lays over the circuit, stage by
     /// stage, in a Zone race.
     ///

@@ -35,7 +35,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
         eprintln!("no adapter; skipping");
         return;
     };
-    if !oag_render::post::fsr3::supported(&adapter) {
+    if !oag_post::fsr3::supported(&adapter) {
         eprintln!("no compute shaders; skipping");
         return;
     }
@@ -75,7 +75,7 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
     );
     let velocity = attachment(
         "velocity",
-        oag_render::mesh_render::VELOCITY_FORMAT,
+        oag_gpu::formats::VELOCITY_FORMAT,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
     );
 
@@ -98,9 +98,9 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
                 depth: &depth,
                 velocity: &velocity,
                 sample_count: 1,
-                camera: oag_render::post::fsr3::Camera::default(),
+                camera: oag_post::fsr3::Camera::default(),
                 jitter: (0.0, 0.0),
-                phase_count: oag_render::jitter::phases(render.0, 16),
+                phase_count: oag_post::jitter::phases(render.0, 16),
                 reset: true,
             }),
             None,

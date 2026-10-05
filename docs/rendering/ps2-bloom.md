@@ -3,7 +3,7 @@
 **Yes, the PS2 build runs a bloom post-process every race frame. Confidence
 90** (rubric: measured directly, four independent frame instances, one
 circuit, one image; not 95 because no second circuit and no static
-corroboration in the executable). **Ported 2026-10-02**: `oag_render::post::ps2_bloom`
+corroboration in the executable). **Ported 2026-10-02**: `oag_post::ps2_bloom`
 runs the chain and `mesh_render::GlowMask::StampedByTexel` writes the mask, see
 "What ours does" below. It is the same shape as the PSP's
 ([`bloom.md`](../ghidra/functions/psp-pulse-usa/bloom.md)) with different

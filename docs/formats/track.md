@@ -148,7 +148,7 @@ differs slightly. See [race modes](../gameplay/race-modes.md) for what that cost
 
 **One circuit authors no `Weapon Pad` node at all** where its race twin does -
 which is the data agreeing with Zone having weapons off, and is the case that
-found a real bug in `oag_render::mesh::build_optional_class`: it returned an
+found a real bug in `oag_mesh::mesh::build_optional_class`: it returned an
 empty model for an *unrecovered class id* but errored for a class the file simply
 does not author, so a Zone race failed to load with `decoded to no triangles`
 while the file parsed perfectly.

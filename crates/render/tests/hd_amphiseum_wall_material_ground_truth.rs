@@ -24,7 +24,7 @@
 //! `EmissiveTexture` rather than a picture. See
 //! `docs/formats/rcsmaterial.md`, "A trackside wall panel drew solid black
 //! because its picture was its glow decal", and
-//! `crates/render/src/mesh/rcs/skin.rs`'s `NOT_A_PICTURE`.
+//! `crates/mesh/src/mesh/rcs/skin.rs`'s `NOT_A_PICTURE`.
 //!
 //! This test builds Amphiseum's real track through the production
 //! `mesh::rcs::scene_from` path and pins two things: the circuit's own
@@ -35,7 +35,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

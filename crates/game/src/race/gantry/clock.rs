@@ -53,8 +53,8 @@
 //! `[3.83, 5.25)` s, so on the release the clock jumps from frame ~203 to frame
 //! 229.8 (`GO` already lit) and then loops 86 ticks. [`HD_PRE_LAP_WINDOW`].
 
-use oag_render::mesh::{DrawCall, Model};
-use oag_render::mesh_render::TexAnims;
+use oag_mesh::mesh::{DrawCall, Model};
+use oag_mesh::mesh_render::TexAnims;
 
 use oag_race::COUNTDOWN_TICKS;
 

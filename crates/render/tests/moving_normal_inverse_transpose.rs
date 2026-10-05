@@ -19,11 +19,11 @@
 //!
 //! Skips when there is no adapter, like `zone_recolour.rs`.
 
-use oag_rcs::rcsskeleton::{IDENTITY, Node};
-use oag_render::mesh::{
+use oag_mesh::mesh::{
     AnimNode, Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Motion, Texels, slots,
 };
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
+use oag_rcs::rcsskeleton::{IDENTITY, Node};
 use std::sync::Arc;
 
 const SCALE: [f32; 3] = [0.5, 1.0, 1.0];
@@ -41,7 +41,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], xform: u32) -> GpuVertex {
         xform,
         sun_mask: 1.0,
         slots: slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }
@@ -126,7 +126,7 @@ fn model(vertices: Vec<GpuVertex>, moving: bool) -> Model {
 const CORNERS: [[f32; 3]; 3] = [[-0.6, -0.7, 0.6], [0.6, -0.7, -0.6], [0.0, 0.7, 0.0]];
 
 fn render(model: &Model) -> Option<Vec<u8>> {
-    oag_render::capture::capture_pixels_from(model, SIZE, SIZE, 0.6, 0.2, Anisotropy::Off, 0.0).ok()
+    oag_mesh::capture::capture_pixels_from(model, SIZE, SIZE, 0.6, 0.2, Anisotropy::Off, 0.0).ok()
 }
 
 #[test]

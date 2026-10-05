@@ -26,7 +26,7 @@ pub(super) struct Grade {
     /// an upscaler's or FXAA/SMAA's output is deliberately read through the
     /// *non*-sRGB twin because that pass works in perceptual space and a
     /// decode on every internal read would be both wrong and paid twice. See
-    /// `oag_render::post`. Since [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
+    /// `oag_post`. Since [ADR-0020](../../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md)
     /// forced every real `format` here non-sRGB, `twin == format` and this is
     /// always zero in production - "a post-process ran" is not the same fact
     /// as "the source needs decoding", and treating them as one is the bug
@@ -39,8 +39,8 @@ pub(super) struct Grade {
     /// Here rather than in a binding of its own because it rides the same
     /// buffer, the same write and the same "only when it changed" comparison
     /// the grade already had, and a second uniform binding would mean a second
-    /// entry in the shared `oag_render::post::fullscreen_layout` that the five passes in
-    /// `oag_render::post` have no use for.
+    /// entry in the shared `oag_post::fullscreen_layout` that the five passes in
+    /// `oag_post` have no use for.
     pub(super) uv_scale: [f32; 2],
     pub(super) uv_max: [f32; 2],
 }
@@ -217,7 +217,7 @@ pub(super) fn bind(
     view: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     // Through the probe rather than `device.create_bind_group` directly, the
-    // same as the five sites in `oag_render::post`. This is the sixth, and the
+    // same as the five sites in `oag_post`. This is the sixth, and the
     // only one outside that module - which is why a sweep of `post/` alone
     // missed it. A counting passthrough: the same bind group, and nothing at
     // all without the `perf-probe` feature.
@@ -226,7 +226,7 @@ pub(super) fn bind(
     // `resolve_scene` binds an upscaler's or a post-process's output every
     // frame it runs one, while `target` and `output` bind once per resize. A
     // resize is rare enough that the count still reads as per-frame churn.
-    oag_render::perfprobe::bind_group(
+    oag_gpu::perfprobe::bind_group(
         device,
         &wgpu::BindGroupDescriptor {
             label: Some("upscale"),

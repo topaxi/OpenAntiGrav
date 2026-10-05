@@ -27,7 +27,7 @@ use anyhow::{Context, Result, bail};
 use oag_vex::track::{self, AiTrack, Sample};
 use oag_vex::vex;
 
-use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model};
 
 /// Curve samples per control-point interval.
 ///
@@ -40,7 +40,7 @@ const STRIP_HALF_WIDTH: f32 = 0.6;
 
 /// Loads a track's spline graph from a `.vex` model inside an archive.
 pub fn load(spec: &str, name: &str) -> Result<(AiTrack, String)> {
-    let data = crate::mesh::read_blob(spec, name)?;
+    let data = oag_mesh::mesh::read_blob(spec, name)?;
     if !vex::has_magic(&data) {
         bail!("{name} is not a .vex file (no VEXX magic)");
     }
@@ -241,8 +241,8 @@ fn strip(
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: crate::mesh::slots::DEFAULT,
-            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         });
         vertices.push(GpuVertex {
@@ -255,8 +255,8 @@ fn strip(
             anim: 0,
             xform: 0,
             sun_mask: 1.0,
-            slots: crate::mesh::slots::DEFAULT,
-            specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            slots: oag_mesh::mesh::slots::DEFAULT,
+            specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
         });
     }

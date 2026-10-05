@@ -11,7 +11,7 @@
 //! `crates/render/src/`.
 
 use crate::exhaust::FlareTexture;
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 use super::MAX_VERTICES;
 
@@ -56,7 +56,7 @@ impl Pipeline {
         format: wgpu::TextureFormat,
         texture: &FlareTexture,
         sample_count: u32,
-        velocity: crate::mesh_render::Velocity,
+        velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("beam"),
@@ -105,7 +105,7 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let constants: Vec<(&str, f64)> = crate::mesh_render::linear_constants(format)
+        let constants: Vec<(&str, f64)> = oag_mesh::mesh_render::linear_constants(format)
             .iter()
             .copied()
             .chain([("glow_mask", f64::from(super::GLOW_MASK))])
@@ -160,7 +160,7 @@ impl Pipeline {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: crate::mesh_render::DEPTH_FORMAT,
+                format: oag_mesh::mesh_render::DEPTH_FORMAT,
                 // `Gu_DepthMask(1)` masks depth writes off, and
                 // `Gu_DepthFunc(6)` is the PSP's reversed-depth spelling of an
                 // ordinary less-or-equal test.
@@ -179,7 +179,7 @@ impl Pipeline {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("beam uniforms"),
-            size: crate::mesh_render::UNIFORMS_SIZE,
+            size: oag_mesh::mesh_render::UNIFORMS_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

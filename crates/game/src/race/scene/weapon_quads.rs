@@ -63,8 +63,8 @@ impl Scene {
         race: &Race,
         right: Vec3,
         up: Vec3,
-        bolt: &mut Vec<oag_render::mesh::GpuVertex>,
-        flash: &mut Vec<oag_render::mesh::GpuVertex>,
+        bolt: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        flash: &mut Vec<oag_mesh::mesh::GpuVertex>,
     ) {
         race.cannon_quad_vertices(&self.weapon_quads.draw, right, up, bolt, flash);
     }
@@ -74,8 +74,8 @@ impl Scene {
         &self,
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
-        bolt: &[oag_render::mesh::GpuVertex],
-        flash: &[oag_render::mesh::GpuVertex],
+        bolt: &[oag_mesh::mesh::GpuVertex],
+        flash: &[oag_mesh::mesh::GpuVertex],
     ) {
         self.weapon_quads
             .pipeline

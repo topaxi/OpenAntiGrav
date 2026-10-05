@@ -277,7 +277,7 @@ eight playable teams, the cockpit once. `oag-view --nodes` reads them:
 | `Data\Weapons\vr_shield_cockpit.vex` | `Anim Transform pSphere3` -> `Mesh pSphereShape3` (4,176 bytes) + `Texture Data\Weapons\Textures\noise1_ADD.tga` |
 
 Both textures carry the `_ADD` suffix the artists use for an additive material,
-which `oag_render::mesh_render::blend::ADDITIVE_BLEND` already has a pipeline
+which `oag_mesh::mesh_render::blend::ADDITIVE_BLEND` already has a pipeline
 for.
 
 `Data\Weapons\shield.vex` is on the disc too, the same mesh and the same

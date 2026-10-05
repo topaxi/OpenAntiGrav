@@ -1260,7 +1260,7 @@ RTTI type tokens rather than real functions.
   vertex-type read, and that is a disc read rather than an emulator one.
 - **Whether `mesh_render::TRANSPARENT_BLEND` should change project-wide.**
   Already self-documented as unconfirmed in
-  `crates/render/src/mesh_render.rs`; this page's measurement is evidence
+  `crates/mesh/src/mesh_render.rs`; this page's measurement is evidence
   against its `SrcAlpha`/`OneMinusSrcAlpha` lerp, in favour of the `GU_FIX`
   additive equation, but changing it touches every transparent batch on every
   track and ship and needs its own verification pass.

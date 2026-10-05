@@ -1,4 +1,4 @@
-//! Confirms `oag_render::mesh::is_blink_light_texture` actually fires on every
+//! Confirms `oag_mesh::mesh::is_blink_light_texture` actually fires on every
 //! real ship, not just on the mined texture name it was written against.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
@@ -12,7 +12,7 @@
 //!
 //! # What this is for
 //!
-//! The heuristic in `oag_render::mesh::is_blink_light_texture` was built from
+//! The heuristic in `oag_mesh::mesh::is_blink_light_texture` was built from
 //! decoding real materials on real ships (see `docs/formats/vex.md`, "Ship
 //! lights: one shared texture, not a mesh-naming convention"): every one of
 //! the 8 playable teams turned out to carry a mesh whose material resolves to
@@ -27,8 +27,8 @@
 
 use std::path::PathBuf;
 
+use oag_mesh::mesh;
 use oag_pulse::race::TEAMS;
-use oag_render::mesh;
 
 /// The archive entry name for a team's ship model, assembled the way
 /// `oag_game::race::ship_entry_name` assembles it. Not shared from there: no

@@ -7,7 +7,7 @@
 //! but not grow.
 
 use oag_core::math::{Mat4, camera};
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 use oag_ui::scene_backdrop::{FOV_Y, Widget};
 use oag_vex::vex::{self, Node};
 

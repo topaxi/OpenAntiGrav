@@ -237,9 +237,9 @@ that recovered this format).
 **2026-09-17, `lane/hd-gantry-wire`: playback is now wired, generically, and
 this is not the same claim as "the digits are correct".** Every `.rcsmodel`
 material carrying a curve - not gantry-specific, see
-[`oag_render::mesh::rcs::curve_track`](../../crates/render/src/mesh/rcs/curve_track.rs)'s
+[`oag_mesh::mesh::rcs::curve_track`](../../crates/mesh/src/mesh/rcs/curve_track.rs)'s
 own doc comment - becomes one more entry of
-[`oag_render::mesh::Model::anim_tracks`](../../crates/render/src/mesh/anim_track.rs),
+[`oag_mesh::mesh::Model::anim_tracks`](../../crates/mesh/src/mesh/anim_track.rs),
 the exact table Pulse's own `TEXOFFSET` blocks already fill, sampled every
 frame through the **same per-model clock every other animation on that model
 already rides** - the race clock, unshifted, `crates/game/src/race/gantry.rs`'s

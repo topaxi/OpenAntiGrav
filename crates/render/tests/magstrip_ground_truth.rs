@@ -54,7 +54,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 use oag_vex::vex;
 
 /// The magstrip surface texture, by artist-given label. PSP embeds labels
@@ -333,7 +333,7 @@ fn the_magstrip_texture_paints_its_features_across_v_not_along_u() {
         .expect("magstrip texture");
     let (w, h) = (texture.width as usize, texture.height as usize);
     // A PSP `.vex` texture is always decoded RGBA8; only Wipeout HD's `.gtf`
-    // keeps its blocks. See `oag_render::mesh::Texels`.
+    // keeps its blocks. See `oag_mesh::mesh::Texels`.
     let rgba = texture.rgba().expect("a .vex texture is decoded RGBA8");
     let luma = |x: usize, y: usize| {
         let o = (y * w + x) * 4;
@@ -765,7 +765,7 @@ fn psp_magstrip_texture_coordinates_are_the_floor_of_the_ps2_masters() {
 /// animation, if any" question as a negative result: the mechanism exists in
 /// the engine and elsewhere on this disc (`docs/formats/vex.md`'s
 /// texture-transform keyframe block, already implemented as
-/// `oag_render::mesh_render::TexAnims`), the magstrip's own two materials
+/// `oag_mesh::mesh_render::TexAnims`), the magstrip's own two materials
 /// just do not use it.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]

@@ -518,7 +518,7 @@ impl Declared {
     ///
     /// Either half of it counts: a program fed the sun's direction is fed the
     /// sun. Together with [`Self::takes_constant_ambient`] this is the
-    /// three-way lighting key - see `oag_render::mesh::slots::NO_SUN` for why
+    /// three-way lighting key - see `oag_mesh::mesh::slots::NO_SUN` for why
     /// asking about the directional light is what makes the split hold where
     /// an earlier one did not.
     #[must_use]

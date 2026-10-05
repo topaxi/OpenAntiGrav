@@ -9,8 +9,8 @@
 
 use std::collections::BTreeSet;
 
-use oag_render::mesh;
-use oag_render::mesh_render::cutout;
+use oag_mesh::mesh;
+use oag_mesh::mesh_render::cutout;
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]

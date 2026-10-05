@@ -11,7 +11,7 @@
 //! - its collision is a `track_col.col` in 2048's container with a 19-byte
 //!   k-d node in place of 24 ([`oag_vex::kdcol::NodeLayout::Packed`]);
 //! - its geometry is a `track.final.rcsmodel` (the `.final` infix is Omega's;
-//!   `oag_render::mesh::rcs::sibling_name_cooked`) in 2048's `.rcsmodel`
+//!   `oag_mesh::mesh::rcs::sibling_name_cooked`) in 2048's `.rcsmodel`
 //!   container with 64-bit pointers, whose materials name `.gnf` textures;
 //! - a craft is `hdships\<team>\Ship.vex` beside `ship.rcsmodel` and
 //!   `handlingstats.xml`, the same three files 2048's HD-derived roster has.

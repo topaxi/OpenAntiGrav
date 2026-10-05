@@ -175,7 +175,7 @@ winding in clip space, was not read. The two setters are named
   with **state bit 3**, not bit 7. **Named 2026-09-23 from RPCS3's own
   `rpcs3/Emu/RSX/gcm_enums.h`: `0x183c` is `NV4097_SET_CULL_FACE_ENABLE`
   and `0xa74` is `NV4097_SET_DEPTH_TEST_ENABLE`** (confidence 90), so state
-  bit 4 is back-face culling and bit 3 depth testing. `oag_render::mesh::rcs`
+  bit 4 is back-face culling and bit 3 depth testing. `oag_mesh::mesh::rcs`
   honours neither yet; the Plasma explosion's three models are the first
   consumers, per model, in `oag_game::race::load::weapon_models::cull_as_authored`;
   see [plasma.md](plasma.md)'s 2026-09-23 section. Neither

@@ -5,7 +5,7 @@
 > on. Five ship in the binary; a player's own go in `<config dir>/oag/shaders/`
 > and are picked up live. The setting is per title, on the GRAPHICS page.
 > The decision is [ADR-0053](../architecture/adr/0053-screen-filters-are-loadable-wgsl-after-the-composite.md);
-> the pass is `oag_render::post::screen`, the catalogue `oag_game::screen`,
+> the pass is `oag_post::screen`, the catalogue `oag_game::screen`,
 > and the frame's plumbing `oag_game::upscale::screen`.
 
 **This page is not reverse engineering and carries no confidence scores.**
@@ -161,7 +161,7 @@ that is not `//!` ends the header.
 The body defines `screen_filter`, returning the colour for the output pixel at
 `uv` (`0..1` across the frame) and `pixel` (its centre in output pixels,
 `0.5, 1.5, ...`). It runs against this prelude, which is
-`crates/render/src/post/screen.wgsl` and is the whole contract:
+`crates/post/src/screen.wgsl` and is the whole contract:
 
 | Name | Binding | What |
 | --- | --- | --- |
@@ -215,7 +215,7 @@ while a preset is selected.
 ## Why these and not a port
 
 The obvious thing to ship is a port of a known CRT shader, and the reason
-none is shipped is the reason `oag_render::post::fxaa` gives for NVIDIA's
+none is shipped is the reason `oag_post::fxaa` gives for NVIDIA's
 FXAA: the collections these come from - libretro's `slang-shaders` and
 `common-shaders`, the Mega Bezel work, most of what a PPSSPP shader pack
 holds - are GPL, and this MIT/Apache-2.0 tree cannot vendor or transliterate
@@ -230,7 +230,7 @@ is small enough that a port is an afternoon and a converter from PPSSPP's
 
 ## Verification
 
-- `oag_render::post::screen::tests` - the header, the accessors, naga's
+- `oag_post::screen::tests` - the header, the accessors, naga's
   refusals, the uniform's size. No device.
 - `oag_game::screen::tests` - every built-in parses and validates; a user
   file joins, shadows a built-in, is re-read on a rewrite, keeps its last

@@ -27,7 +27,7 @@
 //! [`Preset::revision`] moved - a settings change, or a user file saved. A
 //! preset whose shader will not build is reported once and the frame is
 //! drawn unfiltered until its revision moves again, which is the contract
-//! `oag_render::post::screen` states and `crate::screen` relies on for
+//! `oag_post::screen` states and `crate::screen` relies on for
 //! edit-save-look authoring.
 
 use std::time::Instant;
@@ -35,7 +35,7 @@ use std::time::Instant;
 use log::{debug, warn};
 
 use oag_display::display::{Brightness, FilterStrength, Gamma};
-use oag_render::post::screen::{self, Preset};
+use oag_post::screen::{self, Preset};
 
 /// The preset a [`super::Framebuffer`] is currently filtering with, and the
 /// pass built from it.

@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let entry = args.next().ok_or("usage: glow_mask_probe IMAGE ENTRY")?;
     let mut archives = oag_pulse::open(&image)?;
     let blob = archives.read_name(&entry)?;
-    let model = oag_render::mesh::build(&entry, &blob)?;
+    let model = oag_mesh::mesh::build(&entry, &blob)?;
     for (name, draws) in [
         ("opaque", &model.draws),
         ("cutout", &model.alpha_tested_draws),

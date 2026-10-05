@@ -6,7 +6,7 @@
 //! `rcsmaterial::Declared::takes_constant_ambient` reads that list - so the
 //! difference between the two is measurable rather than arguable.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 /// The engine parameter names this probe needs, from `EBOOT.elf`'s own table
 /// at `0x008b7f08` - see `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`.
@@ -130,7 +130,7 @@ fn main() -> anyhow::Result<()> {
     // says: the bits `mesh::rcs::skin::roles` packed.
     let mut emissive_slots = 0usize;
     for (slot, packed) in model.material_slots.iter().enumerate() {
-        if packed & oag_render::mesh::slots::EMISSIVE == oag_render::mesh::slots::EMISSIVE {
+        if packed & oag_mesh::mesh::slots::EMISSIVE == oag_mesh::mesh::slots::EMISSIVE {
             emissive_slots += 1;
             if emissive_slots <= 6 {
                 println!(

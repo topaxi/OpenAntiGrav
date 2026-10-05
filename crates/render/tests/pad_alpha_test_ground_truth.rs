@@ -44,8 +44,8 @@
 use std::path::Path;
 
 use oag_assets::Archive;
-use oag_render::mesh;
-use oag_render::mesh_render::{self, Anisotropy};
+use oag_mesh::mesh;
+use oag_mesh::mesh_render::{self, Anisotropy};
 
 /// `<image>:<archive-path>` for the Pure Data archive, or `None` if the disc
 /// image is not present.

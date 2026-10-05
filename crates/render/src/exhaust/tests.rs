@@ -386,7 +386,7 @@ fn the_ribbon_tapers_in_width_and_fades_in_colour() {
     // the additive blend ignores alpha - true of the *colour* result, and
     // the reason the value looked free to be anything. It is not free: the
     // ribbon stamps `intensity * TRAIL_GLOW_GAIN` into the target's alpha
-    // for `oag_render::post::bloom`'s bright pass to weigh, reproducing
+    // for `oag_post::bloom`'s bright pass to weigh, reproducing
     // `Trail_BuildStateList`'s stencil `REPLACE`. See [`TRAIL_GLOW_GAIN`].
     assert!(
         (v[0].colour[3] - trail_glow(1.0, 0)).abs() < 1e-6,

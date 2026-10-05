@@ -379,9 +379,9 @@ grid (15), which WebGPU refuses for a compressed texture. Cubemaps take the
 `TEXTURE_COMPRESSION_BC` - the GL backend - decodes the base level back through
 `gtf::decode_level` rather than drawing nothing.
 
-Implemented as `oag_render::mesh::Texels`, chosen in
-`oag_render::mesh::rcs::skin::blocks` and uploaded by
-`oag_render::mesh_render::texture::upload`.
+Implemented as `oag_mesh::mesh::Texels`, chosen in
+`oag_mesh::mesh::rcs::skin::blocks` and uploaded by
+`oag_mesh::mesh_render::texture::upload`.
 
 ## What this was read for
 
@@ -420,7 +420,7 @@ diverges. It is pinned in the test rather than tolerated.
 - **The front end's `<Image>` widgets.** `oag_render` uploads a `.gtf` now -
   HD's HUD samples ten of them, and an HD craft and circuit are painted from
   their materials' own textures through
-  [`oag_render::mesh::rcs`](rcsmodel.md#the-texture-a-material-paints-with) -
+  [`oag_mesh::mesh::rcs`](rcsmodel.md#the-texture-a-material-paints-with) -
   but `boot::load_sprites` still offers a front-end image to the PSP `.mip`
   path alone and gets `zero-sized texture 1281x0`. A wiring gap, not a format
   one.

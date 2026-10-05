@@ -11,7 +11,7 @@
 
 use std::path::Path;
 
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 const IMAGE: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const CYAN: [f32; 3] = [0.0, 0.768_628, 0.992_157];

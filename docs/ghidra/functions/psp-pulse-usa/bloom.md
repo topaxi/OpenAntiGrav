@@ -526,7 +526,7 @@ hardware:
    gain `1.85` per axis;
 4. composite additively at `175/255` with depth write off.
 
-`crates/render/src/post/` already carries the offscreen-target and
+`crates/post/src/` already carries the offscreen-target and
 fullscreen-pass plumbing (FXAA, SMAA, FSR 1), so steps 2-4 fit its existing
 shape. **Step 1 is the real work**, and it reaches every surface that should
 glow - see the correction above, which is the first known consumer.

@@ -474,7 +474,7 @@ fn circuits(archives: &mut oag_assets::Archives) -> Vec<String> {
 /// index. Six of Pure's eight team ships are reachable on this pressing under
 /// the Pulse-derived directory names - the other two are an open naming
 /// question, not evidence against the ids - and every reachable one carries
-/// the exact node shape `crates/render/src/mesh.rs` already assumes: two
+/// the exact node shape `crates/mesh/src/mesh.rs` already assumes: two
 /// `0x377` nodes named `Airbrake_Left`/`Airbrake_Right` (case-insensitively),
 /// each with one `Mesh` child, and one `0x2de` node named for a `LodGroup`
 /// with exactly two `Transform` children. See `vex::classes::V4`'s own field

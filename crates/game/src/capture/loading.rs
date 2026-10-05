@@ -124,7 +124,7 @@ pub fn loading(
     let instance = crate::adapter::instance();
     let adapter = crate::adapter::choose(&instance, None, &options.renderer)?.adapter;
     let (device, queue) = pollster::block_on(adapter.request_device(
-        &oag_render::mesh_render::device_descriptor("oag-game loading screen", &adapter),
+        &oag_mesh::mesh_render::device_descriptor("oag-game loading screen", &adapter),
     ))
     .context("requesting the device")?;
 

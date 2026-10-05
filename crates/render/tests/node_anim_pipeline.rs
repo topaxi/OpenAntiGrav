@@ -11,7 +11,7 @@
 //! which is exactly what happened to the texture-transform port's first
 //! attempt.
 
-use oag_render::mesh::{AnimNode, AnimTrack, Bounds, DrawCall, GpuVertex, Model, Motion};
+use oag_mesh::mesh::{AnimNode, AnimTrack, Bounds, DrawCall, GpuVertex, Model, Motion};
 use oag_vex::vex;
 
 /// A quad, in the space of an `Anim Transform` that slides it along `z`.
@@ -32,8 +32,8 @@ fn moving_quad(xform: u32) -> Model {
         lightmap_texcoord: [0.0, 0.0],
         xform,
         sun_mask: 1.0,
-        slots: oag_render::mesh::slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     // Two keys, one second apart: `z` runs 0 to 3 over 60 frames.
@@ -133,13 +133,13 @@ fn bright_centroid(pixels: &[u8], width: u32, height: u32) -> Option<(f32, f32)>
 }
 
 fn capture(model: &Model, seconds: f32) -> Option<Vec<u8>> {
-    oag_render::mesh_render::capture_pixels_from(
+    oag_mesh::mesh_render::capture_pixels_from(
         model,
         128,
         128,
         0.0,
         0.0,
-        oag_render::mesh_render::Anisotropy::Off,
+        oag_mesh::mesh_render::Anisotropy::Off,
         seconds,
     )
     .ok()
@@ -224,7 +224,7 @@ fn a_transparent_draw_moves_too() {
 #[test]
 fn the_texture_table_scrolls_a_surface() {
     // Two texels side by side: black at u < 0.5, white at u >= 0.5.
-    let texture = oag_render::mesh::ModelTexture::rgba8(
+    let texture = oag_mesh::mesh::ModelTexture::rgba8(
         "half and half".to_string(),
         2,
         1,
@@ -242,8 +242,8 @@ fn the_texture_table_scrolls_a_surface() {
         lightmap_texcoord: [0.0, 0.0],
         xform: 0,
         sun_mask: 1.0,
-        slots: oag_render::mesh::slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     let mut model = moving_quad(0);

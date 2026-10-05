@@ -72,7 +72,7 @@ impl Drawable {
             Lists::Solid { order } => order,
             Lists::All | Lists::Blended => None,
         };
-        let mut binds = oag_render::perfprobe::Binds::default();
+        let mut binds = oag_gpu::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
         // the first tier always allows. That is the ship and the collision
@@ -85,7 +85,7 @@ impl Drawable {
         if self.model.indices.is_empty() {
             return stats;
         }
-        oag_render::perfprobe::pipeline_set();
+        oag_gpu::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
@@ -250,7 +250,7 @@ impl Drawable {
             // (or none) still pays for a single `set_pipeline`.
             let cutout = cutouts.select(draw);
             if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                oag_render::perfprobe::pipeline_set();
+                oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(cutout);
                 cutout_set = Some(cutout);
             }
@@ -306,7 +306,7 @@ impl Drawable {
             }
             let pipeline = pipelines.select(draw);
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                oag_render::perfprobe::pipeline_set();
+                oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }

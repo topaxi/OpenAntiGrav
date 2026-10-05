@@ -7,7 +7,7 @@
 //! positions at `+0x30`/`+0x40` - would be the thing that moves it, and it
 //! would live in the unread tail.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

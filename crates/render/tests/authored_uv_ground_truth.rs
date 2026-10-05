@@ -20,7 +20,7 @@
 //! `TEXSCALE`/`TEXOFFSET` block after the mesh's material array - key times in
 //! 60 Hz frames, values in 1/256 units, an authored loop period and a step
 //! flag. `TexAnim_UpdateTransform` (`0x08927204`) replays it, and so does
-//! `oag_render::mesh_render::TexAnims`. See
+//! `oag_mesh::mesh_render::TexAnims`. See
 //! `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
 //!
 //! That earlier file is kept: its survey is still the only record of which
@@ -29,8 +29,8 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, AnimTrack, Model};
-use oag_render::mesh_render::TexAnims;
+use oag_mesh::mesh::{self, AnimTrack, Model};
+use oag_mesh::mesh_render::TexAnims;
 use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {

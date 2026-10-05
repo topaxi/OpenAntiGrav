@@ -44,7 +44,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_render::pvs::{DrawSections, SectionPadding, SwapConflicts, UNPLACED, VisibleSet};
 use oag_vex::pvs::TrackPvs;
 use oag_vex::{track, vex};

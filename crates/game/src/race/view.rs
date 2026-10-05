@@ -474,10 +474,10 @@ pub struct RaceView {
     pub(super) sight_fov: oag_display::display::Fov,
     /// How far out the authored `LodGroup`s switch to their coarser tiers.
     /// `[render_profiles.<title>] model_detail`; see [`Race::lod_eye`].
-    pub(super) model_detail: oag_render::mesh::ModelDetail,
+    pub(super) model_detail: oag_mesh::mesh::ModelDetail,
     /// How far out a PSP model keeps its finer texture levels.
     /// `[render_profiles.<title>] texture_detail`; see [`Race::texture_detail`].
-    pub(super) texture_detail: oag_render::mesh_render::TextureDetail,
+    pub(super) texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///

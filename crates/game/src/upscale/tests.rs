@@ -48,7 +48,7 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
     }))
     .ok()?;
 
-    let mut fsr = oag_render::post::fsr1::Fsr1::new(&device, format).expect("the fsr pipelines");
+    let mut fsr = oag_post::fsr1::Fsr1::new(&device, format).expect("the fsr pipelines");
     let mut out = Vec::new();
     for upscaling in [false, true] {
         // Four texels in, sixteen out. Small, and still a real upscale: at
@@ -105,12 +105,12 @@ fn both_paths(format: wgpu::TextureFormat, input: [f64; 3]) -> Option<([u8; 4], 
                 &device,
                 &queue,
                 &mut encoder,
-                oag_render::post::fsr1::Frame {
+                oag_post::fsr1::Frame {
                     source: framebuffer.perceptual(),
                     viewport: framebuffer.extent(),
                     input: framebuffer.allocation(),
                     output: (4, 4),
-                    sharpness: oag_render::post::fsr1::Sharpness::DEFAULT,
+                    sharpness: oag_post::fsr1::Sharpness::DEFAULT,
                 },
             );
             framebuffer.source(&device, fsr.output().expect("an fsr output"))

@@ -4,7 +4,7 @@
 //! `frame/shadow.rs` already set - a move, with no behaviour change.
 
 use oag_core::math::Vec3;
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 use crate::race::Race;
 

@@ -28,10 +28,10 @@ impl Scene {
     /// a temporal upscaler magnifying by two wants four times the phases it
     /// wants at native. `--camera-jitter` on its own, with nothing
     /// reconstructing from it, is a worse picture and passes
-    /// [`oag_render::jitter::DEFAULT_PHASES`]. See [`Scene::jittered`].
+    /// [`oag_post::jitter::DEFAULT_PHASES`]. See [`Scene::jittered`].
     /// `timestamps`, `blur_timestamps` and `hd_bloom_timestamps` bracket this
     /// pass, the motion-blur chain and the HD/Fury bloom chain, `Some` only on
-    /// the window's own frame loop - see [`oag_render::timing::PassTimer`].
+    /// the window's own frame loop - see [`oag_gpu::timing::PassTimer`].
     /// **These three and no others**, because they are the passes whose cost
     /// falls with the render extent: the upscaler and the composite draw at
     /// presentation size whatever the scale is, so folding them in would put a
@@ -40,7 +40,7 @@ impl Scene {
     /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
     /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
     /// a frame. Empty outside a Zone race or with nothing to draw it into is
-    /// fine: [`oag_render::mesh_render::zone::write_vis`] is a no-op on an
+    /// fine: [`oag_mesh::mesh_render::zone::write_vis`] is a no-op on an
     /// empty slice. See [`crate::race::zone_grade::ZoneGrade`] for the stage
     /// tint this is coloured by.
     #[allow(clippy::too_many_arguments)]
@@ -61,8 +61,8 @@ impl Scene {
         camera_jitter: Option<u32>,
         zone_spectrum: &[f32],
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
-        blur_timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
-        hd_bloom_timestamps: Option<oag_render::post::hd_bloom::ChainTimestamps<'_>>,
+        blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let projection = race.projection(aspect, self.far, fov);
@@ -267,7 +267,7 @@ impl Scene {
         // texels, so binding it to a ship cost nothing. It now **replaces** the
         // albedo, so binding it to a ship would blank the ship. Fog and the
         // light rig still reach them unchanged - only `zone` is dropped.
-        oag_render::perfprobe::mark("fog+zonevis");
+        oag_gpu::perfprobe::mark("fog+zonevis");
         // The SPU lights stay - at ride height the hull is the only receiver
         // in range, and the original selects `SVC1` for the hull (read live);
         // see `race::engine_light`, "Who receives it".
@@ -301,7 +301,7 @@ impl Scene {
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
-        oag_render::perfprobe::mark("scenery-anims");
+        oag_gpu::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
         // original, so there is nothing about them for that switch to test.
@@ -323,7 +323,7 @@ impl Scene {
         // giving `flame_speed * scene.time.x` something to advance. Writing
         // the *scene* here instead would fog and light them, which is the
         // question the paragraph above says is unrecovered.
-        oag_render::perfprobe::mark("ship-anims");
+        oag_gpu::perfprobe::mark("ship-anims");
         let flame_scene = mesh_render::Scene {
             time: [seconds; 4],
             ..mesh_render::Scene::off()
@@ -339,7 +339,7 @@ impl Scene {
         // matrix, roll included, so the horizon rolls with the ship through a
         // barrel roll exactly as `camera::chase` describes the original's
         // external view doing.
-        oag_render::perfprobe::mark("flame-scene");
+        oag_gpu::perfprobe::mark("flame-scene");
         if let Some(sky) = &self.sky {
             sky.write(
                 queue,
@@ -357,7 +357,7 @@ impl Scene {
         // How many slots this race fills, which bounds every per-craft loop from
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.
-        oag_render::perfprobe::mark("sky+track-write");
+        oag_gpu::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
         self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
         let lod_eye = race.lod_eye(aspect, fov);
@@ -426,7 +426,7 @@ impl Scene {
         self.write_absorb_overlays(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_ghost(race, queue, view_projection, prev_vp);
-        oag_render::perfprobe::mark("ship+shield-write");
+        oag_gpu::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp, seconds);
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
@@ -562,7 +562,7 @@ impl Scene {
             // above takes 60 Hz frames and clamps.
             boost.write_node_anims(queue, seconds);
         }
-        oag_render::perfprobe::mark("rockets+plumes");
+        oag_gpu::perfprobe::mark("rockets+plumes");
         if let Some(collision) = &self.collision {
             collision.write(queue, view_projection, Mat4::IDENTITY, prev_vp);
         }
@@ -584,7 +584,7 @@ impl Scene {
         // every title measured: Pulse's `flicker1nonalpha_GLOW.tga` is the
         // gold chevron, HD's `ds_speedup_cs.gtf` the blue one. See
         // `docs/rendering/pads.md`.
-        oag_render::perfprobe::mark("pads+tint");
+        oag_gpu::perfprobe::mark("pads+tint");
         // The camera's own axes, read out of the view matrix: for a view matrix
         // `V`, world-space right and up are rows 0 and 1 of its rotation part.
         // Building the quad from these is what makes it face the viewer, and it is
@@ -604,7 +604,7 @@ impl Scene {
         // it falls outside the frustum on its own. See `Race::draws_own_ship`,
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
-        oag_render::perfprobe::mark("pre-exhaust");
+        oag_gpu::perfprobe::mark("pre-exhaust");
         for slot in 0..drawn {
             // Per craft, unlike the nozzle check below - an inactive slot is
             // out of the race regardless of what its model authors. `continue`
@@ -652,7 +652,7 @@ impl Scene {
             _ => false,
         }));
         self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
-        oag_render::perfprobe::mark("exhaust-gather");
+        oag_gpu::perfprobe::mark("exhaust-gather");
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
         let vp = view_projection.to_cols_array_2d();
@@ -662,7 +662,7 @@ impl Scene {
         self.clouds
             .borrow_mut()
             .upload(queue, &vp, race.sim.world.tick, &race.camera_frame());
-        oag_render::perfprobe::mark("exhaust-upload");
+        oag_gpu::perfprobe::mark("exhaust-upload");
         self.upload_particles(race, queue, &vp, right, up, additive, alpha);
         self.upload_mist(race, queue, 1.0 / projection.y_axis.y);
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
@@ -673,9 +673,9 @@ impl Scene {
         self.shadow
             .borrow_mut()
             .upload(queue, &vp, &quads, &hull_vertices);
-        oag_render::perfprobe::mark("shadow-gather");
+        oag_gpu::perfprobe::mark("shadow-gather");
 
-        oag_render::perfprobe::mark("psys-gather");
+        oag_gpu::perfprobe::mark("psys-gather");
         let depth_view = &self.attachment_views.depth;
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
@@ -749,7 +749,7 @@ impl Scene {
             }),
             // The one pass whose cost falls with the render extent, and so the
             // one a resolution controller will be driven by - see
-            // `oag_render::timing::PassTimer` and this function's own doc.
+            // `oag_gpu::timing::PassTimer` and this function's own doc.
             // `None` on every path that is not the window's frame loop: a
             // capture measures nothing, because a capture has to be
             // reproducible rather than fast.
@@ -757,7 +757,7 @@ impl Scene {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        oag_render::perfprobe::mark("pass-open");
+        oag_gpu::perfprobe::mark("pass-open");
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
         // The sky draws inside this, between the circuit's solid and blended
         // lists - see `draw_track` for why there.
@@ -775,7 +775,7 @@ impl Scene {
         // Frustum culling applies; the PVS does not, because a pad carries no
         // `section` id to look up - the same exemption the sky takes, for a
         // different reason.
-        oag_render::perfprobe::marks::mark(&mut pass, "pads, gantry, shadow");
+        oag_gpu::perfprobe::marks::mark(&mut pass, "pads, gantry, shadow");
         if let Some(pads) = &self.pads {
             stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
         }
@@ -801,7 +801,7 @@ impl Scene {
         // polygon across the middle of the screen. See `Race::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
-        oag_render::perfprobe::marks::mark(&mut pass, "craft, weapons, shields");
+        oag_gpu::perfprobe::marks::mark(&mut pass, "craft, weapons, shields");
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
             if self.hull_skipped(race, index) {
                 continue;
@@ -909,9 +909,9 @@ impl Scene {
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);
-        oag_render::perfprobe::mark("scene-pass");
+        oag_gpu::perfprobe::mark("scene-pass");
 
-        // Wipeout HD's read post chain (`oag_render::post::hd_bloom`): gate,
+        // Wipeout HD's read post chain (`oag_post::hd_bloom`): gate,
         // downsample, the two blurs, the composite back over the linear
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
@@ -936,11 +936,11 @@ impl Scene {
             // adding a blurred copy of the masked colour back over the frame.
             // `view` is the resolved image in both the MSAA and the
             // single-sample case, which is why this runs on it rather than on
-            // `attachment_view`. See `oag_render::post::bloom` - its own
+            // `attachment_view`. See `oag_post::bloom` - its own
             // `Frame` fields document `size`/`origin`/`viewport` in full - and
-            // `oag_render::post::ps2_bloom` for the PS2's own chain.
+            // `oag_post::ps2_bloom` for the PS2's own chain.
             let size = self.depth.size();
-            let frame = oag_render::post::bloom::Frame {
+            let frame = oag_post::bloom::Frame {
                 scene: view,
                 size: (size.width, size.height),
                 origin: (viewport.0, viewport.1),
@@ -975,7 +975,7 @@ impl Scene {
             blur_shake,
             blur_timestamps,
         );
-        oag_render::perfprobe::mark("post-chain");
+        oag_gpu::perfprobe::mark("post-chain");
         stats
     }
 }

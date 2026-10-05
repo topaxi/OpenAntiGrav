@@ -14,8 +14,8 @@
 //!
 //! `cargo run -p oag-render --example hd_pad_tangent_probe -- <archive> <vex>`
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 use oag_vex::vex;
 
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {

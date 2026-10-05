@@ -828,7 +828,7 @@ in order: (1) locating and decoding this curve-list chunk in the `.rcsmodel`
 format (`oag-rcs`), then (2) replaying it per-tick into the draw's own
 `uvOffset`/`uvScale` shader constants the way `Model::write_node_anims`
 already replays an `Anim Transform` track - which does reach
-`crates/render/src/mesh/rcs.rs`, owned by `lane-hd-material-curve` while that
+`crates/mesh/src/mesh/rcs.rs`, owned by `lane-hd-material-curve` while that
 lane is active. Writing a synthetic offset here instead would be exactly the
 invented mechanism `CLAUDE.md`'s "never invent what the assets already
 author" rule exists to stop, now with less excuse than before: the real
@@ -1049,7 +1049,7 @@ for whoever picks this up next.
 
 `docs/formats/edge-animation.md`'s own updated section has the full account:
 every `.rcsmodel` material carrying a curve now reaches
-[`oag_render::mesh::AnimTrack::Rcs`](../../../../crates/render/src/mesh/anim_track.rs),
+[`oag_mesh::mesh::AnimTrack::Rcs`](../../../../crates/mesh/src/mesh/anim_track.rs),
 sampled each frame through the same per-model animation clock Pulse's own
 `TEXOFFSET` tracks already ride - no new time base, and not gantry-specific:
 79 of the disc's 379 `.rcsmodel` files carry at least one live curve, and all
@@ -1144,7 +1144,7 @@ step 3, "binds `+0x50`/`+0x60` as the shader constants... matched by
 `Crc32_HashString`", a separate, earlier load-time write from this function's
 own first pass), the same static parameters
 [`oag_rcs::rcsmodel::material::parameters`](../../../../crates/rcs/src/rcsmodel/material/parameters.rs)
-already decodes and [`curve_track::material_anim_tracks`](../../../../crates/render/src/mesh/rcs/curve_track.rs)
+already decodes and [`curve_track::material_anim_tracks`](../../../../crates/mesh/src/mesh/rcs/curve_track.rs)
 now reads as every curved material's own rest value.
 
 ### What this settles, and what it still leaves open

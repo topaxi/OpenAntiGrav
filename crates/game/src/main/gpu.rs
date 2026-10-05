@@ -92,7 +92,7 @@ impl Gpu {
                 // over. `MemoryUsage` asks for 8-64 MiB instead, which costs
                 // some allocator churn and nothing anyone would see.
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
-                ..oag_render::mesh_render::device_descriptor("oag-game", &chosen.adapter)
+                ..oag_mesh::mesh_render::device_descriptor("oag-game", &chosen.adapter)
             }))
             .context("requesting the device")?;
         let mut config = surface
@@ -117,7 +117,7 @@ impl Gpu {
         // has to be checked against this same list, and re-requesting an
         // adapter to ask would be a second answer to the same question.
         let offered = surface.get_capabilities(&chosen.adapter).present_modes;
-        let temporal = oag_render::post::fsr3::supported(&chosen.adapter);
+        let temporal = oag_post::fsr3::supported(&chosen.adapter);
         if !temporal {
             warn!("no compute shaders on this adapter; UPSCALER fsr3 will run as fsr1");
         }

@@ -2,7 +2,7 @@
 //! how its texels are distributed - the question being whether a lightmap this
 //! renderer samples as hard-edged white blocks is that way in the file.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_texture::gtf;
 
 fn main() -> anyhow::Result<()> {

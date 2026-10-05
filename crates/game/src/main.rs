@@ -168,7 +168,7 @@ fn init_logging() {
 /// keeps the system allocator with no wrapper in front of it.
 #[cfg(feature = "perf-probe")]
 #[global_allocator]
-static ALLOCATOR: oag_render::perfprobe::Counting = oag_render::perfprobe::Counting;
+static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
 
 fn main() -> Result<()> {
     init_logging();

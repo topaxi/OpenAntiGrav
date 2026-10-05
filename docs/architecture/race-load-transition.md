@@ -21,7 +21,7 @@ while it is still running:
 
 **`race-load` uploads textures as it decodes them.** `LAUNCH RACE` hands the
 worker the frame loop's own device and queue as a `race::TextureSink`; the
-thread opens an `oag_render::mesh_render::TextureSinkScope` around `race::load`,
+thread opens an `oag_mesh::mesh_render::TextureSinkScope` around `race::load`,
 and every texture an `.rcsmodel` build decodes (Omega, HD, 2048) goes up through
 `Queue::write_texture` at once and is replaced in its `Model` by a
 `Texels::Uploaded` view. The scene on `race-build` then binds those views
@@ -152,7 +152,7 @@ scene: 1,197 calls asking for the shader module and 9,859 asking for a render
 pipeline, against 53 *distinct* pipelines the scene actually needs - every one
 of the rest was the same descriptor a call before it had already built.
 
-`oag_render::mesh_render::pipeline_cache` (`crates/render/src/mesh_render/pipeline_cache.rs`)
+`oag_mesh::mesh_render::pipeline_cache` (`crates/mesh/src/mesh_render/pipeline_cache.rs`)
 fixes both: a thread-local cache, opened for one thread by a `BuildCacheScope`
 and cleared on drop. Inside an open scope, `build()` asks for the shared
 `mesh.wgsl` module instead of parsing its own, and asks for a pipeline by a

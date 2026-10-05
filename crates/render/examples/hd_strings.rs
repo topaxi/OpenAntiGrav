@@ -2,7 +2,7 @@
 //! `.rcsmodel`, so a file that names other files can be told from one that
 //! does not.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn strings(label: &str, data: &[u8]) {
     let mut out: Vec<String> = Vec::new();

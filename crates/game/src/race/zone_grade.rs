@@ -73,7 +73,9 @@
 
 use std::sync::Arc;
 
-use oag_render::{mesh::ModelTexture, mesh_render};
+use oag_mesh::mesh::ModelTexture;
+
+use oag_mesh::mesh_render;
 use oag_tables::effectsettings::{EffectSettings, StagePalette};
 
 /// The two stage indices HD/Fury's own runtime keeps per entity, and the
@@ -196,14 +198,14 @@ pub struct ZoneGrade {
     /// whose entry did not decode. See [`Self::stage_art`].
     ///
     /// Positional and never compacted, for the same reason
-    /// [`oag_render::mesh::TextureSlots`] is: the index *is* the stage number,
+    /// [`oag_mesh::mesh::TextureSlots`] is: the index *is* the stage number,
     /// so dropping a slot that failed to decode would silently re-map every
     /// stage above it.
-    art: oag_render::mesh::TextureSlots,
+    art: oag_mesh::mesh::TextureSlots,
     /// The "general" set's per-stage texture, `zoneMode<n>.gtf`, on the same
     /// terms as [`Self::art`]. The one a chunk without the track bit samples
     /// - see [`Self::stage_art_pair`].
-    scene_art: oag_render::mesh::TextureSlots,
+    scene_art: oag_mesh::mesh::TextureSlots,
     /// Set by [`Self::pin_stage`]: once true, [`Self::show_zone`] is a no-op
     /// for the rest of this grade's life, so `--zone-stage` wins over the
     /// title's own ladder instead of being overwritten by it on the next
@@ -219,8 +221,8 @@ impl ZoneGrade {
         entry: String,
         table: EffectSettings,
         stages: Option<&'static oag_title::ZoneStages>,
-        art: oag_render::mesh::TextureSlots,
-        scene_art: oag_render::mesh::TextureSlots,
+        art: oag_mesh::mesh::TextureSlots,
+        scene_art: oag_mesh::mesh::TextureSlots,
     ) -> Option<Self> {
         let last_stage = *table.stages.keys().next_back()?;
         Some(Self {
@@ -361,7 +363,7 @@ impl ZoneGrade {
     /// byte-identical flat whites whose alpha is 255 everywhere, so a scene
     /// chunk's surface is its `Scene.Texture Colour` flat plus the rim terms.
     /// `mesh.wgsl`'s `zone_sample` picks per fragment; see
-    /// [`Self::zone_uniform`] and [`oag_render::mesh_render::Zone`].
+    /// [`Self::zone_uniform`] and [`oag_mesh::mesh_render::Zone`].
     ///
     /// `None` for a stage past the set, or one whose entry did not decode -
     /// the slots are positional, so a hole stays a hole.
@@ -391,7 +393,7 @@ impl ZoneGrade {
 
     /// All four of the showing stage's and the stage being swept out's own
     /// textures, as a drawable binds them - see
-    /// [`oag_render::mesh_render::zone::StageArt`].
+    /// [`oag_mesh::mesh_render::zone::StageArt`].
     ///
     /// **The Outer pair falls back to the Inner one, per slot** - the same
     /// fallback [`Self::zone_uniform`] already gives its own Outer palette,
@@ -699,7 +701,7 @@ impl ZoneGrade {
     ///
     /// # What is fed and what is not
     ///
-    /// [`oag_render::mesh_render::Zone`] carries the rule and the full list of
+    /// [`oag_mesh::mesh_render::Zone`] carries the rule and the full list of
     /// terms left out; the two values assembled here are:
     ///
     /// - `zoneColourTint.xy`, the file's own title-wide `Texture U scale` /
@@ -764,7 +766,7 @@ impl ZoneGrade {
         /// more than `zoneTexInner` is - and co-occur with a sampled
         /// `zoneTex*` in 18,032 of them. Every one of the twelve racing
         /// circuits carries this shape and nothing else. See
-        /// `oag_render::mesh_render::Zone` for the census and the second,
+        /// `oag_mesh::mesh_render::Zone` for the census and the second,
         /// arena-only shape it is not. Zero where the stage authors nothing,
         /// which is the identity on a summand.
         fn group(
@@ -830,7 +832,7 @@ impl ZoneGrade {
     }
 
     /// The showing stage's own `EQ colour tint`, for tinting the visualiser
-    /// glow - see `oag_render::mesh_render::zone::write_vis`.
+    /// glow - see `oag_mesh::mesh_render::zone::write_vis`.
     ///
     /// **Naming, not a traced shader input.** `EQ colour tint` and its
     /// `EQ analogue colour tint` sibling are parsed and land in this table's

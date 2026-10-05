@@ -374,7 +374,7 @@ const CIRCUITS: &[&str] = &[
 /// One circuit measured is an anecdote: if some track ran 70 % see-through,
 /// skipping those chunks would delete the level rather than uncover it. The
 /// measured range is **4.3 % (`zone_4`) to 35.9 % (`talons_junction`)**, so the
-/// behaviour `oag_render::mesh::rcs` settled on holds everywhere and not only
+/// behaviour `oag_mesh::mesh::rcs` settled on holds everywhere and not only
 /// where it was looked at.
 #[test]
 #[ignore]
@@ -563,7 +563,7 @@ fn a_third_of_a_circuits_chunks_are_see_through() {
     let (mut see_through, mut opaque) = (0usize, 0usize);
     for mesh in &model.meshes {
         // The world-space half: the road, the walls and the scenery, which is
-        // what `oag_render::mesh::rcs::build_scene` draws without a node.
+        // what `oag_mesh::mesh::rcs::build_scene` draws without a node.
         if placed.contains(&mesh.hash) || mesh.solve_stride_without_a_box(&bytes).is_none() {
             continue;
         }

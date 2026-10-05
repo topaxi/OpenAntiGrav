@@ -26,7 +26,7 @@ only one this script reads.
 
 # How a pixel is attributed to a material slot
 
-`OAG_TINT_MATERIALS=1` (`crates/render/src/mesh/rcs/isolate.rs`) replaces
+`OAG_TINT_MATERIALS=1` (`crates/mesh/src/mesh/rcs/isolate.rs`) replaces
 every material's picture with a flat, **unlit** colour keyed by its slot
 ordinal (`isolate::tint`) - `mesh/rcs.rs` clears `GpuVertex::lit` for it, so
 the palette entry would reach the frame byte-for-byte rather than shaded,
