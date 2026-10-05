@@ -78,3 +78,10 @@
 0x01610df0	function	Composite_RegisterPrograms	72	tonemap.md
 0x017a4eb0	function	Display_SetCheckerboard	74	tonemap.md
 0x0212a7d8	data	ToneMap_Instance	80	tonemap.md
+0x012e1260	function	MagstripWake_Update	65	ships-effects.md
+0x012e2720	function	MagstripWake_EnqueueRender	75	ships-effects.md
+0x012e2770	function	MagstripWake_Draw	65	ships-effects.md
+0x012e3350	function	MagstripWake_Destruct	78	ships-effects.md
+0x012e36d0	function	MagstripWake_DeleteSelf	72	ships-effects.md
+0x012f8c70	function	Ship_StartMagstripSound	55	ships-effects.md
+0x01312770	function	Ship_StopMagstripSound	55	ships-effects.md

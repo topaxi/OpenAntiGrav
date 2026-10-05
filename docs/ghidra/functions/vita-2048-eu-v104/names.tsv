@@ -98,3 +98,5 @@
 # Where a race's particle effect files are read from (2026-10-05).
 0x812a6a2e	function	Particles_BuildEffectPath	85	particle-paths.md
 0x81298f58	function	Ship_RegisterEffectSet	65	particle-paths.md
+0x811aefba	function	MagstripWake_Destruct	78	ships-effects.md
+0x811a8064	function	Ship_StartMagstripSound	55	ships-effects.md
