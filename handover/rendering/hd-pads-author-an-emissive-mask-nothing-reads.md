@@ -277,7 +277,7 @@ old step 0 (which alpha channel gates the accumulate) is done too, and
 changed step 1's own cost estimate - see below. What is left is deciding
 whether to spend on wiring it at all, and the two RE leads.
 
-1. **~~Done 2026-10-05~~ - wired; see `docs/rendering/pads.md`, "Wired, 2026-10-05". The multiply this item feared was EXP2 fog (the decoder had dropped the negate bit), `_ne` is bound third beside the lightmap, and the disc's own normal/glow terms are in `mesh.wgsl`. Left open: HD's original-four circuits' speed pads draw through the scene, outside the pad model, and get no glow.** Old text follows. Attempted 2026-09-25, stopped before any code change - do not
+1. **~~Done 2026-10-05~~ - wired; see `docs/rendering/pads.md`, "Wired, 2026-10-05". The multiply this item feared was EXP2 fog (the decoder had dropped the negate bit), `_ne` is bound third beside the lightmap, and the disc's own normal/glow terms are in `mesh.wgsl`. Original-four speed pads: also wired 2026-10-05 (hd-speed-pads), routed by pad material in `build_scene` because their node hashes name no chunk; see pads.md "Wired, 2026-10-05, the four original circuits' speed pads". Still open: the runtime cooldown colour, and which node owns which speed-pad chunk.** Old text follows. Attempted 2026-09-25, stopped before any code change - do not
    re-attempt without first reading `docs/rendering/pads.md`'s "Wiring
    attempted and stopped" section.** The question this item's own "read the
    trap before touching it, twice over" text asked - does the `_ne`-gated

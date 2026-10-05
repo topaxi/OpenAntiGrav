@@ -58,6 +58,49 @@ pub(super) fn pad_chunk_hashes<'a>(
         .filter_map(move |node| node_geometry(&data[node.payload()], order).map(|(hash, ..)| hash))
 }
 
+/// Whether a material file is one of the two pad programs: `weapon_pads`,
+/// which `talons_junction` and `02_track` also author their speed pads
+/// under, and `speedup_material`, which `amphiseum` does.
+pub(super) fn is_pad_material(name: &str) -> bool {
+    let leaf = name.rsplit('/').next().unwrap_or(name);
+    matches!(
+        leaf,
+        "weapon_pads.rcsmaterial" | "speedup_material.rcsmaterial"
+    )
+}
+
+/// Binds the `_ne` mask to the pad materials [`super::build_scene`]'s
+/// unreferenced-chunk pass is about to draw: the speed pads of the four
+/// original circuits, routed by material because their `Speedup Pad` nodes
+/// name a hash no chunk carries (18, 16, 17 and 15 nodes against as many
+/// chunks on a pad material). A chunk an addressed pad node owns is in
+/// `placed`, so the 12 circuits whose nodes resolve bind nothing here.
+pub(super) fn bind_scene_pad_masks(
+    model: &rcsmodel::Model,
+    placed: &[u32],
+    out: &mut Model,
+    textures: Textures<'_>,
+    report: &mut Report,
+) {
+    let mut pad_slots = vec![false; model.materials.len()];
+    for chunk in model.meshes.iter().filter(|c| !placed.contains(&c.hash)) {
+        for surface in chunk.surfaces() {
+            if let Some(flag) = pad_slots.get_mut(surface.material as usize) {
+                *flag = is_pad_material(&model.materials[surface.material as usize].name);
+            }
+        }
+    }
+    out.pad_masks = pad_ne::pad_ne(
+        model,
+        &out.material_variants,
+        textures,
+        &mut out.material_slots,
+        &mut out.emissive,
+        Some(&pad_slots),
+        report,
+    );
+}
+
 /// The track's `Speedup Pad` geometry, from the `.rcsmodel` beside the
 /// `.vex` - the PS3 counterpart of [`super::super::build_pads`].
 ///
@@ -158,6 +201,7 @@ pub(super) fn build_pad_class(
         textures,
         &mut out.material_slots,
         &mut out.emissive,
+        None,
         &mut report,
     );
     out.material_specular_exponent = material_specular_exponent;

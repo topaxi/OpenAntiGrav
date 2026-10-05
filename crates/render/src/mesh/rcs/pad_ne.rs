@@ -39,12 +39,18 @@ pub(super) const NE_SAMPLER: u32 = 0xa2d5_55b9;
 ///
 /// `table` is the model's own glow table; a pad colour is deduplicated into
 /// it by value beside whatever [`super::emissive::emissive`] put there.
+///
+/// `only` limits the binding to the material slots it marks, `None` for all:
+/// the scene pass names just the pad materials its unreferenced chunks use,
+/// because `diffuse_normal_specular_emmissive` (rails, start line) samples the
+/// same `_ne` hash through a program this module does not read.
 pub(super) fn pad_ne(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    only: Option<&[bool]>,
     report: &mut Report,
 ) -> TextureSlots {
     let mut out: TextureSlots = vec![None; model.materials.len()];
@@ -53,6 +59,9 @@ pub(super) fn pad_ne(
         Default::default();
 
     for (slot, material) in model.materials.iter().enumerate() {
+        if only.is_some_and(|only| !only.get(slot).copied().unwrap_or(false)) {
+            continue;
+        }
         let Some(path) = material
             .samplers
             .iter()

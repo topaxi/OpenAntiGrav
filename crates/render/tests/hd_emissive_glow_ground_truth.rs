@@ -149,10 +149,13 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
         // built), so it never appears here and its absence is not a gap in
         // this reading. `slots::FACING_RAMP_SHEEN` (bit 10) is a tenth role
         // bit, added 2026-09-17 for the glass family's facing-ramp combine -
-        // see `mesh::rcs::glass_sheen`.
+        // see `mesh::rcs::glass_sheen`. `slots::PAD_NE` (bit 14) is the
+        // eleventh: since 2026-10-05 the scene binds it on the speed-pad
+        // materials of the four original circuits, whose pad nodes name no
+        // chunk (`hd_original_speed_pad_ground_truth`).
         for packed in &model.material_slots {
             assert_eq!(
-                packed & slots::ROLE_MASK & !(0x1ffu32 | slots::FACING_RAMP_SHEEN),
+                packed & slots::ROLE_MASK & !(0x1ffu32 | slots::FACING_RAMP_SHEEN | slots::PAD_NE),
                 0,
                 "a role bit outside the ten this reading defines"
             );

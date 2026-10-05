@@ -264,6 +264,8 @@ pub fn build_scene(
         placed.extend(pads::pad_chunk_hashes(data, &nodes, order, class));
     }
 
+    pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
+
     for (chunk_index, chunk) in model.meshes.iter().enumerate() {
         if placed.contains(&chunk.hash) {
             continue;
