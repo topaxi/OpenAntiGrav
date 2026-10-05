@@ -282,9 +282,7 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 ///   layout's placeholder-rect idiom already implied.
 /// - `ThrustBar`, `SpeedBar0`-`4`, `PilotAssist`, `ZoneLight0`-`9`: drawn off
 ///   race state by `oag_hud::dialect_2048::state_sprites` since 2026-10-05.
-/// - `PilotAssist` (kept for the record): the icon left of the speed bar, up
-///   only once Pilot
-/// - `PilotAssist`: the icon left of the speed bar, up only once Pilot
+/// - `PilotAssist` is the icon left of the speed bar, up only once Pilot
 ///   Assist was switched to Extreme in the options; absent at Normal.
 /// - `ZoneLight0`-`9` and `ZoneSpeedLogo`: lit per zone, and never seen (the
 ///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
