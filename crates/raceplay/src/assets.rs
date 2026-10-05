@@ -251,59 +251,87 @@ fn authored_ribbon(
     let blob = archives
         .read_name(model)
         .map_err(|e| format!("{model}: not in the archive set ({e})"))?;
-    let parsed = oag_rcs::rcsmodel::Model::parse(&blob)
-        .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
-    let material = parsed
-        .materials
-        .first()
-        .ok_or_else(|| format!("{model}: parses, but names no material"))?;
-    // The *second* texture is the noise map on every ribbon in this family -
-    // `hd_enginetrail_noise`, `hd_waketrail_clouds`, `smoke_trails_frame2`.
-    // A material with only one is a shape this has not seen, so it says so
-    // rather than falling back to the colour map in a noise slot.
-    let noise = material
-        .second_texture
-        .as_deref()
-        .ok_or_else(|| format!("{model}: its material names no second texture"))?;
-    let pixels = archives
-        .read_name(noise)
-        .map_err(|e| format!("{noise}: named by {model}'s material but not in the set ({e})"))?;
-    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
-        .map_err(|e| format!("{noise}: {} bytes, does not parse ({e})", pixels.len()))?;
-    let texture = gtf
-        .only()
-        .ok_or_else(|| format!("{noise}: parses, but is not a single texture"))?;
-    let rgba = texture
-        .to_rgba(&pixels)
-        .map_err(|e| format!("{noise}: does not decode ({e})"))?;
-    let (width, height) = texture.level_size(0);
-    // Through the recovered mapping rather than a second reading of the same
-    // bytes: `Material::blend` names the factors and `rcs::blend_state` turns
-    // that pair into a pipeline state, and both already draw every HD surface.
-    let authored = material.blend();
-    let oag_rcs::rcsmodel::Blend::Factors { src, dst } = authored else {
-        return Err(format!(
-            "{model}: its material's blend is {authored:?} rather than a factor pair"
-        ));
+    // **Both containers name the same four things**: the coverage texture, the
+    // noise texture, and the blend pair. 2048's `.rcsmodel` is another file
+    // under the same extension and carries no factor pair of its own, so its
+    // ribbon takes HD's pair for the material of the same name -
+    // `hd_enginetrail_bluered`, `SrcAlpha`/`One` - the inheritance
+    // `oag_rcs::rcsmodel::psp2::lineage_blend` already documents.
+    let (coverage, noise, src, dst) = if oag_mesh::mesh::rcs::psp2::is_psp2(&blob) {
+        let parsed = oag_rcs::rcsmodel::psp2::parse(&blob)
+            .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
+        let material = parsed
+            .materials
+            .first()
+            .ok_or_else(|| format!("{model}: parses, but names no material"))?;
+        let coverage = material
+            .textures
+            .first()
+            .ok_or_else(|| format!("{model}: its material names no texture"))?;
+        let noise = material
+            .textures
+            .get(1)
+            .ok_or_else(|| format!("{model}: its material names no second texture"))?;
+        let (src, dst) = oag_rcs::rcsmodel::psp2::lineage_blend::inherited(&material.name)
+            .ok_or_else(|| {
+                format!(
+                    "{model}: its material {} has no blend pair to inherit from HD",
+                    material.name
+                )
+            })?;
+        (
+            format!("/{}", coverage.to_ascii_lowercase()),
+            format!("/{}", noise.to_ascii_lowercase()),
+            src,
+            dst,
+        )
+    } else {
+        let parsed = oag_rcs::rcsmodel::Model::parse(&blob)
+            .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
+        let material = parsed
+            .materials
+            .first()
+            .ok_or_else(|| format!("{model}: parses, but names no material"))?;
+        // The *second* texture is the noise map on every ribbon in this family -
+        // `hd_enginetrail_noise`, `hd_waketrail_clouds`, `smoke_trails_frame2`.
+        // A material with only one is a shape this has not seen, so it says so
+        // rather than falling back to the colour map in a noise slot.
+        let noise = material
+            .second_texture
+            .clone()
+            .ok_or_else(|| format!("{model}: its material names no second texture"))?;
+        // Through the recovered mapping rather than a second reading of the same
+        // bytes: `Material::blend` names the factors and `rcs::blend_state` turns
+        // that pair into a pipeline state, and both already draw every HD surface.
+        let authored = material.blend();
+        let oag_rcs::rcsmodel::Blend::Factors { src, dst } = authored else {
+            return Err(format!(
+                "{model}: its material's blend is {authored:?} rather than a factor pair"
+            ));
+        };
+        (material.texture.clone(), noise, src, dst)
+    };
+    let noise = noise.as_str();
+    let noise_texture = decode_texture(archives, noise)
+        .map_err(|why| format!("{why} (named by {model}'s material)"))?;
+    let (width, height) = (noise_texture.width, noise_texture.height);
+    let container = if noise.to_ascii_lowercase().ends_with(".gxt") {
+        ".gxt"
+    } else {
+        ".gtf"
     };
     let blend = mesh::rcs::blend_state(src, dst);
-    // The *first* texture: the ribbon's own coverage. Its alpha is what HD's
-    // fragment program multiplies into the output - the file is called
-    // `..._alphaistrail.gtf` and the program agrees - so this is the term that
-    // gives the ribbon a shape of its own rather than the PSP preset's.
-    // Reported either way: a decode failure here draws the ribbon exactly as it
-    // drew before, which is a silent regression unless it is stated.
     let mut notes = vec![
         format!(
-            "{noise}: {width}x{height} .gtf - the ribbon's noise, named by {model}'s own material"
+            "{noise}: {width}x{height} {container} - the ribbon's noise, named by {model}'s own material"
         ),
         format!("{model}: blend {src:?}/{dst:?} off the material, not the PSP preset's"),
     ];
-    let shape = match decode_gtf(archives, &material.texture) {
+    let shape = match decode_texture(archives, &coverage) {
         Ok(shape) => {
             notes.push(format!(
-                "{}: {}x{} .gtf - the ribbon's own coverage, multiplied into its alpha",
-                material.texture, shape.width, shape.height
+                "{}: {}x{} {} - the ribbon's own coverage, multiplied into its alpha",
+                coverage, shape.width, shape.height, container
             ));
             Some(shape)
         }
@@ -314,16 +342,43 @@ fn authored_ribbon(
             None
         }
     };
-    Ok((
-        FlareTexture {
-            width,
-            height,
-            rgba: rgba.into_iter().flatten().collect(),
-        },
-        blend,
-        shape,
-        notes,
-    ))
+    Ok((noise_texture, blend, shape, notes))
+}
+
+/// [`decode_gtf`] or [`decode_gxt`], by the name's own extension.
+pub(crate) fn decode_texture(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> std::result::Result<FlareTexture, String> {
+    if name.to_ascii_lowercase().ends_with(".gxt") {
+        decode_gxt(archives, name)
+    } else {
+        decode_gtf(archives, name)
+    }
+}
+
+/// One Vita `.gxt` out of the archive set, as pixels the exhaust pipeline can
+/// bind - 2048's counterpart of [`decode_gtf`].
+pub(crate) fn decode_gxt(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> std::result::Result<FlareTexture, String> {
+    let pixels = archives
+        .read_name(name)
+        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
+    let gxt = oag_texture::gxt::Gxt::parse(&pixels)
+        .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
+    let texture = gxt
+        .only()
+        .ok_or_else(|| format!("{name}: parses, but is not a single texture"))?;
+    let rgba = texture
+        .to_rgba(&pixels)
+        .map_err(|e| format!("{name}: does not decode ({e})"))?;
+    Ok(FlareTexture {
+        width: u32::from(texture.width),
+        height: u32::from(texture.height),
+        rgba: rgba.into_iter().flatten().collect(),
+    })
 }
 
 /// One `.gtf` out of the archive set, as pixels the exhaust pipeline can bind.
@@ -363,11 +418,6 @@ pub(crate) fn decode_gtf(
 /// per craft by [`oag_livery::flare`] and reported there; the sprite
 /// pipeline keeps its stand-in texture for the *rocket* billboard fallback,
 /// which is a separate use of the same slot.
-/// The sprite flare's texture, `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf`
-/// as the executable's own literal at `0x0079bdd8` spells it, in the archive
-/// set's lower-case path form.
-const HD_SPRITE_FLARE: &str = "/data/tex/engineflare/engine_flare_rich.gtf";
-
 pub(super) fn flare_texture(
     archives: &mut oag_assets::Archives,
     title: &oag_title::Title,
@@ -399,10 +449,11 @@ pub(super) fn flare_texture(
             // walk, and the flare's own init (`0x002a1528`) loads this
             // texture and four corner pairs. The modulation this engine does
             // not reproduce is listed on `exhaust::hd::Sprite`.
-            match decode_gtf(archives, HD_SPRITE_FLARE) {
+            let sprite = authored.sprite;
+            match decode_texture(archives, sprite) {
                 Ok(texture) => {
                     report.push(format!(
-                        "{HD_SPRITE_FLARE}: {}x{} .gtf - the sprite flare the \
+                        "{sprite}: {}x{} - the sprite flare the \
                          executable loads beside the flare model",
                         texture.width, texture.height
                     ));

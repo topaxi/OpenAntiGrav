@@ -29,12 +29,14 @@
 //!   a standalone RIFF-wrapped ATRAC9 file, `FEMusic/frontend_stereo.at9`,
 //!   named the same way Pulse's and HD's front-end tracks are - see
 //!   [`names::FRONT_END_MUSIC`] and `docs/formats/2048-frontend.md`.
-//! - [`Title::exhaust`] and [`Title::flare`] are `Unread`. 2048 ships
-//!   `data/ribboneffects/EngineTrail_BlueRed_triangle.vex` and a per-team
-//!   `Engineflare.vex`, so the *files* are there under HD's own spellings -
-//!   but their geometry is in `.rcsmodel` siblings this build cannot decode,
-//!   and HD's `EF_Main`/`EF_Boost` group names have not been checked against
-//!   2048's own. Naming them here would claim a measurement nobody made.
+//! - [`Title::exhaust`] and [`Title::flare`] are read since 2026-10-05, on HD's
+//!   model: 2048 ships `data/ribboneffects/EngineTrail_BlueRed_triangle.vex`
+//!   and a per-team `EngineFlare.vex`, each with a psp2 `.rcsmodel` sibling
+//!   that decodes. The executable names the same three literals HD's does
+//!   (`data/RibbonEffects/enginetrail_bluered_triangle.vex`,
+//!   `%s\engineflare.vex`, `data/Tex/EngineFlare/Engine_Flare_Rich.gxt`) and
+//!   all 72 flare trees hang the same `EF_Main`/`EF_Boost` groups. See
+//!   `docs/formats/2048-status.md`.
 //! - [`hud::ART`] carries an empty always-on set on the same terms: which
 //!   widgets a race actually shows needs a running frame this title has no
 //!   capture harness for. The reticle axis (`sights`) and the played skin the
@@ -84,8 +86,23 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     race: race::DEFAULTS,
-    exhaust: &oag_title::exhaust::Exhaust::Unread,
-    flare: &oag_title::flare::Flare::Unread,
+    // **`bluered`, because the shipped executable names it** - the literal
+    // `data/RibbonEffects/enginetrail_bluered_triangle.vex` - exactly as on HD.
+    // The `.rcsmodel` beside it is the 2048 container; the loader reads it
+    // through `oag_rcs::rcsmodel::psp2` and takes HD's blend pair for the
+    // same-named material (inherited, not measured on 2048).
+    exhaust: &oag_title::exhaust::Exhaust::Authored(
+        "/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel",
+    ),
+    // **Per team, on HD's shape**: `EngineFlare.vex` beside each hull and the
+    // two groups its tree hangs, `EF_Main` and `EF_Boost`, read off every
+    // shipped file. The sprite literal is the executable's own.
+    flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
+        stem: "engineflare",
+        always: "EF_Main",
+        boost: "EF_Boost",
+        sprite: "/data/tex/engineflare/engine_flare_rich.gxt",
+    }),
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,

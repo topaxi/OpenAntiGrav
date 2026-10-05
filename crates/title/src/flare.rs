@@ -75,4 +75,9 @@ pub struct Authored {
     /// concluded before this group was found - the plume is not a file of its
     /// own there, it is a subtree of the flare.
     pub boost: &'static str,
+    /// The sprite flare's texture, in the archive set's lower-case path form,
+    /// drawn **beside** the model: `/data/tex/engineflare/engine_flare_rich.gtf`
+    /// on HD and `.gxt` on 2048 - both executables carry the literal. The
+    /// extension says which decoder reads it.
+    pub sprite: &'static str,
 }
