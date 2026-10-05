@@ -810,6 +810,7 @@ fn build_with_options(
         report.addressed += 1;
         let place = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
         let mut emitted = false;
+        let first_vertex = u32::try_from(out.vertices.len()).unwrap_or(u32::MAX);
         // Every surface, as the world-space pass does - `Mesh::surfaces`.
         for mesh in chunk.surfaces() {
             let tolerance = mesh.scale.iter().fold(0.0f32, |a, &b| a.max(b)) * TOLERANCE_STEPS;
@@ -892,6 +893,17 @@ fn build_with_options(
         if emitted {
             report.drawn += 1;
             out.mesh_count += 1;
+            // The same flap the `.vex`-geometry builder records: HD's
+            // `Ship.vex` authors the `Airbrake` tree and the `.rcsmodel` only
+            // supplies the triangles, which this node has just appended.
+            super::Flap::collect(
+                &mut out.airbrakes,
+                &nodes,
+                classes,
+                &anchors,
+                node,
+                first_vertex..u32::try_from(out.vertices.len()).unwrap_or(u32::MAX),
+            );
         }
     }
 

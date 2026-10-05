@@ -845,6 +845,16 @@ builds no weapon pools. See the handover thread.
   `(1.4, 0.2, 1.5)`; 88 of the title's 97 files author it, 20 distinct triples,
   one with a negative bias.
 
+**Airbrake flaps swing** (2026-10-05, `airbrake-flaps`). Same builder as 2048 (`psp2::build`); the twelve `hdships` hulls in `data01.psarc` all carry both flaps.
+The swing is the same `Flap::deflect` Pulse uses (`hinge * Rx(angle) * hinge^-1`,
+about the hinge frame's local X), scaled by the title's own `<AirbrakeGraphics>`
+`amount` and rates through `RaceView::airbrake_flaps`. **Which way it turns is
+checked, not read:** the title's own `Airbrake` handler is unread, so
+`psp2_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
+deflection raises the flap and flares it outward, both sides) on every Omega hull in `data01.psarc`. Only
+the player's craft swings, as on Pulse; a rival's flaps stay stowed.
+Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
+
   **Wired** in `oag-render` as `Light::with_nova_prelit` and `mesh.wgsl`'s
   `nova` branch, **only for a PS4 container** (`GeometryKind::Ps4`, by
   `psp2::is_ps4`): 2048 authors the key as `1 0 1 0` and its Vita shader is
