@@ -302,7 +302,10 @@ bank's cue list.
    `Ship_UpdateCraft`, `Ship_HoverTwoPoint`, `Ship_HoverFourCorner` or
    `Ship_UpdateMagLock` (`HudSight_Update` reads a `+0x280` of its own
    object). The rest are stack slots. So neither the edge flag nor the blend
-   reaches the engine note, a voice, or a pitch.
+   reaches the engine note, a voice, or a pitch. Forms searched
+   (`search_instructions`, whole program): `lb`/`lbu ..,0x240(`, `lwc1` and
+   `lv.s ..,0x280(`, `lv.s ..,0x240(`, and any `..,0x8bc(` (only
+   `Ship_MagFloorEnter`/`Exit`, `Craft_Construct`'s store, and stack slots).
 2. **Neither effect model authors a sound node.** `MagEffect1.vex` is
    `World`/`Mesh`/`Texture` (`0xf4`, `0x125`, `0x3c1`); `MagEffect2.vex` adds
    one `Anim Transform` (`0x3c0`). `oag_vex::sound_emitters::emitters` finds

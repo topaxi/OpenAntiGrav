@@ -93,6 +93,9 @@ pub(super) struct Shown {
 impl Race {
     /// Reads every craft's mag-floor contact for the tick just run. Called
     /// once a tick from [`Race::tick`], after the simulation.
+    ///
+    /// Deliberately not from `Race::tick_cosmetics`: that path freezes the
+    /// world, so the effect freezes with the craft it hangs under.
     pub(crate) fn advance_mag_floor_fx(&mut self) {
         for (slot, shown) in self.view.mag_floor_fx.iter_mut().enumerate() {
             let blend = self.sim.world.ships[slot].physics.mag_lock_blend;
