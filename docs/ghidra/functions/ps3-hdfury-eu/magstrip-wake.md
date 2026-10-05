@@ -76,3 +76,39 @@ are base class (`0x00885axx`/`0x00885cxx`). Descriptors at `0x00875408` ->
 - **Rumble:** `enter_mag_rumble.xml`, `travel_mag_rumble.xml`, `exit_mag_rumble.xml`
   (`/data/xml/rumble/`, 356, 548, 356 bytes) ship for the magstrip pad; the same three
   ship in the Omega `data00.psarc`. Who plays them was not searched.
+
+## 2026-10-05, magstrip-omega-law lane: the replicated `m_overMagStrip` and the HD anchors
+
+Static reading, `EBOOT.elf`; full evidence for the shared law is on
+[`ps4-omega-eu/ships-effects.md`](../ps4-omega-eu/ships-effects.md) ("2026-10-05,
+magstrip-omega-law lane").
+
+### `ShipNet_CheckSendState` - `0x00337d78`, conf 65
+
+The only reader of the string `"Send due m_overMagStrip change - now %i\n"` (`0x007a9320`,
+TOC slot `0x008b5688`, reached as `-0x7d3c(r2)` on the `r2 = 0x008bd3c4` half of the two-TOC
+split; found by searching `lwz ..,-0x7d3c(r2)`, three hits, one in game code). It is a
+per-ship **should this state be sent** test over a record at `param + slot * 0x24 + 0x10`,
+compared against the last-sent record at `param + slot * 0x28 + 0x160`: it returns 1 (and,
+when the debug flag `param+0x2c0` is set, prints why) on a time overrun
+(`"Send due to time"`), a position error beyond `param+0x2a4`, a rotation error beyond
+`param+0x2ac`, or a **flag-word change**. The flag word is at record `+0x2c`:
+
+- bit `0x400` changed: prints the next string (`-0x7d40(r2)`, the other replicated boolean).
+- **bit `0x200` changed: prints `m_overMagStrip` with `(flags >> 9) & 1`.**
+
+So the replicated field `m_overMagStrip` is **bit 9 of the ship's network flag word** on
+HD (the PS4 packs the same boolean as bit 1 of a byte at `+0x41` of a `0x21`-byte record,
+`FUN_012ed9b0`). Both are filled from the ship's own over-the-strip flag; on the PS4 that is
+`controller+0x5d0`, written by `FUN_0131b510` as `(probe hit a triangle of surface type 3)`
+- the same literal Pulse's `craft+0x240` uses. The HD writer of the flag word was **not**
+located (the HD analogue of `FUN_012ed9b0` is unread), so on the PS3 this page confirms the
+field's existence, its width and that it is replicated, not its producer: the producer
+claim rests on the PS4 and Pulse (85).
+
+### Hull anchors, HD (conf 90)
+
+All 39 `data/ships/<hull>/locators.vex` carry exactly one `arc_anchor_point` node (class
+id `110`, on the centreline), and **match the Omega copies hull for hull**; the table and the
+`#[ignore]`d test (`crates/game/tests/magstrip_anchor_ground_truth.rs`) are on the Omega
+page.
