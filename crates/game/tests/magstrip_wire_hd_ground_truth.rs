@@ -84,6 +84,7 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
                 _ => {}
             }
         }
+        #[allow(clippy::needless_range_loop)]
         for slot in 0..n {
             let over = race.over_magstrip(slot);
             if over {
@@ -193,8 +194,10 @@ fn the_hum_is_in_shiphd_bnk_and_changes_the_audio_only_on_the_strip() {
         audio.finish().expect("writing the dump");
         let file = std::fs::read(&wav).expect("the dump");
         let pcm: Vec<i16> = file[44..]
-            .chunks_exact(2)
-            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
             .collect();
         (log, pcm)
     };
