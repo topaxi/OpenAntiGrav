@@ -51,7 +51,9 @@
 //! uv`, `o[POS] = viewProj * position` - no scale. Fragment program, one sampler:
 //! `rgb = vertex.rgb * tex.rgb * tex.a`, `a = vertex.a * tex.a`, no constant at
 //! all. So the arc adds `brightness * tex.rgb * tex.a`, and the vertex alpha
-//! (`0.3` body, `0.25` contact) reaches only the destination alpha. There is no
+//! (`0.3` body, `0.25` contact) reaches only the destination alpha, which `ONE, ONE`
+//! adds into the frame's alpha - the glow mask HD's bloom gate weights by 3.0 on
+//! Talon's Junction (magstrip-wake.md, 2026-10-05 magstrip-arc-gap lane). There is no
 //! gain anywhere: the `INTENSITY = 3.0` this module carried until then was not in
 //! the original's shading. The program has no transfer function either, so the arc
 //! adds its gamma values as they are into the linear target (the HD engine tube's
@@ -70,15 +72,12 @@
 //!   in `[0, 1)` is used. The draws come from the seeded [`Rng`], not libc.
 //! - **The end point's placement.** Our spline stands in for the AI-track walk:
 //!   `ahead` metres along it, then across the road, clamped to its width.
-//! - **Destination alpha.** The original's `ONE, ONE` blend would add the
-//!   fragment's `vertex.a * tex.a` into the frame's alpha; this port keeps the
-//!   frame's alpha, which its glow stamp reads.
 //! - **Omega.** The PS4 build was not re-read for brightness; it inherits HD's
 //!   law here because only the HD-lineage wake is built.
-//! - **What is still missing**: with the original's law the arcs read faint at
-//!   player size (`brightness <= 0.2`). Not a gain this module may choose: HD's
-//!   bloom and the target's colour space are the open candidates, see the
-//!   evidence page.
+//! - **What is still unmatched**: no matched-pose arc and arc-free frame of the
+//!   original exists, so how much of the original's look the destination alpha
+//!   (the bloom feed) explains is unmeasured; the target's colour space and the
+//!   sampler's sRGB-remap bit stay open, see the evidence page.
 //! - **The spawn-time jitter seed.** HD's spawn writes no jitter; the seed here
 //!   is `spread * (2u - 1) * scale`, this port's.
 //!

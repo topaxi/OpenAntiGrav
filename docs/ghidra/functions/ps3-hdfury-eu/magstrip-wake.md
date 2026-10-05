@@ -309,3 +309,61 @@ The vertex colour is the arc's own brightness, **with no multiplier**: the body 
 | `0x0092f400` | `MagStripArc_vp` | 90 | the vertex program's `SHO` block, a bare `viewProj` transform |
 | `0x002bd750` | `MagstripArcs_InitClass` | 70 | class initialiser: looks both programs up by name, resolves the two parameter indices, builds the five jitter terms |
 | `0x002bc7b0` | `MagstripArcs_Draw` | 80 (was 65 above) | read whole this lane: vertex build, brightness and alpha stores, the state block |
+
+## 2026-10-05, magstrip-arc-gap lane: why our arcs were fainter, and the destination alpha
+
+Static reading plus six RPCS3 boots (own display, config and pad; `data/scratch/magstrip-arc-gap/run1`
+to `run6`). **No matched-pose arc/arc-free pair was obtained** (below), so the size of the effect against
+the original is unmeasured; what is established is a missing feed.
+
+### The finding: arcs feed HD's bloom through the frame alpha (conf 75, static, not pose-verified)
+
+1. The original's blend is `ONE, ONE` on **both** channels: `Rsx_SetBlendFunc` is the two-argument
+   form that writes one factor for RGB and alpha (`material-state.md`, conf 92), and the arc draw
+   passes `(1, 1)` (conf 80). `MagStripArc_fp` writes `a = vertex.a * tex.a` (0.3 body, 0.25
+   contact), so every arc fragment **adds** that into the scene target's alpha.
+2. That alpha is the glow mask HD's bloom gate reads: `gate = frame.rgb * frame.a * <alpha
+   contribution> + frame.rgb * pow(luma, exponent) * <frame contribution>` (`renderer.md`, "The
+   bloom chain", conf 90). **Talon's Junction authors `Bloom from alpha contribution = 3.0`,
+   `from frame contribution = 0.03`, `exponent = 4.0`** (`track.envsettings`, read off the disc).
+3. So an arc fragment's gate input is about `rgb * 0.3 * tex.a * 3.0 = 0.9 * tex.a * rgb`, near the
+   pixel's own colour, while the luminance term is `0.03 * luma^4`, negligible for a 0.1-0.2 arc.
+   **The arcs are bloomed at close to full strength through alpha, not through luminance.** The
+   previous port kept the frame's alpha (`ZERO, ONE_MINUS_SRC_ALPHA`, the PS4 reading), so the
+   gate saw nothing: arcs without their halo.
+4. The original's frames show it: soft white halos at the contact points several times the
+   geometry's size (`data/scratch/magstrip-arc-gap/run2/on064.png`, run1 `018.png`/`019.png`).
+
+Our side: texture upload is `Rgba8Unorm` (no sRGB decode, correct for a program with no transfer
+function), the add is raw into the linear target (the engine-tube precedent), and our bloom gate
+already reads scene alpha. Changed: the arc's alpha blend is `ONE, ONE` and its fragment alpha is
+`vertex.a * tex.a` (`Style::alpha_is_fragment`). Ours, `feisar_c1` autopilot ace, tick 1138:
+`data/scratch/magstrip-arc-gap/ours/cmpA_crop.png` (top before, bottom after): the arcs gain the
+halo and read more present; **they are still thinner than the original's**, and the original's floor
+here is a different, brighter one, so no ratio is claimed.
+
+### Live reads (RPCS3, Talon's Junction, Fury grid cell)
+
+- The wake object is reachable: `*(0x008ad4d8 - 0x49fc)` is the ship table base `Q`, `*(Q + 0x14c)`
+  the player ship, `*(ship + 0x6940)` the `MagstripWake` (vtable `0x00863868`, matches
+  `*(0x008a98d0)`), `*(wake + 0x58)` the 9 x `0xa0` arc pool (conf 85: one boot per read,
+  `run3`, vtable and pointer chain confirmed).
+- **Contact brightness read live**: the field at slot `+0x14` holds `0.056, 0.082, 0.079, 0.056, 0.080,
+  0.074, 0.076, 0.076` on eight live slots, inside the table's `0.05..0.1` (the contact scale
+  `3.5..7` sits at `+0x10`: `4.06, 5.68, 5.73, 3.64, 5.43`). The offsets in this page's earlier
+  sections (`+0x48`, `+0x94`) are relative to a different base and were not reconciled; the body
+  brightness field was not identified.
+- What blocked the matched pair: (a) the original's variable timestep means a stopped craft never
+  stayed still (airbrakes did not stop it within the window; consecutive frames differ by a mean 36
+  levels even for the best on/off pair, `run2`); (b) the pause menu's Photo Mode freezes the sim but
+  the grab did not change between frames (diff 0.0) and a whole-pool zero write crashed the
+  application (`run5`); (c) code patches are not seen by RPCS3's recompiler, so the draw cannot be
+  disabled by a write. A zero of the table's brightness ranges does hide arcs after about 15 ticks
+  (`run2`, off frames), but at a different pose.
+
+### Still open
+
+Sampler sRGB-remap bit on the two arc textures (the engine has no per-texture gamma control,
+`renderer.md`, conf 90, so it is expected clear); whether the scene alpha saturates at 1.0 as the
+original's 8-bit surface does (ours is `Rgba16Float`, the gate clamps at `surface()`); the arc
+width gap, which needs a pose-matched pair to size.

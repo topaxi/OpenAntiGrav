@@ -49,6 +49,11 @@ pub struct Style {
     /// additive blend. `MagStripArc_fp` has no transfer function, so the arc
     /// adds its values as they are (the HD engine tube's precedent).
     pub decodes_source: bool,
+    /// Whether the fragment's alpha is `vertex.a * tex.a` rather than the
+    /// constant [`Style::glow_mask`]. `MagStripArc_fp` computes it and the draw's
+    /// `ONE, ONE` blend adds it into the frame's alpha, which is the glow mask
+    /// HD's bloom gate reads.
+    pub alpha_is_fragment: bool,
     pub topology: wgpu::PrimitiveTopology,
     /// Vertices the buffer holds; an upload past it is cut off.
     pub capacity: usize,
@@ -62,6 +67,7 @@ impl Style {
         glow_mask: super::GLOW_MASK,
         vertex_alpha_weights_colour: true,
         decodes_source: true,
+        alpha_is_fragment: false,
         topology: wgpu::PrimitiveTopology::TriangleStrip,
         capacity: MAX_VERTICES,
     };
@@ -74,13 +80,12 @@ impl Style {
     /// fragment program does not weight the colour by vertex alpha
     /// (`vertex_alpha_weights_colour: false`).
     ///
-    /// **Colour is measured**: `MagstripWake_Construct` builds `enable 1`,
-    /// colour `(ONE, ADD, ONE)` and alpha `(ZERO, ADD, ONE_MINUS_SRC_ALPHA)`
-    /// into `0x65000101` (conf 85, `ps4-omega-eu/ships-effects.md`). **Chosen,
-    /// not measured**: the glow mask is not stamped (`0.0`, so the frame's alpha
-    /// is left as it was, which is what that alpha function does to an opaque
-    /// target), the depth state is the ribbon's (test, no write - the draw's
-    /// second state word is zero and undecoded), and no cull.
+    /// **Colour and alpha are measured.** The wrapper `Rsx_SetBlendFunc` writes one
+    /// factor for both channels, so `ONE, ONE` is the alpha function as well
+    /// (`material-state.md`), and the fragment's alpha `vertex.a * tex.a` is added
+    /// into the frame's alpha: the glow mask HD's bloom gate reads, weighted
+    /// `Bloom from alpha contribution` (3.0 on Talon's Junction). **Chosen, not
+    /// measured**: nothing about how the target's alpha saturates beyond 1.0.
     #[must_use]
     pub const fn magstrip(capacity: usize) -> Self {
         Self {
@@ -92,14 +97,15 @@ impl Style {
                     operation: wgpu::BlendOperation::Add,
                 },
                 alpha: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::Zero,
-                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
                     operation: wgpu::BlendOperation::Add,
                 },
             },
             glow_mask: 0.0,
             vertex_alpha_weights_colour: false,
             decodes_source: false,
+            alpha_is_fragment: true,
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,
         }
@@ -211,6 +217,10 @@ impl Pipeline {
                     f64::from(u8::from(style.vertex_alpha_weights_colour)),
                 ),
                 ("decode_source", f64::from(u8::from(style.decodes_source))),
+                (
+                    "alpha_is_fragment",
+                    f64::from(u8::from(style.alpha_is_fragment)),
+                ),
             ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
