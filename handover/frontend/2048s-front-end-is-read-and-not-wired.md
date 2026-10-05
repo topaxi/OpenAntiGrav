@@ -251,6 +251,11 @@ shape, not by screen, and would have mis-fired on `Team`'s own
   which it previously folded into the same arm as `Unknown`. Full account
   in `docs/formats/2048-frontend.md`'s "frontend.bnk" bullet; pinned by
   `crates/game/tests/vita_2048_music_ground_truth.rs`.
+- **Resolved 2026-10-05: the race soundtrack plays.** Eleven `PI_Music`
+  tracks (`music_stereo.at9`) go through the declared route. Still open: the
+  original's order, shuffle and selection rule (ours is sequential from 01,
+  chosen, not measured), and whether the `.fft` sidecars drive anything.
+  See `docs/formats/2048-status.md`.
 - **The loading screen is real and unauthored.** A percentage-driven
   `LOADING...` bar over the `WIPEOUT 2048` mark runs on every transition seen
   this pass. No `NEWGUI` file declares it - it reads as engine chrome rather

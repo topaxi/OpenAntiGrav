@@ -33,7 +33,7 @@ copies of 2,284 shared textures).
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
 | [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table, the per-submesh material binding, and the node table** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured, and since 2026-09-16 its node-bound meshes draw where their node puts them. `tangent`'s type nibble and the rest of section B's object graph are still unread. |
 | [Scenery animation](2048-animation.md) | **yes, from two files of its own** | `track.vex` authors no `Anim Transform`; a `.rcsskeleton` and a `.rcsanimclip` beside the model carry the hierarchy and the keys. Read, wired, and checked against Wipeout HD's evaluator on the twelve shared circuits. |
-| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` names the teams one; `oag_title::Title::track_plugin_definition` is the axis that reaches the circuits one - `None` on every other title, `Some` here. The soundtrack list still has no equivalent axis and this build sees none. |
+| Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` names the teams one; `oag_title::Title::track_plugin_definition` is the axis that reaches the circuits one - `None` on every other title, `Some` here. The soundtrack list needs no axis of its own: `oag_2048::MUSIC.tracks` names `Data\Plugins\music\Definition.xml` directly (see the music bullet below). |
 
 ## What changed, and what state each is in
 
@@ -134,6 +134,23 @@ the start line and runs the simulation. What it does **not** do, and why:
   full account, including the new `oag_game::at9` decoder and the
   `MusicDiscs::survey`/`pick` fix that was also needed for a Vita boot to
   reach it at all.
+- **The race soundtrack plays since 2026-10-05.** `data/plugins/music/Definition.xml`
+  declares eleven `PI_Music` nodes (`01`..`11`, `location="data\audio\music\NN"`);
+  each directory holds `music_stereo.at9` (RIFF-wrapped ATRAC9, 48 kHz stereo,
+  about 301 s for `01`) and an `.fft` sidecar nothing reads. `oag_2048::MUSIC.tracks`
+  is `Some(DeclaredTracks { music\Definition.xml, "music_stereo.at9" })`, so the
+  same declared route Pure and HD use lists them in file order. Two gaps stopped it
+  reaching a race: `Soundtrack::read` had no `Platform::Vita` arm, and
+  `music::riff_seconds` accepted only 44.1 kHz (ATRAC9 is told apart by its
+  subformat GUID rather than by widening the PSP rate test). The front-end loop
+  did play all along (302 s, decoded from `FEMusic`), but only once the boot's
+  100 s intro movie ends, so a capture shorter than that is silent under it.
+  **Playlist rule - chosen, not measured:** the title-agnostic one, track 01 first,
+  then in declared order, wrapping, with the position kept across races. The
+  original's order, shuffle and selection rule are unread. `Artist` and `Label` are
+  not shown: neither Pulse nor HD shows them. Evidence: `--race --dump-audio` WAV,
+  race music RMS 0.16 in the mixer against raw decoded track level 0.36 (front end
+  raw 0.22), and `vita_2048_music_ground_truth.rs`.
 - **Zone's announcer is wired, off a bank path that is read rather than
   measured.** The executable's own track-construction function decompiles to
   a real dispatch between two live Zone speech banks, gated on the selected

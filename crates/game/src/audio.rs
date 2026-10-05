@@ -1459,11 +1459,10 @@ impl Soundtrack {
     fn read(source: &str, platform: Platform) -> Result<Option<Self>> {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
-            Platform::Psp | Platform::Ps3 => archived_soundtrack(source)?,
-            // Wipeout 2048's and Omega's music are both unlocated -
-            // `oag_2048::TITLE`/`oag_omega::TITLE` both carry `music: None` -
-            // so there is nothing here to read yet.
-            Platform::Vita | Platform::Ps4 | Platform::Unknown => None,
+            Platform::Psp | Platform::Ps3 | Platform::Vita => archived_soundtrack(source)?,
+            // Omega's music is still unlocated (`oag_omega::TITLE` carries
+            // `music: None`), so there is nothing here to read yet.
+            Platform::Ps4 | Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }

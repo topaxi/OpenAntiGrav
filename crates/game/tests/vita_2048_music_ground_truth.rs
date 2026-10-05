@@ -154,3 +154,29 @@ fn the_boots_own_music_discs_survey_finds_it() {
         discs.describe()
     );
 }
+
+/// All eleven `PI_Music` declarations resolve to a readable ATRAC9 track, and
+/// the Vita boot's own survey lists them: dropping `tracks` from
+/// `oag_2048::MUSIC`, or `Platform::Vita` from `Soundtrack::read`, empties it.
+#[test]
+#[ignore = "needs game content in data/extracted/vita/PCSF00007"]
+fn the_eleven_declared_race_tracks_are_listed_and_decode() {
+    let Some(path) = source() else { return };
+    let source = path.display().to_string();
+    let entries = music::listing(&source)
+        .expect("reading the listing")
+        .expect("a title this build knows");
+    assert_eq!(entries.len(), 11, "one entry per PI_Music, none skipped");
+    for entry in &entries {
+        assert!(
+            (100.0..600.0).contains(&entry.seconds),
+            "track {} reads {} s",
+            entry.at,
+            entry.seconds
+        );
+    }
+
+    let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
+    let sound = music::load_entry(&source, entries[0].at, &cache).expect("decoding track 01");
+    assert!((f64::from(sound.seconds()) - entries[0].seconds).abs() < 1.0);
+}
