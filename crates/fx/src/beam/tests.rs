@@ -351,4 +351,18 @@ mod hd_ball {
         let halfway = position(period(length) / 2.0, length, owner, target);
         assert!((halfway - (owner + target) / 2.0).length() < 1e-4);
     }
+
+    #[test]
+    fn the_arc_adds_its_fragment_alpha_into_the_frame_alpha_and_the_ribbon_does_not() {
+        // `Rsx_SetBlendFunc` writes one factor for both channels, so the arc's
+        // `ONE, ONE` is the alpha function too, and `MagStripArc_fp`'s
+        // `a = vertex.a * tex.a` is what it adds (the glow mask HD's bloom gate
+        // reads). The LeachBeam replaces alpha with its constant stamp instead.
+        let arc = super::pipeline::Style::magstrip(8);
+        assert!(arc.alpha_is_fragment);
+        assert_eq!(arc.blend.alpha.src_factor, ::wgpu::BlendFactor::One);
+        assert_eq!(arc.blend.alpha.dst_factor, ::wgpu::BlendFactor::One);
+        assert_eq!(arc.blend.alpha.operation, ::wgpu::BlendOperation::Add);
+        assert!(!super::pipeline::Style::BEAM.alpha_is_fragment);
+    }
 }

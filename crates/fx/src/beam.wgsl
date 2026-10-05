@@ -30,6 +30,11 @@ override vertex_alpha_weight: f32 = 1.0;
 // `exhaust.wgsl`.
 override decode_source: f32 = 1.0;
 
+// 1.0 writes `vertex.a * tex.a` to the alpha output (`MagStripArc_fp`'s own
+// `a = vertex.a * tex.a`, added into the frame's alpha by its `ONE, ONE` blend);
+// 0.0 writes the constant `glow_mask`.
+override alpha_is_fragment: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var beam_texture: texture_2d<f32>;
 @group(1) @binding(1) var beam_sampler: sampler;
@@ -71,5 +76,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // stamp the stencil writes - `beam::pipeline::BLEND` adds the colour and
     // replaces the alpha.
     let weight = texel.a * mix(1.0, in.colour.a, vertex_alpha_weight);
-    return vec4<f32>(decoded * weight, glow_mask);
+    let alpha = mix(glow_mask, in.colour.a * texel.a, alpha_is_fragment);
+    return vec4<f32>(decoded * weight, alpha);
 }
