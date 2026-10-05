@@ -480,16 +480,16 @@ other than 1 and no reset.
 | Repulser field model, boot 1 | 341.338 | `0.000` | `1.0000` over 95 samples | `0.0000` |
 | Same, boot 2 | 168.616 | `0.000` | `1.0000` over 95 samples | `0.0000` |
 
-The two falsifiers both came out for age: detonations at race clocks 60.9, 157.5, 294.1 and 75.1 each
-start from `0` (a race clock would carry the session's tens of seconds), and the three meshes of one
+The two falsifiers both came out for age: detonations at race clocks 60.9, 294.1 and 75.1 (mesh time read) each
+start from `0`; a third probe read the blast object's own age (`+0xd0`), which starts at `0.0` and ticks 0.0166 per frame (clock 157.5), but not a mesh time (a race clock would carry the session's tens of seconds), and the three meshes of one
 blast, first seen 0.15 s apart, share one spawn clock equal to the detonation's own, so the time counts
 from spawn, not from first sight. The updates stop at 1.535 s (hemisphere hide, 1.55 s) and 1.569 s (the
 repulser's `blast_time + wave_time`), once the meshes are not drawn. The wrap period is each block's own
 `+0x2c`, applied by `TexAnim_UpdateTransform`'s `fmodf` (`texture-animation.md`), which the renderer's
 sampler already does.
 
-Confidence **88**: both seeds read at the instruction, the update read at the instruction, and five
-captures over two boots agree to four decimals. Not 90+ because the update has no Ghidra function, so its
+Confidence **88** for the Bomb and the Repulser (the ship explosion's shockwave is **80**: the seed is read, nothing was captured of it): both seeds read at the instruction, the update read at the instruction, and five
+captures of those two over two boots agree to four decimals. Not 90+ because the update has no Ghidra function, so its
 caller and the class slot it sits in were not traced. Unnamed for the same reason (no function to name).
 
 ## What is still open

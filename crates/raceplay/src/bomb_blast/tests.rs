@@ -215,9 +215,10 @@ fn the_basis_is_orthonormal_and_puts_dir_in_the_y_column() {
 /// Both models' texture tracks play on the blast's own age: `BombBlast_Construct`
 /// seeds each with `Node_SetAnimTimeTree(0.0)` and the mesh update adds the clock's
 /// delta from there, so the time is `0` at spawn and the age at rate 1 (measured
-/// live: three detonations at race clocks 60.9, 157.5 and 294.1 all start at `0.000`
-/// with slope `1.0000`). `write_bomb_blasts` hands `age` to `write_anims`; a draw that
-/// did not carry it would leave both tracks at phase 0 for the blast's four seconds.
+/// live: three detonations at race clocks 60.9, 294.1 and 75.1 all start at `0.000`
+/// or at the age they were first seen at, with slope `1.0000`). `write_bomb_blasts`
+/// hands `age` to `write_anims`; a draw that did not carry it would leave both
+/// tracks at phase 0 for the blast's four seconds.
 #[test]
 fn the_draw_carries_the_age_the_texture_tracks_play_at() {
     let mut race = race_with_a_grid();
