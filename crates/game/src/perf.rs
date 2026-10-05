@@ -546,13 +546,33 @@ pub struct Stats {
     pub worst_ms: f32,
 }
 
-/// Where the frame-time panel sits in the 480x272 space, and how big it is.
+/// The overlay's grid height. Its width follows the window's own aspect (see
+/// [`grid`]), so the panels sit on the window's real edges whatever its shape.
+pub const GRID_H: f32 = 272.0;
+
+/// The grid the overlay lays out in for a window of `size` pixels: [`GRID_H`]
+/// tall and as wide as the window's aspect makes it, shown as itself.
 ///
-/// Top right, because the front end and the menus both start at the left margin
-/// and a race puts its ship in the middle. Nothing here is recovered from
-/// anything; it is picked to stay legible at the smallest window the game opens.
-const RIGHT: f32 = 474.0;
-const TOP: f32 = 4.0;
+/// **The window, not the game's aspect rectangle.** The rest of the frame is
+/// fitted into the aspect the player chose, with bars beside it; the overlay
+/// is an instrument, and an instrument belongs on the edge of the glass, not
+/// floating at the edge of a 480x272 box that moves with the resolution.
+#[must_use]
+pub fn grid(size: (u32, u32)) -> oag_display::space::Space {
+    let aspect = size.0.max(1) as f32 / size.1.max(1) as f32;
+    oag_display::space::Space {
+        size: (GRID_H * aspect, GRID_H),
+        display_aspect: aspect,
+    }
+}
+
+/// How far the panels sit from the window's edges, in grid units.
+///
+/// Top right for the frame-time panel and top left for the cost panel, both
+/// flush to the window's corner. Nothing here is recovered from anything; it
+/// is chosen, to stay legible at the smallest window the game opens.
+const EDGE: f32 = 0.0;
+const TOP: f32 = EDGE;
 const PAD: f32 = 4.0;
 const LINE: f32 = 10.0;
 /// One column per remembered frame, so the graph is [`WINDOW`] pixels wide.
@@ -560,8 +580,8 @@ const GRAPH_W: f32 = WINDOW as f32;
 const GRAPH_H: f32 = 30.0;
 const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
 
-/// Where the GPU-cost panel sits: top left, mirroring [`TOP`] and [`PAD`] off
-/// the opposite margin.
+/// Where the GPU-cost panel sits: top left, mirroring the frame-time panel off
+/// the opposite edge.
 ///
 /// **Its own panel rather than folded into the frame-time one**, which is
 /// what it used to be: `GpuCost::rows` puts one reading a row rather than
@@ -572,7 +592,7 @@ const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
 /// menus both start at the left margin too - but neither of those routes ever
 /// has a `GpuCost` to draw, so there is nothing there for this to collide
 /// with in practice.
-const GPU_LEFT: f32 = 4.0;
+const GPU_LEFT: f32 = EDGE;
 /// Wide enough for the longest single row, `FSR3 REN 100.00 MS` at three
 /// digits - picked to stay legible, the same way [`PANEL_W`] was. It was
 /// `SCENE 100.00 MS` and 90 until the FSR 3.1 chain became two rows rather
@@ -690,6 +710,7 @@ pub fn draw_list(
     render: Option<RenderSize>,
     gpu: GpuCost,
     cpu: CpuCost,
+    width: f32,
 ) -> Vec<Draw> {
     if !mode.is_on() {
         return Vec::new();
@@ -698,6 +719,8 @@ pub fn draw_list(
         return Vec::new();
     };
     let target_ms = 1000.0 / target_hz.max(1) as f32;
+    // The window's right edge in the grid [`grid`] built, less the margin.
+    let right = width - EDGE;
 
     let graph = mode == Overlay::Pacing || mode == Overlay::Dev;
     let mut lines = vec![format!("{:.0} FPS  {:.1} MS", stats.fps, stats.mean_ms)];
@@ -757,13 +780,13 @@ pub fn draw_list(
     let panel_h = PAD * 2.0 + text_height + if graph { GRAPH_H + PAD } else { 0.0 };
 
     let mut out = vec![Draw::Fill {
-        rect: [RIGHT - PANEL_W, TOP, PANEL_W, panel_h],
+        rect: [right - PANEL_W, TOP, PANEL_W, panel_h],
         color: PANEL,
     }];
 
     for (row, text) in lines.into_iter().enumerate() {
         out.push(Draw::Text {
-            x: RIGHT - PAD,
+            x: right - PAD,
             y: TOP + PAD + row as f32 * LINE,
             scale: 1.0,
             color: TEXT,
@@ -775,7 +798,7 @@ pub fn draw_list(
     }
 
     if graph {
-        let left = RIGHT - PAD - GRAPH_W;
+        let left = right - PAD - GRAPH_W;
         let top = TOP + PAD + text_height + PAD;
         let bottom = top + GRAPH_H;
         let ceiling = target_ms * GRAPH_FRAMES;

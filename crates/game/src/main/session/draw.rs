@@ -732,6 +732,13 @@ impl Session {
         // `Renderer::overlay` loads rather than clears, so the blit and the
         // aspect bars underneath it survive. One pass, skipped entirely when the
         // setting is off.
+        // **The whole window, not `rect`**: the panels belong on the glass's
+        // own corners, so the overlay gets a full-surface viewport and a grid
+        // as wide as the window's aspect (`perf::grid`), with no letterbox.
+        let surface = self.gpu.size();
+        let overlay_space = perf::grid(surface);
+        let overlay_rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
+        self.overlay.set_space(overlay_space);
         let mut list = perf::draw_list(
             &self.meter,
             self.settings.graphics.perf_overlay,
@@ -772,6 +779,7 @@ impl Session {
                 frame: self.cpu_cost.stats().map(|s| s.mean_ms / 1000.0),
                 present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
+            overlay_space.size.0,
         );
         // The pointer, last of all, so it is over the overlay's own text
         // too. Only where a pointer means something - see
@@ -780,13 +788,12 @@ impl Session {
         // nothing.
         // Positioned off the window's latest reading rather than the last
         // tick's, so it keeps up with the mouse between ticks, and mapped
-        // through the same rectangle the overlay is fitted into: the PSP
-        // grid is the overlay renderer's own space, whatever title is up.
+        // through the same full-window grid the overlay is drawn in.
         if self.shows_cursor()
             && let Some(at) = self.pointer.cursor_at()
         {
             self.refresh_cursor();
-            let at = oag_game::render::to_grid(oag_display::space::Space::PSP, rect, at);
+            let at = oag_game::render::to_grid(overlay_space, overlay_rect, at);
             list.extend(oag_game::cursor::draw(&self.cursor_sheet, at));
         }
         if !list.is_empty() {
@@ -796,7 +803,7 @@ impl Session {
                 &mut encoder,
                 &view,
                 &list,
-                rect,
+                overlay_rect,
             );
         }
 

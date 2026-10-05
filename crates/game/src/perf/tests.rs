@@ -30,7 +30,8 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
             None,
             None,
             GpuCost::default(),
-            CpuCost::default()
+            CpuCost::default(),
+            480.0
         )
         .is_empty()
     );
@@ -133,7 +134,8 @@ fn off_draws_nothing_however_full_the_meter_is() {
             None,
             None,
             GpuCost::default(),
-            CpuCost::default()
+            CpuCost::default(),
+            480.0
         )
         .is_empty()
     );
@@ -156,6 +158,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert_eq!(fps.len(), 2);
     assert!(matches!(fps[0], Draw::Fill { .. }));
@@ -171,6 +174,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     // panel + two lines + the rule + one column per frame
     assert_eq!(pacing.len(), 4 + WINDOW);
@@ -196,6 +200,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
     // rule + one column per frame.
@@ -218,6 +223,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         with_scene
@@ -235,6 +241,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         with_memory
@@ -252,6 +259,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         with_video
@@ -272,6 +280,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         with_all
@@ -330,6 +339,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         !none
@@ -351,6 +361,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         race.iter()
@@ -379,6 +390,7 @@ fn the_render_row_is_dev_only() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        480.0,
     );
     assert!(
         !pacing
@@ -418,6 +430,7 @@ fn nothing_is_drawn_outside_the_panel() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            480.0,
         ),
         draw_list(
             &meter,
@@ -434,6 +447,7 @@ fn nothing_is_drawn_outside_the_panel() {
             }),
             GpuCost::default(),
             CpuCost::default(),
+            480.0,
         ),
     ] {
         let Draw::Fill { rect: panel, .. } = list[0] else {
@@ -477,6 +491,7 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            480.0,
         )
         .into_iter()
         .skip(4) // the panel, two lines of text and the rule
@@ -589,7 +604,18 @@ fn the_wall_clock_rows_join_the_gpu_panel_and_fit_inside_it() {
         frame: Some(0.005),
         present: Some(0.001),
     };
-    let draws = draw_list(&meter, Overlay::Dev, 120, None, None, None, None, gpu, cpu);
+    let draws = draw_list(
+        &meter,
+        Overlay::Dev,
+        120,
+        None,
+        None,
+        None,
+        None,
+        gpu,
+        cpu,
+        480.0,
+    );
     let panel = draws
         .iter()
         .find_map(|draw| match draw {
@@ -630,7 +656,7 @@ fn the_wall_clock_rows_join_the_gpu_panel_and_fit_inside_it() {
 
 /// The GPU panel is `Dev`-only, like the two rows above it, and it is its own
 /// panel - a separate `Fill` at [`super::GPU_LEFT`], not folded into the
-/// frame-time panel at `RIGHT`.
+/// frame-time panel on the right edge.
 #[test]
 fn the_gpu_panel_is_dev_only_and_sits_top_left() {
     let mut meter = Meter::new();
@@ -655,6 +681,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
             None,
             cost,
             CpuCost::default(),
+            480.0,
         )
         .iter()
         .any(|d| matches!(d, Draw::Fill { rect, .. } if rect[0] == super::GPU_LEFT))
@@ -675,6 +702,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         None,
         cost,
         CpuCost::default(),
+        480.0,
     );
     let panel_count = draws
         .iter()
@@ -685,7 +713,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         "the frame-time panel and the GPU panel, and no more"
     );
     // Every GPU row is left-aligned off `GPU_LEFT`, not right-aligned off
-    // `RIGHT` the way the frame-time panel's rows are.
+    // the right edge the way the frame-time panel's rows are.
     let scene_row = draws
         .iter()
         .find(|d| matches!(d, Draw::Text { text, .. } if text == "SCENE 4.20 MS"))
@@ -695,4 +723,50 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
     };
     assert_eq!(*x, super::GPU_LEFT + super::PAD);
     assert_eq!(*align, Align::Left);
+}
+
+/// Both panels sit on the window's own corners, whatever its shape: the
+/// frame-time panel's right edge is the grid's right edge, and the cost panel
+/// starts at zero, on a 16:9 and on a 32:9 window alike.
+#[test]
+fn the_panels_sit_on_the_windows_corners_at_any_aspect() {
+    let mut meter = Meter::new();
+    for _ in 0..8 {
+        meter.record(1.0 / 60.0);
+    }
+    let cost = GpuCost {
+        scene: Some(0.004_2),
+        ..GpuCost::default()
+    };
+    for size in [(1920, 1080), (5120, 1440), (1280, 1024)] {
+        let width = super::grid(size).size.0;
+        let fills: Vec<[f32; 4]> = draw_list(
+            &meter,
+            Overlay::Dev,
+            60,
+            None,
+            None,
+            None,
+            None,
+            cost,
+            CpuCost::default(),
+            width,
+        )
+        .into_iter()
+        .filter_map(|d| match d {
+            Draw::Fill { rect, color } if color == super::PANEL => Some(rect),
+            _ => None,
+        })
+        .collect();
+        assert!(
+            fills
+                .iter()
+                .any(|r| (r[0] + r[2] - width).abs() < 0.001 && r[1] == 0.0),
+            "no panel flush to the top right of a {size:?} window: {fills:?}"
+        );
+        assert!(
+            fills.iter().any(|r| r[0] == 0.0 && r[1] == 0.0),
+            "no panel flush to the top left of a {size:?} window: {fills:?}"
+        );
+    }
 }
