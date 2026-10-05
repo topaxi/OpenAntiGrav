@@ -109,6 +109,12 @@ pub struct WeaponModels {
     /// them for every craft. See `oag_raceplay::mag_floor_fx`. `None` on every
     /// title whose archive was not checked for them or does not carry them.
     pub mag_floor: Option<[&'static str; 2]>,
+    /// The HD-lineage magstrip arc wake: `MagstripWake` (`MagstripWake.cpp`),
+    /// one object per craft, drawn while it is over a magstrip. See
+    /// `oag_raceplay::magstrip_wake` and `oag_fx::magstrip`. `None` on every
+    /// title that does not build the class - Pulse and Pure draw their own
+    /// two-mesh `mag_floor` instead, and the 2048 modes play a `.pob`.
+    pub magstrip_wake: Option<MagstripWake>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -124,6 +130,20 @@ pub struct WeaponModels {
     /// title without its own reading keeps drawing on those terms, as it did
     /// before this field existed.
     pub cannon_look: Option<CannonLook>,
+}
+
+/// The two textures and the one sound cue `MagstripWake` is built from.
+///
+/// Names are archive entry names; the loader reads them through the same
+/// archive set a race loads from, so the case and separator folding of a PSARC
+/// applies. A title that ships them as another container (Omega's `.gnf`) names
+/// that spelling here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MagstripWake {
+    /// `HD_electric_arc_8x8`: the 8-by-8 atlas the arc body samples.
+    pub atlas: &'static str,
+    /// `HD_ElectricArc_Contact`: the quad at the arc's far end.
+    pub contact: &'static str,
 }
 
 impl WeaponModels {
@@ -144,6 +164,7 @@ impl WeaponModels {
         bomb_blast_pulse: None,
         repulser_field: None,
         mag_floor: None,
+        magstrip_wake: None,
         leachbeam_ball: None,
         cannon_look: None,
     };

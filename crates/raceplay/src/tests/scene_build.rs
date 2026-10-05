@@ -67,6 +67,7 @@ fn livery() -> Livery {
         boost_uv: None,
         engine_light: None,
         cannon_flash: [None, None],
+        arc_anchor: None,
     }
 }
 

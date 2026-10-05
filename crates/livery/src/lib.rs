@@ -53,6 +53,7 @@ use oag_vex::vex;
 use entry::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
 mod absorb;
+mod arc_anchor;
 mod cannon_flash;
 pub mod draw;
 pub mod engine_light;
@@ -141,6 +142,9 @@ pub struct Livery {
     /// Wipeout HD's `cannon_flash` locators, model space, `[left, right]` -
     /// both `None` on every source that authors none. See [`cannon_flash`].
     pub cannon_flash: [Option<oag_core::math::Mat4>; 2],
+    /// The `arc_anchor_point` locator the magstrip arc wake hangs on, model
+    /// space. `None` where the hull authors none. See [`arc_anchor`].
+    pub arc_anchor: Option<oag_core::math::Mat4>,
 }
 
 /// One `Ship Collision Fx` locator, in its hull's own model space: where a
@@ -254,6 +258,7 @@ pub fn load(
                 shield: source.shield.clone(),
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
+                arc_anchor: source.arc_anchor,
             };
             report.push(format!(
                 "slot {slot}: {team}, the same livery as slot {first} - the source declares \
@@ -298,6 +303,7 @@ pub fn load(
                     shield: player.shield.clone(),
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
+                    arc_anchor: player.arc_anchor,
                 });
             }
         }
@@ -382,6 +388,7 @@ fn one(
                     shield: None,
                     engine_light: None,
                     cannon_flash: [None, None],
+                    arc_anchor: None,
                 });
             }
         };
@@ -399,6 +406,7 @@ fn one(
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
         let absorb = absorb::locators(archives, &hull_name, &blob, report);
         let cannon_flash = cannon_flash::locators(archives, &hull_name, &blob, report);
+        let arc_anchor = arc_anchor::locator(archives, &hull_name, &blob, report);
         let engine_light =
             engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
         // **The plume comes from here too on this title.** HD ships no
@@ -428,6 +436,7 @@ fn one(
             shield: shell(archives, team, ships.dir, team_model, report),
             engine_light,
             cannon_flash,
+            arc_anchor,
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None)?;
@@ -501,6 +510,7 @@ fn one(
         shield,
         engine_light,
         cannon_flash: [None, None],
+        arc_anchor: None,
     })
 }
 

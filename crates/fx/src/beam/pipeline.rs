@@ -32,6 +32,63 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
+/// The state a [`Pipeline`] differs by between the things it draws: the LeachBeam
+/// ribbon and the magstrip arc wake share one shader and one shape, and not
+/// one blend.
+#[derive(Debug, Clone, Copy)]
+pub struct Style {
+    pub label: &'static str,
+    pub blend: wgpu::BlendState,
+    /// What the fragment writes to alpha, which is the glow mask: see
+    /// [`super::GLOW_MASK`].
+    pub glow_mask: f32,
+    pub topology: wgpu::PrimitiveTopology,
+    /// Vertices the buffer holds; an upload past it is cut off.
+    pub capacity: usize,
+}
+
+impl Style {
+    /// The LeachBeam ribbon: one triangle strip, stamping the glow mask.
+    pub const BEAM: Self = Self {
+        label: "beam",
+        blend: BLEND,
+        glow_mask: super::GLOW_MASK,
+        topology: wgpu::PrimitiveTopology::TriangleStrip,
+        capacity: MAX_VERTICES,
+    };
+
+    /// The magstrip arc wake, `capacity` vertices of triangle list.
+    ///
+    /// **Colour is measured**: `MagstripWake_Construct` builds `enable 1`,
+    /// colour `(ONE, ADD, ONE)` and alpha `(ZERO, ADD, ONE_MINUS_SRC_ALPHA)`
+    /// into `0x65000101` (conf 85, `ps4-omega-eu/ships-effects.md`). **Chosen,
+    /// not measured**: the glow mask is not stamped (`0.0`, so the frame's alpha
+    /// is left as it was, which is what that alpha function does to an opaque
+    /// target), the depth state is the ribbon's (test, no write - the draw's
+    /// second state word is zero and undecoded), and no cull.
+    #[must_use]
+    pub const fn magstrip(capacity: usize) -> Self {
+        Self {
+            label: "magstrip wake",
+            blend: wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Zero,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    operation: wgpu::BlendOperation::Add,
+                },
+            },
+            glow_mask: 0.0,
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            capacity,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -41,6 +98,7 @@ pub struct Pipeline {
     vertices: wgpu::Buffer,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     count: u32,
+    capacity: usize,
 }
 
 impl Pipeline {
@@ -58,8 +116,29 @@ impl Pipeline {
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
+        Self::with_style(
+            device,
+            queue,
+            format,
+            texture,
+            sample_count,
+            velocity,
+            Style::BEAM,
+        )
+    }
+
+    /// [`Self::new`] for another thing drawn the same way - see [`Style`].
+    pub fn with_style(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        texture: &FlareTexture,
+        sample_count: u32,
+        velocity: oag_mesh::mesh_render::Velocity,
+        style: Style,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("beam"),
+            label: Some(style.label),
             source: wgpu::ShaderSource::Wgsl(include_str!("../beam.wgsl").into()),
         });
 
@@ -108,7 +187,7 @@ impl Pipeline {
         let constants: Vec<(&str, f64)> = oag_mesh::mesh_render::linear_constants(format)
             .iter()
             .copied()
-            .chain([("glow_mask", f64::from(super::GLOW_MASK))])
+            .chain([("glow_mask", f64::from(style.glow_mask))])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("beam"),
@@ -135,7 +214,7 @@ impl Pipeline {
                 targets: &{
                     let mut targets = vec![Some(wgpu::ColorTargetState {
                         format,
-                        blend: Some(BLEND),
+                        blend: Some(style.blend),
                         // Alpha open: `Gu_PixelMask(0)` and
                         // `Bloom_SetGlowMaskWritable(g_bloom, 1)` right before
                         // the stencil write.
@@ -150,8 +229,8 @@ impl Pipeline {
                 },
             }),
             primitive: wgpu::PrimitiveState {
-                // The recovered draw is one `GU_TRIANGLE_STRIP`.
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                // The ribbon's recovered draw is one `GU_TRIANGLE_STRIP`.
+                topology: style.topology,
                 // The ribbon has no meaningful winding - it crosses two
                 // strips through each other and is meant to read from any
                 // angle, the same reasoning `exhaust`'s camera-facing quad
@@ -194,7 +273,7 @@ impl Pipeline {
 
         let vertices = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("beam vertices"),
-            size: (MAX_VERTICES * std::mem::size_of::<GpuVertex>()) as u64,
+            size: (style.capacity * std::mem::size_of::<GpuVertex>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -208,6 +287,7 @@ impl Pipeline {
             texture,
             vertices,
             count: 0,
+            capacity: style.capacity,
         }
     }
 
@@ -231,7 +311,7 @@ impl Pipeline {
         block[7] = [0.0, 0.0, 0.0, 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
-        let n = vertices.len().min(MAX_VERTICES);
+        let n = vertices.len().min(self.capacity);
         if n > 0 {
             queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
         }

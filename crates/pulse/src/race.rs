@@ -378,6 +378,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         r"Data\visual_effects\MagEffect1.vex",
         r"Data\visual_effects\MagEffect2.vex",
     ]),
+    magstrip_wake: None,
     leachbeam_ball: None,
     // `None` is this title's own reading - see the field's doc comment.
     cannon_look: None,

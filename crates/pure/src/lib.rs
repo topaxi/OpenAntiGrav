@@ -104,6 +104,7 @@ pub const TITLE: &Title = &Title {
         // `visual_effects` or `MagEffect` string and no `Mag Floor Collision`
         // class (docs/ghidra/functions/psp-pure-usa/magfloor-absent.md).
         mag_floor: None,
+        magstrip_wake: None,
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,
