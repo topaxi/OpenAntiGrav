@@ -322,6 +322,7 @@ const SOUNDS: SoundBanks = SoundBanks {
     weapons: "weapons.bnk",
     speech: "speech.bnk",
     track_general: Some("generaltrack.bnk"),
+    crossfade: None,
 };
 
 /// A fixture with both a native `team_variants` table and a `guest_roster` -

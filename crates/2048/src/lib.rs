@@ -177,10 +177,11 @@ pub mod names {
     /// The music the front end loops under its menus.
     ///
     /// **A standalone file, not a `frontend.bnk` cue** - the bank this
-    /// thread's own Next Step originally pointed at turned out to carry no
-    /// name table at all (`oag_formats::sblk::Bank::sound_names` returns
-    /// empty for it, `HAS_NAME_TABLE` clear), so nothing in it can be
-    /// addressed by name the way a cue-based track is. The base package's
+    /// thread's own Next Step originally pointed at is a version-5 bank whose
+    /// name table is keyed by FNV-1 hashes, not the 16-byte names
+    /// `oag_formats::sblk::Bank::sound_names` walks (it returns empty for it;
+    /// `Bank::cue_named` resolves a name by hash, which was found later). The
+    /// base package's
     /// `PSP2/data.psarc` instead carries
     /// `data/audio/music/FEMusic/frontend_stereo.at9` - RIFF-wrapped ATRAC9,
     /// 48000 Hz stereo, a 302-second `fact` chunk - beside a second,

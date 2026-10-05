@@ -4,10 +4,6 @@ fn put32(out: &mut [u8], at: usize, v: u32) {
     out[at..at + 4].copy_from_slice(&v.to_be_bytes());
 }
 
-fn put16(out: &mut [u8], at: usize, v: u16) {
-    out[at..at + 2].copy_from_slice(&v.to_be_bytes());
-}
-
 /// One channel with `triggers` triggers and one layer on it, big-endian (PS3).
 fn table(triggers: usize) -> Vec<u8> {
     table_in(ByteOrder::Big, triggers)

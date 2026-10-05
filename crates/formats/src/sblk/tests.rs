@@ -386,5 +386,8 @@ fn the_name_hash_is_fnv_one_seeded_with_zero() {
     assert_eq!(name_hash("ABSORB"), 0x49de_bc6f);
     // The last byte is xored in after the multiply, so names that differ only
     // there differ by the xor of those bytes: `~n8` against `~n9`.
-    assert_eq!(name_hash("~n9") ^ name_hash("~n8"), b'9' as u32 ^ b'8' as u32);
+    assert_eq!(
+        name_hash("~n9") ^ name_hash("~n8"),
+        b'9' as u32 ^ b'8' as u32
+    );
 }

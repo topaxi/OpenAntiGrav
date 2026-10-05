@@ -564,6 +564,29 @@ pub struct SoundBanks {
     /// `.vex` audio classes. See `oag_sound::sfx::TrackEmitters` in
     /// `oag-game`.
     pub track_general: Option<&'static str>,
+    /// Where this title's crossfaded engine tables address their sounds, or
+    /// [`None`] to read them from [`Self::ship`] / [`Self::ship_zone`] under
+    /// the plain `xfship_<team>.xfx` names, which is what HD does.
+    pub crossfade: Option<Crossfade>,
+}
+
+/// A title whose engine tables address a bank other than its `ship` bank, and
+/// keep a second set of tables for Zone.
+///
+/// Wipeout 2048 is the one: its five `<team>2048` tables name their sounds by
+/// **cue index**, and those indices bind looping waveforms only in
+/// `Ship_NGP.bnk` (Zone's three tables in `Ship_NGP_Zone.bnk`), where
+/// `shipHD.bnk` binds one-shots under the same numbers. The measurement is
+/// `crates/formats/tests/xfx_2048_ground_truth.rs`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Crossfade {
+    /// The bank a race's tables address.
+    pub ship: &'static str,
+    /// The bank a Zone race's tables address.
+    pub ship_zone: &'static str,
+    /// The infix a Zone race's table names carry (`xfship_ZONE_<team>.xfx`),
+    /// or [`None`] where Zone reads the same tables as any race.
+    pub zone_infix: Option<&'static str>,
 }
 
 /// Where a title keeps the hull a Zone race flies.

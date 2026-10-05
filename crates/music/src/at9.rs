@@ -20,9 +20,10 @@
 //! 48000 Hz stereo, a 302-second `fact` chunk. See
 //! `docs/formats/2048-frontend.md` for how that path was found and why it is
 //! named [`oag_title::Music::front_end`] rather than a cue out of
-//! `frontend.bnk`, which carries no name table at all
-//! (`oag_formats::sblk::Bank::sound_names` returns empty for it), so it
-//! cannot be what addresses a track by name.
+//! `frontend.bnk`, a version-5 bank whose names are hashes
+//! (`oag_formats::sblk::Bank::sound_names` returns empty for it;
+//! `Bank::cue_named` resolves by FNV-1 hash; whether it carries a music cue
+//! was not checked).
 
 use std::path::Path;
 
