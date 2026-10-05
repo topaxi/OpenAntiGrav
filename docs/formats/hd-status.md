@@ -798,7 +798,7 @@ progression and it is **not a measurement** of what the original gates - what
   it is a finer structure than the mask in the `.vex`, not the same table moved.
 - **`.xfx`** - no longer unknown: the per-team engine crossfade table, read by
   `oag_formats::xfx` on all 13 files and played as HD's engine note since
-  2026-10-05 (`crates/game/src/audio/sfx/xfade.rs`); see [hd-xfx](hd-xfx.md).
+  2026-10-05 (`crates/sound/src/sfx/xfade.rs`); see [hd-xfx](hd-xfx.md).
 - **`.stencilvolume`, `.svml`, `.points2`, `.effectsettings`,
   `.envsettings`** - the last of these is plain text, a key/value list starting
   `"Lighting.Constant ambient color"=0.403922 0.392157 0.509804`.

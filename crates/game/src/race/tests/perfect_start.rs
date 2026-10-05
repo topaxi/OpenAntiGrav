@@ -2,8 +2,8 @@
 //! See `race::perfect_start`.
 
 use super::*;
-use crate::audio::sfx::Cue;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::Cue;
 
 /// A time trial with a launch window whose player first thrusts inside the
 /// perfect window: what `ExhaustFlare_OnPerfectStart` (`0x08904fd4`) raises

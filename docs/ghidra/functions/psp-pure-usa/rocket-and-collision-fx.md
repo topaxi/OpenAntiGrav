@@ -250,8 +250,8 @@ for this function, so it does not clear the rubric's 85+ band.
 
 ## `ShipCollisionFx_Trigger` also fires the `.COLLISIONS` sound cue, same as Pulse
 
-Answers, for `oag_game::audio::sfx::Cue::Collision`'s own doc comment (see
-`crates/game/src/audio/sfx.rs`), whether Pure calls the same `Sound_Play` site
+Answers, for `oag_sound::sfx::Cue::Collision`'s own doc comment (see
+`crates/sound/src/sfx.rs`), whether Pure calls the same `Sound_Play` site
 at the same edge Pulse does, and whether the gating matches. Not yet extended
 to the other eight `Cue` variants.
 
@@ -311,7 +311,7 @@ the rubric's 85+ band absent a runtime trace.
 ## `FUN_08925e20` fires `ABSORB` and is `ShipCollisionFx_Trigger`'s own first verified caller
 
 Answers `every-sfx-trigger-is-a-pulse-reading-applied.md`'s next pick,
-`oag_game::audio::sfx::Cue::Absorb`, and corrects the "no call site for any of
+`oag_sound::sfx::Cue::Absorb`, and corrects the "no call site for any of
 the four functions above" claim below: with the spawn-helper correction above
 in hand, the same `off + 0x08804000` search
 (`search_instructions jal, mnemonic jal, operand_pattern "8a340"`, the

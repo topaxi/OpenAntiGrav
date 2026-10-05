@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use log::info;
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, loading, movie, race, settings};
+use oag_game::{boot, loading, movie, race, settings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
 
@@ -159,7 +159,7 @@ impl Stage {
     pub(crate) fn race_loading(
         gpu: &Gpu,
         worker: race::LoadWorker,
-        music: audio::MusicFetchWorker,
+        music: oag_sound::MusicFetchWorker,
         font: &oag_ui::font::Atlas,
         sprites: &oag_game::sprite::Sheet,
         assets: &loading::Assets,
@@ -215,7 +215,7 @@ impl Stage {
         mut loaded: boot::Boot,
         video_format: Option<VideoFormat>,
         trace: bool,
-        audio: &mut audio::Audio,
+        audio: &mut oag_sound::Audio,
     ) -> Result<Self> {
         // Before the renderer is built rather than after, so the sound and the
         // first frame of picture start on the same tick: `Session::frame` draws

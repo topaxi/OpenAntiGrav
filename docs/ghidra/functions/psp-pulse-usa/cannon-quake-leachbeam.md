@@ -461,7 +461,7 @@ value it terminates in is not a fact about the disc.
 
 **2026-09-23: `CANNON`, `CANNONEXPLWALL` and `CANNONEXPLSHIP` wired.**
 `Cue::Cannon`, `Cue::CannonHitWall` and `Cue::CannonHitShip` are in
-`crates/game/src/audio/sfx/cue.rs`. `Cue::Cannon` fires from
+`crates/sound/src/sfx/cue.rs`. `Cue::Cannon` fires from
 `advance_one_cannon` only when a round actually spawns, on a **chosen**
 emitter - `CANNON`'s own call site names no argument. The wall/craft split
 reads `Impact::struck`, the same field the Rocket's own pair already routes
@@ -1053,7 +1053,7 @@ DAT literal was tracked down to a real cue name this pass; both are read as
 > never the same literal.
 >
 > **2026-09-23: wired.** `Cue::QuakeHit` is in
-> `crates/game/src/audio/sfx/cue.rs`, fired on the rising edge of
+> `crates/sound/src/sfx/cue.rs`, fired on the rising edge of
 > `oag_weapons::projectile::quake::Wave::hit`, snapshotted before
 > `Race::advance_quake`'s own `apply_hits` call and compared after - and
 > placed on the **struck** craft, settling this section's own naming
@@ -2568,7 +2568,7 @@ is independent confirmation of "victim selection is the Missile's own lock-on,
 reused whole" above.
 
 **2026-09-23: `LEACH` and `~LEACHATTACH` wired.**
-`Cue::Leach` and `Cue::LeachAttach` are in `crates/game/src/audio/sfx/cue.rs`.
+`Cue::Leach` and `Cue::LeachAttach` are in `crates/sound/src/sfx/cue.rs`.
 `Cue::Leach` fires from both places a beam can be fired locked -
 `Race::spend_pickup`'s own LeachBeam arm and `Race::fire_opponent_leach_beam`
 - since this section names `LeachBeam_InitLocked` alone, not the unlocked

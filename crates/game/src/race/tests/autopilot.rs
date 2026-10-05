@@ -113,7 +113,7 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
         let raised = race
             .drain_cues()
             .into_iter()
-            .filter(|e| e.cue == crate::audio::sfx::Cue::Disengaging)
+            .filter(|e| e.cue == oag_sound::sfx::Cue::Disengaging)
             .count();
         if raised > 0 && at.is_none() {
             at = Some(tick);

@@ -22,10 +22,10 @@
   not choose from it.~~ **Decoded 2026-08-27**, while confirming the dispatch
   table's base rather than by design: random pick among the group, never
   repeating the immediately previous pick. ~~Wiring it into
-  `oag_game::audio::sfx::Banks::pick` is real, unblocked work now~~ **wired
+  `oag_sound::sfx::Banks::pick` is real, unblocked work now~~ **wired
   2026-09-04**, matching the re-roll-once-on-repeat shape rather than a naive
   retry loop; see `Banks::pick`'s own doc comment in
-  `crates/game/src/audio/sfx/banks.rs`.
+  `crates/sound/src/sfx/banks.rs`.
 - ~~Corroborate `0x22`/`0x23`/`0x24`/`0x19` on the PSP side.~~ **Done
   2026-09-04**: the blocker was never the code, it was the address - the
   table stores `.text`-relative offsets the auto-analyzer never walked, so

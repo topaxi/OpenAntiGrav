@@ -1,11 +1,29 @@
-//! Sound, from the composition root outwards.
+//! Sound: the music and effects the game plays.
 //!
-//! `oag-audio` owns the mixer and the device; this module owns the *policy*
+//! `oag-audio` owns the mixer and the device; this crate owns the *policy*
 //! around them - which track plays, where its bytes come from, what the volume
-//! setting means, and how a headless run is turned into a file somebody can
-//! listen to. It lives here for the same reason [`crate::source`] does: it
-//! reads the disc and the settings file, neither of which a library crate below
-//! is allowed to know about.
+//! setting means, how a race's cues become voices, and how a headless run is
+//! turned into a file somebody can listen to.
+//!
+//! # The boundary with `oag-game`
+//!
+//! This crate depends on no title package and not on `oag-game`, so three
+//! things only the composition root can do come in from outside:
+//!
+//! - **Opening a source as a title, and finding the other release's disc.**
+//!   [`library::Library`] is the trait; [`MusicDiscs::survey`] takes one and
+//!   keeps it for the fetches that follow, so a worker thread can open sources
+//!   without owning `Audio`. `oag_game::sound::GameLibrary` implements it over
+//!   `oag_game::title::open_source` and `oag_game::source::search_path`.
+//! - **Reading a race.** [`Audio::race_tick`] takes a plain-data
+//!   [`sfx::RaceFrame`] rather than the game's `Race`; `oag_game::sound::race_tick`
+//!   builds one after `Race::tick` and calls it. The cue queue's *producers*
+//!   stay in `oag-game` and push [`sfx::CueEvent`]s.
+//! - **Reporting what a loader did.** [`sfx::Banks`] and [`sfx::TrackEmitters`]
+//!   carry their `report`; the host sends it to `oag_game::loader_log`.
+//!
+//! [`settings::Settings`] is the `[audio]` section of the player's settings
+//! file, kept here because every field of it is one of this crate's own types.
 //!
 //! # Where a tick ends and a frame begins
 //!
@@ -38,9 +56,12 @@ use serde::{Deserialize, Serialize};
 use oag_display::percentage;
 
 pub mod hd_mix;
+pub mod library;
+pub mod settings;
 pub mod sfx;
 
 mod race_music;
+use library::{Library, NoLibrary, listing, load_entry, load_front_end};
 pub use race_music::MusicFetchWorker;
 use race_music::{PendingSwitch, locate};
 
@@ -238,7 +259,7 @@ impl std::fmt::Display for MusicSource {
 /// measurement `docs/formats/ps2-audio.md` records, run against the disc in
 /// hand rather than trusted from a table, and it is a far stronger test than
 /// any serial: a disc that passes it demonstrably carries this soundtrack.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MusicDiscs {
     /// The booted title's PSP source, if one was found.
     psp: Option<String>,
@@ -265,6 +286,23 @@ pub struct MusicDiscs {
     ps4: Option<String>,
     /// Which release the game booted from, when it is one of the four.
     booted: Option<Platform>,
+    /// How a source string becomes an opened title, and where to look for the
+    /// other release. See [`Library`].
+    library: &'static dyn Library,
+}
+
+impl Default for MusicDiscs {
+    fn default() -> Self {
+        Self {
+            psp: None,
+            ps2: None,
+            ps3: None,
+            vita: None,
+            ps4: None,
+            booted: None,
+            library: &NoLibrary,
+        }
+    }
 }
 
 impl MusicDiscs {
@@ -272,7 +310,7 @@ impl MusicDiscs {
     ///
     /// The booted source is taken at its word - the game is already running off
     /// it - and only the *other* release is looked for, on
-    /// [`crate::source::search_path`]. That halves the work and it also stops
+    /// [`Library::containers`]. That halves the work and it also stops
     /// the survey from opening a second copy of the disc already open.
     ///
     /// Never fails: every reason a counterpart is not found - no such directory,
@@ -280,13 +318,16 @@ impl MusicDiscs {
     /// collapses into "there is no counterpart", which is the same answer a
     /// machine with one disc gives.
     #[must_use]
-    pub fn survey(booted: &str) -> Self {
-        let mut discs = Self::default();
+    pub fn survey(booted: &str, library: &'static dyn Library) -> Self {
+        let mut discs = Self {
+            library,
+            ..Self::default()
+        };
         // **As whichever title it is**, not as Pulse. Pulse's own deny-list
         // names both Pure pressings, so resolving against `oag_pulse::TITLE`
         // used to return `WrongTitle` here and leave a Pure boot with no
         // platform, no listing, and silence under its menus.
-        let Some((title, layout)) = identify(booted) else {
+        let Some((title, layout)) = identify(library, booted) else {
             return discs;
         };
         discs.booted = Some(layout.platform);
@@ -324,7 +365,7 @@ impl MusicDiscs {
         // so it is read first. A source that has none - a partial extract -
         // leaves nothing to confirm a counterpart against, and the row is not
         // offered rather than offered on trust.
-        let Ok(Some(mine)) = Soundtrack::read(booted, layout.platform) else {
+        let Ok(Some(mine)) = Soundtrack::read(library, booted, layout.platform) else {
             return discs;
         };
 
@@ -332,7 +373,7 @@ impl MusicDiscs {
             Platform::Psp => Platform::Ps2,
             _ => Platform::Psp,
         };
-        let Some(found) = find_release(booted, title, wanted, &mine) else {
+        let Some(found) = find_release(library, booted, title, wanted, &mine) else {
             return discs;
         };
         match wanted {
@@ -395,15 +436,17 @@ impl MusicDiscs {
 /// The one place this module asks the question, so that the answer cannot
 /// disagree with itself between the survey and the search. `None` for every
 /// source that will not open as any title this build knows.
-fn identify(source: &str) -> Option<(&'static oag_title::Title, oag_assets::Layout)> {
-    let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
+fn identify(
+    library: &dyn Library,
+    source: &str,
+) -> Option<(&'static oag_title::Title, oag_assets::Layout)> {
+    let opened = library.open(source)?;
     Some((opened.title, opened.archives.layout))
 }
 
 /// The first source on the search path carrying `wanted`'s encode of `mine`.
 ///
-/// Every container in every directory [`crate::source::search_path`] lists is
-/// tried, in that order. Identifying a candidate is only the **prefilter** - it
+/// Every container [`Library::containers`] lists is tried, in that order. Identifying a candidate is only the **prefilter** - it
 /// says which title and platform a disc is and skips one that carries no
 /// archives at all - and [`Soundtrack::pairs_with`] is the test that decides,
 /// for the reason [`MusicDiscs`] records at length: a serial cannot rule a disc
@@ -417,42 +460,29 @@ fn identify(source: &str) -> Option<(&'static oag_title::Title, oag_assets::Layo
 /// through it. `title` costs nothing and does not depend on how the corpus
 /// grows.
 fn find_release(
+    library: &dyn Library,
     booted: &str,
     title: &'static oag_title::Title,
     wanted: Platform,
     mine: &Soundtrack,
 ) -> Option<String> {
-    for directory in crate::source::search_path() {
-        let Ok(entries) = std::fs::read_dir(&directory) else {
+    for path in library.containers() {
+        let source = path.to_string_lossy().into_owned();
+        if source == booted {
+            continue;
+        }
+        let Some((theirs, layout)) = identify(library, &source) else {
             continue;
         };
-        let mut candidates: Vec<PathBuf> = entries
+        if theirs.name != title.name || layout.platform != wanted {
+            continue;
+        }
+        if Soundtrack::read(library, &source, wanted)
+            .ok()
             .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.is_file() && crate::source::is_container(path))
-            .collect();
-        // Alphabetical, so two runs of the same directory pick the same image -
-        // the same reason `crate::source::first_image` sorts.
-        candidates.sort();
-
-        for path in candidates {
-            let source = path.to_string_lossy().into_owned();
-            if source == booted {
-                continue;
-            }
-            let Some((theirs, layout)) = identify(&source) else {
-                continue;
-            };
-            if theirs.name != title.name || layout.platform != wanted {
-                continue;
-            }
-            if Soundtrack::read(&source, wanted)
-                .ok()
-                .flatten()
-                .is_some_and(|theirs| theirs.pairs_with(mine))
-            {
-                return Some(source);
-            }
+            .is_some_and(|theirs| theirs.pairs_with(mine))
+        {
+            return Some(source);
         }
     }
     None
@@ -723,7 +753,7 @@ impl Audio {
     /// (that path is what CI exercises).
     #[must_use]
     pub fn open(
-        settings: &crate::settings::Audio,
+        settings: &crate::settings::Settings,
         dump: Option<PathBuf>,
         tap: Option<&oag_audio::TapSpec>,
         buffer: std::time::Duration,
@@ -771,12 +801,12 @@ impl Audio {
     /// standing on, the way `BRIGHTNESS` is visible on it.
     ///
     /// **The music bus alone also carries [`MUSIC_MASTER_TRIM`]**, folded in
-    /// here rather than into [`crate::audio::Volume::gain`] because it is a
+    /// here rather than into [`crate::Volume::gain`] because it is a
     /// fact about the original's music path specifically - the SFX and
     /// Speech sliders reach `Audio_SetSfxFadeTarget`, a completely separate
     /// chain that never touches this constant. See `MUSIC_MASTER_TRIM`'s own
     /// doc comment for the evidence.
-    pub fn apply(&self, settings: &crate::settings::Audio) {
+    pub fn apply(&self, settings: &crate::settings::Settings) {
         // HD sets music and effects from its authored mix every tick, so only
         // the sliders are kept here. See `hd_mix`.
         self.hd.sliders.set([
@@ -851,7 +881,7 @@ impl Audio {
         if discs.booted() == Some(Platform::Ps3)
             && let Some((source, _)) = discs.pick(MusicSource::Auto)
         {
-            self.load_hd_mix(source);
+            self.load_hd_mix(discs.library, source);
         }
         // The PS2's front-end music **is** a soundtrack track, so it goes
         // through `fetch` and comes back stamped with the release it came off -
@@ -961,7 +991,7 @@ impl Audio {
         let Some((source, platform)) = discs.pick(MusicSource::Auto) else {
             return 0;
         };
-        Soundtrack::read(source, platform)
+        Soundtrack::read(discs.library, source, platform)
             .ok()
             .flatten()
             .map_or(0, |soundtrack| soundtrack.tracks.len())
@@ -1107,7 +1137,13 @@ impl Audio {
             return Ok(None);
         };
 
-        let sound = Arc::new(load_track(source, platform, track, cache_dir)?);
+        let sound = Arc::new(load_track(
+            discs.library,
+            source,
+            platform,
+            track,
+            cache_dir,
+        )?);
         self.held.push((platform, Arc::clone(&sound)));
         Ok(Some(Loaded {
             from: Some(platform),
@@ -1154,7 +1190,13 @@ impl Audio {
             return Ok(None);
         };
 
-        let sound = Arc::new(load_track(source, platform, track, cache_dir)?);
+        let sound = Arc::new(load_track(
+            discs.library,
+            source,
+            platform,
+            track,
+            cache_dir,
+        )?);
         Ok(Some(Loaded {
             from: Some(platform),
             sound,
@@ -1466,11 +1508,11 @@ impl Soundtrack {
     /// # Errors
     ///
     /// An archive that opens and then will not parse.
-    fn read(source: &str, platform: Platform) -> Result<Option<Self>> {
+    fn read(library: &dyn Library, source: &str, platform: Platform) -> Result<Option<Self>> {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
             Platform::Psp | Platform::Ps3 | Platform::Vita | Platform::Ps4 => {
-                archived_soundtrack(source)?
+                archived_soundtrack(library, source)?
             }
             Platform::Unknown => None,
         };
@@ -1566,8 +1608,8 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
 /// Which entries those are is the one question here whose answer depends on
 /// **which title booted**, so it is asked in [`crate::music`] rather than in
 /// this module. [`Track::at`] comes back opaque; see [`crate::music::Entry::at`].
-fn archived_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
-    Ok(crate::music::listing(source)?.map(|entries| {
+fn archived_soundtrack(library: &dyn Library, source: &str) -> Result<Option<Vec<Track>>> {
+    Ok(listing(library, source)?.map(|entries| {
         entries
             .into_iter()
             .map(|entry| Track {
@@ -1585,11 +1627,17 @@ fn archived_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
 /// An archive that will not open or read, and on the PSP a decode that failed -
 /// including `ffmpeg` being absent, which the caller reports rather than
 /// treating as fatal.
-fn load_track(source: &str, platform: Platform, track: Track, cache_dir: &Path) -> Result<Sound> {
+fn load_track(
+    library: &dyn Library,
+    source: &str,
+    platform: Platform,
+    track: Track,
+    cache_dir: &Path,
+) -> Result<Sound> {
     match platform {
         Platform::Ps2 => load_ps2_track(source, track.at as usize)?
             .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
-        _ => crate::music::load_entry(source, track.at, cache_dir),
+        _ => load_entry(library, source, track.at, cache_dir),
     }
 }
 
@@ -1605,7 +1653,7 @@ fn front_end_music(discs: &MusicDiscs, cache_dir: &Path) -> Result<Option<Loaded
         return Ok(None);
     };
     Ok(
-        crate::music::load_front_end(source, cache_dir)?.map(|(what, sound)| Loaded {
+        load_front_end(discs.library, source, cache_dir)?.map(|(what, sound)| Loaded {
             // **Unstamped, and that is the whole of the row's scope.** This
             // track has no counterpart on the other disc, so nothing may swap
             // it.

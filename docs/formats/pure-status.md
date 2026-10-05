@@ -1426,7 +1426,7 @@ The bank paths are Pulse's, hash for hash - `Data\Sound\hud.bnk`, `ship.bnk`,
 `ship_zone.bnk`, `weapons.bnk`, `speech.bnk`, `frontend.bnk`,
 `generaltrack.bnk` - and so are the cue strings the game fires. `SPEEDUPPAD`,
 `.COLLISIONS`, `ABSORB`, `~ENGINE`, `~SHIELD` and `shieldactive` all resolve,
-so `oag_game::audio::sfx` needed **no Pure branch at all**.
+so `oag_sound::sfx` needed **no Pure branch at all**.
 
 Pure's own content differs in ways that are worth recording because one of them
 was load-bearing:

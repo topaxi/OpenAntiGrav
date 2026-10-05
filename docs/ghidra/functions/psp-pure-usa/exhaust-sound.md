@@ -12,7 +12,7 @@ page's "What is not verified" section flagged as unread) carries the identical
 does on Pulse - it is only the separate `<Team>boost.vex` plume mesh that
 Pure never had (`ship-models.md`). See "The visual half" section below.
 
-Answers `oag_game::audio::sfx::Cue::Engine`. Structurally different from the
+Answers `oag_sound::sfx::Cue::Engine`. Structurally different from the
 other `Cue` variants this project has chased: `Engine` is not a one-shot
 trigger fired on an edge, it is a **voice opened once and updated every
 tick** - `sfx.rs`'s own doc comment says so ("held for as long as the craft

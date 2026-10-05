@@ -47,7 +47,7 @@
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use log::warn;
-use oag_game::{audio, launcher, loading, race, settings, source};
+use oag_game::{launcher, loading, race, settings, source};
 use oag_ui::frontend;
 
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -144,7 +144,7 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 ///
 /// `RUST_LOG` replaces the whole expression: `RUST_LOG=warn,oag=debug` for
 /// what the loaders did, `RUST_LOG=warn,oag=trace` for every line there is,
-/// `RUST_LOG=warn,oag_game::audio=trace` for one module,
+/// `RUST_LOG=warn,oag_sound=trace` for one module,
 /// `RUST_LOG=warn,wgpu_core=info` to hear the graphics stack instead, or
 /// `RUST_LOG=warn,calloop=warn` to put the line above back.
 ///
@@ -311,7 +311,7 @@ fn main() -> Result<()> {
         .map_or(oag_audio::MIN_BUFFER, |frame| {
             frame.mul_f32(2.5).max(oag_audio::MIN_BUFFER)
         });
-    let audio = audio::Audio::open(
+    let audio = oag_sound::Audio::open(
         &settings.audio,
         cli.dump_audio.clone(),
         tap.as_ref(),
@@ -511,7 +511,7 @@ fn main() -> Result<()> {
                 None,
                 loading::Assets::default(),
                 None,
-                audio::MusicDiscs::default(),
+                oag_sound::MusicDiscs::default(),
                 None,
             ),
         };

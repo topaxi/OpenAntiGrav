@@ -1,7 +1,7 @@
 # Pulse's weapon cues are read and mostly unwired - the wiring plan
 
 2026-09-23. Landed the same evening the plan below was drafted: every "wire"
-row is now in `crates/game/src/audio/sfx/cue.rs` (`Cue::ALL` grew from 14 to
+row is now in `crates/sound/src/sfx/cue.rs` (`Cue::ALL` grew from 14 to
 28), with a push site in `crates/game/src/race/weapons.rs`,
 `crates/game/src/race/weapons/single_instance.rs`,
 `crates/game/src/race/field/opponent_weapons.rs` or the sibling loop beside
@@ -28,7 +28,7 @@ in `crates/game/tests/sfx_weapon_ground_truth.rs`.
 **2026-09-25: `LEACHENERGY`, `ROCKET`, `QUAKELAUNCH`, `~AUTOPILOT` and
 `autopilot_eng` all wired**, and the missile.md/autopilot.md conflict over
 `Ship_FireHeldWeapon` settled. `Cue::ALL` is now 33. See
-`crates/game/src/audio/sfx/cue.rs`'s own per-variant doc comments,
+`crates/sound/src/sfx/cue.rs`'s own per-variant doc comments,
 `docs/ghidra/functions/psp-pulse-usa/autopilot.md`'s "`Ship_FireHeldWeapon`
 opens both cues" section (the settling read), and
 `docs/ghidra/functions/psp-pulse-usa/missile.md`,

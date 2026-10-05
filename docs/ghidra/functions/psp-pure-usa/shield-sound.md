@@ -3,11 +3,11 @@
 **Binary:** `pure-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** decompilation only, no PPSSPP leg for either title.
 
-Scoped narrowly to the sound question `crates/game/src/audio/sfx.rs`'s module
+Scoped narrowly to the sound question `crates/sound/src/sfx.rs`'s module
 doc asks about Pure and HD dispatch - not a re-derivation of the shield
 subsystem itself, which [`psp-pulse-usa/shield.md`](../psp-pulse-usa/shield.md)
 and [`shield-pickup.md`](../psp-pulse-usa/shield-pickup.md) already cover for
-Pulse. Answers `oag_game::audio::sfx::Cue::Shield` and `Cue::ShieldActive`.
+Pulse. Answers `oag_sound::sfx::Cue::Shield` and `Cue::ShieldActive`.
 
 ## Pulse's `Shield_Activate` (`0x0883e544`) fires two cues in a fixed order
 

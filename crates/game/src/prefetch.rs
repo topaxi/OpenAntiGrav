@@ -686,7 +686,7 @@ fn short_label(spec: &str) -> &str {
 ///
 /// Every name here is evidenced elsewhere rather than guessed - the two movies
 /// in [`pulse::names`], the eight music tracks from the `%d` template at
-/// `0x08a88e94` that `crate::audio` documents.
+/// `0x08a88e94` that `oag_sound` documents.
 #[derive(Debug)]
 struct KnownNames(Vec<(u32, String)>);
 

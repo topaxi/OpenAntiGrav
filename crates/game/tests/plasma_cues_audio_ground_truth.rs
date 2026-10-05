@@ -36,7 +36,7 @@
 //!    hand-built fixture with no floor under it - see `plasma_ground_truth.rs`'s
 //!    own note on why that matters for the flight model, which applies here
 //!    for the same reason. `Cue::PlasmaTravel`'s own held-voice bookkeeping is
-//!    private to `oag_game::audio::sfx`, so what this proves is that its rising
+//!    private to `oag_sound::sfx`, so what this proves is that its rising
 //!    edge has something real to fire on across a real flight, not that the
 //!    voice itself stayed open the whole way - the same reach every other
 //!    ground-truth test in this file has into a private mixer.
@@ -46,10 +46,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::audio::sfx::Cue;
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
+use oag_sound::sfx::Cue;
 use oag_tables::weapons::Weapon;
 
 /// Past the start-line countdown - see `plasma_ground_truth.rs`'s own doc
@@ -143,8 +143,8 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         .join("plasma-cues.wav");
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // headlessly - see `Audio::open`.
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
         None,
         oag_audio::MIN_BUFFER,
@@ -171,9 +171,9 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
     let mut hit_cue = None;
     // Whether a live Plasma bolt was seen actually flying - `charge <= 0.0`,
     // the exact condition `Audio::race_tick`'s own travel tracker gates on
-    // (`crates/game/src/audio/sfx.rs`) - on any tick strictly inside the
+    // (`crates/sound/src/sfx.rs`) - on any tick strictly inside the
     // press-to-impact window. The mixer's own held-voice bookkeeping is
-    // private to `oag_game::audio::sfx` and reaches nothing this crate can
+    // private to `oag_sound::sfx` and reaches nothing this crate can
     // read from outside it, so this is the closest an integration test gets
     // to observing the travel loop's own precondition rather than merely its
     // two bracketing one-shots.
@@ -205,7 +205,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
             .slots
             .iter()
             .any(|p| p.kind == Some(Weapon::Plasma) && p.owner == 0 && p.charge <= 0.0);
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
 
         if hit_tick.is_some() {
@@ -326,8 +326,8 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots")
         .join("plasma-hitship.wav");
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
         None,
         oag_audio::MIN_BUFFER,
@@ -365,7 +365,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
                 hit_wall_tick.get_or_insert(tick);
             }
         }
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
 
         if hit_ship_tick.is_some() || hit_wall_tick.is_some() {

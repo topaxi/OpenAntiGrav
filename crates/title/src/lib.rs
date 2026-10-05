@@ -220,7 +220,7 @@ pub struct Music {
     /// tracks exactly the way Pure's declares nineteen and every one of them
     /// resolves to a real entry; switching Pulse over would reorder its race
     /// playlist and change which track a PS2 boot's menu plays, which is a
-    /// separate change with its own evidence to record. `oag_game::audio` finds
+    /// separate change with its own evidence to record. `oag_sound` finds
     /// Pulse's sixteen by what the entries *are* until then - see `HANDOVER.md`.
     pub tracks: Option<DeclaredTracks>,
     /// A soundtrack addressed by a Wwise bank state rather than by file. See

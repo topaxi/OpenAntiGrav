@@ -4,7 +4,7 @@
 //! because the law they exercise moved out with [`Engine`].
 
 use super::*;
-use crate::audio::sfx::Loaded;
+use crate::sfx::Loaded;
 use oag_audio::Sound;
 use std::sync::Arc;
 

@@ -35,7 +35,7 @@ halves); [pads.md](../../docs/ghidra/functions/psp-pulse-usa/pads.md)'s
 (2026-09-01: found the write site, `Craft_Construct_q`'s own second argument,
 then cross-checked live against all eight racers in a single race - `0` on
 the human-controlled craft, `2` on all seven AI, no other value seen), with
-`oag_game::audio::sfx::Placement::CraftUnlessPlayer` now confirmed rather than
+`oag_sound::sfx::Placement::CraftUnlessPlayer` now confirmed rather than
 merely uncontradicted; exhaust.md's "world position at `+0x50`" was **wrong**
 and is corrected to a scene-node pointer; and reaching craft fields from a
 `Ship_UpdateCraft` breakpoint needs a dereference through `+0x1c4` first (the

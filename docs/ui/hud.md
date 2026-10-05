@@ -985,7 +985,7 @@ Recorded so none of this reads as undiscovered work.
   [`text_for`](../../crates/game/src/hud/draw.rs) draw the counter and the
   score, and as of 2026-08-28 so does a voice line at each milestone this
   title's own `speech_zone.bnk` names one for, see
-  [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs).
+  [`oag_sound::sfx::Announcer`](../../crates/sound/src/sfx/announcer.rs).
   **Wipeout HD's own Zone counter still has nothing to draw it with**, and not
   for the reason Pulse's did: HD's `zone_hud.xml` authors no `"Zone"` text
   widget at all - the counter is `ZonePlus0`-`ZonePlus10`, a row of

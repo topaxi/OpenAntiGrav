@@ -152,7 +152,7 @@ pub struct Options {
     /// Which Pulse releases this machine has, so the MUSIC SOURCE row draws
     /// the same way it would in a live menu: with three values on a machine
     /// that has both discs, and empty on one that does not.
-    pub music_discs: crate::audio::MusicDiscs,
+    pub music_discs: oag_sound::MusicDiscs,
 }
 
 /// How many ticks the runner will take before giving up on `until`.
@@ -162,7 +162,7 @@ pub struct Options {
 /// bounded. **That arithmetic only holds under the tick clock.** On a machine
 /// with a real audio device, an `--until` capture with nothing skipping the
 /// movie is audio-clocked per ADR-0019 (see
-/// `crate::audio::Audio::movie_playhead`): the headless loop runs far faster
+/// `oag_sound::Audio::movie_playhead`): the headless loop runs far faster
 /// than real time, so the movie's real-time position barely advances inside
 /// this many ticks and the run never leaves `LogoFMV`. Confirmed directly -
 /// the same capture that fails here reaches `Language Selection` in 2,403
@@ -185,7 +185,7 @@ pub fn run(
     loaded: Boot,
     video_format: Option<VideoFormat>,
     options: &Options,
-    audio: &mut crate::audio::Audio,
+    audio: &mut oag_sound::Audio,
 ) -> Result<()> {
     let Boot {
         title,
@@ -341,7 +341,7 @@ pub fn run(
             }
         }
         // In the tick loop, next to the state machine it belongs to. See
-        // [`crate::audio`] for why nothing here is per frame.
+        // [`oag_sound`] for why nothing here is per frame.
         audio.tick();
         // The movie's sound outlives neither leg: see
         // `Frontend::is_playing_movie` for why the state is what is asked

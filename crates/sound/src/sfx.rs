@@ -91,6 +91,9 @@ use oag_core::math::Vec3;
 
 use super::{Audio, TICK_HZ};
 
+mod frame;
+pub use frame::RaceFrame;
+
 mod announcer;
 mod bank_name;
 mod banks;
@@ -112,7 +115,7 @@ pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use repeating::Playing;
 pub use track::TrackEmitters;
-pub(crate) use track::circuit_manifest;
+pub use track::circuit_manifest;
 use travel::TravelVoices;
 pub use xfade::{Craft as XfadeCraft, Inputs as XfadeInputs, Team as XfadeTeam};
 
@@ -241,16 +244,35 @@ impl Audio {
     /// Everything device-shaped is here rather than on `Race`: the voice pool,
     /// the held voices and the generator that chooses between a cue's
     /// alternates. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
-    pub fn race_tick(&mut self, race: &mut crate::race::Race) {
-        self.hd_race_mix(race);
-        let cues = race.drain_cues();
-        let announcements = race.drain_announcements();
-        let class_announcements = race.drain_class_announcements();
-        if race.sounds().is_empty()
-            && race.announcer().is_empty()
-            && race.class_announcer().is_empty()
-            && race.track_emitters().omni.is_empty()
-            && race.track_emitters().directional.is_empty()
+    pub fn race_tick(&mut self, frame: RaceFrame<'_>) {
+        let RaceFrame {
+            banks,
+            emitters,
+            announcer,
+            class_announcer,
+            cues,
+            announcements,
+            class_announcements,
+            listener,
+            craft,
+            slot_teams,
+            throttle,
+            projectiles,
+            running,
+            shielded,
+            exploding,
+            autopilot_active,
+            thrust_gated,
+            sight,
+            quake_point,
+            leach_beam,
+        } = frame;
+        self.hd_race_mix(banks.mix.as_deref(), thrust_gated);
+        if banks.is_empty()
+            && announcer.is_empty()
+            && class_announcer.is_empty()
+            && emitters.omni.is_empty()
+            && emitters.directional.is_empty()
         {
             return;
         }
@@ -259,9 +281,9 @@ impl Audio {
             SfxVoices {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
                 xfade: std::array::from_fn(|slot| {
-                    race.slot_team(slot)
-                        .and_then(|team| race.sounds().xfade_team(team))
-                        .map(|t| XfadeCraft::new(t).on_bus(race.sounds().group_bus(7)))
+                    slot_teams[slot]
+                        .and_then(|team| banks.xfade_team(team))
+                        .map(|t| XfadeCraft::new(t).on_bus(banks.group_bus(7)))
                 }),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
@@ -272,7 +294,7 @@ impl Audio {
                 blowup_open: false,
                 autopilot: Vec::new(),
                 autopilot_open: false,
-                ambience: track::Ambience::default().on_bus(race.sounds().group_bus(8)),
+                ambience: track::Ambience::default().on_bus(banks.group_bus(8)),
                 plasma_travel: TravelVoices::new(),
                 rocket_travel: TravelVoices::new(),
                 missile_travel: TravelVoices::new(),
@@ -282,11 +304,6 @@ impl Audio {
                 rng: Rng::new(SFX_SEED),
             }
         });
-        let banks = race.sounds();
-        let emitters = race.track_emitters();
-        let announcer = race.announcer();
-        let class_announcer = race.class_announcer();
-        let listener = listener_of(race);
         // `SoundManager_Update`'s camera-cut guard, one answer for every
         // voice this tick. The first tick has nothing to compare against and
         // is treated as a cut, which is also what it is.
@@ -294,27 +311,6 @@ impl Audio {
             .last_listener
             .replace(listener)
             .is_some_and(|previous| !listener.jumped_from(&previous));
-        let craft = craft_positions(race);
-        // The local player's throttle, `0..=100`: what `Ship_UpdateEngineCrossfade`
-        // reads as `ctrl[+4]` for the craft whose role is zero.
-        let throttle = [race
-            .sim
-            .world
-            .ships
-            .first()
-            .map_or(0.0, |ship| ship.physics.thrust)];
-        // An owned snapshot, the same shape `craft` is - `Projectile` is
-        // `Copy` and the array is small, and copying it out avoids holding a
-        // borrow of `race` across the mixer closure below. Read after
-        // `Race::tick` has already run, so a bolt that ended this tick is
-        // already back to `Projectile::default()` here - which is why
-        // `Cue::PlasmaHitWall` carries its own impact point on the `CueEvent`
-        // rather than being read off this array.
-        let projectiles = race.sim.world.projectiles.slots;
-        let running = !race.finished();
-        let shielded = race.shield_is_up();
-        let exploding = race.craft_is_exploding();
-        let autopilot_active = race.autopilot_is_active();
         self.output.with_mixer(|mixer| {
             for event in cues {
                 // A held cue is not a one-shot and must not be fired as one -
@@ -426,7 +422,6 @@ impl Audio {
             // The lock-on reticle's two blips, on the edges of its state rather
             // than as a level: one voice per transition, because this mixer has
             // no equivalent of the original's cue parameter. See [`Cue::LockOn`].
-            let sight = race.sight_state();
             let sight_played = voices
                 .repeating
                 .drive_sight(sight, banks, mixer, &mut voices.rng);
@@ -578,7 +573,7 @@ impl Audio {
             // midpoint. See [`Cue::QuakeTravel`].
             voices.quake_travel.follow(
                 0,
-                race.quake_point(),
+                quake_point,
                 mixer,
                 banks,
                 &mut voices.rng,
@@ -593,10 +588,7 @@ impl Audio {
             // Position is the chosen midpoint between the two craft, updated
             // every tick like the Plasma's own bolt above rather than fixed
             // at launch.
-            let leach_locked = race
-                .sim
-                .world
-                .leach_beam
+            let leach_locked = leach_beam
                 .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
                 (Some(beam), None) => {
@@ -661,7 +653,7 @@ impl Audio {
                     mixer,
                     banks,
                     &mut voices.rng,
-                    speed * oag_render::exhaust::SPEED_TO_KMH,
+                    speed * oag_core::math::SPEED_TO_KMH,
                     running,
                     position.to_array(),
                     &listener,
@@ -690,9 +682,9 @@ impl Audio {
                     mixer,
                     XfadeInputs {
                         speed_field: speed
-                            * oag_render::exhaust::SPEED_TO_KMH
-                            * oag_render::exhaust::hd::SPEED_FIELD_GAIN,
-                        throttle: player.then(|| throttle[0]),
+                            * oag_core::math::SPEED_TO_KMH
+                            * oag_core::math::SPEED_FIELD_GAIN,
+                        throttle: player.then_some(throttle),
                     },
                     running,
                     position.to_array(),
@@ -777,44 +769,6 @@ impl Audio {
         self.sfx = None;
         self.hd.state = super::hd_mix::State::FrontEnd;
     }
-}
-
-/// The listener, off the camera the frame is actually drawn from.
-///
-/// `SoundManager_Update` (`0x0893a2b0`) copies the active camera's rotation
-/// rows and the negation of its `+0x70` into the sound manager once a frame.
-/// The negation is there because the camera stores a *negated* eye beside a
-/// world-to-camera rotation whose world axes are its columns - a split
-/// `docs/.../camera.md` measured from the rendering side and this reads back
-/// from the audio side. Inverting `Race::view` recovers both halves at once:
-/// the camera's world matrix, whose translation is the eye and whose first
-/// column is the right axis the pan projects onto.
-///
-/// `pub` because a circuit's own emitters are placed against the same ears the
-/// craft cues are, and the two must not be allowed to disagree about where the
-/// listener is - see [`TrackEmitters`].
-pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
-    let camera = race.view().inverse();
-    oag_audio::Listener {
-        position: camera.w_axis.truncate().to_array(),
-        right: camera.x_axis.truncate().normalize_or_zero().to_array(),
-    }
-}
-
-/// Every live craft's world position and speed, indexed by grid slot.
-///
-/// [`None`] for a slot the race did not field. Read once per tick rather than
-/// per cue, because eight cues from one craft must all agree on where it was.
-fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
-    std::array::from_fn(|slot| {
-        let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.ship_count() as usize && ship.active).then(|| {
-            (
-                ship.physics.body.position,
-                ship.physics.body.linear_velocity.length(),
-            )
-        })
-    })
 }
 
 /// [`Cue::LeachAttach`]'s own chosen position: the midpoint between the

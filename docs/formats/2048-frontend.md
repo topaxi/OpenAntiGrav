@@ -489,7 +489,7 @@ Textual corroboration only, no addresses, no names recovered or proposed:
   `crates/game/tests/vita_2048_music_ground_truth.rs`, which loads it
   through `Audio::start_music`'s own path and renders it through a real
   `Mixer` to a WAV to confirm it is not silence. Wiring this also needed
-  `Platform::Vita` added to `oag_game::audio::MusicDiscs::survey`/`pick` -
+  `Platform::Vita` added to `oag_sound::MusicDiscs::survey`/`pick` -
   every match there previously folded Vita in with `Unknown`, so
   `oag_2048::TITLE.music` going from `None` to `Some` was not by itself
   enough to reach the menus.

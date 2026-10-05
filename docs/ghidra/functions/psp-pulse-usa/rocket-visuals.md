@@ -368,7 +368,7 @@ There is no third arm. The `if`/`else if` only ever chooses between
 neither `0x10` nor `0x20`, so the whole `Sound_Play` block is skipped and the
 teardown falls straight through to releasing the slot. The original plays
 **nothing** on a Rocket time-out, matching what this port already does (see
-`Cue::RocketHitWall`'s own doc comment in `crates/game/src/audio/sfx/cue.rs`).
+`Cue::RocketHitWall`'s own doc comment in `crates/sound/src/sfx/cue.rs`).
 
 **The teardown's own callees were read too, not just the branch that skips
 `Sound_Play`.** `FUN_088f3298` (particle-system release) and
@@ -380,7 +380,7 @@ of its attached node and clears the node pointer - a detach, not a stop
 notification - so there is no cue hiding in the teardown's own call tree
 either. **What actually silences `~ROCKETTVL` on a timeout is not a call in
 this function at all**: `TravelVoices::tick`
-(`crates/game/src/audio/sfx/travel.rs`) reads `flying`/`position` straight
+(`crates/sound/src/sfx/travel.rs`) reads `flying`/`position` straight
 off the world's own projectile array every tick, independent of whether an
 `Impact` was written that tick, and `flight.rs`'s timeout branch resets the
 slot to `Projectile::default()` - so the loop's own falling edge fires the
@@ -415,7 +415,7 @@ confirms the `<WEAPON>TVL` - travel - pattern.
 **2026-09-23: wired.** `Cue::RocketTravel` (held, per projectile slot, the
 measured `600.0` radius) and `Cue::RocketHitWall`/`Cue::RocketHitShip` (off
 `Impact::struck`, on the same bolt emitter) are in
-`crates/game/src/audio/sfx/cue.rs`. The 5.0 s pool-reap timeout this page's
+`crates/sound/src/sfx/cue.rs`. The 5.0 s pool-reap timeout this page's
 own "What a rocket hit spends" section leaves silent turned out not to need
 disambiguating: `crates/weapons/src/projectile/flight.rs`'s own Rocket
 timeout branch resets the slot without writing an `Impact` at all, so the
@@ -429,7 +429,7 @@ missile.md/autopilot.md conflict it settled, plays it - `Sound_Play(1.0,
 *(param_1+0x50), weapons.bnk, 0, "ROCKET", 0)`, positional, on a held-id-0
 press, local player only. See `autopilot.md`'s own "`Ship_FireHeldWeapon`
 opens both cues" section for the switch body and cross-checks; `Cue::Rocket`
-in `crates/game/src/audio/sfx/cue.rs`.
+in `crates/sound/src/sfx/cue.rs`.
 
 ## Runtime verification
 

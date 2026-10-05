@@ -7,8 +7,8 @@
 //! `crates/game/tests/sfx_ground_truth.rs`.
 
 use super::*;
-use crate::audio::sfx::Cue;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::Cue;
 
 /// A race whose ship is inside a speed pad from the first tick.
 fn grid_on_a_speed_pad() -> Race {
@@ -598,7 +598,7 @@ fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
 /// `PLASMAHITWALL` unconditionally - so the original plays exactly one of the
 /// two per ending, never both. See
 /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
-/// third ending" section and `crate::audio::sfx::Cue::PlasmaHitShip`'s own
+/// third ending" section and `oag_sound::sfx::Cue::PlasmaHitShip`'s own
 /// doc comment.
 #[test]
 fn a_plasma_that_hits_a_craft_raises_plasmahitship_and_not_plasmahitwall() {

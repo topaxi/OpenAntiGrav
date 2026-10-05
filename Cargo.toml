@@ -29,6 +29,7 @@ members = [
   "crates/tools",
   "crates/trace",
   "crates/ui",
+  "crates/sound",
   "crates/video",
   "crates/weapons",
   "crates/vex",
@@ -55,6 +56,7 @@ oag-gameplay = { path = "crates/gameplay" }
 oag-hd = { path = "crates/hd" }
 oag-input = { path = "crates/input" }
 oag-music = { path = "crates/music" }
+oag-sound = { path = "crates/sound" }
 oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
 oag-pob = { path = "crates/pob" }

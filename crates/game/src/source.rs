@@ -540,7 +540,7 @@ fn images_in(directory: &Path) -> Vec<PathBuf> {
 
 /// Whether a path looks like a disc image this engine can open.
 ///
-/// Public because [`crate::audio::MusicDiscs`] walks the same directories
+/// Public because [`oag_sound::MusicDiscs`] walks the same directories
 /// looking for the *other* release rather than the first one, and a second
 /// spelling of "what counts as an image" is a second thing to keep in step.
 #[must_use]

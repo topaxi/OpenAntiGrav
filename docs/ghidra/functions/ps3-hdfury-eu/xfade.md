@@ -231,7 +231,7 @@ function calls `0x0062b588`, a per-engine dispatch whose Scream engine
 `voice[+0x9a] + voice[+0x98]`, clamps to `+-0x8000`, stores `voice[+0x82]`, and
 calls the already-named `Scream_ComputeVoiceNote` and `Scream_VoicePitch` and
 `CellMs_SetVoiceRate`. **So a layer's pitch word is a SCREAM bend, the unit
-`oag_game::audio::sfx::layers` already plays on Pulse**: linear in semitones
+`oag_sound::sfx::layers` already plays on Pulse**: linear in semitones
 across the cue descriptor's own bend range (`+0x08` down, `+0x09` up),
 `semitones = range * bend / 32768` below zero and `/ 32767` above. The crossfade's
 pitch curve at `0x200` is therefore no bend, and at `0x400` is a full bend up by
@@ -252,7 +252,7 @@ running. The port releases a voice whenever its post-attenuation gain is below
 
 ### The wiring (2026-10-05)
 
-`crates/game/src/audio/sfx/xfade.rs`. Per race, `Banks::load_xfade` reads
+`crates/sound/src/sfx/xfade.rs`. Per race, `Banks::load_xfade` reads
 `xfship_<team>.xfx` for each distinct slot team (only where the ship bank has no
 `~ENGINE`, so Pulse and Pure never read one) and binds every layer name to its
 `shiphd.bnk` cue. Per tick and craft, `Craft::tick` computes the four inputs of

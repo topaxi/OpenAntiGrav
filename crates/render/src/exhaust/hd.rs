@@ -389,21 +389,12 @@ pub fn u_head(speed01: f32) -> f32 {
     1.0 - TEX_USCALE_MAX * speed01
 }
 
-/// What multiplies this engine's km/h into the flare's speed input
-/// (`+0x104`), which every consumer here reads.
+/// What multiplies this engine's km/h into the flare's speed input (`+0x104`).
 ///
-/// Measured, then verified against the live fields directly: a fourth
-/// session read `+0x104` and `+0x108` on all eight craft twice, confirming
-/// `brightness = ramp = (field - 100) / 500` to six decimals and
-/// `speed01 = field / 1000 + 0.25 * throttle` exactly - and the field is
-/// `world speed * 5.4` (median 5.3, range 5.0..6.6 across eight craft's own
-/// ring spacings at the game's 1/60 step), i.e. this engine's km/h times
-/// 1.5. The composition on the original's side is the read `* 3.6` in
-/// `EngineFlare_Update` times an unexplained 1.5 already in the node's
-/// field; only the product is load-bearing here. An earlier revision used
-/// 3.6 (taking the field for km/h-as-shown), which overshot by 1.5x -
-/// saturating everything it fed slightly early.
-pub const SPEED_FIELD_GAIN: f32 = 1.5;
+/// Re-exported from [`oag_core::math`] rather than defined here: `oag_sound`
+/// feeds the same field to HD's crossfaded engine and cannot depend on the
+/// renderer. The measurement is recorded on the definition.
+pub use oag_core::math::SPEED_FIELD_GAIN;
 
 /// The normalised speed the scroll and stretch ride on.
 ///

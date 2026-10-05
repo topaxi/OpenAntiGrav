@@ -448,7 +448,7 @@ pub struct Craft {
     /// Whether the smoothers have been seeded from the first inputs.
     started: bool,
     /// The authored volume group the layers play on, when the title has an
-    /// authored mix (`user7`, [`crate::audio::hd_mix`]). `None` plays on the
+    /// authored mix (`user7`, [`crate::hd_mix`]). `None` plays on the
     /// effects bus at [`ENGINE_BUS_RATIO`].
     bus: Option<Bus>,
 }
@@ -472,7 +472,7 @@ impl Craft {
     }
 
     /// Plays the layers on `bus`, an authored group. The group's own law
-    /// ([`crate::audio::hd_mix::sfx_gain`]) then carries the level
+    /// ([`crate::hd_mix::sfx_gain`]) then carries the level
     /// [`ENGINE_BUS_RATIO`] stood in for.
     #[must_use]
     pub fn on_bus(mut self, bus: Option<Bus>) -> Self {

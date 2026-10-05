@@ -7,7 +7,7 @@
 //! side.
 
 use oag_game::render::Renderer;
-use oag_game::{audio, boot, capture, loading, prefetch, race};
+use oag_game::{boot, capture, loading, prefetch, race};
 
 use crate::gpu::Gpu;
 use crate::race_stage::RaceStage;
@@ -67,7 +67,7 @@ pub(crate) struct LoadingStage {
     /// from, so there is no earlier moment to build it at.
     pub(crate) built_race: Option<Result<Box<RaceStage>, RaceBuildError>>,
     /// The race's music, being located and decoded alongside the circuit -
-    /// see [`audio::MusicFetchWorker`], spawned next to [`Self::race`] in
+    /// see [`oag_sound::MusicFetchWorker`], spawned next to [`Self::race`] in
     /// `Session::launch_race`. `Some` on the race path, `None` on the boot
     /// one, the same split [`Self::race`] itself carries.
     ///
@@ -75,11 +75,11 @@ pub(crate) struct LoadingStage {
     /// [`Self::built_race`] existed: there is no "warm" step for a decoded
     /// track the way there is for a GPU scene, so landed is ready.
     /// `Session::finish_race_loading` takes it at the hand-off and hands it
-    /// to [`oag_game::audio::Audio::finish_race_music`], which is where the
+    /// to [`oag_sound::Audio::finish_race_music`], which is where the
     /// mixer is actually touched - never here, and never before the fade
     /// runs out, or the race music would start audibly under the loading
     /// screen.
-    pub(crate) music: Option<audio::MusicFetchWorker>,
+    pub(crate) music: Option<oag_sound::MusicFetchWorker>,
     pub(crate) trace: bool,
 }
 
@@ -124,7 +124,7 @@ impl LoadingStage {
                 && self
                     .music
                     .as_ref()
-                    .is_none_or(audio::MusicFetchWorker::is_finished))
+                    .is_none_or(oag_sound::MusicFetchWorker::is_finished))
     }
 }
 

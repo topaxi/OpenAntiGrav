@@ -169,7 +169,7 @@ pub enum CraftState {
     /// State 4. The explosion, which runs for [`DESTROYED_DURATION`].
     ///
     /// `Ship_SetState`'s case 4 plays `~BLOWUP`, hides the HUD and puts the
-    /// camera in mode 5. **The sound is built** - `oag_game::audio::sfx` holds
+    /// camera in mode 5. **The sound is built** - `oag_sound::sfx` holds
     /// it for exactly this state - and the other two are not: case 4's HUD and
     /// camera work goes through four globals none of which is identified. The
     /// addresses are on

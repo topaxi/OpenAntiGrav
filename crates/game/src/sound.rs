@@ -1,0 +1,139 @@
+//! The composition root's half of the sound crate.
+//!
+//! [`oag_sound`] decodes soundtracks and effects and plays them over the
+//! mixer, and by design knows nothing of the game: it cannot open a source as
+//! whichever title it is, cannot see a [`Race`], and cannot search the player's
+//! image directories. This module is what supplies those, and nothing else:
+//!
+//! - [`GameLibrary`] opens a source through [`crate::title::open_source`] and
+//!   lists the disc images [`crate::source::search_path`] names, which is what
+//!   [`oag_sound::library::Library`] asks of its host;
+//! - [`race_tick`] turns a race's state into the plain-data
+//!   [`oag_sound::sfx::RaceFrame`] the effects read, so the sound crate never
+//!   depends on `Race`;
+//! - [`listener_of`] and the craft positions the frame carries.
+
+use std::path::PathBuf;
+
+use oag_core::math::Vec3;
+use oag_sound::Audio;
+use oag_sound::library::{Library, Opened};
+use oag_sound::sfx::RaceFrame;
+
+use crate::race::Race;
+
+/// Opens sources as whichever title they are, and searches the player's image
+/// directories for a second release.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GameLibrary;
+
+impl Library for GameLibrary {
+    fn open(&self, source: &str) -> Option<Opened> {
+        let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
+        Some(Opened {
+            title: opened.title,
+            archives: opened.archives,
+        })
+    }
+
+    fn containers(&self) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        for directory in crate::source::search_path() {
+            let Ok(entries) = std::fs::read_dir(&directory) else {
+                continue;
+            };
+            let mut candidates: Vec<PathBuf> = entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file() && crate::source::is_container(path))
+                .collect();
+            // Alphabetical, so two runs of the same directory pick the same
+            // image - the same reason `crate::source::first_image` sorts.
+            candidates.sort();
+            found.extend(candidates);
+        }
+        found
+    }
+}
+
+/// Plays one tick of `race`'s sound effects. See [`Audio::race_tick`].
+///
+/// Called from inside the fixed-timestep loop, immediately after `Race::tick`,
+/// and also on a finished race.
+pub fn race_tick(audio: &mut Audio, race: &mut Race) {
+    let cues = race.drain_cues();
+    let announcements = race.drain_announcements();
+    let class_announcements = race.drain_class_announcements();
+    let frame = RaceFrame {
+        banks: race.sounds(),
+        emitters: race.track_emitters(),
+        announcer: race.announcer(),
+        class_announcer: race.class_announcer(),
+        cues,
+        announcements,
+        class_announcements,
+        listener: listener_of(race),
+        craft: craft_positions(race),
+        slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
+        // The local player's throttle, `0..=100`: what
+        // `Ship_UpdateEngineCrossfade` reads as `ctrl[+4]` for the craft whose
+        // role is zero.
+        throttle: race
+            .sim
+            .world
+            .ships
+            .first()
+            .map_or(0.0, |ship| ship.physics.thrust),
+        // An owned snapshot - `Projectile` is `Copy` and the array is small.
+        // Read after `Race::tick` has already run, so a bolt that ended this
+        // tick is already back to `Projectile::default()` here.
+        projectiles: race.sim.world.projectiles.slots,
+        running: !race.finished(),
+        shielded: race.shield_is_up(),
+        exploding: race.craft_is_exploding(),
+        autopilot_active: race.autopilot_is_active(),
+        thrust_gated: oag_race::RaceState::thrust_gated(race.sim.world.tick),
+        sight: race.sight_state(),
+        quake_point: race.quake_point(),
+        leach_beam: race.sim.world.leach_beam,
+    };
+    audio.race_tick(frame);
+}
+
+/// The listener, off the camera the frame is actually drawn from.
+///
+/// `SoundManager_Update` (`0x0893a2b0`) copies the active camera's rotation
+/// rows and the negation of its `+0x70` into the sound manager once a frame.
+/// The negation is there because the camera stores a *negated* eye beside a
+/// world-to-camera rotation whose world axes are its columns - a split
+/// `docs/.../camera.md` measured from the rendering side and this reads back
+/// from the audio side. Inverting `Race::view` recovers both halves at once:
+/// the camera's world matrix, whose translation is the eye and whose first
+/// column is the right axis the pan projects onto.
+///
+/// `pub` because a circuit's own emitters are placed against the same ears the
+/// craft cues are, and the two must not be allowed to disagree about where the
+/// listener is - see [`TrackEmitters`].
+pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
+    let camera = race.view().inverse();
+    oag_audio::Listener {
+        position: camera.w_axis.truncate().to_array(),
+        right: camera.x_axis.truncate().normalize_or_zero().to_array(),
+    }
+}
+
+/// Every live craft's world position and speed, indexed by grid slot.
+///
+/// [`None`] for a slot the race did not field. Read once per tick rather than
+/// per cue, because eight cues from one craft must all agree on where it was.
+fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
+    std::array::from_fn(|slot| {
+        let ship = race.sim.world.ships.get(slot)?;
+        (slot < race.ship_count() as usize && ship.active).then(|| {
+            (
+                ship.physics.body.position,
+                ship.physics.body.linear_velocity.length(),
+            )
+        })
+    })
+}

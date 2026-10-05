@@ -250,7 +250,7 @@ fn only_a_perfect_start_fires_the_flare_and_turbo() {
             let turbo = race
                 .drain_cues()
                 .iter()
-                .any(|event| event.cue == oag_game::audio::sfx::Cue::Turbo);
+                .any(|event| event.cue == oag_sound::sfx::Cue::Turbo);
             if turbo {
                 turbos.push(frame);
             }

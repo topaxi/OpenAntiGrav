@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use oag_audio::{Bus, Mixer};
 use oag_core::Rng;
-use oag_game::audio::sfx::{Banks, Cue, CueVoice, VoicePlace, start_voices};
+use oag_sound::sfx::{Banks, Cue, CueVoice, VoicePlace, start_voices};
 
 const RATE: u32 = 44_100;
 const PULSE: [&str; 3] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd", "pulse-ps2-eu.chd"];

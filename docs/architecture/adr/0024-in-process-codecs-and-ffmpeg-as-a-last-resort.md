@@ -97,7 +97,7 @@ type.
 - **Wipeout HD's music plays with no `ffmpeg` installed.** The PSP titles still
   need it and still say so when it is missing.
 - **Two decode paths, chosen by content and not by title.**
-  `oag_game::music::decode` offers a blob to `crate::at3` and then to
+  `oag_music::decode` offers a blob to `crate::at3` and then to
   `crate::mp3`; whichever reads it is what it was. A title package names files
   and never describes them, which is what keeps `oag-title` a vocabulary.
 - **`symphonia` is a real dependency with a real surface**, taken with

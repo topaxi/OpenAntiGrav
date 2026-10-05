@@ -112,11 +112,11 @@ impl Session {
                 }
                 if let Some(percent) = stage.frontend.music_choice() {
                     self.settings.audio.music_volume =
-                        oag_game::audio::Volume::try_from(percent).unwrap_or_default();
+                        oag_sound::Volume::try_from(percent).unwrap_or_default();
                 }
                 if let Some(percent) = stage.frontend.sfx_choice() {
                     self.settings.audio.sfx_volume =
-                        oag_game::audio::Volume::try_from(percent).unwrap_or_default();
+                        oag_sound::Volume::try_from(percent).unwrap_or_default();
                 }
             }
             let hint_strings = strings::project_table(self.settings.language.as_deref());
@@ -605,7 +605,7 @@ impl Session {
                     // run) steps only what is seen: the explosion, the shake, the
                     // destroy camera. See `Race::tick_cosmetics`.
                     stage.race.tick_finished();
-                    self.audio.race_tick(&mut stage.race);
+                    oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     // `stage`'s own last use - the reborrow inside
                     // `Session::tick_endrace` is legal from here on, the
                     // same NLL shape `Stage::Menu`'s own arm relies on for
@@ -630,7 +630,7 @@ impl Session {
                     // reason: the audio is not simulation state, so ticking
                     // it is what keeps the engine note honest while `World`
                     // itself sits frozen at whatever tick `Start` caught it on.
-                    self.audio.race_tick(&mut stage.race);
+                    oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                 }
                 // **The pre-race flyby steps instead of the world**: the circuit's own
                 // camera animation, held to its end or a held Cross, with the grid
@@ -664,8 +664,8 @@ impl Session {
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See
-                    // `audio::Audio::race_tick`.
-                    self.audio.race_tick(&mut stage.race);
+                    // `oag_sound::Audio::race_tick`.
+                    oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     if self.log_every > 0
                         && stage.race.sim.world.tick % u64::from(self.log_every) == 0
                     {

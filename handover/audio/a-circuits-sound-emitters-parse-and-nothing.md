@@ -5,7 +5,7 @@ is on
 [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md),
 which is the durable record - **do not requote its layout table here**. This
 thread's title is now stale: `8b6eaf56` (2026-09-06) landed the half that did
-not - **the circuits are audible**, `oag_game::audio::sfx::TrackEmitters`
+not - **the circuits are audible**, `oag_sound::sfx::TrackEmitters`
 opens a held looping voice for every `sound` `0x3e1` node inside its radius
 and stops it when the listener leaves, and a headless lap renders to a WAV.
 What is left is what wiring the 1,298 authored emitters turned up, below.
@@ -50,7 +50,7 @@ them. Tracing that also found *why* `+0x42` reads `0` on every cone
 radius curve, has exactly two static call sites in the executable and both are
 gated on the payload's own `+0x3c`, which is `0` on all 1,298 authored nodes -
 so the curve never actually runs, for a `sound` or a `soundcone`, and `+0x10`
-is the one radius any node ever plays. `oag_game::audio::sfx::track` now
+is the one radius any node ever plays. `oag_sound::sfx::track` now
 places both `TrackEmitters::omni` and `TrackEmitters::directional` (the new
 name for what used to be a bare `cones: usize` count) through
 `oag_audio::spatial::Emitter::cone`, sourcing the radius from `+0x10` rather
@@ -137,7 +137,7 @@ than in the isolated bursts these two captures show (clip counts arrived in
 uneven bursts of 2 to ~1,200 samples across the 60 s window, not a steady
 rail-riding count - the same "isolated transient" character the sibling
 thread's live original capture has, not continuous overload). No gain
-changed in `crates/audio` or `crates/game/src/audio` this pass.
+changed in `crates/audio` or `crates/sound/src` this pass.
 
 Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
 `/home/topaxi/oag-scratch/race_sfx_only_8craft.wav` (music muted).
@@ -145,8 +145,8 @@ Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
 **Gate, 2026-09-08 pass**: no `.rs` file changed. `just check-docs` passes.
 
 **Gate, 2026-09-09 pass**: `.rs` files changed in `crates/vex/src/sound_emitters.rs`,
-`crates/audio/src/spatial.rs` (+`lib.rs`), `crates/game/src/audio/sfx.rs` and
-`crates/game/src/audio/sfx/track.rs`, plus their tests. Ran `just fmt`,
+`crates/audio/src/spatial.rs` (+`lib.rs`), `crates/sound/src/sfx.rs` and
+`crates/sound/src/sfx/track.rs`, plus their tests. Ran `just fmt`,
 `just lint` (one `clippy::neg_cmp_op_on_partial_ord` fix), `just test`
 (3368 passed, 0 failed), `just check-docs`, `just check-deps`,
 `just check-determinism`, `just check-size`, `just check-names`,
@@ -182,7 +182,7 @@ plays without a crash or a silent buffer (99.98% non-zero samples).
   radius-only "out of range" latch ever tripping, so `Ambience::tick` opens
   and holds a voice for it anyway - real cost against the 32-voice pool, only
   measured for `01_Track` (no cones) and `14_Track` (peak still 8, so not yet
-  a problem there) so far. See `crates/game/src/audio/sfx/track.rs`'s own
+  a problem there) so far. See `crates/sound/src/sfx/track.rs`'s own
   header for the reasoning; not fixed here because nothing read says the
   original does anything different for this case, and no invented gate should
   fill that gap.
@@ -253,4 +253,4 @@ table read.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-**both `sound` and `soundcone` are audible now, and both without an emulator.** `oag_game::audio::sfx::TrackEmitters` opens a held voice for every in-range `sound`/`soundcone` node, off `oag_audio::spatial::Emitter::cone`'s law. 2026-09-09 closed the two open reversals: `VexSoundCone_Init` (`0x08925ff4`, confidence 90) settles which of a cone's two authored angles is its half-angle, and tracing it found that `VexSound_Update`'s radius curve has exactly two static call sites, both gated on a byte that is `0` on all 1,298 authored nodes - so the curve never actually runs and `+0x10` is the one radius any node ever plays, which is also why a cone's own curve key reads `0` and is safe to ignore. Pure's own `woSound` class (`0x393`) was found the same pass, without the Ghidra bridge the thread expected it to need: a scene node's own class ID and name are enough, no exporter table required. Earlier finds still stand: PS2 shares Pulse's class IDs and counts exactly; a circuit's own sound bank is named by its `trackstartup.xml` and lives beside it in the circuit directory; opcode `0x14` is a decoded no-op, corroborated on `ps3-hdfury-eu`; the mix's clip rate is down sharply since `Scream_PanVolumePair` landed, and no limiter was invented to chase the rest. Open: a cone in radius but outside its angle still holds a silent voice rather than being budgeted away, unmeasured past two circuits; Pure's own payload field layout past the class ID.
+**both `sound` and `soundcone` are audible now, and both without an emulator.** `oag_sound::sfx::TrackEmitters` opens a held voice for every in-range `sound`/`soundcone` node, off `oag_audio::spatial::Emitter::cone`'s law. 2026-09-09 closed the two open reversals: `VexSoundCone_Init` (`0x08925ff4`, confidence 90) settles which of a cone's two authored angles is its half-angle, and tracing it found that `VexSound_Update`'s radius curve has exactly two static call sites, both gated on a byte that is `0` on all 1,298 authored nodes - so the curve never actually runs and `+0x10` is the one radius any node ever plays, which is also why a cone's own curve key reads `0` and is safe to ignore. Pure's own `woSound` class (`0x393`) was found the same pass, without the Ghidra bridge the thread expected it to need: a scene node's own class ID and name are enough, no exporter table required. Earlier finds still stand: PS2 shares Pulse's class IDs and counts exactly; a circuit's own sound bank is named by its `trackstartup.xml` and lives beside it in the circuit directory; opcode `0x14` is a decoded no-op, corroborated on `ps3-hdfury-eu`; the mix's clip rate is down sharply since `Scream_PanVolumePair` landed, and no limiter was invented to chase the rest. Open: a cone in radius but outside its angle still holds a silent voice rather than being budgeted away, unmeasured past two circuits; Pure's own payload field layout past the class ID.

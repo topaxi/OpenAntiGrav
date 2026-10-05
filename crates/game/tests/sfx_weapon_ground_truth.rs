@@ -130,22 +130,22 @@ fn the_four_travel_voices_open_together_and_close_together() {
         race.ship_count() > 1,
         "the fixture raced alone, so the LeachBeam below has no target"
     );
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     // Settle first, so the engines are already open and the counts below are
     // differences rather than absolutes - the same reason the shield test in
     // `sfx_ground_truth.rs` does this.
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     let idle = voices(&audio);
@@ -195,7 +195,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         slow_ship_factor: 1.0,
     });
 
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert_eq!(
         voices(&audio),
@@ -211,7 +211,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
     race.sim.world.projectiles.slots[1] = oag_weapons::projectile::Projectile::default();
     race.sim.world.projectiles.slots[2] = oag_weapons::projectile::Projectile::default();
     race.sim.world.leach_beam = None;
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert_eq!(
         voices(&audio),
@@ -239,18 +239,18 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     let idle = voices(&audio);
@@ -264,19 +264,19 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
         &stats,
     ));
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert!(race.quake_point().is_some(), "the wave has no road point");
     assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not open");
 
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert_eq!(voices(&audio), idle + 1, "~QUAKETRAVEL did not stay open");
 
     race.sim.world.quake = None;
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert_eq!(voices(&audio), idle, "~QUAKETRAVEL outlived the wave");
 }
@@ -304,21 +304,21 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     // Settle first, so the engine's own voice is already open and the counts
     // below are differences rather than absolutes.
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     let idle = voices(&audio);
@@ -331,7 +331,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // and the wait for it to end.
     race.sim.world.ships[0].autopilot_timer = 10.0;
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     assert!(
         voices(&audio) > idle,
         "the autopilot activated and opened no voice"
@@ -344,7 +344,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     let mut settled = None;
     for tick in 0..180 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
         assert!(
             voices(&audio) <= held,
@@ -365,7 +365,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // warning fires a tick earlier and changes nothing about the loop.
     race.sim.world.ships[0].autopilot_timer = 0.0;
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     assert_eq!(
         voices(&audio),
         idle,
@@ -375,7 +375,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 
 /// A Pulse race with the audio open and the start-of-race voice dropped, and a
 /// closure-free way to count what is sounding.
-fn race_and_audio() -> (race::Race, oag_game::audio::Audio) {
+fn race_and_audio() -> (race::Race, oag_sound::Audio) {
     let path = image("pulse-psp-usa.chd").expect("Pulse USA image");
     let mut loaded = race::load(&race::Options {
         source: path.display().to_string(),
@@ -384,8 +384,8 @@ fn race_and_audio() -> (race::Race, oag_game::audio::Audio) {
     })
     .expect("loading the race");
     loaded.setup.countdown_voice = false;
-    let audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
@@ -394,7 +394,7 @@ fn race_and_audio() -> (race::Race, oag_game::audio::Audio) {
     (race::Race::start(loaded.setup), audio)
 }
 
-fn sounding(audio: &oag_game::audio::Audio) -> usize {
+fn sounding(audio: &oag_sound::Audio) -> usize {
     audio.output().with_mixer(|mixer| mixer.active_voices())
 }
 
@@ -418,7 +418,7 @@ fn the_lock_tone_runs_through_the_race_and_stops_with_the_target() {
     let mut counts = Vec::new();
     for _ in 0..130 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
         counts.push(sounding(&audio));
     }
@@ -441,7 +441,7 @@ fn the_lock_tone_runs_through_the_race_and_stops_with_the_target() {
     race.sim.world.ships[0].pickup.weapon = None;
     for _ in 0..6 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     assert_eq!(race.sight_state(), oag_race::sight::State::Absent);
@@ -461,7 +461,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
     let (mut race, mut audio) = race_and_audio();
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     let floor = sounding(&audio);
@@ -469,7 +469,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
     assert!(race.craft_is_exploding());
     let mut peak = 0;
     for _ in 0..60 {
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
         peak = peak.max(sounding(&audio));
     }
@@ -479,7 +479,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
     );
     race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Racing;
     for _ in 0..2 {
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     assert!(

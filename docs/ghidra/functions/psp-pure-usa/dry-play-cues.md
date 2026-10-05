@@ -3,7 +3,7 @@
 **Binary:** `pure-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** decompilation only, no PPSSPP leg for either title.
 
-Answers `oag_game::audio::sfx::Cue::SpeedupPad` and `Cue::Disengaging` for
+Answers `oag_sound::sfx::Cue::SpeedupPad` and `Cue::Disengaging` for
 Pure. Found as a side effect of
 [`shield-sound.md`](shield-sound.md)'s own investigation: once `Sound_Play`
 (`0x08831ddc`) and the dry-play chain's gate helper (`func_0x001209e0`,

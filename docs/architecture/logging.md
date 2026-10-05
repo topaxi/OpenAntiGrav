@@ -87,7 +87,7 @@ you want the third-party crates at their own level.
 ```sh
 RUST_LOG=warn,oag=debug oag-game ...                 # what every load did
 RUST_LOG=warn,oag=trace oag-game ...                 # every line there is
-RUST_LOG=warn,oag_game::audio=trace oag-game ...     # one module
+RUST_LOG=warn,oag_sound=trace oag-game ...     # one module
 RUST_LOG=warn,wgpu_core=info oag-game ...            # the graphics stack as well
 RUST_LOG=warn,calloop=warn oag-game ...              # put back the key-repeat noise
 RUST_LOG=error oag-game ...                          # only what the player loses

@@ -36,7 +36,7 @@ fn every_settings_volume_reaches_the_bus_it_names() {
     // the wrong bus is the failure this catches, and it is invisible by ear on
     // a build where three of the four are at 100. See ADR-0027.
     let audio = Audio::open(
-        &crate::settings::Audio {
+        &crate::settings::Settings {
             music_volume: Volume(25),
             sfx_volume: Volume(50),
             speech_volume: Volume(75),

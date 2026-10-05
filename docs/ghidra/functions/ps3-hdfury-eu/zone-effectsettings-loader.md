@@ -582,7 +582,7 @@ transcribed from any prior guess.
   selection reuses Pulse's already-implemented elapsed-time zone counter
   (`crates/race/src/zone.rs`, confidence 84, recovered from Pulse's own
   executable) - that mechanism has not been checked against HD's
-  executable at all, and `oag_title::ZoneAnnouncer`/`crates/game/src/audio/sfx/announcer.rs`
+  executable at all, and `oag_title::ZoneAnnouncer`/`crates/sound/src/sfx/announcer.rs`
   (which does play milestone cues off it at runtime) is wired for Pulse's
   zone-number mechanism specifically, not confirmed to generalise. Nothing
   here narrows 2048's still-unfound writer of `Zone_UpdateStage`'s `+0x634`

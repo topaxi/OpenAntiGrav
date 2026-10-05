@@ -27,9 +27,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::audio::sfx::{Banks, Cue};
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::{Banks, Cue};
 
 /// The discs this runs against, and what each is called in a failure message.
 const DISCS: [(&str, &str); 5] = [
@@ -220,7 +220,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// **`MINELAUNCH` is the newest addition, and it resolves on HD's disc with no
 /// per-title work at all - `weapons.bnk` carries it, 88 waveforms.** That is
 /// bank presence, not a confirmed HD trigger: `Cue::MineLaunch`'s own doc
-/// comment cites only `psp-pulse-usa`'s `Mine_Init`, and `crates/game/src/audio/sfx.rs`'s
+/// comment cites only `psp-pulse-usa`'s `Mine_Init`, and `crates/sound/src/sfx.rs`'s
 /// module doc already states the confidence-50 bet this rides on - a title in
 /// the same series with the same cue names is likely to fire them at the same
 /// moments, and nothing here has looked at HD's own weapon-fire dispatch to
@@ -247,7 +247,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// for the correction that cue's reading needed once this test ran against a
 /// real disc rather than `oag-wad sounds` alone. Bank presence only, the
 /// same caveat as every addition above: each cue's own doc comment in
-/// `crate::audio::sfx::Cue` cites `psp-pulse-usa` evidence alone, and
+/// `oag_sound::sfx::Cue` cites `psp-pulse-usa` evidence alone, and
 /// nothing here has looked at HD's own dispatch for any of the six weapons.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -421,10 +421,8 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
     let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
         .expect("opening HD");
     let mut archives = opened.archives;
-    let announcer = oag_game::audio::sfx::ClassAnnouncer::load(
-        &mut archives,
-        opened.title.race.zone_class_announcer,
-    );
+    let announcer =
+        oag_sound::sfx::ClassAnnouncer::load(&mut archives, opened.title.race.zone_class_announcer);
     for line in &announcer.report {
         println!("{line}");
     }
@@ -597,20 +595,20 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
 
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // on a machine with no sound card and on CI - see `Audio::open`.
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     assert_eq!(voices(&audio), 0, "something was playing before the race");
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
         // never rendered never *ends* - so without it a fired one-shot would
@@ -630,7 +628,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     for _ in 0..600 {
         // Deliberately **not** calling `race.tick` - that is exactly what the
         // finished arm does not do.
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
@@ -668,19 +666,19 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     let engine_only = voices(&audio);
@@ -694,7 +692,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     // and needs a wall this fixture has no reason to build. What is under test
     // is the audio layer reading the state.
     race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     audio.tick();
     assert!(
         voices(&audio) > engine_only,
@@ -711,7 +709,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     // will.
     race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
     for _ in 0..60 {
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     assert_eq!(
@@ -725,7 +723,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
 /// The whole grid sounds, and it does not all sound from the same place.
 ///
 /// The end-to-end half of positional audio: unit tests check the law
-/// (`oag_audio::spatial`) and the wiring (`oag_game::audio::sfx`), and neither
+/// (`oag_audio::spatial`) and the wiring (`oag_sound::sfx`), and neither
 /// can see whether eight real `~ENGINE` waveforms out of a real bank actually
 /// reach eight voices with eight positions. Before this landed the answer was
 /// one voice, and every test still passed.
@@ -749,7 +747,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // positions of their own - so leaving them in would make a claim about one
     // rival's stereo position into a claim about wherever the start line
     // happens to be. `track_audio_ground_truth` is where they are tested.
-    loaded.setup.track_emitters = oag_game::audio::sfx::TrackEmitters::default();
+    loaded.setup.track_emitters = oag_sound::sfx::TrackEmitters::default();
     // **The start-of-race voice is dropped from this fixture.** `ready` opens
     // voices from tick 91 and this counts them; what it counts is the held
     // loops, and the start voice has its own file
@@ -766,8 +764,8 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         "the fixture raced alone, so nothing below is testing anything"
     );
 
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
@@ -775,13 +773,13 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     );
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
 
     // **The circuit's own ambience is subtracted, not switched off.** A race
     // on a real circuit opens a held voice for every authored emitter within
-    // its radius (`oag_game::audio::sfx::TrackEmitters`), and those are not
+    // its radius (`oag_sound::sfx::TrackEmitters`), and those are not
     // engines. Counting them here would make this assertion a function of
     // which circuit the default happens to be.
     let voices = audio
@@ -810,7 +808,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     let camera = race.view().inverse();
     let right = camera.x_axis.truncate().normalize();
     race.sim.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
 
     let (left, right) = audio.output().with_mixer(|mixer| {
         let mut out = vec![0.0f32; 2 * 4096];
@@ -858,21 +856,21 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
     let mut race = race::Race::start(loaded.setup);
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
         None,
         oag_audio::MIN_BUFFER,
         false,
     );
     let voices =
-        |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
+        |audio: &oag_sound::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     // Settle first, so the engine's own voice is already open and the counts
     // below are differences rather than absolutes.
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
         // never rendered never *ends* - so without it a fired one-shot would
@@ -890,7 +888,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // its own inside that wait once the line played at its real rate.
     race.sim.world.ships[0].physics.shield_pickup_timer = 10.0;
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     assert!(
         voices(&audio) > idle,
         "the shield came up and opened no voice"
@@ -908,7 +906,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     let mut settled = None;
     for tick in 0..180 {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
         // never rendered never *ends* - so without it a fired one-shot would
@@ -932,7 +930,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 
     race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
     race.tick(&PlayerInputs::none());
-    audio.race_tick(&mut race);
+    oag_game::sound::race_tick(&mut audio, &mut race);
     assert_eq!(
         voices(&audio),
         idle,

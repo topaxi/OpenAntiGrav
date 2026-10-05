@@ -17,7 +17,7 @@
 
 use oag_formats::sblk::timeline::Timeline;
 use oag_formats::sblk::{Bank, Sound};
-use oag_game::audio::sfx::Announcer;
+use oag_sound::sfx::Announcer;
 use oag_title::SequenceTick;
 
 /// The milestone numbers Pulse's own ladder names.

@@ -2,7 +2,7 @@
 //! does a real `MUSIC SOURCE` switch, against real discs and a real `ffmpeg`
 //! decode, actually return before the decode finishes - the freeze
 //! `Audio::set_music_source`'s fix targets - rather than the synthetic
-//! fake-path unit tests in `crates/game/src/audio/tests/source_switch.rs`,
+//! fake-path unit tests in `crates/sound/src/tests/source_switch.rs`,
 //! which prove the mechanics but never touch a real decode.
 //!
 //! `dump` is set so `Audio::tick` actually renders samples with no device
@@ -15,11 +15,13 @@
 //! ```
 use std::time::{Duration, Instant};
 
-use oag_game::audio::{Audio, MusicDiscs, MusicSource};
-use oag_game::settings;
+use oag_sound::{Audio, MusicDiscs, MusicSource};
 
 fn main() {
-    let discs = MusicDiscs::survey("data/images/pulse-psp-usa.chd");
+    let discs = MusicDiscs::survey(
+        "data/images/pulse-psp-usa.chd",
+        &oag_game::sound::GameLibrary,
+    );
     println!("discs: {discs:?}");
 
     // Never actually written: nothing here calls `Audio::finish`, only
@@ -28,7 +30,7 @@ fn main() {
     // attached - see the module doc above.
     let dump = std::env::temp_dir().join("oag-audio-source-switch-probe.wav");
     let mut audio = Audio::open(
-        &settings::Audio::default(),
+        &oag_sound::settings::Settings::default(),
         Some(dump),
         None,
         Duration::from_millis(40),

@@ -11,7 +11,7 @@
 //! # What it is not yet
 //!
 //! This is not a crate, and two fields are why. `cues` and its two companions
-//! are `crate::audio::sfx` types - plain data (a `Cue` and a slot index), but
+//! are `oag_sound::sfx` types - plain data (a `Cue` and a slot index), but
 //! declared inside a module that reaches `oag_audio`, so they would have to move
 //! down first. Everything else is `oag_gameplay`, `oag_physics`, `oag_ai`,
 //! `oag_race`, `oag_tables`, `oag_vex`, `oag_title` or a primitive, and would
@@ -377,10 +377,10 @@ pub struct RaceSim {
     /// **A per-tick output, never state** - the shape ADR-0018 requires, and
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Race::drain_cues`].
-    pub(super) cues: Vec<crate::audio::sfx::CueEvent>,
+    pub(super) cues: Vec<oag_sound::sfx::CueEvent>,
     /// Zone milestone numbers reached this tick, awaiting a drain.
     ///
-    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](crate::audio::sfx::Cue):
+    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](oag_sound::sfx::Cue):
     /// the milestone ladder is per-title data
     /// ([`oag_title::ZoneAnnouncer`]), not one of the engine's own fixed,
     /// statically-named cues, so there is no `Cue` variant for it to be. Same

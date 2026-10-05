@@ -9,7 +9,7 @@ use super::*;
 #[test]
 fn no_audio_forces_the_null_backend() {
     let audio = Audio::open(
-        &crate::settings::Audio::default(),
+        &crate::settings::Settings::default(),
         None,
         None,
         oag_audio::MIN_BUFFER,
@@ -31,7 +31,7 @@ fn no_audio_and_no_dump_leaves_no_playhead_to_pace_a_movie_against() {
     // count on every machine, with or without a sound card. See
     // `Audio::movie_playhead` and ADR-0019.
     let mut audio = Audio::open(
-        &crate::settings::Audio::default(),
+        &crate::settings::Settings::default(),
         None,
         None,
         oag_audio::MIN_BUFFER,

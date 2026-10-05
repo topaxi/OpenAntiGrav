@@ -10,7 +10,7 @@ All three are one 80-byte node payload, and it decodes whole. The evidence is
 two-sided throughout: the executable says which offset it reads, and the disc's
 own 1,298 authored nodes say what is in it.
 
-**They are played now, both classes.** `oag_game::audio::sfx::TrackEmitters`
+**They are played now, both classes.** `oag_sound::sfx::TrackEmitters`
 opens a held looping voice for each `sound` `0x3e1` node the moment the
 listener comes inside its radius and stops it when the listener leaves, off
 the law on [`positional-audio.md`](positional-audio.md). A `soundcone` `0x3e9`

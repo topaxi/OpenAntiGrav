@@ -4,7 +4,7 @@
 //! cargo run -p oag-game --example zone_announcer_render -- data/images/pulse-psp-usa.chd out_dir
 //! ```
 
-use oag_game::audio::sfx::Announcer;
+use oag_sound::sfx::Announcer;
 
 fn main() {
     let mut args = std::env::args().skip(1);

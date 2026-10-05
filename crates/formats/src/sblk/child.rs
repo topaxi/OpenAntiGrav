@@ -228,7 +228,7 @@ impl Bank<'_> {
     ///
     /// Identical to [`Bank::cue_sounds`] for a cue that plays no child, which
     /// is what makes it safe to use everywhere. **Not vacuous on the PSP or
-    /// PS2**, though it was for every cue `oag_game::audio::sfx` wired before
+    /// PS2**, though it was for every cue `oag_sound::sfx` wired before
     /// 2026-09-23: `weapons.bnk`'s `CANNONEXPLSHIP` (cue 36) owns exactly one
     /// command, opcode `0x05`, whose child record indexes cue 37 -
     /// `CANNONEXPLWALL` - directly. So a Cannon round's craft-hit ending

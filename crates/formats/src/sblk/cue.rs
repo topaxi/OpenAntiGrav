@@ -44,7 +44,7 @@
 //! that chooses between them (`0x19`) is decoded and corroborated on both HD
 //! and PSP - see `docs/ghidra/functions/psp-pulse-usa/sound.md`'s
 //! `Scream_OpAlternate` - and it is a random draw, per play, that never
-//! repeats the immediately previous pick. `oag_game::audio::sfx::Banks::pick`
+//! repeats the immediately previous pick. `oag_sound::sfx::Banks::pick`
 //! implements that choice; [`Bank::cue_sounds`] still returns the whole set
 //! in command order, because the decoded opcode is a *runtime* draw, not
 //! something a static WAD parse can resolve to one waveform - the choice

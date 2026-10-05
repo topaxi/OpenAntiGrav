@@ -6,7 +6,7 @@
 //! `scripts/check-file-size.py` - and, unlike its siblings that stayed there,
 //! moved to the composition root's own integration tests rather than with it:
 //! `an_offered_music_source_list_matches_crate_audio_s_own_enum` (below)
-//! checks the shipped definition against `oag_game::audio`, which only a crate
+//! checks the shipped definition against `oag_sound`, which only a crate
 //! that can see both `oag-ui` and `oag-game` can assert.
 
 use oag_gameplay::input::{Button, Input};
@@ -162,7 +162,7 @@ fn a_row_whose_source_has_nothing_is_inert_rather_than_a_panic() {
 #[test]
 fn a_supplied_music_source_row_keeps_the_value_it_was_seeded_with() {
     let mut menu = Menu::new(built_in());
-    let offered: Vec<Choice> = oag_game::audio::MusicSource::ALL
+    let offered: Vec<Choice> = oag_sound::MusicSource::ALL
         .iter()
         .map(|source| Choice::plain(source.name()))
         .collect();

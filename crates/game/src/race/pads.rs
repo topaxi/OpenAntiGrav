@@ -160,10 +160,10 @@ impl Race {
                 // rival's pad arrives from where the rival is. This used to be
                 // gated to slot 0 because nothing here could pan; the audio
                 // layer decides how to place it now. See
-                // `crate::audio::sfx::Placement::CraftUnlessPlayer`, which
+                // `oag_sound::sfx::Placement::CraftUnlessPlayer`, which
                 // carries the one hypothesis that split rides on.
-                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                    crate::audio::sfx::Cue::SpeedupPad,
+                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                    oag_sound::sfx::Cue::SpeedupPad,
                     slot,
                 ));
             }

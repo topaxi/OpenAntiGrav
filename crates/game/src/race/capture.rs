@@ -310,7 +310,7 @@ pub struct Presented {
 pub fn capture(
     loaded: Loaded,
     options: &CaptureOptions,
-    audio: &mut crate::audio::Audio,
+    audio: &mut oag_sound::Audio,
 ) -> Result<()> {
     let (width, height) = options.size;
     let Loaded {
@@ -972,7 +972,7 @@ pub fn capture(
 /// wants the override.
 ///
 /// [`Output::spectrum`]: oag_audio::Output::spectrum
-fn zone_spectrum(options: &CaptureOptions, audio: &crate::audio::Audio) -> [f32; oag_audio::BANDS] {
+fn zone_spectrum(options: &CaptureOptions, audio: &oag_sound::Audio) -> [f32; oag_audio::BANDS] {
     if options.zone_spectrum_test {
         std::array::from_fn(|i| {
             #[expect(

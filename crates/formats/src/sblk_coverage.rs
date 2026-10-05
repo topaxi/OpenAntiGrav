@@ -2,7 +2,7 @@
 //!
 //! **A separate file from `sblk.rs`, deliberately.** This crate's sample-rate
 //! and SAS-pitch questions belong to another thread; nothing here touches
-//! `ASSUMED_SAMPLE_RATE`, opcode decoding, or `crates/game/src/audio` - only
+//! `ASSUMED_SAMPLE_RATE`, opcode decoding, or `crates/sound/src` - only
 //! byte ranges, using [`Bank`]'s already-public fields and offsets. See
 //! `docs/formats/psp-audio.md` for what each section is.
 //!

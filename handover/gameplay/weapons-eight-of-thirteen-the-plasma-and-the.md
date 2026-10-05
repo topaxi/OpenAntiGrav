@@ -1170,7 +1170,7 @@ suite (931 passed).
   five stay open and here is exactly why.** `Cue::MineLaunch` now fires
   `MINELAUNCH` off the firing craft's own emitter (`Placement::Craft`) every
   time `Race::lay_mines` lays a charge whose weapon is `Weapon::Mine` -
-  `crates/game/src/audio/sfx.rs`, wired from `crates/game/src/race/weapons.rs`.
+  `crates/sound/src/sfx.rs`, wired from `crates/game/src/race/weapons.rs`.
   Both `Mine_Init` (`0x08859ac8`) and its only caller, `Weapon_DropMines`
   (`0x088675cc`), were decompiled directly this session to settle *how* the
   cue plays, not only *that* it does: the emitter argument traces, through two
@@ -1732,7 +1732,7 @@ A new placement had to be added for both: `Placement::Point`, carried on
 `CueEvent::at_point` rather than a grid slot - the original always names an
 *emitter* with a scene node, never a bare position, so nothing here is read
 off a call site; it is the smallest honest way to place a sound that is not a
-craft's own. `crates/game/src/audio/sfx.rs` and
+craft's own. `crates/sound/src/sfx.rs` and
 `crates/game/src/race/{weapons.rs,tick.rs}`.
 
 ## 2026-09-16, later again: the launch-speed ramp is ported, and a first attempt at it was wrong

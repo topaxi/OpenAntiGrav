@@ -628,13 +628,13 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the gamma rows and `Gamma::OFFERED` must be one list"
     );
 
-    let music: Vec<oag_game::audio::Volume> = values("audio.music_volume")
+    let music: Vec<oag_sound::Volume> = values("audio.music_volume")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         music,
-        oag_game::audio::Volume::OFFERED,
+        oag_sound::Volume::OFFERED,
         "the music-volume rows and `Volume::OFFERED` must be one list"
     );
 

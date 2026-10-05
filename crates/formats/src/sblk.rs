@@ -101,7 +101,7 @@
 //! Decoded, 2026-09-16. The descriptor's `+0x02`/`+0x03` are a centre note and
 //! a centre fine-tune, and [`pitch`] is the port of the engine's own arithmetic
 //! from those to the `sceSasSetPitch` word - confirmed live, 190 of 190 hits.
-//! [`Sound::sample_rate`] is what a player wants; `oag_game::audio::sfx` plays
+//! [`Sound::sample_rate`] is what a player wants; `oag_sound::sfx` plays
 //! every waveform at it.
 //!
 //! # What is not decoded

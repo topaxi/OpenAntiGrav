@@ -1,7 +1,7 @@
 # Streaming decode for audio would break seek, and nothing forces the change yet
 
 2026-08-25. The race-launch and track-boundary hitches
-(`crates/game/src/audio/race_music.rs`) are fixed by moving decode to a
+(`crates/sound/src/race_music.rs`) are fixed by moving decode to a
 worker thread, not by shrinking the buffer - `RaceMusicWorker` decodes a
 whole track and hands `Audio` a complete `oag_audio::mixer::Sound`
 (`{samples: Vec<i16>, channels, sample_rate}`), same as before, just off
@@ -74,7 +74,7 @@ earlier work fixed needed streaming" - race launch and the natural
 track-boundary. It does not say every track-change path is off the
 frame/settings thread, and one is not:
 
-- **`Audio::set_music_source`** (`crates/game/src/audio.rs:954`), the
+- **`Audio::set_music_source`** (`crates/sound/src/lib.rs:954`), the
   `audio.music_source` settings row's handler
   (`crates/game/src/main/session/apply.rs:224`) - a player toggling the
   MUSIC SOURCE row, in the menu or **mid-race**, calls this **synchronously**
@@ -85,7 +85,7 @@ frame/settings thread, and one is not:
   `fetch_indexed` do a disc read plus, for ATRAC3+, an out-of-process
   `ffmpeg` decode, on the same call stack that applies the setting.
 - **`Audio::advance_race_track`**'s fallback path
-  (`crates/game/src/audio/race_music.rs:338`) - called from `Audio::tick`,
+  (`crates/sound/src/race_music.rs:338`) - called from `Audio::tick`,
   inside the fixed-timestep loop, every time the race voice stops. The
   prefetch (`maybe_prefetch_next_race_track`) covers the *natural* end of a
   track, but the method's own doc already names the gap: "falls back to the
@@ -124,7 +124,7 @@ press used to block until it finished.
 
 Verified two ways:
 
-- Three synthetic unit tests in `crates/game/src/audio/tests/source_switch.rs`
+- Three synthetic unit tests in `crates/sound/src/tests/source_switch.rs`
   (fake disc paths, no game data needed): the call never blocks, a failed
   fetch leaves state untouched, and a press back to the current release
   drops a switch still in flight.

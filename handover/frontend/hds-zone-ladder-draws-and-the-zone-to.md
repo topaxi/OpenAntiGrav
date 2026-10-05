@@ -136,7 +136,7 @@ own `ZONE_STAGES` non-`Start` names. The same fourteen also live inside the
 general `speech_zone.bnk` at cue indices `26`-`39`, which is where an earlier
 pass of this thread's sibling had already spotted them and left them unwired.
 Now `oag_title::ZoneClassAnnouncer` /
-[`crate::audio::sfx::ClassAnnouncer`](../../crates/game/src/audio/sfx/announcer.rs),
+[`oag_sound::sfx::ClassAnnouncer`](../../crates/sound/src/sfx/announcer.rs),
 fired on the same `ZoneStages::stage_for` edge the HUD text and the colour
 grade already key off - see `crates/game/src/race/tick.rs`. Ground-truthed
 against the real disc in `crates/hd/tests/hd_title_ground_truth.rs`'s
@@ -357,12 +357,12 @@ free:**
    predicted.** `crate::race::tick` pushes a milestone announcement and (when
    the same `zone_advanced` edge also crosses a `ZONE_STAGES` boundary) a
    class announcement into two separate queues, unconditionally, on the same
-   tick (`crates/game/src/race/tick.rs`). `crate::audio::sfx::race_tick`
+   tick (`crates/game/src/race/tick.rs`). `oag_sound::sfx::race_tick`
    drains both queues and calls `mixer.play` once per entry, both to
    `Bus::Speech`, back to back, with nothing between them that checks whether
    the bus already has a voice open - and each call's own result is discarded
    (`let _ = mixer.play(...)`) so a refusal is not surfaced either
-   (`crates/game/src/audio/sfx.rs`). Zone 20 (`PHANTOM` + the "20" milestone)
+   (`crates/sound/src/sfx.rs`). Zone 20 (`PHANTOM` + the "20" milestone)
    and zone 35 (`ZEN` + "35") were both crossed live in this session's
    40,000-tick run; its own health log shows voice refusals scattered
    throughout (40 over 25,466 ticks, not concentrated at those two ticks), so

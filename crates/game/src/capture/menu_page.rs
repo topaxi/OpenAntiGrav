@@ -57,7 +57,7 @@ pub(super) fn menu_page(
     race_setup: &crate::boot::RaceSetup,
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
-    music_discs: &crate::audio::MusicDiscs,
+    music_discs: &oag_sound::MusicDiscs,
     // The RECORDS page's own store, read the same read-only way
     // `race::CaptureOptions::previous_best` is - see the call site in
     // `capture.rs`. Taken rather than loaded in here so this function stays
@@ -185,7 +185,7 @@ pub(super) fn menu_page(
     model.supply(
         oag_ui::menu::ValueSource::MusicSources,
         &if music_discs.both() {
-            crate::audio::MusicSource::ALL
+            oag_sound::MusicSource::ALL
                 .iter()
                 .map(|source| oag_ui::menu::Choice::plain(source.name()))
                 .collect::<Vec<_>>()

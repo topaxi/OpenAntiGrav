@@ -2058,6 +2058,7 @@ dependencies = [
  "oag-rcs",
  "oag-render",
  "oag-replay",
+ "oag-sound",
  "oag-tables",
  "oag-testdata",
  "oag-texture",
@@ -2243,6 +2244,32 @@ dependencies = [
  "serde",
  "thiserror 2.0.19",
  "toml",
+]
+
+[[package]]
+name = "oag-sound"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "oag-assets",
+ "oag-audio",
+ "oag-core",
+ "oag-disc",
+ "oag-display",
+ "oag-formats",
+ "oag-gameplay",
+ "oag-hd",
+ "oag-music",
+ "oag-pulse",
+ "oag-pure",
+ "oag-race",
+ "oag-tables",
+ "oag-testdata",
+ "oag-title",
+ "oag-ui",
+ "oag-vex",
+ "serde",
 ]
 
 [[package]]

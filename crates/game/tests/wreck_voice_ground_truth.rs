@@ -9,15 +9,15 @@
 //! 300, past `ready` and `go`, and renders speech alone: the third run of speech
 //! must start where the cue is raised, and there must be exactly one cue.
 
-use oag_game::audio::Volume;
-use oag_game::audio::sfx::Cue;
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_sound::Volume;
+use oag_sound::sfx::Cue;
 
 const WRECKED_AT: u64 = 300;
 const RENDER_TICKS: u64 = 520;
-const FRAMES_PER_TICK: usize = (oag_game::audio::DUMP_SAMPLE_RATE / 60) as usize;
-const RUN_GAP: usize = (oag_game::audio::DUMP_SAMPLE_RATE / 5) as usize;
+const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
+const RUN_GAP: usize = (oag_sound::DUMP_SAMPLE_RATE / 5) as usize;
 const SILENCE: i16 = 8;
 
 #[test]
@@ -36,8 +36,8 @@ fn a_wrecked_opponent_voices_cont_elim_in_a_single_race() {
     let mut race = race::Race::start(loaded.setup);
     let wav = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots/wreck-voice-single-race.wav");
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio {
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings {
             music_volume: Volume::OFFERED[0],
             sfx_volume: Volume::OFFERED[0],
             ..Default::default()
@@ -59,7 +59,7 @@ fn a_wrecked_opponent_voices_cont_elim_in_a_single_race() {
                 raised.push((stepped, event.slot));
             }
         }
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     audio.finish().expect("writing the dump");

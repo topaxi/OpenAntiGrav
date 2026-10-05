@@ -507,7 +507,7 @@ volume by `0.85` when `+0x368` is **set**, which is what a mix does to everybody
 except the listener. Five converging uses is more than three, and it is still
 not a reading - the field is never written anywhere this project has looked, so
 it stays unnamed. See [positional-audio.md](positional-audio.md), and
-`oag_game::audio::sfx::Placement::CraftUnlessPlayer`, which is the one line that
+`oag_sound::sfx::Placement::CraftUnlessPlayer`, which is the one line that
 moves if this turns out to mean something else.
 
 **2026-09-01: the write site, and it settles this.** `Craft_Construct_q`
@@ -526,7 +526,7 @@ read, well past the naming threshold - confidence **85**. Named
 (2026-09-02), wired through `scripts/psp_trace_fields.py`'s already-updated
 capture list the same way every other optional column is. `0` and `2` are the
 only values confirmed live, so whatever `1` and `3` select (multiplayer? a
-second local pad?) is still open, and `oag_game::audio::sfx::Placement::CraftUnlessPlayer`'s
+second local pad?) is still open, and `oag_sound::sfx::Placement::CraftUnlessPlayer`'s
 `== 0` check is confirmed rather than merely uncontradicted.
 
 **`DAT_08b31048 != 2` is not the Zone check.** This project already identifies
@@ -590,7 +590,7 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   volume and a rival's goes through its craft emitter at
   `oag_audio::Emitter::CRAFT_RADIUS`. The branch rides the `+0x368` hypothesis
   above and says so at the one line that implements it. See
-  [positional-audio.md](positional-audio.md), `oag_game::audio::sfx` and
+  [positional-audio.md](positional-audio.md), `oag_sound::sfx` and
   [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table).
 - **`craft+0x318`'s curve.** See the open question above.
 - **Mode `8`.** Read as Eliminator by elimination, not confirmed independently

@@ -422,7 +422,7 @@ impl From<Size> for String {
 /// of thing that drifts one edit at a time. Each type still declares its own
 /// `RANGE`, `OFFERED` and neutral value, which is all that actually differs.
 ///
-/// Exported for `oag_game::audio::Volume`, which is the same shape and is not a
+/// Exported for `oag_sound::Volume`, which is the same shape and is not a
 /// display setting: a percentage row is a percentage row wherever the value
 /// ends up, and a second copy of this body in another module is exactly the
 /// drift the macro exists to prevent. That cross-crate reader is why it is

@@ -9,8 +9,7 @@ use oag_core::TickClock;
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, boot, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings,
-    upscale,
+    boot, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
@@ -84,10 +83,10 @@ pub(crate) struct Session {
     /// Beside `controls` because it is the same kind of thing: a device that
     /// belongs to the run rather than to whatever is on screen, so a race
     /// starting does not restart the music. Stepped from inside the fixed
-    /// timestep and never from the frame - see [`audio::Audio::tick`].
-    pub(crate) audio: audio::Audio,
+    /// timestep and never from the frame - see [`oag_sound::Audio::tick`].
+    pub(crate) audio: oag_sound::Audio,
     /// Which Pulse releases this machine has. See [`App::music_discs`].
-    pub(crate) music_discs: audio::MusicDiscs,
+    pub(crate) music_discs: oag_sound::MusicDiscs,
     pub(crate) clock: TickClock,
     pub(crate) last: std::time::Instant,
     /// Recent frame times, for the performance overlay.
