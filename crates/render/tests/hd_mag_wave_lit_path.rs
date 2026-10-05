@@ -161,6 +161,48 @@ fn the_wave_moves_with_the_clock_and_repeats_each_second() {
     );
 }
 
+/// **A Zone race draws the strip as the plain Zone surface.** Every `ZoneMode`
+/// variant of the wave materials declares no wave, emissive, clock or ramp, so
+/// with `scene.zone.enabled` set the wave bit must change nothing: the pixel
+/// equals the same surface without the bit, and does not move with the clock.
+/// Without the gate the wave escapes the grade, which is what a Zone race
+/// showed on Talon's Junction (the strip drew as it does in Time Trial).
+#[test]
+fn a_zone_race_draws_the_strip_without_its_wave() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let at = |model: &Model, seconds: f32, zone: bool| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        scene.time = [seconds; 4];
+        if zone {
+            scene.zone.enabled = 1.0;
+        }
+        draw(&device, &queue, model, scene)
+    };
+    let off_zone = at(&model(true), 0.875, false);
+    assert!(
+        off_zone[1] > 0,
+        "the fixture's wave must be visible off Zone: {off_zone:?}"
+    );
+    let plain = at(&model(false), 0.875, true);
+    for seconds in [0.125, 0.875, 1.125] {
+        assert_eq!(
+            at(&model(true), seconds, true),
+            plain,
+            "in Zone the wave bit must not reach the pixel (t = {seconds})"
+        );
+    }
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [

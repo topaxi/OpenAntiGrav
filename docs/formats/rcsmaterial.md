@@ -2183,6 +2183,32 @@ the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the 
 is from the code), 2048's Vita `mageffect08` program, and the `mageffect08` floor's
 own diffuse-plus-normal-plus-lightmap composition (only the wave term is added to it).
 
+## A Zone race draws the magstrip family without its wave (2026-10-05, `hd-zone-magfloor`)
+
+**The report from play:** a Zone race on Talon's Junction no longer looked like it did before the wave
+landed. Cause: `slots::MAG_WAVE`/`MAG_LOOP` replaced the shaded result outright, so the strip floor drew
+exactly as in Time Trial while the walls and sky took the Zone grade.
+
+**What the original does.** The six wave materials (`mageffect08`, `mageffect08_floor`, `mageffectloop`,
+`mag_effect_loop_opaque`, `chevron_pulse`, `mageffect_modded`) each ship `ZoneMode` fragment variants. Those
+declare `zoneColourTint`, `zoneEffectInner` (and `Outer`), the zone textures, the grid and the paraboloid
+reflection - and **no wave sampler (`0x85c9fd48`), no emissive picture (`0x1202d8df`), no `time`, no iridescent
+ramp (`0xcc98c527`)**. Read with `scripts/ps3-microcode.py fp-file` on Talon's `mag_effect_loop_opaque`,
+block #15 (`@0xbb40`): the colour is `light * (zoneTex * zoneEffect + zoneBase * rim^10 + zoneBaseAlt *
+rim^5 [+ grid-alpha glow]) + reflection`, the same Zone surface every other material gets. So in Zone the
+strip is recoloured by the stage, not scrolled. Census: `crates/render/examples/hd_zone_variants.rs` prints
+the per-variant table; `hd_zone_wave_census_ground_truth.rs` asserts no Zone variant of any wave material
+declares the wave, across all four PS3 archives. Not one exception, so one gate serves the family.
+
+**Wired as** a `scene.zone.enabled == 0.0` condition on both branches in `mesh.wgsl` (the wave dodge and the
+floor combine); the floor then falls through to the generic Zone surface. A branch, not a mix: the Time Trial
+frame at the lead's matched pose is byte-identical before and after. Test:
+`hd_mag_wave_lit_path::a_zone_race_draws_the_strip_without_its_wave` (fails without the gate).
+
+**Not done:** an RPCS3 Zone frame of the strip for a side-by-side (the decoded program is the evidence); the
+Zone variant's own grid-alpha glow term and paraboloid reflection are not drawn (as off Zone); whether the
+Zone floor's alpha (`@0x82 MOV H0.w`, a literal the decoder prints as 0) means anything for a blended pass.
+
 ## Omega and 2048 draw their see-through materials off the state word (2026-10-05, `transparent-floors`)
 
 Omega and 2048 authored HD's state word on every material (PS4 header `+0x22`, Vita `+0x12`; evidence
