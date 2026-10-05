@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce the two dependency-boundary rules CLAUDE.md calls "enforceable".
+"""Enforce the dependency-boundary rules CLAUDE.md calls "enforceable".
 
 Finding 2 of the 2026-07-30 code review: both rules held on inspection, but
 nothing ran that check - no CI job, no test, no `deny.toml`. A `cargo add`
@@ -106,6 +106,27 @@ NOT_TITLE_PACKAGES = {
     "oag-ui-screens",
 }
 
+# Rule 3: the generic render-side crates carry no title's data. `oag-mesh` was
+# the one that did (a re-exported Pulse animation table and the PS2 texture-name
+# rule); both moved, and this stops it recurring. `oag-render`, `oag-present` and
+# `oag-ui` are deliberately not listed: `oag-render` still reads `oag-pulse`'s
+# presentation tables (`loading`, HUD) and `oag-present` reaches `oag-ui`, whose
+# front end names every title. `oag-title` (the vocabulary) is not forbidden
+# here: it is types only, and `oag-assets` carries it.
+TITLE_DATA_CRATES = {
+    "oag-2048",
+    "oag-hd",
+    "oag-omega",
+    "oag-pulse",
+    "oag-pure",
+}
+TITLE_FREE_RENDER_CRATES = {
+    "oag-fx",
+    "oag-gpu",
+    "oag-mesh",
+    "oag-post",
+}
+
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
 
@@ -169,6 +190,19 @@ def main() -> int:
                 "input/window backend) forbids"
             )
 
+    for crate in sorted(TITLE_FREE_RENDER_CRATES):
+        pkg_id = id_by_name.get(crate)
+        if pkg_id is None:
+            problems.append(f"workspace member {crate!r} not found in cargo metadata")
+            continue
+        hit = reachable_names(pkg_id, graph, names) & TITLE_DATA_CRATES
+        if hit:
+            problems.append(
+                f"{crate} transitively depends on {sorted(hit)}, which rule 3 "
+                "(a generic render-side crate carries no title's data) forbids; "
+                "inject the table from the caller instead"
+            )
+
     vocabulary_id = id_by_name.get(TITLE_VOCABULARY)
     if vocabulary_id is None:
         problems.append(f"workspace member {TITLE_VOCABULARY!r} not found in cargo metadata")
@@ -208,7 +242,7 @@ def main() -> int:
         print("\n\n".join(problems), file=sys.stderr)
         return 1
 
-    print("OK: both dependency-boundary rules hold")
+    print("OK: all three dependency-boundary rules hold")
     return 0
 
 

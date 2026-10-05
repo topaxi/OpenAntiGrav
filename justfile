@@ -997,7 +997,7 @@ harvest-ppsspp-symbols binary port="47800":
 audit-leakage:
     python3 scripts/check-leakage.py
 
-# Assert the two architecture dependency rules from CLAUDE.md still hold
+# Assert the three architecture dependency rules from CLAUDE.md still hold
 check-deps:
     python3 scripts/check-dependency-rules.py
 
