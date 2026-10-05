@@ -65,7 +65,18 @@ pub enum Bus {
     /// Voice lines - the announcer, and anything else the original keeps in
     /// `speech.bnk` rather than beside the effects.
     Speech,
+    /// One of HD's twelve authored SCREAM volume groups, `1..=12` (`user1` to
+    /// `user12` in `GlobalAudioConfig.xml`'s `GroupVolumes`).
+    ///
+    /// **HD only.** Pulse and Pure never play on one, so their mix is the
+    /// three buses above and nothing else. HD's own mix is a per-state row of
+    /// group volumes, and a sound's group decides which of them scales it; see
+    /// `docs/formats/hd-xfx.md`, "The authored mix".
+    Group(u8),
 }
+
+/// How many [`Bus::Group`] buses there are, `user1` to `user12`.
+pub const GROUPS: usize = 12;
 
 /// The original's own fixed trim on the music bus alone, applied after the
 /// `"Music Volume"` slider and independent of it.
@@ -108,7 +119,7 @@ pub const MUSIC_MASTER_TRIM: f32 = 0.44;
 
 impl Bus {
     /// Number of buses, for array sizing.
-    pub const COUNT: usize = 3;
+    pub const COUNT: usize = 3 + GROUPS;
 
     /// This bus's index into a `[_; Bus::COUNT]`.
     #[must_use]
@@ -117,6 +128,9 @@ impl Bus {
             Self::Music => 0,
             Self::Sfx => 1,
             Self::Speech => 2,
+            // Out of range folds onto the last group rather than indexing
+            // past the array; a caller names a group `1..=12`.
+            Self::Group(n) => 3 + usize::from(n.clamp(1, GROUPS as u8)) - 1,
         }
     }
 }

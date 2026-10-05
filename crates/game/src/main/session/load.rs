@@ -703,6 +703,7 @@ impl Session {
         // `SfxVoices` holds a `VoiceId` into a pool the new race is about to
         // reuse. See `Audio::stop_race_sfx`.
         self.audio.stop_race_sfx();
+        self.audio.enter_race_mix();
         // After the stage swap succeeds, not before: a failed launch must
         // leave the menu music playing rather than having already silenced
         // it. See `Audio::finish_race_music`.
