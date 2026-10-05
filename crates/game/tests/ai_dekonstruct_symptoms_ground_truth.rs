@@ -131,9 +131,6 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
         plan_lap: race.build_speed_plan(1).1.verify_lap_ticks,
         ..Symptoms::default()
     };
-    let pace: Vec<f32> = race.speed_plan().map_or_else(Vec::new, |plan| {
-        (0..plan.len()).map(|i| plan.pace(i)).collect()
-    });
     let n = slots.len();
     let mut history: Vec<Vec<f32>> = vec![Vec::new(); n];
     let mut lap = vec![0u32; n];
@@ -178,7 +175,12 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
                 && racing
                 && !recovered[k]
                 && !ship.standing.finished()
-                && let Some(&v) = pace.get(index as usize)
+                // The plan of the line the craft is on: the ring's, or the
+                // route's it drew at a fork (`oag_raceplay`'s `routes`).
+                && let Some(v) = race
+                    .plan_of(slot)
+                    .filter(|plan| (index as usize) < plan.len())
+                    .map(|plan| plan.pace(index as usize))
                 && v.is_finite()
                 && speed < v * TROUGH
             {

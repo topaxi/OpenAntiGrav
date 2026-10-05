@@ -75,6 +75,9 @@ pub struct RaceSim {
     /// The identity permutation on nine of the disc's twelve circuits. See
     /// [`ai_order`], and [`Race::ai_sample`] for the lookup itself.
     pub(super) ai_order: Vec<u32>,
+    /// One AI line per way round a fork, beside the ring's - see
+    /// [`super::routes`]. Empty on a circuit with no fork.
+    pub(super) routes: Vec<super::routes::RouteLine>,
     /// The speed plan the opponents' drivers follow, built at the start from
     /// this line, this collision and the field's handling, or `None` when the
     /// race has no opponents or the plan did not verify clean. See

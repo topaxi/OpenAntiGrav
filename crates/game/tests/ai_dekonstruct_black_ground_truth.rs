@@ -91,19 +91,30 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// one was finished by a weapon blow under either law (shield lost in the 2 s
 /// before, less wall charge, over 20), measured in release with both laws on
 /// one binary.
+///
+/// **Regenerated 2026-10-05 for the fork choice** (`oag_ai::branch`, the
+/// original's `Ai_ChooseBranch`): Black forks once, and opponents now take
+/// either side, so every race past the fork is a different race. Black 5 -> 6
+/// over the twelve cells; six cells moved, three down and three up, and the
+/// reversed column regenerated identical. **No loss is on the route.** The
+/// cells over the old bound were located (release probe, same seeds): VENOM
+/// seed 2 lost one craft to a weapon on the ring (shield 57 to 0 in a tick, no
+/// wall charge, ring sample 2115) and one finished at the ring's first-jump
+/// lip already at 2.7 shield (ring sample 206); RAPIER seed 2 lost one to wall
+/// attrition on the ring (72.5 charged, ring sample 2900, lap 5).
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
-    ("VENOM", 2, 0, 1),
+    ("VENOM", 2, 2, 1),
     ("VENOM", 3, 0, 0),
-    ("FLASH", 1, 1, 0),
+    ("FLASH", 1, 0, 0),
     ("FLASH", 2, 0, 0),
     ("FLASH", 3, 0, 2),
     ("RAPIER", 1, 1, 0),
-    ("RAPIER", 2, 0, 1),
+    ("RAPIER", 2, 1, 1),
     ("RAPIER", 3, 1, 3),
     ("PHANTOM", 1, 0, 0),
     ("PHANTOM", 2, 1, 1),
-    ("PHANTOM", 3, 1, 2),
+    ("PHANTOM", 3, 0, 2),
 ];
 
 fn check(class: &str, seed: u64) {

@@ -218,6 +218,8 @@ pub struct Driver {
     /// ground again. A `bool` because this type is `Eq` and lives in the world
     /// snapshot, for the reason [`Self::provocation`] gives.
     pub roll_decided: bool,
+    /// Which line it is on and what it decided at the last fork: [`crate::branch`].
+    pub branching: crate::branch::Branching,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -236,8 +238,7 @@ const PROVOCATION_MAX: u16 = 600;
 /// The noise stream ramming decisions are rolled against.
 const RAM_STREAM: u32 = 1;
 
-/// How often a driver at full `ram` will take a shot at a rival alongside, per
-/// tick. About once a second.
+/// How often a driver at full `ram` takes a shot at a rival alongside: once a second.
 const RAM_RATE: f32 = 1.0 / 60.0;
 
 /// The noise stream mistakes are rolled against.
@@ -253,9 +254,7 @@ const WEAPON_STREAM: u32 = 2;
 /// The noise stream the barrel roll's commit decision is rolled against.
 const ROLL_STREAM: u32 = 4;
 
-/// And the one that picks which way it goes.
-///
-/// A stream of its own rather than a second use of [`ROLL_STREAM`]: sharing it
+/// And the one that picks which way it goes. A stream of its own rather than a second use of [`ROLL_STREAM`]: sharing it
 /// would tie which way a driver rolls to how readily it rolls at all, so a
 /// pilot with a high [`Personality::roll_chance`] would only ever roll one way.
 const ROLL_SIDE_STREAM: u32 = 5;

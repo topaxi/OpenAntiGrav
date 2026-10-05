@@ -295,7 +295,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
         .physics
         .body
         .position
-        .distance(race.racing_line().point(ship.driver.index as usize));
+        .distance(race.line_of(1).point(ship.driver.index as usize));
     assert!(
         residual < race.sim.rescue_distance,
         "recovered {residual} from where its driver thinks it is"

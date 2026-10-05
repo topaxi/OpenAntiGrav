@@ -183,6 +183,7 @@ mod replay;
 mod repulser_field;
 mod respawn;
 mod results;
+mod routes;
 mod scene;
 pub mod scenery_fx;
 pub mod scoreboard;

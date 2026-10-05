@@ -54,6 +54,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
+| Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
 | Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
@@ -3592,6 +3593,79 @@ to ten ticks' worth.
   `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
   on the probe's invented circuit; a disc-backed plan is pinned only as
   verified-or-not (`speed_plan_ground_truth.rs`), not bit for bit.
+
+## Branch choice at a fork
+
+**Recovered 2026-10-05**, `Ai_ChooseBranch` (`0x08854920`), evidence on
+[ai-branch-choice.md](../ghidra/functions/psp-pulse-usa/ai-branch-choice.md):
+every opponent flips a fair coin at every fork it reaches, independently, on
+entering the path before the fork, and drives the chosen side until it is past
+the merge. The excluded path is what its lookahead and its lap progress walk
+honour, so a craft on either side reads progress on one scale. Nothing else -
+position, class, difficulty, pilot, corridor - enters the choice in Pulse. A
+craft knocked onto the other side off the track takes that side instead.
+
+2048 (`0x8119ae90`), HD (`FUN_000fe818`) and Omega (`FUN_012c0480`) flip the
+same coin. 2048 adds an authored per-circuit override after it (circuit record
+`+0x150`/`+0x154`/`+0x158`, source not found) and a different re-commit; neither
+is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-choice.md).
+
+**Ported 2026-10-05**, for every title, since all four flip the same coin:
+
+- **The coin** is `oag_ai::branch::coin`: bit 8 of a draw off `oag_core::Rng`
+  seeded from the driver's own seed and a per-driver visit counter, so it moves
+  no other roll in the race (49.6 % alternates on the first draw over 14,000
+  seeded craft, 50.0 % after). The draw source is ours; the fairness, the timing
+  (on entering the pre-fork path) and the hold to the merge are the original's.
+- **The geometry** is `oag_race::course::Route`: every way from a ring fork back
+  to the ring, including 2048's multi-path alternates and forks nested inside an
+  alternate (`square`, `mall`, `subway`), which `Course::branches` - the
+  Repulser's narrower view - drops. A nested route is picked by rolling its
+  coins in order (`oag_ai::branch::choose`), so two forks deep is one in four.
+- **The line** is ours: one AI line per route, the ring from the route's merge
+  round to its split and then the route's own samples, built by the same
+  `racing_line` the ring's is (`oag_raceplay`'s `routes` module). A driver's
+  index is into whichever line it is on, and every consumer that pairs it with
+  a line, a sample or a plan asks `Race::line_of` / `ai_sample_for` / `plan_of`.
+- **Chosen, not measured**, each forced by a measured failure on `05_Track` or
+  `07_Track` (`cargo run -p oag-game --example fork_trace`):
+  - the driver holds its draw (`Branching::pending`) and moves onto the route's
+    line only 320 samples short of the split, so the shared stretch is driven
+    on the ring's line and plan;
+  - each route has its own speed plan, and **a route whose plan does not lap
+    clean and contact-free is not offered to the coin** (its share stays on the
+    ring): `07_Track`'s centre ramp parks our craft at route sample 196 without
+    a wall touch, so 07's route is never taken;
+  - across the stretch where a route is still within 8 units of the ring, its
+    corridor is held to 1 unit either side of its line: a Novice on the far
+    side of path 1's corridor rode the ring's take-off ramp and met the divider
+    every lap;
+  - the re-commit (below) never fires in the air, scores the craft's own line
+    over its search window, and needs a margin of 1: as first ported it flipped
+    craft between lines every tick over 05's jump, 328 times in one run.
+- **The re-commit** is otherwise the original's Pulse rule: off the track and
+  moving, a craft scored better on a sibling (`|across| * 10 + along`) switches
+  to it.
+- **Lap progress** on a route is read off the ring span it replaces - see
+  [lap counting](lap-counting.md#where-we-differ).
+
+Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no;
+Omega's copy of `altima` both.
+2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
+`subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
+(no route laps, and the ring's own plan does not verify there either).
+
+Measured on the result: a full field on `05_Track` over a race decided 17 times
+for the ring and 24 for the route; on 2048's `altima` over three laps, 13/7 at
+one fork and 6/16 at the other, every running craft within a lap of the rest
+(`ai_fork_split_ground_truth.rs`). `race_ground_truth`'s lone-craft board stays
+all twelve clean with no respawns, best laps as before except 05 (34.8 ->
+34.6 s). de Konstruct Black's destroyed-craft board moved 5 -> 6 forward, no
+loss on the route (`ai_dekonstruct_black_ground_truth.rs`).
+
+**Not ported**: 2048's per-circuit override (circuit record `+0x150`), its
+per-craft construction coin and its own re-commit; pad-seeking while on a route
+(the pads sit on ring indices).
 
 ## Where this sits
 

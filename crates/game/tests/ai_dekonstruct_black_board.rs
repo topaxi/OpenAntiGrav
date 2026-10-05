@@ -326,10 +326,13 @@ fn field_trace() {
                 if !sh.active {
                     continue;
                 }
-                let off = race.ai_sample(sh.driver.index as usize).map_or(0.0, |sm| {
-                    let lat = oag_core::math::Vec3::from_array(sm.lateral);
-                    (sh.physics.body.position - oag_core::math::Vec3::from_array(sm.pos)).dot(lat)
-                });
+                let off = race
+                    .ai_sample_for(s, sh.driver.index as usize)
+                    .map_or(0.0, |sm| {
+                        let lat = oag_core::math::Vec3::from_array(sm.lateral);
+                        (sh.physics.body.position - oag_core::math::Vec3::from_array(sm.pos))
+                            .dot(lat)
+                    });
                 line.push_str(&format!(
                     " | {:>4} o{:>6.1} v{:>5.1} t{:.2} b{:.2} g{:.1} s{:>5.1} r{}",
                     sh.driver.index,

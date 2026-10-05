@@ -204,12 +204,12 @@ impl Race {
                 // other level. The window is the forward reach of a coast
                 // (about 250 units, 100 samples at 2.5 units, measured on
                 // `16_Track`) with room to spare.
-                let index = self.sim.racing_line.nearest(
+                let index = self.line_of(slot).nearest(
                     self.sim.world.ships[slot].physics.body.position,
                     self.sim.world.ships[slot].driver.index as usize,
                     RESPAWN_SEARCH_WINDOW,
                 );
-                self.sample_index_of(index)
+                self.sample_index_for(slot, index)
             };
             self.sim.last_respawn_cause[slot] = Some(respawn::RespawnCause::Destroyed);
             self.respawn(slot, sample_index);

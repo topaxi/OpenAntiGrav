@@ -219,6 +219,7 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         peak_curvature,
         reflex,
         roll_decided,
+        branching,
     } = driver;
 
     // **Hashed, unlike `handling`.** A driver's place on the racing line is the
@@ -282,6 +283,21 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
     // position and disagree on this are about to spend a twelfth of a shield
     // pool differently. See `oag_ai::Driver::roll_decided`.
     hasher.write_u8(u8::from(*roll_decided));
+    // **And which side of a fork it is on.** Two runs whose craft agree on
+    // every position but whose drivers took different coins are about to steer
+    // down different roads. See `oag_ai::branch`.
+    let oag_ai::branch::Branching {
+        route,
+        decided_at,
+        entered,
+        visits,
+        pending,
+    } = branching;
+    hasher.write_u32(u32::from(*route));
+    hasher.write_u32(u32::from(*decided_at));
+    hasher.write_u8(u8::from(*entered));
+    hasher.write_u32(*visits);
+    hasher.write_u32(u32::from(*pending));
 }
 
 /// A craft's place in the race, which decides the finishing order and is

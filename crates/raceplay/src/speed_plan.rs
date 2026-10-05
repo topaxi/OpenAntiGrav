@@ -12,6 +12,12 @@ use log::info;
 
 use super::*;
 
+/// The step budget a route's plan gets, against the ring's 120,000. **Chosen,
+/// not measured**: Pulse's routes that lap clean build in 8,000-13,000 steps,
+/// and `07_Track`'s centre ramp, which never laps, spent 145,728 on every load
+/// before this.
+const ROUTE_PLAN_BUDGET: u64 = 40_000;
+
 impl Race {
     /// Builds the speed plan for the craft in `slot`, driven from its own grid
     /// pose with its own handling.
@@ -47,16 +53,35 @@ impl Race {
         slot: usize,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
-        let line = &self.sim.racing_line;
+        self.with_plan_course_on(&self.sim.racing_line, &self.sim.ai_order, slot, None, f)
+    }
+
+    /// The same on any line and its sample order - the ring's or a route's
+    /// (`crate::routes`). `start` places a fresh craft at that line index
+    /// instead of starting from `slot`'s own pose, for a line the grid is not
+    /// on.
+    fn with_plan_course_on<T>(
+        &self,
+        line: &oag_ai::Line,
+        order: &[u32],
+        slot: usize,
+        start: Option<usize>,
+        f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
+    ) -> T {
+        let sample_at = |index: usize| {
+            (!order.is_empty())
+                .then(|| order[index % order.len()] as usize)
+                .and_then(|i| self.sim.spline.sample(i))
+        };
         let samples: Vec<Option<oag_physics::TrackSample>> = (0..line.len())
-            .map(|index| self.ai_sample(index).map(Spline::track_sample))
+            .map(|index| sample_at(index).map(Spline::track_sample))
             .collect();
         let ship = &self.sim.world.ships[slot];
         // The race's own rescue pose: the racing line at spawn height, the
         // whole physics state reset. See `Race::respawn`.
         let respawn = |index: usize| {
             let mut placed = *ship;
-            if let Some(sample) = self.ai_sample(index) {
+            if let Some(sample) = sample_at(index) {
                 let height = spawn_height(&placed.handling);
                 placed.place_at(Pose::from_sample(sample, sample.racing_line, height));
             }
@@ -107,10 +132,17 @@ impl Race {
             max_airborne: oag_race::recovery::AIRBORNE_RESET_SECONDS,
             pad: &pad,
         };
-        let craft = oag_ai::plan::Craft {
-            handling: ship.handling,
-            start: ship.physics,
-            start_index: ship.driver.index,
+        let craft = match start {
+            Some(index) => oag_ai::plan::Craft {
+                handling: ship.handling,
+                start: respawn(index),
+                start_index: u32::try_from(index).unwrap_or(0),
+            },
+            None => oag_ai::plan::Craft {
+                handling: ship.handling,
+                start: ship.physics,
+                start_index: ship.driver.index,
+            },
         };
         f(&course, &craft)
     }
@@ -131,8 +163,9 @@ impl Race {
         let (plan, report) = self.build_speed_plan(1);
         let clean = report.verify_failures == 0 && report.verify_respawns == 0;
         info!(
-            "ai speed plan: {} steps, {} unresolved, verification {} - {}",
+            "ai speed plan: {} steps, lap {:?} ticks, {} unresolved, verification {} - {}",
             report.steps,
+            report.verify_lap_ticks,
             report.unresolved.len(),
             if clean { "clean" } else { "not clean" },
             if clean {
@@ -142,6 +175,65 @@ impl Race {
             }
         );
         clean.then_some(plan)
+    }
+
+    /// One plan per route (`crate::routes`), built and verified the way the
+    /// ring's is, or `None` for a route that did not verify: not clean, with
+    /// any wall contact (stricter than the ring, which may keep a plan that
+    /// scrapes), **or clean without ever completing its verification lap** - a craft that
+    /// stalls without touching a wall is neither a failure nor a respawn, and
+    /// that is what `07_Track`'s centre ramp does to ours (2026-10-05). A route
+    /// with no plan is not offered to the coin at all - see
+    /// `Race::steer_branching`.
+    ///
+    /// **Started from the route line's own first sample rather than from the
+    /// grid**: the grid can sit in the stretch a route bypasses (`05_Track`'s
+    /// start is inside its fork), and a craft placed off its own line is a
+    /// rescue, not a lap. Line index 0 is the route's merge, so the craft runs
+    /// the whole shared stretch before it reaches the fork. Ours.
+    pub(super) fn route_speed_plans(&self) -> Vec<Option<oag_ai::SpeedPlan>> {
+        if self.sim.world.ship_count < 2 {
+            return vec![None; self.sim.routes.len()];
+        }
+        self.sim
+            .routes
+            .iter()
+            .enumerate()
+            .map(|(k, route)| {
+                let start = 0;
+                let (plan, report) = self.with_plan_course_on(
+                    &route.line,
+                    &route.order,
+                    1,
+                    Some(start),
+                    |c, craft| {
+                        oag_ai::SpeedPlan::build_within(
+                            c,
+                            craft,
+                            &oag_ai::Tuning::default(),
+                            ROUTE_PLAN_BUDGET,
+                        )
+                    },
+                );
+                let clean = report.verify_failures == 0
+                    && report.verify_respawns == 0
+                    && report.verify_contacts == 0
+                    && report.verify_lap_ticks.is_some();
+                info!(
+                    "ai speed plan, route {k}: {} steps, lap {:?} ticks, {} contact ticks, \
+                     verification {}",
+                    report.steps,
+                    report.verify_lap_ticks,
+                    report.verify_contacts,
+                    if clean {
+                        "clean, driven"
+                    } else {
+                        "did not lap clean, so no craft is sent down it"
+                    }
+                );
+                clean.then_some(plan)
+            })
+            .collect()
     }
 
     /// The plan the field is following, if any. Read-only, for a diagnostic

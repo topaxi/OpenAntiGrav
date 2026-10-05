@@ -736,7 +736,7 @@ impl Race {
                 self.sim.world.ships[slot]
                     .driver
                     .holds_fire(&oag_ai::Context {
-                        line: &self.sim.racing_line,
+                        line: self.line_of(slot),
                         tuning: &self.sim.ai_tuning,
                         pilot: &self.sim.ai_pilots[slot],
                         field: &field,

@@ -151,7 +151,10 @@ impl Race {
             .sim
             .racing_line
             .nearest(position, 0, self.sim.racing_line.len());
-        self.sim.world.ships[0].driver.index = u32::try_from(index).unwrap_or(0);
+        let driver = &mut self.sim.world.ships[0].driver;
+        driver.index = u32::try_from(index).unwrap_or(0);
+        // Located on the ring, so it is on the ring. See `oag_ai::branch::Branching::on_ring`.
+        driver.branching = driver.branching.on_ring();
     }
 
     /// Whether slot 0 is being flown for the player this tick, by any of four
@@ -233,6 +236,7 @@ impl Race {
     /// [`RaceSim::ai_tuning`], when `--autopilot-skill` set it - see
     /// [`Self::set_autopilot_tuning`] for why the two stay apart.
     pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
+        self.steer_branching(slot);
         let places = self.places();
         let field = self.field_for(slot, &places);
         let pilot = self.sim.ai_pilots[slot];
@@ -244,15 +248,20 @@ impl Race {
         // The player's own hull, the same way an opponent gets its own. See
         // `oag_ai::pace::hull_yaw_ceiling`.
         let yaw_ceiling = oag_ai::hull_yaw_ceiling(&ship.handling);
+        let route = ship.driver.branching.route;
         ship.driver.drive(
             &ship.physics,
             &oag_ai::Context {
-                line: &self.sim.racing_line,
+                line: super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
                 tuning: &tuning,
                 pilot: &pilot,
                 field: &field,
                 yaw_ceiling: Some(yaw_ceiling),
-                plan: self.sim.speed_plan.as_ref(),
+                plan: super::routes::plan_for(
+                    &self.sim.routes,
+                    self.sim.speed_plan.as_ref(),
+                    route,
+                ),
             },
         )
     }
@@ -362,7 +371,9 @@ impl Race {
             // `oag_physics::damage::CraftState` and `crate::eliminator`.
             let pilot = self.sim.ai_pilots[slot];
             let field = self.field_for(slot, &places);
+            self.steer_branching(slot);
             let ship = &mut self.sim.world.ships[slot];
+            let route = ship.driver.branching.route;
             let handling = ship.handling;
             let position = ship.physics.body.position;
             // Captured before `oag_physics::step`, because `damage::advance_state`
@@ -373,7 +384,11 @@ impl Race {
                 ship.driver.drive(
                     &ship.physics,
                     &oag_ai::Context {
-                        line: &self.sim.racing_line,
+                        line: super::routes::line_for(
+                            &self.sim.routes,
+                            &self.sim.racing_line,
+                            route,
+                        ),
                         tuning: &self.sim.ai_tuning,
                         pilot: &pilot,
                         field: &field,
@@ -384,7 +399,11 @@ impl Race {
                         // global belief was wrong for all of them. See
                         // `oag_ai::hull_yaw_ceiling`.
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
-                        plan: self.sim.speed_plan.as_ref(),
+                        plan: super::routes::plan_for(
+                            &self.sim.routes,
+                            self.sim.speed_plan.as_ref(),
+                            route,
+                        ),
                     },
                 )
             } else {
@@ -415,9 +434,9 @@ impl Race {
             // The driver just located itself, and the line is index-parallel to
             // `ai_order`, so this costs a lookup rather than a search.
             let index = self.sim.world.ships[slot].driver.index as usize;
-            let track_sample = self.ai_sample(index).map(Spline::track_sample);
+            let track_sample = self.ai_sample_for(slot, index).map(Spline::track_sample);
             let track_sample_next = self
-                .ai_sample(index + 1)
+                .ai_sample_for(slot, index + 1)
                 .map(Spline::track_sample)
                 .or(track_sample);
             // The beam's one-shot throttle, consumed here exactly as slot

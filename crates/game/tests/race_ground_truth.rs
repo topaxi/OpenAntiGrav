@@ -1940,7 +1940,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         for slot in 1..race.ship_count() as usize {
             let ship = &race.sim.world.ships[slot];
             let sample = race
-                .ai_sample(ship.driver.index as usize)
+                .ai_sample_for(slot, ship.driver.index as usize)
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
             let line = Vec3::from_array(sample.pos)

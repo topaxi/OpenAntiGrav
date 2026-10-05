@@ -386,10 +386,18 @@ impl Race {
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase_params);
 
         let weapon_pad_line = super::field::pad_seek_positions(&line, &weapon_pads);
+        let routes = super::routes::route_lines(
+            &spline,
+            course.as_ref(),
+            &order,
+            &collision,
+            handling.antigrav.ride_height,
+        );
         let mut race = Self {
             sim: RaceSim {
                 racing_line: line,
                 ai_order: order,
+                routes,
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
@@ -616,6 +624,14 @@ impl Race {
         // countdown; granting it at tick 0 put a HUD icon on screen during
         // those 272 ticks that the disc never draws.
         race.sim.speed_plan = race.field_speed_plan();
+        for (route, plan) in race
+            .route_speed_plans()
+            .into_iter()
+            .enumerate()
+            .collect::<Vec<_>>()
+        {
+            race.sim.routes[route].plan = plan;
+        }
         race
     }
 }

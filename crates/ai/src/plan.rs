@@ -536,6 +536,18 @@ impl SpeedPlan {
         craft: &Craft,
         tuning: &Tuning,
     ) -> (Self, Report) {
+        Self::build_within(course, craft, tuning, STEP_BUDGET)
+    }
+
+    /// [`Self::build`] with its own step budget, for a caller that would
+    /// rather give up early - a fork's route that cannot be lapped.
+    #[must_use]
+    pub fn build_within<R: Raycaster + ?Sized>(
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        budget: u64,
+    ) -> (Self, Report) {
         let mut plan = Self::unlimited(course.line);
         let mut report = Report::default();
         if plan.len() < 3 {
@@ -549,9 +561,9 @@ impl SpeedPlan {
 
         for _ in 0..MAX_PASSES {
             report.passes += 1;
-            plan.learn(course, craft, tuning, yaw, &mut report);
+            plan.learn(course, craft, tuning, yaw, &mut report, budget);
             let verify = plan.verify(course, craft, tuning, yaw, &mut report);
-            if verify == 0 || report.steps >= STEP_BUDGET {
+            if verify == 0 || report.steps >= budget {
                 break;
             }
         }
@@ -674,6 +686,7 @@ impl SpeedPlan {
         tuning: &Tuning,
         yaw: f32,
         report: &mut Report,
+        budget: u64,
     ) {
         let n = self.len();
         let goal = 2 * n as i64;
@@ -686,7 +699,7 @@ impl SpeedPlan {
         // gave up on is driven through rather than retried forever.
         let mut forgive_until = i64::MIN;
 
-        while run.progress < goal && report.steps < STEP_BUDGET {
+        while run.progress < goal && report.steps < budget {
             // Read inside the tick, after the driver has located itself, exactly
             // as `verify` does - and kept, so the trace knows what was asked.
             let asked = std::cell::Cell::new((1.0, 0.0));
