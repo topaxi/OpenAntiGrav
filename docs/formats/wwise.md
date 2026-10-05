@@ -136,7 +136,8 @@ about 30 of 46 each. The empty stub banks (`shipHD`, `weapons`, `speech_*`) are
 the likeliest home for what is missing. Nothing here guesses at them:
 `Library::resolve_event` reports the target ids and plays nothing for them.
 Of the 3,706 `data00` events, 2,369 resolve to no media - stop and state
-actions, music segments (their child lists are unread), and those dangling
+actions, music events (read in the Music section, below, but not followed by
+`resolve_event`, which reports them in `EventPlan::unread`), and those dangling
 targets - which is why "events reaching media" is a count and not a defect.
 
 **Prefetch.** A streamed source may have its first bytes in `DIDX`: 164
@@ -256,42 +257,117 @@ between 200 and 1,000: a low bed, not an effect - which "first qualifying event"
 gives, and is *chosen, not measured* as the cue to play. Nothing was played on
 any device.
 
-## Music: a `Music_Track` state per artist
+## Music: a `Music_Track` state per song
 
-Read 2026-10-05 off `data08`'s `Music.bnk` (21,658,812 bytes) and the patch's
-`data/plugins/music/Definition.xml` (`data09`), by the lead, with a scratch
-probe (`data/scratch/omega-music/hirc.py`, `states.py`; not committed). Nothing
-is wired yet.
+Read 2026-10-05 off `data08`'s `Music.bnk` (21,658,812 bytes), the patch's
+`data/plugins/music/Definition.xml` (`data09`) and `data/audio/sound/Music.txt`,
+in `oag_formats::wwise::music` and `oag_game::music::omega`. Ground truth:
+`crates/formats/tests/wwise_music_ground_truth.rs` and
+`crates/game/tests/omega_music_ground_truth.rs`. Omega races play it.
 
-* **The playlist is plugin XML.** `Definition.xml` holds 29 `PI_Music`
-  entries: `name` is the song title, `<Values location="00">` to `"28"`,
-  `Artist`, an empty `Label` and `PlaylistId` 1 or 2. `Definition_demo.xml`
-  holds 28.
-* **`Music.bnk`'s objects**: 62 actions, 33 events, 169 music segments, 993
-  music tracks, 10 music switches and 63 music random/sequence containers;
-  nothing else.
-* **The switch group is `Music_Track`** (confidence 85): `fnv1("music_track")`
-  is the group id of 57 actions and appears in 4 of the 10 music switches.
-  `fnv1("race")` appears in one music switch.
-* **Its states are the artist names, with spaces removed** (confidence 88): 28
-  SetState actions (kind `0x1204`, group at body `+9`, state at `+13`) set
-  `Music_Track` to 28 distinct values. 25 of them are FNV-1 hashes of an
-  artist from `Definition.xml` with spaces removed, or of its first credited
-  name when the artist is a collaboration (`BoysNoize`, `TheChemicalBrothers`,
-  `BlackSunEmpire`, `DJKentaro`, `SwedishHouseMafia`, ...). Three hashes
-  (`404193461`, `3252658421`, `4067886831`) match no spelling tried; Code
-  Manta, Burufunk and Noisia are the unmatched artists. Code Manta is
-  `location="00"`, and 29 entries against 28 states suggests one entry with no
-  state of its own. Unverified.
-* **Music track media are ATRAC9 streams** (confidence 90): all 993 tracks
-  carry one source with plugin `0x000C0001`. 990 are streamed (type 1) with a
-  prefetch head in the bank's `DIDX` and 3 are embedded. 168 distinct media
-  ids, 165 of them loose `<id>.wem` in the archives. Of those 165, **154 are
-  stereo and 11 are 8-channel** (48 kHz), so most of the soundtrack decodes
-  with what `oag_formats::wwise::wem` already does.
-* **Not read**: the music switch's association tree (state to child), segment
-  child lists and playlist containers, so the chain from a state to its
-  segment's tracks is inferred, not walked. `PlaylistId` 1 vs 2 is unread.
+* **`Music.txt` is Wwise's own soundbank listing and it names things.** It is
+  shipped beside the bank (138 KB, text) and lists the 33 events, the three
+  state groups (`Music_Track`, `Game_FLOW`, `Gameplay_FLOW`), 29 + 6 + 5 states
+  and the authoring name of every stream (for example
+  `<artist> - <title>__174bpm__DRUMS Front`). Every id in the bank is
+  `name_hash(name)`: FNV-1 (32-bit) over the lower-cased name, checked on all
+  of them (confidence 98). This replaces the first read's "25 of 28 states
+  named by artist spelling": all 28 are named, and the three that did not
+  match are a spelling (`Nosia`), a collaboration (`CarbonCommunity`) and a
+  remix (`AddiktionRemix`).
+* **The playlist is plugin XML and the event number is the location.**
+  `Definition.xml` has 29 `PI_Music` entries (`location` `00` to `28`, an
+  `Artist`, `PlaylistId` 1 or 2). The bank has `Set_Music_Track_N__frontend`
+  for N = 1 to 28, each a pair of `SetState` actions (kind `0x1204`, group at
+  body +9, state at +13): `Music_Track` to that song's state, and a second
+  state in group id 1000. N is the entry's `location` (checked against the
+  artist on every entry that matches by name; confidence 95). **Location 00 has
+  no event** (`__Set_Music_Track_28__frontend` is a commented-out duplicate with
+  no `Music_Track` action): that entry is unplayable in the original too, as far
+  as this bank says.
+* **The walk** (all 28 songs, confidence 92): `Play_External_Music` plays the
+  root music switch. Its tree is keyed on `Game_FLOW`; the `Gameplay` branch
+  goes to a switch on `Gameplay_FLOW` (`Race`, `PostRace`), then to one on a
+  group that is in no bank read here, whose default key (`None`) goes to the
+  switch on `Music_Track`, whose leaf per state is a music random/sequence
+  container. Its playlist is a root and one item that plays one **segment**; the
+  segment's children are the song's **tracks**. `Menus` and `Loading` go to a
+  different container: the front end's own loop (three stereo stems, 279.9 s,
+  embedded in `Music.bnk`'s `DATA`).
+* **A song is its segment's tracks played together** (confidence 90). Every
+  track is type 0, has one source and one clip starting at the segment start;
+  the clips end on the segment's length to the millisecond on all 28 songs.
+  Seventeen songs are 7 to 11 stereo stems (154 files), eleven are one
+  eight-channel file. Each stem peaks at 0.3-83% of full scale and the unity sums at 8-100% (three
+  reach full scale and are scaled down), so they are **parts of a mix, not
+  alternatives** (confidence 85). Each stem has one unread property, id 13,
+  ranging -100 to 100, which looks like a position (the authoring names say
+  `Front`, `Spread`, `SUB`); **how it folds to stereo is not read**, so the
+  mix is a unity sum - **chosen, not measured**.
+* **Clip timing** (fitted, exact on 28 of 28): a source sample `t` plays at song
+  time `play_at + t`, from `max(begin_trim, 0)` to `source_duration +
+  end_trim`; all in milliseconds, `end_trim` is 0 or negative. Many songs
+  trim their ends (307.5 s of a 453.75 s source) and one starts mid file.
+
+### Layouts
+
+Music nodes are `u8 flags, base parameters, u32 n + n child ids, meter, stingers`
+(read forward; confidence 94: 242 of 242 nodes in `data08`, 234 of 234 in
+`data00` read to their last byte and every child resolves).
+
+```text
+flags(u8)  fx: u8 override, u8 n, [u8 bypass, n*7]   attach u8   bus u32   parent u32
+           u8, bundle(4), bundle(8)                  4 bytes: c0 00 00 01 (c3 once)
+           state chunk: u32 props (0 on all), u32 groups { u32 id, u8, u16 n, n*(u32,u32) }
+           u16 rtpc (0 on all)
+children   u32 n, n ids
+meter      f64, f64, f32 tempo, u8 num, u8 denom, u8      stingers u32 (0 on all)
+segment    f64 duration (ms), u32 markers { u32 id, f64 position, u32 len, name }
+switch     u32 rules, rules, u8 continue, u32 depth, depth*u32 group, depth*u8 type,
+           u32 tree bytes, u8 mode, tree nodes {u32 key, u32 target | idx u16 + count u16,
+           u16 weight, u16 probability} (breadth first; leaves at level depth)
+ranseq     u32 rules, rules, u32 items, items {u32 segment, u32 id, u32 children, i32 type,
+           i16 loop, i16 min, i16 max, u32 weight, u16 avoid, u8 use weight, u8 shuffle}
+rule       u32 n + ids, u32 m + ids, 21 bytes source, 24 bytes destination, u8 flag
+           [flag 1: 30 bytes of transition object]
+track      u8, u32 n sources (14 each), u32 clips { u32 track, u32 source,
+           f64 play at, f64 begin trim, f64 end trim, f64 source duration }, ...
+           base parameters (unread), u8 type (byte 5 from the end), i32 look-ahead
+```
+
+Refused by name rather than skipped: non-zero state properties, non-zero RTPC
+lists, stingers, a rule flag other than 0 or 1, a tree or playlist whose sizes
+disagree. None occurs in `data00` or `data08`. The rule's seven inner fields are
+**counted, not named** (they decide transitions, nothing about which song
+plays). A track's own base parameters are unread; its type is fitted off the tail.
+
+### Census (`data00` / `data05` / `data08`)
+
+| | data00 | data05 | data08 |
+| --- | ---: | ---: | ---: |
+| segments | 163 | 0 | 169 |
+| switches | 10 | 0 | 10 |
+| random/sequence containers | 61 | 0 | 63 |
+| tracks (all type 0, one clip per source) | 927 | 0 | 993 |
+| segment children that resolve | 927 of 927 | - | 993 of 993 |
+| switch leaves resolving / `0` / missing | 80 / 1 / 0 | - | 82 / 1 / 0 |
+| playlist segments resolving | 1,228 of 1,228 | - | 1,295 of 1,295 |
+
+Counts come from the ground-truth tests, over every bank of each archive.
+
+### What is not read
+
+* **Three `Music_Track` switches.** The root's third group has keys `0` and
+  `None` (all 28 states), `3493105359` (9 states) and `4072605221` (19
+  states). The 9 + 19 are the union's two halves; whether they are
+  `PlaylistId` 1 and 2 is **unchecked**, so it stays open. The race walk uses
+  the `None` branch.
+* **Front-end flow.** `Menus` is read to play the loop; which of `Menus` and
+  `Loading` the original is in at which moment was not watched.
+* **Eight-channel streams.** 11 songs; `atrac9dec` refuses them.
+* **The property id 13** on tracks, and the track's other base parameters.
+* **Looping.** Whether the ranseq's `loop 1` or the segment loops the song was
+  not read; the engine plays each track once and advances the playlist.
 
 ## What is not done
 
@@ -301,13 +377,14 @@ is wired yet.
   test candidate names against (FNV-1 over the lower-case name is what a bank id
   is; the same for events is not verified).
 * **Multi-channel ATRAC9**, above.
-* **The unread parts of `HIRC`**: the rest of node base parameters, container
-  playlists, music segments/switches/sequences (so an event that plays one is
-  reported in `EventPlan::unread`), `Init.bnk`'s bus and state definitions.
+* **The unread parts of `HIRC`**: the rest of node base parameters, sound
+  containers' playlists, `Init.bnk`'s bus and state definitions. Music
+  objects are read (above); `EventPlan::unread` still lists the events that
+  play one, and `Library::walk_music` is how they are followed.
 * **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
 * **The 1,450 dangling Play targets.**
-* **Race audio on this title** is not wired: the simulation's cues go through
-  `oag_game::audio::sfx`, which reads `SBlk` banks by name.
+* **Race sound effects on this title** are not wired: the simulation's cues go
+  through `oag_game::audio::sfx`, which reads `SBlk` banks by name. (Music is.)
 
 ## Confidence
 

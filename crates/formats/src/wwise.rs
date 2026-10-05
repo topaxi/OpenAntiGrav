@@ -81,26 +81,38 @@
 //! the `HIRC` framing, events, `Play` actions, sounds, music tracks' source
 //! lists and the **parent id** at the head of each node's base parameters.
 //! **Not read:** the rest of the base parameters (positioning, auxiliary
-//! sends, state chunks, RTPCs - the parent id is the only thing this crate
-//! needs from them), a container's own playlist, and music segments,
-//! switches and sequences, so an event that plays one is reported as
-//! unresolved rather than guessed at. `STID` (bank names) is absent from every
+//! sends, RTPCs - the parent id is the only thing this crate needs from
+//! them for sounds) and a sound container's own playlist. **Music is read**
+//! in [`music`]: segments, switches, random/sequence containers and a track's
+//! clips, field by field, refusing by name what was not measured. `STID` (bank names) is absent from every
 //! bank here. Evidence and counts: `docs/formats/wwise.md`.
 
 use std::ops::Range;
 
 pub mod hirc;
 mod library;
+pub mod music;
 #[cfg(test)]
 mod tests;
 pub mod wem;
 
 pub use hirc::{Kind, Object};
-pub use library::{EventPlan, Library, MediaRef};
+pub use library::{EventPlan, Library, MediaRef, SegmentChain, SongChain, TrackChain, WalkError};
 
 /// The bank generator version every bank here carries, and the only one the
 /// layouts in this module were measured against.
 pub const BANK_VERSION: u32 = 118;
+
+/// Wwise's name hash: FNV-1 (32-bit) over the lower-cased name. It is the id of
+/// an event, a state group, a state or a switch, and the banks carry only the
+/// result; checked against every name `Music.txt` lists (events, state groups
+/// and states).
+#[must_use]
+pub fn name_hash(name: &str) -> u32 {
+    name.bytes().fold(2_166_136_261u32, |hash, byte| {
+        hash.wrapping_mul(16_777_619) ^ u32::from(byte.to_ascii_lowercase())
+    })
+}
 
 /// Bytes of a chunk header: a tag and a size.
 const CHUNK_HEADER: usize = 8;

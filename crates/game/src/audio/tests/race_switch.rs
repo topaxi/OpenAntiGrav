@@ -20,6 +20,7 @@ fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     let menu_voice = audio.music.expect("the fixture starts the menu playing");
@@ -53,6 +54,7 @@ fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -90,6 +92,7 @@ fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -119,6 +122,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     let psp_track = silence(180.0, 2, 44_100);
@@ -181,6 +185,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         ps2: None,
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     let menu_sound = silence(28.0, 2, 44_100);

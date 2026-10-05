@@ -124,11 +124,12 @@ pub const TITLE: &Title = &Title {
 /// the disc and every expansion hits, but nothing has been watched running
 /// under an emulator. See `docs/formats/pure-status.md`.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
-    front_end: names::FRONT_END_MUSIC,
+    front_end: Some(names::FRONT_END_MUSIC),
     tracks: Some(oag_title::DeclaredTracks {
         declared_in: names::GAME_PLUGIN_DEFINITION,
         file: names::MUSIC_TRACK_FILE,
     }),
+    state_tracks: None,
 };
 
 /// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a

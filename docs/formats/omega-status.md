@@ -988,7 +988,18 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
 - **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
   0.82]` over an ambient of `1.0`) is not checked against PS4's schema. The
   patch's copy carries no HDR/bloom block, so the read bloom chain is off.
-- **Sound is read, not played** (`omega-pvs-sound`, 2026-09-30). The banks are
+- **Music plays** (`omega-music`, 2026-10-05): a race plays 17 of the 29
+  `PI_Music` songs, the front end plays its own loop. A song is a Wwise
+  `Music_Track` state: `Set_Music_Track_<location>__frontend` sets it, the
+  music switch walks to one segment, and the song is that segment's 7 to 11
+  stereo stems summed (unity, scaled down when it would clip - chosen, not
+  measured). **Not played, by name:** location 0 (no event in the bank) and
+  eleven songs that are one eight-channel file (`atrac9dec` refuses them). A
+  headless `--race` WAV is the first song, `Shake It (WipEout Omega
+  Instrumental Edit)`, at the music bus's 0.44 gain (correlation 0.9999999 with
+  the offline mix). The front end's loop is `Game_FLOW` `Menus`, **not
+  watched in a running original**. See [`wwise.md`](wwise.md#music-a-music_track-state-per-song).
+- **Sound effects are read, not played** (`omega-pvs-sound`, 2026-09-30). The banks are
   **Audiokinetic Wwise**, bank generator version 118, not the PSP's `SBlk`, so
   `sfx: <name> not loaded: unsupported bank version 1145588546` is still what a
   race prints: nothing wires Wwise events to this project's cues.

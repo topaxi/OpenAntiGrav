@@ -90,10 +90,10 @@ pub const TITLE: &Title = &Title {
     // states: a race needs a roster before it needs a circuit list.
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
-    // Neither read this lane - loading-screen and music plugin XML were not
-    // opened. `None` is a gap, not a measurement, on Pure's own terms.
+    // Not read: the loading-screen plugin XML was not opened. `None` is a gap,
+    // not a measurement, on Pure's own terms.
     loading: None,
-    music: None,
+    music: Some(MUSIC),
     cursor: include_str!("../../../assets/cursors/omega.svg"),
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
@@ -111,16 +111,44 @@ pub const TITLE: &Title = &Title {
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
 };
 
+/// Omega's music: no standalone files, a playlist in plugin XML and the audio
+/// picked by Wwise state.
+///
+/// Every name below is hashed by `oag_formats::wwise::name_hash` and matches
+/// an id in `Music.bnk` (checked against the bank's own `Music.txt` listing,
+/// which names the events, state groups and states). **Race flow, measured in
+/// the bank:** `Game_FLOW` `Gameplay` then `Gameplay_FLOW` `Race` select the
+/// music switch's race branch. **Front end, the same way:** `Game_FLOW`
+/// `Menus` selects the front end's own loop. Which of these the original sets
+/// at which moment was not watched; the states' own names are the evidence.
+pub const MUSIC: &oag_title::Music = &oag_title::Music {
+    front_end: None,
+    tracks: None,
+    state_tracks: Some(oag_title::StateTracks {
+        declared_in: names::MUSIC_PLUGIN_DEFINITION,
+        bank: names::MUSIC_BANK,
+        media_dir: names::MEDIA_DIR,
+        track_group: "Music_Track",
+        set_track_event: "Set_Music_Track_{}__frontend",
+        play_event: "Play_External_Music",
+        none_state: "None",
+        race_flow: &[("Game_FLOW", "Gameplay"), ("Gameplay_FLOW", "Race")],
+        front_end_flow: &[("Game_FLOW", "Menus")],
+    }),
+};
+
 /// Paths inside the packages.
 pub mod names {
+    /// The music bank, inside the patch's `data08.psarc`.
+    pub const MUSIC_BANK: &str = "data/audio/sound/Music.bnk";
+    /// Where the loose `<media id>.wem` streams are.
+    pub const MEDIA_DIR: &str = "data/audio/sound/";
     /// The teams plugin - see [`crate::TITLE::plugin_definition`]'s own doc
     /// for why this title splits into three where HD ships one.
     pub const TEAM_PLUGIN_DEFINITION: &str = r"Data\Plugins\teams\Definition.xml";
     /// The circuits plugin - [`crate::TITLE::track_plugin_definition`].
     pub const TRACK_PLUGIN_DEFINITION: &str = r"Data\Plugins\tracks\Definition.xml";
-    /// The soundtrack plugin. No [`oag_title::Title`] axis names this one
-    /// yet (see `oag_2048::names::MUSIC_PLUGIN_DEFINITION` for the same
-    /// gap there), so it is recorded here and unread.
+    /// The soundtrack plugin, [`oag_title::StateTracks::declared_in`].
     pub const MUSIC_PLUGIN_DEFINITION: &str = r"Data\Plugins\music\Definition.xml";
 }
 

@@ -177,7 +177,9 @@ fn every_listed_track_has_a_plausible_length() {
 #[ignore = "needs a disc image in data/images/"]
 fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
     let Some(image) = image() else { return };
-    let name = oag_hd::MUSIC.front_end;
+    let name = oag_hd::MUSIC
+        .front_end
+        .expect("HD names its front-end music");
     let tracks = oag_hd::MUSIC.tracks.expect("HD declares its soundtrack");
     let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
     assert!(archives.locate(name).is_some(), "{name} is absent");
@@ -219,7 +221,7 @@ fn the_front_ends_music_loads_through_the_engines_own_path() {
         .expect("loading the front end's music")
         .expect("HD names one");
 
-    assert_eq!(name, oag_hd::MUSIC.front_end);
+    assert_eq!(Some(name.as_str()), oag_hd::MUSIC.front_end);
     assert!(
         (sound.seconds() - 170.7).abs() < 1.0,
         "the base stereo cut is {} s",

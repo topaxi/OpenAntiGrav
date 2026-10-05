@@ -42,6 +42,8 @@
 
 use std::path::Path;
 
+pub mod omega;
+
 use anyhow::{Context, Result, bail};
 use oag_assets::Archives;
 use oag_audio::Sound;
@@ -115,7 +117,7 @@ fn open_archived(source: &str) -> Option<(&'static Title, Archives)> {
     let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
     matches!(
         opened.archives.layout.platform,
-        Platform::Psp | Platform::Ps3 | Platform::Vita
+        Platform::Psp | Platform::Ps3 | Platform::Vita | Platform::Ps4
     )
     .then_some((opened.title, opened.archives))
 }
@@ -135,6 +137,18 @@ pub fn listing(source: &str) -> Result<Option<Vec<Entry>>> {
     let Some((title, mut archives)) = open_archived(source) else {
         return Ok(None);
     };
+    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
+        let plan = omega::plan(&mut archives, &state_tracks, true)?;
+        return Ok(Some(
+            plan.songs
+                .iter()
+                .map(|song| Entry {
+                    at: song.location,
+                    seconds: song.seconds,
+                })
+                .collect(),
+        ));
+    }
     match title.music.and_then(|music| music.tracks) {
         Some(tracks) => Ok(Some(self::declared(&mut archives, tracks))),
         None => Ok(Some(found(&mut archives)?)),
@@ -328,6 +342,19 @@ pub fn load_entry(source: &str, at: u32, cache_dir: &Path) -> Result<Sound> {
     let (title, mut archives) =
         open_archived(source).with_context(|| format!("opening {source} as a known title"))?;
 
+    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
+        let plan = omega::plan(&mut archives, &state_tracks, false)?;
+        let song = plan
+            .songs
+            .iter()
+            .find(|song| song.location == at)
+            .with_context(|| format!("no playable song at location {at}"))?;
+        let pcm = omega::mix(&mut archives, &state_tracks, song)
+            .with_context(|| format!("mixing {}", song.title))?;
+        return Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
+            .with_context(|| format!("location {at}"));
+    }
+
     let blob = match title.music.and_then(|music| music.tracks) {
         Some(tracks) => {
             let names = declared_names(&mut archives, tracks);
@@ -369,7 +396,19 @@ pub fn load_front_end(source: &str, cache_dir: &Path) -> Result<Option<(String, 
     let Some((title, mut archives)) = open_archived(source) else {
         return Ok(None);
     };
-    let Some(name) = title.music.map(|music| music.front_end) else {
+    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks)
+        && title.music.is_some_and(|music| music.front_end.is_none())
+    {
+        let Some(song) = omega::front_end(&mut archives, &state_tracks)? else {
+            return Ok(None);
+        };
+        let name = song.title.clone();
+        let pcm = omega::mix(&mut archives, &state_tracks, &song)
+            .with_context(|| format!("mixing the front end's {name}"))?;
+        let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name.clone())?;
+        return Ok(Some((name, sound)));
+    }
+    let Some(name) = title.music.and_then(|music| music.front_end) else {
         return Ok(None);
     };
     if archives.locate(name).is_none() {
