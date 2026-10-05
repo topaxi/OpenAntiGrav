@@ -741,16 +741,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     if trail_shape.is_some() {
-        // Vita textures are `.gxt`: the same ribbon and flare code reads 2048,
-        // whose own executable was not measured for any of the laws below.
-        if matches!(craft_title.flare, oag_title::flare::Flare::PerTeam(a) if a.sprite.ends_with(".gxt"))
-        {
-            report.push(
-                "2048 reads its ribbon, flare and boost reveal on HD's laws: inherited, \
-                 not measured on 2048 (only the asset names and the node groups are)"
-                    .into(),
-            );
-        }
         report.push(
             "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
              three-fin tube in the craft's frame, half-width 0.5, white-to-red vertex ramp, \

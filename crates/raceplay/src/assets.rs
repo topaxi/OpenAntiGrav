@@ -225,6 +225,19 @@ pub(super) fn trail_texture(
         oag_title::exhaust::Exhaust::Authored(model) => match authored_ribbon(archives, model) {
             Ok((texture, blend, shape, notes)) => {
                 report.extend(notes);
+                // Vita textures are `.gxt`: the same ribbon, flare and boost
+                // code reads 2048, whose own executable was not measured for
+                // any of the laws `load` reports under the ribbon.
+                if let oag_title::flare::Flare::PerTeam(a) = title.flare
+                    && a.sprite.ends_with(".gxt")
+                {
+                    report.push(
+                        "2048 reads its ribbon, flare and boost reveal on HD's laws: \
+                         inherited, not measured on 2048 (only the asset names and the \
+                         node groups are)"
+                            .into(),
+                    );
+                }
                 (Some(texture), Some(blend), shape)
             }
             Err(why) => {
