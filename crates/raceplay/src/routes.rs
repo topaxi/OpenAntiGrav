@@ -113,7 +113,12 @@ pub(super) fn route_lines(
             );
             continue;
         }
-        let line = racing_line(spline, &order, collision, reach);
+        let line = narrow_the_mouth(
+            racing_line(spline, &order, collision, reach),
+            kept,
+            route,
+            course,
+        );
         out.push(RouteLine {
             line,
             order,
@@ -143,6 +148,68 @@ pub(super) fn plan_for<'a>(
         None => ring,
         Some(k) => routes.get(usize::from(k)).and_then(|r| r.plan.as_ref()),
     }
+}
+
+/// How close to the ring, in units, a route sample still counts as the shared
+/// mouth of its fork. Ours, from the survey: every route on both titles stays
+/// within this of the ring for its first 58-307 samples
+/// (`cargo run -p oag-game --example fork_survey`).
+const MOUTH: f32 = 8.0;
+
+/// How far either side of the racing line a route's corridor reaches across
+/// the shared mouth. Ours.
+const MOUTH_CORRIDOR: f32 = 1.0;
+
+/// A route line whose corridor is pinned close to its racing line while the
+/// route still shares tarmac with the ring.
+///
+/// **Chosen, not measured.** An alternate path's authored corridor covers the
+/// whole road at its fork, and until the two roads separate that includes the
+/// ring's side: on `05_Track` a Novice holding the far side of the route's
+/// corridor rode the ring's take-off ramp at route sample 112, flew a second,
+/// and met the divider at 161, every lap (`fork_trace`, 2026-10-05), and an
+/// Ace field lost two craft there. Past the mouth the corridor is the
+/// author's again.
+fn narrow_the_mouth(
+    line: oag_ai::Line,
+    kept: usize,
+    route: &oag_race::course::Route,
+    course: &Course,
+) -> oag_ai::Line {
+    let near_ring = |p: Vec3| {
+        (0..course.len())
+            .filter_map(|i| course.position(i))
+            .any(|c| (c - p).length() <= MOUTH)
+    };
+    let mouth = route
+        .positions
+        .iter()
+        .position(|p| !near_ring(*p))
+        .unwrap_or(0);
+    if mouth == 0 || !line.has_corridor() {
+        return line;
+    }
+    let points: Vec<Vec3> = (0..line.len()).map(|i| line.point(i)).collect();
+    let corridor: Vec<oag_ai::Frame> = (0..line.len())
+        .map(|i| {
+            let frame = line.corridor_at(i).unwrap_or(oag_ai::Frame {
+                lateral: Vec3::X,
+                left: 0.0,
+                right: 0.0,
+            });
+            if (kept..kept + mouth).contains(&i) {
+                oag_ai::Frame {
+                    left: frame.left.max(-MOUTH_CORRIDOR),
+                    right: frame.right.min(MOUTH_CORRIDOR),
+                    ..frame
+                }
+            } else {
+                frame
+            }
+        })
+        .collect();
+    let unsupported: Vec<bool> = (0..line.len()).map(|i| line.is_unsupported(i)).collect();
+    oag_ai::Line::with_corridor(points, corridor).with_unsupported(unsupported)
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.

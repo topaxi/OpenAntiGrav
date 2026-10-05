@@ -12,6 +12,12 @@ use log::info;
 
 use super::*;
 
+/// The step budget a route's plan gets, against the ring's 120,000. **Chosen,
+/// not measured**: Pulse's routes that lap clean build in 8,000-13,000 steps,
+/// and `07_Track`'s centre ramp, which never laps, spent 145,728 on every load
+/// before this.
+const ROUTE_PLAN_BUDGET: u64 = 40_000;
+
 impl Race {
     /// Builds the speed plan for the craft in `slot`, driven from its own grid
     /// pose with its own handling.
@@ -200,7 +206,14 @@ impl Race {
                     &route.order,
                     1,
                     Some(start),
-                    |c, craft| oag_ai::SpeedPlan::build(c, craft, &oag_ai::Tuning::default()),
+                    |c, craft| {
+                        oag_ai::SpeedPlan::build_within(
+                            c,
+                            craft,
+                            &oag_ai::Tuning::default(),
+                            ROUTE_PLAN_BUDGET,
+                        )
+                    },
                 );
                 let clean = report.verify_failures == 0
                     && report.verify_respawns == 0

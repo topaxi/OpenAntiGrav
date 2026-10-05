@@ -143,6 +143,20 @@ fn main() {
                 );
             }
         }
+        for (k, r) in course.routes().iter().enumerate() {
+            let near = |p: oag_core::math::Vec3| {
+                (0..course.len())
+                    .filter_map(|i| course.position(i))
+                    .map(|c| (c - p).length())
+                    .fold(f32::INFINITY, f32::min)
+            };
+            let diverge = r.positions.iter().position(|p| near(*p) > 8.0);
+            println!(
+                "    route {k} paths {:?}: {} samples, first sample more than 8 units off the ring: {diverge:?}",
+                r.paths,
+                r.len()
+            );
+        }
         for (k, b) in course.branches().iter().enumerate() {
             let stray = b
                 .centres
