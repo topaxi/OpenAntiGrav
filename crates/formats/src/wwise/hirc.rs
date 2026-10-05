@@ -228,6 +228,34 @@ impl Action {
     }
 }
 
+/// What a `SetState` action sets: a state group to one of its states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetState {
+    pub group: u32,
+    pub state: u32,
+}
+
+impl SetState {
+    /// The `SetState` action type.
+    pub const KIND: u16 = 0x1204;
+
+    /// Reads a `SetState` body, exactly: `u16 kind, u32 target, u8 flags`,
+    /// the two property bundles, `u32 group, u32 state`. The target is `0` on
+    /// every one (a state is global).
+    #[must_use]
+    pub fn parse(body: &[u8]) -> Option<Self> {
+        let mut r = Reader::new(body, 0);
+        (r.u16()? == Self::KIND).then_some(())?;
+        r.u32()?;
+        r.u8()?;
+        r.bundle(4)?;
+        r.bundle(8)?;
+        let group = r.u32()?;
+        let state = r.u32()?;
+        r.done().then_some(Self { group, state })
+    }
+}
+
 /// How a source's media reaches the player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamType {

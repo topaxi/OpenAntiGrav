@@ -261,6 +261,8 @@ pub struct MusicDiscs {
     /// with nowhere for a Vita source to land even once it had music to
     /// offer.
     vita: Option<String>,
+    /// The booted title's PS4 source, if one was found. Omega has one release.
+    ps4: Option<String>,
     /// Which release the game booted from, when it is one of the four.
     booted: Option<Platform>,
 }
@@ -309,7 +311,13 @@ impl MusicDiscs {
             // Omega's music is still unlocated (`oag_omega::TITLE` carries
             // `music: None`), so there is not even a soundtrack to pair, and
             // there is no second release of it to pair against either.
-            Platform::Ps4 | Platform::Unknown => return discs,
+            // **Omega: recorded and then done with**, on the same terms as the
+            // Vita - one release, nothing to pair against.
+            Platform::Ps4 => {
+                discs.ps4 = Some(booted.to_string());
+                return discs;
+            }
+            Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -349,13 +357,14 @@ impl MusicDiscs {
     /// One line for a load report: what was found, and where.
     #[must_use]
     pub fn describe(&self) -> String {
-        match (&self.psp, &self.ps2, &self.ps3, &self.vita) {
-            (Some(psp), Some(ps2), _, _) => format!("PSP {psp} and PS2 {ps2}"),
-            (Some(psp), None, _, _) => format!("PSP {psp} only"),
-            (None, Some(ps2), _, _) => format!("PS2 {ps2} only"),
-            (None, None, Some(ps3), _) => format!("PS3 {ps3} only"),
-            (None, None, None, Some(vita)) => format!("Vita {vita} only"),
-            (None, None, None, None) => "neither release".to_string(),
+        match (&self.psp, &self.ps2, &self.ps3, &self.vita, &self.ps4) {
+            (Some(psp), Some(ps2), ..) => format!("PSP {psp} and PS2 {ps2}"),
+            (Some(psp), None, ..) => format!("PSP {psp} only"),
+            (None, Some(ps2), ..) => format!("PS2 {ps2} only"),
+            (None, None, Some(ps3), ..) => format!("PS3 {ps3} only"),
+            (None, None, None, Some(vita), _) => format!("Vita {vita} only"),
+            (None, None, None, None, Some(ps4)) => format!("PS4 {ps4} only"),
+            (None, None, None, None, None) => "neither release".to_string(),
         }
     }
 
@@ -375,7 +384,8 @@ impl MusicDiscs {
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
             Platform::Ps3 => self.ps3.as_deref().map(|at| (at, Platform::Ps3)),
             Platform::Vita => self.vita.as_deref().map(|at| (at, Platform::Vita)),
-            Platform::Ps4 | Platform::Unknown => None,
+            Platform::Ps4 => self.ps4.as_deref().map(|at| (at, Platform::Ps4)),
+            Platform::Unknown => None,
         })
     }
 }
@@ -1459,10 +1469,10 @@ impl Soundtrack {
     fn read(source: &str, platform: Platform) -> Result<Option<Self>> {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
-            Platform::Psp | Platform::Ps3 | Platform::Vita => archived_soundtrack(source)?,
-            // Omega's music is still unlocated (`oag_omega::TITLE` carries
-            // `music: None`), so there is nothing here to read yet.
-            Platform::Ps4 | Platform::Unknown => None,
+            Platform::Psp | Platform::Ps3 | Platform::Vita | Platform::Ps4 => {
+                archived_soundtrack(source)?
+            }
+            Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }

@@ -168,11 +168,12 @@ pub const TITLE: &Title = &Title {
 /// an order read out of the disc's XML, so a run of this build picking a cut is
 /// this build's behaviour rather than evidence about a PS3's.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
-    front_end: names::FRONT_END_MUSIC,
+    front_end: Some(names::FRONT_END_MUSIC),
     tracks: Some(oag_title::DeclaredTracks {
         declared_in: names::FRONT_END_PLUGIN_DEFINITION,
         file: names::MUSIC_TRACK_FILE,
     }),
+    state_tracks: None,
 };
 
 /// The seven archives a Wipeout HD / Fury disc ships, under `PS3_GAME/USRDIR/`.

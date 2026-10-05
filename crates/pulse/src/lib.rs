@@ -84,8 +84,9 @@ pub const TITLE: &Title = &Title {
 /// [`oag_title::Music::tracks`] is `None` here; its doc comment carries the
 /// whole of why.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
-    front_end: names::FRONT_END_MUSIC,
+    front_end: Some(names::FRONT_END_MUSIC),
     tracks: None,
+    state_tracks: None,
 };
 
 /// Pulse's front end: the layout its `Skin.xml` authors and the boot chain a

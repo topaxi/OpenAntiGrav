@@ -198,7 +198,9 @@ fn both_pressings_list_the_same_soundtrack() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
-    let name = oag_pure::MUSIC.front_end;
+    let name = oag_pure::MUSIC
+        .front_end
+        .expect("Pure names its front-end music");
     for (label, image) in pure_images() {
         let mut archives = oag_pure::open(&image.display().to_string()).expect("opening the disc");
         assert!(archives.locate(name).is_some(), "{label}: {name} is absent");

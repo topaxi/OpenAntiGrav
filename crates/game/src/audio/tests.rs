@@ -45,6 +45,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         ps2: None,
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     assert!(!psp_only.both(), "one disc is not a choice");
@@ -61,6 +62,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     assert!(both.both());
@@ -256,6 +258,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     // Three minutes of silence at each release's own rate. What is measured
@@ -356,6 +359,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
@@ -412,6 +416,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         ps2: None,
         ps3: None,
         vita: None,
+        ps4: None,
         booted: None,
     };
     let mut audio = Audio {
@@ -446,6 +451,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     audio.held.push((
@@ -473,6 +479,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     // The PSP front end's own music: 28 seconds, not three minutes, and

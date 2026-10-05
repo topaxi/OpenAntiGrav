@@ -127,11 +127,12 @@ pub const TITLE: &Title = &Title {
 /// constant's own doc for the evidence and for why it names a standalone
 /// file rather than a `frontend.bnk` cue.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
-    front_end: names::FRONT_END_MUSIC,
+    front_end: Some(names::FRONT_END_MUSIC),
     tracks: Some(oag_title::DeclaredTracks {
         declared_in: names::MUSIC_PLUGIN_DEFINITION,
         file: names::MUSIC_TRACK_FILE,
     }),
+    state_tracks: None,
 };
 
 /// Paths inside the packages.

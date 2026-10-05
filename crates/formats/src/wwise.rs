@@ -91,16 +91,28 @@ use std::ops::Range;
 
 pub mod hirc;
 mod library;
+pub mod music;
 #[cfg(test)]
 mod tests;
 pub mod wem;
 
 pub use hirc::{Kind, Object};
-pub use library::{EventPlan, Library, MediaRef};
+pub use library::{EventPlan, Library, MediaRef, SegmentChain, SongChain, TrackChain, WalkError};
 
 /// The bank generator version every bank here carries, and the only one the
 /// layouts in this module were measured against.
 pub const BANK_VERSION: u32 = 118;
+
+/// Wwise's name hash: FNV-1 (32-bit) over the lower-cased name. It is the id of
+/// an event, a state group, a state or a switch, and the banks carry only the
+/// result; checked against every name `Music.txt` lists (events, state groups
+/// and states).
+#[must_use]
+pub fn name_hash(name: &str) -> u32 {
+    name.bytes().fold(2_166_136_261u32, |hash, byte| {
+        hash.wrapping_mul(16_777_619) ^ u32::from(byte.to_ascii_lowercase())
+    })
+}
 
 /// Bytes of a chunk header: a tag and a size.
 const CHUNK_HEADER: usize = 8;

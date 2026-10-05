@@ -44,6 +44,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     let ps2_sound = silence(180.0, 2, 48_000);
@@ -103,6 +104,7 @@ fn a_race_source_switch_does_not_block_the_caller() {
         ps2: Some("ps2.chd".into()), // does not exist
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Psp),
     };
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -143,6 +145,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         ps2: Some("ps2.chd".into()),
         ps3: None,
         vita: None,
+        ps4: None,
         booted: Some(Platform::Ps2),
     };
     let ps2_sound = silence(180.0, 2, 48_000);

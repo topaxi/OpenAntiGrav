@@ -204,12 +204,14 @@ pub struct Title {
 /// is what ADR-0022 asks for before an axis becomes a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Music {
-    /// The front end's own looping track, by entry name in the bulk archive.
+    /// The front end's own looping track, by entry name in the bulk archive,
+    /// or `None` when this build has not recovered one (Omega: no front-end
+    /// music event or state is as clear in its bank as the race tracks').
     ///
     /// Not one of the soundtrack tracks on either title: it is short, it loops,
     /// and it is addressed by a name the executable spells out where a
     /// soundtrack track is addressed by [`Self::track_file`] or not at all.
-    pub front_end: &'static str,
+    pub front_end: Option<&'static str>,
     /// How the soundtrack tracks are addressed, for a title whose entries this
     /// build has recovered **by name**. See [`DeclaredTracks`].
     ///
@@ -221,6 +223,41 @@ pub struct Music {
     /// separate change with its own evidence to record. `oag_game::audio` finds
     /// Pulse's sixteen by what the entries *are* until then - see `HANDOVER.md`.
     pub tracks: Option<DeclaredTracks>,
+    /// A soundtrack addressed by a Wwise bank state rather than by file. See
+    /// [`StateTracks`]. Exclusive with [`Self::tracks`] in practice.
+    pub state_tracks: Option<StateTracks>,
+}
+
+/// A soundtrack whose playlist is plugin XML and whose audio is picked by
+/// setting Wwise states, the way Wipeout: Omega Collection plays one.
+///
+/// Each `PI_Music` entry's `location` is the `N` of an event
+/// ([`Self::set_track_event`]) that sets [`Self::track_group`] to that song's
+/// state; with the flow states of [`Self::race_flow`] also set, playing
+/// [`Self::play_event`] walks the bank's music switches down to the song.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StateTracks {
+    /// The plugin definition whose `PI_Music` nodes list the playlist.
+    pub declared_in: &'static str,
+    /// The bank whose `HIRC` holds the events, music switches, segments and
+    /// tracks.
+    pub bank: &'static str,
+    /// The directory the loose `<media id>.wem` streams are in.
+    pub media_dir: &'static str,
+    /// The state group whose states are the songs.
+    pub track_group: &'static str,
+    /// The event that sets one song's state, `{}` standing for the entry's
+    /// `location` number.
+    pub set_track_event: &'static str,
+    /// The event that plays the music tree.
+    pub play_event: &'static str,
+    /// The state every group not set stands at.
+    pub none_state: &'static str,
+    /// `(state group, state)` pairs set for a race.
+    pub race_flow: &'static [(&'static str, &'static str)],
+    /// `(state group, state)` pairs set for the menus, or empty when this
+    /// build has not read which plays the front end's music.
+    pub front_end_flow: &'static [(&'static str, &'static str)],
 }
 
 /// Where a title declares its soundtrack, and what a declaration points at.
