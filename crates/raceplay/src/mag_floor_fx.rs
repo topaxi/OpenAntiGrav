@@ -2,10 +2,10 @@
 //! `MagEffect2.vex`, shown under a craft while it is on a magstrip. See
 //! `docs/ghidra/functions/psp-pulse-usa/magfloor-fx.md`.
 //!
-//! **Recovered, confidence 88** (`MagFloorFx_Construct` `0x088590a8`,
+//! **Recovered, confidence 95** (`MagFloorFx_Construct` `0x088590a8`,
 //! `MagFloorFx_Update` `0x0885962c`, `MagFloorFx_Show`/`Hide`
-//! `0x088598ac`/`0x088598d8`; the PS2 build's three counterparts agree; not
-//! runtime-verified):
+//! `0x088598ac`/`0x088598d8`; the PS2 build's three counterparts agree; anchor
+//! and tint read live on the running original):
 //!
 //! - **Every craft has one.** `Craft_Construct` builds it unconditionally and
 //!   stores it at `craft+0x8bc`, so the player and every AI craft show it.
@@ -25,6 +25,10 @@
 //!   (`MagFloorFx_InitTint` `0x08859904` writes `1.0` four times), so the
 //!   authored vertex colours draw as they are.
 //!
+//! - **Both play their authored animation**: the lightning's and the halo's
+//!   texture scroll and the halo's spin, on the one animation clock (see
+//!   `Scene::write_mag_floor_fx`).
+//!
 //! **Chosen, not measured:** the track's down comes from the spline sample
 //! nearest the craft, where the original reads its located sample
 //! (`craft+0xb10`) - the same stand-in the simulation's own mag lock is fed
@@ -40,6 +44,12 @@ use oag_weapons::MAX_SHIPS;
 /// into the translation row's `y` by `MagFloorFx_Construct` and
 /// `MagFloorFx_Update` alike (PS2: `[0x0027e950]`, the same `0xc0200000`).
 pub(super) const OFFSET: Vec3 = Vec3::new(0.0, -2.5, 0.0);
+
+/// Set to `on` to draw every craft's effect whether or not it is over a
+/// magstrip - a way to compare the look against the original on a pose that
+/// has no strip. Read on the view side only (the simulation never sees it),
+/// and absent from a normal run.
+pub(super) const FORCE_ENV: &str = "OAG_MAGFX";
 
 /// Whether this tick's mag-floor probe hit, read back off the blend it drove.
 ///
@@ -109,10 +119,11 @@ impl Race {
     /// sample under it.
     #[must_use]
     pub(crate) fn mag_floor_fx_draws(&self) -> [Option<[Mat4; 2]>; MAX_SHIPS] {
+        let forced = std::env::var_os(FORCE_ENV).is_some_and(|v| v == "on");
         std::array::from_fn(|slot| {
             if slot >= usize::from(self.sim.world.ship_count)
                 || !self.ship_active(slot)
-                || !self.view.mag_floor_fx[slot].on
+                || !(forced || self.view.mag_floor_fx[slot].on)
             {
                 return None;
             }

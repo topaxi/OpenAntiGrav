@@ -36,11 +36,12 @@ the original running.
 ## Open
 
 - **Runtime check done 2026-10-05** (anchor 95, see the page's runtime
-  section): offset, scale, ride-versus-lie and tint read live. Left open:
-  the original's streaks **flicker per frame** (patch delta 2-54) and ours
-  holds 14-15 at about 70 % of the mean brightness; cause unknown (the
-  original's capture has bloom and blur ours lacks, or the Anim Transform
-  rate differs). A `MagFloorFx_Show` breakpoint hit is also uncaught.
+  section). **Flicker and brightness closed 2026-10-05** (lane
+  `magfloor-pulse-look`): `write_mag_floor_fx` never uploaded the texture-offset
+  tables, so the lightning's `v` scroll was frozen; one `write_anims` call fixed
+  both, ours now 108 / 113 / 97 % of the original's mean added RGB with a
+  matching spread (page's "Look" section). Left: the original's bloom/blur on
+  the comparison, and a `MagFloorFx_Show` breakpoint hit is still uncaught.
 - The track's down for MagEffect2 comes from the nearest spline sample
   (chosen, the sim's own stand-in), not the located sample `craft+0xb10`.
 - Pure: closed, a negative. Its executable has no magstrip class, no
@@ -51,9 +52,6 @@ the original running.
 
 ## Next Steps
 
-- Find what makes the original flicker: compare the Anim Transform's
-  sampled values over the original's clock against ours, with the `--presented`
-  path on our side. Matched-view recipe: Talon's Junction is `16_Track`
-  (not `01_Track`), start pose `6.07,-50.07,-196.05`; ours needs a way to force
-  the effect on there (a local env patch was used, `force-on.patch` in the
-  lane scratch, not committed).
+- Optional: a paused-frame A/B on the original (toggle Show at one instant)
+  would replace the burst-minus-mean estimate with an exact per-frame add.
+- `OAG_MAGFX=on` forces the effect on for any matched-view comparison.

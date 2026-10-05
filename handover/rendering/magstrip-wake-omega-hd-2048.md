@@ -115,11 +115,11 @@ live PS4, so these are 80-90 reads, not captures.
 
 ## Next Steps
 
-1. (ready to wire, `oag-wire`) The arc wake on the HD-lineage path: contact predicate, anchor
-   locator, additive-RGB blend, the sound start/stop law, with a test that fails when the
-   contact predicate or the arm/disarm edge is dropped. Layout of the batches is on the PS4
-   page ("The draw").
+1. ~~The arc wake on the HD-lineage path~~ - landed 2026-10-05 (magstrip-wire-hd): predicate off the blend, arming law,
+   `~magstrip01`, additive draw, `magstrip_wire_hd_ground_truth`. Still open from it: the two speed ribbons are not drawn;
+   `INTENSITY`, jitter scales and the end-point walk are chosen; `~magstrip01` is a 35-leaf tree the reader flattens
+   (leaf choice unresolved); rumble edges not wired (no rumble layer checked); the Omega `WEAPON_MODELS` row waits for Omega racing.
 2. (ready to wire) `WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes, enabled by
-   the same predicate; the `.pob` player already plays any `.POB` by name.
-3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build to lift the per-arc
-   constants off single-source.
+   the same predicate (`Race::over_magstrip`); the `.pob` player already plays any `.POB` by name.
+3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build (`0x00109858`, `0x001095e0`, `0x00109720`),
+   the `kIntensity` source and the jitter-scale globals, to lift the chosen values off.

@@ -347,6 +347,7 @@ pub fn capture(
         visibility,
         flare,
         leach_beam_texture,
+        magstrip_wake_textures,
         noise,
         trail_blend,
         trail_shape,
@@ -487,6 +488,7 @@ pub fn capture(
         shield_cockpit,
         flare,
         leach_beam_texture,
+        magstrip_wake_textures,
         noise,
         trail_blend,
         trail_shape,
@@ -987,10 +989,7 @@ pub fn capture(
 fn zone_spectrum(options: &CaptureOptions, audio: &oag_sound::Audio) -> [f32; oag_audio::BANDS] {
     if options.zone_spectrum_test {
         std::array::from_fn(|i| {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "oag_audio::BANDS is 16; no precision lost casting a band index"
-            )]
+            #[expect(clippy::cast_precision_loss, reason = "BANDS is 16, so exact")]
             let t = i as f32 / (oag_audio::BANDS - 1) as f32;
             t
         })

@@ -327,6 +327,52 @@ plus the falsifier above, corroborated in the PS2 build). The white tint:
 "Every craft builds one": **90**, unchanged (only the player's was read live).
 Not raised: the animation/brightness match, which is a measured difference.
 
+## Look: the flicker was a missing upload, not a missing law (2026-10-05, lane `magfloor-pulse-look`)
+
+**Cause.** Both effect meshes author a texture-offset track
+(`MagEffect1`'s `lightningShape`: key 1 to 298, `v` from `0` to `1525/256`, a
+4.98 s loop, about 1.2 `v` per second, so the lightning texture scrolls through
+its whole height about every 0.8 s; `MagEffect2`'s `haloShape`: `0` to
+`(255, 510)/256`, 5 s) and `MagEffect2` also carries a spinning `Anim Transform`
+(`pulse_mag_halo:halo`, a 5 s turn about `Y`). `write_mag_floor_fx` uploaded the
+node table (`write_node_anims`, the halo's spin) and **never the texture table**
+(`write_anims`), so both meshes held texture phase 0 for ever. The previous
+section's "the Anim Transform does play" was the halo's spin; the scroll was the
+part that was missing. Fix: one `drawable.write_anims(queue, seconds)` call in
+`crates/raceplay/src/scene/weapon_models.rs`, on the same clock the node table
+already reads.
+
+**Before and after, ours against the original, same circuit/team/pose/view**
+(Talon's Junction, Assegai, start pose `6.07,-50.07,-196.05`, 480x272, forced
+on with the new permanent `OAG_MAGFX=on` env, shown minus hidden at the same
+clock, patch x 150-330, y 190-234 under the craft). Original: 40 shown frames
+from the `b2/` burst minus the mean of 8 hidden frames. Ours: 8 clocks 0.06 s
+apart (change measures) and 40 clocks over the 5 s loop (mean/range).
+
+| Quantity | Original | Ours before | Ours after |
+| --- | --- | --- | --- |
+| Added RGB, mean | 3.7 / 2.3 / 9.7 | 2.8 / 2.0 / 6.1 | **4.0 / 2.6 / 9.4** |
+| Added luminance, per-frame range | 1.3 to 10.3 | n/a (one phase) | 1.6 to 8.0 |
+| Effect-only frame-to-frame luminance delta, 0.06 s | about 2 above the hidden floor (shown 4.5 vs hidden 2.5) | 1.4 to 1.9 | **2.6 to 4.3** |
+
+So the brightness "70 %" of the previous section was one frozen texture phase
+read against a flickering mean: over a loop ours is 108 / 113 / 97 % of the
+original's mean RGB, and the spread now matches. Frames: `data/scratch/
+magfloor-pulse-look/ours/` (`before_*`, `after_*`, `loop_*`), `grid_after.png`.
+Not matched and not tuned: the original's capture carries the PSP bloom and
+motion blur our `--screenshot` lacks, and the patch is a guess at the
+previous member's 180x44 crop. Nothing was tuned; the mean agreeing is a
+consequence, not a target.
+
+**Test.** `crates/game/tests/mag_floor_scroll_ground_truth.rs` (`#[ignore]`d,
+`just test-data`): two clocks 0.1 s apart with the effect on and a control pair
+with it off; the summed absolute RGB change outside the control's own change is
+663,606 with the texture table written and 291,268 without it (the halo's spin
+alone), floor 450,000. Verified to fail with the `write_anims` line removed.
+
+`OAG_MAGFX=on` (read in `mag_floor_fx_draws`, view side only) draws every
+craft's effect off a strip, for matched-view comparisons.
+
 ## The sfx half is open
 
 No call to any sound-play function was found in `Ship_MagFloorEnter`,

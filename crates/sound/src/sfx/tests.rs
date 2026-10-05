@@ -162,7 +162,8 @@ fn every_cue_names_a_bank_and_a_string() {
     // `SfxVoices::leach_attach`, since the LeachBeam is a world-wide single
     // instance rather than a projectile slot. `Autopilot` joins `Blowup`'s
     // shape: a level-driven handle at `SfxVoices::autopilot`, not a
-    // projectile slot.
+    // projectile slot. `Magstrip` is held per grid slot, started and ended by
+    // the `Magstrip` and `MagstripStop` events - see `sfx::magstrip`.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();
     assert_eq!(
         held,
@@ -178,6 +179,7 @@ fn every_cue_names_a_bank_and_a_string() {
             Cue::QuakeTravel,
             Cue::LeachAttach,
             Cue::ShurikenTravel,
+            Cue::Magstrip,
         ]
     );
 }

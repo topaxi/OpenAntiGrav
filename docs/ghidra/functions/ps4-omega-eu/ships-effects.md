@@ -492,3 +492,36 @@ raises the shape to 80 for a reader of this page.
 - The cue's loop flag and the meaning of `ship+0x648b`, `ship+0x71f5 & 0x10`.
 - The `MagStripArc_fp` fragment program (alpha handling) and the draw's depth state.
 - HD's own `0x00109858`/`0x001095e0`/`0x00109720` arc build (not read).
+
+## 2026-10-05, magstrip-wire-hd lane: `MagstripWake_Update` and `_Draw` re-read, and wired on HD
+
+Decompiled again from `/omega/eboot-ps4-omega-eu.bin` (`0x012e1260`, `0x012e2770`); static, PS4 only, 65. The
+implementation is `oag_fx::magstrip` (module doc lists each rule), `oag_raceplay::magstrip_wake` and
+`oag_sound::sfx::magstrip`. HD builds the class (`oag_title::weapons::WeaponModels::magstrip_wake`,
+`oag_hd::race::WEAPON_MODELS`); Omega's table is still `EMPTY` and inherits it when it races.
+
+- **Corrections to the earlier reading.** `rand()` is used as a 30-bit source: every constant is
+  `k / 2^30` with a `-0.5` or `-s` centring (life `0.2 + 0.9u`, contact scale `3.5 + 3.5u`, throw
+  `0.55 + u`), so the "0.2 to 2.0" above is `0.2` to `1.1`. Arcs age whether or not the ship is over the strip
+  (`W+0xa0` gates spawning only), so an arc outlives the strip by up to its life.
+- **Per-arc record (`0xa0` bytes at `pool+0x40`):** `+0x40` life, `+0x60` end point, `+0x70..+0x80` five jitter terms,
+  `+0x84` spread (`0.8`, or blended to `0.6` below speed 200), `+0x88` body brightness, `+0xd0` contact scale,
+  `+0xd4` contact brightness, `+0xd8` atlas frame; `+0x90/a0/b0/c0` the contact diamond's corner vectors.
+- **Per tick:** `scale = 0.525u + 0.525 + 0.85 scale`, `brightness = 0.0862u + 0.01875 + 0.85 brightness`,
+  `glow = 0.0975u + 0.0075 + 0.85 glow`; an arc with the end behind the ship's nose (`dot(fwd, end - ship) < 0`) is
+  shed with probability `clamp((|end - ship|^2 - 368.64) * 0.0086685, 0, 1)`; jitter `j = 0.85 j + 0.15 s (2u - 1)`.
+- **Draw:** start = anchor + `0.4` toward the end flattened onto the ship's up; width vector =
+  `normalize(cross(start - eye, start - end)) * 0.8`; five centre points at `t = 1/6..5/6` on start-to-end pushed by
+  `jitter[i] * width`, then the end. Six quads, `(prev -w, prev +w, next +w, next -w)`, `u` over one atlas column,
+  `v` stepping `1/48` down from the cell's bottom; the last quad's far edge is colour `0.3`. Colour grey
+  `(uint)(x * 255)` with alpha `0xb2`. Contact: a diamond at the end, corners `-T, -L, +T, +L` scaled by `+0xd0`, uv
+  `(0,0) (1,0) (1,1) (0,1)`.
+- **Unread, chosen:** `DAT_02134210..20` (jitter scales) and `DAT_020e52a0 + 0x1e0` (`kIntensity`) are zero in the
+  image (run-time tuning); `1.0` and `INTENSITY = 3.0` are this port's. The end point's spline walk is replaced by our
+  spline (`ahead` metres, then across the road). The two speed ribbons are not drawn.
+- **Textures** `Data/Tex/HD_electric_arc_8x8.gtf` (512x512, 64 purple lightning frames, one bolt a cell, `v` along it) and
+  `HD_ElectricArc_Contact.gtf` (64x64) decode through the existing `.gtf` reader.
+- **Sound:** `~magstrip01` in `shiphd.bnk` is a **35-waveform tree** the reader flattens (about a fifth loop);
+  the port draws until a looping leaf comes up. Group `MagStrip_Player`/`_NPC` has no mixer counterpart.
+- **Predicate on our side:** `ShipState::mag_contact` is sticky (last hit) and the probe result is a local, so the instantaneous
+  contact is read back off the blend with `mag_floor_fx::contact_this_tick`, exact for every ramp sequence.

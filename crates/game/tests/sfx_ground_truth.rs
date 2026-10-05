@@ -138,6 +138,14 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
         let on_pure = label.starts_with("Pure");
         let mut rng = oag_core::Rng::new(1);
         for cue in Cue::ALL {
+            // HD-lineage only: the PSP and PS2 banks carry no `~magstrip01`.
+            if cue == Cue::Magstrip {
+                assert!(
+                    banks.pick(cue, &mut rng).is_none(),
+                    "{label}: ~magstrip01 loaded, so the cue is not HD-only"
+                );
+                continue;
+            }
             if on_pure && NOT_ON_PURE.contains(&cue) {
                 assert!(
                     banks.pick(cue, &mut rng).is_none(),
@@ -348,6 +356,8 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
             "~SHURIKENTRAVEL",
             "REPULSOR",
             "REPULSORHIT",
+            // 2026-10-05, the magstrip hum: `shiphd.bnk`, a 35-waveform tree.
+            "~magstrip01",
         ],
         "HD's loadable cue set changed"
     );
@@ -500,7 +510,7 @@ fn the_decoded_cues_are_audio_and_not_silence() {
     };
     let banks = banks(&path, false);
     let mut rng = oag_core::Rng::new(2);
-    for cue in Cue::ALL {
+    for cue in Cue::ALL.into_iter().filter(|&c| c != Cue::Magstrip) {
         let (sound, looping) = banks.pick(cue, &mut rng).expect("cue");
         let seconds = sound.seconds();
         let (peak, rms) = render(std::sync::Arc::clone(&sound));
