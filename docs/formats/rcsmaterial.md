@@ -2183,6 +2183,22 @@ the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the 
 is from the code), 2048's Vita `mageffect08` program, and the `mageffect08` floor's
 own diffuse-plus-normal-plus-lightmap composition (only the wave term is added to it).
 
+## Omega and 2048 draw their see-through materials off the state word (2026-10-05, `transparent-floors`)
+
+Omega and 2048 authored HD's state word on every material (PS4 header `+0x22`, Vita `+0x12`; evidence
+and the draw-order key in [`material-state.md`](../ghidra/functions/ps4-omega-eu/material-state.md)),
+and `oag_mesh::mesh::rcs::psp2::transparency` routes a textured draw with mode 1 to the blended list and
+mode 2 to the alpha-tested list, where before **every** Omega and 2048 draw was opaque.
+
+- **Law recovered:** mode bits as HD (confidence 75), sort priority bits 9 to 11 (75, not yet used for ordering).
+- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair, so the
+  additive family - `emissive_bloom`, `hd_enginetrail`, light cones - draws as a dim sheet, not a glow) and the
+  alpha-test reference `0.5` (HD's).
+- **Looks:** Tech De Ra's glass tubes now show the crowd through them and its road panels take their see-through
+  layer; 2048's cockpit glass and billboard signs draw. Frames `data/scratch/transparent-floors/shots/{before,after}_{tdr,2048}_300.png`.
+- **Not done:** HD is untouched (its own factor path); the `etched_glass_tech` sheen and `Transparency` param on
+  Omega are not read; GCN pixel programs were not read for an alpha source, so a blended draw uses the first texture's alpha.
+
 ## Open
 
 - **63 of the 125 sampler hashes**, after the wider sweep below - down from

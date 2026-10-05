@@ -41,6 +41,7 @@ use crate::mesh::{Bounds, DrawCall, Flap, GpuVertex, Model, ModelTexture};
 
 mod glow;
 pub mod placement;
+mod transparency;
 
 pub use placement::Animation;
 
@@ -102,6 +103,11 @@ pub struct Report {
     /// would not decode. Such a draw binds the black placeholder, which is the
     /// same picture as no lightmap at all.
     pub lightmap_misses: usize,
+    /// Textured draws routed to the blended list by their material's state word
+    /// (alpha-over, chosen) - see [`transparency`].
+    pub blended_draws: usize,
+    /// Textured draws routed to the alpha-tested list (reference `0.5`, chosen).
+    pub cutout_draws: usize,
     /// Draws whose material named a texture that did not resolve in the
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
@@ -200,6 +206,14 @@ impl Report {
                 self.decoded_tangents
             )
         };
+        let see_through = if self.blended_draws + self.cutout_draws == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} draw(s) blended off the state word (alpha-over, chosen: Omega authors no factors) and {} alpha-tested at 0.5 (chosen)",
+                self.blended_draws, self.cutout_draws
+            )
+        };
         let lightmaps = if self.lightmaps == 0 && self.lightmap_misses == 0 {
             String::new()
         } else {
@@ -242,7 +256,7 @@ impl Report {
         let gnf = self.gnf.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{nodes}{gnf}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{see_through}{nodes}{gnf}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -631,6 +645,7 @@ fn build_planned(
     finish_bounds(&mut model);
 
     bind_textures(&decoded, &glow, &mut model, &mut report, textures);
+    transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
 
