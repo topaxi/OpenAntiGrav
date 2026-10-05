@@ -10,7 +10,7 @@ entry names and 2048-specific facts in
 launch: `crates/raceplay/src/load/campaign.rs`'s `race::load_event` resolves
 an event by name onto `race::Options` before calling the existing `load`, and
 `oag-game --event "<name>"` drives it end to end - see
-[the launch section](#the-launch-cratesgamesrcraceloadcampaignrs) below.
+[the launch section](#the-launch-cratesraceplaysrcloadcampaignrs) below.
 
 Wipeout 2048 has no `CellMode_Definition.xml` and no racebox
 ([`race-setup.md`](race-setup.md): "2048 has no such flow at all"). Its own
