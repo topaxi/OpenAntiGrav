@@ -301,6 +301,22 @@ pub mod slots {
     /// set of rates over the same `UV_offset`. See [`CLOCK_SCROLL_RING`].
     pub const CLOCK_SCROLL_HALO: u32 = 1 << 16;
 
+    /// This material's resolved fragment program takes HD's magstrip wave:
+    /// the emissive picture (bound third, the same slot as [`PAD_NE`]'s mask,
+    /// which no magstrip material shares) is dodged by a scrolling wave
+    /// texture (bound fourth, [`Model::wave_maps`](super::Model::wave_maps)),
+    /// `e / (1 - lerp(e, wave(uv * k + time), e.a) * Colour)`. The tint is
+    /// `Colour`, the scale `k` and the rate 1 ride in this material's
+    /// [`Model::emissive`](super::Model::emissive) entry. See
+    /// `mesh::rcs::mag_wave`.
+    pub const MAG_WAVE: u32 = 1 << 17;
+
+    /// With [`MAG_WAVE`]: the strip-floor combine of `mag_effect_loop_opaque`
+    /// and `mageffectloop`, where `albedo` is the grid, `lightmap` the facing
+    /// ramp, and `d` enters as `vertexLight * grid * (ramp + c) +
+    /// (grid + ramp) * d`. `c` rides in the glow-table entry's `offset`.
+    pub const MAG_LOOP: u32 = 1 << 18;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
@@ -311,10 +327,10 @@ pub mod slots {
     /// bit test that an index above bit 15 cannot disturb. A circuit's
     /// materials number in the hundreds against the 65,535 this allows.
     ///
-    /// Seventeen rather than sixteen since the two clock-scroll bits
+    /// Nineteen since [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
     /// index keeps 32,767 values, against the hundreds a circuit uses.
-    pub const MATERIAL_SHIFT: u32 = 17;
+    pub const MATERIAL_SHIFT: u32 = 19;
 
     /// The mask covering every role bit - the low half of the word, with
     /// [`MATERIAL_SHIFT`]'s index excluded.

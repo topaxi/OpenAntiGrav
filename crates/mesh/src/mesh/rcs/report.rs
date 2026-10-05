@@ -205,6 +205,12 @@ pub struct Report {
     /// parameter the program multiplies the mask's alpha by. Drawn without
     /// the term rather than with an invented colour.
     pub pad_ne_unread: usize,
+    /// Magstrip materials whose emissive picture and wave were bound - see
+    /// `super::mag_wave`.
+    pub mag_wave_bound: usize,
+    /// Magstrip materials that declare the wave and could not be bound: a
+    /// texture did not decode or an authored value is missing. Drawn without.
+    pub mag_wave_unread: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -308,6 +314,12 @@ impl Report {
             n => format!(
                 ", {n} pad material(s) whose _ne mask or its colour could not be read (drawn without)"
             ),
+        } + &match self.mag_wave_bound {
+            0 => String::new(),
+            n => format!(", {n} magstrip material(s) with their scrolling wave bound"),
+        } + &match self.mag_wave_unread {
+            0 => String::new(),
+            n => format!(", {n} magstrip material(s) whose wave could not be read (drawn without)"),
         } + &match self.isolated {
             0 => String::new(),
             n => format!(

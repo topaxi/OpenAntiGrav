@@ -171,6 +171,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod cutout;
 mod isolate;
+mod mag_wave;
 mod pad_ne;
 mod pads;
 pub use pads::{build_pads, build_weapon_pads};
@@ -752,9 +753,13 @@ fn build_with_options(
         material_variants,
         emissive,
         alpha_test_ref,
+        mag_emissive,
+        wave_maps,
         material_anim,
         anim_tracks,
     } = material_setup(&model, model_blob, textures, &mut report);
+    out.pad_masks = mag_emissive;
+    out.wave_maps = wave_maps;
     out.emissive = emissive;
     out.textures = skins;
     out.lightmaps = seconds;

@@ -152,10 +152,18 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
         // see `mesh::rcs::glass_sheen`. `slots::PAD_NE` (bit 14) is the
         // eleventh: since 2026-10-05 the scene binds it on the speed-pad
         // materials of the four original circuits, whose pad nodes name no
-        // chunk (`hd_original_speed_pad_ground_truth`).
+        // chunk (`hd_original_speed_pad_ground_truth`). `slots::MAG_WAVE` and
+        // `slots::MAG_LOOP` (bits 17 and 18) are the twelfth and thirteenth:
+        // the magstrip wave, 2026-10-05 - see `mesh::rcs::mag_wave`.
         for packed in &model.material_slots {
             assert_eq!(
-                packed & slots::ROLE_MASK & !(0x1ffu32 | slots::FACING_RAMP_SHEEN | slots::PAD_NE),
+                packed
+                    & slots::ROLE_MASK
+                    & !(0x1ffu32
+                        | slots::FACING_RAMP_SHEEN
+                        | slots::PAD_NE
+                        | slots::MAG_WAVE
+                        | slots::MAG_LOOP),
                 0,
                 "a role bit outside the ten this reading defines"
             );

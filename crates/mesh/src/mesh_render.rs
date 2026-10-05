@@ -833,6 +833,7 @@ pub fn build_with(
     let bind = |albedo: &wgpu::TextureView,
                 lightmap: &wgpu::TextureView,
                 pad_mask: &wgpu::TextureView,
+                wave: &wgpu::TextureView,
                 label: &str| {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
@@ -853,6 +854,10 @@ pub fn build_with(
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(pad_mask),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(wave),
                 },
             ],
         })
@@ -903,7 +908,7 @@ pub fn build_with(
             .clone()
     };
 
-    let mut texture_binds = vec![bind(&white, &no_lightmap, &no_pad_mask, "white")];
+    let mut texture_binds = vec![bind(&white, &no_lightmap, &no_pad_mask, &white, "white")];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = slot
             .as_ref()
@@ -921,8 +926,14 @@ pub fn build_with(
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
             .unwrap_or_else(|| no_pad_mask.clone());
+        let wave = model
+            .wave_maps
+            .get(index)
+            .and_then(Option::as_ref)
+            .and_then(&mut view_of)
+            .unwrap_or_else(|| white.clone());
         let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
-        texture_binds.push(bind(&albedo, &lightmap, &pad_mask, label));
+        texture_binds.push(bind(&albedo, &lightmap, &pad_mask, &wave, label));
     }
 
     texture::log_census(model, blocks, device.limits().max_texture_dimension_2d);

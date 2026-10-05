@@ -67,6 +67,7 @@ fn triangle_model() -> Model {
         textures: Vec::new(),
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
+        wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
