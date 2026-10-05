@@ -1,4 +1,4 @@
-//! Confirms `oag_mesh::mesh::is_blink_light_texture` actually fires on every
+//! Confirms `oag_pulse::textures::is_blink_light_texture` actually fires on every
 //! real ship, not just on the mined texture name it was written against.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
@@ -12,7 +12,7 @@
 //!
 //! # What this is for
 //!
-//! The heuristic in `oag_mesh::mesh::is_blink_light_texture` was built from
+//! The heuristic in `oag_pulse::textures::is_blink_light_texture` was built from
 //! decoding real materials on real ships (see `docs/formats/vex.md`, "Ship
 //! lights: one shared texture, not a mesh-naming convention"): every one of
 //! the 8 playable teams turned out to carry a mesh whose material resolves to
@@ -65,7 +65,7 @@ fn every_team_has_a_glow_tagged_vertex() {
             .textures
             .iter()
             .flatten()
-            .any(|t| mesh::is_blink_light_texture(&t.label));
+            .any(|t| oag_pulse::textures::is_blink_light_texture(&t.label));
         println!(
             "{team}: {glow_vertices} glow-tagged vertex/vertices of {}, \
              blink texture present: {labelled}",

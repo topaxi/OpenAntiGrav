@@ -2201,7 +2201,6 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-gpu",
- "oag-pulse",
  "oag-rcs",
  "oag-texture",
  "oag-vex",
