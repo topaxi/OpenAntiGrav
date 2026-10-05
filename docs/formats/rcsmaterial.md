@@ -2345,6 +2345,49 @@ reverse-engineering project of its own, and this session's evidence supports
 measuring and naming the container's existence, not guessing its fields.
 `oag_rcs::rcsmaterial`'s existing container reader is untouched.
 
+## HD's light cone was a grey wedge; its combine is two taps and a saturate (2026-10-05)
+
+`dc_lightcone.rcsmaterial` (Talon's Junction slot 440, Amphiseum slot 610 -
+exactly two materials disc-wide, `crates/render/examples/hd_light_cone_census.rs`)
+drew as opaque grey radial wedges across the upper left of
+`talons-matched/03`, where the original draws pale translucent streaks over
+the blue tunnel. Cause: the picture was `Texture1` (`dc_gradient_noise.gtf`,
+grey, alpha 255 everywhere) with the texture's own alpha as coverage.
+
+**The program** (resolved fogged variant, `scripts/ps3-microcode.py fp-file`;
+confidence 85 for the arithmetic, read instruction by instruction):
+
+    colour = fog-lerp(noise.x * K)         K = parameter 0x60eaf40d, 100 on Talon's Junction, absent (1) on Amphiseum
+    alpha  = noise.x * s * ramp(N.V)       s = parameter 0x7611a2d8, 1.0 on Talon's Junction, 0.49596 on Amphiseum
+    N.V    = (N . V) / sqrt(|N|^2 |V|^2)   ramp = dc_gradient_e.gtf at (cos, cos); its red is a function of u alone, 0 at 0 and 1 from 0.5 up
+
+The vertex program writes the attribute in slot 1 into the `w` of three
+interpolators and `eyePositionWorldSpace - position` into `TC2.xyz`. **That
+attribute is a constant `(0, 0, 1)` on every authored cone** (a `CMP` field,
+raw bytes `7f 80 00 00` in every vertex, `hd_unlit_probe`), not a surface
+normal: the fade is against a fixed axis. Confidence 90.
+
+**The colour saturates before it blends.** With `K` = 100 an unclamped
+colour on this project's float target is `100 * noise` of light times the
+alpha, and it drew a white wall; the original's 8-bit surface clamps to 1
+first. The clamp is the cone's own in `mesh.wgsl`, not a global one.
+
+**The ramp tap is predicated on Talon's Junction's variant** (`@0x1550`: `FENCT
+R63, R0, R0` then `TEX H2.x, R2.wwww unit1 [NE(wwww)]`) and not on
+Amphiseum's (`@0x1520`). `H2.x` already holds the noise, so a skipped tap
+makes the alpha `s * noise^2`. `R0` is `f[TC1]`, whose `w` is the normal's
+`y`, which is zero on every cone. **Confidence 60, one matched frame**: that
+`FENCT` sets the condition register from its source is a hypothesis (the
+opcode writes no register, 59,256 of 59,256 uses name 63). The alternative
+reading draws the shafts as an opaque white wall; the skipped-ramp reading
+reproduces the translucent streaks of `talons-matched/03`. Amphiseum's
+variant, whose tap is unconditional, is read from its microcode only: no
+matched pose frames its cone.
+
+Implemented in `mesh::rcs::light_cone` (`slots::LIGHT_CONE`, bit 19, which
+moved `MATERIAL_SHIFT` from 19 to 20) and `mesh.wgsl`; pinned by
+`hd_light_cone_lit_path` (fixture) and `hd_light_cone_ground_truth` (disc).
+
 ## See also
 
 - [rcsmodel](rcsmodel.md) - the material record, and the two texture paths
