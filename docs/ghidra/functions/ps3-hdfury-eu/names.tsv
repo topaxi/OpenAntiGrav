@@ -532,4 +532,7 @@
 0x00109858	function	MagstripWake_UpdateRibbons	70	magstrip-wake.md
 0x002bbd60	function	MagstripArcs_Update	85	magstrip-wake.md
 0x002bb530	function	MagstripArcs_Spawn	75	magstrip-wake.md
-0x002bc7b0	function	MagstripArcs_Draw	65	magstrip-wake.md
+0x002bc7b0	function	MagstripArcs_Draw	80	magstrip-wake.md
+0x0092f180	data	MagStripArc_fp	90	magstrip-wake.md
+0x0092f400	data	MagStripArc_vp	90	magstrip-wake.md
+0x002bd750	function	MagstripArcs_InitClass	70	magstrip-wake.md

@@ -32,15 +32,34 @@
 //!   across it), on the road: the track sample's lifted position plus `2.6`
 //!   along `down`. The original walks its AI-track data to get there.
 //! - **Per tick** each live arc ages by `dt`, and smooths its contact scale,
-//!   body brightness and contact brightness as `x = fresh + 0.85 x`; one that
-//!   has fallen behind the craft is shed with probability
-//!   `clamp((|end - craft|^2 - 368.64) * 0.0086685, 0, 1)`.
+//!   body brightness and contact brightness as `x = 0.85 x + 0.15 sample`
+//!   (HD's samples: scale `3.5..7`, body brightness `0.125..0.2`, contact
+//!   `0.05..0.1`, each a fresh uniform draw); one that has fallen behind the
+//!   craft is shed with probability
+//!   `clamp((|end - craft|^2 - 368.64) * 0.0086685, 0, 1)`. Spawning writes
+//!   neither brightness: the slot carries what it held.
 //! - **The picture**: from `start` (0.4 ahead of the anchor toward the end, in
 //!   the craft's plane) to `end`, a camera-facing strip `1.6` wide in six
 //!   quads sampling one row of the atlas cell, `1/48` of `v` a quad; the middle
 //!   five points are pushed along the strip's width by their jitter term. The
 //!   last quad's far edge is dimmer (`0.3`). A diamond contact quad, `scale`
 //!   wide along the track's forward and lateral axes, lies at `end`.
+//!
+//! # `MagStripArc_fp` (HD, decoded 2026-10-05, conf 85)
+//!
+//! Vertex program: `o[COL0] = v[3]` (the vertex colour, untouched), `o[TC0] =
+//! uv`, `o[POS] = viewProj * position` - no scale. Fragment program, one sampler:
+//! `rgb = vertex.rgb * tex.rgb * tex.a`, `a = vertex.a * tex.a`, no constant at
+//! all. So the arc adds `brightness * tex.rgb * tex.a`, and the vertex alpha
+//! (`0.3` body, `0.25` contact) reaches only the destination alpha. There is no
+//! gain anywhere: the `INTENSITY = 3.0` this module carried until then was not in
+//! the original's shading. The program has no transfer function either, so the arc
+//! adds its gamma values as they are into the linear target (the HD engine tube's
+//! precedent, `exhaust.wgsl`), where every other additive draw here decodes them
+//! first. State measured on HD (`MagstripArcs_Draw`, `0x002bd480..0x002bd530`,
+//! conf 80): blend on, `ONE, ONE`, `FUNC_ADD`; depth test on, `LEQUAL`; depth write
+//! off; culling off. See `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`,
+//! "2026-10-05, magstrip-arc-fp lane".
 //!
 //! # Chosen, not measured
 //!
@@ -51,20 +70,17 @@
 //!   in `[0, 1)` is used. The draws come from the seeded [`Rng`], not libc.
 //! - **The end point's placement.** Our spline stands in for the AI-track walk:
 //!   `ahead` metres along it, then across the road, clamped to its width.
-//! - **Vertex alpha and depth** (see [`crate::beam::pipeline::Style::MAGSTRIP`]):
-//!   `0xb2` is multiplied into the fragment as `beam.wgsl` does; whether
-//!   `MagStripArc_fp` does is unread.
-//! - **Brightness and alpha are the PS4's, and HD differs.** Spawn
-//!   `intensity = 0.125 + 0.575u`, `glow = 0.05 + 0.65u`, the per-tick `0.0862`
-//!   and `0.0975` terms and `ALPHA = 0xb2` are the PS4 reading. HD's own table
-//!   (`0x008c2610`, read live) has body `0.125..0.2`, contact `0.05..0.1`, float
-//!   alpha `0.3` body / `0.25` contact, and no spawn-time brightness. Not wired:
-//!   `INTENSITY` would have to be re-chosen with `MagStripArc_fp`'s gain
-//!   unread. See `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`.
+//! - **Destination alpha.** The original's `ONE, ONE` blend would add the
+//!   fragment's `vertex.a * tex.a` into the frame's alpha; this port keeps the
+//!   frame's alpha, which its glow stamp reads.
+//! - **Omega.** The PS4 build was not re-read for brightness; it inherits HD's
+//!   law here because only the HD-lineage wake is built.
+//! - **What is still missing**: with the original's law the arcs read faint at
+//!   player size (`brightness <= 0.2`). Not a gain this module may choose: HD's
+//!   bloom and the target's colour space are the open candidates, see the
+//!   evidence page.
 //! - **The spawn-time jitter seed.** HD's spawn writes no jitter; the seed here
 //!   is `spread * (2u - 1) * scale`, this port's.
-//! - **Brightness above 1.** The original packs `(uint)(x * 255)` into three
-//!   bytes unclamped; here it is clamped.
 //!
 //! Not drawn: the two speed-driven ribbons offset `+/- 0.28 * clamp(speed - 40,
 //! 0, 120)`. Whether they are the trail-ribbon class is unestablished (55).
@@ -91,8 +107,23 @@ pub const HALF_WIDTH: f32 = 0.8;
 /// How far from the anchor the strip starts, toward the end point.
 pub const START_REACH: f32 = 0.4;
 
-/// Vertex alpha, the fixed `0xb2`.
-pub const ALPHA: f32 = 178.0 / 255.0;
+/// The body's vertex alpha: HD's float `0.3` (`0x008c2610 + 0x34`, read live).
+/// `MagStripArc_fp` multiplies the vertex alpha into the *alpha* output only, never
+/// into the colour - see "`MagStripArc_fp`" above.
+pub const BODY_ALPHA: f32 = 0.3;
+
+/// The contact quad's vertex alpha: HD's float `0.25` (`0x008c2610 + 0x40`).
+pub const CONTACT_ALPHA: f32 = 0.25;
+
+/// The range a tick's body brightness sample is drawn from, `lerp(0.125, 0.2, u)`
+/// (`0x008c2610 + 0x2c`, `+0x30`).
+pub const BODY_SAMPLE: (f32, f32) = (0.125, 0.2);
+
+/// The range a tick's contact brightness sample is drawn from (`+0x38`, `+0x3c`).
+pub const CONTACT_SAMPLE: (f32, f32) = (0.05, 0.1);
+
+/// Weight of the fresh sample in the per-tick smoothing: `x = 0.85 x + 0.15 sample`.
+pub const FRESH: f32 = 0.15;
 
 /// The dim far edge of the last quad: `intensity * 76.5` against `* 255`.
 pub const SOFT: f32 = 0.3;
@@ -100,7 +131,7 @@ pub const SOFT: f32 = 0.3;
 /// How far along `down` from the lifted sample the end point sits (`2.6`).
 pub const END_DROP: f32 = 2.6;
 
-/// Per-tick smoothing: `x = fresh + 0.85 x`.
+/// Per-tick smoothing: the share of the old value kept, `x = 0.85 x + 0.15 sample`.
 pub const DECAY: f32 = 0.85;
 
 /// `|end - craft|^2` below which a rear arc is never shed (`19.2^2`).
@@ -108,13 +139,6 @@ pub const SHED_RADIUS_SQUARED: f32 = 368.64;
 
 /// The shed probability's slope.
 pub const SHED_SLOPE: f32 = 0.008_668_517;
-
-/// Stands in for `kIntensity`, the shader constant `MagstripWake_Draw` writes
-/// from `W+0x5f8` (`DAT_020e52a0 + 0x1e0`, a tuning block the executable's image
-/// leaves zero). The vertex greys are multiplied by it. **Chosen, not measured**:
-/// with the greys alone the arcs vanish into the lit road once the scene is
-/// linearised, which the original's picture does not.
-pub const INTENSITY: f32 = 3.0;
 
 /// The five jitter scales: `0.4 + 0.6 * sin(k * pi / 4)` for `k = 0..=4`, a bell
 /// that leaves the two ends of the arc nearly still and swings the middle.
@@ -263,7 +287,8 @@ impl Wake {
                 let Some(slot) = self.arcs.iter().position(|arc| arc.life <= 0.0) else {
                     break;
                 };
-                if let Some(arc) = self.spawn(craft, walk) {
+                let held = self.arcs[slot];
+                if let Some(arc) = self.spawn(craft, walk, &held) {
                     self.arcs[slot] = arc;
                 }
             }
@@ -275,7 +300,12 @@ impl Wake {
         }
     }
 
-    fn spawn(&mut self, craft: &Craft, walk: &dyn Fn(f32) -> Option<Placement>) -> Option<Arc> {
+    fn spawn(
+        &mut self,
+        craft: &Craft,
+        walk: &dyn Fn(f32) -> Option<Placement>,
+        held: &Arc,
+    ) -> Option<Arc> {
         let rng = &mut self.rng;
         let t = ((craft.speed - 10.0) * (1.0 / 190.0)).clamp(0.0, 1.0);
         let slow = 1.0 - t;
@@ -302,8 +332,6 @@ impl Wake {
         let across =
             (craft.lateral + offset.x).clamp(-placed.half_width_left, placed.half_width_right);
         let end = placed.position + placed.lateral * across + placed.down * END_DROP;
-        let intensity = 0.125 + 0.575 * unit(rng);
-        let glow = 0.05 + 0.65 * unit(rng);
         let frame = rng.below(64);
         let mut jitter = [0.0; 5];
         for (term, scale) in jitter.iter_mut().zip(JITTER_SCALE) {
@@ -314,8 +342,10 @@ impl Wake {
             end,
             scale,
             spread,
-            intensity,
-            glow,
+            // HD's `MagstripArcs_Spawn` never writes either brightness: the slot
+            // carries what it held and `age` smooths it toward the sample.
+            intensity: held.intensity,
+            glow: held.glow,
             jitter,
             frame,
             axes: [placed.forward, placed.lateral],
@@ -328,8 +358,10 @@ impl Wake {
         arc.life -= dt;
         arc.frame = (arc.frame + 1) % 64;
         arc.scale = 0.525 * unit(rng) + 0.525 + arc.scale * DECAY;
-        arc.intensity = 0.0862 * unit(rng) + 0.01875 + arc.intensity * DECAY;
-        arc.glow = 0.0975 * unit(rng) + 0.0075 + arc.glow * DECAY;
+        let body = BODY_SAMPLE.0 + (BODY_SAMPLE.1 - BODY_SAMPLE.0) * unit(rng);
+        let contact = CONTACT_SAMPLE.0 + (CONTACT_SAMPLE.1 - CONTACT_SAMPLE.0) * unit(rng);
+        arc.intensity = arc.intensity * DECAY + FRESH * body;
+        arc.glow = arc.glow * DECAY + FRESH * contact;
         let behind = arc.end - craft.position;
         if behind.dot(craft.forward) < 0.0 {
             let shed =
@@ -376,12 +408,11 @@ impl Wake {
     }
 }
 
-fn vertex(position: Vec3, grey: f32, uv: [f32; 2]) -> GpuVertex {
-    let grey = grey.clamp(0.0, 1.0) * INTENSITY;
+fn vertex(position: Vec3, grey: f32, alpha: f32, uv: [f32; 2]) -> GpuVertex {
     GpuVertex {
         position: position.to_array(),
         normal: [0.0, 0.0, 1.0],
-        colour: [grey, grey, grey, ALPHA],
+        colour: [grey, grey, grey, alpha],
         texcoord: uv,
         lit: 0.0,
         ..bytemuck::Zeroable::zeroed()
@@ -420,10 +451,15 @@ fn body(arc: &Arc, craft: &Craft, eye: Vec3, out: &mut Vec<GpuVertex>) {
         quad(
             out,
             [
-                vertex(previous - across, arc.intensity, [u0, near_v]),
-                vertex(previous + across, arc.intensity, [u0 + CELL, near_v]),
-                vertex(next + across, far_grey, [u0 + CELL, far_v]),
-                vertex(next - across, far_grey, [u0, far_v]),
+                vertex(previous - across, arc.intensity, BODY_ALPHA, [u0, near_v]),
+                vertex(
+                    previous + across,
+                    arc.intensity,
+                    BODY_ALPHA,
+                    [u0 + CELL, near_v],
+                ),
+                vertex(next + across, far_grey, BODY_ALPHA, [u0 + CELL, far_v]),
+                vertex(next - across, far_grey, BODY_ALPHA, [u0, far_v]),
             ],
         );
         previous = next;
@@ -436,10 +472,10 @@ fn contact_quad(arc: &Arc, out: &mut Vec<GpuVertex>) {
     quad(
         out,
         [
-            vertex(at(forward, -1.0), arc.glow, [0.0, 0.0]),
-            vertex(at(lateral, -1.0), arc.glow, [1.0, 0.0]),
-            vertex(at(forward, 1.0), arc.glow, [1.0, 1.0]),
-            vertex(at(lateral, 1.0), arc.glow, [0.0, 1.0]),
+            vertex(at(forward, -1.0), arc.glow, CONTACT_ALPHA, [0.0, 0.0]),
+            vertex(at(lateral, -1.0), arc.glow, CONTACT_ALPHA, [1.0, 0.0]),
+            vertex(at(forward, 1.0), arc.glow, CONTACT_ALPHA, [1.0, 1.0]),
+            vertex(at(lateral, 1.0), arc.glow, CONTACT_ALPHA, [0.0, 1.0]),
         ],
     );
 }
