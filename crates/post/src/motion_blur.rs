@@ -978,6 +978,8 @@ use target::Target;
 #[cfg(test)]
 mod extent_tests;
 #[cfg(test)]
+mod ghost_tests;
+#[cfg(test)]
 mod lattice_tests;
 #[cfg(test)]
 mod shake_tests;
