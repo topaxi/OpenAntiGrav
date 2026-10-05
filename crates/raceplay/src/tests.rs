@@ -47,6 +47,7 @@ mod shield_flash;
 mod spawn;
 mod spectator_press;
 mod spline;
+mod thrust_chase;
 mod trail_hits;
 mod weapons;
 mod wreck_finished;

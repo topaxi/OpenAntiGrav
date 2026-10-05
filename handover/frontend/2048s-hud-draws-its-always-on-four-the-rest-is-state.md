@@ -45,10 +45,14 @@ PSP's grid, twice the size, right-hand column off screen.
   once, with the `PickupText` caption, the instant a pickup is granted -
   unwired, because `Readout` carries no time-since-grant state to key it
   off. Needs a new readout field, not just a draw-side change.
-- **The speed fills** `ThrustBar`, `SpeedBar0`-`4`: seen filling, model
-  unread. The swoosh takes a purple tint on a speed pad.
-- **`PilotAssist`** off the assist setting; **`ZoneLight0`-`9`** one per
-  zone reached. Both are a readout field and a gate away.
+- **Wired 2026-10-05**: the speed fills, `PilotAssist`'s draw and
+  `ZoneLight0`-`9` - see `2048-hud.md` and `pickup-icon-uv-table.md`. Still
+  open from them: `ThrustBar`'s true target (ShipCTRL `+0x578`, per-class
+  ramp rates unrecovered; the port feeds the raw thrust state), the purple
+  `SpeedPad*` tint (a bind-time ship-definition choice, not pad contact),
+  `PilotAssist`'s source (no assist setting exists to feed
+  `Readout::pilot_assist`) and its scale pulse, the zone lights' counter
+  `hud+0x73c` past zones 2 and 5 and their class-up blink.
 - **`Laps`/`Position`/`EnergyText`/`TotalTime` are wired, 2026-09-25** - see
   Next Steps 2. Zone's `SCORE` and `ZONE`/number/class text are still
   positioned by something the composed layout does not carry (`ZoneNumber`

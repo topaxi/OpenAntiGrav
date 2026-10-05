@@ -158,6 +158,73 @@ pub(super) fn pickup_sprites_uv_rewrite(
     sprites
 }
 
+/// What one `SpeedBarN` segment is worth: the `0x430c0000` (140.0) that
+/// `Hud_BindWidgets` (`0x81192cd0`) stores at `hud+0x1d0` and the HUD update
+/// (`0x81195cdc`, dirty bit `1`) multiplies by `N + 1`.
+const SPEED_BAR_STEP_KMH: f32 = 140.0;
+
+/// How many `ZoneLightN` dashes the arc has.
+const ZONE_LIGHTS: u32 = 10;
+
+/// The widgets 2048 draws off race state rather than always: the lit speed
+/// segments, the thrust swoosh, the Pilot Assist icon and the Zone arc's
+/// lit dashes. Empty on every other title and outside the layouts that
+/// author them.
+///
+/// - **`SpeedBar0`-`4`** are discrete: segment `i` is up while
+///   `speed >= (i + 1) * 140` km/h, `speed` being the player's `|v| * 3.6`
+///   (`0x811b1ee2`, `player+0x48`). Read off the disassembly of `0x81195cdc`
+///   (`vcmpe`/`bmi`), not a recalled frame.
+/// - **`ThrustBar`** is the horizontal crop [`super::draw::crop_horizontally`]
+///   already does, to [`Readout::thrust_chase_percent`] of its width.
+/// - **`PilotAssist`** is up while [`Readout::pilot_assist`] is. The original
+///   also pulses its scale by `1 + 0.1 * sin(phase)`; that is not drawn.
+/// - **`ZoneLight0`-`9`** light from the **last** index backwards, one per
+///   zone reached: `Hud_UpdateZoneSpeedClassWidget` (`0x81197d6c`) hides
+///   light `i` while `i < 9 - X` for a non-zero counter `X`, which lights
+///   `X + 1`, and the Zone frames show two lit at zone 2 and five at zone 5
+///   (`68-zone-5.png`: the bottom dashes), so `X` is the zone minus one
+///   there. **Past zone 10, and where `X` is zero, the original's counter
+///   (`hud+0x73c`) is not read**, so the arc stops at ten and zone 1 lights
+///   one dash: **chosen, not measured**.
+///
+/// The `SpeedPad*` family is not drawn: the original picks it **once at
+/// bind** from a ship-definition float, not from touching a pad.
+pub(super) fn state_sprites(
+    layout: &Layout,
+    art: &oag_title::HudArt,
+    readout: &Readout,
+) -> Vec<Sprite> {
+    if art.pickup_icon_uv.is_none() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for i in 0..5u32 {
+        let lit = readout.speed_kmh >= (i + 1) as f32 * SPEED_BAR_STEP_KMH;
+        if let (true, Some(bar)) = (lit, layout.sprite(&format!("SpeedBar{i}"))) {
+            out.push(bar.clone());
+        }
+    }
+    let thrust = (readout.thrust_chase_percent * 0.01).clamp(0.0, 1.0);
+    if thrust > 0.0
+        && let Some(bar) = layout.sprite("ThrustBar")
+    {
+        out.push(super::draw::crop_horizontally(bar, thrust));
+    }
+    if readout.pilot_assist
+        && let Some(icon) = layout.sprite("PilotAssist")
+    {
+        out.push(icon.clone());
+    }
+    let lit_lights = readout.zone.min(ZONE_LIGHTS);
+    for i in (ZONE_LIGHTS - lit_lights)..ZONE_LIGHTS {
+        if let Some(light) = layout.sprite(&format!("ZoneLight{i}")) {
+            out.push(light.clone());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
