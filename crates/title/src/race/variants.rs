@@ -177,6 +177,19 @@ pub struct HullVariant {
 }
 
 impl RaceDefaults {
+    /// The directory `circuit`'s `.pob` effects are read from: the first
+    /// [`Self::effect_dir_by_circuit`] prefix `circuit` starts with (either
+    /// slash, any case), else [`Self::effect_dir`].
+    #[must_use]
+    pub fn effect_dir_for(&self, circuit: &str) -> &'static str {
+        let norm = |s: &str| s.replace('/', "\\").to_ascii_lowercase();
+        let circuit = norm(circuit);
+        self.effect_dir_by_circuit
+            .iter()
+            .find(|(prefix, _)| circuit.starts_with(&norm(prefix)))
+            .map_or(self.effect_dir, |&(_, dir)| dir)
+    }
+
     /// Which [`TeamVariants`] table a **bare** team id is offered variants
     /// from - this title's own [`Self::team_variants`], or
     /// [`Self::guest_roster`]'s, in that order. `None` when neither

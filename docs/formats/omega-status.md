@@ -953,9 +953,13 @@ builds no weapon pools. See the handover thread.
   one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
   The ten `.bnk` in `data02`, which an extension-based census had counted
   as Wwise, are the old `SBlk` container. One Tech De Ra cue plays through the mixer to a WAV.
-  Still silent: `Data\Psys\*.POB` particle effects are not in this archive set
-  under those names; the blob shadow is this project's generated falloff, not the
-  disc's.
+  **Particles play** (`omega-particles`, 2026-10-05): Omega keeps its effects in
+  `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
+  sprites; a race reads `particles2048` on an `environments2048` circuit and
+  `particles` elsewhere (chosen, not measured - `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`).
+  21 of the wired effects load on Tech De Ra; the blend-class-8 distortion and
+  heat-haze effects are refused by name and draw nothing. Still silent: the
+  blob shadow is this project's generated falloff, not the disc's.
 - **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
   `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race
   loaded no collision at all. The reversed name is `track_col_reversed.col`

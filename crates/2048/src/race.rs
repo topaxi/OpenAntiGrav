@@ -43,6 +43,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     ship_dir: SHIP_DIR,
     handling_dir: HANDLING_DIR,
     effect_dir: EFFECT_DIR,
+    effect_dir_by_circuit: &[],
     zone: oag_title::ZoneCircuit::SameCircuit,
     zone_craft: oag_title::ZoneCraft::PlayerShip,
     // Unread: this title's own boost-plume path (if it authors a standalone

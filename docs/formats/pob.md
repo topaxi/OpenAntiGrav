@@ -1073,6 +1073,31 @@ name** - `crates/render/tests/psys_2048_ground_truth.rs`.
 - **No 2048 circuit places a `ParticleSystem` node** (class `0x3c4`: none in
   any `track.vex`); only `weatherPos` nodes (`0x3da`) appear, on 11 circuits.
 
+## Wipeout: Omega Collection carries the same container, and a new blend class - 2026-10-05
+
+`SYSP`, little-endian. `data00.psarc` and the patch's `data05.psarc` each carry
+97 `Data/particles` and 112 `Data/particles2048` effects (the base adds 2 `Get/`
+effects to each); the same stems as 2048's directories, different bytes again.
+`crates/render/tests/psys_omega_ground_truth.rs`.
+
+- **80 of 97 and 96 of 112 parse**; the rest are refused by name. The refusals are **blend class 8** on every shock-distortion and
+  heat-haze effect (`shockdistort`, `distort`, `Heathaze`: `WO_ROCKET_EXPLO`,
+  `WO_MISSILE_EXPLO`, `WO_MINE_EXPLO`'s `shockdistort`, `WO_BOMB_SMOKERING`,
+  `WO_PLASMA_LIGHTNING_EXPAND`, the `WO_RB_HEAT*` set) - a dialect 2048 does not
+  have and the eboot's `psys_normal_heathaze_vp/fp` shaders draw - plus the
+  two 2048 already refused (`WO_BARRIER_COLLISION` render mode 3,
+  `WO_NITRO_SHIP_DEATH` blend class 4). No reader change: every file the
+  reader takes it takes unchanged.
+- **Sprites are `.gnf`**, 521 under `Data/particles*/Tex/`, every one BC7 with
+  tile mode 13 and every one decodes (`Sprite::from_gnf`). The authored path
+  is `C:\WOPS4\Wipeout\Data\particles\Tex\<stem>.tga`, and it names the
+  directory the sprite is in, which is **not always the effect's own** (one
+  `particles` effect names a `particles2048` sprite): 168 distinct sprites,
+  all present but `WO2048_Start_Laser`, which ships nowhere.
+- **Which directory a race reads** is chosen by a runtime flag in the
+  executable, not read down to a circuit: `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`.
+  The port picks by circuit directory (chosen, not measured).
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the

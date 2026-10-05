@@ -148,6 +148,8 @@ pub struct RaceDefaults {
     /// The archive directory this title's `.pob` effects sit in: [`EFFECT_DIR`]
     /// everywhere but 2048's own `Data\Particles2048` (`docs/formats/pob.md`).
     pub effect_dir: &'static str,
+    /// Per-circuit overrides of [`Self::effect_dir`]; see [`Self::effect_dir_for`].
+    pub effect_dir_by_circuit: &'static [(&'static str, &'static str)],
     /// How this title names the circuit a Zone race runs on. See
     /// [`ZoneCircuit`].
     pub zone: ZoneCircuit,

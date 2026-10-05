@@ -66,6 +66,19 @@ Seen on screen: wall sparks, a rocket flare and a rocket detonation
 - Which game modes (`>= 23`) read `Data/Particles` instead.
 - No reference capture of 2048 was compared; the pictures are judged alone.
 
+## Wipeout: Omega Collection (2026-10-05, omega-particles)
+
+`Data\particles` / `Data\particles2048` with `.gnf` sprites
+(`Sprite::from_gnf`); `RaceDefaults::effect_dir_by_circuit` picks the set per
+circuit, **chosen, not measured** - the eboot's flag at `0x01f99bc0` decides
+and which circuit sets it is unread (`ps4-omega-eu/particle-paths.md`). 80/97
+and 96/112 parse; the rest are **blend class 8** (distortion and heat haze:
+rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) and draw
+nothing until that class is read. Seen: wall sparks, rocket flare
+(`data/scratch/omega-particles/shots/`). Open: read the flag's writers to make
+the per-circuit choice measured; blend class 8; the 2048 leftovers (rocket
+flare, Zone spark swap).
+
 ## Open
 
 - **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see
