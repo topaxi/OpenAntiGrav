@@ -290,6 +290,38 @@ not because riding the strip triggers it. Not confirmed either way - it
 would need the pad/emitter placement data for a magstrip track, not just the
 bank's cue list.
 
+### 2026-10-05: the three remaining routes to a per-craft hum are all closed
+
+1. **No sound code reads the mag-contact state.** Every `lbu ..,0x240(..)` in
+   the binary is in `Ship_CastHoverProbes` (three) or `Ship_UpdateMagLock`
+   (one), and every `lwc1 ..,0x280(..)` off a craft pointer is in
+   `Ship_UpdateCraft`, `Ship_HoverTwoPoint`, `Ship_HoverFourCorner` or
+   `Ship_UpdateMagLock` (`HudSight_Update` reads a `+0x280` of its own
+   object). The rest are stack slots. So neither the edge flag nor the blend
+   reaches the engine note, a voice, or a pitch.
+2. **Neither effect model authors a sound node.** `MagEffect1.vex` is
+   `World`/`Mesh`/`Texture` (`0xf4`, `0x125`, `0x3c1`); `MagEffect2.vex` adds
+   one `Anim Transform` (`0x3c0`). `oag_vex::sound_emitters::emitters` finds
+   none in either.
+3. **Track emitters are not placed along the strips.**
+   `cargo run -p oag-vex --example magfloor_emitter_reach` gathers every
+   `MagFloor` collision vertex in world space on each circuit and lists the
+   `sound`/`soundcone` nodes whose radius reaches one. Eight circuits carry a
+   magstrip (01, 02, 03, 05, 06, 07, 09, 16; none on 04, 10, 13, 14). What
+   reaches them is ordinary scenery: `~crowd`, `~billboard`, `~CRAFT`,
+   `~NEON_RING`, `~yellowarrow`. `~bighum` reaches a strip on 01, 03, 07 and
+   09, but the circuits with the most hum-named emitters are 10, 13 and 14
+   (12-17 each), and **none of those three has a magstrip**. 02 and 06 have
+   strips and no hum emitter at all. A cue placed to sound "on the strip"
+   would show the opposite pattern.
+
+**Result: there is no magfloor sfx to wire, confidence 80.** The hum a player
+hears near a strip is whatever ambience that circuit places there, and
+`oag_sound::sfx::TrackEmitters` already plays every `sound`/`soundcone` node
+([track-sound-emitters.md](track-sound-emitters.md)). Short of 85 because no
+live audio capture on a strip was compared, and a cue fired through a
+function-pointer path this search cannot see is not ruled out.
+
 **Do not invent a cue for this.** Per `CLAUDE.md`'s do-not-invent rule, no sfx
 is wired until the emitter reading above is confirmed or refuted.
 
