@@ -36,9 +36,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
+use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
 
 /// Long enough that the craft is genuinely up to speed before a test measures

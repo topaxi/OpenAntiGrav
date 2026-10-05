@@ -27,14 +27,14 @@ fn image() -> Option<std::path::PathBuf> {
     oag_testdata::image("pulse-psp-usa.chd")
 }
 
-fn load(image: &std::path::Path, mode: oag_race::Mode) -> oag_game::race::Loaded {
-    oag_game::race::load(&oag_game::race::Options {
+fn load(image: &std::path::Path, mode: oag_race::Mode) -> oag_raceplay::Loaded {
+    oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode,
         track: Some(r"Data\Environments\16_Track\track.vex".to_string()),
         seed: Some(1),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     })
     .expect("loading 16_Track")
 }
@@ -82,7 +82,7 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
     let total_word = context.strings.get_or_id("IG_HUD_TOTAL").to_string();
 
     let stats = loaded.track_stats.expect("stats.xml reads");
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     race.tick(&PlayerInputs::none());
     let mut readout = race.readout();
     assert_eq!(readout.mode, oag_race::Mode::TimeTrial);
@@ -130,7 +130,7 @@ fn an_eliminator_draws_the_kill_column_in_the_default_face() {
     let Some(image) = image() else { return };
     let loaded = load(&image, oag_race::Mode::Eliminator);
     let context = loaded.hud.context().expect("Pulse's layout parses");
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     race.tick(&PlayerInputs::none());
     let mut readout = race.readout();
     assert_eq!(readout.kill_target, 5, "the race box's first kill row");
@@ -186,7 +186,7 @@ fn a_single_race_draws_pos_and_no_total() {
     let context = loaded.hud.context().expect("Pulse's layout parses");
     let pos = context.strings.get_or_id("IG_HUD_POS").to_string();
     let total = context.strings.get_or_id("IG_HUD_TOTAL").to_string();
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
     assert_eq!(readout.place, 8, "the parked player is 8th of 8");

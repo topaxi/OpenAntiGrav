@@ -1,0 +1,66 @@
+[package]
+name = "oag-raceplay"
+description = "A race from load to finish line: the front-to-back tick, the scene it draws and the effects it plays"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-2048.workspace = true
+oag-ai.workspace = true
+oag-assets.workspace = true
+oag-core.workspace = true
+oag-disc.workspace = true
+oag-display.workspace = true
+oag-formats.workspace = true
+oag-fx.workspace = true
+oag-gameplay.workspace = true
+oag-gpu.workspace = true
+oag-hd.workspace = true
+oag-hud.workspace = true
+oag-input.workspace = true
+oag-livery.workspace = true
+oag-mesh.workspace = true
+oag-physics.workspace = true
+oag-pob.workspace = true
+oag-post.workspace = true
+oag-present.workspace = true
+oag-pulse.workspace = true
+oag-pure.workspace = true
+oag-race.workspace = true
+oag-rcs.workspace = true
+oag-render.workspace = true
+oag-replay.workspace = true
+oag-sound.workspace = true
+oag-source.workspace = true
+oag-tables.workspace = true
+oag-texture.workspace = true
+oag-title.workspace = true
+oag-trace.workspace = true
+oag-ui.workspace = true
+oag-ui-screens.workspace = true
+oag-vex.workspace = true
+oag-weapons.workspace = true
+anyhow.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+dirs = "7"
+log.workspace = true
+serde.workspace = true
+toml.workspace = true
+# `crate::pilots` writes a hand-authored pilot file back byte-for-byte; see its module doc.
+toml_edit = "0.25"
+wgpu.workspace = true
+winit.workspace = true
+
+[features]
+# See `oag-render`'s feature of the same name. Off by default.
+perf-probe = ["oag-render/perf-probe"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+oag-testdata.workspace = true
+pollster.workspace = true

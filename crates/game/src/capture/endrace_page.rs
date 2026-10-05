@@ -120,7 +120,7 @@ fn seconds_to_ticks(seconds: f64) -> u32 {
 )]
 pub(super) fn capture(
     kind: EndRaceKind,
-    race: Option<&crate::race::Options>,
+    race: Option<&oag_raceplay::Options>,
     menu_font: Option<&oag_ui::font::Atlas>,
     font: &oag_ui::font::Atlas,
     menu_skin: &'static oag_title::MenuSkin,

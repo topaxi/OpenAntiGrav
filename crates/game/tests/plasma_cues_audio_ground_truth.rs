@@ -46,9 +46,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
+use oag_raceplay as race;
 use oag_sound::sfx::Cue;
 use oag_tables::weapons::Weapon;
 

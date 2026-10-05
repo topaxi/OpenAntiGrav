@@ -24,8 +24,9 @@
 //! trough or lap figure), and its field lost 49 of 84 craft (see
 //! `docs/gameplay/ai.md`, "de Konstruct Black: the first jump is a magstrip").
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 const TICKS: u64 = 18_000;
 const STOP_FROM: f32 = 60.0;

@@ -9,12 +9,15 @@ use oag_core::{TickClock, TickRate};
 
 use oag_display::display;
 use oag_game::render::Renderer;
-use oag_game::{boot, launcher, loading, pilots, prefetch, race, settings, source};
+use oag_game::{boot, launcher, loading, prefetch, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_present::perf;
 use oag_present::upscale;
+use oag_raceplay as race;
+use oag_raceplay::pilots;
+use oag_source::source;
 use oag_ui::strings;
 
 use winit::application::ApplicationHandler;
@@ -235,7 +238,7 @@ impl App {
             audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,
-                &boot::default_audio_cache_dir(),
+                &oag_source::cache::default_audio_cache_dir(),
             );
             Stage::race(
                 &gpu,

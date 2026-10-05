@@ -18,8 +18,8 @@ use oag_tables::race_campaign::{self, Cell};
 /// `oag_game::remix::catalogue` answers only the raceable list and the Zone
 /// split is half of what a cell needs resolved.
 struct Catalogue {
-    race: Vec<oag_game::catalogue::Track>,
-    zone: Vec<oag_game::catalogue::Track>,
+    race: Vec<oag_raceplay::catalogue::Track>,
+    zone: Vec<oag_raceplay::catalogue::Track>,
 }
 
 impl Catalogue {
@@ -31,7 +31,7 @@ impl Catalogue {
         };
         list.iter()
             .find(|track| track.id == id)
-            .map(oag_game::catalogue::Track::entry_name)
+            .map(oag_raceplay::catalogue::Track::entry_name)
     }
 }
 
@@ -62,12 +62,12 @@ fn open() -> Option<Omega> {
     }
     documents.extend(archives.manifests.iter().cloned());
     let offered =
-        |track: &oag_game::catalogue::Track| archives.locate(&track.entry_name()).is_some();
-    let race_all = oag_game::catalogue::all_tracks(&documents);
+        |track: &oag_raceplay::catalogue::Track| archives.locate(&track.entry_name()).is_some();
+    let race_all = oag_raceplay::catalogue::all_tracks(&documents);
     let zone_all = title.race.zone.menu_tracks(
         &race_all,
         |track| track.available_in_zone,
-        |names| oag_game::catalogue::all_tracks_named(&documents, names),
+        |names| oag_raceplay::catalogue::all_tracks_named(&documents, names),
     );
     let race: Vec<_> = race_all.iter().filter(|t| offered(t)).cloned().collect();
     let zone: Vec<_> = zone_all.into_iter().filter(|t| offered(t)).collect();

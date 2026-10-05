@@ -516,7 +516,7 @@ pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<Men
 /// screen, not because the `None` case is expected to fire.
 #[must_use]
 pub(crate) fn hd_field_rows(
-    board: Option<&oag_game::scoreboard::Board>,
+    board: Option<&oag_raceplay::scoreboard::Board>,
 ) -> Vec<oag_ui_screens::endrace::FieldRow> {
     board
         .map(|board| {
@@ -534,12 +534,12 @@ pub(crate) fn hd_field_rows(
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`
-/// law: [`Board`](oag_game::scoreboard::Board) for this leg's own finish
+/// law: [`Board`](oag_raceplay::scoreboard::Board) for this leg's own finish
 /// order and leg points (`oag_race::tournament::points_for_finish`, the same
 /// law already folded into the running totals a moment earlier -
 /// `crate::main::session::tournament::record_finished_leg` runs before
 /// `Session::build_endrace` in the same frame), and
-/// `crate::race::tournament::Progress` for the cumulative totals and rank.
+/// `oag_raceplay::tournament::Progress` for the cumulative totals and rank.
 /// `slot_teams` is this leg's own grid roster, in slot order -
 /// `crate::main::session::endrace::build_endrace` reads it off the race
 /// (`Race::slot_teams`), since which team flew which slot is not carried on
@@ -548,8 +548,8 @@ pub(crate) fn hd_field_rows(
 /// [`oag_ui_screens::endrace::TournamentRow::team_name`]'s own doc.
 #[must_use]
 pub(crate) fn tournament_results(
-    board: Option<&oag_game::scoreboard::Board>,
-    progress: &crate::race::tournament::Progress,
+    board: Option<&oag_raceplay::scoreboard::Board>,
+    progress: &oag_raceplay::tournament::Progress,
     slot_teams: Option<&[String]>,
     last_leg: bool,
 ) -> Option<TournamentResults> {
@@ -614,7 +614,7 @@ pub(crate) fn elimination_results(
 #[must_use]
 pub(crate) fn zone_results(
     state: &oag_race::RaceState,
-    stats: crate::race::RunStats,
+    stats: oag_raceplay::RunStats,
 ) -> ZoneResults {
     ZoneResults {
         zones_cleared: u32::from(state.zone),
@@ -736,7 +736,7 @@ pub(crate) fn results_table_takes_confirm(finished: bool, endrace_built: bool) -
 #[cfg(test)]
 mod tests {
     use super::{LoyaltyInputs, hd_field_rows, loyalty_award, trophy_index};
-    use oag_game::scoreboard::{Board, Row};
+    use oag_raceplay::scoreboard::{Board, Row};
     use oag_tables::race_campaign::Medal;
 
     /// A campaign medal picks its own trophy; no cell, or no medal, picks

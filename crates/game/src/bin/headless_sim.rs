@@ -26,8 +26,8 @@
 //! cargo run -p oag-game --bin oag-headless-sim -- 600
 //! ```
 
-use oag_game::race::{Race, Setup};
 use oag_gameplay::{Controller, PlayerInputs};
+use oag_raceplay::{Race, Setup};
 
 /// Ticks to run when the command line says nothing.
 const DEFAULT_TICKS: u32 = 120;

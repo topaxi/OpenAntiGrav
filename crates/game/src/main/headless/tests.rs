@@ -11,8 +11,8 @@
 //! ```
 
 use clap::Parser;
-use oag_game::race;
 use oag_gameplay::ControlScheme;
+use oag_raceplay as race;
 
 use super::write_trace;
 use crate::cli::Cli;

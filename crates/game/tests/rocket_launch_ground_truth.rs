@@ -28,7 +28,7 @@
 //! opponent make.
 
 use oag_core::math::{Mat3, Quat, Vec3};
-use oag_game::race;
+use oag_raceplay as race;
 use oag_weapons::projectile;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";

@@ -20,8 +20,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// Five minutes at 60 Hz, the window every other solo benchmark on this disc
 /// uses.

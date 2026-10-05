@@ -37,8 +37,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// How long a measured run is: five minutes at 60 Hz, the same window
 /// `race_ground_truth.rs`'s solo benchmark uses, so the two are comparable.

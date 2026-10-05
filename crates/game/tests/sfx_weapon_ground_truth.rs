@@ -14,8 +14,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
@@ -32,8 +32,9 @@ fn cannonexplship_is_a_child_reference_to_cannonexplwall() {
     let Some(path) = image("pulse-psp-usa.chd") else {
         return;
     };
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let mut archives = opened.archives;
     let blob = archives
         .read_name(r"Data\Sound\weapons.bnk")
@@ -79,7 +80,7 @@ fn repulsortravel_binds_no_sound_on_pulse_psp() {
             continue;
         };
         let opened =
-            oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
                 .expect("opening the source");
         let mut archives = opened.archives;
         let blob = archives

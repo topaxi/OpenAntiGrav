@@ -22,7 +22,7 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race;
+use oag_raceplay as race;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

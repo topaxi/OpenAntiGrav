@@ -13,8 +13,8 @@
 //! a live PPSSPP capture confirmed; circuit seven eighteen `WO_MODESTO_STEAM_A`.
 //! See `docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md`.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 fn race_on(track: &str) -> Option<race::Race> {
     let image = oag_testdata::image("pulse-psp-usa.chd")?;

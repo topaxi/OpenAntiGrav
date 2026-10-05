@@ -98,20 +98,22 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
         .unwrap_or_else(|| panic!("{label}: no ticker viewport to test against"));
 
     let mut opened =
-        oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .unwrap_or_else(|e| panic!("{label}: opening the source: {e}"));
     let plugins = opened
         .title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let mut report = Vec::new();
-    let languages = oag_game::boot::load_languages(&mut opened.archives, plugins, &mut report);
-    // `oag_game::boot::load_strings` is the real path every other caller
+    let languages =
+        oag_ui::language::load::load_languages(&mut opened.archives, plugins, &mut report);
+    // `oag_ui::language::load::load_strings` is the real path every other caller
     // (the live session, `capture::menu_page`) resolves `TKR_NO*` through -
     // not a hand-rolled read, which would leave this test checking its own
     // parse of `language.entries` (an archive *path*, not decoded text)
     // rather than the wiring this thread actually built.
-    let strings = oag_game::boot::load_strings(&mut opened.archives, &languages, None, &mut report);
+    let strings =
+        oag_ui::language::load::load_strings(&mut opened.archives, &languages, None, &mut report);
 
     let tips = oag_game::records::ticker_tips(&strings, &oag_game::records::Store::default());
     assert!(

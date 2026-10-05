@@ -19,7 +19,7 @@ fn main() {
     let image = args.next().expect("image");
     let out = args.next().expect("out dir");
     std::fs::create_dir_all(&out).unwrap();
-    let opened = oag_game::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
+    let opened = oag_source::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
     let tick = opened
         .title
         .race

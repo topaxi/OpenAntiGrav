@@ -10,7 +10,8 @@
 //! banked, and `race::load`'s own default team), or the previous RACE-page
 //! team after one. See `docs/ui/endrace-screens.md`.
 
-use oag_game::{race, settings};
+use oag_game::settings;
+use oag_raceplay as race;
 use oag_ui::menu;
 
 use super::combine_variant;

@@ -1,5 +1,5 @@
 //! Decodes **every team's** boost plume off the disc and checks what came out -
-//! the model `oag_game::race::load` reads beside `Ship.vex`.
+//! the model `oag_raceplay::load` reads beside `Ship.vex`.
 //!
 //! **Two discs, and they do not ship the same model.** Most of this file is the
 //! PSP's `shipboost.vex`, which is where the plume's look was measured; the
@@ -43,7 +43,7 @@
 //! ship space rather than mounted on a locator, see `Loaded::boost_model`'s
 //! doc comment. This file checks the same shape holds for every team rather
 //! than the one that happened to be looked at, through the same
-//! `oag_mesh::mesh::build_with_textures` path `oag_game::race::load` uses.
+//! `oag_mesh::mesh::build_with_textures` path `oag_raceplay::load` uses.
 //!
 //! It also pins that those transparent-draw batches are what they need to be
 //! for `race::Scene`'s additive blend override to matter at all: if the
@@ -284,10 +284,10 @@ fn pulses_load_report_still_finds_its_boost_plume() {
     let Some(image) = image() else {
         return;
     };
-    let loaded = oag_game::race::load(&oag_game::race::Options {
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
     assert!(

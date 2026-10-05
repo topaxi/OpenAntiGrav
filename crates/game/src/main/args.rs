@@ -305,7 +305,7 @@ pub(crate) fn input_script(
 }
 
 /// Resolves `--autopilot-pilot`'s spelling to a pilot, against the same
-/// roster [`oag_game::race::Race::start`] deals the grid from.
+/// roster [`oag_raceplay::Race::start`] deals the grid from.
 ///
 /// **A missing or unreadable pilot directory falls back to the built-in
 /// four**, the same way `Race::start` does - a player who has never
@@ -313,9 +313,9 @@ pub(crate) fn input_script(
 /// rejected rather than ignored, for the reason [`give_weapon`] gives.
 pub(crate) fn autopilot_pilot(name: Option<&str>) -> Result<Option<oag_ai::Pilot>> {
     let Some(name) = name else { return Ok(None) };
-    let roster = oag_game::pilots::load().unwrap_or_else(|e| {
+    let roster = oag_raceplay::pilots::load().unwrap_or_else(|e| {
         warn!("pilots: {e:#} - matching --autopilot-pilot against the built-in four");
-        oag_game::pilots::Roster::built_in()
+        oag_raceplay::pilots::Roster::built_in()
     });
     match roster.find(name) {
         Some(entry) => Ok(Some(entry.pilot)),

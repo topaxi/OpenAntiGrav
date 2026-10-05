@@ -15,6 +15,9 @@ rust-version.workspace = true
 # classification is what makes linking a renderer *legal* here without ever
 # becoming legal for anything gameplay depends on.
 [dependencies]
+# Reads a title's language plugins and string tables out of its archives: `language::load`.
+oag-assets.workspace = true
+anyhow.workspace = true
 # `backdrop::Fury`'s path picker draws from the seeded `Rng`, so a capture at
 # a given seed is the same picture twice.
 oag-core.workspace = true
@@ -50,5 +53,4 @@ workspace = true
 
 [dev-dependencies]
 # `tests/menu_layout_ground_truth.rs` reads a real archive off a disc image.
-oag-assets.workspace = true
 oag-testdata.workspace = true

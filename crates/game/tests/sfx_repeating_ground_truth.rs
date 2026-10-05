@@ -25,8 +25,9 @@ const PULSE: [&str; 3] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd", "pulse-ps2-eu
 const NOT_PSP_TICK: [&str; 2] = ["pure-psp-usa.chd", "hdfury-ps3-eu-dec.iso"];
 
 fn banks(path: &std::path::Path) -> Banks {
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let tick = opened
         .title

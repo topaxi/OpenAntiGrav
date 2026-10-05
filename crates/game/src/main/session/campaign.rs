@@ -24,14 +24,15 @@ impl Session {
         let Some(options) = self.race_options.as_ref() else {
             return;
         };
-        let (packs, pure_packs, problems) = oag_game::dlc::packs_from_defaults(
+        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &options.dlc,
-            &oag_game::boot::default_dlc_cache_dir(),
+            &oag_source::cache::default_dlc_cache_dir(),
         );
         for problem in problems {
             warn!("{problem}");
         }
-        let mut archives = match oag_game::title::open_source(&options.source, packs, pure_packs) {
+        let mut archives = match oag_source::title::open_source(&options.source, packs, pure_packs)
+        {
             Ok(opened) => opened.archives,
             Err(error) => {
                 warn!(
@@ -314,7 +315,7 @@ impl Session {
             |mode, id| {
                 shell
                     .track(mode, id)
-                    .map(oag_game::catalogue::Track::entry_name)
+                    .map(oag_raceplay::catalogue::Track::entry_name)
             },
         ) {
             Ok(plan) => plan,
@@ -385,7 +386,7 @@ impl Session {
         // `Self::tournament`'s own doc for why nothing else has to clear it
         // on this path.
         self.tournament =
-            is_tournament.then(|| crate::race::tournament::Progress::new(leg_entries));
+            is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(campaign) = stage.campaign.take()
         {

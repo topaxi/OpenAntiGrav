@@ -30,8 +30,9 @@
 use std::path::{Path, PathBuf};
 
 use oag_2048::campaign::{EventOutcome, Tier, objective_type};
-use oag_game::{boot, race, records};
+use oag_game::{boot, records};
 use oag_gameplay::input::{Button, Input};
+use oag_raceplay as race;
 use oag_ui::frontend::{self, EarnedTier, ProgressState};
 
 fn source() -> Option<PathBuf> {
@@ -58,7 +59,7 @@ fn options(source: &Path) -> boot::Options {
         leg: frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-2048-campaign-progress-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,

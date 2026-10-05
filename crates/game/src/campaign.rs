@@ -283,7 +283,7 @@ pub fn load(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
+    oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,
@@ -480,7 +480,7 @@ fn load_hd(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
+    oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,
@@ -722,7 +722,7 @@ fn load_omega(
     }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
-    crate::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
+    oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
 
     Ok(Campaign {
         grids,

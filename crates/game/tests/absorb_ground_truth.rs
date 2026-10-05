@@ -12,7 +12,7 @@
 //!
 //! That the burst reaches the screen at all, which it did on no title before
 //! 2026-09-23 - the sound played and nothing drew. So each test absorbs a
-//! pickup on a real race and asserts what `oag_game::race::absorb` promises
+//! pickup on a real race and asserts what `oag_raceplay::absorb` promises
 //! for that title: one `WO_WEAPON_ABSORB` instance per locator the hull
 //! authors, started on the title's own stagger and playing on the stage. The
 //! locator counts are the discs' own - Pulse's Assegai carries six `Ship
@@ -22,9 +22,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
+use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
 
 /// Past the start-line countdown - see `shuriken_ground_truth.rs`'s twin.

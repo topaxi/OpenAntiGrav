@@ -47,16 +47,21 @@ fn image(name: &str) -> Option<PathBuf> {
 /// `Assets::load` needs to reach the other copies of it.
 fn table_and_entries(source: &Path) -> (StringTable, Option<String>) {
     let opened =
-        oag_game::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
             .expect("the source opens");
     let mut archives = opened.archives;
     let mut report = Vec::new();
     let plugins: &[&str] = opened.title.front_end.map_or(&[], |fe| fe.language_plugins);
-    let languages = oag_game::boot::load_languages(&mut archives, plugins, &mut report);
-    let chosen = oag_game::boot::chosen_language(&languages, Some("English"));
+    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
+    let chosen = oag_ui::language::load::chosen_language(&languages, Some("English"));
     let entries = chosen.and_then(|language| language.entries.clone());
     (
-        oag_game::boot::load_strings(&mut archives, &languages, Some("English"), &mut report),
+        oag_ui::language::load::load_strings(
+            &mut archives,
+            &languages,
+            Some("English"),
+            &mut report,
+        ),
         entries,
     )
 }
@@ -382,17 +387,17 @@ fn the_circuit_load_runs_on_a_worker_and_names_what_it_is_reading() {
     let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let options = oag_game::race::Options {
+    let options = oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         track: Some(r"Data\Environments\Talons_Junction\track.vex".to_string()),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     };
     let label = "TALON'S JUNCTION".to_string();
-    let mut worker = oag_game::race::LoadWorker::spawn(options, Some(label.clone()), None);
+    let mut worker = oag_raceplay::LoadWorker::spawn(options, Some(label.clone()), None);
 
     // The screen's own view of it, before the load has necessarily finished.
-    let progress = worker.progress();
+    let progress: oag_game::prefetch::Progress = worker.progress().into();
     assert_eq!(progress.current.as_deref(), Some(label.as_str()));
     assert_eq!(progress.total, 0, "a race load counts nothing");
     assert_eq!(progress.done, 0);

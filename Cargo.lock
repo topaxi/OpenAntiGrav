@@ -2080,10 +2080,12 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-race",
+ "oag-raceplay",
  "oag-rcs",
  "oag-render",
  "oag-replay",
  "oag-sound",
+ "oag-source",
  "oag-tables",
  "oag-testdata",
  "oag-texture",
@@ -2102,7 +2104,6 @@ dependencies = [
  "toml_edit",
  "wgpu",
  "winit",
- "zip",
 ]
 
 [[package]]
@@ -2328,6 +2329,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-raceplay"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "dirs",
+ "log",
+ "oag-2048",
+ "oag-ai",
+ "oag-assets",
+ "oag-core",
+ "oag-disc",
+ "oag-display",
+ "oag-formats",
+ "oag-fx",
+ "oag-gameplay",
+ "oag-gpu",
+ "oag-hd",
+ "oag-hud",
+ "oag-input",
+ "oag-livery",
+ "oag-mesh",
+ "oag-physics",
+ "oag-pob",
+ "oag-post",
+ "oag-present",
+ "oag-pulse",
+ "oag-pure",
+ "oag-race",
+ "oag-rcs",
+ "oag-render",
+ "oag-replay",
+ "oag-sound",
+ "oag-source",
+ "oag-tables",
+ "oag-testdata",
+ "oag-texture",
+ "oag-title",
+ "oag-trace",
+ "oag-ui",
+ "oag-ui-screens",
+ "oag-vex",
+ "oag-weapons",
+ "pollster",
+ "serde",
+ "toml",
+ "toml_edit",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "oag-rcs"
 version = "0.1.0"
 dependencies = [
@@ -2400,6 +2453,25 @@ dependencies = [
  "oag-vex",
  "oag-weapons",
  "serde",
+]
+
+[[package]]
+name = "oag-source"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "log",
+ "oag-2048",
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-hd",
+ "oag-omega",
+ "oag-pulse",
+ "oag-pure",
+ "oag-title",
+ "zip",
 ]
 
 [[package]]
@@ -2479,6 +2551,7 @@ dependencies = [
 name = "oag-ui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "oag-2048",
  "oag-assets",
  "oag-core",

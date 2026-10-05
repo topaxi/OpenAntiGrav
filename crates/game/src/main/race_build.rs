@@ -17,9 +17,10 @@ use std::time::{Duration, Instant};
 
 use log::debug;
 
-use oag_game::{race, settings};
+use oag_game::settings;
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_raceplay as race;
 
 use crate::gpu::Handles;
 use crate::loading_stage::RaceBuildError;

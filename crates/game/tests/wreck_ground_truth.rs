@@ -130,7 +130,7 @@ fn team_on_slot(slot: usize) -> String {
         .read_name(oag_pulse::TITLE.plugin_definition)
         .expect("the plugin definition");
     let xml = oag_tables::fexml::text(&blob).expect("the definition is text");
-    let available: Vec<String> = oag_game::catalogue::teams(&xml)
+    let available: Vec<String> = oag_raceplay::catalogue::teams(&xml)
         .into_iter()
         .map(|team| team.id)
         .collect();
@@ -138,7 +138,7 @@ fn team_on_slot(slot: usize) -> String {
         oag_pulse::TITLE.race.team,
         &available,
         oag_gameplay::MAX_SHIPS,
-        oag_game::race::SEED,
+        oag_raceplay::SEED,
     )
     .swap_remove(slot)
 }

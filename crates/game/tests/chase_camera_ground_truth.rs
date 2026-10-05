@@ -62,7 +62,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
+use oag_raceplay as race;
 use oag_render::camera::chase::{Chase, Target};
 
 /// The largest per-tick eye error, in world units, this comparison may show.

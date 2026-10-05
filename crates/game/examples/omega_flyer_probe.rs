@@ -52,7 +52,7 @@ fn main() -> anyhow::Result<()> {
     // And through the game's own preview path, which is what a flyer would
     // be drawn from.
     if let Some(source) = std::env::args().nth(2) {
-        let mut opened = oag_game::title::open_source(&source, Vec::new(), Vec::new())?;
+        let mut opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())?;
         for entry in [
             "Data/fe/flyers/01_uplift/flyer.vex",
             "Data/FE/Flyers/01_uplift/flyer.vex",

@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::dlc;
+use oag_source::dlc;
 
 fn workspace(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

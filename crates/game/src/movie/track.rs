@@ -85,7 +85,7 @@ enum MovieAudioKind {
 ///
 /// Held rather than decoded on the spot because the ATRAC3+ path shells out to
 /// `ffmpeg` and lands in a **different** cache from the one the pictures use -
-/// see [`crate::boot::default_audio_cache_dir`] - and [`super::open`] is given
+/// see [`oag_source::cache::default_audio_cache_dir`] - and [`super::open`] is given
 /// only the movie cache. Keeping the two apart is also what lets `--prefetch`
 /// and the viewer open a movie without ever paying for its sound. The PS2 path
 /// has no such cost to defer - see [`MovieAudioKind::Pcm`] - but is held the

@@ -13,9 +13,9 @@
 //! `grid0`'s own cells earn the points `grid_points_met` compares. Nothing here writes a
 //! circuit or grid name down: the expectations are read off the same definition.
 
-use oag_game::catalogue::{self, Track};
 use oag_game::records::{Medal, Store};
 use oag_game::unlock::{self, Gate};
+use oag_raceplay::catalogue::{self, Track};
 
 const DEFINITION: &str = r"Data\Plugins\PI001\Definition.xml";
 
@@ -29,7 +29,7 @@ struct Disc {
 fn disc() -> Option<Disc> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let mut opened =
-        oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
             .expect("opening the source");
     let blob = opened
         .archives

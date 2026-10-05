@@ -72,14 +72,14 @@ fn nearest_surface(world: &oag_physics::collide::CollisionWorld, p: Vec3) -> f32
 }
 
 fn main() -> anyhow::Result<()> {
-    let options = oag_game::race::Options {
+    let options = oag_raceplay::Options {
         source: "data/images/hdfury-ps3-eu-dec.iso".into(),
         track: Some(r"Data\Environments\talons_junction\track.vex".into()),
         team: Some("feisar_c1".into()),
         opponents: true,
         ..Default::default()
     };
-    let loaded = oag_game::race::load(&options)?;
+    let loaded = oag_raceplay::load(&options)?;
     let triangles: usize = loaded
         .setup
         .collision
@@ -137,10 +137,10 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     // The same input a `--hold cross` screenshot run drives, so a tick
     // printed here is the `--ticks` a capture wants.
-    let mut held = oag_game::race::HeldButtons::new(oag_gameplay::input::Button::Cross.bit());
+    let mut held = oag_raceplay::HeldButtons::new(oag_gameplay::input::Button::Cross.bit());
     let mut ours = Vec::new();
     let mut first_boost: Option<u32> = None;
     println!("\nours, every 100 ticks (player holding cross):");

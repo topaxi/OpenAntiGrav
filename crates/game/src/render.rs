@@ -583,7 +583,7 @@ impl Renderer {
     /// the frame, so it has to keep what the stage drew. That is the only
     /// difference - a second pass with the same pipelines, which is also why
     /// the overlay needs a renderer of its own rather than a flag on the
-    /// stage's: a race draws through [`crate::race::Scene`] and has no
+    /// stage's: a race draws through [`oag_raceplay::Scene`] and has no
     /// [`Renderer`] at all.
     pub fn overlay(
         &mut self,

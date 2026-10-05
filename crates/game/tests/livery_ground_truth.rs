@@ -29,7 +29,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
+use oag_raceplay as race;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -200,7 +200,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
-    let teams = oag_game::catalogue::teams(&definition);
+    let teams = oag_raceplay::catalogue::teams(&definition);
     assert!(teams.len() > 1, "the disc declares more than one team");
 
     // The *last* team, so a pass could not come from it happening to be first.

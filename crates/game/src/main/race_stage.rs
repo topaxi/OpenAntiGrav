@@ -2,8 +2,8 @@
 
 use log::warn;
 use oag_display::display;
-use oag_game::race;
 use oag_present::upscale;
+use oag_raceplay as race;
 
 use crate::gpu::GpuContext;
 
@@ -35,7 +35,7 @@ pub(crate) struct RaceStage {
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
     /// Which circuit/mode/class row [`oag_game::records`] persists this
     /// race's outcome under - resolved once, at load, from
-    /// [`oag_game::race::Loaded::title`] and the [`oag_game::race::Options`]
+    /// [`oag_raceplay::Loaded::title`] and the [`oag_raceplay::Options`]
     /// that produced it, because neither is reachable from a finished or an
     /// escaped race any other way. See `Session::frame`'s finish-transition
     /// arm and `Session::escape`, the only two readers.
@@ -47,10 +47,10 @@ pub(crate) struct RaceStage {
     pub(crate) record_target: Option<oag_hud::RecordTarget>,
     /// This race's own personal-best comparison, computed once at the finish
     /// transition and drawn on the results table alongside
-    /// [`oag_game::scoreboard::Board`] - see [`RaceStage::draw_hud`].
+    /// [`oag_raceplay::scoreboard::Board`] - see [`RaceStage::draw_hud`].
     ///
     /// `None` until the finish arm sets it, and forever `None` on a race that
-    /// is escaped rather than finished: [`oag_game::race::Race::results`] is
+    /// is escaped rather than finished: [`oag_raceplay::Race::results`] is
     /// `None` on that path too, so there is no table for it to be drawn on.
     /// See `Session::frame`'s finish-transition arm, the only writer.
     pub(crate) personal_best: Option<oag_game::records::PersonalBest>,

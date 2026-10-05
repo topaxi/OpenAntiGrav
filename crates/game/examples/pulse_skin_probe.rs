@@ -31,13 +31,13 @@ fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&out)?;
 
     let load = |skin: Option<&str>| {
-        oag_game::race::load(&oag_game::race::Options {
+        oag_raceplay::load(&oag_raceplay::Options {
             source: image.clone(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             team: Some(team.clone()),
             skin: skin.map(str::to_string),
-            ..oag_game::race::Options::default()
+            ..oag_raceplay::Options::default()
         })
     };
     let baseline = load(None)?;

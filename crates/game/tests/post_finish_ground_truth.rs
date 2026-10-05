@@ -21,8 +21,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 const CAP: u64 = 30_000;
 

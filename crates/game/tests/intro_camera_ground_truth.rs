@@ -15,9 +15,10 @@
 //! the run ends on the tick the measured constants say, that the HUD comes back 30 ticks after,
 //! and that a held Cross ends it when the lock lifts and not before.
 
-use oag_game::race::{self, Race, intro_camera};
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input, InputSnapshot};
+use oag_raceplay as race;
+use oag_raceplay::{Race, intro_camera};
 
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";
 

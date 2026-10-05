@@ -26,7 +26,7 @@ fn load(source: &str) -> Option<boot::Boot> {
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-picker-pitch-ground-truth"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,

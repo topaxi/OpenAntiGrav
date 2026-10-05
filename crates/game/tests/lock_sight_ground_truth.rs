@@ -25,8 +25,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 fn image_named(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)

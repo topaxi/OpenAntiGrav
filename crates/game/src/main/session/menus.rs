@@ -5,7 +5,9 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, catalogue, movie, pilots, settings};
+use oag_game::{boot, movie, settings};
+use oag_raceplay::catalogue;
+use oag_raceplay::pilots;
 use oag_ui::{menu, strings};
 use oag_ui_screens::marquee;
 
@@ -807,7 +809,7 @@ impl Session {
     /// does not offer that team. A no-op with no shell (the `--race` path,
     /// which has no menus to have picked anything). See
     /// [`team::apply_race_team`].
-    pub(crate) fn apply_race_team(&self, race_options: &mut oag_game::race::Options) {
+    pub(crate) fn apply_race_team(&self, race_options: &mut oag_raceplay::Options) {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };

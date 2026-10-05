@@ -7,8 +7,11 @@
 //! of any of the twelve.
 
 fn main() -> anyhow::Result<()> {
-    let opened =
-        oag_game::title::open_source("data/images/hdfury-ps3-eu-dec.iso", Vec::new(), Vec::new())?;
+    let opened = oag_source::title::open_source(
+        "data/images/hdfury-ps3-eu-dec.iso",
+        Vec::new(),
+        Vec::new(),
+    )?;
     let mut dirs: Vec<String> = Vec::new();
     let containers = std::iter::once(&opened.archives.data)
         .chain(opened.archives.fe.iter())

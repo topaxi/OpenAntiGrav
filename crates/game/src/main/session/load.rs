@@ -5,7 +5,8 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 
 use oag_game::render::VideoFormat;
-use oag_game::{boot, loading, movie, prefetch, race, records};
+use oag_game::{boot, loading, movie, prefetch, records};
+use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
@@ -148,7 +149,7 @@ impl Session {
         // finished and its `finished: true` would fade this screen out over a
         // circuit that is still being read.
         if let Some(worker) = stage.race.as_ref() {
-            return (loading::Phase::Race, worker.progress());
+            return (loading::Phase::Race, worker.progress().into());
         }
         let Some(media) = stage.media.as_ref().filter(|m| !m.is_finished()) else {
             return (loading::Phase::Prefetch, progress);
@@ -213,7 +214,7 @@ impl Session {
             .as_mut()
             .map(boot::MediaWorker::join)
             .unwrap_or_default();
-        oag_game::loader_log::lines(&media.report);
+        oag_raceplay::loader_log::lines(&media.report);
         let mut loaded = boot::assemble(shell, media);
         if self.boot_overlay {
             loaded.frontend.set_overlay(true);
@@ -279,7 +280,7 @@ impl Session {
             }
             _ => {}
         }
-        oag_game::loader_log::lines(&loaded.report);
+        oag_raceplay::loader_log::lines(&loaded.report);
         // A source with no intro reel at all - which is every PS2 source, whose
         // intro is an MPEG-2 program stream outside the archives - has no video
         // format either, and the front end draws without one.
@@ -369,7 +370,7 @@ impl Session {
             entries.as_deref(),
             crate::args::style_of(&self.settings),
         );
-        oag_game::loader_log::lines(&assets.notes);
+        oag_raceplay::loader_log::lines(&assets.notes);
         self.loading_assets = assets;
     }
 
@@ -428,7 +429,7 @@ impl Session {
         options.language = self.settings.language.clone();
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
-        // `oag_game::catalogue::label`. `None` on a run whose source offered
+        // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
         // no circuit at all, which draws no line rather than an id.
         let label = self.shell.as_ref().and_then(|shell| {
             let entry = options.track.as_deref()?;
@@ -477,7 +478,7 @@ impl Session {
         let music = oag_sound::MusicFetchWorker::spawn(
             self.music_discs.clone(),
             self.settings.audio.music_source,
-            boot::default_audio_cache_dir(),
+            oag_source::cache::default_audio_cache_dir(),
             music_index,
             "race-music",
         );
@@ -600,7 +601,7 @@ impl Session {
             .unwrap_or_else(|| Err(anyhow::anyhow!("the circuit's load thread would not start")));
         match loaded {
             Ok(loaded) => {
-                oag_game::loader_log::lines(&loaded.report);
+                oag_raceplay::loader_log::lines(&loaded.report);
                 let request = crate::race_build::Request {
                     gpu: self.gpu.handles(),
                     allocation: self.framebuffer.allocation(),
@@ -719,7 +720,7 @@ impl Session {
                 worker,
                 &self.music_discs,
                 self.settings.audio.music_source,
-                &boot::default_audio_cache_dir(),
+                &oag_source::cache::default_audio_cache_dir(),
             ),
             // Defensive rather than load-bearing: `Session::launch_race`
             // always spawns one for the path this function only runs on
@@ -729,7 +730,7 @@ impl Session {
             None => self.audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,
-                &boot::default_audio_cache_dir(),
+                &oag_source::cache::default_audio_cache_dir(),
             ),
         }
         debug!("race music started in {:?}", music_start.elapsed());

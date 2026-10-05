@@ -27,7 +27,7 @@ pub(crate) enum Purpose {
         from: String,
     },
     /// Delete `name`'s file - which **restores** the built-in when `name` is
-    /// one of the four the binary ships. See `oag_game::pilots::delete_pilot`.
+    /// one of the four the binary ships. See `oag_raceplay::pilots::delete_pilot`.
     DeletePilot {
         /// Whose file.
         name: String,

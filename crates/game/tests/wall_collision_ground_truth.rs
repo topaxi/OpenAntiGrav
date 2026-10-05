@@ -36,8 +36,8 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race;
 use oag_physics::{Body, Environment, ShipControls, ShipState, Surface, step};
+use oag_raceplay as race;
 
 /// A fixed 60 Hz tick, matching the rest of the simulation.
 const TICK: f32 = 1.0 / 60.0;

@@ -11,7 +11,7 @@ fn main() {
     let image = args.next().expect("image");
     let out = args.next().expect("out dir");
     std::fs::create_dir_all(&out).unwrap();
-    let opened = oag_game::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
+    let opened = oag_source::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
     let mut archives = opened.archives;
     let announcer = Announcer::load(&mut archives, opened.title.race.zone_announcer);
     for line in &announcer.report {

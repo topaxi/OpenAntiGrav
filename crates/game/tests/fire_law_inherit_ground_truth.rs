@@ -15,7 +15,8 @@
 //! that title.** Dropping a title's `Weapons::ai` falls back to
 //! `FireLaw::Ours` and fails here.
 
-use oag_game::race::{self, FireLaw};
+use oag_raceplay as race;
+use oag_raceplay::FireLaw;
 
 fn fire_law(source: String, mode: oag_race::Mode) -> FireLaw {
     let loaded = race::load(&race::Options {

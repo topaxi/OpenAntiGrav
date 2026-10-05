@@ -41,8 +41,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// Ticks per race: over three minutes at the fixed 60 Hz.
 ///

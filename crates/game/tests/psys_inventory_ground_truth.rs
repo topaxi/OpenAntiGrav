@@ -20,7 +20,7 @@
 //! one of three buckets and the buckets must together be the whole disc, with
 //! nothing left over and nothing named that is not there:
 //!
-//! 1. **Wired** - in [`oag_game::race::RACE_EFFECTS`], loaded at boot and
+//! 1. **Wired** - in [`oag_raceplay::RACE_EFFECTS`], loaded at boot and
 //!    fired by a recovered trigger.
 //! 2. **Embedded** - reached as an emitter *inside* a wired effect's tree, so
 //!    already played without being named separately. Computed from the parsed
@@ -39,8 +39,8 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_game::race::RACE_EFFECTS;
 use oag_pob::{self as pob, ParticleSystem};
+use oag_raceplay::RACE_EFFECTS;
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
@@ -92,40 +92,40 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_SHURIKEN_EXPIRE`** - wired 2026-09-30 off `ShurikenPool_Update`
     // (`0x0886ff38`): the teardown `FUN_08870c78` spawns it at the blade on
     // both endings, a fuse running out and a craft hit. See
-    // `oag_game::race::SHURIKEN_EXPIRE_EFFECT`.
+    // `oag_raceplay::SHURIKEN_EXPIRE_EFFECT`.
     // **Not `WO_REPULSER` or `WO_REPULSER_BLAST`** - wired 2026-10-04 off
     // `Repulser_SpawnWaves` (`0x08876300`) and `Repulser_SpawnBlastEffect`
-    // (`0x088761d8`). See `oag_game::race::REPULSER_EFFECT` and
+    // (`0x088761d8`). See `oag_raceplay::REPULSER_EFFECT` and
     // `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
     // **Not `WO_BOMB_SMOKERING`** - wired 2026-09-23, off `Bomb_Detonate`
     // (`0x088640c8`) -> `BombBlast_Construct` (`0x08872078`), read in full
     // alongside the two `.vex` models the same detonation loads - see
-    // `oag_game::race::bomb_blast` and
+    // `oag_raceplay::bomb_blast` and
     // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
     // **Not `WO_WEAPON_ABSORB`** - wired 2026-09-23, off
     // `Ship_PlayAbsorbFeedback` (`0x08840640`), which both absorb paths call:
     // one instance per `Ship Collision Fx` node, staggered 0.1 s. See
-    // `oag_game::race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+    // `oag_raceplay::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     // **Not `WO_RAIN`, `WO_RAIN_LENS` or `WO_SNOW`** - wired 2026-10-02 off a
     // circuit's `TrackStartup` `<Weather>` element (`Weather_Construct`
     // `0x088f184c`, `Weather_Update` `0x088f1e58`) - see
-    // `oag_game::race::scenery_fx::weather` and `::lens`. Pulse PSP only: the PS2
+    // `oag_raceplay::scenery_fx::weather` and `::lens`. Pulse PSP only: the PS2
     // disc authors the same element on three circuits and plays none yet, and
     // Wipeout HD carries none of the three.
     // **Not `WO_BLUE_WELDER` or `WO_MODESTO_STEAM_A`** - wired 2026-10-02.
     // The circuits place them as `ParticleSystem` (`0x3c4`) nodes and
     // `PsysNode_Init` (`0x089156a0`) spawns each at load; three Basilico
-    // welders confirmed live. See `oag_game::race::scenery_fx`. `RAIN`,
+    // welders confirmed live. See `oag_raceplay::scenery_fx`. `RAIN`,
 ];
 
 /// The eight the PS2 port authors, the PSP does not, and nothing triggers.
 ///
 /// The port's ninth extra is `WO_SHIP_ENGINEFLARE`, which **is** wired -
-/// [`oag_game::race::ENGINE_FLARE_EFFECT`]. Its trigger needs no recovery
+/// [`oag_raceplay::ENGINE_FLARE_EFFECT`]. Its trigger needs no recovery
 /// (an engine flare is on while the craft is), so a PS2-sourced race plays
 /// the asset and `oag_fx::exhaust`'s procedural flare steps aside; a
 /// PSP-sourced one has no such asset and keeps the procedural flare. That
-/// asymmetry is the whole reason [`oag_game::race::RACE_EFFECTS`] is a
+/// asymmetry is the whole reason [`oag_raceplay::RACE_EFFECTS`] is a
 /// superset across sources rather than one list per disc.
 const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
     (
@@ -190,24 +190,24 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
     "WO_SHURIKEN_EXPIRE",
-    // The Repulser's blast and its two waves - see `oag_game::race::REPULSER_EFFECT`.
+    // The Repulser's blast and its two waves - see `oag_raceplay::REPULSER_EFFECT`.
     "WO_REPULSER",
     "WO_REPULSER_BLAST",
     "WO_WEAPON_ABSORB",
     // `Ship_Damage`'s weapon branch on a LeachBeam drain (`craft+0x138 == 7`);
-    // see `oag_game::race::hit_sparks`.
+    // see `oag_raceplay::hit_sparks`.
     "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
     // What a craft throws at each wreck node as it goes out - see
-    // `oag_game::race::wreck_fx`.
+    // `oag_raceplay::wreck_fx`.
     "WO_SHIP_FXNODE_EXPLO",
     "WO_SHIP_DEATH_SPARKS",
     // The big blast 1.5 s later, at the live model's matrix - the same module.
     "WO_SHIP_EXPLOSION",
-    // Placed by the circuits themselves - see `oag_game::race::scenery_fx`.
+    // Placed by the circuits themselves - see `oag_raceplay::scenery_fx`.
     "WO_BLUE_WELDER",
     "WO_MODESTO_STEAM_A",
     // A circuit's `<Weather>` element names them - see
-    // `oag_game::race::scenery_fx::weather`.
+    // `oag_raceplay::scenery_fx::weather`.
     "WO_RAIN",
     "WO_RAIN_LENS",
     "WO_SNOW",
@@ -432,8 +432,8 @@ mod hd {
     use std::collections::BTreeMap;
     use std::path::{Path, PathBuf};
 
-    use oag_game::race::RACE_EFFECTS;
     use oag_pob::ParticleSystem;
+    use oag_raceplay::RACE_EFFECTS;
 
     /// Distinct system names across all seven archives.
     ///
@@ -484,7 +484,7 @@ mod hd {
     /// **A wired name absent from the disc would fire into silence.**
     ///
     /// Every one of [`RACE_EFFECTS`] is on this disc - a superset of the
-    /// PSP's eight and the PS2's nine, per `oag_game::race::RACE_EFFECTS`'s
+    /// PSP's eight and the PS2's nine, per `oag_raceplay::RACE_EFFECTS`'s
     /// own doc comment. The count above drifts as more get wired; recompute
     /// from `RACE_EFFECTS.len()` rather than trusting either number. Kept
     /// separate from [`SYSTEMS`]'s tripwire below so a
@@ -563,7 +563,7 @@ mod hd {
     }
 }
 
-/// Wipeout 2048's own effect directory, held to [`oag_game::race::RACE_EFFECTS`].
+/// Wipeout 2048's own effect directory, held to [`oag_raceplay::RACE_EFFECTS`].
 ///
 /// **Chosen, not measured:** which of the wired names a 2048 race plays is
 /// whatever its `Data\Particles2048` carries - the names below are the ones it
@@ -572,7 +572,7 @@ mod hd {
 /// `WO_SHIP_EXPLOSION_PLAYER`, `WO_ZONE_SHIP_EXPLOSION`), it stays unwired
 /// until its trigger is read.
 mod v2048 {
-    use oag_game::race::RACE_EFFECTS;
+    use oag_raceplay::RACE_EFFECTS;
 
     const ABSENT: [&str; 9] = [
         "WO_PLASMA_FLASH",

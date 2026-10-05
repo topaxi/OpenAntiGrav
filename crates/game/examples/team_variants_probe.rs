@@ -6,7 +6,7 @@ fn check(source: &str, title: &'static oag_title::Title) -> anyhow::Result<()> {
         println!("{}: no team_variants", title.name);
         return Ok(());
     };
-    let opened = oag_game::title::open_source(source, Vec::new(), Vec::new())?;
+    let opened = oag_source::title::open_source(source, Vec::new(), Vec::new())?;
     let archives = opened.archives;
     println!("{}:", title.name);
     for team in team_variants.teams {

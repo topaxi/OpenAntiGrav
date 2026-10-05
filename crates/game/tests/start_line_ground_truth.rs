@@ -18,8 +18,9 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::{catalogue, race};
 use oag_race::Course;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {

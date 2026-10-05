@@ -42,7 +42,7 @@ fn options(source: &Path) -> boot::Options {
         leg: frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-2048-event-card-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,

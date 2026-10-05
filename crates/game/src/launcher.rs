@@ -11,7 +11,7 @@
 //! # Nothing here is authored
 //!
 //! A row's title is [`oag_title::Title::name`], reached through
-//! [`crate::title::identify`] - the disc's own serial, through the deny-list,
+//! [`oag_source::title::identify`] - the disc's own serial, through the deny-list,
 //! which is the same evidence the boot itself uses. Its platform and serial are
 //! [`oag_disc::TitleInfo`], read out of `UMD_DATA.BIN`, `SYSTEM.CNF` or
 //! `PS3_DISC.SFB`. There is deliberately no table in this file mapping a file
@@ -52,7 +52,7 @@ use oag_display::space::SCREEN;
 /// One disc image the chooser offers.
 #[derive(Debug, Clone)]
 pub struct Candidate {
-    /// What to hand [`crate::source::resolve`]'s callers: the path, as a string.
+    /// What to hand [`oag_source::source::resolve`]'s callers: the path, as a string.
     pub source: String,
     /// The file's own name, which is what a player recognises the row by.
     pub name: String,
@@ -109,7 +109,7 @@ const UNAVAILABLE: &str = "WILL NOT OPEN";
 ///
 /// Two reads apiece, both of which already existed: [`DiscImage::identify`] for
 /// the platform and serial, which is a handful of sectors, and
-/// [`crate::title::identify`] for the title, which mounts the archives and
+/// [`oag_source::title::identify`] for the title, which mounts the archives and
 /// drops them. The second is the expensive one and it is also the only thing
 /// that proves a source will open at all, which is exactly what the chooser has
 /// to know before it offers a row.
@@ -157,7 +157,7 @@ fn examine(path: &Path) -> Candidate {
         .map_or(Platform::Unknown, |info| info.platform);
     let serial = info.and_then(|info| info.serial);
 
-    let state = match crate::title::identify(&source) {
+    let state = match oag_source::title::identify(&source) {
         Some(title) => State::Playable(title),
         None => State::Unavailable(why_not(platform)),
     };

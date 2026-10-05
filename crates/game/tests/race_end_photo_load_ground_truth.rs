@@ -15,15 +15,16 @@ fn pulses_race_end_photo_loads_with_both_lines_resolved() {
         return;
     };
     let mut opened =
-        oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
             .expect("Pulse's own disc opens");
     let plugins = opened
         .title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let mut report = Vec::new();
-    let languages = oag_game::boot::load_languages(&mut opened.archives, plugins, &mut report);
-    let strings = oag_game::boot::load_strings(
+    let languages =
+        oag_ui::language::load::load_languages(&mut opened.archives, plugins, &mut report);
+    let strings = oag_ui::language::load::load_strings(
         &mut opened.archives,
         &languages,
         Some("English"),

@@ -238,7 +238,7 @@ impl Session {
                     self.audio.set_music_source(
                         &self.music_discs,
                         source,
-                        &oag_game::boot::default_audio_cache_dir(),
+                        &oag_source::cache::default_audio_cache_dir(),
                     );
                 }
                 Err(e) => {

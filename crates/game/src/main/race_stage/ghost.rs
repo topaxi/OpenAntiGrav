@@ -8,8 +8,9 @@
 //! when it is saved".
 
 use log::{error, info};
-use oag_game::race::{self, Ghost};
 use oag_game::{ghosts, records};
+use oag_raceplay as race;
+use oag_raceplay::Ghost;
 
 /// Loads `key`'s stored ghost into `race` and starts recording, on a mode that
 /// races one. A no-op on every other mode.
@@ -21,7 +22,7 @@ pub(crate) fn arm(
     seed: u64,
     options: std::collections::BTreeMap<String, String>,
 ) {
-    if !ghosts::races_a_ghost(mode) {
+    if !mode.races_a_ghost() {
         return;
     }
     if let Some(stored) = ghosts::load(key)

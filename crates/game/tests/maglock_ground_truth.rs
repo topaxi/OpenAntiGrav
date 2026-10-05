@@ -73,8 +73,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_core::math::{Mat3, Quat, Vec3};
-use oag_game::race;
 use oag_physics::{Body, Environment, ShipState, maglock};
+use oag_raceplay as race;
 
 /// Where the identity is broken, from the capture's own `up.y` column.
 ///

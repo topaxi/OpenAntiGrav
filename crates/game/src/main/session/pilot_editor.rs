@@ -29,7 +29,7 @@
 
 use log::{debug, error, info};
 
-use oag_game::pilots;
+use oag_raceplay::pilots;
 use oag_ui::language::StringTable;
 use oag_ui::menu::{self, Value};
 use oag_ui_screens::prompt::{self, Outcome};
@@ -159,7 +159,7 @@ fn axis_choices(min: f32, max: f32, current: f32) -> Vec<menu::Choice> {
 }
 
 /// One label for the `PILOT` row: the name, with a mark for a built-in - see
-/// [`oag_game::pilots::Entry::from_file`].
+/// [`oag_raceplay::pilots::Entry::from_file`].
 ///
 /// Plain text baked into the row's own list rather than a second `Value`
 /// variant: a built-in is a fact about the *pilot*, not a boolean setting a
@@ -408,7 +408,7 @@ impl Session {
     /// character the row cannot display is never silently dropped or
     /// swapped; the whole prompt falls back to the grid instead, which shows
     /// every character unchanged. An underscore is the one every pilot name
-    /// this project's own `crate::pilots::check_name` allows can carry that
+    /// this project's own `oag_raceplay::pilots::check_name` allows can carry that
     /// the disc's alphabet has no glyph for at all - see this method's own
     /// `## Open` note in the handover thread.
     fn tag_entry_for_rename(&self, name: &str) -> Result<TagEntry, &'static str> {

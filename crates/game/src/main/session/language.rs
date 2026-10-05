@@ -5,7 +5,8 @@
 
 use log::error;
 
-use oag_game::{boot, movie, pilots};
+use oag_game::{boot, movie};
+use oag_raceplay::pilots;
 use oag_ui::menu;
 
 use crate::stage::Stage;
@@ -72,8 +73,8 @@ impl Session {
             leg: oag_ui::frontend::Leg::default(),
             language: self.settings.language.clone(),
             movie: None,
-            cache: boot::default_cache_dir(),
-            audio_cache: boot::default_audio_cache_dir(),
+            cache: oag_source::cache::default_cache_dir(),
+            audio_cache: oag_source::cache::default_audio_cache_dir(),
             extent: movie::Extent::Whole,
             no_video: true,
             refresh_video: false,
@@ -86,7 +87,7 @@ impl Session {
                 return;
             }
         };
-        oag_game::loader_log::lines(&boot_shell.report);
+        oag_raceplay::loader_log::lines(&boot_shell.report);
         let shell = Shell::from_boot(title, definition, &boot_shell);
         let mode = self.race_mode();
         let device = &self.gpu.device;

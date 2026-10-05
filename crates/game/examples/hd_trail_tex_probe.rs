@@ -1,10 +1,10 @@
 //! Scratch probe: the trail textures' channel means as the loader decodes them.
 fn main() -> anyhow::Result<()> {
-    let options = oag_game::race::Options {
+    let options = oag_raceplay::Options {
         source: "data/images/hdfury-ps3-eu-dec.iso".into(),
         ..Default::default()
     };
-    let loaded = oag_game::race::load(&options)?;
+    let loaded = oag_raceplay::load(&options)?;
     for (name, tex) in [
         ("noise/red", loaded.noise.as_ref()),
         ("shape/blue", loaded.trail_shape.as_ref()),

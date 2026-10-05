@@ -784,7 +784,7 @@ fn the_layouts_name_at_most_one_texture() {
             continue;
         }
         let mut archives =
-            oag_game::title::open_source(&full.display().to_string(), Vec::new(), Vec::new())
+            oag_source::title::open_source(&full.display().to_string(), Vec::new(), Vec::new())
                 .expect("opening the source")
                 .archives;
 

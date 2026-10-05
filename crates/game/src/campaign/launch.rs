@@ -11,7 +11,7 @@
 use oag_tables::race_campaign::Cell;
 
 /// What a cell asks the race for. The session copies these into
-/// [`crate::race::Options`]; a value here is the cell's own, resolved.
+/// [`oag_raceplay::Options`]; a value here is the cell's own, resolved.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CellPlan {
     /// The mode the cell's own [`oag_tables::race_campaign::Mode`] launches as.
@@ -27,7 +27,7 @@ pub struct CellPlan {
     pub class_is_fallback: bool,
     /// The lap count to force, only for the modes whose own
     /// `Mode::laps_target` already returns `Some` - see
-    /// [`crate::race::Options::laps_override`].
+    /// [`oag_raceplay::Options::laps_override`].
     pub laps_override: Option<u32>,
     /// `Elimination`'s kill target, which is the cell's gold target.
     pub eliminator_kill_target: Option<u32>,

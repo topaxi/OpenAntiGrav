@@ -11,16 +11,16 @@
 //! laws under test are `Definition_IsUnlocked`'s: `Exclusive` rows are alternatives, and a
 //! `Team="any"` row is met by the best single team, not by the teams' totals added up.
 
-use oag_game::catalogue::{self, LoyaltyRow, Team};
 use oag_game::records::Store;
 use oag_game::unlock::loyalty_unlocked;
+use oag_raceplay::catalogue::{self, LoyaltyRow, Team};
 
 const TITLE: &str = "Wipeout Pulse";
 
 fn teams() -> Option<Vec<Team>> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
     let mut opened =
-        oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
             .expect("opening the source");
     let blob = opened
         .archives

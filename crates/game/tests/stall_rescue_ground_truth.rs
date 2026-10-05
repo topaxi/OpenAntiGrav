@@ -66,8 +66,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {

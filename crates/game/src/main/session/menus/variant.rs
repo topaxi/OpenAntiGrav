@@ -41,7 +41,7 @@ pub(crate) fn variant_choices(title: &'static oag_title::Title, team: &str) -> V
 pub(crate) fn gated_variant_choices(
     title: &'static oag_title::Title,
     team: &str,
-    details: &[oag_game::catalogue::Team],
+    details: &[oag_raceplay::catalogue::Team],
 ) -> Vec<menu::Choice> {
     let mut choices = variant_choices(title, team);
     if !oag_game::unlock::gates_variants(title.name) || title.race.team_variants_for(team).is_some()

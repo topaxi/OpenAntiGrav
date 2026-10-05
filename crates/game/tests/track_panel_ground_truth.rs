@@ -17,9 +17,10 @@
 //! the flyby's first tick to 0.7 s after its end. Nothing here writes a disc string down: the
 //! checks are against the table's own answers.
 
-use oag_game::race::{self, Race};
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input, InputSnapshot};
+use oag_raceplay as race;
+use oag_raceplay::Race;
 use oag_ui::frontend::Draw;
 use oag_ui_screens::track_panel::{FADE_SECONDS, Progress, WIPE_WIDTH};
 
@@ -185,7 +186,7 @@ fn a_pointer_press_skips_the_flyby_when_the_lock_lifts_and_not_before() {
 }
 
 /// What `progress` draws over a flat mid-grey 480x272 target: RGBA, or `None` with no adapter.
-fn pixels(panel: oag_game::track_panel::Assets, progress: Progress) -> Option<Vec<u8>> {
+fn pixels(panel: oag_raceplay::track_panel::Assets, progress: Progress) -> Option<Vec<u8>> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;

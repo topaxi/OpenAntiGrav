@@ -143,7 +143,7 @@ fn load_hd_selection(
 /// Every team's own `FE\Logo.gtf`, for a source whose ship screen draws
 /// one - asked for by name alongside what the screens name, since the
 /// `Logo` widget authors no `src`. See `oag_ui_screens::picker::hd::logo_src`.
-pub(super) fn team_logos(team_box: bool, teams: &[crate::catalogue::Team]) -> Vec<String> {
+pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]) -> Vec<String> {
     if !team_box {
         return Vec::new();
     }
@@ -156,7 +156,10 @@ pub(super) fn team_logos(team_box: bool, teams: &[crate::catalogue::Team]) -> Ve
 /// Every circuit's own emblem, for a source whose track screen draws one -
 /// asked for by name, since the `Emblem` widget authors no `src`. See
 /// `oag_ui_screens::picker::hd::track::emblem_src`.
-pub(super) fn track_emblems(track_box: bool, tracks: &[crate::catalogue::Track]) -> Vec<String> {
+pub(super) fn track_emblems(
+    track_box: bool,
+    tracks: &[oag_raceplay::catalogue::Track],
+) -> Vec<String> {
     if !track_box {
         return Vec::new();
     }

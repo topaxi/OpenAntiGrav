@@ -31,7 +31,7 @@ fn a_hull_variants_title_leaves_the_team_alone_and_returns_a_hull_override() {
 }
 
 /// The baseline choice (`"Ship"`) combines to no override at all - not
-/// `Some("Ship")` - because [`crate::race::ship_entry_name`] already defaults
+/// `Some("Ship")` - because [`oag_raceplay::ship_entry_name`] already defaults
 /// there when handed `None`, and a caller should not have to special-case the
 /// baseline stem to get the same file `None` already names.
 ///

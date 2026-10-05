@@ -15,12 +15,12 @@
 //!
 //! **The gantry is placed and drawn** - `oag_render::gantry` measures the
 //! mounting surface each circuit's own track model authors and
-//! `crate::race::gantry` stands `321Go_StartFinish.vex` on it, so twelve of
+//! `oag_raceplay::gantry` stands `321Go_StartFinish.vex` on it, so twelve of
 //! Pulse's circuits show the `3`, `2`, `1`, `GO` on the object over the start
 //! line, which is where the project owner's own account of the original puts
 //! it. So this widget is drawn **only where no gantry is** -
 //! `race::Scene::draws_gantry` gates both of its call sites
-//! (`main::race_stage` and `race::capture`) - rather than as a second
+//! (`main::race_stage` and `crate::race_capture::capture`) - rather than as a second
 //! countdown beside one. It is not deleted: a circuit that authors no mount,
 //! and every title whose gantry has not been placed, still needs it.
 //!

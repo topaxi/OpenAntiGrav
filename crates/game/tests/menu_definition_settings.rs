@@ -309,7 +309,7 @@ fn a_mode_label_falls_back_rather_than_printing_prose() {
 /// same merged table [`oag_ui::strings::overlay`] writes a project override
 /// into, so naming [`oag_race::Mode::string_id`] in a project file already
 /// overrides the fallback with no further wiring, even with no disc entry at
-/// all. `boot::load_strings` is what performs the merge at boot; this proves
+/// all. `oag_ui::language::load::load_strings` is what performs the merge at boot; this proves
 /// the read side alone, beside the disc-absent case the test above proves.
 #[test]
 fn a_project_override_of_a_mode_id_wins_over_the_hardcoded_fallback() {
@@ -709,7 +709,7 @@ fn every_settings_row_is_one_the_game_seeds() {
 
     // The AI PILOTS page's own four rows are not settings at all - which
     // pilot and which axis are on screen is not persisted, so nothing in
-    // `settings::menu_seeds` could know them (see `crate::pilots`'s own
+    // `settings::menu_seeds` could know them (see `oag_raceplay::pilots`'s own
     // module doc on why a pilot file is not a setting). They are supplied
     // and seeded by `Session::supply_pilot_menu`/`resupply_pilot_bounds`
     // instead. Exempted by name rather than by page, so an ordinary setting

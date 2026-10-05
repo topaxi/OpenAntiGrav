@@ -21,9 +21,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_game::sound::listener_of;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_sound::sfx::TrackEmitters;
 
 /// `01_Track`, the circuit the thread names: 86 `sound` nodes and no cone.
@@ -214,7 +214,7 @@ fn the_loader_names_its_banks_and_every_dangling_reference() {
         ),
     ] {
         let opened =
-            oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
                 .expect("opening the source");
         let mut archives = opened.archives;
         let blob = archives.read_name(track).expect("the circuit");
@@ -363,8 +363,9 @@ fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label()
     let Some(path) = image("pulse-psp-usa.chd") else {
         return;
     };
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let mut archives = opened.archives;
 
     let mut found = 0;

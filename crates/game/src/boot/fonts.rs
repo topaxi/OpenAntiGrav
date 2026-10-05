@@ -37,6 +37,7 @@
 //! nothing here had to change for the fonts to appear, only the parser.
 
 use super::*;
+use oag_ui::language::load::role_font;
 
 /// Reads the front end's own font, falling back to the built-in glyphs.
 ///
@@ -93,32 +94,6 @@ pub(super) fn load_font(
             oag_ui::font::Atlas::build()
         }
     }
-}
-
-/// The `.fnt` a role resolves to on this source, from its language plugins.
-///
-/// **`preferred`'s own slot first.** A role that plugin does not fill falls
-/// through to a scan of every plugin in source order - not because two
-/// plugins are known to name a shared role's file differently, but because a
-/// role the chosen language leaves silent (Pure declares four slots to
-/// Pulse's eight) still deserves the answer *some* plugin on this source
-/// gives, rather than 5x7. `None` only when no plugin at all fills `role` -
-/// an ordinary answer, not a failure.
-///
-/// **`preferred` used to not exist at all here** - every caller scanned
-/// every plugin with no preference, so a face this asked for came off
-/// whichever plugin happened to load first rather than the language the
-/// player chose. See [`crate::race::hud::hud_font`]'s own doc for the sibling
-/// this mirrors and the bug both used to share.
-pub(crate) fn role_font(
-    languages: &[Language],
-    preferred: Option<&Language>,
-    role: &str,
-) -> Option<String> {
-    preferred
-        .and_then(|language| language.font(role))
-        .or_else(|| languages.iter().find_map(|language| language.font(role)))
-        .map(str::to_string)
 }
 
 /// Reads the face this title draws menu *rows* in, when it names one.

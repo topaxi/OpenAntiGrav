@@ -7,8 +7,9 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_display::space::Space;
-use oag_game::{boot, race, records, report, settings};
+use oag_game::{records, report, settings};
 use oag_gameplay::input::Button;
+use oag_raceplay as race;
 use oag_ui::frontend::{self};
 use oag_ui::strings;
 use oag_ui::{font, menu};
@@ -417,7 +418,7 @@ impl Session {
                         }
                     }
                     report(&events, stage.trace);
-                    oag_game::loader_log::lines(stage.frontend.take_notes());
+                    oag_raceplay::loader_log::lines(stage.frontend.take_notes());
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.
@@ -441,7 +442,7 @@ impl Session {
                         self.audio.start_music(
                             &self.music_discs,
                             self.settings.audio.music_source,
-                            &boot::default_audio_cache_dir(),
+                            &oag_source::cache::default_audio_cache_dir(),
                         );
                     }
                 }

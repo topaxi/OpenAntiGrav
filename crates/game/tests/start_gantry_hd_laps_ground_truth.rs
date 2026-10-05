@@ -24,8 +24,9 @@
 //! Every window's start is also checked to be the authored state's: move a
 //! window's bounds and a different board shows there.
 
-use oag_game::race::{self, gantry};
 use oag_mesh::mesh::{DrawCall, Model};
+use oag_raceplay as race;
+use oag_raceplay::gantry;
 
 fn placed() -> Option<gantry::Placed> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;

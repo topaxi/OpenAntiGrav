@@ -83,12 +83,12 @@ fn event_6_authors_all_seven_grid_slots_and_they_resolve() {
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn load_event_places_event_6s_authored_roster_on_the_ai_grid() {
     let Some(source) = source() else { return };
-    let options = oag_game::race::Options {
+    let options = oag_raceplay::Options {
         source: source.display().to_string(),
         team: Some(r"Qirex2048\2".to_string()),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     };
-    let loaded = oag_game::race::load_event(&options, "2048 - Event 6").expect("the event loads");
+    let loaded = oag_raceplay::load_event(&options, "2048 - Event 6").expect("the event loads");
 
     assert!(
         loaded

@@ -31,7 +31,7 @@ fn assets(source: &std::path::Path) -> std::sync::Arc<MenuBackdrop> {
         leg: Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-omega-menu-backdrop-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,

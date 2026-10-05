@@ -86,7 +86,7 @@ fn a_ghost_for_another_race_or_a_damaged_file_is_not_raced() {
 fn only_time_trial_and_speed_lap_race_a_ghost() {
     for mode in oag_race::Mode::ALL {
         assert_eq!(
-            races_a_ghost(mode),
+            mode.races_a_ghost(),
             matches!(mode, oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap),
             "{mode:?}"
         );

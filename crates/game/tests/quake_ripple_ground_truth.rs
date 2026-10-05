@@ -2,7 +2,7 @@
 //!
 //! The ripple draws a bump at the simulation wave's course distance into every
 //! road vertex whose own course distance is near it
-//! (`oag_game::race::place_spans`, `oag_render::ripple`). A vertex's distance
+//! (`oag_raceplay::place_spans`, `oag_render::ripple`). A vertex's distance
 //! is *predicted* from its span's place on its AiTrack path and its own
 //! parameter along the span. Two things are measured here instead of trusted:
 //!
@@ -21,8 +21,8 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race::SpanPlaces;
 use oag_race::Course;
+use oag_raceplay::SpanPlaces;
 use oag_vex::quake::Span;
 use oag_vex::{quake, track, vex};
 

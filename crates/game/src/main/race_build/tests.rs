@@ -12,7 +12,8 @@
 
 use std::time::{Duration, Instant};
 
-use oag_game::{race, settings};
+use oag_game::settings;
+use oag_raceplay as race;
 
 use super::{BuildWorker, Request};
 use crate::gpu::Handles;

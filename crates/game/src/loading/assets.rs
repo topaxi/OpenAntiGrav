@@ -232,7 +232,7 @@ impl Assets {
         // through `oag_pulse::open` comes back `WrongTitle`, which reads as "you
         // pointed at the wrong disc" when the truth is "this title ships no
         // loading screen".
-        let opened = match crate::title::open_source(source, Vec::new(), Vec::new()) {
+        let opened = match oag_source::title::open_source(source, Vec::new(), Vec::new()) {
             Ok(opened) => opened,
             Err(e) => {
                 notes.push(format!("no loading screen assets from {source}: {e}"));
@@ -312,7 +312,7 @@ impl Assets {
                 .read_every_name(entries)
                 .into_iter()
                 .filter_map(|(label, blob)| {
-                    let xml = crate::boot::xml::expand(&blob).ok()?;
+                    let xml = oag_ui::xml::expand(&blob).ok()?;
                     Some((label, StringTable::from_xml(&xml)))
                 })
                 .collect();
@@ -426,7 +426,7 @@ impl Assets {
         let palette = loading.palette.and_then(|names| {
             let root = title.front_end?.root;
             let blob = archives.read_name(root).ok()?;
-            let xml = crate::boot::xml::expand(&blob).ok()?;
+            let xml = oag_ui::xml::expand(&blob).ok()?;
             let globals = oag_ui::screen::Screens::from_xml(&xml).globals;
             let colour = |name: &str| {
                 let raw = globals.get(name)?;

@@ -12,14 +12,15 @@
 //! START exactly as before.
 //!
 //! **Zone skips the ship picker.** The mode forces the shared Zone hull
-//! whatever team is set - see `oag_game::race::ship_entry_name` - and the
+//! whatever team is set - see `oag_raceplay::ship_entry_name` - and the
 //! RACE page already greys its TEAM row for the same reason, so a picker
 //! there would offer a choice the race ignores.
 
 use std::sync::{Arc, Mutex};
 
 use log::{debug, warn};
-use oag_game::{catalogue, records, unlock};
+use oag_game::{records, unlock};
+use oag_raceplay::catalogue;
 use oag_ui_screens::picker::{self, Details, Entry, Event, Kind, Picker};
 
 use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
@@ -117,11 +118,11 @@ impl Session {
     fn unlock_gate(&self) -> oag_game::unlock::Gate {
         let title = self.shell.as_ref().map(|shell| shell.title.name);
         let opened = self.race_options.as_ref().and_then(|options| {
-            let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
+            let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
                 &options.dlc,
-                &oag_game::boot::default_dlc_cache_dir(),
+                &oag_source::cache::default_dlc_cache_dir(),
             );
-            oag_game::title::open_source(&options.source, packs, pure_packs)
+            oag_source::title::open_source(&options.source, packs, pure_packs)
                 .map_err(|error| warn!("cannot open the source to read its unlocks: {error:#}"))
                 .ok()
         });
@@ -134,7 +135,7 @@ impl Session {
     }
 
     /// Reads every circuit in `order` on its own thread and measures its lap
-    /// (see `oag_game::race::circuit_length`) into the map the picker reads
+    /// (see `oag_raceplay::circuit_length`) into the map the picker reads
     /// each tick. A circuit that will not read or measure is logged and its
     /// row keeps its dash.
     fn spawn_distance_worker(&self, order: Vec<(String, String)>) -> Option<Distances> {
@@ -146,11 +147,12 @@ impl Session {
         let spawned = std::thread::Builder::new()
             .name("circuit-lengths".into())
             .spawn(move || {
-                let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
+                let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
                     &dlc,
-                    &oag_game::boot::default_dlc_cache_dir(),
+                    &oag_source::cache::default_dlc_cache_dir(),
                 );
-                let mut archives = match oag_game::title::open_source(&source, packs, pure_packs) {
+                let mut archives = match oag_source::title::open_source(&source, packs, pure_packs)
+                {
                     Ok(opened) => opened.archives,
                     Err(error) => {
                         warn!("cannot open {source} to measure its circuits: {error:#}");
@@ -161,7 +163,7 @@ impl Session {
                     let measured = archives
                         .read_name(&entry)
                         .map_err(anyhow::Error::from)
-                        .and_then(|blob| oag_game::race::circuit_length(&blob));
+                        .and_then(|blob| oag_raceplay::circuit_length(&blob));
                     match measured {
                         Ok(length) => {
                             if let Ok(mut map) = sink.lock() {
@@ -371,14 +373,14 @@ impl Session {
         let Some(options) = self.race_options.as_ref() else {
             return false;
         };
-        let (packs, pure_packs, problems) = oag_game::dlc::packs_from_defaults(
+        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &options.dlc,
-            &oag_game::boot::default_dlc_cache_dir(),
+            &oag_source::cache::default_dlc_cache_dir(),
         );
         for problem in problems {
             warn!("{problem}");
         }
-        let archives = match oag_game::title::open_source(&options.source, packs, pure_packs) {
+        let archives = match oag_source::title::open_source(&options.source, packs, pure_packs) {
             Ok(opened) => opened.archives,
             Err(error) => {
                 warn!(

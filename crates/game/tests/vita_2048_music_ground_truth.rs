@@ -25,7 +25,7 @@
 //! second check that one does not need: this is the first title whose
 //! `MusicDiscs::survey` had to be taught a fourth release
 //! ([`Platform::Vita`]) at all, so `the_boots_own_music_discs_survey_finds_it`
-//! pins that against the same source `oag_game::title::open_source` opens,
+//! pins that against the same source `oag_source::title::open_source` opens,
 //! not just `music::load_front_end` in isolation.
 
 use std::path::{Path, PathBuf};

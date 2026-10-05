@@ -21,10 +21,10 @@ fn the_default_circuit_is_the_reference_scenarios_own() {
     let race = Race::default();
     assert_eq!(race.track, "16_Track");
     assert!(
-        crate::race::DEFAULT_TRACK.contains(&race.track),
+        oag_raceplay::DEFAULT_TRACK.contains(&race.track),
         "{} is not the circuit {} names",
         race.track,
-        crate::race::DEFAULT_TRACK
+        oag_raceplay::DEFAULT_TRACK
     );
 }
 

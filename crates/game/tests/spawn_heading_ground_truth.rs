@@ -42,11 +42,11 @@
 use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
-use oag_game::race;
+use oag_raceplay as race;
 
 /// How far a craft's heading may be off the track's own before this calls it
 /// wrong: `cos 60 degrees`, the same band
-/// `oag_game::race::spawn::SLOT_AGREES_WITH_THE_SPLINE` splits.
+/// `oag_raceplay::spawn::SLOT_AGREES_WITH_THE_SPLINE` splits.
 const AGREES: f32 = 0.5;
 
 /// Every circuit file on the HD disc: 16 forward and 12 reversed.
@@ -301,7 +301,7 @@ fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&s
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-spawn-heading-ground-truth"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // Every assertion here is about a spawn; nothing pays for a transcode.
         no_video: true,

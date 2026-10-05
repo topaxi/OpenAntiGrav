@@ -18,9 +18,10 @@
 //! failure names its cell. `BOUND` is a ceiling on **craft destroyed**, frozen
 //! from `print_bounds` (`OAG_SWEEP=1`, release); it may only fall.
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
 use oag_physics::CraftState;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// Five game-minutes, the window every other AI board uses: a later lap kills too.
 const TICKS: u64 = 18_000;

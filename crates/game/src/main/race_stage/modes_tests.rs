@@ -53,7 +53,7 @@ fn the_zone_table_blanks_the_two_rows_it_cannot_count() {
         score: 12_345,
         ..oag_race::RaceState::default()
     };
-    let table = zone_results(&state, crate::race::RunStats::default());
+    let table = zone_results(&state, oag_raceplay::RunStats::default());
     assert_eq!(table.zones_cleared, 9);
     assert_eq!(table.score, 12_345);
     assert_eq!(table.perfect_zones, Some(0));

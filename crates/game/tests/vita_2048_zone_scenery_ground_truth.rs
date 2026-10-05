@@ -15,7 +15,7 @@
 //! drawn; 1,587 take a `Zone_ColourN` uniform as their colour. Drop the Zone
 //! branch in `race::load::geometry::sibling_model` and every line here goes.
 
-use oag_game::race;
+use oag_raceplay as race;
 use std::path::{Path, PathBuf};
 
 fn source() -> Option<PathBuf> {

@@ -12,9 +12,9 @@
 //! instance by handle". A detach would leave the old instance's particles to
 //! finish their lives, which is what these tests see.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
+use oag_raceplay as race;
 
 const WARM_UP_TICKS: u64 = oag_race::COUNTDOWN_TICKS + 60;
 

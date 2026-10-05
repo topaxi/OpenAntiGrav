@@ -4,14 +4,15 @@
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
-//! The steering is ours, chosen, not measured (`oag_game::race::PadSeeking`);
+//! The steering is ours, chosen, not measured (`oag_raceplay::PadSeeking`);
 //! what this guards is that it is wired and does what it is for. The 240-seed
 //! sweep that decided it ships is in `docs/gameplay/race-modes.md`, "Steering
 //! for weapon pads".
 
-use oag_game::race::{self, PadSeeking};
 use oag_gameplay::PlayerInputs;
 use oag_physics::CraftState;
+use oag_raceplay as race;
+use oag_raceplay::PadSeeking;
 
 /// One game-minute per seed: long enough for a few pickups per craft.
 const TICKS: u64 = 60 * 60;

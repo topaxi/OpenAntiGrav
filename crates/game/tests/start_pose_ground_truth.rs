@@ -26,9 +26,9 @@
 //! `launch_boost_ground_truth.rs`.
 
 use oag_core::math::Vec3;
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_race::state::COUNTDOWN_TICKS;
+use oag_raceplay as race;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
 

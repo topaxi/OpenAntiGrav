@@ -23,7 +23,7 @@ fn keyboard(initial: &str) -> Keyboard {
             hint: String::new(),
         },
         initial,
-        oag_game::pilots::MAX_NAME,
+        oag_raceplay::pilots::MAX_NAME,
     )
 }
 
@@ -62,7 +62,8 @@ fn a_name_can_be_typed_with_the_d_pad_and_cross_alone() {
     assert_eq!(keyboard.text(), "ax9-");
     // And it is a name the writer will accept, which is the reason the grid
     // offers exactly this character set.
-    oag_game::pilots::check_name(keyboard.text()).expect("the grid cannot type an invalid name");
+    oag_raceplay::pilots::check_name(keyboard.text())
+        .expect("the grid cannot type an invalid name");
 }
 
 /// Every character the writer allows has to be on the grid, and nothing else:
@@ -77,7 +78,7 @@ fn the_grid_offers_exactly_the_characters_a_pilot_name_may_hold() {
         })
         .collect();
     for c in offered.chars() {
-        oag_game::pilots::check_name(&c.to_string())
+        oag_raceplay::pilots::check_name(&c.to_string())
             .unwrap_or_else(|e| panic!("the grid offers {c:?}, which a name may not hold: {e:#}"));
     }
     for c in "abcdefghijklmnopqrstuvwxyz0123456789-_".chars() {

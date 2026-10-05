@@ -25,7 +25,7 @@ use super::Settings;
 /// fresh file actually writes. A title contributes one row per *platform* it
 /// ships an archive candidate for, and Pulse ships two (PSP and PS2); this
 /// list itself does not carry that, deliberately, so it stays the same list
-/// [`crate::title::open_source`] tries titles from.
+/// [`oag_source::title::open_source`] tries titles from.
 pub(super) const KNOWN_TITLES: &[&oag_title::Title] = &[
     oag_pulse::TITLE,
     oag_pure::TITLE,
@@ -74,7 +74,7 @@ fn title_platforms(title: &'static oag_title::Title) -> impl Iterator<Item = oag
 ///
 /// Derived from each title's own [`oag_title::Title::archives`] rather than
 /// six hand-written pairs, so the known list cannot drift from the one
-/// `crate::title::open_source` actually opens against - a title that grew a
+/// `oag_source::title::open_source` actually opens against - a title that grew a
 /// third platform's candidate would grow a third row here for free.
 pub(super) fn known_profiles()
 -> impl Iterator<Item = (&'static oag_title::Title, oag_disc::Platform)> {

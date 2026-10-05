@@ -9,7 +9,7 @@
 
 use std::time::Instant;
 
-use oag_game::race;
+use oag_raceplay as race;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -23,7 +23,7 @@ fn main() {
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
-    let entry = oag_game::catalogue::tracks(&definition)
+    let entry = oag_raceplay::catalogue::tracks(&definition)
         .into_iter()
         .find(|t| t.reversed == reversed && t.id == track)
         .expect("a layout by that id")

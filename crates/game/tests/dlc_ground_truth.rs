@@ -33,8 +33,11 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::{boot, catalogue, dlc, race};
+use oag_game::boot;
 use oag_pulse::race::DLC_TEAMS as PACK_TEAMS;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
+use oag_source::dlc;
 
 /// The American disc, on purpose. Mounting European packs on it is the whole
 /// point of the test.
@@ -158,7 +161,7 @@ fn a_pack_team_is_named_by_the_disc_and_its_id_is_not_always_that_name() {
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-dlc-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         no_video: true,
         refresh_video: false,

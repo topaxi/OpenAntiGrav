@@ -16,7 +16,7 @@
 //! `zone_ground_truth.rs` proves a Zone race opens the right *circuit*. This
 //! one proves the escalation laid over it is the disc's: HD/Fury's
 //! `/data/environments/zonemode.effectsettings` reaches
-//! `oag_game::race::Loaded` through a real race load, its fifteen stages are
+//! `oag_raceplay::Loaded` through a real race load, its fifteen stages are
 //! the file's own, and two adjacent stages produce two visibly different fogs
 //! whose numbers are the ones the file authors - not a pair this test made up.
 //!
@@ -29,11 +29,11 @@
 //! zone-number ladder *is* recovered
 //! (`oag_2048::race::ZONE_STAGES`), and the last test in this file drives a
 //! real 2048 table through it, asserting the disc's own colours at the
-//! recovered band boundaries. See `oag_game::race::zone_grade`'s module docs.
+//! recovered band boundaries. See `oag_raceplay::zone_grade`'s module docs.
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
+use oag_raceplay as race;
 
 /// One image, or `None` with a printed reason when it is not present.
 fn image(name: &str) -> Option<PathBuf> {

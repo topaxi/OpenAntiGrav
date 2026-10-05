@@ -31,7 +31,7 @@ pub(crate) struct IconArgs {
 /// Racing and recording a ghost in a headless `--race --screenshot` capture.
 ///
 /// **Explicit files, never the config directory.** A capture reads
-/// `records.toml` and never writes it (see `race::CaptureOptions::
+/// `records.toml` and never writes it (see `oag_game::race_capture::CaptureOptions::
 /// previous_best`); a ghost is the same: `--ghost` names the file to race and
 /// `--record-ghost` the file the run's best lap goes to, so a scripted capture
 /// cannot overwrite a player's own best. See ADR-0055.
@@ -166,7 +166,7 @@ pub(crate) struct WreckArgs {
     /// A verification aid, there because a wreck is hard to produce at a chosen
     /// place and moment. It enters the state `Ship_Damage`'s depletion does, so
     /// the sequence that follows is the simulation's own. See
-    /// [`crate::race::Race::force_destroy`].
+    /// [`oag_raceplay::Race::force_destroy`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
@@ -219,7 +219,7 @@ pub(crate) struct BlurArgs {
     /// `--msaa` is: two captures differing only by this flag are how
     /// the blur gets compared against itself off, and a capture honours it by
     /// rendering a primer frame at the tick-before-last camera first - see
-    /// `race::CaptureOptions::motion_blur`.
+    /// `oag_game::race_capture::CaptureOptions::motion_blur`.
     #[arg(long)]
     pub(crate) motion_blur: Option<oag_display::display::MotionBlur>,
 

@@ -24,7 +24,7 @@ use super::{CampaignRecord, Observation, Store, laps_completed};
 /// so [`Store::record`] and [`laps_completed`] stay testable with no disc, no
 /// GPU and no simulation step; pulling in `oag-formats` here for one enum
 /// would trade that guarantee for a single shared type. [`laps_completed`]
-/// already makes the identical trade for `crate::scoreboard::build`'s
+/// already makes the identical trade for `oag_raceplay::scoreboard::build`'s
 /// arithmetic - see its own doc.
 ///
 /// Serialized as a lowercase word (`medal = "gold"`), never the bare

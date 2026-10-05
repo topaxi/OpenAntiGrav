@@ -23,8 +23,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 const TICKS: u64 = 18_000;
 const LONE: usize = 1;

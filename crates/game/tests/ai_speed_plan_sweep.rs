@@ -20,8 +20,9 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// Five simulated minutes, the window every other AI board uses.
 const TICKS: u64 = 18_000;

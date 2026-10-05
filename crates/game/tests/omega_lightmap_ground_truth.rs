@@ -16,7 +16,7 @@
 //! `Tonemap` block reads, and that 2048, which shares the container family and
 //! authors the key too, does not.
 
-use oag_game::race;
+use oag_raceplay as race;
 use oag_tables::envsettings::{EnvSettings, NOVA_PRELIT};
 
 fn source() -> Option<String> {

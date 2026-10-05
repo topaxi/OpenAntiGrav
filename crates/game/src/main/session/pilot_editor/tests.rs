@@ -36,7 +36,7 @@ values_from = \"pilot_axis_high\"
 
 /// A directory holding one pilot file, cleaned up on drop - the same
 /// idiom `pilots`' own tests use, kept local rather than shared so this
-/// file does not reach into `oag_game::pilots`' private test helpers.
+/// file does not reach into `oag_raceplay::pilots`' private test helpers.
 struct Scratch(std::path::PathBuf);
 
 impl Scratch {

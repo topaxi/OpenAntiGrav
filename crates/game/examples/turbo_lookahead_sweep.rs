@@ -36,8 +36,8 @@
 //! same "worst excursion" shape `driver/tuning.rs`'s own sweep tables already
 //! use - and reports the distribution, not a single lucky/unlucky count.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// How many ticks past the boost's own duration to keep watching, for the
 /// coast into whatever corner the boost carried the craft towards. Ours -

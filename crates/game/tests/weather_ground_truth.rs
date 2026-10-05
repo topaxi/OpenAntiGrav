@@ -72,8 +72,9 @@ fn the_ps2_disc_authors_the_same_element_and_a_third_circuit() {
 
 mod race {
     use oag_fx::psys::field::Frame;
-    use oag_game::race::{self, scenery_fx::Weather, scenery_fx::weather::Setup};
     use oag_gameplay::PlayerInputs;
+    use oag_raceplay as race;
+    use oag_raceplay::{scenery_fx::Weather, scenery_fx::weather::Setup};
 
     fn load(track: &str) -> Option<race::Loaded> {
         let image = oag_testdata::image("pulse-psp-usa.chd")?;

@@ -76,7 +76,7 @@ pub enum Phase {
     /// already on screen.
     Prefetch,
     /// A circuit being read off the disc, between the menus and the grid. See
-    /// [`crate::race::LoadWorker`].
+    /// [`oag_raceplay::LoadWorker`].
     ///
     /// **The one phase that draws no counts, and the reason is the original.**
     /// The other two are this build's own waits - a transcode and a prefetch,

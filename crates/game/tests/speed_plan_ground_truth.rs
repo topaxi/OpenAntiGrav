@@ -14,7 +14,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan

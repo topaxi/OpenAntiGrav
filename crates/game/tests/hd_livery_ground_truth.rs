@@ -37,7 +37,7 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
+use oag_raceplay as race;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
@@ -81,7 +81,7 @@ fn the_disc_declares_twelve_teams_under_hds_own_plugin_name() {
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::text(&blob).expect("reading it as text");
 
-    let teams = oag_game::catalogue::teams(&definition);
+    let teams = oag_raceplay::catalogue::teams(&definition);
     assert_eq!(
         teams.len(),
         12,
@@ -233,7 +233,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
         .read_name(oag_hd::TITLE.plugin_definition)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::text(&blob).expect("reading it as text");
-    let teams = oag_game::catalogue::teams(&definition);
+    let teams = oag_raceplay::catalogue::teams(&definition);
     assert!(teams.len() > 1, "the disc declares more than one team");
 
     // The *last* team, so a pass could not come from it happening to be first.

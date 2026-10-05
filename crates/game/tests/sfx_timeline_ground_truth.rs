@@ -25,8 +25,9 @@ fn image(name: &str) -> Option<PathBuf> {
 }
 
 fn banks(path: &std::path::Path) -> Banks {
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let tick = opened
         .title

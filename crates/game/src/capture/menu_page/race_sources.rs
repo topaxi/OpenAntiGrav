@@ -11,8 +11,8 @@
 pub(super) fn supply(
     model: &mut oag_ui::menu::Menu,
     title: &'static oag_title::Title,
-    tracks: &[crate::catalogue::Track],
-    teams: &[crate::catalogue::Team],
+    tracks: &[oag_raceplay::catalogue::Track],
+    teams: &[oag_raceplay::catalogue::Team],
     race_setup: &crate::boot::RaceSetup,
     strings: &oag_ui::language::StringTable,
 ) {

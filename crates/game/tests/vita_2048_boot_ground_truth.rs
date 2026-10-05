@@ -56,7 +56,7 @@ fn options(source: &Path) -> boot::Options {
         leg: frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-2048-boot-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,
@@ -364,7 +364,7 @@ fn a_network_mode_stays_on_the_grid_with_a_note() {
 
 /// The map carries `SP.xml`'s own events, opens on the first season's first
 /// one, and a press launches it by its own name - the name
-/// `oag_game::race::load_event` resolves.
+/// `oag_raceplay::load_event` resolves.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn a_press_on_the_map_asks_for_the_first_events_race() {
@@ -405,11 +405,11 @@ fn a_press_on_the_map_asks_for_the_first_events_race() {
         ))
     );
     // And the name resolves to a race the way `--event` does.
-    let race = oag_game::race::Options {
+    let race = oag_raceplay::Options {
         source: source.display().to_string(),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     };
-    let resolved = oag_game::race::load_event(&race, "2048 - Event 1").expect("the event loads");
+    let resolved = oag_raceplay::load_event(&race, "2048 - Event 1").expect("the event loads");
     assert_eq!(resolved.setup.class, "FLASH");
 }
 
@@ -427,11 +427,11 @@ fn a_press_on_the_map_asks_for_the_first_events_race() {
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn ship_model_data_forces_the_player_craft_on_some_events() {
     let Some(source) = source() else { return };
-    let race = oag_game::race::Options {
+    let race = oag_raceplay::Options {
         source: source.display().to_string(),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     };
-    let forced = oag_game::race::load_event(&race, "2048 - Event 4-2").expect("the event loads");
+    let forced = oag_raceplay::load_event(&race, "2048 - Event 4-2").expect("the event loads");
     assert!(
         forced
             .report
@@ -441,7 +441,7 @@ fn ship_model_data_forces_the_player_craft_on_some_events() {
         forced.report
     );
 
-    let open = oag_game::race::load_event(&race, "2048 - Event 1").expect("the event loads");
+    let open = oag_raceplay::load_event(&race, "2048 - Event 1").expect("the event loads");
     assert!(
         !open
             .report

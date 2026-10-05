@@ -1,5 +1,5 @@
 //! `Track Creation`'s `Distance(m)` row against the disc: the racing line's
-//! length, summed the way `oag_game::race::circuit_length` sums it,
+//! length, summed the way `oag_raceplay::circuit_length` sums it,
 //! against the number the original prints on the screen - close, and not
 //! equal; see `circuit_length`'s doc for the measured gap.
 //!
@@ -30,7 +30,7 @@ fn the_racing_line_length_is_the_distance_the_screen_prints() {
         .expect("the archives open");
     for (name, shown) in SHOWN {
         let blob = archives.read_name(name).expect("the circuit resolves");
-        let length = oag_game::race::circuit_length(&blob).expect("it measures");
+        let length = oag_raceplay::circuit_length(&blob).expect("it measures");
         eprintln!(
             "DBG {name}: measured {length:.1}, shown {shown:.0}, ratio {:.4}",
             shown / length

@@ -1,16 +1,16 @@
 //! Session-level Tournament bookkeeping: folding a finished leg into
 //! [`Session::tournament`]'s own running standings, continuing to the next
 //! one, and discarding it once its `EndRace Menu` is left. The points law
-//! and the leg list themselves are `crate::race::tournament::Progress`'s -
+//! and the leg list themselves are `oag_raceplay::tournament::Progress`'s -
 //! this module only drives it against the rest of the session, the same
 //! split `crate::main::session::campaign`/`crate::main::session::endrace`
 //! already make for the screens either owns.
 
 use log::warn;
 
-use crate::race::tournament::Progress;
 use crate::race_stage::RaceStage;
 use crate::stage::Stage;
+use oag_raceplay::tournament::Progress;
 
 use super::Session;
 

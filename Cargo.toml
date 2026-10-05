@@ -26,10 +26,12 @@ members = [
   "crates/pulse",
   "crates/pure",
   "crates/race",
+  "crates/raceplay",
   "crates/rcs",
   "crates/render",
   "crates/replay",
   "crates/sound",
+  "crates/source",
   "crates/tables",
   "crates/testdata",
   "crates/texture",
@@ -69,6 +71,7 @@ oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }
 oag-sound = { path = "crates/sound" }
+oag-source = { path = "crates/source" }
 oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
 oag-pob = { path = "crates/pob" }
@@ -77,6 +80,7 @@ oag-present = { path = "crates/present" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
+oag-raceplay = { path = "crates/raceplay" }
 oag-rcs = { path = "crates/rcs" }
 oag-render = { path = "crates/render" }
 oag-replay = { path = "crates/replay" }
@@ -329,12 +333,16 @@ opt-level = 2
 [profile.dev.package.oag-hud]
 opt-level = 2
 
-# The race itself: `oag-game` holds `race/`, the whole front-to-back tick that
+# The race itself: `oag-raceplay` holds the whole front-to-back tick that
 # `ai_roll_ground_truth`, `ram_ground_truth` and the other sim-driving tests run
-# for thousands of ticks, and `oag-render` holds the particle systems the race
-# steps with it. Both were the "left at 0" column of the table in
-# `docs/architecture/workspace-layout.md` and were the largest unoptimised cost
-# in `just test-data`. `opt-level` keeps IEEE semantics, so no state hash moves.
+# for thousands of ticks (it lived in `oag-game` until 2026-10-05, which keeps
+# its own entry for the headless capture loop that drives it), and `oag-render`
+# holds the particle systems the race steps with it. Both were the "left at 0"
+# column of the table in `docs/architecture/workspace-layout.md` and were the
+# largest unoptimised cost in `just test-data`. `opt-level` keeps IEEE
+# semantics, so no state hash moves.
+[profile.dev.package.oag-raceplay]
+opt-level = 2
 [profile.dev.package.oag-game]
 opt-level = 2
 [profile.dev.package.oag-render]

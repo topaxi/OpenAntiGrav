@@ -40,7 +40,7 @@
 //! **Two wrong diagnoses on the way there, both recorded rather than forgotten.** The
 //! first was a suspension that dropped a probe: on the *previous* default track the
 //! ship was grounded on 83 of 120 ticks with both probes on only 6. The default track
-//! was the bug - see [`oag_game::race::DEFAULT_TRACK`] - and the right one is grounded
+//! was the bug - see [`oag_raceplay::DEFAULT_TRACK`] - and the right one is grounded
 //! on 120 of 120 with both probes throughout. The second was a missing speed
 //! equilibrium, inferred from captures that held 23.6-25.1 units/s; the standing-start
 //! capture inverted it. The force law is right, those captures were in sustained wall
@@ -59,10 +59,12 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::{boot, catalogue, movie, race};
+use oag_game::{boot, movie};
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_physics::Raycaster;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 use oag_ui::frontend::states;
 
 fn image() -> Option<PathBuf> {
@@ -161,7 +163,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(boot::DEFAULT_BOOT_MOVIE.to_string()),
         cache: std::env::temp_dir().join("oag-race-handoff"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,
@@ -214,19 +216,19 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
         if race.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
         }
     }
 
-    println!("{}", race::describe(&race.telemetry()));
+    println!("{}", oag_raceplay::describe(&race.telemetry()));
     assert!(
         grounded_ticks > 0,
         "no hover probe reached the track in {HANDOFF_TICKS} ticks"
@@ -549,7 +551,7 @@ fn the_authored_slot_points_where_the_original_starts() {
 /// **This is the `01_Track` trap one level down, and it had to be measured.** M3
 /// settled the track by casting the recording's own positions against every
 /// track's *collision geometry* and finding one where all of them land - see
-/// `oag_game::race::DEFAULT_TRACK`. A forward layout and its reverse share that
+/// `oag_raceplay::DEFAULT_TRACK`. A forward layout and its reverse share that
 /// geometry, so that test could not tell the two apart, and something has to.
 ///
 /// What made the question live rather than theoretical: `track_reversed.vex`'s
@@ -649,7 +651,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         1.0,
         "both hover probes must reach the track from the authored slot, got {}: {}",
         race.ship().physics.grounded,
-        race::describe(&race.telemetry())
+        oag_raceplay::describe(&race.telemetry())
     );
 
     // And the surface really is under it, at the height the spawn claims.

@@ -7,12 +7,12 @@
 use oag_gameplay::PlayerInputs;
 
 fn main() -> anyhow::Result<()> {
-    let options = oag_game::race::Options {
+    let options = oag_raceplay::Options {
         source: "data/images/hdfury-ps3-eu-dec.iso".into(),
         ..Default::default()
     };
-    let loaded = oag_game::race::load(&options)?;
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let loaded = oag_raceplay::load(&options)?;
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     race.set_autopilot(true);
     for _ in 0..700 {
         race.tick(&PlayerInputs::none());

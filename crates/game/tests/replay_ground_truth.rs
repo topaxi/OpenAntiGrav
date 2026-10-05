@@ -26,9 +26,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::input::{Button, Input};
 use oag_gameplay::{InputSnapshot, PlayerInputs};
+use oag_raceplay as race;
 use oag_replay::{Header, Replay, Verifier};
 
 /// How long a run is driven for: long enough for two laps on every circuit

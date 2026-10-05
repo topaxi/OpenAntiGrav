@@ -6,13 +6,12 @@
 //! without a window, and apart from [`oag_ui::frontend`] so the sequence itself
 //! stays free of file I/O.
 
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use oag_pulse as pulse;
 
-use crate::title::open_source;
+use oag_source::title::open_source;
 
 use crate::movie::{self, Extent, Movie};
 use oag_ui::frontend::Frontend;
@@ -99,11 +98,11 @@ pub struct Boot {
     /// something a player can read.
     pub strings: StringTable,
     /// Every circuit this source offers to race on, plus every one a mounted
-    /// pack adds. See [`crate::catalogue`].
-    pub tracks: Vec<crate::catalogue::Track>,
+    /// pack adds. See [`oag_raceplay::catalogue`].
+    pub tracks: Vec<oag_raceplay::catalogue::Track>,
     /// Every team this source offers, plus every one a mounted pack adds, in
     /// the order the definitions declare them.
-    pub teams: Vec<crate::catalogue::Team>,
+    pub teams: Vec<oag_raceplay::catalogue::Team>,
     /// The intro movie's own sound, decoded and ready to play.
     ///
     /// `None` whenever the movie should be silent, and every reason funnels
@@ -201,9 +200,9 @@ pub struct Shell {
     /// screen, which is the other reason this phase exists.
     pub strings: StringTable,
     /// The raceable circuits, for the menus.
-    pub tracks: Vec<crate::catalogue::Track>,
+    pub tracks: Vec<oag_raceplay::catalogue::Track>,
     /// The circuits a Zone race can be picked from. See [`oag_title::ZoneCircuit::menu_tracks`].
-    pub zone_tracks: Vec<crate::catalogue::Track>,
+    pub zone_tracks: Vec<oag_raceplay::catalogue::Track>,
     /// The chosen language's string-table entry, when it names one.
     ///
     /// Carried because the loading screen needs the *other copies* of it: two
@@ -225,7 +224,7 @@ pub struct Shell {
     /// copy names every circuit, which shows each one its id.
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The raceable teams, for the menus.
-    pub teams: Vec<crate::catalogue::Team>,
+    pub teams: Vec<oag_raceplay::catalogue::Team>,
     /// The text atlas.
     pub font: oag_ui::font::Atlas,
     /// The front-end sprite sheet.
@@ -385,9 +384,11 @@ pub fn load_shell(
 ) -> Result<(Shell, oag_assets::Archives, &'static oag_title::Title)> {
     let mut report = Vec::new();
     let mut steps = Steps::new();
-    let (packs, pure_packs, problems) =
-        crate::dlc::packs_from_defaults(&options.dlc, &default_dlc_cache_dir());
-    let crate::title::Opened {
+    let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
+        &options.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
+    let oag_source::title::Opened {
         mut archives,
         title,
     } = open_source(&options.source, packs, pure_packs)
@@ -1574,7 +1575,6 @@ pub mod fonts;
 pub mod fury;
 mod images;
 mod includes;
-pub mod languages;
 mod movies;
 mod options;
 mod progress;
@@ -1585,12 +1585,12 @@ mod screens;
 pub use screens::RaceSetup;
 pub(crate) mod sprites;
 mod steps;
-pub(crate) mod xml;
 
 use fonts::load_font;
-pub use languages::{chosen_language, load_languages, load_strings};
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
+use oag_ui::language::load::{chosen_language, load_languages, load_strings};
+use oag_ui::xml::expand;
 pub use progress::MediaProgress;
 use progress::{loaded, lock_media, starting, watching};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
@@ -1598,64 +1598,6 @@ use screens::{
     load_included_screens, load_screens, read_nav_legend, read_ticker, selection_layouts,
 };
 use steps::Steps;
-use xml::expand;
-
-/// The default movie cache directory: `data/cache/movies` in a repository
-/// checkout, and `<cache dir>/oag/movies` anywhere else - see
-/// [`cache_dir_named`] for how the two are told apart.
-///
-/// Deleting either directory is always safe; see
-/// `docs/architecture/adr/0004-asset-pipeline.md`.
-#[must_use]
-pub fn default_cache_dir() -> std::path::PathBuf {
-    cache_dir_named("movies")
-}
-
-/// The default decoded-audio directory: `data/cache/audio` in a repository
-/// checkout, and `<cache dir>/oag/audio` anywhere else.
-///
-/// A sibling of [`default_cache_dir`] rather than the same directory, because
-/// the two hold different things with different lifetimes - lossless AV1 of a
-/// movie, and PCM decoded out of ATRAC3+ - and a player clearing one should not
-/// have to re-transcode the other. `--cache` names the movie directory only,
-/// which is what its help text has always said. See
-/// `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
-#[must_use]
-pub fn default_audio_cache_dir() -> std::path::PathBuf {
-    cache_dir_named("audio")
-}
-
-/// The default unpacked-DLC directory: `data/cache/dlc` in a repository
-/// checkout, and `<cache dir>/oag/dlc` anywhere else.
-///
-/// A third sibling for the same reason the second one exists: what lands here
-/// is `PACKn.edat` copied out of a downloaded zip, which is derived from a file
-/// the player already has and is therefore always safe to delete. Keeping it
-/// out of the movie and audio directories means clearing one cache never costs
-/// the others - and, unlike those two, nothing here is transcoded, so a stale
-/// entry is cheap to spot: it is a byte copy or it is wrong.
-///
-/// See [`crate::dlc_cache`].
-#[must_use]
-pub fn default_dlc_cache_dir() -> std::path::PathBuf {
-    cache_dir_named("dlc")
-}
-
-/// `data/cache/<what>` in a checkout, `<cache dir>/oag/<what>` anywhere else.
-///
-/// A checkout is recognised by having a `data/` directory, which is where
-/// everything user-supplied already lives and what `just` recipes and
-/// `data/README.md` document. A packaged build has no checkout around it, and
-/// writing beside wherever it happens to have been run from would scatter a
-/// cache through a player's folders - or fail outright, if that is a read-only
-/// mount.
-fn cache_dir_named(what: &str) -> std::path::PathBuf {
-    let checkout = Path::new("data/cache").join(what);
-    if Path::new("data").is_dir() {
-        return checkout;
-    }
-    dirs::cache_dir().map_or_else(|| checkout, |cache| cache.join("oag").join(what))
-}
 
 #[cfg(test)]
 mod tests;

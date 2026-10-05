@@ -33,7 +33,7 @@
 //! rather than the gap itself, so it stays green rather than becoming a
 //! permanently-failing record; the 5-of-16 count lives in `renderer.md` and
 //! this lane's own report instead.
-use oag_game::race;
+use oag_raceplay as race;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 

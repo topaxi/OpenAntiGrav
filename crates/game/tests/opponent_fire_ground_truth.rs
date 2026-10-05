@@ -12,8 +12,9 @@
 //! against 10 to 12 s on this project's older rule, and the field reaches five
 //! kills in a median 75 s against 108 s.
 
-use oag_game::race::{self, FireLaw};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::FireLaw;
 use oag_tables::weapons::Weapon;
 
 /// One game-minute at 60 Hz.

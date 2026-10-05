@@ -11,27 +11,27 @@ pub(super) fn track_entries(
     settings: &crate::settings::Settings,
     circuit_names: &oag_ui::language::CircuitNames,
     strings: &oag_ui::language::StringTable,
-    tracks: &[crate::catalogue::Track],
+    tracks: &[oag_raceplay::catalogue::Track],
     layout: &oag_ui_screens::picker::Layout,
     distance: Option<f32>,
 ) -> (Vec<Entry>, Vec<String>, usize) {
-    let labelled: Vec<(crate::catalogue::Track, String)> = tracks
+    let labelled: Vec<(oag_raceplay::catalogue::Track, String)> = tracks
         .iter()
         .map(|track| {
             (
                 track.clone(),
-                crate::catalogue::label(track, circuit_names, strings, tracks),
+                oag_raceplay::catalogue::label(track, circuit_names, strings, tracks),
             )
         })
         .collect();
     let mode = oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default();
     // HD's grid: the same order and columns the live screen uses.
     let (labelled, columns) = if layout.hd_track.is_some() {
-        crate::catalogue::direction_rows(title, mode, &labelled)
+        oag_raceplay::catalogue::direction_rows(title, mode, &labelled)
     } else {
         (labelled, 0)
     };
-    let laps = crate::catalogue::race_laps(mode, settings.race.class.trim());
+    let laps = oag_raceplay::catalogue::race_laps(mode, settings.race.class.trim());
     let (entries, previews): (Vec<Entry>, Vec<String>) = labelled
         .iter()
         .map(|(track, label)| {
@@ -52,7 +52,7 @@ pub(super) fn track_entries(
                     label: label.clone(),
                     details: Details::Track {
                         info,
-                        emblem: crate::catalogue::track_emblem(title, track),
+                        emblem: oag_raceplay::catalogue::track_emblem(title, track),
                         reversed: track.reversed,
                     },
                 },

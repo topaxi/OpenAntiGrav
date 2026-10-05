@@ -81,15 +81,15 @@ fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
 }
 
 /// The PS4 extract is a directory rather than a disc image, so
-/// `oag_game::source::candidates` needs its own scan for it - see
-/// `oag_game::source::ps4_search_path` and its own doc for why that shape
+/// `oag_source::source::candidates` needs its own scan for it - see
+/// `oag_source::source::ps4_search_path` and its own doc for why that shape
 /// differs from 2048's. This is the ground truth for that scan: a real
 /// extract under `data/extracted/ps4` (the checkout's own, not a substitute)
 /// both appears in `candidates()` and surveys as Omega.
 #[test]
 #[ignore = "needs an Omega Collection PS4 extract under data/extracted/ps4"]
 fn the_ps4_extract_is_a_candidate_and_surveys_as_omega() {
-    let Some(root) = oag_game::source::candidates()
+    let Some(root) = oag_source::source::candidates()
         .into_iter()
         .find(|path| path.ends_with("ps4"))
     else {
@@ -106,7 +106,7 @@ fn the_ps4_extract_is_a_candidate_and_surveys_as_omega() {
 /// image, so this is the state the whole feature is for.
 ///
 /// The directory is reached through [`image`] rather than
-/// `oag_game::source::candidates`, whose first search-path entry is
+/// `oag_source::source::candidates`, whose first search-path entry is
 /// `data/images` **relative to the current directory** - the workspace root
 /// when the game runs, and the crate directory under `cargo nextest`. That is
 /// the composition root's policy working as intended and not something to bend
@@ -124,7 +124,7 @@ fn a_folder_of_several_images_surveys_into_several_rows() {
         .expect("the directory reads")
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.is_file() && oag_game::source::is_container(path))
+        .filter(|path| path.is_file() && oag_source::source::is_container(path))
         .collect();
     paths.sort();
     assert!(paths.len() > 1, "one image needs no chooser: {paths:?}");

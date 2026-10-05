@@ -10,7 +10,7 @@
 //! `LeachBeam_KeepInTrack` bends the chain so it does not cut a corner through
 //! the wall. This finds, on the real circuit, the pair of spline points a beam
 //! could span whose straight line leaves the road by the most, and checks that
-//! the chain the renderer builds from [`oag_game::race::Spline::tube_frame`]
+//! the chain the renderer builds from [`oag_raceplay::Spline::tube_frame`]
 //! stays in the tube where the straight line does not. It fails if the
 //! locator stops being wired (the bent chain would equal the straight one) or
 //! if the tube stops holding.
@@ -19,7 +19,8 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_fx::beam::tube;
-use oag_game::race::{self, Spline};
+use oag_raceplay as race;
+use oag_raceplay::Spline;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

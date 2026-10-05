@@ -31,7 +31,7 @@ fn shell(path: &std::path::Path) -> boot::Shell {
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-selection-screens-ground-truth"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // Every assertion here is about the XML and two meshes; nothing pays
         // for a transcode.

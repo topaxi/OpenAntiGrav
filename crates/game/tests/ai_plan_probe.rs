@@ -6,7 +6,8 @@
 //! `OAG_TRACK` (default `05_Track`), `OAG_REVERSED`, `OAG_SWEEP_CLASS`
 //! (default VENOM), `OAG_SPEED` (default 15), `OAG_TICKS` (default 12000).
 
-use oag_game::{catalogue, race};
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 fn image() -> Option<std::path::PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

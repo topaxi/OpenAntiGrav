@@ -9,8 +9,8 @@
 //! field, kills credited when a weapon finishes a craft, and a kill target the
 //! event ends on.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// Six game-minutes at 60 Hz: past that a run is a wait, not a measurement.
 const TICKS: u64 = 60 * 60 * 6;

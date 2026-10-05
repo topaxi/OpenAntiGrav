@@ -17,7 +17,7 @@
 //! measurement: on Pulse (PSP) the race start plays two cues and nothing else,
 //! `ready` and, exactly 180 ticks later, `go`, the latter on the last tick the
 //! thrust gate holds. The constants below are those measured numbers **written
-//! out as literals**, not read back from `oag_game::race::countdown`, so
+//! out as literals**, not read back from `oag_raceplay::countdown`, so
 //! moving that module's ticks fails here instead of agreeing with itself.
 //!
 //! One test per mode, because the mode is what picks the bank: Time Trial and a
@@ -28,8 +28,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_sound::Volume;
 use oag_sound::sfx::Cue;
 

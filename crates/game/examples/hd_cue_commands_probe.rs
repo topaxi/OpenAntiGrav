@@ -11,7 +11,7 @@ fn main() {
     let image = args.next().expect("image");
     let bank_path = args.next().expect("bank path in the archive");
     let names: Vec<String> = args.collect();
-    let mut opened = oag_game::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
+    let mut opened = oag_source::title::open_source(&image, Vec::new(), Vec::new()).expect("opens");
     let blob = opened.archives.read_name(&bank_path).expect("bank reads");
     let bank = Bank::parse(&blob).expect("parses");
     let all = bank.sound_names();

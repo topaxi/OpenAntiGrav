@@ -45,7 +45,7 @@ pub struct Race {
     /// **A race, not a directory.** `16_Track` and `32_Track` are two entries
     /// and one folder, the second being the first driven the other way, so this
     /// is not a path component and must not be turned into one here - only the
-    /// source can say which `.vex` an id loads. See [`crate::catalogue`].
+    /// source can say which `.vex` an id loads. See [`oag_raceplay::catalogue`].
     #[serde(default = "default_track")]
     pub track: String,
     /// Which numbered variant of `team`, as a plain digit or the raw suffix
@@ -93,7 +93,7 @@ fn default_class() -> String {
     "venom".to_string()
 }
 fn default_team() -> String {
-    crate::race::DEFAULT_TEAM.to_string()
+    oag_raceplay::DEFAULT_TEAM.to_string()
 }
 /// The circuit the reference scenario is on, so the default run is the one
 /// every capture under `data/traces/` was taken against.

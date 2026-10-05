@@ -11,9 +11,9 @@
 //! (`craft+0x2d5`) as the edge, and every figure below is the craft's speed along
 //! its own forward axis that many frames after it. See `docs/physics/launch-boost.md`.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_race::state::COUNTDOWN_TICKS;
+use oag_raceplay as race;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
 

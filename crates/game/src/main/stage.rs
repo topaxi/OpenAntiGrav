@@ -12,9 +12,10 @@ use anyhow::{Context, Result};
 use log::info;
 
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{boot, loading, movie, race, settings};
+use oag_game::{boot, loading, movie, settings};
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_raceplay as race;
 
 use crate::frontend_stage::{FrontendStage, PendingMovie};
 use crate::gpu::{Gpu, GpuContext};

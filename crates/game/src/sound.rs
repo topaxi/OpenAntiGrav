@@ -5,8 +5,8 @@
 //! whichever title it is, cannot see a [`Race`], and cannot search the player's
 //! image directories. This module is what supplies those, and nothing else:
 //!
-//! - [`GameLibrary`] opens a source through [`crate::title::open_source`] and
-//!   lists the disc images [`crate::source::search_path`] names, which is what
+//! - [`GameLibrary`] opens a source through [`oag_source::title::open_source`] and
+//!   lists the disc images [`oag_source::source::search_path`] names, which is what
 //!   [`oag_sound::library::Library`] asks of its host;
 //! - [`race_tick`] turns a race's state into the plain-data
 //!   [`oag_sound::sfx::RaceFrame`] the effects read, so the sound crate never
@@ -20,7 +20,7 @@ use oag_sound::Audio;
 use oag_sound::library::{Library, Opened};
 use oag_sound::sfx::RaceFrame;
 
-use crate::race::Race;
+use oag_raceplay::Race;
 
 /// Opens sources as whichever title they are, and searches the player's image
 /// directories for a second release.
@@ -29,7 +29,7 @@ pub struct GameLibrary;
 
 impl Library for GameLibrary {
     fn open(&self, source: &str) -> Option<Opened> {
-        let opened = crate::title::open_source(source, Vec::new(), Vec::new()).ok()?;
+        let opened = oag_source::title::open_source(source, Vec::new(), Vec::new()).ok()?;
         Some(Opened {
             title: opened.title,
             archives: opened.archives,
@@ -38,17 +38,17 @@ impl Library for GameLibrary {
 
     fn containers(&self) -> Vec<PathBuf> {
         let mut found = Vec::new();
-        for directory in crate::source::search_path() {
+        for directory in oag_source::source::search_path() {
             let Ok(entries) = std::fs::read_dir(&directory) else {
                 continue;
             };
             let mut candidates: Vec<PathBuf> = entries
                 .flatten()
                 .map(|entry| entry.path())
-                .filter(|path| path.is_file() && crate::source::is_container(path))
+                .filter(|path| path.is_file() && oag_source::source::is_container(path))
                 .collect();
             // Alphabetical, so two runs of the same directory pick the same
-            // image - the same reason `crate::source::first_image` sorts.
+            // image - the same reason `oag_source::source::first_image` sorts.
             candidates.sort();
             found.extend(candidates);
         }
@@ -114,7 +114,7 @@ pub fn race_tick(audio: &mut Audio, race: &mut Race) {
 /// `pub` because a circuit's own emitters are placed against the same ears the
 /// craft cues are, and the two must not be allowed to disagree about where the
 /// listener is - see [`TrackEmitters`].
-pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
+pub fn listener_of(race: &oag_raceplay::Race) -> oag_audio::Listener {
     let camera = race.view().inverse();
     oag_audio::Listener {
         position: camera.w_axis.truncate().to_array(),
@@ -126,7 +126,7 @@ pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
 ///
 /// [`None`] for a slot the race did not field. Read once per tick rather than
 /// per cue, because eight cues from one craft must all agree on where it was.
-fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
+fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let ship = race.sim.world.ships.get(slot)?;
         (slot < race.ship_count() as usize && ship.active).then(|| {

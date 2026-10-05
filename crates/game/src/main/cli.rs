@@ -430,7 +430,7 @@ pub(crate) struct Cli {
     /// A second disc image or extracted directory the craft, HUD and grid
     /// roster load from instead of `source` - a Race Remix from the command
     /// line. Left out, the craft comes from `source` like every other race.
-    /// See `oag_game::remix::Remix`.
+    /// See `oag_source::remix::Remix`.
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 
@@ -482,7 +482,7 @@ pub(crate) struct Cli {
     ///
     /// Left out, it is searched for: `data/dlc/` in the current directory, then
     /// beside the AppImage, then `<data dir>/oag/dlc`. `$OAG_DLC` short-circuits
-    /// that, and `oag_game::source::resolve_dlc` documents the order.
+    /// that, and `oag_source::source::resolve_dlc` documents the order.
     ///
     /// **Any pack works against any release.** The original locked a pack to
     /// its own territory's disc; this does not. See `docs/formats/dlc-pack.md`.
@@ -507,7 +507,7 @@ pub(crate) struct Cli {
     /// anything out.
     #[arg(long, default_value = "time_trial")]
     pub(crate) mode: String,
-    /// A Wipeout 2048 campaign event by name - see `crate::race::load_event`.
+    /// A Wipeout 2048 campaign event by name - see `oag_raceplay::load_event`.
     #[arg(long, value_name = "NAME")]
     pub(crate) event: Option<String>,
 
@@ -522,12 +522,12 @@ pub(crate) struct Cli {
     /// than for seeing the look at all: without it, a stage 0 (`Start`) frame
     /// is not reachable at all, since even a zero-tick capture lands after
     /// the race's own opening-stage logic has already stepped past it (see
-    /// `crate::race::load::environment::zone_grade`), and there is otherwise
+    /// `oag_raceplay::load::environment::zone_grade`), and there is otherwise
     /// no way to hold the grade still on a chosen rung long enough to compare
     /// it against the original frame for frame.
     ///
     /// Pins, not just sets once:
-    /// [`crate::race::zone_grade::ZoneGrade::pin_stage`] holds the stage
+    /// [`oag_raceplay::zone_grade::ZoneGrade::pin_stage`] holds the stage
     /// against every later `show_zone` call, so the ladder does not
     /// overwrite it on the next frame the way a plain commit would.
     ///
@@ -544,7 +544,7 @@ pub(crate) struct Cli {
     /// so an ordinary capture shows no glow whatever the scene authors, and
     /// a real device's spectrum is live and non-deterministic, the wrong
     /// input for a comparison two runs are meant to agree on. See
-    /// `race::CaptureOptions::zone_spectrum_test`'s own doc comment.
+    /// `oag_game::race_capture::CaptureOptions::zone_spectrum_test`'s own doc comment.
     #[arg(long)]
     pub(crate) zone_spectrum_test: bool,
 
@@ -612,7 +612,7 @@ pub(crate) struct Cli {
     /// neutral baseline `Driver::default` otherwise leaves slot 0 at.
     ///
     /// One of the same characters a real single race deals from
-    /// [`oag_game::pilots::load`]: the four built-ins - `balanced`, `aggressive`,
+    /// [`oag_raceplay::pilots::load`]: the four built-ins - `balanced`, `aggressive`,
     /// `passive`, `shy` - or a name out of `<config dir>/oag/pilots/`. This is
     /// what makes `--autopilot` useful for checking *a character*, not only
     /// for reaching the finish line unattended - the roster a player edits in
@@ -669,7 +669,7 @@ pub(crate) struct Cli {
     /// pickup. That made every visual change to a projectile unverifiable except
     /// by playing the game by hand - and two rocket changes shipped blind before
     /// this existed, one of them wrong (three pieces of track scenery read as a
-    /// volley; see `oag_game::race::Race::rocket_model_matrices`).
+    /// volley; see `oag_raceplay::Race::rocket_model_matrices`).
     ///
     /// Spelled as the `type` attribute the weapon table uses - `Rocket`,
     /// `Missile`, `Cannon` - and matched case-insensitively.
@@ -973,7 +973,7 @@ pub(crate) struct Cli {
     /// load path rather than a captured reference trace.
     ///
     /// Combining it with `--screenshot` is refused rather than ignored: the
-    /// screenshot route renders through `race::capture`, and threading a writer
+    /// screenshot route renders through `oag_game::race_capture::capture`, and threading a writer
     /// into that loop is a change to a file this flag deliberately does not
     /// touch. Run the two separately.
     #[arg(long, value_name = "FILE.csv", conflicts_with = "screenshot")]

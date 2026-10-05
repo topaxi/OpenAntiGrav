@@ -1,7 +1,7 @@
 //! A Zone craft's start: it stands on the grid through the countdown.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 fn image(name: &str) -> Option<std::path::PathBuf> {
     oag_testdata::image(name)

@@ -23,15 +23,15 @@ use oag_title::SequenceTick;
 /// The milestone numbers Pulse's own ladder names.
 const PULSE_MILESTONES: [u16; 13] = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100];
 
-fn open(image: &str) -> Option<oag_game::title::Opened> {
+fn open(image: &str) -> Option<oag_source::title::Opened> {
     let path = oag_testdata::image(image)?;
     Some(
-        oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .expect("the image opens"),
     )
 }
 
-fn bank_of(opened: &mut oag_game::title::Opened) -> Vec<u8> {
+fn bank_of(opened: &mut oag_source::title::Opened) -> Vec<u8> {
     let table = opened.title.race.zone_announcer.expect("a ladder");
     opened.archives.read_name(table.bank).expect("bank reads")
 }

@@ -174,7 +174,7 @@ pub(super) fn campaign_page(
     measure: &dyn Fn(&str) -> f32,
     // Read-only, off whatever `<config dir>/oag/records.toml` already holds -
     // the same "read, never write" rule the `records` `--menu-page` and
-    // `race::CaptureOptions::previous_best` both already follow, applied
+    // `crate::race_capture::CaptureOptions::previous_best` both already follow, applied
     // here so a locked/unlocked grid or cell in this still matches what a
     // live session (`crate::main::campaign_stage::CampaignStage`) would show
     // for the same file, rather than always drawing the fresh-profile

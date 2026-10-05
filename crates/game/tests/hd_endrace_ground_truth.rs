@@ -30,8 +30,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// The same generous "did it ever finish" bound
 /// `race_finish_ground_truth.rs` uses, for the same reason.
@@ -77,7 +77,7 @@ fn race_to_the_flag(race: &mut race::Race) {
 /// meshes from are not the ones `oag_game::endrace::load` reads screens
 /// through).
 fn open_hd_archives(source: &str) -> oag_assets::Archives {
-    oag_game::title::open_source(source, Vec::new(), Vec::new())
+    oag_source::title::open_source(source, Vec::new(), Vec::new())
         .expect("HD's own disc opens")
         .archives
 }

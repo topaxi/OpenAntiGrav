@@ -14,7 +14,7 @@
 //! # Two populations, labelled separately, because they hit different triggers
 //!
 //! - `ai`: one opponent alone on the circuit. Rescued by
-//!   [`oag_game::race::RespawnCause::LostCircuit`] (8 half-widths from its own
+//!   [`oag_raceplay::RespawnCause::LostCircuit`] (8 half-widths from its own
 //!   driver's sample, 90 ticks), `Stalled`, or an authored `ResetZone`.
 //! - `auto`: slot 0, the player's craft, flown by the same driver. Rescued by
 //!   `OffTrack` (2 half-widths from the *nearest* sample, 45 ticks) or
@@ -42,8 +42,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::race::{self, RespawnCause};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::RespawnCause;
 
 const TICKS: u64 = 18_000;
 const LONE: usize = 1;
@@ -70,7 +71,7 @@ fn circuits_all() -> Vec<Circuit> {
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
     let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
-    oag_game::catalogue::tracks(&definition)
+    oag_raceplay::catalogue::tracks(&definition)
         .into_iter()
         .map(|track| Circuit {
             id: track.id.clone(),

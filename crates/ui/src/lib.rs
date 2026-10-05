@@ -22,3 +22,4 @@ pub mod scene_backdrop;
 pub mod screen;
 pub mod state_machine;
 pub mod strings;
+pub mod xml;

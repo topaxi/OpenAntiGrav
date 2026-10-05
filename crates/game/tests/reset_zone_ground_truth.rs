@@ -31,9 +31,9 @@
 use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_physics::Surface;
+use oag_raceplay as race;
 
 fn disc(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)

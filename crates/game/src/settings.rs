@@ -181,7 +181,7 @@ pub struct Source {
     ///
     /// A list rather than one path, because packs are bought one at a time and
     /// end up wherever the player put each of them. Empty means "look in the
-    /// usual places"; see [`crate::source::resolve_dlc`].
+    /// usual places"; see [`oag_source::source::resolve_dlc`].
     #[serde(default)]
     pub dlc: Vec<String>,
 }
@@ -367,7 +367,7 @@ pub struct Graphics {
     /// `authored + 0.075 * dot(fwd, vel)`, additive degrees driven by **forward
     /// speed** - not the "shake" this comment used to call it, which was a
     /// separate `Hud_Update` term the two measurements had been conflating.
-    /// That widen is recovered and **ported**, as `crate::race::SPEED_FOV_GAIN_DEG`.
+    /// That widen is recovered and **ported**, as `oag_raceplay::SPEED_FOV_GAIN_DEG`.
     ///
     /// This setting is the other thing: a boost-gated tangent multiplier that is
     /// ours by choice, composed on top. [`oag_display::display::BoostFovKick::OFF`] is

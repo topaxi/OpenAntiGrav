@@ -7,7 +7,7 @@
 //! off has to lose its pads (nothing to pick up, nothing to trigger) and report
 //! weapons off to the damage rules, where the untouched default keeps both.
 
-use oag_game::race;
+use oag_raceplay as race;
 
 fn started(weapons_override: Option<bool>) -> Option<race::Race> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;

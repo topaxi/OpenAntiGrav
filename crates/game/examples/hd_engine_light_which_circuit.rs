@@ -82,13 +82,13 @@ fn main() -> anyhow::Result<()> {
         }
     }
     for environment in oag_hd::names::ENVIRONMENTS {
-        let options = oag_game::race::Options {
+        let options = oag_raceplay::Options {
             source: "data/images/hdfury-ps3-eu-dec.iso".into(),
             track: Some(format!(r"Data\Environments\{environment}\track.vex")),
             team: Some("feisar_c1".into()),
             ..Default::default()
         };
-        let loaded = match oag_game::race::load(&options) {
+        let loaded = match oag_raceplay::load(&options) {
             Ok(loaded) => loaded,
             Err(error) => {
                 println!("{environment}: {error:#}");

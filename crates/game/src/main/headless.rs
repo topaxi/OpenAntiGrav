@@ -8,9 +8,10 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
 
-use oag_game::{boot, capture, loading, prefetch, race, records, settings};
+use oag_game::{boot, capture, loading, prefetch, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_raceplay as race;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
@@ -67,11 +68,11 @@ pub(crate) fn run_windowless(
         }
         _ => {}
     }
-    oag_game::loader_log::lines(&loaded.report);
+    oag_raceplay::loader_log::lines(&loaded.report);
 
     // Wipeout 2048's own career, read the same way `Session::finish_loading`
     // does - see that function's own comment. **Read-only**, the same
-    // exception `race::CaptureOptions::previous_best` a few lines down
+    // exception `oag_game::race_capture::CaptureOptions::previous_best` a few lines down
     // already makes for this exact file: a capture never calls
     // `records::save`, so reading `records::load()` here cannot write a
     // player's own `records.toml`, only reflect what is already in it. A
@@ -121,7 +122,7 @@ pub(crate) fn run_windowless(
         prefetch::Prefetch::spawn(prefetch::Options {
             source: options.source.clone(),
             movies: options.cache.clone(),
-            audio: boot::default_audio_cache_dir(),
+            audio: oag_source::cache::default_audio_cache_dir(),
             refresh_video: cli.refresh_video,
         })
     });
@@ -163,7 +164,7 @@ pub(crate) fn run_windowless(
                     .map_or_else(
                         || entry.clone(),
                         |track| {
-                            oag_game::catalogue::label(
+                            oag_raceplay::catalogue::label(
                                 track,
                                 &loaded.circuit_names,
                                 &loaded.strings,
@@ -179,7 +180,7 @@ pub(crate) fn run_windowless(
             loaded.entries.as_deref(),
             crate::args::style_of(settings),
         );
-        oag_game::loader_log::lines(&assets.notes);
+        oag_raceplay::loader_log::lines(&assets.notes);
         capture::loading(
             &assets,
             loaded.font.clone(),
@@ -274,7 +275,7 @@ pub(crate) fn run_windowless(
 /// # Driving the run
 ///
 /// `--input-script` supersedes `--hold`/`--press` from tick 0, the same way
-/// `race::CaptureOptions::input_script` documents its own field: with a
+/// `oag_game::race_capture::CaptureOptions::input_script` documents its own field: with a
 /// script, the two masks are read only for the ticks past its end.
 ///
 /// **This loop used to read `cli.hold`/`cli.press` unconditionally and never
@@ -282,11 +283,11 @@ pub(crate) fn run_windowless(
 /// silently wrote a CSV of a craft sitting still - no error, right row count,
 /// right columns, `throttle`/`steer` zero throughout.
 /// `race::HeldButtons::advance` is the one place both this loop and
-/// `race::capture`'s tick loop make the script-or-mask choice now.
+/// `oag_game::race_capture::capture`'s tick loop make the script-or-mask choice now.
 ///
 /// **Only the script's button mask reaches the ship** - `stick_x`, `stick_y`
 /// and the two `airbrake_*` analog fields a script can author are dropped
-/// here the same way `race::capture`'s tick loop already dropped them; see
+/// here the same way `oag_game::race_capture::capture`'s tick loop already dropped them; see
 /// `HeldButtons::advance`'s own doc for why and what reads them instead.
 ///
 /// # Which of our values stands for which recovered field
@@ -322,7 +323,7 @@ pub(crate) fn run_windowless(
 ///
 /// # Row alignment
 ///
-/// One row per tick, then one final row, mirroring `race::capture`: a row is
+/// One row per tick, then one final row, mirroring `oag_game::race_capture::capture`: a row is
 /// emitted **before** the tick it labels, which is `scripts/psp-trace.py`'s own
 /// alignment ("the craft as this frame's update found it"), and the last row is
 /// the state a `--screenshot` of the same command line would draw - after
@@ -447,17 +448,19 @@ pub(crate) fn run_race(
     // `race::TextureSink`. The trace and `--dry-run` routes build no scene,
     // and the window's own device does not exist yet on the windowed route.
     let gpu = (cli.screenshot.is_some() && cli.trace_out.is_none() && !cli.dry_run)
-        .then(|| race::CaptureGpu::request(&settings.graphics.renderer))
+        .then(|| oag_game::race_capture::gpu::CaptureGpu::request(&settings.graphics.renderer))
         .transpose()?;
     let loaded = {
-        let sink = gpu.as_ref().map(race::CaptureGpu::texture_sink);
+        let sink = gpu
+            .as_ref()
+            .map(oag_game::race_capture::gpu::CaptureGpu::texture_sink);
         let _scope = race::TextureSink::open_if(sink.as_ref());
         match &cli.event {
             Some(name) => race::load_event(&options, name)?,
             None => race::load(&options)?,
         }
     };
-    oag_game::loader_log::lines(&loaded.report);
+    oag_raceplay::loader_log::lines(&loaded.report);
 
     if cli.dry_run {
         return Ok(());
@@ -473,14 +476,14 @@ pub(crate) fn run_race(
     if let Some(path) = cli.screenshot.clone() {
         // Same reasoning as the front end's own capture branch: no window to
         // stay in step with, but the music has to be running before
-        // `race::capture`'s first tick. The race playlist rather than
+        // `oag_game::race_capture::capture`'s first tick. The race playlist rather than
         // `start_music`, so `--race` plays the same music a race launched from
         // the menus does - there is no menu voice here to switch away from,
         // so this simply starts the list at its first (or resumed) track.
         audio.start_race_music(
             &music_discs,
             settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
+            &oag_source::cache::default_audio_cache_dir(),
         );
         // **The title's own profile**, which this leg used to have no way to
         // reach: `race::load` resolves the title to pick a default track and
@@ -511,7 +514,7 @@ pub(crate) fn run_race(
         // The same key `main::stage::build_race_stage` resolves for a real
         // session - see `oag_game::records::Key::track`'s own doc for why the
         // fallback order matters - read here only to look a row up, never to
-        // write one back. See `race::CaptureOptions::previous_best`'s own doc
+        // write one back. See `oag_game::race_capture::CaptureOptions::previous_best`'s own doc
         // for why this capture never calls `oag_game::records::save`.
         let key = oag_game::records::Key::new(
             loaded.title.name,
@@ -534,9 +537,9 @@ pub(crate) fn run_race(
                 (path, header)
             }),
         };
-        race::capture(
+        oag_game::race_capture::capture(
             loaded,
-            &race::CaptureOptions {
+            &oag_game::race_capture::CaptureOptions {
                 gpu,
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.autopilot,
@@ -573,7 +576,7 @@ pub(crate) fn run_race(
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
-                presented: cli.presented.then_some(race::Presented {
+                presented: cli.presented.then_some(oag_game::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {
                         reconstruction: render_profile.reconstruction,
@@ -585,7 +588,7 @@ pub(crate) fn run_race(
                 zone_spectrum_test: cli.zone_spectrum_test,
                 previous_best,
                 ghost,
-                // Resolved here rather than in `race::capture`, which has no
+                // Resolved here rather than in `oag_game::race_capture::capture`, which has no
                 // config directory in hand: the same catalogue the window
                 // reads, so a `--presented` capture shows the same preset.
                 screen_filter: oag_game::screen::Catalogue::load(

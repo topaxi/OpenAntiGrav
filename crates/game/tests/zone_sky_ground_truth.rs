@@ -37,7 +37,7 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
+use oag_raceplay as race;
 
 /// One image, or `None` with a printed reason when it is not present.
 fn image(name: &str) -> Option<PathBuf> {

@@ -29,7 +29,7 @@ fn maps() -> Option<Maps> {
         return None;
     }
     let mut opened =
-        oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .expect("opening the source");
     Some(Maps::load(&mut opened.archives).expect("GlobalAudioConfig.xml has rows"))
 }

@@ -12,8 +12,8 @@ use oag_mesh::mesh_render::Anisotropy;
 
 use crate::boot::Boot;
 use crate::input::Input;
-use crate::race;
 use crate::render::{Renderer, VideoFormat};
+use oag_raceplay as race;
 use oag_ui::frontend::Draw;
 
 mod campaign_page;
@@ -63,7 +63,7 @@ pub struct Options {
     /// path and clock were read. See `Cli::fury_path`.
     pub fury_path: Option<usize>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
-    /// to. `--camera-jitter`; see `race::CaptureOptions::camera_jitter`.
+    /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.
     ///
     /// Carried rather than dropped because `--screenshot` reaching a race
     /// through `Launch Game` is one of the two ways a capture gets a race at
@@ -93,14 +93,14 @@ pub struct Options {
     /// With that handoff, print a telemetry line every this many ticks.
     pub log_every: u32,
     /// `--give`: keep the player's pickup slot topped up. See
-    /// `race::CaptureOptions::give`.
+    /// `crate::race_capture::CaptureOptions::give`.
     pub give: Option<oag_tables::weapons::Weapon>,
     /// `--autopilot`: fly the race this hands off to with an opponent's
-    /// driver. See `race::CaptureOptions::autopilot`.
+    /// driver. See `crate::race_capture::CaptureOptions::autopilot`.
     pub autopilot: bool,
-    /// `--autopilot-pilot`. See `race::CaptureOptions::autopilot_pilot`.
+    /// `--autopilot-pilot`. See `crate::race_capture::CaptureOptions::autopilot_pilot`.
     pub autopilot_pilot: Option<oag_ai::Pilot>,
-    /// `--autopilot-skill`. See `race::CaptureOptions::autopilot_skill`.
+    /// `--autopilot-skill`. See `crate::race_capture::CaptureOptions::autopilot_skill`.
     pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// Image size.
     pub size: (u32, u32),
@@ -178,7 +178,7 @@ const MAX_TICKS: u32 = 60 * 60;
 ///
 /// `audio` is stepped once per simulation tick, in the same loop the front end
 /// is stepped in. It is threaded through rather than made here because the
-/// handoff to [`race::capture`] continues into the *same* buffer: a
+/// handoff to [`crate::race_capture::capture`] continues into the *same* buffer: a
 /// `--dump-audio` run that reaches `Launch Game` would otherwise lose whichever
 /// leg made its own. The caller writes the file once, after both.
 pub fn run(
@@ -280,7 +280,7 @@ pub fn run(
         audio.start_music(
             &options.music_discs,
             options.settings.audio.music_source,
-            &crate::boot::default_audio_cache_dir(),
+            &oag_source::cache::default_audio_cache_dir(),
         );
     }
 
@@ -357,11 +357,11 @@ pub fn run(
             audio.start_music(
                 &options.music_discs,
                 options.settings.audio.music_source,
-                &crate::boot::default_audio_cache_dir(),
+                &oag_source::cache::default_audio_cache_dir(),
             );
         }
         crate::report(&events, options.trace);
-        crate::loader_log::lines(frontend.take_notes());
+        oag_raceplay::loader_log::lines(frontend.take_notes());
         ticks += 1;
     }
 
@@ -400,14 +400,14 @@ pub fn run(
             }
             None => race::load(race_options)?,
         };
-        crate::loader_log::lines(&loaded.report);
+        oag_raceplay::loader_log::lines(&loaded.report);
         // The same handoff `App::launch_race` makes: the menu voice this loop
         // started above stops, and the race playlist takes over - one music
         // rule for every way a race is reached, screenshot captures included.
         audio.start_race_music(
             &options.music_discs,
             options.settings.audio.music_source,
-            &crate::boot::default_audio_cache_dir(),
+            &oag_source::cache::default_audio_cache_dir(),
         );
         // The five render-profile settings, resolved against this title -
         // see `crate::settings::RenderProfile`. Read once rather than inline
@@ -420,7 +420,7 @@ pub fn run(
             .cloned()
             .unwrap_or_default();
         // Read-only, off whatever `<config dir>/oag/records.toml` already
-        // holds - see `race::CaptureOptions::previous_best`'s own doc for why
+        // holds - see `crate::race_capture::CaptureOptions::previous_best`'s own doc for why
         // this never writes one back.
         let previous_best = crate::records::load()
             .get(&crate::records::Key::new(
@@ -433,9 +433,9 @@ pub fn run(
                 &loaded.setup.class,
             ))
             .cloned();
-        return race::capture(
+        return crate::race_capture::capture(
             loaded,
-            &race::CaptureOptions {
+            &crate::race_capture::CaptureOptions {
                 gpu: None,
                 aspect: options.settings.display.aspect,
                 path: options.path.clone(),
@@ -474,7 +474,7 @@ pub fn run(
                 pose_boost: None,
                 pose_intensity: None,
                 pose_speed: None,
-                presented: options.presented.then_some(race::Presented {
+                presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {
                         reconstruction: render_profile.reconstruction,
@@ -685,9 +685,11 @@ pub fn run(
                 // precedence, which (see `oag_game::campaign::hd_selection_string_overlay`'s
                 // own doc) none of `DATA00`/`DATA01`/`DATA02`/`DATA03`/`DATA05`
                 // carry any of the four in.
-                let entries_path =
-                    crate::boot::chosen_language(&languages, options.settings.language.as_deref())
-                        .and_then(|language| language.entries.clone());
+                let entries_path = oag_ui::language::load::chosen_language(
+                    &languages,
+                    options.settings.language.as_deref(),
+                )
+                .and_then(|language| language.entries.clone());
                 // Read-only, the same `crate::records::load()` call the
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
@@ -748,7 +750,7 @@ pub fn run(
             } else {
                 // Read-only, off whatever `<config dir>/oag/records.toml`
                 // already holds - the same "read, never write" rule
-                // `race::CaptureOptions::previous_best` follows a few lines
+                // `crate::race_capture::CaptureOptions::previous_best` follows a few lines
                 // above this arm's own sibling, and for the same reason:
                 // this still shows a player their own stored times, never a
                 // seeded or invented one. A capture with no file, or one

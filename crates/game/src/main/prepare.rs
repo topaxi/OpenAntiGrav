@@ -1,7 +1,7 @@
 //! Everything a run needs that depends on *which* source it opened.
 //!
 //! This used to be the middle of `main`, run once as soon as
-//! [`oag_game::source::resolve`] had answered. It is a module of its own now
+//! [`oag_source::source::resolve`] had answered. It is a module of its own now
 //! because the answer can arrive later: with no source named and several images
 //! on the search path, [`oag_game::launcher`] puts them on screen and the pick
 //! comes from a window that is already open. Both routes run the same code
@@ -19,7 +19,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use log::debug;
 
-use oag_game::{boot, loading, movie, prefetch, race, settings};
+use oag_game::{boot, loading, movie, prefetch, settings};
+use oag_raceplay as race;
 use oag_ui::frontend;
 use oag_ui::{menu, strings};
 
@@ -81,8 +82,8 @@ impl Pending {
                 .cli
                 .cache
                 .clone()
-                .unwrap_or_else(boot::default_cache_dir),
-            audio_cache: boot::default_audio_cache_dir(),
+                .unwrap_or_else(oag_source::cache::default_cache_dir),
+            audio_cache: oag_source::cache::default_audio_cache_dir(),
             // Every frame by default: the movie the disc plays is 1200 frames
             // long and its last one is the Wipeout Pulse logo, so a cap would
             // stop the sequence before the thing it exists to show.
@@ -218,7 +219,7 @@ impl Pending {
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds
         // apart, which reads as the disc having been opened again.
-        oag_game::loader_log::lines(boot_shell.report.drain(..));
+        oag_raceplay::loader_log::lines(boot_shell.report.drain(..));
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
 
         // Every team the player's own source declares, in the definition's file
@@ -267,7 +268,7 @@ impl Pending {
                 boot_shell.entries.as_deref(),
                 crate::args::style_of(&self.settings),
             );
-            oag_game::loader_log::lines(&assets.notes);
+            oag_raceplay::loader_log::lines(&assets.notes);
             assets
         };
 
@@ -282,7 +283,7 @@ impl Pending {
             prefetch: self.cli.prefetch.then(|| prefetch::Options {
                 source: source.to_string(),
                 movies: options.cache.clone(),
-                audio: boot::default_audio_cache_dir(),
+                audio: oag_source::cache::default_audio_cache_dir(),
                 refresh_video: self.cli.refresh_video,
             }),
         })

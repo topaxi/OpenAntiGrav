@@ -240,7 +240,7 @@ fn the_front_ends_own_backdrop_name_resolves_to_the_60hz_cut() {
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(r"Data\Movies\Backdrop.ipf".to_string()),
         cache: std::env::temp_dir().join("oag-ipf-ground-truth"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: movie::Extent::Whole,
         // The resolution is what is under test, not the transcode.
         no_video: true,

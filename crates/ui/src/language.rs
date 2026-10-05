@@ -29,6 +29,8 @@ use std::collections::HashMap;
 
 use crate::screen::{Node, parse};
 
+pub mod load;
+
 /// Font role names, as a `<Font><Values name="...">` slot spells them.
 ///
 /// **A property of the front-end format, not of either release**, which is why

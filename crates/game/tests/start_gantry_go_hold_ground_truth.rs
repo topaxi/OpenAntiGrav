@@ -21,8 +21,8 @@
 //! law. This test fails if that window is dropped: at the raw clock the panel
 //! is 9.99 units above the aperture, on Pulse's clock it never leaves it.
 
-use oag_game::race::gantry::{Clock, PULSE_PRE_LAP_WINDOW};
 use oag_mesh::mesh;
+use oag_raceplay::gantry::{Clock, PULSE_PRE_LAP_WINDOW};
 use oag_vex::vex;
 
 const GANTRY: &str = r"Data\Environments\321_Go\321Go_StartFinish.vex";

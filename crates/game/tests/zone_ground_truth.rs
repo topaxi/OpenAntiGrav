@@ -47,9 +47,10 @@
 //!
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 use oag_title::ZoneCircuit;
 use std::path::PathBuf;
 
@@ -65,7 +66,7 @@ fn image(name: &str) -> Option<PathBuf> {
 /// Every `PI_Track` a source declares as raceable, off the disc's own plugin
 /// definition.
 ///
-/// Read rather than listed, for the reason `oag_game::catalogue` gives: circuit
+/// Read rather than listed, for the reason `oag_raceplay::catalogue` gives: circuit
 /// names in this repository would be shipped content.
 fn race_circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<catalogue::Track> {
     let blob = archives
@@ -774,7 +775,7 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
     for (name, team, craft) in cases {
         let Some(path) = image(name) else { continue };
         let source = path.display().to_string();
-        let archives = oag_game::title::open_source(&source, Vec::new(), Vec::new())
+        let archives = oag_source::title::open_source(&source, Vec::new(), Vec::new())
             .expect("opening the source");
 
         let racing =
@@ -841,7 +842,7 @@ fn every_titles_zone_handling_is_one_classless_block() {
     for (name, directory) in cases {
         let Some(path) = image(name) else { continue };
         let source = path.display().to_string();
-        let mut opened = oag_game::title::open_source(&source, Vec::new(), Vec::new())
+        let mut opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())
             .expect("opening the source");
         let entry = oag_tables::handling::entry_name(directory);
         let blob = opened

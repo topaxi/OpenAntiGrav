@@ -16,7 +16,7 @@
 //!
 //! **The pure resolution lives in `oag_game::scoreboard::records_table`, not
 //! here.** It used to live in this module, split out the same way
-//! `oag_game::pilots::axis_preview_for` is - but that kept it reachable only
+//! `oag_raceplay::pilots::axis_preview_for` is - but that kept it reachable only
 //! from this binary, and `crate::capture::menu_page` (the `--menu-page
 //! records` still, in the library crate) needed the identical resolution so
 //! the live page and its own capture cannot silently disagree about which
@@ -58,7 +58,7 @@ use crate::session::Shell;
 /// this page: `Shell::tracks_for(mode)` carries a distinct Zone track list,
 /// which a `--menu-page records` capture's own boot survey does not - see
 /// that function's own doc. Not unit-tested here for the same reason
-/// `oag_game::pilots::axis_preview_for`'s own live callers are not: building
+/// `oag_raceplay::pilots::axis_preview_for`'s own live callers are not: building
 /// a real `Shell` needs a font atlas and a sprite sheet, neither practical to
 /// fabricate in a unit test. `scoreboard::records_table`'s own tests cover
 /// the resolution itself, with a hand-built track lookup standing in for
@@ -75,6 +75,6 @@ pub(crate) fn table_for(
             .iter()
             .map(|(track, _)| track)
             .find(|track| track.id == track_id)
-            .map(oag_game::catalogue::Track::entry_name)
+            .map(oag_raceplay::catalogue::Track::entry_name)
     })
 }

@@ -87,9 +87,9 @@ pub struct Options {
     /// string `boot::Options::source` carries: the worker opens its own
     /// handles on it rather than borrowing anyone else's.
     pub source: String,
-    /// Where converted movie frames land - [`crate::boot::default_cache_dir`].
+    /// Where converted movie frames land - [`oag_source::cache::default_cache_dir`].
     pub movies: PathBuf,
-    /// Where decoded PCM lands - [`crate::boot::default_audio_cache_dir`].
+    /// Where decoded PCM lands - [`oag_source::cache::default_audio_cache_dir`].
     pub audio: PathBuf,
     /// Convert every movie again even when the cache already holds it, and
     /// overwrite what is there. See [`movie::Decode::refresh`].
@@ -133,6 +133,20 @@ pub struct Progress {
     /// nothing reports one. Only a race load sets it: see
     /// `race::LoadWorker::progress`.
     pub load_stage: u8,
+}
+
+impl From<oag_raceplay::LoadProgress> for Progress {
+    /// A race load's snapshot, uncounted: `total` stays zero, so
+    /// [`crate::loading::Screen::draw_list`] draws no figures, and the stage
+    /// rides in [`Progress::load_stage`].
+    fn from(load: oag_raceplay::LoadProgress) -> Self {
+        Self {
+            current: load.current,
+            finished: load.finished,
+            load_stage: load.stage,
+            ..Self::default()
+        }
+    }
 }
 
 impl Progress {

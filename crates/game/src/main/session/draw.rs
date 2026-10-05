@@ -17,7 +17,8 @@
 use anyhow::Result;
 use log::debug;
 
-use oag_game::{movie, pilots};
+use oag_game::movie;
+use oag_raceplay::pilots;
 
 use oag_present::drs;
 
@@ -578,7 +579,7 @@ impl Session {
             );
             // Pulse's bloom over the HUD (PSP measured, PS2 inherited), as
             // the queue order draws it: see
-            // `oag_game::race::Scene::composite_bloom`.
+            // `oag_raceplay::Scene::composite_bloom`.
             stage
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);

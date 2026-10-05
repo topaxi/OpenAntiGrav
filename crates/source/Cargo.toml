@@ -1,0 +1,33 @@
+[package]
+name = "oag-source"
+description = "Finding a title's disc image and opening it as whichever title it is, with its downloadable content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-2048.workspace = true
+oag-assets.workspace = true
+oag-disc.workspace = true
+oag-formats.workspace = true
+oag-hd.workspace = true
+oag-omega.workspace = true
+oag-pulse.workspace = true
+oag-pure.workspace = true
+oag-title.workspace = true
+anyhow.workspace = true
+dirs = "7"
+log.workspace = true
+# Unpacking a downloaded DLC zip into the cache, and nothing else. Deliberately
+# here rather than in `oag-assets`: `dlc` writes the members out as plain files,
+# so the asset layer only ever opens a `PACKn.edat` off disk and no gameplay
+# crate acquires a decompressor. Deflate only - the packs are torrentzipped, and
+# bzip2/zstd/aes would be dependencies for formats that cannot appear here.
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]

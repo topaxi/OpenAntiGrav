@@ -8,13 +8,16 @@
 use oag_core::TickClock;
 
 use oag_game::render::Renderer;
-use oag_game::{boot, catalogue, loading, movie, pilots, prefetch, race, records, settings};
+use oag_game::{boot, loading, movie, prefetch, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_present::drs;
 use oag_present::perf;
 use oag_present::upscale;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
+use oag_raceplay::pilots;
 use oag_ui::menu;
 
 use crate::gpu::Gpu;
@@ -49,7 +52,7 @@ pub(crate) use load_probe::LoadProbe;
 pub(crate) mod menus;
 #[path = "session/picker.rs"]
 mod picker;
-// Named `pilot_editor`, not `pilots` - `oag_game::pilots` is already imported
+// Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
 // unaliased above, and a sibling module of the same name would shadow it,
 // the same reason `remix_menu` below is not called `remix`.
 #[path = "session/pilot_editor.rs"]
@@ -335,7 +338,7 @@ pub(crate) struct Session {
     /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
     /// starts, by its `SP.xml` name - set by the front end's own
     /// `Launch 2048` and taken by that one launch. `None` is an ordinary
-    /// race from the menus' own options. See `oag_game::race::load_event`.
+    /// race from the menus' own options. See `oag_raceplay::load_event`.
     pub(crate) pending_event: Option<String>,
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
@@ -752,7 +755,7 @@ impl Shell {
     /// ([`crate::prepare::Pending::windowed`]) and a live LANGUAGE-row switch
     /// ([`Session::resupply_language`]) cannot drift onto two different
     /// readings of the same `boot::Shell` - which is exactly the shape of bug
-    /// this project has already hit once: [`crate::race::hud::load_hud`]'s
+    /// this project has already hit once: [`oag_raceplay::hud::load_hud`]'s
     /// own `None` language stayed correct for months because nothing forced
     /// its one caller to agree with the picker.
     ///

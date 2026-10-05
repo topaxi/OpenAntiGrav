@@ -31,14 +31,15 @@
 //! - **Team.** [`yaw_ceiling_by_team_and_class`] below, which is a table read
 //!   rather than a sweep.
 //!
-//! [`Race::wall_contact_ticks_of`]: oag_game::race::Race::wall_contact_ticks_of
-//! [`Race::wall_shield_charged_of`]: oag_game::race::Race::wall_shield_charged_of
+//! [`Race::wall_contact_ticks_of`]: oag_raceplay::Race::wall_contact_ticks_of
+//! [`Race::wall_shield_charged_of`]: oag_raceplay::Race::wall_shield_charged_of
 
 use std::path::PathBuf;
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
 use oag_physics::Raycaster;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 /// How long a measured run is: five minutes at 60 Hz, the same window
 /// `race_ground_truth.rs`'s solo benchmark and `ai_span_sweep.rs` use, so all

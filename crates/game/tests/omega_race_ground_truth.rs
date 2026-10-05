@@ -30,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
+use oag_raceplay as race;
 use oag_vex::{kdcol, track, vex};
 
 /// The directory pair to read, or `None` with the reason printed.

@@ -20,8 +20,8 @@
 //! running original was measured at (eye `468.3436, -22.8052, -39.8696`, 488.6
 //! units from a craft on the start line, 4.1018 degrees).
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_render::camera::destroy;
 
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";

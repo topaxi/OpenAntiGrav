@@ -26,7 +26,7 @@ fn pulses_three_trophies_decode_and_sit_on_the_medal_icon() {
         return;
     };
     let source = image.display().to_string();
-    let mut archives = oag_game::title::open_source(&source, Vec::new(), Vec::new())
+    let mut archives = oag_source::title::open_source(&source, Vec::new(), Vec::new())
         .expect("Pulse's own disc opens")
         .archives;
     let space = oag_display::space::Space::PSP;

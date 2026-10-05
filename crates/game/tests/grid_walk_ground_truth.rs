@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race;
+use oag_raceplay as race;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -23,7 +23,7 @@ fn options_for(id: &str) -> Option<race::Options> {
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .ok()?;
     let definition = oag_tables::fexml::expand(&blob).ok()?;
-    let track = oag_game::catalogue::tracks(&definition)
+    let track = oag_raceplay::catalogue::tracks(&definition)
         .into_iter()
         .find(|track| track.id == id)?;
     Some(race::Options {

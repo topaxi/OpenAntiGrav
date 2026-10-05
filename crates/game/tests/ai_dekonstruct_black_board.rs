@@ -5,9 +5,10 @@
 //! with a lone Ace and with the full field, and logs by line index where craft
 //! touch walls, are rescued or are destroyed.
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
 use oag_physics::CraftState;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 
 const TICKS: u64 = 18_000;
 const CLUSTER: u32 = 50;

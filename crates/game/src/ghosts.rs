@@ -35,14 +35,6 @@ use crate::records::Key;
 /// The extension a ghost file carries.
 pub const EXTENSION: &str = "oagr";
 
-/// Whether a mode races a ghost at all: Time Trial and Speed Lap, the two
-/// Pulse builds one for (`TimeTrial_Construct`, which both share - see
-/// `docs/ghidra/functions/psp-pulse-usa/ghost.md`).
-#[must_use]
-pub fn races_a_ghost(mode: oag_race::Mode) -> bool {
-    matches!(mode, oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap)
-}
-
 /// The directory every ghost lives under: `<config dir>/oag/ghosts`.
 #[must_use]
 pub fn dir() -> Option<PathBuf> {

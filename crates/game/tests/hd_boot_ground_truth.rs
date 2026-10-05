@@ -52,7 +52,7 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
         leg: frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-hd-boot-ground-truth"),
-        audio_cache: boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         // The shell is the half with no movies in it, and every assertion here
         // is about the chain rather than the picture - so nothing below pays for
@@ -228,10 +228,10 @@ fn every_declared_language_plugin_resolves() {
     //
     // The sixteenth is Portuguese, and what was dropping it was one byte:
     // `Portugu\xeas` is Latin-1, `from_utf8` refused the whole file and the
-    // plugin went with it, silently. `boot::xml::expand` falls back to Latin-1
+    // plugin went with it, silently. `oag_ui::xml::expand` falls back to Latin-1
     // now; `all_sixteen_languages_load_including_the_latin_1_one` asserts the
     // name comes out right rather than merely coming out.
-    let languages = boot::load_languages(&mut archives, plugins, &mut report);
+    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
     assert_eq!(languages.len(), 16, "every declared plugin parses");
     assert!(
         languages
@@ -478,7 +478,7 @@ fn every_front_end_image_this_disc_names_decodes() {
 /// All sixteen languages reach the picker, not fifteen.
 ///
 /// **One Latin-1 byte used to drop one of them silently.** `Portuguese` writes
-/// its own name `Portugu\xeas`, which is not valid UTF-8, so `boot::xml::expand`
+/// its own name `Portugu\xeas`, which is not valid UTF-8, so `oag_ui::xml::expand`
 /// failed, `load_languages` skipped the plugin and the boot reported fifteen
 /// with no line saying which had gone. `Spanish` on the same disc is genuinely
 /// UTF-8, so the release is mixed-encoding rather than Latin-1.

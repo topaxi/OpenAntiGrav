@@ -40,7 +40,7 @@ pub struct LoadingOptions {
     /// A real race load to run on a worker while the ticks are paced at 60 Hz,
     /// `--loading-live`: the bar then shows the stage the load has reached by
     /// tick `ticks`, instead of a stated state. `None` draws a stated one.
-    pub live: Option<crate::race::Options>,
+    pub live: Option<oag_raceplay::Options>,
     /// Which adapter to draw with, from `[graphics] renderer`.
     pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
@@ -91,12 +91,12 @@ pub fn loading(
     let mut worker = options
         .live
         .clone()
-        .map(|race| crate::race::LoadWorker::spawn(race, options.progress.current.clone(), None));
+        .map(|race| oag_raceplay::LoadWorker::spawn(race, options.progress.current.clone(), None));
     for _ in 0..options.ticks {
         let finished = match &worker {
             Some(worker) => {
                 std::thread::sleep(std::time::Duration::from_nanos(16_666_667));
-                let progress = worker.progress();
+                let progress: crate::prefetch::Progress = worker.progress().into();
                 screen.set_load_stage(progress.load_stage);
                 progress.finished
             }

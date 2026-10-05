@@ -267,7 +267,7 @@ fn the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback() 
         .front_end
         .expect("oag_2048::TITLE.front_end is None - see ADR-0054")
         .language_plugins;
-    let languages = oag_game::boot::load_languages(&mut archives, plugins, &mut report);
+    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
     assert!(
         !languages.is_empty(),
         "no language plugin resolved: {report:?}"

@@ -176,7 +176,7 @@ fn pulse_cells_answer_a_pointer_on_their_own_hexagon() {
         return;
     };
     let opened =
-        oag_game::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+        oag_source::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
             .expect("open pulse");
     let mut archives = opened.archives;
     let pulse = load_on(&mut archives, oag_pulse::TITLE, [480.0, 272.0]);

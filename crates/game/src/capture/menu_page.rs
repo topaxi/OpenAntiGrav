@@ -52,14 +52,14 @@ pub(super) fn menu_page(
     // The other half of that same row's key - see `crate::settings::profile_key`.
     platform: oag_disc::Platform,
     page: &str,
-    tracks: &[crate::catalogue::Track],
-    teams: &[crate::catalogue::Team],
+    tracks: &[oag_raceplay::catalogue::Track],
+    teams: &[oag_raceplay::catalogue::Team],
     race_setup: &crate::boot::RaceSetup,
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &oag_sound::MusicDiscs,
     // The RECORDS page's own store, read the same read-only way
-    // `race::CaptureOptions::previous_best` is - see the call site in
+    // `crate::race_capture::CaptureOptions::previous_best` is - see the call site in
     // `capture.rs`. Taken rather than loaded in here so this function stays
     // testable on a hand-built `Store` with no real `<config dir>` involved.
     records: &crate::records::Store,
@@ -213,7 +213,8 @@ pub(super) fn menu_page(
     // is what the flag is for. A machine with no directory yet still gets the
     // four built-ins, which is `Roster::built_in`'s job and not a fallback
     // here.
-    let roster = crate::pilots::load().unwrap_or_else(|_| crate::pilots::Roster::built_in());
+    let roster =
+        oag_raceplay::pilots::load().unwrap_or_else(|_| oag_raceplay::pilots::Roster::built_in());
     model.supply(
         oag_ui::menu::ValueSource::Pilots,
         &roster
@@ -231,7 +232,7 @@ pub(super) fn menu_page(
     );
     model.supply(
         oag_ui::menu::ValueSource::PilotAxes,
-        &crate::pilots::AXES
+        &oag_raceplay::pilots::AXES
             .iter()
             .map(|(name, _)| oag_ui::menu::Choice::plain(*name))
             .collect::<Vec<_>>(),
@@ -242,7 +243,7 @@ pub(super) fn menu_page(
     let bounds = roster
         .entries()
         .first()
-        .map(|entry| crate::pilots::AXES[0].1(&entry.pilot));
+        .map(|entry| oag_raceplay::pilots::AXES[0].1(&entry.pilot));
     for (source, value) in [
         (
             oag_ui::menu::ValueSource::PilotAxisLow,
@@ -268,7 +269,7 @@ pub(super) fn menu_page(
     // played one does rather than where a default happened to put it - the
     // AI PILOTS page's own reservation included, off the page just opened
     // rather than a live `AXIS` value. See `pilots::page_reserves_axis_preview`.
-    let reserve_note = crate::pilots::page_reserves_axis_preview(model.page());
+    let reserve_note = oag_raceplay::pilots::page_reserves_axis_preview(model.page());
     model.set_visible_rows(oag_ui::menu::visible_rows(skin, frame, reserve_note));
     // The file's own table, not the built-in default: a settings file that
     // rebound a key should show that key here too. See
@@ -288,9 +289,9 @@ pub(super) fn menu_page(
     );
     // What the `AXIS` row currently means, read live off `model`'s own rows -
     // `None` off any page but AI PILOTS. The one function the live session
-    // draws this line through too; see `crate::pilots::axis_preview_for`'s
+    // draws this line through too; see `oag_raceplay::pilots::axis_preview_for`'s
     // own doc.
-    let axis_preview = crate::pilots::axis_preview_for(&model, Some(strings));
+    let axis_preview = oag_raceplay::pilots::axis_preview_for(&model, Some(strings));
     // The legend's own draw list - empty on a source with none. **`Back`
     // never shows here**: `model.open(page)` above replaces the stack
     // outright rather than walking to it (`Menu::open`'s own doc - "a page
@@ -433,14 +434,14 @@ fn records_draws(
     model: &oag_ui::menu::Menu,
     skin: &oag_ui::menu::Skin,
     title: &'static oag_title::Title,
-    tracks: &[crate::catalogue::Track],
+    tracks: &[oag_raceplay::catalogue::Track],
     records: &crate::records::Store,
 ) -> Vec<oag_ui::frontend::Draw> {
     let Some(rows) = crate::scoreboard::records_table(model, title, records, |_mode, track_id| {
         tracks
             .iter()
             .find(|track| track.id == track_id)
-            .map(crate::catalogue::Track::entry_name)
+            .map(oag_raceplay::catalogue::Track::entry_name)
     }) else {
         return Vec::new();
     };
@@ -538,7 +539,7 @@ fn prompt_draws(
                     ),
                 },
                 name,
-                crate::pilots::MAX_NAME,
+                oag_raceplay::pilots::MAX_NAME,
             );
             if kind == "rename-note" {
                 // The note is the live path's own, set every keystroke from
@@ -641,8 +642,8 @@ pub(super) fn picker_page(
     layout: &oag_ui_screens::picker::Layout,
     settings: &crate::settings::Settings,
     title: &'static oag_title::Title,
-    tracks: &[crate::catalogue::Track],
-    teams: &[crate::catalogue::Team],
+    tracks: &[oag_raceplay::catalogue::Track],
+    teams: &[oag_raceplay::catalogue::Team],
     strings: &oag_ui::language::StringTable,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -689,7 +690,7 @@ pub(super) fn picker_page(
                         std::iter::once((
                             String::new(),
                             strings
-                                .get_or_id(crate::catalogue::BASELINE_SKIN)
+                                .get_or_id(oag_raceplay::catalogue::BASELINE_SKIN)
                                 .to_string(),
                         ))
                         .chain(
@@ -797,13 +798,15 @@ pub(super) fn picker_page(
 
 /// The source a capture's race options name, opened with its packs, for the
 /// selection screens' own reads.
-pub(super) fn open_for_previews(race: &crate::race::Options) -> Result<oag_assets::Archives> {
-    let (packs, pure_packs, problems) =
-        crate::dlc::packs_from_defaults(&race.dlc, &crate::boot::default_dlc_cache_dir());
+pub(super) fn open_for_previews(race: &oag_raceplay::Options) -> Result<oag_assets::Archives> {
+    let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
+        &race.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
     for problem in problems {
         log::warn!("{problem}");
     }
-    Ok(crate::title::open_source(&race.source, packs, pure_packs)?.archives)
+    Ok(oag_source::title::open_source(&race.source, packs, pure_packs)?.archives)
 }
 
 /// The selection screen's preview mesh, over the finished draw list - the
@@ -823,7 +826,7 @@ pub(super) fn draw_preview(
     viewport: (f32, f32, f32, f32),
     target_size: (u32, u32),
     space: oag_display::space::Space,
-    race: &crate::race::Options,
+    race: &oag_raceplay::Options,
     request: &PreviewRequest,
     anisotropy: Anisotropy,
 ) {
@@ -878,9 +881,9 @@ pub(super) fn draw_preview(
 pub(super) fn picker_stills(
     kind: oag_ui_screens::picker::Kind,
     settings: &crate::settings::Settings,
-    track: Option<&crate::catalogue::Track>,
-    tracks: &[crate::catalogue::Track],
-    teams: &[crate::catalogue::Team],
+    track: Option<&oag_raceplay::catalogue::Track>,
+    tracks: &[oag_raceplay::catalogue::Track],
+    teams: &[oag_raceplay::catalogue::Team],
     archives: Option<&mut oag_assets::Archives>,
     screens: &oag_ui::screen::Screens,
     strings: &oag_ui::language::StringTable,
@@ -942,7 +945,7 @@ pub(super) fn picker_stills(
             (Vec::new(), None)
         }
     };
-    crate::loader_log::lines(report);
+    oag_raceplay::loader_log::lines(report);
     (stills, mode3d)
 }
 

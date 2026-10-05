@@ -19,7 +19,7 @@
 //! see `docs/formats/envsettings.md`'s "Wipeout 2048 authors the same shape
 //! under different key names".
 
-use oag_game::race;
+use oag_raceplay as race;
 use std::path::{Path, PathBuf};
 
 fn source() -> Option<PathBuf> {

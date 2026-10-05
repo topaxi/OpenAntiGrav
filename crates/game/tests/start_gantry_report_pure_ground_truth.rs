@@ -25,7 +25,7 @@
 //! `docs/rendering/start-gantry.md`'s "Wipeout Pure" section records that
 //! `crates/formats/tests/start_gantry_pure_ground_truth.rs` reads all sixteen
 //! circuits' own `TrackStartup.xml` and finds no `num="8"` on any of them,
-//! model or colour - so `oag_game::race::load`'s billboard-slot-8 report line
+//! model or colour - so `oag_raceplay::load`'s billboard-slot-8 report line
 //! (added for Pulse in `crates/game/src/race/load.rs`) never fires here, and
 //! that is the correct, title-agnostic behaviour rather than a gap: the same
 //! code that names Pulse's gantry by not finding a slot 8 on Pure's default
@@ -34,7 +34,7 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
+use oag_raceplay as race;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pure-psp-usa.chd")

@@ -40,8 +40,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
 
 fn image() -> Option<PathBuf> {
@@ -174,7 +174,7 @@ fn an_opponent_handed_one_weapon_keeps_it_until_it_fires_it() {
 /// # This test used to be a single-seed worst-craft floor, and the floor broke
 ///
 /// Up to 2026-09-06 this asserted `worst > full * 0.45` on one race, one seed
-/// (the project's fixed default, `oag_game::race::SEED = 1`) - see the git
+/// (the project's fixed default, `oag_raceplay::SEED = 1`) - see the git
 /// history for that version and its own "What the dodge bought" table
 /// (blind 34, dodging 75, dodging-with-Plasma 47). **`oag_physics::pair::overlap`
 /// was corrected the same day against a live, instruction-level read of

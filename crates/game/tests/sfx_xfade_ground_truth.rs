@@ -55,8 +55,9 @@ fn load(teams: &[String]) -> Option<(Banks, Vec<String>)> {
         println!("skipping: {} not present", path.display());
         return None;
     }
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
     let mut banks = Banks::load(

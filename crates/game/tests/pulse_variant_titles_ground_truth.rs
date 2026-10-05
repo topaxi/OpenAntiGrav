@@ -20,7 +20,7 @@
 //! position sat on the layout this table names, not the other one. See
 //! `docs/formats/track.md`, "White and Black".
 
-use oag_game::catalogue;
+use oag_raceplay::catalogue;
 
 /// `(id, colour the title ends in, whether the entry is the reversed layout)`.
 const EXPECTED: &[(&str, &str, bool)] = &[

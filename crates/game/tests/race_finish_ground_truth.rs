@@ -49,8 +49,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// Ticks to give the race before calling it stuck: a little over eight minutes
 /// at the fixed 60 Hz, where a Venom-class lap of the default circuit runs

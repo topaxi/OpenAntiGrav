@@ -41,8 +41,9 @@
 //! stand-ins, not the original. It would also fail for reasons already written
 //! down, which is noise. See `docs/formats/pure-status.md`.
 
-use oag_game::{catalogue, race};
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
+use oag_raceplay::catalogue;
 use std::path::{Path, PathBuf};
 
 /// Both Pure pressings, whichever are present.
@@ -70,7 +71,7 @@ fn images() -> Vec<(&'static str, PathBuf)> {
 
 /// Every circuit the disc's own plugin definition declares as a `Race`.
 ///
-/// Read off the disc for the reason `oag_game::catalogue` gives: a list of
+/// Read off the disc for the reason `oag_raceplay::catalogue` gives: a list of
 /// circuit names in this repository would be shipped content. Pure declares no
 /// `Reversed` entry anywhere, which is itself a difference from Pulse and is
 /// asserted below rather than assumed here.

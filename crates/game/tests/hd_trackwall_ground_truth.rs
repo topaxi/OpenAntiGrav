@@ -39,9 +39,9 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race;
 use oag_gameplay::collision_world;
 use oag_physics::{Body, Environment, ShipControls, ShipState, Surface, step};
+use oag_raceplay as race;
 use oag_vex::collision::{self, CollisionNode, SurfaceKind};
 
 /// The decrypted PS3 image.
@@ -396,7 +396,7 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
 /// The bug this pins: every HD circuit's grid, forward and reversed, landing on
 /// the track rather than over a gap or off the collision mesh.
 ///
-/// **Found by exactly this sweep, before `oag_game::race::spawn::grid_poses`
+/// **Found by exactly this sweep, before `oag_raceplay::spawn::grid_poses`
 /// walked the spline instead of extrapolating a straight line from the anchor.**
 /// With the straight-line formula, 9 of these 12 *reversed* grids put one or
 /// more of the eight slots off the collision mesh entirely - up to 145 units
@@ -416,7 +416,7 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
 /// re-authored for the direction its spline runs, so the whole field was being
 /// laid out along the track the wrong way from the base slot. Correcting the
 /// heading closes it with nothing here changed but this constant. See
-/// `oag_game::race::spawn` and `spawn_heading_ground_truth.rs`.
+/// `oag_raceplay::spawn` and `spawn_heading_ground_truth.rs`.
 ///
 /// So a row added back here is now a real regression rather than a known
 /// wrinkle, and is worth reading before waving through.

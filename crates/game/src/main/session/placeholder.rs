@@ -39,8 +39,9 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
 
-use oag_game::{catalogue, loading};
+use oag_game::loading;
 use oag_hud::sprite;
+use oag_raceplay::catalogue;
 use oag_ui::{font, language, menu, placeholder, strings};
 
 use crate::hints;
@@ -72,11 +73,11 @@ impl Session {
             return Err(windowed_error);
         };
 
-        let (packs, pure_packs, problems) = oag_game::dlc::packs_from_defaults(
+        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
             &pending.dlc,
-            &oag_game::boot::default_dlc_cache_dir(),
+            &oag_source::cache::default_dlc_cache_dir(),
         );
-        let opened = match oag_game::title::open_source(source, packs, pure_packs) {
+        let opened = match oag_source::title::open_source(source, packs, pure_packs) {
             Ok(opened) => opened,
             Err(e) => {
                 self.pending = Some(pending);
@@ -286,7 +287,7 @@ fn raceable_teams(
 
 /// Every named plugin definition this title's roster and circuit list are
 /// declared in, followed by every mounted pack's manifest - the same
-/// one-list-because-one-schema shape `oag_game::catalogue::all_teams` and
+/// one-list-because-one-schema shape `oag_raceplay::catalogue::all_teams` and
 /// `all_tracks` expect, built by hand rather than through
 /// `oag_game::boot::roster::definitions` because that function is private to
 /// the boot sequence this module deliberately does not run.
@@ -305,7 +306,7 @@ fn plugin_documents(archives: &mut oag_assets::Archives, names: &[&str]) -> Vec<
 }
 
 /// A front-end XML file's bytes as text, the same fallback
-/// `oag_game::boot::xml::expand` uses and for the same reason - `.fexml`'s
+/// `oag_game::oag_ui::xml::expand` uses and for the same reason - `.fexml`'s
 /// packed name dictionary on one side, a release with a non-UTF-8 language
 /// name on the other. Reimplemented rather than reached for: that function is
 /// `pub(crate)` to the library crate, and this module is the `[[bin]]` one.
@@ -358,7 +359,7 @@ mod tests {
     fn twenty_forty_eights_own_roster_and_circuits_both_read() {
         let Some(package) = package() else { return };
         let opened =
-            oag_game::title::open_source(&package.display().to_string(), Vec::new(), Vec::new())
+            oag_source::title::open_source(&package.display().to_string(), Vec::new(), Vec::new())
                 .unwrap();
         assert_eq!(opened.title.name, "Wipeout 2048");
         // 2048's front end is real since ADR-0054 - its boot chain and
@@ -381,7 +382,7 @@ mod tests {
         );
         assert_eq!(documents.len(), 2, "both of 2048's own plugins should read");
 
-        let declared = oag_game::catalogue::all_teams(&documents);
+        let declared = oag_raceplay::catalogue::all_teams(&documents);
         assert!(!declared.is_empty(), "2048 ships a real roster");
         // Pins the crash a plain `PI_Team` id produced: `--race`'s own default,
         // `feisar2048\3`, resolving via `oag_tables::handling::entry_name_in`
@@ -404,7 +405,7 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{entry} should actually read: {e}"));
         }
 
-        let raceable: Vec<_> = oag_game::catalogue::all_tracks(&documents)
+        let raceable: Vec<_> = oag_raceplay::catalogue::all_tracks(&documents)
             .into_iter()
             .filter(|track| archives.locate(&track.entry_name()).is_some())
             .collect();

@@ -18,7 +18,7 @@ use super::expand;
 ///
 /// One list because they are one schema: a pack declares its additions as a
 /// fragment of the very file the disc ships, so both go through
-/// [`crate::catalogue`] unchanged. The disc's own definition is first, which is
+/// [`oag_raceplay::catalogue`] unchanged. The disc's own definition is first, which is
 /// what makes it win a collision.
 ///
 /// A definition that will not read is reported and not fatal: a source whose
@@ -66,8 +66,8 @@ pub(super) fn load_tracks(
     definition: &str,
     documents: &[String],
     report: &mut Vec<String>,
-) -> Vec<crate::catalogue::Track> {
-    let declared = crate::catalogue::all_tracks(documents);
+) -> Vec<oag_raceplay::catalogue::Track> {
+    let declared = oag_raceplay::catalogue::all_tracks(documents);
     let declared_count = declared.len();
     let tracks: Vec<_> = declared
         .into_iter()
@@ -106,12 +106,12 @@ pub(super) fn load_zone_tracks(
     zone: oag_title::ZoneCircuit,
     documents: &[String],
     report: &mut Vec<String>,
-) -> Vec<crate::catalogue::Track> {
-    let race_tracks = crate::catalogue::all_tracks(documents);
+) -> Vec<oag_raceplay::catalogue::Track> {
+    let race_tracks = oag_raceplay::catalogue::all_tracks(documents);
     let declared = zone.menu_tracks(
         &race_tracks,
         |track| track.available_in_zone,
-        |names| crate::catalogue::all_tracks_named(documents, names),
+        |names| oag_raceplay::catalogue::all_tracks_named(documents, names),
     );
     let declared_count = declared.len();
     let tracks: Vec<_> = declared
@@ -152,8 +152,8 @@ pub(super) fn load_teams(
     default_team: &str,
     documents: &[String],
     report: &mut Vec<String>,
-) -> Vec<crate::catalogue::Team> {
-    let declared = crate::catalogue::all_teams(documents);
+) -> Vec<oag_raceplay::catalogue::Team> {
+    let declared = oag_raceplay::catalogue::all_teams(documents);
     let declared_count = declared.len();
     // **Wipeout 2048's own roster is two levels deep**: `feisar2048` is a
     // `PI_Team`, and its hull and `handlingstats.xml` are under
@@ -166,7 +166,7 @@ pub(super) fn load_teams(
     // fixed craft until it is. No slot on a title whose default team carries
     // none, which is every other title, where this is a no-op.
     let craft_slot = default_team.rsplit_once('\\').map(|(_, slot)| slot);
-    let mut teams: Vec<crate::catalogue::Team> = Vec::new();
+    let mut teams: Vec<oag_raceplay::catalogue::Team> = Vec::new();
     for mut team in declared {
         if raceable(archives, dirs, &team.id) {
             teams.push(team);
@@ -261,7 +261,7 @@ fn raceable(
 /// than re-derived so the circuit names and the rest of the front end cannot
 /// end up in two different languages. `strings` is that language's served
 /// table, for the fallback and for the reverse marker - see
-/// [`crate::catalogue::label`].
+/// [`oag_raceplay::catalogue::label`].
 ///
 /// `pub(crate)` rather than `pub(super)`: `crate::remix::catalogue` reuses it
 /// too, for the same reason the front end does - a track's real name is
@@ -270,7 +270,7 @@ pub(crate) fn load_circuit_names(
     archives: &mut oag_assets::Archives,
     language: Option<&oag_ui::language::Language>,
     strings: &oag_ui::language::StringTable,
-    tracks: &[crate::catalogue::Track],
+    tracks: &[oag_raceplay::catalogue::Track],
     report: &mut Vec<String>,
 ) -> oag_ui::language::CircuitNames {
     let names = choose_circuit_names(archives, language, tracks, report);
@@ -288,7 +288,7 @@ pub(crate) fn load_circuit_names(
             .iter()
             .map(|track| format!(
                 "{} ({})",
-                crate::catalogue::label(track, &names, strings, tracks),
+                oag_raceplay::catalogue::label(track, &names, strings, tracks),
                 track.id
             ))
             .collect::<Vec<_>>()
@@ -301,7 +301,7 @@ pub(crate) fn load_circuit_names(
 fn choose_circuit_names(
     archives: &mut oag_assets::Archives,
     language: Option<&oag_ui::language::Language>,
-    tracks: &[crate::catalogue::Track],
+    tracks: &[oag_raceplay::catalogue::Track],
     report: &mut Vec<String>,
 ) -> oag_ui::language::CircuitNames {
     use oag_ui::language::{CircuitNames, StringTable};

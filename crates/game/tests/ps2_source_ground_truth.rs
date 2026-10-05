@@ -48,8 +48,8 @@ use std::path::PathBuf;
 use oag_gameplay::input::Button;
 use oag_pulse as pulse;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// The PS2 release, Europe-only, `SCES-54748`.
 const PS2_IMAGE: &str = "pulse-ps2-eu.chd";
@@ -210,12 +210,12 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
         if race.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
@@ -223,7 +223,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     }
 
     let end = race.telemetry();
-    println!("after {TICKS} tick(s): {}", race::describe(&end));
+    println!("after {TICKS} tick(s): {}", oag_raceplay::describe(&end));
     println!("grounded on {grounded_ticks} of {TICKS} tick(s)");
 
     // The probes finding the track at all is the composition claim: the spline
@@ -512,8 +512,8 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
         dlc: Vec::new(),
         leg: oag_ui::frontend::Leg::LogoFmv,
         movie: Some(oag_game::boot::DEFAULT_BOOT_MOVIE.to_string()),
-        cache: oag_game::boot::default_cache_dir(),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        cache: oag_source::cache::default_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(1),
         // No transcode: this is about what is found, not about ffmpeg.
         no_video: true,

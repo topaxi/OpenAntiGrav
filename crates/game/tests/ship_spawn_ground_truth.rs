@@ -28,9 +28,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
+use oag_raceplay as race;
 
 /// Ticks the per-tick suspension assertions cover: two seconds at 60 Hz, driven
 /// *after* the start-line countdown rather than from tick zero.
@@ -123,12 +123,12 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            race::describe(&telemetry)
+            oag_raceplay::describe(&telemetry)
         );
 
         if race.ship().physics.grounded > 0.0 {
@@ -142,7 +142,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     }
 
     let end = race.telemetry();
-    println!("{}", race::describe(&end));
+    println!("{}", oag_raceplay::describe(&end));
     println!(
         "grounded on {grounded_ticks}/{TICKS} tick(s), both probes on {both_probes}, \
          worst spline distance {worst_distance:.2} of {bound:.1}, peak speed {peak_speed:.2}"
@@ -171,7 +171,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     assert!(
         travelled > 10.0,
         "the ship travelled {travelled:.2} units in {TICKS} ticks: {}",
-        race::describe(&end)
+        oag_raceplay::describe(&end)
     );
     // And it went *forwards*. Three separate conventions have to agree for this to
     // hold - the spline's tangent, the rotation `Pose::from_sample` builds from it,

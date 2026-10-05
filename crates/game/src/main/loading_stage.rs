@@ -7,7 +7,8 @@
 //! side.
 
 use oag_game::render::Renderer;
-use oag_game::{boot, capture, loading, prefetch, race};
+use oag_game::{boot, capture, loading, prefetch};
+use oag_raceplay as race;
 
 use crate::gpu::Gpu;
 use crate::race_stage::RaceStage;

@@ -4,7 +4,7 @@
 use anyhow::{Context, Result, ensure};
 use log::warn;
 
-use oag_game::race;
+use oag_raceplay as race;
 
 /// Parses `--pose`: three or four comma-separated numbers, the fourth a yaw in
 /// degrees.

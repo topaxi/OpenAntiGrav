@@ -77,21 +77,21 @@ fn talons_junction_stats() -> Option<oag_tables::track_stats::TrackStats> {
 /// shared across a test-only crate boundary neither file has.
 fn solo_lap_at(tuning: oag_ai::Tuning) -> Option<u64> {
     let image = image().expect("disc image present");
-    let loaded = oag_game::race::load(&oag_game::race::Options {
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         // An archive entry name, not the catalogue id - see
-        // `oag_game::catalogue::Track::entry_name`'s own doc; `ai_span_sweep.rs`
+        // `oag_raceplay::catalogue::Track::entry_name`'s own doc; `ai_span_sweep.rs`
         // records the same trap. `16_Track`'s own directory, confirmed
         // directly (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`
         // cites the identical path for its own `stats.xml` read).
         track: Some(r"Data\Environments\16_Track\track.vex".to_string()),
         seed: Some(1),
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     })
     .expect("loading 16_Track");
-    let mut race = oag_game::race::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     race.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;

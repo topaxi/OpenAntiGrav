@@ -31,8 +31,9 @@
 //!   Altima (2048's) - so there is no clock to set. Pinned so the day a mount
 //!   is found, this fails and the title gets its rule.
 
-use oag_game::race::{self, LoadWorker, TextureSink, gantry};
 use oag_mesh::mesh;
+use oag_raceplay as race;
+use oag_raceplay::{LoadWorker, TextureSink, gantry};
 
 fn pulse_model() -> Option<mesh::Model> {
     let path = oag_testdata::image("data/images/pulse-psp-usa.chd")?;

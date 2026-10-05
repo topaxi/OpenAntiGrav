@@ -131,6 +131,14 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// Whether a run of this mode races a ghost: the two modes Pulse builds one
+    /// for (`TimeTrial_Construct`, which both share - see
+    /// `docs/ghidra/functions/psp-pulse-usa/ghost.md`).
+    #[must_use]
+    pub const fn races_a_ghost(self) -> bool {
+        matches!(self, Self::TimeTrial | Self::SpeedLap)
+    }
+
     /// Every mode a plain "pick a track, press go" launch can run, as a
     /// fixed-size array.
     ///

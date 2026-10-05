@@ -126,11 +126,11 @@ impl Session {
         let format = self.gpu.config.format;
 
         let (packs, pure_packs, problems) =
-            oag_game::dlc::packs_from_defaults(&dlc, &oag_game::boot::default_dlc_cache_dir());
+            oag_source::dlc::packs_from_defaults(&dlc, &oag_source::cache::default_dlc_cache_dir());
         for problem in problems {
             warn!("{problem}");
         }
-        let mut archives = match oag_game::title::open_source(&source, packs, pure_packs) {
+        let mut archives = match oag_source::title::open_source(&source, packs, pure_packs) {
             Ok(opened) => opened.archives,
             Err(error) => {
                 warn!("cannot open {source} for the EndRace screens: {error:#}");

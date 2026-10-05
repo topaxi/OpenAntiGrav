@@ -5,7 +5,7 @@
 //! `scripts/check-file-size.py` - a move, with no behaviour change. This is
 //! also the seam `oag_game::records`'s own module doc points at as "the
 //! other capture site": [`Session::escape`] is where a race that never calls
-//! [`oag_game::race::Race::finished`] - Speed Lap and Zone, since
+//! [`oag_raceplay::Race::finished`] - Speed Lap and Zone, since
 //! [`oag_race::Mode::laps_target`] is `None` for both - still gets its
 //! result recorded, on the way out rather than on a finish transition that
 //! for those two modes never comes. See
@@ -13,7 +13,7 @@
 
 use log::{error, info};
 
-use oag_game::{boot, records};
+use oag_game::records;
 use oag_ui::strings;
 
 use crate::hints;
@@ -68,7 +68,7 @@ impl Session {
         self.audio.start_race_music(
             &self.music_discs,
             self.settings.audio.music_source,
-            &boot::default_audio_cache_dir(),
+            &oag_source::cache::default_audio_cache_dir(),
         );
         let strings = strings::project_table(self.settings.language.as_deref());
         self.gpu.window.set_title(&hints::race_title(&strings));

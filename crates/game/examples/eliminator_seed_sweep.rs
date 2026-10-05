@@ -6,8 +6,8 @@
 //! cargo run --release -p oag-game --example eliminator_seed_sweep
 //! ```
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 
 /// Six game-minutes, the finish test's own window.
 const TICKS: u64 = 60 * 60 * 6;

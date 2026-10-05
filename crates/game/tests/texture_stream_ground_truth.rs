@@ -10,8 +10,9 @@
 //! `#[ignore]`d: they read the Omega extraction and the HD disc, and need a GPU
 //! adapter (they skip without one).
 
-use oag_game::race::{self, LoadWorker, Loaded, TextureSink};
 use oag_mesh::mesh::{Model, Texels};
+use oag_raceplay as race;
+use oag_raceplay::{LoadWorker, Loaded, TextureSink};
 
 /// A sink on a device that asks for wgpu's **default** limits, whose
 /// `max_texture_dimension_2d` is 8,192 - whatever the adapter could do.

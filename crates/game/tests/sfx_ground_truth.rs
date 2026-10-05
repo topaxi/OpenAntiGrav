@@ -27,8 +27,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_sound::sfx::{Banks, Cue};
 
 /// The discs this runs against, and what each is called in a failure message.
@@ -50,8 +50,9 @@ fn image(name: &str) -> Option<PathBuf> {
 /// exactly as `race::load` does. Hard-coding Pulse's here would make the HD leg
 /// below test the wrong paths and pass for the wrong reason.
 fn banks(image: &Path, zone: bool) -> Banks {
-    let opened = oag_game::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening the source");
+    let opened =
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
     let sounds = opened.title.race.sounds;
     let mut archives = opened.archives;
     Banks::load(
@@ -418,8 +419,9 @@ fn wipeout_hd_s_speed_class_announcer_decodes_all_fourteen_cues() {
         println!("skipping: {} not present", path.display());
         return;
     }
-    let opened = oag_game::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
-        .expect("opening HD");
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening HD");
     let mut archives = opened.archives;
     let announcer =
         oag_sound::sfx::ClassAnnouncer::load(&mut archives, opened.title.race.zone_class_announcer);

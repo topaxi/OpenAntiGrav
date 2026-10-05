@@ -22,10 +22,10 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_physics::{Ray, Raycaster, Surface};
+use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
 use oag_weapons::projectile::{
     FALL_ACCELERATION, MAX_PROJECTILES, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,

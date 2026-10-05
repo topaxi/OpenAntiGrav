@@ -23,7 +23,7 @@
 
 use std::path::PathBuf;
 
-use oag_game::{boot, loading};
+use oag_game::loading;
 use oag_ui::font::Atlas;
 use oag_ui::language::roles;
 use oag_ui::{font, screen};
@@ -66,8 +66,13 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     assert_eq!(legal.y, 250.0);
 
     let mut report = Vec::new();
-    let languages = boot::load_languages(&mut archives, oag_pulse::LANGUAGE_PLUGINS, &mut report);
-    let strings = boot::load_strings(&mut archives, &languages, None, &mut report);
+    let languages = oag_ui::language::load::load_languages(
+        &mut archives,
+        oag_pulse::LANGUAGE_PLUGINS,
+        &mut report,
+    );
+    let strings =
+        oag_ui::language::load::load_strings(&mut archives, &languages, None, &mut report);
     let text = strings.get_or_id("BOOT_LEGAL");
     assert_eq!(
         text.chars().count(),

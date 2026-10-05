@@ -22,8 +22,8 @@
 
 use std::path::PathBuf;
 
-use oag_game::race;
 use oag_mesh::mesh;
+use oag_raceplay as race;
 use oag_vex::vex::BlendClass;
 
 fn image() -> Option<PathBuf> {

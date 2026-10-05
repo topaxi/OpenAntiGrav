@@ -90,7 +90,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
     // carries `Reversed`) - `Track::entry_name`'s `Reversed` branch, not
     // the identity case a track named after its own directory would pass
     // even with the branch broken.
-    let track = crate::catalogue::Track {
+    let track = oag_raceplay::catalogue::Track {
         id: "17_Track".to_string(),
         location: r"Data\Environments\01_Track".to_string(),
         reversed: true,

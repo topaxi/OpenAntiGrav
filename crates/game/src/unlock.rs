@@ -30,8 +30,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use oag_tables::race_campaign::{self, Grid, Medal};
 
-use crate::catalogue::{LoyaltyRow, Track};
 use crate::records::{self, Store};
+use oag_raceplay::catalogue::{LoyaltyRow, Track};
 
 /// A campaign medal as the campaign tables name it. The one conversion,
 /// shared by the campaign screens and this gate.

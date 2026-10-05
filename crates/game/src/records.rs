@@ -2,7 +2,7 @@
 //! total time and the last result, per circuit, mode and speed class.
 //!
 //! Read from and written to `<config dir>/oag/records.toml` - a sibling of
-//! [`crate::settings`]'s `settings.toml` and [`crate::pilots`]'s
+//! [`crate::settings`]'s `settings.toml` and [`oag_raceplay::pilots`]'s
 //! `pilots/*.toml`, in the same directory, and following the shape those two
 //! already established: `#[serde(default)]` on every field, so an older file
 //! keeps loading as this grows, and no version key - the file migrates by
@@ -10,16 +10,16 @@
 //!
 //! # Where this is captured, and where it is not
 //!
-//! **Never from inside [`crate::race::Race::tick`].** The simulation does not
+//! **Never from inside [`oag_raceplay::Race::tick`].** The simulation does not
 //! know persistence exists - see `CLAUDE.md`'s core principle - so nothing
 //! here is called from the gameplay crates at all. The composition root reads
-//! [`crate::race::Race`]'s already-public state (`world`, `finished`,
+//! [`oag_raceplay::Race`]'s already-public state (`world`, `finished`,
 //! `places`) from outside the tick, at two moments: the tick a race's own
 //! finish condition is first true, and whenever a player leaves a race that
 //! has not - `escape`, or an unfinished `--race` run quitting outright. That
 //! second path is why this cannot be built as "capture the finish and nothing
 //! else": [`oag_race::Mode::laps_target`] is `None` for `SpeedLap` and
-//! `Zone`, so [`crate::race::Race::finished`] never turns `true` for either
+//! `Zone`, so [`oag_raceplay::Race::finished`] never turns `true` for either
 //! of them - and Speed Lap is the one mode whose entire point is a fast lap
 //! time. Leaving a race is the only exit every mode has in common, so a best
 //! lap set there is captured on the way out rather than never.
@@ -54,7 +54,7 @@
 //! hand, and refusing to boot over one bad row would hold an unrelated race
 //! hostage to a write this module made itself. So the rule here is the
 //! opposite one, on purpose - the same kind of deliberate divergence
-//! [`crate::pilots`]'s own module doc records for why *that* format does not
+//! [`oag_raceplay::pilots`]'s own module doc records for why *that* format does not
 //! rewrite a hand-authored file:
 //!
 //! - **One malformed row does not lose the rest.** [`parse`] decodes the
@@ -106,7 +106,7 @@
 //! [`Key::track`] is whatever entry name the race that just ran actually
 //! loaded - the disc's own `.vex` path, not a name this module invented or
 //! enumerated. A title with no circuits played yet simply has no rows; the
-//! store is populated by racing, the same way [`crate::pilots::Roster`] is
+//! store is populated by racing, the same way [`oag_raceplay::pilots::Roster`] is
 //! populated by a player's own files rather than by a list this project
 //! ships.
 
@@ -132,9 +132,9 @@ pub struct Key {
     /// [`oag_title::Title::name`], lower-cased.
     pub title: String,
     /// The archive entry name of the circuit's `.vex`, exactly as
-    /// [`crate::catalogue::Track::entry_name`] spells it, lower-cased.
+    /// [`oag_raceplay::catalogue::Track::entry_name`] spells it, lower-cased.
     ///
-    /// **The disc's own path, not [`crate::catalogue::Track::id`] alone.**
+    /// **The disc's own path, not [`oag_raceplay::catalogue::Track::id`] alone.**
     /// The entry name already carries the reversed-direction distinction
     /// (`track.vex` against `track_reversed.vex`), so a forward and a
     /// reversed run of the same circuit are two rows rather than one
@@ -156,7 +156,7 @@ pub struct Key {
     /// [`oag_race::Mode::name`] - already lower-cased with underscores, so
     /// this is carried through unchanged.
     pub mode: String,
-    /// The speed class, spelled the way [`crate::race::Options::class`]
+    /// The speed class, spelled the way [`oag_raceplay::Options::class`]
     /// carries it, lower-cased.
     pub class: String,
 }
@@ -183,7 +183,7 @@ impl Key {
     }
 }
 
-/// One race's outcome, read off [`crate::race::Race`]'s already-public state
+/// One race's outcome, read off [`oag_raceplay::Race`]'s already-public state
 /// from *outside* the tick - see the module doc's "where this is captured"
 /// section for why there are exactly two call sites and no others.
 ///
@@ -195,11 +195,11 @@ impl Key {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Observation {
     /// Whether the race had reached its own finish condition - never
-    /// re-derived here, always [`crate::race::Race::finished`]'s own answer.
+    /// re-derived here, always [`oag_raceplay::Race::finished`]'s own answer.
     pub finished: bool,
     /// The player's own race position at the moment of capture, from
-    /// [`crate::race::Race::places`]. Always `Some` for a race that had a
-    /// [`crate::race::Race`] to read at all.
+    /// [`oag_raceplay::Race::places`]. Always `Some` for a race that had a
+    /// [`oag_raceplay::Race`] to read at all.
     pub place: Option<u8>,
     /// Laps completed - see [`laps_completed`], which is what every caller
     /// builds this field with.
@@ -239,7 +239,7 @@ pub struct Observation {
 
 /// Laps completed, for the `laps_completed` field of an [`Observation`].
 ///
-/// [`crate::scoreboard::build`]'s own rule, replicated here rather than
+/// [`oag_raceplay::scoreboard::build`]'s own rule, replicated here rather than
 /// shared: that function takes a whole `Board` this module has no business
 /// depending on - see [`Observation`]'s own doc - and the arithmetic is three
 /// lines. A finished craft's own lap counter reads one past the target by the
@@ -863,7 +863,7 @@ const HEADER: &str = "\
 /// hit degrades to [`Store::default`] plus a logged line:
 ///
 /// - No config directory on this platform: silent, the same case
-///   [`crate::settings::load`] and [`crate::pilots::load`] both treat as
+///   [`crate::settings::load`] and [`oag_raceplay::pilots::load`] both treat as
 ///   "nothing to persist to" rather than an error.
 /// - No file yet: silent, the ordinary case of a player who has not finished
 ///   a race since installing this.

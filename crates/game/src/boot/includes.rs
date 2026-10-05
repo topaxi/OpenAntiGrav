@@ -114,7 +114,7 @@ fn embed(
             return;
         }
     };
-    let xml = match super::xml::expand(&blob) {
+    let xml = match oag_ui::xml::expand(&blob) {
         Ok(xml) => xml,
         Err(error) => {
             report.push(format!("include {name}: {error:#} - skipped"));

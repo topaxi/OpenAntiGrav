@@ -9,8 +9,8 @@
 //! 300, past `ready` and `go`, and renders speech alone: the third run of speech
 //! must start where the cue is raised, and there must be exactly one cue.
 
-use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_raceplay as race;
 use oag_sound::Volume;
 use oag_sound::sfx::Cue;
 

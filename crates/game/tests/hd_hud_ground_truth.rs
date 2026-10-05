@@ -322,11 +322,11 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
     let Some(image) = image() else {
         return;
     };
-    let loaded = oag_game::race::load(&oag_game::race::Options {
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::TimeTrial,
-        ..oag_game::race::Options::default()
+        ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
     assert_eq!(

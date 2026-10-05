@@ -47,7 +47,9 @@
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use log::warn;
-use oag_game::{launcher, loading, race, settings, source};
+use oag_game::{launcher, loading, settings};
+use oag_raceplay as race;
+use oag_source::source;
 use oag_ui::frontend;
 
 use winit::event_loop::{ControlFlow, EventLoop};

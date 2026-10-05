@@ -53,7 +53,7 @@ fn load_leg(leg: oag_ui::frontend::Leg, movie: &str) -> Option<boot::Boot> {
         movie: Some(movie.to_string()),
         // Nothing is written and ffmpeg is never run.
         cache: std::env::temp_dir().join("oag-boot-ground-truth"),
-        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
         extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
         no_video: true,
         refresh_video: false,

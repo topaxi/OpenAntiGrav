@@ -3,8 +3,9 @@
 use anyhow::{Result, bail};
 
 use oag_game::input::Button;
+use oag_game::movie;
 use oag_game::render::{Renderer, letterbox_in};
-use oag_game::{movie, pilots};
+use oag_raceplay::pilots;
 use oag_ui::frontend::{self, Draw};
 use oag_ui::{font, menu};
 use oag_ui_screens::marquee;
