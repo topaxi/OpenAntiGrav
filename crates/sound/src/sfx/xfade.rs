@@ -62,7 +62,7 @@ use oag_formats::sblk;
 use oag_formats::xfx::Xfx;
 
 use super::Cue;
-use super::banks::{load_indexed_cue, load_named_cue};
+use super::banks::{load_cue_record, load_indexed_cue};
 
 /// Channel 0's term `X`, held. The two grid readings of the first boot were
 /// 2.173 and 2.167 and of the second 2.156 and 2.160. Chosen, not measured:
@@ -515,14 +515,14 @@ fn resolve(
                     }
                 }
             } else {
-                let Some(record) = bank.cue_named(&layer.name) else {
+                let Some(record) = bank.cue_named_or_hashed(&layer.name) else {
                     report.push(format!(
                         "xfade: {entry} layer {label} names no cue in {}",
                         bank.name
                     ));
                     return None;
                 };
-                match load_named_cue(bank, &layer.name) {
+                match load_cue_record(bank, &record, &layer.name) {
                     Ok((loaded, _)) => (loaded, record),
                     Err(e) => {
                         report.push(format!("xfade: {entry} layer {label} not loaded: {e}"));
