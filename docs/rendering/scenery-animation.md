@@ -380,3 +380,41 @@ the thing to do first; **2,510 of 2,582 records author the identity**, and
 `uvScale` is `(1, 1)` on every record on the disc. About fifty billboard
 surfaces carry a real sub-tile offset. The numbers are on
 [`rcsmaterial.md`](../formats/rcsmaterial.md).
+
+## Upload audit: which race models author texture tracks, and who uploaded them (2026-10-05)
+
+A model animates its texture only if its draw site calls `Drawable::write_anims`
+(the texture-offset table) as well as `write_node_anims` (the node table); the
+two buffers are separate and a site that writes one leaves the other at phase 0.
+The magstrip effect had exactly that gap and read dim and static; this is the
+sweep for the rest. `crates/render/tests/anim_upload_census_ground_truth.rs`
+(`#[ignore]`d) lists texture tracks / `Anim Transform` nodes per model on the
+Pulse disc and pins the track counts.
+
+| Model | Tracks / nodes | Draw site | Result |
+| --- | --- | --- | --- |
+| `Pulse_Mine`, `Pulse_Bomb` | 1 / 1, 2 / 2 | `write_one_kind` | **Gap, fixed**: texture now on the race clock the node table already rode (`mine_texture_scroll_ground_truth.rs`) |
+| `pulse_plasma_halo1`, `hemisphere1`, `hemisphere2` | 1 / 2, 1 / 0, 1 / 1 | `write_plasma_blasts` | **Gap, fixed**: texture on the model's own `age * rate` scrub. `Node_SetAnimTimeTree` hands one time to the `Mesh` and `Anim Transform` nodes of a tree alike (`anim-transform.md`), so the node time is the texture time. `hemisphere1` has no node, so this is its only upload. The rate (`0.1` / `0.07`) is confidence 75, and the scrub reaches 0.15 s of a 1.98 s track in a 1.5 s blast, so the motion is small but visible |
+| `explosion_hemisphere`, `Bomb_Shockwave`, `pulse_repulsorwave` | 1, 2, 1 / 0 | `write_bomb_blasts` | **Gap, left open**: the original's clock for them is not recovered. `BombBlast_Update` scrubs nothing, and the tracks are authored as object-age shapes (600 s loop with a 119-frame key; a 1.98 s decay curve), so the race clock would play them at a random phase. Measure the GE `TEXOFFSET` on PPSSPP at a known object age before wiring - **chosen, not measured** otherwise |
+| `MagEffect1`, `MagEffect2` | 1 / 0, 1 / 1 | `write_mag_floor_fx` | Fixed earlier (`magfloor-fx.md`, "Look") |
+| `Ship.vex`, `shipshield`, `Zone.vex` | 1 / 0 | `frame.rs` | Already uploaded (hulls; shells `shield_shell_scroll_ground_truth.rs`) |
+| `shipboost`, `Zoneboost` | 1 / 0 | `Drawable::apply_uv_transform` | Deliberate: the plume's clock is its reveal timer, and `write_anims` on top would apply the transform twice (`frame.rs`) |
+| `shipwreck`, `zonewreck`, `Rocket`, `pulse_muzzleflash` | 0 / 0 | n/a | Author none |
+| `vr_shield_cockpit` | 1 / 1 | not loaded | Nothing draws it yet |
+| Ship shine and hull overlays, the track's shine pass | n/a | `shine.rs`, `absorb_overlay.rs` | Not an authored transform: their coordinates are rewritten every frame (`write_view_map`, `write_overlay`, the original's `HullOverlay_Submit` scroll), so `write_anims` would double it |
+| Track, sky, pads, collision, gantry | many | `frame.rs`, `gantry.rs` | Already uploaded (`scenery_animation_ground_truth.rs`) |
+
+**How the mine test isolates the texture.** The mine's node loops every 119
+frames and its texture every 1 s, so two clocks 59.5 s apart (thirty node loops,
+half a texture loop) show the same node pose and opposite texture phases. 791,563
+summed RGB over the mine cluster with the upload, 497 without; a no-mine control
+over the same clocks moves 896. The bomb's node and texture both loop at 3 s, so
+no clock pair separates them and the bomb is checked by eye only. Plasma blasts
+are age-driven, so `--anim-seconds` does not reach them; their evidence is a
+before/after pair at fixed ticks (impact against the start-line wall,
+`--pose 6.07,-50.07,-196.05,90`, plasma fired at tick 421): the hemisphere
+bands differ by 201,658 / 381,052 / 509,492 summed RGB at ticks 505 / 525 / 545.
+
+**Wipeout HD and Pure.** Pure shares the Pulse draw paths above, so the fix
+reaches its mine and bomb. HD's blasts take `write_clocked` with
+`model_clock` instead and were not touched; its RCS materials are another lane's.

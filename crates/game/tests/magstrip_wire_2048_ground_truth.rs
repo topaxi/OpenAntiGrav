@@ -1,7 +1,8 @@
-//! The HD-lineage magstrip arc wake in a real Wipeout 2048 race on `tower`,
-//! eight craft flown by their drivers (the player's by `set_autopilot`), the
-//! over-strip predicate read off the real collision, and the cue edges raised.
-//! Also the two `.POB` effects the executable names and no named mode reaches.
+//! The magstrip effect in a real Wipeout 2048 race on `tower`, eight craft
+//! flown by their drivers (the player's by `set_autopilot`), the over-strip
+//! predicate read off the real collision, and the cue edges raised. 2048 plays
+//! `WO_MAGSTRIP_*` (`.POB`) while a craft is over the strip and builds no arc
+//! wake: a 2048 event's mode id is a CRC, `>= 0x17`.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -13,7 +14,7 @@
 //!
 //! What it pins that the unit tests in `oag-raceplay` cannot: that 2048's own
 //! `track_col.col` reports a magstrip under a craft at all (the precondition of
-//! the whole effect), that the wake's draw list is non-empty on contact and
+//! the whole effect), that the `.pob` effect is up exactly on contact and
 //! empty once its arcs have aged out, that every craft carries an
 //! `arc_anchor_point`, that both `.gxt` decode, and that both `.POB` parse.
 
@@ -42,7 +43,8 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
     .expect("loading the race");
     for line in loaded.report.iter().filter(|l| {
         l.starts_with("sfx")
-            || l.contains("magstrip arc wake")
+            || l.contains("magstrip effect")
+            || l.contains("MAGSTRIP")
             || l.contains("~magstrip01")
             || l.contains("electric_arc")
             || l.contains("ElectricArc")
@@ -50,9 +52,15 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
         println!("{line}");
     }
     assert!(
-        loaded.magstrip_wake_textures.is_some(),
-        "the two .gxt must both decode"
+        loaded.magstrip_wake_textures.is_none(),
+        "no arc textures are bound on a .pob title"
     );
+    for name in ["WO_MAGSTRIP_SPARKS", "WO_MAGSTRIP_ZONE"] {
+        assert!(
+            loaded.setup.effects.get(name).is_some(),
+            "{name} must load from Data/Particles2048"
+        );
+    }
     let mut race = race::Race::start(loaded.setup);
     race.set_autopilot(true);
     Some(race)
@@ -67,13 +75,14 @@ struct Log {
     stops: Vec<(u64, usize)>,
     /// Ticks a slot was over the strip, and ticks it had arcs / vertices.
     over: Vec<(u64, usize)>,
-    drawn_without_arcs: usize,
-    arcs_without_vertices: usize,
+    /// Ticks the `.pob` effect and the contact disagreed, and ticks any arc lived.
+    pob_off_contact: usize,
+    arcs_live: usize,
 }
 
 fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>) {
     let mut race = load().expect("the HD disc");
-    assert!(race.has_magstrip_wake(), "2048 builds the wake");
+    assert!(!race.has_magstrip_wake(), "2048 builds no arc wake");
     let mut audio = audio;
     let mut log = Log::default();
     let mut was = [false; 8];
@@ -104,13 +113,11 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
             }
             was[slot] = over;
         }
-        let (atlas, contact) = race.magstrip_wake_vertices();
-        let live: usize = (0..n).map(|s| race.magstrip_wake_live(s)).sum();
-        if live == 0 && (!atlas.is_empty() || !contact.is_empty()) {
-            log.drawn_without_arcs += 1;
-        }
-        if live > 0 && atlas.is_empty() {
-            log.arcs_without_vertices += 1;
+        for slot in 0..n {
+            if race.magstrip_pob_of(slot).is_some() != race.over_magstrip(slot) {
+                log.pob_off_contact += 1;
+            }
+            log.arcs_live += race.magstrip_wake_live(slot);
         }
         if let Some(audio) = audio.as_deref_mut() {
             oag_game::sound::race_tick_keeping(audio, &mut race, |e| {
@@ -153,21 +160,23 @@ fn every_craft_visits_a_strip_and_its_edges_match_its_cues() {
             "slot {slot}: one stop per departure"
         );
     }
-    assert_eq!(log.drawn_without_arcs, 0, "geometry with no live arc");
-    assert_eq!(log.arcs_without_vertices, 0, "live arcs that drew nothing");
+    assert_eq!(
+        log.pob_off_contact, 0,
+        "WO_MAGSTRIP_* plays exactly while a craft is over the strip"
+    );
+    assert_eq!(log.arcs_live, 0, "no arc on a .pob title");
 }
 
-/// **The original builds the arc wake in every mode a 2048 race can be.**
+/// **A 2048 event plays the `.pob` and builds no arc wake, in every mode.**
 ///
-/// `FUN_81000930` is `mode id < 0x17`, and the id of every mode the executable
-/// names (`FUN_810016ba`'s 23-entry table at `0x815191cc`: Arcade, Time Trial,
-/// Zone, Elimination, Speed Lap, the multiplayer ones...) is below it, so the
-/// `.POB` side (`WO_MAGSTRIP_SPARKS`/`_ZONE`) is reached only by a mode whose
-/// name is absent from that table. See `ships-effects.md`. Dropping the
-/// title's `magstrip_wake` entry, or gating it on a mode, fails this.
+/// `FUN_81000930` is `mode id < 0x17`, and a campaign event's id is a CRC of
+/// its own name: `0x026886dc` read live on Vita3K for Queens Mall's Time Trial
+/// (`ships-effects.md`), so the `.POB` side (`WO_MAGSTRIP_SPARKS`/`_ZONE`) is
+/// the one 2048 reaches and the arc wake is the HD-lineage named-mode side.
+/// Putting the title's `magstrip_wake` entry back fails this.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
-fn every_2048_mode_builds_the_arc_wake_and_none_plays_the_pob() {
+fn every_2048_mode_plays_the_pob_and_builds_no_arc_wake() {
     for mode in [
         oag_race::Mode::SingleRace,
         oag_race::Mode::TimeTrial,
@@ -176,7 +185,11 @@ fn every_2048_mode_builds_the_arc_wake_and_none_plays_the_pob() {
         oag_race::Mode::Zone,
     ] {
         let Some(race) = load_mode(mode) else { return };
-        assert!(race.has_magstrip_wake(), "{mode:?}: the arc wake is built");
+        assert!(!race.has_magstrip_wake(), "{mode:?}: no arc wake");
+        assert!(
+            race.magstrip_wake_vertices().0.is_empty(),
+            "{mode:?}: no arc geometry"
+        );
     }
 }
 
@@ -197,8 +210,8 @@ fn the_hum_is_silent_until_the_vita_bank_resolves_cues() {
 }
 
 /// `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` ship in the base package's
-/// `Data/Particles2048` and parse. They stay unplayed: no named mode reaches
-/// them (see [`every_2048_mode_builds_the_arc_wake_and_none_plays_the_pob`]).
+/// `Data/Particles2048` and parse. They are what a 2048 craft plays over a strip: no named mode reaches
+/// them (see [`every_2048_mode_plays_the_pob_and_builds_no_arc_wake`]).
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
 fn the_two_magstrip_pobs_ship_and_parse() {

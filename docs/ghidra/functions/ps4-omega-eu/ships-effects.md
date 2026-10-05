@@ -224,7 +224,7 @@ document (`ModeManager_ConstructByMode` switches on it; `Rocket_Construct` uses
 
 So Omega's HD-lineage modes get the **procedural arc wake**, its 2048-lineage
 modes get the **particle effect**, and never both on one ship. (The Vita 2048
-build tests a different predicate and, as read, builds both: see its page.)
+build tests the same predicate in the opposite sense and so is exclusive too; a 2048 event's CRC id puts it on the `.POB` side: see its page.)
 
 ### The sound (60)
 

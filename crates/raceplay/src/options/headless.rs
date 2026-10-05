@@ -80,6 +80,7 @@ impl Setup {
             hit_spark_anchors: Vec::new(),
             wreck_anchors: Vec::new(),
             magstrip_wake: None,
+            magstrip_pob: false,
             destroy_stations: Vec::new(),
             finished_thrust: None,
             intro_camera: None,

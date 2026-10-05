@@ -117,9 +117,10 @@ live PS4, so these are 80-90 reads, not captures.
    `~magstrip01`, additive draw, `magstrip_wire_hd_ground_truth`. Still open from it: the two speed ribbons are not drawn;
    `INTENSITY`, jitter scales and the end-point walk are chosen; `~magstrip01` is a 35-leaf tree the reader flattens
    (leaf choice unresolved); rumble edges not wired (no rumble layer checked); the Omega `WEAPON_MODELS` row waits for Omega racing.
-2. ~~`WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes~~ - landed 2026-10-05 (magstrip-2048-pob) as the *arc wake*, not the POB: the Vita's
-   `GameMode_IsHdLineage` is true (`id < 0x17`) for every mode the executable names, Zone included, so no 2048 mode we have plays the `.POB` (both parse;
-   they are the CRC-id-mode side, unreached). 2048 now builds the HD arc wake off its own `.gxt` pair; `magstrip_wire_2048_ground_truth` pins it on `tower`
-   (Altima has no surface-3 triangle). Open from it: the hum is silent (the Vita `shipHD.bnk` resolves no cue by name); the arc reads faintly on 2048's
-   washed-out floor; and ~~`EFFECT_DIR` is the unreached side~~ **checked 2026-10-05: 2048's own events (SP/MP `m_name`) are CRC ids >= 0x17, so they read `Particles2048` (right) and, by the same predicate, take the `WO_MAGSTRIP_*` POB branch, not the arc wake - the arc wake we draw is the HD-lineage named-mode side, which no campaign event reaches (conf 70, arbiter: Vita3K read of `0x8153fd24`)**. Next: play the POB for 2048 events and decide which side `--mode` races stand for.
+2. ~~`WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes~~ - **settled 2026-10-05 (magstrip-2048-mode-check): 2048 plays the POB, no arc wake.**
+   Live Vita3K read: a campaign Time Trial has `0x8153fd24 = 0x026886dc` (a CRC id, `>= 0x17`) and `Particles_BuildEffectPath` formats
+   `Data/Particles2048/...` (conf 80, seen once). 2048 now plays `WO_MAGSTRIP_SPARKS` (`_ZONE` in `Mode::Zone`, chosen) at the hull's
+   `arc_anchor_point` while over the strip (`oag_raceplay::magstrip_wake`, `WeaponModels::magstrip_pob`), and the arc is off for it; HD keeps the arc.
+   Open from it: no Vita3K frame of the POB sparks on a strip (not reached); the effect's start/stop timing is chosen (on contact, detach on leaving);
+   the hum is silent (the Vita `shipHD.bnk` resolves no cue by name).
 3. ~~Read HD's arc build~~ - done 2026-10-05 (magstrip-hd-measure): jitter scales and paired draws wired (`oag_fx::magstrip::JITTER_SCALE`); the HD brightness/alpha law is documented, not wired. Next (2 hours, `oag-re`): decode `MagStripArc_fp` (find the program blob via TOC slot `0x008b389c`) to learn what the float vertex colour is multiplied by - that is the only route to a measured `INTENSITY`, and to why the original's arcs look several times wider (fragment gain or HD bloom). Then wire HD's brightness ramp (slots start at zero, no spawn write), the `0.3`/`0.25` alphas and the two ribbons (`0x00109858` is HD's ribbon update).

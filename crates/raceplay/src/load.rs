@@ -896,6 +896,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             intro_camera: intro::read(&mut archives, &track, pulse_psp, &mut report),
             slot_teams: slot_teams.clone(),
             magstrip_wake: magstrip_wake.anchors,
+            magstrip_pob: wm.magstrip_pob,
             collision,
             handling,
             airbrake_graphics,

@@ -105,6 +105,7 @@ pub const TITLE: &Title = &Title {
         // class (docs/ghidra/functions/psp-pure-usa/magfloor-absent.md).
         mag_floor: None,
         magstrip_wake: None,
+        magstrip_pob: false,
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,

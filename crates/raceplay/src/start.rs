@@ -74,6 +74,7 @@ impl Race {
             hit_spark_anchors,
             wreck_anchors,
             magstrip_wake,
+            magstrip_pob,
             destroy_stations,
             intro_camera,
             slot_teams,
@@ -541,7 +542,13 @@ impl Race {
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],
                 mag_floor_fx: Default::default(),
-                magstrip_wake: magstrip_wake.map(magstrip_wake::Wakes::new),
+                magstrip_wake: magstrip_wake.map(|anchors| {
+                    if magstrip_pob {
+                        magstrip_wake::Wakes::pob(anchors)
+                    } else {
+                        magstrip_wake::Wakes::new(anchors)
+                    }
+                }),
                 quake_point: None,
                 leach_beam_effect: None,
                 leach_charge_effect: [None; MAX_SHIPS],
