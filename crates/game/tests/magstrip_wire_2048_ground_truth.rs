@@ -210,6 +210,25 @@ fn the_hum_resolves_on_the_vita_ship_bank() {
     );
 }
 
+/// A real 2048 race load hands its grid the crossfaded engine of the table the
+/// title's `Crossfade` axis names: four layers in an ordinary race, Zone's own
+/// three-layer `xfship_ZONE_` table in Zone. This goes through
+/// `oag_raceplay::load`, so it fails if that load reads the plain `ship` bank
+/// instead of the axis.
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn a_race_load_gives_the_player_its_teams_crossfade_table_in_both_modes() {
+    for (mode, layers) in [(oag_race::Mode::SingleRace, 4), (oag_race::Mode::Zone, 3)] {
+        let Some(race) = load_mode(mode) else { return };
+        let team = race
+            .sounds()
+            .xfade_team(r"Feisar2048\3")
+            .unwrap_or_else(|| panic!("{mode:?}: no crossfade table for the player's team"));
+        assert_eq!(team.table().layer_count(), layers, "{mode:?}");
+        assert_eq!(team.playable(), 3, "{mode:?}: looping layers that resolved");
+    }
+}
+
 /// `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` ship in the base package's
 /// `Data/Particles2048` and parse. They are what a 2048 craft plays over a strip: no named mode reaches
 /// them (see [`every_2048_mode_plays_the_pob_and_builds_no_arc_wake`]).

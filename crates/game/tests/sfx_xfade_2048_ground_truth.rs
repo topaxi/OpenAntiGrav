@@ -119,6 +119,13 @@ fn a_craft_at_rest_sounds_and_the_pedal_bends_the_idle_layer_through_the_modulat
     let Some((banks, _)) = load(false) else {
         return;
     };
+    // HD's authored mix is read from `Data\sound\GlobalAudioConfig.xml`; 2048's
+    // copy sits in `data/audio/sound/`, so no mix loads and the engine plays at
+    // `ENGINE_BUS_RATIO`, an HD measurement (chosen, not measured, for 2048).
+    assert!(
+        banks.group_bus(7).is_none(),
+        "an authored mix loaded for 2048"
+    );
     let team = banks.xfade_team(r"Feisar2048\3").expect("the feisar table");
     let mut mixer = Mixer::new(SAMPLE_RATE);
     let mut craft = XfadeCraft::new(Arc::clone(&team));
