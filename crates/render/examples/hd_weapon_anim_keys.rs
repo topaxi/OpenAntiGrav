@@ -40,7 +40,11 @@ fn main() -> anyhow::Result<()> {
             };
             println!(
                 "    unit {} loop {} step {} t_base {:?} t_quantum {:?}",
-                a.seconds_per_key, a.loop_seconds, a.step, a.translation_base, a.translation_quantum
+                a.seconds_per_key,
+                a.loop_seconds,
+                a.step,
+                a.translation_base,
+                a.translation_quantum
             );
             for (label, c) in [
                 ("translation", &a.translation),

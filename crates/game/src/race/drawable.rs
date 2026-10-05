@@ -401,7 +401,14 @@ impl Drawable {
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
     ) {
-        self.write_uniforms(queue, view_projection, model, prev_mvp, sun_occlusion_layer, 0.0);
+        self.write_uniforms(
+            queue,
+            view_projection,
+            model,
+            prev_mvp,
+            sun_occlusion_layer,
+            0.0,
+        );
     }
 
     /// [`Self::write`] for a model whose materials read their own animation
