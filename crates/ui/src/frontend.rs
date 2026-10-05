@@ -81,7 +81,7 @@
 use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
-use oag_gameplay::input::{Button, Input};
+use oag_core::buttons::{Button, Input};
 
 mod placement;
 mod player;

@@ -1,4 +1,4 @@
-//! The evidence behind `oag_mesh::mesh::ANIMATED_TEXTURES`, re-measured from
+//! The evidence behind `oag_pulse::textures::ANIMATED_TEXTURES`, re-measured from
 //! real circuits.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
@@ -148,7 +148,7 @@ fn every_animated_track_texture_has_a_narrow_band_draw() {
         };
         println!("{circuit}_Track {label}: narrowest draw spans {span:.2} rows");
         assert!(
-            mesh::animated_v_cycles(label).is_some(),
+            oag_pulse::textures::animated_v_cycles(label).is_some(),
             "{label} is measured here but is not in ANIMATED_TEXTURES"
         );
         if span > NARROW_ROWS {
@@ -191,7 +191,7 @@ fn excluded_static_art_spans_its_whole_texture() {
         };
         println!("{circuit}_Track {label}: narrowest draw spans {span:.2} rows");
         assert_eq!(
-            mesh::animated_v_cycles(label),
+            oag_pulse::textures::animated_v_cycles(label),
             None,
             "{label} is excluded here but the table animates it"
         );

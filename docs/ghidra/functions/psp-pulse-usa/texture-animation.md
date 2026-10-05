@@ -368,7 +368,7 @@ per-batch state. **No track surface receives a texture-coordinate offset.**
 
 The read is on-target rather than incidental: Talon's Junction is `16_Track`,
 which carries two of the surfaces
-`oag_mesh::mesh::ANIMATED_TEXTURES` lists (`col_display7_GLOW` and
+`oag_pulse::textures::ANIMATED_TEXTURES` lists (`col_display7_GLOW` and
 `col_display7_BLEND_GLOW`), and `Gfx_BindTexture` was hit 80 times over the same
 window with many distinct texture objects, so the track was plainly drawing.
 

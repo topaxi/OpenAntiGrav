@@ -7,28 +7,22 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-# A title package is tables. `oag-assets` is here only so the two thin
-# convenience wrappers ([`open`] and [`read_image`]) can name `Archives`; no
-# decoding happens in this crate, and nothing here is reachable from a decode
-# path in `oag-formats` - that edge would be a cycle, and ADR-0022 says why the
-# class tables stay on the other side of it.
+# A title package is tables. `oag-assets` is here so the two thin
+# convenience wrappers ([`open`] and [`read_image`]) can name `Archives`, and
+# `oag-formats` for the PS2 texture-name rule those wrappers retry with (which
+# lives beside `wad::hash_name`, where the generic mesh crate can reach it
+# without a title crate). No decoding happens in this crate, and nothing in
+# `oag-formats` reaches back here - that edge would be a cycle.
 [dependencies]
 oag-assets.workspace = true
+oag-formats.workspace = true
 oag-title.workspace = true
 
-# Tests only, and deliberately not a normal dependency: `PS2_IMAGES` is checked
-# against the `.pct` rule by hashing the rewritten names, which needs
-# `wad::hash_name` and nothing else from the format layer. The check runs
-# offline, without a disc, which is why it is worth an edge the shipping crate
-# does not have.
-#
-# `oag-disc`/`oag-testdata` are here for the same reason and the same offline
-# rule does not apply to them: `tag_input_alphabet_ground_truth.rs` reads
+# `oag-disc`/`oag-testdata`: `tag_input_alphabet_ground_truth.rs` reads
 # `BOOT.BIN` directly off a real disc image, `#[ignore]`d, only via
 # `just test-data`.
 [dev-dependencies]
 oag-disc.workspace = true
-oag-formats.workspace = true
 oag-testdata.workspace = true
 
 [lints]

@@ -119,7 +119,7 @@ pub struct Livery {
     /// The same under [`absorb::LEACH`], while this craft's LeachBeam pulses.
     pub leach_overlay: Option<Model>,
     /// The hull's `0x2000` extra pass - the environment-mapped second texture
-    /// drawn over it every frame; see [`oag_render::shine`]. `None` wherever
+    /// drawn over it every frame; see `oag_render::shine`. `None` wherever
     /// it is not built.
     pub shine: Option<Model>,
     /// What the craft becomes once it has blown up, `shipwreck.vex` - see
@@ -188,7 +188,7 @@ pub struct LoadContext<'a> {
     /// while `oag_fx::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
-    /// `oag_render::shine::DRAWN` says so. See [`oag_render::shine`].
+    /// `oag_render::shine::DRAWN` says so. See `oag_render::shine`.
     pub hull_shine: bool,
     /// Whether to load each team's `shipwreck.vex` - Pulse on a PSP disc alone,
     /// the one source its swap trigger and its flags were read and captured on.
@@ -481,7 +481,7 @@ fn one(
     let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
         .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
     let shine = if ctx.hull_shine {
-        let shine = oag_render::shine::build(&hull);
+        let shine = mesh::shine_pass::build(&hull);
         report.push(match &shine {
             Some(model) => format!(
                 "{hull_name}: {} extra-pass batch(es) under their second texture (oag_render::shine)",

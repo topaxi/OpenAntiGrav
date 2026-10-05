@@ -15,7 +15,6 @@ oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
 oag-gpu.workspace = true
-oag-pulse.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
@@ -25,10 +24,6 @@ pollster.workspace = true
 
 [features]
 perf-probe = ["oag-gpu/perf-probe"]
-
-[dev-dependencies]
-oag-tables.workspace = true
-oag-testdata.workspace = true
 
 [lints]
 workspace = true
