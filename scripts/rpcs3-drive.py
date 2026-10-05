@@ -940,7 +940,8 @@ def cmd_capture(args):
         # shot's candidates have to be in hand before any of them can be
         # picked - nothing is written to disk inside this loop.
         shots = []
-        with Debugger() as gdb:
+        with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
+                      else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
                 session.pad.set("cross", True)
                 gdb.resume()
@@ -1215,17 +1216,7 @@ def cmd_record(args):
             return 1
         time.sleep(args.settle)
         print("walking the menus:", flush=True)
-        # One boot that photographs every screen is what makes a navigation
-        # plan writable at all: the menus are the disc's, nothing describes
-        # them, and `TTY.log` names a screen without saying what is on it.
-        if args.nav_shots:
-            session.screens_seen = set()
-            session.shot_dir = out
-        plan = {}
-        for item in args.nav:
-            screen, _, buttons = item.partition("=")
-            plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
-        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
+        if session.walk_to_race() not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1

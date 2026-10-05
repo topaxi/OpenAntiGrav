@@ -135,3 +135,11 @@ fn an_arc_left_behind_is_shed_far_out() {
     }
     assert_eq!(wake.live(), 0, "an arc 500 units astern is shed at once");
 }
+
+#[test]
+fn the_jitter_scales_are_the_measured_sine_bell() {
+    for (k, scale) in JITTER_SCALE.iter().enumerate() {
+        let want = 0.4 + 0.6 * (k as f64 * std::f64::consts::FRAC_PI_4).sin();
+        assert!((f64::from(*scale) - want).abs() < 1e-6, "term {k}");
+    }
+}

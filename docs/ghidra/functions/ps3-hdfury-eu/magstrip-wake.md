@@ -51,6 +51,9 @@ are base class (`0x00885axx`/`0x00885cxx`). Descriptors at `0x00875408` ->
   two builds**; only slot 5 is matched. The arc update and arc quad build are
   presumably `0x00109858` (slot 7) and `0x001095e0`/`0x00109720` (slots 13, 12);
   **none of those were read**, and they stay unnamed (below 50).
+  **Corrected 2026-10-05 (magstrip-hd-measure): that presumption was wrong** - `0x001095e0`
+  and `0x00109720` are destructors and `0x00109858` is the ribbons' update; the arc pool is
+  `0x002bbd60`/`0x002bb530`/`0x002bc7b0`, see the last section.
 - `0x001092d0`/`0x00109198`/`0x00109568` etc. in the descriptor run are other
   vtable-adjacent code and were not read.
 
@@ -112,3 +115,74 @@ All 39 `data/ships/<hull>/locators.vex` carry exactly one `arc_anchor_point` nod
 id `110`, on the centreline), and **match the Omega copies hull for hull**; the table and the
 `#[ignore]`d test (`crates/game/tests/magstrip_anchor_ground_truth.rs`) are on the Omega
 page.
+
+## 2026-10-05, magstrip-hd-measure lane: HD's own arc pool, read and measured live
+
+Static reading of `EBOOT.elf` plus **two RPCS3 boots** (`rpcs3-drive.py capture --region`,
+`data/scratch/magstrip-hd-measure/live1`, `live2`; Talon's Junction, Fury grid cell). The
+vtable slots earlier assumed to hold the arc update were not it:
+
+| Address | Name | Conf | What it is |
+| --- | --- | --- | --- |
+| `0x001095e0` | `MagstripWake_DeletingDestruct` | 80 | resets the vtable, decrements the live-instance counter, frees the two ribbons (`+0x50`, `+0x54`) and the arc pool (`+0x58`), then `FUN_006761f8(this)` (free) |
+| `0x00109720` | `MagstripWake_Destruct` | 80 | the same body without the free |
+| `0x00109858` | `MagstripWake_UpdateRibbons` | 70 | calls the pool's `0x002bc7b0` (gated on `ship+0x5f43 == 0`) and the ribbons' `0x002a8f58`, then offsets the ribbons by `+/- clamp(speed - [0], [1], ...) * [2]`: the PS4 ribbon law, a second source for it |
+| `0x002bbd60` | `MagstripArcs_Update` | 85 | nine slots of `0xa0` bytes: age, `0.85` smoothing, shed, jitter |
+| `0x002bb530` | `MagstripArcs_Spawn` | 75 | picks the first free slot, sets life, contact scale, spread (the decompiler stops at bad data; the disassembly was read) |
+| `0x002bc7b0` | `MagstripArcs_Draw` | 65 | VMX vertex build: 40-byte float vertices, position, uv at `+0x10/+0x14`, RGBA floats at `+0x18..+0x24` |
+
+### The tuning block is initialised data, and it is read, not a `kIntensity`
+
+All the arc constants live in one table of 22 floats at `0x008c2610` (TOC slot `0x6380`),
+**initialised in the image, not run-time**, and the same bytes read back from live memory on both
+boots (so the PS4's runtime-zero `DAT_020e52a0` has no HD counterpart for these):
+
+| Offset | Value | Used by |
+| --- | --- | --- |
+| `+0x00,+0x04` | `0.2`, `1.1` | arc life (`0.2 + 0.9u`) |
+| `+0x08` | `0.4` | start reach (`START_REACH`) |
+| `+0x0c,+0x10` | `3.0`, `5.0` | slow-speed reach |
+| `+0x14,+0x18` | `15.0`, `22.0` | fast reach; also the shed radius `lerp(15, 22, 0.6) = 19.2` (`368.64` squared) |
+| `+0x1c,+0x20` | `10.0`, `200.0` | the speed blend's ends: `t = (speed - 10) / 190` |
+| `+0x24` | `0.8` | strip half width (`HALF_WIDTH`) |
+| `+0x28` | `0.55` | ahead draw offset (`0.55 + u`) |
+| `+0x2c,+0x30` | `0.125`, `0.2` | **body brightness sample range** |
+| `+0x34` | `0.3` | **body vertex alpha** |
+| `+0x38,+0x3c` | `0.05`, `0.1` | **contact brightness sample range** |
+| `+0x40` | `0.25` | **contact vertex alpha** |
+| `+0x44` | `0.4` | read by the draw/update setup (unresolved) |
+| `+0x48,+0x4c` | `3.5`, `7.0` | contact scale |
+| `+0x50,+0x54` | `0.6`, `0.8` | spread: `0.6` slow, `0.8` fast |
+
+Agrees with the PS4 reading on life, reach, speed blend, scale, spread, shed radius and the
+`0.85`/`0.15` smoothing (`x = 0.85 x + 0.15 sample`, from TOC `0x63a4`/`0x63a8`).
+
+**Disagrees on brightness and alpha** (conf 80, static, table confirmed live): the PS4 reading
+has body brightness `0.0862u + 0.01875` (sample up to `0.7`) and a fixed alpha `0xb2` in a
+`0..255` byte colour; HD's sample is `0.125..0.2` (smoothed mean `0.1625`), the contact's
+`0.05..0.1` (mean `0.075`), and the vertex is **float RGBA with alpha `0.3` (body) and `0.25`
+(contact)**. HD's `MagstripArcs_Spawn` never writes the brightness fields, so a slot's brightness
+ramps from whatever the slot held (`0.85^n`, about 15 ticks to settle). HD names no `kIntensity`
+(string search: zero hits); the PS4's `DAT_020e52a0 + 0x1e0` has no HD analogue found.
+
+### The jitter scales: measured, live (conf 95)
+
+`FUN_00676fe8` is `_FSin`. Both class initialisers (`0x002bd750`, `0x002bde18`) store, at
+`0x00ad8984 + 4k`, `sin(arg_k) * 0.6 + 0.4` with `arg = 0, pi/4, pi/2, 3pi/4, pi`. **Read back
+from RPCS3 on two cold boots, in race: `0.4, 0.824264, 1.0, 0.824264, 0.4`** (the same bytes at
+three captures), term for term what `MagstripArcs_Update` multiplies the five jitter terms by.
+The PS4's `DAT_02134210..20` is almost certainly the same table (not read there).
+
+`MagstripArcs_Update` also pairs the draws: each tick it draws a fresh offset
+`spread * (2u - 1)` for terms 0, 2 and 4; term 1 reuses term 0's draw and term 3 reuses
+term 2's, unless `rand() & 7 == 0` (1 in 8) draws a fresh one (conf 85).
+
+### What a frame shows (not a number)
+
+`data/scratch/magstrip-hd-measure/run1.mp4` (RPCS3's recorder, 30 fps, `rpcs3-drive.py record`),
+frames 31-36 of the 28 s window against ours at ticks 1136-1141 (`ours_consec.png`,
+`orig_consec.png`): the original's arcs are several times wider and whiter on screen than ours
+at the same ship scale, and wavier (smooth, not zig-zag). The world widths agree
+(`+0x24 = 0.8`), so the gap is not geometry: the fragment program `MagStripArc_fp` (compiled
+into the executable, no file on the disc) and HD's bloom are the open candidates. **No intensity
+can be measured from these frames**, since there is no arc-free frame at the same pose.

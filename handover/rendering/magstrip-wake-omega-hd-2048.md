@@ -102,10 +102,8 @@ live PS4, so these are 80-90 reads, not captures.
 - **Which probe is the fifth `FUN_012582a0` call** (segment endpoints `local_db8`/`local_dc8`
   in `FUN_0131b510`); until read, "same probe as Pulse's mag-floor probe" is a reading (85
   on the literal, 65 on the index).
-- **The arc's per-arc constants** (spawn rates, widths, decay `0.85`, spline walk) are still
-  single-source PS4 (65): HD's `0x00109858`, `0x001095e0`, `0x00109720` were not read, and HD
-  slot order differs from the PS4's.
-- **The `MagStripArc_fp` fragment program** and the draw's depth state; the **loop flag of
+- ~~The arc's per-arc constants~~ - read 2026-10-05 (magstrip-hd-measure): HD's own pool (`0x002bbd60`, `0x002bb530`, `0x002bc7b0`) agrees with the PS4 on life, reach, speed blend, scale, spread, shed radius and smoothing; the five jitter scales are `0.4 + 0.6 sin(k pi/4)` (read live, two boots, 95); **HD's brightness (`0.125..0.2`), contact brightness (`0.05..0.1`) and vertex alpha (`0.3` body, `0.25` contact, float) differ from the PS4 reading our code carries (`0.7`, `0.7`, `0xb2`) and are not wired**: with them `INTENSITY` would have to be re-chosen and the fragment gain is unread. See the HD page's last section.
+- **The `MagStripArc_fp` fragment program** (compiled into the EBOOT, no shader file on the disc) and the draw's depth state; HD names no `kIntensity`, so `INTENSITY = 3.0` has no counterpart to read and stays chosen; the **loop flag of
   `~magstrip01`**; `ship+0x648b`, `ship+0x71f5 & 0x10`, `DAT_01f998e8`.
 - ~~Which side a 2048 mode lands on~~ - settled 2026-10-05 (magstrip-2048-pob, 70): every named mode is `< 0x17`, so the arc wake; see the Vita `ships-effects.md`.
 - **The HD writer of the replicated `m_overMagStrip` bit** (bit 9 of the network flag word;
@@ -124,5 +122,4 @@ live PS4, so these are 80-90 reads, not captures.
    they are the CRC-id-mode side, unreached). 2048 now builds the HD arc wake off its own `.gxt` pair; `magstrip_wire_2048_ground_truth` pins it on `tower`
    (Altima has no surface-3 triangle). Open from it: the hum is silent (the Vita `shipHD.bnk` resolves no cue by name); the arc reads faintly on 2048's
    washed-out floor; and ~~`EFFECT_DIR` is the unreached side~~ **checked 2026-10-05: 2048's own events (SP/MP `m_name`) are CRC ids >= 0x17, so they read `Particles2048` (right) and, by the same predicate, take the `WO_MAGSTRIP_*` POB branch, not the arc wake - the arc wake we draw is the HD-lineage named-mode side, which no campaign event reaches (conf 70, arbiter: Vita3K read of `0x8153fd24`)**. Next: play the POB for 2048 events and decide which side `--mode` races stand for.
-3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build (`0x00109858`, `0x001095e0`, `0x00109720`),
-   the `kIntensity` source and the jitter-scale globals, to lift the chosen values off.
+3. ~~Read HD's arc build~~ - done 2026-10-05 (magstrip-hd-measure): jitter scales and paired draws wired (`oag_fx::magstrip::JITTER_SCALE`); the HD brightness/alpha law is documented, not wired. Next (2 hours, `oag-re`): decode `MagStripArc_fp` (find the program blob via TOC slot `0x008b389c`) to learn what the float vertex colour is multiplied by - that is the only route to a measured `INTENSITY`, and to why the original's arcs look several times wider (fragment gain or HD bloom). Then wire HD's brightness ramp (slots start at zero, no spawn write), the `0.3`/`0.25` alphas and the two ribbons (`0x00109858` is HD's ribbon update).
