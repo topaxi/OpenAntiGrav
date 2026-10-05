@@ -338,6 +338,9 @@ for the player at rest.
 
 **Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
 never read, so the 24 re-shipped flares are not the ones drawn.
+Maintainer, 2026-10-05: v1.04 matters mostly for 3D SFX, and the rest of it
+is VR, which is not planned. Loading the patch is low priority, and the
+re-shipped flares are not a gap to chase on their own.
 
 **Omega check** (same test file, `omega_census`): Omega ships 69
 `engineflare.rcsmodel` (68 decode with geometry through the same reader) and 9
