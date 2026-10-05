@@ -103,6 +103,12 @@ pub struct WeaponModels {
     /// `oag_raceplay::repulser_field`. `None` on every title without a
     /// Repulser law of its own.
     pub repulser_field: Option<&'static str>,
+    /// The two models a craft shows while it is on a magstrip, `[MagEffect1,
+    /// MagEffect2]`: one riding the craft, one laid on the track, both
+    /// `(0, -2.5, 0)` below it. `MagFloorFx_Construct` (`0x088590a8`) loads
+    /// them for every craft. See `oag_raceplay::mag_floor_fx`. `None` on every
+    /// title whose archive was not checked for them or does not carry them.
+    pub mag_floor: Option<[&'static str; 2]>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -137,6 +143,7 @@ impl WeaponModels {
         plasma_blast_hd: None,
         bomb_blast_pulse: None,
         repulser_field: None,
+        mag_floor: None,
         leachbeam_ball: None,
         cannon_look: None,
     };

@@ -539,6 +539,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     // comment for what placing this would need and where reading it stopped.
     // HD hands the Repulser out, but its own field-model law is unread.
     repulser_field: None,
+    // `EBOOT.elf` carries no `MagEffect` string at all.
+    mag_floor: None,
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     cannon_look: Some(CANNON_LOOK),
 };

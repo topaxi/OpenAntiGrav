@@ -171,6 +171,7 @@ mod hud;
 pub mod intro_camera;
 mod load;
 pub mod loader_log;
+mod mag_floor_fx;
 mod models;
 mod options;
 mod pads;

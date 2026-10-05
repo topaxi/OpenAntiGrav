@@ -332,11 +332,17 @@ impl super::Scene {
     /// `BombBlast_Update` scales the basis directly rather than scrubbing a
     /// baked node animation - see `bomb_blast`'s own module doc comment - so
     /// a plain [`Drawable::write`] carries the whole picture.
+    ///
+    /// The magstrip effect's pair rides here too, on the container's terms
+    /// (`bomb_blast::BombBlastModels::mag_floor`). It does scrub: MagEffect2
+    /// authors an `Anim Transform`, played on the one animation clock
+    /// `seconds`.
     pub(super) fn write_bomb_blasts(
         &self,
         race: &Race,
         queue: &wgpu::Queue,
         view_projection: Mat4,
+        seconds: f32,
     ) -> BlastsActive {
         let draws = race.bomb_blast_draws();
         let mut hemisphere_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
@@ -384,6 +390,7 @@ impl super::Scene {
             hemisphere: hemisphere_active,
             shockwave: shockwave_active,
             repulser_field: repulser_active,
+            mag_floor: self.write_mag_floor_fx(race, queue, view_projection, seconds),
         }
     }
 
@@ -395,6 +402,13 @@ impl super::Scene {
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
+        for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
+            for pool in &self.bomb_blast.mag_floor {
+                if let Some(drawable) = pool.get(slot) {
+                    stats.add(drawable.draw(pass, None, None, None, None));
+                }
+            }
+        }
         for (slot, _) in active
             .repulser_field
             .iter()
@@ -435,6 +449,34 @@ pub(super) struct BlastsActive {
     shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     /// Per Repulser pool slot - see `repulser_field`.
     repulser_field: [bool; POOL_SIZE],
+    /// Per ship slot - see `mag_floor_fx`.
+    mag_floor: [bool; oag_weapons::MAX_SHIPS],
+}
+
+impl super::Scene {
+    /// Writes each shown magstrip effect's two models and hands back which
+    /// ship slots drew - see `mag_floor_fx` for the two matrices. No tint:
+    /// the original stamps both with opaque white.
+    fn write_mag_floor_fx(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        seconds: f32,
+    ) -> [bool; oag_weapons::MAX_SHIPS] {
+        let mut active = [false; oag_weapons::MAX_SHIPS];
+        for (slot, draw) in race.mag_floor_fx_draws().iter().enumerate() {
+            let Some(matrices) = draw else { continue };
+            for (pool, matrix) in self.bomb_blast.mag_floor.iter().zip(matrices) {
+                if let Some(drawable) = pool.get(slot) {
+                    drawable.write(queue, view_projection, *matrix, view_projection * *matrix);
+                    drawable.write_node_anims(queue, seconds);
+                    active[slot] = true;
+                }
+            }
+        }
+        active
+    }
 }
 
 /// One kind's own write loop - the shared body of

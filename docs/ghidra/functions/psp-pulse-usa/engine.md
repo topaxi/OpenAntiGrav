@@ -2131,10 +2131,11 @@ blend elsewhere on this page; not runtime-verified.
 
 **`Ship_MagFloorEnter` (`0x0883e5fc`) / `Ship_MagFloorExit` (`0x0883e624`),
 confidence 82.** Each is three instructions of substance: gate on
-`entity+0x8bc != 0` (an unidentified per-entity condition - possibly "has a
-scene presence" or "is the local player", per the `entity+0x368` local-player
-field this codebase already tracks elsewhere; not the same field, not
-resolved), then tail-call `MagFloorFx_Show`/`MagFloorFx_Hide`
+`entity+0x8bc != 0` (**corrected 2026-10-05:** not a per-entity condition.
+`entity+0x8bc` is the MagFloorFx object pointer that `Craft_Construct` stores
+at `0x0884189c`, and the listing passes it in `a0` - `lw a0,0x8bc(a0)`; see
+[magfloor-fx.md](magfloor-fx.md#who-constructs-it-and-entity0x8bc-is-the-effect-object-itself)),
+then tail-call `MagFloorFx_Show`/`MagFloorFx_Hide`
 (`0x088598ac`/`0x088598d8`, confidence 88 - created as proper Ghidra function
 boundaries this pass, previously read from raw disassembly only) with no
 arguments of their own (the entity pointer rides in `a0` from the caller's
