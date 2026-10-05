@@ -550,6 +550,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         atlas: r"Data\Tex\HD_electric_arc_8x8.gtf",
         contact: r"Data\Tex\HD_ElectricArc_Contact.gtf",
     }),
+    magstrip_pob: false,
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     cannon_look: Some(CANNON_LOOK),
 };

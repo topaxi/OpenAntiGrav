@@ -39,7 +39,7 @@ mod pads;
 mod perfect_start;
 mod reconcile;
 mod repulser;
-mod respawn;
+pub(crate) mod respawn;
 mod run_stats;
 mod scene;
 mod scene_build;
@@ -181,6 +181,7 @@ fn setup(handling: Handling) -> Setup {
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
         magstrip_wake: None,
+        magstrip_pob: false,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         intro_camera: None,

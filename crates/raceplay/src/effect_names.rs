@@ -426,3 +426,16 @@ pub const RAIN_LENS_EFFECT: &str = "WO_RAIN_LENS";
 
 /// Outpost 7's snow, its `<Weather EnvPsys>`; same footing as [`RAIN_EFFECT`].
 pub const SNOW_EFFECT: &str = "WO_SNOW";
+
+/// What a craft plays over a magstrip on 2048, outside a Zone.
+///
+/// **Recovered, confidence 75.** `FUN_812c847a` (the Vita ship's derived
+/// constructor) plays it at `ship+0x7598` when `GameMode_IsHdLineage`
+/// (`0x81000930`) is false and `FUN_810018d4` (the Zone-family test) is false;
+/// a 2048 event's mode id is a CRC (`>= 0x17`), read live as `0x026886dc` for
+/// a campaign Time Trial. Played by `race::magstrip_wake`.
+pub const MAGSTRIP_SPARKS_EFFECT: &str = "WO_MAGSTRIP_SPARKS";
+
+/// The Zone twin of [`MAGSTRIP_SPARKS_EFFECT`]. Which 2048 events count as a
+/// Zone for `FUN_810018d4` is **chosen, not measured**: `Mode::Zone`.
+pub const MAGSTRIP_ZONE_EFFECT: &str = "WO_MAGSTRIP_ZONE";

@@ -112,15 +112,14 @@ pub const TITLE: &Title = &Title {
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`
     // does would be a claim this build has not checked.
-    // Only the magstrip arc wake is read. `MagstripWake_Construct` (`0x811aeee2`)
-    // names these two `.gxt` and both ship in the base `data.psarc`; every
-    // other model stays unread. See
+    // Only the magstrip effect is read, and it is the `.pob` one: every 2048
+    // event carries a CRC-id mode (`>= 0x17`), the side of
+    // `GameMode_IsHdLineage` (`0x81000930`) that plays `WO_MAGSTRIP_SPARKS` /
+    // `WO_MAGSTRIP_ZONE` and builds no `MagstripWake` (live read of `0x8153fd24`
+    // on Vita3K, 2026-10-05). Every other model stays unread. See
     // `docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`.
     weapon_models: &oag_title::weapons::WeaponModels {
-        magstrip_wake: Some(oag_title::weapons::MagstripWake {
-            atlas: r"Data\Tex\HD_electric_arc_8x8.gxt",
-            contact: r"Data\Tex\HD_ElectricArc_Contact.gxt",
-        }),
+        magstrip_pob: true,
         ..oag_title::weapons::WeaponModels::EMPTY
     },
 };

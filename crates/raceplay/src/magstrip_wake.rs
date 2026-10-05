@@ -21,6 +21,15 @@
 //!   armed: start `~magstrip01` and disarm. Leaving: stop it and re-arm
 //!   ([`sound_edge`]).
 //!
+//! - **2048 plays a `.pob` instead of the arc** ([`Wakes::pob`]): its events carry a
+//!   CRC-id mode (`>= 0x17`), the side of `GameMode_IsHdLineage` that builds no
+//!   wake and plays `WO_MAGSTRIP_SPARKS`, or `WO_MAGSTRIP_ZONE` in a Zone
+//!   (`docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`, live read of
+//!   `0x8153fd24` on Vita3K). The sound edge above is the same either way.
+//!   **Chosen, not measured**: the effect runs only while the craft is over the
+//!   strip (the original's start and stop were not read), at the hull's
+//!   `arc_anchor_point`, and "Zone" is [`Mode::Zone`].
+//!
 //! **Omitted, as unidentified in the original**: the veto `ship+0x71f5 & 0x10`,
 //! the freeze while `controller+0x2d8 == 0` or `+0x2c5 & 4`, and the skip of
 //! the local ship when `DAT_01f998e8 & 1`.
@@ -69,6 +78,10 @@ pub(super) struct Wakes {
     previous_blend: [f32; MAX_SHIPS],
     over: [bool; MAX_SHIPS],
     armed: [bool; MAX_SHIPS],
+    /// Whether the arc wake is simulated and drawn: false on a `.pob` title.
+    arcs: bool,
+    /// The `.pob` instance each craft has riding it, on a `.pob` title.
+    pob: Option<[Option<psys::Playing>; MAX_SHIPS]>,
 }
 
 /// The seed a slot's wake draws from.
@@ -84,6 +97,17 @@ impl Wakes {
             previous_blend: [0.0; MAX_SHIPS],
             over: [false; MAX_SHIPS],
             armed: [true; MAX_SHIPS],
+            arcs: true,
+            pob: None,
+        }
+    }
+
+    /// The `.pob` variant: the same over-strip state and sound, no arc wake.
+    pub(super) fn pob(anchors: [Option<Mat4>; MAX_SHIPS]) -> Self {
+        Self {
+            arcs: false,
+            pob: Some([None; MAX_SHIPS]),
+            ..Self::new(anchors)
         }
     }
 
@@ -120,6 +144,12 @@ impl Race {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
             };
+            if wakes.pob.is_some() {
+                self.advance_magstrip_pob(&mut wakes, slot, over, anchor);
+            }
+            if !wakes.arcs {
+                continue;
+            }
             if !self.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
                 continue;
             }
@@ -131,6 +161,49 @@ impl Race {
             wakes.wakes[slot].advance(dt, over, &craft, &walk);
         }
         self.view.magstrip_wake = Some(wakes);
+    }
+
+    /// One craft's `.pob` magstrip effect: started riding the anchor on contact,
+    /// followed while over the strip, detached on leaving or when the craft is
+    /// out of play. Nothing plays when the effect did not load.
+    fn advance_magstrip_pob(&mut self, wakes: &mut Wakes, slot: usize, over: bool, anchor: Mat4) {
+        let Some(handles) = wakes.pob.as_mut() else {
+            return;
+        };
+        let live = over && self.ship_active(slot);
+        match (handles[slot], live) {
+            (None, true) => {
+                let name = if self.sim.world.mode() == Mode::Zone {
+                    super::effect_names::MAGSTRIP_ZONE_EFFECT
+                } else {
+                    super::effect_names::MAGSTRIP_SPARKS_EFFECT
+                };
+                let Some(effect) = self.view.effects.get(name).cloned() else {
+                    return;
+                };
+                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
+                handles[slot] = self.view.stage.play_riding(&effect, at, 1.0);
+            }
+            (Some(playing), true) => {
+                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
+                self.view.stage.follow(playing, at);
+            }
+            (Some(playing), false) => {
+                self.view.stage.detach(playing);
+                handles[slot] = None;
+            }
+            (None, false) => {}
+        }
+    }
+
+    /// The `.pob` effect craft `slot` has playing now, for tests and telemetry.
+    #[must_use]
+    pub fn magstrip_pob_of(&self, slot: usize) -> Option<psys::Playing> {
+        self.view
+            .magstrip_wake
+            .as_ref()
+            .and_then(|wakes| wakes.pob.as_ref())
+            .and_then(|handles| handles.get(slot).copied().flatten())
     }
 
     /// What the wake reads of craft `slot` this frame. `with_track` and
@@ -210,7 +283,7 @@ impl Race {
         Vec<oag_mesh::mesh::GpuVertex>,
     ) {
         let (mut atlas, mut contact) = (Vec::new(), Vec::new());
-        let Some(wakes) = &self.view.magstrip_wake else {
+        let Some(wakes) = self.view.magstrip_wake.as_ref().filter(|wakes| wakes.arcs) else {
             return (atlas, contact);
         };
         let eye = self.camera_position();
@@ -231,7 +304,10 @@ impl Race {
     /// Whether the title builds the arc wake at all.
     #[must_use]
     pub fn has_magstrip_wake(&self) -> bool {
-        self.view.magstrip_wake.is_some()
+        self.view
+            .magstrip_wake
+            .as_ref()
+            .is_some_and(|wakes| wakes.arcs)
     }
 
     /// How many arcs craft `slot`'s wake has live, for tests and telemetry.

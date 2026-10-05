@@ -477,6 +477,9 @@ pub struct Setup {
     /// authors none is `None` and draws no wake. `None` on every other title.
     /// See `race::magstrip_wake`.
     pub magstrip_wake: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
+    /// Whether the over-strip effect is the title's `.pob` rather than the arc
+    /// wake: see `oag_title::weapons::WeaponModels::magstrip_pob`.
+    pub magstrip_pob: bool,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
