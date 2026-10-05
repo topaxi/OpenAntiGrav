@@ -240,3 +240,103 @@ fn a_stale_hint_far_from_the_ship_reacquires_globally() {
     let located = course.locate(position, Some(0)).expect("on the ring");
     assert_eq!(located.index, target, "the stale hint was not dropped");
 }
+
+/// A three-path ring whose fork's alternate forks again: path 2's exit splits
+/// to 0 (the ring) and 3, and path 3's exit splits to 4 and 5, both of which
+/// rejoin at path 1 - so every route stands in for path 0. Paths 3-5 sit
+/// `stray` units above the ring.
+fn nested_fork(stray: f32) -> AiTrack {
+    let base = square_track(6);
+    let moved = |p: &Path| Path {
+        points: p
+            .points
+            .iter()
+            .map(|pt| oag_vex::track::SplinePoint {
+                pos: [pt.pos[0], pt.pos[1] + stray, pt.pos[2]],
+                ..*pt
+            })
+            .collect(),
+        ..p.clone()
+    };
+    let path = |from: &Path, entry: usize, exit: usize| Path {
+        entry: Some(entry),
+        exit: Some(exit),
+        ..from.clone()
+    };
+    let junction = |prev: usize, next: [Option<usize>; 2]| Junction {
+        prev: [Some(prev), None],
+        next,
+    };
+    AiTrack {
+        version: 1,
+        paths: vec![
+            path(&base.paths[0], 0, 1),
+            path(&base.paths[1], 1, 2),
+            path(&base.paths[2], 2, 0),
+            path(&moved(&base.paths[0]), 0, 3),
+            path(&moved(&base.paths[1]), 3, 4),
+            path(&moved(&base.paths[1]), 3, 5),
+        ],
+        junctions: vec![
+            junction(2, [Some(0), Some(3)]),
+            junction(0, [Some(1), None]),
+            junction(1, [Some(2), None]),
+            junction(3, [Some(4), Some(5)]),
+            junction(4, [Some(1), None]),
+            junction(5, [Some(1), None]),
+        ],
+    }
+}
+
+#[test]
+fn a_fork_inside_an_alternate_is_two_routes_with_their_own_coins() {
+    let course = Course::from_track(&nested_fork(0.0), None).expect("a ring");
+    assert_eq!(course.path_order(), vec![0, 1, 2]);
+    let routes: Vec<(Vec<u16>, Vec<bool>)> = course
+        .routes()
+        .iter()
+        .map(|r| (r.paths.clone(), r.choices.clone()))
+        .collect();
+    assert_eq!(
+        routes,
+        vec![
+            (vec![3, 4], vec![true, false]),
+            (vec![3, 5], vec![true, true])
+        ],
+        "one leaf per way back, primary first, each with the coins that pick it"
+    );
+    for route in course.routes() {
+        assert_eq!(route.pre_fork, 2, "the fork is at path 2's exit");
+        assert_eq!(course.path_of(route.split), Some(0));
+        assert_eq!(course.path_of(route.merge), Some(1));
+    }
+    // Branch, the Repulser's narrower view, sees none of it: path 3 does not
+    // rejoin the ring itself.
+    assert!(course.branches().is_empty());
+}
+
+#[test]
+fn a_craft_far_out_on_a_route_reads_progress_inside_the_span_it_replaces() {
+    // Two hundred units out, far past the ring's reacquire distance.
+    let course = Course::from_track(&nested_fork(200.0), None).expect("a ring");
+    let route = &course.routes()[0];
+    let split = course.progress_at(route.split).expect("in range");
+    let merge = course.progress_at(route.merge).expect("in range");
+    let before = (route.split + course.len() - 1) % course.len();
+    let mut hint = Some(before);
+    let mut last = split;
+    for point in &route.positions {
+        let located = course.locate(*point, hint).expect("located");
+        assert!(
+            located.offset < 1.0,
+            "located on the route, not the ring: {located:?}"
+        );
+        assert!(
+            located.progress >= last && located.progress <= merge,
+            "progress {:.2} outside {last:.2}..={merge:.2}",
+            located.progress
+        );
+        last = located.progress;
+        hint = Some(located.index);
+    }
+}

@@ -27,20 +27,28 @@
 //!     next = path->exit->next_alternate;   // branch selection
 //! ```
 //!
-//! [`Course`] therefore walks the **primary** chain. Alternate paths are
-//! deliberately off the ring: on `05_Track` the two branches "share both
-//! endpoints, so they are two lines over the same stretch rather than a
-//! geographic detour", so a ship on the shortcut still projects onto the ring at
-//! a sensible distance. They are kept beside it as [`Branch`]es, for the one
-//! thing that walks them, a Repulser's fork wave. `05_Track`, `07_Track`,
-//! `14_Track` and `23_Track` carry one; whether the last three are second
-//! routes or duplicates of their primary path is not settled.
+//! [`Course`] therefore walks the **primary** chain. Alternate paths are kept
+//! beside it twice over: as [`Branch`]es, the narrow view a Repulser's fork
+//! wave walks, and as [`Route`]s, every way from a ring fork back to the ring,
+//! which is what an opponent drives (`docs/gameplay/ai.md`, "Branch choice at a
+//! fork").
+//!
+//! **An alternate is a real detour, not a second line over the same stretch.**
+//! That used to be written here of `05_Track`, and measured 2026-10-05
+//! (`cargo run -p oag-game --example fork_survey`) it is wrong: Pulse's three
+//! alternates (05, 07, 14) stray 63 to 241 units from the ring, and 2048's up
+//! to 300 (`subway`). A craft that far out is beyond [`Course::locate`]'s
+//! reacquire distance, so `locate` searches the routes near its hint as well
+//! and reads progress off the ring span a route stands in for - see
+//! [`Course::locate_on_route`].
 
 use oag_core::math::Vec3;
 use oag_vex::track::AiTrack;
 
 pub mod branch;
+pub mod route;
 pub use branch::Branch;
+pub use route::Route;
 
 /// A track walked into a closed ring, with cumulative distance along it.
 ///
@@ -76,6 +84,8 @@ pub struct Course {
     corridor_widths: Vec<f32>,
     /// The alternate paths off the ring - see [`branch`].
     branches: Vec<Branch>,
+    /// Every way round every fork - see [`route`].
+    routes: Vec<Route>,
 }
 
 /// Where a position sits on the course.
@@ -180,6 +190,7 @@ impl Course {
             }
         }
         let branches = branch::branches(ai, &first);
+        let routes = route::routes(ai, &ring, &first, &positions);
         if positions.len() < 2 {
             return None;
         }
@@ -212,6 +223,7 @@ impl Course {
             centres,
             corridor_widths,
             branches,
+            routes,
         };
         if let Some(start) = start_near
             && let Some((slot, _)) = course.nearest_global(start)
@@ -283,6 +295,12 @@ impl Course {
         &self.branches
     }
 
+    /// Every way round every fork, in ring order of the fork - see [`Route`].
+    #[must_use]
+    pub fn routes(&self) -> &[Route] {
+        &self.routes
+    }
+
     /// The AI corridor's width at `index` - see [`Self::corridor_widths`].
     #[must_use]
     pub fn corridor_width(&self, index: usize) -> Option<f32> {
@@ -322,10 +340,23 @@ impl Course {
     /// a lap: the bridge above is hundreds of points away in the table but a few
     /// units away in space, and a global scan would happily jump to it.
     #[must_use]
+    ///
+    /// **A craft on a route off the ring is located on that route.** Near a
+    /// fork the routes whose stretch the hint is in are searched too, and when
+    /// one is nearer than the ring its sample's progress is read off the ring
+    /// span it stands in for - see [`Self::locate_on_route`]. Without it a
+    /// craft on a detour that strays further than the reacquire distance loses
+    /// its fix and a global scan can put it a lap away (`park` read 4,388
+    /// units off; `branch_progress_ground_truth.rs`).
     pub fn locate(&self, position: Vec3, hint: Option<usize>) -> Option<Located> {
         let (index, offset) = match hint {
             Some(hint) if hint < self.positions.len() => {
                 let (index, offset) = self.nearest_within(position, hint);
+                if let Some(on_route) = self.locate_on_route(position, hint)
+                    && on_route.offset < offset
+                {
+                    return Some(on_route);
+                }
                 if offset > self.max_half_width * Self::REACQUIRE_HALF_WIDTHS {
                     self.nearest_global(position)?
                 } else {
@@ -337,6 +368,51 @@ impl Course {
         Some(Located {
             index,
             progress: self.progress_at(index)?,
+            offset,
+        })
+    }
+
+    /// The nearest sample on any route whose stretch `around` is in, located
+    /// as a point on the ring.
+    ///
+    /// A route stands in for the ring from its `split` to its `merge`, so its
+    /// sample at fraction `f` of its own length reads the ring's progress at
+    /// fraction `f` of that span, and its index is the ring point there.
+    /// Continuous at both ends by construction. **Chosen, not measured**: the
+    /// original reads the point's own authored progress (`+0x40`) instead, a
+    /// field this ring does not use (see `docs/gameplay/lap-counting.md`), so
+    /// within a route the two can differ by how unevenly the artist spread it.
+    ///
+    /// A stretch is the ring from [`Self::WINDOW`] before `split` to
+    /// [`Self::WINDOW`] past `merge`, so a hint still on the ring as the craft
+    /// leaves it, or already back as it rejoins, finds the route.
+    #[must_use]
+    pub fn locate_on_route(&self, position: Vec3, around: usize) -> Option<Located> {
+        let count = self.positions.len();
+        let mut best: Option<(usize, usize, f32)> = None;
+        for (r, route) in self.routes.iter().enumerate() {
+            let from = (route.split + count - Self::WINDOW.min(count)) % count;
+            let span = (route.merge + count - from) % count + Self::WINDOW;
+            if (around + count - from) % count > span {
+                continue;
+            }
+            for (i, point) in route.positions.iter().enumerate() {
+                let distance = (*point - position).length();
+                if best.is_none_or(|(_, _, previous)| distance < previous) {
+                    best = Some((r, i, distance));
+                }
+            }
+        }
+        let (r, i, offset) = best?;
+        let route = &self.routes[r];
+        let ring_span =
+            (self.distance[route.merge] - self.distance[route.split]).rem_euclid(self.length);
+        let along = route.fraction(i) * ring_span;
+        let raw = self.distance[route.split] + along;
+        let start = self.distance[self.start_index];
+        Some(Located {
+            index: self.advance(route.split, along),
+            progress: (raw - start).rem_euclid(self.length),
             offset,
         })
     }
