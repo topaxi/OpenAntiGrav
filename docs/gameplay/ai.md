@@ -3614,7 +3614,8 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
 
 - **The coin** is `oag_ai::branch::coin`: bit 8 of a draw off `oag_core::Rng`
   seeded from the driver's own seed and a per-driver visit counter, so it moves
-  no other roll in the race. The draw source is ours; the fairness, the timing
+  no other roll in the race (49.6 % alternates on the first draw over 14,000
+  seeded craft, 50.0 % after). The draw source is ours; the fairness, the timing
   (on entering the pre-fork path) and the hold to the merge are the original's.
 - **The geometry** is `oag_race::course::Route`: every way from a ring fork back
   to the ring, including 2048's multi-path alternates and forks nested inside an
@@ -3625,24 +3626,45 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
   round to its split and then the route's own samples, built by the same
   `racing_line` the ring's is (`oag_raceplay`'s `routes` module). A driver's
   index is into whichever line it is on, and every consumer that pairs it with
-  a line or a sample asks `Race::line_of` / `Race::ai_sample_for`.
-- **The re-commit** is the original's Pulse rule: off the track and moving, a
-  craft scored better on a sibling (`|across| * 10 + along`) switches to it.
+  a line, a sample or a plan asks `Race::line_of` / `ai_sample_for` / `plan_of`.
+- **Chosen, not measured**, each forced by a measured failure on `05_Track` or
+  `07_Track` (`cargo run -p oag-game --example fork_trace`):
+  - the driver holds its draw (`Branching::pending`) and moves onto the route's
+    line only 320 samples short of the split, so the shared stretch is driven
+    on the ring's line and plan;
+  - each route has its own speed plan, and **a route whose plan does not lap
+    clean and contact-free is not offered to the coin** (its share stays on the
+    ring): `07_Track`'s centre ramp parks our craft at route sample 196 without
+    a wall touch, so 07's route is never taken;
+  - across the stretch where a route is still within 8 units of the ring, its
+    corridor is held to 1 unit either side of its line: a Novice on the far
+    side of path 1's corridor rode the ring's take-off ramp and met the divider
+    every lap;
+  - the re-commit (below) never fires in the air, scores the craft's own line
+    over its search window, and needs a margin of 1: as first ported it flipped
+    craft between lines every tick over 05's jump, 328 times in one run.
+- **The re-commit** is otherwise the original's Pulse rule: off the track and
+  moving, a craft scored better on a sibling (`|across| * 10 + along`) switches
+  to it.
 - **Lap progress** on a route is read off the ring span it replaces - see
   [lap counting](lap-counting.md#where-we-differ).
 
-Measured on the result (`ai_fork_split_ground_truth.rs`): a full field on
-`05_Track` over a race decided 17 times for the ring and 24 for the route; on
-2048's `altima` over three laps, 13/8 at one fork and 6/16 at the other, every
-running craft within a lap of the rest. `race_ground_truth`'s lone-craft board
-stays all twelve clean with no respawns; the three fork circuits' best laps
-moved (05 34.8 -> 37.1 s, 14 42.5 -> 43.3 s, 07 45.0 -> 45.3 s) because a craft
-on a route drives the corner model, not the speed plan, which is built for the
-ring alone.
+Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no.
+2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
+`subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
+(no route laps, and the ring's own plan does not verify there either).
+
+Measured on the result: a full field on `05_Track` over a race decided 17 times
+for the ring and 24 for the route; on 2048's `altima` over three laps, 13/7 at
+one fork and 6/16 at the other, every running craft within a lap of the rest
+(`ai_fork_split_ground_truth.rs`). `race_ground_truth`'s lone-craft board stays
+all twelve clean with no respawns, best laps as before except 05 (34.8 ->
+34.6 s). de Konstruct Black's destroyed-craft board moved 5 -> 6 forward, no
+loss on the route (`ai_dekonstruct_black_ground_truth.rs`).
 
 **Not ported**: 2048's per-circuit override (circuit record `+0x150`), its
-per-craft construction coin and its own re-commit; a speed plan per route;
-pad-seeking while on a route (the pads sit on ring indices).
+per-craft construction coin and its own re-commit; pad-seeking while on a route
+(the pads sit on ring indices).
 
 ## Where this sits
 

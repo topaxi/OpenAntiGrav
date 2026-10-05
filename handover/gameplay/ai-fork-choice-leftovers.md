@@ -1,16 +1,19 @@
 # AI fork choice: what is left after the coin
 
-2026-10-05 (ai-forks lane). Opponents now flip the original's coin at every
-fork and drive the route they draw, on every title; lap progress is read off
-the route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
+2026-10-05 (ai-forks lane). Opponents flip the original's coin at every fork
+and drive the route they draw, on every title; lap progress is read off the
+route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
 `docs/gameplay/ai.md` "Branch choice at a fork".
 
 ## Open
 
-- **A speed plan per route.** The plan is built for the ring alone, so a craft
-  on a route drives the corner model. On the lone-craft board the three Pulse
-  fork circuits' best laps grew 0.3-2.3 s (05: 34.8 -> 37.1 s). Building a plan
-  per route costs one verification run per route at load.
+- **Routes our craft cannot drive, so the coin never sends anyone down them.**
+  Pulse `07_Track` (the centre ramp: a lone Ace stalls at route sample 196,
+  about 15 units/s, no wall touch); 2048 `cathedral` (both routes verify with
+  failures) and `sol` (no route laps; the ring's own plan does not verify
+  either). The original sends half its field down each. A physics or driving
+  question on those roads, not a fork one: `cargo run --release -p oag-game
+  --example fork_trace -- <source> <track> <pre-fork path> <from> <to>`.
 - **2048's per-circuit override.** `Ai_ChooseBranch` (`0x8119ae90`) can force a
   side after the coin from the circuit record's `+0x150`/`+0x154`/`+0x158`
   and a per-craft table at `+0x2b2c4`. What fills them is not found.
@@ -20,13 +23,12 @@ the route. Evidence: `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`,
   on a route seeks no pad until it is back (ours).
 - **Runtime confirmation.** A PPSSPP watchpoint on `ai+0x60` over a few races
   of `05_Track` would lift `Ai_ChooseBranch` past 90.
-- **A Pulse picture.** `05_Track`'s fork is roofed by scenery, so a top-down
-  `--camera-pose` frame shows no craft; altima's does
-  (`cargo run -p oag-game --example fork_probe` prints the tick and pose).
+- **Load cost.** A route plan is built per route per race: `sol` spends about
+  250,000 steps on three routes it then discards.
 
 ## Next Steps
 
-1. Plan per route: `Race::field_speed_plan` per `RouteLine`, used when
-   `driver.branching.route` names it.
+1. Look at 07's centre ramp under `fork_trace`: is it hover, the plan, or the
+   ramp's collision? If it is driveable, its route joins the coin by itself.
 2. Find the writer of 2048's circuit record `+0x150` (start from the
    `Definition.xml` track plugin parse).
