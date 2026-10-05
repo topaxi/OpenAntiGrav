@@ -150,6 +150,24 @@ The executable's own load-path strings name every model above
   below-70 rule. The engine draws the bolt velocity-only for now, same as
   the Rocket, documented as chosen rather than measured.
 
+- **2026-10-05 (`hd-weapons`): the Plasma explosion's `UV_offset` is played on
+  the ring and halo, and was never a keyed track.** The trio's `Root` node
+  authors one constant key; the field is the blast's age in seconds
+  (`MeshImporter_SetTime`, see plasma.md's 2026-10-05 section, which corrects
+  the 09-25 "keyframe evaluator" reading). `slots::CLOCK_SCROLL_RING`/`_HALO`
+  plus a per-drawable `model_clock`. Still open on the explosion: the sphere's
+  noise tap (needs the sun, ambient, `0x7480de6d` and the reflection probe, all
+  unwired), and the ring/halo's own colour and alpha combine (the engine's
+  path stands in; only the tap coordinates are the program's).
+- **Missile's detonation pair and the Bomb's five detonation models: no
+  trigger read, so nothing drawn.** `HD_missile_explosion`'s object (vtable
+  `0x00864b38`, shared with the constructors at `0x00154990`/`0x00155c10`/
+  `0x00155d00`; slot 5 `0x00155420` only writes the per-viewport matrix at
+  `this + 0xf0`) has no found writer of `this + 0xf0` and nothing that starts
+  its clock; `Shockwave_scalar` and `UV_offset` are both its age. The Bomb's
+  `HD_Mine_halo`/`HD_bomb_*` have neither a load order nor a placement read.
+  Next: the manager's per-tick walker on the hit path.
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
@@ -178,11 +196,8 @@ The executable's own load-path strings name every model above
    node's own live output, bound to the shader's `UV_offset` constant *by
    pointer* (`Material_BindInstanceParamPointer`), the same two-helper
    pattern Missile's own `UV_offset`/`Shockwave_scalar` bindings use on a
-   different node - see plasma.md's 2026-09-25 section. **Still open**:
-   the field's actual law (its authored keys, one per model) is a data
-   read, not a code one - parse the Anim Transform track at that node in
-   each of `hd_plasma_ring`/`_sphere`/`_halo`'s own `.vex`, the same way
-   `HD_missile_explosion`'s scale keys were read directly off its file.
+   different node - see plasma.md's 2026-09-25 section. **Done 2026-10-05**: the field is the blast's age
+   (not a track - the keys are constant), played on the ring and halo.
    ~~The sphere's track-fitted basis~~ **2026-09-25: the found/not-found
    branch structure in `WeaponExplosions_Start` is read (confidence 60,
    see plasma.md); what actually seeds the found branch's construction

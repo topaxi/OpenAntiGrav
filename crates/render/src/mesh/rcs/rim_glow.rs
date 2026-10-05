@@ -22,6 +22,15 @@
 //! needs beyond the texture and the clock is a literal in the program itself,
 //! which is what [`classify`] checks before it sets a bit.
 //!
+//! # The clock-scroll shapes
+//!
+//! [`slots::CLOCK_SCROLL_RING`] and [`slots::CLOCK_SCROLL_HALO`] are the
+//! Plasma explosion's ring and halo: the same skeleton again (a noise alpha
+//! tap displacing the colour tap, both scrolled) but over the declared
+//! `UV_offset` - the model's own clock - instead of the engine's `time`. They
+//! sit here because the classification is the same fingerprint; what they
+//! change in the picture is only where the texture is sampled.
+//!
 //! # The fingerprint
 //!
 //! A mnemonic sequence, the file's own (unpatched) literals in order, the
@@ -43,6 +52,9 @@ const FOG_COLOUR: u32 = 0x3dc3_1258;
 const GLOBAL_ALPHA_SCALER: u32 = 0x4c13_d3af;
 /// `~crc32("time")` - engine parameter slot 0.
 const TIME: u32 = 0x906b_67ba;
+/// `~crc32("UV_offset")`: the model's own animation clock, bound by pointer
+/// to its first Anim-class node's `+0xc0` (`AnimNode_GetTime`).
+const UV_OFFSET: u32 = 0x8f2f_e704;
 /// The Plasma head's alpha, authored per material; no preimage.
 pub(super) const RIM_EDGE_ALPHA: u32 = 0x7611_a2d8;
 
@@ -53,6 +65,43 @@ struct Shape {
     literals: &'static [[f32; 4]],
     parameters: &'static [u32],
 }
+
+/// `hd_plasmaring_glow.rcsmaterial`, block `@0x1900` (`DATA02`): the
+/// explosion ring. Not a rim program - it earns [`slots::CLOCK_SCROLL_RING`]
+/// for the `UV_offset` clock it shares with the rest of this file's shapes.
+const PLASMA_RING: Shape = Shape {
+    bit: slots::CLOCK_SCROLL_RING,
+    mnemonics: &[
+        "MOV", "MOV", "MOV", "MAD", "TEX", "MAD", "MAD", "MUL", "MUL", "TEX", "ADD", "MUL", "ADD",
+        "MAD", "EX2", "MAD", "MUL", "MAD",
+    ],
+    literals: &[
+        [0.01, 0.0, 0.0, 0.0],
+        [0.15, 0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+    ],
+    parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, UV_OFFSET],
+};
+
+/// `hd_plasmahalo_glow.rcsmaterial`, block `@0x1960` (`DATA02`): the
+/// explosion halo. See [`PLASMA_RING`].
+const PLASMA_HALO: Shape = Shape {
+    bit: slots::CLOCK_SCROLL_HALO,
+    mnemonics: &[
+        "MOV", "MOV", "MAD", "MOV", "TEX", "MUL", "MOV", "MAD", "ADD", "MAD", "MUL", "MUL", "TEX",
+        "ADD", "MUL", "ADD", "MAD", "EX2", "MUL", "MOV", "MAD", "MAD",
+    ],
+    literals: &[
+        [0.4, 0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0, 0.0],
+        [0.04, 0.0, 0.0, 0.0],
+        [0.1, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.333_251_95],
+    ],
+    parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, UV_OFFSET],
+};
 
 /// `hd_leachbeam_ball_glow.rcsmaterial`, block `@0x19b0` (`DATA00`).
 const LEACH_BALL: Shape = Shape {
@@ -117,7 +166,7 @@ pub(super) fn classify(
     }
     let mut parameters = declared.parameters.clone();
     parameters.sort_unstable();
-    for shape in [&LEACH_BALL, &PLASMA_HEAD] {
+    for shape in [&LEACH_BALL, &PLASMA_HEAD, &PLASMA_RING, &PLASMA_HALO] {
         let mut wanted = shape.parameters.to_vec();
         wanted.sort_unstable();
         if parameters != wanted || !mnemonics_match(program, shape.mnemonics) {

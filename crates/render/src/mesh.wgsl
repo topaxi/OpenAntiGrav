@@ -20,7 +20,10 @@ struct Uniforms {
     // bytes, which would silently insert padding this struct's Rust mirror
     // (a flat, tightly packed repr(C)) does not have.
     sun_occlusion_layer: f32,
-    _pad0: f32,
+    // The model's own animation clock, seconds: what an HD material's
+    // `UV_offset` is bound to (`slots::CLOCK_SCROLL_RING`/`_HALO`). Zero for
+    // every other draw. Was padding until 2026-10-05.
+    model_clock: f32,
     _pad1: f32,
     _pad2: f32,
     // The previous simulation tick's `view_projection * model`, premultiplied.
@@ -1304,7 +1307,35 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let view_dir = normalize(scene.fog.camera - in.world);
     let ramp_facing = dot(view_dir, n);
     let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);
-    let first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
+    var first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
+    // **The Plasma explosion's ring and halo scroll on the model's own clock**
+    // (`slots::CLOCK_SCROLL_RING`/`_HALO`): their programs' `UV_offset` is
+    // `node + 0xc0`, the blast's age, not the scene's `time`. Read off the
+    // two programs' own microcode (docs/ghidra/functions/ps3-hdfury-eu/
+    // plasma.md, 2026-10-05) - ring: `n = tex(u, v + 0.01 t).a`, then
+    // `uv + 0.15 n + 0.1 t` on both axes; halo: `n = tex(u, v + 0.4 t).a`,
+    // then `(2u + 0.1 t, v + 0.14 t + 0.1 n)`. **Only where the colour tap
+    // samples**; the programs' own colour and alpha combine is not
+    // reproduced here, the path below stands in for it.
+    let clock = uniforms.model_clock;
+    if (in.slots & 32768u) != 0u {
+        let n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
+        ).a;
+        first_uv = in.texcoord + vec2<f32>(0.15 * n + 0.1 * clock);
+    } else if (in.slots & 65536u) != 0u {
+        let n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
+        ).a;
+        first_uv = vec2<f32>(
+            2.0 * in.texcoord.x + 0.1 * clock,
+            in.texcoord.y + 0.04 * clock + 0.1 * n + 0.1 * clock,
+        );
+    }
     // **Pulse's slope-mode level selection**: `log2(|z| * slope) + bias` off view
     // depth, clamped to the levels the texture has - the GE's rule, in place of
     // the derivatives `textureSample` would use. On only for a model carrying
@@ -1373,7 +1404,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 16u;
+    let glow_slot = in.slots >> 17u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material

@@ -125,7 +125,10 @@ sync_dir() {
     if (( use_rsync )); then
         local exclude_args=() e
         for e in "${excludes[@]}"; do exclude_args+=(--exclude "$e"); done
-        rsync -cvz --progress "${dry_flag[@]}" "${exclude_args[@]}" "$src/" "$host:$dest_dir/"
+        # -r: without it rsync answers "skipping directory ." and copies
+        # nothing at all, which every deploy did until 2026-10-05. -t keeps
+        # the remote mtime so the next run's size+mtime check is honest.
+        rsync -rtvz --progress "${dry_flag[@]}" "${exclude_args[@]}" "$src/" "$host:$dest_dir/"
     else
         # scp has no exclude flag, so walk the directory ourselves.
         local entry name skip e
@@ -166,7 +169,15 @@ sync_psarcs() {
     if (( use_rsync )); then
         # No -z: a .psarc is already compressed, and compressing ~48 GB again
         # costs CPU on both ends for nothing.
-        rsync -cv --progress "${dry_flag[@]}" --prune-empty-dirs \
+        #
+        # -r because without it rsync answers "skipping directory ." and
+        # copies nothing, which every run did until 2026-10-05: a Deck was
+        # found racing the 2026-09-15 base extract (data00-data04) under a
+        # current patch, so the front end booted and every race failed with
+        # "track.vex has no WO Track node". -t keeps the remote mtime, so a
+        # re-extraction of the same size is still caught by rsync's own
+        # size+mtime check without checksumming ~46 GB on both ends.
+        rsync -rtv --progress "${dry_flag[@]}" --prune-empty-dirs \
             --include '*/' --include '*.psarc' --exclude '*' \
             "$src/" "$host:$dest_dir/"
     else

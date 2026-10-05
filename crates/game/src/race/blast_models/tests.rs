@@ -118,3 +118,30 @@ fn the_hd_basis_faces_away_from_the_camera_without_mirroring() {
     assert_eq!(hd.w_axis, billboard.w_axis);
     assert!((hd.determinant() - 1.0).abs() < 1e-5);
 }
+
+/// HD hands every material the blast's age as its `UV_offset` clock
+/// (`MeshImporter_SetTime` via `WeaponExplosions_Draw`); Pulse has no such
+/// binding and carries zero. Fails if the draw stops carrying the age.
+#[test]
+fn an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none() {
+    let dt = 1.0 / 60.0;
+    for hd in [true, false] {
+        let mut race = race_with_a_grid();
+        race.view.hd_plasma_blast = hd;
+        race.spawn_plasma_blast_model(Vec3::ZERO);
+        for _ in 0..30 {
+            race.advance_plasma_blast_models(dt);
+        }
+        let draw = race
+            .plasma_blast_draws(Vec3::X)
+            .into_iter()
+            .flatten()
+            .next()
+            .expect("one live blast");
+        if hd {
+            assert!((draw.hd_clock - 0.5).abs() < 1e-3, "{}", draw.hd_clock);
+        } else {
+            assert_eq!(draw.hd_clock, 0.0);
+        }
+    }
+}
