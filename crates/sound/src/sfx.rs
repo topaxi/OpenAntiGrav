@@ -102,6 +102,7 @@ mod cue;
 mod engine;
 mod hd;
 mod layers;
+mod magstrip;
 mod repeating;
 mod track;
 mod travel;
@@ -220,6 +221,8 @@ pub(super) struct SfxVoices {
     /// reason [`Self::plasma_travel`] reads the projectile array directly:
     /// a moving held voice needs this tick's own position.
     leach_attach: Option<VoiceId>,
+    /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
+    magstrip: magstrip::Voices,
     rng: Rng,
 }
 
@@ -301,6 +304,7 @@ impl Audio {
                 shuriken_travel: TravelVoices::new(),
                 quake_travel: TravelVoices::new(),
                 leach_attach: None,
+                magstrip: magstrip::Voices::default(),
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -313,6 +317,25 @@ impl Audio {
             .is_some_and(|previous| !listener.jumped_from(&previous));
         self.output.with_mixer(|mixer| {
             for event in cues {
+                let slot = usize::from(event.slot);
+                match event.cue {
+                    Cue::Magstrip => {
+                        voices.magstrip.start(
+                            slot,
+                            mixer,
+                            banks,
+                            &mut voices.rng,
+                            &listener,
+                            &craft,
+                        );
+                        continue;
+                    }
+                    Cue::MagstripStop => {
+                        voices.magstrip.stop(slot, mixer);
+                        continue;
+                    }
+                    _ => {}
+                }
                 // A held cue is not a one-shot and must not be fired as one -
                 // `~ENGINE` reaching here would start a second engine every
                 // time it was raised.
@@ -694,6 +717,8 @@ impl Audio {
                 );
             }
 
+            voices.magstrip.follow(mixer, &listener, &craft);
+
             // The circuit's own ambience, from the same ears and the same law.
             // **After the craft**, so that on a starved pool the race's own
             // cues have already taken their voices - the original's pool is
@@ -763,6 +788,7 @@ impl Audio {
                 if let Some(id) = voices.leach_attach.take() {
                     mixer.stop(id);
                 }
+                voices.magstrip.stop_all(mixer);
                 voices.ambience.stop(mixer);
             });
         }

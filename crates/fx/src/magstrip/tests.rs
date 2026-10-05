@@ -44,7 +44,11 @@ fn arcs_spawn_while_on_the_strip_and_age_out_after() {
     for _ in 0..120 {
         wake.advance(1.0 / 60.0, false, &craft(), &road);
     }
-    assert_eq!(wake.live(), 0, "life is at most 1.1 s, so two seconds clears it");
+    assert_eq!(
+        wake.live(),
+        0,
+        "life is at most 1.1 s, so two seconds clears it"
+    );
 }
 
 #[test]
@@ -82,7 +86,12 @@ fn each_live_arc_is_six_body_quads_and_one_contact_quad() {
     }
     let live = wake.live();
     let (mut atlas, mut contact) = (Vec::new(), Vec::new());
-    wake.build(&craft(), Vec3::new(0.0, 6.0, -10.0), &mut atlas, &mut contact);
+    wake.build(
+        &craft(),
+        Vec3::new(0.0, 6.0, -10.0),
+        &mut atlas,
+        &mut contact,
+    );
     assert_eq!(atlas.len(), live * BODY_QUADS * 6);
     assert_eq!(contact.len(), live * 6);
     assert!(atlas.len() <= BODY_VERTICES && contact.len() <= CONTACT_VERTICES);
@@ -94,11 +103,19 @@ fn the_body_samples_one_atlas_cell_and_ends_dim() {
     wake.advance(0.0, true, &craft(), &road);
     let arc = *wake.arcs().iter().find(|a| a.life > 0.0).expect("an arc");
     let (mut atlas, mut contact) = (Vec::new(), Vec::new());
-    wake.build(&craft(), Vec3::new(0.0, 6.0, -10.0), &mut atlas, &mut contact);
+    wake.build(
+        &craft(),
+        Vec3::new(0.0, 6.0, -10.0),
+        &mut atlas,
+        &mut contact,
+    );
     let cell = |v: f32, base: f32| (base..=base + CELL + 1e-5).contains(&v);
     let (col, row) = ((arc.frame % 8) as f32 * CELL, (arc.frame / 8) as f32 * CELL);
     for v in &atlas[..BODY_QUADS * 6] {
-        assert!(cell(v.texcoord[0], col) && cell(v.texcoord[1], row), "{v:?}");
+        assert!(
+            cell(v.texcoord[0], col) && cell(v.texcoord[1], row),
+            "{v:?}"
+        );
         assert_eq!(v.colour[3], ALPHA);
     }
     let last = &atlas[(BODY_QUADS - 1) * 6..BODY_QUADS * 6];

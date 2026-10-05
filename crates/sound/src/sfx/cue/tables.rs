@@ -16,7 +16,7 @@ impl Cue {
     pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 42] = [
         Self::SpeedupPad,
         Self::Turbo,
         Self::Collision,
@@ -58,6 +58,7 @@ impl Cue {
         Self::ShurikenTravel,
         Self::Repulsor,
         Self::RepulsorHit,
+        Self::Magstrip,
     ];
 
     /// The bank the cue is looked up in.
@@ -65,7 +66,7 @@ impl Cue {
     pub fn bank(self) -> BankName {
         match self {
             Self::SpeedupPad | Self::Blowup | Self::LockOn | Self::Autopilot => BankName::Hud,
-            Self::Collision | Self::Engine => BankName::Ship,
+            Self::Collision | Self::Engine | Self::Magstrip | Self::MagstripStop => BankName::Ship,
             Self::Absorb
             | Self::Shield
             | Self::MineLaunch
@@ -200,6 +201,7 @@ impl Cue {
             Self::ShurikenTravel => "~SHURIKENTRAVEL",
             Self::Repulsor => "REPULSOR",
             Self::RepulsorHit => "REPULSORHIT",
+            Self::Magstrip | Self::MagstripStop => "~magstrip01",
         }
     }
 
@@ -238,6 +240,8 @@ impl Cue {
                 | Self::QuakeTravel
                 | Self::LeachAttach
                 | Self::ShurikenTravel
+                | Self::Magstrip
+                | Self::MagstripStop
         )
     }
 
@@ -424,6 +428,9 @@ impl Cue {
             // `Repulser_HitCraft` points the Repulser's own at the struck
             // craft's node - so both sit on a craft, the firer and the victim.
             Self::Repulsor | Self::RepulsorHit => Placement::Craft,
+            // The group is anchored to `ship+0x70c8 + 0x10`, the craft's own
+            // transform; see this variant's doc comment.
+            Self::Magstrip | Self::MagstripStop => Placement::Craft,
         }
     }
 }

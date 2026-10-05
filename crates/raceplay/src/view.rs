@@ -296,6 +296,9 @@ pub struct RaceView {
     /// Per ship slot, whether its magstrip effect is showing - see
     /// [`mag_floor_fx`].
     pub(super) mag_floor_fx: [mag_floor_fx::Shown; MAX_SHIPS],
+    /// The HD-lineage magstrip arc wake, one per craft, on a title that builds
+    /// the class - see [`magstrip_wake`]. `None` everywhere else.
+    pub(super) magstrip_wake: Option<magstrip_wake::Wakes>,
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,

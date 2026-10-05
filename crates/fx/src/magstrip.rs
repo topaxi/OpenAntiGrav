@@ -271,8 +271,8 @@ impl Wake {
         let reach = reach_base + unit(rng) * reach_span;
         let offset = direction * reach;
         let placed = walk(offset.z)?;
-        let across = (craft.lateral + offset.x)
-            .clamp(-placed.half_width_left, placed.half_width_right);
+        let across =
+            (craft.lateral + offset.x).clamp(-placed.half_width_left, placed.half_width_right);
         let end = placed.position + placed.lateral * across + placed.down * END_DROP;
         let intensity = 0.125 + 0.575 * unit(rng);
         let glow = 0.05 + 0.65 * unit(rng);
@@ -304,8 +304,8 @@ impl Wake {
         arc.glow = 0.0975 * unit(rng) + 0.0075 + arc.glow * DECAY;
         let behind = arc.end - craft.position;
         if behind.dot(craft.forward) < 0.0 {
-            let shed = ((behind.length_squared() - SHED_RADIUS_SQUARED) * SHED_SLOPE)
-                .clamp(0.0, 1.0);
+            let shed =
+                ((behind.length_squared() - SHED_RADIUS_SQUARED) * SHED_SLOPE).clamp(0.0, 1.0);
             if unit(rng) <= shed {
                 arc.life = 0.0;
                 return;
@@ -357,10 +357,7 @@ fn body(arc: &Arc, craft: &Craft, eye: Vec3, out: &mut Vec<GpuVertex>) {
     let aim = arc.end - craft.anchor;
     let flat = (aim - craft.up * aim.dot(craft.up)).normalize_or_zero();
     let start = craft.anchor + flat * START_REACH;
-    let across = (start - eye)
-        .cross(start - arc.end)
-        .normalize_or_zero()
-        * HALF_WIDTH;
+    let across = (start - eye).cross(start - arc.end).normalize_or_zero() * HALF_WIDTH;
     let (u0, v0) = (
         (arc.frame % 8) as f32 * CELL,
         (arc.frame / 8) as f32 * CELL + CELL,
