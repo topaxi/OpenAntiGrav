@@ -400,7 +400,7 @@ fn wipeout_pure_s_serial_is_rejected_by_name() {
     assert!(message.contains("UCUS-98612"), "{message}");
     assert!(message.contains("Wipeout Pure"), "{message}");
     // **Points at the call that chooses, not at a milestone.** This asserted
-    // "M8" until Pure actually opened: `oag_game::title::open_source` catches
+    // "M8" until Pure actually opened: `oag_source::title::open_source` catches
     // this error and opens the disc as Pure, so the advice to wait for a
     // milestone became wrong while the error itself stayed right.
     assert!(message.contains("open_source"), "{message}");

@@ -291,7 +291,7 @@ pub const fn at_rest() -> Vec3 {
 /// versus [`oag_physics::Body::forward`]'s convention - agrees, a coarser
 /// and lower-stakes question than the ship's nose/tail one. `Pulse_Bomb.vex`
 /// was not separately viewed. See
-/// `oag_game::race::weapons::visuals::projectile_model_matrices`'s own doc
+/// `oag_raceplay::weapons::visuals::projectile_model_matrices`'s own doc
 /// comment.
 #[must_use]
 pub const fn frozen_pose(orientation: Quat) -> Quat {

@@ -281,7 +281,7 @@ Two things follow:
 
 **Consequence for the Rust side.** `oag_render::camera::chase::anchor` computes
 `position + up * pos_height - forward * pos_length`, so it wants the *negated*
-disc value, and `crates/game/src/race/camera.rs::chase_pos_length` supplies exactly
+disc value, and `crates/raceplay/src/camera.rs::chase_pos_length` supplies exactly
 that. **The behaviour is correct today and the negation must not be removed from
 both places.** What is wrong is only the documented convention: `chase.rs`
 describes `pos_length` as "a positive distance behind", which is not what the
@@ -618,7 +618,7 @@ on the negated eye, is the independent check the 80 was short of. See
 
 ## The fov unit is degrees, measured against the original's own frame
 
-The unrecovered fov unit (`crates/game/src/race/camera.rs` reads it as degrees and
+The unrecovered fov unit (`crates/raceplay/src/camera.rs` reads it as degrees and
 says so) is now measured. Method: craft placed at rest, one tick captured with
 `--camera` plus a window screenshot, our engine rendered from the captured
 row's exact ship and camera pose at 480x272, and the fov swept while comparing
@@ -796,7 +796,7 @@ a single immediate; the reading of it as a general craft-space scale rather than
 five coincidences rests on the five consumers above all scaling craft-space
 lengths.
 
-**Applied 2026-08-08.** `crates/game/src/race/camera.rs::chase_params` multiplies all four
+**Applied 2026-08-08.** `crates/raceplay/src/camera.rs::chase_params` multiplies all four
 offsets by `oag_physics::hover::TARGET_GLOBAL_SCALE`, for both external blocks.
 Three independent numbers agree that this is right:
 

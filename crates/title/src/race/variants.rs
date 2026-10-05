@@ -243,7 +243,7 @@ impl RaceDefaults {
     /// title's own [`Self::ship_dir`], or [`Self::guest_roster`]'s single
     /// directory when `team` is one of its own combined ids.
     ///
-    /// Combined because this is all `oag_game::race::load` has by the time it
+    /// Combined because this is all `oag_raceplay::load` has by the time it
     /// asks - the bare/combined split only exists transiently in the menu
     /// layer, see [`Self::team_variants_for`].
     #[must_use]

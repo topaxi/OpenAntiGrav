@@ -738,7 +738,7 @@ impl Gamma {
 /// original reason was that `<ExternalCameraFar fov>`'s unit was unrecovered, so
 /// a row letting a player type `90` would assert a unit this project had not
 /// established. **That reason expired on 2026-08-09**: the unit is vertical
-/// degrees at confidence 94 (see `oag_game::race::Race::projection`).
+/// degrees at confidence 94 (see `oag_raceplay::Race::projection`).
 ///
 /// The row stays a percentage on a different and weaker argument, recorded so
 /// the next reader can overrule it rather than assume it was never revisited:
@@ -842,8 +842,8 @@ percentage!(Fov, AUTHORED, "field of view");
 /// a calibration instruction ("the measured original sits nearest the 32
 /// tier") and that reading is withdrawn.
 ///
-/// See `oag_game::race::Race::projection` for where it is applied and
-/// `oag_game::race::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
+/// See `oag_raceplay::Race::projection` for where it is applied and
+/// `oag_raceplay::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
 ///
 /// **A number, the same idiom as [`Fov`] itself**, rather than a named tier:
 /// there is nothing to name that "twice as wide" does not already say. 8 was
@@ -857,7 +857,7 @@ percentage!(Fov, AUTHORED, "field of view");
 pub struct BoostFovKick(u32);
 
 impl BoostFovKick {
-    /// No kick at all. `oag_game::race::Race::projection` returns the input
+    /// No kick at all. `oag_raceplay::Race::projection` returns the input
     /// bit-identical here, the same escape hatch [`Fov::AUTHORED`] is.
     pub const OFF: Self = Self(0);
 
@@ -876,7 +876,7 @@ impl BoostFovKick {
     /// The tiers the menus offer: off, then three doublings.
     pub const OFFERED: [Self; 4] = [Self::OFF, Self::SUBTLE, Self::DEFAULT, Self(32)];
 
-    /// The multiplier `oag_game::race::Race::projection` widens the tangent by
+    /// The multiplier `oag_raceplay::Race::projection` widens the tangent by
     /// at full boost.
     #[must_use]
     pub fn gain(self) -> f32 {
@@ -915,7 +915,7 @@ percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 /// This does not enter `oag_gameplay::World` and nothing hashed reads it, so
 /// cycling the view cannot move a determinism hash or a replay. That is asserted
 /// rather than argued: see
-/// `oag_game::race::tests::cycling_the_camera_changes_no_simulation_state`.
+/// `oag_raceplay::tests::cycling_the_camera_changes_no_simulation_state`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CameraView {

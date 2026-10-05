@@ -2,7 +2,7 @@
 
 2026-10-02. Read off the decompile and checked against PPSSPP 1.20.4 (software
 renderer) on Fort Gale White and Outpost 7 White. Ported in
-`oag_game::race::scenery_fx::{weather, lens}`, `oag_vex::weather` and
+`oag_raceplay::scenery_fx::{weather, lens}`, `oag_vex::weather` and
 `oag_fx::psys::field`. The node and trigger are in
 [placed-particle-systems.md](placed-particle-systems.md).
 
@@ -51,7 +51,7 @@ renderer) on Fort Gale White and Outpost 7 White. Ported in
   world. Fort Gale's anchors cover 16 sections, Outpost 7's 20.
 - **The lens** (Fort Gale): droplets on the glass, `6` units ahead, a `10 x 5.625`
   rectangle, running down the screen along the wind. See
-  [`lens.rs`](../../../../crates/game/src/race/scenery_fx/lens.rs) for the cover edge's
+  [`lens.rs`](../../../../crates/raceplay/src/scenery_fx/lens.rs) for the cover edge's
   lifetimes (`80/40`), drag (`0.97`) and speed factor (`0.3`). The original puts the
   lifetime back only when its `0.3` s timer expires and the speed factor never; ported as read.
 - The switch is edge-triggered on the published section, and both sections start at `-1`
@@ -205,7 +205,7 @@ scrolls by an arbitrary amount.
 
 ### Played, and checked against the original (2026-10-04, `pulse-mist`)
 
-`oag_fx::mist` (the law and the pipeline) and `oag_game::race::scenery_fx::mist`
+`oag_fx::mist` (the law and the pipeline) and `oag_raceplay::scenery_fx::mist`
 (the opacity, the drift and the edges). Off the disc's own `Mist.mip` and `<Weather>`
 values; a circuit whose `Tex` does not decode draws no mist and says so in the load report.
 

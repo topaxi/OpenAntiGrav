@@ -58,7 +58,7 @@
 //! So what moved is narrower than it first looked: the *sustained*-stall
 //! reading this file used to demonstrate is gone, and that half of the
 //! regression guard below is real. The bounce-in-place gap is not, and
-//! nothing here closes it - `crates/game/src/race/tests/respawn.rs`'s
+//! nothing here closes it - `crates/raceplay/src/tests/respawn.rs`'s
 //! `a_stopped_opponent_is_flagged_after_the_dwell` proves the dwell counter
 //! mechanism works exactly as designed; it was never the counter that was
 //! wrong, it is that a bouncing craft does not describe the state the counter
@@ -197,7 +197,7 @@ fn no_circuit_sustains_a_stall_at(difficulty: oag_ai::Difficulty) {
 /// difficulty, stays under [`oag_race::recovery::STALL_TICKS`] on this one measure. The
 /// mechanism itself - that the dwell counter fires at the threshold and puts
 /// a craft back - is proven synthetically instead, in
-/// `crates/game/src/race/tests/respawn.rs`. Laps are printed rather than
+/// `crates/raceplay/src/tests/respawn.rs`. Laps are printed rather than
 /// asserted on, precisely because a low count here (`05_Track`, `07_Track`,
 /// both at novice) is not this test's business to hide.
 ///

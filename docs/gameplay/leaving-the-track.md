@@ -76,7 +76,7 @@ Every other circuit's eight slots sit inside the corridor (worst margins, 0-base
 slot 2 at 0.96, `20_Track` reversed slot 2 at 0.95, `13_Track` slot 1 at 1.01 - on the
 edge, not off it). The gate's lone craft is slot 1, so its one `01_Track` respawn is this.
 It is **not player-facing** (slot 0 is on the even column and every slot-0 spawn is
-inside the corridor). It is in `crates/game/src/race/spawn.rs` (`grid_poses` carries
+inside the corridor). It is in `crates/raceplay/src/spawn.rs` (`grid_poses` carries
 the authored node's offset from the centreline through the walk and adds the
 20-unit odd-column stagger on top of it). The stagger and pitch were measured off the
 original on `16_Track` only, and `Race_ComputeGridLayout` (`0x0882b3b0`) may scale or

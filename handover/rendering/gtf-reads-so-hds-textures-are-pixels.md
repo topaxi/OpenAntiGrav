@@ -31,8 +31,8 @@ categories: [rendering, tooling]
   and `docs/rendering/shadows.md`'s `blob` tier; this row was just never
   crossed off here. **2026-09-07: re-read at the source and confirmed still
   true from the code alone** - `crates/render/src/shadow.rs`/`shadow.wgsl`,
-  `crates/game/src/race/shadow.rs` (which loads each team's
-  `ambient_shadow.gtf`) and `crates/game/src/race/scene/frame/shadow.rs`
+  `crates/raceplay/src/shadow.rs` (which loads each team's
+  `ambient_shadow.gtf`) and `crates/raceplay/src/scene/frame/shadow.rs`
   (which calls it every frame `graphics.shadows` is not `off`), plus the
   tier's own unit tests (`crates/render/src/shadow/tests.rs`, including
   `a_banked_surface_tilts_the_quad_with_it`) - **but not visually**: no
@@ -45,7 +45,7 @@ categories: [rendering, tooling]
   still an open line there. All three questions this row asked are answered
   and cited from the code, not invented: size is the craft's own `<Misc>`
   length/width off its `.rcsmodel`/`Ship.vex`, unscaled
-  (`crates/game/src/race/shadow.rs`, `Placement` construction) rather than the
+  (`crates/raceplay/src/shadow.rs`, `Placement` construction) rather than the
   physics hull's `0.75`-scaled one - the comment there cites Feisar's `13.0`
   length against a drawn bounding radius of `6.45` as the check; blend is
   alpha-over black, with the coverage read from the texture's own **red**

@@ -160,7 +160,7 @@ pub fn is_slot_placeholder(label: &str) -> bool {
 /// rather than fired on a guess.
 ///
 /// **Not gated on whether a slot's own replacement was found.** Slot 8 gets
-/// one - `oag_game::race::gantry` stands `321Go_StartFinish.vex` on the mount
+/// one - `oag_raceplay::gantry` stands `321Go_StartFinish.vex` on the mount
 /// this module measures - but slots 1-7
 /// stay unwired (`docs/formats/README.md`'s Track startup row: what a hoarding
 /// attaches to is unrecovered) and this drops their placeholder draws all the
@@ -434,7 +434,7 @@ pub fn surface(model: &Model, texture: &str) -> Option<Mount> {
 /// `seconds` is when the parking is evaluated. A one-shot rather than a
 /// per-frame cull because the retained states do not leave the panel and the
 /// dropped ones do not enter it before
-/// `oag_game::race::gantry::CLOCK_LIMIT`.
+/// `oag_raceplay::gantry::CLOCK_LIMIT`.
 pub fn clip_to_panel(model: &mut Model, half_width: f32, seconds: f32) -> usize {
     let matrices = model.sample_anim_nodes(seconds);
     // The **midpoint of the draw's own x extent**, not the mean of its

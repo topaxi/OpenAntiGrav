@@ -171,7 +171,7 @@ fov rate `0.06` (`0x3d75c28f`). Mode `5` is the death camera (`Ship_SetState` st
 **the destroy camera and this one are the same code with a different view width**: the port shares it
 (`oag_render::camera::destroy`: the station pick, the framing field, the pose).
 
-**The node list was read live** (`16_Track`, forward track, PPSSPP): ten nodes at `cam+0x40`, each with a unit vector at `node+0x80` (the camera's back axis), the **eye at `node+0x90`** and an **aim point at `node+0xa0`**; the eye is the track `.vex` node's world translation and the aim is the three floats at `+0x10` of its `Camera` payload, all ten matching to 0.1 unit and in file order. The director picks nodes by the aim point and sits at the eye. Ported as `oag_game::race::finish_camera`.
+**The node list was read live** (`16_Track`, forward track, PPSSPP): ten nodes at `cam+0x40`, each with a unit vector at `node+0x80` (the camera's back axis), the **eye at `node+0x90`** and an **aim point at `node+0xa0`**; the eye is the track `.vex` node's world translation and the aim is the three floats at `+0x10` of its `Camera` payload, all ten matching to 0.1 unit and in file order. The director picks nodes by the aim point and sits at the eye. Ported as `oag_raceplay::finish_camera`.
 
 Modes `2` and `3` are read and measured: a rigid rear view and a rigid front view, see
 [camera.md](camera.md#the-spectator-views-craft-relative-modes-and-the-directors-hand-off-rules-2026-10-02).

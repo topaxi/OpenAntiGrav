@@ -795,7 +795,7 @@ fn race_pool(_solo: &Solo) -> Option<f32> {
 /// - **`order`**, the spline sample each racing-line index maps to through
 ///   `RaceSim::ai_order`. Non-consecutive values are the path-order splice that
 ///   `Course::path_order` exists to prevent - `05` was one of three circuits it
-///   put craft off the track on, and `crates/game/src/race/course.rs` carries
+///   put craft off the track on, and `crates/raceplay/src/course.rs` carries
 ///   the account.
 /// - **`k4`/`k11`**, the curvature at the two chords. A **kink** - geometry
 ///   that is not a corner - shows as a `k4` spike the `k11` chord averages

@@ -41,7 +41,7 @@ first) and that same `Observation`. `Session::frame`'s finish arm is the
 only writer of `RaceStage::personal_best`; `Session::escape`'s capture site
 never has a results table to draw one on, so it does not need one.
 
-A `--race --screenshot` capture (`crates/game/src/race/capture.rs`,
+A `--race --screenshot` capture (`crates/game/src/race_capture.rs`,
 `crate::capture::run`) draws the identical line, **reading** (never
 writing) whatever `records.toml` already holds under the same key
 `Stage::build_race_stage` would resolve - `race::CaptureOptions::previous_best`.

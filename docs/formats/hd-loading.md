@@ -57,7 +57,7 @@ this page got it wrong the first time.
 ### The caption is the disc's own, and carries the circuit
 
 `LOADING... VINETA K` is `FE_LOADINGDOT` followed by the circuit's own name out
-of the same string table — which `oag_game::catalogue::label` already resolves,
+of the same string table — which `oag_raceplay::catalogue::label` already resolves,
 by the copy-selection this project had to work out separately (see
 [hd-frontend.md](hd-frontend.md)). So the heading needs no new recovery: two
 things already in hand, joined the way the original joins them. Confidence

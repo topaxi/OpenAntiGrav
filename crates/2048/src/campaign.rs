@@ -179,9 +179,9 @@ pub fn event_class(event: &Event) -> Option<EClass> {
 ///
 /// **[`forced_craft`] and [`grid_craft`] are both wired into a launch,
 /// `restriction` is not.** Both land in `race::load_event`
-/// (`crates/game/src/race/load/campaign.rs`): `forced_craft` overrides
+/// (`crates/raceplay/src/load/campaign.rs`): `forced_craft` overrides
 /// `race::Options::team`, `grid_craft` overrides `race::Options::grid_teams`,
-/// which `oag_game::race::load::roster::grid` applies over
+/// which `oag_raceplay::load::roster::grid` applies over
 /// `oag_game::livery::teams_for_slots`'s own roster draw, per AI slot.
 /// The restriction mask does not enforce anywhere in this crate, because
 /// which native screen would enforce it (grey a tile, clamp the cursor,
@@ -242,7 +242,7 @@ pub mod craft {
     }
 
     /// `event`'s own `M_PGRIDSHIPMODELDATA`, resolved slot-by-slot onto
-    /// `race::Options::grid_teams` - `oag_game::race::load_event`'s own
+    /// `race::Options::grid_teams` - `oag_raceplay::load_event`'s own
     /// per-AI-slot override of `oag_game::livery::teams_for_slots`'s
     /// roster draw (Pulse's law, inherited). One entry per `<ARRAY>` child the
     /// field carries, in document order; `None` at an index whose slot is
@@ -429,7 +429,7 @@ pub fn track_vex_entry(track: &Track) -> String {
 ///   never resolved from this campaign.
 /// - [`EventKind::Elimination`] -> `"eliminator"`. **Checked directly, not
 ///   assumed**: `oag_race::Mode::Eliminator` is a real, simulated mode
-///   (`crates/game/src/race/eliminator.rs`, `tick.rs`'s own kill-count
+///   (`crates/raceplay/src/eliminator.rs`, `tick.rs`'s own kill-count
 ///   ending), this title's own `TITLE.weapons.elimination` already names
 ///   `Data\XML\weaponstats_Elimination_2048.xml`, and `cargo run -p oag-game
 ///   -- <2048 source> --race --mode eliminator --track

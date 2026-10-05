@@ -182,7 +182,7 @@ OAG_PILOT_RENAME = "RENAME"
 OAG_PILOT_DELETE = "DELETE"
 
 # Appended to a `PILOT` row's own choice when the name is a built-in with no
-# file of its own yet - see `oag_game::pilots::Entry::from_file`. Read by
+# file of its own yet - see `oag_raceplay::pilots::Entry::from_file`. Read by
 # Rust (`pilot_editor::pilot_choice`), not by a `menu.toml` `string_id`: the
 # suffix is glued onto a filename the row already holds, not a whole row's
 # label.

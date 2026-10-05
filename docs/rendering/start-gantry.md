@@ -28,7 +28,7 @@ countdown mechanism entirely - a manifest reaches only two of the eight.
 > keyed by the name `billboard<num>` - and Pulse's own track files turned out
 > to author the identical surface, at coordinates this project's parser
 > reads straight off the disc. `oag_render::gantry` measures that surface
-> per circuit and `oag_game::race::gantry` stands `321Go_StartFinish.vex` on
+> per circuit and `oag_raceplay::gantry` stands `321Go_StartFinish.vex` on
 > it, so a race now plays the `3`, `2`, `1`, `GO` on the object over the
 > start line rather than as a screen overlay - on Pulse, and, since
 > 2026-09-13, on HD/Fury too, once the same texture match was widened to
@@ -262,7 +262,7 @@ rule is not. HD's and 2048's gantry files are different timelines (2048's `GO`
 slides in at frame 200), so their start tick is not 92 - see
 [the inherited rule](#every-other-title-pulses-rule-on-its-own-go-edge).
 
-`crates/game/src/race/gantry.rs::CLOCK_START_TICK` is that measurement, and
+`crates/raceplay/src/gantry.rs::CLOCK_START_TICK` is that measurement, and
 Pulse's gantry clock is `(tick - 92) / 60`.
 
 ### Every other title: Pulse's rule on its own `GO` edge
@@ -1433,7 +1433,7 @@ Three things the coordinates alone did not say, found by rendering:
 1. **The gantry cannot stand exactly on the panel.** Its board is then coplanar
    with the track's own and loses a `Less` depth test at every distance - the
    whole gantry invisible, with the 8x8 placeholder showing through where it
-   should be. `oag_game::race::gantry::CLEARANCE` stands it one unit in front.
+   should be. `oag_raceplay::gantry::CLEARANCE` stands it one unit in front.
    That value is **chosen, not measured, and carries no confidence score**; what
    is measured is only its order of magnitude, from the 0.48-1.63 units the
    artists themselves put between the two co-located surfaces.
@@ -1880,7 +1880,7 @@ manifest schema. `oag_render::gantry::mount` finds the identical
 measures for PSP - node 76 on this disc against PSP's node 74 (the node
 numbering shifts because the PS2 track file's own node list differs
 elsewhere; the surface itself is the same shape, measured the same way).
-**Nothing about placement is PS2-specific**, so `oag_game::race::gantry`
+**Nothing about placement is PS2-specific**, so `oag_raceplay::gantry`
 already stood the model on its mount correctly, before any fix in this
 section - confirmed with `--dry-run`, which reported `start gantry ... on
 node Some(76)` and no `no start gantry` line even on the unmodified tree.

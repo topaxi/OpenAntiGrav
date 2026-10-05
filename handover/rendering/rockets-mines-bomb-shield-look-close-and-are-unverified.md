@@ -25,7 +25,7 @@ checks these first rather than rediscovering them:
   -> `BombBlast_Construct`/`BombBlast_Update`: `explosion_hemisphere.vex` +
   `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex`, both models eased per
   `BombBlast_Update`'s own three ramps - **built 2026-09-23**
-  (`oag_game::race::bomb_blast`; see
+  (`oag_raceplay::bomb_blast`; see
   [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read)
   for the full read, landed the same session). The shockwave's own recovered
   alpha fade is not wired (`bomb_blast`'s own module doc comment says why),

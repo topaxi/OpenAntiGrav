@@ -20,7 +20,7 @@ fn skin() -> Skin {
     )
 }
 
-/// `oag_game::pilots::MAX_NAME`'s own value, kept as a literal rather than
+/// `oag_raceplay::pilots::MAX_NAME`'s own value, kept as a literal rather than
 /// named: naming it would need a dependency on `oag-game`, which this crate
 /// may never take. `crates/game/tests/prompt_pilots.rs` is the file that
 /// checks this literal still matches the real constant, and is the one place
@@ -61,7 +61,7 @@ fn type_key(keyboard: &mut Keyboard, key: Key) -> Outcome {
 }
 
 // The two tests that used to live here - typing a name the grid produces
-// through `oag_game::pilots::check_name`, and that the grid's own character
+// through `oag_raceplay::pilots::check_name`, and that the grid's own character
 // set matches what that function accepts - moved to
 // `crates/game/tests/prompt_pilots.rs`: an assertion against `oag-game`'s
 // `pilots` module needs a crate that can see both, which this one may not be.

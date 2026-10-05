@@ -12,12 +12,8 @@ use oag_game::{boot, loading, movie, prefetch, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_mesh::mesh_render::Anisotropy;
-use oag_present::drs;
-use oag_present::perf;
-use oag_present::upscale;
-use oag_raceplay as race;
-use oag_raceplay::catalogue;
-use oag_raceplay::pilots;
+use oag_present::{drs, perf, upscale};
+use oag_raceplay::{self as race, catalogue, pilots};
 use oag_ui::menu;
 
 use crate::gpu::Gpu;

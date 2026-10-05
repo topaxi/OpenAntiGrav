@@ -80,7 +80,7 @@
 //! - **`oag-trace` gained a locator, and a real lap now measures it (Task
 //!   #33, closed).** `replay`/`drive`/`drive_with` and `plan::to_gate` all
 //!   take an `Option<&[oag_vex::track::Sample]>` now, located fresh
-//!   every tick the same way `oag_game::race::Race::tick` locates the
+//!   every tick the same way `oag_raceplay::Race::tick` locates the
 //!   player; see `crate::replay::locate` and its own doc comment for why
 //!   the resampling is duplicated here rather than shared.
 //!   `crates/trace/src/replay/tests.rs` pins the mechanism with a synthetic

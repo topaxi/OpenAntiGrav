@@ -33,7 +33,7 @@ PSP's grid, twice the size, right-hand column off screen.
   solid red at 15%. `EnergyBarDelay` is wired the same pass as the lagging
   trail (`crate::race::Race::advance_energy_bar_delay`,
   `oag_hud::dialect_2048::vertical_bar_fraction`), pinned by
-  `crates/game/src/race/tests/energy_bar_delay.rs` rather than a screenshot -
+  `crates/raceplay/src/tests/energy_bar_delay.rs` rather than a screenshot -
   no capture in this pass landed on the exact tick after a scripted hit that
   would show it trailing visibly above `EnergyBar`. Neither widget has a
   located colour write in the decompiled function, so `EnergyBar` keeps its

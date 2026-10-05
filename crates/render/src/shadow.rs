@@ -107,7 +107,7 @@ pub fn fade(height: f32, ride: f32) -> f32 {
 /// Where one craft's shadow goes and how dark it is.
 ///
 /// Built by the caller, which is the side that owns the collision world and
-/// can cast the ray - see `oag_game::race::shadow`.
+/// can cast the ray - see `oag_raceplay::shadow`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Placement {
     /// The point on the surface the craft's downward cast hit, **before**

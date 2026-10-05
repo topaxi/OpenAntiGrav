@@ -10,7 +10,7 @@
 //!
 //! **Per-title since 2026-09-17.** Every entry name comes from the caller's
 //! own `oag_title::weapons::WeaponModels`, not from a Pulse-spelled constant
-//! in this crate - `oag_game::race::ROCKET_MODEL_ENTRY` and friends were
+//! in this crate - `oag_raceplay::ROCKET_MODEL_ENTRY` and friends were
 //! reached for on every source, so a Wipeout HD race asked for
 //! `Data\Weapons\Rocket.vex`, which resolves on no PS3 archive, and every
 //! projectile fell back to a billboard even though HD authors its own models

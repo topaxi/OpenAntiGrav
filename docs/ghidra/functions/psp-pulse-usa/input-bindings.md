@@ -951,7 +951,7 @@ statement and needs no further handedness reasoning.
 
 `crates/render/src/roll.rs`'s `ROLL_DIRECTION` carries this finding, flipped
 from the `+1.0` it shipped as (chosen, not measured) to `-1.0` -
-`crates/game/src/race/drawable.rs`'s
+`crates/raceplay/src/drawable.rs`'s
 `roll_direction_matches_the_original_captured_display_matrix` test reproduces
 this exact body and phase through `oag-render`'s own `orientation * roll`
 composition (rather than hand algebra) to carry the sign across the two

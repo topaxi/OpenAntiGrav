@@ -22,7 +22,7 @@
 //! Diagnostic only: every test here prints and does not assert, because the
 //! finding is a shape, not a pass/fail. This file only reads
 //! `crates/ai`'s public surface and `crates/game`'s own `race` module - it
-//! does not touch `crates/game/src/race/`.
+//! does not touch `crates/raceplay/src/`.
 
 use std::path::PathBuf;
 

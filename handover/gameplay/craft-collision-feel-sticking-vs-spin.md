@@ -16,7 +16,7 @@ afterwards.
 
 `oag_ai::Driver::social`, the only opponent-vs-opponent lateral yield/cover
 term besides `ram` (which only ever targets the player), read
-`ctx.field.behind` only. `crates/game/src/race.rs`'s `field_for` classifies a
+`ctx.field.behind` only. `crates/raceplay/src/lib.rs`'s `field_for` classifies a
 rival as `Field::alongside` - a channel `social` never read - the moment it
 is within `ALONGSIDE_GAP` (16 track-distance units) and `ALONGSIDE_WIDTH` (12
 lateral), both comfortably larger than the actual hull-touch range
@@ -131,7 +131,7 @@ by the first touch does not stay in contact as long. `race_ground_truth`'s
 twelve-circuit guard is unchanged: all twelve clean, `01_Track` 1 respawn at
 `[794]`, before and after. `crates/ai/tests/determinism.rs` did **not** move:
 `oag-ai`'s harness has no pair resolver in it (the pair pass lives in
-`oag_game::race::Field::resolve_craft_pairs`), so its `Field` rows never
+`oag_raceplay::Field::resolve_craft_pairs`), so its `Field` rows never
 touched this code.
 
 **Closed 2026-09-10, and it inverted**: `Body_ResolveContact` - the *wall*

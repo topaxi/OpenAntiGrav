@@ -12,7 +12,7 @@
 //! `solo_on` is private to its own test binary - integration tests do not see
 //! each other's items - and it is owned by another, still-open thread.
 //! [`solo_on`] below is a second, deliberately smaller implementation against
-//! the same public `oag_game::race` surface: three fields instead of eleven,
+//! the same public `oag_raceplay` surface: three fields instead of eleven,
 //! because a regression gate only needs what it asserts on.
 //!
 //! # What "clean lap" means here, and what it does not

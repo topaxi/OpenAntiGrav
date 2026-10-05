@@ -573,7 +573,7 @@ fn the_global_file_authors_a_fifth_class_and_authors_it_first() {
 /// **The guard that keeps a label true.** `Class::pitch` is an `Option` because
 /// Pure authors the element nowhere, and
 /// `oag_gameplay::handling::PITCH_STAND_IN` substitutes Pulse's own block when
-/// it is `None` - a substitution `oag_game::race::load` reports by name, on the
+/// it is `None` - a substitution `oag_raceplay::load` reports by name, on the
 /// stated grounds that it never happens on Pulse.
 ///
 /// If that ever stopped being true, a Pulse ship would fly on borrowed numbers

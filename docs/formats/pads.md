@@ -25,7 +25,7 @@ other.
 **A weapon pad hands out a pickup** as of 2026-08-11, in the one mode that arms
 them - see [pickups](../gameplay/pickups.md) for the trigger, the draw and the
 recovered-versus-ours split. Its trigger volumes are carried on
-`oag_game::race::Setup::weapon_pads` and consumed by `Race::test_weapon_pads`.
+`oag_raceplay::Setup::weapon_pads` and consumed by `Race::test_weapon_pads`.
 
 `crates/game/tests/race_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
 is what makes "drawn where they trigger" a fact rather than a hope: the geometry
@@ -107,7 +107,7 @@ shipped data rather than a runtime trace.
   what happens on a hit. See [pickups](../gameplay/pickups.md).
 - ~~**The pad's own colour cycle is still unimplemented.**~~ **Implemented
   2026-08-17** - `oag_render::weapon_pad` and
-  `oag_game::race::drawable::Drawable::tint_weapon_pads`. See
+  `oag_raceplay::drawable::Drawable::tint_weapon_pads`. See
   [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md#retired-pad0x1a0s-writer-is-weaponpad-refresh_time-exactly-as-guessed)
   for the recovered grey, the `WeaponPad_ColourKeyframes` table and the one
   simplification (every ready pad shares one phase rather than each resuming

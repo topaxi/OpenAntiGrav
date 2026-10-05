@@ -19,7 +19,7 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   is committed (`legal.md`); a `data/`-backed `#[ignore]` test that replays a
   capture is possible if the lead wants one. See `cannon-quake-leachbeam.md`, "2026-10-01: the
   tube against PPSSPP".
-- **`oag_game::race::Spline::tube_frame` does not interpolate; the original's
+- **`oag_raceplay::Spline::tube_frame` does not interpolate; the original's
   locator does.** For the `pulse-shine` lane (that file is theirs): the located
   frame moves linearly with the query inside a segment (query moved `0.65`/
   `1.29`, same nearest row: `pos` moved `0.42`/`0.85`, left half width `0.22`/

@@ -30,7 +30,7 @@ step, and it needed a decision on where that material lives and what happens
 when it does not - and, separately, whether decryption happening *in the
 engine at all* was the right shape, given that every existing precedent for a
 key this project handles was preprocessing, not a runtime code path. That
-second question had not been decided anywhere before this: `oag_game::dlc`
+second question had not been decided anywhere before this: `oag_source::dlc`
 already unpacks a Pulse `.zip` into `data/cache/dlc/` once and reuses the
 result, so "does Pure's decryption belong in that same step, or in a separate
 offline tool the way `scripts/vita-self-decrypt.py` works" was a real, open
@@ -64,7 +64,7 @@ Concretely:
 2. A crate that needs to *use* key material takes it as a parameter -
    `oag_formats::pure_dlc::decrypt_pack(data, keys: &[DlcKey])` - and never
    reads a path itself. Only the composition root
-   (`oag_game::dlc::load_pure_dlc_keys`) knows where the file lives and what
+   (`oag_source::dlc::load_pure_dlc_keys`) knows where the file lives and what
    happens if it is not there.
 3. **A missing key file is not an error, anywhere in the chain.** It parses
    to an empty table, which makes every pack that needs a key fail to
@@ -84,7 +84,7 @@ argument, and graceful, silent absence rather than a hard requirement.
 
 ### Decryption happens in-process, in the existing unpack-to-cache step
 
-**Not in a new standalone tool.** `oag_game::dlc::ensure_extracted` already
+**Not in a new standalone tool.** `oag_source::dlc::ensure_extracted` already
 turns a Pulse `.zip` into plain files under `data/cache/dlc/` once, on
 whichever boot first needs it, and reuses that result afterwards. Pure's
 packs take the same path: `ensure_extracted` tries the plain WAD-header sniff

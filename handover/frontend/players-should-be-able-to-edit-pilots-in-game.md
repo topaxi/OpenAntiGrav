@@ -37,7 +37,7 @@ page in the definition for a `pilot.axis` row rather than the one actually
 open, so the line leaked onto every other page too (found by capturing
 GRAPHICS, not by reading the code). `axis_preview_reads_the_live_axis_row`
 and `axis_preview_is_absent_off_a_page_with_no_axis_row` in
-`crates/game/src/pilots/tests.rs` both cover it now.
+`crates/raceplay/src/pilots/tests.rs` both cover it now.
 
 ## Landed 2026-09-07: rename and delete, and the text entry they needed
 
@@ -156,7 +156,7 @@ project's own, per
 
 ## The trap this feature walks straight into
 
-`crates/game/src/pilots.rs` states, as a deliberate difference from
+`crates/raceplay/src/pilots.rs` states, as a deliberate difference from
 `settings.rs`:
 
 > **Nothing is rewritten on load.** `settings.rs` rewrites its file every run so

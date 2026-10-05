@@ -39,7 +39,7 @@
 //!
 //! `oag_race::Mode` is the engine's type and a title package must not grow one,
 //! which is the rule `oag_pulse::race` states for the Zone hull. So this carries
-//! one field per mode this engine runs and `oag_game::race::hud_layout` does
+//! one field per mode this engine runs and `oag_raceplay::hud_layout` does
 //! the mapping. A title that ships a layout for a mode this engine has no rules
 //! for keeps it as a constant in its own crate, the way HD's Detonator, Duel
 //! and MPTag roots do.
@@ -421,7 +421,7 @@ pub struct HudArt {
     /// carry a HUD font role too" section.
     ///
     /// **Why a per-title role rather than the shared literal every caller
-    /// used to reach for**: `oag_game::race::hud::hud_font` used to ask
+    /// used to reach for**: `oag_raceplay::hud::hud_font` used to ask
     /// every source for the literal `oag_ui::language::roles::HUD`, which
     /// drew 2048's HUD in the 5x7 fallback - no 2048 plugin fills that
     /// role - and had a second failure mode besides: two of 2048's
@@ -476,7 +476,7 @@ pub struct HudArt {
     /// `oag_hud::widget::Label::scale` carries the size, on one atlas -
     /// not a guess standing in for an unlocated second `.fnt`.
     ///
-    /// So `oag_game::race::hud::hud_font` falling back to
+    /// So `oag_raceplay::hud::hud_font` falling back to
     /// [`Self::hud_font_role`]'s own face when this is `None` is not merely
     /// the reading that draws *something* recognisable rather than
     /// nothing - it is the reading the played skin's own layouts already
@@ -576,7 +576,7 @@ pub struct SegmentArc {
 /// # A rung, not a zone
 ///
 /// **`ids[n]` is the name of stage `n`**, the same index
-/// `oag_game::race::zone_grade::ZoneGrade` shows and `--zone-stage` selects -
+/// `oag_raceplay::zone_grade::ZoneGrade` shows and `--zone-stage` selects -
 /// not a zone number. `None` in a slot is a rung with no name of its own, which
 /// is what the bottom of HD's ladder is.
 ///

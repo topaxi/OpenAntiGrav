@@ -1227,12 +1227,12 @@ warns against. Nothing here justifies it *mechanistically* either: the sweep
 shows a threshold, not a reason a threshold that low is wrong in general.
 
 **A separate mechanism question, outside `oag-ai` and left for whoever owns
-`crates/game/src/race/` - measured in part, inferred for the rest, and
+`crates/raceplay/src/` - measured in part, inferred for the rest, and
 labelled accordingly.** `Race::respawn` zeroes velocity and teleports the
 craft back onto the racing line nearest where it was lost - which, for a
 craft that falls straight through an authored gap, reads as a sample *inside*
 the gap. From there, with no speed, it falls straight through again. That
-part is read off `crates/game/src/race/respawn.rs`'s own doc comments, not
+part is read off `crates/raceplay/src/respawn.rs`'s own doc comments, not
 observed directly.
 
 What **is** measured: 18,000 ticks over 347 respawns average **51.9 ticks per
@@ -1260,7 +1260,7 @@ one. **This is a hypothesis from reading the code, not a measurement** - chosen,
 not measured, no confidence score - and whoever owns that file should confirm
 it before treating it as fact. Fixing the *symptom's cost* (347 down to
 something like `01_Track`'s single-digit norm, if the hypothesis holds) is a
-`crates/game/src/race/` question, not this crate's; fixing the *underlying*
+`crates/raceplay/src/` question, not this crate's; fixing the *underlying*
 jump-clearing failure, if it is worth fixing at all rather than accepted as
 "Novice does not clear this jump", is a question for whoever owns that call,
 since it trades against the grip calibration above.
@@ -1440,14 +1440,14 @@ a jump rather than an ordinary straight, and the collision-based test that
 outside this crate's dependency graph by design - `oag-ai` depends on
 `oag-core` and `oag-physics` and nothing that can run a raycast against
 loaded track collision. Wiring that signal through would mean adding a
-producer in `crates/game/src/race/spline.rs`, which is this pass's another
+producer in `crates/raceplay/src/spline.rs`, which is this pass's another
 lane, not this crate's. A `Line` field with nothing to populate it is a dead
 API, not a fix.
 
 **So: accepted as "Novice does not clear this jump", per the brief's own
 allowance for that outcome.** `Difficulty::grip_believed` is untouched at
 every level - Novice keeps every other circuit's identity exactly as
-calibrated. The `crates/game/src/race/` respawn-cooldown hypothesis flagged
+calibrated. The `crates/raceplay/src/` respawn-cooldown hypothesis flagged
 above is also untouched - it was never load-bearing for either finding here,
 and whoever owns that file should still confirm or refute it on its own
 terms; fixing it would very likely take `347` down toward the single-digit
@@ -2508,7 +2508,7 @@ not offered as shorthand: a pilot whose every axis is fixed is one driver
 wearing eight hulls, and making that the easy thing to write would be odd.
 Anything a file leaves out comes from `balanced`.
 
-`crates/game/src/pilots.rs` owns it, and **`oag-ai` gains nothing** - the loader
+`crates/raceplay/src/pilots.rs` owns it, and **`oag-ai` gains nothing** - the loader
 lives in the composition root, which already owns `toml`, `serde` and `dirs` for
 `settings.rs`. `include_str!` plus serde would put a TOML parser inside a
 gameplay crate to save one indirection, which is what rule 1 of the

@@ -294,7 +294,7 @@ pub const PLUME_SECONDS: f32 = 1.5;
 /// speed class's own duration, which is a fraction of this on every shipped
 /// class, so the flare outlives the shove by design: a short push and a long
 /// look. Tying the two together is the obvious-looking mistake and the original
-/// does not do it - see `oag_game::race`'s pad trigger.
+/// does not do it - see `oag_raceplay`'s pad trigger.
 ///
 /// **This is only a third of what a boost changes.** `boost_timer` reaches
 /// exactly three things in `Exhaust_Update`: this size, the reveal of the

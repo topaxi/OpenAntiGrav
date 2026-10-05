@@ -97,7 +97,7 @@ one dorsal fin and one ventral fin.
 
 This is the single largest mismatch with `oag_gameplay`/`oag_render`, which draw
 a camera-facing additive billboard of half-size `1.5`
-(`PROJECTILE_SPRITE_HALF_SIZE`, `crates/game/src/race.rs`). The *scale* is close;
+(`PROJECTILE_SPRITE_HALF_SIZE`, `crates/raceplay/src/lib.rs`). The *scale* is close;
 the primitive is wrong.
 
 ## It is oriented to velocity and to the track, every tick

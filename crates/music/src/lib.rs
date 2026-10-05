@@ -126,7 +126,7 @@ pub fn listing(title: &Title, archives: &mut Archives) -> Result<Vec<Entry>> {
 ///
 /// An entry that is declared and then absent is **skipped rather than
 /// reported**: a `PI_Music` node is a declaration, and the same caveat
-/// `oag_game::catalogue::all_tracks` records for a partial pack set applies
+/// `oag_raceplay::catalogue::all_tracks` records for a partial pack set applies
 /// here. The length always comes from the payload's own header, never from the
 /// declaration, which carries none.
 ///

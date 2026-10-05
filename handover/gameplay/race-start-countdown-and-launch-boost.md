@@ -250,7 +250,7 @@ path needs an explicit `QUIT RACE`, not just `circle`), in
 **Followed by an implementation**, per direction to proceed once the RE
 supported it: `oag_race::RaceState::thrust_gated` and `COUNTDOWN_TICKS` (272)
 gate the player's thrust for the measured span in `Race::tick`
-(`crates/game/src/race/tick.rs`), scoped to exactly what was measured - thrust
+(`crates/raceplay/src/tick.rs`), scoped to exactly what was measured - thrust
 only, not steering/braking/airbrakes; every mode, since only Time Trial was
 captured and no evidence points at a difference (the same reasoning
 `RaceState::eliminate` already uses). Four new tests, `cargo nextest run
@@ -782,7 +782,7 @@ circuits; this one measured its *basis*, drew the model there and moved the
 count off the HUD. What landed is in
 [`docs/rendering/start-gantry.md`](../../docs/rendering/start-gantry.md) - "The
 basis, the scale and the whole disc" and "What it took to actually draw it" -
-and in `oag_render::gantry` / `oag_game::race::gantry`.
+and in `oag_render::gantry` / `oag_raceplay::gantry`.
 
 The three things that were open and are now measured, all in
 `crates/render/tests/gantry_mount_ground_truth.rs` over the whole disc:

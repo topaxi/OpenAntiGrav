@@ -9,9 +9,9 @@
 //! craft that fall in a vacuum and the state hash still moves.
 //!
 //! Its one real caller is the `oag-headless-sim` binary, which exists to show
-//! that `Race`/`RaceSim` reach the tick loop through `[lib] oag_game` with no
-//! renderer attached at all - the cheap half of what a network server needs,
-//! per `workspace-layout.md`'s rule 2 ("no crate depends on `oag-game`").
+//! that `Race`/`RaceSim` reach the tick loop with no renderer attached at all -
+//! the cheap half of what a network server needs, which can now depend on this
+//! crate without `oag-game` (`workspace-layout.md`'s rule 2).
 
 use super::*;
 

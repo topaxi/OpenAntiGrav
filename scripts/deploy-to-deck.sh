@@ -11,7 +11,7 @@
 # looks without any flag: `<XDG_DATA_HOME>/oag/images`, `<XDG_DATA_HOME>/oag/dlc`,
 # `<XDG_DATA_HOME>/oag/extracted/vita`, `<XDG_DATA_HOME>/oag/extracted/ps4` and
 # `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
-# (see crates/game/src/source.rs, crates/game/src/dlc.rs's
+# (see crates/source/src/source.rs, crates/source/src/dlc.rs's
 # `default_pure_dlc_keys_path` and docs/tools/packaging.md#where-the-disc-image-comes-from)
 # - so a fresh Deck needs nothing set to find them.
 #
@@ -216,7 +216,7 @@ if (( sync_data )); then
     sync_dir "$project_root/data/images" "$images_dir" \
         "hdfury-ps3-eu.iso" "hdfury-ps3-eu.dkey" "*.pkg" "*.sha256"
     step "Copying data/dlc"
-    # The 2048 DLC `.pkg`s are not read either: crates/game/src/dlc.rs mounts
+    # The 2048 DLC `.pkg`s are not read either: crates/source/src/dlc.rs mounts
     # Pulse's and Pure's zips only.
     sync_dir "$project_root/data/dlc" "$dlc_dir" "*.pkg"
     step "Copying data/extracted/vita (Wipeout 2048)"

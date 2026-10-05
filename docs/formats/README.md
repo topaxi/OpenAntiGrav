@@ -325,7 +325,7 @@ the `Svenska` name mixups, Russian's mangled `P??????`, and the still-labelled
 this title does not ship and filling them would invent a menu shape the disc
 does not draw. Wiring `front_end` did make the seventeen language plugins
 reachable, but the HUD font still does not draw - a second, distinct gap
-this pass found: `crates/game/src/race/hud.rs` asks for role `"HUD"`, and
+this pass found: `crates/raceplay/src/hud.rs` asks for role `"HUD"`, and
 2048 names its face `2048HUD` instead. Boot movies are a fifth container,
 real MP4/ISOBMFF rather than `.bik`/`.pmf`/`.ipf` - `data/Videos/intro.mp4`
 and 25 siblings - and as of 2026-09-21 [`oag_video::mp4`](mp4.md) reads it:

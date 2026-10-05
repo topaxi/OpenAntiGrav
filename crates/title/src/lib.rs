@@ -131,7 +131,7 @@ pub struct Title {
     ///
     /// The schema is shared, which is what makes one field enough - HD's file
     /// carries the same three node kinds under the same attribute names, and
-    /// `oag_game::catalogue` reads all three off it unchanged.
+    /// `oag_raceplay::catalogue` reads all three off it unchanged.
     ///
     /// **Overlaps [`DeclaredTracks::declared_in`] and is deliberately not
     /// merged with it.** The two agree on the two titles that carry both, and

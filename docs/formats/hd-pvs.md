@@ -8,7 +8,7 @@ unreachable by the retail loader, and deliberately left alone.
 Parser: [`oag_rcs::hd_pvs`](../../crates/rcs/src/hd_pvs.rs).
 Ground truth: `crates/rcs/tests/hd_pvs_ground_truth.rs`.
 Consumer: `oag_render::pvs::ChunkSet`, wired in
-`crates/game/src/race/visibility.rs`. Toggle a run with `--pvs true|false`.
+`crates/raceplay/src/visibility.rs`. Toggle a run with `--pvs true|false`.
 
 **The engine's own loader and lookup were read afterwards** and are on
 [visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md). Where that

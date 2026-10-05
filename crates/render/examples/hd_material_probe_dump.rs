@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
     // `Fog.Fog Color`, straight off the same `.envsettings` the race loads it
-    // from (`crates/game/src/race/load/environment.rs`'s `envsettings_fog`) -
+    // from (`crates/raceplay/src/load/environment.rs`'s `envsettings_fog`) -
     // the anchor `scripts/hd-material-probe.py` needs to classify a tinted
     // pixel that fog has pulled off its material's own flat colour, rather
     // than one this probe fitted from the picture.

@@ -62,7 +62,7 @@ throws a spark. See
     window - reads as a separate spark/particle object at the muzzle, not
     part of either textured quad, and is out of this pass's scope. Left as
     an open item on the evidence page.
-- **The round has a body.** `oag_game::race::CANNON_MODEL_ENTRY` is
+- **The round has a body.** `oag_raceplay::CANNON_MODEL_ENTRY` is
   `Data\Weapons\pulse_muzzleflash.vex` (`0x08a7c85c`), which
   `Cannon_Construct` (`0x088651d8`) loads into every round instance's own scene
   node, through the same path the Rocket's, Mine's and Bomb's models already

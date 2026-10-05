@@ -14,13 +14,13 @@
 //!   [`library::Library`] is the trait; [`MusicDiscs::survey`] takes one and
 //!   keeps it for the fetches that follow, so a worker thread can open sources
 //!   without owning `Audio`. `oag_game::sound::GameLibrary` implements it over
-//!   `oag_game::title::open_source` and `oag_game::source::search_path`.
+//!   `oag_source::title::open_source` and `oag_source::source::search_path`.
 //! - **Reading a race.** [`Audio::race_tick`] takes a plain-data
 //!   [`sfx::RaceFrame`] rather than the game's `Race`; `oag_game::sound::race_tick`
 //!   builds one after `Race::tick` and calls it. The cue queue's *producers*
 //!   stay in `oag-game` and push [`sfx::CueEvent`]s.
 //! - **Reporting what a loader did.** [`sfx::Banks`] and [`sfx::TrackEmitters`]
-//!   carry their `report`; the host sends it to `oag_game::loader_log`.
+//!   carry their `report`; the host sends it to `oag_raceplay::loader_log`.
 //!
 //! [`settings::Settings`] is the `[audio]` section of the player's settings
 //! file, kept here because every field of it is one of this crate's own types.

@@ -2,7 +2,7 @@
 
 **Status: understood.** Read by
 [`oag-assets::dlc`](../../crates/assets/src/dlc.rs), unpacked by
-[`oag-game::dlc`](../../crates/game/src/dlc.rs), mounted by
+[`oag-game::dlc`](../../crates/source/src/dlc.rs), mounted by
 [`oag_assets::Archives`](../../crates/assets/src/source.rs).
 
 Wipeout Pulse sold four downloadable packs for the PSP. Each adds one team and
@@ -124,7 +124,7 @@ the `LoadXML` names: a `PI_Grid` championship ladder, which this engine does not
 read yet.
 
 Because the schema is the disc's,
-[`oag_game::catalogue`](../../crates/game/src/catalogue.rs) reads a pack with
+[`oag_raceplay::catalogue`](../../crates/raceplay/src/catalogue.rs) reads a pack with
 the very functions that read the disc, and a mounted pack's teams and circuits
 are indistinguishable downstream from the source's own.
 
@@ -430,7 +430,7 @@ way Pulse's four DLC teams are - see
   guess. Whether anything reads its 16 bytes at all, in-game or system-side,
   is still open.
 
-**Wired in.** `oag_game::dlc::ensure_extracted` decrypts a pack the moment it
+**Wired in.** `oag_source::dlc::ensure_extracted` decrypts a pack the moment it
 finds a key that fits, `oag_formats::pure_dlc` and the zlib support this
 uncovered in `oag_assets::dlc::Archive::decode` (Pure's `pi.wad` is the first
 shipped use of `Compression::Zlib`) are both implemented, and

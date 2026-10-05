@@ -226,7 +226,7 @@ Assegai's `8 / 8 / 9 / 7`, Qirex's `8 / 7 / 8 / 9`, AG Systems' `7 / 9 / 9 /
 8` and Piranha's `10 / 6 / 6 / 9` on the capture are, digit for digit, the
 `<FE speed thrust handling shield>` element under each `PI_Team` in
 `Data\Plugins\PI001\Definition.xml` - **the rating table race-setup.md
-recorded as unlocated**. Read into `oag_game::catalogue::Team::rating`;
+recorded as unlocated**. Read into `oag_raceplay::catalogue::Team::rating`;
 the bar is drawn at `rating / 10` of its width with the texture sub-rect
 scaled the same way, so the segments stay aligned. Confidence 95.
 

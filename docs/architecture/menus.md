@@ -7,7 +7,7 @@ call rather than a shortcut.
 
 Implemented in [`crates/game/src/menu.rs`](../../crates/ui/src/menu.rs), with
 the tree itself in [`assets/ui/menu.toml`](../../assets/ui/menu.toml) and the
-disc-side lists in [`crates/game/src/catalogue.rs`](../../crates/game/src/catalogue.rs).
+disc-side lists in [`crates/raceplay/src/catalogue.rs`](../../crates/raceplay/src/catalogue.rs).
 
 ## Why not the front-end XML
 
@@ -515,7 +515,7 @@ implied by anything above.
 
 Every `binding` row's label was checked against
 `oag_gameplay::controls::ship_controls`, `Race::spend_pickup`
-(`crates/game/src/race/weapons.rs`, the two weapon buttons) and
+(`crates/raceplay/src/weapons.rs`, the two weapon buttons) and
 `oag_gameplay::input` (the button/`InputSnapshot` wiring) rather than
 trusted by eye, after `circle`'s row was found reading "BRAKE" when circle
 does not brake - there is no brake action anywhere in `ship_controls`,
@@ -563,7 +563,7 @@ Two rows this page deliberately does not add:
 The AI PILOTS page's own `AXIS`/`LOW`/`HIGH` rows show a raw axis name and two
 numbers - `commitment`, `0.93`, `1.05` - and nothing on that page says what
 `commitment` *is* or why `1.05` is close to a wall. `pilots::axis_preview_for`
-(`crates/game/src/pilots.rs`) turns whichever axis `AXIS` is currently on into
+(`crates/raceplay/src/pilots.rs`) turns whichever axis `AXIS` is currently on into
 one plain-language line, read live off the row the same way `session::
 pilot_editor::held_text` reads `pilot.axis` for saving - so it tracks the
 player without a second copy of "which axis is this."
@@ -584,7 +584,7 @@ that cannot be reached would be a preview of nothing on screen.
 
 **One function reached from two crates, because the two draw paths are in
 different ones.** `axis_preview_for` lives in the library crate
-(`oag_game::pilots`) rather than beside `session::pilot_editor`'s other pure
+(`oag_raceplay::pilots`) rather than beside `session::pilot_editor`'s other pure
 functions, which are the binary's: `MenuStage::render` (binary,
 `main/menu_stage.rs`) and `capture::menu_page` (library, for
 `--menu-page pilots`) both need the same line, and the library cannot depend

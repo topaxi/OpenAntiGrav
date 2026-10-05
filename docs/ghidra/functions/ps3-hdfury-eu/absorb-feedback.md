@@ -130,7 +130,7 @@ system is a child of the locator, the burst rides the hull. Confidence **80**.
 - `0x000d9688`: a network message handler on `'B'` and `'Q'`, as on Pulse.
 - `0x000e9160`: not read. By elimination it is the pickup absorb handler.
 
-`oag_game::race::absorb::HD_ABSORB_BURST` (`MirroredPairs { stagger: 0.2 }`)
+`oag_raceplay::absorb::HD_ABSORB_BURST` (`MirroredPairs { stagger: 0.2 }`)
 plays one `WO_WEAPON_ABSORB` per slot on the pairs above, through
 `psys::Stage::play_riding`, which follows the locator while it emits. The
 `absorb` locators come from `Locators.vex` through

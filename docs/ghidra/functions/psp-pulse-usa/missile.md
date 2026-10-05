@@ -405,7 +405,7 @@ while its caller consumes a value, so the code-4 path itself is only at 80.
 ## A press with no lock still fires
 
 **Recovered, confidence 90**, and this page previously implied the opposite -
-`crates/game/src/race/weapons.rs` declined the shot and kept the pickup, which
+`crates/raceplay/src/weapons.rs` declined the shot and kept the pickup, which
 was ours.
 
 `Ship_FireHeldWeapon` (`0x08844ae8`) branches on the lock and calls
@@ -582,7 +582,7 @@ so the angle is not a launch transient that settles.
 writes, already ported as `Projectile::velocity`. Nothing here needs a
 missile model, a locator, or any state this project does not already carry
 per projectile - `age`, `position` and `velocity` are all it takes. Ported as
-[`oag_game::race::weapons::missile_flare_anchors`](../../../../crates/game/src/race/weapons.rs),
+[`oag_raceplay::weapons::missile_flare_anchors`](../../../../crates/raceplay/src/weapons.rs),
 which `Race::advance_projectile_flares` rides both instances off.
 
 **Independently consistent with a maintainer's own description from play**,

@@ -74,7 +74,7 @@ Also still unfound, and shared with the parent thread: **what writes
 (`H = 0x008c2cb8`, two 56-byte per-environment structs). The loader only
 zeroes them. So the texture side terminates at the same unrecovered
 stage-number source as the palette side does - which is fine for
-implementation, because `oag_game::race::zone_grade::ZoneGrade` already
+implementation, because `oag_raceplay::zone_grade::ZoneGrade` already
 carries an **explicit** stage index and weight with no caller
 (`request_stage`/`set_weight`), and the textures can ride that same seam
 until HD's real trigger is recovered.
@@ -83,7 +83,7 @@ until HD's real trigger is recovered.
 
 **Wired.** `oag_title::ZoneStageTextures` carries both entry-name sets and the
 stage count (`oag_hd::race::ZONE_STAGE_TEXTURES`, `None` on every other title);
-`oag_game::race::load::environment::zone_stage_art` loads the **track** set
+`oag_raceplay::load::environment::zone_stage_art` loads the **track** set
 through `oag_mesh::mesh::ModelTexture::from_gtf` (promoted out of
 `mesh::rcs::skin` so a second caller can reach it); and
 `ZoneGrade::stage_art()` hands back the showing stage's texture. Checked
@@ -192,7 +192,7 @@ keep it out of the surface.
 So the gap was not an unfed input, not the visualiser, and not a missing
 material family - it was one term too many in the surface equation.
 
-**Tooling this produced**: `--zone-stage N` (`oag_game::race::Options::zone_stage`).
+**Tooling this produced**: `--zone-stage N` (`oag_raceplay::Options::zone_stage`).
 HD rests wherever its loader left the grade, so before this there was no way to
 put an HD Zone race on a named rung at all, and no way to compare a frame
 against an original that is visibly on one.

@@ -625,7 +625,7 @@ would have been wrong.
 
 ## 2026-09-05: re-read live for a drop-time effect, and a live-database caveat
 
-Before wiring `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`), the
+Before wiring `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_raceplay`), the
 handover thread's own instruction was to read `Mine_Init` and `Mine_Construct`
 again rather than assume the reading above still covered "does dropping a
 mine trigger a particle effect". It does: `Mine_Init`'s full call list, read
@@ -1052,7 +1052,7 @@ Two more things fall out: **a Quake wave passing under a mine detonates it**
 flies through has the same quiet result. Ported: `blast::blast_mine_trip`
 credits the tripping craft alone, gated on `blastradius`, and
 `Projectiles::sweep_rockets_through_laid` is the rocket trip, and
-`Race::advance_quake` (`crates/game/src/race/weapons/single_instance.rs`) is
+`Race::advance_quake` (`crates/raceplay/src/weapons/single_instance.rs`) is
 the Quake trip - after the wave's own hits it retires every laid mine whose
 located progress is inside the wave's radius and ignites the effect with no
 craft credited (`crates/game/tests/mine_ground_truth.rs`,

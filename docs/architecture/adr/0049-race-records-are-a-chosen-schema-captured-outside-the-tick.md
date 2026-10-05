@@ -19,7 +19,7 @@ finds, and it has to leave room for it without guessing at it.
 Three questions had no existing answer to reuse wholesale:
 
 1. **What file shape.** `crates/game/src/settings.rs` and
-   `crates/game/src/pilots.rs` already establish two different persistence
+   `crates/raceplay/src/pilots.rs` already establish two different persistence
    philosophies in this codebase - a machine-owned file that is rewritten
    canonically every run and errors loudly on a bad value (`settings.toml`),
    and a hand-authored file that is never rewritten wholesale and is edited
@@ -76,7 +76,7 @@ race is the one exit every mode has in common, where finishing is not.
 
 Both sites read only fields `race/results.rs`, `race/field.rs` and
 `gameplay/src/world.rs` already made `pub` for the scoreboard and the HUD.
-Nothing was added to `oag-race`, `oag-gameplay` or `crates/game/src/race/` to
+Nothing was added to `oag-race`, `oag-gameplay` or `crates/raceplay/src/` to
 make this possible, and nothing needed to be.
 
 ### Deliberately not `settings.rs`'s rule on a malformed file

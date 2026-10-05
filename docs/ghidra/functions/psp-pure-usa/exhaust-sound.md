@@ -124,7 +124,7 @@ bit pattern `oag_fx::exhaust::BOOST_SECONDS` already carries, read off
 Pulse. So the arm, the decay and the visual term all match Pulse's own
 reading, on both pressings, and this engine's existing generic
 `oag_fx::exhaust::Exhaust` (title-agnostic, wired unconditionally in
-`crates/game/src/race/pads.rs`) already reproduces Pure's boost visual
+`crates/raceplay/src/pads.rs`) already reproduces Pure's boost visual
 correctly - nothing to implement, only to cite.
 
 **The caller is confirmed, not just plausible.** `get_function_xrefs

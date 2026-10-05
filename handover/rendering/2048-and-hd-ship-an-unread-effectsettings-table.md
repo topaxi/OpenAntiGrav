@@ -1035,7 +1035,7 @@ no longer disagree.
   Pure, which were searched rather than assumed);
   `oag_tables::effectsettings::StagePalette`/`blended_palette` read one
   stage and cross-fade it against the stage before it; and
-  `oag_game::race::zone_grade::ZoneGrade` holds the recovered struct's own
+  `oag_raceplay::zone_grade::ZoneGrade` holds the recovered struct's own
   three fields (`+0x00` current, `+0x04` requested, `+0x18` weight) with a
   `commit` that reproduces `Environment_UpdateStageBlend`'s gate, applying
   the result to the same `mesh_render::Fog`/`Light` path `.envsettings`
@@ -1586,7 +1586,7 @@ no longer disagree.
      `Data/Tex/ZoneSky.gtf` for the circuit's own `sky.gtf` wholesale, gated
      on the same mode-id byte this thread's own next section names. Full
      trace: [zone-sky.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md).
-     Wired: `crates/game/src/race/load/environment.rs`, checked against the
+     Wired: `crates/raceplay/src/load/environment.rs`, checked against the
      disc in `zone_sky_ground_truth.rs`. **What that page leaves open**: a
      second, genuinely computed horizon/zenith gradient sits behind the same
      gate, read but its consumer unidentified (confidence 55, below naming

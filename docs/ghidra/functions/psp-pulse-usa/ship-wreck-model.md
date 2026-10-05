@@ -100,7 +100,7 @@ seen from the ordinary chase camera, which is why it was the first comparison.
 
 ## What this port does
 
-`oag_game::race::scene::wreck` draws `shipwreck.vex` (`zonewreck.vex` in Zone)
+`oag_raceplay::scene::wreck` draws `shipwreck.vex` (`zonewreck.vex` in Zone)
 instead of the hull while the craft is `CraftState::Eliminated`, which is case 5;
 the hull stays through `Destroyed`. The player's camera cuts to the circuit's own camera
 for it ([camera.md](camera.md)), and `WO_SHIP_EXPLOSION` goes off 1.5 s later

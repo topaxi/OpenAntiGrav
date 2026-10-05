@@ -6,7 +6,7 @@
 `Data\XML\WeaponAIstats.xml` that [ai-stats.md](ai-stats.md) spent two passes
 failing to find, and it is what
 [`docs/gameplay/ai.md`](../../../gameplay/ai.md) and
-`crates/game/src/race/field.rs` have both recorded as "nothing about it is
+`crates/raceplay/src/field.rs` have both recorded as "nothing about it is
 recovered".
 
 | Address | Name | Confidence |

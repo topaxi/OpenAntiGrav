@@ -66,7 +66,7 @@ and is not repeated here.
   (Talon's Junction, not Amphiseum - `hd_engine_light_which_circuit.rs`).
   Bound to the track alone the term changed zero pixels of a frame. So the
   only receiver within `D` is the craft's own hull, and **the light list is
-  bound to the craft as well as the track** in `crates/game/src/race/scene/frame.rs`
+  bound to the craft as well as the track** in `crates/raceplay/src/scene/frame.rs`
   - a binding the implementing lane labelled **chosen, not measured**, on
   static evidence only: 74 ship materials compile `SVC1` twins
   (`scripts/ps3-sho.py svc-twins`), so the hull *can* take the stream.

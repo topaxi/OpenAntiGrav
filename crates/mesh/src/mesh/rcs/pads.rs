@@ -24,7 +24,7 @@
 //! against. [`build_pads`]/[`build_weapon_pads`] draw the excluded chunks
 //! through [`build_pad_class`] instead: one node-ordered pass per class,
 //! walking [`oag_vex::pads::volumes`]'s own node order so
-//! `oag_game::race::load`'s trigger list and this module's vertex ranges
+//! `oag_raceplay::load`'s trigger list and this module's vertex ranges
 //! stay lined up one entry each.
 
 use anyhow::{Context, Result, bail};
@@ -127,8 +127,8 @@ pub fn build_pads(
 /// buffer with every other track chunk. `Drawable::tint_weapon_pads` needs
 /// the opposite: one [`Model::node_vertex_ranges`] entry per pad **node**, in
 /// the same **tree** order [`oag_vex::pads::volumes`] walks to build the
-/// trigger list `oag_game::race::Race` drives ready/cooling state from - see
-/// that function and `crates/game/src/race/pads.rs`. So this is a second,
+/// trigger list `oag_raceplay::Race` drives ready/cooling state from - see
+/// that function and `crates/raceplay/src/pads.rs`. So this is a second,
 /// dedicated pass over exactly the nodes of one pad class.
 ///
 /// One [`Model::node_vertex_ranges`] entry per node of the wanted class,

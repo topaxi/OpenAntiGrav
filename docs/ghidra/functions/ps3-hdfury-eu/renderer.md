@@ -2431,7 +2431,7 @@ enough to look like a rounding error", the enum's own comment says of the
 same number - but it is not zero: `oag_display::display::viewport` fits a
 1270.6-wide rectangle centred in the 1280-wide canvas and hands the *fitted
 size* to `oag_post::hd_bloom::Chain::run` without its *offset*
-(`crates/game/src/race/scene/frame.rs`'s `hd.run(..., (viewport.2 as u32,
+(`crates/raceplay/src/scene/frame.rs`'s `hd.run(..., (viewport.2 as u32,
 viewport.3 as u32), ...)`, dropping `viewport.0`/`.1`). The chain's own final
 encode pass then writes `set_viewport(0.0, 0.0, rect.0, rect.1, ...)` -
 anchored at the canvas origin - while the scene was actually drawn centred,
@@ -2452,7 +2452,7 @@ general case needs `Chain::run`'s signature to carry an offset alongside
 matching call in the same function (same drop-offset shape, not observed to
 manifest as a literal-black strip in the one Pulse capture checked, not
 independently verified clean either) - `lane-ship-hull`'s files
-(`crates/post/src/`, `crates/game/src/race/scene/frame.rs`), not a
+(`crates/post/src/`, `crates/raceplay/src/scene/frame.rs`), not a
 comparison script's.
 
 **Net effect on the darkness reading: negligible, as the strip's size
@@ -2653,7 +2653,7 @@ that walks a `.envsettings` file and calls into the registrar per key found -
 is not located this session, so "which function does the carrying" stays
 open.
 
-**Consequence for this project, found by reading `crates/game/src/race/load/environment.rs`
+**Consequence for this project, found by reading `crates/raceplay/src/load/environment.rs`
 rather than the disc (not a renderer change, so read-only this pass -
 `crates/` is another lane's tonight):** `envsettings_bloom` requires all ten
 `HDR and Bloom` keys present in the **circuit's own** file, and returns
@@ -2741,7 +2741,7 @@ not further reads themselves.
 ### The carry is wired: 16 of 16 environments build the bloom chain, and Sol 2's own gap narrows by 10-25% on the regions it reaches (2026-09-13, `lane-envsettings-carry`)
 
 The "exact wiring" paragraph above, done.
-`crates/game/src/race/load/environment.rs::staged_envsettings` reads
+`crates/raceplay/src/load/environment.rs::staged_envsettings` reads
 `/data/fe/fe.track.envsettings` as a base layer and lays the circuit's own
 file over it, keeping only the keys the circuit's own file declares as an
 override - the registrar's own persistence, read live above, applied rather
@@ -7025,13 +7025,13 @@ The two sections above were written in parallel by two members who could not see
 
 ### Implementation note: the engine light is wired, the capture is Talon's Junction, and the count is 37 (2026-09-20, implementation lane)
 
-Three corrections from wiring `EngineFlare_SubmitSpuLight` into `mesh.wgsl` (`oag_game::race::engine_light`, `oag_mesh::mesh_render::spu_light`), none of which changes the reading above:
+Three corrections from wiring `EngineFlare_SubmitSpuLight` into `mesh.wgsl` (`oag_raceplay::engine_light`, `oag_mesh::mesh_render::spu_light`), none of which changes the reading above:
 
 1. **`EngineLightData.xml` ships 37 times, not 36.** `scripts/psarc.py list` over all seven archives: 9 directories in `DATA02` (eight teams and `zone`), 4 in `DATA03`, and all **24** `_c1`/`_n1` variants in `DATA06` - the load-site entry's "22 variants" undercounted by two. `detonator`, `zone battle` and `test` ship none. `crates/tables/tests/enginelight_ground_truth.rs` asserts the count and the spans (`Distance` `-0.4`..`1.5`, `Radius` `0.7`..`2.0`, both as read above). Four float spellings occur (`0.4f`, `1f`, `0.3`, `-0.4f`); the reader strips one trailing `f`.
 2. **The companion capture (`data/traces/hd-spu-light-companion/`) is Talon's Junction, not Amphiseum.** Every one of its 40 records was scored against the collision soup of each of the sixteen circuits (`crates/game/examples/hd_engine_light_which_circuit.rs`): Talon's Junction places all 40 between 2.98 and 4.41 units (mean 4.03) from the nearest triangle - a ride height, `5.5 * 0.75 = 4.1` - while Amphiseum places 3 of 40 within 5 units and the rest 10-147 away. The `+0x2084` and `EdgeGeom` entries above that say "Amphiseum" describe the same capture; nothing in them depends on which circuit it was. `rpcs3-capture.md`'s own note that the Racebox nav plan "landed on Talon's Junction this session, not Amphiseum" is the likely cause.
 3. **The light never reaches the floor at ride height, in the original or here.** With `D` at `0.62`-`2.05` and every record a ride height off the surface, the term is zero on the track under a craft in level flight - and bound to the track chunks alone it changed zero pixels of a 1280x720 Amphiseum frame. This project's records on Talon's Junction sit 2.85-4.53 units (mean 4.09) off the surface over a 1,200-tick race, so the placement matches the original's to within the ride-height spread. The surfaces within `D` are the craft's own engine housing (`Distance` runs to `-0.4`, inside the nozzle) and whatever the craft is within a unit or two of - walls on a scrape, the floor on a landing. 74 of the ship materials compile `SVC1` twins (`scripts/ps3-sho.py svc-twins <image> materials/ships`: 1,776 pairs, 888 vertex blocks all carrying the `(255, 128)` decode and `0x868f8229`), so the list is bound to the hulls as well as the track. **Chosen, not measured: the hull binding.** The supporting evidence is static only - the material census and the geometry - with no live read of a hull chunk's `SVC1` bit, so it carries no score; the track binding and the record's arithmetic carry the sections above's own 80-88. Boosted, the `1 + 10 * blend` gain puts a 440-unit light a hand's breadth from the housing and the whole rear of the hull washes warm (`data/scratch/hd-engine-light/talons-t487.png` against `talons-t470.png` at rest); whether the original's hull does the same is the live check that would settle the binding either way.
 
-Not wired: the `t`/`+0x2b4` blue-to-orange transition branch (arming unread) and the other 23 producers. Code: `crates/tables/src/enginelight.rs`, `crates/livery/src/engine_light.rs`, `crates/game/src/race/engine_light.rs`, `crates/game/src/race/load/engine_light.rs`, `crates/mesh/src/mesh_render/spu_light.rs`, `crates/mesh/src/mesh.wgsl` (`spu_light_sum`).
+Not wired: the `t`/`+0x2b4` blue-to-orange transition branch (arming unread) and the other 23 producers. Code: `crates/tables/src/enginelight.rs`, `crates/livery/src/engine_light.rs`, `crates/raceplay/src/engine_light.rs`, `crates/raceplay/src/load/engine_light.rs`, `crates/mesh/src/mesh_render/spu_light.rs`, `crates/mesh/src/mesh.wgsl` (`spu_light_sum`).
 
 ### `Ship_DrawModels` carries the same per-object `0x800`/`SVC1` gate the track's Zone-Stage compilers do - narrows, but does not close, whether the original's hull is ever a real receiver (2026-09-25, confidence 80 for the gate's existence, unscored for whether it ever fires)
 
@@ -7102,7 +7102,7 @@ Taken-branch stops on the player's hull came both at cruise and while the visibl
 
 **Confidence 90** that the hull record's `0x800` bit is set in a race and that the gate selects `SVC1` for the player's hull. Evidence: the static writer chain, one live read of the bit, and 10 live stops on the taken branch with the record pointer matching.
 
-**What this falsifies, and what it leaves.** The top candidate on this page, that the original never selects `SVC1` for a hull, is falsified. The craft binding in `crates/game/src/race/scene/frame.rs` is now measured.
+**What this falsifies, and what it leaves.** The top candidate on this page, that the original never selects `SVC1` for a hull, is falsified. The craft binding in `crates/raceplay/src/scene/frame.rs` is now measured.
 
 The binding is still what produces this project's rear wash. The A/B was run at player size on Talon's Junction, boosted by a fired Turbo, which arms the same `exhaust.boost` the flame's boost blend reads. It took the craft's `SpuLights` out and left everything else. On `Assegai_n1` (Fury light `(40, 10, 4)`) at tick 295, the inner rear panels either side of the nozzle go flat white with the binding and show their grey, yellow and purple structure without it. That is about 600 pixels of a 1440x816 frame, all at the rear. The comparison is `rear-ab.png`, with the two frames beside it, under `data/scratch/hd-svc1-bit/`. Two same-command runs differ by about 2 % of pixels at this tick, from the frame's own motion blur. So the comparison was made against the run whose blur state matched and read by eye, not by pixel count. The white wing rims and the pink on the `_n1` wings are there with the binding removed as well. They are a separate term.
 
@@ -7116,7 +7116,7 @@ Names: `ModelRecord_Create` (`0x003f0348`, 80), `ModelRecord_Load` (`0x003eeb08`
 
 ### Candidate 1 (boost blend at the compared frames) is closed, candidate 3's vertex-output register is noted but not measured, and candidate 2 (anchor-to-panel distance) gets a disc-verified, per-ship mechanism that predicts which hulls wash (2026-09-25, later still, confidence 85 for the per-ship correlation, unscored for whether it is the original's own behaviour too)
 
-**Candidate 1 does not survive: the snap-and-decay law is already measured identical on both sides.** `EngineFlare_Update`'s own decompile (this file, "The boost gate is a timer, a snap and an exponential decay" via `engine-flare.md`) is `*(this+0x144) = 1.0f` under the boost-timer gate and `*= (1 - Thrust Chase Rate)` per 120 Hz substep otherwise - a direct read, not an inference - and `crates/game/src/race/engine_light.rs`'s `Flame::advance` is the same two branches. There is no ramp-vs-snap discrepancy to find. What still varies is *which tick* a screenshot lands on relative to the snap, and the two reference frames this thread has been comparing against turn out to differ in more than that (next paragraph).
+**Candidate 1 does not survive: the snap-and-decay law is already measured identical on both sides.** `EngineFlare_Update`'s own decompile (this file, "The boost gate is a timer, a snap and an exponential decay" via `engine-flare.md`) is `*(this+0x144) = 1.0f` under the boost-timer gate and `*= (1 - Thrust Chase Rate)` per 120 Hz substep otherwise - a direct read, not an inference - and `crates/raceplay/src/engine_light.rs`'s `Flame::advance` is the same two branches. There is no ramp-vs-snap discrepancy to find. What still varies is *which tick* a screenshot lands on relative to the snap, and the two reference frames this thread has been comparing against turn out to differ in more than that (next paragraph).
 
 **The `x11`-vs-`x6` framing in the "What this falsifies" section above compares two different ships**, not two blend states of the same ship. `bp-081.png`'s player is on the **Piranha** planform (this file's own "Live, RPCS3" entry above: "The player's livery on this boot is dark with yellow stripes, on the Piranha planform"). The `rear-ab.png`/`tick 295` wash this thread has been chasing is on `Assegai_n1`. `Piranha` and `Assegai` are not the same hull, and `EngineLightData.xml` (below) says they are not even close.
 

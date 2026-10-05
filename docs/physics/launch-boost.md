@@ -3,7 +3,7 @@
 **Status: ported and measured against five live launches.** Pulse PSP (USA) in
 PPSSPP 1.20.4, 2026-10-01, Time Trial, Venom, Assegai, `16_Track`; the held-through
 launch also on `01_Track`. Code: `oag_physics::launch`, parameters from
-`oag_tables::handling::StartBoost`, wired in `oag_game::race` through
+`oag_tables::handling::StartBoost`, wired in `oag_raceplay` through
 `Environment::start_boost`. Test: `crates/game/tests/launch_boost_ground_truth.rs`.
 
 [grid-state.md](grid-state.md) measured that a craft whose thrust is held through the

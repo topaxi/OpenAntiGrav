@@ -142,7 +142,7 @@ reticle is render-only state on `Race`.
   weapons' reticles sit on the track on Pulse **and on Pure**, whose sight
   models declare the same class. The whole reading and both titles' numbers
   are in [hud.md](../../docs/ui/hud.md), "A `<Mode3D><Model>` quad carries its
-  own blend". Nothing was chosen: `oag_game::race::hud::quad_blend` tabulates
+  own blend". Nothing was chosen: `oag_raceplay::hud::quad_blend` tabulates
   no model name.
 - **`HudSight_Update`'s gate is read and not understood** - `hud->view->0x48 == 2`
   or "one of my missiles is homing". Taken literally the reticle would never

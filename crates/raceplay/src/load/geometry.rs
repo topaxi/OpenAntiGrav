@@ -186,7 +186,7 @@ fn psp2_animation(
 /// decode itself stays unconditional.
 ///
 /// **Its own function because the PS3 path used to have no branch at all.**
-/// `oag_game::race::load` set `weapon_pad_model` to `None` outright whenever
+/// `oag_raceplay::load` set `weapon_pad_model` to `None` outright whenever
 /// `!vex_geometry`, which is always true on the PS3 path - a circuit's weapon
 /// pads there are baked into `rcs_model`'s own world-space chunk pass rather
 /// than named by a PSP-shaped `Weapon Pad` node, so [`track_model`] pulls

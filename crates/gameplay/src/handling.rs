@@ -203,7 +203,7 @@ pub const DEFAULT_SKILL_LEVEL: u8 = 1;
 /// been read out of its binary - it may carry a compiled-in table, or a
 /// different pitch model, or none at all - so nothing here claims to reproduce
 /// it. This is a stand-in that keeps a ship flyable, not a recovered value, and
-/// `oag_game::race::load` reports it by name whenever it is reached.
+/// `oag_raceplay::load` reports it by name whenever it is reached.
 ///
 /// The numbers are **Pulse's**, and near-uniform there: sweeping all 32
 /// `<pitch>` blocks on `pulse-psp-eu.chd` (8 teams x 4 classes) gives

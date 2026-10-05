@@ -8,7 +8,7 @@
 //! parser inside a gameplay crate to save one indirection. So the four built-in
 //! pilots stay Rust constants in `oag_ai::Pilot`, and this - the composition
 //! root, which already owns `toml`, `serde` and `dirs` for
-//! [`crate::settings`] - is the only thing that reads a file.
+//! `crate::settings` - is the only thing that reads a file.
 //!
 //! # A file is ranges, not values
 //!
@@ -35,7 +35,7 @@
 //! # Nothing is rewritten on *save*, either - the in-game editor included
 //!
 //! `settings.rs` saves with `toml::to_string_pretty`
-//! ([`crate::settings::save`]), which serialises a struct and emits canonical
+//! (`crate::settings::save`), which serialises a struct and emits canonical
 //! TOML: every comment, every blank line, every hand-chosen key order, gone.
 //! That is fine for a settings file this build owns end to end and rewrites on
 //! every launch anyway - it is not fine for a pilot file, which is meant to be
@@ -69,7 +69,7 @@ use serde::Deserialize;
 /// Where user pilots live: `<config dir>/oag/pilots/`.
 ///
 /// `None` on a platform `dirs` cannot place a config directory on, exactly as
-/// [`crate::settings::path`] handles the same case.
+/// `crate::settings::path` handles the same case.
 #[must_use]
 pub fn directory() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join("oag").join("pilots"))
@@ -404,7 +404,7 @@ fn axis_gloss(axis: &str) -> Option<(&'static str, String)> {
 /// `AXIS` row - so this tracks whatever a player has AXIS on. Deliberately
 /// crate-only rather than living beside `session::pilot_editor`'s other pure
 /// functions: the binary's `menu_stage.rs` and this crate's own
-/// [`crate::capture::menu_page`] both need it, and the lib cannot depend on
+/// `crate::capture::menu_page` both need it, and the lib cannot depend on
 /// the binary - so this is the one function both call, in the crate both can
 /// reach.
 ///

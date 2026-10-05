@@ -1102,7 +1102,7 @@ would have been the wrong fix**: it would have broken the resting case to
 compensate for a mesh that was not being drawn. The actual fix, now shipped,
 is drawing `<Team>boost.vex`: `oag_fx::exhaust::Exhaust` tracks the
 plume's own 1.5 s reveal timer (`plume_timer`/`plume_visible`,
-`PLUME_SECONDS`) beside the flare's, and `oag_game::race::Loaded::boost_model`
+`PLUME_SECONDS`) beside the flare's, and `oag_raceplay::Loaded::boost_model`
 loads `Data\Ships\<Team>\shipboost.vex` for `Race::Scene` to draw additively
 alongside the ship, model-matrix and all, whenever `plume_visible()` is true.
 
@@ -1427,7 +1427,7 @@ recorded since the trail-direction read that the original's craft world matrix
 carries a global `0.75` (`200000.0` times row 2, live `150,080`). The rigid
 body's own rows are orthonormal - the capture harness measures them unit-length
 over 200 ticks - so the scale belongs to the **render** matrix, and
-`oag_game::race::Race::ship_model_matrix` builds rotation and translation only.
+`oag_raceplay::Race::ship_model_matrix` builds rotation and translation only.
 
 **Applied 2026-08-08** after a third independent confirmation, and the full
 argument is on that function's own doc comment. It was briefly reverted the same

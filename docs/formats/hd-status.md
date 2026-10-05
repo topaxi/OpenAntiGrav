@@ -434,7 +434,7 @@ second circuit's `.rcsmodel` has been checked for a matching hash, so
 whether Talon's Junction's speed pad plates are baked *somewhere* on the disc
 is open; what is closed is that they are not in this circuit's own file.
 
-**Consequence for the render**: `oag_game::race::load` reports "0 of 18 mesh
+**Consequence for the render**: `oag_raceplay::load` reports "0 of 18 mesh
 node(s) drawn... 18 addressed no chunk" for Talon's Junction's speed pads and
 leaves `Loaded::pad_model` at `None` - an honest absence rather than an
 invented plate, the same choice `CLAUDE.md` names for every other unrecovered
@@ -602,7 +602,7 @@ across `DATA02`/`DATA03`, and all twenty-four `_c1`/`_n1` variants in
 behind the flare node along its Z axis, range `Radius`
 ([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md), "The
 captured buffer's producer is found", confidence 85),
-and `oag_game::race::engine_light` builds that record per frame from the
+and `oag_raceplay::engine_light` builds that record per frame from the
 file, the locator and the boost blend - see the "SPU vertex lights" entry in
 [`docs/rendering/README.md`](../rendering/README.md).
 
@@ -769,7 +769,7 @@ therefore an authored difference and not a decode miss; it is a question for
 
 Most of HD's `PI_Team` nodes carry `<Unlock purchase="1">` and most of its
 `PI_Track` nodes carry `<Unlock grid="gridN">`; 69 `Unlock` elements in all.
-`oag_game::catalogue` reads none of them, on HD or on the PSP titles, so
+`oag_raceplay::catalogue` reads none of them, on HD or on the PSP titles, so
 everything declared is offered. That is a defensible answer for a build with no
 progression and it is **not a measurement** of what the original gates - what
 `purchase`, `grid`, `loyalty` and `MedalCount` select has not been read.
@@ -837,7 +837,7 @@ puts the templates a few bytes before `MusicManager.cpp`:
 A soundtrack track is a `PI_Music` location joined with `music`, `_stereo` and
 `.mp3`. The **fifteen** `PI_Music` nodes in
 `/data/plugins/frontend/definition.xml` all resolve - the same schema and the
-same reader (`oag_game::catalogue::music`) the PSP titles use, under a plugin
+same reader (`oag_raceplay::catalogue::music`) the PSP titles use, under a plugin
 named rather than numbered.
 
 ### Two front-end axes, one of them unread

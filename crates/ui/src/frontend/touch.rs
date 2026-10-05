@@ -87,7 +87,7 @@ pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Launch {
     /// A campaign event by its `SP.xml` instance name: the map's own
-    /// `redirect="Launch 2048"`, resolved by `oag_game::race::load_event`.
+    /// `redirect="Launch 2048"`, resolved by `oag_raceplay::load_event`.
     Event(String),
     /// This build's own race box - the `race` page of `assets/ui/menu.toml`.
     RaceBox,

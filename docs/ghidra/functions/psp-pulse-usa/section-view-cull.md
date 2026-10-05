@@ -136,7 +136,7 @@ culled by anything.
 
 `oag_render::pvs::sections_in_view` and `VisibleSet::within_view`
 (`crates/render/src/pvs/section_view.rs`), wired in
-`oag_game::race::scene::frame` (the unjittered view-projection) through
+`oag_raceplay::scene::frame` (the unjittered view-projection) through
 `Visibility::set`. **Chosen, not measured**: the test is made against this
 camera's view-projection, where the original hard-codes `480/272` into its own
 planes (`Camera_SubmitScene`); on a wider picture the original's test would cut

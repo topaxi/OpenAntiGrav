@@ -98,7 +98,7 @@ run, after Turbo's `+0x84` and Shield's `+0x8c`. The arithmetic can now be
 trusted for the Quake's four and the Cannon's five as well.
 
 **Two files split rather than baselined** (`crates/tables/src/weapons.rs`,
-`crates/game/src/race/field.rs`), and the second surfaced the *same* fault the
+`crates/raceplay/src/field.rs`), and the second surfaced the *same* fault the
 last split did: a stranded doc comment. `fire_opponent_rocket`'s paragraphs sat
 above `fire_opponent_missile` and the Rocket carried none, exactly as
 `Driver::drift`'s did. **Moving code is how these are found**, which is an
@@ -363,7 +363,7 @@ the evidence page, so a round rides the shared floor-follower every other
 unread projectile weapon here already gets as a placeholder - the same one
 the Missile, the Plasma and the Shuriken fly - and it draws as the same
 billboard-sprite fallback those three already use, since it has no model of
-its own either. Nothing needed touching in `crates/game/src/race/scene/
+its own either. Nothing needed touching in `crates/raceplay/src/scene/
 frame.rs` for the round to be visible.
 
 Verified against `pulse-psp-usa.chd`: `WeaponStats_ParseCannon`'s block
@@ -475,7 +475,7 @@ still open, most player-visible first:
   **Drawn 2026-09-16** - see that date's section: `PlasmaBlast_Update` read
   in full (hardcoded 1.5 s single-stage retire, a dead keyframe-ramp
   mechanism, a per-model `Node_SetAnimTimeTree` scrub most likely playing
-  each model's own baked animation) and `crates/game/src/race/blast_models.rs`
+  each model's own baked animation) and `crates/raceplay/src/blast_models.rs`
   now draws all three, anchored on the impact point with a chosen
   "face the camera" billboard standing in for the original's own unresolved
   camera-vector read.
@@ -564,7 +564,7 @@ still open, most player-visible first:
   unported (unread meaning). Verified by screenshot against
   `data/images/pulse-psp-eu.chd`, growth clearest in the back half of the
   1 s wind-up; see
-  [`PLASMA_FLARE_EFFECT`](../../crates/game/src/race/effect_names.rs)'s
+  [`PLASMA_FLARE_EFFECT`](../../crates/raceplay/src/effect_names.rs)'s
   doc comment.
 - ~~**`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
   site.** It sits immediately before the plasma blast's own models in the same
@@ -724,7 +724,7 @@ still open, most player-visible first:
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the
 explosion when dropped, instead of when detonating (only tested via
-pulse)". `Race::advance_projectile_flares` (`crates/game/src/race/weapons.rs`)
+pulse)". `Race::advance_projectile_flares` (`crates/raceplay/src/weapons.rs`)
 gated on `projectile.kind.is_none()` - true for *any* live projectile - to
 decide who rides a [`ROCKET_FLARE_EFFECT`] (`WO_ROCKET_FLARE`) instance. That
 effect's emitters are looping (see `mine.md`'s neighbour reading on
@@ -733,7 +733,7 @@ effect's emitters are looping (see `mine.md`'s neighbour reading on
 charge's whole life - which reads exactly like an explosion that started at
 the drop and never really ended. Invisible to `just test`: the headless
 harness builds `Race` with an empty `psys::Library`
-(`crates/game/src/race/tests.rs`), so `self.effects.get(ROCKET_FLARE_EFFECT)`
+(`crates/raceplay/src/tests.rs`), so `self.effects.get(ROCKET_FLARE_EFFECT)`
 is always `None` there and the attach never fires - only `just play` against
 the real disc loads the asset. `docs/formats/pob.md` already listed
 `WO_MISSILE_HEAD` as the Missile's own, separate effect, which is what said
@@ -1100,11 +1100,11 @@ axis) is not settled, so the render side below uses the ordinary "face the
 camera" billboard as a stated substitute rather than this specific,
 unresolved vector math.
 
-**Drawn.** `crates/game/src/race/blast_models.rs` (new module) tracks a
+**Drawn.** `crates/raceplay/src/blast_models.rs` (new module) tracks a
 render-side pool of live blasts - position and age only, `RaceView` state,
 never hashed - spawned from `Race::ignite_blast` on every Plasma
-detonation and aged in `Race::tick`. `crates/game/src/race/scene.rs` and
-`crates/game/src/race/scene/weapon_models.rs` load and draw
+detonation and aged in `Race::tick`. `crates/raceplay/src/scene.rs` and
+`crates/raceplay/src/scene/weapon_models.rs` load and draw
 `PLASMA_BLAST_HALO_MODEL_ENTRY`/`_HEMISPHERE1_/_HEMISPHERE2_MODEL_ENTRY`
 the same way the Rocket's, Mine's, Bomb's and Cannon round's own bodies
 are, sized to `oag_weapons::projectile::MAX_PROJECTILES` but indexed
@@ -1151,7 +1151,7 @@ suite (931 passed).
   HD, which is what writes two of the three explosion windows.
 
 - ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**
-  `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`) load
+  `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_raceplay`) load
   `Data\Weapons\Pulse_Mine.vex`/`Pulse_Bomb.vex` through the existing `.vex`
   path, drawn translation-only (a laid charge carries zero velocity - see
   `oag_weapons::projectile::mine::at_rest`). `Mine_Init`/`Mine_Construct`
@@ -1170,7 +1170,7 @@ suite (931 passed).
   five stay open and here is exactly why.** `Cue::MineLaunch` now fires
   `MINELAUNCH` off the firing craft's own emitter (`Placement::Craft`) every
   time `Race::lay_mines` lays a charge whose weapon is `Weapon::Mine` -
-  `crates/sound/src/sfx.rs`, wired from `crates/game/src/race/weapons.rs`.
+  `crates/sound/src/sfx.rs`, wired from `crates/raceplay/src/weapons.rs`.
   Both `Mine_Init` (`0x08859ac8`) and its only caller, `Weapon_DropMines`
   (`0x088675cc`), were decompiled directly this session to settle *how* the
   cue plays, not only *that* it does: the emitter argument traces, through two
@@ -1257,7 +1257,7 @@ suite (931 passed).
   Fully derivable from state this engine already tracks per projectile
   (`position`, `velocity`, `lifetime`), so it needed no model - see
   [missile.md](../../docs/ghidra/functions/psp-pulse-usa/missile.md#the-two-flare-anchors-orbit-the-missiles-own-flight-line)
-  for the read and `oag_game::race::weapons::missile_flare_anchors` for the
+  for the read and `oag_raceplay::weapons::missile_flare_anchors` for the
   port. **Independently confirmed from play, asked before any of this was
   decompiled**: "the missile rotates with two trails" - matching the
   instruction-level reading of a rotation rather than the crossfade this
@@ -1724,7 +1724,7 @@ own cue.** See ["a craft hit is the third ending"](../../docs/ghidra/functions/p
 in `plasma.md`: the function plays `PLASMAHITSHIP` and clears the bolt's own
 emitter before `Plasmas_Update`'s teardown would otherwise play
 `PLASMAHITWALL`, so the original never plays both. `Cue::PlasmaHitShip` now
-exists and `crates/game/src/race/tick.rs` routes on `Impact::struck` the same
+exists and `crates/raceplay/src/tick.rs` routes on `Impact::struck` the same
 way. The paragraph above is left as the record of what was chosen before this
 was read, not deleted.
 
@@ -1733,7 +1733,7 @@ A new placement had to be added for both: `Placement::Point`, carried on
 *emitter* with a scene node, never a bare position, so nothing here is read
 off a call site; it is the smallest honest way to place a sound that is not a
 craft's own. `crates/sound/src/sfx.rs` and
-`crates/game/src/race/{weapons.rs,tick.rs}`.
+`crates/raceplay/src/{weapons.rs,tick.rs}`.
 
 ## 2026-09-16, later again: the launch-speed ramp is ported, and a first attempt at it was wrong
 
@@ -1979,7 +1979,7 @@ rising: **render-only, measured**, confidence 92.
 
 Built: `oag_vex::quake` (the table), `oag_mesh::mesh::batch_placements` (batch
 header to model vertices), `oag_render::ripple` (the bump, summing owners),
-`oag_game::race::SpanPlaces` (every vertex onto the course through its path's
+`oag_raceplay::SpanPlaces` (every vertex onto the course through its path's
 own `t`, now `SplinePoint::progress`), and a `Scene::write_road` step before
 the weapon pads' tint, which adds the displacement back. Ground truth:
 `crates/vex/tests/quake_ground_truth.rs` and

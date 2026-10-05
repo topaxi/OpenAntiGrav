@@ -2,10 +2,10 @@
 
 2026-09-23. Landed the same evening the plan below was drafted: every "wire"
 row is now in `crates/sound/src/sfx/cue.rs` (`Cue::ALL` grew from 14 to
-28), with a push site in `crates/game/src/race/weapons.rs`,
-`crates/game/src/race/weapons/single_instance.rs`,
-`crates/game/src/race/field/opponent_weapons.rs` or the sibling loop beside
-`ignite_missile_bounces` in `crates/game/src/race/tick.rs`. Per-cue evidence
+28), with a push site in `crates/raceplay/src/weapons.rs`,
+`crates/raceplay/src/weapons/single_instance.rs`,
+`crates/raceplay/src/field/opponent_weapons.rs` or the sibling loop beside
+`ignite_missile_bounces` in `crates/raceplay/src/tick.rs`. Per-cue evidence
 and confidence live on each `Cue` variant's own doc comment and on the RE
 page it cites (`rocket-visuals.md`, `missile.md`,
 `cannon-quake-leachbeam.md`, `shuriken.md`, each carrying a 2026-09-23

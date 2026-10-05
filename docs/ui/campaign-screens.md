@@ -1244,7 +1244,7 @@ for: HD's circuit name table is a different archive copy from its circuit
 *list* (`docs/formats/hd-frontend.md`), so `strings.get_or_id(&cell.track)`
 alone would show the wrong name on eight circuits. `hd_track_line` folds
 through `CircuitNames::get`, falling back to `strings.get_or_id` and then
-the raw id. It is **not** `oag_game::catalogue::label`: that function
+the raw id. It is **not** `oag_raceplay::catalogue::label`: that function
 appends `FE_REVERSE` where a reversed circuit shares its forward twin's name,
 which the original never does on HD (`docs/formats/hd-frontend.md`: the drawn
 name never carries a direction, and Track Select here draws the bare name
@@ -3647,7 +3647,7 @@ its own three-variant axis (`""`, `_c1`, `_n1`, `oag_hd::race::TEAM_VARIANTS`)
 rather than widening to seven; each variant's stats come off the model racing
 out of that directory, preferring one with no `<Unlock>` - `Feisar_c1` is
 both `chrome_c1` and `concept1` - which is **chosen, not measured**
-(`oag_game::catalogue::Team::model_for_directory`).
+(`oag_raceplay::catalogue::Team::model_for_directory`).
 
 **The stat bar, measured off the settled frame**: each block is split where
 its nobble sits (`0.69`, `0.79`, `1.0` of the block for `070`, `080`, `100`);
@@ -3840,8 +3840,8 @@ Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 | `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no |
 
 The numbers above use the circuit's own spline for the length
-(`oag_game::race::circuit_length`, measured on a worker); the lap count is the
-race's own setting (`oag_game::catalogue::race_laps`), so the frame's `13.2KM`
+(`oag_raceplay::circuit_length`, measured on a worker); the lap count is the
+race's own setting (`oag_raceplay::catalogue::race_laps`), so the frame's `13.2KM`
 is three laps and the number here follows the speed class. The PERSONAL, FRIENDS
 and GLOBAL ids (`FE_PERSONAL`/`FE_FRIENDS`/`FE_GLOBAL`) are the string table's
 own entries with that text, looked up through `DATA06`'s `entries.xml` where the

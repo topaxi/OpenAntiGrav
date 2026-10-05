@@ -26,7 +26,7 @@
 //! `crates/formats/tests/start_gantry_pure_ground_truth.rs` reads all sixteen
 //! circuits' own `TrackStartup.xml` and finds no `num="8"` on any of them,
 //! model or colour - so `oag_raceplay::load`'s billboard-slot-8 report line
-//! (added for Pulse in `crates/game/src/race/load.rs`) never fires here, and
+//! (added for Pulse in `crates/raceplay/src/load.rs`) never fires here, and
 //! that is the correct, title-agnostic behaviour rather than a gap: the same
 //! code that names Pulse's gantry by not finding a slot 8 on Pure's default
 //! circuit, says nothing, honestly, because the circuit's own manifest says

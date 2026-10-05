@@ -233,7 +233,7 @@ if (FUN_0883e37c(entity) && source == 2 && entity->fx_count /* +0xca8 */ != 0) {
 
 Confidence **88**: a clean decompile, both call sites read, and measured.
 
-**Ported** as `oag_game::race::hit_sparks`, Pulse only. `oag_weapons::projectile::WeaponHit::landed`
+**Ported** as `oag_raceplay::hit_sparks`, Pulse only. `oag_weapons::projectile::WeaponHit::landed`
 reports each hit that got through `Ship_Damage`'s gate as a per-tick output.
 Three choices are not measured. The cooldown is per locator but not shared
 with wall contacts. The display-mask gate is not modelled. The locator picks
@@ -1159,7 +1159,7 @@ complete xref list) and the silence (both gates on
 on the racing gate and raises `Cue::Absorb`; the absorb handler's own `ABSORB`
 is raised on the same cue. **The staggered `WO_WEAPON_ABSORB` burst is drawn
 as of 2026-09-23**: both paths call `Race::play_absorb_feedback`
-(`oag_game::race::absorb`), which raises the cue and attaches one instance per
+(`oag_raceplay::absorb`), which raises the cue and attaches one instance per
 `Ship Collision Fx` node on the stagger below. One departure, stated on the port: it refills every craft's lap,
 not the player's alone, so a field of opponents that the player never shoots
 does not wear itself down; `slot` is what to narrow if that is the wrong
@@ -1218,7 +1218,7 @@ void Ship_PlayAbsorbFeedback(Entity *e) {                          // 0x08840640
   [contact-response.md](contact-response.md)), so the effect plays as
   authored.
 
-The port is `oag_game::race::absorb::PULSE_ABSORB_BURST`. It plays one
+The port is `oag_raceplay::absorb::PULSE_ABSORB_BURST`. It plays one
 `WO_WEAPON_ABSORB` per locator through `psys::Stage::play_riding`, follows
 the locator while the emitters run, and lets go after. `crates/game/tests/absorb_ground_truth.rs` pins six
 bursts on Assegai, the second starting a tenth of a second in. Pure's twin
@@ -1245,7 +1245,7 @@ HD's is a different mechanism on a different node class; see
 
 - 2026-09-24: **`Ship_Damage`'s weapon branch read and measured**: it throws the
   struck hull's damage sparks, not absorb sparks, on every landed weapon hit.
-  `CockpitHitFx_Arm_q` named. Ported as `oag_game::race::hit_sparks`.
+  `CockpitHitFx_Arm_q` named. Ported as `oag_raceplay::hit_sparks`.
 - 2026-09-23: **the absorb burst's node list and delay read**:
   `Ship_GatherCollisionFxNodes`, `Vex_CollectNodesOfType`, `PsysNode_Start_q`
   and `PsysNode_Update` are named. The burst is drawn.

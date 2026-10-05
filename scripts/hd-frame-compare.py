@@ -435,7 +435,7 @@ def render(game, camera, track, out_path, bloom, cfg_root):
     10-column strip at the frame's right edge on every pose, present with
     `--bloom` on or off, absent on a non-HD (Pulse) capture at the same size -
     `oag_post::hd_bloom::Chain::run`'s caller
-    (`crates/game/src/race/scene/frame.rs`) passes the *fitted* width/height
+    (`crates/raceplay/src/scene/frame.rs`) passes the *fitted* width/height
     to the chain but not the *offset* `oag_display::display::viewport`
     computes alongside it, so the encode pass's own `set_viewport(0.0, 0.0,
     ...)` writes a rectangle anchored at the canvas origin while the scene was

@@ -1493,7 +1493,7 @@ there, not writing the field.
 **So HD stays unwired**, and `oag_hd::race::DEFAULTS` carries
 `zone_stages: None` rather than 2048's numbers - which name a thirteen-stage
 ladder this title does not have. See
-`crates/game/src/race/zone_grade.rs`'s module docs.
+`crates/raceplay/src/zone_grade.rs`'s module docs.
 
 ## 2026-08-30, an eleventh pass: the two mode texture-name tables are read whole and named, and three cited addresses are deliberately left unnamed
 

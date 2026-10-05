@@ -1,7 +1,7 @@
 //! `stats.xml` / `stats_reversed.xml`: a track's own per-class numbers,
 //! inside `FEData.wad` at the same directory
 //! [`crate::race_campaign`]'s `Cell::track` resolves through a title's
-//! `PI_Track` catalogue (`oag_game::catalogue::Track::location`) - `<that
+//! `PI_Track` catalogue (`oag_raceplay::catalogue::Track::location`) - `<that
 //! directory>\stats.xml`. Confirmed directly: `pulse-psp-usa.chd`'s
 //! `FEData.wad` carries an entry whose hash matches
 //! `Data\Environments\16_Track\stats.xml` exactly, and its content is the

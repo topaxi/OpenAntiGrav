@@ -90,7 +90,7 @@ pub struct Standing {
     pub lap_splits: [Option<u32>; MAX_RECORDED_LAPS],
     /// Eliminator kills this craft has scored. Zero on every other mode.
     ///
-    /// **This crate does not credit one.** `oag_game::race` is the only layer
+    /// **This crate does not credit one.** `oag_raceplay` is the only layer
     /// that knows which craft's weapon struck which - `struck`/`owner` on
     /// `oag_weapons::projectile::Impact` - so it is the one that increments
     /// this; this crate only carries the count and orders by it nowhere,

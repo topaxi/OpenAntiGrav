@@ -185,7 +185,7 @@ digit for digit on every team checked (Assegai `8/8/9/7`, Qirex `8/7/8/9`,
 AG Systems `7/9/9/8`, Piranha `10/6/6/9`). That is the table
 [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md)
 reads through `FUN_08808664` at `+0xb4..+0xc0` and this page recorded as
-unlocated; `oag_game::catalogue::Team::rating` reads it. Confidence 95.
+unlocated; `oag_raceplay::catalogue::Team::rating` reads it. Confidence 95.
 
 Neither PSP screen authors a preview widget in XML, so the answer is in the
 screen classes. Those cannot be reached by cross-reference - see

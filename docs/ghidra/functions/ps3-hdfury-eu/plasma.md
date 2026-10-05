@@ -265,7 +265,7 @@ comparison table rather than a claim about the models.
 
 ## 2026-09-17: implementation pass - the Collapse/Draw split, and both `.pob` internal names confirmed
 
-Landing the bolt and the explosion in `oag-game` (`crates/game/src/race/blast_models.rs`,
+Landing the bolt and the explosion in `oag-game` (`crates/raceplay/src/blast_models.rs`,
 `crates/title/src/weapons.rs`) forced two checks past what this page's
 `WeaponExplosions_Start`/`_Collapse`/`_Draw` section already established.
 
@@ -410,7 +410,7 @@ the first loop extracts was not traced element by element.
 
 ### What that composes to, on screen
 
-`1` world unit is one metre (`oag_game::race::spline`'s own note, from the
+`1` world unit is one metre (`oag_raceplay::spline`'s own note, from the
 HUD's `speed * 3.6` km/h factor). At a 60 Hz `Draw` rate - **assumed, not
 read**: `Draw` is called from `0x00127468`, which is slot 5 of the
 explosion's vtable `0x00863ef8`, and what schedules slot 5 was not followed -
@@ -462,7 +462,7 @@ agreeing, and against the direction from the model's origin):
 This engine drew every HD `.rcsmodel` draw unculled (`mesh::rcs` sets
 `DrawCall::culled = false` throughout), so the sphere drew all four layers
 along any line of sight instead of two, and from inside it both shells
-instead of the inner one. `oag_game::race::load::weapon_models::cull_as_authored`
+instead of the inner one. `oag_raceplay::load::weapon_models::cull_as_authored`
 now culls the three explosion models as authored.
 
 **This is the authored state, not a demonstrated cure for the 2026-09-17

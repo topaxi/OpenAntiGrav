@@ -43,7 +43,7 @@ This pass also found and fixed a wrong claim on two other pages:
 fallback text was because 2048 names no language plugin or HUD font. It
 names both - `english/Definition.xml` declares a `2048HUD` font role at
 `Data\XML\2048_hud\font\2048_hud.fnt` - the actual cause is `front_end` being
-`None`, which starves `crates/game/src/race/hud.rs`/`race/load.rs`'s
+`None`, which starves `crates/raceplay/src/hud.rs`/`race/load.rs`'s
 `language_plugins` lookup. Both pages now say so.
 
 **Wired and walked 2026-09-21, on `lane/2048-boot`.** `just play 2048` (no
@@ -52,7 +52,7 @@ its own `<Redirect>` widgets (the card's authored `delay="4.0"`, the six
 button exits on the movie and the title screen), then `GameModeChoice`,
 `Home` and the campaign map drawn off the disc's own `<TouchButton>`s and
 `SP.xml`'s events, pad and pointer alike, and a tap on an event starts its
-race through `oag_game::race::load_event`. Two tiles the disc does not
+race through `oag_raceplay::load_event`. Two tiles the disc does not
 author - `RACEBOX`, `REMIX` - sit after the authored four at the user's
 request, marked as this build's own. The full account, with what is
 authored, measured and chosen on each screen, is
@@ -342,7 +342,7 @@ shape, not by screen, and would have mis-fired on `Team`'s own
    gained `hud_font_role: &'static str` and
    `hud_small_font_role: Option<&'static str>`, mirroring
    `MenuSkin::menu_font`'s "which role names the disc actually uses"
-   pattern; `crates/game/src/race/hud.rs::hud_font` now asks each title for
+   pattern; `crates/raceplay/src/hud.rs::hud_font` now asks each title for
    its own role rather than the literal `"HUD"`/`"HUDSmall"`. 2048 measures
    `"2048HUD"`/`None`. The `HUDSmall` question this item raised was checked
    rather than assumed, at two levels: all seventeen 2048 plugins name no

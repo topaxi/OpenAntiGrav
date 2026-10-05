@@ -51,7 +51,7 @@ fn image() -> Option<PathBuf> {
 /// centre line in rows 3 to 7 and the broad tone bands below it.
 const ROAD: &str = "_surface6_1.tga";
 
-/// Moa Therma. Resolved through `oag_game::catalogue::tracks` plus the string
+/// Moa Therma. Resolved through `oag_raceplay::catalogue::tracks` plus the string
 /// table, and the same directory on both discs -
 /// `crates/render/tests/animated_uv_ground_truth.rs` implies `06_Track` for it,
 /// which is in fact Vertica.

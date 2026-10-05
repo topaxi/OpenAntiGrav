@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Two ratchets on Rust source length: whole files, and the tests inside them.
 
-`crates/game/src/race.rs` reached **11,294 lines** before anything measured it,
+`crates/raceplay/src/lib.rs` reached **11,294 lines** before anything measured it,
 which is thirty times this tree's median file and more than twice its next
 largest. Nothing was wrong with any single commit that grew it; that is the
 failure mode a review cannot catch, because every diff was small. It is 795
@@ -106,11 +106,11 @@ TEST_LIMIT = 200
 # the original 40 outright. These are ceilings, not targets: each may shrink,
 # none may grow, and a row is deleted the moment its file fits under `LIMIT`.
 #
-# **Neither `crates/game/src/race.rs` nor `crates/game/src/main.rs` is here any
+# **Neither `crates/raceplay/src/lib.rs` nor `crates/game/src/main.rs` is here any
 # more, and that is what this script was written for.** `race.rs` motivated the
 # ratchet at 11,294 lines, dropped to 7,751 when its test module moved out, and
 # was split along its own seams on 2026-08-16 into `race.rs` plus twenty-four
-# modules under `crates/game/src/race/`. `main.rs` followed it the same day:
+# modules under `crates/raceplay/src/`. `main.rs` followed it the same day:
 # 4,808 lines into 430 plus eighteen modules under `crates/game/src/main/`.
 # Both splits were move-only and left nothing over 800 lines. The largest thing
 # left is `crates/game/tests/race_ground_truth.rs`.

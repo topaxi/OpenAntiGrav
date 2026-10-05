@@ -285,7 +285,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
 
         if release.is_none() && live.launch_speed_kmh > 0.0 {
             // `oag_physics::step` for slot 0 runs before `projectile::step`
-            // inside `Race::tick` (`crates/game/src/race/tick.rs`), so the
+            // inside `Race::tick` (`crates/raceplay/src/tick.rs`), so the
             // velocity read here is exactly what the release computation
             // read this same tick - not a tick behind it.
             let craft_kmh = race.sim.world.ships[0]
@@ -412,7 +412,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
 /// reach and outside a hull's own collision footprint, so the sentinel is a
 /// blast candidate rather than a direct hit the moment it is placed.
 /// `Race::tick` applies a tick's blast before `step_opponents` moves anyone
-/// (`crates/game/src/race/tick.rs`), so the craft is exactly where the bolt is
+/// (`crates/raceplay/src/tick.rs`), so the craft is exactly where the bolt is
 /// at the moment any blast would land, on every single tick of the flight -
 /// nothing here depends on predicting where a real circuit's geometry puts
 /// the bolt, because the bolt never reaches any. Slot 0's own shield is not

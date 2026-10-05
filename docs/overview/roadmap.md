@@ -545,7 +545,7 @@ seen from the authoring side.
       HD, whose authored lighting landed on 2026-08-18; see that section.
 - [x] **Speed pads**, decoded, placed, drawn and boosting. `Speedup Pad` `0x3bd`
       is a `Mesh` subclass, so its geometry ships inside the track file (see
-      [pads](../formats/pads.md)); the trigger is `oag_game::race`'s reimplementation
+      [pads](../formats/pads.md)); the trigger is `oag_raceplay`'s reimplementation
       of the original's per-racer distance cache, and the force is step 15 of
       `Ship_UpdateCraft` in `oag_physics::engine::speedup_pad`, reading
       `<GlobalClass><SpeedupPads amount time/>` off the player's own disc. Zone
@@ -813,7 +813,7 @@ seen from the authoring side.
       - [x] `shipboost.vex`, the boost ship state - **the additive plume a
         speed pad reveals**, recovered and drawn (2026-08-04); see
         [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md)'s "boost
-        visual" section and `oag_game::race::Loaded::boost_model`. Two meshes,
+        visual" section and `oag_raceplay::Loaded::boost_model`. Two meshes,
         drawn once in ship space with no locator mounting - the file's own
         node tree carries no `Transform` for either mesh to mount on.
       - `shipwreck.vex`, the damage ship state, still open. **Note the naming

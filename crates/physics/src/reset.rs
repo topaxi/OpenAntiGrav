@@ -9,7 +9,7 @@
 //! # What is not recovered, and is therefore not here
 //!
 //! **Where the ship goes.** The evidence says a respawn happens; nothing found
-//! says where to. That decision lives in `crates/game/src/race.rs`, which owns
+//! says where to. That decision lives in `crates/raceplay/src/lib.rs`, which owns
 //! the spline, and is scored there as the low-confidence guess it is. Keeping the
 //! split here rather than passing a recovery pose down means this module cannot
 //! quietly acquire an invented constant.

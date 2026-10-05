@@ -7,7 +7,7 @@ and [`oag_tables::mjolnir::campaign`](../../crates/tables/src/mjolnir/campaign.r
 entry names and 2048-specific facts in
 [`oag_2048::campaign`](../../crates/2048/src/campaign.rs), per
 [ADR-0022](../architecture/adr/0022-title-packages.md). Wired into a headless
-launch: `crates/game/src/race/load/campaign.rs`'s `race::load_event` resolves
+launch: `crates/raceplay/src/load/campaign.rs`'s `race::load_event` resolves
 an event by name onto `race::Options` before calling the existing `load`, and
 `oag-game --event "<name>"` drives it end to end - see
 [the launch section](#the-launch-cratesgamesrcraceloadcampaignrs) below.
@@ -521,7 +521,7 @@ names but no prior pass had read at runtime:
   resolves the field slot-by-slot (not through `Field::references`, which
   drops an unauthored slot's own position along with its empty value) onto
   `race::Options::grid_teams`, a **per-slot** override
-  `crates/game/src/race/load/roster.rs::apply_grid_teams` overlays onto
+  `crates/raceplay/src/load/roster.rs::apply_grid_teams` overlays onto
   `oag_livery::teams_for_slots`' own "chosen, not measured" placement -
   slot by slot, not all-or-nothing: a slot this does not resolve (unauthored,
   or a dangling `WOShipModelData` reference - neither observed on the real
@@ -545,7 +545,7 @@ names but no prior pass had read at runtime:
   `crates/game/tests/vita_2048_campaign_grid_ground_truth.rs` (disc-backed,
   `#[ignore]`d) and by synthetic-fixture unit tests in
   `crates/2048/src/campaign/tests.rs` and
-  `crates/game/src/race/load/roster.rs`. One event, `"Pirhana P Ship
+  `crates/raceplay/src/load/roster.rs`. One event, `"Pirhana P Ship
   Challenge"` (`RACE_A`, 2 laps), authors an **empty** grid alongside its
   forced player craft - a solo or ghost run, not measured further this pass.
   **Not the same shape as an unauthored field**: its own `M_PGRIDSHIPMODELDATA`
@@ -668,7 +668,7 @@ best result this build does not keep).
 --ticks 2 --screenshot out.png` opens the named event's card on page `N`
 (`--until card` alone is the selected event's first page).
 
-## The launch: `crates/game/src/race/load/campaign.rs`
+## The launch: `crates/raceplay/src/load/campaign.rs`
 
 `race::load_event(options, event_name)` resolves `event_name` against
 `SP.xml`, overrides `options.track`/`class`/`mode`/`laps_override` on a clone
@@ -695,7 +695,7 @@ Verified against the real EU v1.04 package:
 - `--event "2048 - Event 4-2"` (an `Elimination` event) loads
   `Elimination_HUD.xml` and a real course end to end.
   **`oag_race::Mode::Eliminator` is a real, implemented mode** -
-  `crates/game/src/race/eliminator.rs`, a kill-count race end in `tick.rs` -
+  `crates/raceplay/src/eliminator.rs`, a kill-count race end in `tick.rs` -
   and 2048's own `TITLE.weapons.elimination` already names
   `Data\XML\weaponstats_Elimination_2048.xml`, so none of `SP.xml`'s four
   event kinds is refused as unsupported; the CLI's own `--mode` help text
@@ -864,7 +864,7 @@ ever confirmed to be its flag - Step 2 now confirms it is.
 campaign.rs`) decodes all eleven bits above (`WEAPON_BITS`) and nothing
 else - `oag_weapons::pickup::draw`'s own `allowed` parameter gates a
 `Weapon Pad`'s draw to that list, wired from the event's own `M_WEAPONSET`
-in `race::load_event` (`crates/game/src/race/load/campaign.rs`) onto
+in `race::load_event` (`crates/raceplay/src/load/campaign.rs`) onto
 `Setup::allowed_weapons`. An event whose weapon set decodes to nothing
 recognised (no weapon set authored at all, or `available_bits` sets no bit
 in `WEAPON_BITS`) races unrestricted rather than this project guessing - the

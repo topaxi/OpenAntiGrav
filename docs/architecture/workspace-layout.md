@@ -62,6 +62,8 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-livery` | `crates/livery` | Per-slot ship assets for a race: hulls, skins (`ship_skin::apply`), shield shells, boost plumes, engine lights, wrecks, plus `entry`, the archive entry names they come from. The catalogue half of skin selection (`resolve`) stays in `oag-game` because it reads `crate::catalogue`. |
 | `oag-music` | `crates/music` | Soundtrack reading and decoding: a title's music listing (declared, sniffed or Omega's Wwise states) and the ATRAC3+, ATRAC9, MP3 and Wwise decoders. `oag-sound` opens the source through its `Library` and calls it. |
 | `oag-sound` | `crates/sound` | What the game plays: soundtrack selection and the music playlist, the effect banks and cues, HD's authored mix, over the `oag-audio` mixer. Depends on neither `oag-game` nor a title package; the host supplies a `Library` (opens a source as a title, lists disc images) and, per tick, a plain-data `RaceFrame`. `oag-game` keeps `oag_game::sound`, which implements the first and builds the second from a `Race`. |
+| `oag-raceplay` | `crates/raceplay` | A race from load to finish line: `race::load`, the front-to-back tick (`Race`, `RaceSim`), the scene it draws, weapon visuals, scenery effects, the replay and ghost glue, plus what a race load reads with them (`catalogue`, `pilots`, `loader_log`, the `scoreboard` table and the track-panel assets). Renderer-coupled, so it sits above `oag-render`, `oag-fx`, `oag-mesh`, `oag-sound`, `oag-hud`, `oag-livery` and `oag-present` and below `oag-game`; classified in `NOT_TITLE_PACKAGES`, nothing gameplay-side may depend on it. It reaches nothing in `oag-game`: the host builds the loading screen's `Progress` from `LoadProgress`, and the headless capture path (`oag_game::race_capture`) stays behind because it composites the front end's overlays. |
+| `oag-source` | `crates/source` | Finding a title's disc image and opening it as whichever title it is: the image search path (`source`), `title::open_source`, downloadable content (`dlc`), a race's track and craft sources (`remix::Remix`) and the derived-cache directories (`cache`). Split out so the boot, `oag-sound`'s host and `oag-raceplay`'s load can all open a source without one depending on another. |
 | `oag-hud` | `crates/hud` | The in-race HUD and the sprite sheet: layout model, readouts, draw list. Extracted from `oag-game`; the two wgpu passes (`hud_overlay`, `hud_countdown`) stay behind because they need `oag-game`'s `Renderer`. Classified in `NOT_TITLE_PACKAGES` - it reads titles and depends on `oag-race`, and nothing gameplay-side may depend on it. |
 | `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, the strings a screen draws. Extracted from `oag-game` the same way `oag-display` was; `oag-game`'s own `render.rs` rasterises the `Draw` list it emits. Classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES` - menus draw, so it may link a renderer, which is exactly what nothing gameplay-side may ever do. |
 | `oag-ui-screens` | `crates/ui-screens` | The front end's individual screens, built on `oag-ui`'s vocabulary: the campaign map and flyer, the end-of-race screens, the garage and track pickers, the name-entry and confirm prompts, the ticker marquee and the track panel. Split out of `oag-ui`, which keeps the lower core (`frontend`, `menu`, `screen`, `language`, `pointer`, `font`) and never depends back on it. Same `NOT_TITLE_PACKAGES` classification. |
@@ -91,7 +93,7 @@ The weapons code reached into `Ship` for nine fields, which became the
 `oag_weapons::Craft` trait, used generically (never `dyn`) so the arithmetic is
 the same instructions as before. The three functions that took a `&mut World`
 (`projectile::step`, `slowdown::drain`, `disruption::advance`) now take the
-pool and the occupied slice of ships; `oag_game::race::tick` passes
+pool and the occupied slice of ships; `oag_raceplay::tick` passes
 `&mut world.ships[..world.ship_count as usize]`. `MAX_SHIPS` is defined once in
 `oag-weapons`, the lowest crate that needs it, and `oag_gameplay::MAX_SHIPS` is
 that constant.
@@ -273,7 +275,7 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-raceplay` (the whole `race/` tick, formerly in `oag-game`, which keeps its own entry for the capture loop) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
 | `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
@@ -491,7 +493,7 @@ session was contention, not drift.
 
 The table above left `oag-game` and `oag-render` at `opt-level = 0`. That was
 right when the sim lived in `oag-race`, and stopped being right when the whole
-race tick (`crates/game/src/race/`) and the particle systems it steps moved into
+race tick (`crates/raceplay/src/`) and the particle systems it steps moved into
 those two crates: `ai_roll`, `ram`, `eliminator_finish`, `difficulty` and the
 rest of the sim-driving ground-truth tests were running the race unoptimised.
 Three changes, all in `Cargo.toml`'s profiles, none touching float semantics

@@ -2,7 +2,7 @@
 
 Read 2026-09-03, chasing which clock feeds the PS2 boost plume's anchor
 animation - previously an approximate fit to `Exhaust::plume_timer` with no
-PS2 executable read behind it (`crates/game/src/race/scene/frame.rs`'s
+PS2 executable read behind it (`crates/raceplay/src/scene/frame.rs`'s
 boost-plume `write_node_anims` call). This settles that question. It does
 **not** repeat the PSP class's full field map or channel
 evaluators - [`anim-transform.md`](../psp-pulse-usa/anim-transform.md) already
@@ -123,7 +123,7 @@ page found.
 **So the node clock feeding every `Anim Transform` node on PS2, including the
 boost plume's anchors, is one shared per-race clock - not a per-object
 reveal timer.** This is not a PS2-specific reading standing alone: it is the
-same mechanism `crates/game/src/race/scene/frame.rs` already assumes for
+same mechanism `crates/raceplay/src/scene/frame.rs` already assumes for
 every *other* `Anim Transform` node in the scene ("the scenery: both
 animation mechanisms off the one clock", driving `write_node_anims` with the
 frame's own `seconds = race.world.tick as f32 / 60.0`). The boost plume's

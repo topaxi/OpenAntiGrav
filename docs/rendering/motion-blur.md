@@ -164,7 +164,7 @@ sets and the way FXAA was already done.
 
 ## Implementation sketch
 
-**Attachments**, in `oag_game::race`. ~~The depth texture gains
+**Attachments**, in `oag_raceplay`. ~~The depth texture gains
 `TEXTURE_BINDING` and the pass's `depth_ops.store` becomes `StoreOp::Store`~~ -
 **done**, by the camera tier, which reads that depth every frame. Add
 an `Rg16Float` velocity target at the scene's sample count, `RENDER_ATTACHMENT |
@@ -186,7 +186,7 @@ position; add a second fragment entry point returning `@location(0)` colour and
 argument - an enum rather than a `bool`, matching how `Depth::Scene` /
 `Depth::Sky` already reads in the same function. Two of its three callers want
 it off - the asset viewer's `crates/view/src/orbit.rs` and
-`crates/render/tests/msaa_resolve.rs`; only `oag_game::race` wants it on - and a
+`crates/render/tests/msaa_resolve.rs`; only `oag_raceplay` wants it on - and a
 missing velocity write is invisible in the final image, so the call sites need
 to say which they mean rather than passing a bare `false`.
 
@@ -543,7 +543,7 @@ Those tests, so they are not a surprise:
 - Every setting-bearing row must appear in `menu_seeds`, and every seed must
   name a key the settings file actually has. Together these catch a half-wired
   option, which is their whole purpose.
-- The `UNIFORMS_SIZE` pin in `oag_game::race` fails the moment `Uniforms`
+- The `UNIFORMS_SIZE` pin in `oag_raceplay` fails the moment `Uniforms`
   grows. That is intended: it is what makes the two mirrored definitions stay
   mirrored.
 

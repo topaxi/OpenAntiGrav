@@ -214,7 +214,7 @@ impl Mode {
     /// on; a fifth rung is deliberately not representable, for the reason
     /// `oag_title::SpeedClasses::VECTOR` gives at length. Resolving a title's
     /// class *name* onto this enum is the caller's job and happens in
-    /// `oag_game::race::Race::start`, where the name already lives.
+    /// `oag_raceplay::Race::start`, where the name already lives.
     ///
     /// **This table is the fallback, not the authority.** A race launched from
     /// the campaign should take the lap count from *its own* cell -
@@ -435,7 +435,7 @@ impl Mode {
     /// distinguishable craft - they still wear the player's livery, which is the
     /// separate roadmap item.
     ///
-    /// `oag_game::race::Options::opponents` remains the escape hatch the grid's
+    /// `oag_raceplay::Options::opponents` remains the escape hatch the grid's
     /// own ground-truth test uses to place all eight from a mode that does not
     /// ask for them.
     ///
@@ -535,13 +535,13 @@ impl Mode {
     /// sentence, and this method is the first of them. The second - a lap
     /// completion refilling the pool instead - touches [`ShipState::shield`],
     /// which this crate cannot see (`oag-race`'s `Cargo.toml` says why); it is
-    /// `oag_game::race::Race::tick`'s to apply, on the same `lap_completed`
+    /// `oag_raceplay::Race::tick`'s to apply, on the same `lap_completed`
     /// edge the free Time Trial/Speed Lap turbo already reads.
     ///
     /// **`false` is not "the press does nothing".** The original's absorb in
     /// an Eliminator spends the held weapon on a one-second Shield
     /// (`Ship_AbsorbHeldPickup`'s mode-8 path); that is
-    /// `oag_game::race::Race::eliminator_absorb`'s to apply.
+    /// `oag_raceplay::Race::eliminator_absorb`'s to apply.
     ///
     /// **`true` for Tournament too, mirroring [`Self::SingleRace`]** - see
     /// [`Self::Tournament`]'s own doc; nothing in `MSC_EVENT_TOURN`'s text

@@ -203,7 +203,7 @@ player's hull, and the log says so once.
 ### The ghost is not in the world
 
 The ghost is not a ninth ship, and it does not occupy a grid slot. It lives
-in `oag_game::race`, beside `RaceView`, never in `RaceSim` or `World`. It
+in `oag_raceplay`, beside `RaceView`, never in `RaceSim` or `World`. It
 collides with nothing, and it cannot change a state hash. A race with a ghost
 hashes exactly like the same race without one, tick for tick.
 `crates/game/tests/replay_ground_truth.rs` asserts that on a real circuit.

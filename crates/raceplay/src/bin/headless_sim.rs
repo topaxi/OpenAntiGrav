@@ -2,13 +2,12 @@
 //! disc, and prints the state hash it arrives at.
 //!
 //! **A smoke test, not a server.** It exists to prove one thing and nothing
-//! else: that `Race`, `RaceSim` and `Race::tick` are reachable through
-//! `[lib] oag_game` with no graphics, audio or windowing attached at all. That
-//! is the cheap half of what a headless network server needs - rule 2 of
-//! `docs/architecture/workspace-layout.md` says no crate may depend on
-//! `oag-game`, so a server cannot be some other crate importing
-//! `oag_game::race`; a second `[[bin]]` in this crate can, with no new
-//! dependency edge and no rule bent.
+//! else: that `Race`, `RaceSim` and `Race::tick` run with no graphics, audio or
+//! windowing attached at all. That is the cheap half of what a headless network
+//! server needs. It is a binary of `oag-raceplay` rather than of `oag-game`
+//! because everything it runs lives here: a server can depend on this crate
+//! without the composition root, which rule 2 of
+//! `docs/architecture/workspace-layout.md` forbids.
 //!
 //! **There is no networking here, and there should not be.** A transport and a
 //! message format are undecided, and `workspace-layout.md`'s own warning about

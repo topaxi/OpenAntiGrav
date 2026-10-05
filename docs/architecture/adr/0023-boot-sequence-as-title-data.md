@@ -80,7 +80,7 @@ filled in by each title package, and consumed by one generic mechanism in
    `has_screen` predicate and the screen model stays where it is.
 
 4. **The profile is selected once, by serial, and never probed for.**
-   `oag_game::title::open_source` already identifies the title from
+   `oag_source::title::open_source` already identifies the title from
    `UMD_DATA.BIN` before any XML is parsed, then discards that knowledge.
    Screen-name probing is what this ADR *removes*; it is not what it formalises.
 

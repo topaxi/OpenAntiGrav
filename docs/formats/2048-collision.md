@@ -234,7 +234,7 @@ Reproducers: `crates/vex/examples/omega_col_probe.rs` and
 `SurfaceKind::ALL` order - never in the order a map happens to iterate, because
 a collider's index *is* its identity to
 `oag_physics::forces::Environment::self_collider` and that ordering feeds
-simulation state. `oag_game::race::load` asks for the sibling file **only when
+simulation state. `oag_raceplay::load` asks for the sibling file **only when
 the `.vex` answered with no collision at all**, so no other title's load changes
 shape.
 

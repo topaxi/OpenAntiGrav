@@ -866,7 +866,7 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // specular exponent and the blanket sun term above. **The stage texture now
 // follows the sphere too**: `zone_tex_outer`/`zone_scene_tex_outer` are the
 // stage being swept out's own `zoneTexInner`/`zoneTexOuter` publication,
-// rebuilt on the same stage-change edge `oag_game::race::Scene::rebind_zone_art`
+// rebuilt on the same stage-change edge `oag_raceplay::Scene::rebind_zone_art`
 // rebinds bind group 2 on rather than every frame - see
 // `oag_mesh::mesh_render::zone::rebind`.
 fn zone_is_track(slots: u32) -> bool {

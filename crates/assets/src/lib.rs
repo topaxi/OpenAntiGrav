@@ -90,14 +90,14 @@ pub enum Error {
     /// [`NoArchive`](Error::NoArchive) if nothing then matches.
     /// The advice this used to give - "support is tracked for M8" - was true
     /// when nothing but Pulse could open, and stopped being true on 2026-08-11:
-    /// `oag_game::title::open_source` catches this error for Pure and opens the
+    /// `oag_source::title::open_source` catches this error for Pure and opens the
     /// disc as Pure instead, which is how `--race` reaches a Pure circuit. So
     /// the error now means what it always literally said and nothing more - *you
     /// asked for one title and this disc is another* - and it points at the
     /// call that does the choosing rather than at a milestone.
     #[error(
         "{looked_in} identifies as {serial} ({title}), not Wipeout Pulse. \
-         Open it through oag_game::title::open_source, which picks the title \
+         Open it through oag_source::title::open_source, which picks the title \
          from the serial; see docs/overview/roadmap.md for how far {title} gets."
     )]
     WrongTitle {

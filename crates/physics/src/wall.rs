@@ -134,7 +134,7 @@
 //!   whose triangle faces away, exactly as `Collision_BoxAgainstMesh` does,
 //!   instead of flipping the normal. That one moved the lap, barely - 617.5
 //!   units travelled to 618.6, both from the spline-sample-0 spawn that
-//!   `oag_game::race` no longer uses, so it is the *difference* that carries the
+//!   `oag_raceplay` no longer uses, so it is the *difference* that carries the
 //!   point and neither absolute reproduces - which is the size the data predicts: 99.6 % of
 //!   `16_Track`'s wall triangles already face the circuit, so only the remaining
 //!   0.4 % can behave differently.

@@ -15,7 +15,7 @@
 //! *extraction*, not a seek-inside-the-zip source. A pack is around 10 MiB and
 //! a full set is four of them; decompressing that into memory on every boot
 //! would be paid every run, for a file that never changes. Writing it once into
-//! [`crate::boot::default_dlc_cache_dir`] keeps the read path identical to the
+//! `crate::boot::default_dlc_cache_dir` keeps the read path identical to the
 //! disc's and the resident cost at zero.
 //!
 //! ## Pure's packs need one more step

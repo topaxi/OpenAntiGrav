@@ -277,7 +277,7 @@ a green-looking figure produced by a run that had not exercised the thing**:
 ## The GPU side, on an integrated GPU (2026-10-03)
 
 `OAG_RENDER_GPU_BENCH=N` (beside `OAG_RENDER_BENCH`, in
-`crates/game/src/race/capture/bench.rs`) records the captured frame, submits
+`crates/game/src/race_capture/bench.rs`) records the captured frame, submits
 it and waits for idle N times, timing submit-to-idle. Device time plus one
 submission's overhead; an A/B on one machine cancels the overhead. The adapter
 is `graphics.renderer` in the settings file - measured on the Ryzen 7900's

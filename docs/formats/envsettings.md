@@ -7,7 +7,7 @@ beside.
 
 Implemented in
 [`oag_tables::envsettings`](../../crates/tables/src/envsettings.rs), read into
-a race by [`oag_game::race::load`](../../crates/game/src/race/load.rs), drawn
+a race by [`oag_raceplay::load`](../../crates/raceplay/src/load.rs), drawn
 through [`oag_mesh::mesh_render::Light`](../../crates/mesh/src/mesh_render.rs),
 and checked against the disc by
 [`envsettings_ground_truth.rs`](../../crates/tables/tests/envsettings_ground_truth.rs).

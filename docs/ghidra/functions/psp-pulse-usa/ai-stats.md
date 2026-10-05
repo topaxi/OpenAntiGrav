@@ -531,7 +531,7 @@ What is left that touches *this* record:
   armed, but the emulator was stalled by the log at the time, so that leg is
   void rather than negative.
 
-**What this actually establishes.** `ai.md` and `crates/game/src/race/field.rs`
+**What this actually establishes.** `ai.md` and `crates/raceplay/src/field.rs`
 recorded this file as where the original decides what an opponent does with a
 pickup, and **they were right** - `FUN_088518b4` reads it every frame and writes
 the fire request. So the weapon-AI hook is located, and what is left is naming the

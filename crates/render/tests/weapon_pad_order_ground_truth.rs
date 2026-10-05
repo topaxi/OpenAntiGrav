@@ -1,7 +1,7 @@
 //! `Model::node_vertex_ranges`' `i`-th entry is `oag_vex::pads::volumes`'
 //! `i`-th trigger's own geometry - a positional correspondence the render
 //! side leans on to recolour a `Weapon Pad` by whether it currently hands
-//! out a pickup (`Drawable::tint_weapon_pads`, `oag_game::race::drawable`).
+//! out a pickup (`Drawable::tint_weapon_pads`, `oag_raceplay::drawable`).
 //!
 //! `#[ignore]`d because it needs a disc image, not a GPU - this only reads
 //! geometry and trigger volumes, no wgpu involved. Run it by hand:

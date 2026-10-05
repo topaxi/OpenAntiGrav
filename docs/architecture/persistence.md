@@ -9,7 +9,7 @@ Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
 | File | Owner module | What it holds |
 | --- | --- | --- |
 | `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. |
-| `pilots/*.toml` | `crates/game/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
+| `pilots/*.toml` | `crates/raceplay/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
 | `records.toml` | `crates/game/src/records.rs` | Best lap, best total time and the last result, per circuit/mode/class. This page. |
 | `ghosts/<title>/<mode>/<class>/<track>.oagr` | `crates/game/src/ghosts.rs` | The best lap raced as a ghost in Time Trial and Speed Lap, one replay file per `records.toml` key, written only when a lap beats it. See [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
 
@@ -76,7 +76,7 @@ concern, and this file is not one.
 the simulation must not know a renderer, or by extension a save system,
 exists - applies here exactly as it does to the scoreboard the results table
 is already built from. Nothing in `oag-race`, `oag-gameplay`, `oag-ai` or
-`crates/game/src/race/` calls into `records.rs`, imports it, or knows it
+`crates/raceplay/src/` calls into `records.rs`, imports it, or knows it
 exists.
 
 Two places in the composition root do, both reading `Race`'s already-public
@@ -147,7 +147,7 @@ it - `Session::frame`'s finish arm reads the row `Store::get` returns
 *before* folding this race's `Observation` in, because `Store::record`
 mutates the row in place and the comparison needs "before" and "after" both.
 
-A `--race --screenshot` capture (`crates/game/src/race/capture.rs`,
+A `--race --screenshot` capture (`crates/game/src/race_capture.rs`,
 `crate::capture::run`) draws the same line, reading (never writing)
 whatever `records.toml` already holds for the key it resolves the same way
 `Stage::build_race_stage` does - see

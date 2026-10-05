@@ -110,7 +110,7 @@ neither blocks anything.
    `oag_render::roll::ease` in `crates/render/src/roll.rs`, with the pinned
    unit tests plus a continuity check at the `+/-0.5` seam.
 3. ~~Apply the rotation to the ship's transform~~ **Done**:
-   `model_matrix_of` in `crates/game/src/race/drawable.rs` composes it into
+   `model_matrix_of` in `crates/raceplay/src/drawable.rs` composes it into
    `body.orientation`, about the local `-Z` axis `oag_physics::ship::Body::
    forward` already uses.
 4. ~~Roll the internal camera's up vector~~ **Done**, alongside
@@ -123,7 +123,7 @@ neither blocks anything.
    as - a `[1, 2, 1]` gesture (tap LEFT first, which ramps `roll_phase`
    toward `-1.0`) turns out to drop the **right** wing, not the left the
    constant originally assumed a player's own gesture would suggest.
-   `crates/game/src/race/drawable.rs`'s
+   `crates/raceplay/src/drawable.rs`'s
    `roll_direction_matches_the_original_captured_display_matrix` pins it
    against the captured body and phase directly, through this crate's own
    rotation composition rather than hand algebra, so a future regression on

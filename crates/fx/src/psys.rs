@@ -1216,7 +1216,7 @@ impl System {
 ///
 /// **Thirty-two since the absorb burst landed, chosen, not measured.** One
 /// absorb alone starts up to ten instances on Pulse (one per `Ship Collision
-/// Fx` node, `oag_game::race::absorb`), each alive about a second, which
+/// Fx` node, `oag_raceplay::absorb`), each alive about a second, which
 /// against twenty-four would have recycled the detonations the old count was
 /// sized for. About 670 KB of pool.
 pub const MAX_INSTANCES: usize = 32;

@@ -27,7 +27,7 @@
 //! file, carrying forward whatever key the file does not declare.
 //!
 //! **Measured against the tree before this lane's
-//! `crates/game/src/race/load/environment.rs::staged_envsettings` existed:
+//! `crates/raceplay/src/load/environment.rs::staged_envsettings` existed:
 //! exactly 5 of these 16 built (`git stash` the module's carry and rerun to
 //! reproduce it).** This test pins the fixed reading - all sixteen build -
 //! rather than the gap itself, so it stays green rather than becoming a
@@ -46,7 +46,7 @@ fn image() -> Option<PathBuf> {
 
 /// Every environment on the disc, by its forward `track.vex` - the reversed
 /// twin reads the same sibling `.envsettings`
-/// (`crates/game/src/race/load/environment.rs::envsettings_name`), so it
+/// (`crates/raceplay/src/load/environment.rs::envsettings_name`), so it
 /// answers `envsettings_bloom` identically and would not add a distinct case
 /// here. The eight `01_..15_` entries are the Fury/DLC circuits (`DATA02`);
 /// the plain names and `zone_1..4` are the base game's (`DATA00`) - see

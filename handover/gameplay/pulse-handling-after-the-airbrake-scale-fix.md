@@ -48,7 +48,7 @@ they belong:
   the missing-pad bug was never its cause. The crest thread stands as written.
 - **`oag-trace drive` (and so `just scripted-sim`) still takes no pads.**
   `DriveOptions` has no track pad list; only `run` loads one.
-- **The swept pad test now exists twice**: `oag_game::race::pads` and
+- **The swept pad test now exists twice**: `oag_raceplay::pads` and
   `oag_trace::replay::pads`. `oag-trace` cannot depend on the composition root,
   so the shared part (sweep + first containing pad) wants a home both can
   reach, `oag-vex` or `oag-race`.

@@ -1,7 +1,7 @@
 //! The track-description panel over the pre-race flyby, read off the disc at race load.
 //!
 //! The picture is `oag_game::track_panel::Overlay`; this half is the [`Assets`] a race load reads
-//! for it and carries in [`crate::Options::track_panel`].
+//! for it and carries in `oag_raceplay::Options::track_panel`.
 //!
 //! The layout is `InGameTrackDescriptionScreen` in `InGame_Definition.xml`, the two strings are
 //! the circuit's name and `MSC_TRACK_<nn>` paragraph in the language's string table, and the

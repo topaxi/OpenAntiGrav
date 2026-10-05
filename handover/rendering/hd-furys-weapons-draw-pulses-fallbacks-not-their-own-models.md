@@ -1,9 +1,9 @@
 # HD/Fury's weapons draw Pulse's fallbacks, not their own models and effects
 
 2026-09-17. Found while drawing lanes for the weapon-fidelity pass. Every
-weapon model entry in `oag_game::race` is a Pulse PSP name
+weapon model entry in `oag_raceplay` is a Pulse PSP name
 (`Data\Weapons\Rocket.vex`, `Pulse_Mine.vex`, `pulse_muzzleflash.vex`,
-`pulse_plasma_*.vex` - `crates/game/src/race/load/weapon_models.rs`), none of
+`pulse_plasma_*.vex` - `crates/raceplay/src/load/weapon_models.rs`), none of
 which resolves on the PS3 disc, so on HD every projectile falls back to
 `Race::projectile_sprites`' procedural billboard (`exhaust::sprite`) - a
 stand-in - and only the `.pob` effects whose names HD shares

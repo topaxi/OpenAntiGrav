@@ -31,7 +31,7 @@ use oag_mesh::mesh;
 use oag_pulse::race::TEAMS;
 
 /// The archive entry name for a team's ship model, assembled the way
-/// `oag_game::race::ship_entry_name` assembles it. Not shared from there: no
+/// `oag_raceplay::ship_entry_name` assembles it. Not shared from there: no
 /// crate may depend on `oag-game`, the composition root.
 fn ship_entry_name(team: &str) -> String {
     format!(r"Data\Ships\{team}\Ship.vex")

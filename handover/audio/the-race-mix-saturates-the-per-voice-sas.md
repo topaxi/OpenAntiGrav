@@ -166,7 +166,7 @@ see the pass's own scratch note for the exact run.
   "fixing it makes the engine louder" was correct, and settles that the
   ordering bug and the saturation are two separate findings, not the same one
   in disguise.
-- **`race::capture` already calls `Audio::race_tick`** (`crates/game/src/race/capture.rs:856`,
+- **`race::capture` already calls `Audio::race_tick`** (`crates/game/src/race_capture.rs:856`,
   landed in `d55b0ffc`, 2026-08-25). Nothing to fix there; the bullet was
   stale from before that commit.
 - **The per-voice SAS volume is recovered, live, and it does not explain the

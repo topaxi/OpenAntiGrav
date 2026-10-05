@@ -242,7 +242,7 @@ own doc comment - becomes one more entry of
 [`oag_mesh::mesh::Model::anim_tracks`](../../crates/mesh/src/mesh/anim_track.rs),
 the exact table Pulse's own `TEXOFFSET` blocks already fill, sampled every
 frame through the **same per-model clock every other animation on that model
-already rides** - the race clock, unshifted, `crates/game/src/race/gantry.rs`'s
+already rides** - the race clock, unshifted, `crates/raceplay/src/gantry.rs`'s
 own `seconds = world.tick / 60` for the gantry, `mesh::rcs::skin`'s callers'
 own clock for anything else. **No new time base was chosen**: this is the
 standing "never invent" rule read the other way round - the invention this

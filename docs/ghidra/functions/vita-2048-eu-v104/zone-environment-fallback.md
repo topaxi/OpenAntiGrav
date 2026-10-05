@@ -550,7 +550,7 @@ stopped one step short: it read the per-record name pointer as inconsistent
 (threshold `90` and threshold `9999` carrying the same pointer), called the
 number-to-name pairing unsettled, and left the thresholds themselves
 uncited. All three are closed here, and the table is now the live trigger
-`crates/game/src/race/zone_grade.rs` runs a 2048 Zone race off.
+`crates/raceplay/src/zone_grade.rs` runs a 2048 Zone race off.
 
 ### The table, read with `read_memory` rather than inferred
 

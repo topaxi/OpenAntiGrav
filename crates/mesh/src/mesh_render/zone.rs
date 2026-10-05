@@ -70,7 +70,7 @@ pub struct StageArt {
     /// `zoneModeTrack<n>.gtf` for the stage being swept out -
     /// `zoneTexTrackOuter`. The showing stage's own texture where the
     /// caller has no previous stage to offer - see
-    /// `oag_game::race::zone_grade::ZoneGrade::stage_art_pair` - so the
+    /// `oag_raceplay::zone_grade::ZoneGrade::stage_art_pair` - so the
     /// sphere test is a no-op rather than a black hole outside it.
     pub track_outer: Option<Arc<ModelTexture>>,
     /// `zoneMode<n>.gtf` for the stage being swept out - `zoneTexOuter`, on
@@ -548,10 +548,10 @@ pub(super) fn scene_bind_group(
 /// everything else in the group (the pipeline is not even reachable from
 /// here) stays exactly as that call left it.
 ///
-/// **Call this on the stage-change edge alone.** `oag_game::race::Drawable`
+/// **Call this on the stage-change edge alone.** `oag_raceplay::Drawable`
 /// keeps its own `RebindResources` beside the [`wgpu::BindGroup`] this
 /// replaces and calls it when
-/// `oag_game::race::zone_grade::ZoneGrade::follow`/`commit` reports a new
+/// `oag_raceplay::zone_grade::ZoneGrade::follow`/`commit` reports a new
 /// `(current, previous)` pair - not every frame. A per-frame call would
 /// still draw the right picture (uploading the same four textures again is
 /// wasteful, not wrong), but the caller gates it the same "log the edge, not

@@ -244,7 +244,7 @@ fn the_leachbeams_four_widgets_are_authored_and_have_no_lockedon_counterpart() {
 /// (`"2048HUD"`) to the real, decodable HUD face - not the 5x7 fallback, and
 /// not a leftover entry from a plugin that never shipped one.
 ///
-/// Regression pin for `crates/game/src/race/hud.rs::hud_font` reading the
+/// Regression pin for `crates/raceplay/src/hud.rs::hud_font` reading the
 /// *title's own* role through `oag_title::Title::hud_art` rather than the
 /// shared `oag_ui::language::roles::HUD` literal every other title's own
 /// plugin happens to also spell. Before that change, `hud_font` asked every

@@ -416,7 +416,7 @@ types - see
 [shield.md](shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type),
 which is where `Race_ReadSetupOptions` (the writer of the global this branch
 reads) is decoded in full. `oag_race::Mode::weapons_enabled` is the port, and
-`Scene::new` in `crates/game/src/race/scene.rs` is where the reimplementation makes
+`Scene::new` in `crates/raceplay/src/scene.rs` is where the reimplementation makes
 the same "decoded, but never uploaded to the GPU" choice this branch does -
 see its own doc comment for why the mesh decode itself stays unconditional
 where this branch's visibility clear does not.
@@ -574,7 +574,7 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   and the refresh timer - see [pickups.md](../../../gameplay/pickups.md). The
   *look* is `oag_render::weapon_pad` (the recovered grey and
   `WeaponPad_ColourKeyframes` table, above) plus
-  `oag_game::race::drawable::Drawable::tint_weapon_pads`, which recolours
+  `oag_raceplay::drawable::Drawable::tint_weapon_pads`, which recolours
   each pad's own vertices by its refresh timer every frame. One simplification,
   recorded rather than silent: the original only advances a pad's phase while
   *that* pad is ready, so two pads that became ready at different moments are
@@ -583,7 +583,7 @@ arrays, most likely by breakpointing `0x08849db4` in a live race.
   the right rate but keeps them in lockstep. See `oag_render::weapon_pad`'s
   own doc comment.
 - ~~**The `"SPEEDUPPAD"` sound.**~~ **Played**, off `hud.bnk`, on exactly the
-  edge this function arms the flare on - `oag_game::race::pads` raises the cue
+  edge this function arms the flare on - `oag_raceplay::pads` raises the cue
   beside the `exhaust[slot].boost(...)` call. ~~What is *not* reproduced is the
   two-emitter split.~~ **The split is reproduced too, 2026-08-24**: every craft
   raises its own cue carrying its own slot, the player's is played dry at full

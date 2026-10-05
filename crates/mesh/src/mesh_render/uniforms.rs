@@ -496,7 +496,7 @@ pub use light::Light;
 /// Here: [`Self::track`] and [`Self::scene`] are the Inner pair,
 /// [`Self::track_outer`] and [`Self::scene_outer`] the Outer, [`Self::origin`]
 /// is `zoneOrigin` and [`Self::radius`] is `zoneColourTint.w`. The game side
-/// (`oag_game::race::zone_grade::ZoneGrade::follow`) derives the radius from
+/// (`oag_raceplay::zone_grade::ZoneGrade::follow`) derives the radius from
 /// the race's own zone clock by the closed form of that advance, and hands
 /// the craft's position over unscaled. Before any transition the Outer pair
 /// equals the Inner and the test is a no-op, which is also every draw
@@ -518,7 +518,7 @@ pub use light::Light;
 /// `zone_inside` test as [`Self::track_outer`]/[`Self::scene_outer`]'s own
 /// colours. The stage-change edge that swaps the showing stage also rebuilds
 /// just those four texture views (`super::zone::rebind`, called from
-/// `oag_game::race::Scene::rebind_zone_art`), rather than rebuilding the
+/// `oag_raceplay::Scene::rebind_zone_art`), rather than rebuilding the
 /// whole drawable - so the boundary is a step in the texture now, not only
 /// in the two colour sets over one texture.
 ///

@@ -13,7 +13,7 @@ This page is about the **pickup** - the thing a Weapon Pad hands out and
 
 It was opened because the reimplementation had a Shield that made a craft
 immune to everything and showed nothing at all, both marked "ours" in
-`crates/physics/src/damage.rs` and `crates/game/src/race/weapons.rs`. Both are
+`crates/physics/src/damage.rs` and `crates/raceplay/src/weapons.rs`. Both are
 recovered here, and one of the two guesses turns out to have been right.
 
 ## The Shield is fire bit `0x20`, not `0x400`
@@ -357,7 +357,7 @@ That table is why the entry name is a per-title axis
 than a constant: it is not one name with a fallback, it is three packagings of
 one effect.
 
-`crates/game/src/race/weapons.rs` said `Data\Ships\<Team>\<Team>shield.vex`.
+`crates/raceplay/src/weapons.rs` said `Data\Ships\<Team>\<Team>shield.vex`.
 That name hashes to nothing in the archive, and it is the reason the feature
 was recorded as unbuildable.
 

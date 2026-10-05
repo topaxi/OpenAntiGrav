@@ -65,7 +65,7 @@ Three things follow:
   `Race_SpawnGrid` at all** - there is no field to order or compact - and that
   the compaction rule above governs only a race that fields opponents.
   **That has not been traced**, so it is a hypothesis; what is measured is the
-  time trial's own start pose. `oag_game::race::Race::start` follows the
+  time trial's own start pose. `oag_raceplay::Race::start` follows the
   capture, placing a solo mode on slot 1, because it is the measurement that
   directly covers the case - and it says so in its own comment and in the load
   report rather than implying the grid path was read.
@@ -285,7 +285,7 @@ that was tried and reverted, and the second circuit (`01_Track`).
 
 ## Ported, and how close it lands
 
-`oag_gameplay::spawn::grid_pose` is the layout and `oag_game::race::grid_poses`
+`oag_gameplay::spawn::grid_pose` is the layout and `oag_raceplay::grid_poses`
 drops each slot onto its own footprint. Eight craft take the grid on any track
 that authors a `Start Position`; **nothing drives the seven opponents**, so they
 hold station until AI lands.
@@ -358,7 +358,7 @@ straight-line formula extrapolates in one fixed direction for the full
 track is not.
 
 **The fix keeps both measured constants** (`GRID_ROW_PITCH`, `GRID_COLUMN_OFFSET`)
-and changes only how they are applied: `oag_game::race::spawn::grid_poses` walks
+and changes only how they are applied: `oag_raceplay::spawn::grid_poses` walks
 the track's own resampled spline from the anchor, `GRID_ROW_PITCH` units per
 step, instead of projecting along the anchor's fixed forward axis, and stagger
 uses each walked sample's own `lateral` axis instead of the anchor's fixed one -
@@ -367,7 +367,7 @@ already uses for the same reason. Heading is untouched: every slot still shares
 the anchor's own orientation, which is the part the live capture actually
 confirmed to four decimal places, and this does not reopen that. Two guards
 keep it from being wrong in a new way: the walk never crosses into a different
-*path* in [`Spline`](../../../../crates/game/src/race/spline.rs)'s own table -
+*path* in [`Spline`](../../../../crates/raceplay/src/spline.rs)'s own table -
 consecutive indices are only spatially adjacent within one path, and crossing
 one landed grid slots on an unrelated branch on a first attempt - and a walk
 that runs off the end of the path before covering the full distance falls back

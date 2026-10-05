@@ -149,7 +149,7 @@ layer-`0x7d` queue `FUN_001de438` nor the forced-mask draw `FUN_001de648`, so
 that pair belongs to some other object type; the object reaches its draw through
 second-base thunks (`obj+0x38` chained via a `+0x70`/`+0x78` offset pair) and
 **that chain has not been followed**. Following it is what would turn
-`oag_game::race::Drawable::draw_additive`'s model-scoped override into a decode.
+`oag_raceplay::Drawable::draw_additive`'s model-scoped override into a decode.
 
 ### The shield shell reaches the same unfollowed draw (2026-09-24, corrected 2026-10-01)
 

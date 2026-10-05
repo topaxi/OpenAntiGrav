@@ -55,7 +55,7 @@ pub const FULL_TURN: f32 = 6.28;
 /// positive `up` component - the right wingtip rises. See
 /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll section
 /// for the full numbers and
-/// `crates/game/src/race/drawable.rs`'s
+/// `crates/raceplay/src/drawable.rs`'s
 /// `roll_direction_matches_the_original_captured_display_matrix` test, which
 /// reproduces that same body and phase through this crate's own
 /// `orientation * roll` composition rather than trusting hand algebra to

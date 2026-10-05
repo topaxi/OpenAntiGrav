@@ -116,7 +116,7 @@ subtrees. Working out which fragments compose which mode is real
 reverse-engineering, not attempted here - `crates/omega/src/hud.rs` fills
 `Title::hud`/`hud_art` with a single real, unread placeholder entry, verified
 provably inert for this lane (the only reader is
-`crates/game/src/race/hud.rs`, reached only once a race has already started
+`crates/raceplay/src/hud.rs`, reached only once a race has already started
 loading).
 
 ## The menu backdrop (2026-09-30, `omega-menu-backdrop`)

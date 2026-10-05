@@ -725,7 +725,7 @@ impl Chain {
     /// `hd-frame-compare.py`'s own doc comment did: a black strip at the
     /// canvas edge under a letterboxed aspect, present with bloom either on
     /// or off, gone once `origin` is threaded here. See
-    /// `crates/game/src/race/scene/frame.rs`'s call site.
+    /// `crates/raceplay/src/scene/frame.rs`'s call site.
     pub fn run(
         &self,
         queue: &wgpu::Queue,

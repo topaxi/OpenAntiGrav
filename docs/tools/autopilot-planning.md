@@ -82,7 +82,7 @@ something to aim at while it is crossing.
 ### The start pose, which is the trap
 
 **`oag-trace drive`'s default start is not where a time trial begins.** It uses
-the track's authored `Start Position` node, the same one `oag_game::race` uses,
+the track's authored `Start Position` node, the same one `oag_raceplay` uses,
 and on Talon's Junction (`16_Track`) that slot sits about 138 units behind the
 emulator's actual start line - `(-131.8, -50.9, -173.6)` against `(6.07, -50.07,
 -196.10)`. Already documented on

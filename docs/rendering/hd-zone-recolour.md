@@ -88,7 +88,7 @@ unread and is left an absence rather than borrowing HD's numbers.
 
 ### How this port runs it
 
-[`ZoneGrade::follow`](../../crates/game/src/race/zone_grade.rs) derives `k`
+[`ZoneGrade::follow`](../../crates/raceplay/src/zone_grade.rs) derives `k`
 from the race's own zone counter and zone clock - the zone the showing stage
 began at on the ladder, times the 600 ticks a zone lasts, plus the ticks into
 the current zone - rather than counting frames. Three reasons, each of which
@@ -133,7 +133,7 @@ line, which is what settling gives.
   the Inner texture per slot when there is nothing to sweep out. The
   stage-change edge rebuilds bind group 2's four texture views alone
   (`oag_mesh::mesh_render::zone::rebind`, called from
-  `oag_game::race::Scene::rebind_zone_art`) rather than rebuilding the whole
+  `oag_raceplay::Scene::rebind_zone_art`) rather than rebuilding the whole
   drawable, gated on the same edge `sync_zone_grade`'s own log line already
   fires on - never every frame.
 

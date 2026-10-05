@@ -18,7 +18,7 @@
 //! # Why the placeholder below is provably inert
 //!
 //! [`oag_title::Title::hud`]/[`Title::hud_art`] are not `Option`, so
-//! [`crate::TITLE`] has to supply *something*. `crates/game/src/race/hud.rs`
+//! [`crate::TITLE`] has to supply *something*. `crates/raceplay/src/hud.rs`
 //! is the **only** reader of `Title::hud`'s fields anywhere in `oag-game`,
 //! and it is reached exclusively from a race that has already started
 //! loading. Omega's race path refuses by name before that point (see

@@ -434,7 +434,7 @@ mod tests {
 
     /// The circuit is this title's own; the team deliberately is not.
     ///
-    /// **Not a style point.** This module exists because `oag_game::race`
+    /// **Not a style point.** This module exists because `oag_raceplay`
     /// re-exported Pulse's circuit constant, so a Pure race asked the archive
     /// for an environment directory that is not on the disc. The team is the
     /// opposite case and is asserted as such: both discs carry Assegai, so

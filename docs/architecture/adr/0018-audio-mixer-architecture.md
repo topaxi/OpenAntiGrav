@@ -69,7 +69,7 @@ reason.
 **Cues are a per-tick output of the simulation, never `World` state**, and the
 control half is serviced inside the fixed-step loop while the device half is
 serviced once per frame outside it. This follows the existing rule at
-`crates/game/src/race.rs:2046-2050`, where exhaust and camera advance inside
+`crates/raceplay/src/lib.rs:2046-2050`, where exhaust and camera advance inside
 `tick` precisely so a headless capture and a window agree at the same tick
 count.
 

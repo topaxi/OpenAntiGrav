@@ -694,7 +694,7 @@ fn hd_format_centiseconds(value: i64) -> String {
 
 /// `Track`'s own resolution - the circuit's display name through
 /// [`CircuitNames`], falling back to the string table and then the raw id.
-/// **Deliberately not `oag_game::catalogue::label`**: that appends `FE_REVERSE`
+/// **Deliberately not `oag_raceplay::catalogue::label`**: that appends `FE_REVERSE`
 /// where a reversed circuit shares its forward twin's name, and HD's own
 /// screens never spell a direction in a name (`docs/formats/hd-frontend.md`),
 /// so a reversed cell reads the bare circuit name here as on Track Select.

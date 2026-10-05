@@ -10,7 +10,7 @@ use oag_mesh::mesh;
 ///
 /// `build_scene`'s own world-space pass excludes both pad classes' chunks
 /// (see its own doc comment) so a caller building a separate, tintable pad
-/// `Drawable` - `oag_game::race` - draws each chunk once rather than twice.
+/// `Drawable` - `oag_raceplay` - draws each chunk once rather than twice.
 /// This viewer wants one merged picture instead, so it draws the pads back
 /// in here rather than showing a circuit with no pad plates.
 ///

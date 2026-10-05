@@ -1427,7 +1427,7 @@ ffdc8ccd, ffd06689` - five draws, ages `0` to `4`; ours drew a sixth at `7.17`, 
 size and colour channels to the last digit (`oag_pob::initial`). Confidence **75** (one boot).
 
 **Probably the same law, unmeasured:** the hull's own collision sparks and the other effects parented to a craft's node ride the same
-`0.75`-row matrices and are still played at frame scale `1.0` (`oag_game::race::hit_sparks` and friends).
+`0.75`-row matrices and are still played at frame scale `1.0` (`oag_raceplay::hit_sparks` and friends).
 
 **Not a law, a warning:** a census of rolled quads by bounding box overstates a particle's size by up to
 `sqrt(2)` (`4/pi` on average for a random roll) - the first reading of this section took that for a `0.79` size

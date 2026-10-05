@@ -54,7 +54,7 @@ so **a perfect start looks like a pad crossing and sounds like a Turbo**. It
 is not a `.POB` effect. Only the human gets it: an AI craft's grade 3 (below)
 never reaches this call.
 
-**Ported**: `oag_game::race::perfect_start` arms the flare with
+**Ported**: `oag_raceplay::perfect_start` arms the flare with
 `exhaust::BOOST_SECONDS` (the pad's `0.8`) and raises `Cue::Turbo`
 (`CraftUnlessPlayer`, as `SPEEDUPPAD`) on the tick a human craft's grade
 becomes `Perfect`. `TURBO` resolves on Pulse (3 waveforms) and HD (15) through

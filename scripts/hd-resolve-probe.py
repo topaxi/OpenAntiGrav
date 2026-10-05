@@ -13,7 +13,7 @@ circuit's own read exposure scale:
 the same formula `oag_post::hd_bloom` already implements for a
 circuit whose `.envsettings` authors the whole `HDR and Bloom` block. **Sol
 2's own file does not** - it authors `Tone adaption boost` alone, so
-`crates/game/src/race/load/environment.rs::envsettings_bloom` returns `None`
+`crates/raceplay/src/load/environment.rs::envsettings_bloom` returns `None`
 and the whole chain (gate, blur, resolve) is skipped for that circuit and the
 seven other Fury/DLC circuits sharing the same partial file (see `renderer.md`,
 "The exposure resolve's Fury circuits carry the front end's own Tone triple").

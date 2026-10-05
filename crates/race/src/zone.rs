@@ -73,7 +73,7 @@ pub const CLEAN_ZONE_BONUS: i32 = 500;
 ///
 /// **A per-tick flag, not a counter.** `Zone_Update` clears it as it consumes it,
 /// so a ship straddling two pads on one tick scores this once. The trigger in
-/// `oag_game::race` reproduces that by scoring on a change of pad rather than per
+/// `oag_raceplay` reproduces that by scoring on a change of pad rather than per
 /// pad tested.
 pub const SPEEDUP_PAD_SCORE: i32 = 100;
 

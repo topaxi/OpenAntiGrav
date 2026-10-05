@@ -506,7 +506,7 @@ impl PlayerInputs {
     /// One person in slot 0, nothing in the rest.
     ///
     /// The shape of every session this engine currently runs, and the reason
-    /// widening `oag_game::race::Race::tick` changed no behaviour: with
+    /// widening `oag_raceplay::Race::tick` changed no behaviour: with
     /// [`crate::World::SINGLE_PLAYER`] on the other side, exactly slot 0 is
     /// consulted and it is handed exactly what the single-snapshot signature
     /// used to pass.

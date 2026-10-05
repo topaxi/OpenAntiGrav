@@ -210,12 +210,12 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
         if race.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
@@ -223,7 +223,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     }
 
     let end = race.telemetry();
-    println!("after {TICKS} tick(s): {}", oag_raceplay::describe(&end));
+    println!("after {TICKS} tick(s): {}", race::describe(&end));
     println!("grounded on {grounded_ticks} of {TICKS} tick(s)");
 
     // The probes finding the track at all is the composition claim: the spline

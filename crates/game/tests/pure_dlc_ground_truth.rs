@@ -73,7 +73,7 @@ fn cache() -> PathBuf {
 /// `dlc::pure_packs`, not `dlc::packs` - `data/dlc/` also holds Pulse's four
 /// packs, and the two are discovered from separate cache subtrees precisely
 /// so a list like this one never has to filter Pulse's out by name (see
-/// `crates/game/src/dlc.rs`'s module docs for why that split exists).
+/// `crates/source/src/dlc.rs`'s module docs for why that split exists).
 fn packs() -> Option<Vec<oag_assets::dlc::Pack>> {
     let root = dlc_root()?;
     let keys = keys()?;

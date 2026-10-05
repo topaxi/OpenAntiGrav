@@ -239,7 +239,7 @@ fn the_vertex_count_is_constant() {
 
 /// A caller's sprite is the same one quad, and the budget has room for the
 /// flare plus a full sky of them - which is the invariant
-/// `oag_game::race`'s own budget test depends on.
+/// `oag_raceplay`'s own budget test depends on.
 #[test]
 fn a_caller_sprite_is_one_quad_and_the_budget_has_room_for_the_flare_too() {
     let quad = sprite(Vec3::ZERO, Vec3::X, Vec3::Y, 1.0, 1.0);

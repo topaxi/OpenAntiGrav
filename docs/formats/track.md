@@ -69,7 +69,7 @@ wrong for five of the twelve circuits.
 language's `entries.xml` (`PI008`-`PI012` carry the same English text), ending in
 "White" or "Black". The entry's `location` and `Reversed` flag pick the file:
 `NN_Track\track.vex`, or `track_reversed.vex` when `Reversed="True"`. This build
-does the same - `oag_game::catalogue::label` and `Track::entry_name` - so our
+does the same - `oag_raceplay::catalogue::label` and `Track::entry_name` - so our
 Track Select shows the disc's titles and starts the layout the original starts.
 `crates/game/tests/pulse_variant_titles_ground_truth.rs` pins the table below on
 both PSP discs (colour words only; the titles stay on the disc).
@@ -130,7 +130,7 @@ absent, with no exception in either direction. `pulse-ps2-eu.chd` declares 32
 entries and the same biconditional holds there, 22 present and 10 absent.
 Confidence **94** - direct name resolution over the whole set.
 `crates/game/tests/zone_ground_truth.rs` is that sweep, and
-`oag_game::catalogue::Track::available_in_zone` is where it is read.
+`oag_raceplay::catalogue::Track::available_in_zone` is where it is read.
 
 **A zone circuit is a different environment, not a filtered view of the race
 one.** `16_Track` decodes to 602 meshes / 163,178 triangles and its
@@ -762,7 +762,7 @@ about that comparison went into deriving the rule.
 
 ### The rule
 
-`oag_game::race::spawn` takes the heading from the spline **only where the two
+`oag_raceplay::spawn` takes the heading from the spline **only where the two
 disagree** — `dot <= 0.5`, a threshold across an empty band: all 92 slots
 measured either agree at `+0.920` or better, or disagree at `0.000` or worse.
 The tangent rather than the negated slot, because the slot is not "backwards"

@@ -36,7 +36,7 @@ greys `AI DIFFICULTY` to `N/A` and `WEAPONS` to `Off` for time trial, speed lap
 and Zone alike, screenshotted for all seven of the original's race types on
 2026-08-10 - see
 [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#g_weapons_enableds-per-mode-default-spelled-out-and-checked-against-every-race-type).
-Two consequences in `crates/game/src/race.rs`:
+Two consequences in `crates/raceplay/src/lib.rs`:
 
 - **The grid never spawns opponents for any mode yet.** For the three
   single-ship modes that is the original's own answer; for a single race it is
@@ -69,11 +69,11 @@ Two consequences in `crates/game/src/race.rs`:
   circuits load through `oag_mesh::mesh::rcs::build_scene`, which used to
   draw weapon-pad geometry as part of the track's own world-space chunk pass
   rather than through a separate `Weapon Pad` node the way the PSP-shaped path
-  does, so `oag_game::race::load` set `weapon_pad_model` to `None` on that
+  does, so `oag_raceplay::load` set `weapon_pad_model` to `None` on that
   path and the mode gate had nothing to act on - HD weapon pads drew in every
   mode. `build_scene` now splits `Weapon Pad` chunks into their own model
   (`crates/mesh/src/mesh/rcs/pads.rs`), and `geometry::track_model`
-  (`crates/game/src/race/load/geometry.rs`) hands that model to the same
+  (`crates/raceplay/src/load/geometry.rs`) hands that model to the same
   `weapon_pad_model` slot the PSP-shaped path already fills, so the existing
   gate covers HD for free. Pinned on the real disc by
   `crates/render/tests/hd_weapon_pad_split_ground_truth.rs`. `Speedup Pad`
@@ -198,7 +198,7 @@ What runs:
 Wipeout HD/Fury and 2048 ship a `.effectSettings` table naming one full
 palette per speed class, laid over whichever circuit the race runs on -
 [effectsettings.md](../formats/effectsettings.md) has the format and
-`oag_game::race::zone_grade` the application. **What selects a stage during a
+`oag_raceplay::zone_grade` the application. **What selects a stage during a
 race is recovered on 2048 and not on HD.**
 
 2048's Zone HUD widget (`Hud_UpdateZoneSpeedClassWidget`, `0x81197d6c`) walks
@@ -506,7 +506,7 @@ nothing until now.
   no construction site can default it silently. The class reaches `oag_race` as
   `oag_tables::handling::SpeedClass` - a crate it already depends on - and the
   disc's own spelling of the class name is resolved onto that enum one layer
-  out, in `oag_game::race::Race::start`, which is the layer that already carries
+  out, in `oag_raceplay::Race::start`, which is the layer that already carries
   the name. Wipeout Pure's `VECTOR` rung has no measured lap count of its own
   (no Pure campaign census has been read), so it falls back to Venom's `3` with
   a warning in the load report; that fallback is **chosen, not measured**, and
@@ -756,7 +756,7 @@ source is a weapon**, the victim's recorded last attacker gets `+0x8d8` (kills) 
 it is the victim. A wall finishing a craft off credits nobody; a wall scrape earlier does not
 erase the attacker. This build used to clear the attacker on any wall contact and credit
 only a direct hit, never splash: a third of deaths credited nobody. Now credited on the fatal
-weapon blow, splash included (`oag_game::race::eliminator`).
+weapon blow, splash included (`oag_raceplay::eliminator`).
 
 **A parked-player Eliminator on `16_Track` now finishes at the original's target of 5 on 22 of 24
 seeds in six game-minutes** (three fixed sets of eight, the last two never swept on; the finish
@@ -884,7 +884,7 @@ documented readers, `World_CollectNodeLists`, `WeaponPads_TestCraft` and the wea
 the documented callers, not an exhaustive cross-reference. It obeys the player's physics: the
 driver is handed a place in the road, never thrust, speed or shield.
 
-How it works. `Race::pad_for` (`crates/game/src/race/field/pad_seek.rs`) projects each pad's
+How it works. `Race::pad_for` (`crates/raceplay/src/field/pad_seek.rs`) projects each pad's
 centre onto the AI line once at the start, and each tick hands an empty-slot craft the next armed
 pad within 150 units, as `oag_ai::Field::pad` (distance ahead, offset across the line). Of a pair
 straddling the line it picks the one nearer across to where the craft already is. `Driver::drift`
@@ -1152,7 +1152,7 @@ onward) scored as one event:
   own race-state byte reads "destroyed"/"retired" (state `7`), a byte this
   engine does not carry; not having finished the leg when it ended is the
   closest honest stand-in, and is what `Progress::record_leg`
-  (`crates/game/src/race/tournament.rs`) actually reads off the board.
+  (`crates/raceplay/src/tournament.rs`) actually reads off the board.
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`) - `Session::advance_tournament_leg`
@@ -1440,7 +1440,7 @@ to `GO` lands on the green step above, tick 273, which puts frame 0 at **tick 92
 `GO` is therefore the timeline's own handover frame landing on the release, and
 the "about a second of `GO` before the craft can move" the gantry docs recorded
 was our clock starting at tick 0, not the original's behaviour.
-`crates/game/src/race/gantry.rs::CLOCK_START_TICK`, **Pulse only**: every other
+`crates/raceplay/src/gantry.rs::CLOCK_START_TICK`, **Pulse only**: every other
 title runs Pulse's rule on its own `GO` edge (HD: frame 203, tick 70; inherited
 from Pulse, unmeasured - `docs/rendering/start-gantry.md`). The
 cockpit-view overlay
@@ -1464,7 +1464,7 @@ functions and the constant that sets the 180 (`RaceManager_Construct`, all modes
 start (92), most likely the same event through a screenshot's lag. The bank is the
 mode's speech bank; see
 [countdown-voice.md](../ghidra/functions/psp-pulse-usa/countdown-voice.md).
-`oag_game::race::countdown` raises them at `World::tick` 91 and 271
+`oag_raceplay::countdown` raises them at `World::tick` 91 and 271
 (`COUNTDOWN_TICKS - 1`, the last gated tick).
 
 **Launch speed is not the problem.** Ours reads 28 km/h thirteen ticks after the

@@ -697,7 +697,7 @@ Each step is a landing that can be reviewed on its own.
    `--shadows` was the override in between.
 3. **`blob` - done, 2026-09-04.** [`oag_render::shadow`](../../crates/render/src/shadow.rs)
    draws a ground-aligned quad per craft;
-   [`oag_game::race::shadow`](../../crates/game/src/race/shadow.rs) places it,
+   [`oag_raceplay::shadow`](../../crates/raceplay/src/shadow.rs) places it,
    casting along the craft's **own** down axis (not world gravity, so a
    magstrip and an inverted section work) against the circuit's own collision
    geometry, filtered to `Floor`/`MagFloor` so a craft beside a barrier does

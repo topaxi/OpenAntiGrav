@@ -20,7 +20,7 @@
 //! crate's own (`crates/game/src/main/`), not `[lib]` `oag_game`'s - a
 //! `crates/game/tests/*.rs` integration test only ever sees the library, the
 //! same reason every other ground-truth file in this directory reaches for
-//! `oag_game::race`/`oag_game::endrace` rather than `crate::main::*`. What
+//! `oag_raceplay`/`oag_game::endrace` rather than `crate::main::*`. What
 //! those two hold beyond what this test exercises is thin, GPU-touching
 //! glue: opening a renderer and copying `Board` rows into `FieldRow`, the
 //! second of which has its own fast, disc-free unit tests

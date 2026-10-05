@@ -45,7 +45,7 @@ What it says:
   refuted by static read, 2026-10-01.** Both write the same 0.75 and scale the eye
   and look-at by it, so HD's close eye sits about 8.3-9.6 units back, which is what the
   engine renders. The engine applies `oag_physics::hover::TARGET_GLOBAL_SCALE` (0.75) to
-  the eye of every title (`ChaseParams::craft_scale`, `crates/game/src/race/camera.rs`,
+  the eye of every title (`ChaseParams::craft_scale`, `crates/raceplay/src/camera.rs`,
   whose doc now carries each title's provenance).
 - HD's close look-at is 4 units below the craft where Pulse and Pure aim level. Our rig
   honours it: `look_at_point` adds `up * lookat_height` per block, and each block reaches

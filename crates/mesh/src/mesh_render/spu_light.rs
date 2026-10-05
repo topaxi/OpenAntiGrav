@@ -41,7 +41,7 @@
 //!
 //! The only producer this project has wired is the one the live capture
 //! showed filling the whole buffer: `EngineFlare_SubmitSpuLight`, one light
-//! per craft behind its nozzle - see `oag_game::race::engine_light`. The
+//! per craft behind its nozzle - see `oag_raceplay::engine_light`. The
 //! other 23 producers renderer.md catalogued (pickups, weapons, the Zone
 //! ship) stay unwired until their triggers are read.
 

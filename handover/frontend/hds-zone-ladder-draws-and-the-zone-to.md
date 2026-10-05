@@ -138,7 +138,7 @@ pass of this thread's sibling had already spotted them and left them unwired.
 Now `oag_title::ZoneClassAnnouncer` /
 [`oag_sound::sfx::ClassAnnouncer`](../../crates/sound/src/sfx/announcer.rs),
 fired on the same `ZoneStages::stage_for` edge the HUD text and the colour
-grade already key off - see `crates/game/src/race/tick.rs`. Ground-truthed
+grade already key off - see `crates/raceplay/src/tick.rs`. Ground-truthed
 against the real disc in `crates/hd/tests/hd_title_ground_truth.rs`'s
 `the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index`,
 checking both copies by cue index rather than by trusting either one's own
@@ -244,7 +244,7 @@ All three unknowns are now read. What is still not a measured number is the
 compares it to a world-space distance; whether `oag_render`'s units match is a
 renderer question, not an RE one). The port side is untouched by this: the
 showing stage's own unblended palette is still what draws, and
-[`ZoneGrade::commit`](../../crates/game/src/race/zone_grade.rs)'s own doc
+[`ZoneGrade::commit`](../../crates/raceplay/src/zone_grade.rs)'s own doc
 comment still says the transition effect is not drawn - the reason has moved
 from "unidentified" to "not yet wired".
 
@@ -290,7 +290,7 @@ The first Next Step, finally watched. `just play hd --race --mode zone --ticks
 held, the craft has no steering, drifts into the walls and is eliminated by
 tick 3230 (zone 5, stage 4) - `RaceState::eliminate` ends the race exactly the
 way a single race or Zone always can
-(`crates/game/src/race/tick.rs`), and `RaceState::update`'s own early return on
+(`crates/raceplay/src/tick.rs`), and `RaceState::update`'s own early return on
 `self.finished` (`crates/race/src/state.rs`) then stops `advance_zone` cold, so
 the zone counter (and with it the grade) freezes at whatever it reached. That
 is not a grade bug - it is what "drive with the pad untouched" always does in
@@ -346,7 +346,7 @@ free:**
    the sync. The headless `--screenshot` path shows the same split even more
    starkly: `race::capture` runs the whole tick loop with no rendering at all,
    then calls `scene.sync_zone_grade(&race)` exactly once
-   (`crates/game/src/race/capture.rs`), before the HUD overlay is even built.
+   (`crates/game/src/race_capture.rs`), before the HUD overlay is even built.
    So in this port the grade is a function of the zone counter alone, not of
    whether a HUD widget ever draws - **this is a statement about this
    codebase's own architecture**, not a new reading of the original's
@@ -357,7 +357,7 @@ free:**
    predicted.** `crate::race::tick` pushes a milestone announcement and (when
    the same `zone_advanced` edge also crosses a `ZONE_STAGES` boundary) a
    class announcement into two separate queues, unconditionally, on the same
-   tick (`crates/game/src/race/tick.rs`). `oag_sound::sfx::race_tick`
+   tick (`crates/raceplay/src/tick.rs`). `oag_sound::sfx::race_tick`
    drains both queues and calls `mixer.play` once per entry, both to
    `Bus::Speech`, back to back, with nothing between them that checks whether
    the bus already has a voice open - and each call's own result is discarded

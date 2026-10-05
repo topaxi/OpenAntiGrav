@@ -33,7 +33,7 @@ use oag_mesh::mesh::GpuVertex;
 /// imported, the same reason [`crate::exhaust::MAX_TRAILS`] is: this crate
 /// must not depend on the simulation. A `const _: () = assert!(...)` on the
 /// game crate's side is where the two are compared - see
-/// `crates/game/src/race/weapons/visuals.rs`.
+/// `crates/raceplay/src/weapons/visuals.rs`.
 pub const MAX_ROUNDS: usize = 128;
 
 /// Vertices per round's bolt (two six-vertex quads) and per flash (one).

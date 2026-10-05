@@ -66,7 +66,7 @@ Five changes, landing together as one prerequisite:
    any of the three. It is a second binary in this crate, not a crate of its
    own, because workspace-layout's rule 2 forbids any crate depending on
    `oag-game`: a future headless server cannot simply be some other crate
-   importing `oag_game::race`. `oag-trace` hit the identical wall earlier and
+   importing `oag_raceplay`. `oag-trace` hit the identical wall earlier and
    chose to duplicate the logic it needed (`locate` in
    `crates/trace/src/replay.rs`) rather than depend on the composition root -
    this is the same choice, made the cheap way a same-crate binary allows,

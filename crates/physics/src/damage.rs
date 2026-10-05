@@ -188,7 +188,7 @@ pub enum CraftState {
     /// wait or the Eliminator's state 8. **This crate stops here** and the
     /// composition root decides: the player's own race ends on this state
     /// (`RaceState::eliminate`), an opponent or an Eliminator craft is put
-    /// back (`oag_game::race::Race::tick_destroyed_craft`).
+    /// back (`oag_raceplay::Race::tick_destroyed_craft`).
     Eliminated,
 }
 

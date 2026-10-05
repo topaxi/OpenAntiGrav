@@ -2,7 +2,7 @@
 //! [`oag_physics::Environment::pad_hit`], and the pad state a reseed has to
 //! restore.
 //!
-//! The running game does this in `oag_game::race`'s `test_speedup_pads`, which
+//! The running game does this in `oag_raceplay`'s `test_speedup_pads`, which
 //! reimplements `Pads_TestCraft` (`0x08887144`). This crate cannot depend on the
 //! composition root, so the test is restated here, and only the part of it that
 //! reaches the force law: which pad the hull is inside this tick and which way it

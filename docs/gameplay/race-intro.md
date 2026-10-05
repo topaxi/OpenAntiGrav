@@ -16,7 +16,7 @@ camera animation per circuit**, in a file nothing here had read for a camera.
 Code behind each row is
 [`race-intro.md`](../ghidra/functions/psp-pulse-usa/race-intro.md); the pose reader is
 [`oag_vex::grid_camera`](../../crates/vex/src/grid_camera.rs), the clock and the hand-over
-[`oag_game::race::intro_camera`](../../crates/game/src/race/intro_camera.rs).
+[`oag_raceplay::intro_camera`](../../crates/raceplay/src/intro_camera.rs).
 
 ## What the original does
 

@@ -10,7 +10,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 (so the countdown and every hash are unchanged). Everything measured is in
 [race-intro.md](../../docs/gameplay/race-intro.md) and
 [the code page](../../docs/ghidra/functions/psp-pulse-usa/race-intro.md); the camera is
-`oag_vex::grid_camera` and `oag_game::race::intro_camera`; `--no-intro` skips it and
+`oag_vex::grid_camera` and `oag_raceplay::intro_camera`; `--no-intro` skips it and
 `--intro-ticks N --screenshot` photographs a tick of it.
 
 ## Open

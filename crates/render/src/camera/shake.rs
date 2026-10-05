@@ -280,7 +280,7 @@ impl Shake {
     /// blur take the shake out of its velocity: the previous tick's unshaken
     /// view times this tick's matrix measures the same scene through the same
     /// shake, so a camera that holds still reads as still however hard it is
-    /// shaking. See `oag_game::race::Race::shake_matrix`.
+    /// shaking. See `oag_raceplay::Race::shake_matrix`.
     #[must_use]
     pub fn matrix(&self, view: Mat4) -> Mat4 {
         if !self.active() {

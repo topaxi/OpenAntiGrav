@@ -177,7 +177,7 @@ winding in clip space, was not read. The two setters are named
   and `0xa74` is `NV4097_SET_DEPTH_TEST_ENABLE`** (confidence 90), so state
   bit 4 is back-face culling and bit 3 depth testing. `oag_mesh::mesh::rcs`
   honours neither yet; the Plasma explosion's three models are the first
-  consumers, per model, in `oag_game::race::load::weapon_models::cull_as_authored`;
+  consumers, per model, in `oag_raceplay::load::weapon_models::cull_as_authored`;
   see [plasma.md](plasma.md)'s 2026-09-23 section. Neither
   was chased; bit 7's own question (alpha-to-coverage, confidence 55 in
   rcsmodel.md) is untouched by this pass and still needs its own RSX-write

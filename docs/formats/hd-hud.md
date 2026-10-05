@@ -471,7 +471,7 @@ approach is ever generalised to the HUD roots.
 
 **Since 2026-08-18 an HD race reads HD's own root**, not Pulse's:
 `oag_title::HudLayouts` is the axis (`arcade`, `time_trial`, `speed_lap`,
-`zone`), each title package fills it in, and `oag_game::race::hud_layout` maps
+`zone`), each title package fills it in, and `oag_raceplay::hud_layout` maps
 the mode. Before that every title was served `oag_pulse::hud::layouts` and HD
 worked only because PSARC normalisation folds `Data\XML\Arcade_HUD.xml` onto
 `/data/xml/arcade_hud.xml` - finding S2 of that day's review.

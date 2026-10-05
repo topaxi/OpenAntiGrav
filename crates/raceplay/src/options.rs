@@ -20,7 +20,7 @@ pub struct Options {
     /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
     /// [`oag_source::remix::Remix`].
     pub craft_source: Option<String>,
-    /// Directories to look in for [downloadable content](crate::dlc), mounted
+    /// Directories to look in for downloadable content (`oag_source::dlc`), mounted
     /// behind `source`'s own archives.
     ///
     /// Independent of which release `source` is, on purpose: the original tied
@@ -107,7 +107,7 @@ pub struct Options {
     /// every caller outside the one below.
     ///
     /// **The one caller today is Wipeout 2048's own campaign**:
-    /// `race::load_event` (`crates/game/src/race/load/campaign.rs`) sets
+    /// `race::load_event` (`crates/raceplay/src/load/campaign.rs`) sets
     /// this from `oag_2048::campaign::craft::grid_craft`'s own reading of an
     /// event's `M_PGRIDSHIPMODELDATA` - the disc's own AI grid, when it
     /// authors one, in place of the roster draw. See that
@@ -914,14 +914,12 @@ pub struct Loaded {
     /// [`load_event`](super::load_event) is what built it - `None` for every
     /// other title and for an ordinary `--race`/menu launch on 2048 itself.
     ///
-    /// Carried on [`Loaded`] rather than threaded through [`Session`] the way
+    /// Carried on [`Loaded`] rather than threaded through `Session` the way
     /// `campaign_cell` is (Pulse/HD's own grid launch): `load_event` already
     /// has the parsed `SP.xml` `Document` in hand to resolve
     /// [`Campaign2048Progress::objectives`], and a second `Document` parse
     /// at grading time would cost an archive read `RaceStage::observation`
-    /// has no business making. See `crates/game/src/race/load/campaign.rs`.
-    ///
-    /// [`Session`]: crate::main::session::Session
+    /// has no business making. See `crates/raceplay/src/load/campaign.rs`.
     pub campaign_2048_event: Option<Campaign2048Progress>,
     /// The road spans a Quake ripples, placed on the course - see
     /// `oag_render::ripple`. Empty everywhere but Pulse off a PSP disc, the one
@@ -931,14 +929,12 @@ pub struct Loaded {
     pub report: Vec<String>,
 }
 
-/// What [`load_event`](super::load_event) resolved for [`RaceStage`] to
+/// What [`load_event`](super::load_event) resolved for `RaceStage` to
 /// grade the race against, once it finishes - see [`Loaded::campaign_2048_event`].
-///
-/// [`RaceStage`]: crate::main::stage::RaceStage
 #[derive(Debug, Clone)]
 pub struct Campaign2048Progress {
     /// The `SP.xml` instance name - the key
-    /// [`oag_game::records::Store::record_campaign`] persists a medal under,
+    /// `oag_game::records::Store::record_campaign` persists a medal under,
     /// the same way Pulse/HD's own launch persists one under a cell's name.
     pub name: String,
     /// The event's own pass/elite bars, when it authors them - `None` for a

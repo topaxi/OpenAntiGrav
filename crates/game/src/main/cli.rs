@@ -33,7 +33,7 @@ pub(crate) struct Cli {
     /// `oag_assets::Layout`.
     ///
     /// Left out, it is searched for: `data/images/` in the current directory,
-    /// then beside the AppImage, then `<data dir>/oag/images`. `oag_game::source`
+    /// then beside the AppImage, then `<data dir>/oag/images`. `oag_source::source`
     /// documents the whole order, and `$OAG_IMAGE` short-circuits it. Finding
     /// more than one there opens the chooser - see `--launcher`.
     pub(crate) source: Option<String>,

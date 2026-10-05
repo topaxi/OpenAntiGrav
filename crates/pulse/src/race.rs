@@ -2,7 +2,7 @@
 //! model entry is spelled.
 //!
 //! Names and defaults, in the [ADR-0022] sense. The mode that picks between a
-//! Zone hull and a normal one is `oag_game::race`'s, because `Mode` is the
+//! Zone hull and a normal one is `oag_raceplay`'s, because `Mode` is the
 //! engine's type and a title package must not grow one; what this file owns is
 //! the four file names it picks between and the path they go into.
 //!
@@ -141,7 +141,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 ///
 /// **Sixteen of the disc's twenty-four `PI_Track` entries have one**, and which
 /// sixteen is declared rather than guessed - see
-/// `oag_game::catalogue::Track::available_in_zone`.
+/// `oag_raceplay::catalogue::Track::available_in_zone`.
 ///
 /// Confidence **94**: every one of the 24 entries was probed by name against
 /// `pulse-psp-usa.chd` and the presence of the file matches the declaration
@@ -161,7 +161,7 @@ pub const ZONE_TRACK_PREFIX: &str = "zone_";
 /// and two entries can name one environment, differing only by `Reversed`. A
 /// trace comparison run against the wrong circuit seeds the original's recorded
 /// position into a different track's collision geometry, which reads as a
-/// force-law failure and is a track-selection one. See `oag_game::race`'s own
+/// force-law failure and is a track-selection one. See `oag_raceplay`'s own
 /// note on [`DEFAULT_TRACK`] for the full account of that day.
 pub const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
@@ -348,7 +348,7 @@ pub mod ships {
 /// another outside `[dev-dependencies]`, per ADR-0022; `oag_2048::TITLE`
 /// carries no restatement at all, since 2048's tree is Vita/PSP2 and none of
 /// these paths is checked to resolve there. Moved here 2026-09-17 off
-/// `oag_game::race`'s own `ROCKET_MODEL_ENTRY` and friends, which stay as
+/// `oag_raceplay`'s own `ROCKET_MODEL_ENTRY` and friends, which stay as
 /// `pub use` aliases so no doc link or call site moved - see that module's
 /// own doc comment for the confidence and evidence each entry carries; only
 /// the location changed, not the reading.

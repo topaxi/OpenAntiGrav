@@ -323,7 +323,7 @@ remove by deleting the files it prints at the end.
 ## Where the disc image comes from
 
 The AppImage ships no image, so finding the player's own is the one thing
-packaging has to answer. [`crates/game/src/source.rs`](../../crates/game/src/source.rs)
+packaging has to answer. [`crates/source/src/source.rs`](../../crates/source/src/source.rs)
 is the answer, and the first hit wins:
 
 | Order | Where | For |
@@ -380,7 +380,7 @@ Wipeout Pure's PSN DLC packs need a key table to decrypt (see
 [ADR-0033](../architecture/adr/0033-external-key-material-for-decryption.md)),
 which is never in this repository and follows its own three-candidate search,
 `default_pure_dlc_keys_path()` in
-[`crates/game/src/dlc.rs`](../../crates/game/src/dlc.rs): a `keys/`
+[`crates/source/src/dlc.rs`](../../crates/source/src/dlc.rs): a `keys/`
 directory beside whichever of `dlc_search_path()`'s locations holds the
 candidate - `data/keys/pure-dlc-keys.txt` under the current directory, beside
 the AppImage, or `~/.local/share/oag/keys/pure-dlc-keys.txt`. A missing file
@@ -449,8 +449,8 @@ under `data/extracted/ps4/` (Wipeout: Omega Collection's extract, about 48 GB)
 onto `<XDG_DATA_HOME>/oag/extracted/ps4`, and, if present,
 `data/keys/pure-dlc-keys.txt` onto `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
 - the same places
-[`crates/game/src/source.rs`](../../crates/game/src/source.rs) and
-[`crates/game/src/dlc.rs`](../../crates/game/src/dlc.rs) already search, so
+[`crates/source/src/source.rs`](../../crates/source/src/source.rs) and
+[`crates/source/src/dlc.rs`](../../crates/source/src/dlc.rs) already search, so
 nothing needs setting on the Deck side to find them.
 
 It copies only what `oag-game` reads, because a Deck's disk is small. Raw
@@ -460,7 +460,7 @@ encrypted `hdfury-ps3-eu.iso` and its `.dkey`. From the Omega extract only the
 nine `.psarc` archives `oag_omega` mounts go over, not `eboot.bin`,
 `sce_sys/`, `sce_module/` or the disc maps. A Deck that has none of Omega's
 archives does not list Omega in the launcher: `ps4_search_path()` in
-`crates/game/src/source.rs` offers it only when
+`crates/source/src/source.rs` offers it only when
 `extracted/ps4/omega-eu-patch/uroot/data09.psarc` exists.
 
 ```sh

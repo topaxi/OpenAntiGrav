@@ -58,7 +58,7 @@ use crate::trace::{AngularReading, Frame, Trace};
 /// The world's generator seed.
 ///
 /// Fixed and arbitrary: nothing in the recovered force law draws from the
-/// generator. The same value `oag_game::race::SEED` uses, written again rather
+/// generator. The same value `oag_raceplay::SEED` uses, written again rather
 /// than imported because nothing may depend on the composition root.
 pub const SEED: u64 = 1;
 
@@ -214,7 +214,7 @@ pub struct Options {
 /// reads `handling.physical.mass` and the integrator reads `body.mass`: they are
 /// one quantity stored twice and keeping them equal is the integrating layer's
 /// job, which here is this function. The inertia is left at its default, which is
-/// the same known gap `oag_game::race` records - nothing in the ship data says
+/// the same known gap `oag_raceplay` records - nothing in the ship data says
 /// how the original builds a tensor.
 ///
 /// The body's rotation is seeded too, when the recording carries one: a capture
@@ -355,7 +355,7 @@ pub fn camera_orientation_of(frame: &Frame) -> Option<Quat> {
 
 /// Table order's nearest sample to `position`, and the sample after it.
 ///
-/// The same "where am I and what is next" pair `oag_game::race::Race::tick`
+/// The same "where am I and what is next" pair `oag_raceplay::Race::tick`
 /// reads for the player every tick - the nearest table entry and its table-order
 /// successor - at this crate's own resolution. Resampled independently by
 /// [`crate::main`]'s `resample` rather than shared: `oag-trace` cannot depend on
@@ -382,7 +382,7 @@ fn locate(samples: &[track::Sample], position: Vec3) -> (Option<TrackSample>, Op
     (track_sample, track_sample_next)
 }
 
-/// The conversion `oag_game::race::Spline::track_sample` makes, restated here for
+/// The conversion `oag_raceplay::Spline::track_sample` makes, restated here for
 /// the reason [`locate`] gives: the disc's sample is the *unlifted* surface
 /// point, and the hold wants it lifted back to where the running game holds it,
 /// with `down` passed raw for the probe direction.
@@ -806,7 +806,7 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         // than silently agreeing.
         shield: Some(state.shield),
         // Neither camera fov term is modelled by `ShipState` - `SPEED_FOV_GAIN_DEG`
-        // in `crates/game/src/race.rs` reproduces the additive term as a
+        // in `crates/raceplay/src/lib.rs` reproduces the additive term as a
         // projection-time constant, not as simulation state, and the intercept
         // has no known writer at all. Reported absent for the same reason
         // `timer_2e0` above is: a field we do not simulate must not read as

@@ -60,7 +60,7 @@ values and from the neighbouring element's convention, with no consumer located.
 
 So the flap and the airbrake it depicts ramp at **different rates**, which is
 the game saying outright that this is graphics. It is why the deflection lives
-on `oag_game::race::Race` beside the boost's FOV kick rather than in
+on `oag_raceplay::Race` beside the boost's FOV kick rather than in
 `ShipState`, where it would move the determinism hashes every time somebody
 adjusted an animation.
 

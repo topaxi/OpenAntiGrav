@@ -51,7 +51,7 @@ Two things that are not obvious from the table:
 The loaders (`race::load`, `boot`, the sound banks, the preview cards) return
 their account of themselves as a `Vec<String>`, because a test or a `--dry-run`
 reads the same strings. The strings carry no level, so they all go to the log
-through `oag_game::loader_log`:
+through `oag_raceplay::loader_log`:
 
 - `loader_log::lines` logs a report at `debug` and each line that says an asset
   is absent or was not used at `warn`.
@@ -63,7 +63,7 @@ through `oag_game::loader_log`:
   The cap is `WARN_CAP`; nothing is dropped, only moved, and the closing line
   names every absence it holds back.
 - What counts as "says an asset is absent" is one list, `ABSENCE` in
-  `crates/game/src/loader_log.rs`, with a test over lines taken from real
+  `crates/raceplay/src/loader_log.rs`, with a test over lines taken from real
   reports. A loader that learns a new way to say "this draws nothing" adds its
   phrase there; a phrase missing from the list hides an absence at `debug`,
   which is why the list errs towards `warn`.

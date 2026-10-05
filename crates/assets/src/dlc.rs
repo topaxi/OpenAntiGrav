@@ -30,7 +30,7 @@
 //! disc's own `Data\Plugins\PI001\Definition.xml`, holding the `PI_Team` and
 //! `PI_Track` nodes this pack adds. The main archive's is populated and the UI
 //! archives ship an empty `<Screen name="Top">` stub, so the manifests are
-//! collected without judging them and the caller - `oag_game::catalogue` - finds
+//! collected without judging them and the caller - `oag_raceplay::catalogue` - finds
 //! nothing in the stubs. Keeping that judgement out of here means the schema is
 //! understood in one place rather than two.
 
@@ -49,7 +49,7 @@ use crate::Archive;
 /// **Public because it has to agree with whoever unpacks the zips.** A zip
 /// found deeper than this walker reaches would be extracted and then never
 /// discovered, and the player would see their pack quietly not load; sharing
-/// the constant is what stops the two halves drifting. `oag_game::dlc` uses it.
+/// the constant is what stops the two halves drifting. `oag_source::dlc` uses it.
 pub const MAX_DEPTH: usize = 2;
 
 /// One directory's worth of downloadable content.

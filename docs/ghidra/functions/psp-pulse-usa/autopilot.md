@@ -206,7 +206,7 @@ Settles every open question the two bullets below used to carry:
   [`shield.md`](shield.md) each independently establish at that exact offset -
   so this whole switch, sounds included, never runs for an opponent. Matches
   this port's own `Race::spend_pickup`, which is likewise only ever called for
-  `player` (`crates/game/src/race/tick.rs`).
+  `player` (`crates/raceplay/src/tick.rs`).
 - **`~AUTOPILOT` goes through `FUN_0883e9b0`**, the same dry, no-position
   helper `Cue::Blowup` and `Cue::Disengaging`
   (`crates/sound/src/sfx/cue.rs`) already cite for the player's own ear

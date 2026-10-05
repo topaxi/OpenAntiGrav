@@ -19,7 +19,7 @@ pub enum Cue {
     ///
     /// `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD", ...)` from
     /// inside its new-pad branch, the same branch that arms the engine flare -
-    /// so this fires on exactly the edge `oag_game::race::Race::test_speedup_pads`
+    /// so this fires on exactly the edge `oag_raceplay::Race::test_speedup_pads`
     /// already arms the flare on. `docs/ghidra/functions/psp-pulse-usa/pads.md`,
     /// confidence 88.
     ///

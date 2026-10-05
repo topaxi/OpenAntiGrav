@@ -29,7 +29,7 @@ pub enum Aspect {
     /// The default, and not merely out of deference: `<ExternalCameraFar>`'s
     /// field of view is only defined at this ratio, so it is the one shape where
     /// what a player sees is what the original framed. See
-    /// `oag_game::race::AUTHORED_ASPECT`.
+    /// `oag_raceplay::AUTHORED_ASPECT`.
     #[default]
     Psp,
     /// 4:3, the PS2's television - not the shape its own artwork wants.

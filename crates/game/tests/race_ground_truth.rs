@@ -60,11 +60,9 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::{boot, movie};
-use oag_gameplay::PlayerInputs;
-use oag_gameplay::input::{Button, Input};
+use oag_gameplay::{PlayerInputs, input::Button, input::Input};
 use oag_physics::Raycaster;
-use oag_raceplay as race;
-use oag_raceplay::catalogue;
+use oag_raceplay::{self as race, catalogue};
 use oag_ui::frontend::states;
 
 fn image() -> Option<PathBuf> {
@@ -216,19 +214,19 @@ fn the_front_end_hands_off_into_a_driveable_race() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
         if race.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
         }
     }
 
-    println!("{}", oag_raceplay::describe(&race.telemetry()));
+    println!("{}", race::describe(&race.telemetry()));
     assert!(
         grounded_ticks > 0,
         "no hover probe reached the track in {HANDOFF_TICKS} ticks"
@@ -651,7 +649,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         1.0,
         "both hover probes must reach the track from the authored slot, got {}: {}",
         race.ship().physics.grounded,
-        oag_raceplay::describe(&race.telemetry())
+        race::describe(&race.telemetry())
     );
 
     // And the surface really is under it, at the height the spawn claims.
@@ -1149,7 +1147,7 @@ fn the_weapon_pads_are_drawn_where_they_trigger() {
 }
 
 /// **The pickup chain, on the disc's own track and the disc's own weapon
-/// table.** The unit tests in `oag_game::race` run it against a synthetic pad
+/// table.** The unit tests in `oag_raceplay` run it against a synthetic pad
 /// and a hand-written table, so they check the logic against this project's
 /// reading of both formats. This checks it against the shipped bytes: a real
 /// `Weapon Pad` volume out of `16_Track`, real `<Pickupodds>` out of

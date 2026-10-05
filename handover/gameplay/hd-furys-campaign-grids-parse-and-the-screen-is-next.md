@@ -377,7 +377,7 @@ RECORDS table (`---` cells) and, on a reverse circuit, the authored
 direction; pointer and Back work; Back from `Team Selection` returns here.
 Writeup: `docs/ui/campaign-screens.md`, "Wipeout HD/Fury: `Track Creation`,
 2026-09-29"; code in `oag_ui_screens::picker::hd::track`, `Picker::with_rows`,
-`oag_game::catalogue::direction_rows`.
+`oag_raceplay::catalogue::direction_rows`.
 
 **Corrections it made**: `right` most likely wraps at twelve (confidence 80:
 press 12 is Vineta K again, cursor on the same top hex row, no reverse glyph in

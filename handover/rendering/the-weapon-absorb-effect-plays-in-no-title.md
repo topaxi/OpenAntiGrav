@@ -6,7 +6,7 @@ though)."
 
 **2026-09-23: built. HD's absorb shell followed later the same day; its cockpit twin is still missing.**
 
-- **The burst.** `oag_game::race::absorb` fires `WO_WEAPON_ABSORB` on the
+- **The burst.** `oag_raceplay::absorb` fires `WO_WEAPON_ABSORB` on the
   title's own stagger, and it rides the locators. Both absorb paths call
   `Race::play_absorb_feedback`: `spend_pickup`'s absorb arm and the
   Eliminator lap refill.

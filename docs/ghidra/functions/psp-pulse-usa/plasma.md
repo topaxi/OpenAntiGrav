@@ -90,7 +90,7 @@ thirteen-entry jump table:
 `0x100`, `0x80`, `0x40` and `0x2` land exactly on the addresses
 `weapon-fire.md`, `mine.md`, `shield-pickup.md` and `autopilot.md` already
 carry, and `0x20`'s lands on `Shield_Fire` (`0x08861568`), which
-`crates/game/src/race/weapons.rs` cites by address. That is what makes the five
+`crates/raceplay/src/weapons.rs` cites by address. That is what makes the five
 bolded rows worth writing down: they come out of the same read, by the same
 arithmetic, in the same pass.
 
@@ -203,7 +203,7 @@ which is the honest "not implemented" state and not "it does not explode" - the
 damage and impulse in `oag_weapons::projectile::blast` still land.
 
 **What this engine plays, 2026-09-16.** `PLASMA` fires at the press -
-`Cue::Plasma`, `Placement::Craft`, `crates/game/src/race/weapons.rs` - through
+`Cue::Plasma`, `Placement::Craft`, `crates/raceplay/src/weapons.rs` - through
 the firing craft's own emitter, confirmed by decompiling `Plasma_Init` in full
 this session: the `Sound_Play` call above runs on the argument the function
 was handed directly, before it ever constructs the bolt's own emitter a few
@@ -495,7 +495,7 @@ with a second `* 0.5` when the craft's `+0x6d` flag is set. **So the bolt sits
 on the nose and its glow grows for the length of the wind-up**, which is
 exactly what a player describes as the Plasma winding up before it fires.
 This engine rides the glow and, as of 2026-09-16, ramps it too - see
-[`PLASMA_FLARE_EFFECT`](../../../../crates/game/src/race/effect_names.rs)'s
+[`PLASMA_FLARE_EFFECT`](../../../../crates/raceplay/src/effect_names.rs)'s
 doc comment for which half landed and why.
 
 **`craft+0x6d` is the internal/cockpit camera flag, closed the same day by two
@@ -1427,7 +1427,7 @@ renamed on one reading.
 **Not ported.** The fix belongs in `oag_weapons::projectile::blast` /
 `Impact` and the visuals that consume it (`blast_direct_hit`, the render
 side) - both outside this pass's owned files (`crates/weapons/src/projectile/**`
-and `crates/game/src/race/weapons/visuals.rs` are `plasma-speed-blend`'s and
+and `crates/raceplay/src/weapons/visuals.rs` are `plasma-speed-blend`'s and
 `blast_models`'s lanes respectively). This section is the read those lanes
 need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered
 flash/blast instances, one at the struck craft's position and one at the

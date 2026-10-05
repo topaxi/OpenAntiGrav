@@ -563,8 +563,8 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         "`pickup::IMPLEMENTED` and this list disagree. A pad can now hand out a \
          weapon that may have no effect. Three places grow together:\n  \
          1. `oag_weapons::pickup::IMPLEMENTED`\n  \
-         2. the `match` in `Race::spend_pickup` (crates/game/src/race/weapons.rs)\n  \
-         3. the `==` chain in `Race::spend_opponent_pickup` (crates/game/src/race/field.rs)\n\
+         2. the `match` in `Race::spend_pickup` (crates/raceplay/src/weapons.rs)\n  \
+         3. the `==` chain in `Race::spend_opponent_pickup` (crates/raceplay/src/field.rs)\n\
          Then update this list."
     );
 }

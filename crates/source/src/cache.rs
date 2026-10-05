@@ -37,7 +37,7 @@ pub fn default_audio_cache_dir() -> std::path::PathBuf {
 /// the others - and, unlike those two, nothing here is transcoded, so a stale
 /// entry is cheap to spot: it is a byte copy or it is wrong.
 ///
-/// See [`crate::dlc_cache`].
+/// See `crate::dlc_cache`.
 #[must_use]
 pub fn default_dlc_cache_dir() -> std::path::PathBuf {
     cache_dir_named("dlc")

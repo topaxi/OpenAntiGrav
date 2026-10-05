@@ -453,7 +453,7 @@ player as systematic AI cannon fire.
 *automatic and continuous on pickup*, not aimed or intermittent. If it is aimed
 and intermittent, this reading is wrong and something else sets that byte.
 
-**Implementation status.** `oag_game::race::weapons` fires AI cannons on the
+**Implementation status.** `oag_raceplay::weapons` fires AI cannons on the
 recovered gate above, but the *value* of the byte is undefined behaviour and so
 cannot be measured: treating it as non-zero for every AI craft is **chosen, not
 measured, and carries no confidence score**. The mechanism is recovered; the
@@ -578,7 +578,7 @@ cargo run -q -p oag-tools --bin oag-wad -- list 'data/images/pulse-psp-usa.chd:P
 
 #### What this project draws, and what it deliberately does not
 
-`oag_game::race::CANNON_MODEL_ENTRY` is the mesh above, loaded the same way the
+`oag_raceplay::CANNON_MODEL_ENTRY` is the mesh above, loaded the same way the
 Rocket's, Mine's and Bomb's are, and `Race::cannon_model_matrices` puts one
 matrix on each live round. **The mesh is named `muzzleflash` and is the bolt**:
 `the_discs_cannon_round_carries_its_own_model` measures it at 20 vertices, 18
@@ -1601,7 +1601,7 @@ renderer exists:
   each batch became; `oag_render::ripple` draws the bump into them, **summing
   the owners of a shared batch** as measured above, and restoring a batch to
   its authored vertices the frame the bump leaves it.
-- `oag_game::race::SpanPlaces` maps every vertex onto the course through its
+- `oag_raceplay::SpanPlaces` maps every vertex onto the course through its
   path's own `t` - the control points' authored `progress`, now read into
   `oag_vex::track::SplinePoint::progress` - so that neighbouring spans meet
   without a step. `crates/game/tests/quake_ripple_ground_truth.rs` holds every
@@ -1866,7 +1866,7 @@ this codebase draws between a recovered draw and a chosen wire-up (see
 ### 2026-09-23: the absorb overlay's writer, its projection, and two corrections
 
 Read for the weapon-absorb build (`oag_fx::hull_overlay`,
-`oag_game::race::absorb`).
+`oag_raceplay::absorb`).
 
 - **The writer.** `+0x830` is the craft's own clock: `FUN_088418e0`, the
   per-craft update, opens with `lwc1 f13,0x830(a0); add.s f13,f13,f12;
@@ -2484,7 +2484,7 @@ arms `Ship::pending_thrust_scale` under the same three gates (positive amount,
 racing, no Shield pickup), the composition root hands it to
 `oag_physics::Environment::thrust_scale` at the next step, and
 `oag_physics::engine::engine` applies it after the doubling on both branches -
-`crates/game/src/race/tests/weapons.rs`,
+`crates/raceplay/src/tests/weapons.rs`,
 `a_leach_beams_victim_is_throttled_by_the_authored_factor`, races two grids
 and measures the difference.
 
@@ -2929,7 +2929,7 @@ every test compute `0`, which is not `< 0`, so the chain stays straight -
 that part is read.
 
 **Built** in `oag_fx::beam::tube` (2026-09-30), fed by
-`oag_game::race::Spline::tube_frame`; a disc-backed test on Talon's
+`oag_raceplay::Spline::tube_frame`; a disc-backed test on Talon's
 Junction's own spline (`leach_tube_ground_truth`) finds the worst chord on
 the circuit, `9.22` units out of the tube straight and `0.01` bent. Measured
 against PPSSPP on 2026-10-01, below.
@@ -3008,7 +3008,7 @@ row, within `100.0`) and the literal law over the original's own start and
 target reproduces the original's chain to **`0.25`-`0.54` units at worst**
 (`0.17`-`0.31` mean) in the four 13-segment runs, while the chain itself leaves
 the straight line by `14.4`-`21.7`. That is below anything visible, so nothing
-in `oag_game::race::Spline::tube_frame` is changed here (not this lane's file);
+in `oag_raceplay::Spline::tube_frame` is changed here (not this lane's file);
 the record is in the handover thread.
 
 **The search radius was not exercised.** The `100.0` could only show as an
@@ -3073,7 +3073,7 @@ Confidence **90** for the overlay drawing (a read of its only texture from
 its only reader), **85** for the cadences.
 
 **Built** in `oag_fx::beam` (the ribbon, the ENERGY walk) and
-`oag_game::race::scene::absorb_overlay` (the LeachBeam half of the hull
+`oag_raceplay::scene::absorb_overlay` (the LeachBeam half of the hull
 overlay pair).
 
 ### 2026-09-17: the two hand-built quads' geometry, read - and drawn

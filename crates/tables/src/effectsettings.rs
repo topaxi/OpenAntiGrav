@@ -48,7 +48,7 @@
 //! the executable - HD/Fury's own runtime cross-fade between adjacent
 //! stages, recovered from two independent functions (confidence 80, see
 //! its own doc comment). [`StagePalette`] is what it blends, and
-//! `oag_game::race::zone_grade` is what applies the result to a race. 2048
+//! `oag_raceplay::zone_grade` is what applies the result to a race. 2048
 //! drives it off its own recovered zone-number ladder; **HD/Fury still takes
 //! an explicit stage index, because what selects the stage during a race is
 //! unrecovered on that title**.

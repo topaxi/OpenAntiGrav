@@ -123,12 +123,12 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
         assert!(
             telemetry.spline_distance < bound,
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
-            oag_raceplay::describe(&telemetry)
+            race::describe(&telemetry)
         );
 
         if race.ship().physics.grounded > 0.0 {
@@ -142,7 +142,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     }
 
     let end = race.telemetry();
-    println!("{}", oag_raceplay::describe(&end));
+    println!("{}", race::describe(&end));
     println!(
         "grounded on {grounded_ticks}/{TICKS} tick(s), both probes on {both_probes}, \
          worst spline distance {worst_distance:.2} of {bound:.1}, peak speed {peak_speed:.2}"
@@ -171,7 +171,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     assert!(
         travelled > 10.0,
         "the ship travelled {travelled:.2} units in {TICKS} ticks: {}",
-        oag_raceplay::describe(&end)
+        race::describe(&end)
     );
     // And it went *forwards*. Three separate conventions have to agree for this to
     // hold - the spline's tangent, the rotation `Pose::from_sample` builds from it,

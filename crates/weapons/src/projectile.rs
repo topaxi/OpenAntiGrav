@@ -442,7 +442,7 @@ impl Projectiles {
     /// Empties every slot.
     ///
     /// **Nothing calls this today**, and that is not an oversight to fix by
-    /// finding a caller: `oag_game::race::Race::start` builds a whole new
+    /// finding a caller: `oag_raceplay::Race::start` builds a whole new
     /// `World`, so a race begins with a fresh array and cannot inherit a rocket
     /// from the previous run. It is here for a caller that *reuses* a `World`
     /// (a replay scrubbing to a keyframe, or a restart that keeps the

@@ -519,7 +519,7 @@ impl Audio {
             // The one-shot endings - `*HITWALL`/`*HITSHIP` for a wall/timeout
             // or a struck craft, never both - are separate `CueEvent`s
             // carrying their own impact point, pushed from
-            // `crates/game/src/race/tick.rs`.
+            // `crates/raceplay/src/tick.rs`.
             voices.plasma_travel.tick(
                 mixer,
                 banks,

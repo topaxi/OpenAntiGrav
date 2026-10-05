@@ -300,4 +300,4 @@ All below in `names.tsv` in this change.
   parameterized rather than hardcoded (the steady-state target, ported as
   Pulse's white pending the real call site). Ported behind a
   `oag_render::shield::Palette` selected by title in
-  `crates/game/src/race/load.rs`.
+  `crates/raceplay/src/load.rs`.

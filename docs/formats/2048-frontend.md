@@ -347,7 +347,7 @@ HUD draws raw `IG_HUD_*` ids in the 5x7 fallback "because this title names no
 language plugin or HUD font." That was a misreading of the *symptom* as the
 *cause*. `oag_2048::TITLE.front_end` is `None`, so
 `craft_title.front_end.map_or::<&[&str], _>(&[], |fe| fe.language_plugins)`
-(`crates/game/src/race/hud.rs`, `crates/game/src/race/load.rs`) always gets
+(`crates/raceplay/src/hud.rs`, `crates/raceplay/src/load.rs`) always gets
 an empty slice and never loads a font - **regardless of what the disc
 authors**. The disc authors plenty:
 
@@ -555,7 +555,7 @@ build's own menu for the title, on the same terms it always did.
 draw**, and the reason moved rather than closed. Wiring `front_end` makes
 `language_plugins` reachable for the first time - a `--race` capture logs
 all seventeen plugins where it used to log none - but
-`crates/game/src/race/hud.rs`'s `hud_font` asks for the literal role name
+`crates/raceplay/src/hud.rs`'s `hud_font` asks for the literal role name
 `"HUD"`/`"HUDSmall"` (`oag_ui::language::roles`, shared by every title), and
 none of 2048's plugins name that role; they all name `2048HUD` instead. Two
 of the seventeen - `korean` and `traditionalchinese` - do carry a leftover
@@ -575,7 +575,7 @@ mismatch rather than to fix it.
 `oag_title::HudArt` gained `hud_font_role: &'static str` and
 `hud_small_font_role: Option<&'static str>`, on the same terms
 `MenuSkin::menu_font` already models a title's own role spelling rather than
-a literal every caller shares. `crates/game/src/race/hud.rs::load_hud` now
+a literal every caller shares. `crates/raceplay/src/hud.rs::load_hud` now
 resolves `title.hud_art.hud_font_role` instead of the literal
 `oag_ui::language::roles::HUD`. Filled per title:
 
@@ -754,7 +754,7 @@ craft-restriction gate runs at
 `oag_ui::frontend::campaign_map::Frontend::launch_selected_event` instead, on
 the existing map screen, rather than waiting on this card - see
 `docs/formats/2048-campaign.md`'s "Craft choice" section.
-| `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
+| `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_raceplay::load_event` |
 
 **2026-09-27: each map marker draws the disc's own hex tile art and mode
 icon, not a flat colour square.** The 2026-09-25 pass's own texture survey

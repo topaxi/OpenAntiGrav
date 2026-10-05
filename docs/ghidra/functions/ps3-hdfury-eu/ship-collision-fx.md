@@ -86,7 +86,7 @@ Takes `(locatorOrObject, kind, ...)` and gates the whole body on a flag byte
 - **`kind == 3`**: a teardown/release call (`FUN_00281cb8(x, 1)`), gated on a
   flag bit (`object+0x34 & 0x1000`) and only if a stashed handle
   (`in_stack_00000094`) is non-null. Read as the release half of the
-  attach/detach pair `oag_game::race`'s own `sparks_attached` doc comment
+  attach/detach pair `oag_raceplay`'s own `sparks_attached` doc comment
   already predicted a looping effect needs.
 
 **What this does not show.** No branch here names `WO_SHIP_COLL_SPARK_DAMAGE`
@@ -102,7 +102,7 @@ call site never supplies. Both are open - see below.
 selection across two of four branches (as strong a signal as Pulse's own
 `ShipCollisionFx_Trigger` read at 85), the switch is branch-clear, and the
 flag-gated no-op/spawn/spawn/teardown shape matches what
-`oag_game::race::Race::sparks_attached`'s doc comment already needed to
+`oag_raceplay::Race::sparks_attached`'s doc comment already needed to
 exist. The kind-to-Pulse-variant mapping still isn't a one-to-one match to
 Pulse's own three kinds, and `WO_SHIP_COLL_SPARK_DAMAGE` itself is still
 absent from all four branches read here - that gap is not closed, just now

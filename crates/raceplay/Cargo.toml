@@ -7,6 +7,13 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# The tick loop with no renderer, no window and no disc. A binary of this crate
+# because everything it runs is `oag_raceplay`: a headless server needs this
+# crate and nothing from the composition root. See the binary's own module doc.
+[[bin]]
+name = "oag-headless-sim"
+path = "src/bin/headless_sim.rs"
+
 [dependencies]
 oag-2048.workspace = true
 oag-ai.workspace = true

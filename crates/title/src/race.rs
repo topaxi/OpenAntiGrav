@@ -114,7 +114,7 @@ pub struct RaceDefaults {
     ///
     /// An **id** - the folder under [`Self::ship_dir`] - and not the name a
     /// player reads, which comes from the string table. See
-    /// `oag_game::catalogue`.
+    /// `oag_raceplay::catalogue`.
     pub team: &'static str,
     /// The archive directory a team's hull, plume, shield and handling stats
     /// all sit under, one subdirectory per team id.
@@ -745,7 +745,7 @@ pub enum ZoneCircuit {
     /// change this string and nothing else.
     ///
     /// **Not every circuit has one**, which is a load-correctness fact and not a
-    /// menu one - see `oag_game::catalogue::Track::available_in_zone`.
+    /// menu one - see `oag_raceplay::catalogue::Track::available_in_zone`.
     Prefixed(&'static str),
     /// A Zone race runs a circuit of its own, sharing nothing with the race
     /// ones, and this is the one it opens when the caller names none.
@@ -940,7 +940,7 @@ impl ZoneCircuit {
     /// not duplicated.
     ///
     /// Generic over `T` and closures rather than naming
-    /// `oag_game::catalogue::Track` and calling `oag_game::catalogue`
+    /// `oag_raceplay::catalogue::Track` and calling `oag_raceplay::catalogue`
     /// directly: `oag-title` sits beneath `oag-game` in the dependency graph
     /// (`docs/architecture/workspace-layout.md`) and must not reach up to it.
     /// `available_in_zone` and `by_own_names` are the two questions

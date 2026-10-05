@@ -96,7 +96,7 @@ Checked still stale at the time of writing unless marked:
   announcer.
 - `docs/ghidra/functions/psp-pulse-usa/shuriken.md` about 112 (the blade loads
   `pulse_shuriken.vex`) against the `projectile_sprites` doc comment in
-  `crates/game/src/race/weapons/visuals.rs` ("has no model at all"). One of
+  `crates/raceplay/src/weapons/visuals.rs` ("has no model at all"). One of
   the two is wrong.
 - `handover/rendering/m6-authored-lighting-no-hardware-light-slot-found.md`
   still calls `DirectionalLight`'s consumer unfound; `scene-light.md`

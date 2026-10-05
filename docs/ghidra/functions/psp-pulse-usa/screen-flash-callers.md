@@ -74,7 +74,7 @@ are never reached because `t < 1` ends the flash first.
   else `EXPLBIG` positional and kind 0; then `WO_SHIP_EXPLOSION`.
 
 **Built 2026-10-01:** the two state 5 particles, `WO_SHIP_FXNODE_EXPLO` then
-`WO_SHIP_DEATH_SPARKS` at each node of the **wreck** (`oag_game::race::wreck_fx`;
+`WO_SHIP_DEATH_SPARKS` at each node of the **wreck** (`oag_raceplay::wreck_fx`;
 read live, see [ship-wreck-model.md](ship-wreck-model.md)); then `WO_SHIP_EXPLOSION`
 at the placement below, and `Camera_ArmShake` for the player on both (`(0.3, 0.4,
 camera, 3)` at state 5 and `(0.8, 0.6, camera, 1)` at state 6, both played where the
@@ -106,7 +106,7 @@ kind 0. Then, in order:
 Live (Talon's Junction, the player's craft put into state 4, 90 frames after the state
 5 edge): the matrix's rows were **0.75 long** (the craft model's own scale) and its
 translation was the craft node's position moved `2.9995` units along `-up`, which is
-`4.0 * 0.7499`, to four digits. Ported as `oag_game::race::wreck_fx::EXPLOSION_DROP`:
+`4.0 * 0.7499`, to four digits. Ported as `oag_raceplay::wreck_fx::EXPLOSION_DROP`:
 `model * (0, -4, 0)`, oriented by the model's up, thrown with the big flash.
 Confidence **90**.
 
@@ -131,7 +131,7 @@ teardown then calls `Shuriken_SpawnExpiry` (`0x08870c78`), which:
 2. starts `ScreenFlash_Start(0)` there;
 3. clears the blade's flags; and the pool then plays `SHURIKENEXPL`.
 
-It calls nothing that spends damage. **Built** as `oag_game::race::SHURIKEN_EXPIRE_EFFECT`,
+It calls nothing that spends damage. **Built** as `oag_raceplay::SHURIKEN_EXPIRE_EFFECT`,
 with the fuse ending reported as an `Impact` with `blast: false`
 (`oag_weapons::projectile`); the sound is not.
 

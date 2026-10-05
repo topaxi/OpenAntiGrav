@@ -52,7 +52,7 @@
 //! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
 //! is those three alone. Steps 4 to 6 are this module guessing, and
 //! [`candidates`] is the whole guess rather than its first hit - which is what
-//! [`crate::launcher`] puts on screen when there is more than one, instead of
+//! `crate::launcher` puts on screen when there is more than one, instead of
 //! opening one and never mentioning the rest. `resolve` is still the two halves
 //! joined, unchanged, for every route that wants one answer and no screen.
 
@@ -362,7 +362,7 @@ fn package_directories() -> Vec<PathBuf> {
 /// **Cheap and title-blind, the same way [`is_container`] is**: this only asks
 /// whether `<candidate>/base/PSP2/data.psarc` exists, which is what tells an
 /// extracted package apart from an empty or partial one - it does not open the
-/// archives and does not decide this is Wipeout 2048. [`crate::launcher`]'s own
+/// archives and does not decide this is Wipeout 2048. `crate::launcher`'s own
 /// `survey` is what opens each candidate and decides whether it is playable at
 /// all, the same as it does for every `.chd` and `.iso` this module finds.
 fn package_directories_in(root: &Path) -> Vec<PathBuf> {

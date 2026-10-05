@@ -13,7 +13,7 @@
 //! # What this pins
 //!
 //! Reported from play: HD drew weapon pads in every solo mode, not just
-//! `SingleRace`. The cause was that `oag_game::race::load` set
+//! `SingleRace`. The cause was that `oag_raceplay::load` set
 //! `weapon_pad_model` to `None` on the PS3 path unconditionally, so
 //! `Scene::new`'s `Mode::weapons_enabled` gate had nothing to act on - HD's
 //! weapon pads were never routed through it at all, because they were baked

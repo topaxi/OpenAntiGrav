@@ -291,7 +291,7 @@ and destroyed on lap 3. Full table, criterion and reproduction:
   of a low wall rather than the face of a tall one.
 - **The AI corridor is inverted over 2,083-2,119.** `ai_bound_right` goes
   negative (to -1.796 at 2,107) while `ai_bound_left` stays near zero, so the
-  two bounds cross and `crates/game/src/race/spline.rs`'s `.min(0.0)`/`.max(0.0)`
+  two bounds cross and `crates/raceplay/src/spline.rs`'s `.min(0.0)`/`.max(0.0)`
   rebasing clamps both to zero. `spline.rs`'s doc comment's straddle-by-0.1
   guarantee is about *control points*; these are interpolated samples between
   them. Under 1.8 units on a track 50 wide, and **not a contributor** - a

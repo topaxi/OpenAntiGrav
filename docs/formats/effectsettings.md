@@ -156,8 +156,8 @@ same `mesh_render::Fog`/`Light` path
 | --- | --- |
 | Where each title keeps its table | `oag_title::ZonePalette` - `TitleWide` on HD/Fury, `BesideCircuit` on 2048, `None` on Pulse and Pure |
 | One stage's palette, and the blend of two | `oag_tables::effectsettings::{StagePalette, EffectSettings::blended_palette}` |
-| The runtime stage state, and what it does to fog and rig | `oag_game::race::zone_grade::{StageBlend, ZoneGrade}` |
-| Read at race load, applied per frame | `oag_game::race::load::environment::staging`, `race/scene/frame.rs` |
+| The runtime stage state, and what it does to fog and rig | `oag_raceplay::zone_grade::{StageBlend, ZoneGrade}` |
+| Read at race load, applied per frame | `oag_raceplay::load::environment::staging`, `race/scene/frame.rs` |
 | Checked against the real image | `crates/game/tests/zone_grade_ground_truth.rs` |
 | **What advances the stage during a race** | `oag_title::ZoneStages` / `oag_2048::race::ZONE_STAGES` - **2048 only**, and `None` on HD/Fury |
 

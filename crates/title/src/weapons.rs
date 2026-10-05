@@ -29,7 +29,7 @@ pub struct Weapons {
     /// `weaponstats.xml` is the whole of its tuning, so there is no second file
     /// for a mode to reach for rather than one this build has not found.
     ///
-    /// Nothing reads it yet: `oag_game::race::load` opens [`Self::race`] for
+    /// Nothing reads it yet: `oag_raceplay::load` opens [`Self::race`] for
     /// every mode. It is carried because the axis is about which files exist,
     /// and recording that Pure has one is the point of the axis.
     pub elimination: Option<&'static str>,
@@ -45,7 +45,7 @@ pub struct Weapons {
     /// title here runs Pulse's law on its own odds; no title's own decision
     /// code is read** - the law is inherited from Pulse and unmeasured on the
     /// rest. A race without the file fires on this project's own rule - see
-    /// `oag_game::race::FireLaw` - which is what a title with no table would
+    /// `oag_raceplay::FireLaw` - which is what a title with no table would
     /// get, and none of the five does.
     pub ai: Option<&'static str>,
 }
@@ -54,7 +54,7 @@ pub struct Weapons {
 /// not the pickup pad's icon.
 ///
 /// **An axis because HD and Pulse disagree in *name*, not just in whether a
-/// field is `None`.** `oag_game::race`'s own `ROCKET_MODEL_ENTRY` and friends
+/// field is `None`.** `oag_raceplay`'s own `ROCKET_MODEL_ENTRY` and friends
 /// were Pulse spellings reached for on every source - `Data\Weapons\Rocket.vex`
 /// resolves on no PS3 archive at all, so every HD projectile fell back to a
 /// procedural billboard even though HD authors its own models under
@@ -73,7 +73,7 @@ pub struct WeaponModels {
     pub bomb: Option<&'static str>,
     /// The Cannon's own model, named `muzzleflash` on both titles that author
     /// one. On Pulse it is the round's body for its whole flight (see
-    /// `oag_game::race::CANNON_MODEL_ENTRY`); on Wipeout HD it is what the
+    /// `oag_raceplay::CANNON_MODEL_ENTRY`); on Wipeout HD it is what the
     /// name says, a flash at the muzzle - [`Self::cannon_look`] says which.
     pub cannon: Option<&'static str>,
     /// The Plasma bolt's own head, ridden from charge through flight.
@@ -84,7 +84,7 @@ pub struct WeaponModels {
     pub plasma_ball: Option<&'static str>,
     /// Pulse's own three-model detonation shell: a halo and two hemispheres,
     /// scrubbed by a baked anim-time track. See
-    /// `oag_game::race::blast_models` for the mechanism this plays back.
+    /// `oag_raceplay::blast_models` for the mechanism this plays back.
     pub plasma_blast_pulse: Option<PulsePlasmaBlast>,
     /// Wipeout HD's own three-model detonation shell: a ring, a sphere and a
     /// halo, each eased by a per-tick `cur += (target - cur) * rate` scale
@@ -94,19 +94,19 @@ pub struct WeaponModels {
     pub plasma_blast_hd: Option<HdPlasmaBlast>,
     /// Pulse's own Bomb detonation: a hemisphere and a shockwave, each eased
     /// by a per-tick `cur += (target - cur) * rate` scale ramp of its own -
-    /// see `oag_game::race::bomb_blast`. `None` on every other title: HD's
+    /// see `oag_raceplay::bomb_blast`. `None` on every other title: HD's
     /// own Bomb detonation is unread and Pure's Bomb authors no fuse at all.
     pub bomb_blast_pulse: Option<PulseBombBlast>,
     /// The Repulser's field model: a flat ring around the firer that shrinks,
     /// then widens and fades - `Repulser_Construct` (`0x08875008`) loads it and
     /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it. See
-    /// `oag_game::race::repulser_field`. `None` on every title without a
+    /// `oag_raceplay::repulser_field`. `None` on every title without a
     /// Repulser law of its own.
     pub repulser_field: Option<&'static str>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
-    /// read this session - see `oag_game::race::load::weapon_models`'s own
+    /// read this session - see `oag_raceplay::load::weapon_models`'s own
     /// doc comment for where that stopped.
     pub leachbeam_ball: Option<&'static str>,
     /// How the Cannon's two hand-built quads and its [`Self::cannon`] model
@@ -114,7 +114,7 @@ pub struct WeaponModels {
     ///
     /// `None` is Pulse's own reading, the one recovered first and the one
     /// `oag_fx::weapon_quads::geometry`'s constants and
-    /// `oag_game::race::CANNON_BOLT_TEXTURE_ENTRY` already carry - every
+    /// `oag_raceplay::CANNON_BOLT_TEXTURE_ENTRY` already carry - every
     /// title without its own reading keeps drawing on those terms, as it did
     /// before this field existed.
     pub cannon_look: Option<CannonLook>,

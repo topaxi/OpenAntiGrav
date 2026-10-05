@@ -30,7 +30,7 @@
   the two discs it already covers - each needs its own executable
   evidence, the same bar `NO_TRIGGER_RECOVERED`'s existing 27 entries hold to.
 - **Correction, 2026-09-08: the "7 wired" / "75 remaining" arithmetic above
-  was already stale when written.** `RACE_EFFECTS` (`crates/game/src/race/effects.rs`)
+  was already stale when written.** `RACE_EFFECTS` (`crates/raceplay/src/effects.rs`)
   is 15 long today - Plasma, Shuriken (both `_HEAD` and `_BOUNCE`) and Quake
   landed 2026-09-02, two weeks after this bullet's 2026-08-24 note counted 7 -
   and the two counts drifted independently in three places (this file said 7,
@@ -122,7 +122,7 @@
   for a PS2-sourced race and its reasoning is source-specific: the PS2 disc
   authors that one name and the PSP doesn't, so a PSP-sourced race falls back
   to `oag_fx::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
-  own doc comment in `crates/game/src/race/effect_names.rs`). HD authors
+  own doc comment in `crates/raceplay/src/effect_names.rs`). HD authors
   three engine-flare names, not one: `WO_SHIP_ENGINEFLARE` plus these two
   unwired ones, and none of the three shows up in HD's own string table
   (checked 2026-09-08, `strings -a` + `search_strings`, all zero) - which

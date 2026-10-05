@@ -92,7 +92,7 @@
   light per craft, `EngineLightData.xml`'s `Distance` behind the flare node
   along its Z axis, range `Radius +- 0.1`, `(40, 10, 4)` on a Fury skin or
   `(4, 10, 40)` otherwise, times `1 + 10 * boost_blend` - see
-  `oag_game::race::engine_light` and
+  `oag_raceplay::engine_light` and
   [`hd-status.md`](../formats/hd-status.md), "Authored data that is plain
   text". **What it lights is the craft's own engine housing, not the floor**:
   every one of the original's 40 captured records sits 3.0-4.4 units (a ride
@@ -130,7 +130,7 @@
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
   recovered in [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md) and
-  implemented in `oag_fx::exhaust` and `oag_game::race::Loaded::boost_model`.
+  implemented in `oag_fx::exhaust` and `oag_raceplay::Loaded::boost_model`.
   The plume's mesh batches draw with `exhaust::TRAIL_BLEND`, not the flare's
   own `exhaust::BLEND` - they take the ordinary mesh draw path's pure-additive
   blend branch, the same equation the ribbon already uses, not the flare's

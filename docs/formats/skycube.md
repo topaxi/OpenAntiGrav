@@ -333,7 +333,7 @@ reasoned about: all 32 `Data\Environments\<n>_Track\track[_reversed].vex`
 files, sky and pads both (64 renders), via
 `oag-view --sky/--pads --textures <preceding-entry-index> --draws
 --screenshot`, resolving the preceding-entry index the same way
-`oag_game::race::load` does (see [`ps2-texture.md`](ps2-texture.md)). 63 of 64
+`oag_raceplay::load` does (see [`ps2-texture.md`](ps2-texture.md)). 63 of 64
 resolve every draw's texture. **`12_Track`'s sky (forward direction only, not
 `12_Track_reversed`) does not**: `--draws` reports one opaque draw -
 `skycube1_nolightShape`, texture ordinal 151 - binding the white 1x1 fallback,

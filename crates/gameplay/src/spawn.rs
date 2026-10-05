@@ -151,7 +151,7 @@ impl Pose {
     /// on no other title measured: nine of its 28 circuit files carry a `Start
     /// Position` whose rotation was never re-authored for the direction the
     /// spline runs. Where the slot is right - which is all 24 PSP track files
-    /// and 19 of HD's 28 - nothing calls this. See `oag_game::race::spawn`,
+    /// and 19 of HD's 28 - nothing calls this. See `oag_raceplay::spawn`,
     /// which holds the measurement and the rule.
     ///
     /// The up axis is taken from the pose rather than passed in, so a caller

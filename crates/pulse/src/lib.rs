@@ -340,7 +340,7 @@ pub mod names {
     ///
     /// `PI001` is the game plugin, where `PI008`-`PI012` are the language ones.
     /// The circuits are the part this project reads today - see
-    /// `oag_game::catalogue` - and they are **entries rather than directories**:
+    /// `oag_raceplay::catalogue` - and they are **entries rather than directories**:
     /// two of them can name one environment and differ only by `Reversed`.
     pub const GAME_PLUGIN_DEFINITION: &str = r"Data\Plugins\PI001\Definition.xml";
 

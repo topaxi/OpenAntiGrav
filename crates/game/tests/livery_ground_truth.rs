@@ -152,7 +152,7 @@ fn every_hull_carries_its_own_nozzle_and_plume() {
 /// at all?
 ///
 /// The stakes are higher than a single craft's flare. `Scene::draw`'s exhaust
-/// loop (`crates/game/src/race/scene/frame.rs`) `break`s out of the whole
+/// loop (`crates/raceplay/src/scene/frame.rs`) `break`s out of the whole
 /// field the first time a slot's nozzle is `None`, reasoning that a shared
 /// hull means a missing locator is missing for every craft - true for Zone,
 /// where the hull really is shared. If `Zone.vex` authors no locator, that

@@ -560,7 +560,7 @@ recorded as such in `hd_ball::position`'s own doc comment.
 
 `oag_fx::beam::hd_ball` (`crates/fx/src/beam.rs`) carries the period
 law and the chosen straight-line placement law above, and
-`Race::advance_leach_beam_ribbon` (`crates/game/src/race/weapons/visuals.rs`)
+`Race::advance_leach_beam_ribbon` (`crates/raceplay/src/weapons/visuals.rs`)
 drives a render-side accumulator (`RaceView::leach_ball_elapsed`) off it
 alongside Pulse's ribbon, firing `WO_LEACHBEAM_ABSORB` as a one-shot burst
 (`stage.play`, not attach-and-follow - the original allocates a fresh
@@ -582,7 +582,7 @@ one `leach_ball: Option<Drawable>` - a single drawable, not a
 `MAX_PROJECTILES` pool, since `oag_gameplay::World::leach_beam` is one
 `Option`, never more than one live beam - written and drawn each frame a
 beam is `Kind::Locked` (`Race::leach_ball_model_matrix`,
-`crates/game/src/race/weapons/visuals.rs`) at
+`crates/raceplay/src/weapons/visuals.rs`) at
 `oag_fx::beam::hd_ball::position`, on a translation-only matrix
 (identity rotation and scale - **chosen, not measured**, since
 `_opd_FUN_001141d8` was never resolved past "orthonormalise/place a matrix

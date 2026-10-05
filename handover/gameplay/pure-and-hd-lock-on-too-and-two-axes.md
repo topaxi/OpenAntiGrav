@@ -148,7 +148,7 @@ not wired up:
   the port scales HD's absolute quarter-seconds onto a different hold
   constant. Screenshotted on `hdfury-ps3-eu-dec.iso`.
 - **`Sight` carries no `World`/hash coverage** - it lives on `Race`'s own
-  view state, not `sim.world` (`crates/game/src/race/weapons.rs`), so none of
+  view state, not `sim.world` (`crates/raceplay/src/weapons.rs`), so none of
   the above moved a determinism hash. Checked directly, not assumed.
 - **`HOLD_SECONDS` untouched, deliberately** - still the PSP's `0.8` on every
   title; the HD-vs-PSP hold-time question above remains unresolved by this

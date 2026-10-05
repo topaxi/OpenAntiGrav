@@ -6,7 +6,7 @@
 [screen-flash-callers.md](../../docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md).
 
 **Landed.** `Ship_SetState` case 5 makes `shipwreck.vex` the live model
-(`CraftState::Eliminated`; `oag_game::race::scene::wreck`), and `race::wreck_fx` throws
+(`CraftState::Eliminated`; `oag_raceplay::scene::wreck`), and `race::wreck_fx` throws
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at each wreck locator on that edge,
 then `WO_SHIP_EXPLOSION` 1.5 s later at the wreck's own model matrix moved
 `4.0` rows along `-up` (`FUN_088407b0`, read and measured live: the matrix rows were 0.75

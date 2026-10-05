@@ -14,7 +14,7 @@ typed-instance database (`<mjolnir><instance typedefid=".." name="..">`),
 and `oag_tables::mjolnir::campaign` gives it a typed view (event kinds,
 `TrackDefinition`, `WeaponSetDefinition`); `oag_2048::campaign` names what
 2048 ships (`SP_XML`/`MP_XML`, the five-class `EClass` ladder, `engine_mode`);
-`race::load_event` (`crates/game/src/race/load/campaign.rs`, new) resolves an
+`race::load_event` (`crates/raceplay/src/load/campaign.rs`, new) resolves an
 event by name onto `race::Options` and calls the existing loader.
 `oag-game --event "<name>"` drives the whole chain end to end, verified
 against the real EU v1.04 package.
@@ -83,7 +83,7 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   (not `Field::references`, which drops an unauthored slot's own position);
   `race::Options::grid_teams` (new, per-slot, defaults to "no override" so
   only one exhaustive `Options` call site needed a line) carries it into
-  `crates/game/src/race/load/roster.rs::apply_grid_teams`, which overlays it
+  `crates/raceplay/src/load/roster.rs::apply_grid_teams`, which overlays it
   onto `teams_for_slots`' own placement one slot at a time rather than
   replacing the whole grid - the "own design rather than a drop-in" this
   entry used to call for. Measured against the real EU v1.04 `SP.xml`: 55 of

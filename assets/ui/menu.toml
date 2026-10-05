@@ -175,7 +175,7 @@ values_from = "speed_classes"
 # id in the language's own string table, which is not always the same word.
 #
 # Zone forces the shared Zone hull regardless of team (see
-# `oag_game::race::ship_entry_name`), so the row is greyed rather than
+# `oag_livery::ship_entry_name`), so the row is greyed rather than
 # offered as if it still picked the drawn model.
 # Only a single race fields opponents, so this greys to N/A in the other three
 # modes. `disabled_by` matches positively, so the list is the modes *without* a

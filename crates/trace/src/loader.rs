@@ -30,7 +30,7 @@ pub(crate) fn checked_class(raw: &str) -> Result<&str> {
 
 /// Reads the handling parameters and the track's collision geometry off a disc.
 ///
-/// The same two reads `oag_game::race::load` does, without the spline, the models
+/// The same two reads `oag_raceplay::load` does, without the spline, the models
 /// or the camera: a comparison run is seeded from the recording rather than from
 /// a grid slot, so it needs nothing that decides where a ship starts.
 ///

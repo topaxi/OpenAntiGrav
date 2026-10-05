@@ -510,7 +510,7 @@ pub const DEFAULT_TEAM: &str = "assegai";
 /// `/data/weapons/<name>.rcsmodel` both present, lowercase as every PSARC
 /// entry is - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
 /// `mesh::rcs::build` is what a PS3 `.vex`'s external-geometry branch needs
-/// for all of them - see `oag_game::race::load::weapon_models`.
+/// for all of them - see `oag_raceplay::load::weapon_models`.
 pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons::WeaponModels {
     rocket: Some(r"Data\Weapons\hd_Rocket.vex"),
     mine: Some(r"Data\Weapons\HD_Mine.vex"),
@@ -535,7 +535,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     // `docs/ghidra/functions/psp-pulse-usa/mine.md`'s own note on what this
     // substitutes.
     bomb_blast_pulse: None,
-    // Named, not wired - see `oag_game::race::load::weapon_models`'s own doc
+    // Named, not wired - see `oag_raceplay::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
     // HD hands the Repulser out, but its own field-model law is unread.
     repulser_field: None,

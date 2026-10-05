@@ -8,7 +8,7 @@ all the way through to the boot path. Full writeup, evidence and confidence:
 [`docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table`](../../docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table).
 
 **Decryption** is `oag_formats::pure_dlc` (`crypt_with_key`/`xtea8`, plus the
-key-table parser). **Mounting** is `oag_game::dlc::ensure_extracted` trying
+key-table parser). **Mounting** is `oag_source::dlc::ensure_extracted` trying
 `pure_dlc::decrypt_pack` on anything that fails the plain-WAD sniff, and
 `oag_pure::open_with_packs` mounting the result the way
 `oag_pulse::open_with_packs` mounts Pulse's own - see
@@ -22,12 +22,12 @@ Confirmed live: `just play pure --team Vanuber` races on the Gamma pack's
 **The one thing this took that Pulse's own DLC path never needed**: Pure's
 packs and Pulse's packs are discovered from two separate subtrees of the DLC
 cache (`<cache>/pure/` vs `<cache>/`, decided in
-`oag_game::dlc::ensure_extracted` per member, by whether it needed decrypting)
+`oag_source::dlc::ensure_extracted` per member, by whether it needed decrypting)
 rather than one shared `oag_assets::dlc::discover` walk. Before that split, a
 run that had decrypted Pure's packs once left them on disk as ordinary WADs,
 indistinguishable from Pulse's own to a later walk with no key table at all -
 so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
-`oag_game::dlc`'s module docs and `crate::title::open_source`'s.
+`oag_source::dlc`'s module docs and `crate::title::open_source`'s.
 
 ## Open
 

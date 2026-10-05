@@ -543,7 +543,7 @@ changing in this engine - see
 `Some("shipboost")` on Pulse, `None` on Pure (measured absent, as above),
 `None` on HD (its plume is a subtree of `engineflare.vex`, not a standalone
 model - see [trail-ribbon.md](../rendering/trail-ribbon.md)), and `None` on
-2048/Omega (unread). `oag_game::race::assets::boost_entry_name` returns
+2048/Omega (unread). `oag_raceplay::assets::boost_entry_name` returns
 `Option<String>` accordingly, and the load report now says "names no
 standalone boost-plume model" for Pure rather than the misleading "not in the
 archive set" it used to.
@@ -1345,7 +1345,7 @@ sentence that stood here until 2026-08-23 said the opposite.
 
 `Data\Plugins\PI001\Definition.xml` carries a `PI_Music` node per track beside
 its `PI_Track` and `PI_Team` ones, in the same schema
-[`oag_game::catalogue`](../../crates/game/src/catalogue.rs) already reads:
+[`oag_raceplay::catalogue`](../../crates/raceplay/src/catalogue.rs) already reads:
 
 ```xml
 <PI_Music name="A Piece Of Music">

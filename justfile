@@ -578,7 +578,7 @@ deploy-deck *ARGS:
 
 # Run the tick loop with no renderer, no window and no disc, and print its hash
 headless-sim *ARGS:
-    cargo run -q -p oag-game --bin oag-headless-sim -- "$@"
+    cargo run -q -p oag-raceplay --bin oag-headless-sim -- "$@"
 
 # View assets straight from a disc image
 view *ARGS:

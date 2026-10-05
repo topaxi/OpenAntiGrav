@@ -124,7 +124,7 @@ Head2Head cell today gets no gap readout.
 - **A live capture (this engine's own front end, or PPSSPP) of an actual
   Head2Head cell launch** - field size, opponent identity, grid slot - was
   not done this pass; the in-process `Race::start` unit test
-  (`crates/game/src/race/tests/spawn.rs`) is the verification this pass
+  (`crates/raceplay/src/tests/spawn.rs`) is the verification this pass
   has, the same "synthetic, not live" shape the standings-table item above
   already carried until its own live check.
 

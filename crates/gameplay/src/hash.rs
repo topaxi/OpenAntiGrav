@@ -10,7 +10,7 @@
 //! committed hash stays green.
 //!
 //! This is the fix that page names. [`hash_world`] covers the whole [`World`];
-//! the pad timers live on `oag_game::race::Race` rather than in the world - they
+//! the pad timers live on `oag_raceplay::Race` rather than in the world - they
 //! belong to the track, not to a craft - and `Race::state_hash` folds them in
 //! on top of this.
 //!

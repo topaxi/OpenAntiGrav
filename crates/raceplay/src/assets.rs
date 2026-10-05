@@ -360,7 +360,7 @@ pub(crate) fn decode_gtf(
 /// this axis existed every HD load report ended with "the flare falls back to a
 /// procedural glow", because the loader asked HD's disc for a Pulse name it
 /// does not carry. HD's flare is `Data\Ships\<Team>\engineflare.vex`, loaded
-/// per craft by [`crate::livery::flare`] and reported there; the sprite
+/// per craft by [`oag_livery::flare`] and reported there; the sprite
 /// pipeline keeps its stand-in texture for the *rocket* billboard fallback,
 /// which is a separate use of the same slot.
 /// The sprite flare's texture, `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf`

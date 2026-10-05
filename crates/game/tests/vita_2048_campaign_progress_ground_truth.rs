@@ -268,7 +268,7 @@ fn load_event_resolves_event_1s_own_pass_and_elite_objectives() {
 
 /// `race::load_event` wires a decoded weapon set through to
 /// `Loaded::setup::allowed_weapons`, gating `race::pads` at runtime - see
-/// `crates/game/src/race/load/campaign.rs` and
+/// `crates/raceplay/src/load/campaign.rs` and
 /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
 ///
 /// Checked against a direct decode off the same document rather than a

@@ -1,6 +1,30 @@
 //! Flying a ship on a real track: the composition every layer beneath this was
 //! built for.
 //!
+//! # Where this crate stops
+//!
+//! This is `oag-game`'s old `race/` module, extracted whole. It is renderer-coupled
+//! on purpose (it builds the scene, the effects and the HUD readout from the same
+//! tick that steps the simulation), so it sits above `oag-render`, `oag-fx`,
+//! `oag-mesh`, `oag-sound`, `oag-hud`, `oag-livery` and `oag-present`, and below
+//! `oag-game`. It is not a gameplay crate: `scripts/check-dependency-rules.py`
+//! classifies it with the other drawing crates, and the pure simulation it drives
+//! stays in `oag-gameplay`, `oag-physics`, `oag-ai` and `oag-race`.
+//!
+//! What came with it, because the load reads them and nothing else in the front end
+//! owns them: [`catalogue`] (the circuits and teams a title offers), [`pilots`] (the
+//! player-authored AI roster), [`loader_log`] (the load report's log levels), the
+//! [`scoreboard`] table a finished race builds and the [`track_panel`] assets the
+//! flyby shows. What it asks of the host it takes as plain data or does without:
+//! opening a source is `oag-source`, the language tables are `oag_ui::language::load`,
+//! and the loading screen's own `Progress` is built by the host from
+//! [`LoadProgress`]. What stayed in `oag-game`: the headless capture
+//! (`oag_game::race_capture`, which composites the front end's scoreboard, HUD,
+//! countdown and track-panel overlays over [`Scene`]) and the overlays' own wgpu
+//! passes.
+//!
+//! # What this module is
+//!
 //! Nothing here is a new subsystem. The track spline, the collision soup, the
 //! handling parameters, the force law, the keyboard mapping, the mesh pipeline and
 //! the chase camera all already exist and are all already tested; this module is

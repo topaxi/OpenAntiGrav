@@ -489,7 +489,7 @@ pub fn build_weapon_pads(
 /// version is folded into that same empty answer**, deliberately, because the
 /// alternative is failing a whole race over a sky - and the caller is the one
 /// holding the class table, so it is the caller that can tell the two apart and
-/// word its report accordingly. `oag_game::race::load` does exactly that.
+/// word its report accordingly. `oag_raceplay::load` does exactly that.
 ///
 /// [`build`] itself does **not** go through this: a track or ship whose `Mesh`
 /// id is unrecovered has no geometry at all, and returning an empty model there

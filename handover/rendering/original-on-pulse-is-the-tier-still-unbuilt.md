@@ -13,7 +13,7 @@ and this file is what is left**, which is step 5.
   `--shadows` as a per-run override. `original` and `mapped` are refused by
   `FromStr`, and `display/tests.rs` names both so whoever lands one deletes
   their line beside a new variant.
-- **`blob`.** `oag_render::shadow` draws it, `oag_game::race::shadow` places
+- **`blob`.** `oag_render::shadow` draws it, `oag_raceplay::shadow` places
   it. HD's own nine `ambient_shadow.gtf` are the silhouette where the source
   ships them, a generated falloff elsewhere, and the load report says which
   happened per slot. **Diffed `off` against `blob` on four titles** rather

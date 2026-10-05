@@ -37,7 +37,7 @@
 //! hits the track does. The struck hull sparks from its own side: the damage
 //! this posts reaches `Ship_Damage`, whose weapon branch throws
 //! `WO_SHIP_COLL_SPARK_DAMAGE` off the victim's locators - see
-//! [`super::WeaponHit::landed`]. See `oag_game::race::CANNON_SPARKS_EFFECT` for where this is wired
+//! [`super::WeaponHit::landed`]. See `oag_raceplay::CANNON_SPARKS_EFFECT` for where this is wired
 //! and `crates/game/tests/psys_inventory_ground_truth.rs`'s
 //! `WO_CANNON_HIT_SHIP` entry for the PS2-only asset this does not settle.
 

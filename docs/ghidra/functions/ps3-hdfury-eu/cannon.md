@@ -193,7 +193,7 @@ receiving either name during a Cannon shot) would settle it.
 ## What the engine draws from this
 
 `oag_hd::race::CANNON_LOOK` carries the reading above. The draw side is
-`oag_game::race` (`weapons/visuals/cannon.rs`), with the locators from
+`oag_raceplay` (`weapons/visuals/cannon.rs`), with the locators from
 `oag_livery::cannon_flash`. Two things are **chosen, not measured**:
 
 - **Which side flashes.** The engine's round is spawned by

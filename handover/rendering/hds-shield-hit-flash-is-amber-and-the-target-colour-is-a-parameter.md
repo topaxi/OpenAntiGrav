@@ -42,7 +42,7 @@ unmodified) and `HD_PALETTE` carries the two measured colours plus
 `TARGET_COLOUR` - Pulse's white, **chosen rather than measured**, labelled so
 in the doc comment, because it is the least-invented default until the real
 call site is read. `Setup::shield_palette` is resolved in
-`crates/game/src/race/load.rs` from `craft_title.name == oag_hd::TITLE.name`,
+`crates/raceplay/src/load.rs` from `craft_title.name == oag_hd::TITLE.name`,
 the same title `shield_entry_names` already keys its own path resolution off,
 and threaded into `Race::start` the same way `hd_trail` is. Two new render
 tests pin the palette difference and the shared-target choice

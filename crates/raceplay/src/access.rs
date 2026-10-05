@@ -278,11 +278,11 @@ impl Race {
     /// Slot 0 is structurally always zero, the same way
     /// [`Self::rolls_armed_of`] is: the player's craft is stepped by
     /// `Race::tick` and only `Race::step_opponents` counts. See
-    /// [`oag_game::race::RaceSim::wall_contact_ticks`] for why this counts
+    /// [`oag_raceplay::RaceSim::wall_contact_ticks`] for why this counts
     /// contacts rather than inbound impacts, and why a contact here is a wall
     /// by construction rather than by a geometric test on the normal.
     ///
-    /// [`oag_game::race::RaceSim::wall_contact_ticks`]: crate::RaceSim
+    /// [`oag_raceplay::RaceSim::wall_contact_ticks`]: crate::RaceSim
     #[must_use]
     pub fn wall_contact_ticks_of(&self, slot: usize) -> u32 {
         self.sim.wall_contact_ticks.get(slot).copied().unwrap_or(0)

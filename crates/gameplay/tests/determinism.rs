@@ -17,9 +17,9 @@
 //! # What this does *not* cover, so nobody assumes it does
 //!
 //! The weapon pads' own refresh timers and distance caches, which live on
-//! `oag_game::race::Race` rather than in the world - pad timers belong to the
+//! `oag_raceplay::Race` rather than in the world - pad timers belong to the
 //! track, not to a craft. They are guarded instead by
-//! `Race::state_hash`'s tests in `crates/game/src/race/tests/hash.rs`, which run on every
+//! `Race::state_hash`'s tests in `crates/raceplay/src/tests/hash.rs`, which run on every
 //! `just` because that fixture needs no disc either. Between the two, nothing in
 //! the pickup system is left to `just test-data`.
 

@@ -290,7 +290,7 @@ a real run - but "both start" is as far as the code proves it.**
 `crate::race::tick` pushes a milestone announcement and, when the same
 `zone_advanced` edge also crosses a `ZONE_STAGES` boundary, a class
 announcement into two separate per-tick queues unconditionally
-(`crates/game/src/race/tick.rs`); `oag_game::sound::race_tick` drains both
+(`crates/raceplay/src/tick.rs`); `oag_game::sound::race_tick` drains both
 and calls `mixer.play` once per entry, both to `Bus::Speech`, with nothing
 between the two calls that checks whether the bus already has a voice open
 (`crates/sound/src/sfx.rs`) - each call's own `Result` is even discarded
@@ -542,7 +542,7 @@ this port's render; the other two banks' `ready` speaks from the cue's own start
 `oag_sound::sfx::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
 `RaceDefaults::countdown_voice` is measured (Pulse only), and raised by
-`oag_game::race::countdown`. Pinned per mode, with a speech-only WAV render, by
+`oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
 `crates/game/tests/countdown_voice_ground_truth.rs`.
 
 **Chosen, not measured (no confidence score).** A placed cue's emitter pan and

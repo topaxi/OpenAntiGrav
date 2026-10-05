@@ -28,7 +28,7 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 /// How many whole V sweeps of the blink-light palette pass per
-/// `oag_game::race`'s `ANIM_PERIOD_TICKS`.
+/// `oag_raceplay`'s `ANIM_PERIOD_TICKS`.
 ///
 /// Two, because the measured single-cycle period is ~30 ticks and the texture
 /// repeats its 8-frame curve twice down its 16 rows, so a full sweep is ~60
@@ -38,7 +38,7 @@
 pub const BLINK_V_CYCLES: f32 = 2.0;
 
 /// Textures whose surfaces animate by scrolling their V (row) coordinate, and
-/// how fast, in whole sweeps per `oag_game::race`'s `ANIM_PERIOD_TICKS`.
+/// how fast, in whole sweeps per `oag_raceplay`'s `ANIM_PERIOD_TICKS`.
 ///
 /// Matched case-insensitively against the filename of the texture's **runtime
 /// asset path** (`Texture` node payload `+0x38`) - the only name a track

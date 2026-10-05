@@ -181,7 +181,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   wired.
   **Resolved 2026-09-21: the HUD text now draws in `2048_hud.fnt`, not the
   5x7 fallback.** The cause was exactly what the 2026-09-20 entry below left
-  open: `crates/game/src/race/hud.rs`'s `hud_font` asked every source for the
+  open: `crates/raceplay/src/hud.rs`'s `hud_font` asked every source for the
   literal role name `"HUD"`/`"HUDSmall"` (`oag_ui::language::roles`), which
   is Pulse's, Pure's and HD's own spelling and not 2048's - every one of
   2048's 17 plugins names its real HUD face `2048HUD` instead, and two of the

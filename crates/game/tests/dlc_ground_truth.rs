@@ -82,7 +82,7 @@ fn cache() -> PathBuf {
 
 /// Every Pulse pack under `data/dlc`, unzipped into the cache if it is still a
 /// zip. `dlc::packs`, not `dlc::pure_packs` - the two discover from separate
-/// cache subtrees (see `crates/game/src/dlc.rs`'s module docs), which is what
+/// cache subtrees (see `crates/source/src/dlc.rs`'s module docs), which is what
 /// keeps this list Pulse's own even though `data/dlc/` also holds seven
 /// Wipeout Pure packs and whatever else a maintainer has downloaded.
 ///

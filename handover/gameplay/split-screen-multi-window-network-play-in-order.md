@@ -31,14 +31,14 @@ local race already handles.
 **2026-09-16, revised same day**: an external review pass caught that the
 first version of this thread named the wrong tick function throughout.
 `World::tick` does not exist. The real 60 Hz step is `Race::tick`
-(`crates/game/src/race/tick.rs`), living in **`oag-game`**, the composition
+(`crates/raceplay/src/tick.rs`), living in **`oag-game`**, the composition
 root, not in `oag-gameplay`. It advances `RaceSim`
-(`crates/game/src/race/sim.rs`), which bundles `World` together with
+(`crates/raceplay/src/sim.rs`), which bundles `World` together with
 `CollisionWorld`, `Spline`, `ai_order: Vec<u32>`, `ai_tuning`,
 `weapon_pad_refresh_left` and a per-tick `cues: Vec<CueEvent>` audio-output
 accumulator (`self.sim.cues`, [ADR-0018](../../docs/architecture/adr/0018-audio-mixer-architecture.md)'s
 "cues are a per-tick output, never `World` state") - `World` alone is not the
-simulation, and `RaceSim::state_hash` (`crates/game/src/race/hash.rs`) hashes
+simulation, and `RaceSim::state_hash` (`crates/raceplay/src/hash.rs`) hashes
 the extras precisely because of that. Every "`World`"/"`World::tick`"
 reference below that actually meant the whole tick step has been corrected
 to `RaceSim`/`Race::tick`; see the "Corrected: what actually has to move"
@@ -329,7 +329,7 @@ without a renderer] without change" via `oag-gameplay`'s render-free design.
 That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 `workspace-layout.md`'s dependency rule 2, "no crate may depend on
 `oag-game`," so a server can't simply be some other crate importing
-`oag_game::race`. Two real options, not one free one:
+`oag_raceplay`. Two real options, not one free one:
 1. A second `[[bin]]` target inside the `oag-game` crate itself (its
    `Cargo.toml` already has `[lib] oag_game` plus `[[bin]] oag-game` - "a
    thin `[[bin]]` over `[lib]` so boot logic is testable headlessly," per
@@ -375,10 +375,10 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
      `Pad::poll_players` and `Controls::player_snapshots` read per slot, and
      `Controls`' button state is one `Input` per slot because an edge is per
      pilot. Default: every device on slot 0, which is the old merged stream.
-   - `oag-headless-sim`, a second `[[bin]]` in `oag-game` over
+   - `oag-headless-sim`, a `[[bin]]` of `oag-raceplay` (it was `oag-game`'s until the race left it) over
      `Setup::headless`, ticks with no renderer and prints its state hash -
      section 3's option 1, taken. `just headless-sim` runs it; its claims are
-     also in `crates/game/src/race/tests/headless.rs` so the gate holds them.
+     also in `crates/raceplay/src/tests/headless.rs` so the gate holds them.
 
    Behaviour is unchanged throughout: a single-player race still reads exactly
    `ships[0]`. ~~No ADR was written~~ - **done, 2026-09-16**:
@@ -400,8 +400,8 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
    asserting the client's post-reconciliation `state_hash` matches the
    server's.~~ **Done, 2026-09-21.** `RaceSim` derives `Clone`,
    `Race::snapshot_sim`/`Race::restore_sim` are the pair
-   (`crates/game/src/race/reconcile.rs`), and
-   `crates/game/src/race/tests/reconcile.rs` is the loopback: a client
+   (`crates/raceplay/src/reconcile.rs`), and
+   `crates/raceplay/src/tests/reconcile.rs` is the loopback: a client
    predicts wrong for forty ticks, is handed the server's authoritative
    snapshot and the true inputs, and lands on the server's `state_hash`
    exactly. It asserts the divergence *before* reconciling, so it cannot pass
@@ -436,7 +436,7 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 - **A reconciliation replay re-fires every view and audio side effect, not
   just the cues - and that is a bigger gap than section 3's cue note made it
   sound.** Measured while building the loopback test, 2026-09-21.
-  `Race::tick` (`crates/game/src/race/tick.rs`) advances the chase camera,
+  `Race::tick` (`crates/raceplay/src/tick.rs`) advances the chase camera,
   `sparks_rng`, `shake_rng` and `stage_rng`, the exhausts, trail hits, shield
   flashes, airbrake flaps and `boost_kick` in the same body as the
   simulation, and pushes `sim.cues`. None of it reaches

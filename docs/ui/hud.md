@@ -140,7 +140,7 @@ of what is on screen.
 (2026-09-08) - "Layouts no mode here reaches" used to name it explicitly
 alongside HD's Detonator/Duel/MPTag. Wired the same way every other mode's
 layout is: `oag_title::HudLayouts::elimination`, read by
-`oag_game::race::hud_layout`. Pulse and HD both author a dedicated file and
+`oag_raceplay::hud_layout`. Pulse and HD both author a dedicated file and
 use it; Pure, whose own Eliminator layout has never been read off its disc,
 falls back to `arcade` - the same "no dedicated file, reuse one that exists"
 shape this page's own `speed_lap`/`time_trial` row already has.
@@ -279,7 +279,7 @@ Two consequences worth carrying:
 - **The class is read per model, never tabulated per widget.** Pure's eleven
   icon models declare `AlphaOver` where its *sight* models declare `Additive`,
   in the same layout - so any table keyed on the widget's name would have been
-  wrong for one of them. `oag_game::race::hud::quad_blend` reads it off the
+  wrong for one of them. `oag_raceplay::hud::quad_blend` reads it off the
   batch at load and `oag_hud::sprite::Placed::blend` carries it to the draw;
   `pickup_icon_ground_truth::a_held_turbo_draws_its_own_authored_green_on_a_real_race`
   pins Pure's reading and `lock_sight_ground_truth` Pulse's.

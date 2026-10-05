@@ -335,7 +335,7 @@ smoother     {"linear": 185, "psmt8": 4856}
 88 - see below).** A model's texture set is never looked up by name or hash
 at all - it is the archive entry **directly before** the model's own entry
 in the WAD directory. `oag_assets::Archives::read_preceding`
-implements this, and `oag_game::race::load` uses it for a ship and for the
+implements this, and `oag_raceplay::load` uses it for a ship and for the
 track file: when a model's embedded texture slots are all empty (the PS2
 signature), it reads the preceding entry and tries it as a texture set.
 
@@ -343,7 +343,7 @@ signature), it reads the preceding entry and tries it as a texture set.
 `Speedup Pad` node's materials name a texture by its ordinal among *all* of
 the file's `Texture` nodes, the same shared ordinal space the track's own art
 meshes use (see [`build_class`'s embedded-texture handling](vex.md#embedded-textures)) -
-they are not separate per-class texture sets. So `oag_game::race::load`
+they are not separate per-class texture sets. So `oag_raceplay::load`
 resolves the set once, against the track model, and passes that same
 resolved `Vec<Option<ModelTexture>>` into `mesh::build_sky` and
 `mesh::build_pads` too, rather than each doing its own `read_preceding`.
@@ -381,11 +381,11 @@ Checked directly: every `Data\Environments\<n>_Track\track.vex` and
 models) against the entry directly preceding it. **27 of 32 match exactly**
 (same entry count as `Texture` nodes); the other 5 (`02_Track`,
 `02_Track_reversed`, `06_Track_reversed`, `12_Track`, `12_Track_reversed`)
-are short by only 1 or 2 slots, never more, and `oag_game::race::load` already
+are short by only 1 or 2 slots, never more, and `oag_raceplay::load` already
 leaves a texture ordinal beyond a short set's length untextured rather than
 misaligning the rest - see `mesh::build_with_textures`'s doc comment. Same
 rule (`sub_entries == texture_nodes` at delta exactly **-1**), same
-`read_preceding`/`ps2_texture_set` call `oag_game::race::load` already made
+`read_preceding`/`ps2_texture_set` call `oag_raceplay::load` already made
 for ships, now also made for the track model when its embedded slots are all
 empty. **Confidence 88**: the same kind of exact-count data agreement the
 ship finding scored 90 on, one point short because 5 of 32 are near misses

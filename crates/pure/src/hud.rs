@@ -23,7 +23,7 @@
 //!
 //! # No atlas, and no constant recording the absence
 //!
-//! Pure's HUD layouts name no texture at all - `oag_game::race::hud` reports it
+//! Pure's HUD layouts name no texture at all - `oag_raceplay::hud` reports it
 //! per race and draws their sprites from `<Model>` geometry. So there is no
 //! `ATLAS` here to match `oag_pulse::hud::ATLAS`, for the reason
 //! [`crate::race`]'s docs give at length: an absent entry is a fact, and a
@@ -73,7 +73,7 @@
 //! Drawing them - selecting the held weapon's model by name and painting it
 //! tinted - shipped the same day: [`PICKUP_ICON_MODELS`] and
 //! `ART.pickup_icon_backdrop_model` name the widgets,
-//! `oag_game::race::hud::vex_model_art` reads each `.vex` mesh's own quad
+//! `oag_raceplay::hud::vex_model_art` reads each `.vex` mesh's own quad
 //! size off its vertices rather than a hand-measured constant, and
 //! `oag_hud::draw::pickup_model_draws` draws them. See
 //! `docs/gameplay/pickups.md`'s Pure section for the evidence, including a

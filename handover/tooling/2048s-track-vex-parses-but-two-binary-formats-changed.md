@@ -468,7 +468,7 @@ None of it is a format any more; it is fields inside one, and presentation:
 
 ## Why nothing was wired up before that
 
-Three things gate a race spawning at all, in `crates/game/src/race/load.rs`:
+Three things gate a race spawning at all, in `crates/raceplay/src/load.rs`:
 `track_render::load` (hard error via `?`, needs `WO Track`), `mesh::build_with_textures`
 or `mesh::rcs::build_scene` for the drivable geometry (both currently error;
 everything downstream of a missing model degrades to "drawn nothing" rather

@@ -133,7 +133,7 @@ fn same_circuit_resolves_to_exactly_what_it_was_given() {
     assert_eq!(zone.default_track(track), track);
 }
 
-/// A stand-in for `oag_game::catalogue::Track`, carrying only the two
+/// A stand-in for `oag_raceplay::catalogue::Track`, carrying only the two
 /// facts [`ZoneCircuit::menu_tracks`] asks about: an id to tell the
 /// results apart by, and whether a race circuit is zone-available. This
 /// module cannot depend on `oag-game` to use the real type - see

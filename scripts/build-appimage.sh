@@ -10,7 +10,7 @@
 #
 # **No game content is ever packaged.** The AppImage is the engine; the player
 # supplies their own disc image, which the game looks for beside the AppImage
-# among other places (crates/game/src/source.rs). This script refuses to build
+# among other places (crates/source/src/source.rs). This script refuses to build
 # if anything that looks like game content has found its way into the AppDir.
 #
 # Usage:

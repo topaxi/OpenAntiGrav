@@ -6,7 +6,7 @@ the free Turbo a solo event is given once a lap.
 Implemented in [`oag_weapons::pickup`](../../crates/weapons/src/pickup.rs)
 (the draw and the inventory),
 [`oag_weapons::projectile`](../../crates/weapons/src/projectile.rs) (rockets in
-the air and what they hit), `oag_game::race` (the trigger, the grant and
+the air and what they hit), `oag_raceplay` (the trigger, the grant and
 spending it), `oag_physics::engine` (what a fired Turbo does) and
 `oag_physics::damage` (what a fired Shield refuses and what a blast costs). The pad
 geometry is [pads.md](../formats/pads.md); the table is
@@ -76,7 +76,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A direct craft hit is a third ending, and it does spend a blast**: `Plasma_HitCraft` credits full `damage`/`slowdown_time` to the struck craft unconditionally, and `Plasma_ApplyBlastForce` then pushes every other craft in `blastradius` - except the bolt's own firer - with a falling-off impulse alone, no damage; ported, `blast: true` routed to a new direct-hit rule | **recovered** | 88 |
 | **The detonation's own three models - a halo and two hemispheres - retire at a hardcoded 1.5 s, single-stage, no HD-style collapse** - `PlasmaBlast_Update`'s own age check | **recovered** | 88 |
 | Each model gets a per-tick anim-time scrub (`Node_SetAnimTimeTree(age * rate, model)`), most likely playing the model's own baked expansion rather than an engine-computed ease; the `+0x90..+0x114` keyframe-ramp mechanism `PlasmaBlast_Construct` builds ships dead in this binary | **recovered** | 75 |
-| **This engine now draws the three models** (`crates/game/src/race/blast_models.rs`), anchored on the bolt's own impact point and oriented by an ordinary "face the camera" billboard standing in for `PlasmaBlast_Update`'s own unresolved camera-vector read | **ours, chosen orientation; no confidence score there** | - |
+| **This engine now draws the three models** (`crates/raceplay/src/blast_models.rs`), anchored on the bolt's own impact point and oriented by an ordinary "face the camera" billboard standing in for `PlasmaBlast_Update`'s own unresolved camera-vector read | **ours, chosen orientation; no confidence score there** | - |
 | **A bolt leaves at the firing craft's own speed plus `launchSpeed` and blends to the class speed over its first second of flight** - `Plasma_SpeedForClass`, the same linear form and the same second `Missile_SpeedNow` independently tests, and read fresh at release rather than at the press that started the charge; ported 2026-09-16, sharing [`missile::speed_kmh`](../../crates/weapons/src/projectile/missile.rs) | **recovered** | 88 |
 | `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
 | **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
@@ -162,7 +162,7 @@ The first column is `Race_ReadSetupOptions` (`0x08896b84`) and
 `World_CollectNodeLists` (`0x088879d4`): a weapons-off race does not ignore a
 crossing, it clears each pad node's visibility bits and zeroes the trigger
 list's own count. `oag_race::Mode::weapons_enabled` is the port, and
-`oag_game::race::Race::start` drops the volumes rather than testing the mode per
+`oag_raceplay::Race::start` drops the volumes rather than testing the mode per
 tick, which is the same layer the original decides it at.
 
 ### The free Turbo, and how the second record was found
@@ -421,7 +421,7 @@ draws it centred on the widget's authored position.
 
 **The one thing that could not be measured from the XML alone was each
 mesh's own size**, and it is not a hand-measured constant the way the sight
-brackets' `SIGHT_SIZE` is: `oag_game::race::hud::vex_model_art` reads it off
+brackets' `SIGHT_SIZE` is: `oag_raceplay::hud::vex_model_art` reads it off
 the model's own vertex positions - the widest span on `x` and `y` across
 every vertex - once, when the model decodes. The ten weapon-icon meshes are
 not one uniform size the way the sight brackets are: read off
@@ -631,7 +631,7 @@ directly - see `crates/game/tests/shuriken_ground_truth.rs`) but a weapon pad
 in this build can never *hand out* one: not because the pool excludes it, but
 because the odds do. **`Shuriken`'s presence in `IMPLEMENTED` was correct-but-unreachable until
 2026-09-08, when `Mode::Eliminator` landed and closed the gap this section
-used to describe as open.** `oag_game::race::load_weapons` now takes the mode
+used to describe as open.** `oag_raceplay::load_weapons` now takes the mode
 and opens `title.weapons.elimination` for Eliminator specifically, falling
 back to `race` (with a report line) for a title that ships no second table -
 see [race-modes.md](race-modes.md#eliminator). A `SingleRace` weapon pad
@@ -935,7 +935,7 @@ the original does: the stamp is unconditional and the grant is not.
   `Pulse_Bomb.vex` both draw at their landed pose (`mine.md`'s 2026-09-05
   section), and as of 2026-09-23 the Bomb's own detonation draws too -
   `explosion_hemisphere.vex` and `Bomb_Shockwave.vex` on their own render
-  pool (`oag_game::race::bomb_blast`) plus `WO_BOMB_SMOKERING`, off
+  pool (`oag_raceplay::bomb_blast`) plus `WO_BOMB_SMOKERING`, off
   `Bomb_Detonate`/`BombBlast_Update`. See
   [mine.md](../ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read).
   The recovered shockwave alpha fade is not wired - see that section's own
@@ -976,7 +976,7 @@ Two halves, and neither needs a disc, so both run on all three CI platforms:
 | Half | Covered by | Guarded by |
 | --- | --- | --- |
 | The whole `World` - ships, inventory, projectiles, lap state, RNG position | `oag_gameplay::hash::hash_world` | committed constants in `crates/gameplay/tests/determinism.rs` |
-| The pad timers and distance caches, which live on `Race` | `oag_game::race::Race::state_hash` | `a_pad_refresh_timer_one_tick_out_moves_the_race_hash` and its neighbours, in `race.rs`'s own `#[cfg(test)]` block |
+| The pad timers and distance caches, which live on `Race` | `oag_raceplay::Race::state_hash` | `a_pad_refresh_timer_one_tick_out_moves_the_race_hash` and its neighbours, in `race.rs`'s own `#[cfg(test)]` block |
 
 The split is not tidiness: `Race` normally needs a disc, so its constants could
 only live in an `#[ignore]`d test. What makes the pad half coverable is that

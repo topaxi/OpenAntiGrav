@@ -717,7 +717,7 @@ fn drive_scenario(args: DriveArgs) -> Result<()> {
         collision
     };
 
-    // The same placement `oag_game::race` makes, and for the same reason: the
+    // The same placement `oag_raceplay` makes, and for the same reason: the
     // track's own `Start Position` when it has one, at the height the hover spring
     // rests at, and the first spline sample only when it has not. A scenario run
     // that started anywhere else would not be the scenario - unless the caller
@@ -1115,7 +1115,7 @@ fn report(run: &Trace, samples: &[track::Sample], every: usize) {
 
 /// Distance from a point to the nearest spline sample.
 ///
-/// A linear scan, and deliberately: `oag_game::race::Spline` scans too, because
+/// A linear scan, and deliberately: `oag_raceplay::Spline` scans too, because
 /// the comparison feeds simulation state and the order it happens in must not
 /// vary between runs. Here it only feeds a report, but the same answer for the
 /// same input is worth more than the microseconds.
@@ -1130,7 +1130,7 @@ fn off_spline(position: oag_core::math::Vec3, samples: &[track::Sample]) -> f32 
 ///
 /// `Ok(None)` when the file carries no `Start Position` node, which is not an
 /// error: a track without one is a track a ship starts on the spline of, the
-/// same fallback `oag_game::race` takes.
+/// same fallback `oag_raceplay` takes.
 fn load_start_position(source: &str, name: &str) -> Result<Option<track::StartPosition>> {
     let mut archives = pulse::open(source)?;
     let blob = archives
@@ -1184,7 +1184,7 @@ pub(crate) fn load_ai(source: &str, name: &str) -> Result<track::AiTrack> {
 
 /// Every path resampled, with the path each sample came from.
 ///
-/// The same `Course::STEPS_PER_SEGMENT` and the same order `oag_game::race::Spline` and
+/// The same `Course::STEPS_PER_SEGMENT` and the same order `oag_raceplay::Spline` and
 /// `oag_render::track` use, so a dumped line, a drawn line and the line a
 /// scenario run starts on are one set of points.
 pub(crate) fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::Sample)> {

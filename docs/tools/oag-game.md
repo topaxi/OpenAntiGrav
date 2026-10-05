@@ -53,7 +53,7 @@ The positional argument is optional. Left out, the image is searched for:
 then beside the executable if it is an AppImage, then
 `~/.local/share/oag/images/`; `$OAG_IMAGE` short-circuits the lot. The full order
 is in [packaging](packaging.md#where-the-disc-image-comes-from), and
-`crates/game/src/source.rs` is the code. **No image ships with the engine** and
+`crates/source/src/source.rs` is the code. **No image ships with the engine** and
 none ever will - see [legal](../overview/legal.md).
 
 **Finding more than one opens the chooser.** `just launch`, or `oag-game` with

@@ -385,7 +385,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         roll_axis_zone,
         time_since_landing,
         // Deliberately not hashed: the race writes it from the countdown clock
-        // every tick (`oag_game::race::Race::tick`), so it is a function of a
+        // every tick (`oag_raceplay::Race::tick`), so it is a function of a
         // value the world hash already carries, and writing it would move every
         // committed reference for a field no probe script ever sets.
         on_grid: _,

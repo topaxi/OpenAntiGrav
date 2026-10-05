@@ -11,14 +11,14 @@
 //! is greyed out and offered for killing.
 //!
 //! So the load moves to a thread and the loading screen goes up over it, which
-//! is the same shape [`crate::boot::MediaWorker`] already has for the boot's own
+//! is the same shape `crate::boot::MediaWorker` already has for the boot's own
 //! movies - deliberately, because the two waits are the same problem and a
 //! second mechanism for it would be a second thing to keep in step with the
 //! frame loop.
 //!
 //! # What it does not do
 //!
-//! **No progress counting** (stages are reported, see [`super::stages`]). [`crate::loading::Phase::Race`]'s own
+//! **No progress counting** (stages are reported, see [`super::stages`]). `crate::loading::Phase::Race`'s own
 //! documentation carries the reasoning: the other two waits this screen covers
 //! are a transcode and a prefetch, neither of which any release has, and the
 //! figures are what make them bearable. A race load is the wait the original
@@ -27,7 +27,7 @@
 //! disc authors. The circuit's name goes up, and nothing else this build made
 //! up.
 //!
-//! **No cancellation.** [`crate::prefetch`]'s worker carries a stop flag because
+//! **No cancellation.** `crate::prefetch`'s worker carries a stop flag because
 //! it runs for ten minutes and a player may quit inside one; this runs for
 //! seconds and its result is the thing being waited for. Dropping the handle
 //! detaches the thread, which finishes its read and drops a `Loaded` nobody
@@ -137,7 +137,7 @@ impl LoadWorker {
     ///
     /// **Never actually waits in the frame loop**, which only calls this once
     /// [`Self::is_finished`] is true - the same contract
-    /// [`crate::boot::MediaWorker::join`] has. `None` on the second call, and
+    /// `crate::boot::MediaWorker::join` has. `None` on the second call, and
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
         let handle = self.handle.take()?;

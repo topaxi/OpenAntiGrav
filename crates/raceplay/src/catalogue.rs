@@ -165,7 +165,7 @@ pub struct Track {
     ///
     /// A **name**, not an index, exactly as the disc spells it
     /// (`docs/formats/race-setup.md`, "Two unlock axes"). What gates on it is
-    /// [`crate::unlock`]; this only carries what the disc authored.
+    /// `crate::unlock`; this only carries what the disc authored.
     pub unlock_grid: Option<String>,
 }
 

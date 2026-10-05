@@ -460,7 +460,7 @@ attaches to *that* craft's hull either way.
 **Implemented 2026-08-24**, and the split is deliberate. `oag_fx::psys`
 plays the disc's own `.POB` - both variants load from the HD archives, pinned
 by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
-`oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
+`oag_raceplay::Race::advance_trail_hits` fires it. **Nothing about the effect
 is invented; only the moment it fires is.** Three things there are this
 engine's and are named in that method's own doc rather than buried: the
 geometric test (**any of the craft's own authored `Ship Collision Fx` locators
@@ -488,7 +488,7 @@ consequence on the disc's own hulls: **4.45 units ahead of the hull centre**. So
 rather than this engine's arithmetic. Confidence 75 on the identification -
 the counts and the "nearest of" rule agree, but nothing has been read that ties
 `+0x79d0` to the locator loader.
-`crates/game/src/race/tests/trail_hits.rs` pins all three.
+`crates/raceplay/src/tests/trail_hits.rs` pins all three.
 
 **All three were wrong on the first pass, and only looking settled them.**
 The third took **two** goes and is the sharpest lesson here. A player looking at
@@ -1122,7 +1122,7 @@ takes).
 **What actually sizes the sprite, per the renderer's own code, is a flat
 constant with no distance term at all**: `oag_fx::exhaust::hd::SPRITE_RADIUS`
 (3.0, jittered ±0.5, floored at 2.0) is applied unconditionally every
-frame (`crates/game/src/race/load.rs`'s own report already says so - "its
+frame (`crates/raceplay/src/load.rs`'s own report already says so - "its
 radius, alpha walk and texture do draw"). Nothing this page has traced in
 `EngineFlare_RenderTick` writes that half-size; the function's own two
 known consumers of the tuning block are the fade scale (gated off, per
@@ -1156,7 +1156,7 @@ halves are renderer/asset questions from here, not further disassembly of
 
 Following the seventh session's redirect to the renderer, this session
 tried to attribute the blob to a specific draw call by disabling each of
-this craft's additive layers in turn (`crates/game/src/race/scene/frame.rs`,
+this craft's additive layers in turn (`crates/raceplay/src/scene/frame.rs`,
 one `continue` at a time, same deterministic 300-tick capture each time -
 `just play hd --race --press cross --ticks 300 --screenshot`) and counting
 bright pixels (`RGB > 200,200,200`) in a fixed crop around the engine gap.
@@ -1878,7 +1878,7 @@ disassembly now agree.
 
 Implemented in `oag_fx::exhaust::hd` (the tube and the flame blends),
 `exhaust.wgsl` (facing fade, depth fade `saturate(window_z * 0.75)`, the
-blue-red mix, the baked scroll) and `oag_game::race` (per-slot state, the
+blue-red mix, the baked scroll) and `oag_raceplay` (per-slot state, the
 Fury flag from the team directory, the group scales). **The tube skips the
 renderer's gamma decode on the linear scene target**: its 29-instruction
 fragment program applies no transfer function anywhere, so the original adds
@@ -2084,9 +2084,9 @@ uv run --with evdev python3 scripts/hd-flare-gate-check.py /tmp/hd-flare-gate-ch
 just build
 just play hd --race --press cross --ticks 300 --screenshot /tmp/a.png   # baseline
 # ...then a `continue` right before the draw call under test in
-# crates/game/src/race/scene/frame.rs (frame.rs:760-772 for the flame mesh,
+# crates/raceplay/src/scene/frame.rs (frame.rs:760-772 for the flame mesh,
 # :773-787 for the boost plume) or an early return in
-# crates/game/src/race/effects.rs's hd_sprite_quad, rebuild, and:
+# crates/raceplay/src/effects.rs's hd_sprite_quad, rebuild, and:
 just play hd --race --press cross --ticks 300 --screenshot /tmp/b.png   # one layer disabled
 uv run --with pillow --with numpy python3 -c "
 from PIL import Image; import numpy as np

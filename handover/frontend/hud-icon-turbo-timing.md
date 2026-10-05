@@ -11,7 +11,7 @@ gantry screenshot taken that day.
 **Not spurious, not invented - it is `PickupBackground` + `TurboIcon`,
 drawn as authored.** Traced to source, not inferred:
 
-- `Race::grant_free_turbo` (`crates/game/src/race/weapons.rs`) hands Time
+- `Race::grant_free_turbo` (`crates/raceplay/src/weapons.rs`) hands Time
   Trial/Speed Lap a free Turbo, called once from `Race::start` before lap 1's
   own edge exists, and again on `lap_completed`. Confidence 85 already
   recorded in `docs/gameplay/pickups.md`: `MSC_EVENT_TT`/`_SL`'s own text and
@@ -47,19 +47,19 @@ state they're handed.
 
 ### The exact fix - landed 2026-09-07
 
-`Race::grant_free_turbo` (`crates/game/src/race/weapons.rs`) was called from
+`Race::grant_free_turbo` (`crates/raceplay/src/weapons.rs`) was called from
 two places: `Race::start`, unconditionally at tick 0 (the bug), and
 `oag_race::Outcome::lap_completed` inside `Race::tick` for every later lap
 (fine). Fixed by deleting the `Race::start` call and calling
 `grant_free_turbo()` once from `Race::tick`, at the tick
 `oag_race::state::RaceState::thrust_gated` first reads `false`
 (`self.world.tick == oag_race::state::COUNTDOWN_TICKS`) - see
-`crates/game/src/race/tick.rs`.
+`crates/raceplay/src/tick.rs`.
 
 `a_fresh_time_trial_or_speed_lap_already_holds_lap_ones_turbo` (renamed
 `..._holds_no_turbo_until_the_countdown_releases`) and two other tests' doc
 comments that assumed the tick-0 grant were flipped alongside it -
-`crates/game/src/race/tests/weapons.rs` and
+`crates/raceplay/src/tests/weapons.rs` and
 `crates/game/tests/race_ground_truth.rs`. `docs/gameplay/pickups.md` and
 `weapons-eight-of-thirteen-the-plasma-and-the.md` (its own countdown-gate
 note) were updated to match.

@@ -31,7 +31,7 @@
 //! craft, rather than the original's segment-index-plus-parametric-`t` pair.
 //! The two are equivalent for a closed ring and this shape needs no new
 //! per-tick state on `oag_gameplay::World` beyond what standings already compute -
-//! see `crates/game/src/race/weapons.rs::advance_quake` for where the wave's
+//! see `crates/raceplay/src/weapons.rs::advance_quake` for where the wave's
 //! own world position is recovered from this distance for the visual, which
 //! needs [`oag_race::Course`] and therefore cannot live in this crate at all
 //! (`oag-gameplay` draws nothing - see `docs/architecture/adr/0003-no-ecs.md`'s
@@ -131,7 +131,7 @@ impl Wave {
     ///
     /// `forward_dot_tangent` is the dot product of the firing craft's own
     /// forward vector against the track's own tangent at its current
-    /// position - the caller's job, since only `crates/game/src/race` holds
+    /// position - the caller's job, since only `crates/raceplay/src` holds
     /// an `oag_race::Course` to read a tangent from. Its sign alone is used;
     /// a value of exactly `0.0` (forward perpendicular to the track, e.g. a
     /// craft facing dead across it) takes the positive direction rather than

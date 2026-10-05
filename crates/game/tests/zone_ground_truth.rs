@@ -873,7 +873,7 @@ fn every_titles_zone_handling_is_one_classless_block() {
 /// Zone mode's engine force comes from `Environment::auto_speed`
 /// (`crates/physics/src/forces.rs`), which replaces the throttle entirely at
 /// the physics layer - a Zone craft accelerates with nothing held down. Before
-/// 2026-08-31 `Race::advance_exhausts` (`crates/game/src/race/effects.rs`) fed
+/// 2026-08-31 `Race::advance_exhausts` (`crates/raceplay/src/effects.rs`) fed
 /// the exhaust's `intensity` ramp from `ship.thrust` regardless of mode - the
 /// raw accelerate-button state `crates/physics/src/controls.rs` writes every
 /// tick - so a Zone craft flown with nothing held (which nothing in the mode

@@ -266,7 +266,7 @@ pairing this page's geometry argument turns on is directly confirmed: both of
 `SEBENCO CLIMB REVERSE`. The direction itself is conveyed by a small arrow
 glyph in the `CIRCUIT DIRECTION` cluster beside the name, not by text - the
 original does not solve the one-column problem the same way
-`oag_game::catalogue::label`'s `FE_REVERSE` suffix does, it avoids having the
+`oag_raceplay::catalogue::label`'s `FE_REVERSE` suffix does, it avoids having the
 problem by keeping both columns' worth of information in one carousel slot.
 Zone's four circuits were not reached: Racebox's `Track Creation` only ever
 showed the 24 base entries and wrapped, so whether `PRO TOZO` et al. appear
@@ -347,7 +347,7 @@ ships `FE_REVERSE` (`REVERSE`, `RÜCKWÄRTS`, in every copy and every language)
 to draw the direction with.
 
 This build's RACE page is one column, where the original's is not, so twelve
-pairs of identical rows would be a menu nobody can use. `oag_game::catalogue::label`
+pairs of identical rows would be a menu nobody can use. `oag_raceplay::catalogue::label`
 appends `FE_REVERSE`'s own string to a reversed circuit **only where it would
 otherwise read the same as the circuit it shares an environment with** - two of
 the disc's strings joined, rather than a word this build made up, and nothing

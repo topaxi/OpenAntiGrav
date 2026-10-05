@@ -63,7 +63,7 @@ the victim itself. The credit is immediate, on the fatal blow, not at the respaw
 other source that finishes a craft off credits nobody, and a wall scrape before a later
 rocket does not erase the attacker id (nothing read clears it).
 
-Two things this build had wrong, both corrected in `oag_game::race::eliminator`: a wall
+Two things this build had wrong, both corrected in `oag_raceplay::eliminator`: a wall
 scrape cleared the credit, and a blast credited only the craft it struck directly (splash
 credited nobody). Measured with the player parked on `16_Track`, 3 of 9 deaths credited
 nobody.
@@ -87,7 +87,7 @@ and shield tests beside it, and is what is ported.
 
 So a Beam or Quake kill **is** credited, and a wall that finishes a craft off after a weapon hit
 that left the shield standing credits nobody (the fatal blow's source must be 2).
-`oag_game::race::eliminator::note_weapon_hit` and `record_pending_hit` port this.
+`oag_raceplay::eliminator::note_weapon_hit` and `record_pending_hit` port this.
 
 ## What is still open
 

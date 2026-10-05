@@ -117,7 +117,7 @@ fn image(name: &str) -> Option<PathBuf> {
 /// lookup below is nearest-*sample*: control points on a long straight can be
 /// tens of units apart, and a triangle beside the gap would take its up axis
 /// from a point far along the curve. Four per segment matches what
-/// `oag_game::race::Spline` builds for the same reason.
+/// `oag_raceplay::Spline` builds for the same reason.
 fn spline_frames(blob: &[u8]) -> Vec<([f32; 3], [f32; 3])> {
     // Found by the class table for the file's own version - `track::find_node`
     // is the call that already does this, and the reason a Pure track's spline
@@ -275,7 +275,7 @@ fn norm(a: [f32; 3]) -> f32 {
 /// Every circuit a source's own plugin definition declares, as entry names.
 ///
 /// Read off the disc rather than listed here, for the reason
-/// `oag_game::catalogue` gives: a circuit list in this repository would be
+/// `oag_raceplay::catalogue` gives: a circuit list in this repository would be
 /// shipped content, and a disc's own answer is the one that matches the
 /// pressing in front of you.
 fn circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<String> {

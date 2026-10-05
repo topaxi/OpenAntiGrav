@@ -434,7 +434,7 @@ impl Layout {
         // Two names for the track screen because the titles disagree and
         // neither is a guess: Pulse's own is "Track Creation", Pure's is
         // "Track Selection" (`docs/formats/race-setup.md`) - tried in order,
-        // the same shape `oag_game::race::shield_entry_names` uses for a
+        // the same shape `oag_raceplay::shield_entry_names` uses for a
         // title-divergent file name. Every title so far names its ship
         // screen "Team Selection" alike, so that one needs no list.
         let names: &[&str] = match kind {
