@@ -59,7 +59,18 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `oag_tables::handling` reads it unmodified, so the handling file sits
     // beside the hull, as it does for every title but 2048's native roster.
     handling_dir: SHIP_DIR,
-    effect_dir: oag_title::race::EFFECT_DIR,
+    // **Omega ships `Data/particles` (the HD-era set) and `Data/particles2048`
+    // and picks one at runtime** - `Data/Particles/%s` when the u32 at
+    // `0x01f99bc0` is 1, `Data/Particles2048/%s` otherwise
+    // (`docs/ghidra/functions/ps4-omega-eu/particle-paths.md`, measured). That
+    // flag is set by a launch-argument handler and by the level-select routine
+    // from a per-entry byte at `+0x24d`; **which circuit sets it was not
+    // read.** **Chosen, not measured:** `environments2048\*` circuits take
+    // the 2048 set and the HD-heritage `environments\*` ones (and Zone) the
+    // `Data\particles` set, which is the era each circuit's own directory
+    // already names.
+    effect_dir: r"Data\particles",
+    effect_dir_by_circuit: &[(r"Data\environments2048\", r"Data\particles2048")],
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,
     // picked here only because it requires inventing nothing. Omega's Zone
@@ -101,3 +112,21 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // Not searched for this lane.
     track_general: None,
 };
+
+#[cfg(test)]
+mod effect_dir_tests {
+    #[test]
+    fn a_2048_circuit_plays_the_2048_set_and_every_other_the_hd_era_one() {
+        assert_eq!(
+            super::DEFAULTS.effect_dir_for(r"Data\environments2048\tower\track.vex"),
+            r"Data\particles2048"
+        );
+        for circuit in [
+            super::DEFAULTS.track,
+            r"Data\environments\zone_1\track.vex",
+            r"Data\environments\01_vineta_k\track.vex",
+        ] {
+            assert_eq!(super::DEFAULTS.effect_dir_for(circuit), r"Data\particles");
+        }
+    }
+}

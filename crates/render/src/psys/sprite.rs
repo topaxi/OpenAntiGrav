@@ -106,6 +106,20 @@ impl Sprite {
         })
     }
 
+    /// A PS4 `.gnf`'s base level - the sprite Wipeout: Omega Collection ships
+    /// beside its `.pob`, as 2048 ships `.gxt`. `None` for a blob that is not a
+    /// `.gnf` or whose format or tiling [`oag_texture::gnf`] does not decode.
+    #[must_use]
+    pub fn from_gnf(blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gnf::Texture::parse(blob).ok()?;
+        let rgba = parsed.decode(blob).ok()?;
+        Some(Self {
+            width: u16::try_from(parsed.width).ok()?,
+            height: u16::try_from(parsed.height).ok()?,
+            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+        })
+    }
+
     /// `record`'s embedded sprite, else the one `external` makes of its authored
     /// texture path.
     pub(super) fn of_record(

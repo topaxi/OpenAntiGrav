@@ -332,6 +332,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     ship_dir: r"Data\art\published\Ships",
     handling_dir: r"Data\HandlingStats",
     effect_dir: r"Data\Psys",
+    effect_dir_by_circuit: &[],
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
     // Not exercised by any test in this file.
@@ -465,5 +466,25 @@ fn has_team_variants_is_true_for_each_of_the_three_sources_alone() {
     assert!(
         !none_at_all.has_team_variants(),
         "Wipeout Pure's own shape: none of the three"
+    );
+}
+
+#[test]
+fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
+    let mut defaults = DEFAULTS;
+    defaults.effect_dir_by_circuit = &[(r"Data\environments2048\", r"Data\particles2048")];
+    assert_eq!(
+        defaults.effect_dir_for("Data/Environments2048/Altima/track.vex"),
+        r"Data\particles2048",
+        "either slash, any case"
+    );
+    assert_eq!(
+        defaults.effect_dir_for(r"Data\environments\tech_de_ra\track.vex"),
+        defaults.effect_dir
+    );
+    assert_eq!(
+        DEFAULTS.effect_dir_for("Data/environments2048/x/track.vex"),
+        DEFAULTS.effect_dir,
+        "a title with no table keeps its one directory"
     );
 }
