@@ -200,11 +200,13 @@ fn brightness_settles_inside_hds_sample_ranges() {
 #[test]
 fn the_arc_draw_leaves_vertex_alpha_out_of_the_colour() {
     use crate::beam::pipeline::Style;
-    assert!(!Style::magstrip(1).vertex_alpha_weights_colour);
-    assert!(Style::BEAM.vertex_alpha_weights_colour);
+    let arc = std::hint::black_box(Style::magstrip(1));
+    assert!(!arc.vertex_alpha_weights_colour);
+    let beam = std::hint::black_box(Style::BEAM);
+    assert!(beam.vertex_alpha_weights_colour);
     // No transfer function in the program: the arc adds gamma values as they
     // are, the beam keeps the decode every other additive draw has.
-    assert!(!Style::magstrip(1).decodes_source && Style::BEAM.decodes_source);
+    assert!(!arc.decodes_source && beam.decodes_source);
     let shader = include_str!("../beam.wgsl");
     assert!(shader.contains("mix(1.0, in.colour.a, vertex_alpha_weight)"));
     assert!(shader.contains("linear_out * decode_source"));
