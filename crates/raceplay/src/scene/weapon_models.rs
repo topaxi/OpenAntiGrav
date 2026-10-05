@@ -290,6 +290,12 @@ impl super::Scene {
                 }
                 if draw.hd_scale.is_none() {
                     drawable.write_node_anims(queue, seconds);
+                    // `Node_SetAnimTimeTree` hands the one scrubbed time to
+                    // the `Anim Transform` and `Mesh` nodes of the tree alike
+                    // (anim-transform.md), so the texture offsets ride the
+                    // same `age * rate`. `hemisphere1` has no node animation
+                    // at all: this is the only thing it writes.
+                    drawable.write_anims(queue, seconds);
                 }
             }
         }
@@ -494,7 +500,8 @@ impl super::Scene {
 /// `None` to leave the identity table `mesh_render::build` initialised. The
 /// Mine and the Bomb pass it: the Bomb's `orbit` ring tumbles about its own `X`
 /// and its `bomb` body about `Y`; neither was ever written before, so both drew
-/// at their time-zero pose.
+/// at their time-zero pose. Their texture-offset tracks ride the same clock
+/// (`Drawable::write_anims`, 2026-10-05).
 fn write_one_kind(
     drawables: &[Drawable],
     matrices: &[Mat4],
@@ -509,6 +516,7 @@ fn write_one_kind(
         drawable.write(queue, view_projection, *matrix, prev_vp * previous);
         if let Some(seconds) = anim_seconds {
             drawable.write_node_anims(queue, seconds);
+            drawable.write_anims(queue, seconds);
         }
     }
 }
