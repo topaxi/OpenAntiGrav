@@ -726,6 +726,12 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             .extend(super::sight_draw::sight_draws(cx, sight));
     }
 
+    // 2048's state-gated fills, over their dim backgrounds - see
+    // `dialect_2048::state_sprites`.
+    for sprite in super::dialect_2048::state_sprites(cx.layout, cx.art, readout) {
+        frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
+    }
+
     // The pickup, after the always-on sprites and before the text. Conditional
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.
