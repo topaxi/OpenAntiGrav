@@ -59,7 +59,7 @@ impl Race {
         let CannonBody::Muzzle { stretch_range } = look.body else {
             return self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon);
         };
-        use oag_render::weapon_quads::{geometry, random};
+        use oag_fx::weapon_quads::{geometry, random};
         let tick = self.sim.world.tick as u32;
         self.flashing_cannon_rounds()
             .filter_map(|(slot, projectile)| {
@@ -81,11 +81,11 @@ impl Race {
     /// This frame's vertices for every live Cannon round's two hand-built
     /// quads: the bolt streak into `bolt`, the muzzle flash into `flash`
     /// while the round's age is under
-    /// [`oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS`].
+    /// [`oag_fx::weapon_quads::geometry::FLASH_WINDOW_SECONDS`].
     ///
     /// `right`/`up` are the camera's own basis vectors, the same ones
     /// [`Self::projectile_sprites`] takes. **The flash's rotation, size and
-    /// alpha are rolled from [`oag_render::weapon_quads::random`], seeded from
+    /// alpha are rolled from [`oag_fx::weapon_quads::random`], seeded from
     /// the round's own slot index and [`World::tick`] - not from
     /// `self.sim.world.rng`.** Rolling it from the simulation's own seeded
     /// stream would advance that stream once per live round per tick for a
@@ -108,7 +108,7 @@ impl Race {
         bolt: &mut Vec<oag_mesh::mesh::GpuVertex>,
         flash: &mut Vec<oag_mesh::mesh::GpuVertex>,
     ) {
-        use oag_render::weapon_quads::{geometry, random};
+        use oag_fx::weapon_quads::{geometry, random};
         let dt = TickRate::DEFAULT.dt();
         let tick = self.sim.world.tick as u32;
         for projectile in &self.sim.world.projectiles.slots {
@@ -150,7 +150,7 @@ impl Race {
     fn flashing_cannon_rounds(
         &self,
     ) -> impl Iterator<Item = (usize, &oag_weapons::projectile::Projectile)> {
-        use oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS;
+        use oag_fx::weapon_quads::geometry::FLASH_WINDOW_SECONDS;
         self.sim
             .world
             .projectiles

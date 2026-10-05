@@ -186,7 +186,7 @@ impl Race {
             // firer (`FUN_088f00c0(.., 2, ..)`, `0x088765ac`).
             let spawning = fronts[0].previous == fronts[0].point && handles[1].is_none();
             if spawning && let Some(flash) = &mut self.view.screen_flash {
-                flash.start(oag_render::flash::REPULSER, firer);
+                flash.start(oag_fx::flash::REPULSER, firer);
             }
             // The fork's own `WO_REPULSER` (`REP2`, `0x32504552`), started on the
             // update it forks (`Repulser_AdvanceWave`, `0x08876914`) and anchored

@@ -65,7 +65,7 @@ impl Race {
     /// An [`oag_weapons::projectile::leach_beam::Kind::Unlocked`] beam draws
     /// nothing.
     ///
-    /// Advances [`RaceView::leach_beam_ribbon`] (see [`oag_render::beam`]) and
+    /// Advances [`RaceView::leach_beam_ribbon`] (see [`oag_fx::beam`]) and
     /// keeps [`LEACHBEAM_ENERGY_EFFECT`] on it: **re-spawned every time the
     /// ribbon's cursor wraps** - the pulse block that also plays
     /// `LEACHENERGY` - one segment short of the target, then walked back
@@ -107,7 +107,7 @@ impl Race {
             &mut self.view.leach_beam_ribbon,
             &mut self.view.leach_beam_rng,
         );
-        let ribbon = ribbon.get_or_insert_with(|| oag_render::beam::Ribbon::new(rng));
+        let ribbon = ribbon.get_or_insert_with(|| oag_fx::beam::Ribbon::new(rng));
         let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
         let spline = &self.sim.spline;
         let at = ribbon.energy_point(owner, target, beam.range, &|p| spline.tube_frame(p));
@@ -143,7 +143,7 @@ impl Race {
     }
 
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
-    /// recovered law ([`oag_render::beam::hd_ball`]), run alongside Pulse's
+    /// recovered law ([`oag_fx::beam::hd_ball`]), run alongside Pulse's
     /// ribbon above rather than instead of it: both are driven from the same
     /// `beam`, and a title with no `WO_LEACHBEAM_ABSORB` asset mounted simply
     /// never resolves the effect below, the same "an absent name costs one
@@ -155,17 +155,12 @@ impl Race {
     /// frame's position whether or not this tick happened to wrap.
     fn advance_leach_ball_hd(&mut self, owner: Vec3, target: Vec3, dt: f32) {
         let length = (target - owner).length();
-        let wrapped =
-            oag_render::beam::hd_ball::advance(&mut self.view.leach_ball_elapsed, dt, length);
+        let wrapped = oag_fx::beam::hd_ball::advance(&mut self.view.leach_ball_elapsed, dt, length);
         if !wrapped {
             return;
         }
-        let at = oag_render::beam::hd_ball::position(
-            self.view.leach_ball_elapsed,
-            length,
-            owner,
-            target,
-        );
+        let at =
+            oag_fx::beam::hd_ball::position(self.view.leach_ball_elapsed, length, owner, target);
         if let Some(effect) = self.view.effects.get(LEACHBEAM_ABSORB_EFFECT) {
             self.view.stage.play(effect, at, 1.0);
         }
@@ -206,12 +201,8 @@ impl Race {
             .body
             .position;
         let length = (target - owner).length();
-        let at = oag_render::beam::hd_ball::position(
-            self.view.leach_ball_elapsed,
-            length,
-            owner,
-            target,
-        );
+        let at =
+            oag_fx::beam::hd_ball::position(self.view.leach_ball_elapsed, length, owner, target);
         Some(Mat4::from_translation(at))
     }
 
@@ -221,7 +212,7 @@ impl Race {
     /// (`DAT_08b317ac == 2`) and on the craft's weapon record `+0` being
     /// positive, and `LeachBeam_UpdatePool` writes that `+0` with
     /// `LeachBeam_PulseStrength` every tick - measured in play, linger
-    /// included. See [`oag_render::beam::Ribbon::pulse_strength`].
+    /// included. See [`oag_fx::beam::Ribbon::pulse_strength`].
     #[must_use]
     pub fn leach_overlay_pulse(&self, slot: usize) -> Option<f32> {
         let beam = self.sim.world.leach_beam?;
@@ -232,7 +223,7 @@ impl Race {
     }
 
     /// The ribbon's geometry for this frame, or empty when there is no
-    /// locked beam to draw - see [`oag_render::beam::build`].
+    /// locked beam to draw - see [`oag_fx::beam::build`].
     ///
     /// `camera_right`/`camera_up` are the view's own world-space axes, which
     /// the two strips are widened along. `alpha` is the link's own coverage:
@@ -266,7 +257,7 @@ impl Race {
         // without the model-space yaw and scale.
         let rotation = shooter.physics.body.orientation
             * oag_render::roll::rotation(oag_core::math::Vec3::NEG_Z, shooter.physics.roll_phase);
-        let frame = oag_render::beam::Frame {
+        let frame = oag_fx::beam::Frame {
             owner: shooter.physics.body.position,
             target: self.sim.world.ships[beam.target as usize]
                 .physics
@@ -280,7 +271,7 @@ impl Race {
             alpha,
         };
         let spline = &self.sim.spline;
-        oag_render::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
+        oag_fx::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
@@ -307,11 +298,11 @@ impl Race {
     /// **What the `/ 50` scales, read 2026-09-24:** the instance's extent
     /// co-factor (`+0x2c`) and nothing else, so `WO_QUAKE`'s line emitters
     /// spread their fire edge to edge while each fireball keeps its authored
-    /// size - see `oag_render::psys::spawn`. Until then this fed the value
+    /// size - see `oag_fx::psys::spawn`. Until then this fed the value
     /// in as severity, which made every fireball `width / 50` too big and
     /// stacked all of them on the midpoint. **Pulse on the PSP only**: every
     /// other source still feeds it in as severity, by choice, until its own
-    /// executable is read (`oag_render::psys::Effect::without_extents`). **The frame's `X` is measured**,
+    /// executable is read (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
     /// `normalize(B - A)`; its `Y` stays world up, which is **chosen, not
     /// measured** - the row `Quake_Update` builds from its
     /// `AiTrack_LocatePosition` struct is not read.
@@ -358,7 +349,7 @@ impl Race {
         };
         // Where the extent law is on (Pulse on the PSP), severity stays
         // `1.0` and the `/ 50` lands on the instance's extent co-factor, not
-        // on size or speed - see `oag_render::psys::spawn`. Everywhere else
+        // on size or speed - see `oag_fx::psys::spawn`. Everywhere else
         // the effect keeps what it did before that law was read: the `/ 50`
         // as severity, by the lead's choice until those executables are read
         // (`psys::Effect::without_extents`).
@@ -382,7 +373,7 @@ impl Race {
         // point - `left` here, the same reading `across` makes (chosen: which
         // of `Quake_SampleSpan`'s two points is `A` is not read).
         if let (Some(_), Some(flash)) = (playing, &mut self.view.screen_flash) {
-            flash.start(oag_render::flash::QUAKE, left);
+            flash.start(oag_fx::flash::QUAKE, left);
         }
     }
     /// Plays the explosion a weapon that just went off authored - its own,
@@ -441,7 +432,7 @@ impl Race {
             self.spawn_bomb_blast_model(at, orientation);
         }
         // Each detonation's own `ScreenFlash_Start`, whether or not its
-        // effect loaded - see [`flash_for`] and `oag_render::flash`.
+        // effect loaded - see [`flash_for`] and `oag_fx::flash`.
         if let (Some(kind), Some(flash)) = (
             flash_for(kind, struck.is_some()),
             &mut self.view.screen_flash,
@@ -453,7 +444,7 @@ impl Race {
         };
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
-        // read as feeding it. See `oag_render::sparks::severity`.
+        // read as feeding it. See `oag_fx::sparks::severity`.
         self.view.stage.play(&effect, at, 1.0);
     }
 
@@ -600,7 +591,7 @@ impl Race {
     ///
     /// **The PS2 port authors an engine flare as a particle effect and the
     /// PSP does not.** On a PSP-sourced race the effect is absent from the
-    /// library, nothing attaches, and [`oag_render::exhaust`]'s procedural
+    /// library, nothing attaches, and [`oag_fx::exhaust`]'s procedural
     /// flare draws as it always has. On a PS2-sourced one the asset plays
     /// and the procedural quad steps aside - see
     /// [`Race::engine_flare_effect`], which is what the renderer asks.

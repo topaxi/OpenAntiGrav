@@ -35,28 +35,17 @@
 //!   `ShipState::roll_phase` and the rotation built from it, read by both the
 //!   ship's own transform and the internal camera's up vector.
 
-pub mod absorb_shell;
-pub mod beam;
 pub mod camera;
-pub mod cloud;
 pub mod collision;
-pub mod exhaust;
-pub mod flash;
 pub mod gantry;
 pub mod ghost;
-pub mod hull_overlay;
 pub mod loading;
-pub mod mist;
-pub mod psys;
 pub mod pvs;
-pub mod ranrot;
 pub mod ripple;
 pub mod roll;
 pub mod shadow;
 pub mod shield;
 pub mod shine;
-pub mod sparks;
 pub mod texgen;
 pub mod track;
 pub mod weapon_pad;
-pub mod weapon_quads;

@@ -121,7 +121,7 @@
   just an unread trigger.** `RACE_EFFECTS`' `WO_SHIP_ENGINEFLARE` is wired
   for a PS2-sourced race and its reasoning is source-specific: the PS2 disc
   authors that one name and the PSP doesn't, so a PSP-sourced race falls back
-  to `oag_render::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
+  to `oag_fx::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
   own doc comment in `crates/game/src/race/effect_names.rs`). HD authors
   three engine-flare names, not one: `WO_SHIP_ENGINEFLARE` plus these two
   unwired ones, and none of the three shows up in HD's own string table

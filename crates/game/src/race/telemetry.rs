@@ -104,8 +104,7 @@ impl Race {
         // course that cannot tell.
         let counted = self.sim.course.is_some();
         crate::hud::Readout {
-            speed_kmh: ship.physics.body.linear_velocity.length()
-                * oag_render::exhaust::SPEED_TO_KMH,
+            speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
             // pickup pays back into - `oag_physics::damage`. (This comment said

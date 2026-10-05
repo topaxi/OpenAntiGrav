@@ -18,7 +18,7 @@ fn race_with_a_trail() -> Race {
     let mut race = race_with_a_grid();
     race.view.hd_trail_active = true;
     race.view.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
-    for k in 0..oag_render::exhaust::hd::SAMPLES {
+    for k in 0..oag_fx::exhaust::hd::SAMPLES {
         race.view.hd_trail[0].push(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::Y, 0.0);
     }
     race
@@ -48,7 +48,7 @@ fn a_craft_inside_the_ribbon_is_marked_and_one_outside_is_not() {
 #[test]
 fn the_fallback_reach_is_the_hull_reach_plus_the_measured_half_width() {
     let mut race = race_with_a_trail();
-    let reach = 2.0 + oag_render::exhaust::hd::FIN_HALF_WIDTH;
+    let reach = 2.0 + oag_fx::exhaust::hd::FIN_HALF_WIDTH;
     place_and_step(&mut race, Vec3::new(-40.0, reach - 0.01, 0.0));
     assert_ne!(race.view.trail_inside[0] & 0b10, 0, "just inside");
     place_and_step(&mut race, Vec3::new(-40.0, reach + 0.01, 0.0));

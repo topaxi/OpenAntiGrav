@@ -24,8 +24,8 @@
 pub(in crate::race) fn flash_for(
     kind: oag_tables::weapons::Weapon,
     struck: bool,
-) -> Option<oag_render::flash::Kind> {
-    use oag_render::flash;
+) -> Option<oag_fx::flash::Kind> {
+    use oag_fx::flash;
     use oag_tables::weapons::Weapon;
     match kind {
         Weapon::Rocket if struck => Some(flash::BLAST),

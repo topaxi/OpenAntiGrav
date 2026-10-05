@@ -3,14 +3,14 @@
 //!
 //! The law is `ParticleSystem_DrawRolledQuads`'s and `ParticleSystem_UpdateParticles`'s, read in
 //! `docs/ghidra/functions/psp-pulse-usa/particle-system.md`, "An emitter's own
-//! particles"; see `oag_render::psys::roll`.
+//! particles"; see `oag_fx::psys::roll`.
 
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::psys::{ColourScale, Effect, System, TICK_HZ};
 use oag_mesh::mesh::GpuVertex;
 use oag_pob as pob;
-use oag_render::psys::{ColourScale, Effect, System, TICK_HZ};
 
 fn effects() -> Vec<(String, Effect)> {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
@@ -66,7 +66,7 @@ fn every_class_3_emitter_is_given_the_rotation_and_nothing_else_is() {
     for (name, effect) in &effects {
         for spec in effect.emitters.iter().filter(|spec| !spec.template) {
             match (spec.rotation.is_some(), spec.render) {
-                (true, oag_render::psys::Render::Billboard) => rotating += 1,
+                (true, oag_fx::psys::Render::Billboard) => rotating += 1,
                 (false, _) => others += 1,
                 (true, render) => panic!("{name} / {}: {render:?} rotates", spec.name),
             }
@@ -130,7 +130,7 @@ fn missile_head_templates() -> Option<std::sync::Arc<Effect>> {
 }
 
 /// The x extent of everything the stage draws.
-fn x_extent(stage: &oag_render::psys::Stage) -> f32 {
+fn x_extent(stage: &oag_fx::psys::Stage) -> f32 {
     let (mut all, over) = stage.vertices(Vec3::X, Vec3::Y);
     all.extend(over);
     let xs = all.iter().map(|v| v.position[0]);
@@ -150,8 +150,8 @@ fn a_missiles_templates_ride_it_and_go_when_it_does() {
     };
     let templates = effect.emitters.iter().filter(|spec| spec.template).count();
     assert_eq!(templates, 2, "redbar and glow");
-    let run = |end: fn(&mut oag_render::psys::Stage, oag_render::psys::Playing)| {
-        let mut stage = oag_render::psys::Stage::new();
+    let run = |end: fn(&mut oag_fx::psys::Stage, oag_fx::psys::Playing)| {
+        let mut stage = oag_fx::psys::Stage::new();
         let mut rng = Rng::new(1);
         let playing = stage.attach(&effect, Vec3::ZERO, 1.0).expect("attach");
         for tick in 0..60 {
@@ -163,7 +163,7 @@ fn a_missiles_templates_ride_it_and_go_when_it_does() {
         stage.advance(1.0 / TICK_HZ, &mut rng);
         (flying, stage.alive_count())
     };
-    let (flying, released) = run(oag_render::psys::Stage::release);
+    let (flying, released) = run(oag_fx::psys::Stage::release);
     assert!(
         flying.0 < 150.0,
         "the templates hang back: drawn {} units wide over 590 of flight",
@@ -172,6 +172,6 @@ fn a_missiles_templates_ride_it_and_go_when_it_does() {
     assert_eq!(flying.1, 2);
     assert_eq!(released, 0, "a release leaves its templates alive");
     // Not released - an instance that ran out on its own - they finish.
-    let (_, detached) = run(oag_render::psys::Stage::detach);
+    let (_, detached) = run(oag_fx::psys::Stage::detach);
     assert_eq!(detached, 2);
 }

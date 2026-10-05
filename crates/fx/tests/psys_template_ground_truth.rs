@@ -9,8 +9,8 @@
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_render::psys::{ColourScale, Effect, System, TICK_HZ};
-use oag_render::sparks;
+use oag_fx::psys::{ColourScale, Effect, System, TICK_HZ};
+use oag_fx::sparks;
 
 fn effect() -> Option<Effect> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;

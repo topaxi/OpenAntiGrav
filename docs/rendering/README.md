@@ -113,7 +113,7 @@
   by `oag_mesh::mesh::build_sky`). `fogCube` is **done** too - the runtime is
   recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
   `oag_vex::fog` plus `mesh.wgsl`'s own bind group. `cloudCube`/`cloudGroup` are
-  **partly done** - `oag_render::cloud` draws every sprite `oag_vex::cloud`
+  **partly done** - `oag_fx::cloud` draws every sprite `oag_vex::cloud`
   decodes off `05_Track` (the only Pulse circuit that authors any), textured
   with the shared `Wipeout_Clouds_D_128x64x4.mip` and blended with the
   measured GE state (`CloudGroup_ApplyDrawState`). Three things the original
@@ -130,7 +130,7 @@
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
   recovered in [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md) and
-  implemented in `oag_render::exhaust` and `oag_game::race::Loaded::boost_model`.
+  implemented in `oag_fx::exhaust` and `oag_game::race::Loaded::boost_model`.
   The plume's mesh batches draw with `exhaust::TRAIL_BLEND`, not the flare's
   own `exhaust::BLEND` - they take the ordinary mesh draw path's pure-additive
   blend branch, the same equation the ribbon already uses, not the flare's
@@ -142,13 +142,13 @@
   class entirely for a `/data/ribboneffects/` template family that already
   decodes; see [`trail-ribbon.md`](trail-ribbon.md))
   and collision sparks (**done** and **recovered**, no longer "authored":
-  `oag_render::sparks` reads `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` at the emitter level, all
+  `oag_fx::sparks` reads `Data\Psys\WO_SHIP_COLL_SPARK_DAMAGE.POB` at the emitter level, all
   four emitters transcribed from the file's own bytes and corroborated live in
   PPSSPP during real wall hits, with `ShipCollisionFx_Trigger` supplying the
   severity formula. Three residual approximations remain, each labelled on its
   own constant - see
   [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function)
-  and the open thread on `HANDOVER.md` for whether `oag_render::sparks` gets
+  and the open thread on `HANDOVER.md` for whether `oag_fx::sparks` gets
   retuned against it), then the general `ParticleSystem`
   `0x3c4` and weapon effects. The weapon effects are M5's, being
   gameplay-coupled

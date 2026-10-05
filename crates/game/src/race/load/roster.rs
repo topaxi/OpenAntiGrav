@@ -208,8 +208,7 @@ pub(super) fn grid(
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,
-            hull_overlay: oag_render::hull_overlay::DRAWN
-                && craft_title.name == oag_pulse::TITLE.name,
+            hull_overlay: oag_fx::hull_overlay::DRAWN && craft_title.name == oag_pulse::TITLE.name,
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
                 && craft_title.name == oag_pulse::TITLE.name,

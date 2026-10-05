@@ -7,7 +7,7 @@
 //! cargo nextest run -p oag-render --run-ignored all -E 'test(exhaust_pipeline)' --no-capture
 //! ```
 //!
-//! The maths is covered by unit tests in `oag_render::exhaust`, which need no
+//! The maths is covered by unit tests in `oag_fx::exhaust`, which need no
 //! GPU. What is **only** checkable here is the part those cannot reach: that
 //! `exhaust.wgsl` compiles, that the vertex layout matches `GpuVertex`, and that
 //! the pipeline's depth and blend state are accepted alongside the mesh
@@ -21,8 +21,8 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::exhaust::{self, Exhaust, FlareTexture};
 use oag_mesh::mesh_render::DEPTH_FORMAT;
-use oag_render::exhaust::{self, Exhaust, FlareTexture};
 
 /// The colour format the headless capture path uses, so this matches it.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;

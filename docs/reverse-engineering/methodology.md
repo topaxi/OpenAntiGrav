@@ -206,7 +206,7 @@ finding and turned out to be **inert**: the boost plume's alpha test
 (`GU_GREATER, 0` discards exactly the fragments a `SrcAlpha` blend already
 weights to zero), its colour test (an RGB-zero fragment adds nothing under an
 additive blend - redundant *algebraically*, for any content), and the spark
-streak's `v` layout (a real difference, but `oag_render::sparks` binds no
+streak's `v` layout (a real difference, but `oag_fx::sparks` binds no
 texture at all). Each check was cheap - a vertex-alpha histogram, one line of
 algebra, a grep for a texture bind - and each would have taken minutes *before*
 the write-up rather than after. The general form: **recovering a GE call is not

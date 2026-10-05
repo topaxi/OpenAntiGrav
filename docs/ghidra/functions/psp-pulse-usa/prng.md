@@ -257,7 +257,7 @@ loop finds the two seed fills.
   fed each `cloudGroup`'s seed out of a running original's RAM, reproduced
   every record those groups drew (369 per boot, four boots; see
   [clouds.md](clouds.md)). The port this page's Consequences section
-  anticipated now exists as `oag_render::ranrot`, under
+  anticipated now exists as `oag_fx::ranrot`, under
   [ADR-0056](../../../architecture/adr/0056-a-render-side-port-of-the-particle-generator.md).
   The rows above keep their confidences; the runtime match would support
   raising them.

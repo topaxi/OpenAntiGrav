@@ -1,7 +1,7 @@
-//! Building [`oag_render::weapon_quads::Pipeline`] for [`super::Scene`].
+//! Building [`oag_fx::weapon_quads::Pipeline`] for [`super::Scene`].
 //!
 //! The state and the maths - the bolt streak's two crossed quads, the
-//! muzzle flash's rotated one - are all `oag_render::weapon_quads`'; see
+//! muzzle flash's rotated one - are all `oag_fx::weapon_quads`'; see
 //! that module's own doc and
 //! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
 //! evidence. This is only the seam: the placeholder-on-absence fallback and
@@ -15,7 +15,7 @@ use super::*;
 #[derive(Debug)]
 pub(super) struct Cannon {
     /// `RefCell` for the reason [`super::Scene`]'s `exhaust` gives.
-    pub(super) pipeline: std::cell::RefCell<oag_render::weapon_quads::Pipeline>,
+    pub(super) pipeline: std::cell::RefCell<oag_fx::weapon_quads::Pipeline>,
     pub(super) draw: crate::race::CannonDraw,
 }
 
@@ -39,7 +39,7 @@ pub(super) fn build(
         look,
         muzzles: liveries.iter().map(|livery| livery.cannon_flash).collect(),
     };
-    let pipeline = std::cell::RefCell::new(oag_render::weapon_quads::Pipeline::new(
+    let pipeline = std::cell::RefCell::new(oag_fx::weapon_quads::Pipeline::new(
         device,
         queue,
         format,
@@ -47,7 +47,7 @@ pub(super) fn build(
         &flash,
         sample_count,
         // The race pass carries the velocity attachment - see
-        // `mesh_render::Velocity` and `oag_render::weapon_quads`'s own doc
+        // `mesh_render::Velocity` and `oag_fx::weapon_quads`'s own doc
         // comment for why this pipeline still masks its own write.
         mesh_render::Velocity::Write,
     ));

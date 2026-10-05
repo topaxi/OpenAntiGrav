@@ -18,8 +18,8 @@
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
+use oag_fx::beam::tube;
 use oag_game::race::{self, Spline};
-use oag_render::beam::tube;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -60,7 +60,7 @@ fn a_beam_across_a_real_corner_stays_in_the_tube() {
 
     // Every chord of about 100 units between two samples on one path; keep the
     // one whose straight line is furthest out of the road.
-    let segments = oag_render::beam::segment_count(100.0, 250.0);
+    let segments = oag_fx::beam::segment_count(100.0, 250.0);
     let mut worst_chord: Option<(f32, usize, usize)> = None;
     for from in 0..spline.len() {
         let Some(a) = spline.sample(from) else {

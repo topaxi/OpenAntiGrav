@@ -1,7 +1,7 @@
 //! [`Clouds`]: `05_Track`'s cloud puffs on the GPU side of [`super::Scene`].
 //!
 //! The state and the maths - what a sprite is, how it rotates, what it draws
-//! with what colour - are all `oag_render::cloud`'s; see that module's own
+//! with what colour - are all `oag_fx::cloud`'s; see that module's own
 //! doc and `docs/ghidra/functions/psp-pulse-usa/clouds.md` for the evidence.
 //! This is only the seam: building the pipeline once at load, and gating the
 //! per-tick advance the way [`super::motion::MotionState`] already gates its
@@ -19,7 +19,7 @@ use super::*;
 /// nothing at all for every other circuit and for a ribbon build.
 #[derive(Debug, Default)]
 pub(super) struct Clouds {
-    state: Option<(oag_render::cloud::Layer, oag_render::cloud::Pipeline)>,
+    state: Option<(oag_fx::cloud::Layer, oag_fx::cloud::Pipeline)>,
     tick: Option<u64>,
 }
 
@@ -32,10 +32,10 @@ impl Clouds {
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         sample_count: u32,
-        source: Option<(oag_render::cloud::Layer, FlareTexture)>,
+        source: Option<(oag_fx::cloud::Layer, FlareTexture)>,
     ) -> std::cell::RefCell<Self> {
         let state = source.map(|(layer, texture)| {
-            let pipeline = oag_render::cloud::Pipeline::new(
+            let pipeline = oag_fx::cloud::Pipeline::new(
                 device,
                 queue,
                 format,
@@ -55,7 +55,7 @@ impl Clouds {
         queue: &wgpu::Queue,
         view_projection: &[[f32; 4]; 4],
         tick: u64,
-        camera: &oag_render::psys::field::Frame,
+        camera: &oag_fx::psys::field::Frame,
     ) {
         let Some((layer, pipeline)) = self.state.as_mut() else {
             return;
@@ -73,7 +73,7 @@ impl Clouds {
 
     /// Draws into a pass the caller already opened. Depth-tested but not
     /// depth-writing, the same as `exhaust::Pipeline::draw` and for the same
-    /// reason - see `oag_render::cloud::Pipeline::draw`.
+    /// reason - see `oag_fx::cloud::Pipeline::draw`.
     pub(super) fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
         if let Some((_, pipeline)) = &self.state {
             pipeline.draw(pass);

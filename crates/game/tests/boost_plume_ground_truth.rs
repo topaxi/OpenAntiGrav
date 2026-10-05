@@ -658,7 +658,7 @@ fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
                     "{name}: anchor {index} loops at {:.4} s, inside the {:.1} s a plume \
                      stays up - see race::scene::frame on why the reveal timer was chosen",
                     transform.loop_seconds,
-                    oag_render::exhaust::PLUME_SECONDS,
+                    oag_fx::exhaust::PLUME_SECONDS,
                 );
             }
         }

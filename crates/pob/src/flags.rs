@@ -41,7 +41,7 @@ pub const LOOPING: u32 = 0x1;
 /// Spawn offsets and velocities skip the emitter node's matrix - and the draw
 /// applies it instead, live (`ParticleSystem_DrawEmitterPool`, `0x08918bf8`), so
 /// the particles are kept in the instance's frame and ride it when the owner moves
-/// it. **Local space, despite the name**; see `oag_render::psys::playback`.
+/// it. **Local space, despite the name**; see `oag_fx::psys::playback`.
 pub const WORLD_SPACE: u32 = 0x2;
 /// Each particle takes a random initial billboard roll.
 pub const RANDOM_ROLL: u32 = 0x4;

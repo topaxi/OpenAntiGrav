@@ -843,20 +843,19 @@ pub(super) fn zone_grade(
 const CLOUD_TEXTURE: &str = "Data\\Tex\\Cloud\\Wipeout_Clouds_D_128x64x4.mip";
 
 /// `05_Track`'s cloud puffs, and their shared texture - `None` for every
-/// other circuit and for a ribbon build. See `crates/render/src/cloud.rs`'s
+/// other circuit and for a ribbon build. See `crates/fx/src/cloud.rs`'s
 /// module doc for what this draws and what it deliberately does not.
 pub(super) fn cloud_layer(
     archives: &mut oag_assets::Archives,
     track_blob: &[u8],
     vex_geometry: bool,
     report: &mut Vec<String>,
-) -> Option<(oag_render::cloud::Layer, FlareTexture)> {
+) -> Option<(oag_fx::cloud::Layer, FlareTexture)> {
     if !vex_geometry {
         return None;
     }
     let nodes = vex::nodes(track_blob).unwrap_or_default();
-    let layer =
-        oag_render::cloud::Layer::from_groups(track_blob, &nodes, &oag_render::cloud::CHOSEN_SEEDS);
+    let layer = oag_fx::cloud::Layer::from_groups(track_blob, &nodes, &oag_fx::cloud::CHOSEN_SEEDS);
     if layer.is_empty() {
         return None;
     }
@@ -875,7 +874,7 @@ pub(super) fn cloud_layer(
         Ok(texture) => {
             report.push(format!(
                 "{CLOUD_TEXTURE}: {}x{} .mip - drawing {} cloud sprite(s), each \
-                 group's field built from a chosen seed (oag_render::cloud::CHOSEN_SEEDS; \
+                 group's field built from a chosen seed (oag_fx::cloud::CHOSEN_SEEDS; \
                  see docs/ghidra/functions/psp-pulse-usa/clouds.md)",
                 texture.width,
                 texture.height,

@@ -8,7 +8,7 @@ impl Race {
     /// particles of that effect on the stage, for tests.
     #[doc(hidden)]
     #[must_use]
-    pub fn leach_energy_for_tests(&self) -> (Option<oag_render::psys::Playing>, usize) {
+    pub fn leach_energy_for_tests(&self) -> (Option<oag_fx::psys::Playing>, usize) {
         let alive = self
             .view
             .effects
@@ -38,7 +38,7 @@ impl Race {
     /// A loaded particle effect by name, for tests.
     #[doc(hidden)]
     #[must_use]
-    pub fn effect_for_tests(&self, name: &str) -> Option<std::sync::Arc<oag_render::psys::Effect>> {
+    pub fn effect_for_tests(&self, name: &str) -> Option<std::sync::Arc<oag_fx::psys::Effect>> {
         self.view.effects.get(name).cloned()
     }
 }

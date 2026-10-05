@@ -18,7 +18,7 @@ pub(crate) struct Scratch {
     pub(crate) additive: Vec<oag_mesh::mesh::GpuVertex>,
     pub(crate) alpha: Vec<oag_mesh::mesh::GpuVertex>,
     /// The Cannon round's bolt streak and muzzle flash -
-    /// `oag_render::weapon_quads::Pipeline`'s own two buffers.
+    /// `oag_fx::weapon_quads::Pipeline`'s own two buffers.
     pub(crate) cannon_bolt: Vec<oag_mesh::mesh::GpuVertex>,
     pub(crate) cannon_flash: Vec<oag_mesh::mesh::GpuVertex>,
     /// Which weapon pads currently hand out a pickup, one per pad node.

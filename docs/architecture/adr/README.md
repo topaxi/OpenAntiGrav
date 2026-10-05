@@ -66,7 +66,7 @@ out to be wrong.
 | [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041 |
 | [0054](0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) | A touch front end is a second axis on `FrontEnd`, not a `MenuSkin` variant | Accepted; extends ADR-0022 |
 | [0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) | Replays are inputs and hashes, and a ghost is drawn from poses | Accepted; opens M7, creates `oag-replay` |
-| [0056](0056-a-render-side-port-of-the-particle-generator.md) | A render-side port of the original's particle generator | Accepted; `oag_render::ranrot`, render-only |
+| [0056](0056-a-render-side-port-of-the-particle-generator.md) | A render-side port of the original's particle generator | Accepted; `oag_fx::ranrot`, render-only |
 
 ## Format
 

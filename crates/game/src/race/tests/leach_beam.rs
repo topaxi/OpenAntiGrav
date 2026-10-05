@@ -170,7 +170,7 @@ fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not()
     let mut race = race_with_a_grid();
     let blob =
         super::respawn::one_emitter_pob(crate::race::effect_names::LEACHBEAM_CHARGING_EFFECT, 0);
-    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     race.view
         .effects

@@ -68,7 +68,7 @@ pub struct Layout {
     /// still chosen by the **data** rather than by the disc it came off.
     ///
     /// **One thing branches on it, and only because it cannot be read out of
-    /// the data**: `oag_render::psys::ColourScale`, the byte value a
+    /// the data**: `oag_fx::psys::ColourScale`, the byte value a
     /// particle effect's colour table treats as fully bright. The PSP
     /// authors `0..=255` and the PS2 `0..=127.5` - the same effect, exported
     /// twice at scales differing by exactly two - and no `.pob` header word

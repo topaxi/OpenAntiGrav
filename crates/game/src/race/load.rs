@@ -681,7 +681,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     stages::reach(stages::Stage::WorldBuilt);
 
     // The player's own, and reported by `livery::load` beside the hull it was
-    // read off. Sparks are slot 0's today - `oag_render::sparks` triggers off
+    // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
     // carrying eight sets nothing reads.
     let collision_fx = liveries[0].collision_fx.clone();
@@ -690,7 +690,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // One loop, one report line each: an effect is a `RACE_EFFECTS` name and a
     // trigger. Pulse's PSP laws only - see `psys::Effect::without_extents`,
-    // `without_pulse_psp_draw` and `oag_render::flash` for what others keep.
+    // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the

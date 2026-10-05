@@ -375,7 +375,7 @@ pub const HALF_SIZE_TO_WORLD: f32 = 1.0;
 
 /// Per-frame state of one ship's exhaust.
 ///
-/// Mirrors [`crate::camera::chase::Chase`] in shape and for the same reasons: it
+/// Mirrors `oag_render::camera::chase::Chase` in shape and for the same reasons: it
 /// is render-only state that the game crate owns and advances on the simulation's
 /// fixed tick, so it never enters `World` and never touches a determinism hash.
 ///
@@ -645,7 +645,7 @@ impl Exhaust {
     /// For a race start and a respawn, so the flare does not visibly light up
     /// over four seconds from a standing start. The original's own equivalent is
     /// the rising-edge snap in `Exhaust_UpdateEngineSound`, which assigns rather
-    /// than filters when the engine turns on; [`crate::camera::chase::Chase`]
+    /// than filters when the engine turns on; `oag_render::camera::chase::Chase`
     /// carries the same idea as `snapped`.
     pub fn snap(&mut self, thrust: f32, speed: f32) {
         self.speed_kmh = speed * SPEED_TO_KMH;

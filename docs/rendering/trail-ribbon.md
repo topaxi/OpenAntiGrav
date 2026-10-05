@@ -49,7 +49,7 @@ There is no capacity, no layer count, no width, no colour, no scroll rate and no
 texture reference anywhere in it. A `Trail` node says **where** a ribbon hangs
 and nothing about what it looks like.
 
-That is the whole negative result, and it is why `oag_render::exhaust`'s
+That is the whole negative result, and it is why `oag_fx::exhaust`'s
 `TRAIL_*` constants cannot be replaced by a parser. On Pulse those numbers come
 from `Trail_InitPreset`'s three-preset table at `&DAT_08ad226c` in `BOOT.BIN`,
 with `ExhaustFlare_Init` passing preset 2 - all of it recovered and tabulated on
@@ -154,7 +154,7 @@ and Pure frames are byte-identical either side.
 
 **Two things this paragraph used to flag are gone the same day the geometry
 was read** (2026-08-24): HD no longer draws the PSP's three layers - it draws
-its own three-fin tube (`oag_render::exhaust::hd`), one coverage falloff, no
+its own three-fin tube (`oag_fx::exhaust::hd`), one coverage falloff, no
 baked `LAYER_COLOUR`, and a `v` that runs across the fin exactly as the
 program expects. See
 [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md).
@@ -166,7 +166,7 @@ tube of 324 vertices per craft, and the colour, alpha, `u` and scroll laws
 were all fitted exactly against the dumped buffers. The whole record, with
 the tuning file that names every constant, is
 [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md);
-`oag_render::exhaust::hd` implements it, and the facing fade, depth fade,
+`oag_fx::exhaust::hd` implements it, and the facing fade, depth fade,
 `TrailSpeed` scroll and per-vertex alpha this page listed as "read and not
 implemented" all draw now. The `0xe296b1ed` = 0.15 facing band is placed
 (the shader's own clamp), and `TrailSpeed`'s live value is the flare's
@@ -467,7 +467,7 @@ material and both textures are already decodable today.
 
 ## What follows for the code
 
-`oag_render::exhaust` holds Pulse-PSP's preset as `TRAIL_*` constants and every
+`oag_fx::exhaust` holds Pulse-PSP's preset as `TRAIL_*` constants and every
 title races on them, which is exactly why "accurately across the games" is
 structurally impossible today. The shape the evidence argues for:
 
@@ -540,7 +540,7 @@ kind `CLAUDE.md` names. The load report says so on every HD race.
   [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md),
   "Ninth session" and "Tenth session". Both paths draw; the sprite is for
   the other crafts, and this renderer draws it that way:
-  `oag_render::exhaust::hd::Sprite` carries the traced size and fade law
+  `oag_fx::exhaust::hd::Sprite` carries the traced size and fade law
   and `race::effects::hd_sprite_quad` never builds one for slot 0. Two
   values in that code are chosen rather than read - the per-view distance
   scale (1.0) and the sign of the view dot - and are labelled so.

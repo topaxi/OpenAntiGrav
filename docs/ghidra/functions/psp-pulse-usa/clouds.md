@@ -309,9 +309,9 @@ original builds and keeps them (`0x097a9b50` in the first boot: 277 authored,
 74 kept). The earlier lane's scan missed it because its filter required at
 most 64 authored records.
 
-The Rust port (`oag_render::cloud::field`) builds from our own parse of the
+The Rust port (`oag_fx::cloud::field`) builds from our own parse of the
 track rather than the RAM's matrices.
-`crates/render/tests/cloud_field_ground_truth.rs` pins it against the first
+`crates/fx/tests/cloud_field_ground_truth.rs` pins it against the first
 boot's values: counts, first and last records, cull, cells, rates and colours.
 
 ## `CloudGroup_Draw` (`0x0893280c`)
@@ -482,7 +482,7 @@ culls, `1.0` culls any pair at all, and `05_Track`'s authored `0.65` sits
 between. **This is a pure function of the authored positions and sizes, no
 randomness involved** - unlike the phase/rate/variant draws below, a
 renderer reproducing this exactly would need only the same pairwise test, not
-a live capture. `crates/render/src/cloud.rs` does not currently reproduce it -
+a live capture. `crates/fx/src/cloud.rs` does not currently reproduce it -
 see its own doc comment.
 
 ## `CloudGroup_BuildDisplayList` (`0x08933ec4`) bakes one flat colour per sprite
@@ -529,7 +529,7 @@ packed with red in the low byte (`A << 24 | B << 16 | G << 8 | R`), the GE's
   the clouds (the start line, section 29), the phases did not advance and the
   vertex buffer held uninitialised words. The test that skips the draw was not
   traced. The next address is whatever calls a `cloudGroup` node's `draw`
-  slot (`0x08ad2a68`). `oag_render::cloud` draws and advances every group
+  slot (`0x08ad2a68`). `oag_fx::cloud` draws and advances every group
   every frame.
 - **No live A/B picture.** The field's values are reproduced from RAM. A
   matched frame against PPSSPP's software renderer was not captured: placing
@@ -549,7 +549,7 @@ packed with red in the low byte (`A << 24 | B << 16 | G << 8 | R`), the GE's
 - **`Seed` is rolled per boot.** Every shipped group leaves it unset, so the
   original takes `Psys_RandIntRange(1, 9999)` after reseeding from the
   clock-seeded `rand()`. No boot's field can be predicted, only reproduced
-  once its seed is read. `oag_render::cloud::CHOSEN_SEEDS` are one boot's
+  once its seed is read. `oag_fx::cloud::CHOSEN_SEEDS` are one boot's
   three draws, chosen, not measured.
 - **The shared particle stream is not reproduced.** Building a group reseeds
   the generator every emitter draws from. Ours gives each group its own

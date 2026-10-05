@@ -289,7 +289,7 @@ fn the_plasma_flare_scale_halves_in_the_cockpit() {
 #[test]
 fn each_detonation_starts_its_own_screen_flash() {
     use crate::race::weapons::flash_for;
-    use oag_render::flash;
+    use oag_fx::flash;
     use oag_tables::weapons::Weapon;
 
     for weapon in Weapon::ALL {

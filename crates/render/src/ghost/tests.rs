@@ -65,7 +65,7 @@ fn the_three_passes_build_against_a_race_target() {
     else {
         return;
     };
-    let static_glow = crate::exhaust::FlareTexture {
+    let static_glow = oag_fx::exhaust::FlareTexture {
         width: 2,
         height: 2,
         rgba: vec![255; 16],

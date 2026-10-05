@@ -249,7 +249,7 @@ fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not() {
     let Some(loaded) = load() else {
         return;
     };
-    let mean = |texture: &oag_render::exhaust::FlareTexture| {
+    let mean = |texture: &oag_fx::exhaust::FlareTexture| {
         let pixels = texture.rgba.as_chunks::<4>().0;
         let total: u64 = pixels.iter().map(|p| u64::from(p[3])).sum();
         total as f64 / pixels.len() as f64
@@ -277,7 +277,7 @@ fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not() {
     );
 }
 
-/// The trail and flame constants `oag_render::exhaust::hd` carries are the
+/// The trail and flame constants `oag_fx::exhaust::hd` carries are the
 /// disc's own: `Data/ships/shipeffectstweaks.txt` names the runtime's whole
 /// tuning block, field for field, and this reads it rather than trusting the
 /// transcription.
@@ -303,7 +303,7 @@ fn the_tube_constants_are_the_discs_own_tuning_file() {
             .parse()
             .expect("float")
     };
-    use oag_render::exhaust::hd;
+    use oag_fx::exhaust::hd;
     assert_eq!(value("Thrust Chase Rate"), hd::THRUST_CHASE_RATE);
     assert_eq!(value("Thrust Min Scale XY"), hd::THRUST_SCALE_XY.0);
     assert_eq!(value("Thrust Max Scale XY"), hd::THRUST_SCALE_XY.1);
@@ -349,7 +349,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
             .parse()
             .expect("float")
     };
-    use oag_render::exhaust::hd;
+    use oag_fx::exhaust::hd;
     assert_eq!(value("Enable Flare Sprite"), 1.0);
     assert_eq!(
         value("\"Ship Effects.Engine Trails.Flare Radius\""),
@@ -495,7 +495,7 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
             anchor_edge = across;
         }
     }
-    let sphere_edge = race.hull_reach_for_tests(1) + oag_render::exhaust::hd::FIN_HALF_WIDTH;
+    let sphere_edge = race.hull_reach_for_tests(1) + oag_fx::exhaust::hd::FIN_HALF_WIDTH;
     println!("anchor test stops firing at {anchor_edge:.2} units off the ribbon");
     println!("the sphere it replaced fired out to {sphere_edge:.2}");
     assert!(
@@ -524,7 +524,7 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     use oag_core::math::Vec3;
-    use oag_render::exhaust::{self, hd};
+    use oag_fx::exhaust::{self, hd};
     let Some(loaded) = load() else { return };
     let mut race = race::Race::start(loaded.setup);
     // Calibrated against the far chase view's eye. The default became the close

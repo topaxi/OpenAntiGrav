@@ -97,7 +97,7 @@ pub struct Built {
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
-    /// same render pass - see `oag_render::exhaust::Pipeline` for the precedent
+    /// same render pass - see `oag_fx::exhaust::Pipeline` for the precedent
     /// of pairing an opaque and a blended pipeline this way.
     ///
     /// Indexed by `culled as usize`: `[0]` two-sided, `[1]` back-face culled.

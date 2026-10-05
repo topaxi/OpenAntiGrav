@@ -62,15 +62,14 @@ use super::*;
 use crate::livery::SparkAnchor;
 
 /// The effect a landed weapon hit throws - the damaging wall contact's own.
-pub const HIT_SPARK_EFFECT: &str = oag_render::sparks::DAMAGE_EFFECT;
+pub const HIT_SPARK_EFFECT: &str = oag_fx::sparks::DAMAGE_EFFECT;
 
 /// What a landed LeachBeam drain throws instead (`craft+0x138 == 7`).
 pub const LEACHBEAM_HIT_SPARK_EFFECT: &str = "WO_SHIP_SPARK_DAMAGE_LEACHBEAM";
 
 /// The severity every hit spark plays at: `ShipCollisionFx_Trigger`'s
 /// `intensity * 2.0 + 0.4` at the hardcoded intensity `1.0`.
-pub const HIT_SPARK_SEVERITY: f32 =
-    oag_render::sparks::SEVERITY_SLOPE + oag_render::sparks::SEVERITY_FLOOR;
+pub const HIT_SPARK_SEVERITY: f32 = oag_fx::sparks::SEVERITY_SLOPE + oag_fx::sparks::SEVERITY_FLOOR;
 
 /// The loop bound `Ship_GatherCollisionFxNodes` collects up to.
 const MAX_NODES: usize = 10;
@@ -214,7 +213,7 @@ impl Race {
             };
             self.view.stage.orient(playing, up);
             let sparks = &mut self.view.hit_sparks;
-            sparks.cooldown[slot][node] = oag_render::sparks::COLLISION_COOLDOWN;
+            sparks.cooldown[slot][node] = oag_fx::sparks::COLLISION_COOLDOWN;
             sparks.riding.push(Riding {
                 slot,
                 node,

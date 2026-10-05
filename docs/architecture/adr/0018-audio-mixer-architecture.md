@@ -51,7 +51,7 @@ its first commit.
 cross-platform device layer; voices, mixing, resampling, pitch and gain are this
 crate's code.
 
-**Split state from device**, the way `oag_render::sparks::Sparks` splits from
+**Split state from device**, the way `oag_fx::sparks::Sparks` splits from
 `sparks::Pipeline`:
 
 - `Mixer` is plain data with no device handle: a 32-voice pool, two buses, and

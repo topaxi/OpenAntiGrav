@@ -53,7 +53,7 @@
 //!   second has passed - measured 1.17 s apart in play - so the original stops
 //!   draining for up to `segment_count` ticks each second. Reproducing that
 //!   needs the ribbon's cursor, geometry this crate does not have and must not
-//!   have; `oag_render::beam::Ribbon` keeps it render-side for the picture.
+//!   have; `oag_fx::beam::Ribbon` keeps it render-side for the picture.
 //!   **Chosen, not measured**, and it is the one place this build knowingly
 //!   transfers more than the original per second.
 //! - **[`LeachBeamStats::slow_ship_factor`] is spent as of 2026-09-16**, the way

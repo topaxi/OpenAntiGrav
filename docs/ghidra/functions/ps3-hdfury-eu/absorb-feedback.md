@@ -338,7 +338,7 @@ statically above.
 
 ### Ported
 
-`oag_render::absorb_shell` reproduces the four floats and their tick.
+`oag_fx::absorb_shell` reproduces the four floats and their tick.
 `oag_game::livery::absorb::shell` loads each team's `AbsorbEffect` pair and
 refuses any whose materials do not all declare `ShieldColour` and blend
 `SrcAlpha`/`One`. `mesh.wgsl`'s `absorb_shading` path is fragment block #1.

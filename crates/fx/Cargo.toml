@@ -1,0 +1,27 @@
+[package]
+name = "oag-fx"
+description = "The renderer's visual effects: the .pob particle player, the exhaust, mist, clouds, beams, flashes and weapon quads"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-pob.workspace = true
+oag-vex.workspace = true
+oag-core.workspace = true
+oag-formats.workspace = true
+oag-texture.workspace = true
+oag-assets.workspace = true
+oag-pulse.workspace = true
+oag-mesh.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+wgpu.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+oag-testdata.workspace = true
+pollster.workspace = true

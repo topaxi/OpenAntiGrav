@@ -208,7 +208,7 @@ The end branch is a separate, still-standing result: `0x10b2 & 0xc0` is non-zero
 (`0x80` is set), so the batch takes the stencil branch that stamps `0xff`
 through `KEEP, KEEP, REPLACE` - the same alpha-channel stamp
 `Trail_BuildStateList` uses on the PSP to feed the bloom's bright pass, see
-`oag_render::exhaust::TRAIL_BLEND`. So the plume is a bloom-contributing
+`oag_fx::exhaust::TRAIL_BLEND`. So the plume is a bloom-contributing
 surface whichever way it blends, which is why `race::Scene` giving it
 `GlowMask::Written` is right on both discs.
 

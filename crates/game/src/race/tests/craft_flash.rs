@@ -8,7 +8,7 @@ const DT: f32 = 1.0 / 60.0;
 fn with_flash() -> Race {
     let mut race = race_with_a_grid();
     assert!(race.sim.world.ship_count > 3, "the fixture has opponents");
-    race.view.screen_flash = Some(oag_render::flash::ScreenFlash::default());
+    race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
     race
 }
 
@@ -27,7 +27,7 @@ fn drawn(race: &mut Race) -> Option<[f32; 4]> {
 fn a_craft_going_out_of_the_race_washes_the_screen_yellow() {
     let mut race = with_flash();
     let at = race.sim.world.ships[3].physics.body.position;
-    race.view.screen_flash = Some(oag_render::flash::ScreenFlash::default());
+    race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
 
     let player_at = race.sim.world.ships[0].physics.body.position;
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
@@ -41,7 +41,7 @@ fn a_craft_going_out_of_the_race_washes_the_screen_yellow() {
     assert_eq!(colour[2], 0.0, "yellow to red: never any blue");
     race.sim.world.ships[0].physics.craft_state = CraftState::Racing;
     race.advance_craft_flashes();
-    race.view.screen_flash = Some(oag_render::flash::ScreenFlash::default());
+    race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
 
     race.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();

@@ -3,7 +3,7 @@
 //! pickup, and under `leachbeam_surface.mip` while that craft's own LeachBeam
 //! pulses.
 //!
-//! The picture is `oag_render::hull_overlay`'s - one draw routine,
+//! The picture is `oag_fx::hull_overlay`'s - one draw routine,
 //! `HullOverlay_Submit`, serves both, and only the texture and the pulse
 //! differ; this is only the per-frame half - where they are written, when
 //! they are drawn - kept out of `frame.rs` under the 1,000-line rule.
@@ -47,9 +47,9 @@ impl Scene {
     }
 
     /// Writes every live overlay's pose, tint and scroll: the craft's own
-    /// matrix, [`oag_render::hull_overlay::tint`] of
-    /// [`oag_render::hull_overlay::alpha`], and
-    /// the texture coordinates slid by [`oag_render::hull_overlay::scroll`].
+    /// matrix, [`oag_fx::hull_overlay::tint`] of
+    /// [`oag_fx::hull_overlay::alpha`], and
+    /// the texture coordinates slid by [`oag_fx::hull_overlay::scroll`].
     pub(super) fn write_absorb_overlays(
         &self,
         race: &Race,
@@ -68,11 +68,11 @@ impl Scene {
                     race.ship_model_matrix_of(slot),
                     prev_vp * prev.ship(slot, race),
                 );
-                let a = oag_render::hull_overlay::alpha(pulse);
+                let a = oag_fx::hull_overlay::alpha(pulse);
                 overlay.write_overlay(
                     queue,
-                    oag_render::hull_overlay::tint(a),
-                    oag_render::hull_overlay::scroll(pulse),
+                    oag_fx::hull_overlay::tint(a),
+                    oag_fx::hull_overlay::scroll(pulse),
                     scratch,
                 );
             }

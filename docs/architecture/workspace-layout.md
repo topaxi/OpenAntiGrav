@@ -41,7 +41,8 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-tables` | `crates/tables` | Every table a title authors as XML, and the tag reader underneath them. The only crate in the workspace with no dependencies at all. |
 | `oag-video` | `crates/video` | Video containers - what the originals wrap a bitstream in, plus this project's own movie cache. The first crate carved off `oag-formats`, and the one with no workspace dependencies at all. |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
-| `oag-render` | `crates/render` | The wgpu renderer's effects and track: the particle systems, the exhaust, shadows, PVS placement, the track-ribbon builder and cameras. Owns no window, so the viewer and the game can each keep their own. Composes `oag-mesh`, `oag-post` and `oag-gpu`; callers import those directly, there are no re-exports. |
+| `oag-render` | `crates/render` | The wgpu renderer's scene: shadows, PVS placement, the track-ribbon builder, the gantry, the ghost and loading overlays and cameras. Owns no window, so the viewer and the game can each keep their own. Composes `oag-fx`, `oag-mesh`, `oag-post` and `oag-gpu`; callers import those directly, there are no re-exports. |
+| `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player (`psys`) and the collision-spark adapter, the exhaust, mist, clouds, the Leach beam, the screen flash, the Cannon's quads and the hull overlays. Split out of `oag-render` on 2026-10-05; depends on `oag-mesh` for the vertex type and the format crates, never on `oag-render`, so the effects need no camera, shadow or PVS code (the one shared leaf, `hull_overlay::pulse`, moved with them). Nothing gameplay may depend on it. |
 | `oag-mesh` | `crates/mesh` | The mesh pipeline: `.vex` and `RCSMODEL` models decoded into one portable vertex and index buffer, the pipeline that draws them offscreen or into a surface, the orbit camera it frames them with, and the headless capture. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` and the format crates, never on `oag-render` or `oag-post`. |
 | `oag-post` | `crates/post` | Post-processing between a scene and the surface: bloom (PSP, PS2, HD), the Omega tonemap, motion blur, SMAA, FXAA, FSR 1 and FSR 3, with the FSR 3 jitter sequence. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` only. |
 | `oag-gpu` | `crates/gpu` | The little the mesh pipeline and the post chain share and neither may own: the scene and velocity target formats, the `perf-probe` instrumentation and GPU timestamp timing. It is what keeps `oag-mesh` and `oag-post` from depending on each other. |
@@ -161,7 +162,7 @@ against the arrows, which is the direction a table is read in.
 
 Two rules, both enforceable:
 
-1. **No gameplay crate may depend on `oag-render`, `oag-audio`, `oag-input`,
+1. **No gameplay crate may depend on `oag-render`, `oag-fx`, `oag-audio`, `oag-input`,
    `winit` or `wgpu`.** The arrow from `oag-input` goes to `oag-gameplay`, which
    owns the input *snapshot type*; the simulation consumes the snapshot, not the
    input system.
@@ -268,7 +269,7 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 (`oag-fx`, `oag-mesh` and `oag-post`, split out of it on 2026-10-05, carry the same entry) - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
 | `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the

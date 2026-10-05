@@ -29,7 +29,7 @@ fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
     let mut setup = setup(handling);
     for name in [HIT_SPARK_EFFECT, LEACHBEAM_HIT_SPARK_EFFECT] {
         let blob = super::respawn::one_emitter_pob(name, 0);
-        let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+        let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
         setup.effects.insert(name, effect);
     }
@@ -57,7 +57,7 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
 
     // Every locator hit on every tick for a little under the gate: no
     // locator may fire twice, so at most six can have started.
-    let ticks = (oag_render::sparks::COLLISION_COOLDOWN / race.dt()) as usize - 2;
+    let ticks = (oag_fx::sparks::COLLISION_COOLDOWN / race.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         race.throw_hit_sparks(&landed_on_player(), false);
@@ -119,7 +119,7 @@ fn a_rocket_striking_the_player_in_the_tick_throws_its_hull_sparks() {
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     race.view.hit_sparks = crate::race::hit_sparks::HitSparks::new(vec![six_locators()]);
     let blob = super::respawn::one_emitter_pob(HIT_SPARK_EFFECT, 0);
-    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     race.view.effects.insert(HIT_SPARK_EFFECT, effect);
     // Past the countdown, so the craft is racing and the gate admits the hit.

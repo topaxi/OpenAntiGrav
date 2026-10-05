@@ -129,7 +129,7 @@ fn every_craft_lays_its_own_ribbon() {
     let mut race = Race::start(setup);
     // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
     // original's own gate, so this needs one tick per sample.
-    for _ in 0..oag_render::exhaust::TRAIL_SAMPLES {
+    for _ in 0..oag_fx::exhaust::TRAIL_SAMPLES {
         race.tick(&PlayerInputs::none());
     }
 
@@ -220,7 +220,7 @@ fn the_field_does_not_flicker_in_lockstep() {
 /// A rocket whose model did not load is drawn as a billboard, and the whole
 /// worst case fits the buffer it is drawn into.
 ///
-/// **The second half is the regression.** `oag_render::exhaust::Pipeline::upload`
+/// **The second half is the regression.** `oag_fx::exhaust::Pipeline::upload`
 /// clamps with `min`, and `MAX_VERTICES` was six - the flare's one quad -
 /// so the projectile sprites were dropped on the floor with nothing in the
 /// logs and nothing on screen. A budget test is the only thing that catches
@@ -592,7 +592,7 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 /// `Rocket_Init` attaches `WO_ROCKET_FLARE` at launch and it rides the
 /// rocket for the whole flight - see [`Race::advance_projectile_flares`].
 /// The bookkeeping is asserted here without a disc; what the flare *looks*
-/// like is `crates/render/tests/psys_ground_truth.rs`' business.
+/// like is `crates/fx/tests/psys_ground_truth.rs`' business.
 #[test]
 fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     let mut race =

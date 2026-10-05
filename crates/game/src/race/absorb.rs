@@ -163,7 +163,7 @@ impl Race {
     /// overlay: `FUN_08844ec4` stores the craft's clock into `+0x878` just
     /// before it calls the feedback (`0x088455ac..b4`), and the Eliminator's
     /// `Ship_RefillLapShield` does not - so a lap refill bursts and never
-    /// lights the hull. See `oag_render::hull_overlay`.
+    /// lights the hull. See `oag_fx::hull_overlay`.
     ///
     /// HD's shell timer is stamped on **every** call, the lap refill included:
     /// `FUN_000d9398` stores `craft+0x7a5c` after all of its branches. It only
@@ -205,7 +205,7 @@ impl Race {
         for elapsed in &mut self.view.absorb_overlay {
             *elapsed = elapsed
                 .map(|seconds| seconds + self.sim.dt)
-                .filter(|seconds| *seconds <= oag_render::hull_overlay::WINDOW);
+                .filter(|seconds| *seconds <= oag_fx::hull_overlay::WINDOW);
         }
         for shell in &mut self.view.absorb_shell {
             shell.advance(self.sim.dt);
@@ -264,7 +264,7 @@ impl Race {
     }
 
     /// The hull overlay's pulse on `slot` this tick - see
-    /// [`oag_render::hull_overlay::pulse`] - or `None` when it draws nothing.
+    /// [`oag_fx::hull_overlay::pulse`] - or `None` when it draws nothing.
     #[must_use]
     pub fn absorb_overlay_pulse(&self, slot: usize) -> Option<f32> {
         self.view
@@ -272,7 +272,7 @@ impl Race {
             .get(slot)
             .copied()
             .flatten()
-            .and_then(oag_render::hull_overlay::pulse)
+            .and_then(oag_fx::hull_overlay::pulse)
     }
 
     /// Whether `slot` is inside its one-second absorb window this tick -
@@ -300,7 +300,7 @@ impl Race {
 
     /// HD's absorb shell fade on `slot` this tick - the `ShieldColour` its
     /// material reads - or `None` while the original hides the shell. See
-    /// [`oag_render::absorb_shell::AbsorbShell::fader`].
+    /// [`oag_fx::absorb_shell::AbsorbShell::fader`].
     #[must_use]
     pub fn absorb_shell_fader(&self, slot: usize) -> Option<f32> {
         self.view.absorb_shell.get(slot)?.fader()

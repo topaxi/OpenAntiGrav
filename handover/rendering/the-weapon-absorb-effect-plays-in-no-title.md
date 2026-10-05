@@ -19,7 +19,7 @@ though)."
     [absorb-feedback.md](../../docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md).
   - `crates/game/tests/absorb_ground_truth.rs` pins the stagger on Pulse and
     on HD.
-- **The hull overlay, Pulse only: drawn** (`oag_render::hull_overlay::DRAWN
+- **The hull overlay, Pulse only: drawn** (`oag_fx::hull_overlay::DRAWN
   = true`, later on 2026-09-23). A real absorb on PPSSPP, instrumented with
   logged watchpoints, showed the stamp store, `HullOverlay_AbsorbFade` and
   `HullOverlay_Submit` firing together for exactly one second. The matrix

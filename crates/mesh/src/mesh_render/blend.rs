@@ -37,7 +37,7 @@ pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
 /// The blend for a transparent batch of class [`oag_vex::vex::BlendClass::Additive`] -
 /// `pass_mask & 0x200`.
 ///
-/// **Recovered, and identical to `oag_render::exhaust::BLEND`.**
+/// **Recovered, and identical to `oag_fx::exhaust::BLEND`.**
 /// `Gfx_BuildBatchStateList`'s `0x200` branch programs
 /// `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000, 0xffffff)` - a fixed
 /// destination factor of white, i.e. `src * srcAlpha + dst`. That is the same

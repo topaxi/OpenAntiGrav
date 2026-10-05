@@ -1,7 +1,7 @@
 # The particle effects are played from the disc; 32 of the PSP's 35 play, 3 wait on a trigger
 
 2026-08-12, census rewritten 2026-10-02. `oag_pob` parses every emitter
-tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
+tree, `oag_fx::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
 `psys::Stage` plays any number at once (`attach`/`follow`/`detach` for one riding
 a moving owner, `play` for a burst). **The mechanism is generic and finished;
 what is per-effect is the trigger.** `crates/game/tests/psys_inventory_ground_truth.rs`
@@ -85,11 +85,11 @@ flare, Zone spark swap).
   [weather.md](../../docs/ghidra/functions/psp-pulse-usa/weather.md). Open:
   - ~~Outpost 7's snow withheld~~: closed 2026-10-04. `WO_SNOW` sets the immortal flag
     `0x800`, which ours ignored, so its flakes died five ticks in. The flag is now honoured
-    in `oag_render::psys`, and the withhold is lifted. This also makes `WO_LEACHBEAM_ENERGY`
+    in `oag_fx::psys`, and the withhold is lifted. This also makes `WO_LEACHBEAM_ENERGY`
     immortal, the only other Pulse emitter with the flag. Its instance is killed on every
     re-spawn, so the pool resets, but its on-screen particle count was not re-checked
     against the original.
-  - The mist overlay plays (`oag_render::mist`, 2026-10-04). Its draw law matches the
+  - The mist overlay plays (`oag_fx::mist`, 2026-10-04). Its draw law matches the
     original's pixels (corr 0.84 and 0.92, weather.md "Played, and checked"). Open: a
     matched pose while driving, a climb, and the rain lens over it were not compared.
   - The PS2 disc authors `<Weather>` on three circuits and plays none here.

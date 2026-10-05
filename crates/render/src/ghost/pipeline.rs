@@ -1,7 +1,7 @@
 //! [`Pipeline::new`]: the three GPU pipelines behind [`super`]'s three
 //! passes, each one row of `ghost.md`'s state table.
 
-use crate::exhaust::FlareTexture;
+use oag_fx::exhaust::FlareTexture;
 use oag_gpu::formats::VELOCITY_FORMAT;
 use oag_mesh::mesh::GpuVertex;
 use oag_mesh::mesh_render::{self, DEPTH_FORMAT};

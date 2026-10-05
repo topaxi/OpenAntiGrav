@@ -28,7 +28,7 @@
 //! # Two halves, deliberately
 //!
 //! [`quad`] and [`fade`] are pure arithmetic with tests, the same split
-//! [`crate::exhaust`] and [`crate::shield`] use: the placement can be wrong in
+//! [`oag_fx::exhaust`] and [`crate::shield`] use: the placement can be wrong in
 //! a way a screenshot does not show, so the part that decides where a shadow
 //! goes is testable on a machine with no graphics driver.
 
@@ -388,10 +388,10 @@ fn ear_clip(points: &[[f32; 2]]) -> Vec<[usize; 3]> {
 
 /// The alpha-over blend a shadow darkens with.
 ///
-/// [`crate::psys::BLEND_ALPHA_OVER`] by another name, and deliberately that
+/// [`oag_fx::psys::BLEND_ALPHA_OVER`] by another name, and deliberately that
 /// one rather than a second copy of the same equation: `src.a * src.rgb +
 /// (1 - src.a) * dst.rgb` with `src.rgb` black is exactly `dst * (1 - a)`.
-pub const BLEND: wgpu::BlendState = crate::psys::BLEND_ALPHA_OVER;
+pub const BLEND: wgpu::BlendState = oag_fx::psys::BLEND_ALPHA_OVER;
 
 /// One craft's silhouette, as pixels.
 ///

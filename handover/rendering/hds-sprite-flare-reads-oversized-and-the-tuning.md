@@ -229,7 +229,7 @@ negative.
 
 - ~~**The draw is read; what is open is a live confirmation and the
   renderer.**~~ **Landed 2026-09-15, later the same day.**
-  `oag_render::exhaust::hd::Sprite` now carries the ninth session's law
+  `oag_fx::exhaust::hd::Sprite` now carries the ninth session's law
   exactly - `half_height = Flare Radius Min (2.0) + Flare Radius (3.0) *
   clamp(fade, 0, 1) + Max Radius Jitter (0.5) * rand01`, `half_width = 4 *
   half_height`, vertex alpha = `fade = min((1 - saturate((dist * k - 15) /

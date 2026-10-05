@@ -24,7 +24,7 @@ effect, loaded by `Data\Psys\%s.POB` (built at `FUN_089156a0` in the PSP
 is not the ship exhaust: weapon impacts and trails, ship collision sparks and
 death sparks, environmental effects (`WO_RAIN`, `WO_SNOW`, `WO_QUAKE`). The
 exhaust flare and trail are a separate, hand-authored code path with no `.pob`
-involvement - see [`oag_render::exhaust`](../rendering/README.md).
+involvement - see [`oag_fx::exhaust`](../rendering/README.md).
 
 ## Container
 
@@ -76,7 +76,7 @@ WO_SHURIKEN_HEAD, WO_SHURIKEN_TRAIL, WO_SNOW, WO_WEAPON_ABSORB
 
 `WO_SHIP_COLL_SPARK`, `WO_SHIP_COLL_SPARK_DAMAGE` and
 `WO_SHIP_COLL_SPARK_NODAMAGE` are three distinct, separately authored
-particle systems for the effect `oag_render::sparks` draws (see
+particle systems for the effect `oag_fx::sparks` draws (see
 [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md);
 `_DAMAGE` is the tree it loads and `WO_SHIP_COLL_SPARK` is one emitter
 *inside* it as well as a file of its own), and `WO_SHIP_COLL_SPARK_TRAIL` and
@@ -433,7 +433,7 @@ That "there" is doing real work: a locator's own matrix places it in the
 a craft flies. `oag_render::livery::SparkAnchor` (`crates/game/src/livery.rs`)
 carries both halves of the same locator matrix an earlier revision of this
 engine read only the translation from - `position` (row 3) and `up` (row
-1) - and `oag_render::psys::System::advance` composes `up` with the ship's
+1) - and `oag_fx::psys::System::advance` composes `up` with the ship's
 *current* attitude every tick, the same way the position was already
 recomposed every tick to ride a moving hull. So a spray fired while banking
 hard into a wall tilts with the hull rather than assuming the craft is
@@ -520,8 +520,8 @@ emitter's own entries from the user's disc at runtime** (`crates/pob/src/lib.rs`
 committed and nothing is sampled down to two colours any more. This closes
 what used to be the recorded follow-up here (until 2026-08-12, the port
 really did sample only the measured endpoints, in
-`oag_render::sparks::Colour::Gradient`) - see
-`crates/render/tests/psys_ground_truth.rs`'s
+`oag_fx::sparks::Colour::Gradient`) - see
+`crates/fx/tests/psys_ground_truth.rs`'s
 `the_collision_spark_palette_is_read_from_disc_not_two_endpoints` and its
 two neighbours for what the endpoints-only version got wrong: the smoke
 ramp is not linear (three quarters of its `RandomEntry` population spawn
@@ -537,7 +537,7 @@ the per-emitter parameter semantics (they inherit the table above).
 ### The parser walks the tree - 2026-08-12
 
 The table above was, until now, transcribed by hand into
-`oag_render::sparks::EMITTERS` for one file. It is now **parsed**:
+`oag_fx::sparks::EMITTERS` for one file. It is now **parsed**:
 [`ParticleSystem::emitters`](../../crates/pob/src/lib.rs) reads an
 `Emitter` per record and follows `+0x944`/`+0x948`/`+0x94c` into a tree,
 returning it depth-first with the root first and the two child fields as
@@ -805,7 +805,7 @@ and caps at `127` on the PS2. That is the PS2 GS's own convention, where
   table above holds the same kind of value on both discs.
 
 So a reader has to be told, from the source it opened.
-`oag_render::psys::ColourScale` is that parameter and
+`oag_fx::psys::ColourScale` is that parameter and
 `oag_assets::Layout::platform` is what chooses it - the only thing in this
 project that branches on the platform rather than on the data, and it says
 so.
@@ -864,7 +864,7 @@ the ejection-speed centre in world units per tick, and the full decode is
 the emitter-record table above - see "The emitter record layout is
 decoded". The caution this paragraph recorded did its job: nothing was
 ported until the consumers were read, and the port
-(`oag_render::psys`) now carries recovered units rather than
+(`oag_fx::psys`) now carries recovered units rather than
 guessed ones.
 
 This is a genuinely separate structure from the slot table and from the
@@ -995,7 +995,7 @@ Both are content, not byte order, and both are pinned as measurements:
 
 - **`blend_class` 4**, on the seven emitters of `WO_NITRO_SHIP_DEATH` and
   nowhere else. Pulse writes only 1-3. Nothing is traced about what it draws,
-  so it stays unnamed and `oag_render::psys` refuses it by
+  so it stays unnamed and `oag_fx::psys` refuses it by
   `Error::UnknownBlendClass` rather than falling back to one of the three.
 - **`LOOPING` is per-emitter** - see the retraction under
   [flag `0x1`](#flag-0x1-is-this-effect-loops---2026-08-12) above.
@@ -1040,7 +1040,7 @@ here.
 
 `SYSP`, little-endian, the same emitter record. **174 `.pob` across the five
 archives that could hold one; 170 parse and play 240 ticks, 4 are refused by
-name** - `crates/render/tests/psys_2048_ground_truth.rs`.
+name** - `crates/fx/tests/psys_2048_ground_truth.rs`.
 
 | Archive | `.pob` |
 | --- | ---: |
@@ -1064,7 +1064,7 @@ name** - `crates/render/tests/psys_2048_ground_truth.rs`.
   `Particles2048` effects: 76 distinct stems, every one a
   `data/particles2048/tex/<stem>.gxt` that decodes
   (`oag_pob::ParticleSystem::texture_path`,
-  `oag_render::psys::Effect::parse_with`). Before this the 2048 effects drew
+  `oag_fx::psys::Effect::parse_with`). Before this the 2048 effects drew
   the procedural radial falloff, which on a colour table authored for a sprite
   is a white blowout.
 - **The 17 patch-only effects** (chimney smoke, globes, lens flares,
@@ -1078,7 +1078,7 @@ name** - `crates/render/tests/psys_2048_ground_truth.rs`.
 `SYSP`, little-endian. `data00.psarc` and the patch's `data05.psarc` each carry
 97 `Data/particles` and 112 `Data/particles2048` effects (the base adds 2 `Get/`
 effects to each); the same stems as 2048's directories, different bytes again.
-`crates/render/tests/psys_omega_ground_truth.rs`.
+`crates/fx/tests/psys_omega_ground_truth.rs`.
 
 - **80 of 97 and 96 of 112 parse**; the rest are refused by name. The refusals are **blend class 8** on every shock-distortion and
   heat-haze effect (`shockdistort`, `distort`, `Heathaze`: `WO_ROCKET_EXPLO`,
@@ -1288,7 +1288,7 @@ above, and these two fields are in its table.
   record is `{ NUL-terminated string, small parameter block }`; a
   non-string record is a run of floats. The *emitter-level* layout that
   used to head this list is decoded ("The emitter record layout is
-  decoded" above) and parsed into `oag_render::psys` with
+  decoded" above) and parsed into `oag_fx::psys` with
   confirmed units - what remains undecoded is the slot-table targets'
   own internals (beyond "site `0x4c4` resolves the texture path"). The
   `+0x9c8`/`+0x9cc` targets once listed here are the embedded sprite's
@@ -1428,7 +1428,7 @@ and `booga` (72 to 100), the Quake's and the Repulser's `shazzam`, the Shuriken'
 `glow`, the ship explosions' `Glow`, the absorb effect's `glow`. **None of it
 was drawn before this**: the parser never reached them. The struck hull's warm
 envelope in the original is this pair. Read by `oag_pob::initial`,
-played by `oag_render::psys::template`; pinned by
+played by `oag_fx::psys::template`; pinned by
 `crates/pob/tests/pob_initial_particles_ground_truth.rs`.
 
 **Not played:** a template on an emitter that is itself a child (it would start
@@ -1436,7 +1436,7 @@ with the child's own instances; `Effect::skipped_templates` counts them).
 **The PS2 and HD files are muted**: the layout is read off Pulse's PSP
 executable alone. **A template's first draw is at age 0**: the instance's first
 update makes the particle and draws it before anything ages it (live: `glow`
-`0.75` then `3.18`, `shazam` `9.36` twice), so `oag_render::psys` skips the
+`0.75` then `3.18`, `shazam` `9.36` twice), so `oag_fx::psys` skips the
 first tick's ageing for a template particle. An emitter's particles are not
 treated that way - unmeasured. (Their roll and aspect are a different law: a
 constant `+0x4c8` aspect and a roll that is always a rate; see the emitter

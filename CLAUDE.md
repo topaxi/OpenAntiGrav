@@ -196,7 +196,8 @@ Existing crates:
 | `oag-weapons` | `crates/weapons` | Pickups, projectiles, blasts, beams, disruption and slowdown. Below `oag-gameplay`, which embeds its state; it reaches a craft only through the `Craft` trait. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct, the `InputSnapshot` type the simulation consumes, spline spawning. |
 | `oag-replay` | `crates/replay` | Replays and ghosts: the per-slot input stream as the truth, a state hash a second so playback reports a desync instead of diverging, and a ghost lap's pose track. See [ADR-0055](docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
-| `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
+| `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player, exhaust, mist, clouds, beams, flashes, weapon quads, hull overlays. Above `oag-mesh`, below `oag-render`; render-side, so no gameplay crate depends on it. |
+| `oag-render` | `crates/render` | The wgpu renderer: track ribbon, shadows, PVS, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
@@ -214,7 +215,7 @@ Two dependency rules, both enforced by `just check-deps` (part of the `just` gat
 `scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
 review:
 
-1. No gameplay crate depends on `oag-render`, `oag-audio`, `oag-input`, `winit` or `wgpu`.
+1. No gameplay crate depends on `oag-render`, `oag-fx`, `oag-audio`, `oag-input`, `winit` or `wgpu`.
    The simulation consumes an input *snapshot type* owned by `oag-gameplay`, never the
    input system itself.
 2. No crate depends on `oag-game` (the composition root).
@@ -324,7 +325,7 @@ applies to particle effects (`Data\Psys\*.POB`), models, textures, tables and
 tuning values alike. Two failures this rule exists to prevent, both of which
 already happened here:
 
-1. **A hand-transcribed table.** `oag_render::sparks` carried the collision
+1. **A hand-transcribed table.** `oag_fx::sparks` carried the collision
    effect's four emitters as a `const` read off the file by hand. Every value
    was *correct* - the parser reproduces them - and it was still wrong: not
    re-derivable, and no use at all for the other 34 effects on the disc.
@@ -339,10 +340,10 @@ the loader report. Nothing is an honest, visible absence; an invention is not.
 Where a stand-in genuinely cannot be avoided (a texture that has no located WAD
 entry yet), keep it to a *substitute for the missing asset alone* and never let
 it override data you do have - the whitening term removed from
-`crates/render/src/psys.wgsl` on 2026-08-12 was a sprite substitute that had
+`crates/fx/src/psys.wgsl` on 2026-08-12 was a sprite substitute that had
 grown into an override of the emitter's own colour table.
 
-The mechanism for effects is already generic: `oag_render::psys::Library` loads
+The mechanism for effects is already generic: `oag_fx::psys::Library` loads
 any `Data\Psys\<name>.POB` by name and `psys::Stage` plays any number of them at
 once. Adding an effect is adding its name and its **trigger** - and the trigger
 is the part that needs reverse-engineering, so an effect with no recovered

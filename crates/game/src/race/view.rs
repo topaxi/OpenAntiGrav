@@ -104,7 +104,7 @@ pub struct RaceView {
     /// capture taken against a single-craft race, and it couples eight flares
     /// that should be independent. See [`exhaust_seed`].
     pub(super) exhaust_rng: [Rng; MAX_SHIPS],
-    /// Wipeout HD's exhaust states. Render-only; see `oag_render::exhaust::hd`.
+    /// Wipeout HD's exhaust states. Render-only; see `oag_fx::exhaust::hd`.
     pub(super) hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     pub(super) hd_trail_active: bool,
     pub(super) hd_trail_red: [f32; MAX_SHIPS],
@@ -116,7 +116,7 @@ pub struct RaceView {
     pub(super) pulse_laid_pose: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
-    pub(super) screen_flash: Option<oag_render::flash::ScreenFlash>,
+    pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// The explosion and sparks a craft throws as it goes out - see
@@ -141,8 +141,8 @@ pub struct RaceView {
     /// hull overlay's window - `craft+0x830 - craft+0x878` in the original.
     pub(super) absorb_overlay: [Option<f32>; MAX_SHIPS],
     /// HD's absorb shell fade per craft, `craft+0x7a50..+0x7a5c` - see
-    /// `oag_render::absorb_shell`.
-    pub(super) absorb_shell: [oag_render::absorb_shell::AbsorbShell; MAX_SHIPS],
+    /// `oag_fx::absorb_shell`.
+    pub(super) absorb_shell: [oag_fx::absorb_shell::AbsorbShell; MAX_SHIPS],
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].
@@ -248,7 +248,7 @@ pub struct RaceView {
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
-    /// see `oag_render::psys`'s module doc comment.
+    /// see `oag_fx::psys`'s module doc comment.
     pub(super) sparks: psys::System,
     /// Every `.pob` this race loaded - see [`Setup::effects`].
     pub(super) effects: psys::Library,
@@ -314,15 +314,15 @@ pub struct RaceView {
     pub(super) leach_charge_effect: [Option<psys::Playing>; MAX_SHIPS],
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
     /// scroll phase [`oag_weapons::projectile::leach_beam::Beam`]
-    /// deliberately does not carry, see `oag_render::beam`'s module doc
+    /// deliberately does not carry, see `oag_fx::beam`'s module doc
     /// comment. `Some` for exactly as long as [`oag_gameplay::World::leach_beam`]
     /// is `Some(Kind::Locked)`, rebuilt fresh each time a new beam locks on.
-    pub(super) leach_beam_ribbon: Option<oag_render::beam::Ribbon>,
+    pub(super) leach_beam_ribbon: Option<oag_fx::beam::Ribbon>,
     /// The LeachBeam ribbon's own generator, deliberately **not** `world.rng` -
     /// see [`Self::exhaust_rng`].
     pub(super) leach_beam_rng: Rng,
     /// Wipeout HD's own LeachBall drain-trip accumulator - render-side state
-    /// for [`oag_render::beam::hd_ball`], which [`oag_gameplay::World`]
+    /// for [`oag_fx::beam::hd_ball`], which [`oag_gameplay::World`]
     /// deliberately does not carry for the same reason
     /// [`Self::leach_beam_ribbon`] does not. Reset to `0.0` whenever no beam
     /// is locked, the same way [`Self::leach_beam_ribbon`] is torn down -
@@ -355,7 +355,7 @@ pub struct RaceView {
     ///
     /// Counts down every tick regardless of contact, and gates a burst
     /// alongside `oag_physics::wall::WallResponse::impact` - see
-    /// `oag_render::sparks::COLLISION_COOLDOWN`'s doc comment for why this is
+    /// `oag_fx::sparks::COLLISION_COOLDOWN`'s doc comment for why this is
     /// a cooldown timer and not a one-shot edge latch: `impact` stays `true`
     /// for every tick of a sustained scrape, and spawning a burst on every
     /// one of those ticks is the per-frame-instead-of-per-impact bug
@@ -375,7 +375,7 @@ pub struct RaceView {
     /// The chosen locator's own authored `+Y`, **model space** - paired with
     /// [`Self::sparks_anchor`] and read the same tick. `None` alongside it.
     ///
-    /// `oag_render::psys::System::advance` takes the *world*-space direction
+    /// `oag_fx::psys::System::advance` takes the *world*-space direction
     /// this maps to, every tick, the same way [`Self::sparks_anchor`]'s
     /// position is re-transformed every tick rather than baked once: a craft
     /// banking mid-scrape tilts the spray with it, not just the point it
@@ -385,7 +385,7 @@ pub struct RaceView {
     /// effects that author [`oag_pob::flags::LOOPING`].
     ///
     /// A looping emitter has no countdown -
-    /// `oag_render::psys::EmitterSpec::run_ticks` is infinite and
+    /// `oag_fx::psys::EmitterSpec::run_ticks` is infinite and
     /// `psys::System::stop` is the only thing that ends it. Pulse authors
     /// `WO_SHIP_COLL_SPARK_DAMAGE` as a 32-tick burst and needs no owner, so
     /// this stays `false` there and the cooldown rule below is the whole

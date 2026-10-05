@@ -33,7 +33,7 @@
 //! positions - consistent with the 62% vs 25.62% coverage gap `pob.md`
 //! already measured between the two platforms. Wipeout HD/Fury does not use
 //! this mechanism either: its sprites are separate `data/psys/tex/*.gtf`
-//! PSARC entries (see `crates/render/src/psys.rs`), and this module has
+//! PSARC entries (see `crates/fx/src/psys.rs`), and this module has
 //! never been run against a big-endian file.
 //!
 //! # The header

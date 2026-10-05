@@ -29,7 +29,7 @@ pub use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4, mat3, mat4, quat, vec2, vec3,
 /// conversion, used in both directions.
 ///
 /// **It lives here because it has two consumers on opposite sides of a
-/// dependency rule.** `oag_render::exhaust` needs it to display a speed and
+/// dependency rule.** `oag_fx::exhaust` needs it to display a speed and
 /// `oag_weapons::projectile` needs it to spend an authored one, and no
 /// gameplay crate may depend on `oag-render`
 /// (`scripts/check-dependency-rules.py`). `oag-core` is the crate both already

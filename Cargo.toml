@@ -9,6 +9,7 @@ members = [
   "crates/disc",
   "crates/display",
   "crates/formats",
+  "crates/fx",
   "crates/game",
   "crates/gameplay",
   "crates/gpu",
@@ -54,6 +55,7 @@ oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }
 oag-formats = { path = "crates/formats" }
+oag-fx = { path = "crates/fx" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-gpu = { path = "crates/gpu" }
 oag-hd = { path = "crates/hd" }
@@ -318,6 +320,11 @@ opt-level = 2
 [profile.dev.package.oag-game]
 opt-level = 2
 [profile.dev.package.oag-render]
+opt-level = 2
+
+# The particle systems, exhaust, clouds and beams were `oag-render`'s hottest
+# modules and moved to `oag-fx` on 2026-10-05; the race steps them every tick.
+[profile.dev.package.oag-fx]
 opt-level = 2
 
 # The mesh pipeline and the post-processing chain were `oag-render`'s two

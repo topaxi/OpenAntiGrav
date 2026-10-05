@@ -97,7 +97,7 @@ The executable's own load-path strings name every model above
   draws since the third.** `LeachBall_Advance`
   (`0x00114c78`) remaps the strip's own length (`param_4[4]`, plausibly but
   not confirmed to be the beam's own length), clamped `[20, 100]`, onto a
-  `[0.3, 1.0]`-second period per drain trip; `oag_render::beam::hd_ball`
+  `[0.3, 1.0]`-second period per drain trip; `oag_fx::beam::hd_ball`
   carries that law and `Race::advance_leach_beam_ribbon` drives a
   render-side accumulator off it, firing `WO_LEACHBEAM_ABSORB` (a real
   trigger, confirmed: it is inlined into `LeachBall_Advance`'s own wrap, not

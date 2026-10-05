@@ -13,14 +13,14 @@ blowouts where the original draws orange fire. Measured, not re-tinted:
      draws a particle as sprite texel times colour (`GU_TFX_MODULATE`, set
      once for the frame). `WO_QUAKE`'s `fireballs` author a near-white colour
      ramp over an orange fire-ring sprite. The sprites are now sampled off one
-     packed sheet, atlas cell included (`oag_render::psys::sprite`).
+     packed sheet, atlas cell included (`oag_fx::psys::sprite`).
   2. **The sprite reader had the wrong offsets.** The header's pixel and palette
      words are relative to the resource base: they are fixup sites. Fixed in
      `oag_pob::texture`, locked by `every_psp_texture_pointer_is_a_fixup_site`.
   3. **The Quake's `/ 50` went into severity.** It belongs in the extent
      co-factor. Severity made every fireball `width / 50` too big and stacked
      them all on one point. `WO_QUAKE` is a line emitter (shape 1); lines and
-     sphere extents are now placed as read (`oag_render::psys::spawn`).
+     sphere extents are now placed as read (`oag_fx::psys::spawn`).
 
 Evidence and addresses:
 
@@ -41,17 +41,17 @@ landed, Pulse PSP only.** Evidence:
 "Streaks, atlas advance and the screen flash".
 
 - **`ScreenFlash_Start`'s consumer, `ScreenFlash_Update` (`0x088ef3a4`), is
-  read and drawn** (`oag_render::flash`, confidence 88).
+  read and drawn** (`oag_fx::flash`, confidence 88).
   - It is additive, a linear lerp of the two keys, and alpha times
     `clamp(1 - (d - near) / (far - near))` from the eye, re-measured every
     frame. A pending flash replaces the running one only when stronger.
   - The PPSSPP Rocket frames match it frame by frame: red `153 (1 - t)`,
     green over red `1 - t`, blue untouched, `t` stepping `(1/60) / 0.5`.
   - Kind 0 fires on a craft-hit Rocket, and kind 4 every tick a Quake runs.
-- **Streaks sample their own sprite** (`oag_render::psys::streak`, 88). Class
+- **Streaks sample their own sprite** (`oag_fx::psys::streak`, 88). Class
   6 is a wedge: `DrawStreak`'s third vertex sits by the particle,
   `0x08916ba0`. Class 7 is the capped bar, as read before.
-- **The atlas frame advances** (`oag_render::psys::frames`, 85). The frame
+- **The atlas frame advances** (`oag_fx::psys::frames`, 85). The frame
   rate is the unparsed `+0x778` channel, now
   `oag_pob::Emitter::frame_rate`.
 
@@ -148,4 +148,4 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-30: every flash kind with a caller is wired and checked live. 2026-09-24: particles draw their own `GU_TFX_MODULATE`d sprites, the sprite offsets are base-relative, and the Quake's `/ 50` is its extent co-factor. Second pass, Pulse PSP only: `ScreenFlash_Update` is read and drawn (`oag_render::flash`, matched to PPSSPP frame by frame), streaks sample their sprite as `DrawStreak`'s wedge and `DrawCappedStreak`'s bar, and the atlas frame advances. Open: the Rocket and Quake looks against the original.
+2026-09-30: every flash kind with a caller is wired and checked live. 2026-09-24: particles draw their own `GU_TFX_MODULATE`d sprites, the sprite offsets are base-relative, and the Quake's `/ 50` is its extent co-factor. Second pass, Pulse PSP only: `ScreenFlash_Update` is read and drawn (`oag_fx::flash`, matched to PPSSPP frame by frame), streaks sample their sprite as `DrawStreak`'s wedge and `DrawCappedStreak`'s bar, and the atlas frame advances. Open: the Rocket and Quake looks against the original.

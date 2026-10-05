@@ -980,7 +980,7 @@ needed:
   the hemisphere's own unscaled basis - `BombBlast_Update` never touches it
   again; its own authored particle behaviour is the entirety of its motion,
   the same as every other `Data\Psys\*.POB` effect this engine already
-  plays through `oag_render::psys::Stage`.
+  plays through `oag_fx::psys::Stage`.
 
 **Porting note, chosen rather than measured**: `WORLD_UP` above needs no
 axis swap at all - `Rocket_HitCraft`'s own `y - 2.5` drop

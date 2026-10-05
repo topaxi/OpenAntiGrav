@@ -183,7 +183,7 @@ sampled parser, with the gaps lining up exactly with F1/F3.
 
 | ID | Finding | Impact | Priority | Conf | Faithful | Effort |
 | --- | --- | --- | --- | --- | --- | --- |
-| R1 | `crates/render/src/psys.rs:749-762`: the emission loop never terminates for an `EmitterSpec` with `interval_ticks == (0, 0)`. No disc asset can produce one (`Effect::parse` clamps to >= 1) but `EmitterSpec` is a pub struct with pub fields inviting direct construction; a hand-built looping emitter hangs the frame loop. A min-1 clamp or debug_assert at the use site closes it. | Medium | P2 | 85 | no | S |
+| R1 | `crates/fx/src/psys.rs:749-762`: the emission loop never terminates for an `EmitterSpec` with `interval_ticks == (0, 0)`. No disc asset can produce one (`Effect::parse` clamps to >= 1) but `EmitterSpec` is a pub struct with pub fields inviting direct construction; a hand-built looping emitter hangs the frame loop. A min-1 clamp or debug_assert at the use site closes it. | Medium | P2 | 85 | no | S |
 | R2 | `crates/mesh/src/capture.rs:277,286,314`: out-of-range texture slots clamp to the *last* texture bind rather than slot 0, the documented white fallback - an inconsistent Model silently paints with an arbitrary texture instead of honestly white. | Low | P3 | 85 | no | S |
 | R3 | `crates/mesh/src/mesh_render/uniforms.rs:372`: `FOG_SIZE` is actually `size_of::<Scene>()` (Fog + Light, 96 bytes); the name and the "fog" labels mislead anyone extending `Scene`. Layout itself verified correct against `mesh.wgsl`. | Low | P3 | 85 | no | S |
 

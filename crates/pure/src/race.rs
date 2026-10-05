@@ -201,7 +201,7 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
 /// confidence 88, both pressings) carry Pulse's identical
 /// `half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)` term and `0.8s`
 /// arm bit for bit, so the always-on `engine_flare` billboard grows on boost
-/// exactly as Pulse's does - `oag_render::exhaust::Exhaust` already
+/// exactly as Pulse's does - `oag_fx::exhaust::Exhaust` already
 /// reproduces it, title-agnostically. Only the separate `<Team>boost.vex`
 /// plume mesh never existed.
 pub mod ships {

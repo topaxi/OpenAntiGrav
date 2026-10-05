@@ -427,7 +427,7 @@ fn resolve(table: Table, bank: &sblk::Bank, entry: &str, report: &mut Vec<String
 #[derive(Debug, Clone, Copy)]
 pub struct Inputs {
     /// `speed_field`: the craft's speed in HD's own unit, `km/h * 1.5`
-    /// ([`oag_render::exhaust::hd::SPEED_FIELD_GAIN`]).
+    /// ([`oag_fx::exhaust::hd::SPEED_FIELD_GAIN`]).
     pub speed_field: f32,
     /// The throttle, `0..=100`, for the local player only. Opponents never
     /// write channel 3.

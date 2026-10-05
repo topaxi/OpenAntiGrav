@@ -227,7 +227,7 @@ back with a twenty-line struct decoder:
   `0x1c8b` and `0x0480`, same matrix), records `0x1b0` apart from
   `0xc86880`. Every craft's world matrix has row lengths of exactly
   **0.75** - HD carries the same global craft scale
-  `oag_render::exhaust::CRAFT_ROW_SCALE` recovered on Pulse - and `+0x30`
+  `oag_fx::exhaust::CRAFT_ROW_SCALE` recovered on Pulse - and `+0x30`
   is the position.
 - **Hover height matches.** Raycasting the recorded positions against this
   project's own Talon's track (`oag-game --pose x,y,z --ticks 1

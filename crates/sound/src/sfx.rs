@@ -69,7 +69,7 @@
 //! ship-against-wall or a severity band with a suffix. The game does know which
 //! of those happened, and pairing them off the names would be a mapping
 //! invented here rather than one read off the disc - the same refusal this file
-//! already makes about `oag_render::sparks::severity`.
+//! already makes about `oag_fx::sparks::severity`.
 //!
 //! # Positional audio
 //!
@@ -132,7 +132,7 @@ const SFX_SEED: u64 = 0x0aa9_5f10_0000_5f58;
 /// The race's held voices and the generator that chooses a cue's alternate.
 ///
 /// Split from [`Banks`], which is decoded data on the race, for the same reason
-/// `oag_render::sparks` splits its pipeline from its particle state.
+/// `oag_fx::sparks` splits its pipeline from its particle state.
 pub(super) struct SfxVoices {
     /// One per grid slot, each with its own random note and its own emitter.
     ///

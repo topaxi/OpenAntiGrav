@@ -1,5 +1,5 @@
 //! `Weather`'s mist overlay: the opacity `Weather_Update` (`0x088f1e58`) eases
-//! on the cover edges and the layers [`oag_render::mist`] steps with the
+//! on the cover edges and the layers [`oag_fx::mist`] steps with the
 //! camera. See `docs/ghidra/functions/psp-pulse-usa/weather.md`, "The mist
 //! overlay".
 //!
@@ -19,8 +19,8 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_render::mist::{self, Config as Layout, Layers, Motion};
-use oag_render::psys::field::Frame;
+use oag_fx::mist::{self, Config as Layout, Layers, Motion};
+use oag_fx::psys::field::Frame;
 use oag_tables::trackstartup::Weather as Config;
 
 use super::lens::Edge;

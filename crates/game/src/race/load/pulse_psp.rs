@@ -113,7 +113,7 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
 ///
 /// Outpost 7's `WO_SNOW` plays too. It was withheld until 2026-10-04 because
 /// ours drew no flakes past its first frames while the original kept 64: the
-/// emitter sets the immortal flag `0x800`, which `oag_render::psys` did not
+/// emitter sets the immortal flag `0x800`, which `oag_fx::psys` did not
 /// honour. With it honoured, its faint speckle matches the original's A/B at
 /// the same spot. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 fn place_weather(
@@ -155,7 +155,7 @@ fn mist_texture(
     archives: &mut oag_assets::Archives,
     tex: Option<&str>,
     report: &mut Vec<String>,
-) -> Option<oag_render::exhaust::FlareTexture> {
+) -> Option<oag_fx::exhaust::FlareTexture> {
     let name = tex?;
     let blob = match archives.read_name(name) {
         Ok(blob) => blob,
@@ -172,7 +172,7 @@ fn mist_texture(
                 "mist: {name}, {}x{}, two additive screen layers under the HUD",
                 texture.width, texture.height
             ));
-            Some(oag_render::exhaust::FlareTexture {
+            Some(oag_fx::exhaust::FlareTexture {
                 width: u32::from(texture.width),
                 height: u32::from(texture.height),
                 rgba: texture.to_rgba(),

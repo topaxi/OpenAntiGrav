@@ -77,7 +77,7 @@ pub(super) const ABSORB: (&str, &str) = (OVERLAY_TEXTURE, "absorb");
 pub(super) const LEACH: (&str, &str) = (LEACH_OVERLAY_TEXTURE, "LeachBeam");
 
 /// The hull redrawn under one of the two hull-overlay textures -
-/// `oag_render::hull_overlay`, [`ABSORB`] or [`LEACH`] - or `None`, reported,
+/// `oag_fx::hull_overlay`, [`ABSORB`] or [`LEACH`] - or `None`, reported,
 /// when `wanted` is false (every title but Pulse), when the texture does not
 /// resolve, or when the hull's batches share no one scale (every PS2 hull).
 pub(super) fn overlay(
@@ -91,8 +91,8 @@ pub(super) fn overlay(
     if !wanted {
         return None;
     }
-    let projection = oag_render::hull_overlay::projection_scale(blob)
-        .zip(oag_render::hull_overlay::overlaid_meshes(hull, blob));
+    let projection = oag_fx::hull_overlay::projection_scale(blob)
+        .zip(oag_fx::hull_overlay::overlaid_meshes(hull, blob));
     let Some((scale, ships)) = projection else {
         report.push(format!(
             "{}: no one batch scale to project from, or meshes that do not map back \
@@ -119,7 +119,7 @@ pub(super) fn overlay(
         return None;
     };
     let mut texels = texture.to_rgba();
-    oag_render::hull_overlay::glow_texels(&mut texels);
+    oag_fx::hull_overlay::glow_texels(&mut texels);
     let texture = oag_mesh::mesh::ModelTexture::rgba8(
         entry.to_string(),
         u32::from(texture.width),
@@ -132,7 +132,7 @@ pub(super) fn overlay(
         hull.label,
         ships.len()
     ));
-    Some(oag_render::hull_overlay::build(
+    Some(oag_fx::hull_overlay::build(
         hull,
         scale,
         &ships,
@@ -144,7 +144,7 @@ pub(super) fn overlay(
 /// directory: `"%s\\AbsorbEffect.vex"`, the literal at `0x00782190`.
 pub const SHELL_STEM: &str = "AbsorbEffect";
 
-/// Wipeout HD's absorb shell for one team - see [`oag_render::absorb_shell`] -
+/// Wipeout HD's absorb shell for one team - see [`oag_fx::absorb_shell`] -
 /// or `None`, reported, when `wanted` is false (every title but HD), when the
 /// pair does not resolve or build, or when its material is not the program
 /// that module reproduces.
@@ -196,7 +196,7 @@ pub(super) fn shell(
         m.blend() == ADDITIVE
             && m.parameters
                 .iter()
-                .any(|p| p.hash == oag_render::absorb_shell::SHIELD_COLOUR)
+                .any(|p| p.hash == oag_fx::absorb_shell::SHIELD_COLOUR)
     };
     if materials.is_empty() || !materials.iter().all(is_shell) || model.indices.is_empty() {
         let names: Vec<&str> = materials.iter().map(|m| m.name.as_str()).collect();
@@ -211,7 +211,7 @@ pub(super) fn shell(
     model.absorb_shell = true;
     report.push(format!(
         "{name}: {} - the absorb shell, faded by ShieldColour off the absorb timer \
-         (oag_render::absorb_shell)",
+         (oag_fx::absorb_shell)",
         built.describe()
     ));
     Some(model)

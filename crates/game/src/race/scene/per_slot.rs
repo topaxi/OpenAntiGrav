@@ -21,11 +21,11 @@ pub(super) struct Build<'a> {
 impl Build<'_> {
     /// The absorb hull overlay per slot: the hull again, unshadowed, tested
     /// `LessEqual` against its own depth, through
-    /// [`oag_render::hull_overlay::BLEND`] - see `absorb_overlay`.
+    /// [`oag_fx::hull_overlay::BLEND`] - see `absorb_overlay`.
     pub(super) fn absorb_overlays(&self) -> Result<Vec<Option<Drawable>>> {
         self.drawables(
             |l| l.absorb_overlay.clone(),
-            oag_render::hull_overlay::BLEND,
+            oag_fx::hull_overlay::BLEND,
             mesh_render::Depth::Overlay,
             mesh_render::ShadowReceiver::Never,
         )
@@ -37,7 +37,7 @@ impl Build<'_> {
     pub(super) fn leach_overlays(&self) -> Result<Vec<Option<Drawable>>> {
         self.drawables(
             |l| l.leach_overlay.clone(),
-            oag_render::hull_overlay::BLEND,
+            oag_fx::hull_overlay::BLEND,
             mesh_render::Depth::Overlay,
             mesh_render::ShadowReceiver::Never,
         )

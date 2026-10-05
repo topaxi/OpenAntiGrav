@@ -120,10 +120,10 @@ cue Pulse's `ExhaustFlare_OnSpeedupPad` plays from the same branch) lands on
 code reference, unaffected by the data-in-data relocation defect - returns
 exactly one function each: `0x0886b548` (usa), `0x0886b340` (eu). Both open
 with `*(undefined4 *)(param_1 + 0x19c) = 0x3f4ccccd;` - **`0.8f`**, the exact
-bit pattern `oag_render::exhaust::BOOST_SECONDS` already carries, read off
+bit pattern `oag_fx::exhaust::BOOST_SECONDS` already carries, read off
 Pulse. So the arm, the decay and the visual term all match Pulse's own
 reading, on both pressings, and this engine's existing generic
-`oag_render::exhaust::Exhaust` (title-agnostic, wired unconditionally in
+`oag_fx::exhaust::Exhaust` (title-agnostic, wired unconditionally in
 `crates/game/src/race/pads.rs`) already reproduces Pure's boost visual
 correctly - nothing to implement, only to cite.
 

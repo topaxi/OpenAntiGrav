@@ -35,13 +35,13 @@ throws a spark. See
     round's age is under `0.1` seconds.
   - Both textured from `Data\Weapons\Textures\Cannon_bolt.mip`/
     `Cannon_muzzle_flash.mip` (`Data.wad` entries 1057/1058) through a new
-    `oag_render::weapon_quads::Pipeline`, modelled on `exhaust::Pipeline`
+    `oag_fx::weapon_quads::Pipeline`, modelled on `exhaust::Pipeline`
     and reusing its recovered additive blend
     (`Gu_BlendFunc(0, 2, 10, 0, 0xffffff)` matches exactly). Depth write is
     **on** here, unlike the exhaust flare's - read directly at both list
     builders, kept as measured.
   - The flash's per-tick random roll is generated render-side
-    (`oag_render::weapon_quads::random`, seeded from the round's pool slot
+    (`oag_fx::weapon_quads::random`, seeded from the round's pool slot
     and the simulation tick), never from `world.rng`, so drawing it moves
     no committed determinism hash.
   - Two new functions recovered and named in the same pass:
@@ -120,7 +120,7 @@ was not separately distinguishable from the dart mesh/flash in any captured
 frame.** The geometry is implemented per the recovered addresses and
 unit-tested (the two ribbons are built perpendicular, at the right
 half-width, between the right two endpoints - see
-`oag_render::weapon_quads::tests`), but every capture this pass took is from
+`oag_fx::weapon_quads::tests`), but every capture this pass took is from
 the chase camera looking almost exactly down each round's own flight
 direction, which foreshortens a streak built along that same axis to close
 to a point - an honest gap in what a screenshot can show, not a sign the
@@ -158,4 +158,4 @@ own frame.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-**2026-09-17: both hand-built quads landed.** The bolt is two crossed camera-facing ribbons between the round's last/current position, fixed white; the flash is one quad, randomly sized/rotated/faded under `0.1 s` of age, fixed white with only its **alpha** rerolled (not RGB - corrects the thread's earlier framing). Both drawn through a new `oag_render::weapon_quads::Pipeline`, random roll seeded render-side so no determinism hash moves. Confirmed on a real disc screenshot: the flash draws on a fresh round and correctly vanishes on older ones. Open: the bolt's own contribution was not distinguishable in any capture (near-head-on foreshortening, not a code defect), no frame caught the wall-hit spark itself, and a small extra particle spawn (`FUN_08945284`) in the same window is unread.
+**2026-09-17: both hand-built quads landed.** The bolt is two crossed camera-facing ribbons between the round's last/current position, fixed white; the flash is one quad, randomly sized/rotated/faded under `0.1 s` of age, fixed white with only its **alpha** rerolled (not RGB - corrects the thread's earlier framing). Both drawn through a new `oag_fx::weapon_quads::Pipeline`, random roll seeded render-side so no determinism hash moves. Confirmed on a real disc screenshot: the flash draws on a fresh round and correctly vanishes on older ones. Open: the bolt's own contribution was not distinguishable in any capture (near-head-on foreshortening, not a code defect), no frame caught the wall-hit spark itself, and a small extra particle spawn (`FUN_08945284`) in the same window is unread.

@@ -1,5 +1,5 @@
 //! The absorb hull overlay's per-frame vertex write and its draw - see
-//! `oag_render::hull_overlay` and `race::scene::absorb_overlay` - plus the
+//! `oag_fx::hull_overlay` and `race::scene::absorb_overlay` - plus the
 //! every-list draw loop it shares with [`Drawable::draw_additive`].
 
 use oag_mesh::mesh;
@@ -37,7 +37,7 @@ impl Drawable {
     ///
     /// The equation is not invented either: `mesh_render::ADDITIVE_BLEND` is
     /// the `0x200` class's own recovered equation, byte-identical to
-    /// [`oag_render::exhaust::BLEND`], and it is what the **PSP** plume
+    /// [`oag_fx::exhaust::BLEND`], and it is what the **PSP** plume
     /// already draws with - its batches carry `0x200` and
     /// `TransparentPipelines::select` routes them there. So this puts the two
     /// discs' plumes on one blend rather than giving them two.
@@ -51,7 +51,7 @@ impl Drawable {
 
     /// Draws the absorb overlay: every draw of every list through the
     /// pipelines built with this drawable's own blend, which for the overlay
-    /// is [`oag_render::hull_overlay::BLEND`] rather than the fixed additive
+    /// is [`oag_fx::hull_overlay::BLEND`] rather than the fixed additive
     /// equation, so the glow mask takes the stencil's full value.
     pub(in crate::race) fn draw_overlay(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
         self.draw_every_list(pass, &self.blend_pipeline)

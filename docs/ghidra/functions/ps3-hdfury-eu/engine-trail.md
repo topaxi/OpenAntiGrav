@@ -12,7 +12,7 @@ breathing, and the boost plume's reveal.
 [trail-ribbon.md](../../../rendering/trail-ribbon.md) the cross-title asset
 survey; both now point here for what used to be "unread".
 
-`oag_render::exhaust::hd` implements what this page measures.
+`oag_fx::exhaust::hd` implements what this page measures.
 
 ## The manager, in the executable
 
@@ -145,7 +145,7 @@ brightness 0.151, peak alpha 32/255. **There is no fill gate anywhere** - no
 part-empty ring ever exists to gate on. The trail appears by the brightness
 ramp alone while the bunched ring stretches out behind the accelerating craft.
 
-`oag_render::exhaust::hd::Tube` now reproduces this: the first push after a
+`oag_fx::exhaust::hd::Tube` now reproduces this: the first push after a
 construction or a clear seeds the whole ring with that sample, so the ring is
 always full from the first tick exactly as the live one is, and the PSP's
 0.9-second full-ring gate no longer applies to HD. What the original does to
@@ -251,7 +251,7 @@ Three things fall out, in order of how much they change:
   sampler's sRGB remap - but `REPEAT` is the only consistent reading: the
   shader's `u + TrailSpeed` exceeds 1.0 for most of the ring at rest, the
   accumulator is kept in `[0, 1)` by its own wrap on every live read, and the
-  trail streaks rather than clamping to an edge texel. `oag_render::exhaust::hd::Tube` starts its phase at
+  trail streaks rather than clamping to an edge texel. `oag_fx::exhaust::hd::Tube` starts its phase at
   `0.0` instead, which is the same thing after the first wrap and every live
   phase read on this page is in `[0, 1)`; the difference is not observable and
   is not worth a constant.
@@ -324,7 +324,7 @@ phase is applied exactly **once** to each of the two texture lookups:
 Both constants are the same `c466`/fslot-`0x4c` `TrailSpeed`, and the SPU's
 vertex `u` carries none of it. So the original's coordinates are
 `(u0 + phase)` and `(u0 + phase + noise)` - which is what
-`oag_render::exhaust::hd::Tube::vertices` produces by adding the phase to the
+`oag_fx::exhaust::hd::Tube::vertices` produces by adding the phase to the
 ring `u` once on the CPU and letting `exhaust.wgsl`'s `trail_shape` branch
 displace from there. **The implementation was already right; its stated reason
 was not.** No constant moved for this finding, and none should: what changed
@@ -376,7 +376,7 @@ to ~0.5 units on a 50-unit ribbon, uniformly along it and with no craft
 anywhere near. Why is **unread**: the likeliest causes are that the job
 smooths or resamples the ring rather than extruding each stored sample where
 it lies, or that the head sample is placed at the live nozzle rather than the
-newest recorded one. `oag_render::exhaust::hd::Tube` extrudes each sample
+newest recorded one. `oag_fx::exhaust::hd::Tube` extrudes each sample
 where it is stored, which is a stated approximation until that is read.
 
 **Confidence 88** on the negative: two pauses, eight trails, 864 rings, craft
@@ -457,7 +457,7 @@ itself (the `Trails` job's code), what `+0x11dc` and the two craft-state gates
 mean, and whether `+0x11f0` names the striking or the struck craft - the effect
 attaches to *that* craft's hull either way.
 
-**Implemented 2026-08-24**, and the split is deliberate. `oag_render::psys`
+**Implemented 2026-08-24**, and the split is deliberate. `oag_fx::psys`
 plays the disc's own `.POB` - both variants load from the HD archives, pinned
 by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
 `oag_game::race::Race::advance_trail_hits` fires it. **Nothing about the effect
@@ -609,7 +609,7 @@ decay, `Spikes Random Scale Min/Max` 0.65/0.85 the per-shape flicker range,
 XY 1.0/1.5 and Z 0.25/1.5 the flame's throttle scales, and
 `Thrust Extra Boost Scale` XY 1.4 / Z 2.0 the boost's additions.
 `crates/game/tests/hd_engine_flare_ground_truth.rs` pins
-`oag_render::exhaust::hd`'s constants against the file itself.
+`oag_fx::exhaust::hd`'s constants against the file itself.
 
 ### All 41 rows, read 2026-09-01
 
@@ -1120,7 +1120,7 @@ matched-view capture (see "Matched-view comparison" above for what that
 takes).
 
 **What actually sizes the sprite, per the renderer's own code, is a flat
-constant with no distance term at all**: `oag_render::exhaust::hd::SPRITE_RADIUS`
+constant with no distance term at all**: `oag_fx::exhaust::hd::SPRITE_RADIUS`
 (3.0, jittered ±0.5, floored at 2.0) is applied unconditionally every
 frame (`crates/game/src/race/load.rs`'s own report already says so - "its
 radius, alpha walk and texture do draw"). Nothing this page has traced in
@@ -1209,7 +1209,7 @@ either way" the naked eye read off two blown-out crops. **Implemented**:
 `model_matrix_of` already applies to the sprite's own *position* via
 `nozzle_of` - so the radius lives in the same space the position does,
 rather than one scaled and the other not.
-`oag_render::exhaust::hd::SPRITE_RADIUS`'s doc comment is corrected to say
+`oag_fx::exhaust::hd::SPRITE_RADIUS`'s doc comment is corrected to say
 so. This is not confirmed against the original's own scale factor for this
 specific field (no live or Ghidra evidence that the original divides
 `Flare Radius` by the same 0.75 rather than by something else, or nothing
@@ -1355,7 +1355,7 @@ clamp(fade, 0, 1) + Max Radius Jitter * jitter01`, with `half_width = 4 *
 half_height`. The `4.0` at `0x008b2f7c` scales the camera's row-0 axis only
 and matches the texture: `Engine_Flare_Rich.gtf` is **1024 x 256** (GTF
 header, `DATA02.PSARC`, format `0x86`, 11 mips), a 4:1 streak, so the quad
-keeps the texel aspect rather than squashing it. `oag_render::exhaust::hd`'s
+keeps the texel aspect rather than squashing it. `oag_fx::exhaust::hd`'s
 `RADIUS +- rand * JITTER, floored at MIN` is a different law (its own doc
 says the law was unread; it now is), and `exhaust::sprite` draws a square.
 Neither is changed by this docs-only session - see the handover thread.
@@ -1658,7 +1658,7 @@ ramp at `+0x108` and the trail block's brightness:
   the `* 3.6` in `EngineFlare_Update` for m/s-to-km/h and then for a gain on
   km/h; both are refuted by the direct read. The composition is the read
   3.6 times an unexplained ~1.5 already in `node[0x4c4]`; only the product
-  is load-bearing, and `oag_render::exhaust::hd::SPEED_FIELD_GAIN` carries
+  is load-bearing, and `oag_fx::exhaust::hd::SPEED_FIELD_GAIN` carries
   it as 1.5 over this engine's own km/h. `Exhaust::speed_ramp` stays
   Pulse's.
 
@@ -1672,7 +1672,7 @@ ramp at `+0x108` and the trail block's brightness:
 - `EF_Boost`: **length `b * 2.0`, no visibility branch at all** - the plume
   grows out of the nozzle and collapses back in ~10 frames rather than
   blinking. This corrects the picture the `Exhaust::plume_visible` wiring
-  drew; `oag_render::exhaust::hd::Flame` is the replacement and
+  drew; `oag_fx::exhaust::hd::Flame` is the replacement and
   `race::scene::frame::hd_flame_transform` applies it.
 - The five spike shapes flicker at `RandRange(0.65, 0.85)` each, per frame -
   read, and **not implemented** (the scene draws the flare as two groups, not
@@ -1876,7 +1876,7 @@ disassembly now agree.
 
 ## What follows for the renderer, and what stays open
 
-Implemented in `oag_render::exhaust::hd` (the tube and the flame blends),
+Implemented in `oag_fx::exhaust::hd` (the tube and the flame blends),
 `exhaust.wgsl` (facing fade, depth fade `saturate(window_z * 0.75)`, the
 blue-red mix, the baked scroll) and `oag_game::race` (per-slot state, the
 Fury flag from the team directory, the group scales). **The tube skips the
@@ -1904,7 +1904,7 @@ Open, in rough order of visible cost:
   with it. The ribbon's phase at `+0x1210` is still a *different* accumulator.
 - The `Engine_Flare_Rich.gtf` sprite flare **draws by the traced law since
   2026-09-15, and never on the viewing player's craft**:
-  `oag_render::exhaust::hd::Sprite` is `EngineFlare_RenderTick`'s own quad
+  `oag_fx::exhaust::hd::Sprite` is `EngineFlare_RenderTick`'s own quad
   (4:1, `half_height = Min + Radius * clamp(fade) + Jitter * rand01`,
   alpha `= fade`, the fade of the ninth session - a `cos^32` lobe into the
   nozzle that is whole inside 15 units and gone at 30) and
@@ -2023,7 +2023,7 @@ Open, in rough order of visible cost:
   of times, for a reason the comments had wrong.)
 - `WO_TRAIL_HITSHIP` / `WO_TRAIL_HITSHIP_RED` - **read and not drawn.** The
   trigger is the `Trails` SPU job's own ribbon-versus-craft test, which this
-  engine has no equivalent of; the effect plays through `oag_render::psys`
+  engine has no equivalent of; the effect plays through `oag_fx::psys`
   the moment one exists. See "the craft sparks" above.
 - What `+0x11dc` carries into the spawner's `f1`, what the two craft-state
   gates at `+0x5ed8`/`+0x5f42` mean, and whether `+0x11f0` names the striking

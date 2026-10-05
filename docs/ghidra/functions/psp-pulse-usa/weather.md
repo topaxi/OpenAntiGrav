@@ -3,7 +3,7 @@
 2026-10-02. Read off the decompile and checked against PPSSPP 1.20.4 (software
 renderer) on Fort Gale White and Outpost 7 White. Ported in
 `oag_game::race::scenery_fx::{weather, lens}`, `oag_vex::weather` and
-`oag_render::psys::field`. The node and trigger are in
+`oag_fx::psys::field`. The node and trigger are in
 [placed-particle-systems.md](placed-particle-systems.md).
 
 ## Corrections to earlier pages
@@ -60,7 +60,7 @@ renderer) on Fort Gale White and Outpost 7 White. Ported in
 ## The snow's draw (2026-10-04)
 
 Read off the pool draw and measured on PPSSPP 1.20.4 (software renderer), Outpost 7
-White, Venom. Ported: `oag_render::psys` now honours flag `0x800`.
+White, Venom. Ported: `oag_fx::psys` now honours flag `0x800`.
 
 - **The flakes never die.** `WO_SNOW`'s emitter authors flags `0x5001805` (the loaded
   resource reads `0x5101805`), a one-tick duration, one burst of `64`, and a
@@ -205,7 +205,7 @@ scrolls by an arbitrary amount.
 
 ### Played, and checked against the original (2026-10-04, `pulse-mist`)
 
-`oag_render::mist` (the law and the pipeline) and `oag_game::race::scenery_fx::mist`
+`oag_fx::mist` (the law and the pipeline) and `oag_game::race::scenery_fx::mist`
 (the opacity, the drift and the edges). Off the disc's own `Mist.mip` and `<Weather>`
 values; a circuit whose `Tex` does not decode draws no mist and says so in the load report.
 
@@ -240,7 +240,7 @@ and sections 1 to 6) shows none.
 **Not matched, and why.** The frames are not a matched pose while driving: the
 original's craft hit walls and its random offsets differ, so the haze's pattern differs
 frame to frame. The first sampler step and the layers' starting `t` are chosen (see
-`oag_render::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
+`oag_fx::mist`). Not compared: a climb or a dive, and Fort Gale's rain lens over
 the mist.
 
 ## Not done, and why

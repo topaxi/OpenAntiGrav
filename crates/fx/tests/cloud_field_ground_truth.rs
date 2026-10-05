@@ -11,7 +11,7 @@
 //! cull, the colour ramp's height range (every record's, culled ones too), the
 //! nested group's second field and the variant draw.
 
-use oag_render::cloud::field::{self, Baked};
+use oag_fx::cloud::field::{self, Baked};
 use oag_vex::{cloud, vex};
 
 /// One group as the original held it: seed, authored and kept counts, the
@@ -81,7 +81,7 @@ fn de_konstruct_s_cloud_fields_match_the_original_s_ram_for_its_seeds() {
     assert_eq!(groups.len(), 3, "three cloudGroups build a field");
 
     for (group, live) in groups.iter().zip(&LIVE) {
-        let mut rng = oag_render::ranrot::Ranrot::reseeded(live.seed);
+        let mut rng = oag_fx::ranrot::Ranrot::reseeded(live.seed);
         let mut records = field::scatter(&group.cubes, &mut rng);
         assert_eq!(records.len(), live.authored, "seed {}: authored", live.seed);
         for (record, want) in [

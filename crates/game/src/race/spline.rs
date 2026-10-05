@@ -293,7 +293,7 @@ impl Spline {
     /// a search radius, and the frame is the nearest of four samples a segment
     /// rather than the original's own interpolation along the segment.
     #[must_use]
-    pub fn tube_frame(&self, position: Vec3) -> Option<oag_render::beam::TubeFrame> {
+    pub fn tube_frame(&self, position: Vec3) -> Option<oag_fx::beam::TubeFrame> {
         /// `AiTrack_LocatePosition`'s first argument in `LeachBeam_KeepInTrack`.
         const LOCATE_RADIUS: f32 = 100.0;
         let (_, sample, distance) = self.nearest(position)?;
@@ -301,7 +301,7 @@ impl Spline {
             return None;
         }
         let track = Self::track_sample(sample);
-        Some(oag_render::beam::TubeFrame {
+        Some(oag_fx::beam::TubeFrame {
             pos: track.position,
             down: track.down,
             lateral: Vec3::from_array(sample.lateral),

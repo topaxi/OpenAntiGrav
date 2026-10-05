@@ -1994,7 +1994,7 @@ anything is authored:
    if the texture authors an opaque dark backing that we are drawing with the
    wrong blend mode - or sampling alpha from the palette byte rather than the
    separate alpha channel - the black is already in the file and we are
-   discarding it. `oag_render::psys` had exactly this class of bug in August,
+   discarding it. `oag_fx::psys` had exactly this class of bug in August,
    where a whitening term overrode an emitter's own colour table.
 2. **The `<Mode3D>` widget's blend state.** The countdown glyphs are geometry
    drawn through the perspective dialect; if the backing quad is drawn

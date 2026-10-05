@@ -261,7 +261,7 @@ pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 /// `BombBlast_Construct` (`0x08872078`, confidence 90) spawns it by name at
 /// the blast's own basis, alongside two `.vex` models
 /// ([`bomb_blast::BombBlastModels`]) this engine's generic
-/// [`oag_render::psys::Stage`] cannot carry. See
+/// [`oag_fx::psys::Stage`] cannot carry. See
 /// `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines`
 /// for the fourcc tag (`'BOSM'`) and the read this plays back.
 pub const BOMB_SMOKERING_EFFECT: &str = "WO_BOMB_SMOKERING";
@@ -277,7 +277,7 @@ pub const CRAFT_BLAST_DROP: f32 = 2.5;
 ///
 /// Two looping emitters, and there is no PSP counterpart - the PSP release
 /// authors no `Data\Psys` engine flare at all, which is why
-/// [`oag_render::exhaust`] draws one procedurally from the `Engine Flare`
+/// [`oag_fx::exhaust`] draws one procedurally from the `Engine Flare`
 /// locator and the behaviour measured off the PSP. Where the source *does*
 /// ship one, playing it beats approximating it, so a PS2-sourced race gets
 /// the asset and the procedural flare quad steps aside - see
@@ -288,7 +288,7 @@ pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
 ///
 /// Re-exported from where the rest of HD's exhaust constants live, because
 /// that is what they are - see [`Race::advance_trail_hits`] for the trigger.
-pub use oag_render::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
+pub use oag_fx::exhaust::hd::{TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT};
 
 /// The Quake's own travelling wave - the disc's authored effect, not a
 /// stand-in for one.
@@ -374,7 +374,7 @@ pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
 /// Wipeout HD's own drain-trip burst: what `LeachBall_Advance`'s inlined
 /// spawn (and its out-of-line, uncalled twin `LeachBeam_SpawnAbsorbEffect`,
 /// `0x00114a00`) fires every time the render-side accumulator
-/// [`oag_render::beam::hd_ball`] tracks wraps - once a drain trip.
+/// [`oag_fx::beam::hd_ball`] tracks wraps - once a drain trip.
 ///
 /// **The disc's own, with a recovered trigger, confidence 82** - the fourcc
 /// `0x4541424c` and the spawn call are both a direct decompile of

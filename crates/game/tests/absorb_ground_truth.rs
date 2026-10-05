@@ -163,7 +163,7 @@ fn hd_plays_three_mirrored_pairs_on_its_absorb_locators() {
 /// frame's `2 * dt` a tick to `2.0`, and gone after.
 ///
 /// The picture itself was compared by eye against a PPSSPP capture of a real
-/// absorb (see `oag_render::hull_overlay::DRAWN`). This proves the path on
+/// absorb (see `oag_fx::hull_overlay::DRAWN`). This proves the path on
 /// disc data: the one batch scale and the five meshes the original was seen
 /// to overlay, on Assegai, and the race's own pulse state.
 #[test]
@@ -179,10 +179,10 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
         .expect("Assegai's hull");
     let hull = oag_mesh::mesh::build(r"Data\Ships\Assegai\Ship.vex", &blob).expect("the hull");
     assert!(
-        oag_render::hull_overlay::projection_scale(&blob).is_some(),
+        oag_fx::hull_overlay::projection_scale(&blob).is_some(),
         "Assegai's mesh batches share no one scale to project from"
     );
-    let overlaid = oag_render::hull_overlay::overlaid_meshes(&hull, &blob)
+    let overlaid = oag_fx::hull_overlay::overlaid_meshes(&hull, &blob)
         .expect("the hull's node ranges map back to its file");
     // Measured on PPSSPP: shipShape, both airbrakes, self_illuminatedShape and
     // glowingShape took the overlay; canopyShape (list 1) and lodShape did not.
@@ -231,7 +231,7 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
 /// Wipeout HD's absorb shell: every team on the grid loads its own
 /// `AbsorbEffect` pair through the `hd_absorbinternal` gate, and an absorb
 /// fades it in over the one-second timer and out after, hidden once the fade
-/// is at or below `0.01` - see `oag_render::absorb_shell`.
+/// is at or below `0.01` - see `oag_fx::absorb_shell`.
 ///
 /// A loader that read the wrong stem, or a gate that stopped recognising the
 /// material, reports no shell and fails the count here rather than drawing

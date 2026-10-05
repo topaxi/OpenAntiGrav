@@ -21,7 +21,7 @@
 //! one `Ship_SetFuryTrailFlag` writes (the same flag that turns the trail
 //! red - `RaceView::hd_trail_red`), and `boost_blend` is the sum
 //! `EngineFlare_PlaceShapes` scales `EF_Main`/`EF_Boost` by - the boost snap
-//! and its `*0.8`-per-substep decay, `oag_render::exhaust::hd::Flame`. The
+//! and its `*0.8`-per-substep decay, `oag_fx::exhaust::hd::Flame`. The
 //! jitter is a `vec4` the original rewrites every `EngineFlare_Update` tick
 //! from its uniform RNG (`FUN_0028c660`), `(x, y, 0, D)`, range `0x3dcccccd`
 //! = 0.1 either side.

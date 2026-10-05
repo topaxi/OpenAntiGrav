@@ -151,7 +151,7 @@ pub struct Livery {
 /// comment for the row convention). Composing `up` with the hull's own live
 /// matrix, the way `position` already is every tick, is what lets a burst's
 /// spray direction follow a banking craft instead of assuming world up -
-/// see `oag_render::psys::System::advance`.
+/// see `oag_fx::psys::System::advance`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SparkAnchor {
     /// The locator's own position, model space.
@@ -180,7 +180,7 @@ pub struct LoadContext<'a> {
     /// unread. See [`oag_title::flare::Flare`].
     pub flare: &'a oag_title::flare::Flare,
     /// Whether to build the absorb hull overlay - Pulse's alone, and only
-    /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
+    /// while `oag_fx::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
     /// Whether to build the hull's extra pass - Pulse's alone, and only while
     /// `oag_render::shine::DRAWN` says so. See [`oag_render::shine`].

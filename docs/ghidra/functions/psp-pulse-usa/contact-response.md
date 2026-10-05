@@ -315,7 +315,7 @@ touching the track.
 ### `FUN_088418e0`'s contact loop drives three separate reactions, and one of them **is** a particle
 
 **Read in full this pass**, prompted by planning the collision-spark visual
-effect (`oag_render::sparks`) and finding no prior page said what actually
+effect (`oag_fx::sparks`) and finding no prior page said what actually
 consumes a hit. The earlier phrase above - "computes camera and audio
 amplitudes" - turns out to conflate two of these three, one of them wrongly;
 corrected here rather than silently. A later pass (below) found the actual
@@ -538,7 +538,7 @@ across a 5x speed range - which is exactly the shape a clamped, roughly
 linear-in-impulse quantity should have well below its own ceiling.
 
 **So the severity formula is now genuinely ported**, not merely re-scoped:
-`oag_render::sparks::SEVERITY_SLOPE` (`2.0`) and `SEVERITY_FLOOR` (`0.4`)
+`oag_fx::sparks::SEVERITY_SLOPE` (`2.0`) and `SEVERITY_FLOOR` (`0.4`)
 apply the recovered shape on top of the already-recovered
 `SEVERITY_SCALE` (`0.0125`) clamp, replacing what was previously an authored
 severity curve with the literal one. `COLLISION_COOLDOWN` was already ported
@@ -623,7 +623,7 @@ world units per tick, `+0x6c` a flag-gated gravity, `+0x70` a
 playback-rate multiplier on the system's `dt`; severity also multiplies
 each particle's drawn size per tick. The waiting-for-a-unit discipline
 this paragraph recorded paid off exactly as intended - the numbers went
-into `oag_render::psys` only after their consumers were read
+into `oag_fx::psys` only after their consumers were read
 and the units confirmed, and the file turned out to hold a four-emitter
 tree ([pob.md](../../../formats/pob.md#the-collision-spark-file-is-a-four-emitter-tree))
 of which these six fields describe only the root.

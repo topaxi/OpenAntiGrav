@@ -600,7 +600,7 @@ because the same question will come up again for any batch whose UVs look degene
   does not.
 
 The `TEXCOORD_U16_GAIN` question in
-[`oag-render::exhaust`](../../crates/render/src/exhaust.rs) does **not** transfer
+[`oag-fx::exhaust`](../../crates/fx/src/exhaust.rs) does **not** transfer
 to baked `.vex` data. That constant is about `Trail_DrawRibbon`, geometry the
 original generates at runtime and where the game's own code writes 16-bit
 texcoords for the GE to divide by 32768. Nothing on the disc is stored that way.

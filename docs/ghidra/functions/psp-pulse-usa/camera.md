@@ -761,7 +761,7 @@ It is **not a camera factor.** The same global is read by
 so it is a **global scale on craft-space geometry**. That is the same `0.75` this
 project had already recovered twice by other routes and named
 `oag_physics::hover::TARGET_GLOBAL_SCALE` and
-`oag_render::exhaust::CRAFT_ROW_SCALE` - the first found empirically (it was the
+`oag_fx::exhaust::CRAFT_ROW_SCALE` - the first found empirically (it was the
 missing suspension headroom), the second read off the craft's world matrix row.
 This pass gives all three an address, a single write site and a value that is an
 immediate rather than a measurement.

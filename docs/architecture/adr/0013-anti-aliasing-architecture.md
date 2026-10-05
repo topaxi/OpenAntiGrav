@@ -83,7 +83,7 @@ what genuinely conflicts.**
   and depth attachments and resolves into the caller's target at the end of
   the scene's one render pass
   (`race::Scene::render`, `oag_mesh::mesh_render::build`,
-  `oag_render::exhaust`, `oag_render::sparks`). The sample count is baked into
+  `oag_fx::exhaust`, `oag_fx::sparks`). The sample count is baked into
   every scene pipeline when it is built, so - unlike `render_scale` and
   `upscaler`, which a frame reads fresh - a change here takes effect **the
   next time a race starts**, not the frame it was chosen. This reuses the

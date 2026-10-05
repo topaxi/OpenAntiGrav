@@ -1,10 +1,10 @@
-//! Scratch probe: how `oag_render::psys` reads one `Data\Psys` effect.
+//! Scratch probe: how `oag_fx::psys` reads one `Data\Psys` effect.
 //!
 //! ```sh
 //! cargo run -q -p oag-render --example psys_effect_dump -- data/images/pulse-psp-usa.chd WO_BLUE_WELDER
 //! ```
 
-use oag_render::psys;
+use oag_fx::psys;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);

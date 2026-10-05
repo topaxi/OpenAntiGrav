@@ -114,7 +114,7 @@
 //! [`cloud_groups`] is the loader for that: every group with the cubes it
 //! collects (its whole subtree, so a nested group's cubes belong to the outer
 //! group too), each with its matrix, `kind`, `scale` and its nearest group's
-//! size attributes. The build itself is `oag_render::cloud::field`; the
+//! size attributes. The build itself is `oag_fx::cloud::field`; the
 //! reading and the live check are on the doc page.
 //!
 use crate::vex::{self, IDENTITY, Node, byte_order, multiply, node_attributes, transform};
@@ -165,7 +165,7 @@ pub struct CloudAttributes {
     pub overlap: f32,
     /// `Seed`. `0.0` when unset, which is what every shipped instance is; the
     /// original re-rolls a random seed at construction time in that case
-    /// rather than using `0` itself. `oag_render::cloud` uses a chosen seed in that case - see its doc.
+    /// rather than using `0` itself. `oag_fx::cloud` uses a chosen seed in that case - see its doc.
     pub seed: f32,
     /// `SpriteRadius`.
     pub sprite_radius: f32,

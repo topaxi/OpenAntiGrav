@@ -461,7 +461,7 @@ The consequence is worth stating plainly because it is counter-intuitive and
 easy to "fix" the wrong way: the **force** runs for the speed class's own
 `<SpeedupPads time>`, which is a fraction of `0.8` on every shipped class, so the
 flare deliberately **outlives** the shove. A pad is a short push and a long look.
-`oag_render::exhaust::BOOST_SECONDS` carries the constant and the argument.
+`oag_fx::exhaust::BOOST_SECONDS` carries the constant and the argument.
 
 Two more details a reader will otherwise trip over:
 

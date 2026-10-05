@@ -214,7 +214,7 @@ impl super::super::Scene {
             let at = model.transform_point3(Vec3::ZERO);
             // The matrix carries the craft's own render scale, so the world
             // radius is the model's through it - see
-            // `oag_render::exhaust::CRAFT_ROW_SCALE`.
+            // `oag_fx::exhaust::CRAFT_ROW_SCALE`.
             let scale = model.x_axis.truncate().length();
             let hull = self.ships[slot].radius() * scale;
             radius = radius.max((at - centre).length() + hull + FIT_MARGIN);
