@@ -3,8 +3,13 @@
 //! Each scene is dark with bright content whose swept path is known exactly,
 //! so the energy the chain deposits outside that path is a number. Method and
 //! findings: `docs/rendering/motion-blur.md`, "Ghosting".
+//!
+//! These scenes have uniform velocity per region, so the tile lookup never
+//! differs between the pre-grain and the bilinear shader: they read the same
+//! numbers on both (checked 2026-10-05). They guard the chain against leaking
+//! energy outside a surface's swept path; they do not isolate the lookup.
 
-use super::lattice_tests::{frame, gpu, Pixel, H, W};
+use super::lattice_tests::{H, Pixel, W, frame, gpu};
 
 /// A shutter's worth of travel at 0.04 uv a tick and strength 0.75, in
 /// pixels: the gather spreads a surface half of this to each side.
@@ -52,7 +57,11 @@ fn opposing(x: u32, _y: u32) -> Pixel {
 fn perpendicular(x: u32, _y: u32) -> Pixel {
     let left = x < 960;
     let colour = if left && x.abs_diff(900) < 2 { 255 } else { 0 };
-    ([colour; 3], if left { [FAST, 0.0] } else { [0.0, FAST] }, 0.5)
+    (
+        [colour; 3],
+        if left { [FAST, 0.0] } else { [0.0, FAST] },
+        0.5,
+    )
 }
 
 fn run(strength: f32) -> Option<[(&'static str, f32); 3]> {
@@ -64,9 +73,12 @@ fn run(strength: f32) -> Option<[(&'static str, f32); 3]> {
     let out_perp = frame(&device, &queue, strength, &perpendicular);
     let both = |x: u32, y: u32| swept(900)(x, y) && swept(1020)(x, y);
     Some([
-        ("still block", leak(&out_still, &still_block, &|x, y| !off_block(x, y) || off_block(x, y))),
+        ("still block", leak(&out_still, &still_block, &off_block)),
         ("opposing", leak(&out_opp, &opposing, &both)),
-        ("perpendicular", leak(&out_perp, &perpendicular, &swept(900))),
+        (
+            "perpendicular",
+            leak(&out_perp, &perpendicular, &swept(900)),
+        ),
     ])
 }
 
@@ -82,18 +94,24 @@ fn line_profile_is_reported() {
         };
         let out = frame(&device, &queue, 0.75, &line);
         for y in [400u32, 401, 402] {
-            let row: Vec<u8> = (900..1020).map(|x| out[((y * W + x) * 4) as usize]).collect();
+            let row: Vec<u8> = (900..1020)
+                .map(|x| out[((y * W + x) * 4) as usize])
+                .collect();
             eprintln!("v {v} y {y}: {row:?}");
         }
     }
 }
 
 #[test]
-fn ghost_energy_is_reported() {
+fn no_energy_lands_off_a_surfaces_swept_path() {
     let Some(found) = run(0.75) else {
         return;
     };
     for (name, value) in found {
         eprintln!("ghost {name}: {value:.4}");
+        assert!(
+            value < 0.01,
+            "{name} leaks {value} of its energy off its swept path"
+        );
     }
 }

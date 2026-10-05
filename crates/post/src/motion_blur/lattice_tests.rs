@@ -25,7 +25,7 @@ fn ramp_frame(device: &wgpu::Device, queue: &wgpu::Queue, strength: f32) -> Vec<
         // Zero at the left edge, past the cap (in pixels) from x=1300 on.
         ([value; 3], [0.0, 0.16 * (x as f32 / 1300.0)], 0.5)
     });
-    rgba.chunks_exact(4).map(|p| p[0]).collect()
+    rgba.iter().step_by(4).copied().collect()
 }
 
 /// A 1920x1080 frame of `pixel`, run through the whole chain, as RGBA bytes.
@@ -118,7 +118,9 @@ pub(super) fn frames(
     (0..count)
         .map(|_| {
             upload(&scene, &pixels);
-            render_once(device, queue, &mut blur, &scene, &velocity, &depth, strength, extent)
+            render_once(
+                device, queue, &mut blur, &scene, &velocity, &depth, strength, extent,
+            )
         })
         .collect()
 }
