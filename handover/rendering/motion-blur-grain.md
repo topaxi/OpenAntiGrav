@@ -23,3 +23,10 @@ has the measurements.
    history, or add a depth-aware 3x3 filter on the blurred region only.
 3. Cheapest alternative, measured: `TAP_SPACING_PX` 3.0 and `TAPS` 21, 3.16
    hp-RMS for about 1.4x the gather.
+
+## Ghosting follow-up (2026-10-05)
+
+Open: ghosting not reproduced. Uniform-velocity scenes read the same on old and
+new shader (see motion-blur.md). Next: a velocity-gradient scene (ramp from
+`(v,0)` to `(0,v)`, short segments not infinite lines) measuring row-to-row
+coherence of tap gaps, old vs new; then try nearest lookup with jittered taps.

@@ -636,3 +636,23 @@ for the primer capture and the interim focus mask, and
 page's own tier - the always-on buffer, the sample-0 MSAA reads, the settled
 `Rg16Float` question (multisample-renderable at 4x, pinned by a live test
 with `Rgba16Float` as the fallback), and both unsolved cases above.
+
+## Ghosting: measured, not reproduced (2026-10-05)
+
+The maintainer reported the bilinear tile lookup ("Grain, and what replaced the
+tile wobble") sometimes reads as ghosting. `motion_blur/ghost_tests.rs` builds
+scenes whose swept path is known (a still block over a fast background,
+opposing movers, perpendicular movers) and measures the energy the chain puts
+outside that path: 0.0003, 0.0000 and 0.0000 of the scene's energy.
+
+Those numbers are identical on the pre-grain shader (`bd229d257^`), because
+every region has one uniform velocity and the tile lookup then returns the same
+value either way. So the scenes guard against off-path leakage but do not
+isolate the lookup; the ghosting the maintainer sees needs a velocity
+*gradient* scene, not yet built. The line profile also shows gaps inside the
+swept band at v=0.1 (discrete tap copies) on both shaders - a tap-count
+effect, not the grain change.
+
+Tests that allocate frames: `lattice_tests::frames` once shadowed its `count`
+parameter with a byte count and rendered 8 million frames (51 GB resident);
+run new `oag-post` tests under `systemd-run ... -p MemoryMax=8G`.

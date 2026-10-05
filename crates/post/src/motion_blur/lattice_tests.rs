@@ -10,12 +10,43 @@
 use super::tests::f32_to_half;
 use super::*;
 
-const W: u32 = 1920;
-const H: u32 = 1080;
+pub(super) const W: u32 = 1920;
+pub(super) const H: u32 = 1080;
 const BLOCK: std::ops::Range<u32> = 700..740;
 
-/// Renders the ramp frame and returns its red channel, row-major.
+/// One pixel of a synthetic frame: its colour, its velocity in uv units and
+/// its depth.
+pub(super) type Pixel = ([u8; 3], [f32; 2], f32);
+
+/// The ramp frame's red channel, row-major.
 fn ramp_frame(device: &wgpu::Device, queue: &wgpu::Queue, strength: f32) -> Vec<u8> {
+    let rgba = frame(device, queue, strength, &|x, y| {
+        let value = if BLOCK.contains(&y) { 255 } else { 0 };
+        // Zero at the left edge, past the cap (in pixels) from x=1300 on.
+        ([value; 3], [0.0, 0.16 * (x as f32 / 1300.0)], 0.5)
+    });
+    rgba.iter().step_by(4).copied().collect()
+}
+
+/// A 1920x1080 frame of `pixel`, run through the whole chain, as RGBA bytes.
+pub(super) fn frame(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    strength: f32,
+    pixel: &dyn Fn(u32, u32) -> Pixel,
+) -> Vec<u8> {
+    frames(device, queue, strength, pixel, 1).remove(0)
+}
+
+/// `count` consecutive frames of the same still scene through one chain, the
+/// way a player's run feeds it, as RGBA bytes each.
+pub(super) fn frames(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    strength: f32,
+    pixel: &dyn Fn(u32, u32) -> Pixel,
+    count: usize,
+) -> Vec<Vec<u8>> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let extent = wgpu::Extent3d {
         width: W,
@@ -65,29 +96,46 @@ fn ramp_frame(device: &wgpu::Device, queue: &wgpu::Queue, strength: f32) -> Vec<
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
     );
 
-    let count = (W * H * 4) as usize;
+    let bytes = (W * H * 4) as usize;
     let (mut pixels, mut velocities, mut depths) = (
-        Vec::with_capacity(count),
-        Vec::with_capacity(count),
-        Vec::with_capacity(count),
+        Vec::with_capacity(bytes),
+        Vec::with_capacity(bytes),
+        Vec::with_capacity(bytes),
     );
     for y in 0..H {
         for x in 0..W {
-            let on = BLOCK.contains(&y);
-            let value = if on { 255 } else { 0 };
-            pixels.extend_from_slice(&[value, value, value, 255]);
-            // Zero at the left edge, past the cap (in pixels) from x=1300 on.
-            let ramp = 0.16 * (x as f32 / 1300.0);
-            velocities.extend_from_slice(&f32_to_half(0.0).to_le_bytes());
-            velocities.extend_from_slice(&f32_to_half(ramp).to_le_bytes());
-            depths.extend_from_slice(&0.5f32.to_le_bytes());
+            let (colour, velocity, depth) = pixel(x, y);
+            pixels.extend_from_slice(&[colour[0], colour[1], colour[2], 255]);
+            velocities.extend_from_slice(&f32_to_half(velocity[0]).to_le_bytes());
+            velocities.extend_from_slice(&f32_to_half(velocity[1]).to_le_bytes());
+            depths.extend_from_slice(&depth.to_le_bytes());
         }
     }
-    upload(&scene, &pixels);
     upload(&velocity, &velocities);
     upload(&depth, &depths);
 
     let mut blur = MotionBlur::new(device, format).expect("building the pipelines");
+    (0..count)
+        .map(|_| {
+            upload(&scene, &pixels);
+            render_once(
+                device, queue, &mut blur, &scene, &velocity, &depth, strength, extent,
+            )
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_once(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    blur: &mut MotionBlur,
+    scene: &wgpu::Texture,
+    velocity: &wgpu::Texture,
+    depth: &wgpu::Texture,
+    strength: f32,
+    extent: wgpu::Extent3d,
+) -> Vec<u8> {
     let mut encoder = device.create_command_encoder(&Default::default());
     blur.render(
         device,
@@ -130,12 +178,12 @@ fn ramp_frame(device: &wgpu::Device, queue: &wgpu::Queue, strength: f32) -> Vec<
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("waiting for the readback");
     let data = readback.slice(..).get_mapped_range().expect("mapping");
-    let mut red = Vec::with_capacity((W * H) as usize);
+    let mut rgba = Vec::with_capacity((W * H * 4) as usize);
     for y in 0..H {
         let row = (y * stride) as usize;
-        red.extend((0..W as usize).map(|x| data[row + x * 4]));
+        rgba.extend_from_slice(&data[row..row + (W * 4) as usize]);
     }
-    red
+    rgba
 }
 
 /// What the ramp's smear profile says about its tile lattice and its grain.
@@ -199,15 +247,21 @@ fn profile(red: &[u8]) -> Profile {
     }
 }
 
-fn measured(strength: f32) -> Option<Profile> {
+/// A device on whatever adapter this machine has, or `None` to skip.
+pub(super) fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
         return None;
     };
-    let (device, queue) =
+    Some(
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("requesting the device");
+            .expect("requesting the device"),
+    )
+}
+
+fn measured(strength: f32) -> Option<Profile> {
+    let (device, queue) = gpu()?;
     Some(profile(&ramp_frame(&device, &queue, strength)))
 }
 
