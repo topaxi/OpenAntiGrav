@@ -457,6 +457,12 @@ impl super::Scene {
     /// Writes each shown magstrip effect's two models and hands back which
     /// ship slots drew - see `mag_floor_fx` for the two matrices. No tint:
     /// the original stamps both with opaque white.
+    ///
+    /// Both play their authored animation on `seconds`: MagEffect2's `Anim
+    /// Transform` (the halo's spin) through [`Drawable::write_node_anims`] and
+    /// both meshes' texture-offset tracks (the lightning scrolls `v` about
+    /// 1.2 per second) through [`Drawable::write_anims`]. Until 2026-10-05
+    /// only the first was written, so the streaks held one texture phase.
     fn write_mag_floor_fx(
         &self,
         race: &Race,
@@ -471,6 +477,7 @@ impl super::Scene {
                 if let Some(drawable) = pool.get(slot) {
                     drawable.write(queue, view_projection, *matrix, view_projection * *matrix);
                     drawable.write_node_anims(queue, seconds);
+                    drawable.write_anims(queue, seconds);
                     active[slot] = true;
                 }
             }
