@@ -109,6 +109,30 @@ impl Race {
         }
         out
     }
+
+    /// How far the circuit's own nearest hoverable floor stands above `at`,
+    /// measured along `normal` - negative when it lies below.
+    ///
+    /// Looks a unit above and two below, which is what bounds [`oag_render::shadow::conform_to_floor`]. `None` where no floor is in that
+    /// span. The question a shadow polygon asks of the road it is laid over:
+    /// anything positive is the road in front of it.
+    #[must_use]
+    pub fn floor_above(
+        &self,
+        at: oag_core::math::Vec3,
+        normal: oag_core::math::Vec3,
+    ) -> Option<f32> {
+        let n = normal.normalize_or_zero();
+        let ray = Ray::new(at + n, -n, 3.0);
+        let mut hits = [None; MAX_HITS];
+        let found = self.sim.collision.raycast_all(ray, None, false, &mut hits);
+        hits.iter()
+            .flatten()
+            .take(found)
+            .filter(|hit| hit.surface.is_hoverable())
+            .min_by(|a, b| a.distance.total_cmp(&b.distance))
+            .map(|hit| (hit.point - at).dot(n))
+    }
 }
 
 /// The entry a team's authored shadow silhouette sits at, in the shared

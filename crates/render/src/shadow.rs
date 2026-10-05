@@ -39,14 +39,23 @@ use oag_mesh::mesh::GpuVertex;
 
 /// How far off the surface the quad is lifted, in world units.
 ///
-/// **Ours, and a fudge rather than a reading**: a quad laid exactly on the
-/// track z-fights the ribbon it is drawn over. Small against a craft (the
-/// hulls run 4-6 units long) and large against the depth buffer's resolution
-/// at race distances, which is the whole window it has to sit in.
+/// **Ours, and a fudge rather than a reading**: a shadow laid on the track
+/// z-fights the ribbon it is drawn over. Small against a craft (the hulls run
+/// 4-6 units long) and large against the depth buffer's resolution at race
+/// distances, which is the whole window it has to sit in.
+///
+/// **0.15, from 0.05 on 2026-10-05, and measured against the picture.** The
+/// road the player sees stands a little proud of the collision floor the
+/// shadow is cast onto, by different amounts along the circuit. At 0.05, in
+/// a Zone capture of Pulse's default circuit late in a lap, the shadow lost up
+/// to 70 % of its pixels on single ticks (3102 changed pixels against a steady
+/// 10-11 thousand) and was back the tick after; at 0.15 the dips are gone
+/// (10610 at worst), and 0.3 and 0.6 look the same, so this is the smallest of
+/// those tried. See `docs/rendering/shadows.md`, "The shadow blinked".
 ///
 /// Applied along the *surface normal*, not world up, so it keeps its meaning
 /// on a banked corner and inside a loop.
-pub const LIFT: f32 = 0.05;
+pub const LIFT: f32 = 0.15;
 
 /// The largest number of quads [`Pipeline`] holds: one per grid slot.
 ///
@@ -308,6 +317,64 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
         rings += 1;
     }
     rings
+}
+
+/// Lays a projected hull on the road that is actually under it, rather than on
+/// the single plane the craft's own cast found.
+///
+/// [`hull_triangles`] projects every vertex onto one plane, the plane of the
+/// one collision triangle the craft's downward ray hit. A hull is several
+/// units across and a road is not flat, so away from that triangle the plane
+/// stands off the surface, and **which** triangle the ray hit changes tick to
+/// tick as the craft crosses seams. Measured on Pulse's default circuit in
+/// Zone, a point of the polygon ended up buried under the road by up to 0.7
+/// units - against a [`LIFT`] of 0.05 - on more than a third of the ticks of
+/// a late-lap window, and by nothing on the ticks between, which is a shadow
+/// whose edge blinks.
+///
+/// `floor` answers "how far above this point, along the surface normal, is the
+/// road?". Each triangle from `first` on is split once at its edge midpoints,
+/// because a flat triangle over a concave road is buried between its own
+/// vertices however well they are placed (a fitted triangle still measured
+/// 0.12 buried at its centre), and every vertex is then moved to [`LIFT`]
+/// above the road. A point `floor` has no answer for stays where it was; how
+/// far `floor` looks is its own bound, so that a deck overhead is not mistaken
+/// for the road.
+///
+/// A shared edge's midpoint is the same point in both triangles it belongs to,
+/// so the surface it makes has no crack.
+pub fn conform_to_floor(
+    vertices: &mut Vec<GpuVertex>,
+    first: usize,
+    mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
+) {
+    let coarse: Vec<GpuVertex> = vertices.drain(first..).collect();
+    let mut place = |vertex: GpuVertex| {
+        let at = Vec3::from_array(vertex.position);
+        let normal = Vec3::from_array(vertex.normal);
+        match floor(at, normal) {
+            Some(above) => GpuVertex {
+                position: (at + normal * (above + LIFT)).to_array(),
+                ..vertex
+            },
+            None => vertex,
+        }
+    };
+    let middle = |a: &GpuVertex, b: &GpuVertex| GpuVertex {
+        position: (Vec3::from_array(a.position).midpoint(Vec3::from_array(b.position))).to_array(),
+        ..*a
+    };
+    for [a, b, c] in coarse
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|t| [&t[0], &t[1], &t[2]])
+    {
+        let (ab, bc, ca) = (middle(a, b), middle(b, c), middle(c, a));
+        for corners in [[*a, ab, ca], [ab, *b, bc], [ca, bc, *c], [ab, bc, ca]] {
+            vertices.extend(corners.map(&mut place));
+        }
+    }
 }
 
 /// Triangulates a simple polygon by ear clipping, in the plane it lies in.
