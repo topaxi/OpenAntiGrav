@@ -22,7 +22,7 @@
 //! never by the title's name, so a PSP title's rows are exactly what they
 //! measured and an HD title's are exactly what its code draws.
 
-use oag_gameplay::input::Button;
+use oag_core::buttons::Button;
 
 use crate::frontend::{Align, Draw};
 

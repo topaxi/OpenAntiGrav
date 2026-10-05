@@ -122,3 +122,53 @@ pub const ANIMATED_TEXTURES: &[(&str, f32)] = &[
     ("sl_bluestrip_glow", BLINK_V_CYCLES),
     ("sl_purplestrip_glow", BLINK_V_CYCLES),
 ];
+
+/// The V scroll rate for a decoded texture, or `None` if it does not animate.
+#[must_use]
+pub fn animated_v_cycles(label: &str) -> Option<f32> {
+    let key = label.to_ascii_lowercase();
+    // Longest match first, so `col_display7_BLEND_GLOW` is not claimed by the
+    // `col_display7_GLOW` entry through a shared prefix.
+    ANIMATED_TEXTURES
+        .iter()
+        .filter(|(name, _)| key.contains(name))
+        .max_by_key(|(name, _)| name.len())
+        .map(|&(_, cycles)| cycles)
+}
+
+/// Whether a decoded texture's name identifies its surface as the shared
+/// blink-light palette, animated by scrolling its V (row) coordinate.
+///
+/// **Confidence: 85.** Every one of the 8 playable PSP ships carries a mesh
+/// named `glowingShape` whose material resolves to the exact same shared
+/// texture, `Data\Tex\colours_flashing_GLOW.tga` - not a per-ship asset, a
+/// common one. The ship-specific mesh names first noticed on Feisar
+/// (`underbrake_flashrightShape`/`underbrake_flashleftShape`) and Triakis
+/// (`flasherShape`/`flasher1Shape`) resolve to the identical texture, which is
+/// why matching by mesh name generalised badly (each ship names its extra
+/// copies of this light differently, or not at all) while matching by the
+/// texture it actually paints generalises to all of them.
+///
+/// The texture's rows turned out to be the animation itself - see
+/// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
+/// axis", for the full survey and the capture that confirmed it
+/// (`crates/render/tests/blink_lights_ground_truth.rs` checks the texture
+/// match against every real ship).
+///
+/// Matching on the texture rather than the mesh name also means a mesh with
+/// more than one material - Feisar's `self_illuminatedShape` has one batch on
+/// this texture and another on the ship's own steady-lit skin - is judged
+/// batch by batch instead of being wrongly all-or-nothing.
+///
+/// Kept as its own predicate, rather than folded into [`animated_v_cycles`],
+/// because the ship claim is evidenced far more strongly than any track entry:
+/// this one is worth naming and citing separately even though the table would
+/// match the same label. `blink_lights_ground_truth.rs` asserts it against every
+/// real ship.
+#[must_use]
+pub fn is_blink_light_texture(label: &str) -> bool {
+    label.to_ascii_lowercase().contains("flashing_glow")
+}
+
+#[cfg(test)]
+mod blink_tests;

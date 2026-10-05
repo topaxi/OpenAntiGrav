@@ -29,7 +29,6 @@ serde.workspace = true
 oag-hd.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true
-oag-testdata.workspace = true
 # The A/V sync test drives the real front-end player off the audio playhead.
 oag-ui.workspace = true
 

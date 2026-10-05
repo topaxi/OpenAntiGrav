@@ -34,10 +34,6 @@ clap.workspace = true
 # `oag-tools` still may not depend on `oag-hd`/`oag-title` at build time, and
 # `just check-deps` only walks the non-dev graph.
 oag-hd.workspace = true
-oag-title.workspace = true
-# `examples/campaign_font_probe.rs` only - same reasoning as the pair above,
-# for Pulse's own three campaign-panel faces instead of HD's buttons atlas.
-oag-pulse.workspace = true
 
 [lints]
 workspace = true

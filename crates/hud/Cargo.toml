@@ -8,7 +8,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-oag-core.workspace = true
 oag-display.workspace = true
 oag-hd.workspace = true
 oag-physics.workspace = true

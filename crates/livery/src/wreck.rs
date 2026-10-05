@@ -8,7 +8,7 @@
 //!
 //! **No extra pass.** The hull's meshes carry `0x2000` in their flag word and
 //! the wreck's do not (`0x1821` on Assegai's, against the hull's `0x3001`), so
-//! [`oag_render::shine::build`] finds no batch on any of the eight teams and
+//! `oag_render::shine::build` finds no batch on any of the eight teams and
 //! nothing here builds one.
 
 use super::*;

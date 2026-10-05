@@ -25,3 +25,12 @@ table") and 317 glow-layer and 19 plain-scroll materials reach the existing
    2048 as well.
 2. Give `scrollingalpha` and `basic_uv_scroll` a V track from `V_Offset` and
    `VSpeed` once HD's meaning is checked on a PS3 capture.
+
+## 2026-10-05, `transparent-floors`: Omega and 2048 transparency
+
+Omega (header `+0x22`) and 2048 (`+0x12`) author HD's state word; blended and alpha-tested draws now leave the
+opaque list (see `docs/formats/rcsmaterial.md`, "Omega and 2048 draw their see-through materials off the state
+word"). **Open:** where Omega's per-material blend equation lives (header has no factor pair; alpha-over is
+chosen, additive materials draw dim); read the GCN pixel programs for the real alpha source; use the priority
+bits (9 to 11) for draw order; Omega's `etched_glass_tech` sheen and `Transparency` param; HD retune not done
+(no HD code touched, no comparison taken).

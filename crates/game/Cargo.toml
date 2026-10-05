@@ -19,7 +19,6 @@ path = "src/main.rs"
 [dependencies]
 oag-display.workspace = true
 oag-rcs.workspace = true
-oag-pob.workspace = true
 oag-vex.workspace = true
 oag-texture.workspace = true
 oag-tables.workspace = true
@@ -57,7 +56,6 @@ oag-formats.workspace = true
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.
 oag-video = { workspace = true, features = ["av1"] }
 oag-gameplay.workspace = true
-oag-weapons.workspace = true
 oag-hud.workspace = true
 oag-input.workspace = true
 oag-livery.workspace = true
@@ -67,7 +65,6 @@ oag-raceplay.workspace = true
 oag-source.workspace = true
 # Recording a run and racing its ghost - see `oag_raceplay::replay` and ADR-0055.
 oag-replay.workspace = true
-oag-fx.workspace = true
 oag-render.workspace = true
 oag-post.workspace = true
 oag-present.workspace = true
@@ -96,7 +93,6 @@ pollster.workspace = true
 toml.workspace = true
 dirs = "7"
 serde.workspace = true
-thiserror.workspace = true
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch
@@ -124,3 +120,6 @@ workspace = true
 # overlay's own reading lives in `oag-present`.
 memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
 oag-testdata.workspace = true
+oag-fx.workspace = true
+oag-pob.workspace = true
+oag-weapons.workspace = true

@@ -8,7 +8,7 @@
 //! gate.
 
 use super::*;
-use oag_gameplay::input::Button;
+use oag_core::buttons::Button;
 
 /// The shape of the real `Language Selection` and `LogoFMV` screens, cut
 /// down to what this module reads. Attribute spellings, the `FEGlobals->`
