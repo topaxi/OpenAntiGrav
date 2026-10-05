@@ -367,3 +367,24 @@ fn a_span_with_no_terminator_is_played_whole() {
     data.push(0x09);
     assert_eq!(adpcm_played(&data).len(), data.len());
 }
+
+#[test]
+fn a_tail_of_at_most_one_block_is_let_through_and_a_longer_one_is_not() {
+    let mut data = bank(1, 1, 1, 2, "x");
+    data.extend_from_slice(&[0; TAIL_SLACK]);
+    assert!(Bank::parse(&data).is_ok());
+    data.push(0);
+    assert_eq!(Bank::parse(&data), Err(Error::BadSections));
+}
+
+#[test]
+fn the_name_hash_is_fnv_one_seeded_with_zero() {
+    use super::cue::name_hash;
+    assert_eq!(name_hash(""), 0);
+    assert_eq!(name_hash("~n8"), 0x8f38_03e4);
+    assert_eq!(name_hash("~jet01_02"), 0x700e_f0f3);
+    assert_eq!(name_hash("ABSORB"), 0x49de_bc6f);
+    // The last byte is xored in after the multiply, so names that differ only
+    // there differ by the xor of those bytes: `~n8` against `~n9`.
+    assert_eq!(name_hash("~n9") ^ name_hash("~n8"), b'9' as u32 ^ b'8' as u32);
+}

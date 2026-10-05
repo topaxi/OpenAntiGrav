@@ -35,12 +35,22 @@ use crate::coverage::Coverage;
 /// The first four bytes: `XFDX`.
 pub const MAGIC: [u8; 4] = *b"XFDX";
 
-/// The second word, big-endian: target platform `2`, then file version `0x060000`.
+/// The second word of a PS3 file, big-endian: target platform `2`, then file
+/// version `0x060000`.
 ///
 /// The game's loader tests `word & 0x00ffffff == 0x060000` (failing it prints
 /// "Incorrect Crossfader file version") and `word >> 24 == 2` (failing it
 /// prints "Incorrect target platform") separately.
 pub const VERSION_WORD: u32 = 0x0206_0000;
+
+/// The second word of a Vita file, **little-endian**: target platform `0`, the
+/// same file version `0x060000`. Read in the file's own order the word is
+/// `0x00060000`; the bytes on disc are `00 00 06 00`.
+///
+/// Wipeout 2048's 23 tables are the only files that carry it, and the whole
+/// file is little-endian: the one thing that differs from HD's layout besides
+/// this word is a fifth channel.
+pub const VERSION_WORD_VITA: u32 = 0x0006_0000;
 
 /// Bytes in the fixed header.
 pub const HEADER_LEN: usize = 0x1c;
@@ -137,6 +147,7 @@ impl std::error::Error for Error {}
 #[derive(Debug, Clone)]
 pub struct Xfx<'a> {
     data: &'a [u8],
+    order: ByteOrder,
     channels: Vec<Channel<'a>>,
     layers: Vec<Layer<'a>>,
 }
@@ -148,6 +159,7 @@ pub struct Xfx<'a> {
 /// sits in, and a rate of zero means no smoothing in that band.
 #[derive(Debug, Clone, Copy)]
 pub struct Channel<'a> {
+    order: ByteOrder,
     raw: &'a [u8],
     triggers: &'a [u8],
 }
@@ -155,6 +167,7 @@ pub struct Channel<'a> {
 /// One layer: a named sound whose gain and pitch follow a channel.
 #[derive(Debug, Clone, Copy)]
 pub struct Layer<'a> {
+    order: ByteOrder,
     raw: &'a [u8],
     gain: &'a [u8],
     pitch: &'a [u8],
@@ -169,17 +182,20 @@ impl<'a> Xfx<'a> {
     /// a record runs off the end of `data`, when a layer is of an unread type,
     /// or when a layer names a channel the table lacks.
     pub fn parse(data: &'a [u8]) -> Result<Self, Error> {
-        let order = ByteOrder::Big;
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
         }
         if data[..4] != MAGIC {
             return Err(Error::NotXfdx);
         }
-        let word = order.u32(data, 4);
-        if word != VERSION_WORD {
+        let word = ByteOrder::Big.u32(data, 4);
+        let order = if word == VERSION_WORD {
+            ByteOrder::Big
+        } else if ByteOrder::Little.u32(data, 4) == VERSION_WORD_VITA {
+            ByteOrder::Little
+        } else {
             return Err(Error::UnsupportedVersion { word });
-        }
+        };
         if order.u32(data, 8) != 0 {
             return Err(Error::AlreadyRelocated);
         }
@@ -202,7 +218,11 @@ impl<'a> Xfx<'a> {
             let triggers = data
                 .get(trigger_at..trigger_at + trigger_count * TRIGGER_LEN)
                 .ok_or(Error::Truncated { what: "triggers" })?;
-            channels.push(Channel { raw, triggers });
+            channels.push(Channel {
+                order,
+                raw,
+                triggers,
+            });
         }
 
         let pointers = data
@@ -231,13 +251,25 @@ impl<'a> Xfx<'a> {
             };
             let gain = curve(0x1c, "gain curve")?;
             let pitch = curve(0x20, "pitch curve")?;
-            layers.push(Layer { raw, gain, pitch });
+            layers.push(Layer {
+                order,
+                raw,
+                gain,
+                pitch,
+            });
         }
         Ok(Self {
             data,
+            order,
             channels,
             layers,
         })
+    }
+
+    /// The byte order the file is in: big on PS3, little on the Vita.
+    #[must_use]
+    pub fn byte_order(&self) -> ByteOrder {
+        self.order
     }
 
     /// The input channels, in file order.
@@ -301,7 +333,7 @@ impl<'a> Xfx<'a> {
         for layer in &self.layers {
             coverage.claim(at(layer.raw), LAYER_LEN, "layer");
         }
-        let table = ByteOrder::Big.u32(self.data, 0x18) as usize;
+        let table = self.order.u32(self.data, 0x18) as usize;
         coverage.claim(table, self.layers.len() * 4, "layer pointer table");
         coverage
     }
@@ -315,7 +347,7 @@ impl<'a> Channel<'a> {
     /// (`0x00313d10`).
     #[must_use]
     pub fn band_edges(&self) -> [u16; 4] {
-        std::array::from_fn(|i| ByteOrder::Big.u16(self.raw, i * 2))
+        std::array::from_fn(|i| self.order.u16(self.raw, i * 2))
     }
 
     /// Per-band rates for a value that is rising, `16.16` counts per millisecond.
@@ -323,26 +355,26 @@ impl<'a> Channel<'a> {
     /// Zero means the value snaps to its target in that band.
     #[must_use]
     pub fn rise_rates(&self) -> [i32; 4] {
-        std::array::from_fn(|i| ByteOrder::Big.u32(self.raw, 0x08 + i * 4) as i32)
+        std::array::from_fn(|i| self.order.u32(self.raw, 0x08 + i * 4) as i32)
     }
 
     /// Per-band rates for a value that is falling or holding, same unit.
     #[must_use]
     pub fn fall_rates(&self) -> [i32; 4] {
-        std::array::from_fn(|i| ByteOrder::Big.u32(self.raw, 0x18 + i * 4) as i32)
+        std::array::from_fn(|i| self.order.u32(self.raw, 0x18 + i * 4) as i32)
     }
 
     /// The multiplier `XFadeSystem_SetInput` (`0x00314618`) applies to a value
     /// written to this channel, `16.16`.
     #[must_use]
     pub fn input_scale(&self) -> i32 {
-        ByteOrder::Big.u32(self.raw, 0x50) as i32
+        self.order.u32(self.raw, 0x50) as i32
     }
 
     /// The bias added after the multiply, in whole counts (shifted up `16`).
     #[must_use]
     pub fn input_bias(&self) -> u16 {
-        ByteOrder::Big.u16(self.raw, 0x54)
+        self.order.u16(self.raw, 0x54)
     }
 
     /// The raw `0x60`-byte record, for fields this reader does not name.
@@ -392,29 +424,51 @@ impl<'a> Layer<'a> {
     /// The flag word at `+0x18`; bit `0x1000` is tested by the layer update.
     #[must_use]
     pub fn flags(&self) -> u32 {
-        ByteOrder::Big.u32(self.raw, 0x18)
+        self.order.u32(self.raw, 0x18)
+    }
+
+    /// The cue index at `+0x18` (a `u16`), which names the sound when the name
+    /// field is empty.
+    ///
+    /// `Crossfader` start (`FUN_8125d4b6` on the Vita build) plays by name when
+    /// the name's first byte is set and by this index when it is not, so the
+    /// `*2048.xfx` files, whose names are all empty, address their bank by
+    /// index alone. On HD's and the older Vita files the high half of
+    /// [`Self::flags`] is zero here.
+    #[must_use]
+    pub fn cue_index(&self) -> u16 {
+        self.order.u16(self.raw, 0x18)
+    }
+
+    /// The element a kind-2 layer modulates (`+0x12`, a signed byte).
+    ///
+    /// A kind-2 layer plays no sound: the update writes its gain and pitch into
+    /// the slots of the layer it links to.
+    #[must_use]
+    pub fn link(&self) -> i8 {
+        self.raw[0x12] as i8
     }
 
     /// The gain curve: `0x400` is unity.
     pub fn gain(&self) -> impl Iterator<Item = i16> + 'a {
-        curve(self.gain)
+        curve(self.order, self.gain)
     }
 
     /// The pitch curve: `0x200` is neutral.
     pub fn pitch(&self) -> impl Iterator<Item = i16> + 'a {
-        curve(self.pitch)
+        curve(self.order, self.pitch)
     }
 
     /// The gain at channel value `x`, clamped to `0..=511`.
     #[must_use]
     pub fn gain_at(&self, x: usize) -> i16 {
-        ByteOrder::Big.i16(self.gain, x.min(CURVE_LEN - 1) * 2)
+        self.order.i16(self.gain, x.min(CURVE_LEN - 1) * 2)
     }
 
     /// The pitch value at channel value `x`, clamped to `0..=511`.
     #[must_use]
     pub fn pitch_at(&self, x: usize) -> i16 {
-        ByteOrder::Big.i16(self.pitch, x.min(CURVE_LEN - 1) * 2)
+        self.order.i16(self.pitch, x.min(CURVE_LEN - 1) * 2)
     }
 
     /// The raw `0x830`-byte record.
@@ -436,8 +490,8 @@ impl<'a> Layer<'a> {
     }
 }
 
-fn curve(bytes: &[u8]) -> impl Iterator<Item = i16> + '_ {
-    (0..bytes.len() / 2).map(|n| ByteOrder::Big.i16(bytes, n * 2))
+fn curve(order: ByteOrder, bytes: &[u8]) -> impl Iterator<Item = i16> + '_ {
+    (0..bytes.len() / 2).map(move |n| order.i16(bytes, n * 2))
 }
 
 #[cfg(test)]

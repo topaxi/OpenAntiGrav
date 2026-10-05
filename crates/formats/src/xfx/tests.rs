@@ -8,14 +8,44 @@ fn put16(out: &mut [u8], at: usize, v: u16) {
     out[at..at + 2].copy_from_slice(&v.to_be_bytes());
 }
 
-/// One channel with `triggers` triggers and one layer on it.
+/// One channel with `triggers` triggers and one layer on it, big-endian (PS3).
 fn table(triggers: usize) -> Vec<u8> {
+    table_in(ByteOrder::Big, triggers)
+}
+
+/// The same table in the Vita's byte order, with its own version word.
+fn vita_table(triggers: usize) -> Vec<u8> {
+    table_in(ByteOrder::Little, triggers)
+}
+
+fn table_in(order: ByteOrder, triggers: usize) -> Vec<u8> {
+    let big = order == ByteOrder::Big;
+    let put32 = |out: &mut [u8], at: usize, v: u32| {
+        let bytes = if big {
+            v.to_be_bytes()
+        } else {
+            v.to_le_bytes()
+        };
+        out[at..at + 4].copy_from_slice(&bytes);
+    };
+    let put16 = |out: &mut [u8], at: usize, v: u16| {
+        let bytes = if big {
+            v.to_be_bytes()
+        } else {
+            v.to_le_bytes()
+        };
+        out[at..at + 2].copy_from_slice(&bytes);
+    };
     let trigger_at = HEADER_LEN + CHANNEL_LEN;
     let layer_at = trigger_at + triggers * TRIGGER_LEN;
     let table_at = layer_at + LAYER_LEN;
     let mut out = vec![0u8; table_at + 4];
     out[..4].copy_from_slice(&MAGIC);
-    put32(&mut out, 4, VERSION_WORD);
+    put32(
+        &mut out,
+        4,
+        if big { VERSION_WORD } else { VERSION_WORD_VITA },
+    );
     put32(&mut out, 0x0c, 1);
     put32(&mut out, 0x10, 1);
     put32(&mut out, 0x14, HEADER_LEN as u32);
@@ -134,4 +164,44 @@ fn a_truncated_file_is_an_error_not_a_panic() {
     for cut in [0, 3, HEADER_LEN, HEADER_LEN + 10, data.len() - 1] {
         assert!(Xfx::parse(&data[..cut]).is_err(), "cut at {cut}");
     }
+}
+
+#[test]
+fn a_vita_table_reads_in_its_own_byte_order_and_matches_the_ps3_one() {
+    let (be, le) = (table(2), vita_table(2));
+    assert_ne!(be, le);
+    let (be, le) = (Xfx::parse(&be).unwrap(), Xfx::parse(&le).unwrap());
+    assert_eq!(be.byte_order(), ByteOrder::Big);
+    assert_eq!(le.byte_order(), ByteOrder::Little);
+    assert_eq!(le.accounted_bytes(), le.bytes().len());
+    assert_eq!(le.channels()[0].band_edges(), be.channels()[0].band_edges());
+    assert_eq!(le.channels()[0].rise_rates(), be.channels()[0].rise_rates());
+    assert_eq!(le.channels()[0].trigger_count(), 2);
+    let (a, b) = (&le.layers()[0], &be.layers()[0]);
+    assert_eq!(a.name(), "~jet1");
+    assert_eq!(a.gain().collect::<Vec<_>>(), b.gain().collect::<Vec<_>>());
+    assert_eq!(a.pitch_at(3), 997);
+}
+
+#[test]
+fn a_layer_with_no_name_is_addressed_by_its_cue_index() {
+    let layer_at = HEADER_LEN + CHANNEL_LEN;
+    let mut data = vita_table(0);
+    data[layer_at + 1..layer_at + 6].fill(0);
+    data[layer_at + 0x18..layer_at + 0x1a].copy_from_slice(&0x41u16.to_le_bytes());
+    data[layer_at + 0x12] = 0xff;
+    let layer = Xfx::parse(&data).unwrap().layers()[0];
+    assert_eq!(layer.name(), "");
+    assert_eq!(layer.cue_index(), 0x41);
+    assert_eq!(layer.link(), -1);
+}
+
+#[test]
+fn a_word_that_is_neither_platforms_version_is_refused() {
+    let mut data = vita_table(0);
+    data[4..8].copy_from_slice(&0x0106_0000u32.to_le_bytes());
+    assert!(matches!(
+        Xfx::parse(&data),
+        Err(Error::UnsupportedVersion { .. })
+    ));
 }
