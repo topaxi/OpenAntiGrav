@@ -4,10 +4,10 @@
 //! In the library rather than the session so the live mouse path and a
 //! disc-backed test build the same targets: a hex is hit where its hexagon is
 //! drawn, which only the decoded pixels say (see
-//! [`oag_ui::campaign::pointer`]'s "Not the sprite's own size").
+//! [`oag_ui_screens::campaign::pointer`]'s "Not the sprite's own size").
 
-use oag_ui::campaign::pointer::Target;
-use oag_ui::campaign::{CellSelection, GridSelection, Layout, pointer};
+use oag_ui_screens::campaign::pointer::Target;
+use oag_ui_screens::campaign::{CellSelection, GridSelection, Layout, pointer};
 
 use crate::sprite::Sheet;
 

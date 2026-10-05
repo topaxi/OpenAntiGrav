@@ -63,7 +63,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # could reach a hash. Narrowing the list is a separate, argued change.
 SCANNED_CRATES = (
     "core", "physics", "weapons", "gameplay", "ai", "race", "formats", "video", "tables",
-    "texture", "vex", "pob", "rcs", "display", "ui", "replay",
+    "texture", "vex", "pob", "rcs", "display", "ui", "ui-screens", "replay",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is

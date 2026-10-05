@@ -1,6 +1,6 @@
 //! The Race Campaign's screens, over the menu stage - the same shape
 //! [`crate::picker_stage`] holds the race box's two in. See
-//! `oag_ui::campaign` for the model and the drawing, and
+//! `oag_ui_screens::campaign` for the model and the drawing, and
 //! `crate::session::campaign` for the flow that opens and closes one.
 //!
 //! **HD/Fury adds a third screen ahead of the other two**: `Campaign
@@ -13,7 +13,7 @@
 //! section.
 
 use oag_tables::race_campaign;
-use oag_ui::campaign::selection::{Campaign, CampaignSelection};
+use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 
 use oag_game::unlock::{campaign_medal_of, to_campaign_medal};
 
@@ -33,14 +33,14 @@ fn to_campaign_difficulty(difficulty: oag_game::records::Difficulty) -> race_cam
 pub(crate) enum Screen {
     /// **HD only** - see the module doc. Never built for any other title.
     Selection(CampaignSelection),
-    Grid(oag_ui::campaign::GridSelection),
+    Grid(oag_ui_screens::campaign::GridSelection),
     /// `which` is the absolute [`CampaignStage::grids`] index the player
     /// drilled into - what `Event::Back` on `Cell Selection` returns `Grid
     /// Selection` to. Absolute, not relative to
     /// [`CampaignStage::grid_range`], so `CampaignStage::grids().get(which)`
     /// always works regardless of which campaign (if any) is open.
     Cell {
-        model: oag_ui::campaign::CellSelection,
+        model: oag_ui_screens::campaign::CellSelection,
         which: usize,
     },
 }
@@ -74,7 +74,7 @@ pub(crate) struct CellCursor(Option<(u32, u32)>);
 impl CellCursor {
     /// Records `model`'s selected cell's slot as the cursor. A cell whose
     /// name carries no `(x, y)` leaves the slot as it was.
-    pub(crate) fn remember(&mut self, model: &oag_ui::campaign::CellSelection) {
+    pub(crate) fn remember(&mut self, model: &oag_ui_screens::campaign::CellSelection) {
         if let Some(slot) = model.selected().and_then(|cell| cell.grid_coords()) {
             self.0 = Some(slot);
         }
@@ -83,7 +83,7 @@ impl CellCursor {
     /// Moves `model`'s cursor to the cell at the remembered slot, when this
     /// grid has one and it shows no lock glyph; otherwise a no-op, which
     /// keeps `CellSelection::new`'s first-unlocked default.
-    pub(crate) fn restore(&self, model: &mut oag_ui::campaign::CellSelection) {
+    pub(crate) fn restore(&self, model: &mut oag_ui_screens::campaign::CellSelection) {
         let Some(slot) = self.0 else {
             return;
         };
@@ -113,13 +113,13 @@ impl CellCursor {
 /// open is cheaper than reopening the disc archive on every confirm.
 pub(crate) struct CampaignStage {
     grids: Vec<race_campaign::Grid>,
-    grid_layout: oag_ui::campaign::Layout,
-    cell_layout: oag_ui::campaign::Layout,
+    grid_layout: oag_ui_screens::campaign::Layout,
+    cell_layout: oag_ui_screens::campaign::Layout,
     /// **HD only**, both `Some` or both `None` together - see
     /// `oag_game::campaign::Campaign`'s own field docs for why they can be
     /// absent even on an HD source.
-    selection_layout: Option<oag_ui::campaign::Layout>,
-    grid_layout_fury: Option<oag_ui::campaign::Layout>,
+    selection_layout: Option<oag_ui_screens::campaign::Layout>,
+    grid_layout_fury: Option<oag_ui_screens::campaign::Layout>,
     /// Which slice of [`Self::grids`] the current [`Screen::Grid`]/
     /// [`Screen::Cell`] pages - `0..grids.len()` (every grid) on every title
     /// but HD once a campaign is chosen, when it narrows to that campaign's
@@ -140,14 +140,14 @@ pub(crate) struct CampaignStage {
     /// static (non-scrolling) panel while `CellSelection::help_open`, per
     /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
     /// authored `Viewport`/`Animation` scroll timeline.
-    cell_help: Option<oag_ui::campaign::Layout>,
+    cell_help: Option<oag_ui_screens::campaign::Layout>,
     /// The front-end root's own `Confirm`/`Back` legend - `None` on a
     /// source whose `Skin.xml` this pass could not read at all (logged when
     /// that happens, see `oag_game::campaign::read_footer`).
-    nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// The front-end root's own scrolling tip ticker layout - content is
     /// supplied per frame by [`Self::ticker_tips`], not carried here.
-    ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// Seconds since this campaign screen opened, advanced by
     /// [`Self::tick_ticker`] - the ticker's own clock. Never reset between
     /// `Grid Selection` and `Cell Selection`, unlike `crate::marquee::Timer`:
@@ -175,10 +175,10 @@ pub(crate) struct CampaignStage {
     /// `crate::main::menu_stage::MenuStage::render` and
     /// `crate::main::session::pointer::campaign_pointer` dispatch on to
     /// pick between Pulse's draw/pointer functions and
-    /// [`oag_ui::campaign::hd`]'s own, since both screens share one name.
+    /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
     title: String,
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
-    /// `oag_ui::campaign::draw::track_line`'s own doc), so this is
+    /// `oag_ui_screens::campaign::draw::track_line`'s own doc), so this is
     /// `CircuitNames::default()` on every other title and costs nothing to
     /// carry. `crate::boot::Shell::circuit_names`, read once when the
     /// campaign opens.
@@ -204,13 +204,13 @@ impl CampaignStage {
     )]
     pub(crate) fn new(
         grids: Vec<race_campaign::Grid>,
-        grid_layout: oag_ui::campaign::Layout,
-        cell_layout: oag_ui::campaign::Layout,
-        selection_layout: Option<oag_ui::campaign::Layout>,
-        grid_layout_fury: Option<oag_ui::campaign::Layout>,
-        cell_help: Option<oag_ui::campaign::Layout>,
-        nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
-        ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+        grid_layout: oag_ui_screens::campaign::Layout,
+        cell_layout: oag_ui_screens::campaign::Layout,
+        selection_layout: Option<oag_ui_screens::campaign::Layout>,
+        grid_layout_fury: Option<oag_ui_screens::campaign::Layout>,
+        cell_help: Option<oag_ui_screens::campaign::Layout>,
+        nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
+        ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
         strings: oag_ui::language::StringTable,
         sprites: oag_game::sprite::Sheet,
         title: String,
@@ -229,7 +229,7 @@ impl CampaignStage {
         let screen = if selection_layout.is_some() && grid_layout_fury.is_some() {
             Screen::Selection(CampaignSelection::new())
         } else {
-            let model = oag_ui::campaign::GridSelection::new(
+            let model = oag_ui_screens::campaign::GridSelection::new(
                 grids
                     .iter()
                     .map(|grid| Self::grid_summary(grid, &title, &records))
@@ -298,12 +298,12 @@ impl CampaignStage {
 
     /// The `Confirm`/`Back` legend's own draw list, or empty when this
     /// source's `Skin.xml` carried none - see
-    /// `oag_ui::campaign::footer::NavigationLegend::draw`, and [`Self::notice`]
+    /// `oag_ui_screens::campaign::footer::NavigationLegend::draw`, and [`Self::notice`]
     /// when there is one.
     #[must_use]
     pub(crate) fn nav_legend_draw(
         &self,
-        faces: &oag_ui::picker::FaceScales,
+        faces: &oag_ui_screens::picker::FaceScales,
         measure: &dyn Fn(&str) -> f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         let Some(legend) = self.nav_legend.as_ref() else {
@@ -321,14 +321,14 @@ impl CampaignStage {
     /// The ticker's own draw at its current clock - `None` when this source
     /// authors no ticker at all, nothing is honestly known to rotate
     /// through yet ([`Self::ticker_tips`]), or the clock is between two
-    /// tips (see `oag_ui::campaign::footer::ticker_draw`'s own doc).
+    /// tips (see `oag_ui_screens::campaign::footer::ticker_draw`'s own doc).
     #[must_use]
     pub(crate) fn ticker_draw(
         &self,
-        faces: &oag_ui::picker::FaceScales,
+        faces: &oag_ui_screens::picker::FaceScales,
         measure: &dyn Fn(&str) -> f32,
     ) -> Option<oag_ui::frontend::Draw> {
-        oag_ui::campaign::footer::ticker_draw(
+        oag_ui_screens::campaign::footer::ticker_draw(
             self.ticker.as_ref()?,
             self.ticker_elapsed,
             &self.ticker_tips(),
@@ -376,7 +376,7 @@ impl CampaignStage {
     }
 
     #[must_use]
-    pub(crate) fn selection_layout(&self) -> Option<&oag_ui::campaign::Layout> {
+    pub(crate) fn selection_layout(&self) -> Option<&oag_ui_screens::campaign::Layout> {
         self.selection_layout.as_ref()
     }
 
@@ -389,8 +389,8 @@ impl CampaignStage {
         grid: &race_campaign::Grid,
         title: &str,
         records: &oag_game::records::Store,
-    ) -> oag_ui::campaign::GridSummary {
-        oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &|cell_name| {
+    ) -> oag_ui_screens::campaign::GridSummary {
+        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(grid, &|cell_name| {
             records
                 .campaign_medal(title, cell_name)?
                 .best_medal
@@ -485,7 +485,7 @@ impl CampaignStage {
     /// itself never reads this) and "the base `Wipeout HD` campaign was
     /// chosen".
     #[must_use]
-    pub(crate) fn grid_layout(&self) -> &oag_ui::campaign::Layout {
+    pub(crate) fn grid_layout(&self) -> &oag_ui_screens::campaign::Layout {
         if self.active_campaign == Some(Campaign::Fury) {
             self.grid_layout_fury.as_ref().unwrap_or(&self.grid_layout)
         } else {
@@ -494,7 +494,7 @@ impl CampaignStage {
     }
 
     #[must_use]
-    pub(crate) fn cell_layout(&self) -> &oag_ui::campaign::Layout {
+    pub(crate) fn cell_layout(&self) -> &oag_ui_screens::campaign::Layout {
         &self.cell_layout
     }
 
@@ -506,8 +506,8 @@ impl CampaignStage {
         self.active_campaign = Some(campaign);
         // `with_per_page(1)` - HD/Fury's own `Grid Selection` pages one
         // flyer at a time, not Pulse's four-hex page. See
-        // `oag_ui::campaign::GridSelection::per_page`'s own doc.
-        let model = oag_ui::campaign::GridSelection::new(
+        // `oag_ui_screens::campaign::GridSelection::per_page`'s own doc.
+        let model = oag_ui_screens::campaign::GridSelection::new(
             self.grids
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
@@ -534,7 +534,7 @@ impl CampaignStage {
     }
 
     #[must_use]
-    pub(crate) fn cell_help_layout(&self) -> Option<&oag_ui::campaign::Layout> {
+    pub(crate) fn cell_help_layout(&self) -> Option<&oag_ui_screens::campaign::Layout> {
         self.cell_help.as_ref()
     }
 
@@ -576,7 +576,7 @@ impl CampaignStage {
         let title = &self.title;
         let records = &self.records;
         let by_name = cells.clone();
-        let mut model = oag_ui::campaign::CellSelection::with_medals_and_records(
+        let mut model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
             cells,
             &|name| {
                 records
@@ -593,7 +593,7 @@ impl CampaignStage {
                 .map(to_campaign_difficulty)
         });
         // HD/Fury's own fresh-profile default rung is `Easy`, not Pulse's
-        // `Medium` - see `oag_ui::campaign::CellSelection::difficulty`'s own
+        // `Medium` - see `oag_ui_screens::campaign::CellSelection::difficulty`'s own
         // doc for the RPCS3 measurement. This only sets the *starting*
         // browsed rung; a `records.campaign_medal` hit for the currently
         // selected cell (not modelled here at all - this is the initial
@@ -610,7 +610,7 @@ impl CampaignStage {
     /// `Line5`'s own value - `Cell_SavedRecord`, in centiseconds. Read off
     /// the general per-track/mode/class [`oag_game::records::Store`] rather
     /// than a per-cell store this build does not keep (see
-    /// [`oag_ui::campaign::CellSelection::records`]'s own doc): a campaign
+    /// [`oag_ui_screens::campaign::CellSelection::records`]'s own doc): a campaign
     /// race already folds into that same table, keyed by the cell's own
     /// track/mode/class, so it is the closest available reading of "this
     /// cell's own saved best" without inventing a new store. **Time Trial**
@@ -655,14 +655,14 @@ impl CampaignStage {
     /// **HD only** - the enclosing grid's own index and count, both relative
     /// to [`Self::grid_range`] (so `Cell Selection`'s own `EventNum`/
     /// `GridNum` reads `"Event 01/08"` on a Fury cell, not `"Event
-    /// 09/16"`), plus its [`oag_ui::campaign::GridSummary`], for
-    /// `oag_ui::campaign::hd::hd_cell_draw_list`'s own counters. `None` off
+    /// 09/16"`), plus its [`oag_ui_screens::campaign::GridSummary`], for
+    /// `oag_ui_screens::campaign::hd::hd_cell_draw_list`'s own counters. `None` off
     /// `Grid Selection`/`Campaign Selection`, since there is no "enclosing
     /// grid" there.
     #[must_use]
     pub(crate) fn cell_grid_summary(
         &self,
-    ) -> Option<(usize, usize, oag_ui::campaign::GridSummary)> {
+    ) -> Option<(usize, usize, oag_ui_screens::campaign::GridSummary)> {
         let Screen::Cell { which, .. } = &self.screen else {
             return None;
         };
@@ -705,7 +705,7 @@ impl CampaignStage {
         // own doc and `crate::main::session::campaign::handle_campaign`'s
         // `Back` routing already use, so this rebuild pages the same way
         // the screen it is returning to just did.
-        let mut model = oag_ui::campaign::GridSelection::new(
+        let mut model = oag_ui_screens::campaign::GridSelection::new(
             self.grids
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
@@ -725,7 +725,7 @@ impl CampaignStage {
 mod tests {
     use super::CellCursor;
     use oag_tables::race_campaign::{Cell, Mode};
-    use oag_ui::campaign::CellSelection;
+    use oag_ui_screens::campaign::CellSelection;
 
     fn cell(name: &str) -> Cell {
         Cell {

@@ -38,7 +38,7 @@ texture dump matched the drawn pixels to `FEData.wad` entries at RMSE 0, and
 each entry is named in full by its own `screen.xml`
 (`hash_name(r"Data\Environments\01_Vineta_K\Images\Track_1.mip")` is
 `0xd6404ac7`, `FEData.wad` entry 194). Both screens are wired and draw, on
-`pure-psp-eu.chd`, through the same `oag_ui::picker`/`oag_game::picker_stage`
+`pure-psp-eu.chd`, through the same `oag_ui_screens::picker`/`oag_game::picker_stage`
 machinery Pulse's use.
 
 ## Open
@@ -70,8 +70,8 @@ machinery Pulse's use.
   `Team Selection`'s `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars and `Track
   Selection`'s `RACE RECORD`/`LAP RECORD`/`LENGTH`/`HEIGHT` block are authored
   in the *entry's* `screen.xml` (the same file as the stills), not in
-  `Selection_Definition.xml` where `oag_ui::picker::body` looks for Pulse's
-  named `<Text>` widgets. `oag_ui::picker::slideshow::Slideshow` now reads
+  `Selection_Definition.xml` where `oag_ui_screens::picker::body` looks for Pulse's
+  named `<Text>` widgets. `oag_ui_screens::picker::slideshow::Slideshow` now reads
   the colour-only bars and the text above any named `Screen` alongside the
   stills, resolving `idstring` through the title's own string table.
   Confidence 90; see `docs/formats/race-setup.md`'s "The stat panel is read
@@ -79,7 +79,7 @@ machinery Pulse's use.
   a German label (`RUNDEN-REKORD`) running into its neighbour's column,
   unmeasured against real hardware.
 - **The entry list does not scroll, and the packed roster is uncounted.**
-  Pure's `<Menu allocate="16">` is a capacity; `oag_ui::picker`'s
+  Pure's `<Menu allocate="16">` is a capacity; `oag_ui_screens::picker`'s
   `entry_rows` draws one row per entry and a source offering more than fit
   runs off the bottom rather than paging. The base disc offers 8 circuits and
   10 teams, comfortably inside 16. **Its seven DLC packs add more and were not

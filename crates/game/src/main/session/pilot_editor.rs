@@ -32,8 +32,8 @@ use log::{debug, error, info};
 use oag_game::pilots;
 use oag_ui::language::StringTable;
 use oag_ui::menu::{self, Value};
-use oag_ui::prompt::{self, Outcome};
-use oag_ui::tag_entry::{self, TagEntry};
+use oag_ui_screens::prompt::{self, Outcome};
+use oag_ui_screens::tag_entry::{self, TagEntry};
 
 use crate::menu_stage::MenuStage;
 use crate::overlay::{Finished, Prompt, Purpose};
@@ -56,7 +56,7 @@ enum RenameModel {
 /// entry** - an id for text this project invented rather than an override of
 /// a disc idstring. Every label the pilot prompts draw goes through here, so
 /// the prompt models themselves hold no table and no English: see
-/// `oag_ui::prompt`'s own module doc on that seam.
+/// `oag_ui_screens::prompt`'s own module doc on that seam.
 ///
 /// The fallback is not politeness. A language with no file yet overlays
 /// nothing (`oag_ui::strings::built_in` ships English alone today), so an id

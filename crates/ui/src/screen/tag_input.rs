@@ -44,10 +44,10 @@ pub struct TagInput {
 }
 
 impl Screens {
-    /// `pub(crate)` for [`crate::tag_entry`], which reads a `TagInput` off
+    /// `pub(crate)` for `oag_ui_screens::tag_entry`, which reads a `TagInput` off
     /// an anonymous `Screen` this module's own `collect_widgets` never
-    /// registers - see that function's own doc and `crate::tag_entry`'s.
-    pub(crate) fn tag_input_from_node(&self, node: &Node) -> TagInput {
+    /// registers - see that function's own doc and `oag_ui_screens::tag_entry`'s.
+    pub fn tag_input_from_node(&self, node: &Node) -> TagInput {
         TagInput {
             name: node.attr("name").unwrap_or_default().to_string(),
             x: self.number(node.value("x")).unwrap_or(0.0),

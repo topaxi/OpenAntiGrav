@@ -80,14 +80,14 @@ profile name is the disc's, on the disc's.
 `docs/formats/fexml.md` has a `TagInput` row and section now, with the
 schema table and the anonymous-screen gap below written up there.
 `oag_ui::screen::TagInput` (+ `Screens::tag_input_from_node`) parses the
-element itself, checked in `crates/ui/tests/tag_input_ground_truth.rs`
+element itself, checked in `crates/ui-screens/tests/tag_input_ground_truth.rs`
 against `Create Profile Setup`'s own `Tag` - the one instance under a
 *named* `Screen`. The other three in this entry - `Name` and the earlier
 `Tag` (the ones this project actually draws) - sit under an **anonymous**
 `Screen`, which `Screens::collect` walks through without registering (that
-rule is shared code and was not changed for this); `oag_ui::tag_entry::geometry`
+rule is shared code and was not changed for this); `oag_ui_screens::tag_entry::geometry`
 reads them by walking `fexml::parse`'s tree directly instead, checked
-against the real disc in `crates/ui/tests/tag_entry_ground_truth.rs`.
+against the real disc in `crates/ui-screens/tests/tag_entry_ground_truth.rs`.
 `oag_pulse::tag_input::ALPHABET` is the 70-byte alphabet as a recovered
 constant (the same shape `oag_vex::CLASS_*` already is - the runtime never
 maps `BOOT.BIN`, so there is no live path to read it from, unlike the WAD
@@ -95,14 +95,14 @@ entries above), checked against both pressings' real bytes in
 `crates/pulse/tests/tag_input_alphabet_ground_truth.rs`; EU sits at file
 offset 2,806,800, USA at 2,808,976, byte-identical.
 
-`oag_ui::tag_entry::TagEntry` is the interactive model, drawn over its own
+`oag_ui_screens::tag_entry::TagEntry` is the interactive model, drawn over its own
 scrim and panel (the real screen has no live menu behind it to hide; this
 one always does). `session::pilot_editor::Session::tag_entry_for_rename`
 gates RENAME PILOT onto it: entry parses, `Name`'s geometry is found,
 the current name fits the authored `length` (10), and every glyph the name
 holds survives `oag_pulse::tag_input::ALPHABET` filtered through
-`oag_ui::prompt::accepts` - failing any of those falls back to
-`oag_ui::prompt::Keyboard` unchanged, logged at `info!` naming which
+`oag_ui_screens::prompt::accepts` - failing any of those falls back to
+`oag_ui_screens::prompt::Keyboard` unchanged, logged at `info!` naming which
 condition failed. Screenshotted via `--menu-page pilots --menu-prompt
 tag-entry`/`tag-entry-typed` (extended for this, needs `--race`'s own
 `source` to read the disc live) against `pulse-psp-eu.chd`, both frames

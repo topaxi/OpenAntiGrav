@@ -560,8 +560,8 @@ pub fn run(
             // so they are drawn by their own builder, off the same boot.
             if let Some(kind) = picker_kind(page) {
                 let layout = match kind {
-                    oag_ui::picker::Kind::Track => track_select.as_ref(),
-                    oag_ui::picker::Kind::Ship => ship_select.as_ref(),
+                    oag_ui_screens::picker::Kind::Track => track_select.as_ref(),
+                    oag_ui_screens::picker::Kind::Ship => ship_select.as_ref(),
                 }
                 .with_context(|| format!("{} authors no {kind:?} selection screen", title.name))?;
                 let skin = oag_ui::menu::Skin::new(
@@ -587,7 +587,7 @@ pub fn run(
                     .iter()
                     .find(|track| track.id == options.settings.race.track);
                 let distance = match (kind, archives.as_mut(), selected) {
-                    (oag_ui::picker::Kind::Track, Some(archives), Some(track)) => archives
+                    (oag_ui_screens::picker::Kind::Track, Some(archives), Some(track)) => archives
                         .read_name(&track.entry_name())
                         .ok()
                         .and_then(|blob| race::circuit_length(&blob).ok()),
@@ -627,7 +627,7 @@ pub fn run(
                 // (`main::menu_stage::footer::hd_nav`).
                 if let Some(legend) = nav_legend.as_ref().filter(|_| layout.is_hd()) {
                     let measure = |text: &str| oag_ui::font::measure(&font, text);
-                    let faces = oag_ui::picker::FaceScales::default();
+                    let faces = oag_ui_screens::picker::FaceScales::default();
                     list.extend(legend.draw_gated(&faces, &measure, true));
                 }
                 // Same disc read `picker_stills` already made for the
@@ -659,13 +659,12 @@ pub fn run(
                         "--menu-page grid-select/cell-select needs --race options open"
                     ),
                 };
-                let faces = oag_ui::picker::FaceScales {
-                    default: menu_font
-                        .as_ref()
-                        .map_or(oag_ui::picker::FaceScales::default().default, |menu| {
-                            font.line_height / menu.line_height
-                        }),
-                    ..oag_ui::picker::FaceScales::default()
+                let faces = oag_ui_screens::picker::FaceScales {
+                    default: menu_font.as_ref().map_or(
+                        oag_ui_screens::picker::FaceScales::default().default,
+                        |menu| font.line_height / menu.line_height,
+                    ),
+                    ..oag_ui_screens::picker::FaceScales::default()
                 };
                 let skin = oag_ui::menu::Skin::new(
                     menu_skin,
@@ -895,7 +894,7 @@ pub fn run(
     }
     // On Pulse (both PSP pressings and the PS2 port) this loads the
     // `Default`-role atlas rather than a title role, so
-    // `oag_ui::campaign::footer`'s `Draw::FacedText` draws the same
+    // `oag_ui_screens::campaign::footer`'s `Draw::FacedText` draws the same
     // mixed-case body face here as the live window does - see
     // `boot::fonts::face_atlas_slot`. Pure now loads its own `Title`-role
     // atlas instead, which resolves to the identical `.fnt` `Default` does

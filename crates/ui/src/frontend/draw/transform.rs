@@ -121,7 +121,7 @@ impl Draw {
 
     /// [`Self::FacedText`] when `role` is `Some`, the plain [`Self::Text`]
     /// this build has always emitted otherwise - the general form
-    /// [`Self::title`] and `oag_ui::campaign::footer`'s own `Default`-role
+    /// [`Self::title`] and `oag_ui_screens::campaign::footer`'s own `Default`-role
     /// prompts are each one fixed shape of. Always `border: None`
     /// and `wrap_width: None`: every caller so far draws a single
     /// unbordered line, the same reason [`Self::title`] never took either.
@@ -162,7 +162,7 @@ impl Draw {
 
     /// A screen title: [`Self::in_role`] pinned to [`crate::frontend::Align::Left`].
     ///
-    /// Shared by `crate::menu::draw_list` and `crate::picker::draw_list`,
+    /// Shared by `crate::menu::draw_list` and `oag_ui_screens::picker::draw_list`,
     /// whose title pushes were one `Draw::Text` literal each before this
     /// variant existed and would otherwise now be two, one per role. Lives
     /// in this module rather than beside either caller for the reason this

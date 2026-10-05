@@ -38,7 +38,7 @@ pub(super) enum EndRaceKind {
     /// place of the ordinary per-lap table, cycling every three seconds
     /// between this leg's own placings and the running standings. `true`
     /// picks the standings page (`ER_TOUR_STAN`), `false` the leg page
-    /// (`ER_RACE_STAN`) - see [`oag_ui::endrace::TournamentResults`]'s own
+    /// (`ER_RACE_STAN`) - see [`oag_ui_screens::endrace::TournamentResults`]'s own
     /// doc. A capture-only knob, the same reason `Menu`'s own
     /// `tournament_next_leg` is one: driving a real tournament leg to a
     /// finish is not (`docs/ghidra/functions/psp-pulse-usa/tournament.md`'s
@@ -97,7 +97,7 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
 const TICKS_PER_SECOND: f64 = 60.0;
 
 /// Seconds to ticks, rounded to the nearest - the inverse of
-/// `oag_ui::endrace::draw`'s own tick-to-`M.SS.CC` formatter, used only to
+/// `oag_ui_screens::endrace::draw`'s own tick-to-`M.SS.CC` formatter, used only to
 /// seed the synthetic content below from the reference capture's own
 /// seconds figures. The two do not round-trip losslessly (a 60 Hz tick and
 /// a centisecond do not divide evenly), so a drawn split may land one
@@ -138,11 +138,12 @@ pub(super) fn capture(
             "--menu-page endrace-results/endrace-rewards/endrace-menu needs --race options open"
         ),
     };
-    let faces = oag_ui::picker::FaceScales {
-        default: menu_font.map_or(oag_ui::picker::FaceScales::default().default, |menu| {
-            font.line_height / menu.line_height
-        }),
-        ..oag_ui::picker::FaceScales::default()
+    let faces = oag_ui_screens::picker::FaceScales {
+        default: menu_font.map_or(
+            oag_ui_screens::picker::FaceScales::default().default,
+            |menu| font.line_height / menu.line_height,
+        ),
+        ..oag_ui_screens::picker::FaceScales::default()
     };
     let skin = oag_ui::menu::Skin::new(menu_skin, space, menu_font.unwrap_or(font).line_height);
     let globals: Vec<(&str, &str)> = frontend_globals
@@ -180,7 +181,7 @@ fn endrace_page(
     kind: EndRaceKind,
     archives: &mut oag_assets::Archives,
     strings: &oag_ui::language::StringTable,
-    faces: oag_ui::picker::FaceScales,
+    faces: oag_ui_screens::picker::FaceScales,
     grid: [f32; 2],
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -219,17 +220,17 @@ fn endrace_page(
         EndRaceKind::Results => {
             // The reference capture's own three laps and their third column
             // (`6`/`9`/`10`, total `25`): `results-01.png`.
-            let split = |lap, seconds, boosts| oag_ui::endrace::LapSplit {
+            let split = |lap, seconds, boosts| oag_ui_screens::endrace::LapSplit {
                 lap,
                 ticks: seconds_to_ticks(seconds),
                 boosts: Some(boosts),
             };
-            let model = oag_ui::endrace::Results {
-                headline: oag_ui::endrace::Headline::TimeTrial,
+            let model = oag_ui_screens::endrace::Results {
+                headline: oag_ui_screens::endrace::Headline::TimeTrial,
                 laps: vec![split(1, 92.49, 6), split(2, 49.34, 9), split(3, 49.93, 10)],
                 total_ticks: u64::from(seconds_to_ticks(191.76)),
             };
-            oag_ui::endrace::results_draw_list(
+            oag_ui_screens::endrace::results_draw_list(
                 &model,
                 &screens.results,
                 skin,
@@ -250,10 +251,10 @@ fn endrace_page(
                     entry: trophy.placement.model.src.clone(),
                     skin: None,
                     rect: [0.0, 0.0, grid[0], grid[1]],
-                    kind: oag_ui::picker::Kind::Ship,
+                    kind: oag_ui_screens::picker::Kind::Ship,
                     mode3d: Some(trophy.placement.model.clone()),
                 });
-            let model = oag_ui::endrace::Rewards {
+            let model = oag_ui_screens::endrace::Rewards {
                 medal,
                 campaign: true,
                 // The reference capture's own numbers
@@ -261,7 +262,7 @@ fn endrace_page(
                 // measured"): a fresh profile's first race,
                 // `Race_ComputeLoyaltyAward`'s `3 laps * 30 = 90`, matching
                 // `"Assegai Loyalty: 90 Points"` / `"Total loyalty: 90"`.
-                loyalty: Some(oag_ui::endrace::Loyalty {
+                loyalty: Some(oag_ui_screens::endrace::Loyalty {
                     team_name: "Assegai".to_string(),
                     award: 90,
                     total: 90,
@@ -274,7 +275,7 @@ fn endrace_page(
                 .rewards
                 .as_ref()
                 .context("this title's EndRace Rewards is not read by this build")?;
-            oag_ui::endrace::rewards_draw_list(
+            oag_ui_screens::endrace::rewards_draw_list(
                 &model,
                 rewards,
                 skin,
@@ -294,12 +295,13 @@ fn endrace_page(
             // `EndRaceResults_PopulateTournamentTable` draws, with numbers
             // chosen for legibility rather than measured (no live capture
             // of this screen exists yet - see the module's own doc).
-            let row = |team: &str, points: u32, player: bool| oag_ui::endrace::TournamentRow {
-                team_name: Some(team.to_string()),
-                points,
-                player,
-            };
-            let mut model = oag_ui::endrace::TournamentResults::new(
+            let row =
+                |team: &str, points: u32, player: bool| oag_ui_screens::endrace::TournamentRow {
+                    team_name: Some(team.to_string()),
+                    points,
+                    player,
+                };
+            let mut model = oag_ui_screens::endrace::TournamentResults::new(
                 false,
                 2,
                 3,
@@ -323,7 +325,7 @@ fn endrace_page(
                 // `EndRaceResults_Update` toggle `tick` reimplements.
                 model.tick(3.1);
             }
-            oag_ui::endrace::tournament_results_draw_list(
+            oag_ui_screens::endrace::tournament_results_draw_list(
                 &model,
                 &screens.results,
                 skin,
@@ -338,14 +340,14 @@ fn endrace_page(
             // The live race's eight records (slot order is the grid's, the ranking
             // is `EliminationResults::new`'s): the player last with 0 kills.
             let craft = |team: &str, kills: u32, deaths: u32, player: bool| {
-                oag_ui::endrace::EliminationRow {
+                oag_ui_screens::endrace::EliminationRow {
                     team_name: Some(team.to_string()),
                     kills,
                     deaths,
                     player,
                 }
             };
-            let model = oag_ui::endrace::EliminationResults::new(vec![
+            let model = oag_ui_screens::endrace::EliminationResults::new(vec![
                 craft("Assegai", 0, 1, true),
                 craft("Feisar", 2, 4, false),
                 craft("EGX", 5, 5, false),
@@ -355,7 +357,7 @@ fn endrace_page(
                 craft("Triakis", 1, 2, false),
                 craft("Piranha", 4, 1, false),
             ]);
-            oag_ui::endrace::elimination_results_draw_list(
+            oag_ui_screens::endrace::elimination_results_draw_list(
                 &model,
                 &screens.results,
                 skin,
@@ -367,7 +369,7 @@ fn endrace_page(
             )
         }
         EndRaceKind::ZoneResults => {
-            let model = oag_ui::endrace::ZoneResults {
+            let model = oag_ui_screens::endrace::ZoneResults {
                 zones_cleared: 7,
                 perfect_zones: Some(3),
                 laps_cleared: None,
@@ -375,7 +377,7 @@ fn endrace_page(
                 top_speed_kmh: Some(812),
                 score: 4321,
             };
-            oag_ui::endrace::zone_results_draw_list(
+            oag_ui_screens::endrace::zone_results_draw_list(
                 &model,
                 &screens.results,
                 skin,
@@ -395,19 +397,19 @@ fn endrace_page(
             // capture has no `Session` behind it either. See that
             // function's own doc for the redirect this mirrors.
             let second_row = if tournament_next_leg {
-                oag_ui::endrace::MenuOption::NextRace
+                oag_ui_screens::endrace::MenuOption::NextRace
             } else {
-                oag_ui::endrace::MenuOption::RaceAgain
+                oag_ui_screens::endrace::MenuOption::RaceAgain
             };
-            let model = oag_ui::endrace::EndRaceMenu::new(
+            let model = oag_ui_screens::endrace::EndRaceMenu::new(
                 vec![
-                    oag_ui::endrace::MenuOption::ReturnToGrid,
+                    oag_ui_screens::endrace::MenuOption::ReturnToGrid,
                     second_row,
-                    oag_ui::endrace::MenuOption::ViewResultsAgain,
+                    oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
                 ],
                 Some(seconds_to_ticks(49.34)),
             );
-            oag_ui::endrace::endrace_menu_draw_list(
+            oag_ui_screens::endrace::endrace_menu_draw_list(
                 &model,
                 &screens.menu,
                 skin,
@@ -424,7 +426,7 @@ fn endrace_page(
 
 /// [`endrace_page`]'s Wipeout HD/Fury branch: `EndRace Results`/`EndRace
 /// Rewards`/`EndRace Menu` - see `crate::endrace::load_hd`'s own doc for why
-/// `EndRace Podium` is out of scope, and [`oag_ui::endrace::hd`] for what
+/// `EndRace Podium` is out of scope, and [`oag_ui_screens::endrace::hd`] for what
 /// the three implemented screens draw. `endrace-rewards` is the only way to
 /// see HD's Rewards at all: the original never enters it, so the live flow
 /// does not either (`docs/formats/hd-endrace-screens.md`). Fed a
@@ -443,9 +445,9 @@ fn endrace_page(
 )]
 fn hd_endrace_page(
     kind: EndRaceKind,
-    results: &oag_ui::endrace::Layout,
-    rewards: Option<&oag_ui::endrace::Layout>,
-    menu: &oag_ui::endrace::Layout,
+    results: &oag_ui_screens::endrace::Layout,
+    rewards: Option<&oag_ui_screens::endrace::Layout>,
+    menu: &oag_ui_screens::endrace::Layout,
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
@@ -454,30 +456,30 @@ fn hd_endrace_page(
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let layers = match kind {
         EndRaceKind::Results => {
-            let model = oag_ui::endrace::FieldResults {
+            let model = oag_ui_screens::endrace::FieldResults {
                 // **Chosen, not measured**: a capture has no race behind it, so
                 // these are `oag_hd::loyalty`'s own three-lap single race on
                 // the medium rung (`3 * 15 * 3`) banked onto a team that
                 // already held 3885.
-                loyalty: Some(oag_ui::endrace::HdLoyalty {
+                loyalty: Some(oag_ui_screens::endrace::HdLoyalty {
                     award: 135,
                     total: 4_020,
                 }),
-                headline: oag_ui::endrace::Headline::Position(1),
+                headline: oag_ui_screens::endrace::Headline::Position(1),
                 rows: vec![
-                    oag_ui::endrace::FieldRow {
+                    oag_ui_screens::endrace::FieldRow {
                         place: 1,
                         time_ticks: Some(u64::from(seconds_to_ticks(191.76))),
                         player: true,
                     },
-                    oag_ui::endrace::FieldRow {
+                    oag_ui_screens::endrace::FieldRow {
                         place: 2,
                         time_ticks: Some(u64::from(seconds_to_ticks(203.11))),
                         player: false,
                     },
                 ],
             };
-            oag_ui::endrace::hd::hd_results_draw_list(
+            oag_ui_screens::endrace::hd::hd_results_draw_list(
                 &model,
                 results,
                 skin,
@@ -491,7 +493,7 @@ fn hd_endrace_page(
         EndRaceKind::Rewards { .. } => {
             // The same synthetic race the Results arm above draws: the
             // player first, on a campaign cell whose law gave gold for it.
-            let model = oag_ui::endrace::HdRewards {
+            let model = oag_ui_screens::endrace::HdRewards {
                 place: Some(1),
                 medal: Some(oag_tables::race_campaign::Medal::Gold),
                 campaign: true,
@@ -499,7 +501,7 @@ fn hd_endrace_page(
             let rewards = rewards.context(
                 "the served copy of this title's screen file authors no EndRace Rewards",
             )?;
-            oag_ui::endrace::hd::hd_rewards_draw_list(
+            oag_ui_screens::endrace::hd::hd_rewards_draw_list(
                 &model,
                 rewards,
                 skin,
@@ -531,11 +533,11 @@ fn hd_endrace_page(
         EndRaceKind::Menu {
             tournament_next_leg: _,
         } => {
-            let model = oag_ui::endrace::EndRaceMenu::new(
+            let model = oag_ui_screens::endrace::EndRaceMenu::new(
                 vec![
-                    oag_ui::endrace::MenuOption::ReturnToGrid,
-                    oag_ui::endrace::MenuOption::RaceAgain,
-                    oag_ui::endrace::MenuOption::ViewResultsAgain,
+                    oag_ui_screens::endrace::MenuOption::ReturnToGrid,
+                    oag_ui_screens::endrace::MenuOption::RaceAgain,
+                    oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
                 ],
                 Some(seconds_to_ticks(49.34)),
             );
@@ -544,11 +546,11 @@ fn hd_endrace_page(
             // shows the cursor a player sees most of the time rather than
             // the first frame's narrow box. The tick count is this
             // capture's choice; the ease and blink are `Block_Update`'s.
-            let mut model = oag_ui::endrace::hd::hd_screen_order(&model, menu);
+            let mut model = oag_ui_screens::endrace::hd::hd_screen_order(&model, menu);
             for _ in 0..34 {
                 model.tick();
             }
-            oag_ui::endrace::hd::hd_menu_draw_list(
+            oag_ui_screens::endrace::hd::hd_menu_draw_list(
                 &model,
                 menu,
                 skin,

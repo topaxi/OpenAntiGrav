@@ -181,7 +181,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Selection`, `Tournament Selection`, `Track Selection`,
     // `Team Selection`, ...) authored in one file, read 2026-09-10 - see
     // `docs/formats/race-setup.md`'s Pure section. Only `Track Selection`
-    // and `Team Selection` map onto `oag_ui::picker::Kind` and are wired as
+    // and `Team Selection` map onto `oag_ui_screens::picker::Kind` and are wired as
     // pickers here, the same two screens Pulse's own race box authors;
     // `Class Selection`/`League Selection`/`Tournament Selection` are not -
     // this build's RACE page settles mode/class the way it already does on

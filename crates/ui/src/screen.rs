@@ -39,7 +39,7 @@ mod widgets;
 pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
-pub use mode3d::Mode3dModel;
+pub use mode3d::{Mode3dModel, Model};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
@@ -100,7 +100,7 @@ pub struct Text {
     /// first shows, from that container's own `transition` attribute -
     /// zero for a widget with no such ancestor, which fades over no time at
     /// all (drawn at once, exactly as before this field existed). See
-    /// [`crate::picker::body`], the one reader: `Data\Plugins\PI001\GUI\
+    /// `oag_ui_screens::picker::body`, the one reader: `Data\Plugins\PI001\GUI\
     /// Selection_Definition.xml`'s `<LeftLayer transition="0.5">` groups
     /// are `Track Creation`'s and `Team Selection`'s info panel, and a live
     /// PPSSPP capture (`docs/ui/selection-screens.md`) shows exactly that
@@ -718,7 +718,7 @@ impl Screens {
             // it through `crate::menu::block`); the label half is
             // collected as a [`Text`] the
             // same idstring-resolution pass every other text already gets
-            // (`crate::campaign::Layout::read_authored`), so a caller reading
+            // (`oag_ui_screens::campaign::Layout::read_authored`), so a caller reading
             // `screen.texts` finds `GridHead1`'s `IG_HUD_POS` or `EndRace
             // Menu`'s own `race_again` beside every other label rather than
             // needing a third widget vocabulary. Confirmed to appear nowhere
@@ -800,7 +800,7 @@ impl Screens {
             // (`ControlTextConfirmButton`/`ControlTextConfirm`, and on
             // `Results` two more for an online-only "cycle records" button
             // this build already excludes by name - see
-            // `oag_ui::endrace::hd::hd_results_draw_list`'s own doc). Before
+            // `oag_ui_screens::endrace::hd::hd_results_draw_list`'s own doc). Before
             // this arm existed the whole container was silently dropped, the
             // same gap `docs/formats/hd-endrace-screens.md`'s own widget
             // table names for all three screens - "that container is not
@@ -832,7 +832,7 @@ impl Screens {
             // widgets `FE Screen` genuinely authors is not a wrong picture.
             // The one shared, title-wide copy this build actually *draws*
             // from - Pulse's and Wipeout HD/Fury's own `Skin.xml`, via
-            // `oag_ui::campaign::footer` - is read directly off the raw
+            // `oag_ui_screens::campaign::footer` - is read directly off the raw
             // parse tree instead, unconditionally rather than gated on this
             // arm, so nothing here duplicates that read.
             // `LeftLayer` is also the one container that authors a
@@ -963,9 +963,9 @@ impl Screens {
         }
     }
 
-    /// `pub(crate)` for [`crate::tag_entry`] - see
+    /// `pub(crate)` for `oag_ui_screens::tag_entry` - see
     /// [`Screens::fill_from_node`]'s own note.
-    pub(crate) fn number(&self, value: Option<&str>) -> Option<f32> {
+    pub fn number(&self, value: Option<&str>) -> Option<f32> {
         self.resolve(value?)?.trim().parse().ok()
     }
 

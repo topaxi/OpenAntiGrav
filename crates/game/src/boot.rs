@@ -64,14 +64,14 @@ pub struct Boot {
     /// The frame its menus are drawn inside. See [`Shell::frame`].
     pub frame: oag_ui::menu::Frame,
     /// Its `Confirm`/`Back` legend - see [`Shell::nav_legend`].
-    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    pub nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// Its footer's scrolling tip ticker layout - see [`Shell::ticker`].
-    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's animated menu backdrop - see [`backdrop::load`]. `None` where none.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
     /// The race box's selection screens. See [`Shell::track_select`].
-    pub track_select: Option<oag_ui::picker::Layout>,
-    pub ship_select: Option<oag_ui::picker::Layout>,
+    pub track_select: Option<oag_ui_screens::picker::Layout>,
+    pub ship_select: Option<oag_ui_screens::picker::Layout>,
     /// The `KILLS` and `WEAPONS` rows' values - see [`Shell::race_setup`].
     pub race_setup: RaceSetup,
     /// The circuit names, for a capture's circuit labels.
@@ -258,7 +258,7 @@ pub struct Shell {
     /// draws the menus exactly as they were drawn before this existed.
     pub frame: oag_ui::menu::Frame,
     /// Its `Confirm`/`Back` legend - see `screens::read_nav_legend`.
-    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    pub nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// Its footer's scrolling tip ticker layout, off the same root -
     /// `None` when this source's front-end root authors no
     /// `TextInfoIsAlwaysLast` viewport, which is every title but Pulse
@@ -267,16 +267,16 @@ pub struct Shell {
     /// `oag_game::records::ticker_tips` - the same rotation the Race
     /// Campaign's own footer already reads, so a live session's two footers
     /// cannot disagree about what a save file honestly has to show.
-    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's menu backdrop, read here for the same reason the frame is.
     pub fury_backdrop: Option<Arc<backdrop::MenuBackdrop>>,
     /// The race box's two selection screens, read off the same XML the
     /// frame was - `Track Creation` and `Team Selection` on Pulse - with
     /// every string resolved. `None` on a title that authors neither, which
     /// launches straight from the RACE page as before. See
-    /// [`oag_ui::picker`].
-    pub track_select: Option<oag_ui::picker::Layout>,
-    pub ship_select: Option<oag_ui::picker::Layout>,
+    /// [`oag_ui_screens::picker`].
+    pub track_select: Option<oag_ui_screens::picker::Layout>,
+    pub ship_select: Option<oag_ui_screens::picker::Layout>,
     /// The `KILLS`/`WEAPONS` rows' values, off the disc's own lists.
     pub race_setup: RaceSetup,
     /// The face menu rows are drawn in, when the title names one and it

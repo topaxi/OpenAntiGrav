@@ -112,7 +112,7 @@ pub struct TouchFrontEnd {
     /// Pulse and Pure - carried here rather than as a `bool` on `FrontEnd`
     /// because `preview_meshes` is defined against [`crate::FrontEnd::race_box`]'s
     /// picker, which 2048 does not fill (its team/track pickers are this
-    /// touch idiom, not the `oag_ui::picker::Layout` dialect `race_box`
+    /// touch idiom, not the `oag_ui_screens::picker::Layout` dialect `race_box`
     /// names), so that field would be inert either way. See
     /// `docs/formats/2048-frontend.md`'s "Team selection is 3D too".
     pub team_model_origin: (f32, f32),

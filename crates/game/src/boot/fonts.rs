@@ -287,7 +287,7 @@ pub fn face_atlas_slot(
 /// `None` whenever any link in the chain is missing (no plugin fills the
 /// `Buttons` slot, or the named `.fnt` does not read), the same honest
 /// absence the caller then draws nothing for
-/// (`oag_ui::campaign::footer::face_role`'s own doc names why a wrong
+/// (`oag_ui_screens::campaign::footer::face_role`'s own doc names why a wrong
 /// fallback would be worse). **Not gated by [`oag_title::MenuSkin`]** the
 /// way [`load_menu_font`]/[`load_title_font`] are: unlike `Title`/`menu`,
 /// nothing about which screen wants this role varies by title package, and

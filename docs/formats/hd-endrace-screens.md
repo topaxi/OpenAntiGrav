@@ -81,7 +81,7 @@ are the literal string `X` at `width="0"` - inert placeholders, not a gap
 this reading introduced. `Grid{col}.{row}` follows that same 4-wide, 10-tall
 shape exactly: `Grid0.0`..`Grid3.9`, forty widgets, confirmed identical in
 `DATA02` and `DATA06`. **This project's own build draws only columns 0 and
-1** (position, time) - see [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s
+1** (position, time) - see [`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs)'s
 module doc.
 
 ### Every `Grid{col}.{row}` cell is authored at `x="0" y="0"` - position is computed, not stated
@@ -217,14 +217,14 @@ Widgets, off `DATA02`'s copy (confidence 90, direct read):
 | `RewardLine1` | `idstring="ER_MEDAL_AWARD"` (`"MEDAL AWARDED:"`), `x="670" y="360"` | the medal tier on a campaign race (chosen) |
 | `RewardLine2` / `RewardLoyaltyPoints` / `RewardLoyaltyActive` | placeholders `"test"` / `"points!"` / `"line 2"` | no - HD never enters this screen; its loyalty is on `Results` (`loyalty1.1`/`loyalty2`, drawn since 2026-10-02) |
 | `loyaltybar` | `<Slider>`, `idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"` | no - `oag_ui::screen` does not collect a `<Slider>` |
-| `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - `oag_ui::endrace::hd`'s own `text_draw` has no `face_role` check, so this screen still risks the raw codepoint (a Greek letter) rather than the disc's own glyph even though a `Buttons`-role atlas now loads (2026-09-25, `oag_ui::campaign::footer::face_role`); a real gap, left open rather than fixed in the same pass that found it - see `oag_ui::endrace::hd::hd_results_draw_list`'s own doc |
+| `ControlTextConfirmButton` | inside a `<NavigationController>`, `font="buttons"` | no - `oag_ui_screens::endrace::hd`'s own `text_draw` has no `face_role` check, so this screen still risks the raw codepoint (a Greek letter) rather than the disc's own glyph even though a `Buttons`-role atlas now loads (2026-09-25, `oag_ui_screens::campaign::footer::face_role`); a real gap, left open rather than fixed in the same pass that found it - see `oag_ui_screens::endrace::hd::hd_results_draw_list`'s own doc |
 | `ControlTextConfirm` | inside the same `<NavigationController>`, `idstring="FE_CONFIRM"` | **yes, since 2026-09-25** - `crate::screen::Screens::collect_widgets` now walks a `NavigationController` the same as any other container; confirmed live, `--menu-page endrace-rewards` |
 | `EndRaceCountDown` | `string=""` | no |
 
 `oag_game::endrace::load_hd` reads the layout when the served copy has it
 and leaves `EndRaceScreens::rewards` `None` otherwise, so `DATA06`'s copy
 still loads Results and Menu. The drawing rules, and which of them are
-chosen, are `oag_ui::endrace::hd::hd_rewards_draw_list`'s own doc; the
+chosen, are `oag_ui_screens::endrace::hd::hd_rewards_draw_list`'s own doc; the
 picture half is [`docs/ui/endrace-screens.md`](../ui/endrace-screens.md)'s HD
 section.
 
@@ -256,7 +256,7 @@ Confidence 80.
 
 Five of these eight idstrings (`ER_NEXT_RACE`, `ER_RACE_AGAIN`,
 `ER_RETURN_GRID`, `ER_RETURN_MENU`, `ER_VIEW_AGAIN`) are **byte-identical**
-to the ones [`oag_ui::endrace::MenuOption::idstring`](../../crates/ui/src/endrace.rs)
+to the ones [`oag_ui_screens::endrace::MenuOption::idstring`](../../crates/ui-screens/src/endrace.rs)
 already returns for Pulse - not a coincidence of two titles reusing similar
 English, but the same engine-wide idstring vocabulary, which is why this
 project's build reuses `MenuOption` unchanged for HD rather than inventing a
@@ -311,7 +311,7 @@ data were unambiguous - it is not.
   `title.name` exactly the way `crate::campaign::load`/`load_hd` already
   does, and its own `load_hd` reads `EndRace Results`/`EndRace Menu`, plus
   `EndRace Rewards` when the served copy authors it.
-- [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs) is the drawing
+- [`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs) is the drawing
   half - what draws, what does not, and the exact chosen-vs-measured split
   for the row/column geometry this page's own tables leave open, in its own
   module doc rather than repeated here.

@@ -7,12 +7,32 @@
 //! `20.0`/`100.0`, the defaults `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`'s
 //! "`Mode3D`'s own fixed camera" section records off the widget's own
 //! constructor. The pose is the `Model`'s own `x y z RotX RotY`.
-//! `crate::picker::slideshow`'s reader predates those defaults and keeps
+//! `oag_ui_screens::picker::slideshow`'s reader predates those defaults and keeps
 //! its own; this one applies them because `TrophyPanel` authors no depth
 //! at all.
 
 use super::{Node, Screens};
-use crate::picker::slideshow::Model;
+
+/// The `<Mode3D><Model>` the same file places: the outline ribbon's own
+/// authored pose. **Read and carried, not yet drawn from** - the outline is
+/// framed by `oag_game::preview::orbit_for`'s capture-read orbit today, and
+/// turning these numbers into that camera needs the `Mode3D` projection
+/// (`nearZ`/`farZ`, an `OriginX`/`OriginY` in an unmeasured space) read
+/// first. Kept so the next reader starts from the disc's numbers rather
+/// than from the capture.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Model {
+    /// The `Src`, `%s` substituted - `<location>\FE\forward.vex`.
+    pub src: String,
+    /// `x`, `y`, `z`.
+    pub position: [f32; 3],
+    /// `RotX`, `RotY`, radians as authored.
+    pub rotation: [f32; 2],
+    /// The `Mode3D`'s `OriginX`/`OriginY`.
+    pub origin: [f32; 2],
+    /// The `Mode3D`'s `nearZ`/`farZ`.
+    pub depth: [f32; 2],
+}
 
 /// One `<Model>` inside a `<Mode3D>`, with its parent's camera.
 #[derive(Debug, Clone, PartialEq)]

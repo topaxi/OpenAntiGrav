@@ -90,7 +90,7 @@ pub(super) fn menu_page(
     // whose root authors no `NavigationController` this build reads. See
     // `crate::main::menu_stage::MenuStage::render`'s own call site for the
     // identical draw this mirrors.
-    nav_legend: Option<&oag_ui::campaign::footer::NavigationLegend>,
+    nav_legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
     // The `Default`-role face `nav_legend`'s own word half draws through.
     default_measure: &dyn Fn(&str) -> f32,
     // The footer's own scrolling tip ticker layout - `None` on a source
@@ -99,7 +99,7 @@ pub(super) fn menu_page(
     // `crate::main::menu_stage::MenuStage::render`'s own call site for the
     // identical draw this mirrors, at a frozen `elapsed` of `0.0` since a
     // still has no clock of its own to animate the scroll with.
-    ticker: Option<&oag_ui::campaign::footer::TickerLayout>,
+    ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
     // This source's own honest tip rotation, off `records` - see
     // `crate::records::ticker_tips`'s own doc.
     ticker_tips: &[String],
@@ -301,7 +301,7 @@ pub(super) fn menu_page(
     let nav_legend_draws: Vec<oag_ui::frontend::Draw> =
         nav_legend.map_or_else(Vec::new, |legend| {
             legend.draw_gated(
-                &oag_ui::picker::FaceScales::default(),
+                &oag_ui_screens::picker::FaceScales::default(),
                 default_measure,
                 model.depth() > 1,
             )
@@ -310,16 +310,16 @@ pub(super) fn menu_page(
     // still has no clock of its own to animate the scroll with, so this
     // shows whichever tip the rotation starts on rather than one mid-scroll.
     // `measure`, not `default_measure`: the ticker's own `font="small"`
-    // routes through no named role (`oag_ui::campaign::footer::face_role`
+    // routes through no named role (`oag_ui_screens::campaign::footer::face_role`
     // answers `None` for it), so it draws through the same primary atlas the
     // rows do - see `crate::main::menu_stage::MenuStage::render`'s own
     // identical choice for its live ticker.
     let ticker_draw: Option<oag_ui::frontend::Draw> = ticker.and_then(|layout| {
-        oag_ui::campaign::footer::ticker_draw(
+        oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             0.0,
             ticker_tips,
-            &oag_ui::picker::FaceScales::default(),
+            &oag_ui_screens::picker::FaceScales::default(),
             measure,
         )
     });
@@ -344,7 +344,7 @@ pub(super) fn menu_page(
     // this flag the on-screen keyboard's layout is reviewable only by playing
     // the game on a machine with a display, and this project's own rule is to
     // judge a screen by looking at it. The models are the live ones
-    // (`oag_ui::prompt`) and the labels come from the same lookup the live
+    // (`oag_ui_screens::prompt`) and the labels come from the same lookup the live
     // path resolves them with (`session::pilot_editor` for rename/delete,
     // `crate::rebind::prompt` for `binding`), so what this draws is what a
     // player sees rather than a mock-up of it.
@@ -376,7 +376,9 @@ pub(super) fn menu_page(
         };
         let mut list = layers.flatten();
         if let Some(text) = &axis_preview {
-            list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
+            list.push(oag_ui_screens::prompt::axis_preview_draw(
+                &model, skin, text,
+            ));
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
@@ -388,7 +390,9 @@ pub(super) fn menu_page(
     let Some(phase) = phase else {
         let mut list = layers.flatten();
         if let Some(text) = &axis_preview {
-            list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
+            list.push(oag_ui_screens::prompt::axis_preview_draw(
+                &model, skin, text,
+            ));
         }
         list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(nav_legend_draws);
@@ -421,7 +425,7 @@ pub(super) fn menu_page(
 /// draws this same table through - see its own doc for why the track lookup
 /// here (this capture's own boot-survey `tracks`, with no distinct Zone
 /// list) can differ from `Shell::tracks_for(mode)` without the two pages
-/// ever disagreeing about anything they both can answer. `oag_ui::prompt::
+/// ever disagreeing about anything they both can answer. `oag_ui_screens::prompt::
 /// record_row_draw` is the same drawing half `crate::menu_stage::MenuStage::
 /// render` calls for the live session, so a row's position here matches a
 /// live one for the same `model` state (`Menu::visible_rows`, `Menu::scroll`).
@@ -443,7 +447,7 @@ fn records_draws(
     rows.iter()
         .enumerate()
         .flat_map(|(index, (label, value))| {
-            oag_ui::prompt::record_row_draw(model, skin, index, label, value)
+            oag_ui_screens::prompt::record_row_draw(model, skin, index, label, value)
         })
         .collect()
 }
@@ -488,14 +492,14 @@ fn prompt_draws(
                 .read_hash(oag_pulse::hashes::TAG_INPUT_SCREENS)
                 .context("no TagInput screens entry on this disc")?;
             let xml = oag_tables::fexml::text(&entry_raw).context("TagInput entry text")?;
-            let geometry = oag_ui::tag_entry::geometry(&xml, &globals, "Name")
+            let geometry = oag_ui_screens::tag_entry::geometry(&xml, &globals, "Name")
                 .context("the Name TagInput was not found in it")?;
             let alphabet: String = oag_pulse::tag_input::ALPHABET
                 .chars()
-                .filter(|&c| oag_ui::prompt::accepts(c))
+                .filter(|&c| oag_ui_screens::prompt::accepts(c))
                 .collect();
-            let mut tag_entry = oag_ui::tag_entry::TagEntry::new(
-                oag_ui::tag_entry::Labels {
+            let mut tag_entry = oag_ui_screens::tag_entry::TagEntry::new(
+                oag_ui_screens::tag_entry::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
                     hint: say(
@@ -512,10 +516,10 @@ fn prompt_draws(
                 // before/after pair actually differs - the same reason
                 // `rename-note` exists beside `rename` above.
                 for edit in [
-                    oag_ui::prompt::Edit::Type('z'),
-                    oag_ui::prompt::Edit::Type('9'),
-                    oag_ui::prompt::Edit::Delete,
-                    oag_ui::prompt::Edit::Type('-'),
+                    oag_ui_screens::prompt::Edit::Type('z'),
+                    oag_ui_screens::prompt::Edit::Type('9'),
+                    oag_ui_screens::prompt::Edit::Delete,
+                    oag_ui_screens::prompt::Edit::Type('-'),
                 ] {
                     tag_entry.edit(edit);
                 }
@@ -523,8 +527,8 @@ fn prompt_draws(
             Ok(tag_entry.draw(skin))
         }
         "rename" | "rename-note" => {
-            let mut keyboard = oag_ui::prompt::Keyboard::new(
-                oag_ui::prompt::Labels {
+            let mut keyboard = oag_ui_screens::prompt::Keyboard::new(
+                oag_ui_screens::prompt::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     delete: say("OAG_KEYBOARD_DELETE", "DEL"),
                     accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
@@ -561,20 +565,22 @@ fn prompt_draws(
             } else {
                 say_of("OAG_PILOT_DELETE_ASK", "DELETE %s? THIS CANNOT BE UNDONE.")
             };
-            Ok(oag_ui::prompt::Confirm::new(oag_ui::prompt::ConfirmLabels {
-                title: say("OAG_PILOT_DELETE_TITLE", "DELETE PILOT"),
-                message,
-                yes: say("OAG_PILOT_DELETE_YES", "DELETE"),
-                no: say("OAG_PILOT_DELETE_NO", "KEEP"),
-            })
-            .draw(skin))
+            Ok(
+                oag_ui_screens::prompt::Confirm::new(oag_ui_screens::prompt::ConfirmLabels {
+                    title: say("OAG_PILOT_DELETE_TITLE", "DELETE PILOT"),
+                    message,
+                    yes: say("OAG_PILOT_DELETE_YES", "DELETE"),
+                    no: say("OAG_PILOT_DELETE_NO", "KEEP"),
+                })
+                .draw(skin),
+            )
         }
-        // The CONTROLS page's key-capture prompt - `oag_ui::prompt::
+        // The CONTROLS page's key-capture prompt - `oag_ui_screens::prompt::
         // message_draw` is the same function `MenuStage::render` calls in
         // the binary, off `Session::awaiting_binding`, so this and a live
         // capture cannot draw two different pictures for the same state.
         // See `docs/architecture/menus.md`'s Rebinding section.
-        "binding" => Ok(oag_ui::prompt::message_draw(
+        "binding" => Ok(oag_ui_screens::prompt::message_draw(
             skin,
             &say_of(
                 "OAG_BINDING_CAPTURE_PROMPT",
@@ -597,22 +603,22 @@ pub(super) struct PreviewRequest {
     /// The skin `.dat` to paint it in, when the settings name one the team
     /// declares.
     pub skin: Option<String>,
-    /// Where it goes, in the screen's grid - [`oag_ui::picker::Layout::preview`].
+    /// Where it goes, in the screen's grid - [`oag_ui_screens::picker::Layout::preview`].
     pub rect: [f32; 4],
-    pub kind: oag_ui::picker::Kind,
+    pub kind: oag_ui_screens::picker::Kind,
     /// The selected circuit's own `<Mode3D><Model>` pose, when its
     /// `screen.xml` authors one - see
     /// [`oag_game::preview::mode3d_view_projection`]. `None` falls back to
     /// [`oag_game::preview::orbit_for`], same as the live screen.
-    pub mode3d: Option<oag_ui::picker::slideshow::Model>,
+    pub mode3d: Option<oag_ui::screen::Model>,
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
 #[must_use]
-pub(super) fn picker_kind(page: &str) -> Option<oag_ui::picker::Kind> {
+pub(super) fn picker_kind(page: &str) -> Option<oag_ui_screens::picker::Kind> {
     match page {
-        "track-select" | "track_select" => Some(oag_ui::picker::Kind::Track),
-        "ship-select" | "ship_select" => Some(oag_ui::picker::Kind::Ship),
+        "track-select" | "track_select" => Some(oag_ui_screens::picker::Kind::Track),
+        "ship-select" | "ship_select" => Some(oag_ui_screens::picker::Kind::Ship),
         _ => None,
     }
 }
@@ -630,9 +636,9 @@ pub(super) fn picker_kind(page: &str) -> Option<oag_ui::picker::Kind> {
     reason = "the same argument menu_page makes: each is a separate thing the page needs"
 )]
 pub(super) fn picker_page(
-    kind: oag_ui::picker::Kind,
+    kind: oag_ui_screens::picker::Kind,
     circuit_names: &oag_ui::language::CircuitNames,
-    layout: &oag_ui::picker::Layout,
+    layout: &oag_ui_screens::picker::Layout,
     settings: &crate::settings::Settings,
     title: &'static oag_title::Title,
     tracks: &[crate::catalogue::Track],
@@ -650,7 +656,7 @@ pub(super) fn picker_page(
     // `LeftLayer transition` it authors. See [`SETTLED_SECONDS`].
     seconds: Option<f32>,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
-    use oag_ui::picker::{Details, Entry, Kind, Picker};
+    use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
     let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
         Kind::Track => {
@@ -724,7 +730,7 @@ pub(super) fn picker_page(
                             label: team.label(strings).to_string(),
                             details: Details::Ship {
                                 loyalty: gates.then(|| saved.loyalty_total(title.name, &team.id)),
-                                rating: team.rating.map(|rating| oag_ui::picker::Rating {
+                                rating: team.rating.map(|rating| oag_ui_screens::picker::Rating {
                                     speed: rating.speed,
                                     thrust: rating.thrust,
                                     handling: rating.handling,
@@ -776,7 +782,7 @@ pub(super) fn picker_page(
         // slideshow read - see `capture.rs`.
         mode3d: None,
     });
-    let layers = oag_ui::picker::draw_list(
+    let layers = oag_ui_screens::picker::draw_list(
         &picker,
         layout,
         skin,
@@ -870,7 +876,7 @@ pub(super) fn draw_preview(
               - which screen, the settings, the two rosters, the disc, the globals and the sheet"
 )]
 pub(super) fn picker_stills(
-    kind: oag_ui::picker::Kind,
+    kind: oag_ui_screens::picker::Kind,
     settings: &crate::settings::Settings,
     track: Option<&crate::catalogue::Track>,
     tracks: &[crate::catalogue::Track],
@@ -884,23 +890,20 @@ pub(super) fn picker_stills(
     // a low value shows both effects the screen's own arrival authors: the
     // fade in and the first card sliding under a second.
     seconds: Option<f32>,
-) -> (
-    Vec<oag_ui::frontend::Draw>,
-    Option<oag_ui::picker::slideshow::Model>,
-) {
+) -> (Vec<oag_ui::frontend::Draw>, Option<oag_ui::screen::Model>) {
     // The entry the *picker* selects, which falls back to the first when the
     // setting names none this source offers - `Picker::new`'s own rule. A
     // second lookup that stopped at `None` instead would leave a capture of
     // another title's disc showing a highlighted row with no picture beside
     // it, which is a disagreement with the live screen and not a finding.
     let source = match kind {
-        oag_ui::picker::Kind::Track => track.or(tracks.first()).map(|track| {
+        oag_ui_screens::picker::Kind::Track => track.or(tracks.first()).map(|track| {
             (
                 track.location.clone(),
                 oag_race::Mode::from_name(&settings.race.mode) == Some(oag_race::Mode::Zone),
             )
         }),
-        oag_ui::picker::Kind::Ship => teams
+        oag_ui_screens::picker::Kind::Ship => teams
             .iter()
             .find(|team| team.id == settings.race.team)
             .or(teams.first())

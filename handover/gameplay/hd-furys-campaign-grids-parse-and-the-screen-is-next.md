@@ -82,7 +82,7 @@ drawing pass.
 2026-09-21 RPCS3 pass above found the real disc has a `Campaign Selection`
 screen ahead of `Grid Selection` that this build had no state for at all,
 defaulting to `Fury` and reaching this build's own base-HD-only grids by
-neither input nor screen. `oag_ui::campaign::selection::CampaignSelection`
+neither input nor screen. `oag_ui_screens::campaign::selection::CampaignSelection`
 now models it, read off `DATA06`'s own copy of `CellMode_Definition.xml`
 (the precedence-resolved `DATA02` copy has neither this screen nor `Grid
 Selection Fury` at all - see `oag_hd::campaign::SCREEN_ENTRY`'s own doc),
@@ -169,7 +169,7 @@ copy is `DATA04`'s `1024x768` atlas (three per-difficulty blocks), not
 `Medal_{x}_{y}` (the grid overview badge) and `Target0/1/2 Medal` (the
 Cell Selection target row) - two different widget-name shelvings of the
 same file, both needed the fix (`oag_game::campaign::read_hd_texture`).
-`oag_ui::campaign::hd::hd_medal_frame` now crops the block matching a
+`oag_ui_screens::campaign::hd::hd_medal_frame` now crops the block matching a
 difficulty, not always block 0. `oag_game::records::CampaignRecord` gained
 `best_difficulty`/`last_difficulty` (backward compatible, `#[serde(default)]`);
 `Store::record_campaign` tie-breaks a harder rung over a better medal at an
@@ -276,11 +276,11 @@ project's own default rung changed from `Difficulty::Medium` to
 `Difficulty::Easy` on HD (Pulse's own `Medium` default is untouched - it was
 already correct, `Profile_SetDifficultyRC(profile, 1)`).
 
-**What landed, player-facing**: `oag_ui::campaign::hd::hd_difficulty_button_line`
+**What landed, player-facing**: `oag_ui_screens::campaign::hd::hd_difficulty_button_line`
 (new) picks `RB_AI_DIF` for `Race`/`Head2Head`, `RB_DIF` for
 `TimeTrial`/`Zone`/`Elimination`/`SpeedLap`/`Mode::Other` (`NitroBattle`/
 `Detonator`), and returns `None` (disc's static string stays) for
-`Tournament`/`CustomGrid`/`AiRace`. `oag_ui::campaign::CellSelection` gained
+`Tournament`/`CustomGrid`/`AiRace`. `oag_ui_screens::campaign::CellSelection` gained
 `with_default_difficulty`, called with `Difficulty::Easy` from both
 `oag_game`'s live session (`CampaignStage::open_cell_selection`, gated on
 `is_hd()`) and the `--menu-page cell-select` still capture path
@@ -340,11 +340,11 @@ title, headings, team logo, per-model stat bars, Confirm/Back legend,
 left/right team, up/down livery, pointer, Back to the same cell and rung,
 and the picked livery reaches the race. Full writeup:
 `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Team Selection`,
-2026-09-29"; code in `oag_ui::picker::hd`.
+2026-09-29"; code in `oag_ui_screens::picker::hd`.
 
 **Left open, in priority order**:
 1. **The 3-D ship in the `SHIP MODEL` frame.** The `ShipModel` pose is read
-   (`oag_ui::picker::hd::ShipModel`); HD ships no `ship_FE.vex` (its own
+   (`oag_ui_screens::picker::hd::ShipModel`); HD ships no `ship_FE.vex` (its own
    per-team `screen.xml` names one), so the preview needs the race's
    `ship.vex` + `ship.rcsmodel` path. An afternoon if the race loader's
    model build can be called with an archive and an entry name alone.
@@ -376,7 +376,7 @@ RECORDS table (`---` cells) and, on a reverse circuit, the authored
 `ReverseIcon`s. Left/right wrap along twelve circuits, up/down switch
 direction; pointer and Back work; Back from `Team Selection` returns here.
 Writeup: `docs/ui/campaign-screens.md`, "Wipeout HD/Fury: `Track Creation`,
-2026-09-29"; code in `oag_ui::picker::hd::track`, `Picker::with_rows`,
+2026-09-29"; code in `oag_ui_screens::picker::hd::track`, `Picker::with_rows`,
 `oag_game::catalogue::direction_rows`.
 
 **Corrections it made**: `right` most likely wraps at twelve (confidence 80:

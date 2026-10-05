@@ -41,7 +41,7 @@ seconds (`EndRaceResults_Update`, new this pass). See
 own dated correction for the decompile and
 [`docs/ui/endrace-screens.md`](../../docs/ui/endrace-screens.md)'s new
 Tournament section for what draws
-(`oag_ui::endrace::TournamentResults`/`tournament_results_draw_list`,
+(`oag_ui_screens::endrace::TournamentResults`/`tournament_results_draw_list`,
 `crate::race_stage::endrace::tournament_results`). **Not yet checked
 against a live PPSSPP capture of a real tournament leg ending** - the same
 autopilot cost `tournament.md`'s own "Live verification" section

@@ -28,7 +28,7 @@ use oag_mesh::mesh_render::{
     write_uniforms, write_uniforms_raw,
 };
 use oag_mesh::orbit::Orbit;
-use oag_ui::picker::slideshow::Slideshow;
+use oag_ui_screens::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
@@ -41,15 +41,15 @@ use crate::render::letterbox_in;
 /// Creation`'s outline ribbon no longer goes through this: see
 /// [`mode3d_view_projection`] for the disc's own camera, now read instead.
 #[must_use]
-pub fn orbit_for(kind: oag_ui::picker::Kind, seconds: f32) -> Orbit {
+pub fn orbit_for(kind: oag_ui_screens::picker::Kind, seconds: f32) -> Orbit {
     match kind {
-        oag_ui::picker::Kind::Ship => Orbit {
+        oag_ui_screens::picker::Kind::Ship => Orbit {
             yaw: -0.7 + seconds * std::f32::consts::TAU / 12.0,
             pitch: 0.35,
             zoom: 0.8,
             ..Orbit::default()
         },
-        oag_ui::picker::Kind::Track => Orbit {
+        oag_ui_screens::picker::Kind::Track => Orbit {
             yaw: 0.3,
             pitch: 1.05,
             zoom: 0.4,
@@ -104,10 +104,7 @@ pub fn orbit_for(kind: oag_ui::picker::Kind, seconds: f32) -> Orbit {
 /// order - RotY here is `0.1` rad, small enough that a wrong order would be
 /// hard to see on this circuit alone.
 #[must_use]
-pub fn mode3d_view_projection(
-    model: &oag_ui::picker::slideshow::Model,
-    space: Space,
-) -> Option<(Mat4, Mat4)> {
+pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Option<(Mat4, Mat4)> {
     let [near, far] = model.depth;
     if !(near > 0.0 && far > near) {
         return None;
@@ -153,7 +150,7 @@ pub type Still = (String, Vec<u8>);
 /// authors both chains in the one `screen.xml`, which the fallback below
 /// reads the same way: the Zone file first when Zone is asked for, then the
 /// plain file, and within it the Zone chain if it has one. See
-/// [`oag_ui::picker::slideshow`].
+/// [`oag_ui_screens::picker::slideshow`].
 ///
 /// **`location` is a craft's as readily as a circuit's**, and on Pure it has
 /// to be: `Data\Ships\<team>\screen.xml` authors the three-still chain that
@@ -173,7 +170,7 @@ pub type Still = (String, Vec<u8>);
 /// `screen.xml` declares none and still names them for its stills' colour.
 /// `strings` resolves the panel's own `idstring` labels - Pure's stat bars,
 /// authored in this same file rather than in `Selection_Definition.xml`. See
-/// [`oag_ui::picker::slideshow::Slideshow::read`].
+/// [`oag_ui_screens::picker::slideshow::Slideshow::read`].
 ///
 /// The stills are read through [`oag_pulse::read_image`], which is what
 /// finds a PS2 disc's `.pct` under a `.mip` name. One that is missing is
@@ -225,7 +222,7 @@ pub fn slideshow(
 /// Seconds the hexagonal window's own stills take to fade in on a fresh
 /// selection - **chosen, not measured**: the circuit's own `screen.xml`
 /// authors no `transition` of its own for them (unlike `Selection_Definition.xml`'s
-/// `LeftLayer`s, which do - see [`oag_ui::picker`]'s own reading of that
+/// `LeftLayer`s, which do - see [`oag_ui_screens::picker`]'s own reading of that
 /// attribute), but a live PPSSPP capture shows them arriving in step with
 /// the info panel's own measured `0.5`s (`docs/ui/selection-screens.md`), so
 /// this reuses that number rather than inventing an unrelated one.
@@ -576,7 +573,7 @@ impl Preview {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
         space: Space,
-        mode3d: Option<&oag_ui::picker::slideshow::Model>,
+        mode3d: Option<&oag_ui::screen::Model>,
         rect: [f32; 4],
         orbit: Orbit,
         seconds: f32,
@@ -631,7 +628,7 @@ impl Preview {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
         space: Space,
-        model: &oag_ui::picker::slideshow::Model,
+        model: &oag_ui::screen::Model,
         seconds: f32,
     ) -> bool {
         if self.model.vertices.is_empty() || self.model.indices.is_empty() {

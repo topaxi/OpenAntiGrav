@@ -40,7 +40,7 @@
 //!
 //! **The `<Model name="ShipModel">` preview is not drawn at all.** Placing a
 //! 3D craft on a 2D front-end screen has no renderer seam yet - the same gap
-//! `oag_ui::picker::slideshow`'s own `Model` sits on ("read and carried, not
+//! `oag_ui_screens::picker::slideshow`'s own `Model` sits on ("read and carried, not
 //! yet drawn from"), which is Wipeout Pulse's Track Creation screen hitting
 //! the identical wall. `TeamInfo`'s own stat panel is not drawn either: it
 //! is native-populated the same way `ProfileTouchMain`/`TouchTeamGrid` are.

@@ -14,10 +14,10 @@
 use std::path::PathBuf;
 
 use oag_assets::Archives;
-use oag_ui::endrace::Layout;
 use oag_ui::language::StringTable;
-use oag_ui::picker::FaceScales;
 use oag_ui::screen::Screens;
+use oag_ui_screens::endrace::Layout;
+use oag_ui_screens::picker::FaceScales;
 
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 
@@ -90,7 +90,7 @@ fn five_archives_carry_the_file_at_its_own_documented_size() {
 /// `DATA02`'s copy: three screens (`Results`/`Rewards`/`Menu`, no
 /// `Podium`), `EndRace Results`' own grid is four columns by ten rows and
 /// only the first two columns are captioned - the shape
-/// `oag_ui::endrace::hd` draws off, read here independent of that crate so
+/// `oag_ui_screens::endrace::hd` draws off, read here independent of that crate so
 /// a change to either notices the other.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -126,7 +126,7 @@ fn data02_authors_three_screens_and_a_four_by_ten_grid() {
     .expect("EndRace Results is on this screen");
 
     // Both halves numeric - the same requirement
-    // `oag_ui::endrace::hd::grid_slot` makes, which is what excludes
+    // `oag_ui_screens::endrace::hd::grid_slot` makes, which is what excludes
     // `Grid0.h`/`Grid1.h`/`Grid2.h` (the still-unexplained white-ink
     // variant, see `docs/formats/hd-endrace-screens.md`) from the 4x10
     // shape proper.
@@ -171,7 +171,7 @@ fn data02_authors_three_screens_and_a_four_by_ten_grid() {
 }
 
 /// `EndRace Menu`'s eight `<Block>` options, by name and idstring - the
-/// table `oag_ui::endrace::MenuOption::hd_block_name`/`idstring` is written
+/// table `oag_ui_screens::endrace::MenuOption::hd_block_name`/`idstring` is written
 /// against. Five of the eight idstrings are byte-identical to
 /// `MenuOption::idstring`'s own Pulse-derived table; this test is what
 /// backs that claim in `docs/formats/hd-endrace-screens.md`.
@@ -220,15 +220,15 @@ fn menu_blocks_match_the_names_and_idstrings_menuoption_expects() {
 
     // Every implemented MenuOption's own idstring is on the screen and
     // resolves to a real Block - the direct check that
-    // `oag_ui::endrace::hd::hd_menu_draw_list`'s own `find_text` lookup by
+    // `oag_ui_screens::endrace::hd::hd_menu_draw_list`'s own `find_text` lookup by
     // `hd_block_name()` finds something on the real disc, not only on the
     // crate's own miniature fixture.
     for option in [
-        oag_ui::endrace::MenuOption::NextRace,
-        oag_ui::endrace::MenuOption::RaceAgain,
-        oag_ui::endrace::MenuOption::ReturnToGrid,
-        oag_ui::endrace::MenuOption::ReturnToMenu,
-        oag_ui::endrace::MenuOption::ViewResultsAgain,
+        oag_ui_screens::endrace::MenuOption::NextRace,
+        oag_ui_screens::endrace::MenuOption::RaceAgain,
+        oag_ui_screens::endrace::MenuOption::ReturnToGrid,
+        oag_ui_screens::endrace::MenuOption::ReturnToMenu,
+        oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
     ] {
         let block = layout
             .screen
@@ -243,7 +243,7 @@ fn menu_blocks_match_the_names_and_idstrings_menuoption_expects() {
 /// HD's own English string table (`DATA02`'s
 /// `Languages\English\entries.xml`) names a finishing position
 /// `ER_{n}PLACE`, not Pulse's `ER_{n}STP` - the measured divergence
-/// `oag_ui::endrace::hd::hd_headline_text` branches on. See that
+/// `oag_ui_screens::endrace::hd::hd_headline_text` branches on. See that
 /// function's own doc.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]

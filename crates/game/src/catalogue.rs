@@ -124,7 +124,7 @@ pub fn track_emblem(title: &oag_title::Title, track: &Track) -> Option<String> {
     title
         .front_end
         .is_some_and(|front_end| front_end.track_select.is_some())
-        .then(|| oag_ui::picker::hd::track::emblem_src(&track.location))
+        .then(|| oag_ui_screens::picker::hd::track::emblem_src(&track.location))
 }
 
 /// One thing a player can pick on the Race page.
@@ -583,7 +583,7 @@ impl Team {
     pub fn variant_stats<'a>(
         &self,
         variant_ids: impl IntoIterator<Item = &'a str>,
-    ) -> Vec<Option<oag_ui::picker::hd::Stats>> {
+    ) -> Vec<Option<oag_ui_screens::picker::hd::Stats>> {
         if self.models.is_empty() {
             return Vec::new();
         }
@@ -593,7 +593,7 @@ impl Team {
                 let rating = self
                     .model_for_directory(&format!("{}{suffix}", self.location))?
                     .rating_tenths?;
-                Some(oag_ui::picker::hd::Stats {
+                Some(oag_ui_screens::picker::hd::Stats {
                     speed: rating.speed,
                     thrust: rating.thrust,
                     handling: rating.handling,

@@ -1,11 +1,11 @@
-//! What `oag_ui::prompt`'s on-screen keyboard grid offers, checked against
+//! What `oag_ui_screens::prompt`'s on-screen keyboard grid offers, checked against
 //! `oag-game`'s own `pilots::check_name`/`MAX_NAME` - the one assertion in
 //! this cluster that needs to see both crates at once, so it lives here
 //! rather than with the rest of the grid's tests in `oag-ui`'s own
 //! `prompt/tests.rs`.
 
 use oag_gameplay::input::{Button, Input};
-use oag_ui::prompt::{CELLS, COLUMNS, Key, Keyboard, Labels, Outcome, key_at};
+use oag_ui_screens::prompt::{CELLS, COLUMNS, Key, Keyboard, Labels, Outcome, key_at};
 
 fn tick(buttons: &[Button]) -> Input {
     let mut input = Input::new();

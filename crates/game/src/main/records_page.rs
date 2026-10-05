@@ -29,7 +29,7 @@
 //! `crate::menu_stage::MenuStage::render` draws the result as one
 //! `Draw::Text` pair per row, continuing the page's own row pitch straight
 //! past its last real entry (MODE, TRACK, BACK) rather than through the
-//! single-line note slot `oag_ui::prompt::axis_preview_draw` reserves for
+//! single-line note slot `oag_ui_screens::prompt::axis_preview_draw` reserves for
 //! AI PILOTS - four lines do not fit in a reservation sized for one, and
 //! widening that reservation would have to touch `crates/game/src/capture/
 //! menu_page.rs` to keep the headless and live paths agreeing, the same

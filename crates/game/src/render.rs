@@ -553,7 +553,7 @@ impl Renderer {
     ///
     /// What a stage does: it owns the frame, so it starts from black and the
     /// bars outside `viewport` are what it leaves uncovered. `clip` is
-    /// `(index, left, right)` for a marquee row - see `oag_ui::marquee`.
+    /// `(index, left, right)` for a marquee row - see `oag_ui_screens::marquee`.
     #[expect(clippy::too_many_arguments, reason = "clip is one more fact")]
     pub fn render(
         &mut self,

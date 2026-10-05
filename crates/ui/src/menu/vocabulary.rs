@@ -45,16 +45,16 @@ pub enum Action {
     RenamePilot,
     /// Asks, and then deletes the selected pilot's file.
     ///
-    /// Behind a [`crate::prompt::Confirm`] because it destroys a file, and
+    /// Behind a `oag_ui_screens::prompt::Confirm` because it destroys a file, and
     /// because for a file named after a built-in "delete" is not what
     /// happens: the file was *replacing* the built-in, so removing it
     /// restores it. See `crate::pilots::is_built_in_name`.
     DeletePilot,
     /// Opens the Race Campaign's `Grid Selection` screen - see
-    /// `oag_ui::campaign` and `crate::main::session::campaign` in `oag-game`.
+    /// `oag_ui_screens::campaign` and `crate::main::session::campaign` in `oag-game`.
     ///
     /// **A stub past `Grid Selection`/`Cell Selection` themselves.** Neither
-    /// screen launches a race here - see `oag_ui::campaign`'s own module doc
+    /// screen launches a race here - see `oag_ui_screens::campaign`'s own module doc
     /// for why, and the `campaign` handover thread's "Next Steps".
     OpenCampaign,
 }

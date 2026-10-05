@@ -12,7 +12,7 @@ impl Grid {
     /// [`Medal::points`] and summed. `0` on a fresh profile, or whenever
     /// `medal_of` answers `None` for every cell here - the same
     /// "player-progress source is optional" reading
-    /// `oag_ui::campaign::GridSummary::from_grid` gives the rest of a grid's
+    /// `oag_ui_screens::campaign::GridSummary::from_grid` gives the rest of a grid's
     /// own numbers.
     #[must_use]
     pub fn points_earned(&self, medal_of: &dyn Fn(&str) -> Option<Medal>) -> u32 {

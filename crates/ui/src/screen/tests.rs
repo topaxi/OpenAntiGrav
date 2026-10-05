@@ -731,7 +731,7 @@ fn a_text_that_authors_its_own_offset_with_no_wrapping_item_positions_itself_by_
     // fixed, `collect_widgets` folded a text's own `OffsetX`/`OffsetY` into
     // what its *children* saw but not into its own position, so this label
     // landed at `(179, 0)` instead of `(179, 300)` - see
-    // `oag_ui::campaign::hd`'s own module doc for the visible bug that was.
+    // `oag_ui_screens::campaign::hd`'s own module doc for the visible bug that was.
     let screens = Screens::from_xml(
         r#"
 <Screen>

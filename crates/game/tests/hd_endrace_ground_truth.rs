@@ -105,18 +105,18 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
     // function lives in the binary crate and is unit-tested there; this is
     // the same three fields, fed real data, to confirm the shape survives
     // contact with a real board rather than only a hand-built one.
-    let rows: Vec<oag_ui::endrace::FieldRow> = board
+    let rows: Vec<oag_ui_screens::endrace::FieldRow> = board
         .rows
         .iter()
-        .map(|row| oag_ui::endrace::FieldRow {
+        .map(|row| oag_ui_screens::endrace::FieldRow {
             place: row.place,
             time_ticks: row.finish_tick,
             player: row.player,
         })
         .collect();
-    let model = oag_ui::endrace::FieldResults {
+    let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
-        headline: oag_ui::endrace::Headline::Position(
+        headline: oag_ui_screens::endrace::Headline::Position(
             rows.iter()
                 .find(|row| row.player)
                 .map(|row| row.place)
@@ -135,7 +135,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
         &base,
         &[],
@@ -157,7 +157,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         oag_display::space::Space::PSP,
         22.0,
     );
-    let layers = oag_ui::endrace::hd::hd_results_draw_list(
+    let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
         &model,
         &screens.results,
         &skin,
@@ -222,7 +222,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
         &oag_game::sprite::Sheet::default(),
         &[],
@@ -237,16 +237,16 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         oag_display::space::Space::PSP,
         22.0,
     );
-    let model = oag_ui::endrace::FieldResults {
+    let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
-        headline: oag_ui::endrace::Headline::Position(1),
-        rows: vec![oag_ui::endrace::FieldRow {
+        headline: oag_ui_screens::endrace::Headline::Position(1),
+        rows: vec![oag_ui_screens::endrace::FieldRow {
             place: 1,
             time_ticks: Some(1000),
             player: true,
         }],
     };
-    let layers = oag_ui::endrace::hd::hd_results_draw_list(
+    let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
         &model,
         &screens.results,
         &skin,
@@ -299,7 +299,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
         &oag_game::sprite::Sheet::default(),
         &[],
@@ -318,8 +318,8 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
         oag_display::space::Space::PSP,
         22.0,
     );
-    let draw = |model: &oag_ui::endrace::HdRewards| {
-        oag_ui::endrace::hd::hd_rewards_draw_list(
+    let draw = |model: &oag_ui_screens::endrace::HdRewards| {
+        oag_ui_screens::endrace::hd::hd_rewards_draw_list(
             model,
             rewards,
             &skin,
@@ -347,7 +347,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
         })
     };
 
-    let layers = draw(&oag_ui::endrace::HdRewards {
+    let layers = draw(&oag_ui_screens::endrace::HdRewards {
         place: Some(3),
         medal: Some(oag_tables::race_campaign::Medal::Bronze),
         campaign: true,
@@ -370,7 +370,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
     assert!(!fill_at(&layers, 600.0, 530.0), "LoyaltyImg never draws");
 
     // Not a campaign race and no place: only the authored labels.
-    let bare = texts(&draw(&oag_ui::endrace::HdRewards {
+    let bare = texts(&draw(&oag_ui_screens::endrace::HdRewards {
         place: None,
         medal: None,
         campaign: false,
@@ -402,7 +402,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
         &oag_game::sprite::Sheet::default(),
         &[],
@@ -423,16 +423,16 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
     // The grid's own origin: `GridSideBarL` sits at `y = 44` inside it.
     let origin_y = side.y - 44.0;
 
-    let rows: Vec<oag_ui::endrace::FieldRow> = (1..=8u8)
-        .map(|place| oag_ui::endrace::FieldRow {
+    let rows: Vec<oag_ui_screens::endrace::FieldRow> = (1..=8u8)
+        .map(|place| oag_ui_screens::endrace::FieldRow {
             place,
             time_ticks: Some(6000 + u64::from(place) * 60),
             player: place == 5,
         })
         .collect();
-    let model = oag_ui::endrace::FieldResults {
+    let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
-        headline: oag_ui::endrace::Headline::Position(5),
+        headline: oag_ui_screens::endrace::Headline::Position(5),
         rows,
     };
     let skin = oag_ui::menu::Skin::new(
@@ -442,7 +442,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         oag_display::space::Space::PSP,
         22.0,
     );
-    let layers = oag_ui::endrace::hd::hd_results_draw_list(
+    let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
         &model,
         &screens.results,
         &skin,

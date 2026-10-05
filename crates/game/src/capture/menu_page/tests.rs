@@ -53,7 +53,7 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
 /// `tag-entry` is a real prompt name - unlike `"qwerty"` above - but it
 /// reads Pulse's own `TagInput` screens live off a disc, which this test has
 /// none of. It has to fail loudly rather than draw an empty or invented
-/// picture; see `crates/ui/tests/tag_entry_ground_truth.rs` for the version
+/// picture; see `crates/ui-screens/tests/tag_entry_ground_truth.rs` for the version
 /// of this that runs against the real thing.
 #[test]
 fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
@@ -72,7 +72,7 @@ fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
 /// `catalogue::Track` whose `entry_name()` needs the `Reversed="True"`
 /// branch resolved - the exact closure `menu_page`'s own caller passes,
 /// pinned here so deleting either the closure or the
-/// `oag_ui::prompt::record_row_draw` call fails a test rather than only
+/// `oag_ui_screens::prompt::record_row_draw` call fails a test rather than only
 /// a screenshot nobody re-reads on every change.
 #[test]
 fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {

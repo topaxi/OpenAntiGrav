@@ -22,7 +22,7 @@
 //!   art rather than drawing HD's numbers under Omega's name.
 //! - **No race box.** `racebox_definition.xml` exists in `data09.psarc`, but
 //!   its dialect has not been checked against either the Pulse/Pure
-//!   `Selection_Definition.xml` shape `oag_ui::picker::Layout::read` parses
+//!   `Selection_Definition.xml` shape `oag_ui_screens::picker::Layout::read` parses
 //!   or HD's own unread `<Model>`-widget one. `None`, a gap rather than a
 //!   measurement - see `docs/formats/omega-status.md`.
 //!
