@@ -332,6 +332,8 @@ override colour_is_light: f32 = 0.0;
 // Bound third, beside the lightmap, and read only where `slots::PAD_NE` (bit
 // 14) is set - see `mesh::rcs::pad_ne`. A flat 1x1 everywhere else.
 @group(1) @binding(3) var pad_mask: texture_2d<f32>;
+// HD's magstrip wave, read only where `slots::MAG_WAVE` is set. `mesh::rcs::mag_wave`.
+@group(1) @binding(4) var wave_map: texture_2d<f32>;
 @group(2) @binding(0) var<uniform> scene: Scene;
 // The Zone stage's `zoneModeTrack<n>.gtf`, and a sampler of its own
 // because it is addressed by a coordinate this shader builds rather than by
@@ -1404,7 +1406,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 17u;
+    let glow_slot = in.slots >> 19u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
@@ -1460,6 +1462,39 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // tint; zero for every other material. Fog follows in `fogged`, which is
     // where the program's own final `MAD` puts it too.
     let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne);
+
+    // **HD's magstrip wave** (`slots::MAG_WAVE`, `oag_mesh::mesh::rcs::mag_wave`):
+    //
+    //     m = lerp(e.rgb, wave(uv * k + time), e.a)
+    //     d = e.rgb / (1 - m * Colour)
+    //
+    // `e` is the emissive picture (the third binding), `k` the glow-table
+    // entry's scale, `Colour` its tint, and the clock is added to both axes with
+    // no multiplier - read off the microcode, `mag_wave`'s doc has the listing.
+    // The wave texture repeats, so the band sweeps once a second.
+    //
+    // **Chosen, not measured: the denominator is floored at 0.05.** `Colour.g`
+    // is 1 on Talon's Junction and the wave's bright band reaches 1, so the
+    // quotient diverges, and a black emissive texel makes it `0 / 0`. The RSX
+    // writes 8 bits and saturates; this floors the divisor and clamps to 1 so
+    // no inf or NaN reaches the bloom's targets. The dodge is also taken on the
+    // sampled (sRGB-decoded) texels rather than raw bytes, the same domain
+    // choice the glow above makes.
+    var mag_glow = vec3<f32>(0.0);
+    if (in.slots & 131072u) != 0u {
+        let e = textureSample(pad_mask, albedo_sampler, in.texcoord);
+        let w = textureSample(
+            wave_map,
+            albedo_sampler,
+            in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
+        );
+        let m = mix(e.rgb, w.rgb, e.a);
+        mag_glow = min(
+            e.rgb / max(vec3<f32>(1.0) - m * glow_tint_offset.rgb, vec3<f32>(0.05)),
+            vec3<f32>(1.0),
+        );
+    }
+    let mag_glow_gamma = pow(mag_glow, vec3<f32>(1.0 / 2.2));
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
@@ -1559,7 +1594,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // signs, everything near the camera - dropped it. Only the far background
         // and the hull ever saw it.
         let lit_linear =
-            surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow;
+            surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow;
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),
@@ -1600,7 +1635,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // texture-lookup product, not an albedo sample, so it owes no sRGB
     // decode either way.
     let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light
-        + glow + zone_glow_term + pad_glow;
+        + glow + zone_glow_term + pad_glow + mag_glow_gamma;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's
@@ -1689,6 +1724,21 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `authored`'s ambient/prelit/sun sum, so running both would shade it
     // twice.
     let shaded_or_sheen = select(shaded, sheen, ramp_sheen);
+    // **The magstrip floor's own combine** (`slots::MAG_LOOP`), traced in
+    // `oag_mesh::mesh::rcs::mag_wave`: `vertexLight * grid * (ramp + c) +
+    // (grid + ramp) * d`, alpha the grid. `albedo` is the grid and `lightmap`
+    // the facing ramp, addressed by `dot(V, N)` as the glass sheen's is. `c`
+    // is the glow entry's `offset`. Left out, named: the paraboloid
+    // reflection term, which this renderer has no probe for.
+    var mag_floor = shaded_or_sheen;
+    if (in.slots & 262144u) != 0u {
+        let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
+        let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
+        let loop_light = in.colour.rgb + in.texcoord.x * ramp_sun;
+        let loop_rgb = loop_light * grid * (ramp + vec3<f32>(glow_tint_offset.w))
+            + (vec3<f32>(grid) + ramp) * mag_glow;
+        mag_floor = vec4<f32>(loop_rgb, grid * in.colour.a);
+    }
 
     // **The absorb shell, when this model is one.** Fragment block #1 of
     // `hd_absorbinternal.rcsmaterial`, which the fogged blocks repeat before
@@ -1717,7 +1767,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         ).rgb;
         absorb = vec4<f32>(absorb_rgb, in.colour.a);
     }
-    let composed = mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
+    let composed = mix(mix(mag_floor, flame, flame_shading), absorb, absorb_shading);
 
     // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the
     // LeachBall) and `slots::RIM_EDGE` (the Plasma bolt's head), each set only

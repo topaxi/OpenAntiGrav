@@ -144,8 +144,11 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials.
     pub lightmaps: TextureSlots,
-    /// Each HD pad material's `_ne` mask, bound third (`mesh::rcs::pad_ne`); empty elsewhere.
+    /// Each HD pad material's `_ne` mask, bound third (`mesh::rcs::pad_ne`), and each
+    /// magstrip material's emissive picture in the same slot (`mesh::rcs::mag_wave`).
     pub pad_masks: TextureSlots,
+    /// Each magstrip material's scrolling wave texture, bound fourth; empty elsewhere.
+    pub wave_maps: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -317,6 +320,7 @@ impl Model {
             textures: Vec::new(),
             lightmaps: Vec::new(),
             pad_masks: Vec::new(),
+            wave_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
@@ -909,6 +913,7 @@ fn build_class(
         textures,
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
+        wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
