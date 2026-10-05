@@ -10,19 +10,21 @@
 //! three lists [`Model`] already has: opaque, alpha-tested, blended.
 //!
 //! **What the file does not say is the equation.** HD authors a factor pair
-//! beside the state word and Omega's header has no such field - the four bytes
-//! where it would be are zero on all 32,880 materials. The executable's material
-//! pass was not found programming a per-material blend, so a blended draw here
-//! uses alpha-over (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`), **chosen, not
-//! measured**. Wrong for the additive family (HD authors `SRC_ALPHA`, `ONE` on
-//! `emissive_bloom`, `hd_enginetrail`, ...), which will draw as a dim sheet
-//! rather than a glow. The alpha test's reference is HD's `0.5` for the same
-//! reason (HD's `GL_GREATER`/`0.5` holds on every one of its mode-2 materials).
+//! beside the state word and neither Omega's header (zero on all 32,880
+//! materials) nor 2048's carries one, and no material-pass call that programs a
+//! per-material blend was found in either executable. So a blended draw takes
+//! HD's own pair for a material of the **same name** where
+//! [`oag_rcs::rcsmodel::psp2::lineage_blend`] holds one (inherited, not
+//! measured here: `emissive_bloom`, `hd_enginetrail` and the light barriers are
+//! `SRC_ALPHA`/`ONE` there), and alpha-over (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`)
+//! for every other name, **chosen, not measured**. The alpha test's reference is
+//! HD's `0.5` for the same reason (HD's `GL_GREATER`/`0.5` holds on every one of
+//! its mode-2 materials).
 //!
 //! Only a **textured** draw moves: the alpha a blend or a test reads is the
 //! texture's, and an unpainted draw has nothing but the white placeholder's `1.0`.
 
-use oag_rcs::rcsmodel::psp2::{self, material::Mode};
+use oag_rcs::rcsmodel::psp2::{self, lineage_blend, material::Mode};
 
 use super::Report;
 use crate::mesh::Model;
@@ -40,13 +42,16 @@ pub(super) fn route(decoded: &psp2::Model, model: &mut Model, report: &mut Repor
     }
     let draws = std::mem::take(&mut model.draws);
     for (mut draw, submesh) in draws.into_iter().zip(&decoded.submeshes) {
-        let mode = submesh
-            .material
-            .and_then(|i| decoded.materials.get(i))
-            .and_then(|m| m.mode());
+        let material = submesh.material.and_then(|i| decoded.materials.get(i));
+        let mode = material.and_then(|m| m.mode());
         match (mode, draw.texture) {
             (Some(Mode::Blended), Some(_)) => {
-                draw.blend_state = Some(crate::mesh_render::TRANSPARENT_BLEND);
+                let inherited = material.and_then(|m| lineage_blend::inherited(&m.name));
+                draw.blend_state = Some(match inherited {
+                    Some((src, dst)) => super::super::blend_state(src, dst),
+                    None => crate::mesh_render::TRANSPARENT_BLEND,
+                });
+                report.inherited_blend_draws += usize::from(inherited.is_some());
                 report.blended_draws += 1;
                 model.transparent_draws.push(draw);
             }
