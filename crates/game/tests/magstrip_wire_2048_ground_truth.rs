@@ -42,7 +42,8 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
     })
     .expect("loading the race");
     for line in loaded.report.iter().filter(|l| {
-        l.starts_with("sfx") || l.contains("magstrip arc wake")
+        l.starts_with("sfx")
+            || l.contains("magstrip arc wake")
             || l.contains("~magstrip01")
             || l.contains("electric_arc")
             || l.contains("ElectricArc")
