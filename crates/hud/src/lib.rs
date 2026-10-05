@@ -658,6 +658,24 @@ pub struct Readout {
     /// this at the shield's own pre-load value avoids a false catch-up
     /// animation from an assumed "full" start that never happened.
     pub energy_bar_delay_fraction: f32,
+    /// 2048's `ThrustBar` fill, in percent: the HUD's own chase toward the
+    /// ship's thrust level, `Hud_Update` (`0x81195cdc`, dirty bit `0x80`).
+    ///
+    /// The original keeps `hud+0x1c8` and moves it toward the thrust level
+    /// at 140 per second when below it and 100 per second when above, clamped
+    /// onto the target, then crops `ThrustBar` to `value * 0.01` of its
+    /// width. Ported by `Race::advance_thrust_chase`. **The target is chosen,
+    /// not measured**: the original reads the ship's `+0x578`, a thrust
+    /// level behind per-class rates this project has not recovered, and this
+    /// port feeds the raw thrust input (`0` or `100`) instead.
+    pub thrust_chase_percent: f32,
+    /// Whether 2048's Pilot Assist setting is on, which lights `PilotAssist`.
+    ///
+    /// The original reads one global byte (`DAT_81545468 + 0x3260e`). This
+    /// build has no assist setting to read, so a race leaves it `false` and
+    /// the widget stays absent; the field and its draw are wired for the day
+    /// the setting exists.
+    pub pilot_assist: bool,
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,
@@ -918,6 +936,8 @@ mod readout_tests;
 mod reticle_tests;
 #[cfg(test)]
 mod shield_tests;
+#[cfg(test)]
+mod state_2048_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
