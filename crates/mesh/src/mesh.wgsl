@@ -1480,8 +1480,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // no inf or NaN reaches the bloom's targets. The dodge is also taken on the
     // sampled (sRGB-decoded) texels rather than raw bytes, the same domain
     // choice the glow above makes.
+    //
+    // **Not in a Zone race.** Every `ZoneMode` variant of the wave family
+    // (`mageffect08`, `mageffect08_floor`, `mageffectloop`,
+    // `mag_effect_loop_opaque`, `chevron_pulse`, `mageffect_modded`) declares no
+    // wave sampler, no emissive picture, no `time` and no iridescent ramp (every one, all four archives -
+    // `hd_zone_wave_census_ground_truth`), so a Zone frame draws
+    // these surfaces as the ordinary Zone surface and this term, and the floor
+    // combine below, stay off. The condition is a branch and not a mix so the
+    // Time Trial picture is untouched to the byte.
     var mag_glow = vec3<f32>(0.0);
-    if (in.slots & 131072u) != 0u {
+    if (in.slots & 131072u) != 0u && scene.zone.enabled == 0.0 {
         let e = textureSample(pad_mask, albedo_sampler, in.texcoord);
         let w = textureSample(
             wave_map,
@@ -1731,7 +1740,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // is the glow entry's `offset`. Left out, named: the paraboloid
     // reflection term, which this renderer has no probe for.
     var mag_floor = shaded_or_sheen;
-    if (in.slots & 262144u) != 0u {
+    if (in.slots & 262144u) != 0u && scene.zone.enabled == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
         let loop_light = in.colour.rgb + in.texcoord.x * ramp_sun;
