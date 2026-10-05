@@ -130,11 +130,34 @@ fn the_field_model_draws_at_the_firer_for_the_repulsers_whole_life() {
     let (race, _) = fire_at(200.0, 4);
     let draws: Vec<_> = race.repulser_field_draws().into_iter().flatten().collect();
     assert_eq!(draws.len(), 1, "one live field");
-    let (matrix, alpha) = draws[0];
+    let (matrix, alpha, _) = draws[0];
     let firer = race.sim.world.ships[0].physics.body.position;
     assert!((matrix.w_axis.truncate() - firer).length() < 1e-4);
     // Fired on tick 1, stepped on ticks 1-3: 1 - 0.8^3.
     assert!((alpha - 0.488).abs() < 1e-4, "{alpha}");
     let (gone, _) = fire_at(200.0, 120);
     assert!(gone.repulser_field_draws().iter().all(Option::is_none));
+}
+
+/// The field model's texture track plays on the Repulser's age: `Repulser_Init`
+/// seeds the model with `Node_SetAnimTimeTree(0.0)` (`0x08875324`) and the mesh
+/// update then integrates the clock's delta, so the time is the age at rate 1.
+/// Measured live on PPSSPP: the one fresh mesh started at `0.000` on the fire
+/// frame, ran at slope `1.0000` against the race clock and stopped at 1.569 s,
+/// the entity's own `blast_time + wave_time`. The draw carries that age.
+#[test]
+fn the_field_models_texture_plays_on_the_repulsers_age() {
+    let (early, _) = fire_at(200.0, 4);
+    let (later, _) = fire_at(200.0, 34);
+    let age = |race: &Race| {
+        let draws: Vec<_> = race.repulser_field_draws().into_iter().flatten().collect();
+        assert_eq!(draws.len(), 1, "one live field");
+        draws[0].2
+    };
+    let step = age(&later) - age(&early);
+    assert!(
+        (step - 30.0 / 60.0).abs() < 1e-3,
+        "thirty ticks later the age is half a second further on, not {step}"
+    );
+    assert!(age(&early) > 0.0 && age(&early) < 0.1, "{}", age(&early));
 }

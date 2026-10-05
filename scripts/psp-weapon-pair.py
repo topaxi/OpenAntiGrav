@@ -67,6 +67,7 @@ BITS = {
     "bomb": 0x0100,
     "backward": 0x0100,
     "quake": 0x0008,
+    "repulser": 0x10000,
 }
 
 # `Psys_Spawn_q` (name in a1) and `Rocket_Update` (the rocket in a0): the two probes
@@ -88,6 +89,15 @@ INGAME_CLOCK = 0x40
 CAMERA_BREAK = 0x0883C13C
 BOMB_INIT = 0x08863188
 SHIELD_UPDATE = 0x0885E254
+# `Mesh_UpdateTextureTransforms` (mesh in a0): its time is `mesh+0x40`, the integral of the clock's
+# delta since `Mesh_SetAnimTime` seeded it (`mesh+0x194` caches the clock). Hit for every animated
+# mesh every frame, so the probe keeps only meshes whose time lags the race clock by 5 s or more -
+# a model that was seeded at its own spawn rather than at session start.
+MESH_TEXTURE_UPDATE = 0x0890E160
+# `BombBlast_Update (float dt in f12, BombBlast *a0)`: the blast's age is `+0xd0`, its hemisphere
+# and shockwave model nodes are `+0xd4` and `+0xd8`. The probe reads each node's `+0x40` (the
+# texture time) and `+0x194` (the cached clock) beside the age, to pair an object age with the time.
+BOMB_BLAST_UPDATE = 0x0887250C
 # `FUN_089194d0` and `ParticleSystem_DrawRolledQuads` (instance in a0, view matrix in a1): the
 # whole-instance draws of a pool-emitter's particles for render modes 0/1 (a plain square quad) and
 # 2 (the rolled quad). Hit once per live instance per frame.
@@ -102,6 +112,8 @@ PROBES = {
     "mine": MINE_POSE_NODE,
     "bomb": BOMB_INIT,
     "shield": SHIELD_UPDATE,
+    "meshtex": MESH_TEXTURE_UPDATE,
+    "blast": BOMB_BLAST_UPDATE,
 }
 
 # The emulator window is 960x544 (the PSP's 480x272, doubled) and is moved here.
@@ -142,7 +154,7 @@ def camera_eye(dbg, node):
     return {"right": m[0:3], "up": m[4:7], "fwd": m[8:11], "eye": [-m[12], -m[13], -m[14]]}
 
 
-def probe_after_fire(dbg, kind, frames, log, detonate=None):
+def probe_after_fire(dbg, kind, frames, log, detonate=None, condition=None):
     """Break at `kind`'s address for `frames` frames after the fire, logging each hit.
 
     Run inside the `Weapons_DispatchFire` stop that wrote the fire word. Only the
@@ -155,14 +167,14 @@ def probe_after_fire(dbg, kind, frames, log, detonate=None):
     start = dbg.call("cpu.status")["ticks"]
     out = log.setdefault(kind, [])
     try:
-        _probe_loop(dbg, kind, address, frames, start, out, detonate)
+        _probe_loop(dbg, kind, address, frames, start, out, detonate, condition)
     except TimeoutError:
         log[kind + "_quiet_after"] = out[-1]["frame"] if out else 0.0
         print("probe quiet: no further hit within 20 s of wall clock", file=sys.stderr)
 
 
-def _probe_loop(dbg, kind, address, frames, start, out, detonate=None):
-    for _, _ in dbg.each_hit(address, 100000, timeout=20.0):
+def _probe_loop(dbg, kind, address, frames, start, out, detonate=None, condition=None):
+    for _, _ in dbg.each_hit(address, 100000, timeout=20.0, condition=condition):
         now = (dbg.call("cpu.status")["ticks"] - start) / CYCLES_PER_FRAME
         if now > frames:
             break
@@ -199,6 +211,32 @@ def _probe_loop(dbg, kind, address, frames, start, out, detonate=None):
                 ptr = struct.unpack_from("<I", blob, at)[0]
                 if ram(ptr):
                     entry["models"][name] = {"ptr": ptr, "flags": dbg.read_u32(ptr + 0x2C)}
+        elif kind == "meshtex":
+            mesh = regs["a0"]
+            if not ram(mesh):
+                continue
+            ingame = dbg.read_u32(G_INGAME)
+            clock = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0] if ram(ingame) else 0.0
+            blob = dbg.read(mesh + 0x40, 4) + dbg.read(mesh + 0x18C, 12) + dbg.read(mesh + 0xC0, 1)
+            time_now, shown, _, cached = struct.unpack_from("<4f", blob, 0)
+            if clock - time_now < 5.0 and "detonation" not in entry:
+                continue
+            entry.update({"mesh": mesh, "time": time_now, "shown": shown, "cached_clock": cached,
+                          "clock": clock, "paused": blob[16]})
+        elif kind == "blast":
+            blast = regs["a0"]
+            if not ram(blast):
+                continue
+            ingame = dbg.read_u32(G_INGAME)
+            entry["clock"] = struct.unpack("<f", dbg.read(ingame + INGAME_CLOCK, 4))[0]
+            entry["blast"] = blast
+            entry["age"] = struct.unpack("<f", dbg.read(blast + 0xD0, 4))[0]
+            for name, at in (("hemisphere", 0xD4), ("shockwave", 0xD8)):
+                node = dbg.read_u32(blast + at)
+                if ram(node):
+                    time_now = struct.unpack("<f", dbg.read(node + 0x40, 4))[0]
+                    cached = struct.unpack("<f", dbg.read(node + 0x194, 4))[0]
+                    entry[name] = {"node": node, "time": time_now, "cached_clock": cached}
         elif kind == "bomb":
             # `Bomb_Init (entity a0, position a1, direction a2, ...)`: the drop point.
             entry["entity"] = regs["a0"]
@@ -375,6 +413,11 @@ def main():
                         help="after the fire, instead of photographing, log every hit of the "
                         "probe address for --probe-frames frames")
     parser.add_argument("--probe-frames", type=float, default=150.0)
+    parser.add_argument("--probe-condition", help="a PPSSPP breakpoint condition on the probe, e.g. "
+                        "'a0 >= 0x90af000 && a0 < 0x90b1000' to keep one heap block's hits only")
+    parser.add_argument("--probe-after-detonation", action="store_true",
+                        help="with --detonate-bomb-at: detonate from the dispatch loop, then start "
+                        "the probe, so a probe address only the blast reaches is armed in time")
     parser.add_argument("--camera", action="store_true",
                         help="record the player camera's pose in every frame row")
     parser.add_argument("--no-fire", action="store_true",
@@ -465,7 +508,7 @@ def main():
                         print("fired %s at stop frame %d (%s after GO), speed %.2f"
                               % (args.weapon, frame, frame - go if go is not None else "-", speed),
                               file=sys.stderr)
-                    if args.probe:
+                    if args.probe and args.detonate_bomb_at is None:
                         # Not nested in this loop: the dispatch breakpoint is still
                         # armed inside it and would stop the probe's run at the next
                         # frame. Leave the loop (its exit removes the breakpoint with
@@ -479,6 +522,10 @@ def main():
                 if args.detonate_bomb_at is not None and k == args.detonate_bomb_at:
                     row["detonation"] = detonate_bomb(dbg, body, position, previous_position,
                                                       args.detonate_ahead)
+                    if args.probe and args.probe_after_detonation:
+                        probe_pending = True
+                        log["frames"].append(row)
+                        break
                 if args.ge_dump_k is not None and k == args.ge_dump_k:
                     dump_ticket = dbg.send("gpu.record.dump")
                     _receive = dbg._recv
@@ -504,7 +551,7 @@ def main():
             frame += 1
         if probe_pending:
             detonate = None
-            if args.detonate_bomb_at is not None:
+            if args.detonate_bomb_at is not None and not args.probe_after_detonation:
                 # `previous` is where the craft was a frame before the fire: the direction of
                 # travel the blast is placed along; `at` is in frames after the fire.
                 detonate = {"at": float(args.detonate_bomb_at), "ahead": args.detonate_ahead,
@@ -512,7 +559,7 @@ def main():
                 # `detonate_bomb` steps from `previous` to the position it is given, so hand it a
                 # `previous` that is the fire frame's own position.
                 detonate["previous"] = last_position if previous_position is None else previous_position
-            probe_after_fire(dbg, args.probe, args.probe_frames, log, detonate)
+            probe_after_fire(dbg, args.probe, args.probe_frames, log, detonate, args.probe_condition)
         dbg.resume()
         if dump_ticket is not None:
             end = time.time() + 120

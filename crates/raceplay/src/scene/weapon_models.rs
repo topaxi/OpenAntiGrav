@@ -334,10 +334,14 @@ impl super::Scene {
     /// hide on two different schedules (`bomb_blast::HEMISPHERE_HIDE_AT_SECONDS`
     /// against the whole object's own retire).
     ///
-    /// **No per-tick anim-time scrub, unlike the Plasma's.**
-    /// `BombBlast_Update` scales the basis directly rather than scrubbing a
-    /// baked node animation - see `bomb_blast`'s own module doc comment - so
-    /// a plain [`Drawable::write`] carries the whole picture.
+    /// **No per-tick node scrub, unlike the Plasma's.** `BombBlast_Update`
+    /// scales the basis directly rather than scrubbing a baked node animation
+    /// - see `bomb_blast`'s own module doc comment - so [`Drawable::write`]
+    /// carries the geometry. The *texture* tracks play on the blast's own age
+    /// (`Drawable::write_anims`): `BombBlast_Construct` and `Repulser_Init`
+    /// seed each model with `Node_SetAnimTimeTree(0.0)` and `Mesh`'s per-frame
+    /// update then adds the clock's delta, so the texture time is the object's
+    /// age at rate 1 (measured live on PPSSPP, `scenery-animation.md`).
     ///
     /// The magstrip effect's pair rides here too, on the container's terms
     /// (`bomb_blast::BombBlastModels::mag_floor`). It does scrub: MagEffect2
@@ -361,6 +365,7 @@ impl super::Scene {
             ) {
                 let mvp = view_projection * draw.hemisphere_matrix;
                 drawable.write(queue, view_projection, draw.hemisphere_matrix, mvp);
+                drawable.write_anims(queue, draw.age);
                 hemisphere_active[slot] = true;
             }
             if let (true, Some(drawable)) =
@@ -368,6 +373,7 @@ impl super::Scene {
             {
                 let mvp = view_projection * draw.shockwave_matrix;
                 drawable.write(queue, view_projection, draw.shockwave_matrix, mvp);
+                drawable.write_anims(queue, draw.age);
                 // The ambient light's alpha the blast's update eases (`bomb_blast`'s doc): the
                 // vertex colours times white with that alpha. Per live shockwave, so a scratch of
                 // its own rather than the scene's.
@@ -381,12 +387,13 @@ impl super::Scene {
         }
         let mut repulser_active = [false; POOL_SIZE];
         for (slot, draw) in race.repulser_field_draws().iter().enumerate() {
-            let (Some((matrix, alpha)), Some(drawable)) =
+            let (Some((matrix, alpha, age)), Some(drawable)) =
                 (draw, self.bomb_blast.repulser_field.get(slot))
             else {
                 continue;
             };
             drawable.write(queue, view_projection, *matrix, view_projection * *matrix);
+            drawable.write_anims(queue, *age);
             // `Image_SetVertexColours(model, alpha << 24 | 0xffffff)`, the
             // shockwave's own mechanism above.
             drawable.tint(queue, [1.0, 1.0, 1.0, *alpha], &mut Vec::new());

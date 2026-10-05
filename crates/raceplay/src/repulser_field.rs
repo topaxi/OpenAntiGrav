@@ -211,10 +211,12 @@ impl Race {
         }
     }
 
-    /// This tick's model matrix and alpha for every pool slot with a live
-    /// field and a spline sample under its firer.
+    /// This tick's model matrix, alpha and the Repulser's age (the texture
+    /// track's time: `Repulser_Init` seeds the model with
+    /// `Node_SetAnimTimeTree(0.0)`) for every pool slot with a live field and
+    /// a spline sample under its firer.
     #[must_use]
-    pub(crate) fn repulser_field_draws(&self) -> [Option<(Mat4, f32)>; POOL_SIZE] {
+    pub(crate) fn repulser_field_draws(&self) -> [Option<(Mat4, f32, f32)>; POOL_SIZE] {
         std::array::from_fn(|index| {
             let field = self.view.repulser_fields[index]?;
             let repulser = self.sim.world.repulsers[index]?;
@@ -229,7 +231,7 @@ impl Race {
                 Vec3::from_array(sample.down),
                 field.scale(),
             );
-            Some((matrix, field.drawn_alpha()))
+            Some((matrix, field.drawn_alpha(), repulser.age))
         })
     }
 }
