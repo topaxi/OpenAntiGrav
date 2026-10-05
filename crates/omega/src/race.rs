@@ -111,6 +111,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     speech: r"Data\audio\sound\speech.bnk",
     // Not searched for this lane.
     track_general: None,
+    crossfade: None,
 };
 
 #[cfg(test)]

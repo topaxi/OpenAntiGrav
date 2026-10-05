@@ -193,20 +193,42 @@ fn every_2048_mode_plays_the_pob_and_builds_no_arc_wake() {
     }
 }
 
-/// The hum is silent on 2048 today and the test says why rather than hiding it:
-/// its ship bank (`shipHD.bnk`, HD's spelling, chosen) resolves no cue by name
-/// on the Vita - not `~magstrip01`, not `.COLLISIONS` - so the cue edges are
-/// raised and nothing is mixed. When the Vita bank reads, this starts to fail
-/// and should become the HD test's audio A/B.
+/// The hum stays silent on 2048: `~magstrip01` is a cue in `shipHD.bnk`, the
+/// ship bank this title still points at (HD's spelling, chosen), and the
+/// general cue lookup does not read a Vita bank's names by hash. Reading every
+/// 2048 cue by hash was tried on 2026-10-05 and played cues whose triggers were
+/// never measured (a perfect-lap announcement mid-lap, and noise), so it was
+/// scoped back to the crossfade engine (`Bank::cue_named_or_hashed`). When the
+/// 2048 cue set and its banks are measured, this flips to the HD test's audio
+/// A/B.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
-fn the_hum_is_silent_until_the_vita_bank_resolves_cues() {
+fn the_hum_is_silent_until_the_vita_cue_set_is_measured() {
     let Some(race) = load() else { return };
     let mut rng = oag_core::Rng::new(1);
     assert!(
         race.sounds().voices(Cue::Magstrip, &mut rng).is_none(),
-        "~magstrip01 now resolves on the Vita: wire the audio A/B like HD's"
+        "~magstrip01 resolves on the Vita ship bank"
     );
+}
+
+/// A real 2048 race load hands its grid the crossfaded engine of the table the
+/// title's `Crossfade` axis names: four layers in an ordinary race, Zone's own
+/// three-layer `xfship_ZONE_` table in Zone. This goes through
+/// `oag_raceplay::load`, so it fails if that load reads the plain `ship` bank
+/// instead of the axis.
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn a_race_load_gives_the_player_its_teams_crossfade_table_in_both_modes() {
+    for (mode, layers) in [(oag_race::Mode::SingleRace, 4), (oag_race::Mode::Zone, 3)] {
+        let Some(race) = load_mode(mode) else { return };
+        let team = race
+            .sounds()
+            .xfade_team(r"Feisar2048\3")
+            .unwrap_or_else(|| panic!("{mode:?}: no crossfade table for the player's team"));
+        assert_eq!(team.table().layer_count(), layers, "{mode:?}");
+        assert_eq!(team.playable(), 3, "{mode:?}: looping layers that resolved");
+    }
 }
 
 /// `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` ship in the base package's

@@ -193,14 +193,14 @@ impl Banks {
     pub fn load_xfade(
         &mut self,
         archives: &mut Archives,
-        ship_bank: &str,
+        source: super::xfade::Source<'_>,
         slot_teams: &[String],
         report: &mut Vec<String>,
     ) {
         if self.sounds.contains_key(&Cue::Engine) {
             return;
         }
-        self.xfade = super::xfade::load(archives, ship_bank, slot_teams, report);
+        self.xfade = super::xfade::load(archives, source, slot_teams, report);
         // Only where tables loaded: the mix is HD's, and a title that reads no
         // `.xfx` keeps its own buses.
         if !self.xfade.is_empty() {
@@ -477,12 +477,39 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
     let record = bank
         .cue_named(name)
         .ok_or_else(|| anyhow::anyhow!("{name:?} names no cue in {}", bank.name))?;
+    load_cue_record(bank, &record, name)
+}
+
+/// [`load_named_cue`] for a cue reached by index: a crossfade layer whose name
+/// is empty addresses its bank by the cue number alone.
+pub(super) fn load_indexed_cue(
+    bank: &sblk::Bank,
+    index: u16,
+) -> anyhow::Result<(Loaded, sblk::Cue)> {
+    let name = format!("cue {index}");
+    let record = bank.cue(index).ok_or_else(|| {
+        anyhow::anyhow!(
+            "{name} is past the {} cue(s) of {}",
+            bank.cue_count,
+            bank.name
+        )
+    })?;
+    let (loaded, _) = load_cue_record(bank, &record, &name)?;
+    Ok((loaded, record))
+}
+
+/// Decodes what an already-found cue binds; `name` only labels errors.
+pub(super) fn load_cue_record(
+    bank: &sblk::Bank,
+    record: &sblk::Cue,
+    name: &str,
+) -> anyhow::Result<(Loaded, usize)> {
     // **The tree, not the cue's own run.** On the PSP, PS2 and Pure discs no
     // wired cue plays a child, so this is `cue_sounds` there and the two are
     // the same call. Wipeout HD's `.COLLISIONS` binds nothing itself and plays
     // `c_CShipShip` and `c_CShipWall`, each of which has S/M/L children of its
     // own - 112 waveforms in all. See `oag_formats::sblk::child`.
-    let sounds = bank.cue_tree_sounds(&record);
+    let sounds = bank.cue_tree_sounds(record);
     // **The opcodes go in the message.** 38 of a circuit's authored emitters
     // land here (`track-sound-emitters.md`), and which opcode blocked them is
     // the whole question: `0x1e` is in every `~SetReg*` cue and plausibly emits
@@ -492,7 +519,7 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
         !sounds.is_empty(),
         "{name} binds no waveform: its {} command(s) run only {:02x?}, opcodes this does not read",
         record.commands,
-        cue_opcodes(bank, &record)
+        cue_opcodes(bank, record)
     );
 
     let mut waveforms = Vec::with_capacity(sounds.len());

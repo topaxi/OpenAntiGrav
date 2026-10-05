@@ -118,7 +118,10 @@ pub use repeating::Playing;
 pub use track::TrackEmitters;
 pub use track::circuit_manifest;
 use travel::TravelVoices;
-pub use xfade::{Craft as XfadeCraft, Inputs as XfadeInputs, Team as XfadeTeam};
+pub use xfade::{
+    Craft as XfadeCraft, Inputs as XfadeInputs, Law as XfadeLaw, Source as XfadeSource,
+    Team as XfadeTeam,
+};
 
 /// The seed the effects generator starts from.
 ///

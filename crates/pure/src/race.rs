@@ -310,6 +310,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // not been read for it, and whether Pure's circuits author the `.vex`
     // audio classes at all is unswept.
     track_general: Some(r"Data\Sound\generaltrack.bnk"),
+    crossfade: None,
 };
 
 /// The circuit a Zone race loads when the caller names none.

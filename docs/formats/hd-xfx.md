@@ -6,6 +6,7 @@ Wipeout HD / Fury drives a craft's engine sound from `data/sound/xfship_<team>.x
 one file per team: **13 files** (`DATA01.PSARC` holds twelve, `DATA00.PSARC` holds
 `xfship_det.xfx`; an earlier note said twelve). The magic is `XFDX`. It is the
 only engine-sound mechanism in the build: `shiphd.bnk` has no `~ENGINE` cue.
+Wipeout 2048's own 23 tables are the same record layout little-endian with five channels: [2048-xfx.md](2048-xfx.md).
 Implemented in `oag_formats::xfx`; the every-file test is
 [`xfx_ground_truth.rs`](../../crates/formats/tests/xfx_ground_truth.rs).
 

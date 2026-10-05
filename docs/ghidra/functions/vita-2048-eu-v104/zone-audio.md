@@ -185,3 +185,10 @@ indirect (a vtable/function-pointer slot, which does not show up as a direct
    Whether the header/name-table portion parses (`byte_order_of` did not
    immediately refuse the file) and only the codec/section-length math
    disagrees, or the container itself differs more fundamentally, is unread.
+
+   **Update 2026-10-05 (`v2048-engine`).** The container is the same two-section
+   SBlk at descriptor version 5, and 18 of the 29 banks under `data/audio/sound/`
+   now parse (names are FNV-1 hashes: [2048-xfx.md](../../../formats/2048-xfx.md#sblk-version-5-banks-names-are-hashes-95)).
+   `speech_zone_NGP.bnk`, `speech_fe_NGP.bnk` and `Speech_NGP.bnk` still fail the
+   whole-block check, so their waveform section is not plain PS-ADPCM; this
+   bullet's own question is still open for them.

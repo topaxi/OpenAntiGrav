@@ -358,6 +358,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // been swept for the three `.vex` audio classes either, so this is an
     // absence twice over rather than an unfinished lookup.
     track_general: None,
+    crossfade: None,
 };
 
 /// The ship directory a Zone race flies out of.

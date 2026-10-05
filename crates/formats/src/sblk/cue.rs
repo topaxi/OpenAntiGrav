@@ -53,6 +53,29 @@
 
 use super::{Bank, COMMAND_LEN, CUE_LEN, Sound};
 
+/// The descriptor block's version word on a Wipeout 2048 bank.
+const HASHED_VERSION: u32 = 5;
+
+/// Where a hashed name table's first record sits in the name block.
+const HASHED_FIRST: usize = 0x14;
+
+/// Bytes in one hashed name record.
+const HASHED_ENTRY_LEN: usize = 16;
+
+/// The hash a Vita bank's name table is keyed by: FNV-1, **seeded with zero**.
+///
+/// `h = h * 0x01000193 ^ byte` per byte, from `h = 0`, not FNV's offset basis.
+/// `FUN_81352b9c` on the v1.04 executable hashes the name this way and hands the
+/// result to its table search. The 32 names of the engine tables and the
+/// weapons bank checked against `shipHD.bnk`, `Ship_NGP_Zone.bnk` and
+/// `Weapons_NGP.bnk` all land on a record whose cue is the one the
+/// `xfship_*.xfx` layers play.
+#[must_use]
+pub fn name_hash(name: &str) -> u32 {
+    name.bytes()
+        .fold(0u32, |h, b| h.wrapping_mul(0x0100_0193) ^ u32::from(b))
+}
+
 /// A cue: one playable sound, and the run of commands that plays it.
 ///
 /// Reached by index from the name table ([`Bank::sound_names`]) or by name
@@ -153,12 +176,64 @@ impl Bank<'_> {
     /// leading dot marks a child sound in SCREAM's own error strings; nothing
     /// here strips it, because doing so would resolve a name the original
     /// would have rejected.
+    ///
+    /// A Vita bank ([`Bank::is_hashed`]) keys its table by [`name_hash`]
+    /// instead and keeps no 16-byte names at all, so this finds nothing there
+    /// on purpose: [`Bank::cue_named_or_hashed`] is the lookup for the one
+    /// caller whose hashed binding is measured. Resolving every 2048 cue by
+    /// hash played cues whose triggers were never checked (a perfect-lap
+    /// announcement mid-lap, and noise), reported from play on 2026-10-05.
     #[must_use]
     pub fn cue_named(&self, name: &str) -> Option<Cue> {
         self.sound_names()
             .into_iter()
             .find(|entry| entry.name == name)
             .and_then(|entry| self.cue(entry.cue))
+    }
+
+    /// [`Bank::cue_named`], and on a [hashed](Bank::is_hashed) bank the cue
+    /// whose name hashes to `name` by [`name_hash`].
+    ///
+    /// Only the crossfade engine uses this, where the hashed names are checked
+    /// against the cues the `xfship_*.xfx` layers play.
+    #[must_use]
+    pub fn cue_named_or_hashed(&self, name: &str) -> Option<Cue> {
+        if self.is_hashed() {
+            return self.cue_by_hash(name_hash(name)).and_then(|c| self.cue(c));
+        }
+        self.cue_named(name)
+    }
+
+    /// Whether the name table is keyed by [`name_hash`] rather than by name.
+    ///
+    /// True when the descriptor block's own version word (`+0x04`) is `5`, which
+    /// is every Wipeout 2048 bank (`Ship_NGP`, `Ship_NGP_Zone`, `shipHD`,
+    /// `Weapons_NGP`, all four measured) and no bank on a PSP, PS2 or PS3 disc,
+    /// where it is `3`.
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        self.order.u32(self.block, 4) == HASHED_VERSION
+    }
+
+    /// The cue whose name hashes to `hash`, on a [hashed](Bank::is_hashed) bank.
+    ///
+    /// The table is [`Bank::cue_count`] records of [`HASHED_ENTRY_LEN`] bytes
+    /// from `+0x14` of the name block: `{u32 hash, u16 cue, u16 next, u32, u32}`.
+    /// The scan is linear and ignores `next`, the hash-collision chain: an
+    /// exact 32-bit match is the lookup, and the chain only matters to a
+    /// runtime that probes a bucket.
+    #[must_use]
+    pub fn cue_by_hash(&self, hash: u32) -> Option<u16> {
+        if !self.is_hashed() || self.flags & super::HAS_NAME_TABLE == 0 {
+            return None;
+        }
+        let block = self.block.get(self.name_offset as usize..)?;
+        (0..usize::from(self.cue_count)).find_map(|n| {
+            let at = HASHED_FIRST + n * HASHED_ENTRY_LEN;
+            let entry = block.get(at..at + HASHED_ENTRY_LEN)?;
+            let cue = self.order.u16(entry, 4);
+            (self.order.u32(entry, 0) == hash && cue < self.cue_count).then_some(cue)
+        })
     }
 
     /// The waveforms a cue's commands bind, in command order.

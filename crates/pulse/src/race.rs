@@ -106,6 +106,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // A literal string in the executable too, at the same confidence as the
     // five above, and the bank 568 of the 1,164 authored `sound` nodes name.
     track_general: Some(r"Data\Sound\generaltrack.bnk"),
+    crossfade: None,
 };
 
 /// The banks Pulse's `ready` and `go` are read from in the two modes that do

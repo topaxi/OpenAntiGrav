@@ -62,7 +62,7 @@ use oag_formats::sblk;
 use oag_formats::xfx::Xfx;
 
 use super::Cue;
-use super::banks::load_named_cue;
+use super::banks::{load_cue_record, load_indexed_cue};
 
 /// Channel 0's term `X`, held. The two grid readings of the first boot were
 /// 2.173 and 2.167 and of the second 2.156 and 2.160. Chosen, not measured:
@@ -106,6 +106,24 @@ const MAX_STEP_MS: i64 = 5000;
 /// The top of a channel and of both curves' index.
 const TOP: i32 = 511;
 
+/// Input channels a table can have: HD's four, the Vita's five.
+const CHANNELS: usize = 5;
+
+/// The ceiling the Vita's ship classes clamp every channel to: `0x43ff0000`,
+/// 510.0, where HD's is [`TOP`].
+const TOP_2048: i32 = 510;
+
+/// The scale the Vita ship classes divide the pedal by before channel 4
+/// (`DAT_8151fdd0`: 0.75 outside the Detonator mode, 0.7 in it).
+const PEDAL_SCALE_2048: f32 = 0.75;
+
+/// The speed-class factor channel 0 is multiplied by on the Vita ship classes,
+/// held. The executable picks `1.25`, `1.15`, `0.95` or `0.8` by the race's
+/// class word (`DAT_8153fd18` 1, 2, 3, 4) and leaves it untouched for any
+/// other; this port does not carry that word to the sound frame, so the table
+/// stands at neutral. **Chosen, not measured.**
+const CLASS_FACTOR_2048: f32 = 1.0;
+
 /// A layer's gain at unity.
 const GAIN_UNITY: f32 = 1024.0;
 
@@ -132,6 +150,13 @@ struct ChannelCfg {
 #[derive(Debug, Clone)]
 struct LayerCfg {
     name: String,
+    /// The layer's kind byte: `0` plays a cue, `2` modulates another layer,
+    /// `1` would start a stream (none is authored).
+    kind: u8,
+    /// The cue index the layer plays when [`Self::name`] is empty.
+    cue: u16,
+    /// For a kind-2 layer, the layer it modulates.
+    link: i8,
     channel: usize,
     gain: Vec<i16>,
     pitch: Vec<i16>,
@@ -164,6 +189,9 @@ impl Table {
             .iter()
             .map(|l| LayerCfg {
                 name: l.name().to_string(),
+                kind: l.kind(),
+                cue: l.cue_index(),
+                link: l.link(),
                 channel: usize::from(l.channel()),
                 gain: l.gain().collect(),
                 pitch: l.pitch().collect(),
@@ -286,9 +314,26 @@ struct LayerSound {
     up: i8,
 }
 
+/// Which ship class writes a table's channels.
+///
+/// The tables do not say: HD's four-channel law and the Vita's five-channel
+/// law are different code on different ship classes, and a Vita `HD`-era table
+/// (`xfship_assegai.xfx`) is read by the one class and a `<team>2048` table by
+/// the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Law {
+    /// `Ship_UpdateEngineCrossfade`, HD's, four channels written.
+    Hd,
+    /// The five Wipeout 2048 team classes (`FUN_812cd154` on the v1.04
+    /// executable): channel 0 is half the speed field, channels 1 to 3 are
+    /// zero, channel 4 follows the pedal.
+    Vita2048,
+}
+
 /// A team's table with its layers' sounds, shared by every craft of the team.
 #[derive(Debug, Clone)]
 pub struct Team {
+    law: Law,
     table: Table,
     /// One per table layer, [`None`] where the cue would not load or does not
     /// loop. A layer without a sound is silent and says so in the report.
@@ -316,32 +361,66 @@ fn dir_of(entry: &str) -> &str {
 
 /// The disc's name for the team a grid slot flies.
 ///
-/// Slot teams carry a Fury reskin suffix on some grids (`goteki_c1`); the table
-/// is per team and not per reskin. The Detonator mode ship has its own table,
-/// `det`.
+/// Slot teams carry a Fury reskin suffix on some grids (`goteki_c1`) and, on
+/// Wipeout 2048's, the livery directory the hull is read from
+/// (`Feisar2048\3`); the table is per team and not per reskin or livery, so
+/// both are dropped (`FUN_81263f6c` builds the file name from the team record's
+/// own name). The Detonator mode ship has its own table, `det`.
 #[must_use]
 pub fn table_name(slot_team: &str) -> String {
     let lower = slot_team.to_lowercase();
-    let base = lower
+    let team = lower.split(['\\', '/']).next().unwrap_or(&lower);
+    let base = team
         .strip_suffix("_c1")
-        .or_else(|| lower.strip_suffix("_n1"))
-        .unwrap_or(&lower);
+        .or_else(|| team.strip_suffix("_n1"))
+        .unwrap_or(team);
     match base {
         "detonator" => "det".to_string(),
         other => other.to_string(),
     }
 }
 
+/// The ship class a team's craft are, which is what picks the channel law.
+///
+/// The five Wipeout 2048 hulls are the classes that write channel 4
+/// ([`Law::Vita2048`]); every other table, HD's or an HD-era hull flown on a
+/// Vita grid, is written by the four-channel class.
+fn law_of(name: &str) -> Law {
+    if name.ends_with("2048") {
+        Law::Vita2048
+    } else {
+        Law::Hd
+    }
+}
+
+/// The table the executable falls back to when a team's own is not on the
+/// disc (`FUN_81263f6c`), Zone or not.
+const FALLBACK_TABLE: &str = "feisar";
+
+/// Where a race's tables are read from.
+#[derive(Debug, Clone, Copy)]
+pub struct Source<'a> {
+    /// The ship bank the layers address.
+    pub bank: &'a str,
+    /// The infix a Zone race's table names carry, or empty (`ZONE_`).
+    pub infix: &'a str,
+}
+
 /// Every team table a grid needs, loaded once per distinct team.
 ///
 /// **Never fails**: a table that will not read, parse or resolve is a report
-/// line and silence for that team, on [`super::Banks::load`]'s own terms.
+/// line and silence for that team, on [`super::Banks::load`]'s own terms. A team
+/// whose file is not on the disc plays `xfship_feisar.xfx`, as the original does.
 pub(super) fn load(
     archives: &mut Archives,
-    ship_bank: &str,
+    source: Source<'_>,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> BTreeMap<String, Arc<Team>> {
+    let Source {
+        bank: ship_bank,
+        infix,
+    } = source;
     let mut teams = BTreeMap::new();
     let blob = match archives.read_name(ship_bank) {
         Ok(blob) => blob,
@@ -358,21 +437,30 @@ pub(super) fn load(
         }
     };
     let dir = dir_of(ship_bank);
-    for slot in slot_teams {
-        let name = table_name(slot);
-        if teams.contains_key(&name) {
-            continue;
-        }
-        let entry = format!("{dir}xfship_{name}.xfx");
-        let team = archives
-            .read_name(&entry)
+    let read = |archives: &mut Archives, entry: &str| {
+        archives
+            .read_name(entry)
             .map_err(|e| e.to_string())
             .and_then(|blob| {
                 let xfx = Xfx::parse(&blob).map_err(|e| e.to_string())?;
                 Ok(Table::from_xfx(&xfx))
             })
-            .map(|table| resolve(table, &bank, &entry, report));
-        match team {
+    };
+    for slot in slot_teams {
+        let name = table_name(slot);
+        if teams.contains_key(&name) {
+            continue;
+        }
+        let mut entry = format!("{dir}xfship_{infix}{name}.xfx");
+        let mut table = read(archives, &entry);
+        if table.is_err() && name != FALLBACK_TABLE {
+            let own = std::mem::replace(&mut entry, format!("{dir}xfship_{FALLBACK_TABLE}.xfx"));
+            report.push(format!(
+                "xfade: {own} not on the disc; the original plays {entry}"
+            ));
+            table = read(archives, &entry);
+        }
+        match table.map(|table| resolve(table, &bank, &entry, law_of(&name), report)) {
             Ok(team) => {
                 report.push(format!(
                     "xfade: {entry} -> {} of {} layer(s) playable",
@@ -387,29 +475,66 @@ pub(super) fn load(
     teams
 }
 
-/// Binds each layer's name to the bank's cue.
-fn resolve(table: Table, bank: &sblk::Bank, entry: &str, report: &mut Vec<String>) -> Team {
+/// Binds each layer to the bank's cue: by name where it has one, by cue index
+/// where the name is empty (`FUN_8125d4b6`).
+///
+/// Only kind-0 layers play a cue. A kind-2 layer modulates another and a kind-1
+/// would start a stream; neither has a sound of its own.
+fn resolve(
+    table: Table,
+    bank: &sblk::Bank,
+    entry: &str,
+    law: Law,
+    report: &mut Vec<String>,
+) -> Team {
     let sounds = table
         .layers
         .iter()
         .map(|layer| {
-            let record = bank.cue_named(&layer.name)?;
-            let descriptor = bank.cue_tree_sounds(&record).into_iter().next()?;
-            let loaded = match load_named_cue(bank, &layer.name) {
-                Ok((loaded, _)) => loaded,
-                Err(e) => {
+            let label = if layer.name.is_empty() {
+                format!("cue {}", layer.cue)
+            } else {
+                format!("{:?}", layer.name)
+            };
+            match layer.kind {
+                0 => {}
+                2 => return None,
+                kind => {
                     report.push(format!(
-                        "xfade: {entry} layer {:?} not loaded: {e}",
-                        layer.name
+                        "xfade: {entry} layer {label} is kind {kind}; not played"
                     ));
                     return None;
                 }
+            }
+            let (loaded, record) = if layer.name.is_empty() {
+                match load_indexed_cue(bank, layer.cue) {
+                    Ok(found) => found,
+                    Err(e) => {
+                        report.push(format!("xfade: {entry} layer {label} not loaded: {e}"));
+                        return None;
+                    }
+                }
+            } else {
+                let Some(record) = bank.cue_named_or_hashed(&layer.name) else {
+                    report.push(format!(
+                        "xfade: {entry} layer {label} names no cue in {}",
+                        bank.name
+                    ));
+                    return None;
+                };
+                match load_cue_record(bank, &record, &layer.name) {
+                    Ok((loaded, _)) => (loaded, record),
+                    Err(e) => {
+                        report.push(format!("xfade: {entry} layer {label} not loaded: {e}"));
+                        return None;
+                    }
+                }
             };
+            let descriptor = bank.cue_tree_sounds(&record).into_iter().next()?;
             let (sound, looping) = loaded.waveforms.first()?.clone();
             if !looping {
                 report.push(format!(
-                    "xfade: {entry} layer {:?} is not marked looping; not held",
-                    layer.name
+                    "xfade: {entry} layer {label} is not marked looping; not held"
                 ));
                 return None;
             }
@@ -420,7 +545,7 @@ fn resolve(table: Table, bank: &sblk::Bank, entry: &str, report: &mut Vec<String
             })
         })
         .collect();
-    Team { table, sounds }
+    Team { law, table, sounds }
 }
 
 /// What the craft feeds the crossfade this tick.
@@ -438,7 +563,10 @@ pub struct Inputs {
 #[derive(Debug)]
 pub struct Craft {
     team: Arc<Team>,
-    smoothers: [Smoother; 4],
+    smoothers: [Smoother; CHANNELS],
+    /// Per layer, what a kind-2 layer last wrote into it: the gain it
+    /// multiplies by and the bend it adds. Neutral until a modulator runs.
+    modulation: Vec<(f32, i32)>,
     voices: Vec<Option<VoiceId>>,
     doppler: oag_audio::Doppler,
     /// Milliseconds on the craft's own clock, for the smoother's step.
@@ -459,8 +587,9 @@ impl Craft {
     pub fn new(team: Arc<Team>) -> Self {
         let voices = vec![None; team.table.layers.len()];
         Self {
+            modulation: vec![(1.0, 0); team.table.layers.len()],
             team,
-            smoothers: [Smoother::default(); 4],
+            smoothers: [Smoother::default(); CHANNELS],
             voices,
             doppler: oag_audio::Doppler::default(),
             clock_ms: 0,
@@ -480,21 +609,45 @@ impl Craft {
         self
     }
 
-    /// The four channel inputs for `inputs`, in channel order, `None` for a
-    /// channel this craft does not write.
+    /// The channel inputs for `inputs` under `law`, in channel order, `None`
+    /// for a channel this craft does not write.
     ///
-    /// `Ship_UpdateEngineCrossfade`: `trunc(0.5 * speed_field + 5 * X)` and
-    /// `trunc(5.12 * throttle)`, each clamped to `0..=511`. Channels 1 and 2
-    /// are held at zero (chosen, not measured).
+    /// [`Law::Hd`], `Ship_UpdateEngineCrossfade`: `trunc(0.5 * speed_field + 5 *
+    /// X)` and `trunc(5.12 * throttle)`, each clamped to `0..=511`; channels 1
+    /// and 2 held at zero (chosen, not measured); channel 4 does not exist.
+    ///
+    /// [`Law::Vita2048`], `FUN_812cd154`: `trunc(0.5 * speed_field * class)`
+    /// clamped to `0..=510` on channel 0 and zero on channels 1 to 3, as read.
+    /// Channel 4 is `70 * pedal / 0.75` in the original, where `pedal` is a ship
+    /// field (`+0x6098`) whose writer was not found; **this port feeds it the
+    /// throttle, `0.7 * throttle / 0.75` of `0..=100`, and nothing for an
+    /// opponent: chosen, not measured.**
     #[must_use]
-    pub fn channel_inputs(inputs: Inputs) -> [Option<i32>; 4] {
-        let clamp = |v: f32| (v as i32).clamp(0, TOP);
-        [
-            Some(clamp(0.5 * inputs.speed_field + 5.0 * X_REST)),
-            Some(0),
-            Some(0),
-            inputs.throttle.map(|t| clamp(5.12 * t)),
-        ]
+    pub fn channel_inputs(inputs: Inputs, law: Law) -> [Option<i32>; CHANNELS] {
+        match law {
+            Law::Hd => {
+                let clamp = |v: f32| (v as i32).clamp(0, TOP);
+                [
+                    Some(clamp(0.5 * inputs.speed_field + 5.0 * X_REST)),
+                    Some(0),
+                    Some(0),
+                    inputs.throttle.map(|t| clamp(5.12 * t)),
+                    None,
+                ]
+            }
+            Law::Vita2048 => {
+                let clamp = |v: f32| (v as i32).clamp(0, TOP_2048);
+                [
+                    Some(clamp(0.5 * inputs.speed_field * CLASS_FACTOR_2048)),
+                    Some(0),
+                    Some(0),
+                    Some(0),
+                    inputs
+                        .throttle
+                        .map(|t| clamp(70.0 * (t / 100.0) / PEDAL_SCALE_2048)),
+                ]
+            }
+        }
     }
 
     /// Advances the smoothers one tick, then writes every layer's gain and
@@ -518,7 +671,7 @@ impl Craft {
         self.elapsed += dt;
         self.clock_ms = (self.elapsed * 1000.0) as i64;
         let ms = self.clock_ms - self.last_ms.replace(self.clock_ms).unwrap_or(self.clock_ms);
-        let wanted = Self::channel_inputs(inputs);
+        let wanted = Self::channel_inputs(inputs, self.team.law);
         for (n, input) in wanted.into_iter().enumerate() {
             let Some(cfg) = self.team.table.channels.get(n) else {
                 continue;
@@ -538,11 +691,23 @@ impl Craft {
         let table = &self.team.table;
         let mut distance = None;
         for (n, layer) in table.layers.iter().enumerate() {
+            if layer.kind == 2 {
+                // A modulator plays nothing: its curves become the linked
+                // layer's gain multiplier and bend offset (`FUN_8125d61e`),
+                // read by that layer on the next tick it runs.
+                let level = level_at(layer, self.smoothers[layer.channel.min(CHANNELS - 1)].value);
+                if let Some(slot) = usize::try_from(layer.link)
+                    .ok()
+                    .and_then(|t| self.modulation.get_mut(t))
+                {
+                    *slot = (level.gain, level.bend);
+                }
+                continue;
+            }
             let Some(sound) = &self.team.sounds[n] else {
                 continue;
             };
-            let value = self.smoothers[layer.channel.min(3)].value;
-            let level = level_at(layer, value);
+            let level = self.level_of(n);
             // The emitter's own radius gate and volume curve are Pulse's
             // (`Emitter::engine`, a 50 unit cull and x^0.59); HD's layer volume
             // is squared and its distance law is [`distance_factor`], so only
@@ -597,20 +762,37 @@ impl Craft {
                 1.0
             }
         };
-        for (n, layer) in table.layers.iter().enumerate() {
+        for n in 0..table.layers.len() {
             let (Some(id), Some(sound)) = (self.voices[n], &self.team.sounds[n]) else {
                 continue;
             };
-            let level = level_at(layer, self.smoothers[layer.channel.min(3)].value);
+            let level = self.level_of(n);
             mixer.set_pitch(id, bend_ratio(level.bend, sound.down, sound.up) * doppler);
+        }
+    }
+
+    /// Layer `n`'s level at its channel's smoothed value, with what a modulator
+    /// last wrote into it: gain times the modulator's, bend plus the
+    /// modulator's, clamped as the layer's own is.
+    ///
+    /// **The product is chosen, not measured.** `FUN_8125d61e` writes the
+    /// modulator's own gain (itself a product with the modulator's two slot
+    /// floats) into the target's gain slot, and this takes that to be the
+    /// curve value alone.
+    fn level_of(&self, n: usize) -> Level {
+        let layer = &self.team.table.layers[n];
+        let base = level_at(layer, self.smoothers[layer.channel.min(CHANNELS - 1)].value);
+        let (gain, bend) = self.modulation[n];
+        Level {
+            gain: base.gain * gain,
+            bend: (base.bend + bend).clamp(-0x8000, 0x8000),
         }
     }
 
     /// The level layer `n` is at right now, for tests and reports.
     #[must_use]
     pub fn level(&self, n: usize) -> Option<Level> {
-        let layer = self.team.table.layers.get(n)?;
-        Some(level_at(layer, self.smoothers[layer.channel.min(3)].value))
+        (n < self.team.table.layers.len()).then(|| self.level_of(n))
     }
 
     /// Releases every layer's voice.
@@ -623,7 +805,8 @@ impl Craft {
         self.last_ms = None;
         self.elapsed = 0.0;
         self.started = false;
-        self.smoothers = [Smoother::default(); 4];
+        self.smoothers = [Smoother::default(); CHANNELS];
+        self.modulation.fill((1.0, 0));
     }
 
     /// How many layer voices are open.
