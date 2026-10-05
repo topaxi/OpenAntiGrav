@@ -188,3 +188,124 @@ and additive arcs on a bright floor plus HD's bloom look different from the same
 (`+0x24 = 0.8`), so the gap is not geometry: the fragment program `MagStripArc_fp` (compiled
 into the executable, no file on the disc) and HD's bloom are the open candidates. **No intensity
 can be measured from these frames**, since there is no arc-free frame at the same pose.
+
+## 2026-10-05, magstrip-arc-fp lane: `MagStripArc_fp` and `MagStripArc_vp` decoded, the draw's state read
+
+Static reading of `EBOOT.elf` (Ghidra, plus a capstone pass over the VMX-heavy draw that the
+bridge's disassembler stops inside), reproduced by `scripts/ps3-microcode.py fp 0x0092f180` and
+`vp 0x0092f400`. No live capture this lane; the programs are not data that varies at run time.
+
+### Where the programs are (conf 90)
+
+The shader pair is initialised data, not a file on the disc. The TOC (`r2 = 0x008ad4d8`, from the
+tuning table's own slot: `0x008b3858` holds `0x008c2610` at `r2 + 0x6380`) carries, in order:
+
+| TOC slot | Offset from `r2` | Holds |
+| --- | --- | --- |
+| `0x008b3894` | `+0x63bc` | `0x007a0d18`, the string `MagStripArc_vp` |
+| `0x008b3898` | `+0x63c0` | `0x0092f400`, the vertex `SHO` block |
+| `0x008b389c` | `+0x63c4` | `0x007a0d28`, the string `MagStripArc_fp` |
+| `0x008b38a0` | `+0x63c8` | `0x0092f180`, the fragment `SHO` block |
+
+`MagstripArcs_InitClass` (`0x002bd750`, the pool's class initialiser, the one that also builds the
+jitter table) looks each program up by name (`lwz r3, 0x63bc(r2)` then `0x006775b8`, and `0x63c4`),
+then resolves two parameter indices by hash into the tuning block's `+0x58` (the vertex program's
+`viewProj`) and `+0x5c` (the fragment program's texture sampler). The draw reads them back.
+
+### The fragment program, whole (conf 90 for the instruction list, 85 for the reading)
+
+```text
+sampler 0x7d99f28d  unit 0          (HD_electric_arc_8x8 / HD_ElectricArc_Contact, bound per batch)
+0x50 bytes of code, no inline constant, no patch slot
+@0  TEX R1, f[TC0] unit0
+@1  MOV H0, f[COL0]
+@2  MUL R0.xzw, H0.xyyz, R1.wwww
+@3  MUL H0.xyz, R0.xzww, R1
+@4  MUL H0.w,   H0, R1            END
+```
+
+H0 and R0 alias on the RSX (`H0` is the low half of `R0`, so `H0.w` lives in `R0.y`, which `@2`
+does not write): the five instructions read as
+
+```text
+out.rgb = vertex.rgb * tex.a * tex.rgb
+out.a   = vertex.a   * tex.a
+```
+
+**There is no constant and no scale. The vertex alpha reaches the alpha output only, never the
+colour. No transfer function appears anywhere**, so the original adds gamma-space values into its
+target, the same finding as the HD engine tube (`engine-trail.md`).
+
+### The vertex program, whole (conf 90)
+
+```text
+0  MOV o[TC0].xy, v[8].xyxx           (uv)
+1  MUL R0, v[0].yyyy, c[1]
+2  MAD R0, v[0].xxxx, c[0], R0
+3  MAD R0, v[0].zzzz, c[2], R0
+4  MOV o[COL0], v[3]                  (vertex colour, untouched)
+5  ADD o[POS], R0, c[3]               END
+```
+
+A bare `viewProj` (parameter `0xe252323b`, `c256`) transform. The vertex colour passes through
+unscaled.
+
+### What the draw uploads and sets (conf 80)
+
+`MagstripArcs_Draw` (`0x002bc7b0..0x002bd6f0`; 40-byte float vertices, position at `+0x00`, uv at
+`+0x10/+0x14`, RGBA at `+0x18..+0x24`). Every call between the build and the return:
+`Rsx_SetMethod`-class state writes (`0x00677ff8`/`0x005c1d0c`), `0x00677468` (the matrix upload,
+4 rows through `0x100..0x130`), `0x00677478` twice (texture bind, per batch: `+0x20` then `+0x24`
+of the class block), the vertex attribute pointers (`0x00678018`), the draw (`0x00678028`). **No
+fragment-parameter setter and no float constant is uploaded**; the fragment program has none to
+receive.
+
+State, from the wrappers (`Rsx_SetMethod`, `Rsx_SetBlendFunc` at `0x005c1fe0`,
+`Rsx_SetBlendEquation` at `0x005c2130`, `Rsx_SetDepthMask` at `0x005c2524`, already named in
+`material-state.md`):
+
+| Call | Value | Reading |
+| --- | --- | --- |
+| method `0x183c` | `0` | cull face off |
+| method `0x304` | `0` | alpha-test related, off (method id unresolved) |
+| method `0xa74` | `1` | depth test on |
+| method `0x310` | `1` | blend enable |
+| `Rsx_SetBlendEquation(0x8006)` | `FUNC_ADD` | |
+| `Rsx_SetBlendFunc(1, 1)` | source `ONE`, destination `ONE` (colour and alpha) | **additive, measured on HD, not inferred from the PS4** |
+| `0x679058(0x203)` | `LEQUAL` | depth function |
+| `Rsx_SetDepthMask(0)` | | **depth write off** |
+
+### Brightness and alpha, read in the build (conf 80)
+
+The vertex colour is the arc's own brightness, **with no multiplier**: the body quads store
+`[slot+0x48]` into `+0x18/+0x1c/+0x20` of each vertex and the tuning float `0.3`
+(`0x008c2610 + 0x34`) into `+0x24`; the last quad's far edge stores `[slot+0x48] * 0.3`
+(`0x008b38ac` holds `0.3`, so the soft edge exists on HD too); the contact quad stores
+`[slot+0x94]` and `0.25` (`+0x40`). The update (`0x002bbd60`) smooths each as
+`x = 0.85 x + 0.15 * (lo + (hi - lo) * u)`: body `0.125..0.2`, contact `0.05..0.1`, scale
+`3.5..7`. `MagstripArcs_Spawn` writes neither brightness.
+
+### What this settles, and what it does not
+
+- **`INTENSITY = 3.0` is not in the original's shading.** Vertex colour, vertex program and
+  fragment program carry no gain (conf 85). Deleted.
+- **With the original's law the arcs are faint in our frame** (brightness at most `0.2`, times the
+  texture's colour and alpha). `data/scratch/magstrip-arc-fp/cmp_g1138.png`: top the old
+  `INTENSITY = 3`, bottom the original's math, same tick (1138), same `feisar_c1` autopilot ace
+  pose. The same arcs are there, thin and dim, and the contact glows are nearly gone. The
+  original's frames (`magstrip-hd-measure`, not a matched pose) read wider and whiter.
+- **Residual gap, named, not tuned**: (1) HD's bloom on the arcs: bloom is ported (see
+  `renderer.md`), but whether the arc's destination is the bloom source at the same weight is
+  unchecked; (2) the destination alpha: the original's `ONE, ONE` adds `vertex.a * tex.a` into the
+  frame's alpha, which this port keeps for its glow stamp (so a bloom keyed on it is not
+  reproduced for arcs); (3) the sampler's sRGB-remap bit (the same unread bit as the engine tube).
+  A matched-pose capture of an arc-free and an arc frame is what would measure it.
+
+### Names
+
+| Address | Name | Conf | What it is |
+| --- | --- | --- | --- |
+| `0x0092f180` | `MagStripArc_fp` | 90 | the fragment program's `SHO` block, five instructions |
+| `0x0092f400` | `MagStripArc_vp` | 90 | the vertex program's `SHO` block, a bare `viewProj` transform |
+| `0x002bd750` | `MagstripArcs_InitClass` | 70 | class initialiser: looks both programs up by name, resolves the two parameter indices, builds the five jitter terms |
+| `0x002bc7b0` | `MagstripArcs_Draw` | 80 (was 65 above) | read whole this lane: vertex build, brightness and alpha stores, the state block |

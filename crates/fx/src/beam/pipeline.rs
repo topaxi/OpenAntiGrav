@@ -42,6 +42,13 @@ pub struct Style {
     /// What the fragment writes to alpha, which is the glow mask: see
     /// [`super::GLOW_MASK`].
     pub glow_mask: f32,
+    /// Whether the vertex alpha scales the colour: the LeachBeam's does,
+    /// `MagStripArc_fp`'s does not (it reaches the alpha output only).
+    pub vertex_alpha_weights_colour: bool,
+    /// Whether a linear target decodes the gamma-authored colour before the
+    /// additive blend. `MagStripArc_fp` has no transfer function, so the arc
+    /// adds its values as they are (the HD engine tube's precedent).
+    pub decodes_source: bool,
     pub topology: wgpu::PrimitiveTopology,
     /// Vertices the buffer holds; an upload past it is cut off.
     pub capacity: usize,
@@ -53,11 +60,19 @@ impl Style {
         label: "beam",
         blend: BLEND,
         glow_mask: super::GLOW_MASK,
+        vertex_alpha_weights_colour: true,
+        decodes_source: true,
         topology: wgpu::PrimitiveTopology::TriangleStrip,
         capacity: MAX_VERTICES,
     };
 
     /// The magstrip arc wake, `capacity` vertices of triangle list.
+    ///
+    /// **HD's own state, measured 2026-10-05 (conf 80)**: `MagstripArcs_Draw`
+    /// (`0x002bc7b0`, `0x002bd480..0x002bd530`) sets blend on with `ONE, ONE` and
+    /// `FUNC_ADD`, depth test on (`LEQUAL`), depth write off, cull off - and the
+    /// fragment program does not weight the colour by vertex alpha
+    /// (`vertex_alpha_weights_colour: false`).
     ///
     /// **Colour is measured**: `MagstripWake_Construct` builds `enable 1`,
     /// colour `(ONE, ADD, ONE)` and alpha `(ZERO, ADD, ONE_MINUS_SRC_ALPHA)`
@@ -83,6 +98,8 @@ impl Style {
                 },
             },
             glow_mask: 0.0,
+            vertex_alpha_weights_colour: false,
+            decodes_source: false,
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,
         }
@@ -187,7 +204,14 @@ impl Pipeline {
         let constants: Vec<(&str, f64)> = oag_mesh::mesh_render::linear_constants(format)
             .iter()
             .copied()
-            .chain([("glow_mask", f64::from(style.glow_mask))])
+            .chain([
+                ("glow_mask", f64::from(style.glow_mask)),
+                (
+                    "vertex_alpha_weight",
+                    f64::from(u8::from(style.vertex_alpha_weights_colour)),
+                ),
+                ("decode_source", f64::from(u8::from(style.decodes_source))),
+            ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("beam"),
