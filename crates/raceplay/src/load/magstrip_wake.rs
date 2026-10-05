@@ -31,7 +31,8 @@ pub(super) fn load(
             textures: None,
         };
     };
-    let textures = textures(archives, wake, report);
+    let platform = archives.layout.platform;
+    let textures = textures(archives, platform, wake, report);
     let mut anchors = [None; oag_gameplay::MAX_SHIPS];
     for (slot, livery) in liveries.iter().enumerate().take(anchors.len()) {
         anchors[slot] = livery.arc_anchor;
@@ -54,23 +55,25 @@ pub(super) fn load(
 
 fn textures(
     archives: &mut oag_assets::Archives,
+    platform: oag_assets::Platform,
     wake: MagstripWake,
     report: &mut Vec<String>,
 ) -> Option<Textures> {
-    let atlas = texture(archives, wake.atlas, report)?;
-    let contact = texture(archives, wake.contact, report)?;
+    let atlas = texture(archives, platform, wake.atlas, report)?;
+    let contact = texture(archives, platform, wake.contact, report)?;
     Some([atlas, contact])
 }
 
 fn texture(
     archives: &mut oag_assets::Archives,
+    platform: oag_assets::Platform,
     name: &str,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
     let decoded = archives
         .read_name(name)
         .map_err(|why| format!("{name}: not in the archive set ({why})"))
-        .and_then(|blob| decode(&blob).ok_or_else(|| format!("{name}: does not decode")));
+        .and_then(|blob| decode(&blob, platform).ok_or_else(|| format!("{name}: does not decode")));
     match decoded {
         Ok(texture) => {
             report.push(format!(
@@ -86,9 +89,20 @@ fn texture(
     }
 }
 
-/// A `.gtf` as pixels - HD's container; the shadow silhouette reads one the
-/// same way.
-fn decode(blob: &[u8]) -> Option<FlareTexture> {
+/// The wake's texture as pixels: a `.gxt` on the Vita (2048), a `.gtf` on every
+/// other title that names one (HD; the shadow silhouette reads one the same way).
+fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<FlareTexture> {
+    if platform == oag_assets::Platform::Vita {
+        let gxt = oag_texture::gxt::Gxt::parse(blob).ok()?;
+        let texture = gxt.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        let (width, height) = texture.level_size(0);
+        return Some(FlareTexture {
+            width,
+            height,
+            rgba: rgba.into_iter().flatten().collect(),
+        });
+    }
     let gtf = oag_texture::gtf::Gtf::parse(blob).ok()?;
     let texture = gtf.only()?;
     let rgba = texture.to_rgba(blob).ok()?;
