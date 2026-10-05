@@ -143,6 +143,14 @@ its four siblings was not traced).
   clamped to `[m_ExposureMin, m_ExposureMax]`) is listed in the `pal` program
   table at `0x01947750` and referenced by no code.
 
+## Wired
+
+`oag_render::post::omega_tonemap` (2026-10-05) runs this law on an Omega race, with
+the choices listed in its module docs and in
+[`omega-status.md`](../../../formats/omega-status.md). Its test
+`the_law_reproduces_the_original_coefficient_shader` holds the Rust law to the
+texels the emulated coefficient shader produced.
+
 ## Names
 
 [`names.tsv`](names.tsv) rows added by this page:

@@ -189,7 +189,7 @@ all return zero matches; the same search style finds the `+0x160..+0x1a9`
 fields read by `FUN_015c63a0`, so the method does work). A read through the
 object pointer (`[reg + 0x1e8]`) cannot be told from the 265 unrelated
 `+0x1e8` accesses in the program by an operand search, and was not chased.
-**The consumer is not located.** The next addresses to try: the `wo_composite_*`
+**Resolved 2026-10-05: the consumer is `ToneMap_ApplyEnvSettings` (`0x01620980`), reading the block through the object pointer; see [`tonemap.md`](tonemap.md).** What follows is the search as it stood. **The consumer is not located.** The next addresses to try: the `wo_composite_*`
 shader-program registry built at `FUN_01623500` (strings `wo_composite_fp`,
 `wo_composite_notonemap_fp`, `wo_composite_nocc_fp` at `0x0182cb3b..0x0182cbc7`,
 `pal_ToneMapCoefficientsFilter_fp` at `0x0183c926`, referenced from
