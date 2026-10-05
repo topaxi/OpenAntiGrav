@@ -40,14 +40,26 @@ pub(super) fn banks_and_announcers(
         sounds.load_countdown(archives, entry, tick);
         crate::loader_log::lines_at(log::Level::Trace, &sounds.report[before..]);
     }
-    // HD's engine is a per-team crossfade table, not a cue: loaded only where
-    // the ship bank has no `~ENGINE`. See `oag_sound::sfx::XfadeTeam`.
-    let ship_bank = if mode == Mode::Zone {
-        race.sounds.ship_zone
-    } else {
-        race.sounds.ship
+    // The engine is a per-team crossfade table on HD and 2048, not a cue:
+    // loaded only where the ship bank has no `~ENGINE`. 2048 addresses a bank
+    // of its own and keeps a second set of tables for Zone. See
+    // `oag_sound::sfx::XfadeTeam` and `oag_title::Crossfade`.
+    let zone = mode == Mode::Zone;
+    let source = match race.sounds.crossfade {
+        Some(c) => oag_sound::sfx::XfadeSource {
+            bank: if zone { c.ship_zone } else { c.ship },
+            infix: c.zone_infix.filter(|_| zone).unwrap_or(""),
+        },
+        None => oag_sound::sfx::XfadeSource {
+            bank: if zone {
+                race.sounds.ship_zone
+            } else {
+                race.sounds.ship
+            },
+            infix: "",
+        },
     };
-    sounds.load_xfade(archives, ship_bank, slot_teams, report);
+    sounds.load_xfade(archives, source, slot_teams, report);
     report.extend(sounds.report.iter().cloned());
 
     // Loaded regardless of mode, on the same terms `sounds` is: an announcer

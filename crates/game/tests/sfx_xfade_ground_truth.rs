@@ -67,7 +67,15 @@ fn load(teams: &[String]) -> Option<(Banks, Vec<String>)> {
         oag_title::SequenceTick::Unknown,
     );
     let mut report = Vec::new();
-    banks.load_xfade(&mut archives, sounds.ship, teams, &mut report);
+    banks.load_xfade(
+        &mut archives,
+        oag_sound::sfx::XfadeSource {
+            bank: sounds.ship,
+            infix: "",
+        },
+        teams,
+        &mut report,
+    );
     Some((banks, report))
 }
 

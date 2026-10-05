@@ -708,6 +708,8 @@ asserted on the mean rather than the worst.
 
 ## Every sound has a name
 
+**Wipeout 2048's banks are the exception: descriptor version 5, names keyed by an FNV-1 hash (seed 0) instead of stored in 16 bytes.** See [2048-xfx.md](2048-xfx.md#sblk-version-5-banks-names-are-hashes-95); `Bank::cue_named` handles both.
+
 The name block (header `+0x38`) is a 64-bucket hash table:
 
 ```text

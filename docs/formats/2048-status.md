@@ -127,7 +127,8 @@ the start line and runs the simulation. What it does **not** do, and why:
   `loading` stays `None` on the narrower gap this page already named: a
   real percentage-bar loading screen with no located plugin XML.
   **`music` is `Some` since 2026-09-25**: `frontend.bnk` turned out to
-  carry no name table at all, so what fills `Music::front_end` instead is
+  carry no 16-byte name table (its names are FNV-1 hashes, [2048-xfx.md](2048-xfx.md#sblk-version-5-banks-names-are-hashes-95)),
+  so what fills `Music::front_end` instead is
   a standalone RIFF-wrapped ATRAC9 file, `FEMusic/frontend_stereo.at9`,
   named the same way Pulse's and HD's own front-end tracks are - see
   [2048-frontend.md](2048-frontend.md)'s "frontend.bnk" bullet for the

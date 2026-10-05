@@ -108,3 +108,16 @@
 0x810018d4	function	GameMode_IsZoneFamily	65	ships-effects.md
 # Where 2048 creates fragment programs (2026-10-05, omega-2048-materials lane).
 0x812f6bee	function	Gxm_CreateFragmentProgramCached	80	fragment-programs.md
+# Crossfade system and the SCREAM name hash (2026-10-05, v2048-engine lane).
+0x8125e5d0	function	XFadeSystem_AddCrossFader	90	crossfader.md
+0x8125ed5a	function	XFadeSystem_SetInput	82	crossfader.md
+0x8125e03c	function	XFadeSystem_UpdateChannels	72	crossfader.md
+0x8125d61e	function	XFadeSystem_UpdateLayers	72	crossfader.md
+0x8125d4b6	function	XFadeSystem_StartLayer	68	crossfader.md
+0x81263f6c	function	XFadeShip_GetTeamTable	80	crossfader.md
+0x81264056	function	XFadeShip_InitSystem	72	crossfader.md
+0x811cb9ac	function	Ship_UpdateEngineCrossfade	72	crossfader.md
+0x812cd154	function	ShipTeam_UpdateEngineCrossfade	68	crossfader.md
+0x81352b9c	function	Scream_FindCueByName	85	crossfader.md
+0x8134bb9e	function	Scream_StartCueByIndex	72	crossfader.md
+0x8134bca8	function	Scream_StartCueByName	72	crossfader.md

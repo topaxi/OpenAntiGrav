@@ -443,6 +443,17 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // `None` for the reason HD's is, and 2048 follows HD everywhere in this
     // table. See [`oag_hd::race::SOUND_BANKS`].
     track_general: None,
+    // The engine does not play out of `shipHD.bnk`. The five `<team>2048`
+    // tables name their layers by cue index, and `Ship_NGP.bnk` is the only
+    // bank where those indices bind looping waveforms; Zone's three tables
+    // resolve the same way in `Ship_NGP_Zone.bnk`. The executable's loader
+    // (`FUN_8121bce2`) names both banks and `FUN_81263f6c` builds the table
+    // names. `docs/formats/2048-xfx.md`.
+    crossfade: Some(oag_title::Crossfade {
+        ship: r"Data\audio\sound\Ship_NGP.bnk",
+        ship_zone: r"Data\audio\sound\Ship_NGP_Zone.bnk",
+        zone_infix: Some("ZONE_"),
+    }),
 };
 
 #[cfg(test)]

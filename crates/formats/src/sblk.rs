@@ -127,6 +127,10 @@ pub const VERSION: u32 = 3;
 /// Bytes per PS-ADPCM block.
 pub const ADPCM_BLOCK_LEN: usize = 16;
 
+/// Bytes a bank may carry past the end of its waveform section: none anywhere
+/// but Wipeout 2048's `Ship_NGP.bnk`, which carries 16.
+pub const TAIL_SLACK: usize = ADPCM_BLOCK_LEN;
+
 /// What a section start has to be a multiple of.
 ///
 /// **Four, and not sixteen** - which is worth stating because HD's own values
@@ -413,10 +417,14 @@ impl<'a> Bank<'a> {
         // rather than the 16 HD's own values happen to satisfy, because the
         // PSP's section 0 sits at 24 and a 16-byte check would reject it.
         //
-        // **The tail is still exact**, and deliberately: it holds on all 50 HD
-        // banks as well as all 83 Pulse and 29 Pure ones, so relaxing it would
-        // give up the one check that says the blob has been read to its end
-        // rather than into the middle of something else.
+        // **The tail is exact on every bank but one**, and deliberately: it
+        // holds on all 50 HD banks as well as all 83 Pulse and 29 Pure ones,
+        // so relaxing it gives up the one check that says the blob has been
+        // read to its end rather than into the middle of something else. The
+        // exception is Wipeout 2048's `Ship_NGP.bnk`, which ends 16 bytes
+        // (`00 07 00 00` then zeros) past its section 1; the other three 2048
+        // banks end exactly. So a tail of at most one block is let through,
+        // and `TAIL_SLACK` names the bound.
         let aligned_after = |from: usize, to: u32| {
             let to = to as usize;
             to >= from && to - from < ADPCM_BLOCK_LEN && to.is_multiple_of(SECTION_ALIGN)
@@ -426,10 +434,9 @@ impl<'a> Bank<'a> {
                 .0
                 .checked_add(sections[0].1)
                 .is_some_and(|end| aligned_after(end as usize, sections[1].0))
-            && sections[1]
-                .0
-                .checked_add(sections[1].1)
-                .is_some_and(|end| end as usize == data.len());
+            && sections[1].0.checked_add(sections[1].1).is_some_and(|end| {
+                (end as usize..=end as usize + TAIL_SLACK).contains(&data.len())
+            });
         if !spans {
             return Err(Error::BadSections);
         }

@@ -66,23 +66,32 @@ fn a_step_is_capped_at_five_seconds() {
 
 #[test]
 fn channel_inputs_follow_the_per_tick_law_and_only_the_player_has_a_throttle() {
-    let player = Craft::channel_inputs(Inputs {
-        speed_field: 400.0,
-        throttle: Some(100.0),
-    });
+    let player = Craft::channel_inputs(
+        Inputs {
+            speed_field: 400.0,
+            throttle: Some(100.0),
+        },
+        Law::Hd,
+    );
     // trunc(0.5 * 400 + 5 * 2.164) = 210, channels 1 and 2 held at zero,
     // trunc(5.12 * 100) = 512 clamped to 511.
-    assert_eq!(player, [Some(210), Some(0), Some(0), Some(511)]);
-    let rival = Craft::channel_inputs(Inputs {
-        speed_field: 1100.0,
-        throttle: None,
-    });
+    assert_eq!(player, [Some(210), Some(0), Some(0), Some(511), None]);
+    let rival = Craft::channel_inputs(
+        Inputs {
+            speed_field: 1100.0,
+            throttle: None,
+        },
+        Law::Hd,
+    );
     assert_eq!(rival[0], Some(511), "channel 0 clamps at 511");
     assert_eq!(rival[3], None, "an opponent never writes channel 3");
-    let idle = Craft::channel_inputs(Inputs {
-        speed_field: 0.0,
-        throttle: Some(0.0),
-    });
+    let idle = Craft::channel_inputs(
+        Inputs {
+            speed_field: 0.0,
+            throttle: Some(0.0),
+        },
+        Law::Hd,
+    );
     assert_eq!(idle[0], Some(10), "the grid value: trunc(5 * 2.164)");
     assert_eq!(idle[3], Some(0));
 }
@@ -97,6 +106,9 @@ fn a_layer_reads_gain_over_unity_and_pitch_through_the_bend_law() {
     pitch[200] = 0;
     let layer = LayerCfg {
         name: "x".into(),
+        kind: 0,
+        cue: 0,
+        link: -1,
         channel: 0,
         gain,
         pitch,
@@ -150,12 +162,18 @@ fn team_with_two_layers() -> Arc<Team> {
         layers: vec![
             LayerCfg {
                 name: "falls".into(),
+                kind: 0,
+                cue: 0,
+                link: -1,
                 channel: 0,
                 gain: fall,
                 pitch: flat.clone(),
             },
             LayerCfg {
                 name: "rises".into(),
+                kind: 0,
+                cue: 0,
+                link: -1,
                 channel: 0,
                 gain: ramp,
                 pitch: flat,
@@ -171,6 +189,7 @@ fn team_with_two_layers() -> Arc<Team> {
         })
     };
     Arc::new(Team {
+        law: Law::Hd,
         table,
         sounds: vec![layer(), layer()],
     })
@@ -281,4 +300,87 @@ fn an_engine_layer_is_louder_by_the_square_of_its_volume() {
     let half = ENGINE_BUS_RATIO * (0.5f32 * distance_factor(0.0)).powi(2);
     assert!((half / full - 0.25).abs() < 1e-6);
     assert!((ENGINE_BUS_RATIO - 0.462).abs() < 0.001);
+}
+
+#[test]
+fn the_vita_class_writes_five_channels_and_clamps_at_510() {
+    let player = Craft::channel_inputs(
+        Inputs {
+            speed_field: 400.0,
+            throttle: Some(75.0),
+        },
+        Law::Vita2048,
+    );
+    // trunc(0.5 * 400 * 1.0), three zeros, trunc(70 * 0.75 / 0.75).
+    assert_eq!(player, [Some(200), Some(0), Some(0), Some(0), Some(70)]);
+    let rival = Craft::channel_inputs(
+        Inputs {
+            speed_field: 2000.0,
+            throttle: None,
+        },
+        Law::Vita2048,
+    );
+    assert_eq!(rival[0], Some(510), "the Vita classes clamp at 510.0");
+    assert_eq!(rival[4], None, "an opponent writes no pedal in this port");
+}
+
+#[test]
+fn a_slot_team_names_its_table_without_its_livery_directory() {
+    assert_eq!(table_name(r"Feisar2048\3"), "feisar2048");
+    assert_eq!(table_name("Qirex2048/1"), "qirex2048");
+    assert_eq!(table_name("goteki_c1"), "goteki");
+    assert_eq!(table_name("Detonator"), "det");
+    assert_eq!(law_of("auricom2048"), Law::Vita2048);
+    assert_eq!(law_of("auricom"), Law::Hd);
+}
+
+fn flat_layer(kind: u8, link: i8, channel: usize, gain: i16, pitch: i16) -> LayerCfg {
+    LayerCfg {
+        name: String::new(),
+        kind,
+        cue: 0,
+        link,
+        channel,
+        gain: vec![gain; CURVE],
+        pitch: vec![pitch; CURVE],
+    }
+}
+
+const CURVE: usize = 512;
+
+#[test]
+fn a_kind_two_layer_scales_and_bends_the_layer_it_links_to_and_plays_nothing_itself() {
+    let table = Table {
+        channels: vec![channel([0; 4], [0; 4]); CHANNELS],
+        layers: vec![
+            flat_layer(0, -1, 0, 0x400, 0x200),
+            flat_layer(2, 0, 4, 0x200, 0x300),
+        ],
+    };
+    let team = Arc::new(Team {
+        law: Law::Vita2048,
+        sounds: vec![None, None],
+        table,
+    });
+    let mut craft = Craft::new(team);
+    let before = craft.level(0).unwrap();
+    assert_eq!((before.gain, before.bend), (1.0, 0), "no modulator has run");
+    let mut mixer = Mixer::new(48_000);
+    let listener = ears();
+    craft.tick(
+        &mut mixer,
+        Inputs {
+            speed_field: 0.0,
+            throttle: None,
+        },
+        true,
+        [0.0; 3],
+        &listener,
+        false,
+        1.0 / 60.0,
+    );
+    let after = craft.level(0).unwrap();
+    assert_eq!(after.gain, 0.5, "0x200 over unity");
+    assert_eq!(after.bend, ((0x300 - 0x200) * 0x7fff) >> 9);
+    assert_eq!(craft.open_voices(), 0, "a modulator owns no voice");
 }
