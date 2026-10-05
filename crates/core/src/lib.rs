@@ -8,6 +8,7 @@
 //! See `docs/architecture/determinism.md` for the full rules and
 //! `docs/architecture/adr/0002-determinism-model.md` for why they were chosen.
 
+pub mod buttons;
 pub mod hash;
 pub mod math;
 pub mod probe;

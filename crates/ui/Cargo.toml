@@ -22,7 +22,6 @@ anyhow.workspace = true
 # a given seed is the same picture twice.
 oag-core.workspace = true
 oag-display.workspace = true
-oag-gameplay.workspace = true
 # Only for the boot sequence's title fallback and its front-end table, the same
 # reason `oag-game` carries it: a Pure disc's intro and menu have to be
 # reachable through the same [`frontend::Frontend`] Pulse uses. See roadmap M8.

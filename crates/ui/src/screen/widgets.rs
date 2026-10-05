@@ -5,7 +5,7 @@
 //! `touch_slider_from_node` into. A move, not a behaviour change.
 
 use super::{Fill, Image, Menu, Node, Redirect, Screens, Text, parse_argb};
-use oag_gameplay::input::button_from_name;
+use oag_core::buttons::button_from_name;
 
 impl Screens {
     /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`

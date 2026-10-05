@@ -21,7 +21,7 @@ use std::collections::HashMap;
 // next to the dictionary expander, so the front end and the handling-stats
 // decoder share one copy rather than growing two. Re-exported because this
 // module is where the rest of the crate reaches for it.
-use oag_gameplay::input::Button;
+use oag_core::buttons::Button;
 pub use oag_tables::fexml::{Node, parse};
 
 mod color;
