@@ -26,7 +26,6 @@ use oag_sound::sfx::Cue;
 const TRACK: &str = r"Data\art\published\environments\tower\track.vex";
 
 const TICKS: u64 = 5600;
-const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
 
 fn load() -> Option<race::Race> {
     load_mode(oag_race::Mode::SingleRace)
