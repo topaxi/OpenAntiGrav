@@ -336,10 +336,18 @@ pub(super) fn load_bodies(
                     hemisphere: one(Some(pulse.hemisphere), "a bomb blast hemisphere", false),
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                     repulser_field: None,
+                    mag_floor: [None, None],
                 }
             });
     // Rides the Bomb blast's container - see `BombBlastModels::repulser_field`.
     bomb_blast.repulser_field = one(models.repulser_field, "a repulser field", false);
+    // And the magstrip effect's pair - see `BombBlastModels::mag_floor`.
+    if let Some([first, second]) = models.mag_floor {
+        bomb_blast.mag_floor = [
+            one(Some(first), "a magstrip effect", false),
+            one(Some(second), "a magstrip effect", false),
+        ];
+    }
     // The LeachBall rides no pool of its own - `Scene::new` builds one
     // drawable, not `MAX_PROJECTILES` of them, since only one beam is ever
     // live - but its model loads on the same terms as every other weapon

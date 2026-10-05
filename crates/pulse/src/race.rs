@@ -373,6 +373,11 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     }),
     // `Repulser_Construct` (`0x08875008`), format string `0x08a7ccdc`.
     repulser_field: Some(r"Data\Weapons\pulse_repulsorwave.vex"),
+    // `MagFloorFx_Construct` (`0x088590a8`), strings `0x08a7bfa8`/`0x08a7bfcc`.
+    mag_floor: Some([
+        r"Data\visual_effects\MagEffect1.vex",
+        r"Data\visual_effects\MagEffect2.vex",
+    ]),
     leachbeam_ball: None,
     // `None` is this title's own reading - see the field's doc comment.
     cannon_look: None,

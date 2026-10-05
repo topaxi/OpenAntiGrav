@@ -196,6 +196,10 @@ pub struct BombBlastModels {
     /// weapon tuple from `load.rs` to `Scene::new`, all of which sit at their
     /// line ceilings. Played by [`super::repulser_field`].
     pub repulser_field: Option<Model>,
+    /// The magstrip effect's two models, `[MagEffect1, MagEffect2]` - riding
+    /// this container for the Repulser field's own reason above. Played by
+    /// [`super::mag_floor_fx`].
+    pub mag_floor: [Option<Model>; 2],
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -205,6 +209,8 @@ pub(crate) struct BombBlastDrawables {
     pub(crate) shockwave: Vec<Drawable>,
     /// One per pool slot - see [`BombBlastModels::repulser_field`].
     pub(crate) repulser_field: Vec<Drawable>,
+    /// One per ship slot - see [`BombBlastModels::mag_floor`].
+    pub(crate) mag_floor: [Vec<Drawable>; 2],
 }
 
 impl BombBlastDrawables {
@@ -219,6 +225,18 @@ impl BombBlastDrawables {
             hemisphere: build_one(models.hemisphere)?,
             shockwave: build_one(models.shockwave)?,
             repulser_field: build_one(models.repulser_field)?,
+            mag_floor: {
+                let [first, second] = models.mag_floor;
+                // A pool per ship, not per projectile: every craft builds one
+                // effect and nothing else does.
+                let mut per_ship = |model| {
+                    build_one(model).map(|mut pool: Vec<Drawable>| {
+                        pool.truncate(oag_weapons::MAX_SHIPS);
+                        pool
+                    })
+                };
+                [per_ship(first)?, per_ship(second)?]
+            },
         })
     }
 }

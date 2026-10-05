@@ -539,6 +539,7 @@ impl Race {
                 quake_effect: None,
                 repulser_effects: [[None; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
                 repulser_fields: [None; oag_weapons::projectile::repulser::POOL_SIZE],
+                mag_floor_fx: Default::default(),
                 quake_point: None,
                 leach_beam_effect: None,
                 leach_charge_effect: [None; MAX_SHIPS],
