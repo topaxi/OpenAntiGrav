@@ -80,7 +80,7 @@ impl Race {
     /// has no Disruptor row to read.
     pub(crate) fn fire_opponent_disruptor(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
-            line: &self.sim.racing_line,
+            line: self.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,

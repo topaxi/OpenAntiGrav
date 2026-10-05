@@ -394,7 +394,7 @@ impl Race {
                 .max(0.0);
             let boosted = speed * TURBO_SPEED_RATIO;
             let context = oag_ai::Context {
-                line: &self.sim.racing_line,
+                line: self.line_of(slot),
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
                 field,
@@ -548,7 +548,7 @@ impl Race {
         };
         let ship = &self.sim.world.ships[slot];
         let context = oag_ai::Context {
-            line: &self.sim.racing_line,
+            line: self.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,

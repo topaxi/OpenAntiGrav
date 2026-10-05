@@ -134,7 +134,10 @@ impl Race {
         };
         let line = &self.sim.racing_line;
         let len = line.len() as u32;
-        if !wants || len == 0 || self.sim.weapon_pad_line.is_empty() {
+        // The pads are placed on the ring's indices, so a craft on a route
+        // (`crate::routes`) does not seek one until it is back. Ours.
+        let on_route = ship.driver.branching.route != 0;
+        if !wants || on_route || len == 0 || self.sim.weapon_pad_line.is_empty() {
             return None;
         }
         let here = ship.driver.index % len;

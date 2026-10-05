@@ -76,6 +76,7 @@
 //! `docs/architecture/determinism.md` forbids. The reasoning is at the top of
 //! `noise.rs`.
 
+pub mod branch;
 mod difficulty;
 mod driver;
 mod field;

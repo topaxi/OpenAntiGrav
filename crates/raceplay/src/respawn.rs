@@ -71,7 +71,7 @@ impl Race {
             .physics
             .body
             .position
-            .distance(self.sim.racing_line.point(index))
+            .distance(self.line_of(slot).point(index))
             > self.sim.rescue_distance
             || self.beneath_the_line(slot);
         self.sim.lost_ticks[slot] = if away {
@@ -99,14 +99,15 @@ impl Race {
         // through the air: a craft that comes down early lands beneath it on
         // the road it was always going to land on (`25_Track` reversed,
         // samples 690-740, 77 ticks in the census).
-        if ship.physics.time_airborne > 0.0 || self.sim.racing_line.is_unsupported(index) {
+        let line = self.line_of(slot);
+        if ship.physics.time_airborne > 0.0 || line.is_unsupported(index) {
             return false;
         }
-        let Some(sample) = self.ai_sample(index) else {
+        let Some(sample) = self.ai_sample_for(slot, index) else {
             return false;
         };
         let up = -Vec3::from_array(sample.down).normalize_or_zero();
-        (self.sim.racing_line.point(index) - ship.physics.body.position).dot(up) > BENEATH_LINE
+        (line.point(index) - ship.physics.body.position).dot(up) > BENEATH_LINE
     }
 
     /// Whether this opponent has been stopped, while asking to move, for long
@@ -288,6 +289,8 @@ impl Race {
             self.sim
                 .racing_line
                 .nearest(pose.position, 0, self.sim.racing_line.len()) as u32;
+        // Put back on the ring, so off any route. See `oag_ai::branch::Branching::on_ring`.
+        ship.driver.branching = ship.driver.branching.on_ring();
 
         self.flash_player_reset(slot);
         self.sim.respawns[slot] += 1;
