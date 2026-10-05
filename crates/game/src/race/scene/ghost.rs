@@ -50,7 +50,7 @@ impl Scene {
         if !crate::ghosts::races_a_ghost(mode) {
             return;
         }
-        let format = if self.hd.is_some() {
+        let format = if self.draws_linear() {
             oag_render::post::hd_bloom::SCENE_FORMAT
         } else {
             caller_format

@@ -114,8 +114,7 @@ pub(in crate::race::load) fn envsettings_light(
     };
     let combination = if ps4 {
         "Omega's own: pow(lightmap, power) * scale + bias on the raw atlas, no constant \
-         ambient on a lightmapped draw; the render target's saturation stands in for its \
-         unlocated tonemap"
+         ambient on a lightmapped draw"
     } else if psp2 {
         "2048 authors no equivalent prelit or specular keys, so both stay at the identity"
     } else {
@@ -136,14 +135,57 @@ pub(in crate::race::load) fn envsettings_light(
         light.ambient[2],
         specular_scale,
     ));
-    // The `Tonemap` block is read and reported, and applied by nothing: the
-    // executable registers it (`FUN_015c1f20`) and no reader of it is located.
-    if let (true, Some(t)) = (ps4, env.tonemap("Tonemap")) {
-        report.push(format!(
-            "{name}: Tonemap block read (exposure {:.2}..{:.2}, response {:.2}, time {:.2}); \
-             nothing applies it - its consumer in the executable is not located",
-            t.exposure_minimum, t.exposure_maximum, t.exposure_response, t.exposure_time,
-        ));
-    }
     light
+}
+
+/// Omega's `Tonemap` block, read into [`oag_render::post::omega_tonemap::Params`].
+///
+/// Its consumer is `ToneMap_ApplyEnvSettings` (`0x01620980`), which reads the
+/// `Tonemap.*` keys, or `TonemapHDR.*` under HDR video out; this port draws
+/// SDR, so it reads `Tonemap`. A circuit's own file only - every Omega circuit
+/// file authors the block; a file without one draws without the curve, and
+/// says so.
+pub(in crate::race::load) fn envsettings_tonemap(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<oag_render::post::omega_tonemap::Params> {
+    let name = envsettings_name(track)?;
+    let blob = archives.read_name(&name).ok()?;
+    let env = EnvSettings::parse(&String::from_utf8(blob).ok()?).ok()?;
+    let Some(t) = env.tonemap("Tonemap") else {
+        report.push(format!(
+            "{name}: no complete Tonemap block; the race draws without Omega's curve"
+        ));
+        return None;
+    };
+    let params = oag_render::post::omega_tonemap::Params {
+        luminance_a: t.luminance_a,
+        luminance_b: t.luminance_b,
+        exposure_minimum: t.exposure_minimum,
+        exposure_maximum: t.exposure_maximum,
+        exposure_response: t.exposure_response,
+        exposure_time: t.exposure_time,
+        source_end_a: t.source_colour_end_a,
+        source_end_b: t.source_colour_end_b,
+        start_angle: t.start_angle,
+        end_angle: t.end_angle,
+    };
+    report.push(format!(
+        "{name}: Tonemap applied - exposure ({:.3} + {:.3} LAvg) / LAvg in {:.2}..{:.2}, \
+         LAvg the mean luma of the last {} frames stepped {:.4} a frame, cubic from 0 to \
+         t1 = {:.3} + {:.3} LAvg with angles {:.1}/{:.1} deg - the executable's own law \
+         (ToneMap_ApplyEnvSettings and its coefficient shader)",
+        params.luminance_a,
+        params.luminance_b,
+        params.exposure_minimum,
+        params.exposure_maximum,
+        params.history_frames(),
+        params.step(),
+        params.source_end_a,
+        params.source_end_b,
+        params.start_angle,
+        params.end_angle,
+    ));
+    Some(params)
 }

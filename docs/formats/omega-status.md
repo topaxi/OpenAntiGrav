@@ -899,13 +899,48 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   measured**); and the vertex-colour variant of the same curve (`NOVAColor`),
   which needs role bits the PS4 material container does not yet provide.
 
-  **The `Tonemap.*` block is read** (`oag_tables::envsettings::Tonemap`, ten keys
-  under both the `Tonemap` and `TonemapHDR` prefixes) and reported, and **applied
-  by nothing**: no instruction in the executable reads it by absolute address
-  and the consumer is not located (next address: the `wo_composite_*` registry
-  at `0x01623500`). The pixel shaders export fp16 (`v_cvt_pkrtz_f16_f32`), so
-  the circuit is rendered to an HDR target and mapped afterwards; this project's
-  saturating target is the missing stage.
+  **The `Tonemap.*` block is applied** (`omega-tonemap`, 2026-10-05). Its consumer
+  is `ToneMap_ApplyEnvSettings` (`0x01620980`), which reads the block through the
+  environment object (the earlier absolute-address search could not see that), and
+  the law is the executable's own, read off GCN microcode and checked by emulation:
+  a Rec.601 mean luma of the frame, averaged over `round(time * 60)` frames,
+  `LAvg` stepped toward it by at most `response / 60` a frame, an exposure
+  `clamp((a + b LAvg) / LAvg, min, max)`, and a **cubic Hermite curve** from `(0, 0)`
+  to `(t1, 1)` with end slopes set by the two angles, applied **per colour channel**
+  inside the 4x MSAA resolve. Bloom is added after it. Evidence, scores and what is
+  not read: [`ps4-omega-eu/tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md).
+  The answer to "does Omega render differently by console" is: only in where the
+  curve runs (the 4x MSAA resolve on a base PS4; a compute resolve with the same
+  coefficients under the Pro's checkerboard mode, whose sample setup is not read); HDR video out switches to the
+  `TonemapHDR.*` twins and a curve ending at 40.0 instead of 1.0.
+
+  **Wired** as `oag_render::post::omega_tonemap`: an Omega race (a PS4 circuit
+  whose file has the block) draws into the linear `Rgba16Float` scene target and
+  the chain runs the law, then the `pow(1/2.2)` display encode every linear target
+  here ends on (**chosen, not measured**: the scanout format is unread; the HDR
+  twin's 0..40 range is why the curve's output is taken as linear light). Also
+  chosen: per pixel rather than per MSAA sample, the first frame starts settled,
+  no readback latency, brightness at the middle setting. Tests:
+  `the_law_reproduces_the_original_coefficient_shader` (numbers produced by the
+  original shader's own instructions on an emulated lane),
+  `the_chain_draws_the_law_on_a_real_device`, and on the disc
+  `omega_lightmap_ground_truth`. Frames (`oag-game --no-audio --race --hold cross`,
+  debug, 1440x816, `data/scratch/omega-tonemap/shots/`, before from `main`):
+
+  | frame | clipped white before -> after | mean luminance |
+  | --- | --- | --- |
+  | Tech De Ra forward, tick 300 | 5.97 % -> 0.01 % | 0.529 -> 0.412 |
+  | Tech De Ra forward, tick 600 | 9.31 % -> 0.14 % | 0.598 -> 0.453 |
+  | Altima (2048 heritage), tick 300 | 7.58 % -> 0.09 % | 0.713 -> 0.566 |
+  | Altima (2048 heritage), tick 600 | 13.51 % -> 3.08 % | 0.585 -> 0.501 |
+  | HD Tech De Ra, tick 300 | 5.26 % -> 5.26 % | **byte-identical** |
+  | Pulse PSP, tick 300 | 4.35 % -> 4.35 % | **byte-identical** |
+
+  Read by eye: Tech De Ra's blown ship hull, banner and upper walls carry their
+  detail. **Altima's road is a flat colour in both frames**: before, it clipped
+  to white; after, it is a flat pink with no texture. That is a defect the clip
+  was hiding (a road surface lit far past 1.0, or drawn without its texture), not
+  the curve, and it is open.
 
 - **`track.final.pvs` is read and culls** (`omega-pvs-sound`, 2026-09-30). It is
   [HD's `track.pvs`](hd-pvs.md) in the 2048 lineage's dialect: little-endian,

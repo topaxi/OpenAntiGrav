@@ -55,3 +55,57 @@ pub(super) fn build(
     };
     (hd, format, caller_format)
 }
+
+/// Omega's tone map (`oag_render::post::omega_tonemap`), built when the
+/// circuit authors a `Tonemap` block and no HD chain already owns the scene
+/// target. Returns it and the scene format, switched to the linear float one
+/// when it is there - the same statement [`build`] makes. A failure is
+/// reported and dropped: the race then draws the pre-tonemap picture.
+pub(super) fn build_omega(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    caller_format: wgpu::TextureFormat,
+    size: (u32, u32),
+    params: Option<oag_render::post::omega_tonemap::Params>,
+) -> (
+    Option<oag_render::post::omega_tonemap::Chain>,
+    wgpu::TextureFormat,
+) {
+    let omega = match params
+        .filter(|_| format == caller_format)
+        .map(|params| {
+            oag_render::post::omega_tonemap::Chain::new(device, caller_format, size, params)
+        })
+        .transpose()
+    {
+        Ok(omega) => omega,
+        Err(e) => {
+            warn!("omega tone map unavailable ({e}) - the frame draws without it");
+            None
+        }
+    };
+    let format = if omega.is_some() {
+        oag_render::post::hd_bloom::SCENE_FORMAT
+    } else {
+        format
+    };
+    (omega, format)
+}
+
+impl Scene {
+    /// The linear float target the race pass draws into under either post
+    /// chain, or `None` when it draws straight into the caller's view.
+    pub(super) fn linear_scene_view(&self) -> Option<&wgpu::TextureView> {
+        match (&self.hd, &self.omega) {
+            (Some(hd), _) => Some(hd.scene_view()),
+            (None, Some(omega)) => Some(omega.scene_view()),
+            (None, None) => None,
+        }
+    }
+
+    /// Whether the scene's pipelines were built against the linear float
+    /// target - see [`build`] and [`build_omega`].
+    pub(super) fn draws_linear(&self) -> bool {
+        self.hd.is_some() || self.omega.is_some()
+    }
+}

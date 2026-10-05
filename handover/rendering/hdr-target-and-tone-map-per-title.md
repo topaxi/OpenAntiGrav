@@ -29,12 +29,26 @@ What is already established, do not re-derive:
 
 ## Open
 
-- **Omega: HDR target plus its tone-map.** Find the consumer of `Tonemap.*` in
-  the PS4 executable, read its law (fixed exposure or adaptive, which curve,
-  how the luminance coefficients enter), then render Omega into an fp16 target
-  and apply it. `render` is exempt from the determinism rules, so float targets
-  are free to use; `fsr3.md` notes that an HDR path would want auto-exposure
-  in the upscaler reduction.
+- ~~**Omega: HDR target plus its tone-map.**~~ **Closed 2026-10-05
+  (`omega-tonemap`)**: consumer `ToneMap_ApplyEnvSettings` (`0x01620980`), law read
+  and wired as `oag_render::post::omega_tonemap`; see
+  `docs/ghidra/functions/ps4-omega-eu/tonemap.md` and `docs/formats/omega-status.md`.
+  Left open from it:
+  - **Altima's road is a flat colour** with the curve on (pink, untextured; it
+    clipped to white before). Some road surface on that 2048-heritage circuit is
+    lit far past 1.0 or drawn without its texture. Check its material and
+    lightmap binding before blaming the curve:
+    `data/scratch/omega-tonemap/shots/altima-t300-before-after.png`. The 3.08 %
+    still clipped at tick 600 (`altima-t600-before-after.png`) is that same
+    road, not a hot light.
+  - The scanout format (sRGB or UNORM) is unread, so the final `pow(1/2.2)` is
+    chosen. Next address: the SDR copy `FUN_0122d760` called from `FUN_01629ce0`,
+    and the display buffer's creation.
+  - Which level of the 256x256 luma chain the coefficient pass samples, and what
+    image the chain starts from (`ToneMap_UpdateCoefficients`, `0x0178c490`).
+  - The Pro checkerboard resolve `0x19685a0` (same `m_abcd` constants), unread.
+  - Omega's bloom and its low-resolution additive layer go on after the curve in
+    the original. Neither is drawn here yet.
 - **HD and 2048: do they do the same?** Read each executable's final composite
   and its target format before assuming Omega's design. A title that genuinely
   renders LDR keeps our 8-bit path.
@@ -61,8 +75,8 @@ What is already established, do not re-derive:
 
 ## Next Steps
 
-1. Omega's tone-map consumer and law (RE on `ps4-omega-eu`), then the fp16
-   target and the curve (wire). The biggest visible change of the three.
+1. ~~Omega's tone-map consumer and law, then the fp16 target and the curve.~~
+   Done 2026-10-05; the Altima road item above is the follow-up.
 2. One RPCS3 capture session on HD that answers both the "feels off" curve
    test and the red-section hull test, same circuit, same team.
 3. HD's and 2048's final composite read, only if step 2 shows a systematic
