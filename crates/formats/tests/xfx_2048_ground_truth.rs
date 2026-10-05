@@ -195,7 +195,7 @@ fn a_layer_name_resolves_by_hash_in_the_zone_bank_to_the_cue_hd_era_tables_expec
                 continue;
             }
             assert!(
-                zone.cue_named(layer.name()).is_some(),
+                zone.cue_named_or_hashed(layer.name()).is_some(),
                 "{file}: {:?} does not resolve",
                 layer.name()
             );
@@ -207,6 +207,6 @@ fn a_layer_name_resolves_by_hash_in_the_zone_bank_to_the_cue_hd_era_tables_expec
     // in an ordinary 2048 race.
     let normal = bank_bytes(&mut archive, "Ship_NGP");
     let normal = Bank::parse(&normal).unwrap();
-    assert!(normal.cue_named("~jet01_02").is_none());
-    assert!(normal.cue_named("~afterburner").is_none());
+    assert!(normal.cue_named_or_hashed("~jet01_02").is_none());
+    assert!(normal.cue_named_or_hashed("~afterburner").is_none());
 }

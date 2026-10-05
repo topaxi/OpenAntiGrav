@@ -178,17 +178,30 @@ impl Bank<'_> {
     /// would have rejected.
     ///
     /// A Vita bank ([`Bank::is_hashed`]) keys its table by [`name_hash`]
-    /// instead and keeps no 16-byte names at all; the lookup is
-    /// [`Bank::cue_by_hash`] there.
+    /// instead and keeps no 16-byte names at all, so this finds nothing there
+    /// on purpose: [`Bank::cue_named_or_hashed`] is the lookup for the one
+    /// caller whose hashed binding is measured. Resolving every 2048 cue by
+    /// hash played cues whose triggers were never checked (a perfect-lap
+    /// announcement mid-lap, and noise), reported from play on 2026-10-05.
     #[must_use]
     pub fn cue_named(&self, name: &str) -> Option<Cue> {
-        if self.is_hashed() {
-            return self.cue_by_hash(name_hash(name)).and_then(|c| self.cue(c));
-        }
         self.sound_names()
             .into_iter()
             .find(|entry| entry.name == name)
             .and_then(|entry| self.cue(entry.cue))
+    }
+
+    /// [`Bank::cue_named`], and on a [hashed](Bank::is_hashed) bank the cue
+    /// whose name hashes to `name` by [`name_hash`].
+    ///
+    /// Only the crossfade engine uses this, where the hashed names are checked
+    /// against the cues the `xfship_*.xfx` layers play.
+    #[must_use]
+    pub fn cue_named_or_hashed(&self, name: &str) -> Option<Cue> {
+        if self.is_hashed() {
+            return self.cue_by_hash(name_hash(name)).and_then(|c| self.cue(c));
+        }
+        self.cue_named(name)
     }
 
     /// Whether the name table is keyed by [`name_hash`] rather than by name.

@@ -499,7 +499,7 @@ pub(super) fn load_indexed_cue(
 }
 
 /// Decodes what an already-found cue binds; `name` only labels errors.
-fn load_cue_record(
+pub(super) fn load_cue_record(
     bank: &sblk::Bank,
     record: &sblk::Cue,
     name: &str,
