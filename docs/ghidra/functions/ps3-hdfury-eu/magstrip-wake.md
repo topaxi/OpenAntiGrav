@@ -165,7 +165,7 @@ has body brightness `0.0862u + 0.01875` (sample up to `0.7`) and a fixed alpha `
 ramps from whatever the slot held (`0.85^n`, about 15 ticks to settle). HD names no `kIntensity`
 (string search: zero hits); the PS4's `DAT_020e52a0 + 0x1e0` has no HD analogue found.
 
-### The jitter scales: measured, live (conf 95)
+### The jitter scales: measured, live (conf 90)
 
 `FUN_00676fe8` is `_FSin`. Both class initialisers (`0x002bd750`, `0x002bde18`) store, at
 `0x00ad8984 + 4k`, `sin(arg_k) * 0.6 + 0.4` with `arg = 0, pi/4, pi/2, 3pi/4, pi`. **Read back
@@ -181,8 +181,10 @@ term 2's, unless `rand() & 7 == 0` (1 in 8) draws a fresh one (conf 85).
 
 `data/scratch/magstrip-hd-measure/run1.mp4` (RPCS3's recorder, 30 fps, `rpcs3-drive.py record`),
 frames 31-36 of the 28 s window against ours at ticks 1136-1141 (`ours_consec.png`,
-`orig_consec.png`): the original's arcs are several times wider and whiter on screen than ours
-at the same ship scale, and wavier (smooth, not zig-zag). The world widths agree
+`orig_consec.png`): the original's arcs look several times wider and whiter on screen than ours,
+and wavier (smooth, not zig-zag). **This is not a matched pose**: the original is ~0:18 on the
+lavender grid with the default walk's hull, ours is tick 1136 over the dark floor with `feisar_c1`,
+and additive arcs on a bright floor plus HD's bloom look different from the same arcs on a dark one. The world widths agree
 (`+0x24 = 0.8`), so the gap is not geometry: the fragment program `MagStripArc_fp` (compiled
 into the executable, no file on the disc) and HD's bloom are the open candidates. **No intensity
 can be measured from these frames**, since there is no arc-free frame at the same pose.

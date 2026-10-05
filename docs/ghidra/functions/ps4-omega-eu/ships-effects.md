@@ -516,7 +516,7 @@ implementation is `oag_fx::magstrip` (module doc lists each rule), `oag_raceplay
   `v` stepping `1/48` down from the cell's bottom; the last quad's far edge is colour `0.3`. Colour grey
   `(uint)(x * 255)` with alpha `0xb2`. Contact: a diamond at the end, corners `-T, -L, +T, +L` scaled by `+0xd0`, uv
   `(0,0) (1,0) (1,1) (0,1)`.
-- **Jitter scales, measured on HD 2026-10-05 (magstrip-hd-measure, 95):** `DAT_02134210..20` is zero in the image because it is
+- **Jitter scales, measured on HD 2026-10-05 (magstrip-hd-measure, 90):** `DAT_02134210..20` is zero in the image because it is
   computed at start-up; HD's identical table reads `0.4, 0.824264, 1.0, 0.824264, 0.4` live (`0.4 + 0.6 sin(k pi/4)`), see
   `ps3-hdfury-eu/magstrip-wake.md`, and the PS4 table is assumed the same (not read). HD's brightness and alpha differ from the
   numbers above (`0.125..0.2`, alpha `0.3`/`0.25` float), same page. **Unread, chosen:** `DAT_020e52a0 + 0x1e0` (`kIntensity`)
