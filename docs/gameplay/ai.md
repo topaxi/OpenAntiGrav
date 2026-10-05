@@ -54,6 +54,7 @@ times larger" - because the finding is the coupling, not the number.
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
+| Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
 | Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
@@ -3592,6 +3593,22 @@ to ten ticks' worth.
   `crates/ai/tests/determinism.rs::the_speed_plan_matches_the_committed_reference`,
   on the probe's invented circuit; a disc-backed plan is pinned only as
   verified-or-not (`speed_plan_ground_truth.rs`), not bit for bit.
+
+## Branch choice at a fork
+
+**Recovered 2026-10-05**, `Ai_ChooseBranch` (`0x08854920`), evidence on
+[ai-branch-choice.md](../ghidra/functions/psp-pulse-usa/ai-branch-choice.md):
+every opponent flips a fair coin at every fork it reaches, independently, on
+entering the path before the fork, and drives the chosen side until it is past
+the merge. The excluded path is what its lookahead and its lap progress walk
+honour, so a craft on either side reads progress on one scale. Nothing else -
+position, class, difficulty, pilot, corridor - enters the choice in Pulse. A
+craft knocked onto the other side off the track takes that side instead.
+
+2048 (`0x8119ae90`), HD (`FUN_000fe818`) and Omega (`FUN_012c0480`) flip the
+same coin. 2048 adds an authored per-circuit override after it (circuit record
+`+0x150`/`+0x154`/`+0x158`, source not found) and a different re-commit; neither
+is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-choice.md).
 
 ## Where this sits
 

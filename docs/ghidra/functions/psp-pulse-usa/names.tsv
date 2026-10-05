@@ -1319,3 +1319,7 @@
 0x088807c8	function	Camera_CycleModeForward	90	race-finish.md
 0x08880838	function	Camera_CycleModeBack	90	race-finish.md
 0x08880718	function	Camera_SetSubjectLock	75	race-finish.md
+0x08854920	function	Ai_ChooseBranch	84	ai-branch-choice.md
+0x0887d39c	function	AiTrack_SampleAhead	80	ai-branch-choice.md
+0x08852318	function	Ai_Rand	90	ai-branch-choice.md
+0x08852334	function	Ai_RandUnit	90	ai-branch-choice.md

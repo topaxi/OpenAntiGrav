@@ -108,3 +108,5 @@
 0x810018d4	function	GameMode_IsZoneFamily	65	ships-effects.md
 # Where 2048 creates fragment programs (2026-10-05, omega-2048-materials lane).
 0x812f6bee	function	Gxm_CreateFragmentProgramCached	80	fragment-programs.md
+0x81198708	function	Ai_Construct	80	ai-branch-choice.md
+0x8119ae90	function	Ai_ChooseBranch	80	ai-branch-choice.md
