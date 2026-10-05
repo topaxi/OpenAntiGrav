@@ -338,9 +338,13 @@ for the player at rest.
 
 **Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
 never read, so the 24 re-shipped flares are not the ones drawn.
-Maintainer, 2026-10-05: v1.04 matters mostly for 3D SFX, and the rest of it
-is VR, which is not planned. Loading the patch is low priority, and the
-re-shipped flares are not a gap to chase on their own.
+What v1.04 is: Sony's own changelog for 2048's v1.04 (June 2012, 142 MB) reads
+only "Various Bug Fixes", with an updated trophy list
+([xtremepsvita](https://www.xtremepsvita.com/2012/06/19/wipeout-2048-updated-to-v1-04/)).
+The 3D audio and PS VR patch is a different one, **Omega's** Update 1.04 of
+2018-03-28 ([PlayStation Blog](https://blog.playstation.com/2018/03/28/wipeout-omega-collection-free-ps-vr-update-out-today/)).
+So no published note says what 2048's patch changed; its archives are the
+only changelog there is.
 
 **Omega check** (same test file, `omega_census`): Omega ships 69
 `engineflare.rcsmodel` (68 decode with geometry through the same reader) and 9
