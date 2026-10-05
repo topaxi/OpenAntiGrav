@@ -10,10 +10,7 @@
 //! polygon buried under the road for one tick and clear of it on the next is a
 //! shadow that blinks. This measures how deep, in world units, the drawn
 //! polygon sits under the circuit's own floor, vertex by vertex and at each
-//! triangle's centre, and compares it with the [`LIFT`] the polygon is raised
-//! by to stay clear.
-//!
-//! [`LIFT`]: oag_render::shadow::LIFT
+//! triangle's centre.
 
 use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
@@ -28,16 +25,16 @@ const WARM: [u64; 3] = [900, 3000, 6000];
 
 /// How far under the road a conformed polygon may still sit, in world units.
 ///
-/// **Chosen, not measured**: twice [`LIFT`](oag_render::shadow::LIFT). The
-/// conformed polygon measures 0.056 at worst on these windows, at the centre
-/// of a sub-triangle between fitted vertices; the unconformed one 0.70.
+/// **Chosen, not measured.** Well under the 0.6 the unconformed polygon reaches,
+/// and above what the conformed one does, which is at worst the centre of a
+/// sub-triangle between fitted vertices.
 const CLEAR_ENOUGH: f32 = 0.1;
 
 /// What one window of ticks measured.
 struct Window {
     /// The deepest any sampled point of the drawn polygon sat under the floor.
     deepest: f32,
-    /// How many ticks had a point buried by more than [`LIFT`].
+    /// How many ticks had a point buried by more than [`CLEAR_ENOUGH`].
     ticks_buried: usize,
     /// Ticks the craft had a shadow at all.
     ticks: usize,
@@ -100,7 +97,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         }
         out.ticks += 1;
         out.deepest = out.deepest.max(deepest);
-        if deepest > oag_render::shadow::LIFT {
+        if deepest > CLEAR_ENOUGH {
             out.ticks_buried += 1;
         }
     }
@@ -109,9 +106,9 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
 
 /// The shadow polygon stays clear of the road it is drawn on, tick after tick.
 ///
-/// Before [`oag_render::shadow::conform_to_floor`] existed this measured, on
-/// the default circuit in Zone at the start, 0.12 units under the road on the
-/// worst tick and a buried point on roughly one tick in four later in the run.
+/// Before [`oag_render::shadow::conform_to_floor`] existed this measured the
+/// polygon up to 0.6 units under the road in Zone late in a lap, on several
+/// ticks in a minute; `docs/rendering/shadows.md` has the table.
 #[test]
 #[ignore = "needs a real disc image under data/images/"]
 fn the_shadow_polygon_is_not_buried_under_the_road() {
@@ -131,6 +128,17 @@ fn the_shadow_polygon_is_not_buried_under_the_road() {
             fit.deepest <= CLEAR_ENOUGH,
             "zone @{warm}: the conformed polygon is {:.3} under the road, past {CLEAR_ENOUGH}",
             fit.deepest,
+        );
+    }
+    // For contrast only, nothing asserted: the same circuit as an ordinary
+    // race, whose craft is slower over the same stretches.
+    for warm in WARM {
+        let Some(raw) = measure(oag_race::Mode::SingleRace, warm, false) else {
+            return;
+        };
+        println!(
+            "single race @{warm}: raw deepest {:.3} buried on {}/{} ticks",
+            raw.deepest, raw.ticks_buried, raw.ticks
         );
     }
     assert!(

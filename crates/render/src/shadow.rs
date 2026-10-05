@@ -39,14 +39,23 @@ use oag_mesh::mesh::GpuVertex;
 
 /// How far off the surface the quad is lifted, in world units.
 ///
-/// **Ours, and a fudge rather than a reading**: a quad laid exactly on the
-/// track z-fights the ribbon it is drawn over. Small against a craft (the
-/// hulls run 4-6 units long) and large against the depth buffer's resolution
-/// at race distances, which is the whole window it has to sit in.
+/// **Ours, and a fudge rather than a reading**: a shadow laid on the track
+/// z-fights the ribbon it is drawn over. Small against a craft (the hulls run
+/// 4-6 units long) and large against the depth buffer's resolution at race
+/// distances, which is the whole window it has to sit in.
+///
+/// **0.15, from 0.05 on 2026-10-05, and measured against the picture.** The
+/// road the player sees stands a little proud of the collision floor the
+/// shadow is cast onto, by different amounts along the circuit. At 0.05, in
+/// a Zone capture of Pulse's default circuit late in a lap, the shadow lost up
+/// to 70 % of its pixels on single ticks (3102 changed pixels against a steady
+/// 10-11 thousand) and was back the tick after; at 0.15 the dips are gone
+/// (10610 at worst), and 0.3 and 0.6 look the same, so this is the smallest of
+/// those tried. See `docs/rendering/shadows.md`, "The shadow blinked".
 ///
 /// Applied along the *surface normal*, not world up, so it keeps its meaning
 /// on a banked corner and inside a loop.
-pub const LIFT: f32 = 0.05;
+pub const LIFT: f32 = 0.15;
 
 /// The largest number of quads [`Pipeline`] holds: one per grid slot.
 ///
