@@ -279,9 +279,16 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `write_driver` and nothing else changed, the previous constants reproduced
 ///   bit for bit at both tick counts. Replaces `0xe655_02d2_4ca9_8eb4` /
 ///   `0x7d19_2a0c_9ac6_6496` at 60 ticks and `0xeaac_e0f2_34f0_5e27` / `0x998b_ec4e_b275_9eb1` at 600.
+///
+/// - **Moved 2026-10-05 again**, when `Branching::pending` (the route a driver
+///   drew, held until it is near the split) joined the driver's hash: four
+///   more bytes per ship per tick, zero on this forkless track. Isolated the
+///   same way: with that one write removed the previous constants reproduced
+///   bit for bit. Replaces `0x8731_a61e_e41b_a9e8` / `0x9df3_6a61_7315_16d6` at 60 ticks and `0x1a03_923d_2d2f_0787` /
+///   `0xaefe_b285_a14e_81a1` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x8731_a61e_e41b_a9e8, 0x9df3_6a61_7315_16d6),
-    (600, 0x1a03_923d_2d2f_0787, 0xaefe_b285_a14e_81a1),
+    (60, 0x46d8_ed88_4c17_9c28, 0x315d_2753_13b0_7b16),
+    (600, 0xc349_6025_7e65_1567, 0x9648_2860_d2cc_25a1),
 ];
 
 #[test]

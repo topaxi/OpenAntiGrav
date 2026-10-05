@@ -610,9 +610,16 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `write_driver` and nothing else changed, the previous constants reproduced
 ///   bit for bit at both tick counts. Replaces `0x393b_148b_b8f2_5727` /
 ///   `0x7f62_1ea3_430c_a071` at 60 ticks and `0x5e00_c1b5_b928_c252` / `0x7838_5bc9_954f_c738` at 600.
+///
+/// - **Moved 2026-10-05 again**, when `Branching::pending` (the route a driver
+///   drew, held until it is near the split) joined the driver's hash: four
+///   more bytes per ship per tick, zero on this forkless track. Isolated the
+///   same way: with that one write removed the previous constants reproduced
+///   bit for bit. Replaces `0x6f3a_9672_4942_4caf` / `0x6423_786d_5305_88bb` at 60 ticks and `0xdbb7_da22_3b37_4562` /
+///   `0x46e0_cbc8_9e6a_ea96` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x6f3a_9672_4942_4caf, 0x6423_786d_5305_88bb),
-    (600, 0xdbb7_da22_3b37_4562, 0x46e0_cbc8_9e6a_ea96),
+    (60, 0xeaa8_47a2_289e_87cf, 0x4134_e0d4_2589_124b),
+    (600, 0x2f1c_7e70_2e92_c262, 0x9191_035b_9d0d_e5a6),
 ];
 
 #[test]
