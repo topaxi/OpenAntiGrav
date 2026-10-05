@@ -72,6 +72,57 @@ pub fn split(model: &Model, data: &[u8], groups: &[&str]) -> anyhow::Result<Vec<
         .collect())
 }
 
+/// [`split`] for a 2048 model, whose draws carry no `.vex` node.
+///
+/// **Joined by name instead.** A 2048 `.rcsmodel` names each mesh object after
+/// its shape node (`ef_OuterShape`), and [`DrawCall::chunk`] is that mesh
+/// object's index, so a draw's group is the group of the `.vex` node of the
+/// same name. A mesh whose name no node carries belongs to no group and is
+/// not returned, the same rule [`split`] applies to a node outside them.
+///
+/// # Errors
+///
+/// Propagates a `.vex` whose node tree will not walk, or a `.rcsmodel` that
+/// is not 2048's container.
+pub fn split_psp2(
+    model: &Model,
+    model_blob: &[u8],
+    vex_blob: &[u8],
+    groups: &[&str],
+) -> anyhow::Result<Vec<Part>> {
+    let nodes = vex::nodes(vex_blob).context("walking the node tree")?;
+    let owner = owners(&nodes, groups);
+    let decoded = oag_rcs::rcsmodel::psp2::parse(model_blob)
+        .map_err(|e| anyhow::anyhow!("the .rcsmodel: {e}"))?;
+    let by_mesh: Vec<Option<usize>> = decoded
+        .scene
+        .meshes
+        .iter()
+        .map(|mesh| {
+            nodes
+                .iter()
+                .position(|n| {
+                    n.name
+                        .as_deref()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(&mesh.name))
+                })
+                .and_then(|i| owner[i])
+        })
+        .collect();
+    Ok(groups
+        .iter()
+        .enumerate()
+        .map(|(g, name)| Part {
+            group: (*name).to_string(),
+            model: part_by(model, name, |call| {
+                call.chunk
+                    .and_then(|c| by_mesh.get(c as usize).copied().flatten())
+                    == Some(g)
+            }),
+        })
+        .collect())
+}
+
 /// For each node, which of `groups` it descends from - itself included, so a
 /// group node that carried geometry directly would count as its own.
 fn owners(nodes: &[vex::Node], groups: &[&str]) -> Vec<Option<usize>> {
@@ -93,16 +144,20 @@ fn owners(nodes: &[vex::Node], groups: &[&str]) -> Vec<Option<usize>> {
 /// One group's own model: the source's buffers, and only the draws whose node
 /// belongs to it.
 fn part(model: &Model, owner: &[Option<usize>], group: usize, name: &str) -> Model {
-    let keep = |call: &DrawCall| {
+    part_by(model, name, |call| {
         call.node
             .and_then(|n| owner.get(n as usize).copied().flatten())
             == Some(group)
-    };
+    })
+}
+
+/// [`part`] with the membership test supplied.
+fn part_by(model: &Model, name: &str, keep: impl Fn(&DrawCall) -> bool) -> Model {
     let mut out = model.clone();
     out.label = format!("{} [{name}]", model.label);
-    out.draws.retain(keep);
-    out.alpha_tested_draws.retain(keep);
-    out.transparent_draws.retain(keep);
+    out.draws.retain(&keep);
+    out.alpha_tested_draws.retain(&keep);
+    out.transparent_draws.retain(&keep);
     // Recomputed rather than inherited: a part's bounding sphere is what the
     // viewer frames it with and what a bounds check would cull it by, and the
     // whole model's sphere is wrong for both. Over the vertices this part's

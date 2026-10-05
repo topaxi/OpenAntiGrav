@@ -285,3 +285,60 @@ A 2048 race plays `Data\Particles2048` effects with their own `.gxt` sprites:
 27 of the 36 wired names load (the 9 that do not are listed in
 `psys_inventory_ground_truth.rs`'s `v2048` module). Census, directory choice and
 what is not wired: [pob.md](pob.md), "Wipeout 2048 carries the same container".
+
+## Engine trail and flare - 2026-10-05
+
+`oag_2048::TITLE` carries `exhaust: Authored` and `flare: PerTeam` on HD's model;
+both were `Unread` on the stale reason that the `.rcsmodel` siblings could not be
+decoded. They decode (`oag_rcs::rcsmodel::psp2`), a 2048 race draws a trail and a
+flare, and the load report names what is inherited.
+
+**Census** (`crates/rcs/tests/psp2_engine_trail_ground_truth.rs`, every file,
+both regions; counted from `PSARC` path lists, not a truncated listing):
+
+| Package | `EngineFlare` .vex + .rcsmodel pairs | Ribbon templates |
+| --- | --- | --- |
+| EU `data.psarc` (18,430 entries) | 58 = 38 `hdships` + 20 `Ships/<team>2048/1-4` | 8 (`data/ribboneffects/*_triangle`) |
+| EU `dlc1`, `dlc2`, `patch-v104/data1` | 0 | 0 |
+| EU `patch-v104/data2` | 24 (`hdships` re-ships: 12 teams, each plain and `_n1`) | 0 |
+| USA (PCSA00015) | the same counts, each package | 8 |
+
+Every pair parses and every mesh object's name is a `.vex` node, so the
+`oag_mesh::mesh::groups::split_psp2` join holds for all of them. Every tree hangs
+`EF_Main` and `EF_Boost` (written `ef_Main` on some craft; matched case-
+insensitively) **except `hdships/Harimau`, which authors no `EF_Boost`**: its boost
+half draws nothing, and the report says so. The materials are two: the
+2048-named `2048_engine_additive` (flame_01 + facing_gradient `.gxt`) and, on the
+base package's `Detonator` and 12 `_n1` flares (the patch replaces 12 of those),
+HD's own `flame_test`.
+
+**What the executable names** (`strings` on `patch-v104/eboot.elf`):
+`data/RibbonEffects/enginetrail_bluered_triangle.vex`, `%s\engineflare.vex` and
+`data/Tex/EngineFlare/Engine_Flare_Rich.gxt` - HD's three literals, so the
+trail template is `bluered` and the sprite flare rides beside the model as on HD.
+
+**What is measured and what is not.** Asset names, the node groups and the
+material names are read off the data. The ribbon's geometry, the sprite flare's
+law and the boost reveal are HD's (`engine-trail.md`) **inherited, not measured on
+2048**. The ribbon takes HD's `SrcAlpha`/`One` for `hd_enginetrail_bluered` through
+`lineage_blend`; the flare's `2048_engine_additive` has no HD namesake and is
+drawn `SrcAlpha`/`One` **chosen, not measured**. The flame's own Vita fragment
+program (rim and noise terms) is unread, so the flare is geometry plus
+`flame_01`. Opponent flares and trails draw the same way.
+
+**The SPU engine light is off on 2048 - chosen, not measured.** Loading
+`EngineLightData.xml` on HD's law (`flare::Authored::engine_light`) washed the
+whole circuit blue-white: all 20 native craft author `Distance 3` /
+`Radius 30` against HD's 0.7-2.0, on a hull of the same length (13.8 units
+against 13.8, so not a units mismatch). The SPU is the PS3's and its Vita
+consumer is unread, so the light is not drawn and the load report says so.
+Switch-off bisect at tick 0: with only the light off the frame is pixel-identical
+to the pre-change one; the flare model, sprite, trail and quad are not visible
+for the player at rest.
+
+**Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
+never read, so the 24 re-shipped flares are not the ones drawn.
+
+**Omega check** (same test file, `omega_census`): Omega ships 69
+`engineflare.rcsmodel` (68 decode with geometry through the same reader) and 9
+ribbon templates. Checked, applies, not wired: Omega racing is out of scope.
