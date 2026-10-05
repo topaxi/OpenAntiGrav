@@ -67,6 +67,7 @@ out to be wrong.
 | [0054](0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) | A touch front end is a second axis on `FrontEnd`, not a `MenuSkin` variant | Accepted; extends ADR-0022 |
 | [0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) | Replays are inputs and hashes, and a ghost is drawn from poses | Accepted; opens M7, creates `oag-replay` |
 | [0056](0056-a-render-side-port-of-the-particle-generator.md) | A render-side port of the original's particle generator | Accepted; `oag_fx::ranrot`, render-only |
+| [0057](0057-the-workspace-after-the-2026-10-05-splits.md) | The workspace after the 2026-10-05 splits | Accepted; extends ADR-0051, supersedes ADR-0050's `.pob` placement |
 
 ## Format
 
