@@ -49,8 +49,11 @@ pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
         &mut loaded.bomb_blast_models.repulser_field,
     ]
     .into_iter()
+    .chain(&mut loaded.bomb_blast_models.mag_floor)
     .flatten()
     {
+        // The magstrip pair joins them: `MagFloorFx_Construct` loads both
+        // through the same `Vex_LoadModel`.
         stamp(model);
     }
     for livery in &mut loaded.liveries {

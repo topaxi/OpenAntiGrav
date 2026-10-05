@@ -100,6 +100,8 @@ pub const TITLE: &Title = &Title {
         // see `oag_tables::weapons::BombStats::timetodie`.
         bomb_blast_pulse: None,
         repulser_field: None,
+        // Neither MagEffect hash is in Pure's `Data.wad`; its code is unread.
+        mag_floor: None,
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,

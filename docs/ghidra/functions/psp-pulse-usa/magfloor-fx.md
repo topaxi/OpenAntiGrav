@@ -28,6 +28,10 @@ games): both a visible spark/glow below the craft and an audible hum were
 reported. This page recovers the gfx half in full down to the trigger; the sfx
 half is open - see below.
 
+**Implemented 2026-10-05** in `oag_raceplay::mag_floor_fx` from the anchor
+below: both models under every craft on a strip, no sound (there is none to
+play, see [The sfx half](#the-sfx-half-is-open)).
+
 ## The two assets are real and on the disc
 
 Both filenames appear twice in `BOOT.BIN`'s data segment: once mixed-case
@@ -74,10 +78,11 @@ Short version: `Ship_CastHoverProbes` writes `craft+0x240` (the same byte
 `Ship_UpdateMagLock` gates on) from a probe restricted to surface type 3 - the
 mag floor - and edge-detects the write, calling `Ship_MagFloorEnter`
 (`0x0883e5fc`) or `Ship_MagFloorExit` (`0x0883e624`) with the craft's entity
-pointer. Those two gate on an unidentified `entity+0x8bc` condition and then
-call `MagFloorFx_Show`/`MagFloorFx_Hide` (`0x088598ac`/`0x088598d8`), which
-flip a byte at `entity+0xb4` and OR/AND bit `0x4` on a field at `+0x2c` of two
-objects reached through `entity+0xac`/`entity+0xb0`.
+pointer. Those two load `entity+0x8bc`, which is the MagFloorFx object itself
+(see [Who constructs it](#who-constructs-it-and-entity0x8bc-is-the-effect-object-itself)),
+and when it is non-null call `MagFloorFx_Show`/`MagFloorFx_Hide`
+(`0x088598ac`/`0x088598d8`) on it, which flip a byte at `obj+0xb4` and OR/AND
+bit `0x4` on a field at `+0x2c` of the two models at `obj+0xac`/`obj+0xb0`.
 
 **The node identity is proven, 2026-09-02.** `MagFloorFx_Construct`
 (`0x088590a8`) is the constructor for this same object (it initialises
@@ -115,43 +120,134 @@ found, consistent with the indirect/vtable-driven construction this codebase
 has already documented for other node-class constructors, e.g. `Engine
 Flare`'s on [exhaust.md](exhaust.md#the-engine-flare-constructor)).
 
-## The 16-float block is boilerplate, not the anchor - the real anchor is still unlocated
+## The anchor: `(0, -2.5, 0)` in the craft's own frame, two attachment modes (2026-10-05)
 
-After loading and hiding both objects, `MagFloorFx_Construct` builds a
-16-float (0x40-byte) block (disassembly: `lui a3,0x29` / `addiu a0,a3,-0x3860`
-constructs the absolute address `0x0028c7a0` directly, not through `$gp` or
-an image-relative displacement) and passes it to `FUN_08945284` twice, once
-per object (`param_3` `1`/`0` distinguishing them). That function copies the
-16 floats verbatim into a lazily-allocated transform-cache slot on the target
-object and then sets two bits in the *same* `+0x2c` field `MagFloorFx_Show`/
-`Hide` already use - `0x01000000` when `param_3 == 0`, `0x08000000` when it
-is not - which reads as a draw-key/layer selector in the same high-byte
-position `draw-order.md` already decoded for the mesh-layer discriminator,
-not anything positional.
+**This section replaces a 2026-09-02 reading that called the constructor's
+16-float block "boilerplate, not the anchor". That reading was wrong in one
+detail that decides everything.** The block's source is `0x08a907a0` (the
+same identity matrix `Vex_UpdateNodeWorldMatrix` lazily copies for a null
+node; the old page quoted it un-rebased as `0x0028c7a0`, which is why it read
+as "unmapped"). It *is* shared and it *is* identity. But
+`MagFloorFx_Construct` copies it to the stack and then overwrites one element
+before passing it on:
 
-**First read this as the authored per-effect anchor; it almost certainly
-is not.** `get_xrefs_to` on `0x0028c7a0` returns **over eighty** reads from
-completely unrelated constructors across the binary - `Gfx_Init`,
-`Trail_InitPreset`, `ShipShield_Update`, `Missile_Update`, `Rocket_Update`,
-`AnimTransform_EvalRotation`, `Mine_SpawnExplosion`, and dozens more with no
-shared subsystem. A per-effect authored anchor would not be read by the
-shield, a missile and the graphics init path alike; a shared default/identity
-matrix constant used to seed a node's local transform before something else
-positions it would be exactly this widely read. Reading it (`ram:0028c7a0`
-is not backed by this Ghidra project's loaded segments, so the actual sixteen
-values were not confirmed) is very unlikely to change this reading, so this
-session stopped chasing it rather than spend more time reading a constant
-that most likely does not vary per-object anyway.
+```text
+08859530  addiu a0,a3,0x7a0         ; a3 = 0x08a9_0000 -> 0x08a907a0, identity
+08859534  lv.q  C400,0x7a0(a3)      ; four rows copied to sp+0x00..0x3f
+...
+08859560  lwc1  f12,0xef0(a0)       ; a0 = 0x08ab_0000 -> [0x08ab0ef0] = 0xc0200000 = -2.5
+08859568  jal   Node_SetLocalMatrix ; (MagEffect1, sp, 1)
+0885956c  _swc1 f12,0x34(sp)        ; element 13 = row 3 (translation), y
+08859578  jal   Node_SetLocalMatrix ; (MagEffect2, sp, 0)
+```
 
-**So the real placement question is still open, and differently shaped than
-this page first thought**: `MagFloorFx_Construct` has no visible call that
-positions either object relative to the craft - it loads, hides, colours,
-and seeds an identity-shaped default transform, then returns. Wherever the
-two nodes get parented onto the craft's scene graph (the mechanism
-`exhaust.md` already documents for `Engine Flare`/`Trail`'s own placement)
-is not in this function. `MagFloorFx_Construct` was not traced back to a
-caller - finding that caller, not reading this constant, is the next step
-for the anchor question.
+So both nodes get the local matrix **identity with translation
+`(0, -2.5, 0)`**. Row 3 is the translation row (corroborated by
+`Vex_UpdateNodeWorldMatrix`'s translate-only branch, which adds the rotated
+`+0x30` row of the local matrix onto the parent's `+0x30` row). Row 1 of a craft's
+matrix is its up axis ([input-bindings.md](input-bindings.md): `body+0x10` is
+`up`, `body+0x20` the nose), so `-2.5` is **2.5 craft units below the craft
+origin**, the "glow under the craft" the maintainer describes.
+
+### Who constructs it, and `entity+0x8bc` is the effect object itself
+
+`get_xrefs_to(0x088590a8)` has exactly one caller, `0x08841860` inside
+`Craft_Construct` (`0x08840c74`), straight-line code with no gate other than
+the craft pointer being non-null:
+
+```text
+08841824  jal  Mem_Alloc(0xc0, ...)        ; the 0xc0-byte MagFloorFx object
+08841844  _sw  s0,0x8(s4)                   ; parent = the craft
+0884184c  jal  Node_AttachChild(s0, s4)
+08841860  jal  MagFloorFx_Construct(s4, s0) ; a1 = the craft -> obj+0x40
+0884189c  sw   s3,0x8bc(s0)                 ; craft+0x8bc = the MagFloorFx object
+```
+
+That closes two open questions at once. **Every craft gets one** (the player
+and every AI craft alike; no player-only gate exists on the path). And
+**`entity+0x8bc` is the MagFloorFx object pointer**:
+`Ship_MagFloorEnter`/`Exit` disassemble to `lw a0,0x8bc(a0); beq a0,zero;
+jal MagFloorFx_Show/Hide` - the Ghidra decompile drops the argument, the
+listing does not. The "gate" is only a null check on a construction that can
+fail. The object `MagFloorFx_Construct` builds is a scene node (`Node_ConstructBase`,
+vtable `0x08aca368` at `+0x38`), its `+0x40` is the craft.
+
+### MagEffect1 rides the craft; MagEffect2 lies on the track
+
+The two children are attached **differently**, which the old page could not
+see:
+
+| | MagEffect1 (`obj+0xac`) | MagEffect2 (`obj+0xb0`) |
+| --- | --- | --- |
+| Parent | the craft (`obj+0x40`, `Node_AttachChild` at `0x08859184`) | `g_race_manager` (`[0x08b317b4]`, the scene root, `0x08859240`) |
+| `Node_SetLocalMatrix` mode | `1` -> `0x08000000`, **translate-only** | `0` -> `0x01000000`, full 4x4 |
+| World matrix | the craft's world rows **unchanged** (rotation, roll, the `0.75` `g_craft_scale`), translation `craft.T + (0,-2.5,0)` carried through the craft's rotation | rebuilt every tick by `MagFloorFx_Update`, below |
+| Scale | inherits `0.75` | unit rows |
+
+`Vex_UpdateNodeWorldMatrix`'s `0x08000000` branch (`0x0894467c`) keeps the
+parent's rows 0-2 and adds `vtfm3.t(parent 3x3, local row 3)` to the parent's
+translation, so MagEffect1 is the craft's own frame moved down its up axis.
+
+**`MagFloorFx_Update` (`0x0885962c`)** is vtable slot `+0x24` of `0x08aca368`,
+the pre-update(dt) slot ([resource-loading.md](resource-loading.md)), and does
+nothing unless `obj+0xb4` (the Show/Hide byte) is set. When it is:
+
+```c
+craft = obj->0x40;
+d = normalize(-craft->0xb10.xyz);               // vneg.q, w zeroed; the located spline sample's down, negated
+W = world matrix of craft (Vex_UpdateNodeWorldMatrix if dirty);
+M = vmmul(O, W);                                 // O = identity with row3.y = -2.5, the same block as above
+row1 = d;                                        // up: the track's up under the craft, unit
+row2 = normalize(W.row2 - d * dot(d, W.row2));   // the nose, made perpendicular to d
+row0 = cross(d, row2);                           // vcrsp.t
+row3 = M.row3;                                   // = W.row3 - 2.5 * W.row1
+Node_SetLocalMatrix(obj->0xb0, {row0,row1,row2,row3}, 0);
+```
+
+So MagEffect2 sits at the same point as MagEffect1 but is laid **flat on
+the track** (its up is the track's, not the craft's, so it does not pitch or roll
+with the craft) and is pointed along the craft's heading, at unit scale.
+`craft+0xb10` is the located spline sample's down
+([engine.md](engine.md#0xb10-is-splineptdown-and-the-whole-record-is-a-located-spline-sample)).
+
+**The `vmmul` order is not a guess: the PS2 build spells it out.** PS2's
+`MagFloorFx_Update` (`0x001659a0`, `SCES_547.48`) has no `vmmul`; it builds
+each row of `O` against `W` with `vmulax/vmadday/vmaddaz/vmaddw` against `W`'s
+four rows, which is `O * W` in row-vector form, so translation is
+`W.row3 + (-2.5) * W.row1`. The rest is the same: up from `-craft+0xbd0`
+normalised, nose orthogonalised with `vrsqrt`, side from `vopmula/vopmsub`
+(the cross product), handed to the PS2's `Node_SetLocalMatrix` (`0x001fe888`)
+with mode `0`. PS2's `MagFloorFx_Construct` (`0x00165688`) loads the same two
+strings (`0x002a71e0`/`0x002a7208`), attaches MagEffect1 to the craft and
+MagEffect2 to `[0x002e0280]`, and writes the `-2.5` from `[0x0027e950]`
+(`0xc0200000`) into the translation row with `vaddx.y vf2,vf0,vf1` (y only)
+before the same two `Node_SetLocalMatrix(.., 1)`/`(.., 0)` calls.
+
+### The tint is opaque white
+
+`Image_SetVertexColours` stamps both models with `[0x08b3bf30..0x08b3bf3c]`
+packed `A<<24 | B<<16 | G<<8 | R`. The four floats have no writer the
+decompiler attributes; the writer is a static initialiser at `0x08859904`
+that Ghidra had never made a function (`MagFloorFx_InitTint`, created
+2026-10-05): `lui a0,0x3f80` then four `swc1 f12` to `0x08b3bf30..3c` - all
+`1.0`. PS2's `MagFloorFx_InitTint` (`0x00165ce0`) is the same, shaped as a GCC
+static-init function (`a1 == 0xffff && a0 != 0`), writing `1.0` to
+`0x002e35e0..ec`. So the stamp is `0xffffffff`: the authored vertex colours
+are drawn as they are, with nothing multiplied in.
+
+### Confidence
+
+- **88**, the anchor `(0, -2.5, 0)` in the craft's own frame and the two
+  attachment modes: the PSP decompile and listing are unambiguous, the
+  same constant and structure are in an independent binary (PS2), and both
+  of PS2's routes to the translation agree with the PSP's. Not
+  runtime-verified, which is what keeps it below 95.
+- **88**, MagEffect2's per-tick basis (`MagFloorFx_Update`): the PSP and PS2
+  bodies agree row for row.
+- **85**, the white tint: a static initialiser in each binary, read and
+  matching. No runtime read of `0x08b3bf30`.
+- **90**, every craft builds one and `craft+0x8bc` is the object: one
+  caller, straight-line code, and the Enter/Exit listing.
 
 ## The sfx half is open
 
@@ -198,6 +294,41 @@ not because riding the strip triggers it. Not confirmed either way - it
 would need the pad/emitter placement data for a magstrip track, not just the
 bank's cue list.
 
+### 2026-10-05: the three remaining routes to a per-craft hum are all closed
+
+1. **No sound code reads the mag-contact state.** Every `lbu ..,0x240(..)` in
+   the binary is in `Ship_CastHoverProbes` (three) or `Ship_UpdateMagLock`
+   (one), and every `lwc1 ..,0x280(..)` off a craft pointer is in
+   `Ship_UpdateCraft`, `Ship_HoverTwoPoint`, `Ship_HoverFourCorner` or
+   `Ship_UpdateMagLock` (`HudSight_Update` reads a `+0x280` of its own
+   object). The rest are stack slots. So neither the edge flag nor the blend
+   reaches the engine note, a voice, or a pitch. Forms searched
+   (`search_instructions`, whole program): `lb`/`lbu ..,0x240(`, `lwc1` and
+   `lv.s ..,0x280(`, `lv.s ..,0x240(`, and any `..,0x8bc(` (only
+   `Ship_MagFloorEnter`/`Exit`, `Craft_Construct`'s store, and stack slots).
+2. **Neither effect model authors a sound node.** `MagEffect1.vex` is
+   `World`/`Mesh`/`Texture` (`0xf4`, `0x125`, `0x3c1`); `MagEffect2.vex` adds
+   one `Anim Transform` (`0x3c0`). `oag_vex::sound_emitters::emitters` finds
+   none in either.
+3. **Track emitters are not placed along the strips.**
+   `cargo run -p oag-vex --example magfloor_emitter_reach` gathers every
+   `MagFloor` collision vertex in world space on each circuit and lists the
+   `sound`/`soundcone` nodes whose radius reaches one. Eight circuits carry a
+   magstrip (01, 02, 03, 05, 06, 07, 09, 16; none on 04, 10, 13, 14). What
+   reaches them is ordinary scenery: `~crowd`, `~billboard`, `~CRAFT`,
+   `~NEON_RING`, `~yellowarrow`. `~bighum` reaches a strip on 01, 03, 07 and
+   09, but the circuits with the most hum-named emitters are 10, 13 and 14
+   (12-17 each), and **none of those three has a magstrip**. 02 and 06 have
+   strips and no hum emitter at all. A cue placed to sound "on the strip"
+   would show the opposite pattern.
+
+**Result: there is no magfloor sfx to wire, confidence 80.** The hum a player
+hears near a strip is whatever ambience that circuit places there, and
+`oag_sound::sfx::TrackEmitters` already plays every `sound`/`soundcone` node
+([track-sound-emitters.md](track-sound-emitters.md)). Short of 85 because no
+live audio capture on a strip was compared, and a cue fired through a
+function-pointer path this search cannot see is not ruled out.
+
 **Do not invent a cue for this.** Per `CLAUDE.md`'s do-not-invent rule, no sfx
 is wired until the emitter reading above is confirmed or refuted.
 
@@ -211,24 +342,13 @@ is wired until the emitter reading above is confirmed or refuted.
 
 ## Open questions
 
-- **Where these two nodes are placed relative to the craft - the primary
-  open question now.** `MagFloorFx_Construct` does not position them; the
-  caller that parents them onto the craft's scene graph is unlocated.
-- What `entity+0x8bc` gates in `Ship_MagFloorEnter`/`Ship_MagFloorExit`
-  (possibly per-player scoping, unconfirmed - see `entity+0x368` on
-  [shield.md](shield.md#entity--0x368-is-craft_construct_qs-own-second-argument)
-  for a similarly-shaped but distinct field this codebase has already chased).
-- Whether `MagFloorFx_Construct`'s `entity` parameter is literally the same
-  "ship entity" pointer documented at `craft+0x1c4` elsewhere on this page's
-  binary, or a distinct sub-object at the same relative offsets - no caller
-  was traced for the constructor.
+- **Runtime confirmation.** Nothing on this page has been watched live; a
+  PPSSPP read of `craft+0x8bc` -> `+0xac`/`+0xb0` world matrices on a
+  magstrip, or a forced Show (`obj+0xb4 = 1`, bit `4` into both `+0x2c`) on the
+  grid, would take the anchor from 88 to 95 and give a look reference.
 - The sfx mechanism, now leaning toward "not attached to this effect at all"
   (see above) rather than a hidden emitter - not settled, since the
   per-track ambience reading is also unconfirmed.
-- What colour `func_0x0010e2b4` packs for the two objects, and whether it
-  differs between them (not decoded - the source globals sit in the same
-  unmapped-in-this-project low address range as the shared transform
-  constant above).
 - Pure's code side (does it have an equivalent trigger over a different or
   absent asset, under a path this session did not hash?) and HD/Fury's
   mechanism, if any, are both unchecked.
@@ -251,3 +371,14 @@ is wired until the emitter reading above is confirmed or refuted.
   to this effect at all" - still not confirmed either way. Pure ruled out for
   these two exact asset hashes in `Data.wad` only; Pure's code and HD/Fury
   both unchecked.
+- 2026-10-05: Anchor recovered (88). The 16-float block is identity with
+  row 3's `y` overwritten by `[0x08ab0ef0] = -2.5`, so both models sit at
+  `(0, -2.5, 0)` in the craft's frame; the 2026-09-02 "boilerplate" reading
+  missed the `swc1 f12,0x34(sp)` in the call's delay slot. MagEffect1 is a
+  translate-only child of the craft; MagEffect2 is a child of the scene root
+  rebuilt each tick by `MagFloorFx_Update` (`0x0885962c`, named) on the
+  track's up. Caller is `Craft_Construct` (`0x08841860`), which stores the
+  object at `+0x8bc` (closes the `+0x8bc` question). Tint is white, from the
+  static initialiser `MagFloorFx_InitTint` (`0x08859904`, created). All of
+  it corroborated in the PS2 build (`0x00165688`, `0x001659a0`,
+  `0x00165ce0`).

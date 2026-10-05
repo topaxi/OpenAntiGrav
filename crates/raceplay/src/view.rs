@@ -293,6 +293,9 @@ pub struct RaceView {
     /// see [`repulser_field`].
     pub(super) repulser_fields:
         [Option<repulser_field::Field>; oag_weapons::projectile::repulser::POOL_SIZE],
+    /// Per ship slot, whether its magstrip effect is showing - see
+    /// [`mag_floor_fx`].
+    pub(super) mag_floor_fx: [mag_floor_fx::Shown; MAX_SHIPS],
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,

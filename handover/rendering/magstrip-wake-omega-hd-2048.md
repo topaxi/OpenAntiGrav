@@ -6,7 +6,7 @@ executables plus an asset census. Evidence and addresses:
 ("2026-10-05"), [vita-2048-eu-v104/ships-effects.md](../../docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md),
 [ps3-hdfury-eu/magstrip-wake.md](../../docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md).
 Pulse's own mechanism (two `.vex` meshes) is a different thread:
-[magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md](magfloor-gfxsfx-two-real-vex-effects-found-trigger-read-sfx-open.md).
+[magfloor-fx-drawn-on-pulse-runtime-check-and-pure-open.md](magfloor-fx-drawn-on-pulse-runtime-check-and-pure-open.md).
 Nothing here was run live; no PS4 or Vita emulator is in the toolchain.
 
 ## What the originals do
