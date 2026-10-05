@@ -193,20 +193,22 @@ fn every_2048_mode_plays_the_pob_and_builds_no_arc_wake() {
     }
 }
 
-/// The hum resolves on 2048 since the Vita bank's names are read by hash
-/// (2026-10-05, `docs/formats/2048-xfx.md`): `~magstrip01` is a cue in
-/// `shipHD.bnk`, the ship bank this title still points at (HD's spelling,
-/// chosen). **This used to assert the opposite**, that nothing resolved, and
-/// said it should become the HD test's audio A/B when the bank read. That A/B
-/// is still unwritten; what changed is that the cue edges now mix a hum.
+/// The hum stays silent on 2048: `~magstrip01` is a cue in `shipHD.bnk`, the
+/// ship bank this title still points at (HD's spelling, chosen), and the
+/// general cue lookup does not read a Vita bank's names by hash. Reading every
+/// 2048 cue by hash was tried on 2026-10-05 and played cues whose triggers were
+/// never measured (a perfect-lap announcement mid-lap, and noise), so it was
+/// scoped back to the crossfade engine (`Bank::cue_named_or_hashed`). When the
+/// 2048 cue set and its banks are measured, this flips to the HD test's audio
+/// A/B.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
-fn the_hum_resolves_on_the_vita_ship_bank() {
+fn the_hum_is_silent_until_the_vita_cue_set_is_measured() {
     let Some(race) = load() else { return };
     let mut rng = oag_core::Rng::new(1);
     assert!(
-        race.sounds().voices(Cue::Magstrip, &mut rng).is_some(),
-        "~magstrip01 does not resolve on the Vita ship bank"
+        race.sounds().voices(Cue::Magstrip, &mut rng).is_none(),
+        "~magstrip01 resolves on the Vita ship bank"
     );
 }
 
