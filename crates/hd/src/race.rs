@@ -541,6 +541,15 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     repulser_field: None,
     // `EBOOT.elf` carries no `MagEffect` string at all.
     mag_floor: None,
+    // `MagstripWake_Construct` (`0x0010a0c0`) and its two texture literals
+    // (`0x007a0d38`, `0x007a0d70`); both files ship in `DATA02.PSARC`. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`. Omega's
+    // `WEAPON_MODELS` is still `EMPTY` (it does not race); when it does, it names
+    // the same pair as `.gnf`.
+    magstrip_wake: Some(oag_title::weapons::MagstripWake {
+        atlas: r"Data\Tex\HD_electric_arc_8x8.gtf",
+        contact: r"Data\Tex\HD_ElectricArc_Contact.gtf",
+    }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     cannon_look: Some(CANNON_LOOK),
 };

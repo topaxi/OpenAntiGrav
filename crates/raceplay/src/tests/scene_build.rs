@@ -67,6 +67,7 @@ fn livery() -> Livery {
         boost_uv: None,
         engine_light: None,
         cannon_flash: [None, None],
+        arc_anchor: None,
     }
 }
 
@@ -108,6 +109,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         Some(triangle()),
         Default::default(),
         Default::default(),
+        None,
         None,
         None,
         None,

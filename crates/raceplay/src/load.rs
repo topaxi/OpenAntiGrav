@@ -18,6 +18,7 @@ mod geometry;
 mod global;
 mod glow_mask;
 mod intro;
+mod magstrip_wake;
 mod pads;
 mod pose;
 mod pulse_ps2;
@@ -780,6 +781,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let leach_beam_texture =
         assets::leach_beam_texture(craft_of(&mut craft, &mut archives), &mut report);
 
+    let magstrip_wake = magstrip_wake::load(
+        craft_of(&mut craft, &mut archives),
+        wm,
+        &liveries,
+        &mut report,
+    );
+
     // The plugin list is the craft's title's, and an empty one is a real
     // answer rather than a missing case: a title whose front end is
     // unrecovered has no declared languages, so the HUD draws its captions as
@@ -887,6 +895,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
             intro_camera: intro::read(&mut archives, &track, pulse_psp, &mut report),
             slot_teams: slot_teams.clone(),
+            magstrip_wake: magstrip_wake.anchors,
             collision,
             handling,
             airbrake_graphics,
@@ -964,6 +973,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         visibility,
         flare,
         leach_beam_texture,
+        magstrip_wake_textures: magstrip_wake.textures,
         noise,
         trail_blend,
         trail_shape,

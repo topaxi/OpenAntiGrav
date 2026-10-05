@@ -132,6 +132,10 @@ fn every_cue_has_something_that_raises_it() {
     // `Engaging` join `Blowup` for the same reason it is here: both are read
     // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
     // level-and-latch match, never pushed.
+    //
+    // `Magstrip` is neither: it is an edge, raised only on a title that builds
+    // the HD-lineage arc wake, which this Pulse fixture does not. Its emitter is
+    // `magstrip_wake::tests::the_cue_edges_follow_the_instantaneous_contact_not_the_lingering_blend`.
     const BY_LEVEL: [Cue; 12] = [
         Cue::Engine,
         Cue::Shield,
@@ -288,7 +292,7 @@ fn every_cue_has_something_that_raises_it() {
 
     for cue in Cue::ALL {
         assert!(
-            raised.contains(&cue) || BY_LEVEL.contains(&cue),
+            raised.contains(&cue) || BY_LEVEL.contains(&cue) || cue == Cue::Magstrip,
             "{} is loaded and nothing raises it",
             cue.name()
         );

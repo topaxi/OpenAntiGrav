@@ -472,6 +472,11 @@ pub struct Setup {
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
+    /// Each slot's `arc_anchor_point` in its hull's model space, when the title
+    /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
+    /// authors none is `None` and draws no wake. `None` on every other title.
+    /// See `race::magstrip_wake`.
+    pub magstrip_wake: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
@@ -893,6 +898,10 @@ pub struct Loaded {
     /// "never invent what the assets author" terms every optional asset here
     /// follows - see `oag_fx::beam`.
     pub leach_beam_texture: Option<FlareTexture>,
+    /// The magstrip arc wake's two textures, `[atlas, contact]`, when the title
+    /// builds the class and both decode - see `load::magstrip_wake`. `None`
+    /// draws no wake rather than a stand-in.
+    pub magstrip_wake_textures: Option<[FlareTexture; 2]>,
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///
     /// The disc's own where the source ships one - Wipeout HD's nine

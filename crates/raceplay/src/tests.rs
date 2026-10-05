@@ -179,6 +179,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
         wreck_anchors: Vec::new(),
+        magstrip_wake: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
         intro_camera: None,

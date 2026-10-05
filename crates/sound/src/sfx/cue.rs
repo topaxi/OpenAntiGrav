@@ -702,6 +702,33 @@ pub enum Cue {
     /// speech bank, so it loads beside [`Self::Ready`] and [`Self::Go`]. Raised
     /// by `Race::tick_destroyed_craft`.
     ContElim,
+    /// The HD-lineage magstrip hum, started once as a craft comes onto a strip.
+    ///
+    /// `Ship_StartMagstripSound` (`0x012f8c70`, Omega) starts `_magstrip01` -
+    /// `~magstrip01` in HD's `shiphd.bnk`, under a `### Magstrip` label - on a
+    /// group named `MagStrip_Player` (the local ship) or `MagStrip_NPC`. The
+    /// per-tick update `FUN_01762e80` raises it behind an arming flag that is
+    /// `1` at construction: over the strip and armed, start and disarm; on the
+    /// falling edge, stop and re-arm. Shape 80, arguments 55 -
+    /// `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`, "2026-10-05,
+    /// magstrip-omega-law lane". Raised by `Race::advance_magstrip_wake`, on a
+    /// title that builds the class only.
+    ///
+    /// **Held** (the cue is the start; [`Self::MagstripStop`] is its end), so it
+    /// never reaches the one-shot path. A waveform that did not loop would play
+    /// once, and the arming flag keeps it from restarting until the craft has
+    /// left the strip.
+    ///
+    /// **Chosen, not measured**: the sound group has no mixer counterpart, so
+    /// the player's craft and a rival's differ in nothing but the slot; and the
+    /// bank's `~magstrip01` is a 35-waveform tree this reader flattens, so the
+    /// voice is drawn until one loops - see `sfx::magstrip`.
+    Magstrip,
+    /// The falling edge of [`Self::Magstrip`]: `Ship_StopMagstripSound`
+    /// (`0x01312770`) sets the stop bit on the instance and on every voice of
+    /// the group. An action, not a sound: it loads nothing and is not in
+    /// [`Self::ALL`].
+    MagstripStop,
 }
 
 mod tables;

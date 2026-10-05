@@ -415,6 +415,7 @@ impl Race {
         // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
         self.advance_bomb_blast_models(self.sim.dt);
         self.advance_mag_floor_fx();
+        self.advance_magstrip_wake();
         self.ignite_missile_bounces(&bounces_before);
         // The same `bounces_before`/after edge the visual bounce above reads,
         // for the two weapons' own bounce cues - `Cue::MissileHitWall`
