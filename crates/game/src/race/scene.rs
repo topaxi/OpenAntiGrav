@@ -292,6 +292,10 @@ pub struct Scene {
     /// scene draws straight into the caller's target as it always has. See
     /// `oag_render::post::hd_bloom` and [`Scene::render`].
     hd: Option<oag_render::post::hd_bloom::Chain>,
+    /// Omega's tone map: the same linear float scene target, then the
+    /// executable's adaptive exposure and cubic curve, and the encode. `None`
+    /// for every other title. See `oag_render::post::omega_tonemap`.
+    omega: Option<oag_render::post::omega_tonemap::Chain>,
     /// Per-object motion blur, run last over the finished frame - an
     /// enhancement of this project's, not a reading of the original. Built
     /// with the scene whatever `[graphics] motion_blur` says, because that
@@ -435,6 +439,7 @@ impl Scene {
         light: mesh_render::Light,
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+        omega_tonemap: Option<oag_render::post::omega_tonemap::Params>,
         zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
@@ -457,6 +462,8 @@ impl Scene {
         // See `hd_chain::build`'s own doc comment for what this chain is and
         // why `format` comes back shadowed.
         let (hd, format, caller_format) = hd_chain::build(device, format, size, hd_bloom);
+        let (omega, format) =
+            hd_chain::build_omega(device, format, caller_format, size, omega_tonemap);
         // **The Zone stage's own texture, bound once per model.** The showing
         // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
@@ -824,7 +831,7 @@ impl Scene {
         // dimmer, not broken. The HD chain replaces this pass outright, and it
         // runs only over a mask stamped as Pulse PSP's is measured to be -
         // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
-        let bloom = match (hd.is_none() && measured_mask && !ps2_mask)
+        let bloom = match (hd.is_none() && omega.is_none() && measured_mask && !ps2_mask)
             .then(|| oag_render::post::bloom::Bloom::new(device, format))
             .transpose()
         {
@@ -834,7 +841,7 @@ impl Scene {
                 None
             }
         };
-        let ps2_bloom = match (hd.is_none() && ps2_mask)
+        let ps2_bloom = match (hd.is_none() && omega.is_none() && ps2_mask)
             .then(|| oag_render::post::ps2_bloom::Ps2Bloom::new(device, format))
             .transpose()
         {
@@ -878,6 +885,7 @@ impl Scene {
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
             hd,
+            omega,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
             velocity,

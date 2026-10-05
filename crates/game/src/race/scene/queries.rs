@@ -128,13 +128,16 @@ impl Scene {
         // Under the HD chain every scene pipeline was built against the
         // linear float format, so the MSAA attachment has to match it, and
         // the chain's own targets track the viewport.
-        let format = if self.hd.is_some() {
+        let format = if self.draws_linear() {
             oag_render::post::hd_bloom::SCENE_FORMAT
         } else {
             format
         };
         if let Some(hd) = &mut self.hd {
             hd.resize(device, size);
+        }
+        if let Some(omega) = &mut self.omega {
+            omega.resize(device, size);
         }
         self.depth = depth_texture(device, size, sample_count);
         self.velocity = motion::velocity_texture(device, size, sample_count);
