@@ -562,3 +562,44 @@ mod hd {
         );
     }
 }
+
+/// Wipeout 2048's own effect directory, held to [`oag_game::race::RACE_EFFECTS`].
+///
+/// **Chosen, not measured:** which of the wired names a 2048 race plays is
+/// whatever its `Data\Particles2048` carries - the names below are the ones it
+/// does not, so each is reported by the loader and draws nothing. Where the
+/// original's own effect for the same job has a different name (the wreck's
+/// `WO_SHIP_EXPLOSION_PLAYER`, `WO_ZONE_SHIP_EXPLOSION`), it stays unwired
+/// until its trigger is read.
+mod v2048 {
+    use oag_game::race::RACE_EFFECTS;
+
+    const ABSENT: [&str; 9] = [
+        "WO_PLASMA_FLASH",
+        "WO_SHIP_ENGINEFLARE",
+        "WO_LEACHBEAM_ENERGY",
+        "WO_SHIP_FXNODE_EXPLO",
+        "WO_SHIP_DEATH_SPARKS",
+        "WO_BLUE_WELDER",
+        "WO_RAIN",
+        "WO_RAIN_LENS",
+        "WO_SNOW",
+    ];
+
+    #[test]
+    #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+    fn the_wired_names_on_2048_are_exactly_the_ones_its_directory_carries() {
+        let Some(root) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+            return;
+        };
+        let mut archive = oag_assets::psarc::Archive::open_file(&root.join("base/PSP2/data.psarc"))
+            .expect("opens");
+        let dir = oag_2048::race::EFFECT_DIR;
+        let absent: Vec<&str> = RACE_EFFECTS
+            .iter()
+            .copied()
+            .filter(|name| !archive.contains(&oag_render::psys::effect_path_in(dir, name)))
+            .collect();
+        assert_eq!(absent, ABSENT);
+    }
+}

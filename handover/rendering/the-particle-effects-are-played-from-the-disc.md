@@ -42,6 +42,30 @@ Evidence for the new rows and the weather:
 [placed-particle-systems.md](../../docs/ghidra/functions/psp-pulse-usa/placed-particle-systems.md);
 for `NODAMAGE`: [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md).
 
+## Wipeout 2048 (2026-10-05, v2048-particles)
+
+All 174 of 2048's `.pob` parse (4 refused by name); a race reads
+`Data\Particles2048` with its `.gxt` sprites (`RaceDefaults::effect_dir`,
+`Effect::parse_with`). 27 of the 36 `RACE_EFFECTS` load. **Firing today, with the
+title-neutral triggers:** wall-contact sparks, weapon visuals (Rocket, Missile,
+Plasma, Shuriken, Mine, Bomb, Cannon, Quake, Repulser, LeachBeam), trail hits.
+Seen on screen: wall sparks, a rocket flare and a rocket detonation
+(`data/scratch/v2048-particles/shots/`). **Not firing, trigger unread or Pulse-gated:**
+
+- Wreck (`wreck_fx`, Pulse-gated): 2048 authors `WO_SHIP_EXPLOSION_PLAYER`,
+  `WO_ZONE_SHIP_EXPLOSION`, `WO_SHIP_DEATH_DAMAGE_PLUME`, not the Pulse names.
+- Hit sparks and absorb (`hit_sparks`, `absorb`: Pulse/Pure/HD only).
+- Zone: the executable swaps in `WO_SHIP_COLL_SPARK_DAMAGE_ZONE` (and
+  `_NODAMAGE_ZONE`, `WO_DAMAGE_ELECTRIC`) in Zone modes
+  (`vita-2048-eu-v104/particle-paths.md`); not wired.
+- `WO_DAMAGE_MILD/MODERATE/CRITICAL`, `WO_FORCE_FIELD*`, `WO_DEBRIS_*`,
+  `WO_MAGSTRIP_*`, `WO_DUST_TRAIL*`, bomb/mine halos: named by the executable,
+  event unread.
+- Engine flare, welder, weather (`WO_RAIN`/`WO_SNOW` absent from 2048).
+- The 17 patch-only effects; the patch archives are not mounted.
+- Which game modes (`>= 23`) read `Data/Particles` instead.
+- No reference capture of 2048 was compared; the pictures are judged alone.
+
 ## Open
 
 - **The weather is wired** (Fort Gale rain and lens, Outpost 7 snow), see

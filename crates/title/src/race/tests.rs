@@ -331,6 +331,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     team: r"Feisar2048\3",
     ship_dir: r"Data\art\published\Ships",
     handling_dir: r"Data\HandlingStats",
+    effect_dir: r"Data\Psys",
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
     // Not exercised by any test in this file.

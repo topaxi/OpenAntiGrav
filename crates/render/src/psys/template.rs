@@ -46,6 +46,7 @@ impl Effect {
         data: &[u8],
         records: &[pob::Emitter],
         scale: ColourScale,
+        external: &mut dyn FnMut(&str) -> Option<super::Sprite>,
     ) {
         let parents: Vec<usize> = self.roots.clone();
         for parent in parents {
@@ -54,7 +55,13 @@ impl Effect {
                     return;
                 }
                 // The template's own sprite, not its parent's: none is a stand-in.
-                let Some(sprite) = super::Sprite::from_template(system, data, template) else {
+                let Some(sprite) =
+                    super::Sprite::from_template(system, data, template).or_else(|| {
+                        system
+                            .texture_path(data, template)
+                            .and_then(|path| external(path))
+                    })
+                else {
                     continue;
                 };
                 let Ok(mut spec) = EmitterSpec::from_record(template, scale, Some(sprite)) else {

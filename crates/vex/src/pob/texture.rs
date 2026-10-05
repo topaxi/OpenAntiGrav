@@ -338,3 +338,29 @@ pub fn parse_template(
         offset.checked_add(TEMPLATE_TEXTURE_OFFSET)?,
     )
 }
+
+impl super::ParticleSystem<'_> {
+    /// The developer path of `emitter`'s own texture, as authored: the string
+    /// its `+0x4c4` field points at, e.g.
+    /// `E:\...\Data\particles2048\Tex\quakesmoke32x32.tga`.
+    ///
+    /// **The field is a base-relative offset the file stores in place**, so no
+    /// slot table is involved - read on all 249 HD emitters
+    /// (`docs/formats/pob.md`, "HD names its own texture the same way Pulse
+    /// does") and on Wipeout 2048's. `None` when the field is zero, points
+    /// outside `data`, or the string is not terminated ASCII. `emitter` must
+    /// have come from [`Self::emitters`] called on the same `data`.
+    #[must_use]
+    pub fn texture_path<'d>(&self, data: &'d [u8], emitter: &super::Emitter) -> Option<&'d str> {
+        let base = self.resource_base();
+        let site = base + emitter.offset + 0x4c4;
+        let baked = self.order.u32(data.get(site..site + 4)?, 0) as usize;
+        if baked == 0 {
+            return None;
+        }
+        let tail = data.get(base + baked..)?;
+        let end = tail.iter().position(|&b| b == 0)?;
+        let text = std::str::from_utf8(&tail[..end]).ok()?;
+        (!text.is_empty()).then_some(text)
+    }
+}

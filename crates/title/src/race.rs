@@ -72,6 +72,9 @@
 /// wrapper uses.
 pub const SHIP_DIR: &str = r"Data\Ships";
 
+/// Where every title but 2048 keeps its `.pob` effects: [`RaceDefaults::effect_dir`].
+pub const EFFECT_DIR: &str = r"Data\Psys";
+
 /// Where one title keeps the models a craft is made of.
 ///
 /// The fields travel together everywhere - a hull path is
@@ -142,6 +145,9 @@ pub struct RaceDefaults {
     /// tuning at `Data\HandlingStats\<team>\<1..4>\`. One string cannot
     /// address both trees, and folding them would mean picking a roster.
     pub handling_dir: &'static str,
+    /// The archive directory this title's `.pob` effects sit in: [`EFFECT_DIR`]
+    /// everywhere but 2048's own `Data\Particles2048` (`docs/formats/pob.md`).
+    pub effect_dir: &'static str,
     /// How this title names the circuit a Zone race runs on. See
     /// [`ZoneCircuit`].
     pub zone: ZoneCircuit,
