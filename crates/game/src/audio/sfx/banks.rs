@@ -76,6 +76,9 @@ pub struct Banks {
     /// Empty on a title with a `~ENGINE` cue, which has no use for them. See
     /// [`super::xfade`].
     pub(super) xfade: BTreeMap<String, Arc<super::xfade::Team>>,
+    /// HD's authored group volumes, read with the engine tables and gated the
+    /// same way. See [`crate::audio::hd_mix`].
+    pub(super) mix: Option<Arc<crate::audio::hd_mix::Maps>>,
 }
 
 impl Banks {
@@ -198,6 +201,11 @@ impl Banks {
             return;
         }
         self.xfade = super::xfade::load(archives, ship_bank, slot_teams, report);
+        // Only where tables loaded: the mix is HD's, and a title that reads no
+        // `.xfx` keeps its own buses.
+        if !self.xfade.is_empty() {
+            self.mix = crate::audio::hd_mix::Maps::load(archives).map(Arc::new);
+        }
     }
 
     /// The crossfade table for the team a slot flies, when one loaded.
@@ -206,6 +214,13 @@ impl Banks {
         self.xfade
             .get(&super::xfade::table_name(slot_team))
             .cloned()
+    }
+
+    /// The authored volume group `n` as a bus, when the title has an authored
+    /// mix (HD); `None` leaves a cue on the bus it always had.
+    #[must_use]
+    pub fn group_bus(&self, n: u8) -> Option<oag_audio::Bus> {
+        self.mix.as_ref().map(|_| oag_audio::Bus::Group(n))
     }
 
     /// Whether anything at all decoded.

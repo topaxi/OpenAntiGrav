@@ -57,7 +57,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use oag_assets::source::Archives;
-use oag_audio::{Mixer, Play, Sound, VoiceId};
+use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_formats::sblk;
 use oag_formats::xfx::Xfx;
 
@@ -78,9 +78,13 @@ pub const X_REST: f32 = 2.164;
 /// boot's scan (four voices of two cues) are `0.6377 * level * (v86 / 1024)^2`,
 /// where `level` is the cue/waveform volume product this port already folds
 /// into [`Sound`]. Ordinary voices read `0.31`, `0.41` and `0.79` elsewhere, so
-/// the denominator is the nearest reading and not a platform constant; the
-/// ratio only places the engine against this port's other cues, whose own scale
-/// is about 3x the original's (see the doc page).
+/// the denominator is the nearest reading and not a platform constant.
+///
+/// **It is `0.68^2`**: the player's `user7` group (`0.68` in the racing state)
+/// squared against an ordinary voice at group `1.0` (`GlobalAudioConfig.xml`,
+/// `hd-xfx.md` "The authored mix"). A title with that mix plays the engine on
+/// its own group bus and the group's law replaces this ratio; it stays for a
+/// title without one.
 pub const ENGINE_BUS_RATIO: f32 = 0.2945 / 0.6377;
 
 /// The per-craft distance factor, `slot+4 / 1024` of the layer slots.
@@ -443,6 +447,10 @@ pub struct Craft {
     elapsed: f32,
     /// Whether the smoothers have been seeded from the first inputs.
     started: bool,
+    /// The authored volume group the layers play on, when the title has an
+    /// authored mix (`user7`, [`crate::audio::hd_mix`]). `None` plays on the
+    /// effects bus at [`ENGINE_BUS_RATIO`].
+    bus: Option<Bus>,
 }
 
 impl Craft {
@@ -459,7 +467,17 @@ impl Craft {
             last_ms: None,
             elapsed: 0.0,
             started: false,
+            bus: None,
         }
+    }
+
+    /// Plays the layers on `bus`, an authored group. The group's own law
+    /// ([`crate::audio::hd_mix::sfx_gain`]) then carries the level
+    /// [`ENGINE_BUS_RATIO`] stood in for.
+    #[must_use]
+    pub fn on_bus(mut self, bus: Option<Bus>) -> Self {
+        self.bus = bus;
+        self
     }
 
     /// The four channel inputs for `inputs`, in channel order, `None` for a
@@ -537,7 +555,10 @@ impl Craft {
             let placed = everywhere.place(listener, 1.0);
             let (gain, pan) = placed.map_or((0.0, None), |p| {
                 let a = level.gain * distance_factor(p.distance);
-                (ENGINE_BUS_RATIO * a * a, Some(p.pan))
+                (
+                    self.bus.map_or(ENGINE_BUS_RATIO, |_| 1.0) * a * a,
+                    Some(p.pan),
+                )
             });
             if let Some(p) = placed {
                 distance = Some(p.distance);
@@ -562,7 +583,10 @@ impl Craft {
                     gain,
                     pitch: bend_ratio(level.bend, sound.down, sound.up),
                     pan,
-                    ..Play::looping(Arc::clone(&sound.sound), Cue::Engine.bus())
+                    ..Play::looping(
+                        Arc::clone(&sound.sound),
+                        self.bus.unwrap_or_else(|| Cue::Engine.bus()),
+                    )
                 });
             }
         }

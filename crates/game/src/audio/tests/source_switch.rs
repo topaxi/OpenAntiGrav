@@ -68,6 +68,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         race_prefetch: None,
         source_switch: None,
         sfx: None,
+        hd: Default::default(),
     };
     audio.music = audio
         .output
@@ -166,6 +167,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         race_prefetch: None,
         source_switch: None,
         sfx: None,
+        hd: Default::default(),
     };
     audio.music = audio
         .output
