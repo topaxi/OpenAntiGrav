@@ -523,3 +523,6 @@
 0x000242a0	function	FrontEnd_ApplyAudioOptions	78	audio-mix.md
 0x00307850	function	SoundSystem_SetMusicSlider	80	audio-mix.md
 0x003084c0	function	SoundSystem_UpdateOutputGains	58	audio-mix.md
+0x0010a0c0	function	MagstripWake_Construct	85	magstrip-wake.md
+0x00109e40	function	MagstripWake_ConstructAlt	75	magstrip-wake.md
+0x00109028	function	MagstripWake_EnqueueRender	78	magstrip-wake.md

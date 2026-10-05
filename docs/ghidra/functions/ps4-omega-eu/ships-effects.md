@@ -84,3 +84,175 @@ under its own `names.tsv`, since a name applies to one binary's own database
 and needs its own evidence page per [ADR-0005](../../../architecture/adr/0005-ghidra-conventions.md) -
 this page and that one cite each other rather than one citing a name the
 other's `names.tsv` has not actually recorded.
+
+## 2026-10-05: the `MagstripWake` object end to end (magfloor-omega-re lane)
+
+Read statically from the decompile and the vtable bytes, checked against the
+Vita and PS3 builds (their own pages: [`vita-2048-eu-v104/ships-effects.md`](../vita-2048-eu-v104/ships-effects.md),
+[`ps3-hdfury-eu/magstrip-wake.md`](../ps3-hdfury-eu/magstrip-wake.md)). No live
+run was possible on a PS4, so nothing below is above the static-reading
+ceiling; each row carries the evidence it rests on.
+
+### The vtable at `0x01915060` (the object's `*param_1`)
+
+| Slot | Address | Role | Name | Conf. |
+| --- | --- | --- | --- | --- |
+| 3 | `0x012e1260` | per-frame update `(float dt, wake)` | `MagstripWake_Update` | 65 |
+| 5 | `0x012e2720` | queue the object into the render list | `MagstripWake_EnqueueRender` | 75 |
+| 7 | `0x012e2770` | build and submit the vertex batches | `MagstripWake_Draw` | 65 |
+| 9 | `0x012e3350` | destructor | `MagstripWake_Destruct` | 78 |
+| 10 | `0x012e36d0` | deleting destructor (calls 9, then `free`) | `MagstripWake_DeleteSelf` | 72 |
+| 0,1,2,4,6,8 | `0x0173c1xx`.. | base-class slots | not named | - |
+
+- **Slot 5 is the strongest.** `0x012e2720` appends `{param_1, key}` to a
+  per-frame list at `DAT_020e45e8 + 0x5a8` with key `0x4d000000 | (mode_depth & 0xfffff)`
+  (or bare `0x4d000000` when `+8 == -1`). The PS3 build's `0x00109028` is the
+  same body with the same `0x4d000000` key, so two independent builds agree
+  (75, capped because the list owner is unnamed).
+- **Destructor (78).** It undoes exactly what the constructor did: `_DAT_01a1109c -= 1`
+  against the constructor's `+= 1`, the two `0x1b0` ribbon objects at `+0x88`/`+0x90`
+  freed through `FUN_016fe980`, the `+0x98` arc pool freed, and the shared texture,
+  shader and index-buffer handles released only when `DAT_020e2f4c` (a use count
+  the constructor increments) reaches zero.
+- **Update and Draw (65 each).** Read from one decompile; the PS3 slots do not
+  line up one for one (see the PS3 page), so no second binary confirms the slot
+  index. The per-arc numbers below are from this read alone.
+
+### What the object holds
+
+The constructor (`MagstripWake_Construct`, `0x012e38d0`) stores, with the
+wake as `W` and the ship as `S` (`W+0xa8`, the constructor's `param_2`):
+
+- `W+0xb8` = the `arc_anchor_point` locator, looked up by name through
+  `FUN_012e42c0(S, "arc_anchor_point")`. This is a named locator **in the ship's
+  own locator set**. The PS3 build prints
+  `"**** WARNING **** : Ship has no arc_anchor_point locator"` when it is missing
+  (`0x00782fd0`), which is the strongest evidence it is a ship-model locator and
+  not a track marker (75). Which `Locators.vex` entries carry it is **not yet
+  checked** (see Open).
+- `W+0x88`, `W+0x90` = two `0x1b0`-byte ribbon objects built by `FUN_016fdef0`,
+  sized by `S+0x68f4`. Both are driven with a lateral offset of
+  `+/- 0.28 * clamp(speed - 40, 0, 120)` in `MagstripWake_Draw`'s tail
+  (`FUN_016ff560`, called once per side), and are ticked and flushed from
+  `MagstripWake_Draw` itself (`FUN_016ffb40`). Whether they are the trail-ribbon
+  class [`docs/rendering/trail-ribbon.md`](../../../rendering/trail-ribbon.md)
+  describes is **not established** (55).
+- `W+0x98` = a `0x600` arc pool: **nine** arc slots of `0xa0` bytes starting at
+  `+0x40`, loop bound `0x678` in the update.
+- `W+0xa0` = the **active** byte (see the trigger below). `W+0x74/0x78/0x7c`
+  are the activation state written when it flips on.
+
+### The arc, per tick (update, `0x012e1260`, 65)
+
+- Spawning is guarded by `W+0xa0` (the loop that ages live arcs runs regardless). When the ship's `+0x68fc` field is `0` or `2`
+  and the global `DAT_01f998e8` has bit 0 set, the whole update is skipped.
+  `+0x68fc == 0` is the local player (it is what picks `"MagStrip_Player"` over
+  `"MagStrip_NPC"` below), so this reads as "do not show the wake on the local
+  player's own ship in that configuration"; the meaning of `DAT_01f998e8` is unread.
+- Spawn: `1 + rand() % 3` arcs per tick into free slots (life `<= 0`), each with
+  life `0.2 + rand * 0.9 / 2^30` seconds (so 0.2 to 2.0), a random 8-by-8 atlas
+  frame index (`rand() % 64`, stored at `+0xd8`, advanced by one each tick), a
+  width `3.5 + rand * 3.26e-9` (3.5 to 10.5) and a colour scalar. Spread and brightness are blended by
+  `t = clamp((speed - 10) / 190, 0, 1)` against slow-speed constants
+  (`0.6`, `3.0`, `15.0`): below speed 200 the arc is narrower and shorter-ranged.
+  `speed` is `body+0x4b8`, the same field the PS3 build reads at `+0x4c4`.
+- Each arc's end point is walked along the **AI track data spline** (the
+  `"AI track data"` CRC lookup in the constructor, `DAT_020e2fc0`, segment stride
+  `0x60`, up to 20 segments) to a point `fVar29 * (dist / spacing)` ahead, so the
+  arc follows the strip instead of flying off in a straight line (60: the walk is
+  read, the exact reference distance is not).
+- Per arc and tick: `life -= dt`, the frame index steps, the jitter terms are
+  smoothed `x = rand*a + 0.85*x_prev` (decay `0.85`), and the arc dies early with
+  probability `clamp((|anchor - ship|^2 - 368.64) * 0.0086685, 0, 1)` when the
+  anchor has fallen behind the ship (`dot < 0`): arcs are shed when the ship leaves
+  them behind.
+
+### The draw (`0x012e2770`, 65)
+
+- For each of the nine slots with `life > 0` it writes **six segments of a
+  four-vertex strip** (24 floats per vertex pair, `pos.xyz, ABGR, uv`) into a
+  triple-buffered vertex array (`W+0x98 + 0..2`, rotated by `W+0x30`), sampling the
+  8-by-8 atlas cell `frame % 8, frame / 8` (cell size `0.125`) for the arc body,
+  then a **contact quad** from the second texture (`uv` 0..1) at the anchor end.
+- Colour is `0xb2RRGGBB`: alpha **fixed at `0xb2` (178)**, RGB grey equal to
+  `intensity * 255` (the arc body) or `intensity * 76.5` (the soft outer strip) or
+  `contact_scale * 255` (the contact quad). So tint is white; the texture carries the colour.
+- Two draw calls are pushed (one for the arc strip, one for the contact quads)
+  through a shader with the vertex inputs `inPos` (float3), `inCol` (ubyte4n) and
+  `inTex`, constants `kWorldViewProj` and `kIntensity`, and sampler `inTex`
+  (named in the constructor; the programs are `MagStripArc_vp`/`MagStripArc_fp`).
+  `kIntensity` is written from `W+0x5f8`, which update sets to a value read from
+  `DAT_020e52a0 + 0x1e0` (a global tuning block, unnamed).
+- **Blend state is not decoded.** The constructor configures it through
+  `FUN_012091a0(.., 1, 0, 1)` and `FUN_012091c0(.., 0, 0, 5)` into `DAT_020e2f88`.
+  Reading those two functions is the next step; do not guess additive from the
+  texture names.
+
+### The trigger (who sets `W+0xa0`)
+
+The per-ship update `FUN_01762e80` (`0x017659bb`) calls a **virtual on the ship at
+`vtable+200`**. When it returns non-zero and `ship+0x71f5 & 0x10` is clear, the wake
+is **activated** (`W+0xa0 = 1`, `W+0x7c = -1.0`, `DAT_01a11098 += 1`, the live-wakes
+count), otherwise it is **deactivated** (`W+0xa0 = 0`, count decremented). A
+second field, `ship+0x8860` (the 2048-style POB, below), is switched on and off by
+the same predicate through the `0x1e0` flag bit of its emitter chain. This
+predicate is the **"ship is over a magstrip"** state: the HD build logs it by name,
+`"Send due m_overMagStrip change - now %i"` (`0x007a9320`), as a replicated
+network field (75). The virtual itself (slot `+200`) was **not read**; the
+magstrip-floor contact test lives behind it (Open).
+
+### One effect or two: `DAT_01f999e4 < 0x17` is the switch (80)
+
+`DAT_01f999e4` is the mode selector `weapons.md` and `billboards.md` already
+document (`ModeManager_ConstructByMode` switches on it; `Rocket_Construct` uses
+`< 0x17` to choose `Data/Weapons` over `Data/Weapons2048`). Against that:
+
+- **The procedural wake is built only for `mode < 0x17`.** Both ship constructors
+  (`FUN_01309e90`, `FUN_0130e540`) wrap `MagstripWake_Construct` in
+  `if (DAT_01f999e4 < 0x17)` and store the result at `ship[0xe18]` (`ship+0x70c0`);
+  otherwise they store 0.
+- **The particle effect is built only for `mode >= 0x17`.** The ship constructor
+  `FUN_0176d240` returns early for `< 0x17` and for `>= 0x17` plays
+  `WO_MAGSTRIP_ZONE` or `WO_MAGSTRIP_SPARKS` (`.POB`, `FUN_01713a50`, anchor
+  `ship+0x8860`, handle stored at `ship+0x8848`). `ZONE` is chosen when `(DAT_0203a728 && FUN_01669270())` or
+  `(DAT_01e31910 && *(DAT_01e31910+0x21c) == 0)`, else `SPARKS`. A `0x8181` mask over
+  `mode - 6` appears in the same condition but is dead there (it can only be true for
+  modes 6, 13, 14 and 21, all below `0x17`).
+- **The disc agrees:** both `.POB` files ship only under `Data/particles2048/` in
+  the Omega archives, none under `Data/particles/`; the arc textures ship under
+  `data/Tex/` and `Data/particles/Tex/`.
+
+So Omega's HD-lineage modes get the **procedural arc wake**, its 2048-lineage
+modes get the **particle effect**, and never both on one ship. (The Vita 2048
+build tests a different predicate and, as read, builds both: see its page.)
+
+### The sound (60)
+
+`Ship_StartMagstripSound` (`0x012f8c70`, `FUN_012f8c70` before naming, conf. 55) creates a sound group named
+`"MagStrip_Player"` (when `ship+0x68fc == 0`, group arg 1) or `"MagStrip_NPC"`
+(arg 0), through `FUN_01736840(DAT_020f95b8, name, 0, arg)`, stores it at
+`ship+0x5f38`, anchors it to `ship+0x70c8 + 0x10`, sets a `[300.0, 50.0]` pair at
+`+0x48` and then starts the cue **`"_magstrip01"`** on it
+(`FUN_01731480(1.0, group, 0, 0, "_magstrip01", ship+0x5f30, -1, 0)`). The cue
+exists: `shiphd.bnk` in the HD archives carries `~magstrip01` and a
+`### Magstrip` section (the `~` is a leading marker the HD strings keep; Omega
+spells it `_`). `Ship_StopMagstripSound` (`0x01312770`, conf. 55) is its
+inverse: it sets the stop bit `0x10` on the instance at `ship+0x5f30` and on every
+voice of the group at `ship+0x5f38`, then clears both.
+
+**The call pattern is not what a plain enter/exit would give, and is unresolved.**
+In `FUN_01762e80` the stop is reached from the *deactivate* branch only, and that
+branch also sets `ship+0x5f48 = 1`, which is the flag the later `FUN_012f8c70`
+call tests. No separate "start on enter" site was found: `FUN_012eaf20`, the other
+caller of `FUN_012f8c70`, has no direct callers (virtual). The second argument of
+`FUN_012f8c70` (forwarded to `FUN_01731800(group, 2, arg)`) is not visible at the
+call and was not recovered (the decompile shows one argument; it is probably a
+float in `xmm0`). Do not implement the sound law from this page alone.
+
+### Names added
+
+`names.tsv` rows for the five methods above and the two sound helpers; the
+constructor row is unchanged. `FUN_0176d240` is the per-ship constructor tail that
+creates the POB, named by nobody yet (a hypothesis only: it also builds
+`WO_DUST_TRAIL`, `WO_DUST_TRAIL_TARMAC` and `WO_WATER_TAIL`, so it is a race-ship
+effect-setup function, conf. 50, not renamed).
