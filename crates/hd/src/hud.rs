@@ -4,7 +4,7 @@
 //! Entry names in the [ADR-0022] sense, the same division [`oag_pulse::hud`]
 //! draws: *which* files HD ships and what each is. Everything that **reads**
 //! them - the `<LoadXML>` splice, the widget model, the offset composition - is
-//! `oag_game::hud` and stays there, because it is one dialect across three
+//! `oag_hud` and stays there, because it is one dialect across three
 //! titles.
 //!
 //! Measured on `hdfury-ps3-eu-dec.iso` (`BCES-00664`), 2026-08-17. Written up
@@ -15,7 +15,7 @@
 //! Pulse ships five self-contained layouts. HD ships a **shell** per mode that
 //! pulls in a dozen fragments by `<LoadXML SrcRel=...>`, so a mode's HUD is 5 to
 //! 17 files rather than one, and reading only the root gets two empty
-//! rectangles. `oag_game::hud::compose` is what assembles one - this crate
+//! rectangles. `oag_hud::compose` is what assembles one - this crate
 //! cannot link to it, being the wrong side of the dependency arrow.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
@@ -258,7 +258,7 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// **`NextSpeedClassBG` is authored beside them and is still not on this list**,
 /// but for a reason rather than a gap: it is up only when there *is* a next
 /// class with a row on screen, which an allow-list cannot express.
-/// `oag_game::hud::draw::zone_next_row` draws it and reconstructs its position,
+/// `oag_hud::draw::zone_next_row` draws it and reconstructs its position,
 /// the layout authoring it at the placeholder `x=0 y=0`.
 ///
 /// [`rpcs3-debugger.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/reverse-engineering/rpcs3-debugger.md
@@ -334,7 +334,7 @@ pub const ALWAYS_ON: &[&str] = &[
 /// cross-check rather than a duplicate: it is indexed by *rung* where
 /// `ZONE_STAGES` is indexed by *zone*, and
 /// `the_two_zone_tables_name_the_same_class_at_every_zone` asserts the two
-/// cannot drift. `oag_game::hud` reads this one, because what the HUD has in
+/// cannot drift. `oag_hud` reads this one, because what the HUD has in
 /// hand is the rung the colour grade is showing.
 ///
 /// [zone-speed-class-table.md]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md

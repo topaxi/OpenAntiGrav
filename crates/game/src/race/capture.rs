@@ -355,11 +355,18 @@ pub fn capture(
         ..
     } = loaded;
     let mode = setup.mode;
-    let record_target = crate::hud::RecordTarget::new(
+    let record_target = oag_hud::RecordTarget::new(
         setup.mode,
         &setup.class,
         track_stats.as_ref(),
-        options.previous_best.as_ref(),
+        options
+            .previous_best
+            .as_ref()
+            .and_then(|record| record.best_total_ticks),
+        options
+            .previous_best
+            .as_ref()
+            .and_then(|record| record.best_lap_ticks),
     );
     let weapons_on = setup.weapons_on();
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
@@ -837,7 +844,7 @@ pub fn capture(
             Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
         None if !race.hud_shown() => {}
-        None => match crate::hud::Overlay::new(&device, &queue, format, &hud) {
+        None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud) {
             Ok(Some(mut overlay)) => {
                 let mut readout = race.readout();
                 // The rung the grade is showing - see `Scene::zone_stage`. A
@@ -847,7 +854,7 @@ pub fn capture(
                     scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
                 // No campaign cell on this path (`campaign_medal: None` above):
                 // no ladder, so `RECORD`.
-                readout.time_trial_pace = crate::hud::pace_for(
+                readout.time_trial_pace = oag_hud::pace_for(
                     readout.mode,
                     readout.race_ticks,
                     readout.lap_ticks,
@@ -863,7 +870,7 @@ pub fn capture(
                     hud_viewport,
                 );
                 // The countdown, on the same terms `RaceStage::draw_hud` draws
-                // it on - see `oag_game::hud::countdown`,
+                // it on - see `oag_hud::countdown`,
                 // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
                 // which stands this overlay down where the circuit's own gantry
                 // is already showing the count.
@@ -871,7 +878,9 @@ pub fn capture(
                     countdown_model,
                     RaceState::thrust_gated(race.sim.world.tick) && !scene.draws_gantry(),
                 ) {
-                    match crate::hud::Countdown::new(&device, &queue, format, model, &widget) {
+                    match crate::hud_countdown::Countdown::new(
+                        &device, &queue, format, model, &widget,
+                    ) {
                         Ok(mut countdown) => countdown.draw(
                             &device,
                             &queue,

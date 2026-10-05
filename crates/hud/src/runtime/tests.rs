@@ -4,7 +4,7 @@
 //! also composes), `ShieldBarText`, and the two arcs.
 
 use super::*;
-use crate::hud::{Layout, draw_list};
+use crate::{Layout, draw_list};
 
 const SRC: &str = r"Data\HUD\Textures\HUD_Components.gtf";
 

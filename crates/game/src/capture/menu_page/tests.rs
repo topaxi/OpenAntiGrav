@@ -158,9 +158,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
         })
         .collect();
     assert!(
-        texts.contains(
-            &crate::hud::format_lap_time(6042, crate::hud::Precision::Hundredths).as_str()
-        ),
+        texts.contains(&oag_hud::format_lap_time(6042, oag_hud::Precision::Hundredths).as_str()),
         "no row shows Venom's real total time: {texts:?}"
     );
     assert!(

@@ -9,7 +9,7 @@
 use oag_ui_screens::campaign::pointer::Target;
 use oag_ui_screens::campaign::{CellSelection, GridSelection, Layout, pointer};
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 /// `Cell Selection`'s targets: one hexagon per occupied cell, where it is drawn.
 #[must_use]

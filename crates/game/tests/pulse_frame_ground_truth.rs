@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use oag_ui::frontend::Draw;
 
 use oag_display::space::Space;
-use oag_game::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 use oag_tables::fexml;
 use oag_ui::screen::Screens;
 

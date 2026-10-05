@@ -127,7 +127,7 @@ fn only_the_named_modes_have_an_executable_id() {
 fn the_name_is_over_the_picture_and_the_heading_over_the_prose() {
     let assets = Assets {
         art: Some(Art {
-            sheet: crate::sprite::Sheet::default(),
+            sheet: oag_hud::sprite::Sheet::default(),
             illustrations: vec![[0.0, 0.0, 64.0, 32.0]; 5],
             title_arrow: None,
             subtitle_arrow: None,

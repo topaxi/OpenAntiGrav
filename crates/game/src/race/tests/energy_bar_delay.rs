@@ -1,4 +1,4 @@
-//! [`crate::hud::Readout::energy_bar_delay_fraction`], wired through a real
+//! [`oag_hud::Readout::energy_bar_delay_fraction`], wired through a real
 //! [`Race::tick`] - the same shape `race/tests/shield_flash.rs` uses for its
 //! own field, rather than a synthetic call to
 //! `Race::advance_energy_bar_delay` on a `Race` with no ship state to read.
@@ -61,7 +61,7 @@ fn the_trail_chases_a_steady_fraction_at_one_tenth_a_tick() {
 }
 
 /// **The trail overshoots on a drop, not just on a rise.** Right after a hit
-/// it reads *higher* than [`crate::hud::Readout::shield_fraction`] for a
+/// it reads *higher* than [`oag_hud::Readout::shield_fraction`] for a
 /// handful of ticks - the decompile's `target` snaps to the new, lower
 /// fraction the same tick the pool drops, and the lagging value is still
 /// most of the way to the old one, so `EnergyBarDelay` (opaque white,

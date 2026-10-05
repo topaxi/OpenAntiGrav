@@ -74,7 +74,7 @@ title showing the reticle over a craft ahead.
   is the same mechanism is unchecked - see the page's "Not read this pass".
 - ~~**HD's four `LeachBeamSight*` are unwired**~~ **Wired 2026-09-15** for
   both HD and 2048 (`oag_title::hud::Sights::Concentric::leach`,
-  `crates/game/src/hud/sight_draw.rs`) - drawn as all four together whenever
+  `crates/hud/src/sight_draw.rs`) - drawn as all four together whenever
   the LeachBeam reticle is up, **chosen, not measured**: `hud-sight.md`'s
   finding above is that the original reveals the four one at a time as the
   lock progresses, which this engine does not reproduce. Pure still authors
@@ -84,7 +84,7 @@ title showing the reticle over a craft ahead.
   2026-09-15 pass had misread three TOC-relative literal loads as a
   weapon-stats pointer index; they are three static floats, exact quarters of
   the shared `0.5` s hold constant. `oag_race::sight::Sight::hold_progress`
-  and `oag_game::hud::sight_draw::leach_reveal_draws` now drive HD/2048's
+  and `oag_hud::sight_draw::leach_reveal_draws` now drive HD/2048's
   three-ring reveal off it, scaled onto this engine's own `HOLD_SECONDS`
   rather than HD's absolute seconds - see `lock-sight.md`'s own
   "Colour and blink, resolved" pass for the sibling colour finding from the

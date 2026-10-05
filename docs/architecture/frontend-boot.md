@@ -259,7 +259,7 @@ The first group is the one with consequences beyond this page: **`x` and `y` do
 not mean the same thing on every element**, so anything sweeping a layout for
 out-of-screen widgets has to know which kind of coordinate it is holding.
 `Arcade_HUD.xml`'s `TimeDiffIcon` is the same shape in the HUD - see
-`oag_game::hud::inside_screen`. No mechanism is claimed for the ten hand
+`oag_hud::inside_screen`. No mechanism is claimed for the ten hand
 re-placements; a PAL title-safe inset is the obvious guess and does not fit,
 since one group moves inward and the other outward.
 
@@ -559,7 +559,7 @@ The executable is the EU build. `--movie hash:3d2c85f8` and
 
 An `Image` widget with a `src` names a `.mip` entry, and those now draw. The
 textures are decoded once at load into a single RGBA sheet
-([`sprite.rs`](../../crates/game/src/sprite.rs)) and drawn through the same quad
+([`sprite.rs`](../../crates/hud/src/sprite.rs)) and drawn through the same quad
 pipeline as text and solid fills, chosen per quad by a mode flag rather than by a
 second pipeline - so the draw list's own back-to-front order is kept without
 splitting the pass the way the movie has to.

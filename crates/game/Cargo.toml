@@ -67,6 +67,7 @@ oag-formats.workspace = true
 oag-video = { workspace = true, features = ["av1"] }
 oag-gameplay.workspace = true
 oag-weapons.workspace = true
+oag-hud.workspace = true
 oag-input.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true

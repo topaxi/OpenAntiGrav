@@ -19,7 +19,7 @@
 //! **The stored best is this build's own, keyed by circuit, mode and class -
 //! chosen, not measured.** The original keys its record store by team
 //! (`FUN_088091a0`, `param_1+0x460`), and this project's
-//! [`crate::records::Key`] has no team, so a run flown in one team's ship
+//! `oag_game::records::Key` has no team, so a run flown in one team's ship
 //! races the best of any team's. The authored figure is unaffected.
 
 use oag_tables::race_campaign::Cell;
@@ -28,7 +28,7 @@ use oag_tables::track_stats::TrackStats;
 /// The tier `Hud_UpdateTimeCluster` reads (`*(hud+0x3c)+0x34`): `0` to `3`.
 ///
 /// Its own type rather than [`oag_tables::race_campaign::Medal`], which
-/// [`crate::records`] persists as a campaign award and which has no
+/// `oag_game::records` persists as a campaign award and which has no
 /// `Record`: a pace is a caption, not something earned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaceTier {
@@ -62,15 +62,17 @@ pub struct RecordTarget {
 
 impl RecordTarget {
     /// The target a `mode` race on `class` chases, or `None` for a mode the
-    /// clock cluster is not shown in. `best` is the [`crate::records::Record`]
-    /// this race saves to; `stats` is `None` where the track's `stats.xml`
+    /// clock cluster is not shown in. `best_total_ticks` and `best_lap_ticks` are
+    /// the personal bests off the `oag_game::records::Record` this race saves
+    /// to (`None` for a row never raced); `stats` is `None` where the track's `stats.xml`
     /// did not read, or the class is not one of the four.
     #[must_use]
     pub fn new(
         mode: oag_race::Mode,
         class: &str,
         stats: Option<&TrackStats>,
-        best: Option<&crate::records::Record>,
+        best_total_ticks: Option<u64>,
+        best_lap_ticks: Option<u32>,
     ) -> Option<Self> {
         let class = oag_tables::handling::SpeedClass::from_name(class);
         let authored = |figures: fn(&TrackStats) -> [f32; 4]| {
@@ -79,13 +81,10 @@ impl RecordTarget {
             Some((figures(stats)[class as usize] * 100.0) as i64)
         };
         let (authored, best_ticks) = match mode {
-            oag_race::Mode::TimeTrial => (
-                authored(|stats| stats.race_times),
-                best.and_then(|record| record.best_total_ticks),
-            ),
+            oag_race::Mode::TimeTrial => (authored(|stats| stats.race_times), best_total_ticks),
             oag_race::Mode::SpeedLap => (
                 authored(|stats| stats.lap_times),
-                best.and_then(|record| record.best_lap_ticks.map(u64::from)),
+                best_lap_ticks.map(u64::from),
             ),
             _ => return None,
         };

@@ -246,7 +246,7 @@ pub struct Model {
     /// `x=0, y=0` there is not a placeholder or a left-edge position - it is
     /// where a symmetric perspective camera looking down `-z` always
     /// projects the optical axis, for any FOV and any `z != 0`. See
-    /// `crate::hud::countdown`'s module doc for the derivation and
+    /// `oag_game::hud_countdown`'s module doc for the derivation and
     /// `docs/ui/hud.md`'s "Two dialects" note for the disc evidence.
     pub orthographic: bool,
     /// The enclosing `<Mode3D><Values OriginX="..." OriginY="...">`, in HUD

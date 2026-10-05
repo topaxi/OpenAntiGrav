@@ -13,7 +13,7 @@ use oag_ui::language::StringTable;
 use oag_ui_screens::campaign::Layout;
 use oag_ui_screens::picker::FaceScales;
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 pub mod hit;
 pub mod launch;

@@ -170,7 +170,7 @@ drifting apart.
 3,069 and 3,087 ticks were timed by the game at `0.50.25` and `1.11.08`: the
 original accumulates its variable `dt` and interpolates the crossing within the
 tick, so its lap times are not frame counts. The lap *counter* is unaffected
-and is what to compare. See `crates/game/src/hud.rs`'s `TICKS_PER_SECOND`.
+and is what to compare. See `crates/hud/src/lib.rs`'s `TICKS_PER_SECOND`.
 
 ## Where we differ
 

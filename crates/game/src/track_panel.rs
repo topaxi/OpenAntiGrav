@@ -13,7 +13,7 @@
 
 use oag_ui_screens::track_panel::{DrawLists, Progress};
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 /// Everything the panel draws from, read once at race load.
 #[derive(Debug, Clone)]

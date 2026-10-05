@@ -66,7 +66,7 @@ into the value `evaluate_medal` wants - see
 own doc, and the join proven with an invented cell in
 `crates/game/tests/campaign_medal.rs`.
 
-Every value is ticks (`u32`/`u64`), the same unit `oag_game::hud::format_lap_time`
+Every value is ticks (`u32`/`u64`), the same unit `oag_hud::format_lap_time`
 already takes, never a formatted string - formatting is a presentation
 concern, and this file is not one.
 

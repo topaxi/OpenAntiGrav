@@ -2048,6 +2048,7 @@ dependencies = [
  "oag-gameplay",
  "oag-gpu",
  "oag-hd",
+ "oag-hud",
  "oag-input",
  "oag-mesh",
  "oag-music",
@@ -2121,6 +2122,25 @@ dependencies = [
  "oag-title",
  "oag-ui",
  "oag-ui-screens",
+ "oag-vex",
+]
+
+[[package]]
+name = "oag-hud"
+version = "0.1.0"
+dependencies = [
+ "oag-2048",
+ "oag-core",
+ "oag-display",
+ "oag-hd",
+ "oag-physics",
+ "oag-pulse",
+ "oag-pure",
+ "oag-race",
+ "oag-tables",
+ "oag-texture",
+ "oag-title",
+ "oag-ui",
  "oag-vex",
 ]
 

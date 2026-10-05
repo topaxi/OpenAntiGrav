@@ -35,7 +35,7 @@ fn pulses_three_trophies_decode_and_sit_on_the_medal_icon() {
         &oag_ui::language::StringTable::default(),
         oag_ui_screens::picker::FaceScales::default(),
         [space.size.0, space.size.1],
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_pulse::TITLE,
     )

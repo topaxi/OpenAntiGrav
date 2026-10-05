@@ -383,7 +383,7 @@ impl GlowStrip {
     /// Decodes a `.mip` blob, or the `.pct` the PS2 keeps the same strip in.
     ///
     /// The PSP format is tried first and **its** error is the one reported, for
-    /// the reason `oag_game::sprite::Image::decode` gives: a `.mip` that will
+    /// the reason `oag_hud::sprite::Image::decode` gives: a `.mip` that will
     /// not parse is the commoner failure, and the PS2 parser's complaint about
     /// a PSP blob points at the wrong decoder.
     ///

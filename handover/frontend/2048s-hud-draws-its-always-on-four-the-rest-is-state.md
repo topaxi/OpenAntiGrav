@@ -23,7 +23,7 @@ PSP's grid, twice the size, right-hand column off screen.
 
 - **`EnergyBar`'s own runtime colour is still unresolved.** `EnergyBg` (not
   `EnergyBar`) tints red at or under 20% shield or during the shared
-  post-hit flash, wired 2026-09-25 in `oag_game::hud::dialect_2048::
+  post-hit flash, wired 2026-09-25 in `oag_hud::dialect_2048::
   energy_bg_tint` off the full decompile of `Hud_UpdateEnergyBar`
   (`0x811957a2`, see
   [pickup-icon-uv-table.md](../../docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md#hud_updateenergybar---0x811957a2)),
@@ -32,7 +32,7 @@ PSP's grid, twice the size, right-hand column off screen.
   at the tip during the post-hit flash window even above 20% (97%, 82%), and
   solid red at 15%. `EnergyBarDelay` is wired the same pass as the lagging
   trail (`crate::race::Race::advance_energy_bar_delay`,
-  `oag_game::hud::dialect_2048::vertical_bar_fraction`), pinned by
+  `oag_hud::dialect_2048::vertical_bar_fraction`), pinned by
   `crates/game/src/race/tests/energy_bar_delay.rs` rather than a screenshot -
   no capture in this pass landed on the exact tick after a scripted hit that
   would show it trailing visibly above `EnergyBar`. Neither widget has a
@@ -75,7 +75,7 @@ PSP's grid, twice the size, right-hand column off screen.
 
 1. ~~Wire `EnergyBar` as a vertical bottom-up crop keyed to
    `readout.shield_fraction()`~~ - done 2026-09-20, see above.
-2. ~~Give `oag_game::hud::text_for` the four 2048 arms (`Laps`, `Position` as
+2. ~~Give `oag_hud::text_for` the four 2048 arms (`Laps`, `Position` as
    `place/ships`, `EnergyText`, `TotalTime` beside a place)~~ - done
    2026-09-25: `Laps`/`Position` are new `dialect_2048::laps_text`/
    `position_text` arms (a `position_combined` flag, `speed_unit`'s own

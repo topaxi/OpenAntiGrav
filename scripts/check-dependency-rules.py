@@ -93,6 +93,7 @@ TITLE_VOCABULARY = "oag-title"
 NOT_TITLE_PACKAGES = {
     "oag-assets",
     "oag-game",
+    "oag-hud",
     "oag-music",
     "oag-sound",
     "oag-trace",

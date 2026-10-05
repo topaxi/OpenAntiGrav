@@ -164,7 +164,7 @@ pub(crate) struct CampaignStage {
     /// `pulse_assets.mip`'s lock-and-selector sub-rects all come off it.
     /// Neither screen needs its own extended sheet the way a picker's
     /// slideshow does: nothing here is per-entity art.
-    pub(crate) sprites: oag_game::sprite::Sheet,
+    pub(crate) sprites: oag_hud::sprite::Sheet,
     pub(crate) screen: Screen,
     /// Why the last confirmed cell did not launch, shown a row above the
     /// footer until the player does anything else - see
@@ -212,7 +212,7 @@ impl CampaignStage {
         nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
         ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
         strings: oag_ui::language::StringTable,
-        sprites: oag_game::sprite::Sheet,
+        sprites: oag_hud::sprite::Sheet,
         title: String,
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,

@@ -1,7 +1,7 @@
 //! [`super::ranked`]'s rule and the rows' text, pinned against the live frame.
 
 use super::{KillTag, ranked};
-use crate::hud::Readout;
+use crate::Readout;
 
 /// The live PPSSPP frame (`AG Systems 1`, `Feisar 1`, `Qirex 1`, `AAA 0`,
 /// `Triakis 0`, `Goteki 45 0`, `Piranha 0`, `EG-X 0`, top to bottom) is the
@@ -111,13 +111,10 @@ fn column_readout() -> Readout {
 /// header - and a title that has not had the column measured draws none of it.
 #[test]
 fn the_column_draws_in_the_default_bucket_and_only_where_the_title_has_it() {
-    use crate::hud::Draw;
-    let layout = crate::hud::Layout::from_xml(COLUMN);
+    use crate::Draw;
+    let layout = crate::Layout::from_xml(COLUMN);
     let strings = strings();
-    let frame = crate::hud::draw_list(
-        &crate::hud::tests::context(&layout, &strings),
-        &column_readout(),
-    );
+    let frame = crate::draw_list(&crate::tests::context(&layout, &strings), &column_readout());
     let scales: Vec<(String, f32)> = frame
         .default_text
         .iter()
@@ -143,9 +140,9 @@ fn the_column_draws_in_the_default_bucket_and_only_where_the_title_has_it() {
         kill_column: false,
         ..*oag_pulse::hud::ART
     };
-    let mut cx = crate::hud::tests::context(&layout, &strings);
+    let mut cx = crate::tests::context(&layout, &strings);
     cx.art = &other;
-    let frame = crate::hud::draw_list(&cx, &column_readout());
+    let frame = crate::draw_list(&cx, &column_readout());
     assert!(frame.default_text.is_empty(), "{:?}", frame.default_text);
     let header: Vec<&Draw> = frame.small_text.iter().collect();
     assert!(

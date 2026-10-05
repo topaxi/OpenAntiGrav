@@ -64,7 +64,7 @@ bracket - `missile_sight_inner` has its own closed box, and the LeachBeam's four
 share a hollow arrowhead. Each model is one 8-unit textured quad, so the
 `<Mode3D>` block needs no 3D pass at all; the quads go through the existing 2D UI
 pipeline with a rotation added to it. `docs/ui/hud.md` and
-`oag_game::hud::widget::Model` had the three *model* names right and said nothing
+`oag_hud::widget::Model` had the three *model* names right and said nothing
 about the four-to-one instancing; both corrected.
 
 **The tone is `~ROCKLOCK`**, `hud.bnk` cue 6, two waveforms, 0.11 s, neither

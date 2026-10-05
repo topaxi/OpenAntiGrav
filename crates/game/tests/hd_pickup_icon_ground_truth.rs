@@ -20,7 +20,7 @@
 //! icons are `<Image>` sprites (`oag_title::HudArt::pickup_icon_models` is
 //! `None` for this title, per `crates/hd/src/hud.rs`), so the equivalent
 //! check here is that each of the thirteen `<Type>Icon` widgets
-//! `oag_game::hud::pickup_icon_name` names is authored in the composed arcade
+//! `oag_hud::pickup_icon_name` names is authored in the composed arcade
 //! layout, resolves its own `Src` into the shared sheet, and carries a
 //! non-zero source rectangle - the three ways a "the hexagon draws empty"
 //! symptom could actually originate (widget missing, texture unresolved,
@@ -34,7 +34,7 @@
 //! `capture::advance_one_tick` writes `options.give` into
 //! `ships[0].pickup.weapon` **before** `Race::tick`, so a capture that runs
 //! zero ticks never reaches that write and `readout.pickup` stays `None` for
-//! the whole capture; `oag_game::hud::draw::draw_list` correctly draws
+//! the whole capture; `oag_hud::draw::draw_list` correctly draws
 //! nothing for a `None` pickup. A one-tick-later capture
 //! (`--ticks 1` or more) shows `holding <Weapon>` in the telemetry line and
 //! every one of the thirteen icons draws, pixel-identical to the sprite this
@@ -101,7 +101,7 @@ fn every_weapon_icon_resolves_to_a_real_sprite_with_non_zero_extent() {
         .into_iter()
         .filter(|weapon| *weapon != Weapon::Disruptor);
     for weapon in hd_roster {
-        let name = oag_game::hud::pickup_icon_name(weapon);
+        let name = oag_hud::pickup_icon_name(weapon);
         let sprite = layout
             .sprites
             .iter()
@@ -173,8 +173,8 @@ fn a_held_rocket_draws_its_own_icon_sprite_on_a_real_race() {
         Some(Weapon::Rocket),
         "the readout must carry the held weapon for the draw list to find it"
     );
-    let frame = oag_game::hud::draw_list(&context, &readout);
-    let icon_name = oag_game::hud::pickup_icon_name(Weapon::Rocket);
+    let frame = oag_hud::draw_list(&context, &readout);
+    let icon_name = oag_hud::pickup_icon_name(Weapon::Rocket);
     let icon_uv = context
         .layout
         .sprites

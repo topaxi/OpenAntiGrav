@@ -69,7 +69,7 @@ Four things follow, and each is a behaviour rather than a layout note:
   `min(amount, max)` and stores it. Nothing floors it at zero, which is what
   makes `Ship_Damage`'s `<= 0.0` test below reachable.
 - **The HUD reads a percentage, not the raw pool**, and only for the entity
-  whose `+0x368` is zero. [`oag_game::hud`](../../../../crates/game/src/hud.rs)
+  whose `+0x368` is zero. [`oag_hud`](../../../../crates/hud/src/lib.rs)
   already formats `ShieldBarText` as a percentage; this is the reading that
   makes that right rather than a guess.
 - **`entity + 0x94` holds the craft, whose `+0x6c` is the stats base.** The
@@ -1064,11 +1064,11 @@ decompile-only and so also capped at 84:**
    this capture's own pre-absorb history is not known, so there is nothing
    to check the resulting phase against.
 
-**Ported** as `oag_game::hud::Readout::shield_absorbing` (wired off
+**Ported** as `oag_hud::Readout::shield_absorbing` (wired off
 `Race::absorb_window_active`, which reuses `Race::view.absorb_overlay`
 rather than a second timer - the same `0.0 <= elapsed <= WINDOW` test
 `HullOverlay_AbsorbWindowActive` itself is), `Readout::shield_blinking`/
-`shield_blink_phase_on` for point 2, and `crate::hud::draw::draw_list`'s
+`shield_blink_phase_on` for point 2, and `oag_hud::draw::draw_list`'s
 `ShieldBar` arm for point 3 - a flat white copy of the bar's own cropped
 fill, painted underneath it, standing in for the unchased draw target named
 above. **The blink's own accumulator is ported, not approximated**:

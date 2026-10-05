@@ -2,7 +2,7 @@
 
 Functions and data in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04),
 image base `0x81000000`. **The names here are applied**, from [names.tsv](names.tsv).
-Found while wiring `oag_game::hud::draw::pickup_sprites` for 2048:
+Found while wiring `oag_hud::draw::pickup_sprites` for 2048:
 `docs/formats/2048-hud.md`'s "What is not done" section already established that
 `HUD_pickups.xml` names exactly one icon widget (`PickupIcon`, not thirteen
 per-weapon ones the way Pulse and HD's own dialects do), so the runtime has to be
@@ -153,7 +153,7 @@ to `orig_y + orig_height * (1 - fVar12) * 0.5` - a bottom-anchored crop *if*
 the position setter takes a rect centre rather than a corner, since a centre
 shifted down by half the removed height leaves the bottom edge fixed and
 moves the top down by the full removed height, matching
-`oag_game::hud::draw::crop_vertically`'s own formula exactly. The identical
+`oag_hud::draw::crop_vertically`'s own formula exactly. The identical
 pair of computations (`height = orig * fraction`, `origin = orig +
 orig*(1-fraction)`) is applied a second time to `EnergyBar`'s own two raw UV
 fields (`+0xcc`, `+0xd4`), mirroring the destination-rect transform - the

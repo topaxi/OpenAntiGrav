@@ -1923,7 +1923,7 @@ unconfirmed `+0xbe` flag were.
   path). Full law and the live evidence:
   [`race-progress.md`](race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
   Wired into the HUD for the campaign branch's gold/silver/bronze ladder,
-  `oag_game::hud::TimeTrialPace`; `RECORD` on either path stays
+  `oag_hud::TimeTrialPace`; `RECORD` on either path stays
   unimplemented - see that page's own "What stays open".
 - **`Locked` on both `PI_Cell` (`+0xb9`) and `PI_Grid` (`+0xa0`) is now
   settled, 2026-09-14** - see

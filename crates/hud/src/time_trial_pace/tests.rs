@@ -199,7 +199,6 @@ fn a_stored_best_faster_than_gold_shows_record_on_a_campaign_cell() {
 /// for a Speed Lap, by class, and the stored best from the matching field.
 #[test]
 fn the_target_reads_the_figure_and_the_best_that_belong_to_the_mode() {
-    use crate::records::Record;
     let stats = oag_tables::track_stats::TrackStats {
         race_times: [117.0, 138.0, 119.0, 128.0],
         lap_times: [38.0, 33.0, 29.0, 25.0],
@@ -209,29 +208,53 @@ fn the_target_reads_the_figure_and_the_best_that_belong_to_the_mode() {
         skill_scale: [[1.0, 2.0, 3.0]; 4],
         mode_modifiers: Default::default(),
     };
-    let best = Record {
-        best_total_ticks: Some(6_000),
-        best_lap_ticks: Some(1_800),
-        ..Record::default()
-    };
+    let (best_total, best_lap) = (Some(6_000), Some(1_800));
     let tt = RecordTarget::new(
         oag_race::Mode::TimeTrial,
         "Venom",
         Some(&stats),
-        Some(&best),
+        best_total,
+        best_lap,
     )
     .expect("a target");
     assert_eq!(tt.authored_centis, Some(11_700));
     assert_eq!(tt.personal_best_centis, Some(10_000));
-    let lap = RecordTarget::new(oag_race::Mode::SpeedLap, "flash", Some(&stats), Some(&best))
-        .expect("a target");
+    let lap = RecordTarget::new(
+        oag_race::Mode::SpeedLap,
+        "flash",
+        Some(&stats),
+        best_total,
+        best_lap,
+    )
+    .expect("a target");
     assert_eq!(lap.authored_centis, Some(3_300));
     assert_eq!(lap.personal_best_centis, Some(3_000));
-    assert!(RecordTarget::new(oag_race::Mode::SingleRace, "venom", Some(&stats), None).is_none());
+    assert!(
+        RecordTarget::new(
+            oag_race::Mode::SingleRace,
+            "venom",
+            Some(&stats),
+            None,
+            None
+        )
+        .is_none()
+    );
     // A class the file has no figure for, or no file at all: no authored time.
-    let unknown = RecordTarget::new(oag_race::Mode::TimeTrial, "unknown", Some(&stats), None);
+    let unknown = RecordTarget::new(
+        oag_race::Mode::TimeTrial,
+        "unknown",
+        Some(&stats),
+        None,
+        None,
+    );
     assert_eq!(unknown.expect("a target").authored_centis, None);
-    let unread = RecordTarget::new(oag_race::Mode::TimeTrial, "venom", None, Some(&best));
+    let unread = RecordTarget::new(
+        oag_race::Mode::TimeTrial,
+        "venom",
+        None,
+        best_total,
+        best_lap,
+    );
     assert_eq!(unread.expect("a target").authored_centis, None);
 }
 
@@ -240,7 +263,7 @@ fn the_target_reads_the_figure_and_the_best_that_belong_to_the_mode() {
 #[test]
 fn without_stats_a_plain_race_has_no_pace_and_a_campaign_cell_still_does() {
     let mode = oag_race::Mode::TimeTrial;
-    let unread = RecordTarget::new(mode, "venom", None, None);
+    let unread = RecordTarget::new(mode, "venom", None, None, None);
     assert_eq!(super::pace_for(mode, 0, 0, None, unread.as_ref()), None);
     let cell = grid0_3_2();
     let pace = super::pace_for(mode, 0, 0, Some(&cell), unread.as_ref()).expect("a pace");

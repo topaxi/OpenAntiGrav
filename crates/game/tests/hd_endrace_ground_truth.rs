@@ -131,7 +131,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         .to_string();
     let mut archives = open_hd_archives(&source);
     let strings = oag_ui::language::StringTable::default();
-    let base = oag_game::sprite::Sheet::default();
+    let base = oag_hud::sprite::Sheet::default();
     let screens = oag_game::endrace::load(
         &mut archives,
         &strings,
@@ -224,7 +224,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         &strings,
         oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_hd::TITLE,
     )
@@ -301,7 +301,7 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
         &strings,
         oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_hd::TITLE,
     )
@@ -404,7 +404,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         &strings,
         oag_ui_screens::picker::FaceScales::default(),
         oag_hd::endrace::AUTHORED_GRID,
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_hd::TITLE,
     )

@@ -47,9 +47,9 @@ fn open() -> Option<oag_assets::Archives> {
     oag_2048::open(&source.display().to_string()).ok()
 }
 
-fn composed(archives: &mut oag_assets::Archives, root: &str) -> oag_game::hud::Composed {
+fn composed(archives: &mut oag_assets::Archives, root: &str) -> oag_hud::Composed {
     let mut read = |path: &str| archives.read_name(path).ok();
-    oag_game::hud::compose(root, &mut read).unwrap_or_else(|| panic!("composing {root}"))
+    oag_hud::compose(root, &mut read).unwrap_or_else(|| panic!("composing {root}"))
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn the_played_skins_layouts_author_no_hudsmall_widget_at_all() {
     let mut small_widgets = Vec::new();
     for root in played_roots {
         for label in composed(&mut archives, root).layout.labels {
-            if label.font == oag_game::hud::Font::Small {
+            if label.font == oag_hud::Font::Small {
                 small_widgets.push(format!("{root}: {}", label.name));
             }
         }

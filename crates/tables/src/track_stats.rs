@@ -53,7 +53,7 @@
 //!
 //! `RaceTimes`/`LapTimes`/`Targets`/`Physical` are parsed and carried too,
 //! since they are on the same record. This crate reads neither;
-//! `oag_game::hud::RecordTarget` does, for the Time Trial and Speed Lap
+//! `oag_hud::RecordTarget` does, for the Time Trial and Speed Lap
 //! `RECORD` readout - `<RaceTimes>` (whole race) and `<LapTimes>` (one lap),
 //! both seconds. `docs/formats/race-setup.md`'s note that a single number per
 //! class carries no gold/silver/bronze split still applies: that split is a

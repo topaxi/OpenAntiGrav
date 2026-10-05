@@ -8,7 +8,7 @@
 //!     data/extracted/vita/PCSF00007/base 'Data\XML\2048_hud\Arcade_HUD.xml'
 //! ```
 
-use oag_game::hud;
+use oag_hud as hud;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

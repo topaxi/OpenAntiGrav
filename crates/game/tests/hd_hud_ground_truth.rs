@@ -38,7 +38,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use oag_game::hud;
+use oag_hud as hud;
 use oag_tables::fexml::{self, Node};
 
 fn image() -> Option<PathBuf> {
@@ -306,7 +306,7 @@ fn the_anonymous_widgets_are_kept_rather_than_dropped() {
 ///
 /// The defect this pins was invisible from the layout side, because a layout
 /// carries bare numbers and every one of them parses the same whatever grid it
-/// is in. `crate::render::Renderer` starts at `Space::PSP` and `hud::Overlay`
+/// is in. `crate::render::Renderer` starts at `Space::PSP` and `hud_overlay::Overlay`
 /// never told it otherwise, so HD's 1920x1080 layouts were drawn four times
 /// oversized: the lap digit landed a quarter of the way into the picture as a
 /// solid yellow slab that reads as scenery, and the speed bar, the total time
@@ -462,7 +462,7 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
             })
             .collect();
         let mut notes = Vec::new();
-        let sheet = oag_game::sprite::Sheet::build(&blobs, &mut notes);
+        let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut notes);
         assert_eq!(
             sheet.len(),
             references.len(),
@@ -540,7 +540,7 @@ fn every_always_on_widget_is_authored_by_at_least_one_layout() {
 
 /// **One name, one widget - and the one layout where that is false.**
 ///
-/// `oag_game::hud::draw_list` matches the always-on set by name and draws the
+/// `oag_hud::draw_list` matches the always-on set by name and draws the
 /// *first* sprite carrying each, which is a rule worth exactly as much as its
 /// exception list. Across all eighteen composed layouts, `BestLapImage` in the
 /// two speed-lap ones is the only always-on name authored more than once - the
@@ -695,7 +695,7 @@ fn every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone() {
 ///
 /// The gap this closes was two-sided and either half alone draws nothing
 /// visible: the sprites were missing from `ALWAYS_ON`, and the eleven
-/// `ZonePlus<N>` labels carry no `idstring`, so `oag_game::hud::draw_list`'s
+/// `ZonePlus<N>` labels carry no `idstring`, so `oag_hud::draw_list`'s
 /// text allow-list dropped every one of them. Checked against the reference
 /// frame `data/shots/hd_zone_hud_original.png` (gitignored), which is a Zone
 /// race on zone 1: `SUB-VENOM` on the current row, `1` beside it, and the ten
@@ -733,7 +733,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         })
         .collect();
     let mut notes = Vec::new();
-    let sheet = oag_game::sprite::Sheet::build(&blobs, &mut notes);
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut notes);
 
     let cx = hud::Context {
         layout: &layout,
@@ -747,7 +747,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
     };
 
     // Zone 1 on rung 1, which is the state the reference frame is in.
-    let readout = oag_game::hud::Readout {
+    let readout = oag_hud::Readout {
         zone: 1,
         zone_stage: 1,
         score: 1452,
@@ -781,7 +781,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
     // own trigger being unrecovered.
     let unnamed = hud::draw_list(
         &cx,
-        &oag_game::hud::Readout {
+        &oag_hud::Readout {
             zone: 1,
             ..Default::default()
         },
@@ -835,7 +835,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
     let strings =
         oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
     let mut notes = Vec::new();
-    let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
+    let sheet = oag_hud::sprite::Sheet::build(&[], &mut notes);
     let cx = hud::Context {
         layout: &layout,
         strings: &strings,
@@ -850,7 +850,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
     // Zone 8: rung 5 (`5 Sub Rapier`), next bump four rows down at zone 12.
     let zone = 8u16;
     let stages = oag_hd::race::ZONE_STAGES;
-    let readout = oag_game::hud::Readout {
+    let readout = oag_hud::Readout {
         zone: u32::from(zone),
         zone_stage: stages.stage_for(zone).expect("a band"),
         zone_next_in: stages.next_zone(zone).map(|next| u32::from(next - zone)),
@@ -917,7 +917,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
     let layout = composed(&mut archives, oag_hd::hud::layouts::ZONE).layout;
     let strings = oag_ui::language::StringTable::default();
     let mut notes = Vec::new();
-    let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
+    let sheet = oag_hud::sprite::Sheet::build(&[], &mut notes);
     let cx = hud::Context {
         layout: &layout,
         strings: &strings,
@@ -928,7 +928,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         default_line_height: 34.0,
         default_border: layout.default_border(),
     };
-    let frame = hud::draw_list(&cx, &oag_game::hud::Readout::default());
+    let frame = hud::draw_list(&cx, &oag_hud::Readout::default());
     // A bare digit string is no longer unique to the `ZonePlus*` ladder:
     // `ShieldBarText` on HD draws one too now that `oag_title::HudArt::
     // shield_percent` is `false` for this title (a `Readout::default()`'s

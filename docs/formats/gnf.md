@@ -522,7 +522,7 @@ whose diagnostics `gnf_tile_row_byte_check.rs` (a plain example, public-API
 only) extended to close the periodic-corruption question.
 `crates/texture/examples/gnf_frontend_census.rs` reports the front end's own
 draws/refused/unsupported split directly off `Texture::decode`, and
-`crates/game/src/sprite.rs::Image::decode_gnf` plus
+`crates/hud/src/sprite.rs::Image::decode_gnf` plus
 `crates/game/src/boot/sprites.rs::gnf_sibling` (reused by
 `crates/game/src/campaign.rs::load_omega`) are what actually wire a decoded
 `.gnf` into the running front end - see `docs/formats/omega-status.md`.

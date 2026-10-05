@@ -2,7 +2,7 @@
 
 2026-08-25, branch `worktree-hd-hud-align`; all of it on [hd-hud.md](../../docs/formats/hd-hud.md#the-hud-draws-and-each-sprite-out-of-its-own-texture). **The one to know**: the sheet held only `Layout::atlas()`'s *first* texture, so 45 of the arcade HUD's 138 sprites sampled `HUD_Components.gtf` at coordinates meant for another image - the right rectangle out of the wrong picture, which reads as art rather than as an error, and which the existing source-rectangle check passes either way. `oag_title::HudArt` is the new axis: texture extension, always-on widgets, pickup-backdrop colour. **Compared against a frame of the running original** (`just rpcs3-race`, speed lap) for the first time - one state of one mode, which is why the always-on set is fifteen names and not fifty. **Four things that frame shows and this build does not**: `DamageBar`'s and the lap arcs' runtime tints, `ShieldBarText`'s `100%`-in-red where the original reads `100` in grey, and the per-lap time rows.
 
-**2026-09-07 re-check.** All four are still genuinely open - confirmed against current code (`crates/game/src/hud/draw.rs`, `crates/hd/src/hud.rs`), not just against the doc - and the doc's own reasoning for not fixing them holds up under a harder check than it had before. Full evidence in [hd-hud.md#what-is-not-done](../../docs/formats/hd-hud.md#what-is-not-done); the short version:
+**2026-09-07 re-check.** All four are still genuinely open - confirmed against current code (`crates/hud/src/draw.rs`, `crates/hd/src/hud.rs`), not just against the doc - and the doc's own reasoning for not fixing them holds up under a harder check than it had before. Full evidence in [hd-hud.md#what-is-not-done](../../docs/formats/hd-hud.md#what-is-not-done); the short version:
 
 - **`DamageBarBg`/lap-arc tints and `DamageBar`'s swap-in state**: two throwaway probes (`crates/game/examples/hd_hud_shield_census.rs`, `hd_hud_tint_census.rs`) walked every raw fragment file behind all eighteen composed layouts, then every one of those fragments was re-pulled **archive by archive** (`scripts/psarc.py cat`) to rule out the copy-precedence trap this same doc page already documents for other paths. `DamageBarBg`, `LapBar0`-`6` and `PosBar0`-`7` carry **no `color=` attribute in any copy on the disc**, and none of the four `FEConst`/`FEGlobals` names any HUD layout declares is yellow or the frame's saturated blue. `DamageBar` itself *is* authored a colour, identically across every copy - red in every mode but Zone, blue only in `zone_hud.xml` - which rules out "we're just drawing the wrong mode's `DamageBar`" as the explanation for the speed-lap frame's blue. One archive-only widget turned up along the way: `DATA06`'s copy of `HUD_damage_indicator.xml` alone adds a `DamageBarShieldBg` layer coloured opaque green, excluded by precedence (this path resolves to `DATA02`) and not blue anyway - a loose end, not the answer. Separately: `arcade_hud.xml` composes **two** widgets named `DamageBar` (the red one, and an unrelated colourless one from `HUD_pickups.xml`) - `draw_list`'s "draw the first of a repeated name" rule means wiring `DamageBar` by name needs a check first. This needs the executable. **Nobody held the Ghidra bridge this pass**, so it stays unread rather than guessed at - next pass, take the bridge for this specifically.
 - **`ShieldBarText`**: confirmed HD's own layout genuinely resolves it to translucent red (`[1.0, 0.0, 0.0, 0.58]`), against Pulse's white - so the red is not a resolution bug in this build, it is what the disc says. No widget authors a `%`-suffix companion the way `SpeedBarTextKMH` does for `SpeedBarText`'s unit, so neither half has a layout-derived fix. One frame at 100% shield cannot tell "always grey" from "grey only when not critical" (the more likely rule, given `ShieldBar`'s own bar already has a measured critical-threshold tint) apart - guessing which would be exactly the invention this project's rules forbid. Left alone rather than fixed on a guess.
@@ -13,7 +13,7 @@ Net: no guessed fix was implemented for any of the four, on purpose - each would
 **2026-09-07, the per-lap rows landed.** `oag_race::RaceState::lap_splits` and
 `Standing::lap_splits` (`[Option<u32>; MAX_RECORDED_LAPS]`, `MAX_RECORDED_LAPS
 = 4` - read off the disc's own four rows, not chosen) now carry the history,
-and `oag_game::hud::lap_splits` wires `Lap1Image`-`Lap4Image` and their
+and `oag_hud::lap_splits` wires `Lap1Image`-`Lap4Image` and their
 `Lap{n}Text`/`Lap{n}Time` children, gated on which laps have a recorded
 split. Full writeup: [hd-hud.md#the-per-lap-history-draws-off-a-new-
 racestatestanding-field](../../docs/formats/hd-hud.md#the-per-lap-history-draws-off-a-new-racestatestanding-field).
@@ -77,7 +77,7 @@ Found from the widget names: `Hud_BindWidgets` stores `DamageBar`/`DamageBarBg`/
 leaves one reader of each set - `Hud_UpdateShieldReadout` (`0x000866c8`),
 `Hud_UpdateLapCounter` (`0x00096ef0`), `Hud_UpdatePositionCounter` (`0x00096088`),
 all dispatched every tick by `Hud_Update` (`0x0009e3d0`). What they write, now
-drawn by `oag_game::hud::runtime` off `oag_title::HudArt::runtime`:
+drawn by `oag_hud::runtime` off `oag_title::HudArt::runtime`:
 
 - `DamageBar` is the fill, cropped from the top to the shield fraction, opaque
   `0x1664FF` (white in Eliminator/Detonator modes). `ShieldBarText` takes the same

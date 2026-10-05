@@ -438,7 +438,7 @@ pub(super) fn exhaust_texture(
 /// [`FlareTexture`] wants.
 ///
 /// The PSP's `.mip` is tried first and **its** error is the one reported, the
-/// same rule `crate::sprite::Image::decode` follows: a `.mip` that will not
+/// same rule `oag_hud::sprite::Image::decode` follows: a `.mip` that will not
 /// parse is far and away the commoner failure, and reporting the PS2 parser's
 /// complaint about a PSP blob sends the reader after the wrong decoder.
 ///

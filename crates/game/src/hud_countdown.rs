@@ -80,7 +80,7 @@
 //! `oag-wad cat --expand` against `Data.wad`) agrees: the ground-truth-tested
 //! block always says `mode="orthographic"` and this one never does. `x=0, y=0`
 //! is not this dialect's placeholder-for-runtime-code value the way it would be
-//! read under `model_draw`'s convention (see [`super::Model::orthographic`]) -
+//! read under `model_draw`'s convention (see [`oag_hud::Model::orthographic`]) -
 //! it is the one screen position a perspective camera puts there **regardless
 //! of the camera's own FOV, near or far plane**: for a symmetric frustum along
 //! `-z`, a point at `x=0, y=0` projects to the exact centre of the viewport for
@@ -97,7 +97,7 @@
 //! future non-orthographic widget authored at a nonzero `x`/`y` under a wrong
 //! guess. [`Countdown::new`] instead takes the screen centre directly - the one
 //! answer that holds under every symmetric projection - and adds
-//! [`super::Model::origin`], the block's own `OriginX`/`OriginY`, which is now
+//! [`oag_hud::Model::origin`], the block's own `OriginX`/`OriginY`, which is now
 //! read the same way [`super::Layout::collect`] reads it for every widget in
 //! this dialect rather than as this file's own private constant. `(0, 35)`
 //! read as a screen pixel put the widget in the top-left corner; `(240, 136) +
@@ -173,7 +173,7 @@ impl Countdown {
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         model: Model,
-        widget: &super::Model,
+        widget: &oag_hud::Model,
     ) -> anyhow::Result<Self> {
         let built = build(
             device,
@@ -220,7 +220,7 @@ impl Countdown {
     /// The widget's screen position, from its own `<Mode3D>` dialect.
     ///
     /// See the module doc for the derivation. Two branches, keyed on
-    /// [`super::Model::orthographic`]:
+    /// [`oag_hud::Model::orthographic`]:
     ///
     /// - **Orthographic** (never true for this widget on any layout read, but
     ///   handled rather than assumed away - the same defensiveness
@@ -230,11 +230,11 @@ impl Countdown {
     ///   titles): only `x=0, y=0` is derivable without the real perspective
     ///   camera this project has not recovered - see the module doc for why
     ///   that is not a gap for *this* value. The screen centre plus the
-    ///   block's own [`super::Model::origin`] is the answer for that case;
+    ///   block's own [`oag_hud::Model::origin`] is the answer for that case;
     ///   a nonzero `x`/`y` here is a widget this file cannot yet place, and
     ///   errors rather than guesses one - the same "draw nothing and say so"
     ///   rule this project's `CLAUDE.md` states for an asset it cannot play.
-    fn screen_position(widget: &super::Model) -> anyhow::Result<[f32; 2]> {
+    fn screen_position(widget: &oag_hud::Model) -> anyhow::Result<[f32; 2]> {
         let [x, y, _z] = widget.position;
         if widget.orthographic {
             return Ok([x, y]);
@@ -244,7 +244,7 @@ impl Countdown {
             "countdown widget {:?} authors a nonzero position ({x}, {y}) in the \
              non-orthographic <Mode3D> dialect - only (0, 0) is derivable \
              without the real perspective camera this project has not \
-             recovered, see crate::hud::countdown's module doc",
+             recovered, see crate::hud_countdown's module doc",
             widget.name,
         );
         let [origin_x, origin_y] = widget.origin;

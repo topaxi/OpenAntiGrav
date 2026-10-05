@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut all_files: BTreeSet<String> = BTreeSet::new();
     for root in oag_hd::hud::ROOTS {
-        let Some(composed) = oag_game::hud::compose(root, &mut read) else {
+        let Some(composed) = oag_hud::compose(root, &mut read) else {
             continue;
         };
         all_files.extend(composed.files);

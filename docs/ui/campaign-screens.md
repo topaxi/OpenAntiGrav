@@ -1278,7 +1278,7 @@ doc already found for `cursor.mip` - but **no archive on this disc carries a
 over all seven archives on `hdfury-ps3-eu-dec.iso` lists every one of the
 five hex textures as `.gtf`, lower-cased (`data/fe/images/hexagon_hd_outline.gtf`
 and siblings), never as `.mip`. `oag_assets::psarc`'s own path normalisation
-folds case and backslashes for the read, but `oag_game::sprite::Sheet::get`
+folds case and backslashes for the read, but `oag_hud::sprite::Sheet::get`
 keys its placements by an exact string match against a widget's own
 `image.src` - so `oag_hd::campaign::HEX_TEXTURES` is `(widget src, archive
 path)` pairs: read the `.gtf` off the archive, shelve the decoded blob under

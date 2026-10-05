@@ -607,7 +607,7 @@ the composed layout explains it exactly: `LapTxt` (`"LAP"`) is authored at
 `scale=0.6` beside `Laps` (`"1/3"`) at `scale=1.0`, both `font="HUD"`;
 `RaceXPTxt`/`RaceXP` (`"XP"`/its value) are both `scale=0.6`, which is why
 that pair reads as one size in the frame while `LAP`/`1/3` reads as two.
-Each widget's own `oag_game::hud::widget::Label::scale` carries the size, on
+Each widget's own `oag_hud::widget::Label::scale` carries the size, on
 one atlas - not a guess standing in for an unlocated second `.fnt`. So
 `hud_font` falling back to `hud_font_role`'s own face for captions is not
 merely the reading that draws something recognisable rather than nothing -

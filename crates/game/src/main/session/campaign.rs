@@ -137,7 +137,7 @@ impl Session {
     /// otherwise has no chance to, since [`Self::open_campaign`] runs before
     /// the next frame's draw and a campaign screen carries no `take_sheet`
     /// dance of its own the way a picker's slideshow does.
-    fn renderer_set_sprites(&mut self, sheet: &oag_game::sprite::Sheet) {
+    fn renderer_set_sprites(&mut self, sheet: &oag_hud::sprite::Sheet) {
         if let Stage::Menu(stage) = &mut self.stage {
             stage
                 .renderer

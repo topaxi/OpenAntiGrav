@@ -240,7 +240,7 @@ are ordinary [`.gtf`](gtf.md) and decode with no new work - `oag_texture::gtf`
 had handled them since long before the front end asked for one.
 
 **What was missing was a branch, and the error named the wrong format.**
-`oag_game::sprite::Image::decode` tried the PSP `.mip` parser and then the PS2
+`oag_hud::sprite::Image::decode` tried the PSP `.mip` parser and then the PS2
 one, so a `.gtf` came back as *"zero-sized texture 1281x0"* - a complaint about a
 format the file is not - all three failed, and the sheet collapsed to a single
 transparent texel. `line.gtf` is the 8x8 tile stretched to the 1600-pixel rules
@@ -1605,7 +1605,7 @@ texel per unit. The paragraph above tested the texture-mask hypothesis
 against `corner2.gtf`, the `<Bracket>` asset, which does not draw this widget.
 
 **The underline's `6.6`-unit residual is closed.** A `.gtf`'s rows run
-bottom-up and `oag_game::sprite::Sheet` flips them (measured on the loading
+bottom-up and `oag_hud::sprite::Sheet` flips them (measured on the loading
 screen's craft, see `sprite.rs`); the bar is at the file's row 1, so the
 sheet's row 7, so `y + 35 + 7 = 167` for the capture's `167.1`. The
 executable's `y + 35` needed no measured correction once the flip was counted.

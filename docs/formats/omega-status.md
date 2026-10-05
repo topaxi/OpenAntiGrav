@@ -60,7 +60,7 @@ never re-authored), and the shipped file is `.gnf` under the same stem -
 `saveIcons.gnf`, `line.gnf`, `Title_Arrow_HD.gnf` all confirmed present this
 way. `crates/game/src/boot/sprites.rs::gnf_sibling` checks the `.gnf`
 sibling directly: when it decodes, its bytes are pushed into the sheet under
-the widget's own `.gtf`-spelled key (`crates/game/src/sprite.rs::Image::decode_gnf`
+the widget's own `.gtf`-spelled key (`crates/hud/src/sprite.rs::Image::decode_gnf`
 is what actually rasterises them); when it does not, the boot report names
 the exact reason rather than a bare "not found" (`image
 Data\FE\Images\saveIcons.gtf: found as Data\FE\Images\saveIcons.gnf (158976

@@ -647,7 +647,7 @@ pub(super) fn picker_page(
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
-    sprites: &crate::sprite::Sheet,
+    sprites: &oag_hud::sprite::Sheet,
     measure: &dyn Fn(&str) -> f32,
     // The selected circuit's lap length, measured by the caller off the
     // disc - `None` draws the dash an unmeasured one draws live.
@@ -884,7 +884,7 @@ pub(super) fn picker_stills(
     archives: Option<&mut oag_assets::Archives>,
     screens: &oag_ui::screen::Screens,
     strings: &oag_ui::language::StringTable,
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
     // `--menu-picker-seconds` - `None` draws the first card, fully arrived
     // (`SETTLED_SECONDS`). `Some` also advances which card is stacked up, so
     // a low value shows both effects the screen's own arrival authors: the

@@ -195,7 +195,7 @@ pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
 /// `oag_assets::psarc::Archive::paths` over all seven archives on
 /// `hdfury-ps3-eu-dec.iso` lists every stem below as a `.gtf` and none as a
 /// `.mip`. `oag_assets::psarc`'s own path normalisation folds case and
-/// backslashes for the *read*, but `oag_game::sprite::Sheet::get` keys its
+/// backslashes for the *read*, but `oag_hud::sprite::Sheet::get` keys its
 /// placements by an exact string match against a widget's own `image.src` -
 /// so a caller has to read the `.gtf` off the archive and then shelve the
 /// decoded blob under the `.mip` spelling the widget actually asks for at

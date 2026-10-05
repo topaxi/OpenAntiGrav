@@ -2,7 +2,7 @@
 //!
 //! Entry names in the [ADR-0022] sense, the same division [`oag_pulse::hud`]
 //! draws: *which* files this disc ships. Everything that reads them is
-//! `oag_game::hud`.
+//! `oag_hud`.
 //!
 //! # Three names, all Pulse's, and that is a measurement
 //!
@@ -68,14 +68,14 @@
 //! at runtime, which is what Pulse's `PickupBackground` needs since one
 //! `<Image>` stands in for thirteen weapons. Pure needs no such table: each
 //! of its ten `<Model>`s already carries its own final colour in the XML,
-//! read by `oag_game::hud::Model::colour` with no substitution step at all
+//! read by `oag_hud::Model::colour` with no substitution step at all
 //! (this crate does not depend on `oag-game`, so that is prose, not a link).
 //! Drawing them - selecting the held weapon's model by name and painting it
 //! tinted - shipped the same day: [`PICKUP_ICON_MODELS`] and
 //! `ART.pickup_icon_backdrop_model` name the widgets,
 //! `oag_game::race::hud::vex_model_art` reads each `.vex` mesh's own quad
 //! size off its vertices rather than a hand-measured constant, and
-//! `oag_game::hud::draw::pickup_model_draws` draws them. See
+//! `oag_hud::draw::pickup_model_draws` draws them. See
 //! `docs/gameplay/pickups.md`'s Pure section for the evidence, including a
 //! real capture of a held Turbo.
 //!

@@ -14,7 +14,7 @@
 //! # What only real data can say here
 //!
 //! The unit tests in `oag_race::sight` assert the recovered *law* and the
-//! ones in `oag_game::hud::reticle_tests` assert the five sprites it becomes,
+//! ones in `oag_hud::reticle_tests` assert the five sprites it becomes,
 //! both against fixtures written by hand. Neither can say the thing that
 //! actually broke every previous attempt at this widget: **that the art is
 //! reachable at all.** The sights are the one HUD element whose picture is not
@@ -72,7 +72,7 @@ fn the_arcade_layout_authors_nine_sight_widgets_over_three_models() {
         .as_ref()
         .expect("the arcade layout parsed");
 
-    let sights: Vec<&oag_game::hud::Model> = layout
+    let sights: Vec<&oag_hud::Model> = layout
         .models
         .iter()
         .filter(|model| sight::is_sight_widget(&model.name))
@@ -473,7 +473,7 @@ fn no_hd_layout_authors_a_leachbeam_lockedon_widget() {
     let mut all: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for &root in oag_hd::hud::ROOTS {
         let mut read = |path: &str| archives.read_name(path).ok();
-        let Some(composed) = oag_game::hud::compose(root, &mut read) else {
+        let Some(composed) = oag_hud::compose(root, &mut read) else {
             continue;
         };
         for sprite in composed.layout.sprites {
@@ -493,7 +493,7 @@ fn no_hd_layout_authors_a_leachbeam_lockedon_widget() {
 /// now draws them - inverted from this file's own former
 /// `hd_authors_four_leachbeam_sight_sprites_that_nothing_draws`, which pinned
 /// the gap `oag_title::hud::Sights::Concentric::leach` and
-/// `oag_game::hud::sight_draw` closed on 2026-09-15. See
+/// `oag_hud::sight_draw` closed on 2026-09-15. See
 /// [`hd_locks_a_craft_and_draws_its_own_concentric_reticle`] for the
 /// Missile's own equivalent on this dialect.
 #[test]

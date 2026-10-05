@@ -72,7 +72,7 @@ pub struct LoadingOptions {
 pub fn loading(
     assets: &crate::loading::Assets,
     font: oag_ui::font::Atlas,
-    sprites: &crate::sprite::Sheet,
+    sprites: &oag_hud::sprite::Sheet,
     options: &LoadingOptions,
 ) -> Result<()> {
     // Seed 0: a capture has to be reproducible, and which feature it draws is

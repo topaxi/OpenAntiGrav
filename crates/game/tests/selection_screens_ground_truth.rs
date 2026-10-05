@@ -285,7 +285,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
     assert_eq!(show.at(12.5).name, "Info");
     // Four cards and the shadow, every one on the disc and 256x128 / 128x64.
     assert_eq!(blobs.len(), 5, "{:?}", show.sources());
-    let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut report);
     let card = sheet
         .get(r"Data\Environments\16_Track\FE\image_01.mip")
         .expect("the first card decodes");
@@ -514,7 +514,7 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
         assert_eq!(show.at(0.0).images[0].color, 0xFF99_D9E8);
 
         assert_eq!(blobs.len(), 3);
-        let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+        let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut report);
         for src in srcs {
             let placed = sheet.get(src).unwrap_or_else(|| panic!("{src} decodes"));
             assert_eq!((placed.width, placed.height), (256, 128), "{src}");

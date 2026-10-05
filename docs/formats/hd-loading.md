@@ -193,7 +193,7 @@ on an HD craft reads the correct way up, which is the check
 [rcsmodel.md](rcsmodel.md) used to confirm the texture coordinate in the first
 place. Their sampling convention and the file's row order agree. So the row
 order is a property of the file and which way up a consumer wants it is the
-consumer's, and the flip belongs in `oag_game::sprite::Image::decode_gtf`,
+consumer's, and the flip belongs in `oag_hud::sprite::Image::decode_gtf`,
 where a sheet is built top-down.
 
 **It was not only this screen.** `Sheet::build` is also what the front-end

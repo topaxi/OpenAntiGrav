@@ -15,7 +15,7 @@ use oag_ui::language::StringTable;
 use oag_ui_screens::endrace::Layout;
 use oag_ui_screens::picker::FaceScales;
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - the file all three of
 /// Pulse's own screens are authored in. See [`oag_hd::endrace::SCREEN_ENTRY`]

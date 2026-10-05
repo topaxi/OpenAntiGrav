@@ -13,6 +13,7 @@ members = [
   "crates/gameplay",
   "crates/gpu",
   "crates/hd",
+  "crates/hud",
   "crates/input",
   "crates/mesh",
   "crates/music",
@@ -58,6 +59,7 @@ oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-gpu = { path = "crates/gpu" }
 oag-hd = { path = "crates/hd" }
+oag-hud = { path = "crates/hud" }
 oag-input = { path = "crates/input" }
 oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }
@@ -314,6 +316,11 @@ opt-level = 2
 # The screens built on it: `endrace_screens_ground_truth.rs` and the other
 # disc-backed tests parse a whole title's screen XML per test.
 [profile.dev.package.oag-ui-screens]
+opt-level = 2
+
+# The HUD and the sprite sheet: `hud_layout_ground_truth.rs` and the HUD
+# ground-truth tests decode real layouts and sheets per test.
+[profile.dev.package.oag-hud]
 opt-level = 2
 
 # The race itself: `oag-game` holds `race/`, the whole front-to-back tick that

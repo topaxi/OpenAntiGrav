@@ -129,7 +129,7 @@ pub(super) fn capture(
     strings: &oag_ui::language::StringTable,
     backdrop: Option<oag_ui::menu::Picture>,
     frame: &oag_ui::menu::Frame,
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
     title: &'static oag_title::Title,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
     let mut archives = match race {
@@ -186,7 +186,7 @@ fn endrace_page(
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
@@ -452,7 +452,7 @@ fn hd_endrace_page(
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
     backdrop: Option<oag_ui::menu::Picture>,
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let layers = match kind {
         EndRaceKind::Results => {
