@@ -212,12 +212,12 @@ pub struct Material {
     pub lightmap: Option<String>,
     /// The uniforms this material instance authors, by name hash, in table
     /// order: a shader's tuning numbers and colours. See [`Param`] and
-    /// [`Self::param`]. Empty on PS4.
+    /// [`Self::param`]. On PS4 read by `ps4_params`.
     pub params: Vec<Param>,
     /// The samplers this material instance binds, by name hash, with the
     /// `.gxt` path each is given - the entries `0x12` of the same table
-    /// [`Self::params`] reads (`+0x10` the path pointer). Table order. Empty
-    /// on PS4. See [`Self::sampler`].
+    /// [`Self::params`] reads (`+0x10` the path pointer on the Vita, `.gnf`
+    /// at `+0x18` on PS4). Table order. See [`Self::sampler`].
     pub samplers: Vec<(u32, String)>,
 }
 
@@ -546,6 +546,8 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
         .collect()
 }
 
+mod ps4_params;
+
 /// Bytes from the start of a PS4 sampler entry to its texture pointer.
 const PS4_SAMPLER_POINTER: usize = 0x18;
 /// Bytes per PS4 sampler entry. Consecutive entries of one material sit this
@@ -738,14 +740,15 @@ pub fn read_ps4(cpu: &[u8]) -> Vec<Material> {
             .map_or_else(|| site.saturating_add(TAIL_SCAN_LIMIT), |(at, _)| *at)
     };
     let build = |(site, name): &(usize, String)| {
+        let header = site - PS4_HEADER_NAME_POINTER;
         let (textures, lightmap) = gnf_textures_in(cpu, site + 8, extent_end(*site));
         Material {
             name: name.clone(),
             technique: None,
             textures,
             lightmap,
-            params: Vec::new(),
-            samplers: Vec::new(),
+            params: ps4_params::params_at(cpu, header),
+            samplers: ps4_params::samplers_at(cpu, header),
         }
     };
     match ps4_table(cpu, &sites) {

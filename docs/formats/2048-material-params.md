@@ -52,6 +52,12 @@ uniform and sampler names the GXP programs declare:
 `Emissive_UV_Offset`, `Emissive_UV_Scale`, `GlowTint`, `speed_multipliaer` (sic),
 `time`, `frameRate`.
 
+**Omega reads the same table**, widened to 64-bit pointers and `0x28`-byte
+entries, with each uniform stating its component count
+([omega-status.md](omega-status.md#the-material-uniform-and-sampler-table-2026-10-05-omega-uv-scroll)).
+Omega's `uv_anim` materials are 2048's shaders, and the glow layer below plays
+them unchanged.
+
 ## What a Zone circuit is made of
 
 **A 2048 Zone race draws `trackZone.rcsmodel`**, not `track.rcsmodel` with a
