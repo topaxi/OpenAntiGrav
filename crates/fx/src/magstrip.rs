@@ -330,9 +330,9 @@ impl Wake {
         }
         if arc.life > 0.0 {
             let spread = arc.spread;
-            let mut fresh = |rng: &mut Rng| spread * (2.0 * unit(rng) - 1.0);
+            let fresh = |rng: &mut Rng| spread * (2.0 * unit(rng) - 1.0);
             let mut draw = fresh(rng);
-            for index in 0..arc.jitter.len() {
+            for (index, (term, scale)) in arc.jitter.iter_mut().zip(JITTER_SCALE).enumerate() {
                 if index % 2 == 1 {
                     // HD's `0x002bbd60` pairs terms (0,1) and (2,3): the odd
                     // term reuses its neighbour's draw unless `rand() & 7` is
@@ -343,7 +343,7 @@ impl Wake {
                 } else if index > 0 {
                     draw = fresh(rng);
                 }
-                arc.jitter[index] = arc.jitter[index] * DECAY + draw * 0.15 * JITTER_SCALE[index];
+                *term = *term * DECAY + draw * 0.15 * scale;
             }
         }
     }
