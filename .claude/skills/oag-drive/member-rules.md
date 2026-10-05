@@ -119,6 +119,11 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   parse, draw or play nothing and say so in the loader report. Anything
   genuinely chosen is labelled **chosen, not measured**, with no confidence
   score; a score means measured off the original.
+- **A 2048 finding is checked against Omega, and the reverse, in the same
+  change** (CLAUDE.md, "A 2048 finding is checked against Omega"). Record
+  `ported`, `checked, applies, not wired`, `checked, differs` or `not
+  checkable` in the doc page and say which in your report. A quick census and
+  reader run, not a second lane.
 - `fd` and `rg` return nothing under `data/` unless you pass `--no-ignore`.
 - Judge as a player would: more than one frame, at the size a player sees,
   read with the Read tool. A green test is not a picture.
