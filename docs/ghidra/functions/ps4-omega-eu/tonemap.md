@@ -56,10 +56,13 @@ parts are scored below.
 
 **Why the curved resolve is the live one on a base PS4.** `FUN_0178a160` pairs
 each resolve destination with a surface created with flags `0x15` when the sizes
-match, and in `FUN_017968a0` flag `0x10` means multisampled with
-`1 << (((DAT_0212f90e & 1) == 0) + 1)` samples: **4x on a base PS4**, 2x when
-`FUN_017a4eb0` has switched on checkerboard mode (it sets `DAT_0212f90c/d/e` and
-builds a 1920x2160 target, the PS4 Pro's half-width 4K). Checkerboard frames take
+match, and in `FUN_017968a0` flag `0x10` means multisampled. Its sample-count
+exponent is `((DAT_0212f90e & 1) == 0) + 1`, overridden for a surface with bit 0
+set (as `0x15` has) by `((DAT_0212f90c & 1) == 0) * 2`: **4x on a base PS4**,
+where `DAT_0212f90c` is 0. `FUN_017a4eb0` sets `DAT_0212f90c/d/e` when it switches
+on checkerboard mode (and builds a 1920x2160 target, the PS4 Pro's half-width 4K),
+which reads as a single sample there; that path's sample setup is not read
+further. Checkerboard frames take
 the compute resolve `0x19685a0` instead, whose constants are the same
 `m_abcd`/`m_LAvgt0t1Exposure` pair (not read further). Confidence that a base-PS4
 race applies the curve in the resolve: **72** (the fmask bit was not watched

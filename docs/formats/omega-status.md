@@ -910,8 +910,8 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   inside the 4x MSAA resolve. Bloom is added after it. Evidence, scores and what is
   not read: [`ps4-omega-eu/tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md).
   The answer to "does Omega render differently by console" is: only in where the
-  curve runs (the MSAA resolve on a base PS4, a compute resolve under the Pro's
-  checkerboard mode, same coefficients); HDR video out switches to the
+  curve runs (the 4x MSAA resolve on a base PS4; a compute resolve with the same
+  coefficients under the Pro's checkerboard mode, whose sample setup is not read); HDR video out switches to the
   `TonemapHDR.*` twins and a curve ending at 40.0 instead of 1.0.
 
   **Wired** as `oag_render::post::omega_tonemap`: an Omega race (a PS4 circuit

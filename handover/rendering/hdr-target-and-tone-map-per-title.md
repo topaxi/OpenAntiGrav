@@ -38,7 +38,9 @@ What is already established, do not re-derive:
     clipped to white before). Some road surface on that 2048-heritage circuit is
     lit far past 1.0 or drawn without its texture. Check its material and
     lightmap binding before blaming the curve:
-    `data/scratch/omega-tonemap/shots/altima-t300-before-after.png`.
+    `data/scratch/omega-tonemap/shots/altima-t300-before-after.png`. The 3.08 %
+    still clipped at tick 600 (`altima-t600-before-after.png`) is that same
+    road, not a hot light.
   - The scanout format (sRGB or UNORM) is unread, so the final `pow(1/2.2)` is
     chosen. Next address: the SDR copy `FUN_0122d760` called from `FUN_01629ce0`,
     and the display buffer's creation.
