@@ -240,14 +240,92 @@ are drawn as they are, with nothing multiplied in.
 - **88**, the anchor `(0, -2.5, 0)` in the craft's own frame and the two
   attachment modes: the PSP decompile and listing are unambiguous, the
   same constant and structure are in an independent binary (PS2), and both
-  of PS2's routes to the translation agree with the PSP's. Not
-  runtime-verified, which is what keeps it below 95.
+  of PS2's routes to the translation agree with the PSP's. Runtime-verified 2026-10-05, now 95: see that section.
 - **88**, MagEffect2's per-tick basis (`MagFloorFx_Update`): the PSP and PS2
   bodies agree row for row.
 - **85**, the white tint: a static initialiser in each binary, read and
   matching. No runtime read of `0x08b3bf30`.
 - **90**, every craft builds one and `craft+0x8bc` is the object: one
   caller, straight-line code, and the Enter/Exit listing.
+
+## Runtime check on the running original (2026-10-05)
+
+PPSSPP v1.20.4, **software renderer**, Time Trial on Talon's Junction White
+(`16_Track`), Assegai, native 480x272. One emulator boot, two race loads (a
+`psp-drive.py restart` between), the readings below identical on both. Raw
+frames and the JSON dumps are under
+`data/scratch/magfloor-pulse-live/` (`orig/`, `ours/`); nothing from the disc is committed.
+
+**Where the object is: `*(*0x08b317b4 + 0x2c0) + 0x8bc`.** That is the ship
+entity (`Ship_UpdateCraft`'s `a0`, `entity+0x94`, reads **0** at `+0x8bc`; the
+rigid-body holder is a different object). This page's "`craft+0x8bc`" means the
+entity throughout, and so does `MagFloorFx_Update`'s `craft->0xb10`. The effect
+object's `+0x40` equals the entity. `obj+0xac`/`+0xb0` are `Node` objects
+(vtable `0x08a6cd08`); a node's world matrix is `*(node+0x3c)+0x00` and its
+local matrix `*(node+0x3c)+0x40`.
+
+**Measured, forced Show on the grid** (`obj+0xb4 = 1`, bit `4` ORed into both
+`+0x2c`; both start with bit `4` clear and `obj+0xb4 = 0`):
+
+| Quantity | Read live | Matches the page? |
+| --- | --- | --- |
+| Local matrix of MagEffect1 (`+0x40`) | identity, row 3 = `(0, -2.5, 0)` | yes |
+| MagEffect1 parent (`+0x08`), mode byte of `+0x2c` | the entity; `0x08` (translate-only) | yes |
+| MagEffect2 parent, mode byte | `g_race_manager` (`[0x08b317b4]`); `0x01` | yes |
+| MagEffect1 world rows | the drawn craft matrix's rows, **length 0.750** | yes (rides, keeps `0.75`) |
+| MagEffect1 translation minus drawn craft's | `-1.875` along the craft's up, 0 elsewhere | yes; **`-2.5` x the `0.75` row** |
+| MagEffect2 world rows | unit length, translation equal to MagEffect1's to 4 decimals | yes |
+| MagEffect2 nose (row 2) | the body's nose, to 3 decimals | yes |
+| Tint floats `0x08b3bf30..3c` | `1.0, 1.0, 1.0, 1.0` | yes (white, runtime now) |
+
+**The ride-versus-lie falsifier.** Had both nodes followed the craft, their up
+rows would agree. With Show forced and the craft banking through a held left
+steer (ten samples, one every 0.5 s): MagEffect1's up differs from the drawn
+craft's up by **0.00 deg** every sample, and MagEffect2's by 5, 15, 21, 25, 27,
+28, 28, 28, 29, 29 deg. MagEffect1 rides the craft's matrix; MagEffect2 stays
+on the track's up. (`craft+0xb10` was not read at this offset on the entity, so
+"the track's up" is the sample's down by structure, not read directly.)
+
+**The trigger fires on a real strip.** Both models cleared (`obj+0xb4 = 0`,
+bit `4` off), the craft placed 90 units before the 16_Track strip and let run:
+`obj+0xb4` went to `1` and both `+0x2c` gained bit `4` with `craft+0x240 = 1`
+and `craft+0x280 = 1.0`, with nothing of mine written during the run.
+A breakpoint on `MagFloorFx_Show` (`0x088598ac`) was **not** caught (the edge came before it
+could be armed, and `place`'s own breakpoint competes), so the call itself is
+inferred from the state edge. Frames taken there show the same purple streaks.
+
+**Look, ours against the original at the same circuit, team, pose and view**
+(Talon's Junction White, Assegai, start-line pose `6.07,-50.07,-196.05`, ours
+with the effect forced on via a local, uncommitted patch; the effect has no
+strip at the start line):
+
+- Same kind of picture: thin lavender-to-white streaks fanning out from under
+  the craft toward the camera plus broad soft purple smears either side of the
+  hull; additive, no tint. The A/B in each (effect off) shows nothing else
+  differs. Position and size read the same.
+- Brightness added under the craft (mean RGB over a 180x44 patch, shown minus
+  hidden): original mean **18.6 / 15.5 / 28.9**, ours **13.6 / 11.8 / 18.2**;
+  ours is about **70 %** of the original, blue-dominant in both.
+- Animation: the original **flickers frame to frame** (patch luminance delta
+  2 to 54, 40 consecutive shots 0.06 s apart); ours sits at 14-15 over 12
+  consecutive ticks and 11-16 across `--anim-seconds` 0 to 5 (the Anim
+  Transform does play). So the mean is near and the **spread is not**.
+  Not resolved: the original's capture carries the PSP bloom and its own
+  motion blur which our `--screenshot` does not, and the original's anim clock
+  advances unevenly under the emulator; the cause is open and no value was
+  tuned to match.
+
+**Our matrices at the same pose** (printed from `mag_floor_fx_draws`):
+MagEffect1 rows 0.750 long, translation `craft - 1.875 * up`; MagEffect2 rows
+unit, up `(-0.003, 1.0, -0.019)`, same translation. Agrees with the table
+above. No change to `mag_floor_fx.rs` was needed.
+
+**Confidence.** The anchor, the two attachment modes and MagEffect2's
+orientation law: **88 -> 95** (runtime read of both world and local matrices
+plus the falsifier above, corroborated in the PS2 build). The white tint:
+**85 -> 95** (floats read live; the stamp itself is still read statically).
+"Every craft builds one": **90**, unchanged (only the player's was read live).
+Not raised: the animation/brightness match, which is a measured difference.
 
 ## The sfx half is open
 
@@ -342,10 +420,9 @@ is wired until the emitter reading above is confirmed or refuted.
 
 ## Open questions
 
-- **Runtime confirmation.** Nothing on this page has been watched live; a
-  PPSSPP read of `craft+0x8bc` -> `+0xac`/`+0xb0` world matrices on a
-  magstrip, or a forced Show (`obj+0xb4 = 1`, bit `4` into both `+0x2c`) on the
-  grid, would take the anchor from 88 to 95 and give a look reference.
+- **Runtime confirmation** is done, see the 2026-10-05 section. Still open: why
+  the original's streaks flicker (patch delta 2-54) where ours holds 14-15, and
+  a `MagFloorFx_Show` breakpoint hit on a real strip.
 - The sfx mechanism, now leaning toward "not attached to this effect at all"
   (see above) rather than a hidden emitter - not settled, since the
   per-track ambience reading is also unconfirmed.
@@ -382,3 +459,7 @@ is wired until the emitter reading above is confirmed or refuted.
   static initialiser `MagFloorFx_InitTint` (`0x08859904`, created). All of
   it corroborated in the PS2 build (`0x00165688`, `0x001659a0`,
   `0x00165ce0`).
+- 2026-10-05 (live): the anchor, attachment modes, MagEffect2's up and the
+  white tint read on the running original (95). The object is on the entity, not
+  the rigid-body holder. Ours matches in offset (1.875 world units), scale and
+  kind of picture; brightness about 70 % of the original and no frame flicker.
