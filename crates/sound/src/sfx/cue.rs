@@ -604,7 +604,7 @@ pub enum Cue {
     /// effect alone;
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
     /// "Assets and cues - checked, not assumed". **Wired 2026-09-25** off
-    /// [`oag_render::beam::Ribbon::advance`]'s own pulse-edge return, which
+    /// [`oag_fx::beam::Ribbon::advance`]'s own pulse-edge return, which
     /// `crate::race::weapons::visuals::Race::advance_leach_beam_ribbon` now
     /// pushes a [`super::CueEvent::at_point`] on rather than only reading for
     /// the effect respawn - the edge that page's own 2026-09-23 note left

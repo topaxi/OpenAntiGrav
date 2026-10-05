@@ -3,7 +3,7 @@
 //! Plain data with no device handle, so it runs identically under a real
 //! output stream, under the offline dump and under `cargo nextest` on a machine
 //! with no sound card. That is the same split
-//! [`oag_render::sparks::Sparks`](../../../render/src/sparks.rs) makes against
+//! [`oag_fx::sparks::Sparks`](../../../render/src/sparks.rs) makes against
 //! its GPU pipeline, and for the same reason.
 //!
 //! # Two clocks

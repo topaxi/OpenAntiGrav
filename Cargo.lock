@@ -2024,6 +2024,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-fx"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "oag-assets",
+ "oag-core",
+ "oag-formats",
+ "oag-mesh",
+ "oag-pob",
+ "oag-pulse",
+ "oag-testdata",
+ "oag-texture",
+ "oag-vex",
+ "pollster",
+ "wgpu",
+]
+
+[[package]]
 name = "oag-game"
 version = "0.1.0"
 dependencies = [
@@ -2045,6 +2063,7 @@ dependencies = [
  "oag-disc",
  "oag-display",
  "oag-formats",
+ "oag-fx",
  "oag-gameplay",
  "oag-gpu",
  "oag-hd",
@@ -2328,6 +2347,7 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-fx",
  "oag-gpu",
  "oag-mesh",
  "oag-pob",

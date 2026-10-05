@@ -43,7 +43,7 @@
 //!
 //! [`Wave`] and [`Wave::quads`] are the recovered algorithm and need no GPU;
 //! [`Pipeline`] draws what they produce. The split is the one
-//! [`crate::sparks`] uses, for the same reason: the motion is testable, and
+//! [`oag_fx::sparks`] uses, for the same reason: the motion is testable, and
 //! is tested, without an adapter.
 
 use anyhow::{Context, Result};
@@ -282,7 +282,7 @@ impl Wave {
 /// Two floats of position rather than three, and no normal, colour or `lit`
 /// flag: this is a screen-space overlay, so there is nothing for a light rig or
 /// a camera to do. That is why it does not reuse
-/// [`oag_mesh::mesh::GpuVertex`] the way [`crate::exhaust`] and [`crate::sparks`]
+/// [`oag_mesh::mesh::GpuVertex`] the way [`oag_fx::exhaust`] and [`oag_fx::sparks`]
 /// do - they draw in the world and this does not.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -331,7 +331,7 @@ pub fn vertices(quads: &[Quad]) -> Vec<GpuVertex> {
 pub const MAX_VERTICES: usize = COLUMNS * BANDS * 6;
 
 /// The overlay's blend: `dst + src.rgb * src.a`, the same shape
-/// [`crate::exhaust::BLEND`] and [`crate::sparks::BLEND`] use.
+/// [`oag_fx::exhaust::BLEND`] and [`oag_fx::sparks::BLEND`] use.
 ///
 /// Additive rather than alpha-over for two reasons, and the second is the one
 /// that decides it:
@@ -364,7 +364,7 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
 /// 68, name hash `d857f34b`, 2,064 bytes on the PSP, and the same declared name
 /// under `.pct` as `WADS2.WAD` entry 138 (`312beffb`, 2,317 bytes) on the PS2.
 /// See `oag_pulse::ps2_texture_name`. Unlike
-/// [`crate::exhaust::FlareTexture`], which takes pixels the caller decoded, this
+/// [`oag_fx::exhaust::FlareTexture`], which takes pixels the caller decoded, this
 /// carries its own [`GlowStrip::decode`]: `oag-render` already depends on
 /// `oag-formats`, there is exactly one blob this pipeline ever wants, and
 /// pushing the parse onto the caller only spreads that one fact around. The
@@ -419,7 +419,7 @@ impl GlowStrip {
     ///
     /// Used by the tests below, which must run without a disc image. **Not** a
     /// silent substitute in the game: a caller that cannot read entry 68 should
-    /// say so, for the reason [`crate::exhaust::FlareTexture::placeholder`]
+    /// say so, for the reason [`oag_fx::exhaust::FlareTexture::placeholder`]
     /// gives - a plausible-looking stand-in is how a decode failure survives
     /// review.
     ///
@@ -533,7 +533,7 @@ const TINT_SIZE: u64 = std::mem::size_of::<[f32; 4]>() as u64;
 
 /// The wave's draw pipeline.
 ///
-/// Modelled on [`crate::sparks::Pipeline`] - `new`/`upload`/`draw`, every entry
+/// Modelled on [`oag_fx::sparks::Pipeline`] - `new`/`upload`/`draw`, every entry
 /// point taking the device and queue the caller already has - with two
 /// differences, both because this is a 2D overlay:
 ///
@@ -700,7 +700,7 @@ impl Pipeline {
     /// quad's alpha would corrupt the across-screen ramp that *is* recovered.
     ///
     /// Takes `&mut self` only for the vertex count; both writes go through
-    /// `queue`, the same split [`crate::sparks::Pipeline::upload`] uses.
+    /// `queue`, the same split [`oag_fx::sparks::Pipeline::upload`] uses.
     pub fn upload(&mut self, queue: &wgpu::Queue, tint: [f32; 4], vertices: &[GpuVertex]) {
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&tint));
         let n = vertices.len().min(MAX_VERTICES);

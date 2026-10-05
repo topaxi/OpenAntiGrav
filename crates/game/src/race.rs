@@ -89,6 +89,9 @@ use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
+use oag_fx::exhaust::{self, Exhaust, FlareTexture};
+use oag_fx::psys;
+use oag_fx::sparks;
 use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls,
@@ -110,12 +113,9 @@ use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::camera::internal::InternalParams;
 use oag_render::collision as render_collision;
-use oag_render::exhaust::{self, Exhaust, FlareTexture};
-use oag_render::psys;
 use oag_render::pvs::{
     ChunkSet, DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
-use oag_render::sparks;
 use oag_render::{shield::ShipShield, track as track_render};
 use oag_tables::handling;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
@@ -350,7 +350,7 @@ pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 
 /// The exhaust's per-frame budgets have to cover the whole grid.
 ///
-/// `oag_render::exhaust` sizes its two shared vertex buffers for
+/// `oag_fx::exhaust` sizes its two shared vertex buffers for
 /// `exhaust::MAX_TRAILS` craft and cannot import [`MAX_SHIPS`] itself - rule 1 of
 /// `docs/architecture/workspace-layout.md` runs the other way, but a render crate
 /// reaching into the simulation for a constant is the kind of dependency that
@@ -360,14 +360,13 @@ pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 /// A **compile-time** assertion, because the failure is the silent kind:
 /// `exhaust::Pipeline::upload` clamps with `min`, so an undersized buffer drops
 /// the last craft's ribbon with nothing in the logs.
-const _: () = assert!(oag_render::exhaust::MAX_TRAILS >= MAX_SHIPS);
+const _: () = assert!(oag_fx::exhaust::MAX_TRAILS >= MAX_SHIPS);
 
 /// Same reason as [`EXHAUST_SEED`]'s assertion above, for the Cannon's own
-/// two quads: `oag_render::weapon_quads` sizes its buffers for
-/// [`oag_render::weapon_quads::MAX_ROUNDS`] and cannot import
+/// two quads: `oag_fx::weapon_quads` sizes its buffers for
+/// [`oag_fx::weapon_quads::MAX_ROUNDS`] and cannot import
 /// `oag_weapons::projectile::MAX_PROJECTILES` itself.
-const _: () =
-    assert!(oag_render::weapon_quads::MAX_ROUNDS >= oag_weapons::projectile::MAX_PROJECTILES);
+const _: () = assert!(oag_fx::weapon_quads::MAX_ROUNDS >= oag_weapons::projectile::MAX_PROJECTILES);
 
 /// Seed for spark spawn parameters, kept distinct from [`SEED`] and
 /// [`EXHAUST_SEED`] for the same determinism reason.

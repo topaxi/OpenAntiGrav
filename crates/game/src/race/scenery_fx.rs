@@ -35,7 +35,7 @@ mod wind;
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_render::psys;
+use oag_fx::psys;
 use oag_vex::placed_psys::Placed;
 
 pub use weather::Weather;

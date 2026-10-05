@@ -91,7 +91,7 @@ pub const SEVERITY_FLOOR: f32 = 0.4;
 /// This is the value `Ship_DispatchCollisionFx` passes on unmodified to its
 /// *second* call, `Camera_ArmShake` - see
 /// `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`. A caller arming
-/// [`crate::camera::shake::Shake`] from the same contact wants this, not
+/// `oag_render::camera::shake::Shake` from the same contact wants this, not
 /// [`severity`]'s own output: the two reactions share one clamp and diverge
 /// only in what each does with it afterwards.
 #[must_use]

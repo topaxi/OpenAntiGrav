@@ -19,7 +19,7 @@
 //! eleven records on eleven emitters, ten of them selector `2`; the eleventh,
 //! `WO_REPULSER_BLAST`'s selector `5`, is **the lifetime co-factor**: it lands at
 //! instance `+0x54`, which `ParticleSystem_InitParticle` multiplies into a newborn's
-//! life (`oag_render::psys::playback`, 2026-10-04).
+//! life (`oag_fx::psys::playback`, 2026-10-04).
 
 use oag_formats::ByteOrder;
 

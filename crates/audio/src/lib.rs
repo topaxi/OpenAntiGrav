@@ -6,7 +6,7 @@
 //! reversed. See `docs/architecture/workspace-layout.md`.
 //!
 //! The crate owns no window, no event loop and no clock. It is split by what
-//! each part needs to run, the way [`oag_render::sparks`] splits its particle state from its GPU
+//! each part needs to run, the way [`oag_fx::sparks`] splits its particle state from its GPU
 //! pipeline:
 //!
 //! - [`mixer`] is plain data: a voice pool, two buses, and the sample loop.

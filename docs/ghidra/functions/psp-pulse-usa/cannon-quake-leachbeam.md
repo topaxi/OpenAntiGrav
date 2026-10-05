@@ -588,7 +588,7 @@ matrix aims down the velocity, which is not the shape of a flash at a barrel.
 ~~**The two display lists are still not drawn**~~ - **both are drawn as of
 2026-09-17**: see "The two hand-built quads' geometry, read - and drawn"
 further down this page for the vertex-level recovery and
-`oag_render::weapon_quads` for the pipeline. "Which display list is the
+`oag_fx::weapon_quads` for the pipeline. "Which display list is the
 bolt and which the flash: settled" below is what made the geometry read
 possible to attribute correctly once it was found.
 
@@ -1622,7 +1622,7 @@ it does not walk; and the original's update-order phase skew between spans is
 not reproduced.
 
 The screen tint is drawn since 2026-09-24 on Pulse's PSP source
-(`oag_render::flash`).
+(`oag_fx::flash`).
 
 ### 2026-09-08: the LeachBeam's texture, located - and it is not the ribbon's
 
@@ -1861,11 +1861,11 @@ the shield pickup's own absorb path is the more general one) rather than
 the unidentified `state+0x830`/`+0x878` pair. That trigger substitution
 would be **chosen, not measured** - the same split every other module in
 this codebase draws between a recovered draw and a chosen wire-up (see
-`oag_render::exhaust`'s own module doc comment for the shape).
+`oag_fx::exhaust`'s own module doc comment for the shape).
 
 ### 2026-09-23: the absorb overlay's writer, its projection, and two corrections
 
-Read for the weapon-absorb build (`oag_render::hull_overlay`,
+Read for the weapon-absorb build (`oag_fx::hull_overlay`,
 `oag_game::race::absorb`).
 
 - **The writer.** `+0x830` is the craft's own clock: `FUN_088418e0`, the
@@ -1957,8 +1957,8 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   If both hit, turn it on.
 
 **Built** ~~**and off by default**~~ - **on since "2026-09-23 (later)"
-below** (`oag_render::hull_overlay::DRAWN = true`), as
-`oag_render::hull_overlay`. The port and what it chose are in
+below** (`oag_fx::hull_overlay::DRAWN = true`), as
+`oag_fx::hull_overlay`. The port and what it chose are in
 that module's own doc comment. The depth test is `LessEqual` with no write,
 standing in for `EQUAL`. ~~Every hull mesh is overlaid, since the `+0x79`
 byte is unread~~ ~~- read the same day (above): only a mesh named
@@ -2118,7 +2118,7 @@ including the airbrakes. The HUD energy bar is white instead of cyan.
 write, for the original's `EQUAL` with writes on) remains chosen: a frame
 cannot tell the two apart on an unmoving coplanar redraw.
 
-**The port, against these frames.** `oag_render::hull_overlay` was changed
+**The port, against these frames.** `oag_fx::hull_overlay` was changed
 to match what this run measured. Two changes:
 - the mesh set is every list-0 mesh of the first level of detail;
 - the overlay has its own blend, which writes the full glow mask the stencil
@@ -2579,7 +2579,7 @@ position (the owner/target midpoint) is chosen, since this section does not
 say what the beam's own scene node tracks.
 
 **2026-09-25: `LEACHENERGY` wired too**, off the same edge this note used to
-call "read and discarded". `oag_render::beam::Ribbon::advance` (see the
+call "read and discarded". `oag_fx::beam::Ribbon::advance` (see the
 2026-09-23 ribbon re-read just below) returns a `bool` for the cursor's own
 wrap to zero - the pulse block - and
 `crate::race::weapons::visuals::Race::advance_leach_beam_ribbon` now pushes a
@@ -2732,14 +2732,14 @@ reads of literals and a decompiled loop; the exact re-roll *cadence* is not
 reproduced - see below.
 
 **What is buildable and what stays chosen**, for
-`crates/render/src/beam.rs` (**superseded 2026-09-23**: nothing in the
+`crates/fx/src/beam.rs` (**superseded 2026-09-23**: nothing in the
 geometry is chosen any more, see below):
 
 - Recovered and built: the segment-count formula, the half-width (`1.0`),
   the base colour (opaque white), the disconnect fade (`0.5` s linear, already
   the ported [`DISCONNECT_LINGER_SECONDS`]), the endpoint-alpha-zero taper,
   the amplitude range (`[0.0, 2.0]`) and bucket span (`3` segments), the
-  additive blend (identical to [`oag_render::exhaust::BLEND`] -
+  additive blend (identical to [`oag_fx::exhaust::BLEND`] -
   `Gu_BlendFunc(0, 2, 10, 0, 0xffffff)` is the same `GU_ADD`/`GU_SRC_ALPHA`/
   `GU_FIX(1.0)` call `exhaust::BLEND`'s own doc comment already cites, so this
   reuses that constant rather than re-deriving it), and the crossed-double-
@@ -2928,7 +2928,7 @@ point is not established. When it finds nothing the zeroed record makes
 every test compute `0`, which is not `< 0`, so the chain stays straight -
 that part is read.
 
-**Built** in `oag_render::beam::tube` (2026-09-30), fed by
+**Built** in `oag_fx::beam::tube` (2026-09-30), fed by
 `oag_game::race::Spline::tube_frame`; a disc-backed test on Talon's
 Junction's own spline (`leach_tube_ground_truth`) finds the worst chord on
 the circuit, `9.22` units out of the tube straight and `0.01` bent. Measured
@@ -3072,7 +3072,7 @@ item above: the overlay is drawn, and its fade is the pulse strength.
 Confidence **90** for the overlay drawing (a read of its only texture from
 its only reader), **85** for the cadences.
 
-**Built** in `oag_render::beam` (the ribbon, the ENERGY walk) and
+**Built** in `oag_fx::beam` (the ribbon, the ENERGY walk) and
 `oag_game::race::scene::absorb_overlay` (the LeachBeam half of the hull
 overlay pair).
 
@@ -3130,7 +3130,7 @@ transform, resets that matrix to an identity constant
 (`DAT_08a907a0`), and adds the constant width straight to the transformed
 `x`/`y` - a fixed-function trick for a billboard whose on-screen size
 tracks perspective without a per-vertex camera basis. `oag_render` has no
-such hand-transform stage, so `oag_render::weapon_quads::geometry` builds
+such hand-transform stage, so `oag_fx::weapon_quads::geometry` builds
 the equivalent offset from the camera's own `right`/`up` vectors instead,
 the same port `exhaust::sprite` already makes - see that module's own doc
 comment for the full equivalence argument.
@@ -3167,7 +3167,7 @@ memory read on `psp-pulse-usa`, not decompiled from an instruction operand.
 
 #### What this project draws now
 
-`oag_render::weapon_quads::Pipeline` draws both, textured from
+`oag_fx::weapon_quads::Pipeline` draws both, textured from
 `Data\Weapons\Textures\Cannon_bolt.mip` (`CANNON_BOLT_TEXTURE_ENTRY`, entry
 1057) and `Cannon_muzzle_flash.mip` (`CANNON_MUZZLE_FLASH_TEXTURE_ENTRY`,
 entry 1058), with the same additive blend as the exhaust flare's own
@@ -3178,8 +3178,8 @@ GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)` - see `crate::exhaust::BLEND`'s own doc
 comment). **Depth write is on** (`Gu_DepthMask(1)`, read directly at both
 list builders) where the exhaust flare's is off - kept as measured rather
 than matched to the flare, and noted as unusual in
-`oag_render::weapon_quads`'s own module doc comment. The flash's per-tick
-roll is generated render-side (`oag_render::weapon_quads::random`), seeded
+`oag_fx::weapon_quads`'s own module doc comment. The flash's per-tick
+roll is generated render-side (`oag_fx::weapon_quads::random`), seeded
 from the round's own pool slot and the simulation tick rather than from
 `world.rng`, so drawing it never advances the simulation's own seeded
 stream or moves a committed determinism hash.
@@ -3239,7 +3239,7 @@ quads, and is out of this pass's scope. Left as an open item below.
   (`LeachBeam_BuildStrip`/`LeachBeam_SubmitStrip`), its width, its base
   colour, its disconnect fade and its endpoint taper are all recovered; see
   "2026-09-17: the LeachBeam ribbon's own texture" above and
-  `crates/render/src/beam.rs`. Only the two displacement axes and the
+  `crates/fx/src/beam.rs`. Only the two displacement axes and the
   amplitude re-roll cadence are chosen rather than measured.
 
 ## History

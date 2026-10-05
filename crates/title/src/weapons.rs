@@ -113,7 +113,7 @@ pub struct WeaponModels {
     /// are drawn, where a title's own executable says so.
     ///
     /// `None` is Pulse's own reading, the one recovered first and the one
-    /// `oag_render::weapon_quads::geometry`'s constants and
+    /// `oag_fx::weapon_quads::geometry`'s constants and
     /// `oag_game::race::CANNON_BOLT_TEXTURE_ENTRY` already carry - every
     /// title without its own reading keeps drawing on those terms, as it did
     /// before this field existed.

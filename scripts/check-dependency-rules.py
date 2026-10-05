@@ -55,12 +55,13 @@ GAMEPLAY_CRATES = {
     "oag-title",
     "oag-weapons",
 }
-# oag-gpu, oag-mesh and oag-post are the three crates split out of oag-render;
+# oag-gpu, oag-mesh, oag-post and oag-fx are the crates split out of oag-render;
 # each links wgpu so the entry is redundant today, and is listed for the reason
 # oag-render is: the rule should name the renderer's crates, not lean on one
 # transitive dependency staying put.
 FORBIDDEN_FOR_GAMEPLAY = {
     "oag-render",
+    "oag-fx",
     "oag-gpu",
     "oag-mesh",
     "oag-post",

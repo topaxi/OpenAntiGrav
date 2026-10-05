@@ -14,7 +14,7 @@ crashes). Where a claim rests on the decompile alone, its confidence says so.
 Format-level consequences (the emitter record layout, the four-emitter
 sibling tree, the channel blocks and colour table) live in
 [pob.md](../../../formats/pob.md); this page is the function-by-function
-record. The consumer in this repository is `oag_render::sparks`, which
+record. The consumer in this repository is `oag_fx::sparks`, which
 transcribes the collision-spark emitters.
 
 ## The call graph
@@ -157,7 +157,7 @@ Confidence **85**. Runs once per new particle:
   `1/lifetime` cached for normalized age. Resource flag `0x800` means
   immortal (`FLT_MAX`). Read live on Outpost 7's `WO_SNOW` (2026-10-04): all
   64 pool particles hold `FLT_MAX` at particle `+0x88`/`+0x8c`. Honoured by
-  `oag_render::psys` since then; on the Pulse discs only `WO_SNOW` and
+  `oag_fx::psys` since then; on the Pulse discs only `WO_SNOW` and
   `WO_LEACHBEAM_ENERGY` set it. See [weather.md](weather.md).
 - **Velocity inherit**: particle velocity `+= instance+0x150`,
   unconditionally. `+0x150` is written when a *child* system spawns off a
@@ -320,7 +320,7 @@ port.
 
 ## The emit frame and the velocity dispatch, settled (2026-08-10)
 
-Chased down because `oag_render::sparks` aimed everything at the contact
+Chased down because `oag_fx::sparks` aimed everything at the contact
 normal and its wall hits read as a symmetric starburst where the original's
 read as an upward fan with lines hugging the wall. Three readings, each at
 instruction or byte level, two live-corroborated:
@@ -351,7 +351,7 @@ instruction or byte level, two live-corroborated:
   the near-horizontal half of a `+Y` hemisphere, not aiming.
 
 Two file-byte corrections to the collision-spark table found on the way,
-both fed back into `oag_render::sparks`: the **`bits` emitter has the
+both fed back into `oag_fx::sparks`: the **`bits` emitter has the
 gravity flag set** (`flags 0x80000202`, `+0x74 = -0.015` units/tick² -
 an earlier pass read the flag as clear on all four), and
 `WO_SHIP_COLL_SPARK_NODAMAGE.POB` decodes as a two-emitter tree (the bright
@@ -369,7 +369,7 @@ white-hot core (`(253, 235, 220)` at the centre) tightening to saturated
 orange by `r ≈ 0.15` and dimming linearly outward at constant hue. Radially
 averaged measurements: alpha fits `(1-r)^0.92` with a plateau inside
 `r < 0.06`; the texel colour itself also dims essentially linearly while
-staying at saturation `0.98`. `oag_render::sparks`'s shader carries exactly
+staying at saturation `0.98`. `oag_fx::sparks`'s shader carries exactly
 that split (measured constants, not the texels - ADR-0006), which is what
 keeps a spark's bright part small: at the same alpha curve, a flat-rgb quad
 reads about twice as wide.
@@ -425,7 +425,7 @@ has only two `TexFunc` emitters, both accounted for in
 texel times its colour, alpha included.** `WO_QUAKE`'s `fireballs` walk a
 colour table from `(255, 250, 252)` to orange over their life, and their
 sprite is an orange fire ring: the product is orange from birth. Drawn
-over a white procedural disc - what `oag_render::psys` did before this
+over a white procedural disc - what `oag_fx::psys` did before this
 pass - the same table is white.
 
 ### The atlas frame: `FUN_088f58a4` and `ParticleSystem_InitParticle`
@@ -473,7 +473,7 @@ Everything in the two sections above is read off this binary. The port
 applies the extent law - line and sphere placement, and the Quake's `/ 50`
 as the extent co-factor - **only to Pulse off a PSP disc**; every other
 source keeps spawning at the anchor with the `/ 50` as severity
-(`oag_render::psys::Effect::without_extents`). That is a choice made
+(`oag_fx::psys::Effect::without_extents`). That is a choice made
 2026-09-24, not a finding: the PS2 ELF and HD's `EBOOT.elf` have not been
 read, and a law unmeasured there should not change what they draw. A future
 read starts from the PS2/HD counterparts of `ParticleSystem_SpawnBurst`
@@ -505,13 +505,13 @@ capture of a craft-hit Rocket shows for its first frames (screen mean
 `(89, 96, 84)` -> `(223, 225, 85)`: red and green up, blue untouched), and
 kind 4 is the orange tint the Quake capture opens with. That match is why
 the name clears 70. The per-frame consumer - the blend, the distance
-falloff, the key interpolation - is read below, and `oag_render::flash`
+falloff, the key interpolation - is read below, and `oag_fx::flash`
 draws every kind with a caller on Pulse's PSP source.
 
 ## Open, deliberately
 
 - `FUN_088fc634` (shape 3, cone *placement*) and shapes 1/2/8 are unread;
-  `oag_render::sparks` approximates shape 3 spawn position as the anchor
+  `oag_fx::sparks` approximates shape 3 spawn position as the anchor
   (the authored extents are at most 0.1 units - sub-pixel at any race
   camera distance).
 - Inside the draw layer: `FUN_08916d00` (the mode-7 two-point draw) and
@@ -724,7 +724,7 @@ resolved so cleanly. It is not modified later either:
 `ParticleSystem_UpdateParticles` (`0x088f635c`) contains no store to `+0x64` in
 any form.
 
-**And that means `oag_render::sparks` is already exactly right.** Its cap is
+**And that means `oag_fx::sparks` is already exactly right.** Its cap is
 `1.0 * half`, and its doc comment calls that a substitution for an unknown
 per-system factor. It is not a substitution - it is the recovered value. **The
 comment should be corrected; the code should not change.** That is the second
@@ -747,7 +747,7 @@ hit belongs to a different struct, so that route is genuinely exhausted.
 ### Checked against the consumer: none of this is a code change today
 
 Done before recommending anything, and the answer is that it should **not** be
-implemented yet. `oag_render::sparks` builds **one** four-corner quad per streak,
+implemented yet. `oag_fx::sparks` builds **one** four-corner quad per streak,
 `centre ± dir*(length/2 + half) ± perp*half`, with `u`,`v` spanning `0..1` across
 the whole thing. Against the original's eight vertices that is two differences:
 
@@ -855,7 +855,7 @@ not the nearer one. `ParticleSystem_DrawCappedStreak` uses the mean.
 matches the table in "The two unread draw modes, read" exactly, with
 `a` the position and `b` the second point.
 
-**Implemented** as `oag_render::psys::streak`. Class 7's eight vertices are
+**Implemented** as `oag_fx::psys::streak`. Class 7's eight vertices are
 drawn as one quad whose along-coordinate `psys.wgsl` folds back into the
 `0 / 0.5 / 0.5 / 1` `v`, which is exact because `v` is linear along each of
 the three spans. **Chosen, not measured**: the strip is built in world
@@ -902,7 +902,7 @@ Confidence **85**.
 `Psys_RandIntRange(1, +0x9ac) << 4` into a per-particle flag byte when it
 is above 1. What reads those bits is not traced.
 
-**Implemented** as `oag_render::psys::frames`, and the channel is parsed as
+**Implemented** as `oag_fx::psys::frames`, and the channel is parsed as
 `oag_pob::Emitter::frame_rate`.
 
 ### The screen flash's consumer, read and measured (2026-09-24)
@@ -1006,7 +1006,7 @@ which is its own light. Blue never moves. That confirms the additive blend, the 
 The HUD's cyan bar gains only 16 red under the full wash, against 150 on the
 track. So the HUD draws over the flash, as `oag_game` composites it.
 
-**Implemented** as `oag_render::flash`. It is drawn last in the scene pass,
+**Implemented** as `oag_fx::flash`. It is drawn last in the scene pass,
 before the bloom, colour-only. Our own run of the same shot adds
 `141 -> 24` red over ticks 18 to 42 with the same green-over-red slope, `t`
 stepping 1/30 a tick.
@@ -1119,7 +1119,7 @@ is the instance's **template** list, not its pool (see "An emitter's own
 particles"), so the `now != 0` arm stops the emitters and frees the templates
 and leaves every emitter particle to live out its life. `now == 0` destroys
 the lot (`ParticleSystem_Destroy` walks the pool at `+0x74` in `FUN_088f45a0` as well, unread past its loop header).
-In `oag_render::psys::Stage`: `now == 0` is **`kill`** (the ENERGY, both
+In `oag_fx::psys::Stage`: `now == 0` is **`kill`** (the ENERGY, both
 sites), `now != 0` is **`release`** (the rocket, missile and plasma flares and
 the quake), and `detach` - nothing freed early - is for an instance whose
 emitters ran out on their own, which no caller here releases. Confidence
@@ -1268,7 +1268,7 @@ decompile's reading and is **unmeasured**: the four keyframed class 3 emitters
 on the disc are `WO_LEACHBEAM_CHARGING`'s `RINGS`, `WO_MISSILE_EXPLO`'s
 `drift_down`, `WO_MODESTO_STEAM_A` and `WO_QUAKE`'s `debris`, and only the last
 pair's flags decide which way they turn without a coin. The port plays all of
-the above in `oag_render::psys::roll`.
+the above in `oag_fx::psys::roll`.
 
 **Corrects the section above.** `FUN_089177e4` walks the template list, not the
 pool, so "the `+0x64` of an emitter's particles is `1.0`" was never a statement
@@ -1340,7 +1340,7 @@ selector 5 animated). The animated attributes on the disc: eleven records on ele
 emitters, ten of them selector 2 (`WO_BOMB_SMOKERING` and its `debris`,
 `WO_SHIP_EXPLOSION` and its `FIREBALL`, `WO_ROCKET_EXPLO`'s two mushrooms and
 `WO_ROCKET_EXPLO_TRACK`'s `Fire_Emitter`, the Shuriken's bounce and expiry and the absorb).
-`oag_render::psys::spawn::Spawn::Ring`, `place` and `EmitterSpec::extent_animation` play
+`oag_fx::psys::spawn::Spawn::Ring`, `place` and `EmitterSpec::extent_animation` play
 all of it, and since 2026-10-04 (section below) the even step, the sub-frame spread, the
 azimuth's sign and selector 5 too. The
 "approximates shape 3 as the anchor" remark further down was true of the collision sparks'
@@ -1470,7 +1470,7 @@ ours starts both on the same tick and the offset is **not ported**; frame phase 
 Read for the Repulser's blast, whose beaded ring did not match the PSP's
 (`WO_REPULSER_BLAST`: one burst of 50 on a ring of radius 13.6, speed `-0.625`,
 drag `0.955`, flags `0x0430009e`, rate `4.0`, one selector-5 record). Every law below
-is now played by `oag_render::psys` (`psys::playback`, `psys::spawn`).
+is now played by `oag_fx::psys` (`psys::playback`, `psys::spawn`).
 
 **The playback rate, `res+0x4cc`, reaches every clock.** Confidence **90**, read in
 four functions that agree. `ParticleSystem_DeriveScaledParams` stores
@@ -1620,7 +1620,7 @@ aspect `0.05`, flags `0x06100099`, extent `50`, two particles an emission, life 
 Every law below was read in the listing and then measured on PPSSPP 1.20.4 (software
 renderer, Talon's Junction Time Trial, a Repulser fired through the fire word): memory
 sampled at `Repulser_Update` (`data/scratch/pulse-psys-shape8/live1.jsonl`) and three
-GE frame dumps (`ge/`, `ge-s1/`, `ge-s2/`). Played by `oag_render::psys` since this
+GE frame dumps (`ge/`, `ge-s1/`, `ge-s2/`). Played by `oag_fx::psys` since this
 change.
 
 ### `ParticleSystem_EmitHalfRing` (`0x088fcb10`): shape 8 is half of shape 3

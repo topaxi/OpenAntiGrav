@@ -94,7 +94,7 @@ impl Race {
                 // and by state 5 the original has put the player in its
                 // destroy camera ([`super::destroy_camera`]); the flash reads
                 // this port's own active camera in the same way.
-                self.start_flash(oag_render::flash::BLAST, position);
+                self.start_flash(oag_fx::flash::BLAST, position);
                 let model = super::drawable::model_matrix_of(&self.sim.world.ships[slot]);
                 self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
                 self.throw_wreck_fx(slot);
@@ -116,9 +116,9 @@ impl Race {
                     let (at, model) = (*at, *model);
                     self.view.craft_flashes.blowup[slot] = None;
                     let kind = if slot == player {
-                        oag_render::flash::PLAYER_DESTROYED
+                        oag_fx::flash::PLAYER_DESTROYED
                     } else {
-                        oag_render::flash::BLAST
+                        oag_fx::flash::BLAST
                     };
                     self.start_flash(kind, at);
                     self.throw_wreck_explosion(slot, model);
@@ -143,11 +143,11 @@ impl Race {
     /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
     pub(super) fn flash_player_reset(&mut self, slot: usize) {
         if slot == self.sim.world.primary_slot() {
-            self.start_flash(oag_render::flash::RESET, Vec3::ZERO);
+            self.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
         }
     }
 
-    fn start_flash(&mut self, kind: oag_render::flash::Kind, at: Vec3) {
+    fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
         if let Some(flash) = &mut self.view.screen_flash {
             flash.start(kind, at);
         }

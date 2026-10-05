@@ -4,7 +4,7 @@
 on a craft a weapon has hit read **1.6x weaker** overall and **2.6x** on later
 hits than the original. This page is the per-locator measurement that settled
 why: three causes, two of them ours, one of them the comparison itself. Code:
-`oag_game::race::hit_sparks`, `oag_render::psys::template`. The trigger and the
+`oag_game::race::hit_sparks`, `oag_fx::psys::template`. The trigger and the
 law it fires on are in
 [`shield.md`](../ghidra/functions/psp-pulse-usa/shield.md), "`Ship_Damage`'s
 weapon branch".

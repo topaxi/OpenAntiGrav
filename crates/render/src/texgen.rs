@@ -53,7 +53,7 @@
 //! That also accounts for a measurement this project already had and could
 //! not explain: the original's boost region reads magenta (mean
 //! `(223, 164, 224)`) against ours at `(159, 118, 175)`
-//! ([`crate::exhaust`], and the table in `race::Scene::new`). With column 0
+//! ([`oag_fx::exhaust`], and the table in `race::Scene::new`). With column 0
 //! as the only sample there was **no magenta anywhere in our pipeline** for
 //! the additive blend to reach.
 //!
@@ -62,7 +62,7 @@
 //! uvgen is a **transform-stage** operation on real hardware - the GE
 //! generates the coordinate per vertex, before rasterisation - so doing it per
 //! vertex here is the faithful placement, not a shortcut. It also costs
-//! nothing: the plume is 121 vertices, and `oag_render::exhaust` already
+//! nothing: the plume is 121 vertices, and `oag_fx::exhaust` already
 //! rewrites a whole vertex buffer every frame.
 //!
 //! The alternative, a fourth bind group carrying the mode and the two light

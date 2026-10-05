@@ -31,9 +31,9 @@ use std::sync::Arc;
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::psys::field::{Anchor, Frame};
+use oag_fx::psys::{Effect, System};
 use oag_mesh::mesh::GpuVertex;
-use oag_render::psys::field::{Anchor, Frame};
-use oag_render::psys::{Effect, System};
 
 /// Seed for the lens's own draws. Any constant: render state, never hashed.
 const SEED: u64 = 0x1e45_d20b;

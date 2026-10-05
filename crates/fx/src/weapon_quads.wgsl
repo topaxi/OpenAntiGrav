@@ -3,7 +3,7 @@
 // header for why the model matrix in the shared uniform block is unused.
 // Unlike psys.wgsl, this pipeline does sample a texture, because both
 // `Cannon_bolt.mip` and `Cannon_muzzle_flash.mip` are real, located WAD
-// entries - see `crates/render/src/weapon_quads.rs` and
+// entries - see `crates/fx/src/weapon_quads.rs` and
 // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 
 struct Uniforms {

@@ -1,6 +1,6 @@
 # A *slot-resolved* record's own field layout
 
-Narrowed 2026-08-12, and the row used to overstate what was missing. The container, the `SYSP` slot table, the names **and the whole emitter tree** are decoded, parsed and corroborated on a second binary (35 PSP files / 76 emitters, 41 PS2 / 90, one unmodified parser). What is still unread is what a *slot* resolves to - 43% are developer texture paths, the rest small float runs - which is what stands between `oag_render::psys`'s procedural falloff and the authored sprites.
+Narrowed 2026-08-12, and the row used to overstate what was missing. The container, the `SYSP` slot table, the names **and the whole emitter tree** are decoded, parsed and corroborated on a second binary (35 PSP files / 76 emitters, 41 PS2 / 90, one unmodified parser). What is still unread is what a *slot* resolves to - 43% are developer texture paths, the rest small float runs - which is what stands between `oag_fx::psys`'s procedural falloff and the authored sprites.
 
 2026-08-25: the one specific lead this thread named (xref the preload path-string addresses) was tried and is a clean static dead end - see `docs/formats/pob.md`'s "The preload happens as a batch" section for the full evidence trail. It was also a stale lead: it was written before the 2026-08-01 pass that located the record interpreter through a different route (`ShipCollisionFx_Trigger` → ... → `particle-system.md`), so finding the preload's caller would no longer be the way into the slot-resolved record question even if it had worked. A second, previously-unrecorded 24-entry weapon preload table (`0x08a7c3e4`-`0x08a7c6ac`) turned up in the same search and is now written down in `pob.md`, but adds no new effect name and no new mechanism.
 
@@ -9,7 +9,7 @@ Narrowed 2026-08-12, and the row used to overstate what was missing. The contain
 ## Open
 
 - What a *slot* resolves to is still unread - 43% are developer texture paths, the rest small float runs.
-- This gap is what stands between `oag_render::psys`'s procedural falloff and the authored sprites.
+- This gap is what stands between `oag_fx::psys`'s procedural falloff and the authored sprites.
 
 ## Next Steps
 

@@ -24,7 +24,7 @@ impl Race {
     ///
     /// `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that gets
     /// past its own 0.8-second gate, which is the same 0.8 seconds
-    /// `oag_render::sparks::COLLISION_COOLDOWN` carries - one constant in the
+    /// `oag_fx::sparks::COLLISION_COOLDOWN` carries - one constant in the
     /// original, read twice here.
     ///
     /// **A shielded contact is silent, and this used to raise `ABSORB` on
@@ -45,7 +45,7 @@ impl Race {
         if !impact || shielded || *cooldown > 0.0 {
             return;
         }
-        *cooldown = oag_render::sparks::COLLISION_COOLDOWN;
+        *cooldown = oag_fx::sparks::COLLISION_COOLDOWN;
         self.sim.cues.push(oag_sound::sfx::CueEvent::new(
             oag_sound::sfx::Cue::Collision,
             slot,

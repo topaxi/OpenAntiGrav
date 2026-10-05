@@ -10,9 +10,9 @@
 //!
 //! # What this is for
 //!
-//! Until 2026-08-12 `oag_render::sparks` carried the collision effect's four
+//! Until 2026-08-12 `oag_fx::sparks` carried the collision effect's four
 //! emitters as a hand-transcribed `const`. It is now parsed
-//! ([`oag_render::psys::Effect`]), and the transcription is gone - so the
+//! ([`oag_fx::psys::Effect`]), and the transcription is gone - so the
 //! values it held survive here instead, as the regression guard they always
 //! were:
 //!
@@ -36,13 +36,11 @@ use std::path::{Path, PathBuf};
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::psys::spawn::Spawn;
+use oag_fx::psys::streak::StreakDraw;
+use oag_fx::psys::{Blend, ColourMode, ColourScale, Direction, Effect, Render, System, TICK_HZ};
+use oag_fx::sparks;
 use oag_pob as pob;
-use oag_render::psys::spawn::Spawn;
-use oag_render::psys::streak::StreakDraw;
-use oag_render::psys::{
-    Blend, ColourMode, ColourScale, Direction, Effect, Render, System, TICK_HZ,
-};
-use oag_render::sparks;
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
@@ -190,7 +188,7 @@ fn the_collision_spark_effect_matches_the_values_it_replaced() {
 }
 
 /// The collision spark's own 256-entry colour tables, against the
-/// two-endpoint approximation `oag_render::sparks` carried until
+/// two-endpoint approximation `oag_fx::sparks` carried until
 /// 2026-08-12 and `docs/formats/pob.md` kept describing after that date.
 ///
 /// # Why this exists
@@ -516,7 +514,7 @@ fn every_hd_effect_translates_or_is_refused_by_name() {
     assert_eq!(played, HD_SYSTEMS - 1);
 }
 
-/// Every PSP effect's billboard sprites fit one [`oag_render::psys::Library`]
+/// Every PSP effect's billboard sprites fit one [`oag_fx::psys::Library`]
 /// sheet together, and the sprite the Quake's fire draws with is the
 /// orange the whole 2026-09-24 fix rests on.
 ///
@@ -532,7 +530,7 @@ fn every_psp_sprite_fits_one_sheet_and_the_quake_fire_is_orange() {
         return;
     };
     let count = archive.directory().entries.len();
-    let mut library = oag_render::psys::Library::new();
+    let mut library = oag_fx::psys::Library::new();
     for index in 0..count {
         let Ok(head) = archive.peek(index, 4) else {
             continue;

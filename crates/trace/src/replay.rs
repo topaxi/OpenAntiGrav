@@ -842,7 +842,7 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         camera_up: None,
         camera_forward: None,
         camera_position: None,
-        // The flare state machine is `oag_render::exhaust::Exhaust`, and this
+        // The flare state machine is `oag_fx::exhaust::Exhaust`, and this
         // crate must not depend on `oag-render` (`just check-deps`). So a replay
         // reports the flare as not compared rather than as agreement; the side
         // that *can* write it is `oag-game --race --trace-out`, which owns both.

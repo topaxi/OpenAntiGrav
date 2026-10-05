@@ -162,6 +162,6 @@ Four ways this is not the original, all of them ours:
    cutout, then transparent, each sorted; the original interleaves them within a
    batch set. The layer ordering is right *within* each list.
 3. **No depth term anywhere.** Correct for mesh geometry, and the exhaust's own
-   key is not implemented - `oag_render::exhaust` draws in its own pass.
+   key is not implemented - `oag_fx::exhaust` draws in its own pass.
 4. **No `0x40000000` set and no reflection layers.** Neither is built, so
    neither is ordered.

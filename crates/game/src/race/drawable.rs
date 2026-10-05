@@ -809,7 +809,7 @@ pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
     let roll = oag_render::roll::rotation(Vec3::NEG_Z, ship.physics.roll_phase);
     Mat4::from_rotation_translation(body.orientation * roll, body.position)
         * Mat4::from_rotation_y(MODEL_YAW)
-        * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
+        * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
 }
 
 #[cfg(test)]
@@ -833,7 +833,7 @@ mod tests {
             ship.physics.body.orientation,
             ship.physics.body.position,
         ) * Mat4::from_rotation_y(MODEL_YAW)
-            * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE));
+            * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE));
         assert_eq!(rolled, expected);
     }
 

@@ -123,7 +123,7 @@ fraction, independent of `magnitude`'s own value: full strength
 (`magnitude * 0.25`) at the moment of impact, down to `magnitude * 0.125` by
 30% of the way through the shake's duration, down to `0.0` at the end - three
 points, linearly interpolated between them, same table shape as
-`oag_render::exhaust`'s own keyframed intensity ramps.
+`oag_fx::exhaust`'s own keyframed intensity ramps.
 
 **The two arm-call scale constants, read directly**: `FUN_00154cf8` (above)
 calls `Camera_ArmShake(DAT_0027e8dc * severity, DAT_0027e8e0, ...)`.
@@ -135,7 +135,7 @@ role, confirmed by reading both binaries' `.data`. So a full-severity hit
 on both platforms; only the severity scalar varies shake to shake.
 
 `Rng_RangeF`-shaped: `FUN_001cc100(0.2, 0.8)` is the same "random float in a
-range" shape `oag_render::exhaust`'s own `FLICKER`/`Rng_RangeF(0.75, 1.25)`
+range" shape `oag_fx::exhaust`'s own `FLICKER`/`Rng_RangeF(0.75, 1.25)`
 already reproduces for the engine flare, on a different function - not
 renamed here, out of scope for this page.
 

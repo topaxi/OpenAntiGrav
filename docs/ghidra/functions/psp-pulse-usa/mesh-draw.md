@@ -424,7 +424,7 @@ Gu_StencilOp(KEEP, KEEP, KEEP);  Gu_Disable(STENCIL_TEST)
 ```
 
 **The blend is `src.rgb * src.a + dst`** - the `SrcAlpha`/`One` that
-`oag_render::exhaust::BLEND` already programs and that `exhaust.md` recorded as
+`oag_fx::exhaust::BLEND` already programs and that `exhaust.md` recorded as
 an unexplained empirical fit. It is not a fit; `pass_mask & 0x200` selects it,
 and the format layer's `BlendClass` has described that bit as "additive and
 source-alpha weighted" all along. The competing `GU_FIX`/`GU_FIX` reading is
@@ -1789,7 +1789,7 @@ depth/stencil attachment, but it is the reason the redundancy claim is scoped to
 already does: the orange vertices are authored at **alpha 0**, and the blend is
 weighted by source alpha. The rim contributes nothing at its vertices and only
 its interpolated interior contributes at all. That mechanism was already
-correct in `oag_render::exhaust::BLEND` before this pass started. The five
+correct in `oag_fx::exhaust::BLEND` before this pass started. The five
 candidate multipliers on [`exhaust.md`](exhaust.md) read negative because
 **there is no multiplier and there never was** - the suppression is the authored
 alpha meeting a source-alpha blend, and it is already implemented.
@@ -1799,12 +1799,12 @@ cause, and the most likely candidate is that the comparison predates the uvgen-2
 fix, which changed the plume's sampled texel from a constant white column to the
 real streak lookup. Re-measure before opening a new thread on it.
 
-### `oag_render::exhaust::BLEND` is exactly right, and is no longer a departure
+### `oag_fx::exhaust::BLEND` is exactly right, and is no longer a departure
 
 The recovered call is `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0x000000,
 0xffffff)` - source weighted by source alpha, destination weighted by fixed
 white, i.e. **`SrcAlpha` / `One`**. That is bit-for-bit what
-`oag_render::exhaust::BLEND` already uses.
+`oag_fx::exhaust::BLEND` already uses.
 
 This page currently describes that choice as "a deliberate departure from this
 page ... the GE path that performs that per-fragment weight is not recovered".

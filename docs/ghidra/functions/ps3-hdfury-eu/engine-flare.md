@@ -352,7 +352,7 @@ transform.
 
 **So the boost really is timer-driven, and the shape of the gate is the shape
 this engine already had**: a countdown set by something else, a hard reveal
-while it is above a threshold, a decay after. `oag_render::exhaust`'s recovered
+while it is above a threshold, a decay after. `oag_fx::exhaust`'s recovered
 Pulse gate - `boost_timer`, `BOOST_GATE`, `BOOST_DECAY` - is the same three
 parts. Wiring `EF_Boost` to `Exhaust::plume_visible` is therefore a *matched
 mechanism* rather than a guess off a node name. **Confidence 88**, up from the
@@ -497,7 +497,7 @@ this renderer loaded until now, and the plain one is named nowhere in the
 executable. `Trail_ConstructManager` (`0x002e2da8`) allocates `0x11b00` bytes
 and initialises **eight** per-craft trails, each `0x1230` bytes with a
 `0x1200`-byte GPU buffer. The buffer's stride and sample count are not read, so
-`oag_render::exhaust`'s geometry constants stay PSP's. The rest is on
+`oag_fx::exhaust`'s geometry constants stay PSP's. The rest is on
 [trail-ribbon.md](../../../rendering/trail-ribbon.md).
 
 ## Reproducing this

@@ -20,7 +20,7 @@
 //! **The lens** `ScreenPsys` (`WO_RAIN_LENS`, Fort Gale) is [`super::lens`].
 //!
 //! **The mist overlay** `WeatherMist_Construct` (`0x088fa0a0`) builds from
-//! `Tex` and its sizes is [`super::mist`], drawn by `oag_render::mist`.
+//! `Tex` and its sizes is [`super::mist`], drawn by `oag_fx::mist`.
 //!
 //! **Not played, and said so:**
 //! - The manager's clock behind the noise: its units are taken as seconds, the
@@ -31,9 +31,9 @@ use std::sync::Arc;
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::psys::field::{Anchor, FieldSpec, Frame};
+use oag_fx::psys::{self, Effect, System};
 use oag_mesh::mesh::GpuVertex;
-use oag_render::psys::field::{Anchor, FieldSpec, Frame};
-use oag_render::psys::{self, Effect, System};
 use oag_tables::trackstartup::{Weather as Config, effect_name};
 use oag_vex::weather::{self as covered, Anchor as CoveredAnchor};
 
@@ -54,7 +54,7 @@ pub struct Setup {
     pub anchors: Vec<CoveredAnchor>,
     /// `Tex` decoded, the mist overlay's texture; `None` when the circuit
     /// names none or it did not decode, and then the mist draws nothing.
-    pub mist_texture: Option<oag_render::exhaust::FlareTexture>,
+    pub mist_texture: Option<oag_fx::exhaust::FlareTexture>,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -161,7 +161,7 @@ impl Weather {
 
     /// The mist overlay's decoded texture, for the renderer.
     #[must_use]
-    pub fn mist_texture(&self) -> Option<&oag_render::exhaust::FlareTexture> {
+    pub fn mist_texture(&self) -> Option<&oag_fx::exhaust::FlareTexture> {
         self.setup.as_ref()?.mist_texture.as_ref()
     }
 

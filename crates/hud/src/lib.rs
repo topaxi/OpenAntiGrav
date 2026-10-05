@@ -496,7 +496,7 @@ const TICKS_PER_SECOND: f64 = 60.0;
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Readout {
     /// Speed in km/h - `|velocity| * 3.6`, using the recovered factor in
-    /// [`oag_render::exhaust::SPEED_TO_KMH`].
+    /// [`oag_fx::exhaust::SPEED_TO_KMH`].
     pub speed_kmh: f32,
     /// The speed the bar reads full at, in km/h.
     ///
@@ -600,7 +600,7 @@ pub struct Readout {
     pub shield_flashing_whole: bool,
     /// Whether the player is inside the one-second window after absorbing a
     /// pickup this frame - `Race::absorb_window_active(player_slot)`, the
-    /// same state [`oag_render::hull_overlay`] draws off.
+    /// same state [`oag_fx::hull_overlay`] draws off.
     ///
     /// `Hud_UpdateEnergyBar` (`0x0881c638`) calls
     /// `HullOverlay_AbsorbWindowActive` on the player's own craft every
@@ -687,7 +687,7 @@ pub struct Readout {
 /// **A placeholder, and labelled one so it is never mistaken for a recovered
 /// value.** The one bounded piece of evidence about the original's speed range is
 /// the exhaust's own ramp, which saturates at **600 km/h**
-/// (`oag_render::exhaust::RAMP_FLOOR_KMH` + `RAMP_SPAN_KMH`, both recovered from
+/// (`oag_fx::exhaust::RAMP_FLOOR_KMH` + `RAMP_SPAN_KMH`, both recovered from
 /// the instruction stream). That is a ramp for a visual effect, not a bar
 /// maximum, so using it here is an inference and not a small one.
 ///

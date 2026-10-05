@@ -1,8 +1,8 @@
 //! Where the LeachBeam ball model sits, and which titles ever load one to
-//! draw - see `oag_render::beam::hd_ball` and
+//! draw - see `oag_fx::beam::hd_ball` and
 //! `race/weapons/visuals.rs::leach_ball_model_matrix`. The law itself
 //! (`hd_ball::period`/`position`) has its own coverage in
-//! `oag_render::beam::tests::hd_ball`; these test the composition root's own
+//! `oag_fx::beam::tests::hd_ball`; these test the composition root's own
 //! read of it against a live `Race`.
 
 use super::*;
@@ -30,7 +30,7 @@ fn the_matrix_sits_where_hd_ball_position_says_it_should() {
     let elapsed = 0.2;
     let race = locked_race(owner, target, elapsed);
     let length = (target - owner).length();
-    let expected = oag_render::beam::hd_ball::position(elapsed, length, owner, target);
+    let expected = oag_fx::beam::hd_ball::position(elapsed, length, owner, target);
     let matrix = race
         .leach_ball_model_matrix()
         .expect("a locked beam must place the ball");

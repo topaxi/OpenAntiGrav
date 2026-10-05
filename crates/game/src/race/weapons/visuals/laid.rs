@@ -18,7 +18,7 @@
 //! draws the same shape (a normalised `U(-1, 1)^3`) from a hash of the mine's
 //! slot and its fixed position, so the simulation's seeded stream never
 //! advances for a picture - the same reason
-//! `oag_render::weapon_quads::random` exists. Chosen, not measured.
+//! `oag_fx::weapon_quads::random` exists. Chosen, not measured.
 //!
 //! **Every other title keeps the frozen craft pose**, which is chosen, not
 //! measured: HD's own laid-charge poses live in a different binary and were

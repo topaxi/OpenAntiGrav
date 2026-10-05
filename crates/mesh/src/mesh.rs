@@ -231,7 +231,7 @@ pub struct Model {
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
     /// Wipeout HD's absorb shell program (`hd_absorbinternal`), for the one
-    /// model that is one. See `oag_render::absorb_shell`.
+    /// model that is one. See `oag_fx::absorb_shell`.
     pub absorb_shell: bool,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.

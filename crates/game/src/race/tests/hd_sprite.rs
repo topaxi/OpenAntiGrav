@@ -1,6 +1,6 @@
 //! HD's sprite flare at the draw: `Race::hd_sprite_quad`.
 //!
-//! The law itself is tested where it lives, `oag_render::exhaust::hd`; what
+//! The law itself is tested where it lives, `oag_fx::exhaust::hd`; what
 //! these pin is the part only a `Race` can decide - which craft gets a quad
 //! at all, and that the camera and the nozzle feed the law the way the
 //! original's draw does (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`,

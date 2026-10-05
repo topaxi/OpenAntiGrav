@@ -1,7 +1,7 @@
 //! Wipeout HD's absorb shell drawables: one per craft, the team's own
 //! `AbsorbEffect` model on the hull's matrix, faded by the absorb timer.
 //!
-//! The fade is `oag_render::absorb_shell`'s and the program is `mesh.wgsl`'s
+//! The fade is `oag_fx::absorb_shell`'s and the program is `mesh.wgsl`'s
 //! `absorb_shading` path; this is only where the per-frame half is written and
 //! drawn, kept out of `frame.rs` under the 1,000-line rule.
 //!
@@ -11,7 +11,7 @@
 //!
 //! **Not the player's while the camera is inside the hull.** There the
 //! original shows the cockpit shell instead and hides the hull nodes; that
-//! shell is not drawn here - see `oag_render::absorb_shell`.
+//! shell is not drawn here - see `oag_fx::absorb_shell`.
 
 use super::*;
 

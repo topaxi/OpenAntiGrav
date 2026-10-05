@@ -172,7 +172,7 @@ restored afterwards). So `half_size` is in view units - world-sized under a
 rigid view - and the sprite projects like any other geometry. This supersedes
 the "post-projection units, constant on-screen size" reading an earlier
 version of this page carried, and with it the fitted `2.15` world conversion:
-`oag_render::exhaust::HALF_SIZE_TO_WORLD` is now `1.0`, confirmed by a
+`oag_fx::exhaust::HALF_SIZE_TO_WORLD` is now `1.0`, confirmed by a
 matched-pose frame comparison (`--pose-from` a captured crossing row, same
 recorded camera) where `1.0` reproduces the original's flare-to-hull ratio and
 `2.15` read double.
@@ -218,7 +218,7 @@ stalled-craft capture is contradicted by all three and is not reproduced. Its
 companion, "a square-drawn flare read visibly narrower against a live capture"
 (2026-08-02), was taken while `HALF_SIZE_TO_WORLD` was still the fitted
 `2.15`, so what it compared was *size*, not aspect - which is why it did not
-survive the correction that retired `2.15` either. `oag_render::exhaust`'s
+survive the correction that retired `2.15` either. `oag_fx::exhaust`'s
 `FLARE_ASPECT` is gone; `Exhaust::vertices` carries the three readings above
 so nobody reinstates it from a screenshot measurement.
 
@@ -532,7 +532,7 @@ texcoords as `fraction * 65535`, but the GE decodes 16-bit texcoords as
 therefore lands at just under **twice** its written value: the noise advances
 `0.2 * texscale` per sample and wraps twice around the four-fin tube. The
 scroll offsets are exempt (`sceGuTexOffset` applies after the decode).
-`oag_render::exhaust` carries this as `TEXCOORD_U16_GAIN`.
+`oag_fx::exhaust` carries this as `TEXCOORD_U16_GAIN`.
 
 ### Why the ribbon can saturate on screen without any hidden gain
 
@@ -749,7 +749,7 @@ implemented.
 - **2026-08-08** - the three opens from 2026-08-07 worked through. **The
   flare stretch is closed: there isn't one** (square quad at instruction
   level, round glow in UV space, aspect-exact projection read live);
-  `FLARE_ASPECT` retired from `oag_render::exhaust`. **The fov chain is
+  `FLARE_ASPECT` retired from `oag_fx::exhaust`. **The fov chain is
   recovered end to end** and written up on [camera.md](camera.md) - five
   links, each pinned by a PPSSPP memory write breakpoint - leaving only which
   of its two paths a pad uses. **The plume's alpha question is sharpened
@@ -1062,9 +1062,9 @@ the function reads it:
 2. the reveal of the `<Team>boost.vex` plume, and
 3. the `engine_on` flag (`self+0x94`) - with thrust off, `boost_timer > 0.2`
    alone keeps the engine counted as on, which feeds the engine sound and the
-   intensity ramp. `oag_render::exhaust::Exhaust::advance` already implements
+   intensity ramp. `oag_fx::exhaust::Exhaust::advance` already implements
    this third use (the `engine_on` line); only the "exactly two" phrasing here
-   and in `oag_render::exhaust::BOOST_SECONDS`'s doc comment was off by one,
+   and in `oag_fx::exhaust::BOOST_SECONDS`'s doc comment was off by one,
    corrected 2026-08-04.
 
 **The `Trail` gets nothing from a boost.** Its two per-frame parameters and all
@@ -1083,7 +1083,7 @@ So **the ribbon not reacting to a pad is faithful**, and at racing speed
 exhaustive read of the one function that writes these fields.
 
 **The size law is confirmed exactly**, which retires any doubt about the four
-constants `oag_render::exhaust` carries:
+constants `oag_fx::exhaust` carries:
 
 ```c
 self->0xc4 = (intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0;
@@ -1091,7 +1091,7 @@ self->0xc4 = (intensity * 0.6 + 0.4) * 2.5 + boost_timer * 8.0;
 
 At `intensity = 1` that is `2.5` at rest and `8.9` at the pad's armed `0.8`, so
 the original's flare really is **3.56x** wider during a boost. The ratio is the
-original's; only `oag_render::exhaust::HALF_SIZE_TO_WORLD` is ours, and it was
+original's; only `oag_fx::exhaust::HALF_SIZE_TO_WORLD` is ours, and it was
 fitted on a *resting* frame.
 
 **The conclusion for the renderer, and its resolution.** The original spends a
@@ -1100,7 +1100,7 @@ until 2026-08-04 this crate drew only the first. So the flare carried the whole
 effect, which was exactly the reported symptom. **Detuning `HALF_SIZE_TO_WORLD`
 would have been the wrong fix**: it would have broken the resting case to
 compensate for a mesh that was not being drawn. The actual fix, now shipped,
-is drawing `<Team>boost.vex`: `oag_render::exhaust::Exhaust` tracks the
+is drawing `<Team>boost.vex`: `oag_fx::exhaust::Exhaust` tracks the
 plume's own 1.5 s reveal timer (`plume_timer`/`plume_visible`,
 `PLUME_SECONDS`) beside the flare's, and `oag_game::race::Loaded::boost_model`
 loads `Data\Ships\<Team>\shipboost.vex` for `Race::Scene` to draw additively
@@ -1422,7 +1422,7 @@ captured row's *measured* exhaust state rather than a saturated one.
 ### The craft's `0.75` render scale, confirmed three ways - and a residual that is not it
 
 **This is a large part of why the boost reads weak, and it is not an exhaust bug
-at all.** [`CRAFT_ROW_SCALE`](../../../../crates/render/src/exhaust.rs) has
+at all.** [`CRAFT_ROW_SCALE`](../../../../crates/fx/src/exhaust.rs) has
 recorded since the trail-direction read that the original's craft world matrix
 carries a global `0.75` (`200000.0` times row 2, live `150,080`). The rigid
 body's own rows are orthonormal - the capture harness measures them unit-length
@@ -1815,7 +1815,7 @@ Two controls fixed it, and both are worth reusing:
   was re-read to the instruction for this and writes `u` as
   `(short)(int)(frac * 65535.0)` stepping `ring+0x08` per sample and `v` as
   `(short)(int)(i * 0.25 * 65535.0)` for `i = 0..4`, which is exactly what
-  [`TEXCOORD_U16_GAIN`](../../../../crates/render/src/exhaust.rs) and
+  [`TEXCOORD_U16_GAIN`](../../../../crates/fx/src/exhaust.rs) and
   `LAYER_TEX_SCALE_U` already encode. **Nothing here justifies moving them.**
 - **The modulation depth is not the problem either** - ours is slightly
   *higher* than the original's, so the noise is reaching the picture.
@@ -1965,7 +1965,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   (`0x08849078`) reaches it through `craft->0x1c4 -> +0x78` inside the
   new-pad branch. Decompiled and written up on
   [pads.md](pads.md#exhaustflare_onspeeduppad-0x08904f10), and
-  `oag_render::exhaust::BOOST_SECONDS`'s doc comment has cited the same store
+  `oag_fx::exhaust::BOOST_SECONDS`'s doc comment has cited the same store
   all along - this page's Open list simply never caught up.
 
   **Recorded because the failure mode is the expensive one**: the entry said
@@ -2014,7 +2014,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   [mesh-draw.md](mesh-draw.md). The plume's own path enables `GU_ALPHA_TEST` and
   blends `GU_SRC_ALPHA` / `GU_FIX` white. The heading's answer is unchanged and
   is in fact sharper: the authored alpha reaches the picture as a *weight* on
-  the additive blend, which is exactly what `oag_render::exhaust::BLEND` already
+  the additive blend, which is exactly what `oag_fx::exhaust::BLEND` already
   does.**) The falloff comes from the *texture*, sampled through
   environment-generated coordinates. (**Overturned for the plume 2026-08-10:
   it draws under `TEXMAPMODE` 0 and samples its authored UVs through an

@@ -228,7 +228,7 @@ fn the_recovery_pose_is_the_last_place_the_craft_was_on_the_track() {
 }
 
 /// **The firehose trap.** A ship held against a wall for many ticks must
-/// spawn one spark burst per `oag_render::sparks::COLLISION_COOLDOWN`,
+/// spawn one spark burst per `oag_fx::sparks::COLLISION_COOLDOWN`,
 /// not one burst per tick of the ensuing scrape - the shape of bug this
 /// guards against is the same one `oag_physics::wall::STUN_PER_CONTACT`'s
 /// doc comment records this crate cost a session of play-testing to, for
@@ -275,7 +275,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
     // has not got. The trigger cadence is this test's subject and the
     // counter is the unambiguous signal for it; that a real asset then
     // fills the pool is checked against the disc in
-    // `crates/render/tests/psys_ground_truth.rs`.
+    // `crates/fx/tests/psys_ground_truth.rs`.
     for tick in 0..10 {
         push_toward_wall(&mut race);
         race.tick(&PlayerInputs::none());
@@ -289,7 +289,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
 
 /// The other half of the firehose-trap guard: unlike a one-shot edge
 /// latch, `ShipCollisionFx_Trigger`'s recovered behaviour is a periodic
-/// re-fire - `oag_render::sparks::COLLISION_COOLDOWN` (`0.8` s) after the
+/// re-fire - `oag_fx::sparks::COLLISION_COOLDOWN` (`0.8` s) after the
 /// last burst, for as long as contact continues. A burst's own trailing
 /// embers can outlive the cooldown (up to `32 + 30` ticks, about
 /// `1.03` s), so an empty pool is *not* a precondition of the re-fire
@@ -322,7 +322,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
 
     // Run past the cooldown: a second burst must have ignited, and only
     // one.
-    let ticks = (oag_render::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1;
+    let ticks = (oag_fx::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
         race.tick(&PlayerInputs::none());
@@ -389,7 +389,7 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
 ///
 /// Hand-laid bytes, no game content: the container's header, an empty slot
 /// table, and a single record at the resource base carrying the smallest set
-/// of fields `oag_render::psys::Effect::parse` needs to accept it. Field
+/// of fields `oag_fx::psys::Effect::parse` needs to accept it. Field
 /// offsets are the ones `oag_pob::Emitter` documents.
 pub(super) fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
     use oag_pob::{EMITTER_LEN, HEADER_LEN, MAGIC, NAME_LEN};
@@ -430,11 +430,9 @@ fn race_with_spark_effect(blob: &[u8]) -> Race {
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
-    let effect = oag_render::psys::Effect::parse(blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup
-        .effects
-        .insert(oag_render::sparks::DAMAGE_EFFECT, effect);
+    setup.effects.insert(oag_fx::sparks::DAMAGE_EFFECT, effect);
     Race::start(setup)
 }
 
@@ -473,7 +471,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
 
     // Held against the wall: one attachment, not one per tick and not one
     // per cooldown - a chattering scrape must not go dark waiting to re-arm.
-    let ticks = (oag_render::sparks::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
+    let ticks = (oag_fx::sparks::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
         race.tick(&PlayerInputs::none());

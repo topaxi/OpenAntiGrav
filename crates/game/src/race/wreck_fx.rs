@@ -137,7 +137,7 @@ impl Race {
                 self.view.stage.orient(playing, up);
                 self.view
                     .stage
-                    .set_frame_scale(playing, oag_render::exhaust::CRAFT_ROW_SCALE);
+                    .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
                 let fx = &mut self.view.wreck_fx;
                 fx.riding.push(Riding {
                     slot,
@@ -177,7 +177,7 @@ impl Race {
         self.view.stage.orient(playing, up);
         self.view
             .stage
-            .set_frame_scale(playing, oag_render::exhaust::CRAFT_ROW_SCALE);
+            .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
         self.view.wreck_fx.started += 1;
         self.view.wreck_fx.last_explosion_at = Some(at);
     }

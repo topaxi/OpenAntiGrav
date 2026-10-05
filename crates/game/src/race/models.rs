@@ -26,7 +26,7 @@ impl Race {
     ///    per-sample trail direction `Exhaust_Update` stores is `200000.0` times
     ///    the craft's row 2, and it reads back `150,080` -
     ///    `200000 * 0.75 = 150,000`. See
-    ///    `oag_render::exhaust::CRAFT_ROW_SCALE`.
+    ///    `oag_fx::exhaust::CRAFT_ROW_SCALE`.
     /// 2. **The drop-shadow divides it back out.** `FUN_089038c8` - a stencil
     ///    shadow-volume pass - computes its ground projection and then scales it
     ///    by `1.0 / g_craft_scale` before `Gu_SetMatrix(2, ...)` installs the

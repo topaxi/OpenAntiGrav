@@ -148,7 +148,7 @@ impl Race {
     pub fn ghost_model_matrix(pose: &Pose) -> Mat4 {
         Mat4::from_rotation_translation(pose.rotation, pose.position)
             * Mat4::from_rotation_y(MODEL_YAW)
-            * Mat4::from_scale(Vec3::splat(oag_render::exhaust::CRAFT_ROW_SCALE))
+            * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
     }
 
     /// The best lap this run has set since the last call, as a replay ready

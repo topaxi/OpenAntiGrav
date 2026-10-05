@@ -549,7 +549,7 @@ impl Race {
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],
                 hd_plasma_blast,
                 pulse_laid_pose,
-                screen_flash: screen_flash.then(oag_render::flash::ScreenFlash::default),
+                screen_flash: screen_flash.then(oag_fx::flash::ScreenFlash::default),
                 craft_flashes: Default::default(),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(

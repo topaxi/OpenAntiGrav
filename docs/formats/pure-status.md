@@ -374,7 +374,7 @@ contradicted by measurement and should be read as **open**, not as 88.
 ## Pure's particle systems decode unchanged
 
 **Measured 2026-08-12, and this row used to read "unknown, both".** Pointing a
-Pure race at `oag_render::psys::Library` - which loads any `Data\Psys\<name>.POB`
+Pure race at `oag_fx::psys::Library` - which loads any `Data\Psys\<name>.POB`
 by name - decodes three of the four effects the race path asks for, with their
 whole emitter trees, and plays them. Sparks fly off a Pure hull on contact with
 no change to the decoder at all.
@@ -533,7 +533,7 @@ literally identical to Pulse's (confidence 88, decompiled in full on both
 pressings) - same `half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)`
 term, same `0.8s` arm on a speed pad. So the always-on `Engine Flare`
 billboard still grows and re-randomises on boost; it is only the separate
-`<Team>boost.vex` plume mesh that never existed. `oag_render::exhaust::Exhaust`
+`<Team>boost.vex` plume mesh that never existed. `oag_fx::exhaust::Exhaust`
 already implements this generically and unconditionally, so nothing needed
 changing in this engine - see
 [exhaust-sound.md](../ghidra/functions/psp-pure-usa/exhaust-sound.md)'s

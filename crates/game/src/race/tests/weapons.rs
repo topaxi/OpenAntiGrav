@@ -485,7 +485,7 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
 
 /// The HUD readout's own absorb flag - `Readout::shield_absorbing` - mirrors
 /// [`Race::absorb_window_active`] the same tick the pickup is spent and
-/// clears once [`oag_render::hull_overlay::WINDOW`] has passed. See
+/// clears once [`oag_fx::hull_overlay::WINDOW`] has passed. See
 /// `crates/hud/src/shield_tests.rs` for what the readout draws once
 /// this is set.
 #[test]

@@ -456,7 +456,7 @@ pub struct Setup {
     pub grid_frame_from_sample: bool,
     /// Whether weapon detonations start `ScreenFlash_Start`'s full-screen
     /// wash - Pulse off a PSP disc only, the one executable its consumer is
-    /// read off. See `oag_render::flash`.
+    /// read off. See `oag_fx::flash`.
     pub screen_flash: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
@@ -760,7 +760,7 @@ pub struct Loaded {
     /// terms as [`Self::rocket_model`] - a source with no entry, or none
     /// recovered on this title's own [`oag_title::weapons::WeaponModels`],
     /// draws no ball at all rather than a stand-in. See
-    /// `oag_render::beam::hd_ball` for the position law it is drawn at.
+    /// `oag_fx::beam::hd_ball` for the position law it is drawn at.
     pub leach_ball_model: Option<Model>,
     /// The sphere a fired Shield shows from **inside** the cockpit, drawn
     /// instead of the per-team shell when the camera is in the craft.
@@ -784,9 +784,9 @@ pub struct Loaded {
     pub fog_volumes: Vec<oag_vex::fog::FogVolume>,
     /// `05_Track`'s cloud puffs and the shared texture they draw with -
     /// `None` for every other circuit and for a ribbon build. See
-    /// `crates/render/src/cloud.rs` and
+    /// `crates/fx/src/cloud.rs` and
     /// `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
-    pub clouds: Option<(oag_render::cloud::Layer, FlareTexture)>,
+    pub clouds: Option<(oag_fx::cloud::Layer, FlareTexture)>,
     /// The circuit's own light rig, out of its `.envsettings`.
     ///
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
@@ -891,7 +891,7 @@ pub struct Loaded {
     ///
     /// `None` draws no ribbon body at all rather than a stand-in, on the same
     /// "never invent what the assets author" terms every optional asset here
-    /// follows - see `oag_render::beam`.
+    /// follows - see `oag_fx::beam`.
     pub leach_beam_texture: Option<FlareTexture>,
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///

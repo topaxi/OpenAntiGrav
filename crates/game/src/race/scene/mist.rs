@@ -1,6 +1,6 @@
 //! The weather's mist overlay on the GPU side of [`super::Scene`]: built once
 //! from the circuit's decoded `Tex`, uploaded each frame from
-//! [`crate::race::scenery_fx::mist::Mist`]. See `oag_render::mist`.
+//! [`crate::race::scenery_fx::mist::Mist`]. See `oag_fx::mist`.
 
 use super::*;
 
@@ -15,7 +15,7 @@ impl Scene {
         texture: Option<&FlareTexture>,
     ) {
         *self.mist.borrow_mut() = texture.map(|texture| {
-            oag_render::mist::Pipeline::new(
+            oag_fx::mist::Pipeline::new(
                 device,
                 queue,
                 format,

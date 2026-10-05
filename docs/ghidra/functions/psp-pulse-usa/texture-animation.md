@@ -213,7 +213,7 @@ is hidden (0 hits over 3 idle seconds). `flare+0x88` was watched resetting
 animation **plays the 90-frame track exactly once per reveal** - clamped at
 the bright first key at t < 1 frame, darkening down the ramp, reaching the
 last key exactly as the plume's own 1.5 s life
-(`oag_render::exhaust::PLUME_SECONDS`, `flare+0x88`'s hide threshold at
+(`oag_fx::exhaust::PLUME_SECONDS`, `flare+0x88`'s hide threshold at
 preset 2) expires. Track span and plume life are both 1.5 s by authoring.
 The "looping" in the paragraph above is the held-boost artifact: pinning
 `boost_timer` at 0.8 re-reveals the plume the moment its 1.5 s expires,
@@ -264,7 +264,7 @@ a breakpoint-paced autopilot lap (pad 4, Talon's Junction): plume idle,
 same reveal the writes produce. What a mid-sweep pad
 *does* change is every
 timer-driven effect: the flare's half-size term, the engine note, the
-physics boost. `oag_render::exhaust`'s edge-triggered reveal plus
+physics boost. `oag_fx::exhaust`'s edge-triggered reveal plus
 next-tick re-reveal reproduces all three regimes.
 
 ### Two earlier readings this corrects

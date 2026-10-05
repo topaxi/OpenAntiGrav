@@ -549,7 +549,7 @@ carrying a guess about exactly what beyond placement it might also do.
 `_opd_FUN_00116308` flips its own fraction (`dVar11 = dVar9 - dVar11`) when
 `param_2[2] == *param_2` - a condition this pass did not chase to a
 concrete craft identity. This engine's own implementation
-(`oag_render::beam::hd_ball::position`) picks target-at-`0`,
+(`oag_fx::beam::hd_ball::position`) picks target-at-`0`,
 owner-at-`1` (the wrap = arrival at the shooter) by analogy with Pulse's own
 `WO_LEACHBEAM_ENERGY`, which the ribbon's `Ribbon::energy_point` already
 recovers as arriving at the shooter the same way - not itself a measurement
@@ -558,7 +558,7 @@ recorded as such in `hd_ball::position`'s own doc comment.
 
 ### What the engine now does with this
 
-`oag_render::beam::hd_ball` (`crates/render/src/beam.rs`) carries the period
+`oag_fx::beam::hd_ball` (`crates/fx/src/beam.rs`) carries the period
 law and the chosen straight-line placement law above, and
 `Race::advance_leach_beam_ribbon` (`crates/game/src/race/weapons/visuals.rs`)
 drives a render-side accumulator (`RaceView::leach_ball_elapsed`) off it
@@ -583,7 +583,7 @@ one `leach_ball: Option<Drawable>` - a single drawable, not a
 `Option`, never more than one live beam - written and drawn each frame a
 beam is `Kind::Locked` (`Race::leach_ball_model_matrix`,
 `crates/game/src/race/weapons/visuals.rs`) at
-`oag_render::beam::hd_ball::position`, on a translation-only matrix
+`oag_fx::beam::hd_ball::position`, on a translation-only matrix
 (identity rotation and scale - **chosen, not measured**, since
 `_opd_FUN_001141d8` was never resolved past "orthonormalise/place a matrix
 onto the node" at confidence 70).

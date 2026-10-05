@@ -138,7 +138,7 @@ impl Race {
                 // `Ship_ApplySpeedupPad`, inside its new-pad branch, and stores a
                 // code literal - **not** `<SpeedupPads time>`. So the flare
                 // outlives the force rather than expiring with it; see
-                // `oag_render::exhaust::BOOST_SECONDS`, which is where the reason
+                // `oag_fx::exhaust::BOOST_SECONDS`, which is where the reason
                 // is written down.
                 //
                 // **The craft that crossed the pad, whichever it is.** Every

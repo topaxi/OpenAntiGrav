@@ -135,7 +135,7 @@ pub enum Side {
 
 /// Per-frame state of one camera's impact shake.
 ///
-/// Mirrors [`crate::camera::chase::Chase`] and [`crate::exhaust::Exhaust`] in
+/// Mirrors [`crate::camera::chase::Chase`] and [`oag_fx::exhaust::Exhaust`] in
 /// shape and for the same reason: render-only state the game crate owns and
 /// advances on the simulation's fixed tick, so it never enters `World` and
 /// never touches a determinism hash. `Copy`, so a caller holding one per
@@ -169,11 +169,11 @@ impl Shake {
     }
 
     /// Arms the shake from a collision's clamped severity (`0..1`, the same
-    /// clamp [`crate::sparks::severity`]'s own input is scaled from) and
+    /// clamp [`oag_fx::sparks::severity`]'s own input is scaled from) and
     /// which side of the craft it hit - `Camera_ArmShake`'s own inputs.
     ///
     /// `rng` is the phase draw, seeded and never OS entropy - the same
-    /// contract [`crate::exhaust::Exhaust::advance`]'s own `rng` carries.
+    /// contract [`oag_fx::exhaust::Exhaust::advance`]'s own `rng` carries.
     pub fn arm(&mut self, severity: f32, side: Side, rng: &mut Rng) {
         self.arm_with(severity * MAGNITUDE_SCALE, DURATION_SECONDS, side, rng);
     }

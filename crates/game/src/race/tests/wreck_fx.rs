@@ -29,7 +29,7 @@ fn race_with_wreck_locators() -> Race {
     race.view.wreck_fx = WreckFx::new(anchors);
     for name in [FXNODE_EXPLO_EFFECT, DEATH_SPARKS_EFFECT] {
         let blob = super::respawn::one_emitter_pob(name, 0);
-        let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+        let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
         race.view.effects.insert(name, effect);
     }
@@ -85,7 +85,7 @@ fn the_wreck_effects_are_let_go_once_they_stop_emitting() {
 fn the_big_explosion_follows_after_the_delay_below_the_craft() {
     let mut race = race_with_wreck_locators();
     let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
-    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     race.view.effects.insert(EXPLOSION_EFFECT, effect);
     go_out(&mut race, 3);
@@ -108,7 +108,7 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
         .expect("thrown by 1.5 s after the edge");
     assert_eq!(race.wreck_fx_started_for_tests(), after_the_nodes + 1);
     let below = (wrecked_at - at).dot(up);
-    let expect = EXPLOSION_DROP * oag_render::exhaust::CRAFT_ROW_SCALE;
+    let expect = EXPLOSION_DROP * oag_fx::exhaust::CRAFT_ROW_SCALE;
     assert!(
         (below - expect).abs() < 1e-3,
         "{below} below, expected {expect}"

@@ -186,7 +186,7 @@ pub struct Scene {
     bomb_blast: bomb_blast::BombBlastDrawables,
     /// The LeachBeam's own ball, HD only - `None` when
     /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load. Drawn
-    /// at [`oag_render::beam::hd_ball::position`] each tick a beam is locked
+    /// at [`oag_fx::beam::hd_ball::position`] each tick a beam is locked
     /// (see [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`),
     /// through its own material's program, `mesh::rcs::rim_glow`'s
     /// `RIM_GLOW` (docs/rendering/hd-unlit-programs.md).
@@ -216,9 +216,9 @@ pub struct Scene {
     weapon_quads: weapon_quads::Cannon,
     clouds: std::cell::RefCell<clouds::Clouds>,
     /// The weather's mist overlay, once [`Scene::attach_mist`] built it.
-    mist: std::cell::RefCell<Option<oag_render::mist::Pipeline>>,
+    mist: std::cell::RefCell<Option<oag_fx::mist::Pipeline>>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
-    beam: Option<std::cell::RefCell<oag_render::beam::Pipeline>>,
+    beam: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
@@ -429,7 +429,7 @@ impl Scene {
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
         cannon: crate::race::CannonAssets,
-        cloud_layer: Option<(oag_render::cloud::Layer, FlareTexture)>,
+        cloud_layer: Option<(oag_fx::cloud::Layer, FlareTexture)>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -759,7 +759,7 @@ impl Scene {
         // one-drawable shape `Self::shield_cockpit` does rather than
         // `weapon_models::build`'s per-slot one. Same transparent blend and
         // protected glow mask every other weapon body above takes - see
-        // `oag_render::beam::hd_ball`'s own doc comment for what is measured
+        // `oag_fx::beam::hd_ball`'s own doc comment for what is measured
         // about this model's placement and what is chosen.
         let leach_ball = match leach_ball_model.filter(|model| !model.indices.is_empty()) {
             Some(model) => Some(Drawable::new(

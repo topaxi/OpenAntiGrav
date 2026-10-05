@@ -1567,7 +1567,7 @@ at all - it could not have loaded any other way.
   every reachable leaf and chooses among them with its own generator - the same
   approximation it already makes among a single cue's alternates, one level
   further down. The game does know whether it hit a wall or a ship, and
-  `oag_render::sparks::severity` already computes a severity band, but pairing
+  `oag_fx::sparks::severity` already computes a severity band, but pairing
   either against these names would be a mapping invented here rather than one
   read off the disc.
 

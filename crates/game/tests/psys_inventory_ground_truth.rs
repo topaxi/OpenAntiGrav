@@ -123,7 +123,7 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
 /// The port's ninth extra is `WO_SHIP_ENGINEFLARE`, which **is** wired -
 /// [`oag_game::race::ENGINE_FLARE_EFFECT`]. Its trigger needs no recovery
 /// (an engine flare is on while the craft is), so a PS2-sourced race plays
-/// the asset and `oag_render::exhaust`'s procedural flare steps aside; a
+/// the asset and `oag_fx::exhaust`'s procedural flare steps aside; a
 /// PSP-sourced one has no such asset and keeps the procedural flare. That
 /// asymmetry is the whole reason [`oag_game::race::RACE_EFFECTS`] is a
 /// superset across sources rather than one list per disc.
@@ -598,7 +598,7 @@ mod v2048 {
         let absent: Vec<&str> = RACE_EFFECTS
             .iter()
             .copied()
-            .filter(|name| !archive.contains(&oag_render::psys::effect_path_in(dir, name)))
+            .filter(|name| !archive.contains(&oag_fx::psys::effect_path_in(dir, name)))
             .collect();
         assert_eq!(absent, ABSENT);
     }

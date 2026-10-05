@@ -2767,7 +2767,7 @@ decision rather than a detail:
 - **Still render-only state.** The array sits on `Race`, not in `World`, for
   exactly the reason one `Exhaust` did: it must not enter a snapshot a replay or
   a determinism hash reads. Eight of them change nothing about that.
-- **The shared vertex buffers had to grow.** `oag_render::exhaust` uploads every
+- **The shared vertex buffers had to grow.** `oag_fx::exhaust` uploads every
   flare and every ribbon through one pipeline, and `Pipeline::upload` clamps with
   `min` - so an undersized buffer would have dropped the last craft's ribbon with
   nothing in the logs. `MAX_TRAILS` is the grid, `MAX_TRAIL_VERTICES` is eight

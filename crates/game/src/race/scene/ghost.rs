@@ -11,7 +11,7 @@
 use std::cell::RefCell;
 
 use oag_core::Rng;
-use oag_render::exhaust::FlareTexture;
+use oag_fx::exhaust::FlareTexture;
 
 use super::*;
 

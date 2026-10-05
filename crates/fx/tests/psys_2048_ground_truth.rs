@@ -18,9 +18,9 @@ use std::collections::BTreeSet;
 use oag_assets::psarc::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_fx::psys::sprite::Sprite;
+use oag_fx::psys::{ColourScale, Effect, System, TICK_HZ};
 use oag_pob as pob;
-use oag_render::psys::sprite::Sprite;
-use oag_render::psys::{ColourScale, Effect, System, TICK_HZ};
 
 /// Archives that carry `.pob`, and how many each holds.
 const ARCHIVES: [(&str, usize); 5] = [

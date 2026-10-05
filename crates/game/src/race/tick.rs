@@ -877,7 +877,7 @@ impl Race {
             // `Camera_ArmShake`'s own severity is the *raw* clamp
             // `Ship_DispatchCollisionFx` passes it, not the spark's
             // slope-and-floor-reshaped one - see
-            // `oag_render::sparks::clamped_intensity`. `mode = 3` (ahead) vs
+            // `oag_fx::sparks::clamped_intensity`. `mode = 3` (ahead) vs
             // `mode = 1` (elsewhere) is a dot product of the contact point
             // against the craft's forward, exactly as
             // `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`

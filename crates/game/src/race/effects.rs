@@ -477,7 +477,7 @@ impl Race {
 
     /// [`Self::hd_trail_vertices`], appended to a list the caller owns - the
     /// form the renderer uses, for the reason
-    /// [`oag_render::exhaust::Exhaust::extend_trail_vertices`] gives.
+    /// [`oag_fx::exhaust::Exhaust::extend_trail_vertices`] gives.
     pub fn extend_hd_trail_vertices(&self, out: &mut Vec<oag_mesh::mesh::GpuVertex>, slot: usize) {
         if !self.view.hd_trail_active {
             return;
@@ -513,7 +513,7 @@ impl Race {
 
     /// One craft's sprite-flare quad: `Engine_Flare_Rich.gtf` at the nozzle,
     /// a 4:1 streak sized and faded by `EngineFlare_RenderTick`'s own law
-    /// (`oag_render::exhaust::hd::Sprite`). Empty off HD, where no locator
+    /// (`oag_fx::exhaust::hd::Sprite`). Empty off HD, where no locator
     /// exists, for the craft the camera follows, and when the nozzle faces
     /// away from the eye.
     ///
@@ -789,7 +789,7 @@ impl Race {
     /// class the same way [`Self::spark_vertices`] is.
     ///
     /// The rocket flares and the detonations today. Uploaded through the same
-    /// [`oag_render::psys::Pipeline`] as the sparks - one pass, two buffers,
+    /// [`oag_fx::psys::Pipeline`] as the sparks - one pass, two buffers,
     /// no third pipeline per effect.
     pub fn extend_stage_vertices(
         &self,
@@ -838,7 +838,7 @@ impl Race {
     /// it loaded.
     ///
     /// The renderer asks this to decide whether to draw
-    /// [`oag_render::exhaust`]'s procedural flare quad: drawing both would
+    /// [`oag_fx::exhaust`]'s procedural flare quad: drawing both would
     /// put an invented glow on top of the authored one, which is the exact
     /// thing `CLAUDE.md`'s do-not-invent rule forbids. The trail ribbon and
     /// the boost plume are unaffected - the PS2's effect is the *flare*, and

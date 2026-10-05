@@ -20,9 +20,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use oag_assets::psarc::Archive;
+use oag_fx::psys::sprite::Sprite;
+use oag_fx::psys::{ColourScale, Effect};
 use oag_pob as pob;
-use oag_render::psys::sprite::Sprite;
-use oag_render::psys::{ColourScale, Effect};
 
 const ARCHIVES: [&str; 2] = [
     "data/extracted/ps4/omega-eu/uroot/data00.psarc",

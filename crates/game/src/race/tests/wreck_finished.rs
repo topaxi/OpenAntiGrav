@@ -34,7 +34,7 @@ fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
     }
     race.view.wreck_fx = WreckFx::new(vec![Vec::new(); 1]);
     let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
-    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     race.view.effects.insert(EXPLOSION_EFFECT, effect);
     race.view.destroy_camera = crate::race::destroy_camera::DestroyCamera::new(
@@ -170,7 +170,7 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
     let mut race = an_eliminator_grid();
     race.view.wreck_fx = WreckFx::new(vec![Vec::new(); 1]);
     let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
-    let effect = oag_render::psys::Effect::parse(&blob, oag_render::psys::ColourScale::Full)
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
     race.view.effects.insert(EXPLOSION_EFFECT, effect);
     race.view.destroy_camera = crate::race::destroy_camera::DestroyCamera::new(

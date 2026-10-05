@@ -4,12 +4,12 @@ categories: [rendering]
 
 # Pulse's cloud field: the far-camera skip and a live A/B picture
 
-2026-10-04, `pulse-clouds`. The field itself is done. `oag_render::cloud`
+2026-10-04, `pulse-clouds`. The field itself is done. `oag_fx::cloud`
 builds each `cloudGroup`'s records the way `CloudGroup_BuildField`
 (`0x08933c1c`) does: scatter, `Overlap` cull, height ramp, atlas cell. Fed a
 boot's seeds, the build reproduces that boot's RAM exactly (four boots, both
 `05_Track` layouts). Evidence: `docs/ghidra/functions/psp-pulse-usa/clouds.md`,
-`crates/render/tests/cloud_field_ground_truth.rs`, ADR-0056.
+`crates/fx/tests/cloud_field_ground_truth.rs`, ADR-0056.
 
 ## Open
 
@@ -27,7 +27,7 @@ boot's seeds, the build reproduces that boot's RAM exactly (four boots, both
 
 1. Read who calls a `cloudGroup`'s `draw` slot (`0x08ad2a68` in its method
    table) and what distance or visibility test gates it. Implement it in
-   `oag_render::cloud::Layer`.
+   `oag_fx::cloud::Layer`.
 2. For the picture: drive to the clouds rather than placing there, for
    example by letting the craft run from a placement that settles (index
    ~2054). Then pause with the debugger, zero the colour word at vertex

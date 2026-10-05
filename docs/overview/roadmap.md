@@ -800,7 +800,7 @@ seen from the authoring side.
         string and computes a usable severity formula from the same contact
         impulse magnitude `contact-response.md` already recovers - see
         [contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#shipcollisionfx_trigger-0x089246b4-is-the-actual-spark-spawn-function).
-        `oag_render::sparks` still triggers off our own physics contact data
+        `oag_fx::sparks` still triggers off our own physics contact data
         (`oag_physics::wall::WallResponse`) rather than this class, and has
         not yet been retuned against the newly recovered formula - see that
         module's doc comment and the open thread on `HANDOVER.md`.
@@ -1399,7 +1399,7 @@ rather than absent, which is what the second row above covers.
 **The boost plume is settled, not a gap.** Pure ships no standalone
 `shipboost.vex`-shaped asset at all (measured, confidence 93,
 [pure-status.md](../formats/pure-status.md)), and the always-on engine flare
-still grows on boost through the same generic `oag_render::exhaust::Exhaust`
+still grows on boost through the same generic `oag_fx::exhaust::Exhaust`
 Pulse uses - also measured against Pure's own executable, same page. Nothing
 missing and nothing to build.
 

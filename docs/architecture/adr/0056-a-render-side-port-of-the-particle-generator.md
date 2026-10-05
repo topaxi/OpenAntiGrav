@@ -27,7 +27,7 @@ checked against a capture of the original sprite by sprite.
 ## Decision
 
 - Port `PsysRng_Reseed`, `PsysRng_Next`, `Psys_RandFloatRange` and
-  `Psys_RandIntRange` as `oag_render::ranrot::Ranrot`, read off the
+  `Psys_RandIntRange` as `oag_fx::ranrot::Ranrot`, read off the
   disassembly. That includes the signed-then-corrected `u32` to `f32`
   conversion, which makes the range closed at `1.0`.
 - **It lives in `oag-render` and only there.** Rendering is exempt from the
@@ -36,15 +36,15 @@ checked against a capture of the original sprite by sprite.
 - A render-side effect that the original builds from a seed uses `Ranrot` and
   the seed. Every shipped `cloudGroup` leaves `Seed` unset, and the original
   then rolls one from the clock. Where that happens we use a fixed seed,
-  labelled **chosen, not measured** (`oag_render::cloud::CHOSEN_SEEDS`).
-- Particle effects (`oag_render::psys`) may move onto `Ranrot` later, but that
+  labelled **chosen, not measured** (`oag_fx::cloud::CHOSEN_SEEDS`).
+- Particle effects (`oag_fx::psys`) may move onto `Ranrot` later, but that
   is their own decision. This ADR does not require it.
 
 ## Consequences
 
 - A capture of ours and the original can match sprite for sprite, given the
   boot's seeds. A test can pin the build against values read live
-  (`crates/render/tests/cloud_field_ground_truth.rs`).
+  (`crates/fx/tests/cloud_field_ground_truth.rs`).
 - There are two generators in the tree. A contributor reaching for "the RNG"
   in render code now has to choose, and must not use `Ranrot` from simulation
   code, where nothing enforces the boundary except review and this ADR.
