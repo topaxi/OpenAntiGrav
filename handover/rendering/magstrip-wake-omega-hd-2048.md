@@ -1,6 +1,6 @@
 # Magstrip effects on Omega, HD/Fury and 2048: the arc wake, the POB, the sound, the rumble
 
-2026-10-05, magfloor-omega-re lane, static reading of the PS4, PS3 and Vita
+2026-10-05, magfloor-omega-re lane (shape) and magstrip-omega-law lane (the law), static reading of the PS4, PS3 and Vita
 executables plus an asset census. Evidence and addresses:
 [ps4-omega-eu/ships-effects.md](../../docs/ghidra/functions/ps4-omega-eu/ships-effects.md)
 ("2026-10-05"), [vita-2048-eu-v104/ships-effects.md](../../docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md),
@@ -52,36 +52,65 @@ is the static floor, already handled in `docs/formats/rcsmaterial.md`.
 Not done: the Vita PSARCs and the Omega sound banks were not listed or extracted.
 `data/scratch/magfloor-omega-re/` holds the HD and Omega path lists this table came from.
 
+## The law, ready to wire (magstrip-omega-law lane, 2026-10-05)
+
+Evidence in the Omega page's "2026-10-05, magstrip-omega-law lane" section. All static, no
+live PS4, so these are 80-90 reads, not captures.
+
+- **Contact predicate (85).** Over a magstrip = the ship's surface probe hit a triangle of
+  surface type `3` this tick. In our physics that is `ShipState::mag_contact.is_some()`
+  (`oag_physics::maglock::probe`, the same `Surface::MagFloor` literal `3` as Pulse's
+  `craft+0x240`). Use the **instantaneous** contact, not the mag-lock blend (the blend ramps
+  and lingers). Edges: rising = `contact && !prev`, falling = `!contact && prev`. The
+  activation is also vetoed by `ship+0x71f5 & 0x10` (meaning unread; ignore, say so).
+- **Which effect (80).** `mode < 0x17` Omega-style (HD-lineage modes) builds the procedural
+  arc wake; the 2048-lineage modes play `WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` instead,
+  never both. A title with no 2048 modes (Pulse's own two-`.vex` mechanism is a different
+  thread) wires only the arc wake.
+- **Blend of both arc batches (85): additive RGB.** `out.rgb = src.rgb + dst.rgb` (factors
+  ONE/ONE, **not** SRC_ALPHA), alpha channel `dst.a * (1 - src.a)`. Vertex alpha is fixed
+  `0xb2` but is NOT a colour factor, so it does not dim the arc; brightness is the RGB.
+  Unknown: the fragment program's own use of vertex alpha (Orbis shader, not decompiled) and
+  the draw's depth test/write (second state word is zero, meaning undecoded). Choose and
+  label depth as chosen, not measured.
+- **Anchor (90).** One `arc_anchor_point` node per hull in `Locators.vex`, class `110`,
+  centreline, model space, translation in row 3. HD and Omega agree on all 38 hulls; the
+  per-hull values are in the Omega page and printed by
+  `magstrip_anchor_ground_truth` (`#[ignore]`d). `world = ship_model * anchor`.
+- **Sound (80 shape, 55 arguments).** Arming flag, initially armed. Over the strip and armed:
+  start cue `_magstrip01` (HD `~magstrip01`, `shiphd.bnk`) once in group `MagStrip_Player`
+  (local ship) or `MagStrip_NPC`, anchored to the ship transform; disarm. On the falling edge:
+  stop the instance and group, re-arm. The cue's loop flag is bank-side and not read; the
+  `[300.0, 50.0]` pair on the group and the `ship+0x648b ^ 1` argument (probably a
+  paused flag) are unresolved.
+- **Rumble (70), local player only.** Rising edge: `Enter_Mag_Rumble.xml`, then hold
+  `Travel_Mag_Rumble.xml` as a handle while over the strip; falling edge: queue
+  `Exit_Mag_Rumble.xml` and finish the held handle. Whether our front end has a rumble layer
+  at all is not checked.
+
 ## Open
 
-- **The over-the-strip predicate.** The virtual at `ship vtable + 200`, called at
-  `0x017659bb` in `FUN_01762e80`, was not read. It is the mag-floor contact state; the
-  PS3 logs it as the replicated field `m_overMagStrip`. Whoever wires anything starts here.
-- **The blend state** of the arc batches (`FUN_012091a0(.., 1, 0, 1)`,
-  `FUN_012091c0(.., 0, 0, 5)` into `DAT_020e2f88`). Do not guess additive.
-- **Which `Locators.vex` entries carry `arc_anchor_point`**, and their offsets.
-- **The sound law.** `FUN_012f8c70` starts `_magstrip01`; the only site that raises its
-  trigger flag (`ship+0x5f48`) is the *deactivate* branch, which also stops the sound
-  (`FUN_01312770`). No start-on-enter site and no second argument were recovered, so
-  "loop while over the strip" is a hypothesis, not a law.
-- **Which side a 2048 mode lands on** (Vita `FUN_81000930`, `FUN_810018d4` unidentified);
-  and whether `DAT_01f998e8` (suppresses the wake on the local player in some mode)
-  matters.
-- **HD's own update and arc build** (`0x00109858`, `0x001095e0`, `0x00109720`) were not
-  read; HD's vtable order differs from the PS4's, so the PS4 per-arc constants are
-  single-source (65).
+- **Which probe is the fifth `FUN_012582a0` call** (segment endpoints `local_db8`/`local_dc8`
+  in `FUN_0131b510`); until read, "same probe as Pulse's mag-floor probe" is a reading (85
+  on the literal, 65 on the index).
+- **The arc's per-arc constants** (spawn rates, widths, decay `0.85`, spline walk) are still
+  single-source PS4 (65): HD's `0x00109858`, `0x001095e0`, `0x00109720` were not read, and HD
+  slot order differs from the PS4's.
+- **The `MagStripArc_fp` fragment program** and the draw's depth state; the **loop flag of
+  `~magstrip01`**; `ship+0x648b`, `ship+0x71f5 & 0x10`, `DAT_01f998e8`.
+- **Which side a 2048 mode lands on** (Vita `FUN_81000930`, `FUN_810018d4` unidentified).
+- **The HD writer of the replicated `m_overMagStrip` bit** (bit 9 of the network flag word;
+  `ShipNet_CheckSendState`, `0x00337d78`, reads it) was not located on the PS3.
 - **Whether the two ribbons are `trail-ribbon.md`'s class** (55).
 - HD's `wo_magstrip_lightning.pob` has no referencing string. A built path is possible.
 
 ## Next Steps
 
-1. (2 hours) Decompile `ship vtable+200` on PS4 (find the vtable from the `FUN_01309e90`
-   constructor) and name the over-strip predicate; find who reads the HD
-   `m_overMagStrip` field to confirm on PS3.
-2. (1 hour) Read `FUN_012091a0` and `FUN_012091c0` for the blend, then the draw is a
-   wiring job with the layout in the PS4 page ("The draw").
-3. (ready to wire once 1 is done) `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` from the
-   2048 particle set: spawn at `ship+0x8860`'s anchor, enable while over the strip.
-   Pick `ZONE` for Zone-style modes, `SPARKS` otherwise (the exact PS4 condition is on the PS4 page).
-4. An `oag-wire` member implements only what lands above, with a test that fails when
-   the law is dropped; nothing for the sound until the start site is found.
+1. (ready to wire, `oag-wire`) The arc wake on the HD-lineage path: contact predicate, anchor
+   locator, additive-RGB blend, the sound start/stop law, with a test that fails when the
+   contact predicate or the arm/disarm edge is dropped. Layout of the batches is on the PS4
+   page ("The draw").
+2. (ready to wire) `WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes, enabled by
+   the same predicate; the `.pob` player already plays any `.POB` by name.
+3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build to lift the per-arc
+   constants off single-source.

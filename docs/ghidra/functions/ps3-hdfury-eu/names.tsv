@@ -526,3 +526,4 @@
 0x0010a0c0	function	MagstripWake_Construct	85	magstrip-wake.md
 0x00109e40	function	MagstripWake_ConstructAlt	75	magstrip-wake.md
 0x00109028	function	MagstripWake_EnqueueRender	78	magstrip-wake.md
+0x00337d78	function	ShipNet_CheckSendState	65	magstrip-wake.md

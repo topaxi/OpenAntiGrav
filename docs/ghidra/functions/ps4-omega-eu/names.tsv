@@ -85,3 +85,13 @@
 0x012e36d0	function	MagstripWake_DeleteSelf	72	ships-effects.md
 0x012f8c70	function	Ship_StartMagstripSound	55	ships-effects.md
 0x01312770	function	Ship_StopMagstripSound	55	ships-effects.md
+0x01768a40	function	Ship_IsOverMagStrip	85	ships-effects.md
+0x012ff590	function	Ship_IsOverMagStripBase	80	ships-effects.md
+0x0131b510	function	Craft_UpdateSurfaceProbes	65	ships-effects.md
+0x01315b30	function	Ship_MagStripEnterRumble	70	ships-effects.md
+0x01312b80	function	Ship_MagStripExitRumble	70	ships-effects.md
+0x012091a0	function	BlendState_SetColor	85	ships-effects.md
+0x012091c0	function	BlendState_SetAlpha	85	ships-effects.md
+0x012091f0	function	BlendState_SetSeparateAlpha	85	ships-effects.md
+0x01209180	function	BlendState_SetEnable	85	ships-effects.md
+0x01209170	function	BlendState_Clear	85	ships-effects.md
