@@ -336,7 +336,7 @@ impl super::Scene {
     ///
     /// **No per-tick node scrub, unlike the Plasma's.** `BombBlast_Update`
     /// scales the basis directly rather than scrubbing a baked node animation
-    /// - see `bomb_blast`'s own module doc comment - so [`Drawable::write`]
+    /// (see `bomb_blast`'s own module doc comment), so [`Drawable::write`]
     /// carries the geometry. The *texture* tracks play on the blast's own age
     /// (`Drawable::write_anims`): `BombBlast_Construct` and `Repulser_Init`
     /// seed each model with `Node_SetAnimTimeTree(0.0)` and `Mesh`'s per-frame
