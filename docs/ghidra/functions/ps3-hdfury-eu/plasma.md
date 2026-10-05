@@ -733,3 +733,72 @@ authors and whose engine source is unread) and a paraboloid reflection probe
 this renderer does not have - it is a lit, reflective program, not an unlit
 one, so the path `docs/rendering/hd-unlit-programs.md` added does not cover it
 and drawing the noise alone would be an invention of its combine.
+
+## 2026-10-05: `UV_offset` is the blast's age, not a keyed track, and it is played on the ring and halo
+
+**`hd-weapons`.** The 2026-09-25 section above left `UV_offset`'s law "a data
+read: parse the Anim Transform track at that node". Parsed, and it is not one.
+Corrects that section's "keyframe evaluator" reading, which followed the wrong
+vtable (the correction [gantry-clock.md](gantry-clock.md) already recorded).
+
+**The data side, negative.** `crates/render/examples/hd_weapon_anim_keys.rs`
+dumps every `0x3c0` node of the trio (`data/scratch/hd-weapons/keys.txt` has
+the run). Each of `HD_plasma_ring`, `_sphere` and `_halo` authors exactly one
+`Anim Transform` node, `Root`, with a single scale key `(256, 256, 256)` (1.0)
+and a single translation key at frame 36000 with a `1.8e-43` quantum, no
+rotation. Nothing in those keys moves, so no scroll can come from them.
+(`HD_missile_explosion`'s `sphere`/`bloom`/`rays`/`shockwave` nodes do carry
+scale keys: 25 keys 1 -> 18 over 60 frames, the shockwave 25 -> 11264 /256.)
+
+**The code side, which settles it.** `AnimNode_GetTime` (`0x002c0d78`) returns
+`*(float *)(node + 0xc0)` of the first node whose type is `*0x008b3988`, and
+`AnimNode_FindTransformValueField` (`0x002c11c8`) returns the address of that
+same field - [gantry-clock.md](gantry-clock.md) reads the class as
+`MeshImporter`, whose slot `+0x40` is `MeshImporter_SetTime` (`stfs f1,
+0xc0(r3)`), and `AnimNode_UpdateTransformTree` (`0x002c1b30`) calls that slot
+on the tree. `WeaponExplosions_Draw` calls it with the blast's `age`. So the
+`UV_offset` every one of the three materials is bound to **is the blast's age
+in seconds**, set each draw, unbounded (no `fmod`). `Shockwave_scalar` on the
+Missile's own explosion is the same field, i.e. that object's age too.
+Confidence 80: every link is read, no live watchpoint, and the age passed by
+`Draw` is read off the decompile rather than a breakpoint.
+
+**Which programs read it, and how.** `hd_plasmaring_glow` (race block
+`@0x1900`) and `hd_plasmahalo_glow` (`@0x1960`) declare `UV_offset`; the
+sphere's `plasmasphere_glow` does too, but through the lit program above.
+`scripts/ps3-microcode.py fp-file`, `t = UV_offset`, `(u, v) = TC3.xy`:
+
+```text
+ring   n  = tex(u, v + 0.01 t).a
+       uv = (u, v) + 0.15 n + 0.1 t            (both axes, each term)
+       rgb = tex(uv).rgb * TC0 ;  alpha = TC3.z * (r + g + b)  (then fog, globalAlphaScaler)
+halo   n  = tex(u, v + 0.4 t).a
+       uv = (2u + 0.1 t, v + 0.04 t + 0.1 n + 0.1 t)
+       rgb = tex(uv).rgb * TC0 ;  alpha = (r + g + b) * globalAlphaScaler.y / 3 + .x
+```
+
+(The halo's `ADD R0.xy, R1, R0.zwzz` adds `R0.z = u` to `u`, so its first
+coordinate doubles; read from the listing, not a typo.)
+
+**Played.** Two slot bits (`slots::CLOCK_SCROLL_RING`, `_HALO`, matched by
+`mesh::rcs::rim_glow`'s fingerprint) and a per-drawable `model_clock` in the
+mesh uniform (a pad, as `sun_occlusion_layer` was) that `mesh.wgsl` reads in
+place of the scene's `time` where those bits are set; the blast writes its age
+into it. **Only where the colour tap samples** moves; the programs' own colour
+and alpha combine is not reproduced, the engine's path stands in for it.
+
+**The sphere stays unwired, and says so.** Its `noise.gtf` tap only reaches
+the colour through the sun's specular term (`20 * noise * sun * spec`), and the
+sun direction and colour, the ambient, `0x7480de6d` and the reflection probe
+are all unwired. Its `UV_offset` therefore has nothing to move: the sphere
+draws exactly as before, a lit plain-textured ball without the noise highlight.
+(Its plasma tap's `v + 0.01 UV_offset` and alpha scale are not played alone:
+the alpha operand is unread.)
+
+**What a player sees.** The dome is the ring and halo; their texture now
+flows. `--give plasma` grid shot, ticks 185/200/215/230 (HD, chase camera):
+the streak pattern in the purple dome shifts frame to frame instead of sitting
+fixed on the shell (537,340 pixels differ at tick 185, 41,672 at 200, 152,234
+at 215, 58,312 at 230; 0 at 175, before the blast). Subtle by construction:
+0.1 per second over a 1.3 s window is 0.13 of the texture. Pulse's frame of
+the same shot is pixel-identical before and after (ticks 200 and 230).
