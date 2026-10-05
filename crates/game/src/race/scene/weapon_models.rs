@@ -283,7 +283,11 @@ impl super::Scene {
                     None => draw.matrix,
                 };
                 let mvp = view_projection * matrix;
-                drawable.write(queue, view_projection, matrix, mvp);
+                if draw.hd_scale.is_some() {
+                    drawable.write_clocked(queue, view_projection, matrix, mvp, draw.hd_clock);
+                } else {
+                    drawable.write(queue, view_projection, matrix, mvp);
+                }
                 if draw.hd_scale.is_none() {
                     drawable.write_node_anims(queue, seconds);
                 }

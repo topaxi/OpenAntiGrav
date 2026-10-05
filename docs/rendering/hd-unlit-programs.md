@@ -176,6 +176,16 @@ never activates the shield in a headless run (`holding Shield` through tick
 work recorded, and `oag-view` draws the additive sphere as nothing against
 its black background either way.
 
+## The clock-scroll programs (2026-10-05)
+
+The Plasma explosion's ring and halo (`hd_plasmaring_glow` `@0x1900`,
+`hd_plasmahalo_glow` `@0x1960`) are the same skeleton as the two rim glows
+over the declared `UV_offset` - the model's own clock, the blast's age -
+rather than `time`. They earn `slots::CLOCK_SCROLL_RING`/`_HALO` through
+`rim_glow`'s fingerprint; only the colour tap's coordinates are played. The
+programs, the evidence and the frames are in
+[plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md), 2026-10-05.
+
 ## Gates
 
 - **LeachBall: drawn.** `load::weapon_models::LEACH_BALL_DRAWN` is deleted

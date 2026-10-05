@@ -249,6 +249,12 @@ pub(super) struct PlasmaBlastDraw {
     /// `WeaponExplosions_Collapse`'s own node-hide - see this module's own
     /// doc comment. `None` on Pulse.
     pub(super) hd_scale: Option<[f32; 3]>,
+    /// HD only: the blast's age in seconds, which `WeaponExplosions_Draw`
+    /// hands every model as its animation time
+    /// (`AnimNode_UpdateTransformTree` -> `MeshImporter_SetTime`) and which
+    /// each material's `UV_offset` is bound to by pointer. `0.0` on Pulse.
+    /// See plasma.md, 2026-10-05.
+    pub(super) hd_clock: f32,
 }
 
 impl Race {
@@ -370,6 +376,7 @@ impl Race {
                         hemisphere2_seconds: 0.0,
                         hemisphere1_seconds: 0.0,
                         hd_scale: Some(if visible { blast.hd_ease } else { [0.0; 3] }),
+                        hd_clock: blast.age,
                     }
                 } else {
                     PlasmaBlastDraw {
@@ -378,6 +385,7 @@ impl Race {
                         hemisphere2_seconds: blast.age * PLASMA_BLAST_HEMISPHERE2_ANIM_RATE,
                         hemisphere1_seconds: blast.age * PLASMA_BLAST_HEMISPHERE1_ANIM_RATE,
                         hd_scale: None,
+                        hd_clock: 0.0,
                     }
                 }
             })

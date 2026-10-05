@@ -401,11 +401,37 @@ impl Drawable {
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
     ) {
+        self.write_uniforms(queue, view_projection, model, prev_mvp, sun_occlusion_layer, 0.0);
+    }
+
+    /// [`Self::write`] for a model whose materials read their own animation
+    /// clock - `clock` seconds, what an HD material's `UV_offset` is bound
+    /// to. See `oag_render::mesh::slots::CLOCK_SCROLL_RING`.
+    pub(super) fn write_clocked(
+        &self,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        model: Mat4,
+        prev_mvp: Mat4,
+        clock: f32,
+    ) {
+        self.write_uniforms(queue, view_projection, model, prev_mvp, None, clock);
+    }
+
+    fn write_uniforms(
+        &self,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        model: Mat4,
+        prev_mvp: Mat4,
+        sun_occlusion_layer: Option<usize>,
+        clock: f32,
+    ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
             sun_occlusion_layer: sun_occlusion_layer.map_or(0.0, |layer| layer as f32 + 1.0),
-            _pad0: 0.0,
+            model_clock: clock,
             _pad1: 0.0,
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
@@ -756,7 +782,8 @@ pub(crate) struct Uniforms {
     /// plus one; `0.0` for none - see `mesh_render`'s own mirror of this
     /// layout and `oag_render::shadow::occlusion`.
     sun_occlusion_layer: f32,
-    _pad0: f32,
+    /// See `mesh_render`'s own mirror: the model's own animation clock.
+    model_clock: f32,
     _pad1: f32,
     _pad2: f32,
     /// The previous tick's `view_projection * model`, premultiplied - one
