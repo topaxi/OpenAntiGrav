@@ -123,8 +123,8 @@
 //! also derived the scale.
 
 use oag_core::math::{Mat4, Vec3, camera};
-use oag_render::mesh::Model;
-use oag_render::mesh_render::{
+use oag_mesh::mesh::Model;
+use oag_mesh::mesh_render::{
     Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
     TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
     write_uniforms_raw,
@@ -186,8 +186,8 @@ impl Countdown {
             TRANSPARENT_BLEND,
             GlowMask::Protected,
             Velocity::None,
-            &oag_render::mesh_render::zone::StageArt::NONE,
-            oag_render::mesh_render::ShadowMaps::NONE,
+            &oag_mesh::mesh_render::zone::StageArt::NONE,
+            oag_mesh::mesh_render::ShadowMaps::NONE,
             ShadowReceiver::Never,
         )?;
 
@@ -389,7 +389,7 @@ impl Countdown {
         pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
-        let bind = |draw: &oag_render::mesh::DrawCall| {
+        let bind = |draw: &oag_mesh::mesh::DrawCall| {
             let slot = draw.texture.map_or(0, |t| t + 1);
             &self.built.texture_binds[if slot < self.built.texture_binds.len() {
                 slot

@@ -469,7 +469,7 @@ impl Race {
     /// with HD's own constants (rise 0.25/s, fall 0.5/s; floor 100 km/h,
     /// span 500).
     #[must_use]
-    pub fn hd_trail_vertices(&self, slot: usize) -> Vec<oag_render::mesh::GpuVertex> {
+    pub fn hd_trail_vertices(&self, slot: usize) -> Vec<oag_mesh::mesh::GpuVertex> {
         let mut out = Vec::new();
         self.extend_hd_trail_vertices(&mut out, slot);
         out
@@ -478,11 +478,7 @@ impl Race {
     /// [`Self::hd_trail_vertices`], appended to a list the caller owns - the
     /// form the renderer uses, for the reason
     /// [`oag_render::exhaust::Exhaust::extend_trail_vertices`] gives.
-    pub fn extend_hd_trail_vertices(
-        &self,
-        out: &mut Vec<oag_render::mesh::GpuVertex>,
-        slot: usize,
-    ) {
+    pub fn extend_hd_trail_vertices(&self, out: &mut Vec<oag_mesh::mesh::GpuVertex>, slot: usize) {
         if !self.view.hd_trail_active {
             return;
         }
@@ -536,7 +532,7 @@ impl Race {
         slot: usize,
         right: Vec3,
         up: Vec3,
-    ) -> Vec<oag_render::mesh::GpuVertex> {
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
         if !self.view.hd_trail_active || slot == FOLLOWED_SLOT {
             return Vec::new();
         }
@@ -776,8 +772,8 @@ impl Race {
     /// the disc's own effect did not load.
     pub fn extend_spark_vertices(
         &self,
-        additive: &mut Vec<oag_render::mesh::GpuVertex>,
-        alpha_over: &mut Vec<oag_render::mesh::GpuVertex>,
+        additive: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        alpha_over: &mut Vec<oag_mesh::mesh::GpuVertex>,
         right: Vec3,
         up: Vec3,
     ) {
@@ -797,8 +793,8 @@ impl Race {
     /// no third pipeline per effect.
     pub fn extend_stage_vertices(
         &self,
-        additive: &mut Vec<oag_render::mesh::GpuVertex>,
-        alpha_over: &mut Vec<oag_render::mesh::GpuVertex>,
+        additive: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        alpha_over: &mut Vec<oag_mesh::mesh::GpuVertex>,
         right: Vec3,
         up: Vec3,
     ) {
@@ -932,7 +928,7 @@ impl Race {
     /// than a per-tick check).
     ///
     /// One entry per weapon pad, in the track file's own node order - the
-    /// same order `oag_render::mesh::Model::node_vertex_ranges` walks the
+    /// same order `oag_mesh::mesh::Model::node_vertex_ranges` walks the
     /// weapon pad model in, which is what lets a caller pair position `i`
     /// here with that list's `i`-th vertex range.
     #[must_use]

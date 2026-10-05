@@ -332,7 +332,7 @@ recovered feature - it should be labelled as such wherever it lands, the same
 way `TRANSPARENT_BLEND` and `ALPHA_TEST_THRESHOLD` above are labelled as
 invented rather than recovered.
 
-**Implemented first as `oag_render::mesh::Lod`, superseded by the per-frame
+**Implemented first as `oag_mesh::mesh::Lod`, superseded by the per-frame
 switch below** (`both`/`single`, a `[graphics] lod` settings key
 defaulting to `both` until 2026-09-23; the type and the both-tiers view
 are gone, and the setting is the per-title `model_detail` - see the
@@ -424,7 +424,7 @@ almost every opponent more than 30 units ahead draws as its coarse
 track scenery draws its coarse tier. Up close, only tier 0 shows, which is
 what the two frames above measured.
 
-**What this meant for the old `oag_render::mesh::Lod`:** `single` was the
+**What this meant for the old `oag_mesh::mesh::Lod`:** `single` was the
 faithful picture up close and `both` was not, the opposite of what its doc
 said. `single` became the default the same day and the `[graphics] lod`
 settings key was removed; once the per-frame switch landed, the `Lod` type
@@ -435,7 +435,7 @@ and the table, and a fixed view calls `Model::keep_nearest`.
 
 `single` was superseded the same evening by the switch itself. Every model
 built from one `.vex` now keeps all of its tiers, plus an
-`oag_render::mesh::LodGroups` table: each group's payload position (`+0x40`)
+`oag_mesh::mesh::LodGroups` table: each group's payload position (`+0x40`)
 carried into model space through the group node's world matrix, its
 `child_count - 1` switch distances (from `+0x60`), and which group and child
 every scene-tree node sits under. `LodGroups::child_at` is
@@ -960,7 +960,7 @@ material's `& 0x10` flag.
 
 `oag_vex::vex::mesh_tex_transforms` parses the array and
 `TexTransform::sample` reproduces the evaluator;
-`oag_render::mesh_render::TexAnims` is what draws through it.
+`oag_mesh::mesh_render::TexAnims` is what draws through it.
 `crates/render/tests/authored_uv_ground_truth.rs` pins both against the disc.
 
 Read off `Data\Ships\Assegai\shipboost.vex` and Feisar's (byte-identical), on
@@ -990,7 +990,7 @@ authoring idiosyncrasy.
 
 ### List B is real, distinct geometry, not a second pass over list A
 
-**Confidence: 90.** `oag_render::mesh` used to read list A only, on the theory
+**Confidence: 90.** `oag_mesh::mesh` used to read list A only, on the theory
 that B was a duplicate pass and reading both would draw the same surface
 twice. Checked directly against `16_Track` (Talon's Junction): most meshes
 that have batches in both lists really do share them (mesh `507`'s four batches
@@ -1037,10 +1037,10 @@ between them and the rest of the opaque scene, since depth write was off for
 geometry that has no actual transparency to justify it. `is_alpha_tested()`
 batches get their own pipeline instead - see below.
 
-`oag_render::mesh::Model` splits batches three ways: `draws` (opaque, neither
+`oag_mesh::mesh::Model` splits batches three ways: `draws` (opaque, neither
 flag set), `alpha_tested_draws` (`is_alpha_tested()`), `transparent_draws`
 (`is_transparent()`). Two more pipelines join the opaque one in
-`oag_render::mesh_render::Built`, all drawn in the same pass, in that order:
+`oag_mesh::mesh_render::Built`, all drawn in the same pass, in that order:
 
 - `alpha_test_pipeline` keeps depth write on and `discard`s pixels below a
   threshold in the shader (`fs_main_alpha_test` in `mesh.wgsl`) rather than
@@ -1385,7 +1385,7 @@ picture instead:
   `engine_general.tga`. A mesh-name heuristic cannot get this one right in
   either direction - it is genuinely mixed at the batch level.
 
-`oag_render::mesh::is_blink_light_texture` matches on the decoded texture name
+`oag_mesh::mesh::is_blink_light_texture` matches on the decoded texture name
 (case-insensitively containing `flashing_glow`) rather than the mesh name, so
 it judges each batch by what it actually paints. That is what makes it
 generalise to all 8 ships at once - see
@@ -1478,7 +1478,7 @@ not distinguish a forward from a backward scroll. The grey/white column does:
 its authored row sequence is asymmetric rather than a single smooth hump, so
 playing it the wrong way round is a real, visible difference - a fast
 attack/slow decay reads as the reverse, a slow build to a sudden cutoff.
-`crates/render/src/mesh.wgsl` subtracts the scroll offset rather than adding
+`crates/mesh/src/mesh.wgsl` subtracts the scroll offset rather than adding
 it, on direct report against the original rather than an independent
 frame-by-frame capture of the white light specifically (unlike the red curve
 above, which is a real measurement). **Confidence 55** for the direction
@@ -1615,7 +1615,7 @@ the twelve, with 474 meshes below them** - and the class is read whole:
 registration, binder and all three channel evaluators are in
 [`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md), which
 is also where the field map's evidence lives. `oag_vex::vex::anim_transform`
-parses it and `oag_render::mesh::AnimNode` plays it.
+parses it and `oag_mesh::mesh::AnimNode` plays it.
 
 The payload is a `0x50`-byte header followed by six key arrays - translation,
 rotation and scale, each a `u16` time array in 60 Hz frames paired with

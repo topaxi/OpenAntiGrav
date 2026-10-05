@@ -108,7 +108,7 @@ view   = FUN_005a2b18(eye, target, up)
 right = normalise(cross(up, forward)), up' = cross(forward, right), last row
 `-eye . axes`. So **the map looks from a point 70 units up the sun vector at
 the ship, along the sun**, and the sun vector points *towards* the light -
-the same sense `oag_render::mesh_render::Light::direction` carries.
+the same sense `oag_mesh::mesh_render::Light::direction` carries.
 
 **The box.** The eight corners of `bbox` - or, when null, the fixed
 `(-6,-6,-6)..(6,6,6)` cube the function writes once into

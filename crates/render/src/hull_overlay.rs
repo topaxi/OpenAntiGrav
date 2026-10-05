@@ -100,7 +100,7 @@ use std::sync::Arc;
 use oag_core::math::Vec3;
 use oag_vex::vex;
 
-use crate::mesh::{Model, ModelTexture};
+use oag_mesh::mesh::{Model, ModelTexture};
 
 /// Whether a race draws the overlay at all: **on**, because the original
 /// draws it in play.
@@ -290,7 +290,7 @@ pub fn tint(alpha: f32) -> [f32; 4] {
 }
 
 /// Whether the overlay over a batch whose own mask value is `glow`
-/// ([`crate::mesh::GpuVertex::glow`]) reaches the bloom's mask: only a batch
+/// ([`oag_mesh::mesh::GpuVertex::glow`]) reaches the bloom's mask: only a batch
 /// that stamps a glow of its own does.
 ///
 /// Measured 2026-10-01 on a real absorb (`docs/rendering/glow-mask.md`, "The
@@ -303,7 +303,7 @@ pub fn tint(alpha: f32) -> [f32; 4] {
 /// vertices) is the only overlay draw the dump holds after the shadow pass.
 #[must_use]
 pub fn stamps_mask(glow: f32) -> bool {
-    glow > (f32::from(crate::mesh::glow::BASE) + 0.5) / 255.0
+    glow > (f32::from(oag_mesh::mesh::glow::BASE) + 0.5) / 255.0
 }
 
 /// The overlay model for `hull`: the same vertices and triangles, textured
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn only_a_batch_with_a_glow_of_its_own_keeps_the_overlays_mask() {
-        let base = f32::from(crate::mesh::glow::BASE) / 255.0;
+        let base = f32::from(oag_mesh::mesh::glow::BASE) / 255.0;
         assert!(!stamps_mask(base), "an ordinary batch's mask is wiped");
         assert!(!stamps_mask(0.0), "a transparent batch without the bits");
         assert!(

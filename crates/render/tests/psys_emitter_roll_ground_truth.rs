@@ -8,8 +8,8 @@
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_mesh::mesh::GpuVertex;
 use oag_pob as pob;
-use oag_render::mesh::GpuVertex;
 use oag_render::psys::{ColourScale, Effect, System, TICK_HZ};
 
 fn effects() -> Vec<(String, Effect)> {

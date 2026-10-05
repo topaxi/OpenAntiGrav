@@ -10,7 +10,7 @@ use log::{debug, warn};
 
 use oag_game::{boot, capture, loading, prefetch, race, records, settings};
 use oag_gameplay::ControlScheme;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 

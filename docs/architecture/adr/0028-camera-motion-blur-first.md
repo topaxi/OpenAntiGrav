@@ -31,7 +31,7 @@ half.
 
 ## Decision
 
-**Build `oag_render::post::motion_blur` as camera reprojection, wired exactly
+**Build `oag_post::motion_blur` as camera reprojection, wired exactly
 where the design put the full tier, under exactly the row the design
 specified.**
 
@@ -65,7 +65,7 @@ specified.**
   so a camera cut this project does not yet signal (a view switch, a respawn)
   costs one frame of bounded smear rather than a whole-frame streak.
 - **Colour space**: the gather averages in the stored perceptual encoding,
-  like every pass in `oag_render::post`, per
+  like every pass in `oag_post`, per
   [ADR-0020](0020-gamma-authoritative-colour-space.md)'s authority statement.
   Linear-light averaging would be the physically better lens model and is
   deliberately not smuggled in as a side effect of a blur pass.

@@ -20,7 +20,7 @@
 //! (`Model::material_variants`), the same idiom `hd_material_probe_dump.rs`
 //! uses for roles, not a second reading of the variant-selection logic.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

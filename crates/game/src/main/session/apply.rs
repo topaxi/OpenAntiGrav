@@ -7,7 +7,7 @@ use oag_game::{drs, input, perf, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_input::pad::TriggerMode;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::menu;
 
 use crate::stage::Stage;
@@ -374,7 +374,7 @@ impl Session {
             // Applied by the next frame the race draws: the session hands the
             // preset to `Race::set_model_detail` every frame, and every model
             // is built with all its tiers whatever this says.
-            "graphics.model_detail" => match text.parse::<oag_render::mesh::ModelDetail>() {
+            "graphics.model_detail" => match text.parse::<oag_mesh::mesh::ModelDetail>() {
                 Ok(detail) => {
                     if let Some(profile) = self.render_profile_mut() {
                         profile.model_detail = detail;
@@ -389,7 +389,7 @@ impl Session {
             // preset to `Race::set_texture_detail` every frame, which writes
             // it into the scene uniform the fragment stage reads.
             "graphics.texture_detail" => {
-                match text.parse::<oag_render::mesh_render::TextureDetail>() {
+                match text.parse::<oag_mesh::mesh_render::TextureDetail>() {
                     Ok(detail) => {
                         if let Some(profile) = self.render_profile_mut() {
                             profile.texture_detail = detail;

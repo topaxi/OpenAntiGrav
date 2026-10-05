@@ -2,7 +2,7 @@
 
 The bloom's four passes are recovered on
 [`bloom.md`](../ghidra/functions/psp-pulse-usa/bloom.md) and ported in
-`oag_render::post::bloom`, every constant read. What was not known until
+`oag_post::bloom`, every constant read. What was not known until
 2026-09-23 is what the framebuffer's alpha channel holds when the bright pass
 reads it, and whether the pass runs at all. This page is that measurement,
 and the rules it gives for writing the mask.
@@ -108,7 +108,7 @@ plume **does not** write the mask.
   the track, the sky, the pads, the hulls, the plumes and the shields - is
   `Model::stamps_glow`, and its opaque and cutout pipelines write
   `GpuVertex::glow` into alpha: rules 1 and 2 above, per batch, through
-  `oag_render::mesh::glow`. Its blended pipeline writes colour only, which is
+  `oag_mesh::mesh::glow`. Its blended pipeline writes colour only, which is
   rule 3 and takes the plume and the shield out of the mask.
 - **The `_GLOW` decals draw.** They are cutouts on the `0x10` reference,
   coplanar with the wall they light, and `Gfx_BuildBatchStateList` gives
@@ -295,7 +295,7 @@ there and the arches, the laser and the tunnel's rim light drew with no glow.
 
 **How ours stamps it - chosen, not measured.** The original writes the stencil
 inside the blended draw. A blend state cannot write a constant alpha while its
-colour factors read the texel's own, so `oag_render::mesh_render::stamp` builds
+colour factors read the texel's own, so `oag_mesh::mesh_render::stamp` builds
 a second pipeline - colour write mask off, alpha only, no blend, the batch's own
 alpha test and the blended pipelines' depth state - and
 `race::Drawable::draw_stamps` submits every visible transparent draw through it

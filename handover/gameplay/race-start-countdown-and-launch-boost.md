@@ -294,7 +294,7 @@ against the race clock would blink it roughly 4.6 times through a 272-tick count
 duration nothing here measured.
 
 **Rendered through a new, dedicated pass** (`crates/game/src/hud/countdown.rs`,
-`oag_render::mesh_render::write_uniforms_raw` added for it), reusing the generic
+`oag_mesh::mesh_render::write_uniforms_raw` added for it), reusing the generic
 `TexAnims`/`NodeAnims` playback `start-gantry.md` already said needed no new mechanism -
 true here too, once the actual bug was found. **The bug, worth recording because it will
 recur**: an orthographic projection built by mirroring `top`/`bottom` to get "HUD-pixel
@@ -712,7 +712,7 @@ In short:
   own authored content (`target+0x20+0xc`) was not decoded - likely lives
   inside `321go_startfinish.rcsmodel`'s own bytes, in a section `oag-rcs`
   does not parse yet - so playback is a format-recovery task first, then a
-  `crates/render/src/mesh/rcs.rs` replay hook. Full write-up:
+  `crates/mesh/src/mesh/rcs.rs` replay hook. Full write-up:
   `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s own 2026-09-17
   section and `docs/rendering/start-gantry.md`'s matching one.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~

@@ -177,7 +177,7 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
     let blob = archives
         .read_name(r"Data\Ships\Assegai\Ship.vex")
         .expect("Assegai's hull");
-    let hull = oag_render::mesh::build(r"Data\Ships\Assegai\Ship.vex", &blob).expect("the hull");
+    let hull = oag_mesh::mesh::build(r"Data\Ships\Assegai\Ship.vex", &blob).expect("the hull");
     assert!(
         oag_render::hull_overlay::projection_scale(&blob).is_some(),
         "Assegai's mesh batches share no one scale to project from"

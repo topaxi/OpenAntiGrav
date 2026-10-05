@@ -176,7 +176,7 @@ pub struct RenderProfile {
     /// (`Graphics::bloom`), on by default because the original runs it. It is also the
     /// first consumer of the reprojection infrastructure temporal
     /// anti-aliasing needs, which is most of why it exists - see
-    /// `oag_render::post::motion_blur`, `docs/rendering/motion-blur.md` and
+    /// `oag_post::motion_blur`, `docs/rendering/motion-blur.md` and
     /// ADR-0028.
     ///
     /// A strength rather than a boolean, per that design: the value names a
@@ -244,13 +244,13 @@ pub struct RenderProfile {
     /// every distance and `maximum` never switches; both are this project's
     /// own, chosen rather than measured. One multiplier on the authored
     /// distances, so the rule itself stays the one source of truth - see
-    /// [`oag_render::mesh::ModelDetail`].
+    /// [`oag_mesh::mesh::ModelDetail`].
     ///
     /// Per title because it is render-cost-sensitive the way
     /// [`Self::msaa`] is: the coarse tier is where a full grid's triangle
     /// count goes down. Read fresh every frame, so the row applies live.
     #[serde(default)]
-    pub model_detail: oag_render::mesh::ModelDetail,
+    pub model_detail: oag_mesh::mesh::ModelDetail,
     /// How far out a PSP `.vex` model keeps its finer texture levels:
     /// `original`, `high` or `maximum`.
     ///
@@ -258,10 +258,10 @@ pub struct RenderProfile {
     /// law, `Gu_TexLodSlope` at `1/256` with bias 1, over the mip levels the
     /// disc authors. `high` doubles the depth of every level step and `maximum`
     /// never steps; both are this project's own, chosen rather than measured.
-    /// One multiplier on the law - see [`oag_render::mesh_render::TextureDetail`].
+    /// One multiplier on the law - see [`oag_mesh::mesh_render::TextureDetail`].
     /// Read fresh every frame, so the row applies live.
     #[serde(default)]
-    pub texture_detail: oag_render::mesh_render::TextureDetail,
+    pub texture_detail: oag_mesh::mesh_render::TextureDetail,
 }
 
 /// See [`RenderProfile::screen_filter`]: `off`.
@@ -289,8 +289,8 @@ impl Default for RenderProfile {
             shadows: oag_display::display::Shadows::default(),
             screen_filter: default_screen_filter(),
             screen_filter_strength: oag_display::display::FilterStrength::default(),
-            model_detail: oag_render::mesh::ModelDetail::default(),
-            texture_detail: oag_render::mesh_render::TextureDetail::default(),
+            model_detail: oag_mesh::mesh::ModelDetail::default(),
+            texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
         }
     }
 }

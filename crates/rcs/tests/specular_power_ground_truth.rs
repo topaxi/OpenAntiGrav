@@ -38,7 +38,7 @@ fn a_zero_specular_exponent_patched_from_specular_power_is_authored_non_zero() {
 
         // The chunk-carried vertex declaration for each material slot that
         // draws at least one chunk - the same lookup
-        // `oag_render::mesh::rcs::skin::variants` builds, reimplemented here
+        // `oag_mesh::mesh::rcs::skin::variants` builds, reimplemented here
         // rather than depended on: this crate sits below `oag-render` in the
         // dependency graph.
         let mut decl_of: std::collections::BTreeMap<u32, Option<&rcsmodel::VertexDecl>> =

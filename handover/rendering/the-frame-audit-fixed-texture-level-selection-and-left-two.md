@@ -33,7 +33,7 @@ of it the same day; see `frame-audit.md`.
   was not the shine pass and not a missing batch: the arch lights and rim light
   are **blended batches with the glow bits**, which the original stamps into the
   bloom's mask (`0xfa`, their texture's own byte) and ours left at `4`, so they
-  had no bloom at all. `oag_render::mesh_render::stamp` now writes it
+  had no bloom at all. `oag_mesh::mesh_render::stamp` now writes it
   (`docs/rendering/glow-mask.md`, "Transparent batches stamp"); a frame of ours
   at a bright phase of the strip's brightness cycle (about 300 ticks; which texture
   drives it is unread) has 1,584 pixels over 225 in the strip's box against the

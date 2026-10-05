@@ -18,7 +18,7 @@
 
 use oag_core::math::{Mat4, Vec3};
 
-use crate::mesh::{DrawCall, Model};
+use oag_mesh::mesh::{DrawCall, Model};
 
 use super::{FX350_TEXTURE, basename};
 

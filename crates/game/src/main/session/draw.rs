@@ -331,17 +331,17 @@ impl Session {
                         &zone_spectrum,
                         self.pass_timer
                             .as_ref()
-                            .and_then(oag_render::timing::PassTimer::writes),
+                            .and_then(oag_gpu::timing::PassTimer::writes),
                         self.blur_timer.as_ref().and_then(|timer| {
-                            Some(oag_render::post::motion_blur::ChainTimestamps {
-                                begin: timer.half_writes(oag_render::timing::Half::Begin)?,
-                                end: timer.half_writes(oag_render::timing::Half::End)?,
+                            Some(oag_post::motion_blur::ChainTimestamps {
+                                begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
+                                end: timer.half_writes(oag_gpu::timing::Half::End)?,
                             })
                         }),
                         self.hd_bloom_timer.as_ref().and_then(|timer| {
-                            Some(oag_render::post::hd_bloom::ChainTimestamps {
-                                begin: timer.half_writes(oag_render::timing::Half::Begin)?,
-                                end: timer.half_writes(oag_render::timing::Half::End)?,
+                            Some(oag_post::hd_bloom::ChainTimestamps {
+                                begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
+                                end: timer.half_writes(oag_gpu::timing::Half::End)?,
                             })
                         }),
                     )
@@ -395,20 +395,20 @@ impl Session {
                     &zone_spectrum,
                     self.pass_timer
                         .as_ref()
-                        .and_then(oag_render::timing::PassTimer::writes),
+                        .and_then(oag_gpu::timing::PassTimer::writes),
                     // The two halves of one pair, for the chain's first and
                     // last pass - see `PassTimer::half_writes`.
                     self.blur_timer.as_ref().and_then(|timer| {
-                        Some(oag_render::post::motion_blur::ChainTimestamps {
-                            begin: timer.half_writes(oag_render::timing::Half::Begin)?,
-                            end: timer.half_writes(oag_render::timing::Half::End)?,
+                        Some(oag_post::motion_blur::ChainTimestamps {
+                            begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
+                            end: timer.half_writes(oag_gpu::timing::Half::End)?,
                         })
                     }),
                     // The same split, for the HD/Fury bloom chain.
                     self.hd_bloom_timer.as_ref().and_then(|timer| {
-                        Some(oag_render::post::hd_bloom::ChainTimestamps {
-                            begin: timer.half_writes(oag_render::timing::Half::Begin)?,
-                            end: timer.half_writes(oag_render::timing::Half::End)?,
+                        Some(oag_post::hd_bloom::ChainTimestamps {
+                            begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
+                            end: timer.half_writes(oag_gpu::timing::Half::End)?,
                         })
                     }),
                 );

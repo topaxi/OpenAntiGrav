@@ -30,7 +30,7 @@ fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
     pollster::block_on(
-        adapter.request_device(&oag_render::mesh_render::device_descriptor(
+        adapter.request_device(&oag_mesh::mesh_render::device_descriptor(
             "race-build test",
             &adapter,
         )),
@@ -83,7 +83,7 @@ fn race_build_polls_never_wait_on_the_build() {
         allocation,
         extent: allocation,
         warm_target: view.clone(),
-        anisotropy: oag_render::mesh_render::Anisotropy::default(),
+        anisotropy: oag_mesh::mesh_render::Anisotropy::default(),
         settings: settings::Settings::default(),
         render_profile: settings::RenderProfile::default(),
         scheme: oag_gameplay::ControlScheme::default(),

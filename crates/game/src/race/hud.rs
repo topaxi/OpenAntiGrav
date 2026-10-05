@@ -357,7 +357,7 @@ fn vex_model_art(
                 continue;
             }
         };
-        let model = match oag_render::mesh::build(src, &blob) {
+        let model = match oag_mesh::mesh::build(src, &blob) {
             Ok(model) => model,
             Err(why) => {
                 report.push(format!("HUD model {src} did not build ({why})"));
@@ -424,7 +424,7 @@ fn vex_model_art(
 /// [`crate::sprite::Placed::blend`].
 fn quad_blend(
     src: &str,
-    model: &oag_render::mesh::Model,
+    model: &oag_mesh::mesh::Model,
     report: &mut Vec<String>,
 ) -> Option<oag_vex::vex::BlendClass> {
     let mut declared: Vec<oag_vex::vex::BlendClass> = Vec::new();
@@ -460,7 +460,7 @@ fn quad_blend(
 /// `None` for a model with fewer than two vertices - not a quad at all - which
 /// none of the sight or icon models are, but a reader elsewhere handing this a
 /// track or a ship should not get a bogus `[0.0, 0.0]` back.
-fn quad_extent(model: &oag_render::mesh::Model) -> Option<[f32; 2]> {
+fn quad_extent(model: &oag_mesh::mesh::Model) -> Option<[f32; 2]> {
     let mut min = [f32::MAX, f32::MAX];
     let mut max = [f32::MIN, f32::MIN];
     for vertex in &model.vertices {

@@ -19,15 +19,15 @@
 //! Neither touches the frame the capture writes out: both record into
 //! encoders of their own.
 
-use oag_render::timing::{Half, PassTimer};
+use oag_gpu::timing::{Half, PassTimer};
 
 /// The timestamp pairs one recording is handed - all `None` on the CPU bench
 /// and on a device without timestamps.
 #[derive(Default)]
 pub(super) struct Timestamps<'a> {
     pub scene: Option<wgpu::RenderPassTimestampWrites<'a>>,
-    pub blur: Option<oag_render::post::motion_blur::ChainTimestamps<'a>>,
-    pub bloom: Option<oag_render::post::hd_bloom::ChainTimestamps<'a>>,
+    pub blur: Option<oag_post::motion_blur::ChainTimestamps<'a>>,
+    pub bloom: Option<oag_post::hd_bloom::ChainTimestamps<'a>>,
 }
 
 /// Runs whichever benches the environment asks for, `record` encoding the
@@ -52,7 +52,7 @@ pub(super) fn run(
         let mut timers: [Option<PassTimer>; 3] =
             std::array::from_fn(|_| PassTimer::new(device, queue));
         let mut spans: [Vec<f64>; 3] = Default::default();
-        let marks = oag_render::perfprobe::marks::Marks::new(device, queue);
+        let marks = oag_gpu::perfprobe::marks::Marks::new(device, queue);
         let mut groups: Vec<(&'static str, Vec<f64>, Option<u64>)> = Vec::new();
         // The first tenth warms caches and clocks and is not counted.
         let warmup = runs / 10;
@@ -70,13 +70,13 @@ pub(super) fn run(
                 Timestamps {
                     scene: scene.as_ref().and_then(PassTimer::writes),
                     blur: blur.as_ref().and_then(|t| {
-                        Some(oag_render::post::motion_blur::ChainTimestamps {
+                        Some(oag_post::motion_blur::ChainTimestamps {
                             begin: t.half_writes(Half::Begin)?,
                             end: t.half_writes(Half::End)?,
                         })
                     }),
                     bloom: bloom.as_ref().and_then(|t| {
-                        Some(oag_render::post::hd_bloom::ChainTimestamps {
+                        Some(oag_post::hd_bloom::ChainTimestamps {
                             begin: t.half_writes(Half::Begin)?,
                             end: t.half_writes(Half::End)?,
                         })

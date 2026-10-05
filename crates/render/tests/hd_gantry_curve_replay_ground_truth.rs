@@ -19,7 +19,7 @@
 //! `crates/rcs/tests/hd_gantry_curve_ground_truth.rs` already pins the byte
 //! layout of `321go_startfinish.rcsmodel`'s four curves. This file is the
 //! other half: that the *renderer* actually reaches them - a material's curve
-//! becomes an [`oag_render::mesh::AnimTrack::Rcs`], a vertex's own `anim`
+//! becomes an [`oag_mesh::mesh::AnimTrack::Rcs`], a vertex's own `anim`
 //! index selects it, and `TexAnims::sample` produces a different value at two
 //! different points in time, the same three checks
 //! `authored_uv_ground_truth.rs` already runs for Pulse's own mechanism.
@@ -38,8 +38,8 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, AnimTrack};
-use oag_render::mesh_render::TexAnims;
+use oag_mesh::mesh::{self, AnimTrack};
+use oag_mesh::mesh_render::TexAnims;
 
 /// The digit board's own model: five materials, four of them carrying a
 /// curve - see `docs/formats/edge-animation.md`.
@@ -49,7 +49,7 @@ fn image() -> Option<PathBuf> {
     oag_testdata::image("hdfury-ps3-eu-dec.iso")
 }
 
-/// Every curved material reaches [`oag_render::mesh::Model::anim_tracks`] as
+/// Every curved material reaches [`oag_mesh::mesh::Model::anim_tracks`] as
 /// an [`AnimTrack::Rcs`], a vertex of that material selects it, and replaying
 /// it at two different times actually changes the sampled table - the same
 /// "wired, not frozen" bar `authored_uv_ground_truth.rs` holds Pulse's own

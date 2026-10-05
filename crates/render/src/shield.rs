@@ -23,7 +23,7 @@
 //! This module is the state and the maths, with no `wgpu` in it at all, the same
 //! split [`crate::exhaust`] uses: the recovered constants are testable on a
 //! machine with no graphics driver. The models themselves are ordinary `.vex`
-//! meshes and go through [`crate::mesh`] like the hull and the boost plume, so
+//! meshes and go through [`oag_mesh::mesh`] like the hull and the boost plume, so
 //! there is no pipeline here to own.
 //!
 //! # What is recovered and what is ours

@@ -17,8 +17,8 @@
 //! block ever patch the same code slot, over every pair of every block
 //! reached here.
 
+use oag_mesh::mesh;
 use oag_rcs::{rcsmaterial, rcsmodel};
-use oag_render::mesh;
 
 const CIRCUITS: &[(&str, &str)] = &[
     ("DATA00", "/data/environments/amphiseum/track.vex"),

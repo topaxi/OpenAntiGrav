@@ -3,7 +3,7 @@
 //! # Why this matters more than its size suggests
 //!
 //! **The renderer's light rig is a stand-in, and this is what it stands in
-//! for.** `crates/render/src/mesh.wgsl` says so in its own header - a fixed
+//! for.** `crates/mesh/src/mesh.wgsl` says so in its own header - a fixed
 //! two-light rig with invented directions, chosen so that geometry reads
 //! clearly rather than to reproduce the game's look. On HD the game's look is
 //! authored, in plain text, one file per circuit: a sun direction, a sun

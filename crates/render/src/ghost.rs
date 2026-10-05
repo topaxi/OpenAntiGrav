@@ -12,7 +12,7 @@
 //! The team's ordinary ship model, three times, all unlit:
 //!
 //! 1. **A depth lay.** Depth test and write on, no colour, and the ordinary
-//!    [`crate::mesh::glow::BASE`] stamped into the glow mask. It is what makes
+//!    [`oag_mesh::mesh::glow::BASE`] stamped into the glow mask. It is what makes
 //!    the next two passes see only the ghost's nearest surface, so a ghost
 //!    never shows its own back faces through itself.
 //! 2. **The hull, cross-faded.** Depth `EQUAL` against that lay, each batch's
@@ -47,7 +47,7 @@
 
 use oag_core::Rng;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// `MeshNode_Ghost_Draw`'s far weight, `0.55` (`0x3f0ccccd`): what `k` is from
 /// 15 units out.
@@ -121,7 +121,7 @@ pub fn static_offsets(rng: &mut Rng) -> [f32; 2] {
 ///
 /// Borrowed rather than rebuilt, so a ghost costs no second upload of the
 /// hull. The bind groups must be built against
-/// [`crate::mesh_render::material_bind_group_layout`], which every mesh drawable's
+/// [`oag_mesh::mesh_render::material_bind_group_layout`], which every mesh drawable's
 /// are.
 #[derive(Debug)]
 pub struct Hull<'a> {
@@ -192,7 +192,7 @@ impl Pipeline {
                 frame.offsets[0],
                 frame.offsets[1],
                 f32::from(frame.fade.glow) / 255.0,
-                f32::from(crate::mesh::glow::BASE) / 255.0,
+                f32::from(oag_mesh::mesh::glow::BASE) / 255.0,
             ],
             scale: [
                 STATIC_SCALE[0],

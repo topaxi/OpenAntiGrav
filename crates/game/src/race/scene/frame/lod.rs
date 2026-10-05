@@ -4,14 +4,14 @@
 //! seam `frame/shadow.rs` already set.
 
 use oag_core::math::Mat4;
-use oag_render::mesh::LodEye;
+use oag_mesh::mesh::LodEye;
 
 use crate::race::Race;
 
 impl super::Scene {
     /// Chooses this frame's `LodGroup` child on the circuit and on every
     /// craft in play, from the one camera the frame is drawn with - see
-    /// `oag_render::mesh::LodGroups::child_at` for the rule.
+    /// `oag_mesh::mesh::LodGroups::child_at` for the rule.
     ///
     /// **Every craft, the player's own included**: `LodGroup_SelectChild`
     /// runs per group per frame with no knowledge of whose hull it is on, so

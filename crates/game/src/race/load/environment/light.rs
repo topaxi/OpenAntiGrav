@@ -138,7 +138,7 @@ pub(in crate::race::load) fn envsettings_light(
     light
 }
 
-/// Omega's `Tonemap` block, read into [`oag_render::post::omega_tonemap::Params`].
+/// Omega's `Tonemap` block, read into [`oag_post::omega_tonemap::Params`].
 ///
 /// Its consumer is `ToneMap_ApplyEnvSettings` (`0x01620980`), which reads the
 /// `Tonemap.*` keys, or `TonemapHDR.*` under HDR video out; this port draws
@@ -149,7 +149,7 @@ pub(in crate::race::load) fn envsettings_tonemap(
     archives: &mut oag_assets::Archives,
     track: &str,
     report: &mut Vec<String>,
-) -> Option<oag_render::post::omega_tonemap::Params> {
+) -> Option<oag_post::omega_tonemap::Params> {
     let name = envsettings_name(track)?;
     let blob = archives.read_name(&name).ok()?;
     let env = EnvSettings::parse(&String::from_utf8(blob).ok()?).ok()?;
@@ -159,7 +159,7 @@ pub(in crate::race::load) fn envsettings_tonemap(
         ));
         return None;
     };
-    let params = oag_render::post::omega_tonemap::Params {
+    let params = oag_post::omega_tonemap::Params {
         luminance_a: t.luminance_a,
         luminance_b: t.luminance_b,
         exposure_minimum: t.exposure_minimum,

@@ -12,7 +12,7 @@
 //! `#[ignore]`d because it needs a GPU adapter:
 //! `cargo nextest run -p oag-render --run-ignored all -E 'test(bloom_gain)'`
 
-use oag_render::post::bloom::{BLUR_WEIGHTS, Bloom, COMPOSITE_STRENGTH, Frame};
+use oag_post::bloom::{BLUR_WEIGHTS, Bloom, COMPOSITE_STRENGTH, Frame};
 
 const W: u32 = 480;
 const H: u32 = 272;

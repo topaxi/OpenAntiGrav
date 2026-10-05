@@ -120,7 +120,7 @@ impl TrackVisibility {
     /// because the two share nothing: this one has no `section` nodes to walk,
     /// no draw-call placement to derive and no swap relation to recover - the
     /// association it needs is the chunk index each draw call already carries
-    /// out of `oag_render::mesh::rcs`.
+    /// out of `oag_mesh::mesh::rcs`.
     ///
     /// **A circuit with no readable `.pvs` draws every chunk**, which is what
     /// this project did before the file was decoded: slower, and showing
@@ -368,7 +368,7 @@ mod tests {
         let entry = r"Data\Environments\16_Track\track.vex";
         let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
         let blob = archives.read_name(entry).expect("track.vex");
-        let model = oag_render::mesh::build_with_textures(entry, &blob, None).expect("model");
+        let model = oag_mesh::mesh::build_with_textures(entry, &blob, None).expect("model");
         let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
         let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
         let ai = oag_vex::track::parse(&blob[node.payload()]).expect("spline");
@@ -418,7 +418,7 @@ mod tests {
         let entry = r"Data\Environments\16_Track\track.vex";
         let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
         let blob = archives.read_name(entry).expect("track.vex");
-        let model = oag_render::mesh::build_with_textures(entry, &blob, None).expect("model");
+        let model = oag_mesh::mesh::build_with_textures(entry, &blob, None).expect("model");
         let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
         let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
         let ai = oag_vex::track::parse(&blob[node.payload()]).expect("spline");

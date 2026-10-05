@@ -8,7 +8,7 @@
 //! cargo run -p oag-render --example hd_weapon_extents
 //! ```
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 const SPEC: &str = "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC";
 

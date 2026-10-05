@@ -156,7 +156,7 @@ fn the_preview_meshes_resolve_and_are_what_the_screens_show() {
     let blob = archives
         .read_name(r"Data\Environments\16_Track\FE\forward.vex")
         .expect("the outline resolves");
-    let outline = oag_render::mesh::build("outline", &blob).expect("it decodes");
+    let outline = oag_mesh::mesh::build("outline", &blob).expect("it decodes");
     assert_eq!(outline.vertices.len(), 364);
     assert!(
         outline.radius > 500.0,
@@ -167,7 +167,7 @@ fn the_preview_meshes_resolve_and_are_what_the_screens_show() {
     let blob = archives
         .read_name(r"Data\Ships\Assegai\ship_FE.vex")
         .expect("the hull resolves");
-    let hull = oag_render::mesh::build("hull", &blob).expect("it decodes");
+    let hull = oag_mesh::mesh::build("hull", &blob).expect("it decodes");
     assert!(hull.vertices.len() > 1000, "{}", hull.vertices.len());
     assert!(hull.radius < 20.0, "craft scale: radius {}", hull.radius);
 }

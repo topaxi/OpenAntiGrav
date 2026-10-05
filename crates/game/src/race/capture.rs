@@ -166,7 +166,7 @@ pub struct CaptureOptions {
     /// function of the whole invocation rather than of the tick count alone.
     /// The same command is reproducible; the same tick count reached a
     /// different way is not necessarily the same phase. See
-    /// [`oag_render::jitter`].
+    /// [`oag_post::jitter`].
     pub camera_jitter: bool,
     /// Force the exhaust into the state it holds this many seconds after a
     /// speed pad entry, at saturated intensity, before the frame is drawn.
@@ -211,7 +211,7 @@ pub struct CaptureOptions {
     /// holds the last tick back, renders a **primer** frame at the
     /// tick-before-last pose (drawn and discarded - its only product is the
     /// previous-transform cache it seeds), runs the final tick, and renders
-    /// the frame that is written out. See `oag_render::post::motion_blur` and
+    /// the frame that is written out. See `oag_post::motion_blur` and
     /// `docs/rendering/motion-blur.md`.
     pub motion_blur: oag_display::display::MotionBlur,
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
@@ -226,9 +226,9 @@ pub struct CaptureOptions {
     pub shadows: oag_display::display::Shadows,
     /// How far out authored `LodGroup`s switch in the captured frame -
     /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.
-    pub model_detail: oag_render::mesh::ModelDetail,
+    pub model_detail: oag_mesh::mesh::ModelDetail,
     /// `[render_profiles.<title>] texture_detail`, or `--texture-detail`.
-    pub texture_detail: oag_render::mesh_render::TextureDetail,
+    pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// Replaces the live audio spectrum with a fixed synthetic ramp before
     /// the frame is drawn. `--zone-spectrum-test`.
     ///
@@ -270,7 +270,7 @@ pub struct CaptureOptions {
     /// brightness setting baked into one. Under `--presented` it is the one
     /// way to see what a preset does to a still frame - with last frame's
     /// output black, since there is no last frame here.
-    pub screen_filter: Option<oag_render::post::screen::Preset>,
+    pub screen_filter: Option<oag_post::screen::Preset>,
     pub screen_filter_strength: oag_display::display::FilterStrength,
 }
 
@@ -425,7 +425,7 @@ pub fn capture(
         queue,
     } = options.open_gpu()?;
     // Asked here because this path builds its own adapter; see `upscale::Temporal`.
-    let temporal_supported = oag_render::post::fsr3::supported(&adapter);
+    let temporal_supported = oag_post::fsr3::supported(&adapter);
 
     // **`Rgba8Unorm` on both paths now**, because every shader in this pipeline
     // writes gamma-space values and nothing may encode them again - see
@@ -525,7 +525,7 @@ pub fn capture(
         dimension: wgpu::TextureDimension::D2,
         format,
         // `TEXTURE_BINDING` because the bloom's bright pass samples the frame
-        // it was just drawn into - see `oag_render::post::bloom`.
+        // it was just drawn into - see `oag_post::bloom`.
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT
             | wgpu::TextureUsages::COPY_SRC
             | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -639,7 +639,7 @@ pub fn capture(
             // **No timestamps on any capture path**, deliberately: this
             // project compares captures byte for byte, and a measurement is
             // the input a resolution controller would eventually act on. See
-            // `oag_render::timing::PassTimer` and `perf.rs`'s own argument for
+            // `oag_gpu::timing::PassTimer` and `perf.rs`'s own argument for
             // why the overlay is window-only. All three pairs: the scene
             // pass's, the motion-blur chain's, and the HD/Fury bloom chain's.
             None,
@@ -669,8 +669,8 @@ pub fn capture(
         scene.rebind_zone_art(&device, &queue);
     }
     let spectrum = zone_spectrum(options, audio);
-    oag_render::perfprobe::reset();
-    oag_render::perfprobe::mark("frame-start");
+    oag_gpu::perfprobe::reset();
+    oag_gpu::perfprobe::mark("frame-start");
     // `OAG_RENDER_BENCH` and `OAG_RENDER_GPU_BENCH`: see `bench`. `cfg!`
     // rather than `#[cfg]`, so the harness still type-checks without
     // `perf-probe` and cannot rot between the runs that use it.
@@ -721,7 +721,7 @@ pub fn capture(
         None,
         None,
     );
-    oag_render::perfprobe::report_frame(race.sim.world.tick);
+    oag_gpu::perfprobe::report_frame(race.sim.world.tick);
     // What the captured frame submitted, so a `--pvs true` / `--pvs false`
     // pair (or `--lod`, or frustum culling) can be compared by count as well as
     // by picture. The overlay's own figures, which a screenshot cannot show
@@ -954,10 +954,10 @@ pub fn capture(
     readback.unmap();
 
     // A screenshot is opaque. The frame's alpha channel is the bloom mask and
-    // not coverage - see `oag_render::capture::make_opaque` - so encoding it
+    // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
     // straight from the readback writes a fully transparent PNG.
-    oag_render::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
-    oag_render::capture::make_opaque(&mut pixels);
+    oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
+    oag_mesh::capture::make_opaque(&mut pixels);
     let png = oag_texture::png::encode_rgba(width, height, &pixels);
     std::fs::write(&options.path, png)
         .with_context(|| format!("writing {}", options.path.display()))?;

@@ -334,7 +334,7 @@ pub const V4: Classes = Classes {
     // `0x377` nodes named `Airbrake_Left`/`Airbrake_Right` (case varies by
     // team - `mesh.rs`'s own reader already compares case-insensitively),
     // each with a single `Mesh` (`0x11e`) child under a `Transform` parent -
-    // the exact shape `crates/render/src/mesh.rs` already assumes when it
+    // the exact shape `crates/mesh/src/mesh.rs` already assumes when it
     // reads `classes.airbrake`. Before this, that reader could never fire on
     // a Pure ship at all: Pure's flaps rendered in their base pose with no
     // deflection. Confidence **90**: exact node names, matching the

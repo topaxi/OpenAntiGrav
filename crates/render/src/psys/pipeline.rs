@@ -5,7 +5,7 @@
 
 use super::sprite::{SHEET_SIZE, Sheet};
 use super::{MAX_INSTANCES, MAX_PARTICLES};
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// The additive blend - the original's blend class 2, `BlendFunc(ADD,
 /// SRC_ALPHA, FIX 0xffffff)`, used by the three bright emitters. The same
@@ -59,7 +59,7 @@ pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
 /// with no sprite of its own draws the procedural radial falloff instead -
 /// see [`super::sprite`]. Otherwise it matches `mesh_render`'s pipeline
 /// the same way the exhaust does: same target format, same
-/// [`crate::mesh_render::DEPTH_FORMAT`], depth-tested but not
+/// [`oag_mesh::mesh_render::DEPTH_FORMAT`], depth-tested but not
 /// depth-writing, for the same transparency-ordering reason
 /// `exhaust::Pipeline` documents.
 #[derive(Debug)]
@@ -93,7 +93,7 @@ impl Pipeline {
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         sample_count: u32,
-        velocity: crate::mesh_render::Velocity,
+        velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("psys"),
@@ -170,13 +170,13 @@ impl Pipeline {
                             blend: Some(blend),
                             // Colour only - the original's particle draw path
                             // (`FUN_08915fd0`) calls `Bloom_SetPixelMask(g_bloom, 0)`,
-                            // protecting the glow mask. See `crate::post::bloom`.
+                            // protecting the glow mask. See `oag_post::bloom`.
                             write_mask: wgpu::ColorWrites::COLOR,
                         })];
                         targets.extend(velocity.target(true));
                         targets
                     },
-                    compilation_options: crate::mesh_render::fragment_options(format),
+                    compilation_options: oag_mesh::mesh_render::fragment_options(format),
                 }),
                 primitive: wgpu::PrimitiveState {
                     // A camera-facing quad has no meaningful winding: the
@@ -185,7 +185,7 @@ impl Pipeline {
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
-                    format: crate::mesh_render::DEPTH_FORMAT,
+                    format: oag_mesh::mesh_render::DEPTH_FORMAT,
                     depth_write_enabled: Some(false),
                     depth_compare: Some(wgpu::CompareFunction::Less),
                     stencil: Default::default(),
@@ -204,7 +204,7 @@ impl Pipeline {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("psys uniforms"),
-            size: crate::mesh_render::UNIFORMS_SIZE,
+            size: oag_mesh::mesh_render::UNIFORMS_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

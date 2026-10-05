@@ -41,7 +41,7 @@
 
 use oag_core::math::{Mat3, Mat4, Quat, Vec3};
 
-use crate::mesh::Model;
+use oag_mesh::mesh::Model;
 
 pub mod panel;
 
@@ -76,10 +76,10 @@ pub const HD_SLOT8_TEXTURE: &str = "billboard8.gtf";
 ///
 /// **Why this exists at all, and not just `eq_ignore_ascii_case`.** A Pulse
 /// `.vex`'s embedded `Texture` node is already reduced to its bare file name
-/// before it reaches [`crate::mesh::Model::textures`] (`mesh.rs`'s own
+/// before it reaches [`oag_mesh::mesh::Model::textures`] (`mesh.rs`'s own
 /// `rsplit(['/', '\\'])`), but an HD/Wipeout-2048 `.rcsmodel` material names
 /// its `.gtf` by the **full archive path** the sampler table carries
-/// (`crates/render/src/mesh/rcs/skin.rs`'s `path` argument, passed to
+/// (`crates/mesh/src/mesh/rcs/skin.rs`'s `path` argument, passed to
 /// `ModelTexture::from_gtf` unchanged) - `.../textures/dds/billboard8.gtf`,
 /// not `billboard8.gtf`. Matching the whole label would silently never find
 /// an HD surface by name; this is what makes "on the file name alone", the
@@ -224,7 +224,7 @@ fn strip_texture(model: &mut Model, matches: impl Fn(&str) -> bool) -> usize {
         return 0;
     }
     let is_match =
-        |draw: &crate::mesh::DrawCall| draw.texture.is_some_and(|slot| slots.contains(&slot));
+        |draw: &oag_mesh::mesh::DrawCall| draw.texture.is_some_and(|slot| slots.contains(&slot));
     let mut removed = 0;
     for draws in [
         &mut model.draws,
@@ -242,7 +242,7 @@ fn strip_texture(model: &mut Model, matches: impl Fn(&str) -> bool) -> usize {
 ///
 /// All of it is measured off the track's own vertices, in track space, after
 /// the mesh build has composed the scene transforms - the same space
-/// [`crate::mesh::DrawCall::bounds`] is in.
+/// [`oag_mesh::mesh::DrawCall::bounds`] is in.
 #[derive(Debug, Clone, Copy)]
 pub struct Mount {
     /// The scene node the surface belongs to, for reporting.
@@ -443,7 +443,7 @@ pub fn clip_to_panel(model: &mut Model, half_width: f32, seconds: f32) -> usize 
     // towards the crowded side to move a parked board back onto the panel by a
     // unit or two. Which is exactly what it did: one of the `FINAL LAP` board's
     // three draws survived the clip on eleven of twelve circuits.
-    let midpoint = |draw: &crate::mesh::DrawCall| -> Option<f32> {
+    let midpoint = |draw: &oag_mesh::mesh::DrawCall| -> Option<f32> {
         let (mut lo, mut hi) = (f32::MAX, f32::MIN);
         for i in draw.range.clone() {
             let v = model.vertices[model.indices[i as usize] as usize];
@@ -465,7 +465,7 @@ pub fn clip_to_panel(model: &mut Model, half_width: f32, seconds: f32) -> usize 
     // `gantry_mount_ground_truth`, which measures the glyph node's normal at
     // `(0, 0, 1)` - so "across the panel" is the model's own x.
     let outside =
-        |draw: &crate::mesh::DrawCall| midpoint(draw).is_some_and(|x| x.abs() > half_width);
+        |draw: &oag_mesh::mesh::DrawCall| midpoint(draw).is_some_and(|x| x.abs() > half_width);
     let lists = [
         &model.draws,
         &model.alpha_tested_draws,

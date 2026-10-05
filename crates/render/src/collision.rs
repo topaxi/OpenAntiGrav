@@ -33,7 +33,7 @@
 use anyhow::{Context, Result};
 use oag_vex::collision::{self, CollisionNode, SurfaceKind};
 
-use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model};
 
 /// How the soup is drawn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -66,7 +66,7 @@ const OUTLINE_MAX_INSET: f32 = 0.35;
 /// The same `.vex` [`crate::track::load`] reads: a track file carries the
 /// spline and the collision soup side by side.
 pub fn load(spec: &str, name: &str) -> Result<(Vec<CollisionNode>, String)> {
-    let data = crate::mesh::read_blob(spec, name)?;
+    let data = oag_mesh::mesh::read_blob(spec, name)?;
     let nodes = collision::from_vex(&data)
         .map_err(|e| anyhow::anyhow!("{name}: {e}"))
         .context("decoding collision nodes")?;
@@ -389,8 +389,8 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: crate::mesh::slots::DEFAULT,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

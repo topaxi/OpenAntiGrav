@@ -1,6 +1,6 @@
 //! Scratch probe: the scene loader's own report for an HD circuit.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()

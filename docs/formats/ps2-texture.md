@@ -474,7 +474,7 @@ honestly rather than silently matching something else.
 
 **This is a real, source-confirmed consequence for the current renderer, not
 speculation about the original.** `mesh::build_with_textures`
-(`crates/render/src/mesh.rs`) resizes a short external set with
+(`crates/mesh/src/mesh.rs`) resizes a short external set with
 `set.resize_with(set.len().max(slots), || None)` - appending `None` at the
 *end* so a short set's tail goes untextured rather than shifting anything -
 which is a flat "node ordinal `N` reads external-set entry `N`" scheme with no
@@ -766,7 +766,7 @@ AG_Systems' `livery.pct` is the same cyan livery the PSP's `ship_alt.dat`
 paints. Full reading, the per-player atlas copies `Texture_LoadVexNode`
 makes, and the untraced `ship.dat` baseline restore in
 [`ps2-pulse-eu/ship-skin.md`](../ghidra/functions/ps2-pulse-eu/ship-skin.md);
-implemented by `oag_render::mesh::ship_skin::apply_ps2_atlas` and
+implemented by `oag_mesh::mesh::ship_skin::apply_ps2_atlas` and
 [`oag_game::livery::ship_skin`](../../crates/game/src/livery/ship_skin.rs),
 pinned by `crates/game/tests/ps2_ship_skin_ground_truth.rs`.
 

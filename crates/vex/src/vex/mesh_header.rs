@@ -172,7 +172,7 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
 /// at all is a batch whose vertices are not in this file. Wipeout HD and
 /// Wipeout 2048 both export that way, having moved their geometry into a
 /// `.rcsmodel` beside the `.vex` and left the batch headers behind. See
-/// `oag_render::mesh::geometry_is_external`.
+/// `oag_mesh::mesh::geometry_is_external`.
 ///
 /// `None` when the payload is too short to hold a batch list, or when neither
 /// list has a batch in it - which says nothing either way and is deliberately

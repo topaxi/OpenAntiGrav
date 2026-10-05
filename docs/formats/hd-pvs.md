@@ -219,7 +219,7 @@ disc and never opened. Confidence 80. Not decoded, and there is no reason to.
 
 ## How the renderer uses it
 
-`oag_render::mesh::rcs` records each draw call's chunk index in
+`oag_mesh::mesh::rcs` records each draw call's chunk index in
 `DrawCall::chunk`, which is the join key. Per frame,
 `oag_render::pvs::ChunkSet::around` unions the cells within `CHUNK_PAD` (24
 units, two median cell spacings) of the craft and of the camera, and the

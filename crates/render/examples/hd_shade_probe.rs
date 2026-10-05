@@ -6,7 +6,7 @@
 //! mask in its fourth byte, the world normal, and the albedo actually sampled
 //! at each vertex's own texture coordinate.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
             }
             // Decoded once per draw call rather than per texel: Wipeout HD's
             // textures stay in their DXT blocks in memory now. See
-            // `oag_render::mesh::Texels`.
+            // `oag_mesh::mesh::Texels`.
             let Some(rgba) = texture.to_rgba() else {
                 continue;
             };

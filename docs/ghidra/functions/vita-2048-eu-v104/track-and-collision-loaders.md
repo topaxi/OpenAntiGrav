@@ -2,7 +2,7 @@
 
 Functions in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image
 base `0x81000000`. **The names here are applied**, from [names.tsv](names.tsv).
-Found while chasing why `oag_render::mesh::rcs::build_scene` and
+Found while chasing why `oag_mesh::mesh::rcs::build_scene` and
 `oag_vex::collision::parse_chunks` do not read this title's
 `track.rcsmodel` and `track_col.col` unmodified.
 

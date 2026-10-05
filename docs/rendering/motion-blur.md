@@ -3,7 +3,7 @@
 > **Status, 2026-08-25: the tier this page chose is built.** The per-object
 > velocity buffer, the `prev_mvp` uniform, the tile-max / neighbour-max /
 > reconstruction chain and the always-on buffer are implemented as designed
-> - `oag_render::post::motion_blur`, `mesh.wgsl`'s `velocity_of`,
+> - `oag_post::motion_blur`, `mesh.wgsl`'s `velocity_of`,
 > `mesh_render::Velocity` - under exactly the strength row and at the
 > placement this page specified. It happened in the two steps the page
 > sanctioned: camera reprojection shipped first as the stepping stone
@@ -171,7 +171,7 @@ an `Rg16Float` velocity target at the scene's sample count, `RENDER_ATTACHMENT |
 TEXTURE_BINDING`, resized alongside depth, cleared to zero each frame with no
 `resolve_target`. The race pass gains a second colour attachment.
 
-**Shader**, in `oag_render::mesh_render` and `mesh.wgsl`. `Uniforms` gains one
+**Shader**, in `oag_mesh::mesh_render` and `mesh.wgsl`. `Uniforms` gains one
 premultiplied `prev_mvp`; `VertexOutput` gains current and previous clip
 position; add a second fragment entry point returning `@location(0)` colour and
 `@location(1)` velocity as the NDC delta, halved and y-flipped into UV space.
@@ -198,7 +198,7 @@ geometry keeps passing identity; the sky passes last tick's camera translation,
 which cancels against last tick's view-projection and correctly leaves it with
 rotation-only velocity.
 
-**Post chain**, as `oag_render::post::motion_blur`, following the shape every
+**Post chain**, as `oag_post::motion_blur`, following the shape every
 other pass in that module already has: `new(device, format) -> Result<Self>`,
 targets built lazily at the first `render` because that is the first time a size
 is known, `output()`, uniforms written only when they change. Four passes -
@@ -219,7 +219,7 @@ blur is a sharper race, not a broken one.
 > [ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md) counts
 > five and four, which is what landed with it; the separable split came
 > after. ADRs are immutable, so this line and
-> `oag_render::post::motion_blur`'s module docs carry the current count.
+> `oag_post::motion_blur`'s module docs carry the current count.
 >
 > The warning above was earned twice. The first tier had no per-object
 > velocity at all, which is the whole of ADR-0028 and ADR-0029. The second
@@ -398,7 +398,7 @@ at the ~85 km/h a headless `--race --hold cross` reaches, the whole effect is
 0.6 of 255 and the lattice does not rise above the scene's own content.
 
 The trade the jitter makes is in
-[`motion_blur.wgsl`](../../crates/render/src/post/motion_blur.wgsl)'s own
+[`motion_blur.wgsl`](../../crates/post/src/motion_blur.wgsl)'s own
 comment: a smear's boundary becomes stochastic where it was hard. It cannot
 under-reach - the tile the lookup lands on is at most one away, and that
 tile's neighbour-max already covers the pixel's own tile.
@@ -485,7 +485,7 @@ fails if `Scene::render` drops the map), `the_blur_is_given_the_shakes_own_scree
 (the matrices, from a cold shake and mid-decay) and `post::motion_blur::shake_tests`
 (the shader, on a device).
 
-[`MAX_STRETCH`]: ../../crates/render/src/post/motion_blur.rs
+[`MAX_STRETCH`]: ../../crates/post/src/motion_blur.rs
 
 ## Settle these before writing any shader
 

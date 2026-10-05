@@ -1,7 +1,7 @@
 //! Alpha statistics of a pad `_ne` file: how much of the texture the light-bar
 //! mask covers, per circuit. `cargo run -p oag-render --example hd_pad_ne_alpha -- <archive> <path>`
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_texture::gtf;
 
 fn main() -> anyhow::Result<()> {

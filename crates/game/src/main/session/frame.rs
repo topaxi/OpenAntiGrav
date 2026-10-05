@@ -168,7 +168,7 @@ impl Session {
         // Counted here, before anything this frame is measured against it. A
         // GPU reading names the frame it was taken on rather than the frame it
         // arrives on, which is what `stall_frame` below is then able to
-        // exclude - see [`oag_render::timing::PassTimer`].
+        // exclude - see [`oag_gpu::timing::PassTimer`].
         self.frame_index += 1;
         // **How long this frame took, or nothing at all on a stalled one.**
         // The same value `meter` is fed, handed to the same guard: a load is

@@ -8,7 +8,7 @@
 //! its four channels (`slots::alpha_channel`) - so the answer is the shader's
 //! and not a guess at it.
 
-use oag_render::mesh::{self, ModelTexture, slots};
+use oag_mesh::mesh::{self, ModelTexture, slots};
 
 fn texel(texture: &ModelTexture, rgba: &[u8], [u, v]: [f32; 2]) -> [f32; 4] {
     let x = ((u.rem_euclid(1.0) * texture.width as f32) as u32).min(texture.width - 1) as usize;
@@ -20,7 +20,7 @@ fn texel(texture: &ModelTexture, rgba: &[u8], [u, v]: [f32; 2]) -> [f32; 4] {
 /// One decode per texture, keyed on the shared texture's own address.
 ///
 /// Wipeout HD's `.gtf` textures stay in their DXT blocks in memory now (see
-/// `oag_render::mesh::Texels`), so decoding at the call site would decode a
+/// `oag_mesh::mesh::Texels`), so decoding at the call site would decode a
 /// 2048x2048 atlas once per vertex. This is what the probes got for free back
 /// when every texture was expanded to RGBA8 at load.
 fn rgba_of<'a>(

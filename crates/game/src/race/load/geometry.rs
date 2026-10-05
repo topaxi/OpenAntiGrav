@@ -5,7 +5,7 @@
 //! absent, one that will not decode, and one in a container this build reads
 //! are three outcomes with one fallback between them.
 
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 
 /// The `.rcsmodel` beside a circuit's `.vex`, and the name it was found under.
 ///
@@ -62,13 +62,13 @@ pub(super) fn sibling_model(
 /// `.vex` beside it - a chunk is addressed by hash and its vertex stride comes
 /// from the node's authored box - and Wipeout 2048's needs neither, so it takes
 /// a builder of its own rather than a branch inside HD's. See
-/// `oag_render::mesh::rcs::psp2`.
+/// `oag_mesh::mesh::rcs::psp2`.
 ///
 /// A sibling that will not decode falls back exactly as a missing one does, and
 /// the report says which happened: they need different work to fix.
 ///
 /// **Excludes both pad classes' chunks on a Wipeout HD source.**
-/// `oag_render::mesh::rcs::build_scene`'s own doc comment explains why - a
+/// `oag_mesh::mesh::rcs::build_scene`'s own doc comment explains why - a
 /// caller that wants a circuit's `Weapon Pad`/`Speedup Pad` geometry reaches
 /// it through `pads::ps3_pad_models` instead, which is what gives
 /// `race::load` a tintable, gateable model rather than one baked
@@ -87,7 +87,7 @@ pub(super) fn track_model(
         // beside it - a chunk is addressed by hash and its stride comes from the
         // node's box - and Wipeout 2048's needs neither, so it takes a builder
         // of its own rather than a branch inside HD's. See
-        // `oag_render::mesh::rcs::psp2`.
+        // `oag_mesh::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
             let animation = psp2_animation(archives, track, model_name, report);
             match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
@@ -131,7 +131,7 @@ pub(super) fn track_model(
 /// nodes place the geometry even when nothing moves it, so the clip's
 /// absence costs the motion and not the placement. A circuit with no
 /// skeleton at all draws its node-bound meshes through the model's own bind
-/// matrices - see `oag_render::mesh::rcs::psp2::placement`.
+/// matrices - see `oag_mesh::mesh::rcs::psp2::placement`.
 fn psp2_animation(
     archives: &mut oag_assets::Archives,
     track: &str,

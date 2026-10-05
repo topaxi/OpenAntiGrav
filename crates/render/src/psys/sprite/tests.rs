@@ -65,7 +65,7 @@ fn an_atlas_cell_is_its_grid_square_pulled_in_half_a_texel() {
 
 #[test]
 fn mapping_a_quad_marks_it_sampled_and_moves_its_uvs() {
-    let mut corners = [crate::mesh::GpuVertex {
+    let mut corners = [oag_mesh::mesh::GpuVertex {
         texcoord: [1.0, 1.0],
         normal: [0.0, 0.0, 1.0],
         ..bytemuck::Zeroable::zeroed()

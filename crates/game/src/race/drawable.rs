@@ -91,7 +91,7 @@ pub(super) struct Drawable {
     /// This instance's per-frame `LodGroup` choice - see [`Self::select_lod`].
     /// Starts on every group's finest child, which a drawable nobody
     /// switches keeps.
-    lod: oag_render::mesh::LodSwitch,
+    lod: oag_mesh::mesh::LodSwitch,
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
@@ -280,7 +280,7 @@ impl Drawable {
         model.release_texels();
         Ok(Self {
             opaque_ranges,
-            lod: oag_render::mesh::LodSwitch::new(&model.lod_groups),
+            lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
             model: std::sync::Arc::new(model),
             pipeline,
             alpha_test_pipeline,
@@ -321,7 +321,7 @@ impl Drawable {
     }
 
     /// Rebuilds bind group 2 with `stage`'s four textures - see
-    /// `oag_render::mesh_render::zone::rebind`, which this forwards to.
+    /// `oag_mesh::mesh_render::zone::rebind`, which this forwards to.
     /// Everything else this drawable draws with (the pipeline, the
     /// geometry, the shadow map) is untouched.
     ///
@@ -368,7 +368,7 @@ impl Drawable {
     /// Rewrites the Zone visualiser's lookup from `bands` levels, tinted by
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
     /// with no authored `EQ colour tint` gets. See
-    /// `oag_render::mesh_render::zone::write_vis`, which this forwards to.
+    /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
     pub(super) fn write_zone_vis(&self, queue: &wgpu::Queue, bands: &[f32], tint: Option<[u8; 3]>) {
         mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
     }
@@ -413,7 +413,7 @@ impl Drawable {
 
     /// [`Self::write`] for a model whose materials read their own animation
     /// clock - `clock` seconds, what an HD material's `UV_offset` is bound
-    /// to. See `oag_render::mesh::slots::CLOCK_SCROLL_RING`.
+    /// to. See `oag_mesh::mesh::slots::CLOCK_SCROLL_RING`.
     pub(super) fn write_clocked(
         &self,
         queue: &wgpu::Queue,
@@ -443,12 +443,7 @@ impl Drawable {
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
-        oag_render::perfprobe::write_buffer(
-            queue,
-            &self.uniforms,
-            0,
-            bytemuck::bytes_of(&uniforms),
-        );
+        oag_gpu::perfprobe::write_buffer(queue, &self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
     /// Samples every authored texture-transform track this model carries at
@@ -473,7 +468,7 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::TexAnims::sample(&self.model, seconds);
-        oag_render::perfprobe::write_buffer(queue, &self.anims, 0, bytemuck::bytes_of(&anims));
+        oag_gpu::perfprobe::write_buffer(queue, &self.anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Samples every `Anim Transform` this model carries at `seconds` and
@@ -491,7 +486,7 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
-        oag_render::perfprobe::write_buffer(queue, &self.node_anims, 0, bytemuck::bytes_of(&anims));
+        oag_gpu::perfprobe::write_buffer(queue, &self.node_anims, 0, bytemuck::bytes_of(&anims));
     }
 
     /// Applies a texture transform to this model's **authored** UVs and
@@ -635,7 +630,7 @@ impl Drawable {
     ///    colour entirely from `pad+0x6c`.
     /// 2. On an HD model `colour` is not a tint at all. It is the baked
     ///    per-vertex light the fragment program **adds** inside its authored
-    ///    lighting sum - see `oag_render::mesh::rcs::emit`. Writing a palette
+    ///    lighting sum - see `oag_mesh::mesh::rcs::emit`. Writing a palette
     ///    entry there is not "the wrong colour", it is a different quantity.
     ///
     /// What HD does instead is unrecovered - see `docs/rendering/pads.md`. An
@@ -717,9 +712,9 @@ impl Drawable {
 
     /// Chooses this frame's child of each authored `LodGroup` for the
     /// instance at `model` seen from `eye` - `LodGroup_SelectChild`'s rule,
-    /// see `oag_render::mesh::LodGroups::child_at`. Free on a model with no
+    /// see `oag_mesh::mesh::LodGroups::child_at`. Free on a model with no
     /// group, which is every drawable but a circuit and a hull.
-    pub(super) fn select_lod(&self, model: Mat4, eye: oag_render::mesh::LodEye) {
+    pub(super) fn select_lod(&self, model: Mat4, eye: oag_mesh::mesh::LodEye) {
         self.lod.select(&self.model.lod_groups, model, eye);
     }
 
@@ -755,7 +750,7 @@ impl Drawable {
     pub(super) fn ghost_hull(
         &self,
         at: Mat4,
-        eye: oag_render::mesh::LodEye,
+        eye: oag_mesh::mesh::LodEye,
     ) -> oag_render::ghost::Hull<'_> {
         let model = &self.model;
         oag_render::ghost::Hull {
@@ -774,7 +769,7 @@ impl Drawable {
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.
 ///
-/// Declared here rather than reused because `oag_render::mesh_render` only exposes
+/// Declared here rather than reused because `oag_mesh::mesh_render` only exposes
 /// a writer that computes an *orbit* camera from the model's bounding sphere, which
 /// is what a viewer wants and is not something a chase camera can use. The layout is
 /// the shader's own, and a test below asserts it against

@@ -9,7 +9,7 @@ use super::*;
 
 /// Wipeout HD's post chain: a linear float scene target, the read
 /// FunkLayerBloom passes and the encode. Present exactly when the circuit
-/// authors an `HDR and Bloom` block - see `oag_render::post::hd_bloom` for
+/// authors an `HDR and Bloom` block - see `oag_post::hd_bloom` for
 /// what of it is the microcode's. A failure is reported and dropped the way
 /// the PSP bloom's is: a race without it is the pre-HDR picture, not a
 /// broken one.
@@ -30,15 +30,15 @@ pub(super) fn build(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
     size: (u32, u32),
-    hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    hd_bloom: Option<oag_post::hd_bloom::Params>,
 ) -> (
-    Option<oag_render::post::hd_bloom::Chain>,
+    Option<oag_post::hd_bloom::Chain>,
     wgpu::TextureFormat,
     wgpu::TextureFormat,
 ) {
-    let glow = oag_render::post::hd_bloom::Glow::Drawn;
+    let glow = oag_post::hd_bloom::Glow::Drawn;
     let hd = match hd_bloom
-        .map(|params| oag_render::post::hd_bloom::Chain::new(device, format, size, params, glow))
+        .map(|params| oag_post::hd_bloom::Chain::new(device, format, size, params, glow))
         .transpose()
     {
         Ok(hd) => hd,
@@ -49,14 +49,14 @@ pub(super) fn build(
     };
     let caller_format = format;
     let format = if hd.is_some() {
-        oag_render::post::hd_bloom::SCENE_FORMAT
+        oag_gpu::formats::SCENE_FORMAT
     } else {
         format
     };
     (hd, format, caller_format)
 }
 
-/// Omega's tone map (`oag_render::post::omega_tonemap`), built when the
+/// Omega's tone map (`oag_post::omega_tonemap`), built when the
 /// circuit authors a `Tonemap` block and no HD chain already owns the scene
 /// target. Returns it and the scene format, switched to the linear float one
 /// when it is there - the same statement [`build`] makes. A failure is
@@ -66,16 +66,11 @@ pub(super) fn build_omega(
     format: wgpu::TextureFormat,
     caller_format: wgpu::TextureFormat,
     size: (u32, u32),
-    params: Option<oag_render::post::omega_tonemap::Params>,
-) -> (
-    Option<oag_render::post::omega_tonemap::Chain>,
-    wgpu::TextureFormat,
-) {
+    params: Option<oag_post::omega_tonemap::Params>,
+) -> (Option<oag_post::omega_tonemap::Chain>, wgpu::TextureFormat) {
     let omega = match params
         .filter(|_| format == caller_format)
-        .map(|params| {
-            oag_render::post::omega_tonemap::Chain::new(device, caller_format, size, params)
-        })
+        .map(|params| oag_post::omega_tonemap::Chain::new(device, caller_format, size, params))
         .transpose()
     {
         Ok(omega) => omega,
@@ -85,7 +80,7 @@ pub(super) fn build_omega(
         }
     };
     let format = if omega.is_some() {
-        oag_render::post::hd_bloom::SCENE_FORMAT
+        oag_gpu::formats::SCENE_FORMAT
     } else {
         format
     };

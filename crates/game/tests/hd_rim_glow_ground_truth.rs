@@ -17,7 +17,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 

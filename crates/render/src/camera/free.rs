@@ -4,15 +4,15 @@
 //! tunnel to see whether the geometry closes, or following a spline by hand. It
 //! reproduces nothing from the original game and claims nothing about it.
 //!
-//! Angles use the same convention as [`super::orbit`]: yaw sweeps around the
+//! Angles use the same convention as `oag_mesh::orbit`: yaw sweeps around the
 //! world Y axis and pitch lifts out of the XZ plane, so yaw and pitch both zero
 //! looks along +X with world +Y up.
 
 use oag_core::math::{Mat4, Vec3, camera};
 
-/// Reuses the orbit camera's limit, for the same reason: at exactly straight up
-/// or down the `look_at` up vector degenerates and the view flips.
-pub use super::orbit::PITCH_LIMIT;
+// Reuses the orbit camera's limit, for the same reason: at exactly straight up
+// or down the `look_at` up vector degenerates and the view flips.
+use oag_mesh::orbit::PITCH_LIMIT;
 
 /// How fast a free camera is being asked to move, this frame.
 ///
@@ -29,7 +29,7 @@ pub struct Motion {
     /// while pitched down does not walk the camera forwards as well.
     pub rise: f32,
     /// Radians per second, positive turning the same way as
-    /// [`super::orbit::Held::yaw_pos`].
+    /// `oag_mesh::orbit::Held::yaw_pos`.
     pub yaw: f32,
     /// Radians per second, positive tilting the view upwards.
     pub pitch: f32,

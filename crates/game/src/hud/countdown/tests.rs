@@ -19,7 +19,7 @@
 //! (`scripts/check-file-size.py`) forcing them out anyway.
 
 use super::*;
-use oag_render::mesh::{Bounds, DEFAULT_SPECULAR_EXPONENT, DrawCall, GpuVertex, slots};
+use oag_mesh::mesh::{Bounds, DEFAULT_SPECULAR_EXPONENT, DrawCall, GpuVertex, slots};
 
 /// A device, or `None` so the caller skips - the same shape
 /// `upscale::extent_tests` uses for a machine with no adapter.
@@ -61,7 +61,7 @@ fn one_triangle_model(label: &str) -> Model {
         range: 0..3,
         // Untextured: `Built::texture_binds` always carries the white
         // placeholder at slot 0, which is what `None` binds to - see
-        // `oag_render::mesh_render::build`.
+        // `oag_mesh::mesh_render::build`.
         texture: None,
         bounds: Bounds {
             centre: [0.0, 0.0, 0.0],

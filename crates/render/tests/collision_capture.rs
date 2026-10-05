@@ -96,14 +96,14 @@ fn a_synthetic_corridor_renders_through_the_capture_path() {
             "{}-{suffix}.png",
             stem.file_stem().unwrap_or_default().to_string_lossy()
         ));
-        oag_render::mesh_render::capture_from(
+        oag_mesh::mesh_render::capture_from(
             &model,
             &path,
             1280,
             960,
             0.9,
             0.85,
-            oag_render::mesh_render::Anisotropy::default(),
+            oag_mesh::mesh_render::Anisotropy::default(),
             0.0,
         )
         .expect("capturing the collision view");
@@ -113,4 +113,65 @@ fn a_synthetic_corridor_renders_through_the_capture_path() {
         assert!(bytes.len() > 4096, "suspiciously small capture");
         eprintln!("wrote {}", path.display());
     }
+}
+
+/// A model with no geometry must write a frame rather than panic.
+///
+/// `wgpu::Buffer::slice` panics on a zero-length buffer, which is how
+/// `oag-view --collision` died on any `.vex` with no recognised collision
+/// class - see `docs/formats/pure-status.md`. Worth knowing if this ever
+/// regresses: `create_buffer(size: 0)` and `write_buffer(&[])` both
+/// *succeed*, so the death is two frames later at `set_vertex_buffer`, and
+/// clamping the buffer to a nonzero size is the fix that looks right and
+/// still crashes.
+///
+/// Deliberately not `#[ignore]`d, unlike the `#[ignore]`d test below: that
+/// one exists to produce a picture, this one guards a regression, and an
+/// `#[ignore]`d regression test is a test nobody runs. The adapter probe is
+/// the pattern `oag_post::fxaa` and `oag_post::fsr1` already use, so a machine
+/// without a GPU skips instead of failing.
+#[test]
+fn an_empty_model_captures_a_frame_instead_of_panicking() {
+    // Probed here rather than left to `capture_from`, which reports a
+    // missing adapter as an error - indistinguishable, from the test's
+    // side, from the guard not working.
+    let instance = wgpu::Instance::default();
+    if pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+        .is_err()
+    {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    }
+
+    // Built the way the bug arrived rather than hand-assembled: a `.vex`
+    // with no recognised collision class decodes to zero nodes, and
+    // `build_model` over zero nodes is what reached the render pass.
+    let model = collision::build_model("empty", &[], Style::Wireframe, true);
+    assert!(model.vertices.is_empty() && model.indices.is_empty());
+
+    let path = std::env::temp_dir().join("oag-empty-model.png");
+    oag_mesh::capture::capture_from(
+        &model,
+        &path,
+        64,
+        64,
+        0.9,
+        0.85,
+        oag_mesh::mesh_render::Anisotropy::default(),
+        0.0,
+    )
+    .expect("capturing an empty model");
+
+    // Checked through the PNG header rather than the pixels: reaching this
+    // line at all is the regression, since the old code panicked inside the
+    // render pass and never wrote a file. Byte length carries no signal -
+    // `oag_texture::png` emits stored deflate blocks, so every 64x64 frame
+    // is the same ~16 KB whatever is in it.
+    let bytes = std::fs::read(&path).expect("reading the capture back");
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");
+    assert_eq!(
+        &bytes[16..24],
+        &[0, 0, 0, 64, 0, 0, 0, 64],
+        "wrong IHDR size"
+    );
 }

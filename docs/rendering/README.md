@@ -110,7 +110,7 @@
   `02_track` and `12_sol_2`) is honoured.
 - Environment: `Skycube` (**done** - the payload is a `Mesh` payload, recovered in
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
-  by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
+  by `oag_mesh::mesh::build_sky`). `fogCube` is **done** too - the runtime is
   recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
   `oag_vex::fog` plus `mesh.wgsl`'s own bind group. `cloudCube`/`cloudGroup` are
   **partly done** - `oag_render::cloud` draws every sprite `oag_vex::cloud`

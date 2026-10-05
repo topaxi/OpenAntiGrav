@@ -24,7 +24,7 @@
 //! vertices through their node matrices and clears the node index.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh::{DrawCall, GpuVertex, Model};
+use oag_mesh::mesh::{DrawCall, GpuVertex, Model};
 
 /// Multiplies every animated vertex through its node's matrix at `seconds`
 /// and marks it static.

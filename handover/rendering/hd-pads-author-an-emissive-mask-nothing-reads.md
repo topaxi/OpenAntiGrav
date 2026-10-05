@@ -236,7 +236,7 @@ Three things the disc authors that this project does not touch:
    material record carries **three** sampler entries, not the two this
    renderer's `Pick` has room for - `[0]` the `_cs` diffuse, `[1]` the `_ne`
    mask (the file's own `second_texture`), `[2]` the lightmap - and
-   `oag_render::mesh::rcs::skin::picks` (`crates/render/src/mesh/rcs/skin.rs`)
+   `oag_mesh::mesh::rcs::skin::picks` (`crates/mesh/src/mesh/rcs/skin.rs`)
    short-circuits on `Material::lightmap_entry().is_some()`: "the lightmap
    wins the second binding, wherever it sits" grabs entry `[2]` for the
    renderer's one `aux` slot and entry `[1]` is never looked at again. That
@@ -252,7 +252,7 @@ Three things the disc authors that this project does not touch:
    pad chunks measured (10 `Speedup Pad` + 8 `Weapon Pad`). No parameter
    patch gates it; each material carries exactly one `parameters` entry and
    neither pad's hash (`0x7611a2d8` speedup, `0xce5c4410` weapon) is the tint,
-   offset or scroll-rate hash `oag_render::mesh::rcs::emissive` already reads,
+   offset or scroll-rate hash `oag_mesh::mesh::rcs::emissive` already reads,
    so a wired layer would run at `emissive`'s own defaults - tint
    `[1.0, 1.0, 1.0]`, no scroll. So the disc's own shader treats the light
    bars as a plain, unconditional additive layer, on every pad measured, with
@@ -265,7 +265,7 @@ Three things the disc authors that this project does not touch:
    may move.** The pad's "specular scalar" turned out to be EXP2 fog once the
    negate was honoured. Re-check, without re-deriving the pad itself, every
    earlier conclusion that read decoded HD fragment programs:
-   `Program::specular_exponent` and `Program::dp3_feeding` (`crates/render/src/mesh.rs`,
+   `Program::specular_exponent` and `Program::dp3_feeding` (`crates/mesh/src/mesh.rs`,
    `crates/rcs/tests/specular_power_ground_truth.rs`) and the `hd_specular_*`,
    `hd_litex2_census` and `hd_dp3_feeding_lane_check` examples under
    `crates/render/examples/`. The gate stayed green across the change, so no

@@ -5,8 +5,8 @@
 //! cargo run --release -p oag-render --example hd_ribbon_probe \
 //!     /data/ribboneffects/enginetrail_bluered_triangle
 //! ```
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 const ISO: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const ARCHIVES: [&str; 7] = [

@@ -1084,7 +1084,7 @@ model's own baked animation.** `Node_SetAnimTimeTree(age * rate, model)` -
 already a named, shared engine function - runs every tick with `rate`
 `0.1`/`0.07`/`0.07` for the halo/hemisphere2/hemisphere1. Since this
 project already has a working "sample this model's own `Anim Transform`
-node at a given time" path (`oag_render::mesh::Model::sample_anim_nodes`,
+node at a given time" path (`oag_mesh::mesh::Model::sample_anim_nodes`,
 wired for the PS2 boost plume's anchors), this reads as the *original*
 scrubbing the same kind of baked animation this engine can already play
 back - which is what the render side below does, rather than reproducing
@@ -1977,7 +1977,7 @@ junction one batch belongs to two or three records, and they add. And a
 stationary craft sat on a vertex that rose 10.8 units without its body
 rising: **render-only, measured**, confidence 92.
 
-Built: `oag_vex::quake` (the table), `oag_render::mesh::batch_placements` (batch
+Built: `oag_vex::quake` (the table), `oag_mesh::mesh::batch_placements` (batch
 header to model vertices), `oag_render::ripple` (the bump, summing owners),
 `oag_game::race::SpanPlaces` (every vertex onto the course through its path's
 own `t`, now `SplinePoint::progress`), and a `Scene::write_road` step before

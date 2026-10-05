@@ -84,7 +84,7 @@ until HD's real trigger is recovered.
 **Wired.** `oag_title::ZoneStageTextures` carries both entry-name sets and the
 stage count (`oag_hd::race::ZONE_STAGE_TEXTURES`, `None` on every other title);
 `oag_game::race::load::environment::zone_stage_art` loads the **track** set
-through `oag_render::mesh::ModelTexture::from_gtf` (promoted out of
+through `oag_mesh::mesh::ModelTexture::from_gtf` (promoted out of
 `mesh::rcs::skin` so a second caller can reach it); and
 `ZoneGrade::stage_art()` hands back the showing stage's texture. Checked
 against `hdfury-ps3-eu-dec.iso` in
@@ -248,7 +248,7 @@ haze behind structure, the same failure Vineta K's produced. So this is not a
 matter of choosing a better frame from what is on disk; it needs a new capture,
 on a **racing circuit**, with open sky and one measurable feature. A Zone frame
 can never serve now that the Zone sky is measured at 64x64. Written up in
-`crates/render/src/mesh/sky_cube.rs` so it is not re-attempted.
+`crates/mesh/src/mesh/sky_cube.rs` so it is not re-attempted.
 
 ## 2026-08-31, later: the HUD names the same fifteen rungs, and two of them are pinned to zone numbers
 
@@ -305,7 +305,7 @@ no longer disagree.
 The wiring itself was already complete and is confirmed end to end this pass:
 `oag_audio::spectrum::Analyzer::process` (render-ahead thread) ->
 `Output::spectrum()` -> `race::scene::frame::Scene::render`'s `zone_spectrum`
--> `Drawable::write_zone_vis` -> `oag_render::mesh_render::zone::write_vis` ->
+-> `Drawable::write_zone_vis` -> `oag_mesh::mesh_render::zone::write_vis` ->
 bind group 2 bindings 4/5 -> `mesh.wgsl`'s `zone_glow`, which applies the
 recovered term on **both** shading paths and carries the `(1 - windowDepth)`
 factor. Nothing in the chain was missing. What was missing was knowing **how
@@ -604,7 +604,7 @@ unblocks - see Next Steps below for what implementing it needs.
   render-side spectrum: `oag_audio::spectrum::Analyzer` runs a 32-band
   Goertzel transform on the render-ahead thread, `Output::spectrum()` hands
   the levels to `oag-game` once a frame, and
-  `oag_render::mesh_render::zone::write_vis` builds the 256-wide lookup from
+  `oag_mesh::mesh_render::zone::write_vis` builds the 256-wide lookup from
   them, tinted by the showing stage's own `EQ colour tint`. `mesh.wgsl`'s
   `zone_glow` draws the term end to end - pixel-tested in
   `crates/render/tests/zone_recolour.rs`, and checked against real HD disc

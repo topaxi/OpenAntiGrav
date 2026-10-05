@@ -15,7 +15,7 @@
 //! back to the base level and a box filter would leave every texture
 //! `Texels::Rgba8`, and the count below would be zero.
 
-use oag_render::mesh::{self, Texels};
+use oag_mesh::mesh::{self, Texels};
 
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]

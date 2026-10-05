@@ -1,7 +1,7 @@
 //! Where a screen filter comes from: the presets this crate ships, and the
 //! ones a player drops into their own `shaders/` directory.
 //!
-//! A preset is a `.wgsl` file - see [`oag_render::post::screen`] for what is
+//! A preset is a `.wgsl` file - see [`oag_post::screen`] for what is
 //! in one - and its **id is its file stem**, which is what
 //! `[render_profiles.<title>] screen_filter` holds and what the menu row
 //! stores. The built-ins are compiled into the binary from
@@ -28,7 +28,7 @@
 //!
 //! Every shipped preset is this project's own text, written from the
 //! technique rather than transliterated from a published shader - the same
-//! route `oag_render::post::fxaa` took, and for the same reason: the popular
+//! route `oag_post::fxaa` took, and for the same reason: the popular
 //! CRT and handheld shader collections are largely GPL, which this MIT and
 //! Apache-2.0 tree cannot vendor. The user directory is the answer for
 //! anything under a licence the repository cannot carry.
@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use log::{debug, warn};
-use oag_render::post::screen::Preset;
+use oag_post::screen::Preset;
 use oag_ui::menu;
 
 use crate::settings::SCREEN_FILTER_OFF;

@@ -3,7 +3,8 @@
 //! Six of them, all pure maths over plain vectors so they can be tested
 //! without a window or a GPU:
 //!
-//! - [`orbit`], which an asset viewer wants: yaw, pitch and zoom around a point.
+//! - `oag_mesh::orbit`, which an asset viewer wants: yaw, pitch and zoom around a point
+//!   (it lives in `oag-mesh`, which frames a model with it).
 //! - [`free`], which a debug fly-through wants.
 //! - [`chase`], the external view the game flies behind a ship, whose parameters
 //!   come from the ship's own `handlingstats.xml`.
@@ -33,7 +34,6 @@ pub mod craft_view;
 pub mod destroy;
 pub mod free;
 pub mod internal;
-pub mod orbit;
 pub mod shake;
 
 use oag_core::math::{Mat4, camera};

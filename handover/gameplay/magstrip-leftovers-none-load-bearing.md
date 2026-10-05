@@ -26,7 +26,7 @@ Neither magstrip material carries the texture-transform gate
 `the_magstrip_material_carries_no_texture_transform`. The mechanism this was
 asking about (material `+0x10`'s flag driving `FUN_0892733c`'s texture-matrix
 uploads) is real and already implemented generically
-(`oag_render::mesh_render::TexAnims`); the magstrip's two materials just do
+(`oag_mesh::mesh_render::TexAnims`); the magstrip's two materials just do
 not use it. Separately, `_magsurface3_1verb.tga`'s `"verb"` suffix is the
 **only** occurrence of that string across all 5,017 texture names on the
 disc's 307 version-6 `.vex` files (a `Dmagsurface3_1verb.tga` "Dark" variant

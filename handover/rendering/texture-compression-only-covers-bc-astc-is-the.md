@@ -2,9 +2,9 @@
 
 2026-09-03. `crates/render::mesh_render::optional_features` probes and requests
 exactly one compressed-texture feature, `wgpu::Features::TEXTURE_COMPRESSION_BC`
-(`crates/render/src/mesh_render.rs:69`), and `texture::upload` decodes back to
+(`crates/mesh/src/mesh_render.rs:69`), and `texture::upload` decodes back to
 `Rgba8Unorm` on the CPU when the adapter lacks it
-(`crates/render/src/mesh_render/texture.rs`, "Uploads one `ModelTexture`, in
+(`crates/mesh/src/mesh_render/texture.rs`, "Uploads one `ModelTexture`, in
 the form it came in"). That fallback exists for the GL backend this project
 does not ship - it also fires, unintentionally, on every Apple Silicon Mac
 today, since `Backends::PRIMARY` includes Metal and Apple GPUs decode ASTC
@@ -77,7 +77,7 @@ probably not even per-process-startup for anything but small/dev iteration.
    same way `optional_features` already probes BC - additive, no change to
    any adapter that only has BC
 3. **On an adapter reporting both features**, benchmark actual frame cost
-   (upload bandwidth in `oag_render::timing::PassTimer`, or a dedicated
+   (upload bandwidth in `oag_gpu::timing::PassTimer`, or a dedicated
    micro-benchmark) rather than assuming either format wins from spec sheets.
    Whichever measures faster becomes the default *on that adapter*; the loser
    stays selectable but not default. Apple Silicon Mac is the only hardware

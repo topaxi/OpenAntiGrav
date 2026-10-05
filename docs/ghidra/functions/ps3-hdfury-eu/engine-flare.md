@@ -142,7 +142,7 @@ six parameters above:
 | `0x31182e0d` | `Speed` | **2.0** |
 
 **All fourteen craft author the same six**, which is a measurement rather than
-a reason to share one - `oag_render::mesh::Flame` reads them per craft.
+a reason to share one - `oag_mesh::mesh::Flame` reads them per craft.
 
 So the whole program, with nothing left unrecovered - the clock included, as of
 2026-08-24:
@@ -232,7 +232,7 @@ Neither of the two draw-state builders read so far is the one that draws the
 flame *model*; the claim is that entry 0 holds a live clock every frame, which
 both of them establish, not that the flare's own builder supplies it.
 
-**Drawn as of 2026-08-24.** `oag_render::mesh::Flame` reads `Speed` as a sixth
+**Drawn as of 2026-08-24.** `oag_mesh::mesh::Flame` reads `Speed` as a sixth
 authored number (2.0 on all fourteen craft and on all fourteen boost plumes -
 `crates/game/tests/hd_engine_flare_ground_truth.rs` pins it against the disc),
 `mesh_render::Scene` carries the clock the way the original binds it - one
@@ -318,7 +318,7 @@ literals; the rest are the same run of strings, `0x0079be80` to `0x0079bf58`.
 individually. But its first five slots are exactly the five the `.vex` hangs
 under `EF_Main` and its next five exactly the five under `EF_Boost`, in that
 order, which is a partition arrived at from the other side of the asset.
-`oag_render::mesh::groups::split` reaches the same one by walking the subtrees.
+`oag_mesh::mesh::groups::split` reaches the same one by walking the subtrees.
 **Confidence 90.**
 
 Two loose ends the table names. `ef_FlareShape` is a slot the runtime binds and

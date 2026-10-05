@@ -6,7 +6,7 @@
 //! `frame/attachments.rs` already set; a move, with no behaviour change.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::Placement;
 
 use crate::race::Race;
@@ -126,30 +126,30 @@ impl super::super::Scene {
     pub(super) fn shadow_uniform(
         &self,
         shadows: oag_display::display::Shadows,
-    ) -> oag_render::mesh_render::ShadowMap {
+    ) -> oag_mesh::mesh_render::ShadowMap {
         let map = self.shadow_map.borrow();
         match shadows {
             oag_display::display::Shadows::Original if map.casters() > 0 => {
-                oag_render::mesh_render::ShadowMap {
+                oag_mesh::mesh_render::ShadowMap {
                     matrix: map.matrix().to_cols_array_2d(),
                     strength: MAP_STRENGTH,
-                    mode: oag_render::mesh_render::ShadowMap::COVERAGE,
+                    mode: oag_mesh::mesh_render::ShadowMap::COVERAGE,
                     depth_bias: 0.0,
                     _pad: 0.0,
                 }
             }
             oag_display::display::Shadows::Mapped if map.depth_casters() > 0 => {
-                oag_render::mesh_render::ShadowMap {
+                oag_mesh::mesh_render::ShadowMap {
                     matrix: map.depth_matrix().to_cols_array_2d(),
                     strength: MAPPED_STRENGTH,
-                    mode: oag_render::mesh_render::ShadowMap::DEPTH,
+                    mode: oag_mesh::mesh_render::ShadowMap::DEPTH,
                     depth_bias: MAPPED_DEPTH_BIAS,
                     _pad: 0.0,
                 }
             }
             // Every other case, `off` included: a strength of zero is what
             // makes the sample every pipeline carries inert.
-            _ => oag_render::mesh_render::ShadowMap::off(),
+            _ => oag_mesh::mesh_render::ShadowMap::off(),
         }
     }
 
@@ -275,7 +275,7 @@ impl super::super::Scene {
             && self.light.enabled > 0.5;
         let drawn = usize::from(race.ship_count());
         let track = self.track.occlusion_track();
-        for slot in 0..(oag_render::shadow::occlusion::LAYERS as usize) {
+        for slot in 0..(oag_mesh::mesh_render::OCCLUSION_LAYERS as usize) {
             if self.ships.get(slot).is_none() || !active || slot >= drawn || !race.ship_active(slot)
             {
                 // Cleared once, not every frame: a layer nothing drew into
@@ -398,7 +398,7 @@ impl super::super::Scene {
     /// [`Self::render_sun_occlusion`] left them.
     pub(super) fn sun_occlusion_matrices(
         &self,
-    ) -> [[[f32; 4]; 4]; oag_render::shadow::occlusion::LAYERS as usize] {
+    ) -> [[[f32; 4]; 4]; oag_mesh::mesh_render::OCCLUSION_LAYERS as usize] {
         let maps = self.sun_occlusion.borrow();
         std::array::from_fn(|layer| maps.matrix(layer).to_cols_array_2d())
     }
@@ -517,7 +517,7 @@ fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::
 /// it, where the craft itself hides it. That is what the first capture of this
 /// tier showed - a frame with shadows on the scenery and nothing under the
 /// ship.
-fn mapped_light(light: &oag_render::mesh_render::Light) -> Vec3 {
+fn mapped_light(light: &oag_mesh::mesh_render::Light) -> Vec3 {
     if light.enabled != 0.0 {
         return Vec3::from_array(light.direction);
     }

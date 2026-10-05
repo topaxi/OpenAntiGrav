@@ -14,7 +14,7 @@ section) is the current, authoritative state.
   engine parameter slot 0, a global seconds clock every draw-state builder
   writes; the flame's noise tap scrolls at `Speed * time` = `2.0 * seconds`
   and this renderer implements it -
-  [`crates/render/src/mesh/flame.rs:41`](../../crates/render/src/mesh/flame.rs).
+  [`crates/mesh/src/mesh/flame.rs:41`](../../crates/mesh/src/mesh/flame.rs).
   Closed.
 - **The Fury afterburner's second blend is measured and deliberately not
   reproduced**, not unexplained: `Afterburner Chase Rate` 0.03, `Afterburner

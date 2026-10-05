@@ -1,4 +1,4 @@
-//! The evidence behind `oag_render::mesh::ANIMATED_TEXTURES`, re-measured from
+//! The evidence behind `oag_mesh::mesh::ANIMATED_TEXTURES`, re-measured from
 //! real circuits.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this project
@@ -42,7 +42,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

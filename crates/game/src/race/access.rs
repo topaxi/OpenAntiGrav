@@ -63,7 +63,7 @@ impl Race {
     /// `[render_profiles.<title>] model_detail`. Render-only, cheap and
     /// idempotent like [`Self::set_sight_fov`], so the frame loop sets it
     /// every frame and the menu row applies live.
-    pub fn set_model_detail(&mut self, detail: oag_render::mesh::ModelDetail) {
+    pub fn set_model_detail(&mut self, detail: oag_mesh::mesh::ModelDetail) {
         self.view.model_detail = detail;
     }
 
@@ -71,14 +71,14 @@ impl Race {
     /// `[render_profiles.<title>] texture_detail`. Render-only and idempotent
     /// like [`Self::set_model_detail`], so the frame loop sets it every frame
     /// and the menu row applies live.
-    pub fn set_texture_detail(&mut self, detail: oag_render::mesh_render::TextureDetail) {
+    pub fn set_texture_detail(&mut self, detail: oag_mesh::mesh_render::TextureDetail) {
         self.view.texture_detail = detail;
     }
 
     /// The preset [`Self::set_texture_detail`] last set; the frame writes it
     /// into the scene uniform.
     #[must_use]
-    pub fn texture_detail(&self) -> oag_render::mesh_render::TextureDetail {
+    pub fn texture_detail(&self) -> oag_mesh::mesh_render::TextureDetail {
         self.view.texture_detail
     }
 

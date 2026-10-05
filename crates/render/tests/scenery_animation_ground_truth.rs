@@ -34,7 +34,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, ANIM_TRACK_LIMIT, AnimTrack, Model, NODE_ANIM_LIMIT};
+use oag_mesh::mesh::{self, ANIM_TRACK_LIMIT, AnimTrack, Model, NODE_ANIM_LIMIT};
 use oag_vex::vex;
 
 /// The `Anim Transform` class, from the class table in `docs/formats/vex.md`.

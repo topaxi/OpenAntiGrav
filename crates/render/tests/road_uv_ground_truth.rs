@@ -39,7 +39,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, Model};
+use oag_mesh::mesh::{self, Model};
 use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {

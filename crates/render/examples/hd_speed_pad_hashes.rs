@@ -1,6 +1,6 @@
 //! Node `+0x30` hashes against the chunk hashes of the speed-pad material.
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 use oag_vex::vex;
 fn main() -> anyhow::Result<()> {
     let spec = "data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC";

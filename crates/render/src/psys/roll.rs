@@ -52,7 +52,7 @@ use oag_core::math::Vec3;
 use oag_pob::{self as pob, Channel, ChannelMode, flags};
 
 use super::{Effect, Particle, channel_sample, quad};
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// A template's flag `0x10`: start at a random roll.
 const RANDOM_START: u32 = 0x10;

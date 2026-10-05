@@ -1,7 +1,7 @@
 //! What one frame cost, from the two clocks that can be asked about it.
 //!
 //! [`GpuCost`] is **device time**: timestamps written on the GPU around the
-//! passes this build brackets, from [`oag_render::timing::PassTimer`].
+//! passes this build brackets, from [`oag_gpu::timing::PassTimer`].
 //! [`CpuCost`] is **wall-clock time on the frame thread**: how long
 //! `Session::frame` itself ran, and how much of that went into the two
 //! swapchain calls that are allowed to block.
@@ -55,7 +55,7 @@
 /// the interval between loop iterations, which under `Vsync::On` is the
 /// refresh and under a frame limit is the limit - so a frame with headroom
 /// and a frame with none read the same *there*. These are GPU timestamps
-/// around specific work, from [`oag_render::timing::PassTimer`]. Read
+/// around specific work, from [`oag_gpu::timing::PassTimer`]. Read
 /// together - see [`GpuCost::rows`] and the `OTHER` row it appends - the two
 /// say what the frame-time panel alone cannot: how much of a frame is
 /// accounted for and how much is not.
@@ -72,7 +72,7 @@ pub struct GpuCost {
     pub scene: Option<f32>,
     /// The motion-blur chain, or `None` before its first reading has come
     /// back. That includes every frame `[render_profiles.<title>]
-    /// motion_blur` is `off`, since `oag_render::post::motion_blur::MotionBlur::render`
+    /// motion_blur` is `off`, since `oag_post::motion_blur::MotionBlur::render`
     /// then encodes nothing and the claimed slot is given back unwritten. See
     /// [ADR-0042](../../../../docs/architecture/adr/0042-the-dynamic-resolution-budget-subtracts-what-it-can-measure.md).
     pub blur: Option<f32>,

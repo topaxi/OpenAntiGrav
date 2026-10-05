@@ -53,7 +53,7 @@ their latency buy little for a racing game.
 magnifying - it is a magnifier, and asked to minify it undoes the supersampling
 it was handed. It is also the middle rung of FSR 3.1's fallback chain, for
 adapters that cannot supply the storage-texture features the temporal path
-needs. See [`oag_render::post`](../../crates/render/src/post/mod.rs) for the
+needs. See [`oag_post`](../../crates/post/src/lib.rs) for the
 colour-space arrangement, which is the part most easily got wrong.
 
 **What FSR 3.1 still needs**, none of which exists yet - the prerequisites this
@@ -86,7 +86,7 @@ section's own expectations:
 
 - **The jitter was already upstream's function.**
   `ffxFsr3UpscalerGetJitterOffset` is `halton(index % phaseCount + 1, 2) - 0.5`
-  on x and base 3 on y, which is what `oag_render::jitter` had been doing since
+  on x and base 3 on y, which is what `oag_post::jitter` had been doing since
   ADR-0039 - written from the same reasoning, before anyone read the SDK. Only
   the phase *count* was ours, and `jitter::PHASES`' own doc comment had said so
   and named the port as what would replace it. It did.
@@ -202,7 +202,7 @@ be most of the win for a fraction of the machinery.
 
 | Feature | Licence status | Early decision |
 | --- | --- | --- |
-| FSR 1 upscaling | MIT, ported | **Built.** `oag_render::post::fsr1`, off by default, magnification only |
+| FSR 1 upscaling | MIT, ported | **Built.** `oag_post::fsr1`, off by default, magnification only |
 | FSR 3.1 upscaling | MIT, open | **In flight**, one of eight passes built - [fsr3.md](../rendering/fsr3.md). Ported to WGSL per [ADR-0012](../architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md), against a pinned FidelityFX-SDK `v1.1.4` with nothing vendored; every renderer-side prerequisite was in place before it opened |
 | FSR3 frame generation | MIT, open | Skip - interpolated presentation from the 60 Hz simulation is the better fit |
 | FSR4 | Signed DLLs, no source; driver upgrade is Windows-only | Ship nothing proprietary and hard-code nothing FSR4-specific. Do not plan around inheriting it |

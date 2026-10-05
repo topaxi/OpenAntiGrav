@@ -4,7 +4,7 @@
 MiB (debug build) by passing `.gnf` BC7 chains through as blocks. `omega-texture-stream`
 then took it to **792 MiB** (3,417 MiB measured on the same tree before the
 change) by uploading each texture as it is decoded: `race::TextureSink`
-carries the device into `race::load`, `oag_render::mesh_render::TextureSinkScope`
+carries the device into `race::load`, `oag_mesh::mesh_render::TextureSinkScope`
 catches every texture the `.rcsmodel` build decodes, and a `Model` holds a
 `Texels::Uploaded` view where it held the blocks. RSS after the uploads fell from
 2,650 to 560 MiB; the still is byte-identical, and so are HD's and 2048's with

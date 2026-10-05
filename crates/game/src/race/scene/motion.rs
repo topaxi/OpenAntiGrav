@@ -168,7 +168,7 @@ pub(super) fn velocity_texture(
         mip_level_count: 1,
         sample_count,
         dimension: wgpu::TextureDimension::D2,
-        format: oag_render::mesh_render::VELOCITY_FORMAT,
+        format: oag_gpu::formats::VELOCITY_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     })
@@ -279,8 +279,8 @@ impl super::Scene {
         let cut = watch.observe(view, respawns);
         self.cut_watch.set(watch);
         self.last_frame.set(phases.map(|phase_count| TemporalFrame {
-            camera: oag_render::post::fsr3::camera_from_projection(projection),
-            jitter: oag_render::jitter::offset_pixels(phase, phase_count),
+            camera: oag_post::fsr3::camera_from_projection(projection),
+            jitter: oag_post::jitter::offset_pixels(phase, phase_count),
             phase_count,
             // The sequence's first frame has nothing behind it, and a camera
             // cut mid-race - a view change or the player's own respawn - hands
@@ -326,7 +326,7 @@ impl super::Scene {
 #[derive(Debug, Clone, Copy)]
 pub struct TemporalFrame {
     /// The camera, in the terms FSR 3.1 asks for.
-    pub camera: oag_render::post::fsr3::Camera,
+    pub camera: oag_post::fsr3::Camera,
     /// The sub-pixel offset this frame was actually drawn with, in pixels.
     pub jitter: (f32, f32),
     /// The jitter sequence's length.
@@ -348,7 +348,7 @@ impl super::Scene {
     /// sees a sub-pixel wobble.
     ///
     /// Both matrices take the **same** phase, which is what cancels the offset out
-    /// of the velocity target - `oag_render::jitter`'s own tests carry that claim.
+    /// of the velocity target - `oag_post::jitter`'s own tests carry that claim.
     /// The counter advances whether or not jitter is on, so turning it on does not
     /// restart the sequence.
     ///
@@ -359,8 +359,8 @@ impl super::Scene {
     /// `phases` is `None` for off, and otherwise the sequence length - which is
     /// a property of whatever is *resolving* these frames, not of the camera.
     /// A temporal upscaler wants more phases the further it is magnifying
-    /// ([`oag_render::jitter::phases`]); nothing at all wants
-    /// [`oag_render::jitter::DEFAULT_PHASES`].
+    /// ([`oag_post::jitter::phases`]); nothing at all wants
+    /// [`oag_post::jitter::DEFAULT_PHASES`].
     pub(super) fn jittered(
         &self,
         phases: Option<u32>,
@@ -373,7 +373,7 @@ impl super::Scene {
         let Some(phases) = phases else {
             return (view_projection, prev_vp);
         };
-        let jitter = oag_render::jitter::matrix(frame, phases, (viewport.2, viewport.3));
+        let jitter = oag_post::jitter::matrix(frame, phases, (viewport.2, viewport.3));
         (jitter * view_projection, jitter * prev_vp)
     }
 }
@@ -402,7 +402,7 @@ impl super::Scene {
         viewport: (f32, f32, f32, f32),
         strength: f32,
         camera_shake: Mat4,
-        timestamps: Option<oag_render::post::motion_blur::ChainTimestamps<'_>>,
+        timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
     ) -> bool {
         let Some(pass) = &self.motion_blur else {
             return false;
@@ -415,7 +415,7 @@ impl super::Scene {
             device,
             queue,
             encoder,
-            &oag_render::post::motion_blur::Frame {
+            &oag_post::motion_blur::Frame {
                 scene,
                 velocity,
                 depth,

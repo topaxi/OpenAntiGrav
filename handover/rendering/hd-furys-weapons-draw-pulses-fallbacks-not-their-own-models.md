@@ -24,7 +24,7 @@ quads, which `cannon-quads` owns separately) all report a real triangle
 count and material, not "falls back to a billboard".
 
 What HD authors, all in DATA02 (`.vex` + `.rcsmodel` pairs, load
-through `oag_render::mesh::rcs::build` the way a craft hull does; full entry
+through `oag_mesh::mesh::rcs::build` the way a craft hull does; full entry
 dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 
 | weapon | models | HD-only effects |

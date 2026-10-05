@@ -373,7 +373,7 @@ fn the_stride_search_recovers_each_width_the_disc_ships() {
 /// dequantises to a legal position instead and several strides both fit and
 /// fill the box, so there is no answer to give. It gives none: an undecodable
 /// mesh draws nothing and is reported, which is what
-/// `oag_render::mesh` does with it.
+/// `oag_mesh::mesh` does with it.
 #[test]
 fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() {
     let data = model(18, 64);

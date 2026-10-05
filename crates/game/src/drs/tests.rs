@@ -221,7 +221,7 @@ fn a_floor_above_the_ceiling_collapses_onto_it() {
 #[test]
 fn a_step_is_followed_by_a_cooldown_covering_the_frames_in_flight() {
     // Four is the timer's own ring depth, and a reading resolves at least one
-    // frame late - see `oag_render::timing::PassTimer`.
+    // frame late - see `oag_gpu::timing::PassTimer`.
     const { assert!(COOLDOWN >= 4) };
 
     let target = Target::OFFERED[2];

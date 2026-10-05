@@ -39,7 +39,7 @@ use std::ops::Range;
 
 use oag_vex::quake::Span;
 
-use crate::mesh::{BatchPlacement, GpuVertex};
+use oag_mesh::mesh::{BatchPlacement, GpuVertex};
 
 /// The bump's height at its peak, in world units.
 ///

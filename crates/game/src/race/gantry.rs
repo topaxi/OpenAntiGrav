@@ -80,8 +80,8 @@ pub use clock::{
 
 use super::*;
 
+use oag_mesh::mesh::Bounds;
 use oag_render::gantry::Mount;
-use oag_render::mesh::Bounds;
 
 /// Where the gantry's authored timeline is held, in seconds.
 ///
@@ -214,8 +214,7 @@ pub(super) fn place(
     // Built with the texture sink set aside: `clock::go_edge` reads this
     // model's texels, and a sunk texture has none. One 64x128 texture, so the
     // peak the sink exists to keep down does not move.
-    let model = match oag_render::mesh_render::without_texture_sink(|| load(archives, name, report))
-    {
+    let model = match oag_mesh::mesh_render::without_texture_sink(|| load(archives, name, report)) {
         Ok(model) => model,
         Err(e) => {
             report.push(format!("no start gantry: {name} did not load ({e})"));

@@ -129,7 +129,7 @@ impl Scene {
     }
 
     /// Chooses the `LodGroup` child of every live wreck.
-    pub(super) fn select_wreck_lod(&self, race: &Race, eye: oag_render::mesh::LodEye) {
+    pub(super) fn select_wreck_lod(&self, race: &Race, eye: oag_mesh::mesh::LodEye) {
         for slot in 0..usize::from(race.ship_count()) {
             if self.is_wrecked(race, slot)
                 && let Some(wreck) = &self.wrecks.hull[slot]

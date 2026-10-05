@@ -13,10 +13,11 @@
 //! Skips when there is no adapter, like `velocity_target.rs`.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh::GpuVertex;
-use oag_render::mesh_render::material_bind_group_layout;
+use oag_mesh::mesh::GpuVertex;
+use oag_mesh::mesh_render::OCCLUSION_LAYERS;
+use oag_mesh::mesh_render::material_bind_group_layout;
 use oag_render::shadow::map::{Caster, Fit};
-use oag_render::shadow::occlusion::{LAYERS, Maps, REACH, Track};
+use oag_render::shadow::occlusion::{Maps, REACH, Track};
 use oag_render::shadow::self_shadow::SIZE;
 
 fn vertex(position: Vec3) -> GpuVertex {
@@ -30,8 +31,8 @@ fn vertex(position: Vec3) -> GpuVertex {
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: oag_render::mesh::slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }
@@ -229,5 +230,5 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
         "the layer cleared to far"
     );
     assert_eq!(maps.self_shadow().drawn(2), 0);
-    const { assert!(LAYERS > 2) };
+    const { assert!(OCCLUSION_LAYERS > 2) };
 }

@@ -21,7 +21,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// Samples in the history ring.
 ///

@@ -51,7 +51,7 @@ impl Scene {
             return;
         }
         let format = if self.draws_linear() {
-            oag_render::post::hd_bloom::SCENE_FORMAT
+            oag_gpu::formats::SCENE_FORMAT
         } else {
             caller_format
         };
@@ -133,7 +133,7 @@ impl Scene {
     pub(super) fn draw_ghost(
         &self,
         race: &Race,
-        eye: oag_render::mesh::LodEye,
+        eye: oag_mesh::mesh::LodEye,
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {

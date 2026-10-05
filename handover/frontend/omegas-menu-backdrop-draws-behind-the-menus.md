@@ -13,7 +13,7 @@ categories: [frontend, rendering]
 `Picture::Scene`/`Draw::SceneBackdrop`, `oag_game::render::scene` (scene into a white target,
 `FEBackgroundAnim_fp`'s Roberts cross, blur, copy), `oag_game::boot::{backdrop,scene}` (one
 `MenuBackdrop` slot holding the Fury clouds **or** the scene, since the two widgets are never up
-together), `oag_render::mesh::rcs::psp2::build_with_vex` (Omega's geometry is a PS4 `.rcsmodel`
+together), `oag_mesh::mesh::rcs::psp2::build_with_vex` (Omega's geometry is a PS4 `.rcsmodel`
 whose motion is in the `.vex`), and `BootProfile::menu_scene`, true for Omega alone. HD, Pulse, Pure
 and 2048 `--menu-page main` captures are byte-identical before and after (double captures, plus the
 Fury `--anim-seconds 4` one). Disc-backed:

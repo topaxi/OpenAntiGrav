@@ -55,7 +55,20 @@ GAMEPLAY_CRATES = {
     "oag-title",
     "oag-weapons",
 }
-FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
+# oag-gpu, oag-mesh and oag-post are the three crates split out of oag-render;
+# each links wgpu so the entry is redundant today, and is listed for the reason
+# oag-render is: the rule should name the renderer's crates, not lean on one
+# transitive dependency staying put.
+FORBIDDEN_FOR_GAMEPLAY = {
+    "oag-render",
+    "oag-gpu",
+    "oag-mesh",
+    "oag-post",
+    "oag-audio",
+    "oag-input",
+    "winit",
+    "wgpu",
+}
 
 # The crates that link `oag-title` without being title packages: the reader of
 # any title's archives, the composition root that picks one, and the trace

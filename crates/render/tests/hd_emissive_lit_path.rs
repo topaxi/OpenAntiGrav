@@ -38,8 +38,8 @@
 
 use std::sync::Arc;
 
-use oag_render::mesh::{Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
+use oag_mesh::mesh::{Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -77,7 +77,7 @@ fn vertex(lit: f32, position: [f32; 3]) -> GpuVertex {
         // than selecting between the two, and the high half carries the index
         // into the glow table.
         slots: slots::DEFAULT | slots::EMISSIVE | slots::ADD_SECOND | GLOW_SLOT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

@@ -24,8 +24,8 @@
 
 use std::sync::Arc;
 
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneSet, zone};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneSet, zone};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -53,7 +53,7 @@ fn vertex(position: [f32; 3], lit: f32) -> GpuVertex {
         // material's own declaration in the original too - a program fed
         // neither a constant ambient nor a directional light.
         slots: slots::DEFAULT | slots::EMISSIVE,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }
@@ -359,7 +359,7 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
 
 /// A quad with a normal facing straight up (`+Y`), the shape [`zone_glow`]'s
 /// own `saturate(N.y - 0.5)` gate wants a nonzero reading from - see
-/// `oag_render::mesh_render::Zone`'s doc comment: the visualiser is a floor
+/// `oag_mesh::mesh_render::Zone`'s doc comment: the visualiser is a floor
 /// display, and every other quad in this file faces the camera along `+Z`.
 fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
     let vertex = |position: [f32; 3]| GpuVertex {
@@ -373,7 +373,7 @@ fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
         xform: 0,
         sun_mask: 1.0,
         slots: slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     };
     Model {
@@ -389,7 +389,7 @@ fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
 /// **The visualiser glow reaches the frame**, indexed by the stage texture's
 /// own alpha and driven by a spectrum this test writes directly - the same
 /// seam `race::Scene::render` calls once a frame in the real game, via
-/// `oag_render::mesh_render::zone::write_vis`.
+/// `oag_mesh::mesh_render::zone::write_vis`.
 ///
 /// Isolated from every other term: `effect.rgb`, `base` and `base_alt` are
 /// all zero (no surface colour), the albedo is irrelevant (the Zone term
@@ -416,7 +416,7 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
 
     // Texel 128 is band 12's eighth segment under the recovered layout
     // (`128 = 1 + 10 * 12 + 7`), so band 12 at full level lights it - see
-    // `oag_render::mesh_render::zone::write_vis`. Under the invented
+    // `oag_mesh::mesh_render::zone::write_vis`. Under the invented
     // one-band-per-texel spread this replaced, the same texel was band 128
     // of 256; the layout moved, what the shader does with the texel did not.
     let mut bands = [0.0f32; 16];

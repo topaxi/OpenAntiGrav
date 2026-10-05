@@ -23,9 +23,9 @@
 //! just test-data
 //! ```
 
+use oag_mesh::mesh::rcs::psp2 as build;
 use oag_rcs::hd_pvs::Pvs;
 use oag_rcs::rcsmodel::psp2;
-use oag_render::mesh::rcs::psp2 as build;
 
 /// How far the chunk index is shifted either way.
 const SHIFT: i64 = 3;

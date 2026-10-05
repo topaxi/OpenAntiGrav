@@ -41,7 +41,7 @@ sequencing done and the `OTHER` row now showing a real, unexplained residual,
 ## Decision
 
 **`hd_bloom` is now a fourth timed pass**, on equal footing with the scene
-pass and the motion-blur chain: `oag_render::post::hd_bloom::Chain::run`
+pass and the motion-blur chain: `oag_post::hd_bloom::Chain::run`
 draws through the render extent, exactly as the other two do, so its cost
 belongs in `drs::Cost::scalable`.
 

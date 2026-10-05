@@ -1,5 +1,5 @@
 //! Scratch probe behind [`pads.md`](../../../docs/rendering/pads.md)'s "What
-//! binds the `_ne` file": `oag_render::mesh::rcs::emissive` reads the tint
+//! binds the `_ne` file": `oag_mesh::mesh::rcs::emissive` reads the tint
 //! parameter (`0xe8bcd7f5`) off the **inline** `rcsmodel::Material` record
 //! and falls back to white `[1.0, 1.0, 1.0]` when it is absent - which
 //! `pads.md` already established for both pad materials (one `parameters`
@@ -23,11 +23,11 @@
 
 use oag_rcs::{rcsmaterial, rcsmodel};
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 const NE_SAMPLER_HASH: u32 = 0xa2d5_55b9;
-/// `oag_render::mesh::rcs::emissive::TINT`.
+/// `oag_mesh::mesh::rcs::emissive::TINT`.
 const TINT_HASH: u32 = 0xe8bc_d7f5;
 
 fn main() -> anyhow::Result<()> {

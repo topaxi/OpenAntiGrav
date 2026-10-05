@@ -38,7 +38,7 @@ look-at point, so a corner can be brought into the middle of the frame and then
 looked at from any angle.
 
 Two properties it is built to have, both pinned by tests in
-`oag_render::camera::orbit` and `oag_render::mesh_render::uniforms`:
+`oag_mesh::orbit` and `oag_mesh::mesh_render::uniforms`:
 
 - **The drag holds the model, not the camera.** Drag right and the model goes
   right, which means the camera goes left. Getting that backwards is the classic
@@ -107,7 +107,7 @@ quits. `--yaw` and `--pitch` set the starting angle. The window draws through
 the same pipeline `--screenshot` does, so what you see interactively is what
 the screenshot would have captured at that angle.
 
-The orbit camera's arithmetic is `oag_render::camera::orbit`, which is a pure
+The orbit camera's arithmetic is `oag_mesh::orbit`, which is a pure
 function of the held keys and the elapsed time and is unit tested without a
 window or a GPU. Only the mapping from real keys onto it is in this crate.
 

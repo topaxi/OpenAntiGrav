@@ -23,8 +23,8 @@
 //! cargo run -p oag-render --example hd_emissive_reach
 //! ```
 
+use oag_mesh::mesh::{self, slots};
 use oag_rcs::rcsmaterial::{self, fragment};
-use oag_render::mesh::{self, slots};
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

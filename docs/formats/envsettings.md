@@ -8,7 +8,7 @@ beside.
 Implemented in
 [`oag_tables::envsettings`](../../crates/tables/src/envsettings.rs), read into
 a race by [`oag_game::race::load`](../../crates/game/src/race/load.rs), drawn
-through [`oag_render::mesh_render::Light`](../../crates/render/src/mesh_render.rs),
+through [`oag_mesh::mesh_render::Light`](../../crates/mesh/src/mesh_render.rs),
 and checked against the disc by
 [`envsettings_ground_truth.rs`](../../crates/tables/tests/envsettings_ground_truth.rs).
 
@@ -21,7 +21,7 @@ just play hd --race --screenshot /tmp/hd.png --ticks 2
 ## Why it matters more than its size suggests
 
 **The renderer's light rig was a stand-in, and this is what it stood in for.**
-`crates/render/src/mesh.wgsl` said so in its own header: a fixed two-light rig
+`crates/mesh/src/mesh.wgsl` said so in its own header: a fixed two-light rig
 with invented directions - `(0.4, 0.8, 0.5)` and `(-0.5, 0.2, -0.7)`, weighted
 `0.15 + 0.75 * key + 0.25 * fill` - chosen so that geometry reads clearly rather
 than to reproduce the game's look. [`CLAUDE.md`](../../CLAUDE.md)'s rule about
@@ -158,7 +158,7 @@ has.
 | `Lighting.Sky rotation` | **Drawn**: the sky cubemap is turned by it, about the vertical. Degrees is the corpus's own unit - 180 and -40 survive no radian reading - and the sign and axis are this project's choice, said per race in the load report |
 | `Fog.Fog Color`, `Fog Density` | **Drawn, on the curve read out of the circuit materials' own fragment microcode**: `f = exp(-(density * view_depth)^2)`, the colour lerped in by `f`. See [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode). What is *not* read is how the engine fills the shader's coefficient from `Fog Density`; the authored value is passed through unscaled and judged against an rpcs3 reference frame |
 | `Fog.Alternate *` | Read, unused - what selects the alternate pair over the primary is unread |
-| `HDR and Bloom.*` | **Drawn** (2026-08-19): the whole non-radial chain - gate, adaptation fade, blurs, exposure - runs on the read formulas in `oag_render::post::hd_bloom`, every key's field pinned by the executable's own settings registrar. Still unused: the `Radial bloom *` set (its passes are read but not implemented) and `Bloom feedback` (authored by no circuit) |
+| `HDR and Bloom.*` | **Drawn** (2026-08-19): the whole non-radial chain - gate, adaptation fade, blurs, exposure - runs on the read formulas in `oag_post::hd_bloom`, every key's field pinned by the executable's own settings registrar. Still unused: the `Radial bloom *` set (its passes are read but not implemented) and `Bloom feedback` (authored by no circuit) |
 | `Water.*` | Read, unused. No water surface is drawn |
 | `Lighting.Prelit *`, `Spotlight *`, `Ambient false direction` | Read, unused, and undecoded - what "prelit ambient false specular" means is not established |
 
@@ -237,7 +237,7 @@ do with a circuit.
   circuits author **no `Skycube` node** - class `0x3c6` is in the class table
   and zero nodes carry it - and the sky is `sky.gtf` beside the track, a
   six-face **cubemap** [`gtf::Texture::face_to_rgba`](gtf.md) decodes.
-  `oag_render::mesh::sky_cube` builds it into a camera-centred cube whose quads
+  `oag_mesh::mesh::sky_cube` builds it into a camera-centred cube whose quads
   sample each face exactly where the RSX's own cubemap addressing would, drawn
   through the same `Depth::Sky` path as Pulse's authored `Skycube` mesh; the
   picture is the disc's and the cube is the geometry a cubemap defines for

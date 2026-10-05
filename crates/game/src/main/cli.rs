@@ -8,7 +8,7 @@ use clap::Parser;
 
 use oag_display::display;
 use oag_gameplay::ControlScheme;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 use crate::args::DEFAULT_SIZE;
 
@@ -696,16 +696,16 @@ pub(crate) struct Cli {
     /// How far out an authored `LodGroup` switches to its coarser tiers:
     /// `original`, `high` or `maximum`, overriding
     /// `[render_profiles.<title>] model_detail` for this run only (the file
-    /// on disk is not changed). See `oag_render::mesh::ModelDetail`.
+    /// on disk is not changed). See `oag_mesh::mesh::ModelDetail`.
     #[arg(long)]
-    pub(crate) lod: Option<oag_render::mesh::ModelDetail>,
+    pub(crate) lod: Option<oag_mesh::mesh::ModelDetail>,
 
     /// How far out a PSP `.vex` model keeps its finer texture levels:
     /// `original`, `high` or `maximum`, overriding
     /// `[render_profiles.<title>] texture_detail` for this run only (the file
-    /// on disk is not changed). See `oag_render::mesh_render::TextureDetail`.
+    /// on disk is not changed). See `oag_mesh::mesh_render::TextureDetail`.
     #[arg(long)]
-    pub(crate) texture_detail: Option<oag_render::mesh_render::TextureDetail>,
+    pub(crate) texture_detail: Option<oag_mesh::mesh_render::TextureDetail>,
 
     /// Whether the track's authored visibility set culls this run: `true` or
     /// `false`.
@@ -769,7 +769,7 @@ pub(crate) struct Cli {
     /// pixel - invisible in a window, obvious in a byte diff, which is how to
     /// check it is live. Only the race's 3D scene moves: the HUD, the reticle
     /// and the menus are all drawn at presentation resolution and are not
-    /// jittered. See `oag_render::jitter`.
+    /// jittered. See `oag_post::jitter`.
     #[arg(long)]
     pub(crate) camera_jitter: bool,
 

@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 use oag_render::psys::field::{Anchor, FieldSpec, Frame};
 use oag_render::psys::{self, Effect, System};
 use oag_tables::trackstartup::{Weather as Config, effect_name};

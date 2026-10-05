@@ -13,7 +13,7 @@ use oag_game::{
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::menu;
 
 use crate::gpu::Gpu;
@@ -103,7 +103,7 @@ pub(crate) struct Session {
     /// iterations, which under `Vsync::On` is the refresh and under any
     /// `FrameLimit` is the limit. This one is work, and it is the only signal a
     /// resolution controller could be built on - see
-    /// [`oag_render::timing::PassTimer`] and
+    /// [`oag_gpu::timing::PassTimer`] and
     /// [dynamic-resolution.md](../../../../docs/rendering/dynamic-resolution.md).
     ///
     /// It feeds the `dev` overlay's own reading and, since the controller
@@ -122,7 +122,7 @@ pub(crate) struct Session {
     /// and never moves the extent, whatever the menu row says. The row cannot
     /// be greyed for it: `disabled_by` names a *setting* and an adapter
     /// capability is not one. See `docs/architecture/menus.md`.
-    pub(crate) pass_timer: Option<oag_render::timing::PassTimer>,
+    pub(crate) pass_timer: Option<oag_gpu::timing::PassTimer>,
     /// What FSR 3.1's six **render-resolution** dispatches cost on the GPU, in
     /// the seconds [`Session::scene_cost`] is fed.
     ///
@@ -145,7 +145,7 @@ pub(crate) struct Session {
     /// upscaler is a frame the controller does not get a scene reading for.
     /// Four slots each is eight tiny buffers - see `PassTimer`'s own note on
     /// what a ring costs.
-    pub(crate) upscale_timer: Option<oag_render::timing::PassTimer>,
+    pub(crate) upscale_timer: Option<oag_gpu::timing::PassTimer>,
     /// What FSR 3.1's `accumulate` and `rcas` cost on the GPU, in the same
     /// seconds - the half of the chain that runs at presentation resolution
     /// and does not move when the extent does.
@@ -166,7 +166,7 @@ pub(crate) struct Session {
     /// that disagree by a frame are two rings `Session::feed_drs` can never
     /// match again - it pairs readings by frame index and treats a missing
     /// one as "not measured yet", which stalls the controller for the run.
-    pub(crate) upscale_presented_timer: Option<oag_render::timing::PassTimer>,
+    pub(crate) upscale_presented_timer: Option<oag_gpu::timing::PassTimer>,
     /// What the motion-blur chain costs on the **GPU**, in the same seconds.
     ///
     /// **The third meter, and the one that made the budget honest.** Motion
@@ -185,12 +185,12 @@ pub(crate) struct Session {
     /// `PassTimer::half_writes` exists for: the chain is prepare, two tile
     /// reductions, a neighbour-max, a gather and a copy, and timing any single
     /// one of them would measure a fraction of the cost.
-    pub(crate) blur_timer: Option<oag_render::timing::PassTimer>,
+    pub(crate) blur_timer: Option<oag_gpu::timing::PassTimer>,
     /// What Wipeout HD/Fury's read bloom chain costs on the **GPU**, in the
     /// same seconds.
     ///
     /// **The fourth meter, and the fix for a gap ADR-0042 recorded rather than
-    /// closed.** `oag_render::post::hd_bloom::Chain::run` draws through the
+    /// closed.** `oag_post::hd_bloom::Chain::run` draws through the
     /// render extent - the same viewport every level of its ladder follows -
     /// so its cost belongs beside the scene pass and the motion-blur chain in
     /// [`drs::Cost::scalable`], not folded into `drs::RESIDUAL_SHARE` as an
@@ -209,7 +209,7 @@ pub(crate) struct Session {
     /// simplification: `Chain::run` has no early return, so the only way a
     /// claim goes unwritten is a scene with no `Chain` at all, never a
     /// mid-chain bail-out.
-    pub(crate) hd_bloom_timer: Option<oag_render::timing::PassTimer>,
+    pub(crate) hd_bloom_timer: Option<oag_gpu::timing::PassTimer>,
     /// How long [`Session::frame`] itself took, in the same seconds
     /// [`Session::meter`] is fed - the **fifth** meter, and the first one that
     /// is not a GPU timestamp at all.
@@ -249,7 +249,7 @@ pub(crate) struct Session {
     ///
     /// Exists because a GPU reading arrives a frame or more after the frame it
     /// describes, so it has to name one: see
-    /// [`oag_render::timing::Reading::frame`] and [`Session::stall_frame`].
+    /// [`oag_gpu::timing::Reading::frame`] and [`Session::stall_frame`].
     pub(crate) frame_index: u64,
     /// The most recent frame that carried a load.
     ///
@@ -369,7 +369,7 @@ pub(crate) struct Session {
     /// not exist yet. On its own it strictly worsens the picture, so there is
     /// no version of it a player should be offered a row for - and a value
     /// persisted now would still be set when the real gate ("is a temporal
-    /// upscaler selected") arrives to replace it. See `oag_render::jitter`.
+    /// upscaler selected") arrives to replace it. See `oag_post::jitter`.
     pub(crate) camera_jitter: bool,
     /// The Zone visualiser's per-band peak-hold.
     ///
@@ -377,8 +377,8 @@ pub(crate) struct Session {
     /// over time: a hold rebuilt when a stage is is a hold that restarts from
     /// silence, and the original keeps its own sixteen floats in a struct
     /// that outlives a frame. See
-    /// `oag_render::mesh_render::zone::Hold` for the recovered rule.
-    pub(crate) zone_hold: oag_render::mesh_render::zone::Hold,
+    /// `oag_mesh::mesh_render::zone::Hold` for the recovered rule.
+    pub(crate) zone_hold: oag_mesh::mesh_render::zone::Hold,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
     /// On the session rather than on a stage because it outlives them: a race

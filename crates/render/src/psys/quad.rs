@@ -2,7 +2,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// Six vertices - two triangles - for one camera-facing quad.
 pub(super) fn quad(

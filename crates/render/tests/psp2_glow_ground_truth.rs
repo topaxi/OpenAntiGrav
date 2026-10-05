@@ -14,9 +14,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::rcs::psp2::{self, Animation};
-use oag_render::mesh::{Model, slots};
-use oag_render::mesh_render::TexAnims;
+use oag_mesh::mesh::rcs::psp2::{self, Animation};
+use oag_mesh::mesh::{Model, slots};
+use oag_mesh::mesh_render::TexAnims;
 
 fn package() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,7 +58,7 @@ fn build(circuit: &str) -> Option<(Model, psp2::Report)> {
 /// The first vertex each non-empty draw's indices reach.
 fn first_vertices(
     model: &Model,
-) -> impl Iterator<Item = (&oag_render::mesh::DrawCall, oag_render::mesh::GpuVertex)> {
+) -> impl Iterator<Item = (&oag_mesh::mesh::DrawCall, oag_mesh::mesh::GpuVertex)> {
     model.draws.iter().filter(|d| !d.range.is_empty()).map(|d| {
         (
             d,

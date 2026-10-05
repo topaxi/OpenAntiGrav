@@ -1,0 +1,29 @@
+[package]
+name = "oag-gpu"
+description = "GPU vocabulary the renderer's crates share: the off-by-default perf probe, GPU timestamp timing and the offscreen target formats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+
+[features]
+# Off by default. Turns on `oag_gpu::perfprobe`'s counters, its `mark` and
+# `report_frame` printing; `oag-mesh` forwards it for its device probe, and
+# `oag-render` forwards it to both, as `oag-game` does to `oag-render`.
+#
+# Every probe call site is compiled either way and every one of them collapses
+# to nothing without this - the counters are behind `cfg!`, not `#[cfg]`, so
+# the code cannot rot while the flag is off, which is the failure a debug
+# affordance nobody builds actually has.
+perf-probe = []
+
+[dev-dependencies]
+pollster.workspace = true
+
+[lints]
+workspace = true

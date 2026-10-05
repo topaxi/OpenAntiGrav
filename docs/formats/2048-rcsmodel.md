@@ -6,7 +6,7 @@ It shares the extension and nothing else: a linker-style image, read
 little-endian, with a header section carrying relocation tables and two
 back-to-back payload blocks that are rebased at load.
 
-Read by `oag_rcs::rcsmodel::psp2`, drawn by `oag_render::mesh::rcs::psp2`,
+Read by `oag_rcs::rcsmodel::psp2`, drawn by `oag_mesh::mesh::rcs::psp2`,
 validated by `crates/rcs/tests/psp2_rcsmodel_ground_truth.rs` over **all 993
 files** the three EU packages ship. The loader is `RcsModel_Load`
 (`0x812f15b2`), tagged `PSP2/Psp2.RcsModelLoader.cpp` - see
@@ -355,7 +355,7 @@ three-plus-padding, since 4 components exactly fill 4 declared bytes and
 leave nothing spare the way `normal`'s 4th byte was. This is weaker evidence
 than `normal`'s 96, for a reason specific to this field: **there is no
 Wipeout HD twin to check content against.** HD's own renderer has no decoded
-tangent frame either - `oag_rcs::rcsmodel`/`oag_render::mesh::rcs` (the HD
+tangent frame either - `oag_rcs::rcsmodel`/`oag_mesh::mesh::rcs` (the HD
 module) name a tangent frame among the inputs HD's renderer still lacks, not
 among what it has decoded - so the index-exact oracle that settled `normal`
 and `Uv1` has nothing to compare against here. What follows instead is
@@ -430,7 +430,7 @@ named, so `names.tsv` gains no row.
 
 Implemented as `oag_rcs::rcsmodel::psp2::unpack_tangent`, wired into
 `psp2::SubMesh::tangents` and counted (not yet drawn with) in
-`oag_render::mesh::rcs::psp2::Report::decoded_tangents` -
+`oag_mesh::mesh::rcs::psp2::Report::decoded_tangents` -
 `just play 2048 --race` now reports e.g. "260533 tangent(s) decoded, unused
 (no normal-map consumer yet)" for Altima's own circuit mesh. **Confirmed to
 change nothing visually**: `data/shots/2048_tangent_before.png` (pre-change)

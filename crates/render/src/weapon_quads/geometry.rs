@@ -25,7 +25,7 @@
 use bytemuck::Zeroable;
 use oag_core::math::Vec3;
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 /// Half-width of the bolt streak's two crossed ribbons, world units.
 ///

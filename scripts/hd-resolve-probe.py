@@ -10,7 +10,7 @@ circuit's own read exposure scale:
     scale = <Tone maximum brightness> - min(adapted * <Tone adaption boost>,
                                              <Tone darkening clamp>)
 
-the same formula `oag_render::post::hd_bloom` already implements for a
+the same formula `oag_post::hd_bloom` already implements for a
 circuit whose `.envsettings` authors the whole `HDR and Bloom` block. **Sol
 2's own file does not** - it authors `Tone adaption boost` alone, so
 `crates/game/src/race/load/environment.rs::envsettings_bloom` returns `None`

@@ -11,7 +11,7 @@
 //! L2 ( 0.965, 0.260,  0.024) diffuse (47,58,71)
 //! ```
 
-use oag_render::mesh_render::HullLights;
+use oag_mesh::mesh_render::HullLights;
 use oag_vex::vex;
 
 fn bytes(rgb: [f32; 4]) -> [u32; 3] {

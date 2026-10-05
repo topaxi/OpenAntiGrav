@@ -379,7 +379,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // **A PS3 circuit's geometry is in the `.rcsmodel` beside it.** Both the
     // meshes its `.vex` places - which on HD are all props - and the far larger
     // set of chunks no node references, which is the road itself; see
-    // `oag_render::mesh::rcs::build_scene`. A source with no sibling falls back
+    // `oag_mesh::mesh::rcs::build_scene`. A source with no sibling falls back
     // to the derived ribbon, which draws the circuit this project can derive
     // rather than nothing at all, and says so, so nobody mistakes an invented
     // surface for the disc's art.

@@ -17,6 +17,7 @@ oag-texture.workspace = true
 oag-assets.workspace = true
 oag-formats.workspace = true
 oag-render.workspace = true
+oag-mesh.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true

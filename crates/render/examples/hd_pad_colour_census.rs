@@ -19,8 +19,8 @@
 //! cargo run -p oag-render --example hd_pad_colour_census
 //! ```
 
+use oag_mesh::mesh;
 use oag_rcs::{rcsmaterial, rcsmodel};
-use oag_render::mesh;
 use oag_vex::vex;
 
 /// Every `track.vex` on the disc, archive by archive - the full set, not a

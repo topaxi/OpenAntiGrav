@@ -3,8 +3,9 @@
 //! `Drawable::tint_weapon_pads` does at the ready cycle's first keyframe,
 //! side by side as two PNGs.
 
-use oag_render::mesh_render::Anisotropy;
-use oag_render::{capture, mesh};
+use oag_mesh::capture;
+use oag_mesh::mesh;
+use oag_mesh::mesh_render::Anisotropy;
 
 /// A single node's own slice of `model`, rebased to its own vertex buffer,
 /// keeping only the draws whose triangles fall entirely inside `range`.

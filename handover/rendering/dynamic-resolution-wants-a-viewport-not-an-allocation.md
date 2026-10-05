@@ -63,7 +63,7 @@ are closed.
   - **One thing that line's own reasoning glosses over, worth a second look
     without implementing anything from it**: three of the chain's four
     passes (`bloom bright`, `bloom blur x`, `bloom blur y` in
-    `crates/render/src/post/bloom.rs`) do target the fixed 240x136 scratch
+    `crates/post/src/bloom.rs`) do target the fixed 240x136 scratch
     buffers, but the fourth, `bloom composite` (the same file's last
     `pass(...)` call), targets the caller's `scene` view at `viewport` -
     which *does* fall with the render extent. Whether that pass alone is
@@ -76,7 +76,7 @@ are closed.
 - **FSR 3.1 will want a moving jitter phase count.** `jitter::PHASES` is a
   fixed sixteen, deliberately: deriving it from the presentation-to-render
   ratio is the FSR 3.1 port's decision, not this thread's. A moving scale means
-  a moving phase count when that lands, and `oag_render::jitter::PHASES` is the
+  a moving phase count when that lands, and `oag_post::jitter::PHASES` is the
   one place it changes.
 - **The scale still steps between two adjacent grid points on a marginal
   load.** `RISE_PATIENCE` took a 4K/144 race from 143 resolution changes a

@@ -43,7 +43,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 /// The decrypted PS3 image.
@@ -302,13 +302,13 @@ fn two_animation_clocks_render_two_different_frames() {
         };
         checked += 1;
         let shot = |seconds: f32| {
-            oag_render::mesh_render::capture_pixels_from(
+            oag_mesh::mesh_render::capture_pixels_from(
                 &model,
                 320,
                 240,
                 0.0,
                 0.3,
-                oag_render::mesh_render::Anisotropy::default(),
+                oag_mesh::mesh_render::Anisotropy::default(),
                 seconds,
             )
             .expect("the offscreen capture runs")
@@ -356,7 +356,7 @@ const MOVING_MODELS: &[(&str, usize)] = &[
 /// The billboards are not in the circuits' archive, and which one holds a given
 /// advert is not worth pinning here - `oag_assets::Archives` exists for exactly
 /// this and needs a title package this test does not otherwise want.
-fn build_anywhere(image: &Path, path: &str) -> Option<(oag_render::mesh::Model, String)> {
+fn build_anywhere(image: &Path, path: &str) -> Option<(oag_mesh::mesh::Model, String)> {
     for n in 0..ARCHIVES {
         let archive = format!("PS3_GAME/USRDIR/DATA0{n}.PSARC");
         let spec = format!("{}:{archive}", image.display());

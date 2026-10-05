@@ -659,7 +659,7 @@ impl super::Renderer {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        model: oag_render::mesh::Model,
+        model: oag_mesh::mesh::Model,
     ) {
         match super::SceneBackdrop::new(device, queue, self.target_format, model) {
             Ok(scene) => self.scene = Some(scene),

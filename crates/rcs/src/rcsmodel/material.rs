@@ -331,7 +331,7 @@ pub enum Transparency {
 /// ordering and an additive one blows a glass panel white.
 ///
 /// `oag_texture::gtf` closed that: [`Material::texture`] names a `.gtf`, its
-/// `to_rgba` carries the alpha, and `oag_render::mesh::rcs` draws these surfaces
+/// `to_rgba` carries the alpha, and `oag_mesh::mesh::rcs` draws these surfaces
 /// blended with the equation below.
 ///
 /// **One case still paints solid, and it is a property of the data rather than
@@ -522,7 +522,7 @@ impl Material {
     /// carrying one. See [`Blend::AlphaTest`] for what answering
     /// [`Blend::Factors`] here cost.
     ///
-    /// `oag_render::mesh::rcs` draws through this; see [`Blend`].
+    /// `oag_mesh::mesh::rcs` draws through this; see [`Blend`].
     #[must_use]
     pub fn blend(&self) -> Blend {
         match self.transparency() {

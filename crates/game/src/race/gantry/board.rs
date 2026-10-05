@@ -20,9 +20,9 @@
 //! a scrolling chequered flag on the last. All three are the asset's own
 //! frames at those times; nothing here authors a state.
 
+use oag_mesh::mesh::Model;
 use oag_race::Standing;
 use oag_render::gantry::panel;
-use oag_render::mesh::Model;
 
 use super::clock::ReleaseWindow;
 

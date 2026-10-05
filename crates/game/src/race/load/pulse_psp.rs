@@ -7,7 +7,7 @@
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
 
-use oag_render::mesh_render;
+use oag_mesh::mesh_render;
 
 use super::Loaded;
 

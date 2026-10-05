@@ -5,7 +5,7 @@
 //! cargo run -q -p oag-game --example vita_probe -- <psarc path>
 //! ```
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_tables::handling;
 use oag_vex::{collision, vex};
 

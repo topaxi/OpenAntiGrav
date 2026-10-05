@@ -30,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -195,13 +195,13 @@ fn the_glow_reaches_the_frame_and_the_clock_moves_it() {
             continue;
         };
         let shot = |model: &mesh::Model, seconds: f32| {
-            oag_render::mesh_render::capture_pixels_from(
+            oag_mesh::mesh_render::capture_pixels_from(
                 model,
                 320,
                 240,
                 0.0,
                 0.3,
-                oag_render::mesh_render::Anisotropy::default(),
+                oag_mesh::mesh_render::Anisotropy::default(),
                 seconds,
             )
             .expect("the offscreen capture runs")

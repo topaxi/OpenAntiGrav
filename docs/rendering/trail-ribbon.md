@@ -186,7 +186,7 @@ model plus a material plus textures.
 | leech beam | `leachbeam_triangle.*`, `hd_leechbeam_glow.gtf` |
 
 **Each `*_triangle.vex` decodes to literally one triangle** through
-`oag_render::mesh::rcs::build` - the existing PS3 path, unchanged, no new
+`oag_mesh::mesh::rcs::build` - the existing PS3 path, unchanged, no new
 decoder - with one texture slot filled and a **second texture loaded but not
 drawn**. That is the shape of a *template*: the engine extrudes the ribbon from
 the craft's position history and skins it with the material, and the second
@@ -262,7 +262,7 @@ team rather than shared.
 **Every one of the fourteen craft ships `Data\Ships\<Team>\engineflare.vex`
 and the `.rcsmodel` beside it** - the twelve teams, plus `zone` and
 `detonator`. 961 to 2,141 triangles each, built by
-`oag_render::mesh::rcs::build` with no new decoder, exactly as the hull is. One
+`oag_mesh::mesh::rcs::build` with no new decoder, exactly as the hull is. One
 material each, always the shared
 `data/materials/ships/engines/flame_test.rcsmaterial`, always additive
 (`0x0302`/`0x0001`). Confidence 92 - a directory listing of all 11,664 archive
@@ -334,7 +334,7 @@ things follow for the picture:
   `.rcsmodel` material record, in a per-instance parameter table that was the
   unread tail of that record until now. `power1` = 10, `scale1` = 0.3,
   `min1` = 0.45, an alpha scale of 2.0 and a colour scale of 1.0, identical on
-  all fourteen craft and read per craft anyway. `oag_render::mesh::Flame`
+  all fourteen craft and read per craft anyway. `oag_mesh::mesh::Flame`
   carries them to `mesh.wgsl` as pipeline constants, and the whole path is off
   for a material that does not declare the full set.
 - **`Speed` = 2.0 is authored and `time` is not**, which is what says the

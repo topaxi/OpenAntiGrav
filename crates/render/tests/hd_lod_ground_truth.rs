@@ -30,7 +30,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 /// The decrypted PS3 image.

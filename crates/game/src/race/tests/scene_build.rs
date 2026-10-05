@@ -1,7 +1,7 @@
 //! What building a [`Scene`] costs on the GPU side, as opposed to what it draws.
 
 use super::*;
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex};
 
 fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {

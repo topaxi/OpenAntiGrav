@@ -34,8 +34,8 @@
 //! `quake_ripple_ground_truth.rs` holds the result against where each vertex
 //! actually is on the course, and against every seam in the table.
 
+use oag_mesh::mesh::{self, BatchPlacement, Model};
 use oag_race::course::Course;
-use oag_render::mesh::{self, BatchPlacement, Model};
 use oag_render::ripple::{Built, Ripple};
 use oag_vex::quake::{self, Span};
 use oag_vex::track::AiTrack;

@@ -19,8 +19,8 @@
 
 use std::sync::Arc;
 
-use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Light, Scene, SpuLight, SpuLights, UNIFORMS_SIZE};
+use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
+use oag_mesh::mesh_render::{self, Anisotropy, Light, Scene, SpuLight, SpuLights, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -46,7 +46,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         // black rig leaves the SPU term alone; not `NO_SUN`, so the chunk is
         // not `EMISSIVE`, which would replace the sum with `1.0` outright.
         slots: slots::DEFAULT | slots::NO_AMBIENT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

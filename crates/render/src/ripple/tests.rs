@@ -43,8 +43,8 @@ fn vertex(y: f32) -> GpuVertex {
         xform: 0,
         lightmap_texcoord: [0.0; 2],
         sun_mask: 1.0,
-        slots: crate::mesh::slots::DEFAULT,
-        specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

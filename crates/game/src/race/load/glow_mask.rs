@@ -5,13 +5,13 @@
 //! on both, because both originals run one batch state list over every `.vex`
 //! model the race draws.
 
-use oag_render::mesh::Model;
+use oag_mesh::mesh::Model;
 
 use super::Loaded;
 
 /// Marks the track, sky, pads, hulls, plumes, shields and weapon bodies as
 /// stamping the mask. `by_texel` is the PS2's rule - see
-/// [`oag_render::mesh_render::GlowMask::StampedByTexel`].
+/// [`oag_mesh::mesh_render::GlowMask::StampedByTexel`].
 pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
     let stamp = |model: &mut Model| {
         model.stamps_glow = true;

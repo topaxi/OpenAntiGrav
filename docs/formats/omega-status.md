@@ -126,7 +126,7 @@ Omega can have: no `.points2` clouds ship in any of the nine archives. The scene
 `FrontEndScene_HD_ATG.vex` with its PS4 `.rcsmodel` (byte-identical in `data00` and `data08`);
 the `*_VR` scenes are not drawn. The `.vex` carries the motion and the camera (60 s loop, 2,274
 translation keys on `camera1`), the `.rcsmodel` the geometry, and the two bind by shape name -
-`oag_render::mesh::rcs::psp2::build_with_vex`. The picture is the scene drawn on white and filtered by
+`oag_mesh::mesh::rcs::psp2::build_with_vex`. The picture is the scene drawn on white and filtered by
 `FEBackgroundAnim_fp` into a grey line drawing; everything is read in
 [`menu-backdrop-scene.md`](../ghidra/functions/ps3-hdfury-eu/menu-backdrop-scene.md).
 `--menu-page main` (settled `Main Menu` row: edge 0.6, fill 0.2, width 0.5, no blur) and any other
@@ -449,7 +449,7 @@ The three changes, each with what it rests on:
    fact.** 22 circuits use the `.final` spelling for the model, skeleton, clip,
    `.pvs`, audio and checkpoint files, four (`zone_1`..`zone_4`) use the plain
    one, and none ships both. The game tries the plain sibling first and the
-   `.final` one only when it is absent (`oag_render::mesh::rcs::sibling_name_cooked`),
+   `.final` one only when it is absent (`oag_mesh::mesh::rcs::sibling_name_cooked`),
    so no other title's lookup changes.
 3. **A PS4 `.rcsmodel` is 2048's container with 64-bit pointers.**
    - *Same container, told apart by header word `+0x04` - confidence 95:* 0 on
@@ -574,7 +574,7 @@ every `.rcsmodel` that has materials:
   (2 and 17).
 
 **Consumed by the existing 2048 glow plan, unchanged**:
-`oag_render::mesh::rcs::psp2::glow::plan` reads `Material::params` and
+`oag_mesh::mesh::rcs::psp2::glow::plan` reads `Material::params` and
 `samplers` by name hash, so filling them on PS4 is the whole wiring. A Vineta K
 race reports `28 glow layer(s) and 0 plain scroll(s) off the materials' own
 uniforms (rates chosen, not measured)`. Rates are the 2048 rule, **chosen, not
@@ -627,7 +627,7 @@ circuit's parse costs about 380 MiB transient.
 them, so the peak (3,360 MiB) was all of them at once; after the uploads RSS
 fell to 2,585 MiB and stayed there because glibc keeps freed pages. A load
 given a device now uploads each texture as it is decoded
-(`race::TextureSink`, `oag_render::mesh_render::TextureSinkScope`,
+(`race::TextureSink`, `oag_mesh::mesh_render::TextureSinkScope`,
 `Texels::Uploaded`; the mechanism is in
 [`race-load-transition.md`](../architecture/race-load-transition.md)), so a
 `Model` never holds the blocks and glibc never has them to keep.
@@ -680,7 +680,7 @@ limit of 8192", reproduced on both). Every other circuit's largest side is 8,192
 Two changes, one commit:
 
 1. **The device asks for the adapter's own texture limits**
-   (`oag_render::mesh_render::required_limits`: wgpu's defaults with only the
+   (`oag_mesh::mesh_render::required_limits`: wgpu's defaults with only the
    1D/2D/3D dimension limits raised, `Limits::using_resolution`). RADV and
    lavapipe both report 16,384, so on this machine both circuits go up whole.
    It also raises the clamp `oag_game::upscale::target_size` reads from the same
@@ -914,7 +914,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   coefficients under the Pro's checkerboard mode, whose sample setup is not read); HDR video out switches to the
   `TonemapHDR.*` twins and a curve ending at 40.0 instead of 1.0.
 
-  **Wired** as `oag_render::post::omega_tonemap`: an Omega race (a PS4 circuit
+  **Wired** as `oag_post::omega_tonemap`: an Omega race (a PS4 circuit
   whose file has the block) draws into the linear `Rgba16Float` scene target and
   the chain runs the law, then the `pow(1/2.2)` display encode every linear target
   here ends on (**chosen, not measured**: the scanout format is unread; the HDR

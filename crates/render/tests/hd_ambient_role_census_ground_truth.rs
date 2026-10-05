@@ -30,7 +30,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, slots};
+use oag_mesh::mesh::{self, slots};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

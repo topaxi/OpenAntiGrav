@@ -107,7 +107,7 @@ impl EndRaceRuntime {
         rewards: Option<Rewards>,
         menu: EndRaceMenu,
         runs_on_after_the_end: bool,
-        anisotropy: oag_render::mesh_render::Anisotropy,
+        anisotropy: oag_mesh::mesh_render::Anisotropy,
     ) -> Result<Self> {
         let mut screens = screens;
         // `Race End Photo` first after a finish by the line wherever the

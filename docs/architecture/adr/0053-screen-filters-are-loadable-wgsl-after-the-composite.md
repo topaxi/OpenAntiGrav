@@ -22,7 +22,7 @@ Emulators answer this with a post-processing shader system: PPSSPP ships a
 `shaders.ini` of `.fsh` files with a previous-frame binding, RetroArch has its
 `.slangp` presets. Both are user-extensible, and the popular collections built
 on them are largely GPL - which this MIT/Apache-2.0 tree cannot vendor, and
-which is the same constraint `oag_render::post::fxaa`'s module doc records for
+which is the same constraint `oag_post::fxaa`'s module doc records for
 NVIDIA's FXAA.
 
 Three questions had to be settled before anything was written, because each
@@ -55,7 +55,7 @@ and a body defining `fn screen_filter(uv, pixel) -> vec3<f32>` against a
 prelude this crate owns - the frame, a bilinear and a nearest sampler, **last
 frame's own output**, the output size, the title's authored grid
 (`Space::size`), a frame counter, a clock and the tunables. The prelude is
-`crates/render/src/post/screen.wgsl`; the contract in full is
+`crates/post/src/screen.wgsl`; the contract in full is
 [screen-filters.md](../../rendering/screen-filters.md). Built-ins live in
 `assets/shaders/screen/` and are compiled into the binary; a player's own live
 in `<config dir>/oag/shaders/`, a file with a built-in's stem replaces it, and

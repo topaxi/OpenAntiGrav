@@ -140,7 +140,7 @@ breakpoint.
    ```
    Row-major, four rows `(1,0,0,0)`/`(0,cos,sin,0)`/`(0,-sin,cos,0)`/`(0,0,0,1)`
    - a textbook rotation about **local X**, the row that never varies. That is
-   the same axis `oag_render::mesh::Flap::deflect` already used, chosen rather
+   the same axis `oag_mesh::mesh::Flap::deflect` already used, chosen rather
    than recovered at the time.
 5. **The unit conversion is its own corroboration.** The angle is scaled by
    the VFPU constant `2/PI` (Ghidra names it `vcst.s S002,2/PI` directly)
@@ -156,7 +156,7 @@ below 50 (chosen, not recovered) at the point this section was written.
 
 ## What was implemented
 
-`oag_render::mesh::Flap` carries the vertex span and the hinge; `Flap::deflect`
+`oag_mesh::mesh::Flap` carries the vertex span and the hinge; `Flap::deflect`
 returns `hinge * R * hinge^-1`, because `build_with_textures` has already baked
 every ancestor transform into the vertices and rotating them directly would
 swing the flap about the model's origin six units away. `R` is local X, which

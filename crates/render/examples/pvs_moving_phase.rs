@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut archives = oag_pulse::open(&image)?;
     let blob = archives.read_name(&entry)?;
-    let model = oag_render::mesh::build_with_textures(&entry, &blob, None)?;
+    let model = oag_mesh::mesh::build_with_textures(&entry, &blob, None)?;
     let nodes = vex::nodes(&blob)?;
     let _ = track::find_node(&blob, &nodes).ok_or("no WO Track node")?;
 

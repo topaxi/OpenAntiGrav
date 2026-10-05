@@ -35,7 +35,7 @@ impl Scene {
         seconds: f32,
         (view_projection, prev_vp): (Mat4, Mat4),
         pads_ready: &mut Vec<bool>,
-        recoloured: &mut Vec<oag_render::mesh::GpuVertex>,
+        recoloured: &mut Vec<oag_mesh::mesh::GpuVertex>,
     ) {
         // The simulation's own wave, drawn - `Race::advance_quake` retires it
         // at five seconds, which is also where the bump's envelope reaches

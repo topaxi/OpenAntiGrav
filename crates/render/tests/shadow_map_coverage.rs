@@ -11,7 +11,7 @@
 //! Skips when there is no adapter, like `velocity_target.rs`.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_render::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::map::{Caster, DEPTH_SIZE, Fit, Map, SIZE};
 
 fn vertex(position: [f32; 3]) -> GpuVertex {
@@ -25,8 +25,8 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: oag_render::mesh::slots::DEFAULT,
-        specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        slots: oag_mesh::mesh::slots::DEFAULT,
+        specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }

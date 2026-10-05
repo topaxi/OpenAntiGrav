@@ -2046,12 +2046,15 @@ dependencies = [
  "oag-display",
  "oag-formats",
  "oag-gameplay",
+ "oag-gpu",
  "oag-hd",
  "oag-input",
+ "oag-mesh",
  "oag-music",
  "oag-omega",
  "oag-physics",
  "oag-pob",
+ "oag-post",
  "oag-pulse",
  "oag-pure",
  "oag-race",
@@ -2094,6 +2097,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-gpu"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "pollster",
+ "wgpu",
+]
+
+[[package]]
 name = "oag-hd"
 version = "0.1.0"
 dependencies = [
@@ -2118,6 +2130,28 @@ dependencies = [
  "log",
  "oag-gameplay",
  "winit",
+]
+
+[[package]]
+name = "oag-mesh"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "log",
+ "oag-assets",
+ "oag-core",
+ "oag-formats",
+ "oag-gpu",
+ "oag-pulse",
+ "oag-rcs",
+ "oag-tables",
+ "oag-testdata",
+ "oag-texture",
+ "oag-vex",
+ "pollster",
+ "serde",
+ "wgpu",
 ]
 
 [[package]]
@@ -2162,6 +2196,20 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-testdata",
+]
+
+[[package]]
+name = "oag-post"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "oag-core",
+ "oag-gpu",
+ "pollster",
+ "serde",
+ "toml",
+ "wgpu",
 ]
 
 [[package]]
@@ -2217,11 +2265,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
- "log",
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-gpu",
+ "oag-mesh",
  "oag-pob",
+ "oag-post",
  "oag-pulse",
  "oag-pure",
  "oag-rcs",
@@ -2230,8 +2280,6 @@ dependencies = [
  "oag-texture",
  "oag-vex",
  "pollster",
- "serde",
- "toml",
  "wgpu",
 ]
 
@@ -2403,6 +2451,7 @@ dependencies = [
  "log",
  "oag-assets",
  "oag-formats",
+ "oag-mesh",
  "oag-render",
  "oag-texture",
  "oag-vex",

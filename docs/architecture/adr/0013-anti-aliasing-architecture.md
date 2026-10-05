@@ -52,7 +52,7 @@ pinned to exactly the render scales where that is true (below 100%, i.e. 50
 and 75 of `Scale::OFFERED`). Below that render scale, FXAA or SMAA running
 before EASU blurs the low-resolution scene EASU is about to reconstruct edges
 from - fighting the very kernel that reasons about them, for the same reason
-the module docs at `oag_render::post` warn against feeding EASU a linear-light
+the module docs at `oag_post` warn against feeding EASU a linear-light
 image instead of the perceptual one it expects. At 100% and above, FSR 1 does
 nothing regardless of whether it is selected, so there is nothing to fight.
 
@@ -82,7 +82,7 @@ what genuinely conflicts.**
   [Consequences](#consequences). MSAA multisamples the race scene's colour
   and depth attachments and resolves into the caller's target at the end of
   the scene's one render pass
-  (`race::Scene::render`, `oag_render::mesh_render::build`,
+  (`race::Scene::render`, `oag_mesh::mesh_render::build`,
   `oag_render::exhaust`, `oag_render::sparks`). The sample count is baked into
   every scene pipeline when it is built, so - unlike `render_scale` and
   `upscaler`, which a frame reads fresh - a change here takes effect **the
@@ -95,14 +95,14 @@ what genuinely conflicts.**
 - **FXAA** is one WGSL fullscreen pass, ported from the published algorithm
   description rather than transliterated from a specific author's shader
   text, to keep its licensing unambiguous the way [ADR-0012](0012-wgsl-upscalers-not-native-fidelityfx.md)
-  requires for a transliteration. See `oag_render::post::fxaa`.
+  requires for a transliteration. See `oag_post::fxaa`.
 - **SMAA** is ported from `iryoku/smaa` (MIT, no attribution required even in
   binary form) the same way FSR 1 was ported from `ffx_fsr1.h` - three WGSL
   passes (luma edge detection, blending weight calculation against the
   precomputed area/search lookup textures, neighbourhood blending) plus the
   upstream lookup textures themselves, embedded as binary data with the
   licence reproduced under `licences/` and a header naming the upstream
-  repository on every ported file. See `oag_render::post::smaa`.
+  repository on every ported file. See `oag_post::smaa`.
 - **Both FXAA and SMAA run after MSAA's resolve (if any) and before the
   upscaler**, reading the same offscreen target FSR 1 reads - the "Post
   Processing" stage in the pipeline below. This is the reverse of a generic

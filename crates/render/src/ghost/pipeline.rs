@@ -2,8 +2,9 @@
 //! passes, each one row of `ghost.md`'s state table.
 
 use crate::exhaust::FlareTexture;
-use crate::mesh::GpuVertex;
-use crate::mesh_render::{self, DEPTH_FORMAT, VELOCITY_FORMAT};
+use oag_gpu::formats::VELOCITY_FORMAT;
+use oag_mesh::mesh::GpuVertex;
+use oag_mesh::mesh_render::{self, DEPTH_FORMAT};
 
 use super::{Pipeline, STRIDE, Uniforms};
 

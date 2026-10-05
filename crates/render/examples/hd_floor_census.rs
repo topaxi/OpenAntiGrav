@@ -4,7 +4,7 @@
 //! see-through - the closest thing to a machine definition of "a glass floor
 //! panel went missing" without a picture.
 //!
-//! Two passes, because `oag_render::mesh::rcs::build`/`build_scene` use two
+//! Two passes, because `oag_mesh::mesh::rcs::build`/`build_scene` use two
 //! different stride-recovery paths for the same reason: a node-addressed
 //! chunk (a prop) has an authored box to check against and a per-submesh
 //! `submesh_fits` gate; a world-space chunk (the road, most of a circuit) has
@@ -18,7 +18,7 @@
 
 use oag_rcs::rcsmodel;
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 /// One `(archive, .vex path)` pair per circuit direction, read straight off
@@ -169,7 +169,7 @@ fn main() -> anyhow::Result<()> {
         let world = vex::world_transforms(&data, &nodes);
 
         // Every `Mesh` node's `(hash, min, max, world-space box centre, name)`,
-        // the box reading `oag_render::mesh::rcs::node_geometry` does, plus the
+        // the box reading `oag_mesh::mesh::rcs::node_geometry` does, plus the
         // world transform this census needs and the real loader does not.
         type NodeBox = (u32, [f32; 3], [f32; 3], [f32; 3], Option<String>);
         let node_boxes: Vec<NodeBox> = nodes

@@ -2,7 +2,7 @@
 //! `oag_render::hull_overlay` and `race::scene::absorb_overlay` - plus the
 //! every-list draw loop it shares with [`Drawable::draw_additive`].
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, VisibleSet};
 
@@ -65,7 +65,7 @@ impl Drawable {
         pipelines: &[wgpu::RenderPipeline; 2],
     ) -> SceneStats {
         let mut stats = SceneStats::default();
-        let mut binds = oag_render::perfprobe::Binds::default();
+        let mut binds = oag_gpu::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         if self.model.indices.is_empty() {
             return stats;
@@ -89,7 +89,7 @@ impl Drawable {
             // that sets it differently should still be obeyed.
             let pipeline = &pipelines[usize::from(draw.culled)];
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                oag_render::perfprobe::pipeline_set();
+                oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }

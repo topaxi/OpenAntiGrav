@@ -23,7 +23,7 @@
 //! fixing a broken one - the control the hypothesis has to survive, not
 //! just the two materials it's meant to explain.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 const PRELIT_SCALE: f32 = 6.0;
 const PRELIT_POWER: f32 = 3.5;

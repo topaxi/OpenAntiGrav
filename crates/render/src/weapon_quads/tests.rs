@@ -39,7 +39,7 @@ fn the_bolts_two_quads_are_perpendicular_diagonals() {
     // width vector is the offset between its two `x`-differing corners at
     // the same `z` - reading it back this way is independent of
     // `ribbon_quad`'s own corner order.
-    let width_vec = |quad: &[crate::mesh::GpuVertex]| {
+    let width_vec = |quad: &[oag_mesh::mesh::GpuVertex]| {
         let a = quad[0].position;
         let b = quad[2].position;
         [b[0] - a[0], b[1] - a[1]]

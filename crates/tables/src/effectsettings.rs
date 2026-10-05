@@ -403,7 +403,7 @@ pub mod key {
     /// `cf_constantcolourglow` and its kin suggested: 20,084 of the 20,214
     /// Zone-bearing fragment blocks on the disc consume it, 18,032 of them
     /// alongside a sampled `zoneTex*`. See
-    /// `oag_render::mesh_render::Zone` for the census.
+    /// `oag_mesh::mesh_render::Zone` for the census.
     pub const TRACK_BASE_COLOUR_HIGHLIGHT: &str = "Track.Base Colour Highlight";
     /// `zoneBaseAlt<Inner|Outer>` for the track group - the `rim^5` summand's
     /// colour, on the same terms as [`TRACK_BASE_COLOUR_HIGHLIGHT`].

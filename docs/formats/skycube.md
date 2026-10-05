@@ -40,7 +40,7 @@ The payload is byte-for-byte the same shape as a `Mesh` node's:
 | `+0x30` | material array, stride `0x14` |
 
 So [`vex::mesh_materials`] and [`vex::mesh_batches`] decode it **unchanged**, and
-`oag_render::mesh::build_sky` is `build_with_textures` pointed at a different
+`oag_mesh::mesh::build_sky` is `build_with_textures` pointed at a different
 class id rather than a second decoder.
 
 The evidence is the arithmetic, not the resemblance. On `01_Track` the material
@@ -166,7 +166,7 @@ Two findings a loader has to handle:
 
 ## What this engine does with it
 
-`oag_render::mesh::build_sky` builds the `Skycube` into its own `Model` from the
+`oag_mesh::mesh::build_sky` builds the `Skycube` into its own `Model` from the
 same track blob, indexing the same textures. `race::Scene` draws it **first** in
 the existing pass, with `mesh_render::Depth::Sky` - `depth_compare: Always`,
 `depth_write_enabled: false` - and a model matrix of
@@ -187,7 +187,7 @@ obvious and is wrong:
 
 Fog **is** implemented. `oag_vex::fog` decodes the volumes and reimplements
 `FogCube_Sample`; `race::Scene` samples them at the camera each frame and writes
-`oag_render::mesh_render::Fog` into bind group 2, which `mesh.wgsl` applies as
+`oag_mesh::mesh_render::Fog` into bind group 2, which `mesh.wgsl` applies as
 the same linear ramp `Gu_Fog` sends. The sky is deliberately left unfogged - it
 rides on the camera at a radius of 18 to 62 units while fog starts at 30 to 250,
 so fogging it would drown it, and the original's sky geometry is authored
@@ -318,7 +318,7 @@ semantically undecoded block.
 **PS2 rendering was broken until 2026-08-07: `build_sky` never received the
 external texture set, so every PS2 sky drew white.** A PS2 `.vex` embeds no
 texture block at all (see [`ps2-texture.md`](ps2-texture.md)), and
-`oag_render::mesh::build_sky` hardcoded `external: None`, unlike
+`oag_mesh::mesh::build_sky` hardcoded `external: None`, unlike
 [`build_with_textures`] which the track model already resolved an external set
 for. The `Skycube`'s materials name a texture by its ordinal among *all* of the
 file's `Texture` nodes, the same ordinal space the track mesh and the speedup

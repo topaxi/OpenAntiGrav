@@ -183,7 +183,7 @@ fn frame(
     )
 }
 
-fn triangles(model: &oag_render::mesh::Model, nearest_only: bool) -> u64 {
+fn triangles(model: &oag_mesh::mesh::Model, nearest_only: bool) -> u64 {
     model
         .draws
         .iter()

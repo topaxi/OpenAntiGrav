@@ -44,7 +44,7 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 mod emitter_state;
 pub mod field;

@@ -47,8 +47,8 @@ use std::collections::HashMap;
 
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
-use oag_render::mesh::Model;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh::Model;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::campaign::flyer::{self, FlyerWidget};
 use oag_ui::frontend::Draw;
 
@@ -238,7 +238,7 @@ const UNREAD_EFFECTS: [&str; 5] = [
 /// Removes every draw that samples one of [`UNREAD_EFFECTS`]. `textures` is
 /// the `.gtf` path of each texture slot, in order.
 fn hide_effects(model: &mut Model, textures: &[String]) {
-    let hidden = |draw: &oag_render::mesh::DrawCall| {
+    let hidden = |draw: &oag_mesh::mesh::DrawCall| {
         draw.texture
             .and_then(|slot| textures.get(slot))
             .is_some_and(|path| {

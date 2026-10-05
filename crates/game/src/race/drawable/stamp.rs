@@ -45,7 +45,7 @@ impl Drawable {
             }
             let pipeline = stamp.select(draw);
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                oag_render::perfprobe::pipeline_set();
+                oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
             }

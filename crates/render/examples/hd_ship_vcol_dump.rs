@@ -3,8 +3,8 @@
 //! whether it is really the same `colorSet1`/`0x1aaf7631` colour set the
 //! doc comment measures over world/track chunks, or a different attribute
 //! that happens to share its shape (4 components, `RSX_UBYTE_NORM`).
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

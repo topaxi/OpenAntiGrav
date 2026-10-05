@@ -19,7 +19,7 @@
 //!    `Texture1`, not the ramp.
 //!
 //! Built as the direct test of "does this shape occur once or many times",
-//! before `crates/render/src/mesh/rcs/skin.rs`'s `picks`/`roles` act on it -
+//! before `crates/mesh/src/mesh/rcs/skin.rs`'s `picks`/`roles` act on it -
 //! the same reason `hd_emissive_reach.rs` exists for its own mechanism.
 //!
 //! ```sh
@@ -31,8 +31,8 @@
 //! how this page's own `c` value (`0x512f8e65`) was read off the disc rather
 //! than guessed.
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmaterial::{self, fragment::Texel};
-use oag_render::mesh;
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

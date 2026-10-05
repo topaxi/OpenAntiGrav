@@ -368,7 +368,7 @@ per-batch state. **No track surface receives a texture-coordinate offset.**
 
 The read is on-target rather than incidental: Talon's Junction is `16_Track`,
 which carries two of the surfaces
-`oag_render::mesh::ANIMATED_TEXTURES` lists (`col_display7_GLOW` and
+`oag_mesh::mesh::ANIMATED_TEXTURES` lists (`col_display7_GLOW` and
 `col_display7_BLEND_GLOW`), and `Gfx_BindTexture` was hit 80 times over the same
 window with many distinct texture objects, so the track was plainly drawing.
 
@@ -403,7 +403,7 @@ it.
 authored blocks: `oag_vex::vex::mesh_tex_transforms` parses the
 per-material array, `TexTransform::sample` reproduces
 `TexAnim_UpdateTransform`'s wrap-divide-clamp-lerp, and
-`oag_render::mesh_render::TexAnims` samples every track of a model once a frame
+`oag_mesh::mesh_render::TexAnims` samples every track of a model once a frame
 into a uniform table that `mesh.wgsl` indexes per vertex. The name table stays
 as the record of the geometric survey and no longer draws anything - the two
 disagree, and the table was wrong: `col_display7_GLOW` is authored as a **U**

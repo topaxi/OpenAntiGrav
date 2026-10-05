@@ -4,8 +4,8 @@
 //!
 //! Built through `mesh::rcs::scene_from`, the real production path.
 
-use oag_render::mesh;
-use oag_render::mesh::slots;
+use oag_mesh::mesh;
+use oag_mesh::mesh::slots;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

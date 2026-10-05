@@ -3,8 +3,8 @@
 //! the chunks drawn with it, and every node whose class name says pad.
 //! `cargo run -p oag-render --example hd_speed_pad_census`
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {

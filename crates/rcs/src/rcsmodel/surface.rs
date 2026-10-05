@@ -31,7 +31,7 @@ struct Header {
 /// [`SPACE_BYTE`].
 ///
 /// **The disc states this, and this project used to guess it.**
-/// `oag_render::mesh::rcs::is_world_baked` decided the same question by
+/// `oag_mesh::mesh::rcs::is_world_baked` decided the same question by
 /// carrying a `.vex` node's authored box through its transform and asking
 /// whether it landed within one world unit of the chunk's bias - a tolerance
 /// invented here, with an essay attached. Measured over every `Mesh` node on

@@ -1597,7 +1597,7 @@ renderer exists:
 - `oag_vex::quake` decodes the `Quake` node's table, and
   `crates/vex/tests/quake_ground_truth.rs` holds all 9,226 records of the 24
   circuit files to "one record, one whole batch" and to distance-exact links.
-- `oag_render::mesh::batch_placements` says which vertices of a built model
+- `oag_mesh::mesh::batch_placements` says which vertices of a built model
   each batch became; `oag_render::ripple` draws the bump into them, **summing
   the owners of a shared batch** as measured above, and restoring a batch to
   its authored vertices the frame the bump leaves it.

@@ -288,7 +288,7 @@ fn the_tube_constants_are_the_discs_own_tuning_file() {
         return;
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
-    let blob = oag_render::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
+    let blob = oag_mesh::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
         .expect("the tuning file HD ships");
     let text = String::from_utf8(blob).expect("ascii");
     let value = |key: &str| -> f32 {
@@ -333,7 +333,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let text = String::from_utf8(
-        oag_render::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
+        oag_mesh::mesh::read_blob(&spec, "/data/ships/shipeffectstweaks.txt")
             .expect("the tuning file"),
     )
     .expect("ascii");
@@ -375,7 +375,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
     assert_eq!(value("Flare Highlight Power"), hd::SPRITE_HIGHLIGHT_POWER);
     assert_eq!(value("Flare Highlight Boost"), hd::SPRITE_HIGHLIGHT_BOOST);
     // And the texture the flare's init names decodes from the archive set.
-    let blob = oag_render::mesh::read_blob(&spec, "/data/tex/engineflare/engine_flare_rich.gtf")
+    let blob = oag_mesh::mesh::read_blob(&spec, "/data/tex/engineflare/engine_flare_rich.gtf")
         .expect("Engine_Flare_Rich.gtf");
     assert!(blob.len() > 100_000, "{} bytes", blob.len());
 }

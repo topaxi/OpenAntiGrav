@@ -114,7 +114,7 @@
 //! `cubemap` is set on 23 files, all of them a `sky` or an environment probe.
 //! Six faces follow one another - face-major, decoded by
 //! [`Texture::face_to_rgba`], drawn as a race's sky by
-//! `oag_render::mesh::sky_cube` - and the length invariant holds on all 23,
+//! `oag_mesh::mesh::sky_cube` - and the length invariant holds on all 23,
 //! with **an unexplained 360 bytes** on the 20 that carry a mip chain, the
 //! same 360 whether the faces are 128x128 `DXT1` or 2048x2048. Six times
 //! sixty, and sixty is not a multiple of any block size here; the slack is

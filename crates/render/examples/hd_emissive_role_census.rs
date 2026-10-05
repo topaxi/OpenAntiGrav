@@ -30,8 +30,8 @@
 //! ```sh
 //! cargo run -p oag-render --example hd_emissive_role_census
 //! ```
+use oag_mesh::mesh::{self, slots};
 use oag_rcs::rcsmodel;
-use oag_render::mesh::{self, slots};
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

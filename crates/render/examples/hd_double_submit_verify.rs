@@ -4,7 +4,7 @@
 //! that the node-loop skip in `build` actually stops the double submission
 //! `hd_double_submit_check.rs` measured as a risk against the old code.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 const TARGETS: &[(&str, u32, [f32; 3])] = &[
     // sol_2 cf_startbeam_glow, read earlier in this investigation.

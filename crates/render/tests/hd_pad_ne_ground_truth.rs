@@ -25,8 +25,8 @@
 
 use std::path::Path;
 
-use oag_render::mesh::{self, Model, slots};
-use oag_render::mesh_render::{self, Anisotropy};
+use oag_mesh::mesh::{self, Model, slots};
+use oag_mesh::mesh_render::{self, Anisotropy};
 
 const IMAGE: &str = "data/images/hdfury-ps3-eu-dec.iso";
 

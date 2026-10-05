@@ -1,8 +1,8 @@
 //! Scratch probe: `index x y z` for every chunk of an HD `.rcsmodel`, in file
 //! order - the join key for anything indexed by chunk, `track.pvs` included.
 
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

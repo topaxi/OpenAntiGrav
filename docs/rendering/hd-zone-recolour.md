@@ -22,7 +22,7 @@ thirty-one are the ones this page rests on) and
 Zone mode is not an engine program: it is a variant compiled into 1,467 of
 the disc's `.rcsmaterial` files, and on every racing circuit it *replaces* a
 material's shading rather than tinting it. What it computes, read out of the
-fragment microcode (82) and reproduced in `crates/render/src/mesh.wgsl`:
+fragment microcode (82) and reproduced in `crates/mesh/src/mesh.wgsl`:
 
 ```text
 zoneUV  = zoneColourTint.xy * (1 - meshUV)
@@ -40,7 +40,7 @@ beside `zoneMode<n>.gtf` with the `Scene.*` colours, and which pair a chunk
 reads is bit 0 of its own render-block flags in the `.rcsmodel` (85). The
 `10` and `5` are inline literals in every one of the 20,084 blocks that carry
 this shape; nothing per-stage drives them.
-[`oag_render::mesh_render::Zone`](../../crates/render/src/mesh_render/uniforms.rs)
+[`oag_mesh::mesh_render::Zone`](../../crates/mesh/src/mesh_render/uniforms.rs)
 is the uniform, with the census, the colour-space argument and the terms
 deliberately left out.
 
@@ -132,7 +132,7 @@ line, which is what settling gives.
   fills the Outer pair from the wavefront's previous stage, falling back to
   the Inner texture per slot when there is nothing to sweep out. The
   stage-change edge rebuilds bind group 2's four texture views alone
-  (`oag_render::mesh_render::zone::rebind`, called from
+  (`oag_mesh::mesh_render::zone::rebind`, called from
   `oag_game::race::Scene::rebind_zone_art`) rather than rebuilding the whole
   drawable, gated on the same edge `sync_zone_grade`'s own log line already
   fires on - never every frame.

@@ -10,8 +10,8 @@
 //! The evidence reproducer for
 //! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`; `hd_flare_tree`
 //! beside it prints the node tree the groups come from.
+use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
-use oag_render::mesh;
 
 const ISO: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const ARCHIVES: [&str; 7] = [

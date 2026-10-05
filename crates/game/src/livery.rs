@@ -46,8 +46,8 @@
 
 use anyhow::{Context, Result};
 use oag_core::math::Vec3;
+use oag_mesh::mesh::{self, Model};
 use oag_race::Mode;
-use oag_render::mesh::{self, Model};
 use oag_vex::vex;
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
@@ -323,7 +323,7 @@ fn one(
         .with_context(|| format!("reading {hull_name}"))?;
     // **A PS3 hull's geometry is in the `.rcsmodel` beside it**, so it is read
     // from the pair. Untextured and lit off computed face normals; see
-    // `oag_render::mesh::rcs` for what is decoded and what is not. A source
+    // `oag_mesh::mesh::rcs` for what is decoded and what is not. A source
     // with no sibling draws nothing and says so rather than substituting
     // anything.
     if mesh::geometry_is_external(&blob) {
@@ -340,7 +340,7 @@ fn one(
                 "{hull_name}: a .vex with external geometry and no .rcsmodel beside it"
             )),
             // 2048's container is a different file under the same extension
-            // and needs no `.vex` at all - see `oag_render::mesh::rcs::psp2`.
+            // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
             Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
                 mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                     archives.read_name(path).ok()

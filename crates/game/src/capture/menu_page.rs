@@ -3,7 +3,7 @@
 //! `scripts/check-file-size.py`, which is the rule as a gate.
 
 use anyhow::{Context, Result};
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh_render::Anisotropy;
 
 /// A draw's clip: its index in the flattened list, plus `(left, right)` in
 /// screen space - what [`menu_page`] returns for the footer ticker and

@@ -334,7 +334,7 @@ fn the_mode_row_is_seeded_by_the_settings_module() {
     let settings = oag_game::settings::Settings::default();
     let seeds = oag_game::settings::menu_seeds(
         &settings,
-        oag_render::mesh_render::Anisotropy::default(),
+        oag_mesh::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE,
         oag_disc::Platform::Psp,
     );
@@ -363,7 +363,7 @@ fn every_controls_row_is_seeded_by_the_settings_module() {
         .expect("a controls page");
     let seeds = oag_game::settings::menu_seeds(
         &oag_game::settings::Settings::default(),
-        oag_render::mesh_render::Anisotropy::default(),
+        oag_mesh::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE,
         oag_disc::Platform::Psp,
     );
@@ -470,7 +470,7 @@ fn the_anisotropy_row_offers_only_levels_that_parse() {
     for option in values {
         option
             .value
-            .parse::<oag_render::mesh_render::Anisotropy>()
+            .parse::<oag_mesh::mesh_render::Anisotropy>()
             .unwrap_or_else(|e| panic!("{:?}: {e}", option.value));
     }
 }
@@ -557,14 +557,14 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the MSAA rows and `Msaa::ALL` must be one list"
     );
 
-    let texture_detail: Vec<oag_render::mesh_render::TextureDetail> =
+    let texture_detail: Vec<oag_mesh::mesh_render::TextureDetail> =
         values("graphics.texture_detail")
             .iter()
             .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
             .collect();
     assert_eq!(
         texture_detail,
-        oag_render::mesh_render::TextureDetail::ALL,
+        oag_mesh::mesh_render::TextureDetail::ALL,
         "the TEXTURE DETAIL rows and `TextureDetail::ALL` must be one list"
     );
 
@@ -699,7 +699,7 @@ fn every_settings_row_is_one_the_game_seeds() {
     };
     let seeded: Vec<&str> = oag_game::settings::menu_seeds(
         &settings,
-        oag_render::mesh_render::Anisotropy::default(),
+        oag_mesh::mesh_render::Anisotropy::default(),
         oag_pulse::TITLE,
         oag_disc::Platform::Psp,
     )

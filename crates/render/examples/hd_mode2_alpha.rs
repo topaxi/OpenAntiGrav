@@ -14,8 +14,8 @@
 //! channels, read off each material's own fragment microcode, and this reads
 //! the same bits `mesh.wgsl` does.
 
+use oag_mesh::mesh::{self, ModelTexture, slots};
 use oag_rcs::rcsmodel::{Material, Transparency};
-use oag_render::mesh::{self, ModelTexture, slots};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The circuit directories, copied from `oag_hd::names::ENVIRONMENTS` because
@@ -205,7 +205,7 @@ fn main() -> anyhow::Result<()> {
         // **The mean, which is what a fully averaged mip level converges to.**
         // A cutout is discarded wholesale under minification when this falls
         // below the reference and drawn solid when it rises above it - see
-        // `oag_render::mesh::rcs::cutout`.
+        // `oag_mesh::mesh::rcs::cutout`.
         let mean: f64 = row
             .bins
             .iter()

@@ -28,7 +28,7 @@
 //!
 //! # Shape
 //!
-//! One `Depth32Float` array of [`super::occlusion::LAYERS`] layers, bound
+//! One `Depth32Float` array of [`OCCLUSION_LAYERS`] layers, bound
 //! beside the occlusion array in the scene group and read through its
 //! non-filtering depth sampler, by the same layer index the hull's uniform
 //! names for the occlusion map. Owned by [`super::occlusion::Maps`] rather
@@ -40,13 +40,8 @@
 use oag_core::math::Mat4;
 
 use super::map::Caster;
-use super::occlusion::LAYERS;
-use crate::mesh::GpuVertex;
-
-/// The maps' texel format: real depth, for the same reason
-/// [`super::map::DEPTH_FORMAT`] is - a comparison needs it, and eight bits
-/// over a 140-unit-deep box would be half a unit per step.
-pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+use oag_mesh::mesh::GpuVertex;
+use oag_mesh::mesh_render::{OCCLUSION_LAYERS, SELF_SHADOW_FORMAT};
 
 /// Each layer's resolution, square.
 ///
@@ -74,7 +69,7 @@ pub struct Maps {
     binds: Vec<wgpu::BindGroup>,
     /// How many index ranges each layer's last pass drew - a cleared layer
     /// and a never-rendered one look identical otherwise.
-    drawn: [usize; LAYERS as usize],
+    drawn: [usize; OCCLUSION_LAYERS as usize],
 }
 
 impl Maps {
@@ -86,12 +81,12 @@ impl Maps {
             size: wgpu::Extent3d {
                 width: SIZE,
                 height: SIZE,
-                depth_or_array_layers: LAYERS,
+                depth_or_array_layers: OCCLUSION_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: FORMAT,
+            format: SELF_SHADOW_FORMAT,
             // `COPY_SRC` so a test can read a layer back, as the occlusion
             // array's is: the only other observable is a compare inside the
             // hull's shader, and a pass that culls the whole craft away
@@ -106,7 +101,7 @@ impl Maps {
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             ..Default::default()
         });
-        let layer_views = (0..LAYERS)
+        let layer_views = (0..OCCLUSION_LAYERS)
             .map(|layer| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     label: Some("self shadow map layer"),
@@ -172,7 +167,7 @@ impl Maps {
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: FORMAT,
+                format: SELF_SHADOW_FORMAT,
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
@@ -192,11 +187,11 @@ impl Maps {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("self shadow caster uniforms"),
-            size: UNIFORM_STRIDE * u64::from(LAYERS),
+            size: UNIFORM_STRIDE * u64::from(OCCLUSION_LAYERS),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let binds = (0..LAYERS)
+        let binds = (0..OCCLUSION_LAYERS)
             .map(|layer| {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("self shadow caster"),
@@ -220,7 +215,7 @@ impl Maps {
             pipeline,
             uniforms,
             binds,
-            drawn: [0; LAYERS as usize],
+            drawn: [0; OCCLUSION_LAYERS as usize],
         }
     }
 
@@ -341,7 +336,7 @@ impl Maps {
                 origin: wgpu::Origin3d {
                     x: 0,
                     y: 0,
-                    z: layer.min(LAYERS - 1),
+                    z: layer.min(OCCLUSION_LAYERS - 1),
                 },
                 aspect: wgpu::TextureAspect::DepthOnly,
             },

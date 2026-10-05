@@ -172,7 +172,7 @@ it, because its own Zone stage source has no found writer.
 `zoneEffectOuter`, and `Environment_RegisterStageSchema` (`0x003d0b98`)
 registers the two prefix-free keys `Texture U scale` / `Texture V scale`
 directly into `zoneColourTint.xy` - so both feeds are traced rather than
-guessed. `oag_render::mesh_render::Zone` and `mesh.wgsl`'s `zone_surface`
+guessed. `oag_mesh::mesh_render::Zone` and `mesh.wgsl`'s `zone_surface`
 draw the part of the material variant those two feed:
 
 ```text

@@ -54,7 +54,7 @@
 
 use oag_core::{Rng, math::Vec3};
 
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 pub mod tube;
 pub use tube::TubeFrame;
@@ -101,7 +101,7 @@ pub const PULSE_SECONDS: f32 = 1.0;
 /// `Gu_StencilFunc(GU_ALWAYS, DAT_08ab1078, 0xff)` with
 /// `Gu_StencilOp(KEEP, KEEP, REPLACE)`, and `DAT_08ab1078` reads `0x28`. The
 /// PSP's stencil is the framebuffer's alpha byte, which is what
-/// [`crate::post::bloom`] reads. Confidence **80**: the value and the op are
+/// [`oag_post::bloom`] reads. Confidence **80**: the value and the op are
 /// direct reads; that every fragment of the strip writes it, transparent
 /// texels included, follows from the alpha test being off in the same
 /// function.

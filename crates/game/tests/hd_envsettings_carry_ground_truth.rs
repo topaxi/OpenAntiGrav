@@ -17,7 +17,7 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "The resolve's Fury
 //! circuits carry the front end's own Tone triple" section (2026-09-13) found
 //! `envsettings_bloom` requiring the *circuit's own* `.envsettings` to author
-//! the whole ten-key `HDR and Bloom` block, so `oag_render::post::hd_bloom::Chain`
+//! the whole ten-key `HDR and Bloom` block, so `oag_post::hd_bloom::Chain`
 //! was never built on eleven of the sixteen environments: the eight Fury/DLC
 //! circuits, which author `Tone adaption boost` alone and never `Tone
 //! darkening clamp`/`Tone maximum brightness`, and `zone_2`/`zone_3`/`zone_4`,

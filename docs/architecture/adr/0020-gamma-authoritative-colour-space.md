@@ -3,7 +3,7 @@
 ## Status
 Accepted
 
-Supersedes the reasoning written into `crates/render/src/mesh_render.rs:186-201`,
+Supersedes the reasoning written into `crates/mesh/src/mesh_render.rs:186-201`,
 which chose an sRGB render target on the premise that textures were linearised.
 That premise is removed here, so the conclusion it supported does not carry.
 

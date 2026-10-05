@@ -244,7 +244,7 @@ impl Race {
         &self,
         camera_right: oag_core::math::Vec3,
         camera_up: oag_core::math::Vec3,
-    ) -> Vec<oag_render::mesh::GpuVertex> {
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
         use oag_weapons::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
         let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
@@ -769,7 +769,7 @@ impl Race {
         right: Vec3,
         up: Vec3,
         modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
-    ) -> Vec<oag_render::mesh::GpuVertex> {
+    ) -> Vec<oag_mesh::mesh::GpuVertex> {
         let mut vertices = Vec::new();
         for projectile in &self.sim.world.projectiles.slots {
             let Some(kind) = projectile.kind else {

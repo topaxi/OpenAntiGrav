@@ -11,7 +11,7 @@ about: `oag-game --race --screenshot`, Talon's Junction (`16_Track`, Pulse's
 Two instruments, both debug-only and both still in the tree - see "The
 instrumentation is still here" below.
 
-- `oag_render::perfprobe`, a counting global allocator plus hand-placed
+- `oag_gpu::perfprobe`, a counting global allocator plus hand-placed
   counters at every `create_bind_group`, `create_view` and `set_bind_group`
   in the frame path. `OAG_RENDER_PERF=1` prints one line a frame and a
   per-stage allocation breakdown.
@@ -53,7 +53,7 @@ from six interleaved before/after pairs of 600 recordings each, run back to
 back on an otherwise-quiet machine, against a *second* worktree at `157a4666`
 carrying the same `OAG_RENDER_BENCH` block and nothing else (temporary, and
 removed - recreate it with `git worktree add <dir> 157a4666`, copy
-`crates/render/src/perfprobe.rs` and the `OAG_RENDER_BENCH` block across, and
+`crates/gpu/src/perfprobe.rs` and the `OAG_RENDER_BENCH` block across, and
 `just link-data`) - a single-binary
 before/after here drifts by more than the effect does, and the first attempt at
 one produced numbers twice the real size. Mean of the six medians: **130.0 ->
@@ -466,7 +466,7 @@ the GPU side headlessly.
 
 ## The instrumentation is still here, behind an off-by-default feature
 
-`crates/render/src/perfprobe.rs` and its call sites, the `perfprobe::mark`
+`crates/gpu/src/perfprobe.rs` and its call sites, the `perfprobe::mark`
 calls through `race/scene/frame.rs`, the `OAG_RENDER_BENCH` block in
 `race/capture.rs` and the counting `#[global_allocator]` in
 `crates/game/src/main.rs` are all behind **`perf-probe`, which is off**. A

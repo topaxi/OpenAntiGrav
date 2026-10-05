@@ -11,16 +11,16 @@
 pub(crate) struct Scratch {
     /// Engine flares, HD sprite quads and projectile billboards: the
     /// `exhaust::Pipeline`'s sprite buffer.
-    pub(crate) vertices: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) vertices: Vec<oag_mesh::mesh::GpuVertex>,
     /// The engine ribbons, the same pipeline's second buffer.
-    pub(crate) trail: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) trail: Vec<oag_mesh::mesh::GpuVertex>,
     /// The particle pipeline's two blend classes.
-    pub(crate) additive: Vec<oag_render::mesh::GpuVertex>,
-    pub(crate) alpha: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) additive: Vec<oag_mesh::mesh::GpuVertex>,
+    pub(crate) alpha: Vec<oag_mesh::mesh::GpuVertex>,
     /// The Cannon round's bolt streak and muzzle flash -
     /// `oag_render::weapon_quads::Pipeline`'s own two buffers.
-    pub(crate) cannon_bolt: Vec<oag_render::mesh::GpuVertex>,
-    pub(crate) cannon_flash: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) cannon_bolt: Vec<oag_mesh::mesh::GpuVertex>,
+    pub(crate) cannon_flash: Vec<oag_mesh::mesh::GpuVertex>,
     /// Which weapon pads currently hand out a pickup, one per pad node.
     pub(crate) pads_ready: Vec<bool>,
     /// The span of vertices whichever recolour or reshape is running has just
@@ -39,7 +39,7 @@ pub(crate) struct Scratch {
     ///
     /// Each caller clears it itself rather than trusting the state it is
     /// handed, so a span is never written from another mesh's leftovers.
-    pub(crate) recoloured: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) recoloured: Vec<oag_mesh::mesh::GpuVertex>,
 }
 
 impl Scratch {

@@ -61,7 +61,7 @@
 use oag_core::math::Vec3;
 
 use super::{Effect, EmitterSpec, Particle, quad, sprite};
-use crate::mesh::GpuVertex;
+use oag_mesh::mesh::GpuVertex;
 
 impl Effect {
     /// Draws every streak with the procedural profile again and keeps every

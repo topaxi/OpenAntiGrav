@@ -5,7 +5,7 @@
 Accepted.
 
 FSR 1's EASU and RCAS are ported and shipped behind `[graphics] upscaler`
-([`oag_render::post::fsr1`](../../../crates/render/src/post/fsr1.rs)). FSR 3.1
+([`oag_post::fsr1`](../../../crates/post/src/fsr1.rs)). FSR 3.1
 is not built; this decides the route it will take when it is.
 
 ## Context

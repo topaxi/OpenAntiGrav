@@ -32,7 +32,7 @@
 //!   is found, this fails and the title gets its rule.
 
 use oag_game::race::{self, LoadWorker, TextureSink, gantry};
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn pulse_model() -> Option<mesh::Model> {
     let path = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
@@ -65,7 +65,7 @@ fn pulses_own_asset_gives_pulses_measured_start_through_the_rule() {
 /// `hidden` names the draws the gantry leaves out at `seconds`
 /// (`gantry::PanelCull::hidden`): HD's model keeps its later states.
 fn lit_white(model: &mesh::Model, hidden: &[u32], seconds: f32) -> u32 {
-    let table = oag_render::mesh_render::TexAnims::sample(model, seconds);
+    let table = oag_mesh::mesh_render::TexAnims::sample(model, seconds);
     let mut total = 0;
     let lists: [&[mesh::DrawCall]; 3] = [
         &model.draws,

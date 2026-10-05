@@ -630,7 +630,7 @@ pub fn collision_nodes(decoded: &KdCollision) -> (Vec<CollisionNode>, Vec<(u8, u
 /// beside a `track_col_reversed.col`); 2048's base package ships no reversed
 /// `.col` at all, so for it the reversed name simply is not found.
 ///
-/// The same sibling-name idiom `oag_render::mesh::rcs::sibling_name` uses, and
+/// The same sibling-name idiom `oag_mesh::mesh::rcs::sibling_name` uses, and
 /// the same reason: the pairing is by position in the archive's own directory,
 /// not by anything either file states.
 #[must_use]

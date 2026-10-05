@@ -118,7 +118,7 @@ Census over every race and Zone circuit's model, in submeshes:
 same three (`Emissive_UV_Offset` `0x78256a45`, `Emissive_UV_Scale`
 `0x78787596`, `GlowTint` `0xe8bcd7f5`) that HD's `uvanim_diffuse_emissive` reads
 ([rcsmaterial.md](rcsmaterial.md), "A surface scrolls off an engine `time`"),
-now with their names. So the layer is `oag_render::mesh::Emissive` and
+now with their names. So the layer is `oag_mesh::mesh::Emissive` and
 `mesh::slots::ADD_SECOND`, sampled at `(u, (v + offset) * scale + time * rate)`,
 added to the albedo and gated by the diffuse alpha, with the emissive texture
 bound beside the diffuse the way HD binds its second one.

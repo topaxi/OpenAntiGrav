@@ -6,8 +6,8 @@ pad's colour come from?**
 
 The trigger side is [`pads.md`](../ghidra/functions/psp-pulse-usa/pads.md); the
 payload layout is [`formats/pads.md`](../formats/pads.md); how a pad's geometry
-gets into a model at all is `oag_render::mesh::build_pads` on PSP/PS2 and
-`oag_render::mesh::rcs::pads` on PS3. This page is only about pixels.
+gets into a model at all is `oag_mesh::mesh::build_pads` on PSP/PS2 and
+`oag_mesh::mesh::rcs::pads` on PS3. This page is only about pixels.
 
 ## The answer, per title and per class
 
@@ -220,7 +220,7 @@ carries the `_ne` mask as the file's own `second_texture`
 drops it is that the record carries a **third** sampler entry beyond the two
 this renderer reads positionally - `[0]` the `_cs` diffuse, `[1]` the `_ne`
 mask, `[2]` the circuit's lightmap - and
-`oag_render::mesh::rcs::skin::picks` (`crates/render/src/mesh/rcs/skin.rs`)
+`oag_mesh::mesh::rcs::skin::picks` (`crates/mesh/src/mesh/rcs/skin.rs`)
 resolves a material's one `aux` binding by "the lightmap wins the second
 binding, wherever it sits" whenever `Material::lightmap_entry()` finds one
 anywhere in the sampler list. That rule exists on purpose - it is what fixed a
@@ -238,7 +238,7 @@ shared by both `Speedup Pad` and `Weapon Pad`) binds fragment unit 1, and
 (10 `Speedup Pad`, 8 `Weapon Pad`). No parameter patch gates it - each
 material carries exactly one `parameters` entry, and neither pad's hash
 (`0x7611a2d8` speedup, `0xce5c4410` weapon) matches the tint, offset or
-scroll-rate hashes `oag_render::mesh::rcs::emissive` already reads for other
+scroll-rate hashes `oag_mesh::mesh::rcs::emissive` already reads for other
 circuits' glow materials, so a wired layer runs at that module's own
 defaults - tint `1,1,1`, no scroll. **The disc's own shader treats the light
 bars as a plain, unconditional additive layer on every chunk measured**, with
@@ -692,7 +692,7 @@ other people from looking" applies as much to a shader opcode as to a Ghidra
 function. **Separately, and only relevant once the opcodes are named**: `N`
 in this chain's own `N.H` is the tangent-space normal `_ne` itself decodes to
 per pixel, not the vertex normal `mesh.wgsl`'s existing specular term already
-uses - `crates/render/src/mesh.wgsl`'s `GpuVertex` carries no tangent
+uses - `crates/mesh/src/mesh.wgsl`'s `GpuVertex` carries no tangent
 attribute, so even a correctly-named chain would need a per-pixel tangent
 frame this renderer does not build yet, either from authored data or from
 screen-space derivatives of `in.world`/`in.texcoord`. That is real, separate

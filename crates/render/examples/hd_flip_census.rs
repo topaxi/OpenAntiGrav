@@ -5,7 +5,7 @@
 //! circuit so the reading can be checked against surfaces whose picture is
 //! already known to be right or wrong.
 
-use oag_render::mesh;
+use oag_mesh::mesh;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

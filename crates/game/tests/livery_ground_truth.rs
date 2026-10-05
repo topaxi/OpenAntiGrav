@@ -418,7 +418,7 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
     // 2. The right size: the block's dimensions against the hull's own.
     let mut checked = 0;
     for slot in baseline.liveries[0].hull.textures.iter().flatten() {
-        let Some(index) = oag_render::mesh::ship_skin::slot_of(&slot.label) else {
+        let Some(index) = oag_mesh::mesh::ship_skin::slot_of(&slot.label) else {
             continue;
         };
         let block = &skin.blocks[index];
@@ -464,7 +464,7 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
     let mut differing = 0u64;
     let mut total = 0u64;
     for ((label, before), (_, after)) in before.iter().zip(&after) {
-        if oag_render::mesh::ship_skin::slot_of(label).is_none() {
+        if oag_mesh::mesh::ship_skin::slot_of(label).is_none() {
             continue;
         }
         assert_eq!(before.len(), after.len(), "{label}: same size either way");

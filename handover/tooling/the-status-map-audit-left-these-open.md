@@ -55,7 +55,7 @@ Checked still stale at the time of writing unless marked:
 
 - `docs/overview/roadmap.md` about 1189-1195: the M6 bloom box is unchecked
   and says nothing writes the alpha. Bloom is ported and measured
-  (`crates/render/src/post/bloom.rs`,
+  (`crates/post/src/bloom.rs`,
   `docs/ghidra/functions/psp-pulse-usa/bloom.md`), and status.md's own M6 row
   now says so.
 - `docs/formats/2048-status.md` about 86: ".envsettings does not parse for this

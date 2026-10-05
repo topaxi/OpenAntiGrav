@@ -22,8 +22,8 @@
 
 use oag_core::math::Mat4;
 use oag_display::space::Space;
-use oag_render::mesh::Model;
-use oag_render::mesh_render::Anisotropy;
+use oag_mesh::mesh::Model;
+use oag_mesh::mesh_render::Anisotropy;
 use oag_ui::scene_backdrop::Frame;
 
 use super::resources::{sampler_entry, texture_entry, uniform_entry};

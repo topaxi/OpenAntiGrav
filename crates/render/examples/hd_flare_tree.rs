@@ -9,7 +9,7 @@
 //! of them carries - which is where `EF_Main`'s unread `AnimEnd` shows up. The
 //! companion of `hd_flare_probe`; both are cited by
 //! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
-use oag_render::mesh;
+use oag_mesh::mesh;
 use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {

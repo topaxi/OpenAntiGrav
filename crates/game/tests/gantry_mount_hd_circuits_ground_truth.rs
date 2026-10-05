@@ -45,7 +45,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::Model;
+use oag_mesh::mesh::Model;
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -55,7 +55,7 @@ fn image() -> Option<PathBuf> {
 }
 
 /// The circuit's own track model, built exactly as `race::load` builds it -
-/// through `oag_render::mesh::rcs::build_scene` off the `.vex` and its
+/// through `oag_mesh::mesh::rcs::build_scene` off the `.vex` and its
 /// sibling `.rcsmodel` - mirroring `start_gantry_hd_mount_ground_truth.rs`'s
 /// own `track_model`, parametrised over the environment instead of pinned to
 /// Talon's Junction.
@@ -64,12 +64,12 @@ fn track_model(image: &std::path::Path, environment: &str) -> Model {
     let track = oag_hd::names::track(environment);
     let track_blob = archives.read_name(&track).expect("the track .vex reads");
     let sibling =
-        oag_render::mesh::rcs::sibling_name(&track).expect("a .vex name has an .rcsmodel sibling");
+        oag_mesh::mesh::rcs::sibling_name(&track).expect("a .vex name has an .rcsmodel sibling");
     let geometry = archives
         .read_name(&sibling)
         .expect("the sibling .rcsmodel reads");
     let (model, _report) =
-        oag_render::mesh::rcs::build_scene(&track, &track_blob, &geometry, &mut |path| {
+        oag_mesh::mesh::rcs::build_scene(&track, &track_blob, &geometry, &mut |path| {
             archives.read_name(path).ok()
         })
         .expect("the track model builds");

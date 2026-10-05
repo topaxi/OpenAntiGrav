@@ -345,7 +345,7 @@ follow-on to the other.** First: which submesh uses which material is
 genuinely unresolved, not merely unread - every submesh field was checked
 against every material's identity and against its own still-uninterpreted
 64-bit hash, and nothing matches. A model with exactly one material draws
-through the binding regardless (`oag_render::mesh::rcs::psp2::build` now
+through the binding regardless (`oag_mesh::mesh::rcs::psp2::build` now
 takes a texture-loading closure and does this), but neither the raced craft
 (`feisar2048\3`, 6 materials) nor the circuit (`altima`, 527) is that model.
 Second: even a resolved binding would meet `oag_texture::gxt` refusing to
@@ -456,7 +456,7 @@ None of it is a format any more; it is fields inside one, and presentation:
   unit-length across the full corpus**
   ([2048-rcsmodel.md](../../docs/formats/2048-rcsmodel.md#the-normal-is-cracked-three-signed-bytes-not-a-packed-word)).
   Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal`, wired into
-  `oag_render::mesh::rcs::psp2::build`, and `just play 2048 --race` now draws
+  `oag_mesh::mesh::rcs::psp2::build`, and `just play 2048 --race` now draws
   Altima lit off the file's own normals. What is still missing is the texture
   coordinate's own type nibble (`t8`) and the material/texture binding - that
   is what stands between this and a picture worth comparing.
@@ -662,7 +662,7 @@ TITLE entry rather than showing them under 2048 - see
 6. ~~`normal`'s encoding~~ - cracked the same session, see "Open" above:
    three signed bytes, `byte/127.0`, x/y/z in file order, 4th byte padding.
    Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal` and wired into
-   `oag_render::mesh::rcs::psp2::build`; `just play 2048 --race` now draws
+   `oag_mesh::mesh::rcs::psp2::build`; `just play 2048 --race` now draws
    Altima lit off real normals. The index-exact correspondence built to get
    there (`crates/game/examples/vita_rcsmodel_exact.rs`, 1,504 vertices, zero
    ambiguity) is a reusable oracle for the next guess.
@@ -786,7 +786,7 @@ the consumer is what would take any of the three past its current ceiling.
 **Wired, and confirmed to draw nothing new.** `oag_rcs::rcsmodel::psp2::unpack_tangent`
 decodes it, `psp2::SubMesh::tangents` carries it per vertex on the same
 declaration-lookup terms `texcoords` already uses, and
-`oag_render::mesh::rcs::psp2::Report::decoded_tangents` counts it into the
+`oag_mesh::mesh::rcs::psp2::Report::decoded_tangents` counts it into the
 load report (`just play 2048 --race` now says e.g. "260533 tangent(s)
 decoded, unused (no normal-map consumer yet)" for Altima). **Confirmed
 byte-identical before and after** (`cmp` on `data/shots/2048_tangent_before.png`
