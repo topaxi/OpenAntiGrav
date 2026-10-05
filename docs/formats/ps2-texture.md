@@ -620,7 +620,7 @@ declares exactly two `Texture` nodes, embeds neither, and is preceded at delta
 -1 by a set that decodes **exactly two** entries. 24 of 24 exact, with no near
 misses at all, which is the cleanest agreement any of the three model types has
 produced; the ship finding's eleven and the track finding's 27-of-32 both
-predate it. `oag_game::livery::ps2_skin` is the call site, on the same
+predate it. `oag_livery::ps2_skin` is the call site, on the same
 all-slots-empty gate the hull takes, and
 `crates/game/tests/boost_plume_ground_truth.rs` asserts both halves for every
 file - that the preceding entry decodes, *and* that rebuilding through it
@@ -647,7 +647,7 @@ of 13 exact. The shell's one texture is `pulse_shield_extra_ADD`, 128x64
 `CSM1`-swizzled (palette entry `i` at
 `(i & ~0x18) | ((i & 8) << 1) | ((i & 0x10) >> 1)`), which the decoder's
 `unswizzle_clut` already undoes.
-`oag_game::livery::shield::shield_model` now calls `ps2_skin` on the same
+`oag_livery::shield::shield_model` now calls `ps2_skin` on the same
 all-slots-empty gate. Before that, both models bound the white 1x1, which is
 half of why the PS2 shell drew as a flat pale dome.
 `crates/game/tests/ps2_shield_ground_truth.rs` walks all thirteen the way the
@@ -767,7 +767,7 @@ paints. Full reading, the per-player atlas copies `Texture_LoadVexNode`
 makes, and the untraced `ship.dat` baseline restore in
 [`ps2-pulse-eu/ship-skin.md`](../ghidra/functions/ps2-pulse-eu/ship-skin.md);
 implemented by `oag_mesh::mesh::ship_skin::apply_ps2_atlas` and
-[`oag_game::livery::ship_skin`](../../crates/game/src/livery/ship_skin.rs),
+[`oag_livery::ship_skin`](../../crates/livery/src/ship_skin.rs),
 pinned by `crates/game/tests/ps2_ship_skin_ground_truth.rs`.
 
 ## Not determined

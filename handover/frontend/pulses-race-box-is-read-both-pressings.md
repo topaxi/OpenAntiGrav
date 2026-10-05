@@ -91,7 +91,7 @@ walking back down. Read by `oag_ui::picker::slideshow`, loaded through the
 front end's sheet extended per selection, drawn on both pressings. On the
 way: the hex grid is a 32x16 tile the sheet could not repeat
 (`Draw::TiledSprite`), the PS2's `Team Selection` widgets carry a `0`
-player suffix, the PS2 previews needed `race::ps2_texture_set`, and the
+player suffix, the PS2 previews needed `oag_livery::entry::ps2_texture_set`, and the
 RACE page's TEAM/VARIANT/TRACK rows are dropped on a title with these
 screens (`Definition::drop_rows_picked_on_screen`). Docs:
 [`selection-screens.md`](../../docs/ui/selection-screens.md),

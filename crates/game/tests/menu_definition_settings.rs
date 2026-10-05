@@ -578,33 +578,33 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         "the window-size rows and `Size::OFFERED` must be one list"
     );
 
-    let overlays: Vec<oag_game::perf::Overlay> = values("graphics.perf_overlay")
+    let overlays: Vec<oag_present::perf::Overlay> = values("graphics.perf_overlay")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         overlays,
-        oag_game::perf::Overlay::ALL,
+        oag_present::perf::Overlay::ALL,
         "the overlay rows and `Overlay::ALL` must be one list"
     );
 
-    let limits: Vec<oag_game::perf::FrameLimit> = values("display.frame_limit")
+    let limits: Vec<oag_present::perf::FrameLimit> = values("display.frame_limit")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         limits,
-        oag_game::perf::FrameLimit::OFFERED,
+        oag_present::perf::FrameLimit::OFFERED,
         "the frame-limit rows and `FrameLimit::OFFERED` must be one list"
     );
 
-    let vsync: Vec<oag_game::perf::Vsync> = values("display.vsync")
+    let vsync: Vec<oag_present::perf::Vsync> = values("display.vsync")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         vsync,
-        oag_game::perf::Vsync::ALL,
+        oag_present::perf::Vsync::ALL,
         "the vsync rows and `Vsync::ALL` must be one list"
     );
 
@@ -769,9 +769,9 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
     let [Value::Text(name)] = condition.values.as_slice() else {
         panic!("the vsync row stores one text value");
     };
-    let mode: oag_game::perf::Vsync = name.parse().expect("a real vsync mode");
+    let mode: oag_present::perf::Vsync = name.parse().expect("a real vsync mode");
     assert!(mode.paces_itself());
-    for other in oag_game::perf::Vsync::ALL {
+    for other in oag_present::perf::Vsync::ALL {
         assert_eq!(
             other.paces_itself(),
             other == mode,

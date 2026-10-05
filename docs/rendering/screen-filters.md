@@ -6,7 +6,7 @@
 > and are picked up live. The setting is per title, on the GRAPHICS page.
 > The decision is [ADR-0053](../architecture/adr/0053-screen-filters-are-loadable-wgsl-after-the-composite.md);
 > the pass is `oag_post::screen`, the catalogue `oag_game::screen`,
-> and the frame's plumbing `oag_game::upscale::screen`.
+> and the frame's plumbing `oag_present::upscale::screen`.
 
 **This page is not reverse engineering and carries no confidence scores.**
 Nothing on a disc authors a display; the "never invent what the assets
@@ -31,7 +31,7 @@ far that is from a measurement - which for every one of them is "not one".
 From the command line, `--screen-filter <id>` overrides the profile for one
 run, and a `--presented --screenshot` capture is the way to see one in a
 still: an ordinary `--screenshot` is the scene as drawn, for the reason the
-grade is left out of it (see `crates/game/src/upscale.rs`'s module doc).
+grade is left out of it (see `crates/present/src/upscale.rs`'s module doc).
 
 ```sh
 just play --race --screenshot /tmp/crt.png --ticks 300 --hold cross \
@@ -235,7 +235,7 @@ is small enough that a port is an afternoon and a converter from PPSSPP's
 - `oag_game::screen::tests` - every built-in parses and validates; a user
   file joins, shadows a built-in, is re-read on a rewrite, keeps its last
   good revision when broken, and falls back when deleted.
-- `oag_game::upscale::screen_tests` - on a device: a passthrough composites
+- `oag_present::upscale::screen_tests` - on a device: a passthrough composites
   what it was given, a preset sees its own previous output on the second
   frame, the strength row mixes, a broken preset draws unfiltered, every
   built-in builds. Skipped where there is no adapter.

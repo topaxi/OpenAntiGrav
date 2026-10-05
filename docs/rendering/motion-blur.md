@@ -138,7 +138,7 @@ load-bearing and both look wrong at a glance:
 - *Inside `Scene::render`, not `Framebuffer::resolve_scene`.* This was written
   when the HUD and the perf overlay were drawn into the same target immediately
   after the scene, so a pass sitting alongside FXAA and SMAA in
-  `oag_game::upscale` would have smeared them. Since
+  `oag_present::upscale` would have smeared them. Since
   [ADR-0036](../architecture/adr/0036-ui-composites-at-presentation-resolution.md)
   neither is in that target - both composite at presentation resolution - so
   the smearing argument no longer holds. The placement stands on the *other*

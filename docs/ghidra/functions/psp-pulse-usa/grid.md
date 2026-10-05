@@ -685,7 +685,7 @@ walk over the same list on `+0x74`.
 
 **The shuffle is not Fisher-Yates.** Each index trades places with
 `rand() % n` over the whole range, which is biased. The port keeps that
-swap exactly (`crates/game/src/livery/draw.rs`). `rand` is the libc LCG on
+swap exactly (`crates/livery/src/draw.rs`). `rand` is the libc LCG on
 [prng.md](prng.md).
 
 ### Live: seven launches, three player teams
@@ -729,7 +729,7 @@ interpreter are the two things not tried.
 
 ### What the port does with it
 
-`oag_game::livery::teams_for_slots` reproduces the filter's name tests
+`oag_livery::teams_for_slots` reproduces the filter's name tests
 (player excluded, `Zone` excluded; `Type="Race"` is already
 `catalogue::teams`'s filter), the swap and the first-seven cut, with slot 0
 the player's. **Chosen, not measured:** the seed is the race seed through a
@@ -800,7 +800,7 @@ on [race-progress.md](race-progress.md).
   Both closed: the AI landed 2026-08-11 and per-team hulls on 2026-08-15. A
   slot now flies its own team's `Data\Ships\<Team>\Ship.vex` - eight
   different models, 845 to 1,497 triangles - with its own nozzle and plume. See
-  `crates/game/src/livery.rs`. ~~**Which team flies which slot is narrowed for
+  `crates/livery/src/lib.rs`. ~~**Which team flies which slot is narrowed for
   one mode and re-opened for the one that matters.** `id` is a genuine,
   separate per-entrant field on `Race_SpawnGrid`'s struct (confidence 90 on
   the layout and accessors, see "Which team flies which slot" above) - but

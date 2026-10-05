@@ -14,7 +14,7 @@ Mine, Bomb and Cannon round all draw their own HD model too, not only
 Plasma.** `oag_title::weapons::WeaponModels` is a new field on `Title`
 (`crates/title/src/weapons.rs`), filled by all four title crates;
 `load/weapon_models.rs::load` takes the PS3 external-geometry branch
-`crate::livery::shield::shield_model` already had (`mesh::geometry_is_external` +
+`oag_livery::shield::shield_model` already had (`mesh::geometry_is_external` +
 `mesh::rcs::build`), so every entry below except the two still-open rows
 now resolves off its `.vex`/`.rcsmodel` pair on a real HD race rather than
 falling back to a billboard. Verified from the loader's own report line at

@@ -492,7 +492,7 @@ fn load(
 /// so [`mesh::build_with_textures`] bails on it outright
 /// (`"a PS3 .vex carries no render geometry"`). [`mesh::rcs::build`] is the
 /// same function a ship's own livery loads through
-/// (`oag_game::livery`/`livery::flare`), not [`mesh::rcs::build_scene`]:
+/// (`oag_livery`/`livery::flare`), not [`mesh::rcs::build_scene`]:
 /// the gantry has no world-baked second pass of its own to catch a
 /// wrongly-skipped part, the same reasoning that function's own doc comment
 /// gives for every non-track caller.
@@ -547,7 +547,7 @@ fn ps2_skin(
     report: &mut Vec<String>,
 ) {
     let slots = model.textures.len();
-    let Some(external) = super::ps2_texture_set(archives, candidate) else {
+    let Some(external) = oag_livery::entry::ps2_texture_set(archives, candidate) else {
         report.push(format!(
             "{name}: {slots} empty texture slot(s) and the preceding archive entry is \
              not a texture set - the gantry draws untextured"

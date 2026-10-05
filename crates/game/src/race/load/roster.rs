@@ -26,7 +26,7 @@ pub(super) fn resolve_team(
 }
 
 /// One hull, plume and nozzle per grid slot, each off its own team's
-/// directory - see [`crate::livery`], which also records what is recovered
+/// directory - see [`oag_livery`], which also records what is recovered
 /// here (the paths) and what is this project's (which team flies which
 /// slot). Slot 0 is the player's.
 ///
@@ -111,7 +111,7 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
 
 /// Overlays [`crate::race::Options::grid_teams`] onto `slot_teams` - the
 /// disc's own authored AI grid, where an event carries one, in place of
-/// [`crate::livery::teams_for_slots`]'s draw.
+/// [`oag_livery::teams_for_slots`]'s draw.
 ///
 /// **Per-slot, not all-or-nothing.** `grid_teams[i]` is grid slot `i + 1`
 /// (slot `0` stays the player's, always); a `None` entry, or an index past
@@ -150,15 +150,15 @@ fn apply_grid_teams(
 /// one draws, and HD's per-slot trail flag.
 pub(super) struct Grid {
     /// Which team flies each slot, the player first - Pulse's own draw, see
-    /// [`crate::livery::teams_for_slots`].
+    /// [`oag_livery::teams_for_slots`].
     pub slot_teams: Vec<String>,
     /// Wipeout HD's red-trail flag per slot; see [`hd_trail_red`].
     pub hd_trail_red: [f32; oag_gameplay::MAX_SHIPS],
     /// One hull, plume, nozzle and shield per slot.
-    pub liveries: Vec<crate::livery::Livery>,
+    pub liveries: Vec<oag_livery::Livery>,
 }
 
-/// Fills the grid: slot teams out of `available`, then a [`crate::livery`] per
+/// Fills the grid: slot teams out of `available`, then a [`oag_livery`] per
 /// slot off `archives`.
 ///
 /// Here rather than in `load.rs` under the 1,000-line rule in
@@ -172,13 +172,13 @@ pub(super) struct Grid {
 /// swaps the model file ([`oag_title::race::HullVariant`]), and
 /// [`crate::race::Options::skin`], which repaints the model this slot just
 /// built. The second is resolved here against what the source's own definition
-/// declares for the team - see [`crate::livery::ship_skin`], and note that
+/// declares for the team - see [`oag_livery::ship_skin`], and note that
 /// **which** skin a race flies is this project's choice rather than the
 /// original's.
 ///
 /// # Errors
 ///
-/// Propagates [`crate::livery::load`]: only the player's own hull failing to
+/// Propagates [`oag_livery::load`]: only the player's own hull failing to
 /// read or build, which is not a race.
 pub(super) fn grid(
     archives: &mut oag_assets::Archives,
@@ -189,7 +189,7 @@ pub(super) fn grid(
     hull_variant: Option<&str>,
     report: &mut Vec<String>,
 ) -> anyhow::Result<Grid> {
-    let skin = crate::livery::ship_skin::resolve(
+    let skin = super::skin::resolve(
         archives,
         craft_title,
         team,
@@ -199,12 +199,12 @@ pub(super) fn grid(
     );
     let seed = options.seed.unwrap_or(crate::race::SEED);
     let mut slot_teams =
-        crate::livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS, seed);
+        oag_livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS, seed);
     apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
-    let liveries = crate::livery::load(
+    let liveries = oag_livery::load(
         archives,
         &slot_teams,
-        &crate::livery::LoadContext {
+        &oag_livery::LoadContext {
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,

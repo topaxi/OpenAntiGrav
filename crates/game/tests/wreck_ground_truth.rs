@@ -19,7 +19,7 @@
 //! finest tier and extra pass, and the same frame during the explosion (state 4)
 //! is the hull's, pixel for pixel.
 
-use oag_game::livery::{self, LoadContext};
+use oag_livery::{self as livery, LoadContext};
 use oag_race::Mode;
 
 /// Every Pulse PSP team, by the directory the disc keeps it in.

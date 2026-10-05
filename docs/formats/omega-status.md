@@ -683,7 +683,7 @@ Two changes, one commit:
    (`oag_mesh::mesh_render::required_limits`: wgpu's defaults with only the
    1D/2D/3D dimension limits raised, `Limits::using_resolution`). RADV and
    lavapipe both report 16,384, so on this machine both circuits go up whole.
-   It also raises the clamp `oag_game::upscale::target_size` reads from the same
+   It also raises the clamp `oag_present::upscale::target_size` reads from the same
    limit; `Scale::RANGE` tops out at 200 %, so only a display wider than 4,096
    pixels at that scale could ever have hit 8,192.
 2. **A texture still over the limit uploads from the first mip level that fits**

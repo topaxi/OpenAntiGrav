@@ -154,7 +154,7 @@ type BoostAndFlares = (
 pub(super) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    liveries: &[crate::livery::Livery],
+    liveries: &[oag_livery::Livery],
     format: wgpu::TextureFormat,
     anisotropy: Anisotropy,
     sample_count: u32,

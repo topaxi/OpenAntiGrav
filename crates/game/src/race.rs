@@ -85,7 +85,6 @@
 
 use std::path::PathBuf;
 
-use crate::livery::Livery;
 use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
@@ -94,12 +93,14 @@ use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls,
 };
+use oag_livery::Livery;
+use oag_livery::entry::ps2_texture_set;
 use oag_mesh::mesh;
 use oag_mesh::mesh::{DrawCall, Model};
 use oag_mesh::mesh_render;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
-use oag_pulse::race::ships;
+use oag_present::perf::SceneStats;
 use oag_race::recovery::{
     BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
     RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
@@ -180,7 +181,6 @@ pub use absorb::{
     ABSORB_EFFECT, AbsorbBurst, HD_ABSORB_BURST, PULSE_ABSORB_BURST, PURE_ABSORB_BURST,
     absorb_burst_for,
 };
-pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
 pub use capture::gpu::CaptureGpu;
@@ -201,14 +201,13 @@ pub use spline::{Spline, circuit_length};
 pub use telemetry::Telemetry;
 pub use texture_sink::TextureSink;
 pub use view::RaceView;
-pub use visibility::{SceneStats, TrackVisibility};
+pub use visibility::TrackVisibility;
 pub use worker::LoadWorker;
 
 // `pub`, not `pub(crate)`: the selection screens' previews are built by the
 // composition root's own `picker_stage`, which is the `[[bin]]` over this
 // `[lib]` and draws a PS2 circuit's outline and craft through the same
 // texture-set rule a race does.
-pub use assets::ps2_texture_set;
 // The two exhaust names are re-exported so a ground-truth test can assert the
 // report line each one produces without spelling the literal a second time -
 // the names are the executable's, and one copy of them is the point.

@@ -31,7 +31,6 @@ pub mod capture;
 pub mod catalogue;
 pub mod cursor;
 pub mod dlc;
-pub mod drs;
 pub mod endrace;
 pub mod flyer;
 pub mod ghosts;
@@ -49,11 +48,9 @@ pub use oag_gameplay::input;
 /// its owner.
 pub use oag_input::keys;
 pub mod launcher;
-pub mod livery;
 pub mod loader_log;
 pub mod loading;
 pub mod movie;
-pub mod perf;
 pub mod pilots;
 pub mod prefetch;
 pub mod preview;
@@ -70,7 +67,6 @@ pub mod sprite;
 pub mod title;
 pub mod track_panel;
 pub mod unlock;
-pub mod upscale;
 
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///

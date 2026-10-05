@@ -46,7 +46,7 @@
 //! Pulse on a PSP disc only: no other title's wreck or `Ship_SetState` is read.
 
 use super::*;
-use crate::livery::SparkAnchor;
+use oag_livery::SparkAnchor;
 
 /// The blast at each wreck node.
 pub const FXNODE_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_EXPLO";
@@ -70,7 +70,7 @@ const MAX_NODES: usize = 10;
 /// title whose wreck is not read.
 pub(super) fn anchors(
     title: &oag_title::Title,
-    liveries: &[crate::livery::Livery],
+    liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
     if title.name != oag_pulse::TITLE.name {
         return Vec::new();

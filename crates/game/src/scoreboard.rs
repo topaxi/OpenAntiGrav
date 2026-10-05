@@ -25,7 +25,7 @@
 //! # What is not in a row, and why
 //!
 //! **No team name.** A craft's team reaches the renderer as
-//! [`crate::livery::Livery::team`], which is an *id* (`Feisar`) and says so; the
+//! [`oag_livery::Livery::team`], which is an *id* (`Feisar`) and says so; the
 //! display name lives in the string table, which a `--race` run never loads.
 //! Neither is reachable from [`crate::race::Race`], which is what holds the
 //! standings, so a row names its grid slot and nothing else. Threading the

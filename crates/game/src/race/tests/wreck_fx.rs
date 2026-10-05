@@ -5,10 +5,10 @@
 //! pair per node, and that a craft with no wreck locators throws nothing.
 
 use super::*;
-use crate::livery::SparkAnchor;
 use crate::race::wreck_fx::{
     DEATH_SPARKS_EFFECT, EXPLOSION_DROP, EXPLOSION_EFFECT, FXNODE_EXPLO_EFFECT, WreckFx,
 };
+use oag_livery::SparkAnchor;
 use oag_physics::CraftState;
 
 fn locators(count: usize) -> Vec<SparkAnchor> {

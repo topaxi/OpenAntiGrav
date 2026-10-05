@@ -126,7 +126,7 @@ pub fn absorb_burst_for(title: &oag_title::Title) -> Option<AbsorbBurst> {
 /// [`AbsorbBurst::MirroredPairs`], and nothing for a title with no burst.
 pub(super) fn anchors(
     burst: Option<AbsorbBurst>,
-    liveries: &[crate::livery::Livery],
+    liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<Vec3>> {
     liveries
         .iter()

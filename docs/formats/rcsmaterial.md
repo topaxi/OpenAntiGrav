@@ -1678,7 +1678,7 @@ holds is unread; only that it is not the light term is established.
 the first draft narrowed it and broke a second, real consumer.**
 `VertexDecl::vertex_colour()` is still the shape match (four normalised
 bytes, not `tangent`) it always was, because
-`oag_game::livery::flare::alpha_ramp` reads `VertexColour1` through exactly
+`oag_livery::flare::alpha_ramp` reads `VertexColour1` through exactly
 this method (via `Mesh::vertex_light`) for a real and unrelated purpose: the
 engine flame's own alpha ramp, `alpha = alpha_scale * (1 - f) *
 VertexColour1.w`, per

@@ -278,7 +278,7 @@ pub fn fade_draw(draw: oag_ui::frontend::Draw, alpha: f32) -> oag_ui::frontend::
 /// Reads and decodes a preview mesh off the disc - the outline ribbon or
 /// the front-end hull - with a PS2 disc's sibling texture set resolved the
 /// way a race resolves its own hull's and circuit's
-/// ([`crate::race::ps2_texture_set`]): only when the model's own texture
+/// ([`oag_livery::entry::ps2_texture_set`]): only when the model's own texture
 /// slots exist and are all empty, which is that disc's signature and never
 /// a PSP model's. Without it both PS2 previews draw flat white. One
 /// function so the live screen and the headless capture cannot disagree.
@@ -316,7 +316,7 @@ pub fn model_named(
         .with_context(|| format!("decoding the preview mesh {entry}"))?;
     if !model.textures.is_empty()
         && model.textures.iter().all(Option::is_none)
-        && let Some(external) = crate::race::ps2_texture_set(archives, entry)
+        && let Some(external) = oag_livery::entry::ps2_texture_set(archives, entry)
     {
         return oag_mesh::mesh::build_with_textures(entry, &blob, Some(&external))
             .map(|mut model| {
@@ -366,7 +366,7 @@ fn ps3_model(
 /// `model_name`, the same swap a race makes - the PSP's four-block upload or
 /// the PS2's whole-atlas sibling, whichever the hull's own slots call for.
 /// Returns the report lines; a skin that will not apply leaves the hull's
-/// own paint and says so in them. See `crate::livery::ship_skin`.
+/// own paint and says so in them. See `oag_livery::ship_skin`.
 pub fn paint(
     archives: &mut oag_assets::Archives,
     entry: &str,
@@ -374,7 +374,7 @@ pub fn paint(
     model: &mut Model,
 ) -> Vec<String> {
     let mut report = Vec::new();
-    crate::livery::ship_skin::apply(archives, entry, model_name, model, &mut report);
+    oag_livery::ship_skin::apply(archives, entry, model_name, model, &mut report);
     report
 }
 

@@ -6,7 +6,8 @@
 
 use log::warn;
 use oag_display::display;
-use oag_game::{icon, perf};
+use oag_game::icon;
+use oag_present::perf;
 
 /// The window's Wayland `app_id` and X11 `WM_CLASS` - the same field on both
 /// backends' shared `PlatformSpecificWindowAttributes`, so one call to

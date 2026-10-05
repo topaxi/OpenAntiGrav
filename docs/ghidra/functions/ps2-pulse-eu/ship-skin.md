@@ -164,4 +164,4 @@ and Harimau it is not**: Feisar's `Textures_All.pct` hashes `22d0c48a` and its
 is CRC-32 with ASCII upper case folded, so only comparable with each other). Whether the
 original repaints the baseline craft with `<stem>2` on every race depends on
 whether `FE_ModelSkin` is always inserted, which is not traced. This project
-does not apply `<stem>2` - see `crates/game/src/livery/ship_skin.rs`.
+does not apply `<stem>2` - see `crates/livery/src/ship_skin.rs`.

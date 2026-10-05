@@ -12,7 +12,7 @@
 //!
 //! # Why it needs the disc
 //!
-//! `crate::livery`'s unit tests cover which team lands in which slot, which is
+//! `oag_livery`'s unit tests cover which team lands in which slot, which is
 //! arithmetic over a list of strings. What they cannot see is whether those
 //! ids resolve to *different hulls* on a real source, and that is the whole
 //! feature: before this landed, `race::load` read one `Ship.vex` and
@@ -315,10 +315,10 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
         .expect("the archives open");
     let teams = vec!["Detonator".to_string()];
     let mut report = Vec::new();
-    let liveries = oag_game::livery::load(
+    let liveries = oag_livery::load(
         &mut archives,
         &teams,
-        &oag_game::livery::LoadContext {
+        &oag_livery::LoadContext {
             race: oag_hd::TITLE.race,
             mode: oag_race::Mode::SingleRace,
             flare: oag_hd::TITLE.flare,
@@ -385,7 +385,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
 ///    on a texture's address rather than on its label.
 ///
 /// **Which skin a race flies is this project's choice, not the original's**,
-/// and no unlock is checked - see `oag_game::livery`'s `ship_skin` module.
+/// and no unlock is checked - see `oag_livery`'s `ship_skin` module.
 #[test]
 #[ignore = "needs a disc image"]
 fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {

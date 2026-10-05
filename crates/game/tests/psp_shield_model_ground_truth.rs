@@ -17,8 +17,6 @@
 //! `extrashield.vex` is on the PSP disc under every team directory and is a
 //! different file from `shipshield.vex`, which is what this reads.
 
-use oag_game::race;
-
 const TEAMS: [&str; 8] = [
     "AG_Systems",
     "Assegai",
@@ -40,7 +38,7 @@ fn every_team_carries_a_concept_shell_distinct_from_its_ordinary_one() {
         oag_pulse::open(&image.display().to_string()).expect("opening the PSP archives");
     for team in TEAMS {
         let name = |model| {
-            race::shield_entry_names(
+            oag_livery::entry::shield_entry_names(
                 oag_title::race::SHIP_DIR,
                 team,
                 oag_assets::Platform::Psp,

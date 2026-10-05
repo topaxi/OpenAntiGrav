@@ -985,3 +985,6 @@ pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32))
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod composite_tests;

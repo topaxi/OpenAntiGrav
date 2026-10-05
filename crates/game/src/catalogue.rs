@@ -438,7 +438,7 @@ pub struct ModelSkin {
     /// **A full path, used verbatim - never composed.** This is the same
     /// `location` attribute whose sibling on `PI_TeamModel` holds a bare file
     /// *stem* (`"ship"`), which is the naming trap `docs/formats/dlc-pack.md`
-    /// and `crate::livery`'s module docs both record. Nothing may `format!`
+    /// and `oag_livery`'s module docs both record. Nothing may `format!`
     /// this path out of a team id.
     pub location: String,
     /// The skin's `<Unlock>` rows, in file order. Empty for a skin that

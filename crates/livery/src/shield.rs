@@ -78,7 +78,7 @@ fn shield_model(
 }
 
 /// The shell a fired Shield pickup raises, from the first of
-/// [`crate::race::shield_entry_names`] the source actually carries.
+/// [`entry::shield_entry_names`] the source actually carries.
 ///
 /// **Absence is reported rather than fatal**, exactly as [`plume`]'s is: a
 /// source without either model is a source without a shield visual, which is a
@@ -94,7 +94,7 @@ fn shield_model(
 /// would be a second, invisible place for the look to come from. The PS2
 /// branch in [`shield_model`] touches only which texture a draw binds, never a
 /// vertex, and the PS2 shell is `extrashield.vex`, not the PSP's `shipshield.vex`
-/// (see [`crate::race::shield_entry_names`]).
+/// (see [`entry::shield_entry_names`]).
 pub(super) fn shell(
     archives: &mut oag_assets::Archives,
     team: &str,
@@ -103,7 +103,7 @@ pub(super) fn shell(
     report: &mut Vec<String>,
 ) -> Option<Model> {
     let names =
-        crate::race::shield_entry_names(ship_dir, team, archives.layout.platform, team_model);
+        crate::entry::shield_entry_names(ship_dir, team, archives.layout.platform, team_model);
     for (index, name) in names.iter().enumerate() {
         let provenance = if index == 0 {
             "the team's own"
@@ -136,7 +136,7 @@ pub(super) fn shell(
 /// **`ShipShield_Update` chooses between the two on `craft+0x6d`**, the same
 /// byte `oag_display::display::CameraView::draws_own_ship` reads - see that function,
 /// whose confidence-70 note this is a second consumer for.
-pub(crate) fn cockpit_shield(
+pub fn cockpit_shield(
     archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
 ) -> Option<Model> {

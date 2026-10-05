@@ -69,9 +69,11 @@ use oag_ui::frontend::{Align, Draw};
 
 pub mod cost;
 pub mod memory;
+pub mod scene;
 pub mod transition;
 
 pub use cost::{CpuCost, GpuCost};
+pub use scene::SceneStats;
 
 /// How many frames the meter remembers: two seconds at 60 Hz.
 ///
@@ -105,7 +107,7 @@ pub enum Overlay {
     Pacing,
     /// Everything [`Self::Pacing`] shows, plus a line of scene counts (draw
     /// calls submitted against the total, and triangles submitted - see
-    /// [`crate::race::SceneStats`]), the size the scene was drawn at (see
+    /// [`SceneStats`]), the size the scene was drawn at (see
     /// [`RenderSize`]), a line of resident memory (see [`memory::Probe`]), and
     /// a line naming the video decoder, each present only when the caller
     /// actually has one to give it.
@@ -704,7 +706,7 @@ pub fn draw_list(
     meter: &Meter,
     mode: Overlay,
     target_hz: u32,
-    scene: Option<crate::race::SceneStats>,
+    scene: Option<SceneStats>,
     video: Option<&str>,
     memory: Option<u64>,
     render: Option<RenderSize>,

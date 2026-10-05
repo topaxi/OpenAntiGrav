@@ -191,7 +191,7 @@ pub struct VideoFrame {
 pub trait VideoDecoder: std::fmt::Debug + Send {
     /// A short, human-readable name for what is actually decoding - `"av1
     /// cache"`, `"gstreamer"`. Exists for the `dev` performance overlay (see
-    /// [`crate::perf`]), so a player or a screenshot can tell which tier
+    /// [`oag_present::perf`]), so a player or a screenshot can tell which tier
     /// served a given movie without reading a log.
     fn label(&self) -> &'static str;
 

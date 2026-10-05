@@ -2,7 +2,8 @@
 
 use log::warn;
 use oag_display::display;
-use oag_game::{race, upscale};
+use oag_game::race;
+use oag_present::upscale;
 
 use crate::gpu::GpuContext;
 
@@ -179,7 +180,7 @@ impl RaceStage {
         timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
-    ) -> race::SceneStats {
+    ) -> oag_present::perf::SceneStats {
         // The Zone stage grade, pointed at the zone the race has reached before
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs
         // in on 2048, where it is called from the render update rather than the

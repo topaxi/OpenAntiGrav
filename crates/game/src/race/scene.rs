@@ -117,7 +117,7 @@ pub struct Scene {
     /// **Empty of everything but `None` on Pulse, Pure and the PS2 port**,
     /// whose flare is the six camera-facing vertices `exhaust::Pipeline`
     /// draws: a different mechanism, not a missing model. See
-    /// [`oag_title::flare::Flare`] and `crate::livery::flare`.
+    /// [`oag_title::flare::Flare`] and `oag_livery::flare`.
     ///
     /// Indexed by slot for the reason [`Self::boost`] is: eight craft need
     /// eight model matrices a frame, and the draw loop indexes rather than
@@ -129,7 +129,7 @@ pub struct Scene {
     ///
     /// `None` for a slot whose source carries neither the per-team
     /// `shipshield.vex` nor the shared `Data\Weapons\shield.vex` - see
-    /// `crate::livery::Livery::shield`, which reports which of the two answered.
+    /// `oag_livery::Livery::shield`, which reports which of the two answered.
     /// Drawn only while that craft's `oag_render::shield::ShipShield` is
     /// visible, with the craft's own model matrix scaled by the shell's swell.
     ///
@@ -194,7 +194,7 @@ pub struct Scene {
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
-    /// `crate::livery::Livery::boost_uv`). `None` falls back to the engine's
+    /// `oag_livery::Livery::boost_uv`). `None` falls back to the engine's
     /// own identity default.
     ///
     /// **Per slot, because the plumes are.** Every team read so far carries
@@ -727,7 +727,7 @@ impl Scene {
         let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
         let shine = slots.shines()?;
         let wrecks = wreck::Wrecks::build(&slots, scene_depth, zone_art)?;
-        let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
+        let shell = |l: &oag_livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
         // One per projectile slot - the Rocket's, the Mine's, the Bomb's,

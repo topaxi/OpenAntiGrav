@@ -5,7 +5,7 @@ shield "renders and animates, it just does not look exactly like in the
 original (shape/color)." The renderer was drawing HD's shield through Pulse's
 own recovered law and constants, title-blind - the entry-name resolution
 already picked HD's own per-team `shipshield.vex`
-(`crates/game/src/race/assets.rs::shield_entry_names`), but the colours and
+(`crates/livery/src/entry.rs::shield_entry_names`), but the colours and
 swell/scale constants painting it were `oag_render::shield`'s Pulse ones on
 every title.
 

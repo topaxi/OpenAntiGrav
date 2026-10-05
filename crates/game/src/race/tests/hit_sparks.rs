@@ -6,9 +6,9 @@
 //! hit landing in `Race::tick` reaches it.
 
 use super::*;
-use crate::livery::SparkAnchor;
 use crate::race::hit_sparks::{HIT_SPARK_EFFECT, LEACHBEAM_HIT_SPARK_EFFECT};
 use oag_gameplay::PlayerInputs;
+use oag_livery::SparkAnchor;
 use oag_weapons::projectile::WeaponHit;
 
 /// Six locators, Assegai's count, a unit apart along the hull.

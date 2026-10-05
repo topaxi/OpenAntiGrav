@@ -209,7 +209,7 @@ One grid step is a fixed fraction of the *ceiling* (5 % at `GRID = 20`), so it
 is a growing fraction of *cost* as the scale falls - cost goes as pixel count,
 so a step from scale `s` to `s + STEP` multiplies cost by
 `((s + STEP) / s)^2`. At the top of the range that is about 10 %; at half
-scale it is about 21 %. [`DEADBAND`](../../../crates/game/src/drs/policy.rs) is
+scale it is about 21 %. [`DEADBAND`](../../../crates/present/src/drs/policy.rs) is
 15 % wide. Below roughly 70 % scale, a rise the deadband would have permitted
 lands *outside* the band on the other side and is corrected back down next
 frame - the two-point ping-pong `RISE_PATIENCE` already exists to prevent,

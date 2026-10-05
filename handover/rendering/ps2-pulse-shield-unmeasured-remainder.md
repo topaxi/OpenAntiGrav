@@ -31,7 +31,7 @@ the swell.
 The PSP's `ShipShield_Construct` formats the `FE_TeamModel` registry value, not the
 literal `ship`, into `%s\%sshield.vex`, so a PSP **Concept** race (hull `extra.vex`)
 raises `<Team>\extrashield.vex` - on the disc for all eight teams - for the player and
-every opponent. Built (`race::shield_entry_names` takes the player's hull stem) and pinned
+every opponent. Built (`oag_livery::entry::shield_entry_names` takes the player's hull stem) and pinned
 by a unit test and a disc test. Open there: no frame of the original's Concept shield was
 taken (the Concept model is behind a loyalty unlock this profile lacks), and the registry
 value of a Concept race was not read live. `extrawreck.vex` exists too, by the same

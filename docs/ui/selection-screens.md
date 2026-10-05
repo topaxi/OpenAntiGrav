@@ -269,7 +269,7 @@ things differ, and all three are handled rather than special-cased:
   `honey` (`picker::strip_player_suffix`); the `1` set only exists on
   `Team SelectionSplit`, a screen this build does not open.
 - **Both previews need the circuit's or the craft's sibling texture set**,
-  the same rule a race applies (`race::ps2_texture_set`); without it the
+  the same rule a race applies (`oag_livery::entry::ps2_texture_set`); without it the
   outline and the hull both drew flat white.
 - **The cards are `.pct`**, found through `oag_pulse::read_image`'s rewrite
   like every other PS2 image, and the PS2 `screen.xml` is plain XML rather

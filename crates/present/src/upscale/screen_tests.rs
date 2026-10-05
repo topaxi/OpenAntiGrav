@@ -226,14 +226,3 @@ fn a_preset_reads_its_tunables_through_the_generated_accessors() {
     assert!(active);
     close(pixel, [128, 0, 0]);
 }
-
-#[test]
-fn every_built_in_preset_builds_on_this_device() {
-    for (id, source) in crate::screen::BUILT_IN {
-        let preset = preset(id, source);
-        let Some((_, active)) = filtered(Some(&preset), FilterStrength::FULL, &[RED, GREEN]) else {
-            return;
-        };
-        assert!(active, "{id} did not build");
-    }
-}

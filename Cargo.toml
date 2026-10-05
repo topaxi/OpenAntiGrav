@@ -14,11 +14,13 @@ members = [
   "crates/gpu",
   "crates/hd",
   "crates/input",
+  "crates/livery",
   "crates/mesh",
   "crates/music",
   "crates/omega",
   "crates/physics",
   "crates/post",
+  "crates/present",
   "crates/pulse",
   "crates/pure",
   "crates/race",
@@ -58,6 +60,7 @@ oag-gameplay = { path = "crates/gameplay" }
 oag-gpu = { path = "crates/gpu" }
 oag-hd = { path = "crates/hd" }
 oag-input = { path = "crates/input" }
+oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }
 oag-sound = { path = "crates/sound" }
@@ -65,6 +68,7 @@ oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
 oag-pob = { path = "crates/pob" }
 oag-post = { path = "crates/post" }
+oag-present = { path = "crates/present" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }

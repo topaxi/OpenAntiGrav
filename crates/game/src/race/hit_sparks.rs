@@ -59,7 +59,7 @@
 //! nothing here.
 
 use super::*;
-use crate::livery::SparkAnchor;
+use oag_livery::SparkAnchor;
 
 /// The effect a landed weapon hit throws - the damaging wall contact's own.
 pub const HIT_SPARK_EFFECT: &str = oag_render::sparks::DAMAGE_EFFECT;
@@ -82,7 +82,7 @@ pub const HIT_SPARKS_SEED: u64 = 0x5_9a_2b_03;
 /// on a title whose weapon-hit path is not the one read here.
 pub(super) fn anchors(
     title: &oag_title::Title,
-    liveries: &[crate::livery::Livery],
+    liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
     if title.name != oag_pulse::TITLE.name {
         return Vec::new();

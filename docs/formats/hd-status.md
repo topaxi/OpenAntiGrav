@@ -754,7 +754,7 @@ Eight slots, eight teams, eight different `.rcsmodel` hulls:
 | 7 | EGX | 22,163 |
 
 Which team flies which slot is **this project's** and not the original's - the
-same statement `oag_game::livery` carries for the PSP grid. All twelve declared
+same statement `oag_livery` carries for the PSP grid. All twelve declared
 ids resolve to a `ship.vex`, a `ship.rcsmodel`, a `locators.vex` and a
 `handlingstats.xml`; the ids are capitalised in the XML and lowercase in the
 manifest, and the PSARC lookup's case folding is what joins them.

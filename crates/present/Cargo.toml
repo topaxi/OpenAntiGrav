@@ -1,0 +1,34 @@
+[package]
+name = "oag-present"
+description = "Presentation: the upscaler and the composite onto the surface, dynamic resolution scaling, and the performance meter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-display.workspace = true
+oag-gpu.workspace = true
+oag-post.workspace = true
+oag-ui.workspace = true
+anyhow.workspace = true
+bytemuck = { workspace = true, features = ["derive"] }
+log.workspace = true
+serde.workspace = true
+wgpu.workspace = true
+# The `perf` overlay's memory line. This workspace forbids `unsafe`
+# (`unsafe_code = "deny"` at the workspace level), which rules out reading a
+# process's own resident set size by hand: every platform's answer is a raw
+# syscall or an FFI call. This crate does that reading and stays a safe-Rust
+# surface. `always_use_statm` trades `/proc/self/smaps`'s better accuracy for
+# `/proc/self/statm`'s single small read on Linux - the overlay only needs a
+# number that moves in the right direction, and `perf::memory::Probe` already
+# throttles the read to a few times a second.
+memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
+
+[dev-dependencies]
+pollster.workspace = true
+
+[lints]
+workspace = true

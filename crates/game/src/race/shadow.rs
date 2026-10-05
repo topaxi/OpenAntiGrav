@@ -236,7 +236,7 @@ pub fn hulls(
         // its shadow geometry, and threading the player's choice through
         // here would only matter the day the two shapes are shown to
         // disagree.
-        let name = crate::race::ship_entry_name(race.ships_for(team), team, mode, None);
+        let name = oag_livery::entry::ship_entry_name(race.ships_for(team), team, mode, None);
         let found = archives.read_name(&name).ok().and_then(|blob| {
             let tree = vex::nodes(&blob).ok()?;
             let found: Vec<usize> = tree

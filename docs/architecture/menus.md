@@ -93,7 +93,7 @@ the release rather than of this project:
 | SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
 | MONITOR | winit's own monitor list, read every time the menus open |
 | WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_display::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
-| PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
+| PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_present::perf`, pinned the same way |
 
 MONITOR is the one supplied row that is a property of **the desk** rather than
 of the disc, and it is supplied for the same reason the others are: a definition
@@ -1603,7 +1603,7 @@ always was. A test asserts exactly that.
 
 `GRAPHICS -> PERFORMANCE OVERLAY` is `off`, `fps` or `pacing`, and it is the one
 row here that draws over every stage rather than configuring one.
-[`crates/game/src/perf.rs`](../../crates/game/src/perf.rs) has the reasoning; the
+[`crates/present/src/perf.rs`](../../crates/present/src/perf.rs) has the reasoning; the
 part that belongs on this page is why it is **three values and not a toggle**:
 `fps` answers "is there headroom", `pacing` answers "are the frames evenly
 spaced", and the second question is the one an average frame rate is incapable

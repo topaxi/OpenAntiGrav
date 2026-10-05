@@ -151,7 +151,7 @@ fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin() {
 /// with `v[3]` named `VertexColour1` by its hash. So the byte is the flame's
 /// opacity ramp and not the sun-occlusion mask `mesh/rcs.rs` files it as for
 /// the circuit materials that reading was measured on. See
-/// `crate::livery::flare::alpha_ramp` and
+/// `oag_livery::flare::alpha_ramp` and
 /// `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
 #[test]
 #[ignore = "needs a disc image"]

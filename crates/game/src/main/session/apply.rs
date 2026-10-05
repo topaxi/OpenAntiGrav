@@ -3,11 +3,13 @@
 use log::{error, warn};
 use oag_display::display;
 use oag_game::settings::TriggerSensitivity;
-use oag_game::{drs, input, perf, settings};
+use oag_game::{input, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_input::pad::TriggerMode;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_present::drs;
+use oag_present::perf;
 use oag_ui::menu;
 
 use crate::stage::Stage;

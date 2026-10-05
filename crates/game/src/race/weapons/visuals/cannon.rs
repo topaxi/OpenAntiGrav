@@ -28,7 +28,7 @@ pub(crate) type CannonAssets = (
 /// reading and, for a title that flashes at the muzzle, every slot's two
 /// `cannon_flash` locators in its hull's model space.
 ///
-/// Built once from the loaded liveries; see `crate::livery::Livery`'s own
+/// Built once from the loaded liveries; see `oag_livery::Livery`'s own
 /// `cannon_flash` field.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CannonDraw {

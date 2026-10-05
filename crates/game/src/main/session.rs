@@ -8,12 +8,13 @@
 use oag_core::TickClock;
 
 use oag_game::render::Renderer;
-use oag_game::{
-    boot, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings, upscale,
-};
+use oag_game::{boot, catalogue, loading, movie, pilots, prefetch, race, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_present::drs;
+use oag_present::perf;
+use oag_present::upscale;
 use oag_ui::menu;
 
 use crate::gpu::Gpu;
@@ -115,7 +116,7 @@ pub(crate) struct Session {
     ///
     /// Runs only while `[graphics] target_fps` names a rate; off, it
     /// is asked for the ceiling every frame and returns it. See
-    /// [`oag_game::drs`], which owns the whole policy and reads nothing.
+    /// [`oag_present::drs`], which owns the whole policy and reads nothing.
     pub(crate) drs: drs::Controller,
     /// The timer behind [`Session::scene_cost`], or `None` on a device that
     /// cannot be asked - in which case dynamic resolution has no signal at all
@@ -176,7 +177,7 @@ pub(crate) struct Session {
     /// `high` costs about 1.7 ms against a 9.3 ms frame, with the scene pass
     /// and the FSR 3.1 chain both unmoved. A controller that could not see it
     /// was budgeting against a fifth of the work it controls. See
-    /// [`oag_game::drs`].
+    /// [`oag_present::drs`].
     pub(crate) blur_cost: perf::Meter,
     /// The timer behind [`Session::blur_cost`], on its own ring for the reason
     /// [`Session::upscale_timer`] has one.
@@ -949,12 +950,12 @@ impl Session {
     /// The rate the frame limiter is actually holding the loop to, or `None`
     /// when nothing is.
     ///
-    /// `None` for `FrameLimit::UNLIMITED` and for [`crate::perf::Vsync::On`],
+    /// `None` for `FrameLimit::UNLIMITED` and for [`oag_present::perf::Vsync::On`],
     /// where the display is the bound and this build cannot ask a surface what
     /// its refresh is. **Deliberately not the `presentation_hz` fallback**:
     /// guessing the simulation's 60 is a fine default for a graph's scale and
     /// a bad one for a clamp, because a 144 Hz panel would silently have its
-    /// `target_fps` capped at 60. See [`oag_game::drs::Target::at_most`].
+    /// `target_fps` capped at 60. See [`oag_present::drs::Target::at_most`].
     fn limiter_hz(&self) -> Option<u32> {
         self.frame_period()
             .and_then(|_| self.settings.display.frame_limit.hz())

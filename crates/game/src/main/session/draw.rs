@@ -17,7 +17,13 @@
 use anyhow::Result;
 use log::debug;
 
-use oag_game::{drs, movie, perf, pilots, upscale};
+use oag_game::{movie, pilots};
+
+use oag_present::drs;
+
+use oag_present::perf;
+
+use oag_present::upscale;
 
 use oag_display::display;
 

@@ -9,10 +9,12 @@ use oag_core::{TickClock, TickRate};
 
 use oag_display::display;
 use oag_game::render::Renderer;
-use oag_game::{boot, launcher, loading, perf, pilots, prefetch, race, settings, source, upscale};
+use oag_game::{boot, launcher, loading, pilots, prefetch, race, settings, source};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_mesh::mesh_render::Anisotropy;
+use oag_present::perf;
+use oag_present::upscale;
 use oag_ui::strings;
 
 use winit::application::ApplicationHandler;
@@ -360,7 +362,7 @@ impl App {
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),
             scene_cost: perf::Meter::new(),
-            drs: oag_game::drs::Controller::new(),
+            drs: oag_present::drs::Controller::new(),
             pass_timer,
             upscale_cost: perf::Meter::new(),
             upscale_timer,

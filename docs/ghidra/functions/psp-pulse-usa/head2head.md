@@ -73,7 +73,7 @@ finding is that even the code path that *does* carry a real per-entrant team id
 unresolved, while the path this project's Custom Race capture actually exercises
 hardcodes `id = 0` for every racer. Sinking Ghidra time into a second attempt at
 that same open question, for one more mode that reaches it the same way Race
-does, was not this pass's job. This project's own `crate::livery::teams_for_slots`
+does, was not this pass's job. This project's own `oag_livery::teams_for_slots`
 - already labelled "this project's own rule rather than the original's" for
 Race - is what Head2Head uses too; see the implementation's own doc comment.
 

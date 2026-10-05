@@ -18,7 +18,7 @@
 use anyhow::{Context, Result};
 
 use crate::settings::Settings;
-use crate::upscale::{Composite, Framebuffer, ScreenFrame};
+use oag_present::upscale::{Composite, Framebuffer, ScreenFrame};
 
 /// The target a `--presented` front-end capture draws into, and what puts it
 /// on the capture texture afterwards.

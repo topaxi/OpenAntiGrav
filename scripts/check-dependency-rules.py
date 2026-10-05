@@ -90,7 +90,16 @@ TITLE_VOCABULARY = "oag-title"
 # rather than there is what makes that legal for `oag-ui` alone - nothing
 # gameplay-side may ever depend on `oag-ui` (`oag-game`'s own composition-root
 # rule already forbids the only crate that could try).
-NOT_TITLE_PACKAGES = {"oag-assets", "oag-game", "oag-music", "oag-sound", "oag-trace", "oag-ui"}
+NOT_TITLE_PACKAGES = {
+    "oag-assets",
+    "oag-game",
+    "oag-livery",
+    "oag-music",
+    "oag-present",
+    "oag-sound",
+    "oag-trace",
+    "oag-ui",
+}
 
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
