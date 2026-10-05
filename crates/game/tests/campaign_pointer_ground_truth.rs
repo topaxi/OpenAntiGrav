@@ -14,12 +14,12 @@
 //!     -E 'binary(campaign_pointer_ground_truth)'
 //! ```
 
-use oag_ui::campaign::pointer::{self, What};
-use oag_ui::campaign::{CellSelection, Layout};
 use oag_ui::language::StringTable;
-use oag_ui::picker::FaceScales;
+use oag_ui_screens::campaign::pointer::{self, What};
+use oag_ui_screens::campaign::{CellSelection, Layout};
+use oag_ui_screens::picker::FaceScales;
 
-use oag_game::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 const OUTLINE: &str = r"Data\FE\Images\Hexagon_HD.mip";
 

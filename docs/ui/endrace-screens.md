@@ -6,7 +6,7 @@ Pulse. This is the *picture* half - what this build actually draws and why;
 reading half (every widget, its authored position, its runtime source) and
 [`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`](../ghidra/functions/psp-pulse-usa/endrace-screens.md)
 is the decompiled law behind each value; this page does not repeat either.
-Implemented in [`oag_ui::endrace`](../../crates/ui/src/endrace.rs) (model,
+Implemented in [`oag_ui_screens::endrace`](../../crates/ui-screens/src/endrace.rs) (model,
 layout, draw, pointer), [`oag_game::endrace`](../../crates/game/src/endrace.rs)
 (the disc read, mirroring [`oag_game::campaign`](../../crates/game/src/campaign.rs)),
 [`crate::race_stage::endrace`](../../crates/game/src/main/race_stage/endrace.rs)
@@ -44,7 +44,7 @@ trade against a `Stage::Menu`-based design.
 
 A Pulse race that ended on the line does not open `EndRace Results` at once. The original sits in `Race End Photo` first
 (measured and written up in [after-the-finish.md](../gameplay/after-the-finish.md)); ours does the same, in
-[`oag_ui::endrace::photo`](../../crates/ui/src/endrace/photo.rs) (timing and draw list) and
+[`oag_ui_screens::endrace::photo`](../../crates/ui-screens/src/endrace/photo.rs) (timing and draw list) and
 [`race_stage::endrace_flow`](../../crates/game/src/main/race_stage/endrace_flow.rs) (which screen is on top):
 
 | Part | What ours does | Source |
@@ -100,8 +100,8 @@ placings (`ER_RACE_STAN`) and the running tournament standings
 (`ER_TOUR_STAN`) - two genuinely different pages, not one table shown two
 ways. This build reuses the same three shared table widgets
 (`lap0.0`..`lap8.2`, `tablehighlight`) the per-lap table above draws,
-through a new model, [`oag_ui::endrace::TournamentResults`]
-(`oag_ui::endrace::tournament_results_draw_list`), built in
+through a new model, [`oag_ui_screens::endrace::TournamentResults`]
+(`oag_ui_screens::endrace::tournament_results_draw_list`), built in
 [`crate::race_stage::endrace::tournament_results`](../../crates/game/src/main/race_stage/endrace.rs)
 off this build's own [`oag_race::tournament`]/[`crate::race::tournament::Progress`]
 (established, not re-derived by this pass) and the leg's own grid roster
@@ -109,7 +109,7 @@ off this build's own [`oag_race::tournament`]/[`crate::race::tournament::Progres
 function's own doc for why it is a second call rather than a threaded-through
 field).
 
-[`oag_ui::endrace::TournamentResults`]: ../../crates/ui/src/endrace.rs
+[`oag_ui_screens::endrace::TournamentResults`]: ../../crates/ui-screens/src/endrace.rs
 [`oag_race::tournament`]: ../../crates/race/src/tournament.rs
 
 | Widget | Draws | Why |
@@ -149,9 +149,9 @@ Zone (mode 6) tables of their own, filled by `EndRaceResults_PopulateElimination
 and `EndRaceResults_PopulateZoneTable`; the reading is on the [ghidra
 page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#the-variant-populates-2026-09-30).
 Both go through the walk every table shares
-([`oag_ui::endrace::table`](../../crates/ui/src/endrace/table.rs)), which shows only
+([`oag_ui_screens::endrace::table`](../../crates/ui-screens/src/endrace/table.rs)), which shows only
 the rows a mode fills. Models and draws are in
-[`oag_ui::endrace::modes`](../../crates/ui/src/endrace/modes.rs); the builders are
+[`oag_ui_screens::endrace::modes`](../../crates/ui-screens/src/endrace/modes.rs); the builders are
 `crate::race_stage::endrace::{elimination_results, zone_results}`.
 
 **Eliminator - confirmed against a live PPSSPP frame** (`--menu-page
@@ -216,7 +216,7 @@ where the frames show the mixed-case default face - the shared-table font gap
 | `MedalImg` (hex-dash glyph) | Yes, campaign + no medal only | the one measured case (`results-02.png`) |
 | `MedalImg` under an earned trophy | **No - settled 2026-09-30, confidence 80** | a live gold-medal run (campaign `grid0_3_2`, one lap, 1.19.84, `Gold medal awarded`) shows only the gold trophy in the medal square and **no static hex glyph under it**; the trophy **spins** about its vertical axis (seven frames 0.9 s apart, edge-on to full face and back, about a 6 s period) where this build holds its first frame - `StartPaused` and the animation stay **chosen, not measured** here |
 | trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **Yes, 2026-09-28**, on a campaign race that earned a medal | the medal's own model, `oag_game::endrace::Trophy`, drawn with the disc's `Mode3D` camera - see "The trophy" below |
-| `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui::endrace::Loyalty`](../../crates/ui/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
+| `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui_screens::endrace::Loyalty`](../../crates/ui-screens/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
 | `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar` is `total * 0.00124` **pixels** wide and as many texels of the sheet (not a fraction of the authored width; the `100000` cap is the authored `124`), so a total of 90 shows only `loyaltybg`, as the reference frame does - see [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
 | `LoyaltyImg` | Yes, alongside the row | |
 | `BigPos` | **No** | a finishing-position figure this model carries no place for - would need threading a `place` into `Rewards` that nothing else on this screen needs |
@@ -323,7 +323,7 @@ The reference frame's bar is uniformly dim (~130 on every segment, no bright col
 that is `loyaltybg` alone at half alpha, not a lit bar. `100000 * 0.00124 = 124` is the
 authored width, which is why it looked like a fraction.
 
-**Drawn:** `oag_ui::endrace::draw`'s `loyalty_bar_draw` sets the width and the texture
+**Drawn:** `oag_ui_screens::endrace::draw`'s `loyalty_bar_draw` sets the width and the texture
 width to `total * 0.00124` (a crop, where the old code narrowed the rectangle and left
 the whole 124-texel window in it, squashing all twenty segments into a few pixels).
 `--menu-page endrace-rewards` at total `90` now reads ~126 on every segment along the
@@ -419,7 +419,7 @@ them from the first frame.
 - **A parser quirk this pass routed around** rather than fixing:
   `Screens::collect_widgets` places a colour-only `<Image OffsetY=...>` wrapper at
   its own `y` without the tag's `OffsetY`, so the eight `tablebg{n}` backings landed
-  on the top of the screen (`y` 0 and 1). `oag_ui::endrace::table` puts the offset
+  on the top of the screen (`y` 0 and 1). `oag_ui_screens::endrace::table` puts the offset
   back for those eight; the shared reader is untouched, since nothing here measured
   another screen that depends on the current behaviour. A wrapper on some other screen
   with an `OffsetY` and no `src` would show the same fault.
@@ -437,7 +437,7 @@ entirely different widget vocabulary from Pulse's file this page otherwise
 describes. [`docs/formats/hd-endrace-screens.md`](../formats/hd-endrace-screens.md)
 is the reading half; this section is the picture half plus what live
 verification found, the same split the rest of this page keeps.
-Implemented in [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)
+Implemented in [`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs)
 (model reuse, draw, pointer), `oag_game::endrace::load_hd`, and the
 title-dispatched `ResultsModel` in
 [`crate::race_stage::endrace`](../../crates/game/src/main/race_stage/endrace.rs).
@@ -454,7 +454,7 @@ position. `EndRace Podium` is inventoried (see the formats page) but not
 drawn: its three `pod_head.{1,2,3}` widgets sharing one idstring reads as an
 authoring placeholder rather than something this build could draw correctly.
 Full "what does and does not draw, and why" is
-[`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s own module doc.
+[`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs)'s own module doc.
 
 **Every one of the three end screens' own `Confirm` prompt draws, since
 2026-09-25** - see the Rewards table below for the walking mechanism.
@@ -488,7 +488,7 @@ rewards model on HD. The screen is drawn only by
 | Confirm prompt (icon glyph) | nothing | `font="buttons"` - a `Buttons`-role atlas now loads (2026-09-25, HD's campaign footer), but this screen's own draw path does not yet route to it; see `docs/formats/hd-endrace-screens.md`'s own doc for the gap and why a wrong glyph would be worse than none in the meantime |
 
 Pointer: the screen has nothing to select, so it needs no target list - a
-click anywhere is its confirm, the rule `oag_ui::endrace::pointer`'s module
+click anywhere is its confirm, the rule `oag_ui_screens::endrace::pointer`'s module
 doc already states for Pulse's Results/Rewards. It would apply unchanged if
 the screen were ever wired in.
 
@@ -562,7 +562,7 @@ found two things wrong, both fixed from the executable rather than chosen:
   The walk that verified it found a third bug: Up moved the cursor *down*,
   because the shared option list is Pulse's order (`RETURN TO GRID` first)
   while HD draws each option at its own Block's `y`.
-  `oag_ui::endrace::hd::hd_screen_order` now steps them in screen order and
+  `oag_ui_screens::endrace::hd::hd_screen_order` now steps them in screen order and
   keeps the default focus.
 - **The 8th Results row sat on the footer bar.** The file's frame is the
   Time Trial layout; on a race `EndRaceResults_LayoutGrid` hides
@@ -596,7 +596,7 @@ an AI craft is x2/x3/x4 by the rung with no x1, and there is no suggested-ship
 doubling. `oag_hd::loyalty` is that law, `crate::race_stage::hd_loyalty` maps
 this project's race onto it, and `Session::build_endrace` banks the award
 (`records::record_loyalty`, the same `100000` ceiling) and hands
-`oag_ui::endrace::FieldResults::loyalty` to the draw.
+`oag_ui_screens::endrace::FieldResults::loyalty` to the draw.
 
 | Widget | Draws | Source |
 | --- | --- | --- |

@@ -13,7 +13,7 @@
 //!
 //! # Why this file is the real test of the layout parser
 //!
-//! The unit tests in `oag_game::hud` parse a sample written by hand from what the
+//! The unit tests in `oag_hud` parse a sample written by hand from what the
 //! disc looks like, so they check the parser against this project's *reading* of
 //! the format. They cannot catch a reading that is wrong in the same way twice.
 //! These do: the input is the shipped bytes, and the assertions are properties
@@ -30,7 +30,7 @@
 //! against the PS2 release's own 640x448 grid rather than the PSP's - added
 //! 2026-09-05. Before it, no PS2 HUD layout had ever been checked for this bug
 //! at all, on the strength of a doc comment that read the two grids as "not a
-//! flat scaling" and left it there; see `oag_game::hud::inside_screen`'s doc
+//! flat scaling" and left it there; see `oag_hud::inside_screen`'s doc
 //! for why the raw XML's exceptions turn out not to threaten this check once
 //! the `<Item>` composition already in [`Layout::from_xml`] is accounted for.
 //!
@@ -71,7 +71,7 @@
 
 use std::path::PathBuf;
 
-use oag_game::hud::{self, Layout};
+use oag_hud::{self as hud, Layout};
 use oag_pulse as pulse;
 
 fn image(name: &str) -> Option<PathBuf> {
@@ -338,7 +338,7 @@ fn every_widget_lands_on_screen() {
 /// [`Layout::from_xml`] composes that offset into the widget's `rect`/`x,y`
 /// before this test ever sees it, so the nudge is a pixel or two of slop on a
 /// widget the offset already moved most of the way, not a widget in the wrong
-/// space. See `oag_game::hud::inside_screen`'s doc comment for the coordinate
+/// space. See `oag_hud::inside_screen`'s doc comment for the coordinate
 /// tally this rests on. If some future layout widget's own unscaled nudge ever
 /// grows large enough to matter, this test is exactly what would catch it -
 /// nothing here assumes composed rects stay on screen without checking.
@@ -492,7 +492,7 @@ fn every_sprite_samples_the_hud_atlas_and_every_constant_resolves() {
 
 /// No two widgets the HUD draws may share an anchor, on any shipped layout.
 ///
-/// `oag_game::hud::Frame` splits text into two font passes, which gives up
+/// `oag_hud::Frame` splits text into two font passes, which gives up
 /// document paint order *between* fonts, so two live labels at one anchor would
 /// leave which of them is visible to the order the renderer happens to bind the
 /// atlases in. The unit test of the same name checks a hand-written sample; this
@@ -500,7 +500,7 @@ fn every_sprite_samples_the_hud_atlas_and_every_constant_resolves() {
 ///
 /// **It has already caught one.** `Arcade_HUD.xml` authors `TotalTime` and
 /// `Position` at exactly `(445, 35)`, right-aligned, same font and scale - see
-/// `oag_game::hud::place_owns_the_anchor`, which is the rule that keeps at most
+/// `oag_hud::place_owns_the_anchor`, which is the rule that keeps at most
 /// one of them live and is why this passes rather than a coincidence that it does.
 ///
 /// The readout is deliberately the *busiest* one a race can produce: a place in a
@@ -542,7 +542,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
                 strings: &strings,
                 // Empty: this test reads only the label passes, and no sprite
                 // reaches a draw without a texture to sample.
-                sheet: &oag_game::sprite::Sheet::default(),
+                sheet: &oag_hud::sprite::Sheet::default(),
                 art: oag_pulse::hud::ART,
                 // The real line heights of `PulseHud.fnt` and `small.fnt`. They
                 // only move the anchors vertically and together, so the exact
@@ -640,7 +640,7 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
 /// ids are numeric", with no id-to-weapon mapping known - which made drawing the
 /// right icon look like it needed an unrecovered table. It does not:
 /// `Arcade_HUD.xml` authors **thirteen** and names each one after its weapon's
-/// own `type` string, so `oag_game::hud::pickup_icon_name` is the whole lookup.
+/// own `type` string, so `oag_hud::pickup_icon_name` is the whole lookup.
 ///
 /// # The layouts also say which modes hand out what, and they agree with the manual
 ///
@@ -706,7 +706,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
         // background colour that stands in for it. If a layout ever stopped
         // defining `HudBGColour`, the substitution would silently not happen
         // and the icon would go back to being invisible - see
-        // `oag_game::hud::PICKUP_BACKDROP_COLOUR`.
+        // `oag_hud::PICKUP_BACKDROP_COLOUR`.
         let backdrop = layout.sprite("PickupBackground").expect("PickupBackground");
         let turbo = layout
             .sprite(&hud::pickup_icon_name(Weapon::Turbo))
@@ -758,7 +758,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
 
 /// Every shipped layout names **at most one** texture, on either title.
 ///
-/// The assumption `oag_game::hud::Layout::atlas` rests on. It returns one name
+/// The assumption `oag_hud::Layout::atlas` rests on. It returns one name
 /// because nine of nine layouts across the two discs carry one; a layout that
 /// broke the rule would have its later sprites drawn from the wrong sheet, which
 /// looks like a UV bug rather than a missing texture. Failing here instead names

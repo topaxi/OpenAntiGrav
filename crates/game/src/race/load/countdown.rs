@@ -7,18 +7,18 @@
 
 use super::*;
 
-/// See `crate::hud::countdown` for why this one is drawn through the mesh
-/// pipeline rather than `crate::hud::draw::model_draw`'s baked-quad shortcut
+/// See `oag_hud::countdown` for why this one is drawn through the mesh
+/// pipeline rather than `oag_hud::draw::model_draw`'s baked-quad shortcut
 /// every other `<Mode3D>` widget uses. Placed by this mode's own layout,
 /// found by name rather than assumed present: Pure's HUD authors
 /// `Ready_GO.vex` and no `Cockpit321Go` widget at all, so a title or mode
 /// with no such widget has nothing to place this model by and gets none, the
 /// same "absence is reported, not fatal" rule `weapon_models::load` follows.
 pub(super) fn model(
-    hud: &crate::hud::Assets,
+    hud: &oag_hud::Assets,
     archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
-) -> Option<(Model, crate::hud::Model)> {
+) -> Option<(Model, oag_hud::Model)> {
     hud.layout
         .as_ref()
         .and_then(|layout| {

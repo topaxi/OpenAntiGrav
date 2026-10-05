@@ -82,7 +82,7 @@ content against `hd-frontend.md`.
     container, BC7 and the micro-tile address formula all decode, guarded by
     an `Error::CorruptBlocks` refusal for a base level with genuinely
     missing PSARC-level content (219 of 289 front-end/campaign `.gnf` files
-    draw clean). Wired into `crates/game/src/sprite.rs`,
+    draw clean). Wired into `crates/hud/src/sprite.rs`,
     `crates/game/src/boot/sprites.rs::gnf_sibling` and
     `crates/game/src/campaign.rs::load_omega`. What that opened rather than
     closed: this lane's own two-archive extraction is missing five of the

@@ -155,7 +155,7 @@ pub(super) fn campaign_page(
     // session; see `oag_game::campaign::hd_selection_string_overlay`'s own
     // doc for why this is not already in `strings`.
     entries_path: Option<&str>,
-    faces: oag_ui::picker::FaceScales,
+    faces: oag_ui_screens::picker::FaceScales,
     grid: [f32; 2],
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -165,7 +165,7 @@ pub(super) fn campaign_page(
     // idiom `picker_stills` already uses, so the sheet `Renderer::new` builds
     // from further down `run` is the one these two textures actually landed
     // on.
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
     // The front-end root's own `FEGlobals` - see `crate::campaign::load`'s
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],
@@ -207,7 +207,7 @@ pub(super) fn campaign_page(
             .best_medal
             .map(to_campaign_medal)
     };
-    // [`medal_of`]'s own sibling for `oag_ui::campaign::CellSelection::with_difficulty`
+    // [`medal_of`]'s own sibling for `oag_ui_screens::campaign::CellSelection::with_difficulty`
     // - **HD only**, per that method's own doc; read unconditionally here
     // the same way `medal_of` is, since it answers `None` on every non-HD
     // row regardless.
@@ -274,11 +274,12 @@ pub(super) fn campaign_page(
                         oag_hd::campaign::SCREEN_ENTRY
                     );
                 };
-                let model = oag_ui::campaign::selection::CampaignSelection::at(if selected == 0 {
-                    oag_ui::campaign::selection::Campaign::Fury
-                } else {
-                    oag_ui::campaign::selection::Campaign::Hd
-                });
+                let model =
+                    oag_ui_screens::campaign::selection::CampaignSelection::at(if selected == 0 {
+                        oag_ui_screens::campaign::selection::Campaign::Fury
+                    } else {
+                        oag_ui_screens::campaign::selection::Campaign::Hd
+                    });
                 selected_campaign = Some(model.selected());
                 // No progress source in a still - `0` earned, the same
                 // fresh-profile reading `GridSelection::new`'s own bare
@@ -296,7 +297,7 @@ pub(super) fn campaign_page(
                         .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
                         .sum::<u32>()
                 };
-                oag_ui::campaign::selection::draw_list(
+                oag_ui_screens::campaign::selection::draw_list(
                     &model,
                     layout,
                     skin,
@@ -315,17 +316,19 @@ pub(super) fn campaign_page(
                 )
             }
             CampaignKind::Grid { tier, .. } => {
-                let mut model = oag_ui::campaign::GridSelection::new(
+                let mut model = oag_ui_screens::campaign::GridSelection::new(
                     hd_grids
                         .iter()
                         .map(|grid| {
-                            oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
+                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+                                grid, &medal_of,
+                            )
                         })
                         .collect(),
                 );
                 model.set_index(tier);
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
-                oag_ui::campaign::hd::hd_grid_draw_list(
+                oag_ui_screens::campaign::hd::hd_grid_draw_list(
                     &model,
                     hd_grid_layout,
                     skin,
@@ -348,16 +351,19 @@ pub(super) fn campaign_page(
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
                 // HD/Fury's own fresh-profile default rung is `Easy`, not
                 // Pulse's `Medium` - see
-                // `oag_ui::campaign::CellSelection::difficulty`'s own doc for
+                // `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
-                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of)
+                let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of)
                     .with_difficulty(&difficulty_of)
                     .with_default_difficulty(oag_tables::race_campaign::Difficulty::Easy);
-                let grid_summary = grid.map_or(oag_ui::campaign::GridSummary::empty(), |grid| {
-                    oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
-                });
-                oag_ui::campaign::hd::hd_cell_draw_list(
+                let grid_summary =
+                    grid.map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
+                        oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+                            grid, &medal_of,
+                        )
+                    });
+                oag_ui_screens::campaign::hd::hd_cell_draw_list(
                     &model,
                     &campaign.cell_layout,
                     skin,
@@ -382,16 +388,18 @@ pub(super) fn campaign_page(
                 );
             }
             CampaignKind::Grid { .. } => {
-                let model = oag_ui::campaign::GridSelection::new(
+                let model = oag_ui_screens::campaign::GridSelection::new(
                     campaign
                         .grids
                         .iter()
                         .map(|grid| {
-                            oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
+                            oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+                                grid, &medal_of,
+                            )
                         })
                         .collect(),
                 );
-                oag_ui::campaign::grid_draw_list(
+                oag_ui_screens::campaign::grid_draw_list(
                     &model,
                     &campaign.grid_layout,
                     skin,
@@ -412,8 +420,8 @@ pub(super) fn campaign_page(
                     .first()
                     .map(|grid| grid.cells.clone())
                     .unwrap_or_default();
-                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
-                oag_ui::campaign::cell_draw_list(
+                let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of);
+                oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,
                     skin,

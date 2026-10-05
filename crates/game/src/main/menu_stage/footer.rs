@@ -5,8 +5,9 @@
 //! plain move (`MenuStage::render` drew it inline before); the ticker half
 //! is new - see `MenuStage::render`'s own call site for both.
 
+use oag_ui::font;
 use oag_ui::frontend::Draw;
-use oag_ui::{font, picker};
+use oag_ui_screens::picker;
 
 use super::MenuStage;
 
@@ -16,7 +17,7 @@ use super::MenuStage;
 /// (`screen-Team-Selection.png`, `racebox` walk). Empty on every other
 /// title's picker, whose screens author their own footer text.
 pub(super) fn hd_nav(
-    legend: &Option<oag_ui::campaign::footer::NavigationLegend>,
+    legend: &Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     atlas: &font::Atlas,
     picker: &crate::picker_stage::PickerStage,
 ) -> Vec<Draw> {
@@ -63,7 +64,7 @@ impl MenuStage {
     /// see [`Self::ticker`]'s own doc. `None` on a source with none, no
     /// tips honestly to show, or (briefly, once a cycle) the gap between one
     /// tip leaving and the next entering - see
-    /// `oag_ui::campaign::footer::ticker_draw`'s own doc for that last case.
+    /// `oag_ui_screens::campaign::footer::ticker_draw`'s own doc for that last case.
     ///
     /// Never gated on depth the way [`Self::nav_legend_overlay`]'s `Back`
     /// is: nothing measured suggests the disc hides the ticker on any
@@ -71,20 +72,20 @@ impl MenuStage {
     /// ticker's own viewport, `(left, right)` in screen space - what a
     /// caller turns into `Renderer::render_with`'s own `clip` once it has
     /// found the draw's index in its own flattened list, the same
-    /// `oag_ui::campaign::footer`-driven idiom
+    /// `oag_ui_screens::campaign::footer`-driven idiom
     /// `crate::campaign_stage::CampaignStage::ticker_clip_bounds` already
     /// uses for the Race Campaign's own footer.
     ///
     /// `measure` reads [`Self::text_atlas`], not [`Self::default_atlas`]:
     /// the ticker's own `font="small"` routes through no named role
-    /// (`oag_ui::campaign::footer::face_role` answers `None` for it), the
+    /// (`oag_ui_screens::campaign::footer::face_role` answers `None` for it), the
     /// same choice `CampaignStage::ticker_draw`'s own call site makes one
     /// screen over.
     #[must_use]
     fn ticker_overlay(&self, tips: &[String]) -> Option<(Draw, (f32, f32))> {
         let layout = self.ticker.as_ref()?;
         let measure = |text: &str| font::measure(&self.text_atlas, text);
-        let draw = oag_ui::campaign::footer::ticker_draw(
+        let draw = oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             self.ticker_elapsed,
             tips,
@@ -122,7 +123,7 @@ impl MenuStage {
 }
 
 /// The clip `Self::render` hands `Renderer::render_with`, combining the value
-/// marquee's own (`marquee_clip`, from `oag_ui::marquee::apply`) with the
+/// marquee's own (`marquee_clip`, from `oag_ui_screens::marquee::apply`) with the
 /// ticker's (`ticker_clip`, from [`MenuStage::ticker_overlay`]) - the render
 /// pass has exactly one clip slot, and the two can genuinely both want it on
 /// the same frame (an overflowing settings value while the footer ticker is

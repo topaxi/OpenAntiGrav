@@ -33,9 +33,9 @@ fn pulses_race_end_photo_loads_with_both_lines_resolved() {
     let screens = oag_game::endrace::load(
         &mut opened.archives,
         &strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         [space.size.0, space.size.1],
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_pulse::TITLE,
     )
@@ -76,7 +76,9 @@ fn pulses_race_end_photo_loads_with_both_lines_resolved() {
     );
 
     // And it draws once the state is entered.
-    let list =
-        oag_ui::endrace::photo::photo_draw_list(&photo, oag_ui::endrace::photo::ENTER_TICKS + 1);
+    let list = oag_ui_screens::endrace::photo::photo_draw_list(
+        &photo,
+        oag_ui_screens::endrace::photo::ENTER_TICKS + 1,
+    );
     assert_eq!(list.len(), 2);
 }

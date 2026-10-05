@@ -11,11 +11,11 @@
 //! `crate::campaign::load`/`load_hd` already use.
 
 use anyhow::{Context, Result};
-use oag_ui::endrace::Layout;
 use oag_ui::language::StringTable;
-use oag_ui::picker::FaceScales;
+use oag_ui_screens::endrace::Layout;
+use oag_ui_screens::picker::FaceScales;
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - the file all three of
 /// Pulse's own screens are authored in. See [`oag_hd::endrace::SCREEN_ENTRY`]
@@ -215,7 +215,7 @@ fn load_photo(
             oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
         Layout::read(
             &screens,
-            oag_ui::endrace::photo::SCREEN,
+            oag_ui_screens::endrace::photo::SCREEN,
             strings,
             faces,
             grid,
@@ -239,7 +239,7 @@ fn load_photo(
 /// `EndRace Results`/`EndRace Menu` are required; `EndRace Rewards` is read
 /// when the served copy authors it (`DATA02`-`05` do, `DATA06` does not) and
 /// left `None` otherwise, never failing the other two. See
-/// `docs/formats/hd-endrace-screens.md` and [`oag_ui::endrace::hd`]'s module
+/// `docs/formats/hd-endrace-screens.md` and [`oag_ui_screens::endrace::hd`]'s module
 /// doc for what does and does not draw and why. `EndRace Podium` (`DATA05`/
 /// `DATA06` only) is not read at all.
 fn load_hd(

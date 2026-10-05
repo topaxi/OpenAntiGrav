@@ -39,7 +39,8 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
 
-use oag_game::{catalogue, loading, sprite};
+use oag_game::{catalogue, loading};
+use oag_hud::sprite;
 use oag_ui::{font, language, menu, placeholder, strings};
 
 use crate::hints;

@@ -183,7 +183,7 @@ fn the_two_titles_do_not_name_the_same_body_face() {
 /// pins the fact itself rather than trusting a picture.
 ///
 /// This is the fact `crates/game/src/boot/fonts.rs`'s `face_atlas_slot` and
-/// `oag_ui::campaign::footer`'s `Draw::in_role(Some("Default"), ..)` exist
+/// `oag_ui_screens::campaign::footer`'s `Draw::in_role(Some("Default"), ..)` exist
 /// for: a `"default"`-labelled widget has to draw through `Default`'s own
 /// atlas to show mixed case at all, and a `"menu"`-labelled one gains
 /// nothing from the same move, because the disc's own `menu` face was never

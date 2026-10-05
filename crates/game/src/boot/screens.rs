@@ -18,7 +18,7 @@ use oag_ui::screen::Screens;
 /// `color` may carry. `None` when `skin_xml` is `None` (the root did not
 /// decode at all, already reported by the caller) or the file authors no
 /// `NavigationController` with either half
-/// `oag_ui::campaign::footer::NavigationLegend::read` reads.
+/// `oag_ui_screens::campaign::footer::NavigationLegend::read` reads.
 ///
 /// Split out under the 1,000-line rule alongside every other loader in this
 /// file, not because this one function is large - it is not - but because
@@ -28,14 +28,18 @@ pub(super) fn read_nav_legend(
     skin_xml: Option<&str>,
     globals: &std::collections::HashMap<String, String>,
     strings: &StringTable,
-) -> Option<oag_ui::campaign::footer::NavigationLegend> {
+) -> Option<oag_ui_screens::campaign::footer::NavigationLegend> {
     let xml = skin_xml?;
-    oag_ui::campaign::footer::NavigationLegend::read(&oag_ui::screen::parse(xml), globals, strings)
+    oag_ui_screens::campaign::footer::NavigationLegend::read(
+        &oag_ui::screen::parse(xml),
+        globals,
+        strings,
+    )
 }
 
 /// The front-end root's own scrolling tip ticker layout, off the identical
 /// `skin_xml`/`globals` pair [`read_nav_legend`] reads - mirrors that
-/// function for [`oag_ui::campaign::footer::TickerLayout`], the ordinary
+/// function for [`oag_ui_screens::campaign::footer::TickerLayout`], the ordinary
 /// menu pages' own footer read rather than `Cell Selection`'s own copy
 /// (`oag_game::campaign::read_footer`, which reads the same root a second
 /// time for the campaign screens - see that function's own doc for why it
@@ -46,9 +50,9 @@ pub(super) fn read_nav_legend(
 pub(super) fn read_ticker(
     skin_xml: Option<&str>,
     globals: &std::collections::HashMap<String, String>,
-) -> Option<oag_ui::campaign::footer::TickerLayout> {
+) -> Option<oag_ui_screens::campaign::footer::TickerLayout> {
     let xml = skin_xml?;
-    oag_ui::campaign::footer::TickerLayout::read(&oag_ui::screen::parse(xml), globals)
+    oag_ui_screens::campaign::footer::TickerLayout::read(&oag_ui::screen::parse(xml), globals)
 }
 
 /// One of the skin's `LoadXML` includes, parsed on its own with the skin's
@@ -64,7 +68,7 @@ pub(super) fn load_included_screens(
 
 /// A title's standalone `Team Selection` or `Track Creation` definition
 /// ([`oag_title::FrontEnd::team_select`], [`oag_title::FrontEnd::track_select`]), parsed with the skin's globals
-/// and kept beside its own text - `oag_ui::picker::hd::read` walks the tree
+/// and kept beside its own text - `oag_ui_screens::picker::hd::read` walks the tree
 /// again for the widgets [`Screens`] does not collect - and the strings its
 /// `idstring`s resolve to in `entries`' own `DATA06` copy, the archive the
 /// file itself is on (see `crate::campaign::hd_data06_strings`).
@@ -101,7 +105,7 @@ pub(super) fn load_track_select(
         name,
         entries,
         skin,
-        &oag_ui::picker::hd::track::RECORD_ROW_IDS,
+        &oag_ui_screens::picker::hd::track::RECORD_ROW_IDS,
         "track",
         report,
     )
@@ -138,27 +142,27 @@ fn load_hd_selection(
 
 /// Every team's own `FE\Logo.gtf`, for a source whose ship screen draws
 /// one - asked for by name alongside what the screens name, since the
-/// `Logo` widget authors no `src`. See `oag_ui::picker::hd::logo_src`.
+/// `Logo` widget authors no `src`. See `oag_ui_screens::picker::hd::logo_src`.
 pub(super) fn team_logos(team_box: bool, teams: &[crate::catalogue::Team]) -> Vec<String> {
     if !team_box {
         return Vec::new();
     }
     teams
         .iter()
-        .map(|team| oag_ui::picker::hd::logo_src(&team.id))
+        .map(|team| oag_ui_screens::picker::hd::logo_src(&team.id))
         .collect()
 }
 
 /// Every circuit's own emblem, for a source whose track screen draws one -
 /// asked for by name, since the `Emblem` widget authors no `src`. See
-/// `oag_ui::picker::hd::track::emblem_src`.
+/// `oag_ui_screens::picker::hd::track::emblem_src`.
 pub(super) fn track_emblems(track_box: bool, tracks: &[crate::catalogue::Track]) -> Vec<String> {
     if !track_box {
         return Vec::new();
     }
     let mut out: Vec<String> = tracks
         .iter()
-        .map(|track| oag_ui::picker::hd::track::emblem_src(&track.location))
+        .map(|track| oag_ui_screens::picker::hd::track::emblem_src(&track.location))
         .collect();
     out.sort_unstable();
     out.dedup();
@@ -348,7 +352,7 @@ pub(super) fn load_screens(
 ///
 /// The face ratios are measured off the faces actually loaded where both
 /// are - `default` against `menu` - and Pulse's own `small` where the third
-/// is not. See [`oag_ui::picker::FaceScales`].
+/// is not. See [`oag_ui_screens::picker::FaceScales`].
 #[allow(
     clippy::too_many_arguments,
     reason = "each is a separate fact of the two screens: the three files, the strings and faces, the grid"
@@ -363,20 +367,21 @@ pub(super) fn selection_layouts(
     space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> (
-    Option<oag_ui::picker::Layout>,
-    Option<oag_ui::picker::Layout>,
+    Option<oag_ui_screens::picker::Layout>,
+    Option<oag_ui_screens::picker::Layout>,
 ) {
-    let faces = oag_ui::picker::FaceScales {
-        default: menu_font.map_or(oag_ui::picker::FaceScales::default().default, |menu| {
-            font.line_height / menu.line_height
-        }),
-        ..oag_ui::picker::FaceScales::default()
+    let faces = oag_ui_screens::picker::FaceScales {
+        default: menu_font.map_or(
+            oag_ui_screens::picker::FaceScales::default().default,
+            |menu| font.line_height / menu.line_height,
+        ),
+        ..oag_ui_screens::picker::FaceScales::default()
     };
     let track_select = race_box
         .and_then(|included| {
-            oag_ui::picker::Layout::read(
+            oag_ui_screens::picker::Layout::read(
                 included,
-                oag_ui::picker::Kind::Track,
+                oag_ui_screens::picker::Kind::Track,
                 strings,
                 faces,
                 [space.size.0, space.size.1],
@@ -386,7 +391,7 @@ pub(super) fn selection_layouts(
             let track_box = track_box?;
             let strings = with_served_gaps(strings, track_box);
             let grid = [space.size.0, space.size.1];
-            oag_ui::picker::hd::track::read(
+            oag_ui_screens::picker::hd::track::read(
                 &track_box.xml,
                 &track_box.screens,
                 &strings,
@@ -396,9 +401,9 @@ pub(super) fn selection_layouts(
         });
     let ship_select = race_box
         .and_then(|included| {
-            oag_ui::picker::Layout::read(
+            oag_ui_screens::picker::Layout::read(
                 included,
-                oag_ui::picker::Kind::Ship,
+                oag_ui_screens::picker::Kind::Ship,
                 strings,
                 faces,
                 [space.size.0, space.size.1],
@@ -408,7 +413,13 @@ pub(super) fn selection_layouts(
             let team_box = team_box?;
             let strings = with_served_gaps(strings, team_box);
             let grid = [space.size.0, space.size.1];
-            oag_ui::picker::hd::read(&team_box.xml, &team_box.screens, &strings, faces, grid)
+            oag_ui_screens::picker::hd::read(
+                &team_box.xml,
+                &team_box.screens,
+                &strings,
+                faces,
+                grid,
+            )
         });
     report.push(format!(
         "selection screens: track {}, ship {}",

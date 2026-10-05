@@ -21,7 +21,7 @@ use oag_game::race::{self, Race};
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input, InputSnapshot};
 use oag_ui::frontend::Draw;
-use oag_ui::track_panel::{FADE_SECONDS, Progress, WIPE_WIDTH};
+use oag_ui_screens::track_panel::{FADE_SECONDS, Progress, WIPE_WIDTH};
 
 fn load(track: &str) -> Option<race::Loaded> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;

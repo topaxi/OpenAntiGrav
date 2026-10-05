@@ -2,7 +2,7 @@
 //!
 //! Entry names in the [ADR-0022] sense - *which* files this package ships -
 //! the same division [`oag_hd::hud`] draws. Everything that reads them is
-//! `oag_game::hud`.
+//! `oag_hud`.
 //!
 //! # Four skin sets, and `2048_hud` is the one a race actually plays
 //!
@@ -225,7 +225,7 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 /// `EnergyBar` shares `EnergyBg`'s rect and source rectangle exactly
 /// (`(27, 372)` 50x110 off `(270, 16)`), differing only in colour, so it is
 /// now in this list too and cropped **vertically from the bottom** by
-/// `oag_game::hud::draw::crop_vertically`, keyed to
+/// `oag_hud::draw::crop_vertically`, keyed to
 /// `Readout::shield_fraction()` - the vertical counterpart to
 /// `crop_horizontally`, Pulse's `ShieldBar` model. `36-w-5.png` (95%) and
 /// `68-zone-5.png` (27%) both show the fill's top edge tracking the
@@ -255,13 +255,13 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 ///   (`0xffa7a5a7`) normally, opaque red (`0xffff0000`) at or under 20%
 ///   shield or during the shared post-hit flash window
 ///   (`Readout::shield_flashing`) - wired in
-///   `oag_game::hud::dialect_2048::energy_bg_tint`, resolving the earlier
+///   `oag_hud::dialect_2048::energy_bg_tint`, resolving the earlier
 ///   "our silhouette is opaque white" gap against the running original.
 /// - **`EnergyBarDelay` is a lagging trail, not a flash.** It receives the
 ///   same vertical crop as `EnergyBar`, fed an exponentially-smoothed
 ///   fraction (`lagging += (target - lagging) * 0.1` every tick, `target`
 ///   the current shield fraction on every path) rather than the raw one -
-///   wired in `oag_game::hud::dialect_2048::vertical_bar_fraction` and
+///   wired in `oag_hud::dialect_2048::vertical_bar_fraction` and
 ///   `Race::advance_energy_bar_delay`. Now in this list too.
 ///
 /// `EnergyBarDelay`'s own runtime colour is the one open gap this pass did

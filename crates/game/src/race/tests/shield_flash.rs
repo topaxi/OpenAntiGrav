@@ -1,4 +1,4 @@
-//! [`crate::hud::Readout::shield_flashing`], wired through a real
+//! [`oag_hud::Readout::shield_flashing`], wired through a real
 //! [`Race::tick`] rather than the pure `shield_flash_step` helper
 //! `race/telemetry.rs`'s own `shield_flash_tests` exercises.
 //!

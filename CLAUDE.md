@@ -184,6 +184,7 @@ Existing crates:
 | `oag-tables` | `crates/tables` | The tables titles author as XML: handling, weapons, campaign grids, load manifests, lighting rigs. Zero dependencies - the crate the simulation reads its numbers from has no path to a texture decoder. |
 | `oag-video` | `crates/video` | Video containers: `.PMF` (PSP), `IPUF` (PS2), Bink (HD), plus the IVF/AV1 movie cache this project writes. Depends on nothing in the workspace. |
 | `oag-assets` | `crates/assets` | Runtime asset access: `Archive` reads a WAD by path or straight out of a disc image, by index/name/hash. |
+| `oag-ui-screens` | `crates/ui-screens` | The front end's screens built on `oag-ui`: campaign, end of race, pickers, prompts, the ticker marquee, the track panel. `oag-ui` stays the lower core and never depends on it; same `NOT_TITLE_PACKAGES` classification. |
 | `oag-title` | `crates/title` | The `Title` type and its three axes: archive candidates, entry names, foreign-serial deny-list. Types only, no title's data. |
 | `oag-pulse` | `crates/pulse` | What Wipeout Pulse ships: archive and entry names, hashes, and its presentation tables (HUD, front end, loading wave, animated textures, race defaults). |
 | `oag-pure` | `crates/pure` | The same for Wipeout Pure, deliberately thinner - it holds only what `docs/formats/pure-status.md` measured. |
@@ -202,6 +203,7 @@ Existing crates:
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
 | `oag-audio` | `crates/audio` | Mixing and playback: a hardware-free voice pool and sample loop, a `cpal` stream or none at all, and a WAV writer so a headless run is checkable. Cues are a per-tick *output* of the simulation, never `World` state. See [ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md). |
+| `oag-hud` | `crates/hud` | The in-race HUD: the layout model, the `Readout` a race hands it, the `Draw` list `draw_list` builds, and the `sprite` sheet every screen packs its textures into. No GPU pass of its own: `oag_game::hud_overlay` and `oag_game::hud_countdown` hold the wgpu halves. Reads titles, so it is classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES`; nothing gameplay-side may ever depend on it. |
 | `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, and the strings a screen draws - the `Draw` vocabulary `oag_game::render` rasterises. Menus draw, so it is classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES`; nothing gameplay-side may ever depend on it. |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 | `oag-testdata` | `crates/testdata` | **A dev-dependency, never a runtime one.** Where a test finds the disc images this project does not ship, and the `OAG_REQUIRE_GAME_DATA` skip-or-fail contract, in one place instead of 130 copies. Holds no game knowledge at all - no image names, no archive names, no title. |

@@ -124,7 +124,7 @@ pub fn entry_name(index: u8) -> String {
 /// changes nothing observable. **`Cell Selection` is not equivalent at
 /// all**, and `oag_game::campaign::load_hd` reads `DATA06`'s copy of it too,
 /// **switched from `DATA02` on 2026-09-27** -
-/// [`crate::TITLE`]/`oag_ui::campaign::hd`'s own module doc has the full
+/// [`crate::TITLE`]/`oag_ui_screens::campaign::hd`'s own module doc has the full
 /// archive-precedence argument (a general last-wins overlay rule plus a
 /// direct, per-widget RPCS3 confirmation) and the complete list of
 /// differences (an extra `bBg_x_y` background layer, a repositioned
@@ -169,7 +169,7 @@ pub const FURY_GRID_SCREEN: &str = "Grid Selection Fury";
 
 /// The grid `CellMode_Definition.xml` is authored in - HD's own screen
 /// resolution, unlike Pulse's copy of the same two screen names, which
-/// `oag_ui::campaign::Layout`'s own `PSP_GRID` constant is written at
+/// `oag_ui_screens::campaign::Layout`'s own `PSP_GRID` constant is written at
 /// 480x272 for. Measured directly off the file: `<Flyer>`'s own
 /// `OriginX="960" OriginY="540"` is dead centre of 1920x1080, and widgets
 /// place out past 480 on both axes (`DifficultyButton` at `x="944"
@@ -195,7 +195,7 @@ pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
 /// `oag_assets::psarc::Archive::paths` over all seven archives on
 /// `hdfury-ps3-eu-dec.iso` lists every stem below as a `.gtf` and none as a
 /// `.mip`. `oag_assets::psarc`'s own path normalisation folds case and
-/// backslashes for the *read*, but `oag_game::sprite::Sheet::get` keys its
+/// backslashes for the *read*, but `oag_hud::sprite::Sheet::get` keys its
 /// placements by an exact string match against a widget's own `image.src` -
 /// so a caller has to read the `.gtf` off the archive and then shelve the
 /// decoded blob under the `.mip` spelling the widget actually asks for at
@@ -229,7 +229,7 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
 /// detail-column row, the lock overlay HD's `Grid Selection` shows over a
 /// locked flyer, the bracket-cornered ticker's placeholder fill, and
 /// `Cell Selection`'s own `Target0/1/2 Medal` row (`DATA06`'s copy - see
-/// `oag_ui::campaign::hd`'s own module doc, "The winning archive"). Every
+/// `oag_ui_screens::campaign::hd`'s own module doc, "The winning archive"). Every
 /// one of these is already spelled `.gtf` on both the widget and the
 /// archive, unlike [`HEX_TEXTURES`], so a flat list is enough. Read the same
 /// way: off the file directly, not invented. A texture that will not decode

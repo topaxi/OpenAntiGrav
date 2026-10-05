@@ -2,7 +2,7 @@
 //!
 //! Entry names, in the [ADR-0022] sense: which files Pulse ships and what is in
 //! each. Everything that *reads* them - the `<Image>`/`<Text>` widget model, the
-//! `<Item>` offset handling, the draw list - is `oag_game::hud` and stays there,
+//! `<Item>` offset handling, the draw list - is `oag_hud` and stays there,
 //! because a second title with a different atlas would reuse all of it.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
@@ -42,7 +42,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// carries it.
 ///
 /// All three rows are Pulse's own answers, which until 2026-08-25 were `const`s
-/// inside `oag_game::hud` that every title was served. See
+/// inside `oag_hud` that every title was served. See
 /// [`oag_title::HudArt`] for what each row is and for HD's disagreement on all
 /// three.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
@@ -138,7 +138,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 ///
 /// # And it is Pulse's answer, not the dialect's
 ///
-/// A `const` in `oag_game::hud` until 2026-08-25, applied to every title. HD
+/// A `const` in `oag_hud` until 2026-08-25, applied to every title. HD
 /// authors `PickupBackground` as a hexagon **outline** rather than a filled
 /// one, so its icon is legible in the colour its own layout gives it, and
 /// Pulse's substitution turned HD's backdrop into a quarter-alpha smudge. See
@@ -265,7 +265,7 @@ pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 /// Positional rather than keyed by `oag_tables::weapons::Weapon`: this crate
 /// is deliberately tables only, with no non-test edge to `oag-formats` (see
 /// this file's `Cargo.toml`), so the index is a data contract with
-/// `oag_game::hud` - which does own that dependency - the same way
+/// `oag_hud` - which does own that dependency - the same way
 /// [`oag_title::HudArt::pickup_colours`] documents it.
 pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     // Values are `0xAARRGGBB`, drawn opaque - see this constant's own doc

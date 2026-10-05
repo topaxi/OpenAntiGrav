@@ -1,6 +1,6 @@
 //! The EndRace flow a finished race holds open: `EndRace Results` ->
 //! (`EndRace Rewards`, campaign only) -> `EndRace Menu`. See
-//! `oag_ui::endrace` for the model and the drawing, `oag_game::endrace` for
+//! `oag_ui_screens::endrace` for the model and the drawing, `oag_game::endrace` for
 //! the disc read, and `crate::main::session::endrace` for the flow that
 //! drives one - the same split `crate::campaign_stage`/
 //! `crate::main::session::campaign` make for the Race Campaign's own
@@ -19,7 +19,7 @@
 
 use anyhow::Result;
 
-use oag_ui::endrace::{
+use oag_ui_screens::endrace::{
     EliminationResults, EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards,
     TournamentResults, TournamentRow, ZoneResults,
 };
@@ -31,7 +31,7 @@ use endrace_flow::{Flow, Which};
 
 /// `EndRace Results`' own model, title-dispatched: Pulse's per-lap table, or
 /// Wipeout HD/Fury's whole-field standings grid
-/// ([`oag_ui::endrace::hd`]). Carrying both behind one enum, rather than an
+/// ([`oag_ui_screens::endrace::hd`]). Carrying both behind one enum, rather than an
 /// `Option` of each, is what keeps [`EndRaceRuntime::draw`] from being able
 /// to hold a Pulse model against an HD screen layout (or the reverse) -
 /// exactly the mismatch `oag_game::endrace::load`'s own title dispatch
@@ -42,14 +42,14 @@ pub(crate) enum ResultsModel {
     /// A Tournament leg's own results - Pulse only, off
     /// `EndRaceResults_OnEnter`'s `case 4: case 0x10:` block, cycling every
     /// three seconds between this leg's own placings and the running
-    /// standings. See [`oag_ui::endrace::TournamentResults`].
+    /// standings. See [`oag_ui_screens::endrace::TournamentResults`].
     PulseTournament(TournamentResults),
     /// An Eliminator race's field, ranked by kills - Pulse only, off
     /// `EndRaceResults_PopulateEliminationTable`. See
-    /// [`oag_ui::endrace::EliminationResults`].
+    /// [`oag_ui_screens::endrace::EliminationResults`].
     PulseElimination(EliminationResults),
     /// A Zone run's six statistics - Pulse only, off
-    /// `EndRaceResults_PopulateZoneTable`. See [`oag_ui::endrace::ZoneResults`].
+    /// `EndRaceResults_PopulateZoneTable`. See [`oag_ui_screens::endrace::ZoneResults`].
     PulseZone(ZoneResults),
     Hd(FieldResults),
 }
@@ -74,7 +74,7 @@ pub(crate) struct EndRaceRuntime {
     /// cell awarded one and its `.vex` decoded - `oag_game::endrace::Trophy`,
     /// drawn over the screen's own draw list with the `Mode3D` camera the
     /// disc authors for it.
-    trophy: Option<(oag_game::preview::Preview, oag_ui::picker::slideshow::Model)>,
+    trophy: Option<(oag_game::preview::Preview, oag_ui::screen::Model)>,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -122,9 +122,11 @@ impl EndRaceRuntime {
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
         renderer.set_space(skin.space());
         // Wipeout HD/Fury steps its options in their Blocks' own on-screen
-        // order - see `oag_ui::endrace::hd::hd_screen_order`.
+        // order - see `oag_ui_screens::endrace::hd::hd_screen_order`.
         let menu = match &results {
-            ResultsModel::Hd(_) => oag_ui::endrace::hd::hd_screen_order(&menu, &screens.menu),
+            ResultsModel::Hd(_) => {
+                oag_ui_screens::endrace::hd::hd_screen_order(&menu, &screens.menu)
+            }
             _ => menu,
         };
         let trophy = trophy_for(rewards.as_ref(), &mut screens.trophies).and_then(|trophy| {
@@ -202,22 +204,22 @@ impl EndRaceRuntime {
 
     /// `EndRace Menu`'s own row targets for a pointer tick, title-dispatched
     /// the same way [`Self::draw`] is: Pulse's `<Menu>` list stride
-    /// (`oag_ui::endrace::pointer::menu_targets`), or Wipeout HD/Fury's own
-    /// per-`<Block>` positions (`oag_ui::endrace::hd::hd_menu_targets`).
+    /// (`oag_ui_screens::endrace::pointer::menu_targets`), or Wipeout HD/Fury's own
+    /// per-`<Block>` positions (`oag_ui_screens::endrace::hd::hd_menu_targets`).
     /// Kept here rather than at the call site so a caller never has to know
     /// which title it is driving - the same seam [`Self::draw`] already
     /// draws for it.
     #[must_use]
-    pub(crate) fn menu_targets(&self) -> Vec<oag_ui::endrace::pointer::Target> {
+    pub(crate) fn menu_targets(&self) -> Vec<oag_ui_screens::endrace::pointer::Target> {
         match &self.results {
             ResultsModel::Pulse(_)
             | ResultsModel::PulseTournament(_)
             | ResultsModel::PulseElimination(_)
             | ResultsModel::PulseZone(_) => {
-                oag_ui::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
+                oag_ui_screens::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
             }
             ResultsModel::Hd(_) => {
-                oag_ui::endrace::hd::hd_menu_targets(&self.menu, &self.screens.menu)
+                oag_ui_screens::endrace::hd::hd_menu_targets(&self.menu, &self.screens.menu)
             }
         }
     }
@@ -265,7 +267,10 @@ impl EndRaceRuntime {
             // Nothing but the legend, over the race; nothing at all for the
             // first second. No panel, no backdrop: the screen authors none.
             if let Some(layout) = &self.screens.photo {
-                let list = oag_ui::endrace::photo::photo_draw_list(layout, self.flow.photo_ticks());
+                let list = oag_ui_screens::endrace::photo::photo_draw_list(
+                    layout,
+                    self.flow.photo_ticks(),
+                );
                 if !list.is_empty() {
                     self.renderer
                         .overlay(device, queue, encoder, view, &list, viewport);
@@ -275,18 +280,20 @@ impl EndRaceRuntime {
         }
         let sprites = &self.screens.sprites;
         let layers = match (self.flow.which(), &self.results) {
-            (Which::Results, ResultsModel::Pulse(results)) => oag_ui::endrace::results_draw_list(
-                results,
-                &self.screens.results,
-                &self.skin,
-                &self.frame,
-                &self.strings,
-                None,
-                true,
-                &|src| sprites.get(src),
-            ),
+            (Which::Results, ResultsModel::Pulse(results)) => {
+                oag_ui_screens::endrace::results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Results, ResultsModel::PulseTournament(results)) => {
-                oag_ui::endrace::tournament_results_draw_list(
+                oag_ui_screens::endrace::tournament_results_draw_list(
                     results,
                     &self.screens.results,
                     &self.skin,
@@ -298,7 +305,7 @@ impl EndRaceRuntime {
                 )
             }
             (Which::Results, ResultsModel::PulseElimination(results)) => {
-                oag_ui::endrace::elimination_results_draw_list(
+                oag_ui_screens::endrace::elimination_results_draw_list(
                     results,
                     &self.screens.results,
                     &self.skin,
@@ -310,7 +317,7 @@ impl EndRaceRuntime {
                 )
             }
             (Which::Results, ResultsModel::PulseZone(results)) => {
-                oag_ui::endrace::zone_results_draw_list(
+                oag_ui_screens::endrace::zone_results_draw_list(
                     results,
                     &self.screens.results,
                     &self.skin,
@@ -322,7 +329,7 @@ impl EndRaceRuntime {
                 )
             }
             (Which::Results, ResultsModel::Hd(results)) => {
-                oag_ui::endrace::hd::hd_results_draw_list(
+                oag_ui_screens::endrace::hd::hd_results_draw_list(
                     results,
                     &self.screens.results,
                     &self.skin,
@@ -346,7 +353,7 @@ impl EndRaceRuntime {
                 let Some(layout) = &self.screens.rewards else {
                     return;
                 };
-                oag_ui::endrace::rewards_draw_list(
+                oag_ui_screens::endrace::rewards_draw_list(
                     rewards,
                     layout,
                     &self.skin,
@@ -363,7 +370,7 @@ impl EndRaceRuntime {
                 | ResultsModel::PulseTournament(_)
                 | ResultsModel::PulseElimination(_)
                 | ResultsModel::PulseZone(_),
-            ) => oag_ui::endrace::endrace_menu_draw_list(
+            ) => oag_ui_screens::endrace::endrace_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
                 &self.skin,
@@ -373,7 +380,7 @@ impl EndRaceRuntime {
                 true,
                 &|src| sprites.get(src),
             ),
-            (Which::Menu, ResultsModel::Hd(_)) => oag_ui::endrace::hd::hd_menu_draw_list(
+            (Which::Menu, ResultsModel::Hd(_)) => oag_ui_screens::endrace::hd::hd_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
                 &self.skin,
@@ -463,7 +470,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // Pulse's `Zone`/`Eliminator` never ask for this: each has a table of its
         // own with its own `Line1` (`ZoneResults`, `EliminationResults`). What
         // reaches here is HD's field grid, whose own populate for those modes is
-        // not read - see `oag_ui::endrace::Headline::Unresolved`'s own doc.
+        // not read - see `oag_ui_screens::endrace::Headline::Unresolved`'s own doc.
         oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
     }
 }
@@ -473,7 +480,7 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// `ER_SAVE_QUIT` (mid-Tournament save-and-quit) never appears: this engine
 /// implements no `Tournament_SaveProgress`/`_LoadProgress` -
 /// `Session::tournament`'s own doc says why. `ER_SAVE_GHOST`/`MSC_DEL_DATA`
-/// never appear either - see `oag_ui::endrace`'s own module doc for why.
+/// never appear either - see `oag_ui_screens::endrace`'s own module doc for why.
 ///
 /// **`tournament_next_leg`**: `true` on every leg but a Tournament cell's
 /// own last one, offering `ER_NEXT_RACE` in place of `RACE AGAIN` - the
@@ -510,13 +517,13 @@ pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<Men
 #[must_use]
 pub(crate) fn hd_field_rows(
     board: Option<&oag_game::scoreboard::Board>,
-) -> Vec<oag_ui::endrace::FieldRow> {
+) -> Vec<oag_ui_screens::endrace::FieldRow> {
     board
         .map(|board| {
             board
                 .rows
                 .iter()
-                .map(|row| oag_ui::endrace::FieldRow {
+                .map(|row| oag_ui_screens::endrace::FieldRow {
                     place: row.place,
                     time_ticks: row.finish_tick,
                     player: row.player,
@@ -538,7 +545,7 @@ pub(crate) fn hd_field_rows(
 /// (`Race::slot_teams`), since which team flew which slot is not carried on
 /// `Board`/`Progress` themselves. `None` team entries draw the
 /// name absent rather than a placeholder - see
-/// [`oag_ui::endrace::TournamentRow::team_name`]'s own doc.
+/// [`oag_ui_screens::endrace::TournamentRow::team_name`]'s own doc.
 #[must_use]
 pub(crate) fn tournament_results(
     board: Option<&oag_game::scoreboard::Board>,
@@ -591,7 +598,7 @@ pub(crate) fn elimination_results(
         ships
             .iter()
             .enumerate()
-            .map(|(slot, ship)| oag_ui::endrace::EliminationRow {
+            .map(|(slot, ship)| oag_ui_screens::endrace::EliminationRow {
                 team_name: slot_teams.and_then(|teams| teams.get(slot).cloned()),
                 kills: ship.standing.kills,
                 deaths: ship.standing.deaths,
@@ -651,7 +658,7 @@ pub(crate) struct LoyaltyInputs {
 /// `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`. The
 /// `SingleRace`/Tournament/Head2Head branch (the only one with a difficulty
 /// multiplier) and the `Zone`/`Eliminator` branch are decompiled under the
-/// same page but not independently live-verified - `oag_ui::endrace::Loyalty`
+/// same page but not independently live-verified - `oag_ui_screens::endrace::Loyalty`
 /// carries no flag for this, so `docs/ui/endrace-screens.md` states the
 /// caveat in prose rather than on screen, the same way this project already
 /// treats every other confidence gap that does not change what draws.
@@ -736,13 +743,13 @@ mod tests {
     /// none - `EndRaceRewards_OnEnter`'s two branches.
     #[test]
     fn a_campaign_medal_picks_its_own_trophy_and_nothing_else_picks_one() {
-        let rewards = |medal, campaign| oag_ui::endrace::Rewards {
+        let rewards = |medal, campaign| oag_ui_screens::endrace::Rewards {
             medal,
             campaign,
             loyalty: None,
         };
         let loaded = [Medal::Gold, Medal::Silver, Medal::Bronze];
-        let pick = |r: &oag_ui::endrace::Rewards| trophy_index(Some(r), loaded);
+        let pick = |r: &oag_ui_screens::endrace::Rewards| trophy_index(Some(r), loaded);
         assert_eq!(pick(&rewards(Some(Medal::Bronze), true)), Some(2));
         assert_eq!(pick(&rewards(Some(Medal::Gold), true)), Some(0));
         assert_eq!(pick(&rewards(Some(Medal::Gold), false)), None);

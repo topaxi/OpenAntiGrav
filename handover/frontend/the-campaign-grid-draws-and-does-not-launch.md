@@ -46,11 +46,11 @@ sections for the decompile itself.
    overwrites the stored difficulty unconditionally, even *downward* - the
    previous "harder rung always wins outright" implementation was wrong on
    this branch, right only on an exact-tie branch); and
-   `oag_ui::campaign::draw::medal_line` now appends `"(<rung>)"` to `Line7`
+   `oag_ui_screens::campaign::draw::medal_line` now appends `"(<rung>)"` to `Line7`
    exactly the way `CellSelection_PopulateDetail`'s own `"%s (%s)"` format
    does, `"Gold (Medium)"` rather than a bare medal word. Verified by new
    unit tests (`crates/game/src/records/tests.rs`,
-   `crates/ui/src/campaign/draw/tests.rs`) reproducing the decompiled
+   `crates/ui-screens/src/campaign/draw/tests.rs`) reproducing the decompiled
    branches directly, and a live `--menu-page cell-select` capture of a
    worktree-local `records.toml` row predating this fix (`Best: Gold`, no
    suffix - correct, since that row's own `best_difficulty` is `None`).
@@ -63,7 +63,7 @@ sections for the decompile itself.
    rebuilds `DifficultyButton`'s text every frame,
    `sprintf("%s (%s)", resolve("RB_AI_DIF"), resolve(rung))` off the
    screen's own browsed rung (`Easy`/`Medium`/`Hard`, bare idstrings, no
-   `MSC_`/`FE_` prefix) - `oag_ui::campaign::draw::difficulty_button_line`
+   `MSC_`/`FE_` prefix) - `oag_ui_screens::campaign::draw::difficulty_button_line`
    reproduces it. Verified against `data/reference/psp-campaign-screens/
    cell-selection-difficulty-hard.png` (`"AI difficulty (Hard)"`) and a live
    `--menu-page cell-select` capture of this build reading `"AI difficulty
@@ -110,16 +110,16 @@ item below.
 2. **Fixed: the detail panel's `default`-role text (`Line1`..`8`/`Title`/
    `Track Line`/`Speed class`, both screens) was drawing at roughly 60% the
    real size - a genuine bug, not a "too broad a constant" risk.**
-   `crates/ui/src/campaign/draw.rs`'s `text_draw` was multiplying `scale` by
+   `crates/ui-screens/src/campaign/draw.rs`'s `text_draw` was multiplying `scale` by
    `layout.face_scale("default")` (`13/22`) *on top of* routing through the
    real `Default`-role atlas `face_atlas_slot` already loads at its own
    native size - double-shrinking glyphs that needed no shrinking at all.
-   `oag_ui::campaign::footer::face_scale` already carries the correct form
+   `oag_ui_screens::campaign::footer::face_scale` already carries the correct form
    (`"default" => 1.0`) for the footer's own prompts, landed the same day as
    `face_atlas_slot` (2026-09-21) but never mirrored onto
-   `Layout::face_scale` (`crates/ui/src/campaign.rs`), which every panel
+   `Layout::face_scale` (`crates/ui-screens/src/campaign.rs`), which every panel
    label reads instead. Now does. **`FaceScales::default()` itself
-   (`crates/ui/src/picker.rs`) was never touched** - every other screen that
+   (`crates/ui-screens/src/picker.rs`) was never touched** - every other screen that
    reads it is unaffected. Verified against the same aligned crop (this
    build's `"Speed class"` row now within a pixel of the reference) and
    `cargo nextest run -p oag-ui campaign`/`-p oag-game campaign`, both green.
@@ -148,8 +148,8 @@ item below.
    `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
    "`CellSelection_OnEnter`'s own default-cursor scan" section for the full
    decompile and confidence. `CellSelection::new`/`with_medals_and_records`
-   (`crates/ui/src/campaign.rs`) now reproduce it, with two new tests
-   (`crates/ui/src/campaign/tests.rs`). **Separately measured, still
+   (`crates/ui-screens/src/campaign.rs`) now reproduce it, with two new tests
+   (`crates/ui-screens/src/campaign/tests.rs`). **Separately measured, still
    unreproduced**: the cursor **persists** across a back-out to `Grid
    Selection` and a re-entry (moved to `grid0_3_2`, backed out, came back in
    on `grid0_3_2`, not reset to `grid0_3_1`) - this build's own screen
@@ -178,7 +178,7 @@ four-hex row. Measured live against PPSSPP (`pulse-psp-usa.chd`, Xvfb):
 the page, and **neither direction wraps** - both clamp at their own boundary,
 and a page turn keeps the pressed-in slot rather than resetting to the new
 page's own first tile. `GridSelection::page_step`/`tile_step`
-(`crates/ui/src/campaign/pointer.rs`) carry the corrected arithmetic; a new
+(`crates/ui-screens/src/campaign/pointer.rs`) carry the corrected arithmetic; a new
 `per_page` field keeps HD/Fury's own one-tile-per-page flyer pager on the old
 wrapping `step` unchanged. Full walk in `docs/ui/campaign-screens.md`'s
 "Measured against PPSSPP, 2026-09-25" section. **Separately confirmed
@@ -241,7 +241,7 @@ rule now implemented.
 closed live**, `[ai] difficulty = "novice"` (worktree-local, never committed)
 plus `--autopilot-skill ace` finishing `grid0_3_1` 1st of 8 and `Cell
 Selection` reading `Points 3/3` / `Best Gold` back. New module:
-`oag_ui::campaign::footer`, reading `Skin.xml`'s `<NavigationController>`/
+`oag_ui_screens::campaign::footer`, reading `Skin.xml`'s `<NavigationController>`/
 `<TextInfo>` directly off the raw parsed tree - neither tag is one
 `oag_ui::screen::Screens::collect_widgets` recognises, and even parsed,
 neither fits the per-screen widget model (a `NavigationController` picks
@@ -344,7 +344,7 @@ Still open, not touched this pass: the `DIFFICULTY (<rung>)` runtime
 template (`Cell Selection` still shows the disc's own authored `"Change
 Difficulty"`) and this build's own difficulty default reading `SKILLED`
 where RPCS3's fresh-profile default reads `NOVICE` - two mismatches on the
-same widget, named together in the docs section above; `oag_ui::endrace::hd`'s
+same widget, named together in the docs section above; `oag_ui_screens::endrace::hd`'s
 own screens (`Results`/`Rewards`/`Menu`) still draw no button glyph at all,
 since that module's own `text_draw` has no `face_role` check the campaign
 screens' does; and whether Omega's own language plugins declare the same
@@ -355,7 +355,7 @@ Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
 (what draws, what is measured vs chosen, every number this pass read off the
-disc), `oag_ui::campaign` (`crates/ui/src/campaign.rs`, model + layout +
+disc), `oag_ui_screens::campaign` (`crates/ui-screens/src/campaign.rs`, model + layout +
 draw), `oag_game::campaign` (`crates/game/src/campaign.rs`, the shared
 read), `crates/game/src/main/campaign_stage.rs` and
 `crates/game/src/main/session/campaign.rs` (the live flow).
@@ -391,10 +391,10 @@ read), `crates/game/src/main/campaign_stage.rs` and
   section.
 - ~~The detail panel's `default`-role text may be undersized.~~ **Fixed,
   `pulse-campaign` lane, 2026-09-28** - a real bug, not too broad a
-  constant to touch: `crates/ui/src/campaign.rs`'s own `Layout::face_scale`
+  constant to touch: `crates/ui-screens/src/campaign.rs`'s own `Layout::face_scale`
   was double-scaling `"default"`-role text against the real `Default` atlas
   `face_atlas_slot` already loads at native size, the same shape
-  `oag_ui::campaign::footer::face_scale` was already fixed for one widget
+  `oag_ui_screens::campaign::footer::face_scale` was already fixed for one widget
   over. `FaceScales::default()` itself was never touched. See this file's
   own 2026-09-28 update paragraph above.
 - ~~PPSSPP was not captured against this pass.~~ **Captured, `pulse-campaign`
@@ -414,7 +414,7 @@ read), `crates/game/src/main/campaign_stage.rs` and
   paging crossfade between four-tile pages. A PPSSPP capture across a page
   turn would likely settle it.
 - ~~`Cell Help`'s own text is resolved but the overlay is not drawn.~~
-  **Done, 2026-09-21** - draws as a static panel, `oag_ui::campaign::draw::cell_help_draw`.
+  **Done, 2026-09-21** - draws as a static panel, `oag_ui_screens::campaign::draw::cell_help_draw`.
   Its `Viewport`/`Animation` scroll timeline is still not scripted, on
   purpose - see `docs/ui/campaign-screens.md`'s 2026-09-21 section.
 - ~~Grid-tier locking draws every tier open.~~ **Done, 2026-09-14**, in the
@@ -485,7 +485,7 @@ read), `crates/game/src/main/campaign_stage.rs` and
   `Grid Selection`'s `Medals`/`Points` and `Cell Selection`'s `Line6`/
   `Line7` all read real numbers now, fed through a `Fn(&str) ->
   Option<Medal>` closure rather than the store type itself - see
-  `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+  `oag_ui_screens::campaign::GridSummary::from_grid_with_medals`/
   `CellSelection::with_medals`. ~~`Line5`/`Line8` are unchanged.~~ **`Line5`
   done, 2026-09-21** - `CellSelection::with_medals_and_records` reads the
   general per-track/mode/class `oag_game::records::Store` for Time Trial/
@@ -500,7 +500,7 @@ read), `crates/game/src/main/campaign_stage.rs` and
   "Measured against PPSSPP" section, which that lane owns; do not edit
   inside it.
 - ~~The scrolling tip ticker and the `Confirm`/`Back` half of the footer
-  legend still do not draw.~~ **Done, 2026-09-21** - `oag_ui::campaign::footer`.
+  legend still do not draw.~~ **Done, 2026-09-21** - `oag_ui_screens::campaign::footer`.
   The ticker's own scroll speed is chosen, not measured, and the
   `Grid`/`Grid1` duplicate `GridController` question above is still open.
 - **A previous live walk's cell (`grid0_2_1`) is locked under the rule this
@@ -537,15 +537,15 @@ read), `crates/game/src/main/campaign_stage.rs` and
 - ~~This whole screen renders every label upper-case~~ **Fixed 2026-09-21**,
   stale bullet struck 2026-09-25 - the atlas gap this bullet itself named as
   blocking a fix landed (`crates/game/src/boot/fonts.rs`'s
-  `face_atlas_slot`), and `oag_ui::campaign::draw::text_draw` now routes
+  `face_atlas_slot`), and `oag_ui_screens::campaign::draw::text_draw` now routes
   through it. See `docs/ui/campaign-screens.md`'s own "upper-case label
   note", confirmed still fixed by this pass's own fresh
   `--menu-page grid-select` capture.
 - ~~`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`~~ - **fixed,
-  `pulse-cellsel` lane, 2026-09-28.** `oag_ui::campaign::draw::difficulty_button_line`
+  `pulse-cellsel` lane, 2026-09-28.** `oag_ui_screens::campaign::draw::difficulty_button_line`
   reproduces `CellSelection_Update`'s own runtime template - see this
   file's own 2026-09-28 update paragraph above.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-21. `Grid Selection`/`Cell Selection` draw and launch, off `CellMode_Definition.xml` and the real 236-cell campaign; the tip ticker, the `Confirm`/`Back` footer legend, `Cell Help`'s static overlay and `Line5` (`Cell_SavedRecord`, Time Trial/Speed Lap) all now draw too, via a new `oag_ui::campaign::footer` reading `Skin.xml`'s `<NavigationController>`/`<TextInfo>` directly (neither tag is one `Screens::collect_widgets` recognises). The podium walk closed live: a worktree-local `[ai] difficulty = "novice"` plus `--autopilot-skill ace` podiumed a campaign cell 1st of 8 and `Cell Selection` read `Points 3/3` / `Best Gold` back. Open: the `Grid`/`Grid1` duplicate `GridController`, no live PPSSPP capture of the ticker/footer/`Cell Help` (verified only against this build's own behaviour), the ticker's own scroll speed (chosen, not measured), `Line8` and `Zone`/`Elimination`'s own saved records (no raw count anywhere in `oag_game::records::Record`)
+2026-09-21. `Grid Selection`/`Cell Selection` draw and launch, off `CellMode_Definition.xml` and the real 236-cell campaign; the tip ticker, the `Confirm`/`Back` footer legend, `Cell Help`'s static overlay and `Line5` (`Cell_SavedRecord`, Time Trial/Speed Lap) all now draw too, via a new `oag_ui_screens::campaign::footer` reading `Skin.xml`'s `<NavigationController>`/`<TextInfo>` directly (neither tag is one `Screens::collect_widgets` recognises). The podium walk closed live: a worktree-local `[ai] difficulty = "novice"` plus `--autopilot-skill ace` podiumed a campaign cell 1st of 8 and `Cell Selection` read `Points 3/3` / `Best Gold` back. Open: the `Grid`/`Grid1` duplicate `GridController`, no live PPSSPP capture of the ticker/footer/`Cell Help` (verified only against this build's own behaviour), the ticker's own scroll speed (chosen, not measured), `Line8` and `Zone`/`Elimination`'s own saved records (no raw count anywhere in `oag_game::records::Record`)

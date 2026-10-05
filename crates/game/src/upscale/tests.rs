@@ -524,7 +524,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
     // two passes off one renderer both draw whatever the second one uploaded.
     // Written shared first and caught by this test's own assertion. The game
     // has two here for its own reasons - the HUD draws through
-    // `crate::hud::Overlay` and the performance overlay through
+    // `crate::hud_overlay::Overlay` and the performance overlay through
     // `Session::overlay` - so this matches it rather than working around it.
     // `race/capture.rs` records the same trap for its primer frame.
     let mut ui = Renderer::new(
@@ -533,7 +533,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         format,
         None,
         oag_ui::font::Atlas::build(),
-        &crate::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
     let mut instrument = Renderer::new(
@@ -542,7 +542,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         format,
         None,
         oag_ui::font::Atlas::build(),
-        &crate::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
     )
     .expect("the overlay pipeline");
 
@@ -807,7 +807,7 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
         format,
         None,
         oag_ui::font::Atlas::build(),
-        &crate::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
 

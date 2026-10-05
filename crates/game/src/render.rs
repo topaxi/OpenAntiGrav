@@ -223,7 +223,7 @@ impl Renderer {
         format: wgpu::TextureFormat,
         video: Option<VideoFormat>,
         atlas: Atlas,
-        sprites: &crate::sprite::Sheet,
+        sprites: &oag_hud::sprite::Sheet,
     ) -> Result<Self> {
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("oag-game uniforms"),
@@ -451,7 +451,7 @@ impl Renderer {
     /// What the selection screens need: their stills are per circuit, read
     /// when a circuit is selected rather than at boot, and a sheet is one
     /// texture. The caller hands over a sheet that **extends** the one this
-    /// was built with (`crate::sprite::Sheet::extended`), so every placement
+    /// was built with (`oag_hud::sprite::Sheet::extended`), so every placement
     /// the menus already hold stays where it was and nothing has to be
     /// restored when the screen closes. One texture upload and one bind
     /// group; the pipeline, the atlas and the uniforms are untouched.
@@ -459,7 +459,7 @@ impl Renderer {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        sprites: &crate::sprite::Sheet,
+        sprites: &oag_hud::sprite::Sheet,
     ) {
         let sprite_texture = upload_rgba(
             device,
@@ -553,7 +553,7 @@ impl Renderer {
     ///
     /// What a stage does: it owns the frame, so it starts from black and the
     /// bars outside `viewport` are what it leaves uncovered. `clip` is
-    /// `(index, left, right)` for a marquee row - see `oag_ui::marquee`.
+    /// `(index, left, right)` for a marquee row - see `oag_ui_screens::marquee`.
     #[expect(clippy::too_many_arguments, reason = "clip is one more fact")]
     pub fn render(
         &mut self,

@@ -17,7 +17,7 @@
 
 use std::path::PathBuf;
 
-use oag_ui::campaign::flyer;
+use oag_ui_screens::campaign::flyer;
 
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
 
@@ -220,7 +220,7 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
     let near = |got: f32, want: f32, what: &str| {
         assert!((got - want).abs() < 40.0, "{what}: {got} against {want}");
     };
-    use oag_ui::campaign::selection::Campaign;
+    use oag_ui_screens::campaign::selection::Campaign;
     let [fury, hd] = rects(Campaign::Fury).try_into().expect("two");
     near(fury[0], 240.0, "Fury's left edge, selected");
     near(fury[0] + fury[2], 1038.0, "Fury's right edge, selected");

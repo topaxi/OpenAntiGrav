@@ -17,7 +17,7 @@ drawn as authored.** Traced to source, not inferred:
   recorded in `docs/gameplay/pickups.md`: `MSC_EVENT_TT`/`_SL`'s own text and
   `TimeTrial_HUD.xml` authoring exactly one weapon icon (`TurboIcon`) where
   Arcade authors thirteen and Zone none.
-- `crates/game/src/hud/draw.rs`'s `draw_list` draws `readout.pickup` (which is
+- `crates/hud/src/draw.rs`'s `draw_list` draws `readout.pickup` (which is
   `Some(Turbo)` from tick 0 in Time Trial) unconditionally, with no countdown
   gate anywhere in that file.
 - The widget's authored position is screen top-centre (`x=240`, half the
@@ -39,7 +39,7 @@ pickup slot for the HUD to draw during those 272 ticks, and the icon
 (identification above still stands - it is `TurboIcon`, drawn correctly given
 what it's handed) simply has nothing to show at that point in the real game.
 
-**So: the HUD is not the bug.** `crates/game/src/hud/draw.rs` is drawing
+**So: the HUD is not the bug.** `crates/hud/src/draw.rs` is drawing
 `readout.pickup` exactly as it should; the bug is that `readout.pickup` is
 `Some(Turbo)` during the countdown at all. **Do not touch the icon's
 position, opacity or draw gate** - all three are behaving correctly given the

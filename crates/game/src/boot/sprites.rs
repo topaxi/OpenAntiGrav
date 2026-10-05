@@ -26,7 +26,7 @@ use super::Screens;
 /// in the boot log.
 pub(super) fn block_art(
     blocks: Option<oag_title::MenuBlocks>,
-    sprites: &crate::sprite::Sheet,
+    sprites: &oag_hud::sprite::Sheet,
     screens: &Screens,
     report: &mut Vec<String>,
 ) -> Option<oag_ui::menu::block::BlockArt> {
@@ -115,7 +115,7 @@ pub(super) fn load(
     sources: &[&Screens],
     extra: &[&str],
     report: &mut Vec<String>,
-) -> crate::sprite::Sheet {
+) -> oag_hud::sprite::Sheet {
     let mut srcs: Vec<String> = Vec::new();
     for screen in sources.iter().flat_map(|screens| &screens.screens) {
         // A `TouchButton`'s icon is an image the screen names the same way
@@ -137,7 +137,7 @@ pub(super) fn load(
     }
 
     if srcs.is_empty() {
-        return crate::sprite::Sheet::default();
+        return oag_hud::sprite::Sheet::default();
     }
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
@@ -162,7 +162,7 @@ pub(super) fn load(
         }
     }
 
-    let sheet = crate::sprite::Sheet::build(&blobs, report);
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, report);
     report.push(format!(
         "{} of {} front-end image(s) decoded into a {}x{} sheet",
         sheet.len(),
@@ -234,7 +234,7 @@ fn vita_texture_name(name: &str) -> Option<String> {
 /// If `name`'s `.gtf` spelling failed to resolve but a `.gnf` sibling is
 /// present in the served archives, decodes it (`docs/formats/gnf.md`) and
 /// returns `Some(Ok(bytes))` - still the raw `.gnf` bytes, not pixels, so
-/// [`crate::sprite::Image::decode`]'s own `.gnf` branch is what actually
+/// [`oag_hud::sprite::Image::decode`]'s own `.gnf` branch is what actually
 /// draws them, the same one `Sheet::build` already runs every other image
 /// through - or `Some(Err(reason))` naming the file, its size and the exact
 /// reason it draws nothing instead (a genuinely tiled surface this project

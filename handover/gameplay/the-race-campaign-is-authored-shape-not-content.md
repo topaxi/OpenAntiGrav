@@ -81,7 +81,7 @@ The law, all decompiled and all in `race-campaign.md`:
   beats gold and the live pace beats that too, or against a separate,
   still-unread personal-best/track-record pair otherwise (always `RECORD`
   on that second path). Wired into the HUD for the campaign branch's
-  gold/silver/bronze ladder alone: `oag_game::hud::TimeTrialPace`. Full law:
+  gold/silver/bronze ladder alone: `oag_hud::TimeTrialPace`. Full law:
   [`docs/ghidra/functions/psp-pulse-usa/race-progress.md`](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md#the-target-time-readout-0x780x7c0x80-closed-2026-09-28).
   Still open, and out of this pass's scope: `RECORD` on either path, which
   needs a split-time record store (`FUN_088091a0`) this project's own

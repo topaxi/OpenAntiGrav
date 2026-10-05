@@ -446,7 +446,7 @@ package, 1.59 GB, `crates/texture/tests/gxt_coverage_ground_truth.rs`.
 
 ## Wired into the sprite loader
 
-`oag_game::sprite::Image::decode` tries `.gxt` as a fourth branch alongside
+`oag_hud::sprite::Image::decode` tries `.gxt` as a fourth branch alongside
 the PSP `.mip`, PS2 and PS3 `.gtf` readers, so a HUD sprite reference that
 resolves to a shipped `.gxt` entry decodes to real pixels through the same
 `Sheet` every other title's HUD uses. See

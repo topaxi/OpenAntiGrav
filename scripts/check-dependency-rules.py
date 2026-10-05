@@ -85,13 +85,22 @@ FORBIDDEN_FOR_GAMEPLAY = {
 # before. So a new crate reaching for `oag-title` now has to be classified
 # here or there, and cannot be neither.
 TITLE_VOCABULARY = "oag-title"
-# `oag-ui` joined deliberately, not by omission: menus draw, so this crate may
+# `oag-ui` and `oag-ui-screens` joined deliberately, not by omission: menus draw, so this crate may
 # one day link a renderer directly, which is exactly what `GAMEPLAY_CRATES`
 # exists to keep away from everything gameplay depends on. Classifying it here
 # rather than there is what makes that legal for `oag-ui` alone - nothing
 # gameplay-side may ever depend on `oag-ui` (`oag-game`'s own composition-root
 # rule already forbids the only crate that could try).
-NOT_TITLE_PACKAGES = {"oag-assets", "oag-game", "oag-music", "oag-sound", "oag-trace", "oag-ui"}
+NOT_TITLE_PACKAGES = {
+    "oag-assets",
+    "oag-game",
+    "oag-hud",
+    "oag-music",
+    "oag-sound",
+    "oag-trace",
+    "oag-ui",
+    "oag-ui-screens",
+}
 
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"

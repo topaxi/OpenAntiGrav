@@ -104,7 +104,7 @@ all, so there is no medal to credit.
 
 **The in-race HUD caption tier is unrelated and still blocked on RE** - see
 `handover/frontend/the-huds-four-remaining-items.md`. Nothing in this change
-touches `crates/game/src/hud/**` or feeds a campaign medal into
+touches `crates/hud/src/**` or feeds a campaign medal into
 `Hud_UpdateTimeCluster_q`'s tier; the two are different encodings of
 different things, by design - see `records.rs`'s own `Medal` doc comment for
 why it round-trips as a word rather than the HUD's own ordinal.
@@ -154,7 +154,7 @@ tests.rs`.
 `crate::records_page::table_for` calls for the live session - supplying a
 track lookup over the capture's own boot-survey `tracks` list rather than
 `Shell::tracks_for(mode)`, and draws the resulting rows through
-`oag_ui::prompt::record_row_draw`, the identical function
+`oag_ui_screens::prompt::record_row_draw`, the identical function
 `crate::menu_stage::MenuStage::render` draws them through live. The
 `menu_page` function calls `records_draws` in the same two branches
 `axis_preview_draw` already draws in. The one real difference from the live

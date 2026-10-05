@@ -6,8 +6,8 @@ rating bars, the livery row on the disc's own skin axis, the lap distance
 measured off each circuit, both preview meshes, and (since 2026-09-10) the
 slideshow of the circuit's own stills behind the hexagonal window. One
 thing is known and unbuilt: the `Loyalty` bar.** Implemented in
-[`oag_ui::picker`](../../crates/ui/src/picker.rs) (model, layout, draw),
-[`oag_ui::picker::slideshow`](../../crates/ui/src/picker/slideshow.rs)
+[`oag_ui_screens::picker`](../../crates/ui-screens/src/picker.rs) (model, layout, draw),
+[`oag_ui_screens::picker::slideshow`](../../crates/ui-screens/src/picker/slideshow.rs)
 (the window's state machine),
 [`oag_game::preview`](../../crates/game/src/preview.rs) (the 3D pass and
 the slideshow's loader) and `crates/game/src/main/session/picker.rs` (the
@@ -52,7 +52,7 @@ content, and every number below is a reading off them.
 right line count.** `Talon's Junction White` is three lines, `Moa Therma
 White` two; a greedy word wrap against the panel's inner width (170 minus
 the group's 14 on each side) reproduces both, which is what
-`oag_ui::picker::wrap_name` does. Confidence 80 that this is the rule and not
+`oag_ui_screens::picker::wrap_name` does. Confidence 80 that this is the rule and not
 only the result: two names is a small sample, and the executable's own
 `Info Track %d.%d` formatter has not been read.
 
@@ -117,10 +117,10 @@ Confidence 95: the file's own content, drawn, against the capture.
 **The slideshow restarts on every selection**, as the original's
 `TransitionTo("Info")` does, and runs off the picker's own fixed-tick
 clock, so `--menu-page track-select` is always the first card. Read by
-[`oag_ui::picker::slideshow`](../../crates/ui/src/picker/slideshow.rs),
+[`oag_ui_screens::picker::slideshow`](../../crates/ui-screens/src/picker/slideshow.rs),
 loaded by `oag_game::preview::slideshow`, and drawn off the front end's own
 sprite sheet **extended** with the circuit's cards
-(`crate::sprite::Sheet::extended`) - every widget the menus already placed
+(`oag_hud::sprite::Sheet::extended`) - every widget the menus already placed
 keeps its rectangle, so nothing is swapped back when the screen closes.
 
 Zone mode enters `Zone` rather than `Info`, off `screen_zone.xml` on the
@@ -160,7 +160,7 @@ title bar's own `transition="0"` group is solid from the first frame.
 Read into `Text`/`Image`/`Fill::transition` by `oag_ui::screen`'s
 `LeftLayer` container (inherited by everything nested under it, the same
 way `OffsetX`/`OffsetY` already thread down) and applied in
-`oag_ui::picker::body` as a linear alpha ramp against
+`oag_ui_screens::picker::body` as a linear alpha ramp against
 `Picker::seconds()` - **the ramp's own shape is measured, not chosen**:
 `Widget_UpdateTransitionFraction` (`0x0888d8e4`, confidence 80,
 [race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-per-widget-fade-is-confirmed-linear-2026-09-28)),
@@ -251,7 +251,7 @@ Track Select, by contrast, hides circuits whose `<Unlock Grid>` is not met
 **The Loyalty block is drawn on Pulse** (2026-10-02): the title, the dim
 backing, the selected team's own running total beside it and the bar,
 `150 * min(total, 100000) / 100000` whole pixels wide (`FEScreen_SetStatBar`
-as `TeamSelection_Update` calls it; `crates/ui/src/picker/body.rs`). It is a
+as `TeamSelection_Update` calls it; `crates/ui-screens/src/picker/body.rs`). It is a
 read-out with no pointer behaviour. A title with no loyalty counter
 (`Details::Ship::loyalty` is `None`) still leaves the block out whole.
 

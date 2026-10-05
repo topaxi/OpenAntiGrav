@@ -14,7 +14,7 @@
 //! # What only real data can say here
 //!
 //! `crates/pure/src/hud.rs`'s `PICKUP_ICON_MODELS` and
-//! `oag_game::hud::pickup_model_tests` both assert against a hand-written
+//! `oag_hud::pickup_model_tests` both assert against a hand-written
 //! fixture - three widgets and an invented `.vex` for the backdrop grid. What
 //! they cannot say is the thing `docs/gameplay/pickups.md`'s retracted claim
 //! got wrong in the first place: **that the ten real icon models actually
@@ -107,7 +107,7 @@ fn every_named_icon_model_decodes_with_a_real_quad_extent() {
 /// `TURBO_icon`'s disc-authored `0xff40ff40`.
 ///
 /// The end-to-end path: real archive, real layout, real sheet, real
-/// `oag_game::hud::draw::pickup_model_draws` - nothing here is a fixture.
+/// `oag_hud::draw::pickup_model_draws` - nothing here is a fixture.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
@@ -141,11 +141,11 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
         Some(oag_tables::weapons::Weapon::Turbo),
         "the readout must carry the held weapon for the draw list to find it"
     );
-    let frame = oag_game::hud::draw_list(&context, &readout);
+    let frame = oag_hud::draw_list(&context, &readout);
 
     // A `<Mode3D><Model>` widget, so a `BlendedSprite`: the quad carries the
     // blend its own model declares rather than taking the pipeline's. See
-    // `oag_game::sprite::Placed::blend`.
+    // `oag_hud::sprite::Placed::blend`.
     let icon_draw = frame
         .sprites
         .iter()

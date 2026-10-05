@@ -93,7 +93,7 @@ inside the `487` bottom bar.
 
 ## Implemented
 
-`oag_ui::endrace::hd::hd_results_draw_list`'s `RaceGrid` - every number
+`oag_ui_screens::endrace::hd::hd_results_draw_list`'s `RaceGrid` - every number
 above, applied to a race-family headline; Time Trial and Speed Lap keep the
 file's frame and this build's older, chosen row pitch, since their fillers
 (`0x002239a8`, `0x00227b30`) were not read. Pinned against the real disc by

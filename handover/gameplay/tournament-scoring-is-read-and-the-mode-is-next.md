@@ -41,7 +41,7 @@ seconds (`EndRaceResults_Update`, new this pass). See
 own dated correction for the decompile and
 [`docs/ui/endrace-screens.md`](../../docs/ui/endrace-screens.md)'s new
 Tournament section for what draws
-(`oag_ui::endrace::TournamentResults`/`tournament_results_draw_list`,
+(`oag_ui_screens::endrace::TournamentResults`/`tournament_results_draw_list`,
 `crate::race_stage::endrace::tournament_results`). **Not yet checked
 against a live PPSSPP capture of a real tournament leg ending** - the same
 autopilot cost `tournament.md`'s own "Live verification" section
@@ -115,7 +115,7 @@ Head2Head cell today gets no gap readout.
   it, and this pass drew it as finish order on behavioural evidence, not a
   traced one.
 - ~~**Draw Head2Head's own `HeadToHeadBar` HUD swap.**~~ **Done 2026-09-29**
-  (`crates/game/src/hud/head_to_head.rs`, fed by `Race::head_to_head`); the
+  (`crates/hud/src/head_to_head.rs`, fed by `Race::head_to_head`); the
   field semantics are pinned in `head2head.md` (the bar is a vertical
   connector, `+0xa0` is `Height`, vtable `+0xec` is `GetY`). Static evidence
   only. **Measured live 2026-09-29** (`head2head.md` "Live measurement"): bar, clamps, label, both colours, leading swap confirmed; the rows use the `Default` font and carry names (`1st Goteki 45`/`2nd AAA`), and the player's row throbs (`0x200`). Still open from it: the two row **names** (`craft+0x798`,

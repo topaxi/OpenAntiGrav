@@ -65,7 +65,7 @@ pub(super) fn load_hud(
     language_plugins: &[&str],
     preferred_language: Option<&str>,
     report: &mut Vec<String>,
-) -> crate::hud::Assets {
+) -> oag_hud::Assets {
     let entry = hud_layout(title, mode);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
@@ -80,7 +80,7 @@ pub(super) fn load_hud(
     // the PSP shortens its layouts, the PS2 and HD ship plain `<?xml`, and
     // reaching for `expand` refused the PS2's outright and took the whole HUD
     // with it.
-    let composed = crate::hud::compose(entry, |path| archives.read_name(path).ok());
+    let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
     let layout = match composed {
         Some(composed) => {
             let layout = composed.layout;
@@ -175,7 +175,7 @@ pub(super) fn load_hud(
         layout
             .labels
             .iter()
-            .any(|label| label.font == crate::hud::Font::Default)
+            .any(|label| label.font == oag_hud::Font::Default)
     }) {
         hud_font(
             archives,
@@ -188,7 +188,7 @@ pub(super) fn load_hud(
         font.clone()
     };
 
-    crate::hud::Assets {
+    oag_hud::Assets {
         layout,
         sheet,
         font,
@@ -218,7 +218,7 @@ pub(super) fn load_hud(
 /// meant for a different texture.
 ///
 /// Keyed by the reference the layout spells, which is what
-/// [`crate::hud::sprite_draw`] looks up. Which entry that reference resolves to
+/// [`oag_hud::sprite_draw`] looks up. Which entry that reference resolves to
 /// is this function's business: the declared name first, then the title's own
 /// rewrite of it - `oag_title::HudArt::texture_extension`, which is `None` on
 /// both PSP titles and `.gtf` on HD, where a `src` names the exporter's input
@@ -230,11 +230,11 @@ pub(super) fn load_hud(
 fn load_atlases(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
-    layout: Option<&crate::hud::Layout>,
+    layout: Option<&oag_hud::Layout>,
     entry: &str,
     report: &mut Vec<String>,
-) -> crate::sprite::Sheet {
-    let references = layout.map(crate::hud::Layout::textures).unwrap_or_default();
+) -> oag_hud::sprite::Sheet {
+    let references = layout.map(oag_hud::Layout::textures).unwrap_or_default();
     // **A layout that names no `.mip` may still have sight art**, and taking the
     // early return before [`sight_art`] is what made Pure's reticle draw
     // nothing: all four of its HUD layouts are `<Model>` geometry with no atlas
@@ -248,10 +248,10 @@ fn load_atlases(
         ));
         let extra = vex_model_art(archives, title, layout, report);
         if extra.is_empty() {
-            return crate::sprite::Sheet::default();
+            return oag_hud::sprite::Sheet::default();
         }
         let mut notes = Vec::new();
-        let sheet = crate::sprite::Sheet::build_with(&[], extra, &mut notes);
+        let sheet = oag_hud::sprite::Sheet::build_with(&[], extra, &mut notes);
         report.extend(notes);
         return sheet;
     }
@@ -265,7 +265,7 @@ fn load_atlases(
     }
 
     let mut notes = Vec::new();
-    let sheet = crate::sprite::Sheet::build_with(
+    let sheet = oag_hud::sprite::Sheet::build_with(
         &blobs,
         vex_model_art(archives, title, layout, report),
         &mut notes,
@@ -299,7 +299,7 @@ fn load_atlases(
 /// models, one apiece (`oag_title::HudArt::pickup_icon_models` and
 /// `pickup_icon_backdrop_model`). So the art is reached by building the model
 /// and taking the texture it unpacked, which is what
-/// [`crate::sprite::Sheet::build_with`] exists for. See
+/// [`oag_hud::sprite::Sheet::build_with`] exists for. See
 /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md` for the sights' law and
 /// `docs/gameplay/pickups.md` for the icons' colour finding.
 ///
@@ -308,7 +308,7 @@ fn load_atlases(
 ///
 /// **Each entry's quad extent is read off its own vertices**, not carried as a
 /// per-model constant the way the sights' `SIGHT_SIZE` is - see
-/// [`crate::sprite::Placed::quad_extent`]'s own doc for why the two do not (yet)
+/// [`oag_hud::sprite::Placed::quad_extent`]'s own doc for why the two do not (yet)
 /// share a reading.
 ///
 /// **A model that will not read costs its own widget and nothing else.** It is
@@ -318,9 +318,9 @@ fn load_atlases(
 fn vex_model_art(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
-    layout: Option<&crate::hud::Layout>,
+    layout: Option<&oag_hud::Layout>,
     report: &mut Vec<String>,
-) -> Vec<crate::sprite::DecodedImage> {
+) -> Vec<oag_hud::sprite::DecodedImage> {
     let Some(layout) = layout else {
         return Vec::new();
     };
@@ -390,7 +390,7 @@ fn vex_model_art(
             texture.height,
             quad_extent(&model)
         ));
-        out.push(crate::sprite::DecodedImage {
+        out.push(oag_hud::sprite::DecodedImage {
             src: src.to_string(),
             width: texture.width,
             height: texture.height,
@@ -421,7 +421,7 @@ fn vex_model_art(
 /// opaque rather than having one of them picked for it: none of the widgets
 /// this walks is such a model, and guessing which batch speaks for a quad that
 /// is not a quad is the invention this project's asset rule forbids. See
-/// [`crate::sprite::Placed::blend`].
+/// [`oag_hud::sprite::Placed::blend`].
 fn quad_blend(
     src: &str,
     model: &oag_mesh::mesh::Model,

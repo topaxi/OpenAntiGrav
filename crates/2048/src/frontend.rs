@@ -395,7 +395,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Pure and HD each author one.
     menu_frame: None,
     // 2048's team/track pickers are the touch idiom `TOUCH` describes, not
-    // the `oag_ui::picker::Layout` dialect this field names a definition
+    // the `oag_ui_screens::picker::Layout` dialect this field names a definition
     // file for.
     race_box: None,
     team_select: None,

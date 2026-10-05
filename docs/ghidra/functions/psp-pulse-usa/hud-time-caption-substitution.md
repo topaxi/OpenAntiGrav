@@ -173,7 +173,7 @@ under the fix that page describes before spending more time on this by hand.
 
 **Settled:** the substitution is a real, single, table-driven mechanism keyed
 on an ordinal state - not five independent code paths, not a per-mode
-`match`. `oag_game::hud::draw::caption`'s fallback, resolving `TotalTimeTxt`
+`match`. `oag_hud::draw::caption`'s fallback, resolving `TotalTimeTxt`
 straight off the layout's own `idstring`, is correct only for the tiers this
 table maps back to `IG_HUD_TOTAL`: a race in a mode outside `{5, 0x11, 10, 7}`
 (where the widget pair is hidden anyway), `DAT_08ab0de0 == 0`, and a track whose
@@ -188,7 +188,7 @@ has the source (`min(stored best, <RaceTimes>/<LapTimes>)`) and the live frame
 it was checked on: `record 1.33.2` at `0.23.7` on a Venom Time Trial on Talon's
 Junction, reproduced as `1.33.2` at `0.23.8` on ours. `draw.rs`'s
 `TotalTime`/`TotalTimeTxt` arms read
-[`Readout::time_trial_pace`](../../../../crates/game/src/hud.rs), which
+[`Readout::time_trial_pace`](../../../../crates/hud/src/lib.rs), which
 `RaceStage::draw_hud` and the headless capture both fill; `None` leaves the
 plain reading above.
 

@@ -1,7 +1,7 @@
 //! What a modal prompt over the menus is **for**, and the two lines that keep
 //! that out of [`crate::menu_stage`].
 //!
-//! [`oag_ui::prompt`] is the model: a grid of keys, a buffer, a yes/no, and
+//! [`oag_ui_screens::prompt`] is the model: a grid of keys, a buffer, a yes/no, and
 //! no idea what any of it will be used for. This is the other half - which
 //! pilot is being renamed, which file is about to be deleted - and it lives on
 //! the binary side because only the composition root knows.
@@ -15,8 +15,8 @@
 use oag_game::input::Input;
 use oag_ui::frontend::Draw;
 use oag_ui::menu::Skin;
-use oag_ui::prompt::{Confirm, Edit, Keyboard, Outcome};
-use oag_ui::tag_entry::TagEntry;
+use oag_ui_screens::prompt::{Confirm, Edit, Keyboard, Outcome};
+use oag_ui_screens::tag_entry::TagEntry;
 
 /// What to do with a prompt the player accepted.
 #[derive(Debug, Clone, PartialEq, Eq)]

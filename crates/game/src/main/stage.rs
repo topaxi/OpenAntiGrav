@@ -60,7 +60,7 @@ impl Stage {
             gpu.config.format,
             None,
             oag_ui::font::Atlas::build(),
-            &oag_game::sprite::Sheet::default(),
+            &oag_hud::sprite::Sheet::default(),
         )
         .context("building the disc chooser")?;
         Ok(Self::Launcher(Box::new(LauncherStage {
@@ -161,7 +161,7 @@ impl Stage {
         worker: race::LoadWorker,
         music: oag_sound::MusicFetchWorker,
         font: &oag_ui::font::Atlas,
-        sprites: &oag_game::sprite::Sheet,
+        sprites: &oag_hud::sprite::Sheet,
         assets: &loading::Assets,
         draw: u64,
         // The source executable's mode id for the race being loaded, which
@@ -467,11 +467,14 @@ impl Stage {
         // What the HUD's `RECORD` readout chases, read once here so the
         // standing best cannot move mid-race: the row this race will save to,
         // as it stood when the race started.
-        let record_target = oag_game::hud::RecordTarget::new(
+        let standing = oag_game::records::load();
+        let standing = standing.get(&result_key);
+        let record_target = oag_hud::RecordTarget::new(
             setup.mode,
             &setup.class,
             track_stats.as_ref(),
-            oag_game::records::load().get(&result_key),
+            standing.and_then(|record| record.best_total_ticks),
+            standing.and_then(|record| record.best_lap_ticks),
         );
         let mut scene = race::Scene::new(
             gpu.device(),
@@ -535,8 +538,9 @@ impl Stage {
         );
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.
-        let overlay = oag_game::hud::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
-            .context("building the HUD overlay")?;
+        let overlay =
+            oag_game::hud_overlay::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
+                .context("building the HUD overlay")?;
         // The results table, built from the same assets and drawn into the same
         // target - see `oag_game::scoreboard`, which is where the "this is ours,
         // the disc's own Race End chain is not built" argument lives. Built with
@@ -547,11 +551,11 @@ impl Stage {
             oag_game::scoreboard::Overlay::new(gpu.device(), gpu.queue(), gpu.format(), &hud)
                 .context("building the scoreboard overlay")?;
         // The countdown's own `<Mode3D>` model, when this mode's layout carries
-        // one - see `oag_game::hud::countdown`. Built the same way `overlay`
+        // one - see `oag_game::hud_countdown`. Built the same way `overlay`
         // just was, against the same surface format.
         let countdown = countdown_model
             .map(|(model, widget)| {
-                oag_game::hud::Countdown::new(
+                oag_game::hud_countdown::Countdown::new(
                     gpu.device(),
                     gpu.queue(),
                     gpu.format(),

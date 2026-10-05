@@ -78,7 +78,7 @@ impl Medal {
 /// own doc gives, not merely by analogy**: `Cell::targets_for_difficulty`'s
 /// own index convention (`0` easy .. `2` hard) is a plain `u8` everywhere
 /// else in this codebase (`CellSelection::difficulty`,
-/// `Cell::skill_for_difficulty`, `oag_ui::campaign::hd::hd_medal_frame`) -
+/// `Cell::skill_for_difficulty`, `oag_ui_screens::campaign::hd::hd_medal_frame`) -
 /// deliberately left that way there, since changing an established,
 /// widely-used index convention to chase type safety in code that already
 /// bounds-checks it (`difficulty.min(2)`) would be exactly the abstraction

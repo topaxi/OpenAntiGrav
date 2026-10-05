@@ -60,7 +60,7 @@ never re-authored), and the shipped file is `.gnf` under the same stem -
 `saveIcons.gnf`, `line.gnf`, `Title_Arrow_HD.gnf` all confirmed present this
 way. `crates/game/src/boot/sprites.rs::gnf_sibling` checks the `.gnf`
 sibling directly: when it decodes, its bytes are pushed into the sheet under
-the widget's own `.gtf`-spelled key (`crates/game/src/sprite.rs::Image::decode_gnf`
+the widget's own `.gtf`-spelled key (`crates/hud/src/sprite.rs::Image::decode_gnf`
 is what actually rasterises them); when it does not, the boot report names
 the exact reason rather than a bare "not found" (`image
 Data\FE\Images\saveIcons.gtf: found as Data\FE\Images\saveIcons.gnf (158976
@@ -194,7 +194,7 @@ shared with HD:
   uses. Which face the original picks is **chosen, not measured**.
 - *`cell-select`/`grid-select` raw ids ("Event line", "rc laps line"), `%d`, the
   footer overprint and "more points needed" over "010"* were one cause: the
-  campaign still and live stage dispatched `title == HD` to `oag_ui::campaign::hd`
+  campaign still and live stage dispatched `title == HD` to `oag_ui_screens::campaign::hd`
   and sent Omega to Pulse's draw list, which has no arm for HD's widget names.
   `oag_game::campaign::draws_hd_campaign` covers both titles. Omega's `Cell
   Selection` also authors a `RecordsButton` (`FE_RECORDS`) at exactly
@@ -376,7 +376,7 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   in `data09.psarc` at HD's path and naming it in `oag_omega::frontend::FRONT_END`
   makes the screen read, but it draws an empty frame: the logos are at
   `Data\art\published\hdships\<Team>\FE\Logo.gnf` where HD's reader asks
-  `Data\Ships\<Team>\FE\Logo.gtf` (`oag_ui::picker::hd::logo_src`), the stat
+  `Data\Ships\<Team>\FE\Logo.gtf` (`oag_ui_screens::picker::hd::logo_src`), the stat
   blocks do not draw, and `hdships\<Team>\screen.xml` has no slideshow chain.
   A cell therefore races whichever team the RACE page holds (`settings.race.team`;
   `Session::apply_race_team` copies it in): slot 0 was `hdships\Assegai` on the walk,

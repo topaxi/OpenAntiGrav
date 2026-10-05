@@ -7,7 +7,7 @@
 //! `.vex` before, which is why HD's own `preview_meshes` is `false`), and
 //! [`crate::preview::Preview::draw_matrices`] is `draw_mode3d`'s second half
 //! with the camera passed in. This module adds the things specific to a
-//! flyer: which entries to read ([`oag_ui::campaign::flyer`]), what the card
+//! flyer: which entries to read ([`oag_ui_screens::campaign::flyer`]), what the card
 //! shows ([`clip`]) and where it stands ([`flyer_view_projection`]).
 //!
 //! # What a card is
@@ -49,8 +49,8 @@ use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
 use oag_mesh::mesh::Model;
 use oag_mesh::mesh_render::Anisotropy;
-use oag_ui::campaign::flyer::{self, FlyerWidget};
 use oag_ui::frontend::Draw;
+use oag_ui_screens::campaign::flyer::{self, FlyerWidget};
 
 use crate::preview::Preview;
 use crate::render::Renderer;
@@ -408,8 +408,11 @@ impl Flyers {
     /// turned as its widget authors it ([`campaign_pose`]). Empty when either
     /// widget is missing.
     #[must_use]
-    pub fn selection_shows(&self, selected: oag_ui::campaign::selection::Campaign) -> Vec<Show> {
-        use oag_ui::campaign::selection::Campaign;
+    pub fn selection_shows(
+        &self,
+        selected: oag_ui_screens::campaign::selection::Campaign,
+    ) -> Vec<Show> {
+        use oag_ui_screens::campaign::selection::Campaign;
         [
             (
                 Campaign::Fury,

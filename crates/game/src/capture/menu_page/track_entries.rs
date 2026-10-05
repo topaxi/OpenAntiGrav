@@ -2,7 +2,7 @@
 //! same list, order and labels the live screen opens with
 //! (`session::picker::open_track_picker`).
 
-use oag_ui::picker::{Details, Entry};
+use oag_ui_screens::picker::{Details, Entry};
 
 /// The entries, each one's preview mesh name, and the grid's column count
 /// (`0` off HD's own track screen).
@@ -12,7 +12,7 @@ pub(super) fn track_entries(
     circuit_names: &oag_ui::language::CircuitNames,
     strings: &oag_ui::language::StringTable,
     tracks: &[crate::catalogue::Track],
-    layout: &oag_ui::picker::Layout,
+    layout: &oag_ui_screens::picker::Layout,
     distance: Option<f32>,
 ) -> (Vec<Entry>, Vec<String>, usize) {
     let labelled: Vec<(crate::catalogue::Track, String)> = tracks
@@ -40,7 +40,7 @@ pub(super) fn track_entries(
             let measured = distance.filter(|_| track.id == settings.race.track);
             let info = match (measured, layout.hd_track.is_some()) {
                 (Some(d), true) => {
-                    let [length, race] = oag_ui::picker::hd::track::length_rows(d, laps);
+                    let [length, race] = oag_ui_screens::picker::hd::track::length_rows(d, laps);
                     [length, race, "-".into()]
                 }
                 (Some(d), false) => [format!("{d:.0}"), "-".into(), "-".into()],

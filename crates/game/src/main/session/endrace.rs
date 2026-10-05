@@ -1,11 +1,11 @@
 //! Builds and drives the EndRace flow a finished race holds open - the same
 //! split `crate::main::session::campaign` makes for the Race Campaign's own
 //! screens. See `crate::main::race_stage::endrace` for the runtime this
-//! module builds and drives, and `oag_ui::endrace` for the model.
+//! module builds and drives, and `oag_ui_screens::endrace` for the model.
 
 use log::warn;
 
-use oag_ui::endrace::{Event, MenuOption};
+use oag_ui_screens::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
@@ -69,9 +69,9 @@ impl Session {
         let observation = stage.observation();
         let standing = &stage.race.sim.world.ships[0].standing;
         let boosts = stage.race.run_stats().boosts_by_lap;
-        let laps: Vec<oag_ui::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
+        let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
             .filter_map(|index| {
-                standing.lap_splits[index].map(|ticks| oag_ui::endrace::LapSplit {
+                standing.lap_splits[index].map(|ticks| oag_ui_screens::endrace::LapSplit {
                     lap: (index + 1) as u32,
                     ticks,
                     boosts: Some(boosts[index]),
@@ -101,14 +101,12 @@ impl Session {
             suggested_ship: false,
         });
 
-        let faces = oag_ui::picker::FaceScales {
-            default: shell
-                .menu_font
-                .as_ref()
-                .map_or(oag_ui::picker::FaceScales::default().default, |menu| {
-                    shell.font.line_height / menu.line_height
-                }),
-            ..oag_ui::picker::FaceScales::default()
+        let faces = oag_ui_screens::picker::FaceScales {
+            default: shell.menu_font.as_ref().map_or(
+                oag_ui_screens::picker::FaceScales::default().default,
+                |menu| shell.font.line_height / menu.line_height,
+            ),
+            ..oag_ui_screens::picker::FaceScales::default()
         };
         let grid = [shell.space.size.0, shell.space.size.1];
         let strings = shell.strings.clone();
@@ -190,7 +188,7 @@ impl Session {
                 if let Err(e) = oag_game::records::save(&self.records) {
                     warn!("could not save the loyalty total: {e:#}");
                 }
-                oag_ui::endrace::HdLoyalty { award, total }
+                oag_ui_screens::endrace::HdLoyalty { award, total }
             })
         } else {
             None
@@ -214,13 +212,13 @@ impl Session {
                 if let Err(e) = oag_game::records::save(&self.records) {
                     warn!("could not save the loyalty total: {e:#}");
                 }
-                oag_ui::endrace::Loyalty {
+                oag_ui_screens::endrace::Loyalty {
                     team_name: team,
                     award,
                     total,
                 }
             });
-            Some(oag_ui::endrace::Rewards {
+            Some(oag_ui_screens::endrace::Rewards {
                 medal: observation.campaign_medal.map(to_campaign_medal),
                 campaign,
                 loyalty,
@@ -268,19 +266,19 @@ impl Session {
                 stage.race.run_stats(),
             ))
         } else if is_hd {
-            ResultsModel::Hd(oag_ui::endrace::FieldResults {
+            ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
                 headline: headline(mode, observation.place),
                 rows: hd_field_rows(board.as_ref()),
                 loyalty: hd_loyalty,
             })
         } else {
-            ResultsModel::Pulse(oag_ui::endrace::Results {
+            ResultsModel::Pulse(oag_ui_screens::endrace::Results {
                 headline: headline(mode, observation.place),
                 laps,
                 total_ticks: observation.tick,
             })
         };
-        let menu = oag_ui::endrace::EndRaceMenu::new(
+        let menu = oag_ui_screens::endrace::EndRaceMenu::new(
             menu_options(campaign, self.tournament_has_next_leg()),
             new_best_lap_ticks,
         );

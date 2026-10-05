@@ -4,7 +4,7 @@
 //! Held on [`crate::menu_stage::MenuStage::picker`] rather than as a stage of
 //! its own, the same way a modal prompt is: while one is open the menu behind
 //! it is a picture, and closing it lands back on the page it opened from with
-//! nothing rebuilt. See `oag_ui::picker` for the model and
+//! nothing rebuilt. See `oag_ui_screens::picker` for the model and
 //! `crate::session::picker` for the flow that opens and closes one.
 
 use std::collections::HashMap;
@@ -13,12 +13,12 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use oag_game::preview::Preview;
-use oag_game::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_mesh::orbit::Orbit;
 use oag_ui::frontend::{Draw, Placed};
-use oag_ui::picker::slideshow::Slideshow;
-use oag_ui::picker::{self, Picker};
+use oag_ui_screens::picker::slideshow::Slideshow;
+use oag_ui_screens::picker::{self, Picker};
 
 use crate::gpu::Gpu;
 
@@ -92,10 +92,10 @@ pub(crate) struct Previews {
     /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
     /// declares no globals and still names them for its stills' colour, so
     /// without this Pure's stills tint white - invisible on its white front
-    /// end. See [`oag_ui::picker::slideshow::Slideshow::read`].
+    /// end. See [`oag_ui_screens::picker::slideshow::Slideshow::read`].
     pub(crate) globals: Vec<(String, String)>,
     /// The title's own string table, for the panel's `idstring` labels - see
-    /// [`oag_ui::picker::slideshow::Slideshow::read`].
+    /// [`oag_ui_screens::picker::slideshow::Slideshow::read`].
     pub(crate) strings: oag_ui::language::StringTable,
 }
 
@@ -211,7 +211,7 @@ impl PickerStage {
     }
 
     /// The stills on screen this tick, timed from the last selection change
-    /// (see [`oag_ui::picker::slideshow::Slideshow::at`]), faded in over
+    /// (see [`oag_ui_screens::picker::slideshow::Slideshow::at`]), faded in over
     /// [`oag_game::preview::CARD_FADE_SECONDS`] - see that constant's own doc
     /// for why this reads it rather than an attribute of its own.
     pub(crate) fn slideshow_draws(&self) -> Vec<Draw> {
@@ -230,7 +230,7 @@ impl PickerStage {
     /// [`oag_game::preview::mode3d_view_projection`]. `None` on `Team
     /// Selection` (Pulse's craft `screen.xml` authors no `Mode3D`) and on any
     /// circuit missing one, so a caller falls back to [`oag_game::preview::orbit_for`].
-    pub(crate) fn mode3d_model(&self) -> Option<&oag_ui::picker::slideshow::Model> {
+    pub(crate) fn mode3d_model(&self) -> Option<&oag_ui::screen::Model> {
         self.slideshow.as_ref()?.model.as_ref()
     }
 

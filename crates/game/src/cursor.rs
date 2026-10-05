@@ -34,7 +34,7 @@ use resvg::{tiny_skia, usvg};
 
 use oag_ui::frontend::Draw;
 
-use crate::sprite::{DecodedImage, Sheet};
+use oag_hud::sprite::{DecodedImage, Sheet};
 
 /// The disc chooser's cursor: this build's own, in the window icon's colours.
 pub const LAUNCHER: &str = include_str!("../../../assets/cursors/launcher.svg");

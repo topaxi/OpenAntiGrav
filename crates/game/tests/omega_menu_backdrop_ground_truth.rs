@@ -108,7 +108,7 @@ fn draw(
         format,
         None,
         oag_ui::font::Atlas::build(),
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
     renderer.set_space(Space {

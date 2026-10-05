@@ -43,7 +43,7 @@ below.
 
 **The widget names are in `BOOT.BIN`; the model names are only in the layout
 XML**, and conflating the two is easy: `docs/ui/hud.md` and
-`oag_game::hud::widget::Model` both named the models (`missile_sight_inner` /
+`oag_hud::widget::Model` both named the models (`missile_sight_inner` /
 `_outer`, `leachbeam_sight`) and were **correct about them**. What is new here is
 that there are *nine widgets over three models* - four instances of one bracket,
 four of one arrowhead, one inner - which is what makes the reticle a reticle.
@@ -223,7 +223,7 @@ Its own four sprites are `LeachBeamSightBG`, `LeachBeamSightOuter`,
 `LeachBeamSightMiddle` and `LeachBeamSightInner` - the same four-part naming
 `MissileSight*` uses - off `HUD_Components_01.gtf`. They are **not** drawn:
 `Sights::Concentric` carries one set of names and nothing has read which of the
-four is up when, so `oag_game::hud::sight_draw` draws nothing for a LeachBeam on
+four is up when, so `oag_hud::sight_draw` draws nothing for a LeachBeam on
 that dialect rather than lending it `MissileSight*`. Both halves are pinned by
 `crates/game/tests/lock_sight_ground_truth.rs`.
 
@@ -580,13 +580,13 @@ carries at that score - the construction is read directly, not inferred.
 **The colour word's own alpha byte is always `0xff`.** The eased fade this
 project already carries as `Sight::alpha()` scales the RGB channels instead of
 a blend alpha - consistent with the sight models' `Additive` blend class
-(`crates/game/src/hud/sight_draw.rs`): under `dst + src.rgb * src.a`, fixing
+(`crates/hud/src/sight_draw.rs`): under `dst + src.rgb * src.a`, fixing
 `a = 1` and scaling `rgb` is the same final colour as fixing `rgb = white` and
 scaling `a`, so this is not a second, uncounted fade layered on top of the one
 already ported.
 
 **Ported** to `oag_race::sight::Sight::tint` (returns `[r, g, b]` now, not a
-scalar) and `crates/game/src/hud/sight_draw.rs::bracket_draws`. Wipeout HD's
+scalar) and `crates/hud/src/sight_draw.rs::bracket_draws`. Wipeout HD's
 concentric dialect is deliberately **not** given this hue - HD authors each
 ring's own colour (a red outer, a green inner) and nothing has read whether
 HD's own sight code spends a blink the same way, so `Sight::brightness()`

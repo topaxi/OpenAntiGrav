@@ -7,7 +7,7 @@
 //! **They are: every segment comes back yellow.** Two corrections over this
 //! probe's first version, which reported pure white. A `.gtf`'s rows run
 //! bottom-up and a layout's `V` counts from the top, so `V` has to be read
-//! against the flipped image the way `crate::sprite`'s `decode_gtf` flips it
+//! against the flipped image the way `oag_hud::sprite`'s `decode_gtf` flips it
 //! for the sheet; and a fully transparent texel's RGB is white in this
 //! texture, so an unweighted mean of an empty region reads as white art.
 //!

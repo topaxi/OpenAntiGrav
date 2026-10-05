@@ -9,7 +9,7 @@ with **nothing missing and nothing skipped**, into 2,320 widgets.
 
 Pinned by `crates/game/tests/hd_hud_ground_truth.rs`; the entry names are
 [`oag_hd::hud`](../../crates/hd/src/hud.rs), the reader is
-[`oag_game::hud::compose`](../../crates/game/src/hud/compose.rs). Measured
+[`oag_hud::compose`](../../crates/hud/src/compose.rs). Measured
 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.
 
 90 rather than higher because **no executable path has been read**: every number
@@ -152,7 +152,7 @@ the whole of the geometry change. `OffsetX`/`OffsetY` move the element **and
 everything under it**; `x`/`y` place the element inside whatever translation it
 inherited. So offsets **compose** down the tree and positions do not.
 
-`oag_game::hud` read an `<Item>`'s offset as *absolute* until 2026-08-17, with
+`oag_hud` read an `<Item>`'s offset as *absolute* until 2026-08-17, with
 the note "nothing in the shipped data nests them, so composing would be untested
 code". True of Pulse, and false of the lineage:
 
@@ -200,7 +200,7 @@ close on 0..1920 / 0..1080 by themselves, and this page does not re-derive the
 coordinate space - it cites [hd-frontend](hd-frontend.md#the-coordinate-space-is-1920x1080)'s
 reading of `skin.xml` (confidence 90). Widgets outside the box are the expected
 kinds: the runtime-anchored position tags, the reverse-view mirror set, and
-parked off-screen elements. `oag_game::hud::inside_screen` is still PSP-only and
+parked off-screen elements. `oag_hud::inside_screen` is still PSP-only and
 **a screen-space check for HD is not written**; doing it needs the same
 `x`-is-not-one-thing distinction [ui/hud.md](../ui/hud.md) records for the PS2.
 
@@ -499,7 +499,7 @@ below.
 
 **Since 2026-08-25 an HD race draws its HUD**, checked against a frame of the
 running original rather than against the layout alone. Three things were wrong
-at once, and they were one mistake repeated: `oag_game::hud` held Pulse's answer
+at once, and they were one mistake repeated: `oag_hud` held Pulse's answer
 as a `const` and served it to every title. All three are now
 [`HudArt`](../../crates/title/src/hud.rs) rows, which the title packages fill in.
 
@@ -567,7 +567,7 @@ other two:
    roots author any of them, asserted by
    `every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone`.
 2. **The labels were not in the text allow-list.** `ZonePlus0`-`ZonePlus10`
-   carry no `idstring`, so `oag_game::hud::draw_list` dropped every one. They
+   carry no `idstring`, so `oag_hud::draw_list` dropped every one. They
    are `zone + N`: the widget name says it, both reference frames read the
    current zone and the ten above it, and **the authored placeholders are the
    zone-`0` frame spelled out** - `ZonePlus0` carries no `string` at all and
@@ -661,7 +661,7 @@ as the bands widen.
   layout units, which measures at ~39 screen pixels on that capture against 42
   predicted.
 
-`oag_game::hud::draw::zone_next_row` is those two sentences; the bar takes the
+`oag_hud::draw::zone_next_row` is those two sentences; the bar takes the
 same row and the panel's own horizontal inset, keeping its authored size.
 Everything in it is read out of the layout, and no constant here was chosen to
 match a picture. **Confidence 80**, up from 72: the zone-1 frame put two
@@ -699,7 +699,7 @@ can display.
 
 Each `<Image name="Lap{n}Image">` carries two `<Text>` children,
 `Lap{n}Text` and `Lap{n}Time`, both authored `string=""` in every copy - so
-neither half comes from the layout itself. `oag_game::hud::lap_splits` reads
+neither half comes from the layout itself. `oag_hud::lap_splits` reads
 the family the same way `zone_plus` reads `ZonePlusN`: one function per half
 rather than eight match arms.
 
@@ -714,7 +714,7 @@ rather than eight match arms.
   `Precision::Tenths` is one still running.
 - **The row draws nothing until its lap is recorded**, background included -
   `Lap{n}Image` is not in [`oag_hd::hud::ALWAYS_ON`], and is instead drawn
-  conditionally by `oag_game::hud::lap_splits::lap_split_sprites`, gated on
+  conditionally by `oag_hud::lap_splits::lap_split_sprites`, gated on
   `RaceState::lap_splits[n - 1]` being `Some`. The alternative - drawing every
   row and letting the blank ones show an empty box - is the "no value" versus
   "not wired up" confusion this page's `text_for` allow-list already rejects
@@ -766,7 +766,7 @@ comparing them against this build's own render at the matching state.
 
 ### Two widgets drew that no frame ever shows, and one dropped a suffix no frame ever carries
 
-`oag_game::hud::draw::text_for`'s fallback arm draws **any** widget carrying an
+`oag_hud::draw::text_for`'s fallback arm draws **any** widget carrying an
 `idstring` as a static caption, with no gate - right for a genuine always-on
 caption, wrong for two widgets this corpus never checked against a frame
 before:
@@ -803,7 +803,7 @@ pickup backdrop. `oag_title::HudArt::shield_percent: bool` is the new axis:
 reading rather than guessed changed), `false` for HD. No widget authors a
 `%`-suffix companion the way `SpeedBarTextKMH` does for `SpeedBarText`'s unit,
 so this cannot be read off the layout - it has to be a title fact, checked in
-`oag_game::hud::draw::text_for`'s `the_shield_readout_drops_the_percent_on_a_
+`oag_hud::draw::text_for`'s `the_shield_readout_drops_the_percent_on_a_
 title_that_measures_none` test.
 
 ### `ShieldBarText`'s colour is sharper now, and still not implemented
@@ -913,8 +913,8 @@ Every one of them is written by HD's per-tick HUD update, not authored, and
 all three functions are now read -
 [hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md) carries
 the addresses, the constants and the branch table. `oag_title::HudArt::runtime`
-holds the values (`oag_hd::hud::RUNTIME`) and `oag_game::hud::runtime` applies
-them; `crates/game/src/hud/runtime/tests.rs` pins each rule and
+holds the values (`oag_hd::hud::RUNTIME`) and `oag_hud::runtime` applies
+them; `crates/hud/src/runtime/tests.rs` pins each rule and
 `crates/game/tests/hd_hud_runtime_ground_truth.rs` checks the widgets it acts on
 are where it looks on the disc's own layouts.
 

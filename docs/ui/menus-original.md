@@ -367,7 +367,7 @@ lowercase.** `Cell Selection`'s footer alone (`Confirm`/`Back`, both
 `NavigationController`, authoring no `font=` and falling to `Default`) is
 fixed as of this pass; `Grid Selection`/`Cell Selection`'s own
 `n="default"` widgets - `Speed class`/`Laps`/`Weapons`/`Points`/`Best` and
-their values - are not, because they draw through `oag_ui::campaign::draw`,
+their values - are not, because they draw through `oag_ui_screens::campaign::draw`,
 a file this lane does not own. See `docs/ui/campaign-screens.md`'s own
 dated paragraph.
 
@@ -404,11 +404,11 @@ The menu stage's renderer bound exactly one atlas (`rows_face`, the `menu`
 role's `Pulse_20.fnt`) as its whole glyph source before this pass -
 `crates/game/src/main/session/menus.rs`'s `Renderer::new` call - with every
 other role's text drawn through it too, scaled by a ratio
-(`oag_ui::picker::FaceScales`/`crate::picker::FaceScales::face_scale`)
+(`oag_ui_screens::picker::FaceScales`/`crate::picker::FaceScales::face_scale`)
 that changes *size* and never *which glyphs*. Swapping which atlas is
 primary was tried and reverted in this same pass: `Grid Selection`'s own
 `Title`-role mode name (`font="Menu"`, e.g. `"GRID 1"`, `"Time Trial"`) is
-authored and drawn through `oag_ui::campaign`, a file this lane cannot
+authored and drawn through `oag_ui_screens::campaign`, a file this lane cannot
 touch, and it reads `text.font` through a match that only recognises
 `"default"`/`"small"` - anything else, including `"menu"`, draws through
 whatever the primary atlas is at scale `1.0`. Making `Default` primary would
@@ -427,12 +427,12 @@ where it used to be ignored outright.
 
 **What this reaches, today:** anything this lane owns that draws a
 `"default"`-labelled string through `Draw::in_role` -
-`oag_ui::campaign::footer`'s `Confirm`/`Back`/ticker prompts, and Pulse's own
+`oag_ui_screens::campaign::footer`'s `Confirm`/`Back`/ticker prompts, and Pulse's own
 per-row subtitle (`oag_title::HelpText`, `helptext0`..`6`, whose `scale`
 dropped from a derived `13.0 / 22.0` to `1.0` now that it draws its own face
 rather than a scaled-down `menu` one - see that field's own doc). **What it
 does not reach:** every `n="default"` widget inside
-`Data\Plugins\PI001\GUI\CellMode_Definition.xml` that `oag_ui::campaign::draw::text_draw`
+`Data\Plugins\PI001\GUI\CellMode_Definition.xml` that `oag_ui_screens::campaign::draw::text_draw`
 draws - `Speed class`, `Laps`, `Weapons`, `Points`, `Best`, and their
 values - which is one edit (`text_draw`'s single `Draw::Text` literal
 becoming a role-aware constructor, mirroring `Draw::in_role`) in a file
@@ -462,7 +462,7 @@ gives `'0'`/`'O'`, `'D'`/`'J'` or `'/'`/`'S'` the same glyph box the way it
 does every lowercase/uppercase pair, is **checked and false**: all three
 pairs have distinct, unrelated `(u0, v0)` in the raw `.fnt` table. The
 actual mechanism is not identified - left as "cause unknown" rather than a
-plausible-sounding guess, for whoever picks up `oag_ui::campaign::draw`'s
+plausible-sounding guess, for whoever picks up `oag_ui_screens::campaign::draw`'s
 own fix above.
 
 ## Reproducing this

@@ -3,7 +3,7 @@
 //! The one stage that runs before anything has been opened, which is what
 //! decides everything about it. There is no disc, so there is no font, no
 //! sprite sheet and no title skin - it draws with [`oag_ui::font::Atlas::build`]
-//! and [`oag_game::sprite::Sheet::default`], the same disc-free pair the
+//! and [`oag_hud::sprite::Sheet::default`], the same disc-free pair the
 //! performance overlay is built from, and in the 480x272 grid the renderer
 //! defaults to.
 

@@ -517,11 +517,11 @@ of all on `TextColor` (`0x11ACD0` against the sampled `0x88D6E8`).
 
 **Implemented 2026-09-27.** The `RACE RECORD`/`LAP RECORD`/`LENGTH`/`HEIGHT`
 block and the `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars above draw now -
-`oag_ui::picker::body` never had a chance at them, because they are not in
+`oag_ui_screens::picker::body` never had a chance at them, because they are not in
 `Selection_Definition.xml` at all: they sit above any named `Screen` in the
 *entry's own* `screen.xml`, the same file the slideshow stills come from
 (`Data\Ships\Feisar\screen.xml`, `Data\Environments\01_Vineta_K\screen.xml`).
-`oag_ui::picker::slideshow::Slideshow` reads them the same way it already read
+`oag_ui_screens::picker::slideshow::Slideshow` reads them the same way it already read
 the stills - inherited into every state, since they sit outside any of the
 three (`Info`/`Side`/`Top`) - as a `Vec<Fill>` (the colour-only bars, no
 `src`) and a `Vec<Text>` (`idstring="SPEED"` resolved through the title's own
@@ -566,7 +566,7 @@ bars) and no `<Menu>` at all. Pure authors one `<Menu name="Track">` /
 `<Menu name="Team">` per screen, at `x=21 y=45 scale=1.15
 color="FEGlobals->TextColor" allocate="16"`, and no named text - it **lists
 every entry** down the left the way its own `Language Selection` lists
-languages. `oag_ui::picker` draws both shapes; each title's own XML decides
+languages. `oag_ui_screens::picker` draws both shapes; each title's own XML decides
 which it gets.
 
 The widget states no row pitch, so the step is one line of its own font at its
@@ -604,7 +604,7 @@ RotX="0.4" RotY="-0.5">`. Both are `<Model>` widgets - rendered meshes, with a
 camera stated. Confidence 90. `TrackModel` is a sibling of the screens rather
 than a child, so `Track Creation` and `Tournament C` share it.
 
-`ShipModel`'s values are read since 2026-09-29 (`oag_ui::picker::hd::ShipModel`)
+`ShipModel`'s values are read since 2026-09-29 (`oag_ui_screens::picker::hd::ShipModel`)
 and nothing draws them yet: the one preview path this build has reads
 `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and no HD
 archive carries. See `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Team

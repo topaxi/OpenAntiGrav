@@ -206,7 +206,7 @@ pub struct Observation {
     pub laps_completed: u32,
     /// The player's own finishing tick if they had one, or however far the
     /// clock had got when the race was left. Ticks, never a formatted
-    /// string - `crate::hud::format_lap_time` takes ticks too, so nothing
+    /// string - `oag_hud::format_lap_time` takes ticks too, so nothing
     /// here forces a caller to format before it can persist.
     pub tick: u64,
     /// The player's own quickest completed lap, in ticks - `None` if they
@@ -452,7 +452,7 @@ pub struct CampaignRecord {
     /// at - `#[serde(default)]`, so a file [`Self::best_medal`] already
     /// existed in before this field did (every pre-2026-09-28 row, and
     /// every Pulse row forever) loads as `None` rather than refusing to
-    /// parse. `oag_ui::campaign::hd::hd_medal_frame`'s own doc names the
+    /// parse. `oag_ui_screens::campaign::hd::hd_medal_frame`'s own doc names the
     /// default it falls back to when a saved medal carries no difficulty at
     /// all. See [`Store::record_campaign`] for how the two are kept
     /// together.
@@ -709,7 +709,7 @@ impl Store {
 
 /// The footer ticker's own honest tip rotation - the `TKR_NO*` family, the
 /// only strings on disc that carry no `%d`/`%s`/`%.2f` template this build has
-/// a real counter for. See `oag_ui::campaign::footer`'s own module doc for why
+/// a real counter for. See `oag_ui_screens::campaign::footer`'s own module doc for why
 /// nothing here invents a play-time or song-count statistic instead.
 ///
 /// **One function, three callers that must agree.** The Race Campaign's own

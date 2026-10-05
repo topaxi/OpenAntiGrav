@@ -254,7 +254,7 @@ hex-cropped with its border baked in. Confidence 92 for the mechanism
 (decompiled, and the file it names is on the disc and reads as described)
 and 95 for what the window shows (the file's own content, drawn and
 compared against the capture). Implemented in
-`oag_ui::picker::slideshow`; see `docs/ui/selection-screens.md`.
+`oag_ui_screens::picker::slideshow`; see `docs/ui/selection-screens.md`.
 
 `FUN_088c4410` has four more callers (`FUN_088b09b4`, `FUN_088b12c8`,
 `FUN_088ecb54`, `FUN_088ed05c`) besides `TrackSelection_OnExit`'s teardown -
@@ -392,7 +392,7 @@ the circuit's per-entry `screen.xml` (`docs/ui/selection-screens.md`) has no
 this build (`oag_game::preview::CARD_FADE_SECONDS`) reuses the panel's own
 measured `0.5`s rather than inventing an unrelated number, on the strength
 of the capture above showing both arrive in the same window. Implemented in
-`oag_ui::picker::body` (the panel, reading `Text`/`Image`/`Fill::transition`
+`oag_ui_screens::picker::body` (the panel, reading `Text`/`Image`/`Fill::transition`
 off `oag_ui::screen`'s own `LeftLayer` inheritance) and
 `oag_game::preview::fade_draw` (the cards, shared between the live picker
 stage and the `--menu-page --menu-picker-seconds` still capture). See
@@ -725,7 +725,7 @@ whoever picks EU coverage of this area up next.
   card are both faint at 130ms into `Track Creation` and settled by
   320-480ms, matching the XML's own `transition="0.5"`, while the title
   bar's `transition="0"` group is solid from the first frame. Built in
-  `oag_ui::picker::body` and `oag_game::preview::fade_draw` - see the new
+  `oag_ui_screens::picker::body` and `oag_game::preview::fade_draw` - see the new
   section above and `docs/ui/selection-screens.md`.
 - 2026-09-10: `FUN_088c4410` and `FUN_08891448` named, off
   `TrackSelection_ApplySelection`'s own call; the per-circuit `screen.xml`

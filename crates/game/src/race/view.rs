@@ -179,13 +179,13 @@ pub struct RaceView {
     /// and it counts *up* while running rather than down, wrapping to `0.0`
     /// at `1.0` - see [`Race::advance_shield_flash`] for why that is not
     /// rewritten as a countdown. `> 0.0` is what
-    /// [`crate::hud::Readout::shield_flashing`] reads out of it every tick.
+    /// [`oag_hud::Readout::shield_flashing`] reads out of it every tick.
     /// Render-side, like [`Self::shield_was_up`], and out of the hash.
     pub(super) shield_flash_timer: f32,
     /// The shield bar's blink accumulator.
     ///
     /// `Hud_UpdateEnergyBar`'s own `hud+0x1dc`: advances by the tick's `dt`
-    /// whenever [`crate::hud::Readout::shield_blinking`]'s three conditions
+    /// whenever [`oag_hud::Readout::shield_blinking`]'s three conditions
     /// hold (low shield, [`Self::shield_flash_timer`] running, or absorbing),
     /// **freezes rather than resets** the rest of the time - so two blinks
     /// in the same race can start at different phases, exactly like the
@@ -213,7 +213,7 @@ pub struct RaceView {
     /// [`Self::shield_flash_timer_whole`]. Render-side, out of the hash.
     pub(super) shield_blink_timer_whole: f32,
     /// 2048's `EnergyBarDelay`: the lagging shield fraction
-    /// [`crate::hud::Readout::energy_bar_delay_fraction`] reads out of it
+    /// [`oag_hud::Readout::energy_bar_delay_fraction`] reads out of it
     /// every tick - `Hud_UpdateEnergyBar`'s own `hud+0x1ec`
     /// (`0x811957a2`, vita-2048-eu-v104), advanced by
     /// [`super::Race::advance_energy_bar_delay`]. `0.0` on a fresh race, the

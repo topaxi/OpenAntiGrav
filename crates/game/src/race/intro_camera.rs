@@ -33,7 +33,7 @@
 //! - **The scenery's animation clock is the world's tick**, so it holds still under the
 //!   flyby; the original's runs on.
 //! - **The panel's leave starts on the tick the flyby ends**; the original's started one or two
-//!   ticks after its substate changed. The panel itself is [`oag_ui::track_panel`].
+//!   ticks after its substate changed. The panel itself is [`oag_ui_screens::track_panel`].
 //!
 //! # What is not ported
 //!
@@ -301,12 +301,12 @@ impl Race {
 
     /// Where the track-description panel is, while it is on screen: up through the flyby, then
     /// fading out as the chase view returns. `None` before the flyby, with none, and once it has
-    /// faded. The panel's own timing is [`oag_ui::track_panel`]; the clock is the 60 Hz tick.
+    /// faded. The panel's own timing is [`oag_ui_screens::track_panel`]; the clock is the 60 Hz tick.
     #[must_use]
-    pub fn track_panel_progress(&self) -> Option<oag_ui::track_panel::Progress> {
+    pub fn track_panel_progress(&self) -> Option<oag_ui_screens::track_panel::Progress> {
         let intro = self.view.intro.as_ref()?;
         let tick = 1.0 / 60.0;
-        let progress = oag_ui::track_panel::Progress {
+        let progress = oag_ui_screens::track_panel::Progress {
             entered: intro.ticks() as f32 * tick,
             left: match intro {
                 intro if intro.playing() => None,

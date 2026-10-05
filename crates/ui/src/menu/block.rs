@@ -199,7 +199,7 @@ pub fn draw(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw
 
 /// [`draw`]'s two fill passes alone, with no border - for a caller that
 /// composes one block's inside out of more than one colour, as HD's `Team
-/// Selection` stat bars do (`crate::picker::hd`).
+/// Selection` stat bars do (`oag_ui_screens::picker::hd`).
 pub fn draw_fill(block: &Block, art: &BlockArt, scale: (f32, f32), out: &mut Vec<Draw>) {
     if block.width <= 0.0 || block.height <= 0.0 {
         return;
@@ -336,7 +336,7 @@ fn fill(block: &Block, art: &BlockArt, scale: (f32, f32), color: [f32; 4], out: 
 
 /// A block's inside in two colours, split at `split` (a drawing-grid `x`):
 /// `block.color` left of it, `right` after it - HD's `Team Selection` stat
-/// bars (`crate::picker::hd`). **The composition is this build's**; each
+/// bars (`oag_ui_screens::picker::hd`). **The composition is this build's**; each
 /// half is [`fill`]'s own shape and its own two passes, collapsed into the
 /// one alpha those two passes leave over whatever is below
 /// (`1 - (1 - a1)(1 - a2)`), so the two halves can meet without either
@@ -414,7 +414,7 @@ pub fn draw_split_fill(
 ///
 /// **`v` is flipped on the way.** The executable's `v` counts from the
 /// file's first row, and a `.gtf`'s rows run bottom-up - which is why
-/// `oag_game::sprite::Sheet` reverses them into its top-down sheet (measured
+/// `oag_hud::sprite::Sheet` reverses them into its top-down sheet (measured
 /// on the loading screen's craft, see that module). So the file's row `r`
 /// is the sheet's row `63 - r`, and a rectangle authored against the file
 /// is the same rectangle against the sheet with its top and bottom swapped.

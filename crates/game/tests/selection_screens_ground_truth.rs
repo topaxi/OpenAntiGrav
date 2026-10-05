@@ -6,7 +6,7 @@
 //!
 //! # What this pins that the unit tests cannot
 //!
-//! `oag_ui::picker`'s own tests parse a hand-written miniature of the file.
+//! `oag_ui_screens::picker`'s own tests parse a hand-written miniature of the file.
 //! This reads the real one through the same boot the game uses, so the two
 //! parser gaps that hid the screens for a day - `<Item>`/`<LeftLayer>` not
 //! being walked, and `OffsetX`/`OffsetY` not being summed - would fail here
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use oag_game::boot;
 use oag_ui::language::StringTable;
-use oag_ui::picker::{Details, Entry, Kind, Picker};
+use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -196,7 +196,7 @@ fn the_track_picker_draws_the_discs_own_rows() {
     let picker = Picker::new(Kind::Track, entries, Some("16_Track"), None);
     let face = shell.menu_font.as_ref().unwrap_or(&shell.font);
     let skin = oag_ui::menu::Skin::new(shell.menu_skin, shell.space, face.line_height);
-    let layers = oag_ui::picker::draw_list(
+    let layers = oag_ui_screens::picker::draw_list(
         &picker,
         layout,
         &skin,
@@ -285,7 +285,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
     assert_eq!(show.at(12.5).name, "Info");
     // Four cards and the shadow, every one on the disc and 256x128 / 128x64.
     assert_eq!(blobs.len(), 5, "{:?}", show.sources());
-    let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut report);
     let card = sheet
         .get(r"Data\Environments\16_Track\FE\image_01.mip")
         .expect("the first card decodes");
@@ -514,7 +514,7 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
         assert_eq!(show.at(0.0).images[0].color, 0xFF99_D9E8);
 
         assert_eq!(blobs.len(), 3);
-        let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+        let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut report);
         for src in srcs {
             let placed = sheet.get(src).unwrap_or_else(|| panic!("{src} decodes"));
             assert_eq!((placed.width, placed.height), (256, 128), "{src}");
@@ -565,7 +565,7 @@ fn pure_reads_its_own_screen_names_and_previews_with_stills() {
 }
 
 /// Wipeout HD/Fury: `Team Selection` reads off `DATA06`'s own
-/// `Team_Selection_Definition.xml` (`oag_ui::picker::hd`), with the parent
+/// `Team_Selection_Definition.xml` (`oag_ui_screens::picker::hd`), with the parent
 /// `Team Selection Top Level`'s widgets under the child's name, every
 /// heading resolved - `RC_NAV_TEAM` only through `DATA06`'s own
 /// `entries.xml` - and each team's per-model ratings in tenths. HD's track
@@ -629,13 +629,13 @@ fn hd_reads_its_own_team_selection() {
     );
     // And every team's logo is on the sheet.
     for team in &shell.teams {
-        let src = oag_ui::picker::hd::logo_src(&team.id);
+        let src = oag_ui_screens::picker::hd::logo_src(&team.id);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
 }
 
 /// Wipeout HD/Fury: `Track Creation` reads off `DATA06`'s own
-/// `Track_Selection_Definition.xml` (`oag_ui::picker::hd::track`), merged
+/// `Track_Selection_Definition.xml` (`oag_ui_screens::picker::hd::track`), merged
 /// under the child's name with none of `Tournament C`'s widgets, every
 /// heading and the RECORDS row labels resolved, and every circuit's own
 /// `TrackSelectEmblem_Fury.gtf` on the sheet. See `docs/ui/campaign-screens.md`'s
@@ -682,7 +682,7 @@ fn hd_reads_its_own_track_creation() {
     );
     // The screen's own path is live: `racebox_definition.xml` only names it.
     assert!(shell.tracks.iter().all(|track| {
-        let src = oag_ui::picker::hd::track::emblem_src(&track.location);
+        let src = oag_ui_screens::picker::hd::track::emblem_src(&track.location);
         shell.sprites.get(&src).is_some()
     }));
 }

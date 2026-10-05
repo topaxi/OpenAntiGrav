@@ -183,7 +183,7 @@ vertical; `+0xa0` on an `<Image>` is `Height`.
 
 ### Implemented
 
-`crates/game/src/hud/head_to_head.rs` draws exactly the above from the layout's
+`crates/hud/src/head_to_head.rs` draws exactly the above from the layout's
 own widgets (`Layout::fill("HeadToHeadBar")`, `label("Position")` etc.), fed by
 `Race::head_to_head` in `crates/game/src/race/telemetry.rs`
 (`|Standing::distance(player) - Standing::distance(opponent)|`, and

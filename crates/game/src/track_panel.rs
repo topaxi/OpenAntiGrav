@@ -3,7 +3,7 @@
 //!
 //! The layout is `InGameTrackDescriptionScreen` in `InGame_Definition.xml`, the two strings are
 //! the circuit's name and `MSC_TRACK_<nn>` paragraph in the language's string table, and the
-//! timing is [`oag_ui::track_panel`]'s. What reads and what does not:
+//! timing is [`oag_ui_screens::track_panel`]'s. What reads and what does not:
 //!
 //! - **Pulse off a PSP disc only**, the one executable the screen was read off.
 //! - A string, the screen or a texture that will not read leaves the panel out, and the load
@@ -11,14 +11,14 @@
 //!
 //! See `docs/gameplay/race-intro.md`.
 
-use oag_ui::track_panel::{DrawLists, Progress};
+use oag_ui_screens::track_panel::{DrawLists, Progress};
 
-use crate::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 
 /// Everything the panel draws from, read once at race load.
 #[derive(Debug, Clone)]
 pub struct Assets {
-    layout: oag_ui::campaign::Layout,
+    layout: oag_ui_screens::campaign::Layout,
     sheet: Sheet,
     name: String,
     description: String,
@@ -30,7 +30,7 @@ impl Assets {
     /// The panel at `progress`, for a test that has no GPU.
     #[must_use]
     pub fn draw_lists(&self, progress: Progress) -> DrawLists {
-        oag_ui::track_panel::draw_lists(
+        oag_ui_screens::track_panel::draw_lists(
             &self.layout,
             &|src| self.sheet.get(src),
             &self.name,
@@ -79,11 +79,11 @@ pub fn read(
         }
     };
     let screens = oag_ui::screen::Screens::from_xml(&xml);
-    let Some(layout) = oag_ui::campaign::Layout::read(
+    let Some(layout) = oag_ui_screens::campaign::Layout::read(
         &screens,
         oag_pulse::race::TRACK_DESCRIPTION_SCREEN,
         strings,
-        oag_ui::picker::FaceScales::default(),
+        oag_ui_screens::picker::FaceScales::default(),
         [480.0, 272.0],
     ) else {
         report.push(format!(

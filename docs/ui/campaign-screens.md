@@ -18,11 +18,11 @@ confirms it, the paging arrows are clickable, and the secondary button (or
 a click/tap while `Cell Help` is open) backs out - the same vocabulary
 `docs/architecture/menus.md`'s "A mouse and a finger" already gives every
 other front-end screen. See
-[`oag_ui::campaign::pointer`](../../crates/ui/src/campaign/pointer.rs) for
+[`oag_ui_screens::campaign::pointer`](../../crates/ui-screens/src/campaign/pointer.rs) for
 the targets and the two-tap idiom, and its own module doc for why a hex is
 hit-tested as a hexagon rather than its bounding box - the staggered grid's
 neighbours overlap at their corners otherwise. Implemented in
-[`oag_ui::campaign`](../../crates/ui/src/campaign.rs) (model, layout, draw),
+[`oag_ui_screens::campaign`](../../crates/ui-screens/src/campaign.rs) (model, layout, draw),
 [`oag_game::campaign`](../../crates/game/src/campaign.rs) (the shared read
 off an open source), `crates/game/src/main/campaign_stage.rs` (what the
 session holds open) and `crates/game/src/main/session/campaign.rs` (the
@@ -63,7 +63,7 @@ capture.** `GridSelection_Update` binds it to `"%d-%d / %d"` off
 `max` counts *pages* of four (`3*4+4 = 16`), not grids (`16*4+4 = 68`) or
 tiers directly. So the `GridController name="Grid"` widget
 (`MaxX="4" MaxY="1"`) is the current page's four tiers - a **row**, not a
-flat wrapping list. `oag_ui::campaign::GridSelection` implements it as one
+flat wrapping list. `oag_ui_screens::campaign::GridSelection` implements it as one
 flat `index` over every grid, `page()` and `slot()` derived from it,
 `counter()` reproducing the formula exactly.
 
@@ -79,7 +79,7 @@ settled it the other way - `Up`/`Down` page by a full four-hex row and
 clamp at their own boundary (the deck's own ends for `Up`/`Down`, the current
 page's own ends for `Left`/`Right`). See "Measured against PPSSPP,
 2026-09-25" below for the full walk. `GridSelection::page_step`/`tile_step`
-(`crates/ui/src/campaign/pointer.rs`) carry the corrected arithmetic;
+(`crates/ui-screens/src/campaign/pointer.rs`) carry the corrected arithmetic;
 `GridSelection::step` (wrapping, one tile) is kept only for HD/Fury's own
 one-tile-per-page flyer pager, which reuses this same model with
 `per_page` set to `1` - see [Wipeout HD/Fury: `Grid Selection` is not a hex
@@ -125,7 +125,7 @@ on "harmless to skip"; open at 50 on what `Grid1` is *for*.
 `Medals` to `Grid_CountMedalsAtLeast(grid, 0) / Grid_CellCount(grid)` and
 `Points` to `Grid_PointsEarned / Grid_PointsPossible` - both read a saved
 record, which now exists (`records.toml`'s `[[campaign]]` table, see
-`docs/architecture/persistence.md`). `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+`docs/architecture/persistence.md`). `oag_ui_screens::campaign::GridSummary::from_grid_with_medals`/
 `CellSelection::with_medals` take a `Fn(&str) -> Option<Medal>` keyed on a
 cell's own `name`, and `crates/game/src/main/campaign_stage.rs` feeds it
 from `Session::records` - a snapshot read once when the screen opens, the
@@ -149,7 +149,7 @@ answers `"Grid 1"`, `Grid4` answers `"Grid 5"`, and - not derivable from a
 `"Grid {n+1}"` formula - **`Grid12`..`Grid15` answer `"Phantom Grid
 1"`..`"Phantom Grid 4"`**, not `"Grid 13"`..`"Grid 16"`. `Grid16`..`Grid19`
 exist too (`"Download grid 1"`..`"4"`), for DLC grids this build's sixteen
-shipped ones never reach. `oag_ui::campaign::draw::grid_title` looks the
+shipped ones never reach. `oag_ui_screens::campaign::draw::grid_title` looks the
 capitalised name up directly (`strings.get(&id)`), falling back to the raw
 `grid->name` on a miss - the same visible-absence rule every other label on
 this screen already follows. This also very likely settles `race-campaign.md`'s
@@ -179,7 +179,7 @@ cell lock glyph visible  ⟺  cell.locked (absent defaults to true) != 0
                         AND  no hex-adjacent cell has a medal either
 ```
 
-`oag_ui::campaign::GridSelection::tier_shows_lock`/`CellSelection::cell_shows_lock`
+`oag_ui_screens::campaign::GridSelection::tier_shows_lock`/`CellSelection::cell_shows_lock`
 implement both exactly, the six-neighbour cell check against
 `g_anCellNeighbourOffsets`'s own two-parity table included, and
 [`Lock_x_y`/`Lock_n_0`](#lock_x_ylock_n_0-now-draw-three-linen-titles-still-do-not)
@@ -209,7 +209,7 @@ column heights are `5, 4, 5, 4, 5, 4, 5` - 32 hex positions total, filled to
 whichever 8-16 of them the selected grid's own cells actually name (parsed
 off each cell's `grid0_x_y`-shaped name, `Cell::grid_coords`).
 
-`oag_ui::campaign::CellSelection` reads the selected `(x, y)` position
+`oag_ui_screens::campaign::CellSelection` reads the selected `(x, y)` position
 straight off the disc-resolved `Medal_{x}_{y}`/`Outline_{x}_{y}` widgets -
 no stagger formula is reimplemented in Rust, since the widget's own already-
 offset-resolved `x`/`y` *is* the pixel position. Movement (up/down/left/
@@ -228,7 +228,7 @@ spelled out a second time.
 both.** `docs/ui/campaign-screens.md`'s own PPSSPP measurement (below) found
 the previous reading backwards: a `Race` cell reads `"SINGLE RACE"`, not the
 raw enum spelling, and `Track Line` reads the circuit's display name, not
-the raw `NN_Track` id. `oag_ui::campaign::draw::cell_title` mirrors
+the raw `NN_Track` id. `oag_ui_screens::campaign::draw::cell_title` mirrors
 `crate::menu::mode_label`'s own `MSC_EVENT_*`-head-before-the-colon reading
 for the six modes this engine implements, plus `MSC_EVENT_HTH` for
 `Head2Head` (present on disc, resolved the identical way, but unmeasured
@@ -274,7 +274,7 @@ Confirm, on every cell, as metadata alongside whichever medal that race
 earns - never a gate on the medal itself. `Session::handle_campaign` no
 longer filters on `difficulty_targets`, and `CellSelection_PopulateDetail`'s
 own `"%s (%s)"` format (`0x088d68d8`) is reproduced by
-`oag_ui::campaign::draw::medal_line` - `"Gold (Medium)"`, not a bare medal
+`oag_ui_screens::campaign::draw::medal_line` - `"Gold (Medium)"`, not a bare medal
 word, once the saved row knows its own rung. See
 `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
 `record+8`/`record+9` write" and "The `DifficultyRC` persisted rung"
@@ -300,7 +300,7 @@ test**: the `Target0..2 Image` swatches used to draw *unconditionally*, in
 the general per-widget pass that also draws the hex grid and the panel's
 rules - nothing excluded them there, only the second, gated pass that draws
 them properly. A `Race` cell showed all three medal-colour hexes regardless.
-Fixed; `crates/ui/src/campaign/tests.rs`'s
+Fixed; `crates/ui-screens/src/campaign/tests.rs`'s
 `race_draws_no_target_swatch_even_though_the_sprite_resolves` is the
 regression test, built with a sprite closure that actually resolves a
 `Placed` rather than the other tests' `&|_| None` - which hid the bug in
@@ -392,7 +392,7 @@ screens, unconditionally.** `docs/ghidra/functions/psp-pulse-usa/race-campaign.m
 two widgets at every slot with two different jobs: `Outline_x_y` (base hex,
 always drawn) and `Medal_x_y` (a colour swatch, drawn only where a cell/tier
 has actually earned a medal or points - `draw_medal_colour`/`if pointsEarned
-!= 0`). `oag_ui::campaign::draw::{grid_draw_list, cell_draw_list}` now
+!= 0`). `oag_ui_screens::campaign::draw::{grid_draw_list, cell_draw_list}` now
 follow that: `Medal_x_y` is skipped entirely (`Outline_x_y` still draws)
 unless `CellSelection::medal_at`/the tier's own `points_earned` says
 otherwise, and the swatch that does draw is tinted per the medal tier
@@ -467,7 +467,7 @@ same fresh, zero-medal profile:
   attribute - defaults locked) also showing its own lock glyph under the
   selector - matching `cell-selection-grid0-default-cell.png` on every text
   row. The `HELP`/`CHANGE DIFFICULTY` footer draws here (a mechanism outside
-  `oag_ui::campaign` this pass did not need to touch) but without the
+  `oag_ui_screens::campaign` this pass did not need to touch) but without the
   `Confirm`/`Back` legend the reference shows - not chased further this
   pass. The occupied-hex layout is still the two-column zigzag
   `crates/tables/src/race_campaign.rs`'s `grid_coords` parse produces from
@@ -504,7 +504,7 @@ directly.
 
 **A user playing this build reported "the selected hexagon is misaligned" on
 `Cell Selection`; this section is that report turned into numbers.** The
-mechanism: `oag_ui::campaign`'s `hex_position` (`crates/ui/src/campaign.rs`)
+mechanism: `oag_ui_screens::campaign`'s `hex_position` (`crates/ui-screens/src/campaign.rs`)
 draws the `Selector` widget with its own top-left placed exactly at the
 selected `Medal_x_y` hex's own resolved top-left. That is only correct if
 `Selector` and `Medal_x_y`/`Outline_x_y` are the same size - they are not,
@@ -582,7 +582,7 @@ duplicate-declaration shape `campaign-screens.md` already flagged for
 The hex origins/pitch this page already documents (`Grid Selection`'s
 `(65,145)/(95,126)/(125,107)/(155,88)` diagonal, `Cell Selection`'s `(35,
 40)` `GridController` origin with 30px columns and a 19px stagger) come
-from the XML directly and are re-derivable from `crates/ui/src/campaign/
+from the XML directly and are re-derivable from `crates/ui-screens/src/campaign/
 tests.rs`'s own miniature fixture, which mirrors the real file's container
 nesting exactly - `Item`/`GridController` offsets accumulate the way
 `oag_ui::screen::Screens::collect_widgets` sums them: for `Medal_0_0`,
@@ -694,7 +694,7 @@ could disagree with independently of the `Selector` bug above.
 ## Measured against PPSSPP, 2026-09-25: `left`/`right` on `Grid Selection`
 
 **A maintainer playing this build reported left/right dead on the first
-campaign screen** - `oag_ui::campaign::GridSelection::update` left `Left`/
+campaign screen** - `oag_ui_screens::campaign::GridSelection::update` left `Left`/
 `Right` entirely unbound, and bound `Down`/`Up` to a single-tile wrapping
 step, both on the reasoning (struck above) that no left/right arrow image is
 authored. PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb, the same
@@ -747,9 +747,9 @@ the *identical* frame before and after the press, not merely "a plausible
 neighbour" - a clamp reads as literally nothing moving, which a wrap could
 not produce by coincidence.
 
-`oag_ui::campaign::GridSelection::page_step`/`tile_step`
-(`crates/ui/src/campaign/pointer.rs`) implement this; `GridSelection::update`
-(`crates/ui/src/campaign.rs`) binds `Down`/`Up`/`Left`/`Right` to them.
+`oag_ui_screens::campaign::GridSelection::page_step`/`tile_step`
+(`crates/ui-screens/src/campaign/pointer.rs`) implement this; `GridSelection::update`
+(`crates/ui-screens/src/campaign.rs`) binds `Down`/`Up`/`Left`/`Right` to them.
 `GridSelection::step` (the old wrapping, single-tile method) is kept
 unchanged and still used by HD/Fury's own one-tile-per-page flyer pager
 (`GridSelection::step`'s own doc, and see "`Grid Selection` is not a hex
@@ -762,7 +762,7 @@ verified in code review, not re-measured, since HD's own campaign is a
 different lane's own thread.
 
 The up/down and left/right arrow **click** targets (`GridSelection::pointer`
-in `crates/ui/src/campaign/pointer.rs`) now call the same `page_step` the
+in `crates/ui-screens/src/campaign/pointer.rs`) now call the same `page_step` the
 pad's `Up`/`Down` does, so a mouse/touch player sees the identical clamped,
 slot-preserving paging a pad player does - no click target exists for a
 single-tile left/right step, since the four hexes are individually
@@ -953,18 +953,18 @@ rather than the PSP's 480x272, and `Grid Selection` **nests** `Cell
 Selection` inside it in the XML rather than sitting beside it as a sibling.
 `oag_ui::screen::Screens::collect` already flattens a nested `<Screen>` into
 its own entry regardless of depth, so
-[`oag_ui::campaign::Layout::read_authored`](../../crates/ui/src/campaign.rs)
+[`oag_ui_screens::campaign::Layout::read_authored`](../../crates/ui-screens/src/campaign.rs)
 reaches both by the same two names unmodified - the discriminating question
 this thread opened with ("does `FlyerSelection` combine what Pulse splits
 into two?") turned out to be no: read whole, the file is the same two-screen shape, just
 authored differently inside each screen. Implemented in
-[`oag_ui::campaign::hd`](../../crates/ui/src/campaign/hd.rs), wired through
+[`oag_ui_screens::campaign::hd`](../../crates/ui-screens/src/campaign/hd.rs), wired through
 `oag_game::campaign::load` (title-dispatched to a Wipeout HD/Fury branch the
 same way the rest of this build picks a title's tables),
 `crate::main::campaign_stage::CampaignStage::is_hd`/`circuit_names`/
 `cell_grid_summary`, and a draw/pointer dispatch in `crate::main::menu_stage`/
 `crate::main::session::pointer`. **The confirm/launch path is untouched** -
-`Screen::Grid`/`Screen::Cell` and `oag_ui::campaign::Event` are shared
+`Screen::Grid`/`Screen::Cell` and `oag_ui_screens::campaign::Event` are shared
 between the two titles, so `session::campaign::handle_campaign`/
 `launch_campaign_cell` need no HD arm of their own; an HD cell launches
 through the identical code Pulse's already does. Captured headlessly with
@@ -983,7 +983,7 @@ gated the same three-term way Pulse's own tile lock is
 (`GridSelection::selected_is_locked`), reused unchanged and labelled
 **"assumed to transfer to HD, unmeasured"** on the exact glyph, the same
 qualifier `crate::campaign` module doc already carries for `Cell
-Selection`'s own lock rule. `oag_ui::campaign::GridSelection`'s model is
+Selection`'s own lock rule. `oag_ui_screens::campaign::GridSelection`'s model is
 reused as-is - one flat `index`, `step`, `selected_is_locked` - since a
 one-tier-at-a-time pager is exactly that shape; only the *draw* differs
 (`hd_grid_draw_list`, not `draw::grid_draw_list`).
@@ -1015,7 +1015,7 @@ locked tier also draws **no** `POINTS ACHIEVED`/`TOTAL POINTS AVAILABLE` and
 neither bullet arrow. **Still chosen, not measured**: an unlocked tier whose
 own requirement is already met, and the last tier, show no box (only the
 fresh-profile frames exist); `RC_POINT_NEEDED` is selected for a figure of 1.
-Pinned by `oag_ui::campaign::hd::unlock::tests`.
+Pinned by `oag_ui_screens::campaign::hd::unlock::tests`.
 
 **Drawn since 2026-09-30** - see "The flyer behind `Grid Selection`" below.
 The earlier reading that the per-grid `flyerlogo` path was "the same literal
@@ -1035,7 +1035,7 @@ layers. Drawn by `oag_game::flyer`, through the mesh-in-menu seam below, for
 drew a circuit's outline ribbon and (on Pulse) a team's hull behind the race
 box's two screens, but only from a PSP or PS2 `.vex`: HD's own race-setup
 picker does **not** draw its `<Model name="ShipModel">` (`preview_meshes` is
-`false`, `oag_ui::picker::hd` reads the pose and stops). Two changes made it
+`false`, `oag_ui_screens::picker::hd` reads the pose and stops). Two changes made it
 general, and `ShipModel` is unblocked by them but not wired:
 
 - `preview::model` now reads a PS3 `.vex` + `.rcsmodel` pair, with every
@@ -1209,8 +1209,8 @@ are chosen and are not pinned to the frames.
 MaxY="5"` - the identical bounding shape and widget-name scheme
 (`{Bg,Outline,Lock,Medal}_{x}_{y}`) Pulse's own `Cell Selection` authors,
 just with a fourth layer (`Bg_x_y`, `Hexagon_HD_OUTLINE.mip`/`.gtf` - see
-below) under Pulse's three. `oag_ui::campaign::CellSelection` and
-[`hex_rect`](../../crates/ui/src/campaign.rs) (which already searches for a
+below) under Pulse's three. `oag_ui_screens::campaign::CellSelection` and
+[`hex_rect`](../../crates/ui-screens/src/campaign.rs) (which already searches for a
 "Medal_" or "Outline_" widget, both of which HD authors) are reused
 unchanged; `Bg_x_y`/`Outline_x_y` both draw for every occupied slot the same
 way Pulse's single `Outline_x_y` does, `Lock_x_y`/`Medal_x_y` gated the same
@@ -1231,7 +1231,7 @@ since nothing shares a position.
 | Widget | Source | Notes |
 | --- | --- | --- |
 | `Event` | `crate::campaign::draw::cell_title` (reused) | the localised mode name |
-| `Track` | [`hd_track_line`](../../crates/ui/src/campaign/hd.rs) | through `oag_ui::language::CircuitNames`, not `strings.get_or_id` directly - see below |
+| `Track` | [`hd_track_line`](../../crates/ui-screens/src/campaign/hd.rs) | through `oag_ui::language::CircuitNames`, not `strings.get_or_id` directly - see below |
 | `Speed Class` | `cell.class` | shown for every mode, not gated on Zone the way Pulse's `Line1` is - nothing shares its slot |
 | `Weapons` | `FE_ON`/`FE_OFF` | Race/Head2Head/Tournament only, same gate as Pulse |
 | `Target0..2` | `Cell::targets_for_difficulty(model.difficulty())` | the selected difficulty rung - see below |
@@ -1264,7 +1264,7 @@ field defaulting to `1` (medium - the rung `gold`/`silver`/`bronze` already
 mean on a cell with no `difficulty_targets`, so it is inert on every Pulse
 cell) and a wrapping step, bound to `Square` on the pad (free on this
 screen in this build) and to a click on `DifficultyButton`'s own text via
-[`difficulty_button_rect`](../../crates/ui/src/campaign/hd.rs) - **an
+[`difficulty_button_rect`](../../crates/ui-screens/src/campaign/hd.rs) - **an
 invented rect**, since the widget is a `Text` with no authored width or
 height, sized generously around its baseline rather than measured off a
 capture.
@@ -1278,7 +1278,7 @@ doc already found for `cursor.mip` - but **no archive on this disc carries a
 over all seven archives on `hdfury-ps3-eu-dec.iso` lists every one of the
 five hex textures as `.gtf`, lower-cased (`data/fe/images/hexagon_hd_outline.gtf`
 and siblings), never as `.mip`. `oag_assets::psarc`'s own path normalisation
-folds case and backslashes for the read, but `oag_game::sprite::Sheet::get`
+folds case and backslashes for the read, but `oag_hud::sprite::Sheet::get`
 keys its placements by an exact string match against a widget's own
 `image.src` - so `oag_hd::campaign::HEX_TEXTURES` is `(widget src, archive
 path)` pairs: read the `.gtf` off the archive, shelve the decoded blob under
@@ -1366,7 +1366,7 @@ column's own dead space, and moved with `Selector`'s own semi-transparent
 `Hexagon_HD_THICK_OUT.mip` colour (`0x3fffffff`) - confirmed by
 instrumenting the draw call directly rather than by reading the XML cold.
 
-**Root cause: `hex_rect` (`crates/ui/src/campaign.rs`) tried `Medal_{x}_{y}`
+**Root cause: `hex_rect` (`crates/ui-screens/src/campaign.rs`) tried `Medal_{x}_{y}`
 before `Outline_{x}_{y}`, and HD's `Medal_` widget is not hex-sized.** Both
 prefixes are interchangeable on Pulse - `hex_filled.mip`/`hex_outline.mip`
 are both a plain 32x32 hex, so whichever the function found first gave the
@@ -1396,7 +1396,7 @@ the centring term zero. Confidence 95: reproduced directly (before/after
 capture, `data/scratch/lane-hd/before-cell-select.png` vs
 `after-cell-select.png`, this session's own files, not committed - game
 content) and pinned by `hex_rect_prefers_outline_over_an_oversized_medal_atlas`
-(`crates/ui/src/campaign/tests.rs`), a synthetic fixture asserting
+(`crates/ui-screens/src/campaign/tests.rs`), a synthetic fixture asserting
 `hex_rect` resolves to `Outline_0_0`'s 32x32 rect rather than a
 neighbouring `Medal_0_0`'s 1024x256 one at the same slot. Not full
 confidence only because the real disc's `Selector` alpha blend was not
@@ -1411,7 +1411,7 @@ the real 128x64 hex - a correctness fix there too, not just cosmetic;
 before this, adjacent HD cells' giant hitboxes would have overlapped each
 other's whole detail column. Pulse's own pointer tests are unaffected: 
 their fixture returns the same 32x32 `Placed` for every `src`, so the
-prefix swap is a no-op for them (`crates/ui/src/campaign/tests.rs`'s own
+prefix swap is a no-op for them (`crates/ui-screens/src/campaign/tests.rs`'s own
 353-test run stayed green). Nobody has clicked an HD cell in this build
 before this pass - step 3 below is the first live exercise of this path.
 
@@ -1455,7 +1455,7 @@ And `medal_argb` multiplies a flat tier swatch over whatever draws - correct
 for a plain white hex, actively wrong for an atlas frame that already
 carries the tier's own baked-in colour.
 
-**The fix, and the evidence pinning its numbers**: `oag_ui::campaign::hd::hd_medal_frame`
+**The fix, and the evidence pinning its numbers**: `oag_ui_screens::campaign::hd::hd_medal_frame`
 crops one 60x60 frame of the correct tier and `hd_tinted_medal_draw` draws it
 at the widget's own authored `image.x`/`image.y` (no tint) - unchanged from
 the pre-fix code's own position, which was always right; only the size and
@@ -1487,7 +1487,7 @@ readings only agree once a Y-flip between this project's own raster order
 and the GPU's `V` convention is accounted for (unmeasured which side is
 "backwards" - not worth a second GTF reader to settle when the disc's own
 widget already gives the numbers a caller needs). See
-`crates/ui/src/campaign/hd.rs`'s own `hd_medal_frame` doc for the full
+`crates/ui-screens/src/campaign/hd.rs`'s own `hd_medal_frame` doc for the full
 reconciliation, and `crates/hd/tests/campaign_selection_ground_truth.rs`'s
 `target_medal_widgets_author_the_hexmedal_atlas_crop_hd_medal_frame_reads`
 for the disc-backed pin.
@@ -1603,7 +1603,7 @@ sheet whether the caller is a live session (`crate::main::session::endrace`,
 which passes `shell.sprites` - the plain front-end sheet, not the
 campaign-extended one `renderer_set_sprites` only ever uploads to the GPU
 transiently while campaign screens are up) or `--menu-page endrace-results`.
-So `hd_results_draw_list`'s own image loop (`crates/ui/src/endrace/hd.rs`)
+So `hd_results_draw_list`'s own image loop (`crates/ui-screens/src/endrace/hd.rs`)
 finds no sprite for any of these four widgets and skips them (`sprites(&image.src)`
 answers `None`), the same absence the sibling `Target0`/`1`/`2` *text*
 widgets are already explicitly given. Net effect: the whole target row
@@ -1655,7 +1655,7 @@ inferred from play alone.**
 ### The atlas itself: two archives, two different heights
 
 `Data\FE\Images\Hexmedal_HD.gtf` (and its `.mip`-spelled sibling
-`Medal_{x}_{y}` sources - see [`hd_medal_frame`](../../crates/ui/src/campaign/hd.rs)'s
+`Medal_{x}_{y}` sources - see [`hd_medal_frame`](../../crates/ui-screens/src/campaign/hd.rs)'s
 own doc) exists on two archives that disagree, the same shape
 `CellMode_Definition.xml`'s own `DATA02`/`DATA06` split already established
 for the screen XML:
@@ -1811,7 +1811,7 @@ taller one being on disc:
    by name (`Archives::read_every_name`, filtered by archive label) rather
    than taking whichever archive `read_name`'s ordinary "bulk archive
    first" precedence happens to try first.
-2. `oag_ui::campaign::hd::hd_medal_frame` took only a medal tier, always
+2. `oag_ui_screens::campaign::hd::hd_medal_frame` took only a medal tier, always
    cropping `v-block 0` - the atlas's *height* changed but nothing selected
    a different block. It now takes a [`Difficulty`](../../crates/tables/src/race_campaign.rs)
    too: the currently-browsed one for `Target0/1/2 Medal`'s own crop (that
@@ -1837,7 +1837,7 @@ with the seeded record the way the paragraph here previously claimed.
 `model.difficulty()` is `CellSelection`'s own single browsed-rung field, and
 `--menu-page cell-select` has no session to cycle `DifficultyButton` through
 at all - `CellSelection::new` hardwires it to `Difficulty::Medium`
-(`crates/ui/src/campaign.rs`), so every `--menu-page cell-select` render
+(`crates/ui-screens/src/campaign.rs`), so every `--menu-page cell-select` render
 draws `Target0/1/2 Medal` at the cane shape regardless of what
 `best_difficulty` a scratch `records.toml` seeds. Only `Medal_{x}_{y}` reads
 the seeded value. This pass's own render
@@ -1882,13 +1882,13 @@ Selection` draws *whole* - its own `bBg_x_y` layer, its own repositioned
 `GridController` (`OffsetX="240" OffsetY="370"`, was `"170"`/`"230"`), its
 own `Event`/`Track`/`Speed Class`/`Weapons` emblem layout and
 `RightColumnText` panel - not a graft of `DATA06`'s medal icons onto
-`DATA02`'s otherwise-unchanged screen (`oag_ui::campaign::hd`'s own module
+`DATA02`'s otherwise-unchanged screen (`oag_ui_screens::campaign::hd`'s own module
 doc, "The winning archive", has the complete widget diff). Every
 `OffsetX`/`OffsetY` difference draws correctly with no code change at all:
 `oag_ui::screen`'s widget collector already folds offsets generically, and
 the new `<Bracket>` borders around the emblems and the target row have no
 parser arm (the same "silently dropped, not drawn wrong" rule
-`oag_ui::campaign::selection` already established for `Campaign
+`oag_ui_screens::campaign::selection` already established for `Campaign
 Selection`'s own `Bracket`).
 
 **Left unswitched, deliberately**: the sixteen `grid_00.xml`..`grid_15.xml`
@@ -1902,8 +1902,8 @@ only the first was in this lane's scope.
 ### What actually needed fixing beyond the archive switch
 
 Three real bugs surfaced once the medal icons were finally visible to check
-against a live frame, all in `oag_ui::campaign::hd::hd_cell_draw_list`
-(`crates/ui/src/campaign/hd.rs`) - see that file's own doc comments on
+against a live frame, all in `oag_ui_screens::campaign::hd::hd_cell_draw_list`
+(`crates/ui-screens/src/campaign/hd.rs`) - see that file's own doc comments on
 `hd_target_title`/`hd_target_value`/`hd_format_centiseconds` for the full
 capture-by-capture evidence:
 
@@ -1961,13 +1961,13 @@ on, per this lane's own scope.
 
 ### Pointer
 
-`Cell Selection`'s own hex click targets (`oag_ui::campaign::pointer::cell_targets`)
+`Cell Selection`'s own hex click targets (`oag_ui_screens::campaign::pointer::cell_targets`)
 read the same generically-parsed `Outline_x_y`/`Bg_x_y` widget positions
 this section's own screenshots confirm draw correctly at their new
 `DATA06`-authored offset - the geometry is shared between drawing and
 hit-testing, not duplicated, so nothing here changes independently of what
 the captures above already show. The existing pointer test suite (95 tests
-under `oag_ui::campaign`) is unchanged and green. Not independently
+under `oag_ui_screens::campaign`) is unchanged and green. Not independently
 exercised with a live mouse click this pass - `--press right` produced no
 visible navigation in a `--menu-page cell-select` capture, which reads as a
 capture-tooling gap (this debug flag's own d-pad mapping on this screen, not
@@ -1980,7 +1980,7 @@ regression, since nothing pointer-specific changed in this lane's own code.
 under "Open" below found the screen exists and defaults to `Fury`, but left
 its own widgets unread and its toggle to the base `Wipeout HD` campaign
 unmeasured. This pass read the screen directly, confirmed the toggle on
-RPCS3, and wired `oag_ui::campaign::selection` + `crate::campaign_stage`
+RPCS3, and wired `oag_ui_screens::campaign::selection` + `crate::campaign_stage`
 ahead of `Grid Selection` for HD only - Pulse's flow is untouched, and its
 own ground-truth tests still pin a straight `RACE CAMPAIGN` -> `Grid
 Selection` boot.
@@ -2034,7 +2034,7 @@ disagreement on a different file) settles it:
 ### The screen itself
 
 `<Screen name="Campaign Selection" type="CampaignSelection">`, read via
-[`oag_ui::campaign::selection`](../../crates/ui/src/campaign/selection.rs):
+[`oag_ui_screens::campaign::selection`](../../crates/ui-screens/src/campaign/selection.rs):
 
 | Widget | Reads |
 | --- | --- |
@@ -2056,7 +2056,7 @@ build's own screen reachable, but a scratch survey
 it generically would have started drawing widgets on every title's every
 screen this pass never measured, not only this one. Reverted; the three
 positions/colours in the table above are read directly off the file and
-kept as plain constants in `oag_ui::campaign::selection`
+kept as plain constants in `oag_ui_screens::campaign::selection`
 (`SUBTITLE_POSITION`/`FURY_GOLD_MEDALS_LABEL_POSITION`/`HD_GOLD_MEDALS_LABEL_POSITION`),
 the same "grounded in a real, measured number, not through the generic
 parser" precedent `BRACKET_RECT` already sets for the `Bracket` above.
@@ -2086,7 +2086,7 @@ nothing naming either campaign and nothing marking which was selected.
 String="FE_RC_HD">` resolve, off `DATA06`'s own
 `Data\Plugins\Languages\English\entries.xml` (confirmed directly against
 `hdfury-ps3-eu-dec.iso`), to `"FURY CAMPAIGN"` and `"HD CAMPAIGN"` -
-[`oag_ui::campaign::selection::Campaign::entry_id`]. These are disc data, not
+[`oag_ui_screens::campaign::selection::Campaign::entry_id`]. These are disc data, not
 invented: the disc's own string table names each entry, this build had just
 never drawn it. Drawn at `FURY_ENTRY_NAME_POSITION`/`HD_ENTRY_NAME_POSITION`
 (`(558.75, 610)`/`(1356.25, 610)`), `Align::Centre` - **chosen, not
@@ -2103,12 +2103,12 @@ anything; centring on each half fixes it structurally, not by nudging a
 number.
 
 **The selector**: this screen authors no `<Image name="Selector">` at all,
-unlike `Grid Selection`/`Cell Selection`'s own (`oag_ui::campaign::draw`'s
+unlike `Grid Selection`/`Cell Selection`'s own (`oag_ui_screens::campaign::draw`'s
 `centred_selector_draw`) - the real game's own equivalent is presumably the
 selected 3D flyer's own scale/emphasis (an RPCS3 frame shows the selected
 card larger and centred; see the "not drawn" note above for why this build
 draws neither flyer at all). With no selector widget and no flyer to make the
-choice visible, [`oag_ui::campaign::selection::draw_list`] draws a plain
+choice visible, [`oag_ui_screens::campaign::selection::draw_list`] draws a plain
 four-sided white outline (`selector_outline`, `SELECTOR_BORDER`/`SELECTOR_COLOR`)
 around the selected half of `Bracket`'s own rect, split at its own midpoint -
 the same split `CampaignSelection::pointer`'s own click targets already use.
@@ -2180,12 +2180,12 @@ to rule out being a second, redundant toggle direction.
 
 ### What is modelled, and what is not
 
-[`oag_ui::campaign::selection::CampaignSelection`](../../crates/ui/src/campaign/selection.rs)
+[`oag_ui_screens::campaign::selection::CampaignSelection`](../../crates/ui-screens/src/campaign/selection.rs)
 is a flat two-entry list - `Fury` then `Hd`, matching `campaignList`'s own
 document order and the measured default - stepped by `left`/`right` (pad) or
 a click on one of two invented halves of the screen's own `Bracket` rect
 (left half Fury, right half `Wipeout HD`, the same "grounded in a real rect,
-not a free-standing invention" idiom `oag_ui::campaign::hd::hd_grid_targets`
+not a free-standing invention" idiom `oag_ui_screens::campaign::hd::hd_grid_targets`
 already uses for `Grid Selection`'s own confirm region) - two-tap, hover
 selects and a second click on the already-selected half confirms, the same
 idiom every other campaign screen in this crate uses. `Up`/`down` are left
@@ -2200,7 +2200,7 @@ convention, not a new measurement. `Back` on either `Grid Selection` screen
 now returns to `Campaign Selection` rather than closing the campaign outright
 - the previous, pre-this-pass behaviour, kept for Pulse and Omega (neither
 ever builds a `Selection` screen, so their own `Back` still closes the
-campaign the way it always has - `crates/ui/src/campaign/tests.rs` pins both
+campaign the way it always has - `crates/ui-screens/src/campaign/tests.rs` pins both
 titles' own flows).
 
 **Drawn since 2026-09-30**: both `Flyer` widgets - see "The two cards". Not
@@ -2253,7 +2253,7 @@ selected none beside Fury's).
 
 Pinned on the disc by `campaign_selections_cards_land_where_rpcs3_shows_them`
 in `crates/game/tests/hd_flyer_ground_truth.rs` (both selections, against the
-measured columns), and by `oag_ui::campaign::selection`'s tests for the stand-ins
+measured columns), and by `oag_ui_screens::campaign::selection`'s tests for the stand-ins
 and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
 `data/scratch/hd-flyer/rpcs3-raw/`; ours and the comparisons
 `data/scratch/hd-fury-cards/exp/cmp-cs-sel0.png`, `cmp-cs-sel1.png`.
@@ -2320,7 +2320,7 @@ and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
     live wiring end to end. Everything downstream of `open_campaign`
     (`handle_campaign`'s new `Screen::Selection` arms,
     `CampaignStage::open_grid_selection`/`open_selection`) is proven only by
-    `crates/ui/src/campaign/selection/tests.rs`'s own model-level tests and
+    `crates/ui-screens/src/campaign/selection/tests.rs`'s own model-level tests and
     by reading the code, not by a running session.
 - `crates/hd/tests/campaign_selection_ground_truth.rs` (new, `#[ignore]`d,
   needs `data/images/`, checked as raw text rather than through
@@ -2331,9 +2331,9 @@ and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
   `Grid Selection`/`Grid Selection Fury`'s own `flyerlist` grid names match
   the 0/8 and 8/16 split `oag_hd::campaign::HD_GRID_RANGE`/`FURY_GRID_RANGE`
   and `crate::campaign_stage` assume.
-- `crates/ui/src/campaign/selection/tests.rs` (new): the model's own
+- `crates/ui-screens/src/campaign/selection/tests.rs` (new): the model's own
   stepping/confirm/pointer behaviour against a synthetic fixture, the same
-  shape `crates/ui/src/campaign/tests.rs` already gives `GridSelection`.
+  shape `crates/ui-screens/src/campaign/tests.rs` already gives `GridSelection`.
 
 ## The tip ticker, the Confirm/Back legend, `Cell Help` and a podium, 2026-09-21
 
@@ -2346,7 +2346,7 @@ the tag and every child) and unreachable through the per-screen widget model
 even if the tag were parsed - a `NavigationController` picks *per screen*
 which prompts to show, and the ticker's own `TextInfo type="bar"` is two
 alternating text buffers sharing one clip viewport, neither of which any
-named `Screen` carries as a fact. `oag_ui::campaign::footer` (new module)
+named `Screen` carries as a fact. `oag_ui_screens::campaign::footer` (new module)
 reads both directly off the raw parsed tree instead - see its own module doc.
 
 - **The ticker.** `TickerLayout::read` finds `<Viewport
@@ -2466,7 +2466,7 @@ solo look at the new draw caught:
    `Vec<Draw>`) rather than up to two - the earlier double-copy trick for a
    seamless wrap only works unclipped, so the honest trade is a brief,
    real gap at each wrap instead of a seam this build cannot clip away
-   (see `oag_ui::campaign::footer::ticker_draw`'s own doc). Confirmed live,
+   (see `oag_ui_screens::campaign::footer::ticker_draw`'s own doc). Confirmed live,
    `data/scratch/lane-pulse/shots/crop-ticker-left.png`: the text now cuts
    cleanly at the tab's own edge.
 2. **`Confirm` ran into both button glyphs beside it.** `ControlTextConfirm`
@@ -2497,7 +2497,7 @@ is the `Title` role, not a body face. Two consequences, both left open:
 - ~~Every label on this screen still renders upper-case~~ **Fixed
   2026-09-21**, once the atlas this note itself said was missing landed
   (`crates/game/src/boot/fonts.rs`'s `face_atlas_slot`, a separate lane's
-  own work): `oag_ui::campaign::draw::text_draw` now picks
+  own work): `oag_ui_screens::campaign::draw::text_draw` now picks
   `Draw::FacedText` over the plain `Draw::Text` this note describes
   whenever `text.font` names `"default"` - `super::footer::face_role`,
   the identical check `NavigationLegend::draw` already made for
@@ -2512,7 +2512,7 @@ is the `Title` role, not a body face. Two consequences, both left open:
   `pulse-cellsel` lane, 2026-09-28.** `CellSelection_Update`
   (`0x088d6430`, decompiled and named this pass) rebuilds `DifficultyButton`'s
   text every frame with `sprintf("%s (%s)", resolve("RB_AI_DIF"),
-  resolve(rung))` - `oag_ui::campaign::draw::difficulty_button_line`
+  resolve(rung))` - `oag_ui_screens::campaign::draw::difficulty_button_line`
   reproduces it exactly, matching `data/reference/psp-campaign-screens/
   cell-selection-difficulty-hard.png`'s own `"AI difficulty (Hard)"` digit
   for digit (rung word for rung word). See
@@ -2568,7 +2568,7 @@ on PS2's own wider viewport.
 marquee, a `MenuStage` ticker or a `CampaignStage` ticker wants it on a given
 frame - a fresh capture call site that draws unclipped text starts from
 `None` by default, and nothing except a side-by-side screenshot against the
-real viewport catches the omission, since `oag_ui::campaign::footer`'s own
+real viewport catches the omission, since `oag_ui_screens::campaign::footer`'s own
 unit tests only check the *draw*, never how a caller clips it.
 
 ## Where the cursor lives: one shared slot, measured 2026-10-02
@@ -2656,7 +2656,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
   `grid0_3_1` (fourth listed, first explicit `false`) exactly. See
   `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
   "`CellSelection_OnEnter`'s own default-cursor scan" section for the full
-  decompile, and `crates/ui/src/campaign.rs`'s `CellSelection::new`. **Still
+  decompile, and `crates/ui-screens/src/campaign.rs`'s `CellSelection::new`. **Still
   open**: the cursor is separately confirmed to *persist* across a back-out
   to `Grid Selection` and a re-entry in the original, live-tested twice this
   pass - this build's own `CampaignStage::open_cell_selection`
@@ -2700,7 +2700,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
       `race-campaign.md`'s own table previously read it as (corrected there
       too, this change). This build had it backwards: `Medals` was
       zero-padded (`"04/08"`) and `Required` was not (`"12"`); the disc shows
-      `"0/8"` and `"012"`. Fixed, `oag_ui::campaign::draw::grid_draw_list`.
+      `"0/8"` and `"012"`. Fixed, `oag_ui_screens::campaign::draw::grid_draw_list`.
   - **The selected hex/cell drew plain white, not tinted.** A shared,
     non-PI001 widget routine (`FUN_088a5700`, reached off the `Selector`/
     `SelectorGlow` widget-name strings at `0x08a7f130`/`0x08a7f178`) pulses
@@ -2709,7 +2709,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     `Selector` at a fixed, multiply-neutral `i="0xffffffff"`, so this build's
     plain white was the XML's own default with no runtime tint applied at
     all. Fixed as a static draw of the cyan endpoint (`SELECTOR_TINT`,
-    `oag_ui::campaign::draw`) - the real widget animates and this build's
+    `oag_ui_screens::campaign::draw`) - the real widget animates and this build's
     draw-list builder has no clock to animate it with, so this always shows
     the phase `grid-selection-page1-grid0-unlocked.png`/
     `cell-selection-grid0-default-cell.png` happen to have caught, not the
@@ -2773,7 +2773,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     this build's **11px**, a 64% difference visible by eye in the crop, not
     just in the numbers - not a brightness-threshold artifact, since both
     crops are read with the identical script against the identical widget.
-    `crates/ui/src/campaign/draw.rs`'s `text_draw` draws every `font="..."`
+    `crates/ui-screens/src/campaign/draw.rs`'s `text_draw` draws every `font="..."`
     role off the **Menu** face's own glyphs, scaled down by
     `layout.face_scale(&text.font)` (`13.0/22.0` for `"default"`) rather than
     loading a separate small atlas - a technique that only reproduces the
@@ -2783,10 +2783,10 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     guessed at - `FaceScales::default()` itself was never the bug.**
     `TitleScale` is confirmed `1.0` on the PSP (`Skin.xml`'s own `<Variable
     global="TitleScale">`, ruling out a title-side scale confound), which
-    left `crates/ui/src/campaign/draw.rs`'s own `text_draw` as the only
+    left `crates/ui-screens/src/campaign/draw.rs`'s own `text_draw` as the only
     other place the ratio could be applied wrong. It was: `text_draw`
     already routes a `font="default"` widget through
-    `oag_ui::campaign::footer::face_role`, which since the `face_atlas_slot`
+    `oag_ui_screens::campaign::footer::face_role`, which since the `face_atlas_slot`
     fix (2026-09-21) resolves to `Draw::FacedText { role: "Default", .. }` -
     a real second atlas (`pulse_text.fnt`, loaded at its own native size),
     not the `Menu` atlas faked smaller. `crates/game/src/render/text.rs`'s
@@ -2798,11 +2798,11 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     (`13/22`) on top - shrinking already-native-sized glyphs by another
     `13/22`, roughly 60% too small, which is exactly the ~64% gap this
     pass's crop measurement found. **The identical bug, already found and
-    fixed one widget over**: `oag_ui::campaign::footer`'s own `face_scale`
-    (`crates/ui/src/campaign/footer.rs:97`) carries the correct form -
+    fixed one widget over**: `oag_ui_screens::campaign::footer`'s own `face_scale`
+    (`crates/ui-screens/src/campaign/footer.rs:97`) carries the correct form -
     `"default" => 1.0` with a doc comment naming this exact shape - for the
     footer's `Confirm`/`Back`/`Help` prompts, landed when `face_atlas_slot`
-    did; `Layout::face_scale` (`crates/ui/src/campaign.rs`, feeding every
+    did; `Layout::face_scale` (`crates/ui-screens/src/campaign.rs`, feeding every
     `Line1`..`8`/`Title`/`Track Line`/`Speed class` label on both screens)
     was simply never given the matching fix. Now is: `"default" => 1.0`,
     mirroring `footer::face_scale` exactly. `"small"` is untouched - no real
@@ -2829,7 +2829,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
 
   The reference frame's scrolling tip and `AAA` badge still draw as an empty
   bar in ours - **not a new finding**,
-  `oag_ui::campaign::draw::grid_draw_list`'s own doc already names this as
+  `oag_ui_screens::campaign::draw::grid_draw_list`'s own doc already names this as
   `--menu-page`'s own known gap (the capture has no `CampaignStage` behind it
   to drive the ticker's clock or its tip list), not a live-game defect. The
   two captures otherwise disagree only on medal/points state (this
@@ -2894,13 +2894,13 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
   before) draws the cursor visibly down-and-right of the hex rather than
   around it - confirmed live, `xdotool` hovering a tier on
   `pulse-psp-eu.chd` at 2026-09-14's window scale, screenshot on file with
-  the `campaign-pointer` lane. `oag_ui::campaign::centred_selector_draw`
+  the `campaign-pointer` lane. `oag_ui_screens::campaign::centred_selector_draw`
   centres the two rects on each other instead - **chosen, not measured**:
   both sprite sizes are the disc's own, but nothing on disc says centring is
   the right rule for the gap between them, only that top-left alignment
   reads wrong. `the_selector_is_centred_on_the_selected_hex_not_top_left_aligned`/
   `cell_selections_selector_is_also_centred_on_the_selected_hex`
-  (`crates/ui/src/campaign/tests.rs`) pin the two screens' own resolved
+  (`crates/ui-screens/src/campaign/tests.rs`) pin the two screens' own resolved
   rects.
 - ~~The launch path is wired but not interactively played in this pass.~~
   **Driven live, 2026-09-14**, mouse-only, under Xvfb with `xdotool`
@@ -2942,10 +2942,10 @@ rpcs3-preflight` OK beforehand):
    on the exact same `grid8` cell again - `down` is not the toggle between
    the two campaigns, or there is no toggle reachable this way at all.
 
-~~This build's own `oag_hd`/`oag_ui::campaign` has no `Campaign Selection`
+~~This build's own `oag_hd`/`oag_ui_screens::campaign` has no `Campaign Selection`
 state whatsoever~~ - **Modelled and driven, 2026-09-21**, see
 "Wipeout HD/Fury: `Campaign Selection`, 2026-09-21" above:
-`oag_ui::campaign::selection` reads the screen off `DATA06`'s own copy of
+`oag_ui_screens::campaign::selection` reads the screen off `DATA06`'s own copy of
 `CellMode_Definition.xml` (the precedence-resolved `DATA02` copy this
 build otherwise reads has no such screen at all), `right` on the pad is
 measured, three separate RPCS3 boots, as the toggle to the base `Wipeout
@@ -3105,14 +3105,14 @@ and its own "what is not determined" section.
   both at once.
 - **The upper-case defect above is partially closed, 2026-09-21, from the
   render side rather than this crate's own.** `Confirm`/`Back`
-  (`oag_ui::campaign::footer`) and the per-row subtitle
+  (`oag_ui_screens::campaign::footer`) and the per-row subtitle
   (`oag_title::HelpText`) now draw mixed case, through a second,
   `Default`-role atlas the menu stage loads beside its unchanged `menu`-role
   primary - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
   for the other" section for the full mechanism and the measured fact it
   rests on (Pulse's `menu`/`Small` faces have no lowercase glyph art at
   all; only `Default` does). **Still upper-case**: every `n="default"`
-  widget `oag_ui::campaign::draw::text_draw` itself draws - `Speed class`,
+  widget `oag_ui_screens::campaign::draw::text_draw` itself draws - `Speed class`,
   `Laps`, `Weapons`, `Points`, `Best` and their values, and by the same
   mechanism `Change Difficulty` two bullets up. One edit closes it:
   `text_draw`'s single `Draw::Text` literal becoming a role-aware
@@ -3149,7 +3149,7 @@ and its own "what is not determined" section.
   the identical `NavigationController` shape lives on HD/Omega's own shared
   `Skin.xml` too (`Top FE Screen -> FE Screen ->
   BodgeScreenContainingNavigationController`, that literal name is the
-  disc's own). Wired into `oag_ui::campaign::hd::hd_cell_draw_list`'s new
+  disc's own). Wired into `oag_ui_screens::campaign::hd::hd_cell_draw_list`'s new
   `footer_overlay` parameter, drawn on `Cell Selection` only - the same
   screen Pulse's own draws it on, and for the same reason: neither title's
   `CellMode_Definition.xml` authors a `NavigationButtons` gate on that
@@ -3210,7 +3210,7 @@ pass's own RPCS3 frames say otherwise for HD specifically:
 `rpcs3-grid0-3-2/00-default.png` shows the same row plus a third prompt
 (`CHANGE DIFFICULTY`) under `Grid Selection Fury` - the identical row `Cell
 Selection`'s own frame carries. `hd_grid_draw_list`/`selection::draw_list`
-(`crates/ui/src/campaign/hd.rs`/`crates/ui/src/campaign/selection.rs`) both
+(`crates/ui-screens/src/campaign/hd.rs`/`crates/ui-screens/src/campaign/selection.rs`) both
 gained the same `footer_overlay: &[Draw]` parameter `hd_cell_draw_list`
 already had, appended to `layers.chrome` right after the title the same way;
 `crates/game/src/main/menu_stage.rs`'s `Selection`/`Grid` arms and
@@ -3338,7 +3338,7 @@ string in the meantime, which is honest disc content, just not what RPCS3
 shows at runtime.
 
 **Both open mismatches fixed, `hd-difficulty` lane, 2026-09-28 (later the
-same day).** `oag_ui::campaign::hd::hd_difficulty_button_line` now computes
+same day).** `oag_ui_screens::campaign::hd::hd_difficulty_button_line` now computes
 `RB_AI_DIF`/`RB_DIF (<rung>)` the same way `crate::campaign::draw::difficulty_button_line`
 already does for Pulse, mode-gated per `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s
 `CellSelection_UpdateDifficultyButton_q` finding; `CellSelection::difficulty`
@@ -3471,12 +3471,12 @@ not a one-off typo, the same authoring tool's own repeated mistake - so the
 fix is general rather than special-cased to `grid4`.
 
 **Not fixed this pass, named rather than silently left stale:**
-`oag_ui::endrace::hd`'s own `text_draw` (a different function from
-`oag_ui::campaign::draw::text_draw`) has no `face_role` check at all, so
+`oag_ui_screens::endrace::hd`'s own `text_draw` (a different function from
+`oag_ui_screens::campaign::draw::text_draw`) has no `face_role` check at all, so
 `EndRace Results`/`Rewards`/`Menu`'s own `ControlTextConfirmButton`
 (`font="buttons"`) still draws nothing even though a `Buttons`-role atlas
 now loads - see `docs/formats/hd-endrace-screens.md`'s own table and
-`oag_ui::endrace::hd::hd_results_draw_list`'s doc for the gap. Whether Omega
+`oag_ui_screens::endrace::hd::hd_results_draw_list`'s doc for the gap. Whether Omega
 also declares a `Buttons` slot is unverified this pass -
 `data/images/omega-ps4-eu.pkg` is a raw PS4 package, not directly openable
 the way the decrypted PS3 ISO is (`no ISO 9660 primary volume descriptor
@@ -3721,7 +3721,7 @@ old save of 2026-09-21.
 - **Pointer**: the `CHOOSE TEAM` frame's left/right halves step the team,
   the `NAVIGATE TEAM` frame's top/bottom halves the livery, the `SHIP MODEL`
   frame confirms, the secondary button backs out
-  (`oag_ui::picker::pointer`'s `hd_targets`).
+  (`oag_ui_screens::picker::pointer`'s `hd_targets`).
 - **The RACE page's START** opens `Track Creation` first and this screen
   after it (not in Zone), see "Wipeout HD/Fury: `Track Creation`, 2026-09-29"
   below.
@@ -3852,14 +3852,14 @@ original fills them from code. That id choice is **chosen, not measured**.
 
 - **Axes**: measured, see "`right` wraps at twelve" above -
   left/right steps along a row, up/down switches direction.
-  `oag_ui::picker::Picker::with_rows`. **The order of the reverse row** is
+  `oag_ui_screens::picker::Picker::with_rows`. **The order of the reverse row** is
   the forward order, also measured (one walk).
 - **A reverse circuit is labelled with its forward twin's name**: the frame
   never spells a direction in the name.
 - **Pointer**: the `CHOOSE CIRCUIT` frame's left/right halves step the circuit,
   the hex frame's top/bottom halves switch the direction row, the circuit model
   frame confirms, the secondary button backs out
-  (`oag_ui::picker::hd::track::targets`).
+  (`oag_ui_screens::picker::hd::track::targets`).
 - **Confirm** opens `Team Selection` (the redirect's default), except in Zone,
   which forces its own hull as on Pulse. **Back** reopens the RACE page; Back from
   `Team Selection` returns here on the same circuit and direction.
@@ -3899,7 +3899,7 @@ hexagon. Walked from the language picker under Xvfb: the keyboard path was fine
 the **mouse** failed. The hex sprites (`Hexagon_HD.mip`, `_OUTLINE`, `_THICK_OUT`) are
 128x64 power-of-two textures whose opaque pixels are a 72x62 hexagon in the top-left
 corner (alpha box x 1..72, y 1..62 on Omega's; `Hexlock_HD.mip`'s glyph is x 20..54).
-[`oag_ui::campaign::pointer`] tested the placed texture rectangle as if it were the
+[`oag_ui_screens::campaign::pointer`] tested the placed texture rectangle as if it were the
 hexagon, so each hit region was a hexagon 128 wide and 111 tall centred 28 units right of
 the art. Neighbours overlapped and the first target in cell order won: hovering
 `grid0_3_2` (Speed Lap, unlocked) selected `grid0_2_2` (Time Trial, `Locked` unset), and a
