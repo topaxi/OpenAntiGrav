@@ -207,13 +207,35 @@ fn hds_curve_is_untouched_when_the_nova_flag_is_off() {
     let Some((device, queue)) = adapter() else {
         return;
     };
-    // HD's combination on the same draw: ambient plus the sRGB-decoded atlas.
-    // Texel 128: 0.9 + 0.50196^2.2 * 1 = 1.1 - clamps to white, which is the
+    // HD's combination on the same draw: ambient plus the raw atlas through the
+    // curve. Texel 128: 0.9 + 0.50196 = 1.4 - clamps to white, which is the
     // opposite of the nova result above for the same texel.
     let hd = draw(&device, &queue, &model(true, 128), rig(false));
     let nova = draw(&device, &queue, &model(true, 128), rig(true));
     assert_eq!(hd[0], 255, "HD's rig, ambient plus a decoded atlas");
     assert!(nova[0] < 255 && nova[0] > 200, "nova's own sum: {nova:?}");
+}
+
+/// **HD's lightmap is read raw, not sRGB-decoded.** Block #9 of
+/// `track_surface.rcsmaterial` is `TEX` then `LG2`/`MUL`/`EX2` then `MAD` by the
+/// scale, and the RSX sRGB-decodes no texture on the disc
+/// (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "HD's lightmap is read
+/// raw"), so `prelit = scale * pow(texel, power)` on the stored byte. With no
+/// ambient and the identity curve a texel of 128 must come out as
+/// `encoded(128 / 255)`; the old extra `pow(_, 2.2)` gave `128` back instead.
+/// Fails if the decode in front of the curve returns.
+#[test]
+fn hds_lightmap_enters_the_curve_raw() {
+    let Some((device, queue)) = adapter() else {
+        return;
+    };
+    let mut scene = rig(false);
+    scene.light = Light::authored([0.0, 0.0, 1.0], [0.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 0.0);
+    for texel in [64_u8, 128, 200] {
+        let want = encoded(f32::from(texel) / 255.0);
+        let got = draw(&device, &queue, &model(true, texel), scene);
+        close(got[0], want, &format!("texel {texel}, HD raw atlas"));
+    }
 }
 
 /// Identity camera and model, so clip space is model space.

@@ -218,8 +218,7 @@ override linear_out: f32 = 0.0;
 // so every pipeline built outside a race scene - the viewer, a test, a front
 // end - shades as it always did. Set by `race::Scene::new` through
 // `mesh_render::BuildCacheScope::lit_by`. A constant rather than a rewrite of
-// the curve: selecting the `pow`'s input instead stops the driver folding
-// HD's `pow(pow(x, 2.2), power)` into one `exp2` and moves pixels.
+// the curve: selecting the `pow`'s input instead moves pixels.
 override nova_prelit: f32 = 1.0;
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
@@ -1130,7 +1129,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // that material's interpolator and not a convention: the same closer
         // arrives on `f[TC0]` in `talons_junction/bluemetal`, so a per-material
         // path will have to read which varying carries it.
-        let baked_linear = pow(baked.rgb, vec3<f32>(2.2));
+        // **Raw, no sRGB decode (2026-10-05).** Block #9 is `TEX` then
+        // `LG2`/`MUL`/`EX2` then `MAD` by the scale, and the RSX decodes no texture
+        // on the disc (renderer.md, "HD's lightmap is read raw"), so the curve
+        // runs on the stored byte, exactly as Omega's does below. The `pow(_,
+        // 2.2)` that stood here was ADR-0026's decode of every sample and was
+        // the darkness: on Amphiseum (power 3.5) it compounded to a 7.7 power.
+        let baked_linear = baked.rgb;
         // **Wipeout: Omega Collection's combination, on a lightmapped draw.** Read
         // out of its circuit pixel shaders (ps4-omega-eu/lightmap-prelit.md):
         // `v_log_f32` / `v_mul_f32 power` / `v_exp_f32` / `v_mad_f32 scale, bias` on

@@ -7185,3 +7185,64 @@ Two more Assegai boots (`assg2`, `assg3`) never reached a pad with the player's 
 - **The earlier "correlates with `Distance`" table is not the original's behaviour:** the original's `Distance 0.0` hulls do not wash, so `Distance` does not by itself explain the gap. What is still ours and not the original's is open, and is **not** the boost blend (closed), the bloom (measured), the colour (same classic `(4,10,40)` base), or the light's numbers (read off the original's own list above).
 
 **What is left (not measured):** the per-vertex weight inside `EdgeGeom` (`0x007f6d80`) on a hull. Candidates, each a read of that SPU job's per-vertex loop rather than a guess: the `1 - |d|/D` term evaluated in a space or scale the hull's vertices are not in (our `mesh.wgsl::spu_light_sum` computes it in world units from `uniforms.model * placed`), the `N.L` term (the original may take the normal from the compressed `EdgeGeom` stream, not the file's), or whether the hull's `SVC1` stream is built from a different light subset than the track's (the `BP_TAKEN_PASS` stops all carried one record, `0xca6e90` on `assg1`, whose identity as the player's hull was not read this lane).
+
+## HD's lightmap is read raw: the extra `pow(_, 2.2)` was the frame-wide darkness (2026-10-05, `hd-darkness`)
+
+**Cause, confidence 85.** `mesh.wgsl`'s authored branch ran the lightmap through
+`pow(texel, 2.2)` before `prelitScale * pow(_, prelitPower)`. Nothing on the disc
+asks for it: block #9 of `track_surface.rcsmaterial` (see "The lit track material"
+above) is `TEX`, then `LG2`/`MUL`/`EX2` by the authored power, then `MAD` by the
+scale - no step in front of the curve - and "Per-texture sRGB/`GAMMA` decode:
+settled negative" (confidence 90) finds no texture on the disc carrying a decode.
+Omega's path already reads its atlas raw on the same grounds. The decode came in
+with ADR-0026's blanket "the samples are sRGB-decoded" (`c31a8fe95`), never from a
+microcode read of the lightmap, and it compounds with the authored power: on
+Amphiseum (`Prelit ambient colour power` 3.5, scale 6) the curve ran at 3.5 * 2.2 =
+7.7, which leaves a mid-grey lightmap at 0.5^7.7 = 0.005 of its authored value.
+Talon's Junction authors power 2 / scale 4, Sol 2 power 1.3 / scale 0.87.
+
+**Where it showed (before the change, `hd-material-probe.py` on Amphiseum pose 00,
+delta = reference - ours).** Only the lightmapped group was dark: `track_surface`
+(slot 547, 58,037 px) +0.087, `track_wall` +0.272, lightmapped `base_diffusespecular`
++0.201; the non-lightmapped groups sat at or above the reference. That ruled out a
+missing light source: Sol 2 authors `Enable spu vertex lights = 0` and is the darkest
+circuit, and the engine-light thread measured track chunks out of an engine light's
+reach at ride height. After: `track_surface` +0.007, `track_wall` +0.111, `cf_diff_spec`
+lightmapped +0.002.
+
+**Whole-frame luma excluding the HUD, ours / reference**, `scripts/hd-frame-compare.py`
+on copies under scratch, before then after:
+
+| set | pose | before | after | reference |
+| --- | --- | --- | --- | --- |
+| Talon's Junction | 00 | 0.404 | 0.533 | 0.618 |
+| | 01 | 0.376 | 0.497 | 0.601 |
+| | 03 | 0.437 | 0.479 | 0.618 |
+| Amphiseum | 00 | 0.164 | 0.237 | 0.245 |
+| | 01 | 0.469 | 0.553 | 0.457 |
+| | 02 | 0.297 | 0.479 | 0.427 |
+| Sol 2 | 00 | 0.493 | 0.580 | 0.684 |
+| | 01 | 0.479 | 0.566 | 0.698 |
+| | 02 | 0.611 | 0.653 | 0.911 |
+
+Amphiseum 00 closes (-0.081 to -0.008) and the floor reads cyan-lit where it was near
+black. **Amphiseum 01 and 02 now overshoot (+0.096, +0.052)**: 01's excess is the
+billboards, which were already white where the reference is saturated red-orange
+before this change (an emissive/glow combine, not the lightmap), and 02 was
+-0.130 before. Omega and 2048 frames are unmoved (Omega `data/extracted/ps4` default
+race, 2 pixels by one level, which is shader-recompile noise; 2048 byte-identical):
+Omega takes the nova branch and 2048's frame draws no HD-lightmapped surface.
+
+**Still open, not changed.** (1) The remaining Talon's/Sol 2 gap (-0.09 to -0.14, Sol 2 02
+-0.26) is not this term. The authored branch multiplies a decoded albedo by the light
+and encodes `1/2.2` afterwards, so for a light sum `L` the frame carries `L^0.4545`
+where the original's raw 8-bit multiply carries `L`; that is ADR-0026's domain choice.
+Applying the light sum as `L^2.2` (equivalent to the original's raw-domain product) was
+rendered once as a diagnostic and was worse on Amphiseum 00 (0.140) and mixed
+elsewhere, so it is not made; the exposure/encode end of the chain (question 1 in
+"Per-texture sRGB/`GAMMA` decode") is the next place to look. (2) Sky luma changes sign
+between circuits (Sol 2 sky ours 0.51 / 0.55 / 0.50 against 0.86 / 0.94 / 0.94,
+Amphiseum 00 ours 0.63 against 0.49) and does not touch the lightmap; the Sol 2 and
+Talon's reference poses are 429-448 km/h frames with glare and adaptation state ours
+cannot reproduce at rest, so it was not separated here. (3) The matched poses are
+moving frames with a craft; only Talon's 00 was said to be stationary.
