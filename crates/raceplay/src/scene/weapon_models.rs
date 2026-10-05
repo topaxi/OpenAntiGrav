@@ -500,7 +500,8 @@ impl super::Scene {
 /// `None` to leave the identity table `mesh_render::build` initialised. The
 /// Mine and the Bomb pass it: the Bomb's `orbit` ring tumbles about its own `X`
 /// and its `bomb` body about `Y`; neither was ever written before, so both drew
-/// at their time-zero pose.
+/// at their time-zero pose. Their texture-offset tracks ride the same clock
+/// (`Drawable::write_anims`, 2026-10-05).
 fn write_one_kind(
     drawables: &[Drawable],
     matrices: &[Mat4],

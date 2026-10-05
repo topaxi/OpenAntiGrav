@@ -86,8 +86,12 @@ fn anim_upload_census() {
                     if let mesh::AnimTrack::Psp(t) = t {
                         println!(
                             "    off {:?}@{:?} scale {:?}@{:?} loop {} step {}",
-                            t.offset.values, t.offset.times, t.scale.values, t.scale.times,
-                            t.loop_seconds, t.step
+                            t.offset.values,
+                            t.offset.times,
+                            t.scale.values,
+                            t.scale.times,
+                            t.loop_seconds,
+                            t.step
                         );
                     }
                 }
