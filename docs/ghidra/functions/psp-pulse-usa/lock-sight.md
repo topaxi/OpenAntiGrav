@@ -87,7 +87,7 @@ weapon id is 10 and `stats+0x50`/`+0x54` when it is 1 - see
 selection is shared**: the same `0.9` cone, the same 1.4 along-track screen, the
 same nearest-by-longitudinal-distance tie-break, the same "not the firer, and
 racing" skip. So the two lockable weapons differ by **two numbers and nothing
-else**, which is why `oag_gameplay::projectile::missile::lock_window` takes the
+else**, which is why `oag_weapons::projectile::missile::lock_window` takes the
 numbers rather than a second stats type.
 
 **And the two numbers differ, which is the finding.** Measured 2026-09-07

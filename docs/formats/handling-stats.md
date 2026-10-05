@@ -545,7 +545,7 @@ is `classes.len() == SpeedClass::ALL.len()`.
 
 Instead a race carries the rung as **the name the disc spells** and resolves it
 against the file that authored it: `Stats::class_named`, `Global::class_named`
-and `oag_gameplay::pickup::table_for`. A title asked for four gets four and
+and `oag_weapons::pickup::table_for`. A title asked for four gets four and
 grows nothing. Per-class *weapon speeds* need no fifth entry either - Pure
 authors a single class-independent `speed` per weapon, which `class_speeds`
 records as `class_independent` rather than inferring from four equal values.

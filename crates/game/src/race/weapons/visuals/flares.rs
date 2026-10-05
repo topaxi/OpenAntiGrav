@@ -88,7 +88,7 @@ pub(super) fn advance_one_flare(
 /// engine's own `projectile.charge`; the fraction is written as
 /// `(CHARGE_SECONDS - charge) / CHARGE_SECONDS` rather than the original's
 /// bare `1.0 - charge` so this stays correct if
-/// [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`] ever moves off its
+/// [`oag_weapons::projectile::plasma::CHARGE_SECONDS`] ever moves off its
 /// current `1.0` - the two forms are identical today only because the
 /// constant happens to equal the wind-up the original hardcodes. `charge` is
 /// clamped into `[0, CHARGE_SECONDS]` first: this engine's own countdown
@@ -122,7 +122,7 @@ pub(super) fn advance_one_flare(
 /// fresh on every charging tick too, and wrong only in the narrow case of a
 /// player switching camera view during a bolt's own brief flight, where the
 /// original's frozen value and this port's live one can disagree for that
-/// bolt's remaining ticks. Adding a frozen field is `oag_gameplay::projectile`
+/// bolt's remaining ticks. Adding a frozen field is `oag_weapons::projectile`
 /// work, out of this function's own reach.
 ///
 /// **What `scale` actually multiplies is the same thing on both sides.**
@@ -163,7 +163,7 @@ pub(in crate::race) fn plasma_flare_scale(
     if kind != Some(oag_tables::weapons::Weapon::Plasma) {
         return 1.0;
     }
-    let charge_seconds = oag_gameplay::projectile::plasma::CHARGE_SECONDS;
+    let charge_seconds = oag_weapons::projectile::plasma::CHARGE_SECONDS;
     let scale = (charge_seconds - charge.clamp(0.0, charge_seconds)) / charge_seconds * 0.75;
     if cockpit { scale * 0.5 } else { scale }
 }
@@ -245,7 +245,7 @@ pub(in crate::race) fn missile_flare_anchors(
 /// [`flare_effect_for`] is: testable without a loaded `psys` library.
 ///
 /// Only a Missile carries a counter that ever moves (see
-/// [`oag_gameplay::projectile::Projectile::bounces`]), so `kind` gates this
+/// [`oag_weapons::projectile::Projectile::bounces`]), so `kind` gates this
 /// the same way [`flare_effect_for`] gates on the weapon rather than trusting
 /// the counter alone - a stray nonzero `bounces` on some other kind must
 /// never read as a bounce.

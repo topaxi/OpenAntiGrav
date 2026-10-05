@@ -547,10 +547,10 @@ fn grid_armed_over_every_circuit(
 /// tiers: one craft deciding differently reorders the table.
 ///
 /// That is not a hypothesis. On 2026-09-08, adding `Weapon::LeachBeam` to
-/// `oag_gameplay::pickup::IMPLEMENTED` - a change that touches no roll gate, no
+/// `oag_weapons::pickup::IMPLEMENTED` - a change that touches no roll gate, no
 /// `oag_ai` axis and no force law - turned this red. Confirmed by isolation:
 /// removing that one line made it pass again, putting it back made it fail. A
-/// wider pickup pool widens the weighted walk in `oag_gameplay::pickup::draw`,
+/// wider pickup pool widens the weighted walk in `oag_weapons::pickup::draw`,
 /// so every craft is handed different pickups, so every trajectory differs, so
 /// all seven coin tosses are re-rolled. The totals it produced were novice 1,
 /// skilled 0, elite 1, ace 3. Nothing about the mechanic had moved; the

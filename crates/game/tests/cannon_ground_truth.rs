@@ -85,7 +85,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 }
 
 /// Every Cannon round slot 0 has fired and still has in the air.
-fn rounds(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+fn rounds(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
     race.sim
         .world
         .projectiles

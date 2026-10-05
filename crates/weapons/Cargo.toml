@@ -1,0 +1,23 @@
+[package]
+name = "oag-weapons"
+description = "Weapons: the pickup a craft holds, the projectiles it fires, the blasts, beams and disruptions that land, and the slowdown they credit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Below `oag-gameplay` on purpose: `World` and `Ship` embed this crate's state,
+# and the code here reaches a craft only through the `Craft` trait. No
+# renderer, audio, input or windowing crate, as for every simulation crate.
+[dependencies]
+oag-core.workspace = true
+oag-physics.workspace = true
+oag-race.workspace = true
+oag-tables.workspace = true
+
+[dev-dependencies]
+oag-vex.workspace = true
+
+[lints]
+workspace = true

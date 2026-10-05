@@ -1,11 +1,11 @@
 //! The Repulser in the race: firing one and walking every live one a tick.
 //!
-//! The law is `oag_gameplay::projectile::repulser`'s; this is the part that needs
+//! The law is `oag_weapons::projectile::repulser`'s; this is the part that needs
 //! the course, the cue queue and the hit bookkeeping. See
 //! `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
 
 use super::*;
-use oag_gameplay::projectile::repulser::Repulser;
+use oag_weapons::projectile::repulser::Repulser;
 
 impl Race {
     /// `Weapon_FireRepulser` (`0x0886ce8c`) for `slot`: claims a pool slot and
@@ -55,7 +55,7 @@ impl Race {
         };
         let rules = self.sim.damage_rules();
         let dt = self.sim.dt;
-        let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
+        let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         let mut credits: Vec<(usize, u8)> = Vec::new();
         for index in 0..self.sim.world.repulsers.len() {
             let Some(mut repulser) = self.sim.world.repulsers[index] else {

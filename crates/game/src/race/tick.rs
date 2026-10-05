@@ -111,7 +111,7 @@ impl Race {
         // asked for: no thrust, no airbrakes, a mirrored yaw, or an
         // autopilot's thrust scale. Before the start-line gate below, so a
         // stalled craft on the line is still gated and not doubly so. See
-        // `oag_gameplay::disruption`.
+        // `oag_weapons::disruption`.
         controls = self.disrupted_controls(player, controls, flown);
         // The start-line countdown: measured, not authored - see
         // `RaceState::thrust_gated` for the live capture this reproduces. Only
@@ -130,9 +130,9 @@ impl Race {
         // `Ship_UpdateCraft`. One call for all eight slots rather than one
         // beside each step, so the drain cannot depend on whether a craft is
         // flown by slot 0's branch or the field's. See
-        // `oag_gameplay::slowdown::drain`.
-        oag_gameplay::slowdown::drain(
-            &mut self.sim.world,
+        // `oag_weapons::slowdown::drain`.
+        oag_weapons::slowdown::drain(
+            &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
         );
 
@@ -292,11 +292,11 @@ impl Race {
         // makes a shell visibly react - see `oag_render::shield::ShipShield::hit`)
         // or one that got through (the hull's own sparks). Both have to come
         // back out of the step rather than being invisible on both sides.
-        let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
+        let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         // Read before the step, for `ignite_missile_bounces` below: a bounce
         // never stops a projectile, so it never reaches `impacts` and the
         // only way to see one is to compare this counter before and after.
-        let bounces_before: [u8; oag_gameplay::projectile::MAX_PROJECTILES] =
+        let bounces_before: [u8; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].bounces);
         // Read before the step too, for `ignite_blast`'s Bomb arm below: a
         // detonated slot resets to `Projectile::default()` inside `step`
@@ -305,10 +305,11 @@ impl Race {
         // `bounces_before` already takes, and `impacts` is slot-indexed the
         // same way. Read for every slot rather than gated on `kind ==
         // Bomb`, since nothing here is on the determinism-hashed path.
-        let orientations_before: [Quat; oag_gameplay::projectile::MAX_PROJECTILES] =
+        let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
-        let impacts = oag_gameplay::projectile::step(
-            &mut self.sim.world,
+        let impacts = oag_weapons::projectile::step(
+            &mut self.sim.world.projectiles,
+            &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
             self.sim.dt,
             &self.sim.collision,
             self.sim.weapons.as_ref(),
@@ -356,7 +357,7 @@ impl Race {
             // one of the two per ending, never both. `impact.struck.is_some()`
             // is this port's own equivalent of that emitter-cleared branch:
             // a craft hit (the shared sweep-segment test in
-            // `oag_gameplay::projectile::flight`) plays `PlasmaHitShip`, and a
+            // `oag_weapons::projectile::flight`) plays `PlasmaHitShip`, and a
             // wall hit or the 10 s timeout (`struck: None` either way) plays
             // `PlasmaHitWall` as before. See
             // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
@@ -368,7 +369,7 @@ impl Race {
             // `Cue::RocketHitShip` and `Cue::CannonHitWall`/`Cue::CannonHitShip`
             // for the evidence and, for both, why a `struck: None` reaching
             // here can never be their own weapon's flight-time reap: neither
-            // one's timeout path in `oag_gameplay::projectile::flight` writes
+            // one's timeout path in `oag_weapons::projectile::flight` writes
             // an `Impact` at all, so every entry this loop sees for either
             // kind is a real wall or craft hit.
             use oag_tables::weapons::Weapon;
@@ -496,7 +497,10 @@ impl Race {
         // effect of one tick is one tick. Over the whole field at once, as
         // `slowdown::drain` is, so the countdown cannot depend on which
         // branch stepped the craft.
-        oag_gameplay::disruption::advance(&mut self.sim.world, self.sim.dt);
+        oag_weapons::disruption::advance(
+            &mut self.sim.world.ships[..self.sim.world.ship_count as usize],
+            self.sim.dt,
+        );
 
         // The destroyed-craft pass, over the whole field: Eliminator's
         // respawn-and-bookkeeping, and a single race's opponent respawn.

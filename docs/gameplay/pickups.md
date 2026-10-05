@@ -3,9 +3,9 @@
 What a `Weapon Pad` hands out, what a craft does with it, and - separately -
 the free Turbo a solo event is given once a lap.
 
-Implemented in [`oag_gameplay::pickup`](../../crates/gameplay/src/pickup.rs)
+Implemented in [`oag_weapons::pickup`](../../crates/weapons/src/pickup.rs)
 (the draw and the inventory),
-[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs) (rockets in
+[`oag_weapons::projectile`](../../crates/weapons/src/projectile.rs) (rockets in
 the air and what they hit), `oag_game::race` (the trigger, the grant and
 spending it), `oag_physics::engine` (what a fired Turbo does) and
 `oag_physics::damage` (what a fired Shield refuses and what a blast costs). The pad
@@ -77,7 +77,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **The detonation's own three models - a halo and two hemispheres - retire at a hardcoded 1.5 s, single-stage, no HD-style collapse** - `PlasmaBlast_Update`'s own age check | **recovered** | 88 |
 | Each model gets a per-tick anim-time scrub (`Node_SetAnimTimeTree(age * rate, model)`), most likely playing the model's own baked expansion rather than an engine-computed ease; the `+0x90..+0x114` keyframe-ramp mechanism `PlasmaBlast_Construct` builds ships dead in this binary | **recovered** | 75 |
 | **This engine now draws the three models** (`crates/game/src/race/blast_models.rs`), anchored on the bolt's own impact point and oriented by an ordinary "face the camera" billboard standing in for `PlasmaBlast_Update`'s own unresolved camera-vector read | **ours, chosen orientation; no confidence score there** | - |
-| **A bolt leaves at the firing craft's own speed plus `launchSpeed` and blends to the class speed over its first second of flight** - `Plasma_SpeedForClass`, the same linear form and the same second `Missile_SpeedNow` independently tests, and read fresh at release rather than at the press that started the charge; ported 2026-09-16, sharing [`missile::speed_kmh`](../../crates/gameplay/src/projectile/missile.rs) | **recovered** | 88 |
+| **A bolt leaves at the firing craft's own speed plus `launchSpeed` and blends to the class speed over its first second of flight** - `Plasma_SpeedForClass`, the same linear form and the same second `Missile_SpeedNow` independently tests, and read fresh at release rather than at the press that started the charge; ported 2026-09-16, sharing [`missile::speed_kmh`](../../crates/weapons/src/projectile/missile.rs) | **recovered** | 88 |
 | `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
 | **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
 | A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |
@@ -107,7 +107,7 @@ exactly the offsets the grant walks, and `WeaponStats_Parse`'s tail sums those
 same offsets into the total the grant divides by. Full layout on
 [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#by-catch-the-pickup-grant-and-it-is-pickupodds).
 
-**Ported 2026-08-17.** `oag_gameplay::pickup::draw` now does what the original
+**Ported 2026-08-17.** `oag_weapons::pickup::draw` now does what the original
 does: the `ai` column flat for an opponent, and for the player a **blend** of
 `human` with `front`/`back` by race position -
 
@@ -395,7 +395,7 @@ input scale its `amount` is added at is unread), Rubber Ship (a hover
 damping term in `oag-physics`) and Drunk Camera. A shielded or
 already-disrupted craft is immune. Bolt and effects are read off
 `psp-pure-usa` - `docs/ghidra/functions/psp-pure-usa/weapons.md` - and live in
-`oag_gameplay::projectile::disruptor` and `oag_gameplay::disruption`. Two
+`oag_weapons::projectile::disruptor` and `oag_weapons::disruption`. Two
 recorded deviations: the effect is rolled at the press rather than at the pad,
 and the homing lock is the Missile's test run at the press rather than a
 reticle's hold. Nothing of it is drawn yet beyond the generic projectile
@@ -443,7 +443,7 @@ the first time this build has drawn any part of Pure's pickup on screen.
 
 ## Only what has an effect is handed out
 
-`oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
+`oag_weapons::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
 **Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma, Shuriken, the
 Cannon and, later the same day, the Quake**, the LeachBeam since 2026-09-08 and
 Pure's Disruptor since 2026-09-15 - which only Pure's odds weight, so a Pulse or
@@ -460,7 +460,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   [missile.md](../ghidra/functions/psp-pulse-usa/missile.md).
 - ~~**Bomb** needs the Mine first.~~ **Built 2026-08-26**, the same day, and it
   is the cheapest weapon this project has added: one bigger charge out of the
-  same rear anchor, sharing every line of `oag_gameplay::projectile::mine`
+  same rear anchor, sharing every line of `oag_weapons::projectile::mine`
   except a count.
 - ~~**Mine** needs somewhere to sit and something to trip it.~~ **Built
   2026-08-26**, and the thing that unblocked it was somebody else's mistake:
@@ -493,7 +493,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   (`0x088577ac`) reads. So holding fire gives auto-repeat at the authored rate
   and tapping gives a few frames of countdown per tap, twin barrels
   alternating by the low bit of its own remaining `rounds`, until the magazine
-  runs out - `oag_gameplay::pickup::Held::advance_cannon_reload` is the port,
+  runs out - `oag_weapons::pickup::Held::advance_cannon_reload` is the port,
   called from `Race::advance_cannons` for the player alone, on the ticks the
   button is down.
 
@@ -514,7 +514,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   the schema's own shape: the Cannon is the only projectile weapon whose
   block authors neither `blastforce` nor `blastradius`, so a round that hits
   a wall costs nobody anything and one that hits a craft costs that craft
-  alone, through `oag_gameplay::projectile::cannon::direct_hit`. See
+  alone, through `oag_weapons::projectile::cannon::direct_hit`. See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
 - ~~**Quake** needs its per-frame travel and its hit latch, neither
   located.~~ **Built 2026-09-07**, the same day the latch was found inside a
@@ -529,7 +529,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   does not ride it, measured: the road rose 10.8 units under a stationary
   craft whose body did not. So the damage path still needs none of it. See
   that page's "the ripple itself" and "measured live" sections. A single travelling instance
-  (`oag_gameplay::projectile::quake::Wave`) advances at a fixed, unauthored
+  (`oag_weapons::projectile::quake::Wave`) advances at a fixed, unauthored
   `270.0` units a second along the course, tracked as a plain distance-along
   rather than the original's segment-plus-parametric-`t` pair, and its hit on
   a craft reuses the same generic pending-damage channel the Missile and
@@ -539,7 +539,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   to the midpoint and width of the track's own two edges nearest the wave -
   orientation is not established by anything read, so it draws
   axis-aligned, chosen rather than measured. **The wave lives 5.0 seconds from
-  launch and is then dropped** (`oag_gameplay::projectile::quake::LIFETIME_SECONDS`,
+  launch and is then dropped** (`oag_weapons::projectile::quake::LIFETIME_SECONDS`,
   recovered 2026-09-08 at confidence 85), which is also what re-opens the
   once-at-a-time guard so a second Quake can be fired in the same race. Before
   that landed the wave circled the ring forever and a player got exactly one
@@ -562,7 +562,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   returning `age < active_time`. Target selection is the Missile's lock
   outright, and `FUN_0883f540` confirms that directly by calling
   `Ship_AcquireLock` for held weapon ids `1` and `10` and no others.
-  `oag_gameplay::projectile::leach_beam` holds the single link a race ever
+  `oag_weapons::projectile::leach_beam` holds the single link a race ever
   has - a whole-race pool cursor, the strictest gate any weapon here has -
   and `oag_tables::weapons::LeachBeamStats` now decodes all nine attributes.
   **And the throttle is wired as of 2026-09-16**: `slowShipFactor` lands on
@@ -752,7 +752,7 @@ and for the same reason - it is read before it is decremented. Pinned by
 ## What a fired Rocket does
 
 **One projectile, straight ahead, at the class's own authored speed.** Built in
-[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs); the
+[`oag_weapons::projectile`](../../crates/weapons/src/projectile.rs); the
 damage lands through `oag_physics::damage::apply_weapon`, which is
 `Ship_Damage`'s recovered body - the state gate, the weapons-off halving, the
 clamp and the destroyed transition - sharing one function with the contact path
@@ -842,7 +842,7 @@ outstanding**, not a speed floor; while that timer runs the victim gets no
 engine thrust, a zeroed throttle and no lateral grip, and its hover target
 height is lowered. `oag_tables::weapons` decodes `slowdown_time` on all six
 decoded blocks as of the same day. **The physics half landed the same day
-too**: `oag_gameplay::slowdown::drain` runs once a tick for the whole field,
+too**: `oag_weapons::slowdown::drain` runs once a tick for the whole field,
 ahead of every craft's own step, and `oag_physics::slowdown` holds the timer,
 the clamp and the four effects it drives - a craft hit by a mine, rocket,
 missile or plasma bolt does slow down. See
@@ -926,7 +926,7 @@ the original does: the stamp is unconditional and the grant is not.
   against fourteen at the `venomspeed` control offset, and **Pure hard-codes
   the same second in the same two stores**. The attribute earns no field in
   `oag_tables::weapons::PlasmaStats` for the usual reason, and this build now
-  holds the shot for `oag_gameplay::projectile::plasma::CHARGE_SECONDS`. See
+  holds the shot for `oag_weapons::projectile::plasma::CHARGE_SECONDS`. See
   [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#the-charge-is-real-and-it-is-not-charge_time).
 - **The Bomb's `damageradius`.** Authored, the only second radius any weapon
   has, and no consumer found - so it is decoded nowhere and spent nowhere. See

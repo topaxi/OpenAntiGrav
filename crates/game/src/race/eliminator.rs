@@ -494,14 +494,14 @@ impl Race {
     /// radius the struck craft is inside.
     pub(super) fn credit_blast(
         &mut self,
-        impact: &oag_gameplay::projectile::Impact,
-        hits: &[oag_gameplay::projectile::WeaponHit; MAX_SHIPS],
+        impact: &oag_weapons::projectile::Impact,
+        hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
     ) {
         if self.sim.world.mode() != Mode::Eliminator {
             return;
         }
         let Some(stats) =
-            oag_gameplay::projectile::blast_stats(self.sim.weapons.as_ref(), impact.kind)
+            oag_weapons::projectile::blast_stats(self.sim.weapons.as_ref(), impact.kind)
         else {
             return;
         };

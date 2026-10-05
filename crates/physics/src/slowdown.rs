@@ -29,7 +29,7 @@
 //! credited from a weapon's `slowdown_time` out of `<WeaponStats>`, and
 //! `oag-physics` depends on `oag-core` and nothing else - so it lives on
 //! `oag_gameplay::world::Ship` beside the pickup that fired the weapon, and
-//! `oag_gameplay::slowdown` runs the drain that calls [`add`].
+//! `oag_weapons::slowdown` runs the drain that calls [`add`].
 //!
 //! Three of the four effects were implemented here long before the mechanic was
 //! understood, under the name "leap timer": [`crate::engine::engine`]'s early

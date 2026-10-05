@@ -3,7 +3,7 @@
 **Binary:** `pulse-psp` `BOOT.BIN`, image base `0x08804000`.
 
 **Status:** **read and built.** Five functions and the whole `<Stats>` block are
-recovered; `oag_gameplay::projectile::shuriken` and
+recovered; `oag_weapons::projectile::shuriken` and
 `oag_tables::weapons::ShurikenStats` are the port. The reading was done on 2026-09-02
 alongside the Plasma's, once [plasma.md](plasma.md)'s dispatch table handed over
 the handler address.
@@ -101,7 +101,7 @@ s->velocity = basis_right * s->speed;
 ```
 
 **The firing craft's speed is inherited**, measured rather than assumed - which
-settles for this weapon the question `oag_gameplay::projectile::rocket::launch`
+settles for this weapon the question `oag_weapons::projectile::rocket::launch`
 records as still open for the Rocket ("the speed being the class's plus
 `launchSpeed` ... is this engine's choice"). Here it is the craft's speed plus
 the lookup's, and whether the lookup itself folds in `launchspeed` was not
@@ -154,7 +154,7 @@ arithmetic is unambiguous, the `0.1` is a code literal, both the effect and the
 cue are direct `.rodata` reads, and the caller is now identified.
 
 **This is not the Missile's bounce and must not reuse it.**
-`oag_gameplay::projectile::missile::MAX_BOUNCES` glances off up to five walls
+`oag_weapons::projectile::missile::MAX_BOUNCES` glances off up to five walls
 under the Missile's own rule; nothing here counts bounces at all, and what ends
 a shuriken is its `fuse` (see below), not a bounce budget. Reusing the Missile's
 path would be the same class of mistake as the Rocket's flare riding a mine.

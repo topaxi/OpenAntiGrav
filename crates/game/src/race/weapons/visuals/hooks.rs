@@ -29,7 +29,7 @@ impl Race {
         else {
             return false;
         };
-        self.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+        self.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
             owner, target, &stats,
         ));
         true

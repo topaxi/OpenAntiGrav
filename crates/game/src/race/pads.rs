@@ -268,7 +268,7 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return;
         };
-        let Some(table) = oag_gameplay::pickup::table_for(weapons, &self.sim.class) else {
+        let Some(table) = oag_weapons::pickup::table_for(weapons, &self.sim.class) else {
             return;
         };
         // **The `human` column for slot 0 and the `ai` column for the rest**, and
@@ -278,12 +278,12 @@ impl Race {
         // not depend on where it is; the rubber-banding is aimed at the player.
         // See `docs/gameplay/pickups.md`.
         let who = if slot == 0 {
-            oag_gameplay::pickup::Driver::Human {
+            oag_weapons::pickup::Driver::Human {
                 place: self.player_place(),
                 field: self.sim.world.ship_count,
             }
         } else {
-            oag_gameplay::pickup::Driver::Ai
+            oag_weapons::pickup::Driver::Ai
         };
         let last = self.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
@@ -296,7 +296,7 @@ impl Race {
         // otherwise.
         let allowed =
             (!self.sim.allowed_weapons.is_empty()).then_some(self.sim.allowed_weapons.as_slice());
-        let drawn = oag_gameplay::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
+        let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
             self.sim.world.ships[slot].pickup.grant(weapon);
         }

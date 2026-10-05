@@ -11,7 +11,7 @@ handler [weapon-fire.md](weapon-fire.md) attributed to the Cannon at confidence
 **Bomb**. Both attributions were informed guesses; this page replaces them with
 four independent readings that agree.
 
-Both are ported in `crates/gameplay/src/projectile/mine.rs` - one module,
+Both are ported in `crates/weapons/src/projectile/mine.rs` - one module,
 because they are one weapon in two sizes. See
 [The Bomb is the same weapon](#the-bomb-is-the-same-weapon-one-size-up).
 
@@ -244,7 +244,7 @@ opposite ends and met in the middle.
 
 1. **The blast impulse falls off linearly with distance and the damage does
    not.** `1.0 - d/blastradius` scales the impulse; the damage accumulator takes
-   the authored figure flat. `oag_gameplay::projectile::blast` applied *both*
+   the authored figure flat. `oag_weapons::projectile::blast` applied *both*
    flat and said so - "full damage everywhere inside `blastradius`, with no
    falloff" was recorded as this project's own reading, and half of it is now
    replaced by the original's. Not clamped in the original, incidentally: a hit
@@ -264,7 +264,7 @@ for the instruction-level read this rests on.
 ## `Mine_SpawnExplosion` plays `WO_MINE_EXPLO`
 
 **Recovered 2026-08-26, confidence 90 - direct instruction-level read, closed
-the same day this page's own doc comment in `crates/gameplay/src/projectile/mine.rs`
+the same day this page's own doc comment in `crates/weapons/src/projectile/mine.rs`
 started calling this "unread".** `FUN_08867370`'s teardown pass - the second
 loop, over every entity whose `+0x3c` bit `4` ("destroy") is set - calls
 `func_0x00063f1c(param_2, iVar4, auStack_40)` for each. That is the same
@@ -500,7 +500,7 @@ second page would be nine tenths this one.
   Mine either. This is the same negative result
   [weapon-fire.md](weapon-fire.md#what-is-not-verified) recorded and it survives
   a second search. The engine picks a number and says so; see
-  `crates/gameplay/src/projectile/mine.rs`.~~ **Measured 2026-09-15: five**,
+  `crates/weapons/src/projectile/mine.rs`.~~ **Measured 2026-09-15: five**,
   and the writer both sweeps missed is `WeaponPickup_ArmMine` (`0x0886759c`) -
   see [below](#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
   The negative result was wrong, not merely incomplete: a third
@@ -750,7 +750,7 @@ callers resolved by xref rather than by hand. EU at 87 by
   recovered rather than chosen. The only writer of `+0x1ac` outside the
   handler's decrement is on the grant path, and `Weapon_RequestFire` cannot
   reach it, so a second press while bit `0x2` is already set changes nothing
-  - which is what `oag_gameplay::pickup::Held::begin_drop`'s guard does.
+  - which is what `oag_weapons::pickup::Held::begin_drop`'s guard does.
 - **The reload timer's initial value** - listed as unread on
   [weapon-fire.md](weapon-fire.md#what-is-not-verified) - is `0.0`, written
   by the arm's delay slot, so the first mine leaves on the frame fire is
@@ -810,7 +810,7 @@ the relocated database now, and its eight stores are:
 | `+0xe0` | `trigger_radius` |
 | `+0xe4` | `timetodie` |
 
-So the Bomb's fuse **is** its own `timetodie`, which `oag_gameplay::projectile::
+So the Bomb's fuse **is** its own `timetodie`, which `oag_weapons::projectile::
 mine::Drop::bomb` took by analogy and can now take as recovered - and the
 reason `Weapon_FireBomb` writes nothing to `+0x48` is that the Bomb counts
 **up** from zero at `+0xc0` where the Mine counts **down** at `+0x48`. The
@@ -1017,7 +1017,7 @@ mode it also posts a `0xc`-byte "mine gone" record. Then
 **Nothing on the fuse path or the teardown touches a craft**: a mine that
 times out plays `WO_MINE_EXPLO` and hurts nobody, the same shape as a
 Missile's expiry. The earlier "both ways out spend a blast" reading in
-`crates/gameplay/src/projectile/mine.rs` was an inference from the chain's
+`crates/weapons/src/projectile/mine.rs` was an inference from the chain's
 shape and is retracted; the port now expires a mine quietly.
 
 **`Mine_SweepCraftTrigger` (`0x08867b50`, 88)** is the only caller of
@@ -1217,7 +1217,7 @@ was near. So the layer trips its own charge after about 0.5 s: the Bomb's
 observation of the same for the Mine, whose `Mine_SweepCraftTrigger` was not
 read for the point.
 
-`oag_gameplay::projectile::mine::triggered_by` still excludes the owner for good,
+`oag_weapons::projectile::mine::triggered_by` still excludes the owner for good,
 labelled as this engine's choice. **That choice now has a measurement against
 it.** Changing it is a gameplay change (a craft reversing into its own cluster
 takes a blast in the original) and needs the racing gate; it is left for a lane
@@ -1286,7 +1286,7 @@ the craft's own position, no push back along the hull.** Confidence 90 (two stat
 exact; the Mine's moving-craft case rests on the shared `Weapon_FireBomb` shape and the
 frame series, not a Mine probe at speed).
 
-`oag_gameplay::projectile::mine::drop_point` took the hull's own extent as a chosen
+`oag_weapons::projectile::mine::drop_point` took the hull's own extent as a chosen
 offset; it now returns the body position. It moves simulation state (a laid charge's
 position, hashed per projectile); no committed golden hash covers a laid charge. The
 `mine_ground_truth` tests that asserted "behind the craft" now assert "at the craft's

@@ -96,7 +96,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 }
 
 /// Every plasma bolt slot 0 has in the air.
-fn bolts(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+fn bolts(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
     race.sim
         .world
         .projectiles
@@ -230,9 +230,9 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         "the bolt spawned behind the craft"
     );
     // **This reads the charge-hold magnitude, not the flight speed** - the
-    // fire tick above is the first of [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`]'s
+    // fire tick above is the first of [`oag_weapons::projectile::plasma::CHARGE_SECONDS`]'s
     // wind-up, so the bolt has not been released yet and this is still
-    // [`oag_gameplay::projectile::plasma::launch`]'s own `class + launchSpeed`
+    // [`oag_weapons::projectile::plasma::launch`]'s own `class + launchSpeed`
     // reading, unaffected by the release-time ramp measured further down this
     // test. The class speed plus `launchSpeed`, both km/h in the file. Asserted as
     // "faster than the craft" rather than against the authored figure, which
@@ -260,7 +260,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     //
     // **Also where the release-time ramp is measured.** The charge outlives
     // this loop's first tick - the wind-up is
-    // [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`], one second, about
+    // [`oag_weapons::projectile::plasma::CHARGE_SECONDS`], one second, about
     // 60 ticks - and the bolt is racing a real circuit's own geometry through
     // all of it, so the firing craft's own speed is genuinely changing tick to
     // tick: exactly the case a press-time reading and a release-time reading
@@ -293,20 +293,18 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
                 .body
                 .linear_velocity
                 .length()
-                * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+                * oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND;
             release = Some((tick, craft_kmh, live.launch_speed_kmh));
         }
         if let Some((release_tick, ..)) = release {
             let since = tick - release_tick;
             if since == 30 && mid_speed.is_none() {
-                mid_speed = Some(
-                    live.velocity.length() * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND,
-                );
+                mid_speed =
+                    Some(live.velocity.length() * oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND);
             }
             if since == 70 && late_speed.is_none() {
-                late_speed = Some(
-                    live.velocity.length() * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND,
-                );
+                late_speed =
+                    Some(live.velocity.length() * oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND);
             }
         }
     }
@@ -326,7 +324,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     // The release-time reading itself: `Plasma_Launch` re-reads the firing
     // craft's velocity at the moment the charge ends, not at the moment the
     // press started it - `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s
-    // "the charge is real" section. `crates/gameplay/src/projectile/plasma/tests.rs`'s
+    // "the charge is real" section. `crates/weapons/src/projectile/plasma/tests.rs`'s
     // `the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press`
     // is the same claim on a hand fixture with a fixture table; this is the
     // same claim against the shipped table and a real circuit's own physics -
@@ -403,7 +401,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
 /// shipped circuit's collision geometry reaches that high, so
 /// `Plasma_Update`'s probe finds no floor and no wall on any tick, and the
 /// only way the flight can end is the lifetime hitting zero - the ending this
-/// test is actually about. `oag_gameplay::projectile::FALL_ACCELERATION`
+/// test is actually about. `oag_weapons::projectile::FALL_ACCELERATION`
 /// pulls the bolt down at most `0.5 * 50.0 * 10.0^2 = 2500` units over the
 /// full flight, so even a bolt launched with no upward velocity at all stays
 /// thousands of units clear of the ground the whole time.
@@ -424,7 +422,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
 ///
 /// Confidence on the reading this asserts: **`plasma.md`**'s "the teardown
 /// spends no blast on either ending" - the corresponding unit tests in
-/// `oag_gameplay::projectile::plasma::tests` cover the same claim on a hand
+/// `oag_weapons::projectile::plasma::tests` cover the same claim on a hand
 /// fixture; this is the same claim against the shipped table and a real
 /// track's own damage law.
 #[test]

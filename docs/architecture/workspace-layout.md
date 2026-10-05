@@ -50,6 +50,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-physics` | `crates/physics` | Ship dynamics and collision. |
 | `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
 | `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
+| `oag-weapons` | `crates/weapons` | Pickups, projectiles, blasts, beams, disruption and slowdown: what a craft holds, what it fires and what a hit costs. Simulation code, in `GAMEPLAY_CRATES` and the determinism scan. **Below `oag-gameplay`**: `World` and `Ship` embed its state, and it reaches a craft only through the `oag_weapons::Craft` trait, which `oag_gameplay::Ship` implements. Depends on `oag-core`, `oag-physics`, `oag-race` and `oag-tables`. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
 | `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
@@ -69,24 +70,22 @@ crate created before its shape is understood tends to get the wrong shape.
 
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
-| `oag-weapons` | M5 | Pickups, projectiles, damage. **Not created; the work landed elsewhere** - see below. |
 | `oag-ui` | M5 | HUD and menus. |
 | `oag-net` | M8 | Multiplayer. |
 
-**`oag-weapons` is a plan this project did not follow, and the reason is the
-warning above it.** Pickups landed on 2026-08-11 and projectiles the same day,
-and they went into the crates that already had what they needed:
-`oag_tables::weapons` for the table, `oag_gameplay::pickup` for the draw and
-the inventory, `oag_gameplay::projectile` for flight and blasts,
-`oag_game::race` for the trigger and the fire buttons, and
-`oag_physics::damage` for what a hit costs. A new crate would have needed
-`oag-formats` (to name a `Weapon`) and `oag-physics` (to move a body), which is
-`oag-gameplay`'s dependency set exactly - so it would have been a second name
-for the same layer rather than a boundary.
-
-Splitting it out later is still open, and the thing that would justify it is
-weapons growing past what one module should hold. Recorded here rather than
-silently diverging, because the table above is what a contributor reads first.
+**`oag-weapons` was reserved here for M5 and created on 2026-10-05.** Pickups
+and projectiles had landed in `oag-gameplay` on 2026-08-11 because it already
+held what they needed, and `oag-gameplay` grew to carry about two thirds weapons
+code. The split put them below it: `World` and `Ship` hold a `Projectiles`, a
+`Held` and a `Disruption`, so the edge has to run from gameplay to weapons.
+The weapons code reached into `Ship` for nine fields, which became the
+`oag_weapons::Craft` trait, used generically (never `dyn`) so the arithmetic is
+the same instructions as before. The three functions that took a `&mut World`
+(`projectile::step`, `slowdown::drain`, `disruption::advance`) now take the
+pool and the occupied slice of ships; `oag_game::race::tick` passes
+`&mut world.ships[..world.ship_count as usize]`. `MAX_SHIPS` is defined once in
+`oag-weapons`, the lowest crate that needs it, and `oag_gameplay::MAX_SHIPS` is
+that constant.
 
 ## Title packages
 
@@ -265,7 +264,7 @@ split is by what the loop is, not by crate ownership:
 
 | optimised | left at `opt-level = 0` |
 | --- | --- |
-| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
+| `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test; `oag-game` (the whole `race/` tick) and `oag-render` (the particle systems it steps), added 2026-10-01 - see [the gate-speed section](#the-race-itself-was-the-unoptimised-cost-2026-10-01) | `oag-view`, `oag-input`, `oag-audio` |
 | `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc; `oag-texture` - per-texel palette and block-codec loops; `oag-vex` - the node walk over a whole circuit; `oag-pob` - every particle system on a disc parsed and its bytes claimed; `oag-rcs` - the RCSMODEL geometry and material walk | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
@@ -285,7 +284,7 @@ spends what is left on more cores at once, and buys almost as much wall clock
 again without making anything faster. Both are needed; neither is most of it.
 
 The four `matches_the_committed_reference` determinism tests - `oag-core`,
-`oag-ai`, `oag-gameplay`, `oag-physics` - pass unchanged at `opt-level = 2`,
+`oag-ai`, `oag-weapons`, `oag-gameplay`, `oag-physics` - pass unchanged at `opt-level = 2`,
 which is the check that matters before touching this: see
 [determinism](determinism.md).
 

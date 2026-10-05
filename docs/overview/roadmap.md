@@ -598,7 +598,7 @@ seen from the authoring side.
       **Shield and Rocket followed the same day**, taking the draw pool to
       three. Shield is the Turbo's shape - the disc's `<Shield time>` on a timer
       that makes `damage::apply_contact` refuse - and **Rocket is the first
-      projectile**: `oag_gameplay::projectile` flies a fixed-size array of them
+      projectile**: `oag_weapons::projectile` flies a fixed-size array of them
       straight-line, sweeps each tick's step against the track and against
       hulls, and spends `<Rocket damage>`/`blastforce`/`blastradius` through a
       new `damage::apply_weapon` that shares `Ship_Damage`'s recovered body with
@@ -650,7 +650,7 @@ seen from the authoring side.
       speed - and turned up the pickup-grant call site that
       [pickups.md](../gameplay/pickups.md) had recorded as not existing.
       **All thirteen weapons the table weights are in the draw pool as of
-      2026-09-16** (`oag_gameplay::pickup::IMPLEMENTED`), and the slowdown
+      2026-09-16** (`oag_weapons::pickup::IMPLEMENTED`), and the slowdown
       mechanic behind `<Global slowdown_limit>` is recovered and built -
       `Ship_AddSlowdown`'s clamp in `oag_physics::slowdown`, credited by every
       blast, the Cannon and the Quake, drained once a tick ahead of the step

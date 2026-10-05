@@ -25,11 +25,11 @@
 
 use oag_core::math::Vec3;
 use oag_gameplay::hash::hash_world;
-use oag_gameplay::projectile;
 use oag_gameplay::world::World;
 use oag_physics::DamageRules;
 use oag_physics::params::Dimensions;
 use oag_tables::weapons::Weapon;
+use oag_weapons::projectile;
 
 mod determinism_support;
 use determinism_support::{TICK, corridor, weapon_stats};
@@ -81,7 +81,8 @@ fn run(ticks: u32) -> (u64, u64) {
     let mut trajectory = oag_core::hash::StateHasher::new();
     for tick in 0..ticks {
         projectile::step(
-            &mut world,
+            &mut world.projectiles,
+            &mut world.ships[..world.ship_count as usize],
             TICK,
             &world_geometry,
             Some(&stats),
@@ -305,7 +306,7 @@ fn run(ticks: u32) -> (u64, u64) {
 /// - **Moved a seventh time 2026-08-11, and this one is unlike the six above:
 ///   it is a change to what the simulation *does*, not to what is hashed.**
 ///   Projectiles now follow the track floor instead of flying straight - see
-///   `oag_gameplay::projectile` and
+///   `oag_weapons::projectile` and
 ///   `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`. This scenario
 ///   flies a rocket down a corridor into a wall, so its whole trajectory
 ///   differs. That is the intended outcome, not a defect.
@@ -367,7 +368,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x92e8_8d29_f718_d061` at 600 - are exactly what `probe::hash_state`'s
 ///   own isolation check reproduced bit for bit with the new write removed.
 ///
-/// - **Moved 2026-08-26**, when `oag_gameplay::pickup::Held` gained `dropping`
+/// - **Moved 2026-08-26**, when `oag_weapons::pickup::Held` gained `dropping`
 ///   and `drop_reload`, the two counters a Mine cluster comes out on. **The
 ///   move is the hash stream and nothing else.** Both are zero through every
 ///   scenario here - neither collects a pickup, so neither ever starts a drop -
@@ -562,7 +563,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   at 60 ticks and `0x9290_5461_4434_9d81` / `0xd773_b51b_1a49_815f` at 600.
 ///
 /// - **Moved 2026-09-15**, when Pure's Disruptor landed: `Ship::disruption`
-///   (a kind byte and an `f32` timer, `oag_gameplay::disruption`) and
+///   (a kind byte and an `f32` timer, `oag_weapons::disruption`) and
 ///   `Projectile::effect` (a kind byte) entered the stream - five more bytes
 ///   per ship and one more per projectile slot per tick. **Isolated the
 ///   documented way**: with `write_disruption` and the projectile's
@@ -664,7 +665,8 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
     let mut flew = false;
     for _ in 0..600 {
         let reported = projectile::step(
-            &mut world,
+            &mut world.projectiles,
+            &mut world.ships[..world.ship_count as usize],
             TICK,
             &world_geometry,
             Some(&stats),

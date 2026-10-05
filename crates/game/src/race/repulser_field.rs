@@ -34,7 +34,7 @@
 //! `bomb_blast` makes; see `ship-shockwave.md`).
 
 use super::*;
-use oag_gameplay::projectile::repulser::POOL_SIZE;
+use oag_weapons::projectile::repulser::POOL_SIZE;
 
 /// One `(target, rate)` ease, stepped `current += (target - current) * rate`.
 #[derive(Debug, Clone, Copy, PartialEq)]

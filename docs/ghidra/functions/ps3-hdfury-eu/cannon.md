@@ -197,7 +197,7 @@ receiving either name during a Cannon shot) would settle it.
 `crate::livery::cannon_flash`. Two things are **chosen, not measured**:
 
 - **Which side flashes.** The engine's round is spawned by
-  `oag_gameplay::projectile::cannon::launch` a quarter-hull left or right of
+  `oag_weapons::projectile::cannon::launch` a quarter-hull left or right of
   the nose, off the same kind of parity bit. The draw reads the side back
   from which side of the craft the round is on, and picks the node named
   `left` for the left. Whether that matches the original's bit sense is not

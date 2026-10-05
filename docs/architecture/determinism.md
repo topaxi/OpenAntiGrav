@@ -198,7 +198,7 @@ patterns.** `glam` in this workspace is `["std", "scalar-math"]` with no `libm`
 feature, so `Quat::from_axis_angle` is `sin_cos(angle * 0.5)` through the
 platform's libm - the same portability hole as `f32::acos`, wearing a type name
 instead of a method name. Both patterns wanted a leading `.` or an `f32::`, so
-neither matched it, and `oag_gameplay::projectile::launch` computed the rocket
+neither matched it, and `oag_weapons::projectile::launch` computed the rocket
 fan's spread directions through it into `Projectile::velocity`, which is hashed
 state. Three gates missed it at once (finding D1, 2026-08-18): this script's
 patterns, the gameplay determinism scenario that spawned rockets with

@@ -53,6 +53,7 @@ GAMEPLAY_CRATES = {
     # drawn by the composition root. ADR-0055.
     "oag-replay",
     "oag-title",
+    "oag-weapons",
 }
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}
 

@@ -386,7 +386,7 @@ fn vector_loads_pures_own_tuning_and_not_venoms() {
             .as_ref()
             .expect("Pure authors a weapon table");
         assert!(
-            oag_gameplay::pickup::table_for(weapons, "VECTOR").is_some(),
+            oag_weapons::pickup::table_for(weapons, "VECTOR").is_some(),
             "{label}: Pure authors <Pickupodds class=\"Vector\"> and it was not found"
         );
 

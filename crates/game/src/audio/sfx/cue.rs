@@ -256,7 +256,7 @@ pub enum Cue {
     /// (`SoundEmitter_Init` on a fresh `0x70`-byte allocation, stored at the
     /// bolt's `+0x5c`). Decompiled directly 2026-09-16 to settle exactly this:
     /// see [plasma.md](../../../../../docs/ghidra/functions/psp-pulse-usa/plasma.md#plasma_init-0x0885bd18-plays-plasma-and-wo_plasma_head).
-    /// So this fires at the press, the same tick [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`]'s
+    /// So this fires at the press, the same tick [`oag_weapons::projectile::plasma::CHARGE_SECONDS`]'s
     /// wind-up starts - not at release, which is [`Self::PlasmaTravel`]'s edge.
     /// Bank data confirms it as a plain one-shot: `oag-wad sounds` reports
     /// `PLASMA` with 3 waveforms and 0 looping, in `weapons.bnk`.
@@ -279,7 +279,7 @@ pub enum Cue {
     /// `CueEvent` or `SfxVoices` can address... every held voice this engine
     /// plays is keyed by grid slot". This is the first cue built against that
     /// gap: [`super::SfxVoices::plasma_travel`] is an array of
-    /// [`oag_gameplay::projectile::MAX_PROJECTILES`] voice handles, read and
+    /// [`oag_weapons::projectile::MAX_PROJECTILES`] voice handles, read and
     /// written directly off the world's own projectile array every tick -
     /// the same reason [`super::Engine`] reads craft position directly rather than
     /// through a queued [`super::CueEvent`]. Never pushed through the cue queue
@@ -298,7 +298,7 @@ pub enum Cue {
     ///
     /// **Does not fire on a craft hit - that ending plays [`Self::PlasmaHitShip`]
     /// instead.** This port's own Plasma can also end on a craft
-    /// (`Impact::struck.is_some()`, `crates/gameplay/src/projectile/flight.rs`'s
+    /// (`Impact::struck.is_some()`, `crates/weapons/src/projectile/flight.rs`'s
     /// shared sweep-segment test), a third ending closed 2026-09-16:
     /// `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on the
     /// bolt's own emitter and **clears that emitter** before pass-two's
@@ -377,7 +377,7 @@ pub enum Cue {
     /// on the same bolt emitter [`Self::RocketTravel`] plays from - never
     /// reallocated - for a wall/track hit; confidence 90. **This port's own
     /// 5.0 s pool-reap timeout never reaches this edge**:
-    /// `crates/gameplay/src/projectile/flight.rs`'s own Rocket-timeout branch
+    /// `crates/weapons/src/projectile/flight.rs`'s own Rocket-timeout branch
     /// (`kind == Weapon::Rocket && age > rocket::LIFETIME_SECONDS`) resets
     /// the slot and `continue`s *without* writing an `Impact` at all, so no
     /// `struck: None` from a timeout ever reaches this port's own impacts
@@ -397,7 +397,7 @@ pub enum Cue {
     ///
     /// The same teardown pass plays `ROCKEXPLSHIP` (flag `0x20`) instead, on
     /// a craft hit; confidence 90. This port's own split reads
-    /// `oag_gameplay::projectile::Impact::struck`, the same field
+    /// `oag_weapons::projectile::Impact::struck`, the same field
     /// [`Self::PlasmaHitShip`] already routes on.
     RocketHitShip,
     /// The Missile leaving the rail, both the player's own press and an
@@ -446,7 +446,7 @@ pub enum Cue {
     /// teardown tests), each on the round's own emitter with its radius written
     /// to `600.0` (`0x44160000`) just before. The `Sound_Play` for this one is
     /// the `lw` at `0x08869af8` (pointer cell `0x08a7c93c`, string `0x08a7c92c`).
-    /// Fires from the impact loop when a Missile's [`oag_gameplay::projectile::Impact`]
+    /// Fires from the impact loop when a Missile's [`oag_weapons::projectile::Impact`]
     /// names a struck craft, at the impact point, like [`Self::RocketHitShip`].
     MissileHitShip,
     /// A Missile that outlived its fuse.
@@ -478,7 +478,7 @@ pub enum Cue {
     /// splits `CANNONEXPLWALL`/`CANNONEXPLSHIP` on the round's own `0x10`
     /// (wall) / `0x20` (craft) flags, set by `Cannon_UpdateRound`'s
     /// world-hit branch and `Cannon_MarkCraftHit` respectively -
-    /// `oag_gameplay::projectile::cannon`'s own module doc already mirrors
+    /// `oag_weapons::projectile::cannon`'s own module doc already mirrors
     /// this exact split. **The same timeout reasoning as
     /// [`Self::RocketHitWall`] applies**: `flight.rs`'s shared
     /// `MAX_FLIGHT_SECONDS` reap (the branch every weapon but Rocket,
@@ -532,7 +532,7 @@ pub enum Cue {
     /// 0x40`), confidence 85 -
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
     /// around lines 930-1001. This port's own edge is
-    /// [`oag_gameplay::projectile::quake::Wave::hit`]'s own rising edge,
+    /// [`oag_weapons::projectile::quake::Wave::hit`]'s own rising edge,
     /// snapshotted before `Race::advance_quake` and compared after.
     /// **Placed on the struck craft**: the doc's own pseudocode names the
     /// argument `owner_craft_cue_slot`, but the surrounding block's
@@ -580,7 +580,7 @@ pub enum Cue {
     LeachFail,
     /// The LeachBeam's own body, held for as long as a **locked** beam
     /// instance exists - through its disconnect linger, not only while it
-    /// is [`connected`](oag_gameplay::projectile::leach_beam::Beam::connected).
+    /// is [`connected`](oag_weapons::projectile::leach_beam::Beam::connected).
     ///
     /// `LeachBeam_InitLocked` allocates a dedicated `SoundEmitter_Init`
     /// emitter at the instance's own `+0x4c`, `600.0`-unit falloff, and the

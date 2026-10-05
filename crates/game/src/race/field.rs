@@ -163,7 +163,7 @@ impl Race {
     /// that sets one must not silently spend the other. The third is a
     /// Disruptor's two Autopilot effects, which hand the craft to its driver
     /// for their `time` at a scaled thrust - see
-    /// `oag_gameplay::disruption::Disruption::autopilot_thrust_scale`.
+    /// `oag_weapons::disruption::Disruption::autopilot_thrust_scale`.
     ///
     /// **The fourth is the finish line.** Once the player has crossed it for the
     /// last time the original stops reading the pad and flies the craft itself

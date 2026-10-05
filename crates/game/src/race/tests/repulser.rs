@@ -1,5 +1,5 @@
 //! The Repulser in a race: the press, the cue, the hit and the swept Mine.
-//! The law itself is `oag_gameplay::projectile::repulser`'s own tests.
+//! The law itself is `oag_weapons::projectile::repulser`'s own tests.
 
 use super::*;
 use crate::audio::sfx::Cue;

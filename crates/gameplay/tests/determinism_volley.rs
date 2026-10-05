@@ -6,10 +6,10 @@
 //! `REFERENCE` in the history below is `determinism.rs`'s own table.
 
 use oag_gameplay::hash::hash_world;
-use oag_gameplay::projectile;
 use oag_gameplay::world::World;
 use oag_physics::DamageRules;
 use oag_physics::params::Dimensions;
+use oag_weapons::projectile;
 
 mod determinism_support;
 use determinism_support::{TICK, corridor, weapon_stats};
@@ -76,7 +76,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
     let mut trajectory = oag_core::hash::StateHasher::new();
     for _ in 0..ticks {
         projectile::step(
-            &mut world,
+            &mut world.projectiles,
+            &mut world.ships[..world.ship_count as usize],
             TICK,
             &world_geometry,
             Some(&weapon_stats()),

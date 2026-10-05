@@ -133,7 +133,7 @@ teardown then calls `Shuriken_SpawnExpiry` (`0x08870c78`), which:
 
 It calls nothing that spends damage. **Built** as `oag_game::race::SHURIKEN_EXPIRE_EFFECT`,
 with the fuse ending reported as an `Impact` with `blast: false`
-(`oag_gameplay::projectile`); the sound is not.
+(`oag_weapons::projectile`); the sound is not.
 
 ## Measured live (2026-09-30, PPSSPP, Talon's Junction, the player stationary)
 
@@ -155,7 +155,7 @@ the eye.
 **The Mine and the Bomb tripped on the stationary craft that laid them, 29 and
 30 frames later.** That is `Bomb_InArmingDelay`'s 0.5 s, read for the Bomb in
 [mine.md](mine.md) and now seen for the Mine as well: the original has no
-permanent owner exclusion. This port does (`oag_gameplay::projectile::mine::triggered_by`,
+permanent owner exclusion. This port does (`oag_weapons::projectile::mine::triggered_by`,
 labelled chosen). A gameplay change with the racing gate behind it, so it is
 recorded here and not made.
 

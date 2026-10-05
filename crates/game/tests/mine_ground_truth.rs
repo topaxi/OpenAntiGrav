@@ -91,7 +91,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 }
 
 /// Every charge of one kind slot 0 has laid, in the order the array holds them.
-fn laid_of(race: &race::Race, kind: Weapon) -> Vec<oag_gameplay::projectile::Projectile> {
+fn laid_of(race: &race::Race, kind: Weapon) -> Vec<oag_weapons::projectile::Projectile> {
     race.sim
         .world
         .projectiles
@@ -103,7 +103,7 @@ fn laid_of(race: &race::Race, kind: Weapon) -> Vec<oag_gameplay::projectile::Pro
 }
 
 /// Every mine slot 0 has laid, in the order the array holds them.
-fn laid(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+fn laid(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
     laid_of(race, Weapon::Mine)
 }
 
@@ -164,7 +164,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
 
     // The whole cluster takes `(CLUSTER - 1) * DROP_INTERVAL` plus the tick the
     // first one leaves on. Drive well past that.
@@ -185,10 +185,10 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     );
     assert_eq!(
         mines.len(),
-        usize::from(oag_gameplay::projectile::mine::CLUSTER),
+        usize::from(oag_weapons::projectile::mine::CLUSTER),
         "the drop laid {} of {} mines",
         mines.len(),
-        oag_gameplay::projectile::mine::CLUSTER
+        oag_weapons::projectile::mine::CLUSTER
     );
     assert_eq!(
         still_held_after_first,
@@ -210,7 +210,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
             furthest = furthest.max((a.position - b.position).length());
         }
     }
-    let expected = speed * oag_gameplay::projectile::mine::DROP_INTERVAL;
+    let expected = speed * oag_weapons::projectile::mine::DROP_INTERVAL;
     assert!(
         furthest > expected,
         "the furthest two mines are {furthest:.1} apart where one drop interval at \
@@ -253,7 +253,7 @@ fn a_mine_is_laid_at_the_crafts_own_position() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
     // One tick, so exactly the first mine is out and the craft has barely moved -
     // measuring after the whole cluster would fold the craft's own travel into
     // the answer and make a nose-mounted drop look rearward.
@@ -293,7 +293,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
     for _ in 0..40 {
         race.tick(&PlayerInputs::single(throttle));
     }
@@ -354,7 +354,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
     for _ in 0..40 {
         race.tick(&PlayerInputs::single(throttle));
     }
@@ -377,7 +377,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
         .locate(mines[0].position, None)
         .expect("the mine is on the ring")
         .progress;
-    race.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+    race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
         7, progress, 1.0, &stats,
     ));
     race.tick(&PlayerInputs::single(throttle));
@@ -403,12 +403,12 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
 /// **A Bomb press lays exactly one, and it is a Mine one size up in every way
 /// the engine models.**
 ///
-/// The Bomb shares every line of `oag_gameplay::projectile::mine` with the Mine
+/// The Bomb shares every line of `oag_weapons::projectile::mine` with the Mine
 /// except a count, so what a real-data test can say that a unit test cannot is
 /// that sharing it did not quietly make one of them the other. Four claims, all
 /// against the *disc's* numbers rather than chosen ones:
 ///
-/// - One charge, not [`CLUSTER`](oag_gameplay::projectile::mine::CLUSTER). A
+/// - One charge, not [`CLUSTER`](oag_weapons::projectile::mine::CLUSTER). A
 ///   Bomb wired through the Mine's `Drop` with the wrong count is the single
 ///   most likely way this refactor goes wrong, and it is invisible to the type
 ///   system.

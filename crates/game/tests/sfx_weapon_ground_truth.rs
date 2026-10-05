@@ -151,14 +151,14 @@ fn the_four_travel_voices_open_together_and_close_together() {
     let idle = voices(&audio);
 
     let origin = race.sim.world.ships[0].physics.body.position;
-    let rocket = oag_gameplay::projectile::Projectile {
+    let rocket = oag_weapons::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Rocket),
         position: origin,
         owner: 0,
         lifetime: 5.0,
         ..Default::default()
     };
-    let missile = oag_gameplay::projectile::Projectile {
+    let missile = oag_weapons::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Missile),
         position: origin,
         owner: 0,
@@ -166,7 +166,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         ..Default::default()
     };
     // On the blade's own emitter, so it needs no owner to be heard from.
-    let shuriken = oag_gameplay::projectile::Projectile {
+    let shuriken = oag_weapons::projectile::Projectile {
         kind: Some(oag_tables::weapons::Weapon::Shuriken),
         position: origin,
         owner: 0,
@@ -179,10 +179,10 @@ fn the_four_travel_voices_open_together_and_close_together() {
     // A locked beam between slots 0 and 1, built directly rather than fired -
     // this test needs a `Kind::Locked` instance to exist, not a lock to be
     // acquired. The numbers are otherwise inert: nothing here calls `advance`.
-    race.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam {
+    race.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam {
         owner: 0,
         target: 1,
-        kind: oag_gameplay::projectile::leach_beam::Kind::Locked,
+        kind: oag_weapons::projectile::leach_beam::Kind::Locked,
         age: 0.0,
         disconnected_at: None,
         first_drain: true,
@@ -207,9 +207,9 @@ fn the_four_travel_voices_open_together_and_close_together() {
     );
 
     // Clear the rest and confirm every held voice this test opened closes.
-    race.sim.world.projectiles.slots[0] = oag_gameplay::projectile::Projectile::default();
-    race.sim.world.projectiles.slots[1] = oag_gameplay::projectile::Projectile::default();
-    race.sim.world.projectiles.slots[2] = oag_gameplay::projectile::Projectile::default();
+    race.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile::default();
+    race.sim.world.projectiles.slots[1] = oag_weapons::projectile::Projectile::default();
+    race.sim.world.projectiles.slots[2] = oag_weapons::projectile::Projectile::default();
     race.sim.world.leach_beam = None;
     audio.race_tick(&mut race);
     audio.tick();
@@ -257,7 +257,7 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
 
     let stats = race.quake_stats().expect("Pulse authors a Quake");
     let length = race.course().expect("a course").length();
-    race.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+    race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
         0,
         length * 0.5,
         1.0,

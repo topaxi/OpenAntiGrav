@@ -108,7 +108,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 }
 
 /// Every blade slot 0 has in the air.
-fn blades(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
+fn blades(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
     race.sim
         .world
         .projectiles
@@ -187,7 +187,7 @@ fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
 /// blade thrown from the grid on this track (`16_Track`, the disc's own
 /// default) at this warm-up struck a grid-mate 15 units away on its very
 /// first tick - `Impact { kind: Shuriken, owner: 0, struck: Some(7), .. }`.
-/// That is a **direct hit**, and `oag_gameplay::projectile::step`'s own
+/// That is a **direct hit**, and `oag_weapons::projectile::step`'s own
 /// `may_bounce` rule is `struck.is_none() && ..` - a hull hit detonates by
 /// design, the same rule a Rocket or a Missile follows. **The engine was
 /// behaving correctly**; the test's own fixture had a craft in the one place
@@ -254,7 +254,7 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     let direction = thrown[0].velocity.normalize();
     let angle = direction.dot(right).atan2(direction.dot(forward)).abs();
     assert!(
-        (angle - oag_gameplay::projectile::shuriken::LAUNCH_ANGLE).abs() < 1e-3,
+        (angle - oag_weapons::projectile::shuriken::LAUNCH_ANGLE).abs() < 1e-3,
         "the blade left at {angle:.4} rad, not the recovered launch angle"
     );
 

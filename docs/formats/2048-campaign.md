@@ -862,7 +862,7 @@ ever confirmed to be its flag - Step 2 now confirms it is.
 
 **Wiring**: `WeaponSet::allowed_weapons` (`crates/tables/src/mjolnir/
 campaign.rs`) decodes all eleven bits above (`WEAPON_BITS`) and nothing
-else - `oag_gameplay::pickup::draw`'s own `allowed` parameter gates a
+else - `oag_weapons::pickup::draw`'s own `allowed` parameter gates a
 `Weapon Pad`'s draw to that list, wired from the event's own `M_WEAPONSET`
 in `race::load_event` (`crates/game/src/race/load/campaign.rs`) onto
 `Setup::allowed_weapons`. An event whose weapon set decodes to nothing

@@ -344,7 +344,7 @@ fn the_mine_authors_a_fuse_and_a_trigger_radius() {
 ///
 /// Shape only, never values - ADR-0006, so what is asserted is the *ordering*
 /// between two weapons rather than either weapon's numbers. That ordering is
-/// the claim `oag_gameplay::projectile::mine` rests on when it treats the two
+/// the claim `oag_weapons::projectile::mine` rests on when it treats the two
 /// with one mechanism: if the Bomb were not uniformly the bigger of the pair,
 /// "a single big mine" would be the wrong model and the shared code would be
 /// hiding it.

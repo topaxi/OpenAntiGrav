@@ -62,7 +62,7 @@ impl Race {
     /// *locked* beam exists - through its disconnect linger too, which the
     /// original also advances (measured: the ribbon's cursor steps and the
     /// firing craft's pulse strength is written on every frame of the linger).
-    /// An [`oag_gameplay::projectile::leach_beam::Kind::Unlocked`] beam draws
+    /// An [`oag_weapons::projectile::leach_beam::Kind::Unlocked`] beam draws
     /// nothing.
     ///
     /// Advances [`RaceView::leach_beam_ribbon`] (see [`oag_render::beam`]) and
@@ -82,7 +82,7 @@ impl Race {
             .sim
             .world
             .leach_beam
-            .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
+            .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
         let Some(beam) = locked else {
             self.view.leach_beam_ribbon = None;
             self.view.leach_ball_elapsed = 0.0;
@@ -172,7 +172,7 @@ impl Race {
     }
 
     /// Where the LeachBeam ball model sits this frame, or `None` when
-    /// nothing is drawn - no [`oag_gameplay::projectile::leach_beam::Kind::Locked`]
+    /// nothing is drawn - no [`oag_weapons::projectile::leach_beam::Kind::Locked`]
     /// beam this tick, the same gate [`Self::advance_leach_beam_ribbon`]
     /// takes for the ribbon.
     ///
@@ -196,7 +196,7 @@ impl Race {
             .sim
             .world
             .leach_beam
-            .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked)?;
+            .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked)?;
         let owner = self.sim.world.ships[beam.owner as usize]
             .physics
             .body
@@ -237,7 +237,7 @@ impl Race {
     /// `camera_right`/`camera_up` are the view's own world-space axes, which
     /// the two strips are widened along. `alpha` is the link's own coverage:
     /// `1.0` while connected, and while disconnected a linear fade to `0.0`
-    /// over [`oag_gameplay::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`] -
+    /// over [`oag_weapons::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`] -
     /// `LeachBeam_BuildStrip`'s own recovered alpha write.
     #[must_use]
     pub(in crate::race) fn leach_beam_ribbon_vertices(
@@ -245,7 +245,7 @@ impl Race {
         camera_right: oag_core::math::Vec3,
         camera_up: oag_core::math::Vec3,
     ) -> Vec<oag_render::mesh::GpuVertex> {
-        use oag_gameplay::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
+        use oag_weapons::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
         let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
         else {
@@ -288,7 +288,7 @@ impl Race {
     ///
     /// Needs `self.sim.course` (to place the wave along the ring) and
     /// `self.sim.spline` (to read the track's own width there), which is why this
-    /// cannot live in `oag_gameplay::projectile::quake` at all - see that
+    /// cannot live in `oag_weapons::projectile::quake` at all - see that
     /// module's own doc comment on the split.
     ///
     /// **Recovered position and scale, chosen orientation.** `Quake_Update`
@@ -391,7 +391,7 @@ impl Race {
     /// **Recovered for the Rocket, the Missile, the Mine and the Bomb.** See
     /// [`Race::blast_for`] for the map and the reading behind each arm.
     /// `orientation` is the frozen pose a laid charge detonated with
-    /// ([`oag_gameplay::projectile::mine::frozen_pose`]) - unused by every
+    /// ([`oag_weapons::projectile::mine::frozen_pose`]) - unused by every
     /// arm but the Bomb's, which needs it to place its own two `.vex`
     /// models; see [`Self::spawn_bomb_blast_model`].
     ///
@@ -481,7 +481,7 @@ impl Race {
     ///   raycast; the separate craft-proximity test that produces a `Some`
     ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
     ///   sound cue but never spawns a particle effect. See
-    ///   `oag_gameplay::projectile::cannon`'s module doc for the full read.
+    ///   `oag_weapons::projectile::cannon`'s module doc for the full read.
     /// - **`Plasma`**: [`PLASMA_BLAST_EFFECT`] always, whatever it struck, the
     ///   same shape as the Missile's and the Mine's. `Plasmas_Update`
     ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
@@ -553,29 +553,29 @@ impl Race {
     /// this tick.
     ///
     /// **Not reached from `Impact`.** A bounce is not a detonation -
-    /// `oag_gameplay::projectile::step` reports only what *stopped* a
+    /// `oag_weapons::projectile::step` reports only what *stopped* a
     /// projectile, and a bouncing missile does not stop. So this reads
-    /// `before`, a snapshot of every slot's [`oag_gameplay::projectile::Projectile::bounces`]
+    /// `before`, a snapshot of every slot's [`oag_weapons::projectile::Projectile::bounces`]
     /// taken right before `step`, and fires wherever a live Missile's own
     /// counter went up by exactly one this tick - the only way it moves, per
-    /// [`oag_gameplay::projectile::missile::MAX_BOUNCES`]. `Projectile::bounces`
+    /// [`oag_weapons::projectile::missile::MAX_BOUNCES`]. `Projectile::bounces`
     /// is public simulation state read here rather than threaded through a
     /// new out-parameter the way [`Race::tick`]'s `absorbed` is, because nothing
     /// about the gate is deterministic-critical or hidden - it is the same
     /// counter [`crate::race::hash`] already hashes.
     ///
     /// A slot whose kind changed (a detonation freed it, a new weapon took
-    /// it) cannot show a false bounce: [`oag_gameplay::Projectile::default`]
+    /// it) cannot show a false bounce: [`oag_weapons::projectile::Projectile::default`]
     /// resets `bounces` to zero, so the count only ever goes *down* across
     /// such a transition, never up, and this only looks for an increase.
     ///
     /// Called after `projectile::step`, so a bounce plays where the missile
     /// actually is this tick - a few hundredths of a unit past the wall it
-    /// struck, at [`oag_gameplay::projectile::missile::BOUNCE_PUSH_OFF`], rather
+    /// struck, at [`oag_weapons::projectile::missile::BOUNCE_PUSH_OFF`], rather
     /// than exactly on it.
     pub(in crate::race) fn ignite_missile_bounces(
         &mut self,
-        before: &[u8; oag_gameplay::projectile::MAX_PROJECTILES],
+        before: &[u8; oag_weapons::projectile::MAX_PROJECTILES],
     ) {
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             if !bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
@@ -683,7 +683,7 @@ impl Race {
             let (primary, orbiting) = if projectile.kind
                 == Some(oag_tables::weapons::Weapon::Missile)
             {
-                let age = oag_gameplay::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+                let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
                 let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
                 (a, Some(b))
             } else {
@@ -847,12 +847,12 @@ impl Race {
 
     /// Where each live mine is, and the pose it landed in, for the model draw.
     ///
-    /// **No longer translation only.** `oag_gameplay::projectile::mine::at_rest`
+    /// **No longer translation only.** `oag_weapons::projectile::mine::at_rest`
     /// is the recovered velocity a laid mine carries - zero, so
     /// [`Self::projectile_model_matrices`]'s `forward == Vec3::ZERO` branch is
     /// exactly what fires here - but that branch now draws
     /// `Projectile::orientation` rather than a bare translation. See
-    /// [`oag_gameplay::projectile::mine::frozen_pose`] for what `Mine_Init`
+    /// [`oag_weapons::projectile::mine::frozen_pose`] for what `Mine_Init`
     /// copies at drop, at what confidence, and which half of this reading is
     /// chosen rather than measured.
     #[must_use]
@@ -863,8 +863,8 @@ impl Race {
     /// Where each live bomb is, for the model draw - the Mine's, one size up.
     ///
     /// Same reading as [`Self::mine_model_matrices`], carried over on the same
-    /// terms [`oag_gameplay::projectile::mine::frozen_pose`] already applies
-    /// [`oag_gameplay::projectile::mine::at_rest`] to both weapons: the Bomb's
+    /// terms [`oag_weapons::projectile::mine::frozen_pose`] already applies
+    /// [`oag_weapons::projectile::mine::at_rest`] to both weapons: the Bomb's
     /// own spawn helper is unread, so nothing confirms the same matrix-copy
     /// happens there, and nothing rules it out either.
     #[must_use]
@@ -953,7 +953,7 @@ impl Race {
                 let forward = projectile.velocity.normalize_or_zero();
                 if forward == Vec3::ZERO {
                     // Every weapon that reaches this branch lays rather than
-                    // flies (`oag_gameplay::projectile::mine::at_rest`). On
+                    // flies (`oag_weapons::projectile::mine::at_rest`). On
                     // Pulse the pose is the executable's own, measured - see
                     // `laid`; elsewhere `orientation` is the frozen pose it
                     // landed with, chosen, not measured.

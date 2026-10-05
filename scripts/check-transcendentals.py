@@ -62,7 +62,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # joins this tuple on the way out, whether or not its arithmetic looks like it
 # could reach a hash. Narrowing the list is a separate, argued change.
 SCANNED_CRATES = (
-    "core", "physics", "gameplay", "ai", "race", "formats", "video", "tables",
+    "core", "physics", "weapons", "gameplay", "ai", "race", "formats", "video", "tables",
     "texture", "vex", "pob", "rcs", "display", "ui", "replay",
 )
 

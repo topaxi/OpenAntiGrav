@@ -523,7 +523,7 @@ fn readout_flags_the_absorb_window_the_same_tick_it_opens() {
 /// Neither dispatch can be introspected from a test. The player's
 /// (`Race::spend_pickup`) is a `match` whose last arm is `_ => return`, and the
 /// opponent's (`Race::spend_opponent_pickup`) is an `==` chain whose fallthrough
-/// is the *absorb* branch. So a weapon added to `oag_gameplay::pickup::IMPLEMENTED`
+/// is the *absorb* branch. So a weapon added to `oag_weapons::pickup::IMPLEMENTED`
 /// and nowhere else compiles clean, passes every other test, and reaches a player
 /// as a pickup that does nothing when fired and quietly turns into energy for an
 /// opponent.
@@ -558,11 +558,11 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
     ];
 
     assert_eq!(
-        oag_gameplay::pickup::IMPLEMENTED,
+        oag_weapons::pickup::IMPLEMENTED,
         WIRED,
         "`pickup::IMPLEMENTED` and this list disagree. A pad can now hand out a \
          weapon that may have no effect. Three places grow together:\n  \
-         1. `oag_gameplay::pickup::IMPLEMENTED`\n  \
+         1. `oag_weapons::pickup::IMPLEMENTED`\n  \
          2. the `match` in `Race::spend_pickup` (crates/game/src/race/weapons.rs)\n  \
          3. the `==` chain in `Race::spend_opponent_pickup` (crates/game/src/race/field.rs)\n\
          Then update this list."
@@ -577,7 +577,7 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
 /// null and an index of `-1` when there is not - and `Weapon_FireMissile`
 /// (`0x088685cc`) empties the held-weapon slot before it so much as checks
 /// whether the pool has room. See
-/// `oag_gameplay::projectile::missile::lock`'s "`None` is not a refusal to fire".
+/// `oag_weapons::projectile::missile::lock`'s "`None` is not a refusal to fire".
 ///
 /// Built on an empty grid so there is provably nothing to lock, and on a table
 /// that authors a Missile so the arm cannot pass for the *other* reason it
@@ -621,7 +621,7 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
 /// An unguided missile fired through the button path ends itself on time.
 ///
 /// **The timer only**, and deliberately: that the detonation spends no blast is
-/// a rule of `oag_gameplay::projectile` and is asserted there, by
+/// a rule of `oag_weapons::projectile` and is asserted there, by
 /// `a_self_detonating_missile_damages_nobody_standing_in_it`. What this adds is
 /// that a missile fired the way a player fires one - a pad's pickup, a `SQUARE`
 /// press, `Race::tick` driving the pool - reaches the same end.
@@ -630,7 +630,7 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
 /// `3.0 < age` on every live slot.
 #[test]
 fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
-    use oag_gameplay::projectile::missile::SELF_DETONATE_SECONDS;
+    use oag_weapons::projectile::missile::SELF_DETONATE_SECONDS;
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());

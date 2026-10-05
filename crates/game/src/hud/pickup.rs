@@ -91,7 +91,7 @@ pub(super) fn pickup_sprites(
 /// Empty whenever `cx.art.pickup_icon_models` is `None` (every title but
 /// Pure, so far), whenever the held weapon's slot in it is `None` - Pure
 /// authors no icon for `Cannon`, `LeachBeam`, `Repulser` or `Shuriken`, and a
-/// Pure race can hand out the last of those (`oag_gameplay::pickup::
+/// Pure race can hand out the last of those (`oag_weapons::pickup::
 /// IMPLEMENTED`), so this is a live path and not a dead branch - or whenever
 /// the model failed to build or its art did not reach the sheet, which
 /// [`crate::race::hud::vex_model_art`] reports and this draws nothing for

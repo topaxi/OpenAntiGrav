@@ -208,7 +208,7 @@ fn every_cue_has_something_that_raises_it() {
             race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
             race.sim.world.ships[0]
                 .pickup
-                .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+                .begin_drop(oag_weapons::projectile::mine::CLUSTER);
         }
         // A Rocket and a Missile, each pressed once after the Plasma's own
         // wind-up has released - one bolt in the air at a time is enough,
@@ -337,7 +337,7 @@ fn every_cue_has_something_that_raises_it() {
 /// **The shooter carries a forward velocity even though its position is
 /// pinned**, because since 2026-09-16 a bolt leaves at *the craft's own speed*
 /// plus `launchSpeed` and only blends up to the class speed over its first
-/// second (`Plasma_SpeedForClass`, `crates/gameplay/src/projectile/flight.rs`).
+/// second (`Plasma_SpeedForClass`, `crates/weapons/src/projectile/flight.rs`).
 /// A shooter held at zero velocity launches a `26 km/h` bolt that falls off
 /// the synthetic straight - which has no surface under it - before it has
 /// covered the fifteen units, and the hull sweep misses under the target. The
@@ -347,9 +347,9 @@ fn every_cue_has_something_that_raises_it() {
 /// ordinary Venom pace, and puts the bolt across the gap in the first few
 /// ticks after release the way the pre-ramp fixture did.
 ///
-/// **Ship count is `2`, not a full `GRID_SLOTS` grid.** `oag_gameplay::projectile::step`
+/// **Ship count is `2`, not a full `GRID_SLOTS` grid.** `oag_weapons::projectile::step`
 /// only sweeps `world.ships[..world.ship_count]` -
-/// `crates/gameplay/src/projectile.rs`'s own `step` - so the second craft has
+/// `crates/weapons/src/projectile.rs`'s own `step` - so the second craft has
 /// to be counted in for the hull test to see it at all, but nothing here
 /// needs the other six slots `race_with_a_grid`-style grid construction would
 /// also spin up.
@@ -386,7 +386,7 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
 /// A Rocket meeting a second, stationary craft - the same two-craft shape
 /// [`plasma_hits_a_craft`] takes and for the same reason:
 /// `every_cue_has_something_that_raises_it`'s own wall fixture only ever
-/// meets the wall it is re-aimed at every tick. `oag_gameplay::projectile::flight`
+/// meets the wall it is re-aimed at every tick. `oag_weapons::projectile::flight`
 /// gives the Rocket the Plasma's own two endings - see `Cue::RocketHitShip`'s
 /// own doc comment - so this is the same fixture with the weapon and its
 /// table swapped, and no charge/wind-up delay to wait out.
@@ -615,7 +615,7 @@ fn a_plasma_that_hits_a_craft_raises_plasmahitship_and_not_plasmahitwall() {
     );
 }
 
-/// The same split as the Plasma's, on `oag_gameplay::projectile::Impact::struck` -
+/// The same split as the Plasma's, on `oag_weapons::projectile::Impact::struck` -
 /// see `Cue::RocketHitShip`'s own doc comment.
 #[test]
 fn a_rocket_that_hits_a_craft_raises_rockethitship_and_not_rockethitwall() {
@@ -893,9 +893,9 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 /// One `MINELAUNCH` per mine that leaves the back of the craft, on the same
 /// tick each one does - not one per press, and not one for the Bomb.
 ///
-/// `oag_gameplay::pickup::Held::begin_drop` fires the first charge on the very
+/// `oag_weapons::pickup::Held::begin_drop` fires the first charge on the very
 /// tick it is called, so the count landed by the end of the run is exactly
-/// [`oag_gameplay::projectile::mine::CLUSTER`] rather than one short.
+/// [`oag_weapons::projectile::mine::CLUSTER`] rather than one short.
 #[test]
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
@@ -903,7 +903,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
 
     let mut launches = 0;
     // Comfortably past the whole cluster: `DROP_INTERVAL` is a tenth of a
@@ -918,7 +918,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     }
     assert_eq!(
         launches,
-        usize::from(oag_gameplay::projectile::mine::CLUSTER),
+        usize::from(oag_weapons::projectile::mine::CLUSTER),
         "one MINELAUNCH per mine in the cluster, not more and not fewer"
     );
 }

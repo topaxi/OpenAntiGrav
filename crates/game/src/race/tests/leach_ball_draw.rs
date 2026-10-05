@@ -6,7 +6,7 @@
 //! read of it against a live `Race`.
 
 use super::*;
-use oag_gameplay::projectile::leach_beam::Beam;
+use oag_weapons::projectile::leach_beam::Beam;
 
 fn locked_race(owner_at: Vec3, target_at: Vec3, elapsed: f32) -> Race {
     let mut race = Race::start(setup(hulled_handling()));
@@ -57,7 +57,7 @@ fn nothing_locked_draws_no_ball() {
 
 /// Fired with no lock: a real `Beam` exists (see `leach_beam.rs`'s own
 /// `a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock`) but
-/// it is not [`oag_gameplay::projectile::leach_beam::Kind::Locked`], so it
+/// it is not [`oag_weapons::projectile::leach_beam::Kind::Locked`], so it
 /// draws no ball either.
 #[test]
 fn an_unlocked_beam_draws_no_ball_either() {

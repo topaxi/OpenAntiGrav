@@ -109,7 +109,7 @@ a union:
 **Bold rows are decoded by `oag_tables::weapons`**; the rest are named here and
 read no further, because [nothing consumes them](../gameplay/pickups.md) and a
 field decoded with no consumer is a field nobody has checked. The Rocket is
-partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
+partly bold for the same reason: `oag_weapons::projectile` reads nine of its
 eleven attributes, and the one left plain is `spread`.
 
 **`slowdown_time` moved out of that list on 2026-09-06** and is decoded on

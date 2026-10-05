@@ -25,11 +25,11 @@ use oag_core::math::Vec3;
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
-use oag_gameplay::projectile::{
-    FALL_ACCELERATION, MAX_PROJECTILES, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
-};
 use oag_physics::{Ray, Raycaster, Surface};
 use oag_tables::weapons::Weapon;
+use oag_weapons::projectile::{
+    FALL_ACCELERATION, MAX_PROJECTILES, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
+};
 
 fn image(title: &str) -> Option<PathBuf> {
     match title {
@@ -119,7 +119,7 @@ fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> 
 }
 
 fn replicate<R: Raycaster + ?Sized>(
-    projectile: &oag_gameplay::projectile::Projectile,
+    projectile: &oag_weapons::projectile::Projectile,
     dt: f32,
     world: &R,
     ships: &[oag_gameplay::Ship],
@@ -163,7 +163,7 @@ fn replicate<R: Raycaster + ?Sized>(
         if !ship.active || slot as u8 == projectile.owner {
             continue;
         }
-        let radius = oag_gameplay::projectile::hull_radius(&ship.handling.dimensions);
+        let radius = oag_weapons::projectile::hull_radius(&ship.handling.dimensions);
         if let Some(t) = segment_sphere(from, to, ship.physics.body.position, radius) {
             let d = t * distance;
             if hull.is_none_or(|(_, best)| d < best) {
@@ -357,7 +357,7 @@ fn trace_a_rocket_volley_along_the_floor() {
                     (Some(_), _) => End::SweptIntoGeometry,
                     (None, Some(_)) => End::Hull,
                     _ if age as f32 * dt
-                        >= oag_gameplay::projectile::ROCKET_LIFETIME_SECONDS - dt =>
+                        >= oag_weapons::projectile::ROCKET_LIFETIME_SECONDS - dt =>
                     {
                         End::Expired
                     }

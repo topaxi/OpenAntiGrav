@@ -460,13 +460,13 @@ pub fn replay<R: Raycaster + ?Sized>(
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about
         // rather than a silent empty slot.
-        pickup: oag_gameplay::Held::empty(),
+        pickup: oag_weapons::pickup::Held::empty(),
         // And no weapon either, so nothing ever credits this. Named for the
         // same reason the pickup above is.
         pending_slowdown: 0.0,
         pending_thrust_scale: 1.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
-        disruption: oag_gameplay::disruption::Disruption::default(),
+        disruption: oag_weapons::disruption::Disruption::default(),
         active: true,
     };
     world.ship_count = 1;
@@ -691,13 +691,13 @@ where
         // ever fill this. Named rather than left to `..Default::default()` so
         // that a pickup reaching a replay is a compile error to think about
         // rather than a silent empty slot.
-        pickup: oag_gameplay::Held::empty(),
+        pickup: oag_weapons::pickup::Held::empty(),
         // And no weapon either, so nothing ever credits this. Named for the
         // same reason the pickup above is.
         pending_slowdown: 0.0,
         pending_thrust_scale: 1.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
-        disruption: oag_gameplay::disruption::Disruption::default(),
+        disruption: oag_weapons::disruption::Disruption::default(),
         active: true,
     };
     world.ship_count = 1;

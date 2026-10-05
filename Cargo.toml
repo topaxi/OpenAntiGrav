@@ -30,6 +30,7 @@ members = [
   "crates/trace",
   "crates/ui",
   "crates/video",
+  "crates/weapons",
   "crates/vex",
   "crates/view",
 ]
@@ -71,6 +72,7 @@ oag-trace = { path = "crates/trace" }
 oag-ui = { path = "crates/ui" }
 oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
+oag-weapons = { path = "crates/weapons" }
 
 anyhow = "1"
 # Two crates now: `oag-display` defines the settings vocabulary and `oag-game`
@@ -90,7 +92,7 @@ pollster = "1"
 #
 # `env_logger` is a dependency of the **binaries alone** - a library never picks
 # the sink. It is also deliberately absent from the simulation crates
-# (`oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay`), which log
+# (`oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay`), which log
 # nothing at all: they take a snapshot in and emit one out, and a logger there
 # would be a side effect the determinism tests cannot see.
 #
@@ -246,6 +248,8 @@ opt-level = 2
 [profile.dev.package.oag-race]
 opt-level = 2
 [profile.dev.package.oag-gameplay]
+opt-level = 2
+[profile.dev.package.oag-weapons]
 opt-level = 2
 
 # The asset decode path: LZSS, the GS and GE texture swizzles, the `.vex` node

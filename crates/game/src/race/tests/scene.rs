@@ -243,7 +243,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     );
 
     // The worst case: every slot in the air at once.
-    for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
+    for slot in 0..oag_weapons::projectile::MAX_PROJECTILES {
         race.sim.world.projectiles.spawn(
             oag_tables::weapons::Weapon::Rocket,
             Vec3::Z * slot as f32,
@@ -254,7 +254,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     let vertices = race.projectile_sprites(right, up, |_| false);
     assert_eq!(
         vertices.len(),
-        oag_gameplay::projectile::MAX_PROJECTILES * 6,
+        oag_weapons::projectile::MAX_PROJECTILES * 6,
         "six vertices per projectile, and nothing else in this buffer"
     );
     // A modelled rocket's glow comes off the disc instead, so this buffer
@@ -380,10 +380,10 @@ fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
 /// A laid mine or bomb is drawn with the pose it landed in, not a bare
 /// translation - the fix over what this asserted before 2026-09-07. See
 /// [`Race::mine_model_matrices`]'s own doc comment and
-/// `oag_gameplay::projectile::mine::frozen_pose` for what `Mine_Init` carries
+/// `oag_weapons::projectile::mine::frozen_pose` for what `Mine_Init` carries
 /// and which half of the reading is chosen rather than measured.
 ///
-/// Goes through [`oag_gameplay::projectile::Projectiles::lay`] rather than
+/// Goes through [`oag_weapons::projectile::Projectiles::lay`] rather than
 /// `Projectiles::spawn` on purpose: `spawn` is the flying weapons' own entry
 /// point and defaults `orientation` to identity, which would pass this test
 /// whether the drawing code used the field at all - `lay` is the one entry
@@ -559,7 +559,7 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
 /// (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a sound cue but never
 /// spawns a particle. Playing [`CANNON_SPARKS_EFFECT`] on a craft hit too
 /// would be exactly the kind of plausible-looking invention `CLAUDE.md`
-/// forbids - see `oag_gameplay::projectile::cannon`'s module doc for the
+/// forbids - see `oag_weapons::projectile::cannon`'s module doc for the
 /// full read.
 ///
 /// **The struck craft still sparks, from its own side.** `Ship_Damage`

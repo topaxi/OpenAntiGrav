@@ -62,7 +62,7 @@ because it reuses the **Rocket's** whole flight model. `Plasma_Update`
 (`0x0885c6cc`) is `Rocket_Update`'s floor follower instruction for instruction -
 the same 12-unit probe along the carried surface normal, the same
 speed-preserving redirect, the same fall, the same detonate on a wall, the same
-`/ 3.6`. `oag_gameplay::projectile::advance` already *was* that function, so the
+`/ 3.6`. `oag_weapons::projectile::advance` already *was* that function, so the
 port needed no flight code at all: a `PlasmaStats`, a one-shot `launch`, two
 fire arms and a flare name. **The pattern to carry forward is that the
 expensive part of a weapon in this engine is its trigger and its trajectory,
@@ -165,7 +165,7 @@ is the one that is wrong about ids" is itself now corrected: it is right about
 eleven of them, and the *AI stats file* is the thing indexed differently.
 
 **Ported the same day**: `MineStats` (seven attributes, `WeaponStats_ParseMine`
-`0x0880d124`, 92); `oag_gameplay::projectile::mine`; a drop that lays
+`0x0880d124`, 92); `oag_weapons::projectile::mine`; a drop that lays
 `CLUSTER` mines one every recovered `0.1 s`; the recovered coupling that the
 craft **keeps holding the pickup** until the last one is out, which is why
 `pickup::Held` grew `dropping` and `drop_reload`; a mine that does not fly at
@@ -184,7 +184,7 @@ reproduce bit for bit.
 
 **The Bomb followed the Mine the same day and cost almost nothing**, which is
 the point of recording it here rather than in a thread of its own: it shares
-every line of `oag_gameplay::projectile::mine` except a count. Three
+every line of `oag_weapons::projectile::mine` except a count. Three
 independent things say it is the Mine one size up - its `<Stats>` are the
 Mine's six with every one larger on both shipped tables; `Weapon_FireBomb`
 (`0x08863a20`) spawns once where `Weapon_DropMines` reloads a timer and spawns
@@ -315,7 +315,7 @@ both corrected in the same change.
 
 Built straight off the same day's evidence page, with no further Ghidra
 session - the page's own "buildable now" claim held. `Weapon::Cannon` joins
-`oag_gameplay::pickup::IMPLEMENTED`; `oag_tables::weapons::CannonStats`
+`oag_weapons::pickup::IMPLEMENTED`; `oag_tables::weapons::CannonStats`
 decodes the block whole (`absorb rounds rate damage_per_bullet
 slowdown_time`); `Race::advance_cannons` is the per-craft, per-tick port of
 `Cannon_UpdateReload` - every craft holding one fires itself, twin barrels
@@ -329,7 +329,7 @@ for whoever touches this next:**
   `Race::spend_pickup`'s Cannon arm and `Race::spend_opponent_pickup`'s both
   `return` unconditionally - a press (human or AI) is a recovered non-event,
   not a stub. The pickup is spent only by
-  `oag_gameplay::pickup::Held::advance_cannon_reload` reaching zero rounds.
+  `oag_weapons::pickup::Held::advance_cannon_reload` reaching zero rounds.
 - **It self-arms rather than being armed at grant time.** A pad crossing,
   `--give` and a test setting `Held::weapon` directly are three different
   ways this project fills the slot, and only the first goes through this
@@ -343,7 +343,7 @@ invented, flagged accordingly.** `Cannon_Init` adds a per-class base speed
 (`func_0x00060af4`, `0x08864af4`) to the firing craft's own current speed,
 and the Cannon's `<Stats>` authors no speed at all - not even a per-class
 one, the shape every other projectile weapon here has. `0x08864af4` was not
-decompiled this pass; `oag_gameplay::projectile::cannon::BASE_SPEED_KMH` is
+decompiled this pass; `oag_weapons::projectile::cannon::BASE_SPEED_KMH` is
 this build's stand-in, `400.0`, chosen and given no confidence score. This
 is the one place `cannon-quake-leachbeam.md` is not sufficient to build the
 Cannon from without a further Ghidra session, and its own "Not chased" line
@@ -351,7 +351,7 @@ already said so.
 
 **Damage is direct-hit only, and that is read off the schema rather than
 chosen.** The Cannon is the only projectile weapon whose block authors
-neither `blastforce` nor `blastradius`, so `oag_gameplay::projectile::step`
+neither `blastforce` nor `blastradius`, so `oag_weapons::projectile::step`
 gives it its own arm rather than routing it through the shared
 `blast`/`blast_stats` radius sweep: a round that struck a craft costs that
 craft `damage_per_bullet` directly, through the same recovered
@@ -376,7 +376,7 @@ which is the whole point of the weapon.
 ### 2026-10-04: the Repulser built (pulse-repulser lane)
 
 Read whole on [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md)
-(twenty functions, 60-90) and built: `oag_gameplay::projectile::repulser`,
+(twenty functions, 60-90) and built: `oag_weapons::projectile::repulser`,
 `Race::fire_repulser`/`advance_repulsers`/`advance_repulser_visual`. What is
 still open, most player-visible first:
 
@@ -447,7 +447,7 @@ still open, most player-visible first:
   early; not seen, not checked. (6) **The live wave ended before 5.0 s**: in
   the one PPSSPP run, the last armed frame was at age 4.788 and
   `Quake_UpdateSpans` was never called again (`live == 0`), while
-  `oag_gameplay::projectile::quake::LIFETIME_SECONDS` is the static read's 5.0
+  `oag_weapons::projectile::quake::LIFETIME_SECONDS` is the static read's 5.0
   and gates refire. One run is not enough to move a recovered constant; it is
   a measured discrepancy with no explanation yet (the amplitude is 0.5 units
   there, so perhaps every span had already run off its far end).
@@ -468,7 +468,7 @@ still open, most player-visible first:
   `Plasma_SpeedForClass` blends `entity+0x48` (the craft's own speed plus
   `launchspeed`) into the class speed over the bolt's first second of flight;
   this engine flies at `class + launchspeed` throughout, which is
-  `oag_gameplay::projectile::launch`'s shared choice. Deliberate, so the Rocket
+  `oag_weapons::projectile::launch`'s shared choice. Deliberate, so the Rocket
   and the Plasma cannot drift apart - worth revisiting only alongside the
   Rocket's own.
 - ~~**The Plasma blast's three models are recovered and not drawn.**~~
@@ -507,7 +507,7 @@ still open, most player-visible first:
   says the original spends nothing there either, and it is deliberately not
   touched by this port; see the dated section for why.
 - ~~**The Plasma's wall-hit branch in `Projectiles::advance`
-  (`crates/gameplay/src/projectile/flight.rs`) still credits `blast: true`,
+  (`crates/weapons/src/projectile/flight.rs`) still credits `blast: true`,
   which the 2026-09-16 reading below says the original never does either -
   wall or timeout, `Plasmas_Update`'s teardown is identical and spends no
   blast on a Plasma.**~~ **Closed 2026-09-16, later the same day** - see the
@@ -574,7 +574,7 @@ still open, most player-visible first:
   `BombBlast_Construct` (`0x08872078`) loads a second copy of that string
   (`0x08a7cbdc`) alongside `explosion_hemisphere.vex` and `WO_BOMB_SMOKERING`
   - see [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines).
-- ~~**How many mines a press lays is invented.** `oag_gameplay::projectile::mine::CLUSTER`
+- ~~**How many mines a press lays is invented.** `oag_weapons::projectile::mine::CLUSTER`
   is `5`. Two independent sweeps for what writes the original's counter at
   `craft+0x1ac` found only the handler's own decrement, and no `<Stats>`
   attribute counts mines. It is simulation state, so changing it is a hash move.~~
@@ -671,7 +671,7 @@ still open, most player-visible first:
   `crate::hash`'s reference on purpose - it is presentation state nothing in
   the simulation reads back, so hashing it would only make the reference move
   the day the field started being set, for a value that cannot be the reason
-  two runs diverge. See `oag_gameplay::projectile::mine::frozen_pose`'s doc
+  two runs diverge. See `oag_weapons::projectile::mine::frozen_pose`'s doc
   comment for the two-part reading it carries: that a laid charge freezes a
   pose at drop is recovered from `Mine_Init` (`0x08859ac8`, confidence 90,
   `entity+0x60..0x9c`); that the pose is the craft's *body* orientation rather
@@ -716,7 +716,7 @@ still open, most player-visible first:
   press with no `pickup.is_dropping()` guard, so a re-press mid-cluster
   re-arms the drop and lays immediately rather than being ignored until the
   cluster finishes. ~~**Not fixed here**~~ **Fixed, later and unlinked commit
-  (thread audit note, 2026-09-10): `crates/gameplay/src/pickup.rs`'s
+  (thread audit note, 2026-09-10): `crates/weapons/src/pickup.rs`'s
   `begin_drop` is now a no-op while `is_dropping()` is already true - no
   `Race::spend_pickup`-side guard needed after all. Confirmed in current
   source; this bullet was never struck through when the fix landed.**
@@ -827,7 +827,7 @@ the section below.
 
 `Race::advance_quake` ends with `self.world.quake = Some(wave)` on every path and
 nothing anywhere sets the field back to `None`;
-`oag_gameplay::projectile::quake::Wave` carries no age and no lifetime. Two
+`oag_weapons::projectile::quake::Wave` carries no age and no lifetime. Two
 player-visible consequences, both live on `main`:
 
 1. `Race::spend_pickup`'s Quake arm returns early on `world.quake.is_some()`, so
@@ -855,7 +855,7 @@ gate. Confidence 85; nine names landed with the evidence. See
 [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)'s
 2026-09-08 section.
 
-`oag_gameplay::projectile::quake::LIFETIME_SECONDS` is that 5.0, `Wave::age`
+`oag_weapons::projectile::quake::LIFETIME_SECONDS` is that 5.0, `Wave::age`
 accumulates it on every path including the degenerate-course one, and
 `Race::advance_quake` drops the wave before applying hits on the tick it
 expires.
@@ -877,14 +877,14 @@ regression.
 `oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`
 (six `a_full_grid_of_*_arms_no_fewer_rolls_than_*` tests since 2026-09-09)
 red**, and nothing about the barrel roll had moved. Recorded here because the
-next weapon to join `oag_gameplay::pickup::IMPLEMENTED` will do the same thing to
+next weapon to join `oag_weapons::pickup::IMPLEMENTED` will do the same thing to
 whatever statistic is next-smallest.
 
 The failure: `skilled armed 0 rolls total against novice's 1`, per-tier totals
 novice 1, skilled 0, elite 1, ace 3. Cause confirmed by isolation, not guessed -
 `Weapon::LeachBeam` in `IMPLEMENTED` makes it fail, the same line out makes it
 pass, with nothing else changed. **A wider pickup pool widens the weighted walk
-in `oag_gameplay::pickup::draw`**, so every craft draws different pickups, so
+in `oag_weapons::pickup::draw`**, so every craft draws different pickups, so
 every trajectory in the race differs, so the seven per-flight roll coin tosses
 are simply re-rolled.
 
@@ -1107,7 +1107,7 @@ detonation and aged in `Race::tick`. `crates/game/src/race/scene.rs` and
 `crates/game/src/race/scene/weapon_models.rs` load and draw
 `PLASMA_BLAST_HALO_MODEL_ENTRY`/`_HEMISPHERE1_/_HEMISPHERE2_MODEL_ENTRY`
 the same way the Rocket's, Mine's, Bomb's and Cannon round's own bodies
-are, sized to `oag_gameplay::projectile::MAX_PROJECTILES` but indexed
+are, sized to `oag_weapons::projectile::MAX_PROJECTILES` but indexed
 independently of the projectile pool since a blast outlives its bolt. One
 transform serves all three models per blast (the per-model scale/offset
 nudge `PlasmaBlast_Construct` reads is `0.0` for all three, measured), and
@@ -1154,7 +1154,7 @@ suite (931 passed).
   `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`) load
   `Data\Weapons\Pulse_Mine.vex`/`Pulse_Bomb.vex` through the existing `.vex`
   path, drawn translation-only (a laid charge carries zero velocity - see
-  `oag_gameplay::projectile::mine::at_rest`). `Mine_Init`/`Mine_Construct`
+  `oag_weapons::projectile::mine::at_rest`). `Mine_Init`/`Mine_Construct`
   were read live first, per this item's own instruction: no call in
   `Mine_Init` resolves to `Psys_Spawn_q`, so there is no drop-time particle
   effect to wire, checked rather than assumed - see `mine.md`'s
@@ -1432,7 +1432,7 @@ that is what the port spends.
 Built the same session, from that page and this thread in full:
 
 - `oag_tables::weapons::QuakeStats` - the four authored attributes.
-- `oag_gameplay::projectile::quake::Wave` - the single travelling instance,
+- `oag_weapons::projectile::quake::Wave` - the single travelling instance,
   tracked as a plain `f32` distance-along-course in
   `oag_race::Standing::progress`'s own convention rather than the original's
   segment+parametric-`t` pair. The two are equivalent on a closed ring and
@@ -1563,14 +1563,14 @@ craft near it.
 Full evidence: [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#the-expiry-settles-a-damage-question-nobody-had-read).
 
 **Ported**: `Projectiles::advance`'s Plasma-specific branch at the lifetime
-timeout (`crates/gameplay/src/projectile/flight.rs`) now emits
+timeout (`crates/weapons/src/projectile/flight.rs`) now emits
 `Impact { blast: false, .. }` instead of reaping the slot silently, matching
 the wall-hit branch in point, kind and owner - the same shape the Missile's
 own self-detonation already uses. `Race::tick` plays the `PLASMA_BLAST_EFFECT`
 for every impact regardless of `blast`, so the timeout now draws
 `WO_PLASMA_FLASH` exactly as a wall hit does; `blast: false` keeps
 `apply_impacts` from spending the blast. Tests: two unit tests against a hand
-fixture (`crates/gameplay/src/projectile/plasma/tests.rs`, mirroring the
+fixture (`crates/weapons/src/projectile/plasma/tests.rs`, mirroring the
 Missile's own `an_unguided_missile_detonates_when_its_three_seconds_are_up`
 pair) and one ground-truth test against a real disc
 (`crates/game/tests/plasma_ground_truth.rs`,
@@ -1652,13 +1652,13 @@ wall and the travel-sweep hit) now split by `kind` and, for the sweep branch,
 by `struck`: a Plasma wall hit is `blast: false` on both, a Plasma craft hit
 is `blast: true` routed through a new `blast::blast_direct_hit` rather than
 the uniform `blast()` every other weapon still uses. `Impact::struck` and
-`Impact::blast`'s own doc comments in `crates/gameplay/src/projectile.rs`
+`Impact::blast`'s own doc comments in `crates/weapons/src/projectile.rs`
 carry the full reading. The Rocket is untouched throughout - see the new Open
 item above for why `Rocket_HitCraft`'s identical shape is a lead, not a fix,
 here.
 
 Tests: three new unit tests in
-`crates/gameplay/src/projectile/plasma/tests.rs` (the `Impact` shape on a
+`crates/weapons/src/projectile/plasma/tests.rs` (the `Impact` shape on a
 craft hit, the struck craft's direct credit, and the bystander/firer split).
 `weapon_slowdown_ground_truth.rs` needed no assertion change - it hand-detonates
 through `blast()` directly rather than through a real `Impact`, so the new
@@ -1705,7 +1705,7 @@ or `~BOMBRADAR`.
 **`PLASMAHITWALL` also plays for a craft hit, and that is chosen, not
 measured.** This engine's own Plasma can end on a craft
 (`Impact::struck.is_some()`, the shared sweep-segment test in
-`oag_gameplay::projectile::flight`) as well as a wall or the 10 s timeout.
+`oag_weapons::projectile::flight`) as well as a wall or the 10 s timeout.
 `plasma.md`'s own reading of `Plasmas_Update`'s teardown covers only the
 latter two - `Plasma_Update`'s decompiled switch has no craft-hit case, and
 the travel-segment sweep against a craft is the part of that function this
@@ -1742,17 +1742,17 @@ Closes the `## Open` item above. `Plasma_SpeedForClass` (`0x0885c5a4`,
 unimplemented: the bolt leaves at the firing craft's own speed plus
 `launchSpeed` and blends to the class speed over its first second of flight,
 and this engine flew at `class + launchSpeed` throughout instead, the choice
-`oag_gameplay::projectile::launch`'s doc comment made "so the Rocket and the
+`oag_weapons::projectile::launch`'s doc comment made "so the Rocket and the
 Plasma cannot drift apart."
 
-**Ported**, in `oag_gameplay::projectile::flight`'s charging branch
-(`crates/gameplay/src/projectile/flight.rs`): the tick the charge countdown
+**Ported**, in `oag_weapons::projectile::flight`'s charging branch
+(`crates/weapons/src/projectile/flight.rs`): the tick the charge countdown
 crosses zero, the bolt's `launch_speed_kmh` is set from the firing craft's
 *current* velocity plus `stats.launch_speed`, read fresh rather than
 whatever the craft was doing at the press - `Plasma_Launch` (`0x0885bf84`)
 re-reads the craft's own node matrix and velocity at release for the same
 reason the position is re-seated. The per-tick blend shares
-[`missile::speed_kmh`](../../crates/gameplay/src/projectile/missile.rs) with
+[`missile::speed_kmh`](../../crates/weapons/src/projectile/missile.rs) with
 the Missile rather than growing its own copy: `Missile_SpeedNow`
 (`0x0885a038`) and `Plasma_SpeedForClass` each independently test `age < 1.0`
 and blend with the identical operand order, `launch * (1 - age) + class *
@@ -1782,7 +1782,7 @@ charge-hold constant the assertion expected. Fixed by gating the release
 block on `projectile.charge <= 0.0` as well.
 
 **Tests.** Two new unit tests in
-`crates/gameplay/src/projectile/plasma/tests.rs`:
+`crates/weapons/src/projectile/plasma/tests.rs`:
 `the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press`
 (release formula, isolated) and
 `a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second`
@@ -1877,7 +1877,7 @@ Screenshots and exact commands are in the lane report,
 **Chosen, not recovered**: the two axes the crossed double-strip displaces
 along (this engine's `Ship` carries no per-craft node basis the way the
 original's scene graph does) and the amplitude bucket's re-roll cadence (the
-original ties it to a ribbon-scroll cursor `oag_gameplay::projectile::leach_beam`
+original ties it to a ribbon-scroll cursor `oag_weapons::projectile::leach_beam`
 already declines to model, for the reason given there). Everything else -
 segment count, half-width, amplitude range and bucket span, base colour, the
 disconnect fade, the endpoint taper, the crossed-strip structure and the

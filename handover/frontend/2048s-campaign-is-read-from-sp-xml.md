@@ -159,7 +159,7 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   authored anomaly, unresolved by either pass. `WeaponSet::allowed_weapons`
   (`crates/tables/src/mjolnir/campaign.rs`) now decodes all eleven bits and
   `race::load_event` wires the result onto `Setup::allowed_weapons`, which
-  `oag_gameplay::pickup::draw`'s own `allowed` parameter gates a `Weapon
+  `oag_weapons::pickup::draw`'s own `allowed` parameter gates a `Weapon
   Pad`'s draw by - an event whose set decodes to nothing recognised races
   unrestricted rather than guessing. See `docs/formats/2048-campaign.md`'s
   "The weapon set gate" section,

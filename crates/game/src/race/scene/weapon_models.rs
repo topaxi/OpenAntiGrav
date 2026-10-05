@@ -13,7 +13,7 @@
 
 use super::super::*;
 use super::motion::Snapshot;
-use oag_gameplay::projectile::repulser::POOL_SIZE;
+use oag_weapons::projectile::repulser::POOL_SIZE;
 
 /// One kind's own drawables, one per pool slot - the Rocket's, the Mine's or
 /// the Bomb's, built identically.
@@ -38,7 +38,7 @@ pub(super) fn build(
 ) -> Result<Vec<Drawable>> {
     let mut drawables: Vec<Drawable> = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
-        for _ in 0..oag_gameplay::projectile::MAX_PROJECTILES {
+        for _ in 0..oag_weapons::projectile::MAX_PROJECTILES {
             // Every slot but the first is another name for the first's GPU
             // resources - see `Drawable::instance` for what it shares.
             if let Some(slot) = drawables.first().map(|first| first.instance(device, queue)) {

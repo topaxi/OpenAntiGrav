@@ -23,7 +23,7 @@ Evidence:
 
 - [shield.md](../../docs/ghidra/functions/psp-pulse-usa/shield.md), "`Ship_Damage`'s weapon branch throws the hit sparks".
 - [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md): corrects the old "death burst only" reading.
-- Code: `oag_game::race::hit_sparks` and `oag_gameplay::projectile::WeaponHit`.
+- Code: `oag_game::race::hit_sparks` and `oag_weapons::projectile::WeaponHit`.
 
 Frames are in `data/scratch/hit-sparks/` (gitignored):
 

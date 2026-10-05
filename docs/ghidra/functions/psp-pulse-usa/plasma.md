@@ -200,7 +200,7 @@ of anything beyond the string beside it.
 flash, the detonation, or the charge-up the section below is about, is open. It
 is deliberately not guessed at: `Race::blast_for` returns `None` for the Plasma,
 which is the honest "not implemented" state and not "it does not explode" - the
-damage and impulse in `oag_gameplay::projectile::blast` still land.
+damage and impulse in `oag_weapons::projectile::blast` still land.
 
 **What this engine plays, 2026-09-16.** `PLASMA` fires at the press -
 `Cue::Plasma`, `Placement::Craft`, `crates/game/src/race/weapons.rs` - through
@@ -243,7 +243,7 @@ p->position = next;
 speed by renormalising and rescaling, the same fall when the probe finds
 nothing, the same detonate on a wall, and the same `/ 3.6` that says the
 authored speeds are **km/h**
-([rocket-visuals.md](rocket-visuals.md)). `oag_gameplay::projectile::advance`
+([rocket-visuals.md](rocket-visuals.md)). `oag_weapons::projectile::advance`
 already implements all of it, which is why porting the Plasma needed no flight
 code at all.
 
@@ -425,10 +425,10 @@ teardown (above, re-read the same pass with no elision) is identical for a
 wall hit and a `10.0 < age` timeout - `Psys_Release_q`,
 `Plasma_SpawnDetonation`, `PLASMAHITWALL`, nothing else - and neither route
 into it, nor the teardown itself, nor `FUN_0886b898`, touches a craft's
-shield or `entity+0x110`. `oag_gameplay::projectile::flight`'s expiry arm is
+shield or `entity+0x110`. `oag_weapons::projectile::flight`'s expiry arm is
 ported to this reading, `blast: false`, on 2026-09-16 - see
-[`Impact::blast`](../../../../crates/gameplay/src/projectile.rs)'s doc comment
-and `crates/gameplay/src/projectile/plasma/tests.rs`. ~~Read at the time as
+[`Impact::blast`](../../../../crates/weapons/src/projectile.rs)'s doc comment
+and `crates/weapons/src/projectile/plasma/tests.rs`. ~~Read at the time as
 "neither ending"~~ - a **third** ending, a direct craft hit, was not yet
 enumerated when that line was written; it is read and ported later the same
 day, below.
@@ -590,7 +590,7 @@ walker `FUN_088552a0` has the identical charge / launch / 10-second reap /
 times shorter than the attribute suggests. `oag_tables::weapons::PlasmaStats`
 still carries no field for it, under the module's own rule that an attribute
 earns a field when something reads it; what changed is that the *reason* is
-now measured rather than "not found yet". `oag_gameplay::projectile::plasma::CHARGE_SECONDS`
+now measured rather than "not found yet". `oag_weapons::projectile::plasma::CHARGE_SECONDS`
 carries the 1.0 instead.
 
 **The HUD lead is closed too, and it was never open.** `docs/ui/hud.md`
@@ -621,13 +621,13 @@ float Plasma_SpeedForClass(Plasma *p) {
 Two things: it confirms `plasma.md`'s own `<Stats>` offsets from the reading
 end, and **it is the `launchspeed` consumer** - the bolt leaves at the firing
 craft's own speed plus `launchspeed` and blends to the class speed over its
-first second of flight. **Ported 2026-09-16.** `oag_gameplay::projectile::flight`'s
+first second of flight. **Ported 2026-09-16.** `oag_weapons::projectile::flight`'s
 `pinned_kmh` reads the craft's own velocity at the tick the charge ends -
-`crates/gameplay/src/projectile/flight.rs`'s charging branch - and blends it
+`crates/weapons/src/projectile/flight.rs`'s charging branch - and blends it
 to the class speed with `missile::speed_kmh`, the identical linear form
 `Missile_SpeedNow` (`0x0885a038`) independently tests over the same second;
 see that function's own `SPEED_RAMP_SECONDS` doc comment. This is no longer
-`oag_gameplay::projectile::launch`'s shared choice with the Rocket - that
+`oag_weapons::projectile::launch`'s shared choice with the Rocket - that
 function's own doc comment now says so - the Rocket alone still flies at
 `class + launchspeed` throughout, unread rather than chosen.
 
@@ -968,7 +968,7 @@ sweep, which already excludes the owner's hull) is not excluded at all.
 
 ### What was ported
 
-`crates/gameplay/src/projectile/flight.rs`, both `Weapon::Plasma` arms that
+`crates/weapons/src/projectile/flight.rs`, both `Weapon::Plasma` arms that
 used to share code with the Rocket:
 
 - The floor-probe wall branch (`Some(hit) if matches!(kind, Rocket | Plasma)`,
@@ -982,7 +982,7 @@ used to share code with the Rocket:
   `blast: true`, routed to the new rule below. Every other weapon's `blast`
   is unchanged.
 
-`crates/gameplay/src/projectile/blast.rs` gains
+`crates/weapons/src/projectile/blast.rs` gains
 `blast_direct_hit(ships, point, stats, struck, owner, rules, absorbed)`,
 called from `apply_impacts` only for `impact.kind == Weapon::Plasma &&
 impact.struck.is_some()`. It credits `damage` and `slowdown_time` to `struck`
@@ -1305,7 +1305,7 @@ here since the Bomb's teardown is outside this page's own function set.
   the exact shape `Weapon_PostBlastImpulse` and `Missile_ApplyBlastForce`
   already carry, corrected from this page's own "no `Plasma_ApplyBlast`-shaped
   function exists" (wrong; the function just was not named yet). Ported to
-  `oag_gameplay::projectile::flight`'s two Plasma/Rocket-shared branches,
+  `oag_weapons::projectile::flight`'s two Plasma/Rocket-shared branches,
   split by kind so the Rocket is untouched, and to a new
   `blast::blast_direct_hit`. The Rocket's own `Rocket_HitCraft` shows the
   identical split-shape and is left as a lead, not fixed - see
@@ -1315,7 +1315,7 @@ here since the Bomb's teardown is outside this page's own function set.
   "not verified" list: a Plasma bolt spends no blast on either ending, wall or
   timeout. `Weapon_PostBlastImpulse`'s only caller in the binary is confirmed
   to be the Mine's own chain (`get_xrefs_to`), and no `Plasma_ApplyBlast`-shaped
-  function exists. Ported to `oag_gameplay::projectile::flight`'s expiry arm;
+  function exists. Ported to `oag_weapons::projectile::flight`'s expiry arm;
   the wall-hit branch's own conflicting `blast: true` is flagged, not touched.
   `FUN_0886b898` itself is read as a mechanical sweep of the Mine's and the
   Bomb's pool shapes but not renamed - the radius it reads is unauthored for a
@@ -1424,9 +1424,9 @@ struct nor `+0x60`'s exact meaning ("local player index", guessed) is
 corroborated anywhere else, so it is left as `FUN_0883e37c` rather than
 renamed on one reading.
 
-**Not ported.** The fix belongs in `oag_gameplay::projectile::blast` /
+**Not ported.** The fix belongs in `oag_weapons::projectile::blast` /
 `Impact` and the visuals that consume it (`blast_direct_hit`, the render
-side) - both outside this pass's owned files (`crates/gameplay/src/projectile/**`
+side) - both outside this pass's owned files (`crates/weapons/src/projectile/**`
 and `crates/game/src/race/weapons/visuals.rs` are `plasma-speed-blend`'s and
 `blast_models`'s lanes respectively). This section is the read those lanes
 need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered

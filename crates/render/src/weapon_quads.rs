@@ -29,7 +29,7 @@ use crate::mesh::GpuVertex;
 
 /// How many live rounds this pipeline's buffers are sized for.
 ///
-/// Duplicated from `oag_gameplay::projectile::MAX_PROJECTILES` rather than
+/// Duplicated from `oag_weapons::projectile::MAX_PROJECTILES` rather than
 /// imported, the same reason [`crate::exhaust::MAX_TRAILS`] is: this crate
 /// must not depend on the simulation. A `const _: () = assert!(...)` on the
 /// game crate's side is where the two are compared - see

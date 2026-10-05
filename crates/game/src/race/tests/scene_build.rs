@@ -136,7 +136,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
     for (pool, (slots, shared)) in scene.weapon_pool_sharing().into_iter().enumerate() {
         assert_eq!(
             slots,
-            oag_gameplay::projectile::MAX_PROJECTILES,
+            oag_weapons::projectile::MAX_PROJECTILES,
             "pool {pool} lost a slot"
         );
         assert!(shared, "pool {pool} gave every slot its own geometry copy");

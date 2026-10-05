@@ -3,8 +3,8 @@
 //! Its own file rather than two more arms in `weapons.rs` and
 //! `field/opponent_weapons.rs`, because the two share everything but the
 //! trigger: the roll, the lock and the spawn are one function, and the
-//! dispatch chains call it. See `oag_gameplay::projectile::disruptor` for the
-//! bolt and `oag_gameplay::disruption` for what a hit does; the reading is
+//! dispatch chains call it. See `oag_weapons::projectile::disruptor` for the
+//! bolt and `oag_weapons::disruption` for what a hit does; the reading is
 //! `docs/ghidra/functions/psp-pure-usa/weapons.md`.
 
 use super::*;
@@ -20,7 +20,7 @@ impl Race {
     /// ways, from the same seeded generator, **at the press instead** - a
     /// deviation, recorded as one. It is invisible to a player (nothing on
     /// Pure's HUD names the kind before it lands) and it keeps the roll out of
-    /// `oag_gameplay::pickup::Held`, which `--give` fills with no generator to
+    /// `oag_weapons::pickup::Held`, which `--give` fills with no generator to
     /// hand. `Disruptor_RollEffect`'s own switch order is
     /// `DisruptorEffectKind::ROLLED`.
     ///
@@ -49,14 +49,14 @@ impl Race {
         let count = self.sim.world.ship_count as usize;
         let ship = &self.sim.world.ships[slot];
         let (position, velocity, up) =
-            oag_gameplay::projectile::disruptor::launch(&ship.physics, &ship.handling.dimensions);
+            oag_weapons::projectile::disruptor::launch(&ship.physics, &ship.handling.dimensions);
         let missile = self
             .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::missile);
         let target = missile.and_then(|missile| {
-            oag_gameplay::projectile::missile::lock(
+            oag_weapons::projectile::missile::lock(
                 &self.sim.world.ships[..count],
                 slot as u8,
                 position,
@@ -104,7 +104,7 @@ impl Race {
     /// The controls `slot` actually gets this tick, after its disruption.
     ///
     /// `ai_driven` is whether an AI produced `controls` - see
-    /// `oag_gameplay::disruption::Disruption::filter` for why the Stall asks.
+    /// `oag_weapons::disruption::Disruption::filter` for why the Stall asks.
     /// An Autopilot effect's thrust scale is applied here too, so the two
     /// call sites - the player's in `Race::tick`, the field's in
     /// `Race::step_opponents` - are one line each.

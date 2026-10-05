@@ -226,11 +226,11 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         "{} (tick {hit}) did not come after PLASMA (tick {press})",
         cue.name()
     );
-    // The wind-up is `oag_gameplay::projectile::plasma::CHARGE_SECONDS`
+    // The wind-up is `oag_weapons::projectile::plasma::CHARGE_SECONDS`
     // (1.0 s = 60 ticks) before the bolt can even start flying, so an ending
     // any sooner than that is the press and the impact landing on the same
     // bolt's charge rather than a real flight in between.
-    let charge_ticks = (oag_gameplay::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
+    let charge_ticks = (oag_weapons::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
     assert!(
         hit - press >= charge_ticks,
         "{} landed only {} ticks after PLASMA, inside the {charge_ticks}-tick \
@@ -292,7 +292,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
 /// driving. It is re-pinned to `ships[0]`'s own `body.forward() * 15.0` -
 /// ahead of the *moving* player rather than a fixed world point, since this
 /// test drives forward the same way the sibling test does - so the
-/// swept-sphere hull test in `oag_gameplay::projectile::geometry::nearest_hit`
+/// swept-sphere hull test in `oag_weapons::projectile::geometry::nearest_hit`
 /// always has a target in its own flight path. Its `handling` is already the
 /// grid's own `VENOM` copy (`Race::start` gives every opponent the player's
 /// own handling), so nothing here has to set it.
@@ -385,7 +385,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
         "PLASMAHITSHIP never fired - the bolt may have missed the target craft \
          within this test's own FLIGHT_TICKS budget",
     );
-    let charge_ticks = (oag_gameplay::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
+    let charge_ticks = (oag_weapons::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
     assert!(
         hit - press >= charge_ticks,
         "PLASMAHITSHIP landed only {} ticks after PLASMA, inside the {charge_ticks}-tick \

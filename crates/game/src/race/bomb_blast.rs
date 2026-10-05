@@ -14,7 +14,7 @@
 //!
 //! **Render-side view state only**, on [`super::blast_models`]'s own terms:
 //! a blast's own position and age never move a determinism hash, because the
-//! simulation itself only ever produces one [`oag_gameplay::projectile::Impact`]
+//! simulation itself only ever produces one [`oag_weapons::projectile::Impact`]
 //! at the moment of detonation - everything after that is presentation. See
 //! that module's own doc comment for the fuller argument.
 //!
@@ -45,7 +45,7 @@
 //! these two mesh views, not by re-reading the decompile.
 //!
 //! **Substituted, chosen rather than measured, no confidence score - carried
-//! from [`oag_gameplay::projectile::mine::frozen_pose`]'s own hedge:** what
+//! from [`oag_weapons::projectile::mine::frozen_pose`]'s own hedge:** what
 //! `dir` itself *is*. The basis crosses the frozen craft orientation's own
 //! up axis (`orientation * Vec3::Y`) against the executable's own `(0, 0,
 //! 1)` reference vector (`Vec3::Z` directly - see `bomb_blast_basis`'s own
@@ -89,12 +89,12 @@ use super::*;
 
 /// How many render-side Bomb-blast instances can be live at once.
 ///
-/// [`oag_gameplay::projectile::MAX_PROJECTILES`], the same bound
+/// [`oag_weapons::projectile::MAX_PROJECTILES`], the same bound
 /// [`blast_models::PLASMA_BLAST_SLOTS`] takes and for the same reason: it is
 /// this engine's own projectile-pool cap, not a measured figure for how many
 /// the original itself keeps around (its own object is heap-allocated per
 /// detonation, with no fixed pool this project has found).
-pub(super) const BOMB_BLAST_SLOTS: usize = oag_gameplay::projectile::MAX_PROJECTILES;
+pub(super) const BOMB_BLAST_SLOTS: usize = oag_weapons::projectile::MAX_PROJECTILES;
 
 /// `BombBlast_Update`'s own hardcoded object retire time - the whole blast,
 /// hemisphere, shockwave and all, is torn down here. Confidence 85: a `4.0`
