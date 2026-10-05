@@ -26,6 +26,9 @@ use oag_ui_screens::endrace::{
 
 use oag_game::render::Renderer;
 
+// Explicit paths: this file is itself a `#[path]` module, so `cargo shear` cannot infer where its
+// children sit and reports them as unlinked files without these.
+#[path = "endrace_flow.rs"]
 mod endrace_flow;
 use endrace_flow::{Flow, Which};
 
@@ -910,4 +913,5 @@ mod tests {
 }
 
 #[cfg(test)]
+#[path = "modes_tests.rs"]
 mod modes_tests;
