@@ -196,8 +196,10 @@ pub fn music_gain(slider: f32, group: f32) -> f32 {
 pub struct Hd {
     /// The live groups, once a title with a mix has been read.
     pub(super) live: Option<Live>,
-    /// The state a race asked for this tick; menus leave it `None`.
-    pub(super) state: Option<State>,
+    /// The state the mix chases: set by the race each tick, `PreRace` from the
+    /// moment a race loads (the fly-over has no race tick), and back to
+    /// `FrontEnd` when the race's audio stops.
+    pub(super) state: State,
     /// The music, effects and speech settings as gains, kept for the tick.
     pub(super) sliders: std::cell::Cell<[f32; 3]>,
 }
@@ -206,7 +208,7 @@ impl Default for Hd {
     fn default() -> Self {
         Self {
             live: None,
-            state: None,
+            state: State::FrontEnd,
             sliders: std::cell::Cell::new([1.0; 3]),
         }
     }
@@ -288,6 +290,12 @@ impl Live {
 mod tests;
 
 impl Audio {
+    /// A race has loaded: its fly-over runs on the `PreRace` row until the
+    /// race's own tick takes over. A no-op where no mix was read.
+    pub fn enter_race_mix(&mut self) {
+        self.hd.state = State::PreRace;
+    }
+
     /// Reads HD's authored mix off the booted source, once.
     ///
     /// A title with no `GlobalAudioConfig.xml` (Pulse, Pure) leaves

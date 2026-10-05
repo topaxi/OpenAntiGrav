@@ -321,13 +321,33 @@ channels (stereo RMS in brackets)**:
 | the grid, user8 at `0` | silent | `0.093` ambience | `0` |
 
 Reading: **music matches** where the track is the same (mono mean `0.070` against `0.070`). The
-engine and ambience read **half** of the original (0.47 to 0.57), which the second hardware voice
-of each pair predicts: two voices of the same waveform at azimuth `+-30` sum in phase to `1.37 K` on the mono
-mean against one centred voice's `0.71 K`, a ratio of `1.93`, and the observed ratios are 1.8-2.3. The
-port plays one voice per layer and was left so; "the factor of 3" is closed, and a remaining factor
-of 2 on those two buses is that pair, not a bus gain. The front end's stereo RMS is `0.13` in ours and
-`0.072` in the original at the same mono level: the original's output has almost no side energy and
-ours has a lot. Not investigated.
+engine and ambience read **half** of the original (0.47 to 0.57). The candidates, none confirmed:
+the **second hardware voice of each pair** (two voices of one waveform at azimuth `+-30`; in phase
+they sum to `1.37 K` on the mono mean against one centred voice's `0.71 K`, ratio `1.93`, but if the
+two start offsets 164 bytes apart decorrelate them the ratio is about `1.37`, which does not reach the
+observed 1.8-2.3), the **ambience distance law** (the port's emitter law against the original's), and
+the engine's own state (`X`, held). The mixer's pan law was checked: `pan_gains(0)` is `0.707, 0.707`,
+a hypot of 1 like the original's constant-power pan, so it is **not** the residual. "The factor of 3"
+is closed; a remaining factor of about 2 on these two buses is open. The front end's stereo RMS is
+`0.13` in ours and `0.072` in the original at the same mono level: the original's output has almost no
+side energy and ours has a lot. Not investigated.
+
+**Ordinary effects** (collisions, pads, weapons) were **not exercised** in the idle windows on either
+side; the evidence is the per-voice `K` of the first boot's scan (`0.6377 = 0.8^2`, group `1.0`) and the
+port plays them on the effects bus at group `1.0`.
+
+**Confidence** (rubric: [`confidence-rubric.md`](../reverse-engineering/confidence-rubric.md)):
+
+| Claim | Score | Boots |
+| --- | --- | --- |
+| `GlobalAudioConfig.xml` rows are the live rows (eight states read back, Stereo branch, `DATA00` copy) | 90 | 2 (and the disc test) |
+| both slider defaults 80 %, profile at the defaults | 88 | 2 (options XML and live) |
+| effects voice `K = (slider * group)^2` | 85 | 2 (cap1 and cap2, three groups each) |
+| music `slider * group`, linear in both | 72 | 1 (cap2 only) |
+| front-end music matches at the mono mean | 70 | 2 (this lane and the previous one's capture, same track) |
+| engine on group 7, emitters on group 8 | 75 | 2 (group 7 read off the player's voices; group 8 the only audible one with the rest zero) |
+| the per-state glide `0.025` per frame | 35 | 1 reading |
+| the remaining x2 on engine and ambience | 0 (unexplained) | 2 |
 
 **Not modelled**: the `MasterCompressor` (ratio 0.2, threshold -6 dB), `MasterEQ`, the ducking
 templates, `Auto Volume` (default on; its flag's readers are persistence accessors, not traced), the

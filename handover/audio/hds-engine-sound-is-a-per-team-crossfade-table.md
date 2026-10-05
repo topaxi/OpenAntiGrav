@@ -35,8 +35,9 @@ this file is only what is left.
   critical-energy and player-dead rows, and the transition speed (`SMOOTHING` is one reading).
 - **The front end's music has no side energy in the original** (stereo RMS `0.072` against mono-mean
   `0.070`) and a lot in ours (`0.13` against `0.070`): the same loudness, a different stereo image.
-- **Ours is half of the original on the engine and the ambience** at the matched law, which the
-  second voice of each pair predicts (below); measured ratios 1.8 to 2.3 against 1.93 predicted.
+- **Ours is half of the original on the engine and the ambience** at the matched law (measured ratios
+  1.8 to 2.3). Candidates, none confirmed: the second voice of each pair (1.93 in phase, about 1.37 if
+  decorrelated), the ambience distance law, the engine's held `X`. The mixer's pan law is not it (hypot 1).
 - **The per-craft distance factor is a fit** (`slot[+4] / 1024`, confidence 55): its writer was not
   found, `Ship_UpdateEngineCrossfade` does not write it. Find the store (a short at `+4` of every layer
   slot; slots are `0x80` apart from word 2 of each `0x10`-byte instance at `*(*0x008b5064 + 0x18)`) with a data watchpoint on RPCS3's

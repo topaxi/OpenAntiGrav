@@ -201,7 +201,11 @@ impl Banks {
             return;
         }
         self.xfade = super::xfade::load(archives, ship_bank, slot_teams, report);
-        self.mix = crate::audio::hd_mix::Maps::load(archives).map(Arc::new);
+        // Only where tables loaded: the mix is HD's, and a title that reads no
+        // `.xfx` keeps its own buses.
+        if !self.xfade.is_empty() {
+            self.mix = crate::audio::hd_mix::Maps::load(archives).map(Arc::new);
+        }
     }
 
     /// The crossfade table for the team a slot flies, when one loaded.

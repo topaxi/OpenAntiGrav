@@ -775,6 +775,7 @@ impl Audio {
             });
         }
         self.sfx = None;
+        self.hd.state = super::hd_mix::State::FrontEnd;
     }
 }
 

@@ -12,10 +12,10 @@ impl Audio {
     /// Chooses this tick's mix state from the race. A no-op on a title with no
     /// authored mix.
     ///
-    /// **Two of the original's states are not modelled**: the fly-over's
-    /// `PreRace` (this port's race opens on the grid) and the critical-energy
-    /// and player-dead rows, which change only a few groups; `RaceNormal` is
-    /// used throughout. Chosen, not measured.
+    /// **Three of the original's states are not modelled**: the critical-energy,
+    /// player-dead and post-race rows (the fly-over's `PreRace` is set when the
+    /// race loads, [`Audio::enter_race_mix`]), which change only a few groups;
+    /// `RaceNormal` is used throughout. Chosen, not measured.
     pub(super) fn hd_race_mix(&mut self, race: &crate::race::Race) {
         if self.hd.live.is_none()
             && let Some(maps) = race.sounds().mix.as_deref()
@@ -23,10 +23,10 @@ impl Audio {
             self.hd.live = Some(Live::new(maps.clone()));
         }
         let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
-        self.hd.state = Some(if gated {
+        self.hd.state = if gated {
             State::Countdown
         } else {
             State::RaceNormal
-        });
+        };
     }
 }

@@ -1287,8 +1287,7 @@ impl Audio {
         // first keeps the two from racing each other over which one moves
         // `race_voice` on a tick they would otherwise both touch it.
         self.poll_source_switch();
-        let state = self.hd.state.take().unwrap_or(hd_mix::State::FrontEnd);
-        self.hd_mix_tick(state);
+        self.hd_mix_tick(self.hd.state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
         {
