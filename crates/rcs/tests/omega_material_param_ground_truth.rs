@@ -72,6 +72,11 @@ struct Survey {
     /// Uniforms and samplers whose name some table here recovers.
     named_uniforms: usize,
     named_samplers: usize,
+    /// Materials the render's glow layer acts on: both `Emissive_UV_*`
+    /// uniforms and an emissive and a diffuse sampler bound.
+    glow_layers: usize,
+    /// Materials with a plain `speed_multipliaer` scroll and no glow layer.
+    plain_scrolls: usize,
 }
 
 fn sweep(dir: &str, name: &str) -> Option<Survey> {
@@ -135,6 +140,15 @@ fn sweep(dir: &str, name: &str) -> Option<Survey> {
                     survey.wrong_width += usize::from(p.bits.len() != w);
                 }
             }
+            let has = |n: &str| material.param(name_hash(n)).is_some();
+            let bound = |ns: &[&str]| ns.iter().any(|n| material.sampler(name_hash(n)).is_some());
+            let glow = has("Emissive_UV_Offset")
+                && has("Emissive_UV_Scale")
+                && bound(&["EmissiveTexture", "EmissiveMap"])
+                && bound(&["DiffuseTexture", "DiffuseAlphaMap", "DiffuseMap"]);
+            survey.glow_layers += usize::from(glow);
+            survey.plain_scrolls +=
+                usize::from(!has("Emissive_UV_Offset") && has("speed_multipliaer"));
             for (h, _) in &material.samplers {
                 survey.named_samplers += usize::from(names::sampler_name(*h).is_some());
             }
@@ -170,53 +184,53 @@ archive!(
     base_data00,
     "omega-eu",
     "data00.psarc",
-    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2720, named_samplers: 3597 }"
+    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2720, named_samplers: 3597, glow_layers: 16, plain_scrolls: 2 }"
 );
 archive!(
     base_data01,
     "omega-eu",
     "data01.psarc",
-    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2097, named_samplers: 9222 }"
+    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2097, named_samplers: 9222, glow_layers: 128, plain_scrolls: 0 }"
 );
 archive!(
     base_data02,
     "omega-eu",
     "data02.psarc",
-    "Survey { files: 32, materials: 8565, uniforms: 14668, samplers: 18515, other_kinds: 0, unbound: 4061, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 4782, named_samplers: 14728 }"
+    "Survey { files: 32, materials: 8565, uniforms: 14668, samplers: 18515, other_kinds: 0, unbound: 4061, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 4782, named_samplers: 14728, glow_layers: 153, plain_scrolls: 0 }"
 );
 archive!(
     base_data03,
     "omega-eu",
     "data03.psarc",
-    "Survey { files: 143, materials: 289, uniforms: 637, samplers: 446, other_kinds: 0, unbound: 289, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 355, named_samplers: 130 }"
+    "Survey { files: 143, materials: 289, uniforms: 637, samplers: 446, other_kinds: 0, unbound: 289, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 355, named_samplers: 130, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     base_data04,
     "omega-eu",
     "data04.psarc",
-    "Survey { files: 40, materials: 13722, uniforms: 16415, samplers: 20548, other_kinds: 0, unbound: 7169, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 3781, named_samplers: 10024 }"
+    "Survey { files: 40, materials: 13722, uniforms: 16415, samplers: 20548, other_kinds: 0, unbound: 7169, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 3781, named_samplers: 10024, glow_layers: 20, plain_scrolls: 17 }"
 );
 archive!(
     patch_data05,
     "omega-eu-patch",
     "data05.psarc",
-    "Survey { files: 1, materials: 1, uniforms: 2, samplers: 2, other_kinds: 0, unbound: 1, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 1, named_samplers: 2 }"
+    "Survey { files: 1, materials: 1, uniforms: 2, samplers: 2, other_kinds: 0, unbound: 1, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 1, named_samplers: 2, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     patch_data07,
     "omega-eu-patch",
     "data07.psarc",
-    "Survey { files: 1, materials: 6, uniforms: 13, samplers: 10, other_kinds: 0, unbound: 6, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 6, named_samplers: 4 }"
+    "Survey { files: 1, materials: 6, uniforms: 13, samplers: 10, other_kinds: 0, unbound: 6, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 6, named_samplers: 4, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     patch_data08,
     "omega-eu-patch",
     "data08.psarc",
-    "Survey { files: 99, materials: 1051, uniforms: 990, samplers: 597, other_kinds: 0, unbound: 1051, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 391, named_samplers: 165 }"
+    "Survey { files: 99, materials: 1051, uniforms: 990, samplers: 597, other_kinds: 0, unbound: 1051, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 391, named_samplers: 165, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     patch_data09,
     "omega-eu-patch",
     "data09.psarc",
-    "Survey { files: 0, materials: 0, uniforms: 0, samplers: 0, other_kinds: 0, unbound: 0, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 0, named_samplers: 0 }"
+    "Survey { files: 0, materials: 0, uniforms: 0, samplers: 0, other_kinds: 0, unbound: 0, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 0, named_samplers: 0, glow_layers: 0, plain_scrolls: 0 }"
 );
