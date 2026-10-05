@@ -124,6 +124,14 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   `ported`, `checked, applies, not wired`, `checked, differs` or `not
   checkable` in the doc page and say which in your report. A quick census and
   reader run, not a second lane.
+- **Keep a reader change from switching on what your lane did not measure.**
+  If a fix to a shared lookup (a bank's names, a table, an effect list)
+  suddenly makes cues, effects or draws resolve beyond your lane, scope the
+  change to your lane's caller and leave the rest as they were. On
+  2026-10-05 a hashed bank-name lookup turned on every 2048 sound cue: the
+  engine was right, but the player heard noise and a perfect-lap
+  announcement mid-lap. "Load report went from 42 missing to 6" is a warning,
+  not a win.
 - `fd` and `rg` return nothing under `data/` unless you pass `--no-ignore`.
 - Judge as a player would: more than one frame, at the size a player sees,
   read with the Read tool. A green test is not a picture.
