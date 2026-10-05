@@ -289,3 +289,61 @@ fn the_afterburner_layer_follows_the_throttle() {
     assert_eq!(off.gain, 0.0, "the afterburner sounds with no throttle");
     assert!(on.gain > 0.5, "the afterburner is silent at full throttle");
 }
+
+/// Eight craft on the measured grid, one team each, all at rest and then all at
+/// speed: the engines alone must neither clip nor take the whole voice pool.
+///
+/// The distances are the ones the eight `slot+4` words were read at (8.7 to 148
+/// units behind or ahead of the listener), so the original's own grid decides
+/// how many layers are audible at once. Every other cue of a race (the
+/// ambience, the countdown, a collision) needs a voice too, so the engines get
+/// to take no more than 96 of the 128 an HD race has.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_full_grid_neither_clips_nor_starves_the_voice_pool() {
+    let Some((banks, _)) = load(&all_teams()) else {
+        return;
+    };
+    let distances = [8.7, 34.4, 47.5, 69.8, 86.4, 109.2, 126.8, 147.6];
+    let mut mixer = Mixer::new(SAMPLE_RATE);
+    mixer.grow_pool(oag_audio::mixer::HD_VOICES);
+    let mut crafts: Vec<XfadeCraft> = TEAMS
+        .iter()
+        .take(8)
+        .map(|t| XfadeCraft::new(banks.xfade_team(t).expect("table")))
+        .collect();
+    let mut peak = 0.0f32;
+    let mut most_voices = 0;
+    let mut out = Vec::new();
+    for (label, speed, throttle) in [("rest", 0.0, 0.0), ("400 km/h", 400.0, 100.0)] {
+        for tick in 0..240 {
+            for (slot, craft) in crafts.iter_mut().enumerate() {
+                craft.tick(
+                    &mut mixer,
+                    XfadeInputs {
+                        speed_field: speed * 1.5,
+                        throttle: (slot == 0).then_some(throttle),
+                    },
+                    true,
+                    [distances[slot], 0.0, 0.0],
+                    &ears(),
+                    false,
+                    1.0 / TICK_HZ as f32,
+                );
+            }
+            out.clear();
+            mixer.render_tick(TICK_HZ, &mut out);
+            if tick >= 60 {
+                peak = peak.max(out.iter().fold(0.0f32, |m, s| m.max(s.abs())));
+            }
+            most_voices =
+                most_voices.max(crafts.iter().map(XfadeCraft::open_voices).sum::<usize>());
+        }
+        println!("{label}: peak so far {peak:.3}, most voices {most_voices}");
+    }
+    assert!(peak < 1.0, "eight engines alone clip: peak {peak}");
+    assert!(
+        most_voices <= 96,
+        "eight engines hold {most_voices} of the 128 voices"
+    );
+}

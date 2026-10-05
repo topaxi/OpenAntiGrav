@@ -670,7 +670,11 @@ impl Audio {
             }
 
             // HD's engine: the same craft, the same ears, a table instead of a
-            // held pitch law. See [`xfade`].
+            // held pitch law. See [`xfade`]. Its layers stay resident, which is
+            // more than the PSP's 32 voices.
+            if voices.xfade.iter().any(Option::is_some) {
+                mixer.grow_pool(oag_audio::mixer::HD_VOICES);
+            }
             for (slot, craft_xfade) in voices.xfade.iter_mut().enumerate() {
                 let Some(xfade) = craft_xfade else {
                     continue;

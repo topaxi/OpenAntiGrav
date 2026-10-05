@@ -528,6 +528,64 @@ the base and ~5.6 KB in the patch. `oag_omega::EXTRA_CANDIDATES` therefore
 searches `data08`, `data07`, `data05` before `data00`-`data04`. Nobody watched
 a PS4 mount them.
 
+### The material uniform and sampler table (2026-10-05, `omega-uv-scroll`)
+
+A PS4 material header carries the same instance table as the Vita's
+([2048-material-params.md](2048-material-params.md)), with 64-bit pointers and
+one improvement: **a uniform states its own component count**. Read by
+`oag_rcs::rcsmodel::psp2::material::ps4_params`; confidence 92 on the layout.
+
+```text
+header  +0x3c u32  count of 32-bit floats   +0x40 u64  offset of the float pool
+        +0x48 u32  entry count              +0x50 u64  offset of the entries
+        +0x34 +0x38 +0x44 +0x4c +0x54       zero on every material
+entry (0x28 bytes)
+        +0x00 u32  name hash, ~crc32(name)  +0x04 u32  kind: 1 uniform, 0x12 sampler
+uniform +0x10 u64  offset of the value      +0x18 u32  components << 16 (1 to 4)
+        +0x1c u32  pool, 0x1000 the float pool (no half pool on PS4)
+sampler +0x18 u64  offset of the .gnf path, 0 for a sampler nothing is bound to
+        +0x20 u32  sampler state (mostly 0x522800; meaning not read)
+```
+
+**What the numbers say**, `crates/rcs/tests/omega_material_param_ground_truth.rs`
+over all nine archives (five base, `data05`, `data07`, `data08`; `data09` ships no model),
+every `.rcsmodel` that has materials:
+
+- **0 entries of a third kind, 0 dropped, 0 stray header words.** Every entry
+  is a uniform or a sampler and the reader returns every one; a sampler is a
+  `.gnf` path or a null pointer (unbound: 18,746 of them).
+- **The float pool tiles exactly on all 34,423 materials**: the uniforms'
+  stated component counts add up to the pool's count with none missing and none
+  overlapping. A wrong stride or offset would not do this; it is the invariant
+  that replaces the Vita pass's name check, because PS4 ships no shader that
+  names its inputs.
+- **The names are 2048's, not HD's.** Of the `uv_anim`/`uvanim`/`scroll`
+  material families (35 names over `data00` to `data02`), the glow layer's
+  `Emissive_UV_Offset`, `Emissive_UV_Scale`, `GlowTint` and `time`/`TimeScaler`
+  resolve through the 2048 table (`mt_uvanim_diffuse_emissive*`,
+  `uvanim_diffuse_emissive*`, `fc09`/`fc10_effects_vscroll_lambertalpha_emissive`)
+  and the glow uniforms read the widths their names say (1, 1 and 3) on every
+  one. HD's names (`V_Offset`, `VSpeed`, `speed`) appear only on
+  `scrollingalpha`, `basic_uv_scroll` and the `uvanim_diffuse_emissive*_bloom`
+  extras, which no consumer reads.
+- **317 materials are glow layers** (both `Emissive_UV_*` uniforms plus bound
+  emissive and diffuse samplers: 16 in `data00`, 128 in `data01`, 153 in
+  `data02`, 20 in `data04`) and **19 are plain `speed_multipliaer` scrolls**
+  (2 and 17).
+
+**Consumed by the existing 2048 glow plan, unchanged**:
+`oag_render::mesh::rcs::psp2::glow::plan` reads `Material::params` and
+`samplers` by name hash, so filling them on PS4 is the whole wiring. A Vineta K
+race reports `28 glow layer(s) and 0 plain scroll(s) off the materials' own
+uniforms (rates chosen, not measured)`. Rates are the 2048 rule, **chosen, not
+measured**: `TimeScaler` where authored, else the authored `time`, else `1.0`.
+Frames: `data/scratch/omega-uv-scroll/after_vineta_{120,180,240,300}.png`
+against `before_vineta_300.png`. Before, the panels the glow layer lights are
+dull grey; after, they glow. The only pixels that differ from main's build at
+tick 300 are those surfaces (438 pixels over a threshold of 24, all inside one
+band of the frame). On that panel the texture is near-uniform, so the scroll is
+subtle at this size.
+
 ### What one race costs in memory
 
 2026-09-30, `lane/omega-memory`. Tech De Ra forward, `--race --hold cross

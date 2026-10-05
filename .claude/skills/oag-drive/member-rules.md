@@ -97,6 +97,9 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 
 ## Commits
 
+- **Read `git diff --cached --stat` before every commit** and unstage
+  anything you did not mean to change. On 2026-10-05 a member's commit
+  silently deleted six committed examples that docs cite as reproducers.
 - Commit early and often. If pinentry blocks, use `git commit --no-gpg-sign`.
   End every message with a `Co-Authored-By:` trailer naming your own model.
 - Never merge into main. The lead merges.

@@ -35,6 +35,12 @@ pub const CHANNELS: usize = 2;
 /// bug shows up here rather than only on hardware.
 pub const MAX_VOICES: usize = 32;
 
+/// The voice pool of a title that mixes on the PS3's SCREAM: the hardware slot
+/// table the voice bitmask spans, `0x80` entries (`Scream` voice masks are four
+/// words, `0x0062cb10` walks bits `0..0x80`). 62 were in use at once in an HD
+/// race scan.
+pub const HD_VOICES: usize = 128;
+
 /// A mix bus: one class of sound, with its own gain.
 ///
 /// **Not one per row of the original's options menu.** That menu has two and
@@ -404,6 +410,20 @@ impl Mixer {
             starved: 0,
             clipped: 0,
             tick_frame_remainder: 0,
+        }
+    }
+
+    /// Grows the voice pool to at least `voices`; a smaller number is ignored.
+    ///
+    /// For a title whose original mixes more voices than the PSP's 32:
+    /// Wipeout HD keeps every layer of every craft's engine resident (nine
+    /// layers, two hardware voices each, eight craft) and its own table has 128
+    /// slots, [`HD_VOICES`]. Voices already playing are untouched, so this is
+    /// safe mid-race. Nothing calls it for a title that does not need it, which
+    /// leaves Pulse and Pure on [`MAX_VOICES`] exactly as before.
+    pub fn grow_pool(&mut self, voices: usize) {
+        if voices > self.voices.len() {
+            self.voices.resize(voices, Voice::default());
         }
     }
 

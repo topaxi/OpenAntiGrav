@@ -24,6 +24,17 @@
 //!   (`Scream_ComputeVoiceNote`, `0x0062e998`, the same law
 //!   `super::layers` already plays on Pulse).
 //!
+//! **Measured live on RPCS3, 2026-10-05** (two boots, 126 hardware voices
+//! read over the GDB stub, `docs/formats/hd-xfx.md` "Level"): the layer's
+//! volume word is `curve[x] * craft_factor / 1024` and the voice's final
+//! gain is `K * level * (word / 1024)^2` - **squared** - with `K = 0.295` on
+//! every engine layer voice and `level` the cue-times-waveform volume
+//! product [`Sound`] already carries. So `0x400` is unity, and a layer at
+//! half volume is a quarter as loud, which is not Pulse's x^0.59 curve
+//! ([`oag_audio::spatial::volume_curve`]) that this module used to apply.
+//! [`ENGINE_BUS_RATIO`] carries the absolute scale against this port's other
+//! cues; [`distance_factor`] is the per-craft factor.
+//!
 //! **Chosen, not measured**, no confidence attached:
 //!
 //! - `X` is held at [`X_REST`], the value both boots read on the grid.
@@ -32,10 +43,14 @@
 //!   gap, so the live term is not reproduced. It moves channel 0 by at most
 //!   about 12 of 511.
 //! - Channels 1 and 2 are held at zero: they read zero in every live sample.
-//! - `0x400` is taken as the unity of a layer's gain (the value the layer slots
-//!   are initialised to), applied on top of the cue's own authored volume.
-//! - Opponents open a layer's voice only while it is audible, which spends the
-//!   mixer's 32 voices on what can be heard.
+//! - [`distance_factor`] is a straight line fitted to eight readings, not the
+//!   traced law (the writer of the slot word it is read from was not found).
+//! - Channel 3 is written in every mode; the original skips it in the modes
+//!   whose id is bit 6, 13, 14 or 21 of `0x206040` (Zone is 6) and this port has
+//!   no map from those ids to its own modes.
+//! - Opponents open a layer's voice only while it is audible. The original
+//!   keeps every layer resident (62 hardware voices of 128 in one scan), so a
+//!   race with an engine grows the mixer's pool to [`oag_audio::mixer::HD_VOICES`].
 //! - A finished race releases every layer, as [`super::Engine`] does.
 
 use std::collections::BTreeMap;
@@ -53,6 +68,33 @@ use super::banks::load_named_cue;
 /// 2.173 and 2.167 and of the second 2.156 and 2.160. Chosen, not measured:
 /// see the module documentation.
 pub const X_REST: f32 = 2.164;
+
+/// How loud an engine layer plays against the same cue played as an ordinary
+/// SCREAM voice: `0.2945 / 0.6377 = 0.462`.
+///
+/// Measured live on RPCS3 (`docs/formats/hd-xfx.md`, "Level"): every engine
+/// layer voice's final hardware gain is `0.2945 * level * (v86 / 1024)^2`
+/// (the same on two boots), and the nearest ordinary voices read in the first
+/// boot's scan (four voices of two cues) are `0.6377 * level * (v86 / 1024)^2`,
+/// where `level` is the cue/waveform volume product this port already folds
+/// into [`Sound`]. Ordinary voices read `0.31`, `0.41` and `0.79` elsewhere, so
+/// the denominator is the nearest reading and not a platform constant; the
+/// ratio only places the engine against this port's other cues, whose own scale
+/// is about 3x the original's (see the doc page).
+pub const ENGINE_BUS_RATIO: f32 = 0.2945 / 0.6377;
+
+/// The per-craft distance factor, `slot+4 / 1024` of the layer slots.
+///
+/// **Fitted, not traced**: the writer of that word was not found. Eight
+/// craft read on the grid at 8.7 to 148 units from the listener gave 0.991,
+/// 0.971, 0.938, 0.876, 0.831, 0.771, 0.720, 0.660; a straight line
+/// `1.0626 - 0.0027 d` passes every point past 34 units within 0.006, and the
+/// near craft reads 0.991 to 0.994 rather than 1. Assumes the camera and the
+/// grid of this port's own spawn stand where the original's did.
+#[must_use]
+pub fn distance_factor(distance: f32) -> f32 {
+    (1.0626 - 0.0027 * distance).clamp(0.0, 0.992)
+}
 
 /// Milliseconds the smoother may be advanced by in one step, `XFadeSystem_UpdateChannels`.
 const MAX_STEP_MS: i64 = 5000;
@@ -483,8 +525,20 @@ impl Craft {
             };
             let value = self.smoothers[layer.channel.min(3)].value;
             let level = level_at(layer, value);
-            let placed = oag_audio::Emitter::engine(position).place(listener, level.gain);
-            let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+            // The emitter's own radius gate and volume curve are Pulse's
+            // (`Emitter::engine`, a 50 unit cull and x^0.59); HD's layer volume
+            // is squared and its distance law is [`distance_factor`], so only
+            // the pan and the distance are taken from the placement.
+            let everywhere = oag_audio::Emitter {
+                position,
+                radius: f32::MAX,
+                cone: None,
+            };
+            let placed = everywhere.place(listener, 1.0);
+            let (gain, pan) = placed.map_or((0.0, None), |p| {
+                let a = level.gain * distance_factor(p.distance);
+                (ENGINE_BUS_RATIO * a * a, Some(p.pan))
+            });
             if let Some(p) = placed {
                 distance = Some(p.distance);
             }
