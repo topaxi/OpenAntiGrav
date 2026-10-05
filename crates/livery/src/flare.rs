@@ -72,13 +72,26 @@ pub(super) fn per_team(
         ));
         return Flare::default();
     };
-    let built = mesh::rcs::build(
-        &name,
-        &blob,
-        &geometry,
-        &mut |path| archives.read_name(path).ok(),
-        |c| c.mesh,
-    );
+    // **2048's container is a different file under the same extension**, and
+    // its flare is the same two-group tree with the same shape names - read
+    // off all 72 `EngineFlare.vex` the Vita build ships - so only the build
+    // and the group join differ. See [`psp2_flare`].
+    let vita = mesh::rcs::psp2::is_psp2(&geometry);
+    let built = if vita {
+        mesh::rcs::psp2::build(&name, &geometry, None, &mut |path| {
+            archives.read_name(path).ok()
+        })
+        .map(|(model, built)| (model, built.describe()))
+    } else {
+        mesh::rcs::build(
+            &name,
+            &blob,
+            &geometry,
+            &mut |path| archives.read_name(path).ok(),
+            |c| c.mesh,
+        )
+        .map(|(model, built)| (model, built.describe()))
+    };
     let (mut model, built) = match built {
         Ok(pair) => pair,
         Err(error) => {
@@ -88,7 +101,7 @@ pub(super) fn per_team(
             return Flare::default();
         }
     };
-    report.push(format!("{name}: {}", built.describe()));
+    report.push(format!("{name}: {built}"));
     let Some(nozzle) = nozzle else {
         report.push(format!(
             "{name}: this craft authors no Engine Flare locator, so the flare model \
@@ -96,11 +109,20 @@ pub(super) fn per_team(
         ));
         return Flare::default();
     };
-    alpha_ramp(&mut model);
-    shading(&mut model, &geometry, report);
+    if vita {
+        psp2_flare(&mut model, &geometry, &name, report);
+    } else {
+        alpha_ramp(&mut model);
+        shading(&mut model, &geometry, report);
+    }
     translate(&mut model, nozzle);
     let groups = [authored.always, authored.boost];
-    let parts = match mesh::groups::split(&model, &blob, &groups) {
+    let split = if vita {
+        mesh::groups::split_psp2(&model, &geometry, &blob, &groups)
+    } else {
+        mesh::groups::split(&model, &blob, &groups)
+    };
+    let parts = match split {
         Ok(parts) => parts,
         Err(error) => {
             report.push(format!(
@@ -155,6 +177,51 @@ pub(super) fn per_team(
         }
     }
     out
+}
+
+/// What 2048's flare needs that its container does not say: the blend.
+///
+/// **A material with an HD namesake takes HD's pair; the one 2048 names itself
+/// is additive, chosen, not measured.** 2048's own `2048_engine_additive` has
+/// no HD namesake, so [`oag_rcs::rcsmodel::psp2::lineage_blend`] holds no row
+/// and the ordinary route would draw it alpha-over. HD's flare material of the
+/// same role, `flame_test`, is `SrcAlpha`/`One` and the 2048 name says
+/// additive in words, so every draw goes into the blended list with that
+/// pair. `flame_test` itself - still on the base package's `Detonator` flare
+/// and its thirteen livery flares the v1.04 patch replaces - is inherited.
+///
+/// **Not reproduced: the flame's own fragment program.** HD's `flame_test`
+/// shades with a rim term and a scrolling noise tap (see [`mesh::Flame`]);
+/// 2048's equivalent is a Vita `.gxp` this build does not translate, so the
+/// flare is the authored geometry textured with the material's first texture,
+/// and says so in the report.
+fn psp2_flare(model: &mut Model, geometry: &[u8], name: &str, report: &mut Vec<String>) {
+    use oag_rcs::rcsmodel::{Factor, psp2};
+    let material = psp2::parse(geometry)
+        .ok()
+        .and_then(|m| m.materials.first().map(|m| m.name.clone()))
+        .unwrap_or_default();
+    let (src, dst, source) = match psp2::lineage_blend::inherited(&material) {
+        Some((src, dst)) => (src, dst, "inherited from HD's material of the same name"),
+        None => (
+            Factor::SrcAlpha,
+            Factor::One,
+            "chosen, not measured: the name is 2048's own and says additive",
+        ),
+    };
+    let blend = mesh::rcs::blend_state(src, dst);
+    let draws = std::mem::take(&mut model.draws)
+        .into_iter()
+        .chain(std::mem::take(&mut model.alpha_tested_draws))
+        .chain(std::mem::take(&mut model.transparent_draws));
+    for mut draw in draws {
+        draw.blend_state = Some(blend);
+        model.transparent_draws.push(draw);
+    }
+    report.push(format!(
+        "{name}: {material} drawn {src:?}/{dst:?} ({source}), textured, without the flame \
+         program's rim and noise terms (Vita .gxp, unread)"
+    ));
 }
 
 /// Reads the flame's own shader parameters off the material and hangs them on

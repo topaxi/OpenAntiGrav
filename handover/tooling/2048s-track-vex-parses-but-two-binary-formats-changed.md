@@ -232,7 +232,7 @@ runs the simulation. What landed to get there:
 
 - **`oag-2048`** (`crates/2048`), the fourth title package - archives, HUD
   layout entries, race defaults, sound banks. `front_end`/`loading`/`music` are
-  `None` and `exhaust`/`flare`/`sights` are `Unread`, deliberately: 2048 ships
+  `None` and `sights` is `Unread`, deliberately (`exhaust` and `flare` were read on 2026-10-05 - see 2048-status.md): 2048 ships
   HD's files under HD's names and changed the containers underneath them, so
   copying HD's answers would compose to something wrong rather than to nothing.
 - **`Platform::Vita`**, and it is never identified from a disc - 2048's package
@@ -634,6 +634,8 @@ TITLE entry rather than showing them under 2048 - see
   alone was sufficient for everything above.
 
 ## Next Steps
+
+- **Engine trail and flare (read 2026-10-05, [2048-status.md](../../docs/formats/2048-status.md#engine-trail-and-flare---2026-10-05)).** Still open: the v1.04 patch archives are never opened by `oag_2048::open`, so the 24 patched flares are not the ones drawn (2048's own v1.04 changelog says only "Various Bug Fixes"; the 3D audio and VR patch is Omega's 1.04, see 2048-status.md); the flame's Vita `.gxp` rim/noise terms are unread; the ribbon, sprite flare and boost reveal are HD's laws, unmeasured on 2048; Omega's 69 flare models are unwired.
 
 1. ~~Nail the `WO Track` tail layout~~ - done, see above. The HD pairing beat
    the planned statistical sweep outright: a sweep could only have said "this

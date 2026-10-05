@@ -785,6 +785,8 @@ impl Race {
         // 2048's own trail, independent of the two above - see
         // `Self::advance_energy_bar_delay`.
         self.advance_energy_bar_delay();
+        // 2048's `ThrustBar` chase - see `Self::advance_thrust_chase`.
+        self.advance_thrust_chase();
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically

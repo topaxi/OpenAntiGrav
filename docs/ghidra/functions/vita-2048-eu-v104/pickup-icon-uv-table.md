@@ -205,6 +205,67 @@ at runtime**, rather than their authored green-at-half-alpha and opaque
 white respectively - no colour write to either was found in this function,
 so that gap in `2048-hud.md` stands as recorded.
 
+## `Hud_UpdateWidgets` - `0x81195cdc`
+
+**Confidence: 82** (decompile plus the Thumb-2 disassembly of the branches
+read below; no live trace of the widget values).
+
+The per-frame HUD dispatcher the sections above are called from, entered with
+`dt` in `s0` and the HUD in `r0`; each block runs when its bit of
+`*(hud+0x10)` is set. The three it adds to this page, all drawn by
+`oag_hud::dialect_2048::state_sprites`:
+
+- **`SpeedBar0`-`4`** (bit `1`, bound at `hud+0x2c..0x3c`). When the float at
+  `*(*(*(hud+8)+0x5640)+0x80)+0x46c` is `<= 0` (`vcmpe`, `bls 0x81195f48`),
+  segment `i` is made visible (flag bit `4` of `widget+0x30`) while
+  `speed >= (i + 1) * hud[0x1d0]`; `Hud_BindWidgets` stores `0x430c0000`
+  (140.0) there. `speed` is the first float of the PLAYER HUD data block
+  (`*(hud+0xc)`), which `Player_UpdateHudData` writes at `player+0x48` as
+  `|v| * 3.6` - kilometres an hour.
+- **`ThrustBar`** (bit `0x80`, bound at `hud+0x68`). `hud+0x1c8` chases the
+  float at `*(hud+0xc)+8`: when below it, `+= dt * 100 * 1.4` (`0x3fb33333`),
+  when at or above it `-= dt * 100`, each clamped onto the target. Then
+  `ThrustBar+0xa8` and `+0xd0` (rect width and UV width) are set to
+  `hud[0x1cc] * value * 0.01`, `hud[0x1cc]` being the widget's authored width
+  captured at bind: a left-anchored horizontal crop.
+  **The target is unresolved**: `*(hud+0xc)+8` is `player+0x50`, copied from
+  the ship's `+0x578`, which `FUN_811cf532` (ShipCTRL.cpp) ramps by per-class
+  rates read through `+0x84` that this project has not recovered.
+- **`PilotAssist`** (bound at `hud+0x184`). Visible while the global byte
+  `DAT_81545468 + 0x3260e` is non-zero, scale `1 + 0.1 * sin(phase)` with
+  `phase += dt * 10` wrapping to zero at pi.
+- **The `SpeedPad*` family is a bind-time choice.** `Hud_BindWidgets` binds
+  `SpeedPadThrustBar` and `SpeedPadBar0`-`9` (`hud+0x40`, drawn from
+  `proto_HUD.gxt`) instead of `ThrustBar`/`SpeedBar` when the same
+  `+0x46c` float is positive, and the update then lights pad bar `i` while
+  `i < ship+0x5e0`. That float is part of the ship definition, not a
+  speed-pad contact, so the purple swoosh seen on a pad is **not** explained
+  here and stays open.
+
+## `Player_UpdateHudData` - `0x811b1ee2`
+
+**Confidence: 75.** The `Backend/Ships/Player.cpp` update (vtable
+`0x81511c48`, slot 3) that fills the block the HUD reads: `player+0x48` is
+the speed in km/h (`sqrt(v.v) * 3.6` on `*(ship+0x5f84)+0x90`),
+`player+0x50` the thrust level (`ship+0x5640 -> +0x578`), `player+0x68`
+`+0x53c` of the same.
+
+## `ZoneLight0`-`9`
+
+Bound by `Hud_InitZoneSpeedClassWidget` (`0x81197c24`), driven by the tail of
+`Hud_UpdateZoneSpeedClassWidget` (`0x81197d6c`): with the flash counter
+`hud+0x738` at zero, light `i` is hidden while `i < 9 - (int)X` and `X != 0`,
+`X` being the float at `hud+0x73c`; so `X + 1` lights, the **highest indices**,
+are up, and all ten when `X == 0`. While the counter is positive it instead
+blinks every light on `counter % 10 >= 6` and counts down. `X` is written
+elsewhere and not read: the Zone frames show two lights at zone 2 and five at
+zone 5 (the bottom dashes, `68-zone-5.png`), so `X` is the zone minus one
+there. The only `str.w` to `+0x73c` found is the constructor
+(`0x81197b88`, zeroes it); the writer was not found. Wired as `X = zone - 1`
+through the decompiled branch: zone 0 none, zone 1 all ten, zones 2-10 one
+per zone from the last index, past 10 none (`9u - X` wraps). Zones 2 and 5
+are the only measured points.
+
 ## See also
 
 - [race-hud-selection.md](race-hud-selection.md) - the sibling finding this

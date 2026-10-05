@@ -61,6 +61,8 @@
 0x81194f9c	function	Hud_UpdatePickupIcon	85	pickup-icon-uv-table.md
 0x81489070	data	g_pickup_icon_uv_table	90	pickup-icon-uv-table.md
 0x811957a2	function	Hud_UpdateEnergyBar	85	pickup-icon-uv-table.md
+0x81195cdc	function	Hud_UpdateWidgets	82	pickup-icon-uv-table.md
+0x811b1ee2	function	Player_UpdateHudData	75	pickup-icon-uv-table.md
 0x813cf478	function	TouchCampaign_Item_Construct	82	frontend-campaign-map.md
 0x813cf498	function	TouchCampaign_Item_Create	82	frontend-campaign-map.md
 0x812b0e2a	function	GameModeBase_RegisterFields	90	game-mode-base-fields.md

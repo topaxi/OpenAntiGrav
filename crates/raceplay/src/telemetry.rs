@@ -176,6 +176,8 @@ impl Race {
             shield_flashing_whole: self.view.shield_flash_timer_whole > 0.0,
             shield_blink_phase_whole: self.view.shield_blink_timer_whole,
             energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
+            thrust_chase_percent: self.view.thrust_chase_percent,
+            pilot_assist: false,
             mode: self.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the
             // stored best, which live on `RaceStage`, one level up -
@@ -339,11 +341,35 @@ impl Race {
         self.view.energy_bar_delay_fraction +=
             (target - self.view.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
     }
+
+    /// Advances 2048's `ThrustBar` chase for the next [`Self::readout`].
+    ///
+    /// Called once a tick, from [`Self::tick`], with the fixed 60 Hz `dt`.
+    /// The rates and the clamp are the original's; the target (the ship's
+    /// thrust state, already `0..=100`) is **chosen, not measured** - see
+    /// [`oag_hud::Readout::thrust_chase_percent`].
+    pub(super) fn advance_thrust_chase(&mut self) {
+        let target = self.ship().physics.thrust.clamp(0.0, 100.0);
+        let dt = 1.0 / 60.0;
+        let value = self.view.thrust_chase_percent;
+        self.view.thrust_chase_percent = if value < target {
+            (value + THRUST_CHASE_RISE_PER_SECOND * dt).min(target)
+        } else {
+            (value - THRUST_CHASE_FALL_PER_SECOND * dt).max(target)
+        };
+    }
 }
 
 /// `Hud_UpdateEnergyBar`'s own `0.1` - see
 /// [`Race::advance_energy_bar_delay`].
 const ENERGY_BAR_DELAY_RATE: f32 = 0.1;
+
+/// 2048's `ThrustBar` rise rate: `100 * 1.4` percent per second, the
+/// `0x3fb33333` the HUD update multiplies its `dt * 100` by.
+const THRUST_CHASE_RISE_PER_SECOND: f32 = 140.0;
+
+/// 2048's `ThrustBar` fall rate, percent per second: the bare `dt * 100`.
+const THRUST_CHASE_FALL_PER_SECOND: f32 = 100.0;
 
 /// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
 /// `hud+0x118`/`hud+0x11c` pair.

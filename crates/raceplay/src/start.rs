@@ -596,6 +596,7 @@ impl Race {
                 shield_flash_timer_whole: 0.0,
                 shield_blink_timer_whole: 0.0,
                 energy_bar_delay_fraction: 0.0,
+                thrust_chase_percent: 0.0,
                 sight: sight::Sight::default(),
                 sight_state: sight::State::Absent,
                 sight_fov: oag_display::display::Fov::AUTHORED,

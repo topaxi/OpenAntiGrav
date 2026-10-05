@@ -44,7 +44,16 @@ pub(super) fn load(
     axis: Option<Vec3>,
     report: &mut Vec<String>,
 ) -> Option<EngineLight> {
-    if !matches!(flare, oag_title::flare::Flare::PerTeam(_)) {
+    let oag_title::flare::Flare::PerTeam(authored) = flare else {
+        return None;
+    };
+    if !authored.engine_light {
+        // Said once per craft: a title that ships the file but whose light is
+        // not read is an absence, not a silent skip.
+        report.push(format!(
+            "{team}: this title ships EngineLightData.xml but its SPU vertex light is the \
+             PS3's and unread on this platform - no engine light (chosen, not measured)"
+        ));
         return None;
     }
     let name = oag_tables::enginelight::entry_name_in(ship_dir, team);
