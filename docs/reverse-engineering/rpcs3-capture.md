@@ -697,6 +697,17 @@ Pulse's `Medium` untouched) - see
 `docs/ui/campaign-screens.md`'s "Which block is which difficulty" section
 for the implementation.
 
+## Reading a live global without a camera hunt (2026-10-05, magstrip-hd-measure)
+
+`capture --region ADDR:LEN --keep-dumps --shots 1` is the whole recipe for reading a known static
+address out of a running race: the dump lands as `<shot>-<addr>.bin` (big-endian) beside the
+screenshot, the "camera null" lines can be ignored. Two fixes the lane made to `rpcs3-drive.py`:
+`capture` ignored `OAG_RPCS3_GDB`'s port (it always dialled 2345, so a member on its own port got
+`ConnectionRefusedError`), and `record` crashed on a leftover `args.nav_shots` block from `capture`.
+`record --drive 60` writes a 30 fps MP4 under `~/.config/rpcs3/recordings/BCES00664/` (the stock
+config's directory, not the lane's); frame it with `ffmpeg -ss S -t 4 -i x.mp4 -vf fps=30`. Used for the
+HD magstrip jitter scales and tuning block: `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
