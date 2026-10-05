@@ -363,6 +363,7 @@ mod hd_ball {
         assert_eq!(arc.blend.alpha.src_factor, ::wgpu::BlendFactor::One);
         assert_eq!(arc.blend.alpha.dst_factor, ::wgpu::BlendFactor::One);
         assert_eq!(arc.blend.alpha.operation, ::wgpu::BlendOperation::Add);
-        assert!(!super::pipeline::Style::BEAM.alpha_is_fragment);
+        let ribbon = super::pipeline::Style::BEAM;
+        assert_ne!(ribbon.alpha_is_fragment, arc.alpha_is_fragment);
     }
 }
