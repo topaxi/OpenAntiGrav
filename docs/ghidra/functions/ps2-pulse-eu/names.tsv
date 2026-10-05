@@ -232,3 +232,6 @@
 0x00169418	function	ShipShield_Activate	85	shield-pickup.md
 0x001695d8	function	ShipShield_Deactivate	80	shield-pickup.md
 0x00169658	function	ShipShield_Update	88	shield-pickup.md
+0x00165688	function	MagFloorFx_Construct	88	magfloor-fx.md
+0x001659a0	function	MagFloorFx_Update	88	magfloor-fx.md
+0x00165ce0	function	MagFloorFx_InitTint	85	magfloor-fx.md
