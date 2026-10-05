@@ -4,7 +4,7 @@
 **authored data, not code**, and it decodes with the front-end XML machinery this
 project already had. Every rectangle, atlas sub-rectangle, colour, font role and
 alignment is read off the player's own disc. Implemented in
-[`oag_game::hud`](../../crates/game/src/hud.rs); pinned against all five shipped
+[`oag_hud`](../../crates/hud/src/lib.rs); pinned against all five shipped
 layouts by `crates/game/tests/hud_layout_ground_truth.rs`.
 
 95 rather than higher because the *geometry* is read directly from shipped data
@@ -64,7 +64,7 @@ nudges** (`LapTxt`'s `y`, `RearWarningMissileIcon`'s and
 `RearWarningRocketIcon`'s `y`, and most of `TimeDiffIcon`'s `x`) that stay
 byte-identical across consoles while the `<Item>` enclosing every one of them
 scales its own `OffsetX`/`OffsetY` correctly, dwarfing the nudge. See
-`oag_game::hud::inside_screen`'s doc comment for the full tally and
+`oag_hud::inside_screen`'s doc comment for the full tally and
 `crates/game/tests/hud_layout_ground_truth.rs` for the check that runs against
 both grids.
 
@@ -238,9 +238,9 @@ undrawable in practice, not the runtime-placement question
 settled separately (there is no runtime writer, and there does not need to be
 one). `x=0, y=0` is where a symmetric perspective camera along `-z` always
 projects the optical axis, for any FOV and any `z != 0` - so it reads as
-screen-centre in this dialect, not a placeholder. `oag_game::hud::Layout::collect`
+screen-centre in this dialect, not a placeholder. `oag_hud::Layout::collect`
 now parses `mode` and `OriginX`/`OriginY` per `<Mode3D>` block (`super::Model::orthographic`/`::origin`),
-and [`countdown.rs`](../../crates/game/src/hud/countdown.rs)'s own module doc
+and [`countdown.rs`](../../crates/game/src/hud_countdown.rs)'s own module doc
 has the full derivation, including why no projection matrix needs to be built
 for the `(0, 0)` case every shipped layout actually authors, and why a future
 widget authored at a nonzero `x`/`y` in this dialect is a documented gap
@@ -280,7 +280,7 @@ Two consequences worth carrying:
   icon models declare `AlphaOver` where its *sight* models declare `Additive`,
   in the same layout - so any table keyed on the widget's name would have been
   wrong for one of them. `oag_game::race::hud::quad_blend` reads it off the
-  batch at load and `oag_game::sprite::Placed::blend` carries it to the draw;
+  batch at load and `oag_hud::sprite::Placed::blend` carries it to the draw;
   `pickup_icon_ground_truth::a_held_turbo_draws_its_own_authored_green_on_a_real_race`
   pins Pure's reading and `lock_sight_ground_truth` Pulse's.
 - **The countdown was never affected.** Both its models are `AlphaOver`, and
@@ -369,7 +369,7 @@ Venom Eliminator frame reads `KILLS (5)` over `AG Systems 1`, `Feisar 1`,
 nothing writes them (`hud+0x40` has `0x40`, whose reader only writes the
 `Position`/`PositionOf` digits); a place *list* in the same rows exists for
 multiplayer alone (`0x800`), a mode this build does not run. Wired in
-[`oag_game::hud::kill_tags`](../../crates/game/src/hud/kill_tags.rs), with a new
+[`oag_hud::kill_tags`](../../crates/hud/src/kill_tags.rs), with a new
 `Default`-face text bucket, for Pulse only (`oag_title::HudArt::kill_column`; HD authors
 its own `KillsText` and `PosTag0`-`PosTag5`, unmeasured). The player's row is drawn at scale
 `1.0` and the others at `0.8`. **Chosen, not measured**: the player's row carries
@@ -385,7 +385,7 @@ to compose, nothing to check.
 
 ## The reader is shared with HD/Fury, and HD is what corrected it
 
-`oag_game::hud`'s `Layout` reads Wipeout HD / Fury's eighteen layouts as well as
+`oag_hud`'s `Layout` reads Wipeout HD / Fury's eighteen layouts as well as
 Pulse's five - see [hd-hud](../formats/hd-hud.md), which is where the numbers
 are. Two rules on this page were right about Pulse and wrong about the dialect,
 and HD is what showed it:
@@ -405,7 +405,7 @@ pointing a parser at a second title even when no milestone is open on it.
 ### And the grid is the source's, not the PSP's
 
 A layout carries bare numbers and says nothing about the space they are in, so
-the renderer has to be told which one. `oag_game::hud::Overlay` never told it,
+the renderer has to be told which one. `oag_game::hud_overlay::Overlay` never told it,
 and `crate::render::Renderer` starts at `Space::PSP` - so **every HUD, on every
 title, was drawn as if authored at 480x272**. That is right for both Pulse
 pressings on PSP and for Pure, silently wrong for the PS2 pressing's 640x448,
@@ -568,16 +568,16 @@ pair of the 26 code-only keys; the other 25 are not read.
   white in both, which is consistent - only the bar fill is tinted. The speed
   bar in the same frames is mint green (`HudColour2`, `0xFF7DEFC0`) and fills
   from the left, which is what this build already draws.
-  **Now implemented**: [`Readout::shield_forced_red`](../../crates/game/src/hud.rs)
+  **Now implemented**: [`Readout::shield_forced_red`](../../crates/hud/src/lib.rs)
   computes the rule from a shield percentage plus a one-tick-memory flash flag
   the readout carries (`Readout::shield_flashing`), and
-  [`crate::hud::draw::draw_list`](../../crates/game/src/hud/draw.rs) applies
+  [`oag_hud::draw::draw_list`](../../crates/hud/src/draw.rs) applies
   it to `ShieldBar` alone. ~~leaving the alpha byte untouched. **Not
   reproduced**: the low-shield icon's own separate blink cycle (`hud+0x1dc`,
   scaled by `8.0`) ... and `iVar1`, the external override flag ...~~ -
   **both closed 2026-09-25**: `iVar1` is
   `HullOverlay_AbsorbWindowActive(player)` -
-  [`Readout::shield_absorbing`](../../crates/game/src/hud.rs) - and it
+  [`Readout::shield_absorbing`](../../crates/hud/src/lib.rs) - and it
   *suppresses* the forced-red branch rather than being an unread override,
   and `hud+0x1dc`'s blink is now applied to `ShieldBar`'s own alpha through
   [`Readout::shield_blinking`]/[`Readout::shield_blink_phase_on`], driven off
@@ -637,7 +637,7 @@ PlasmaIcon BombIcon MineIcon LeachBeamIcon RepulserIcon ShurikenIcon
 
 That is exactly `oag_tables::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
 `Repulser`) included, so the lookup is `format!("{}Icon", weapon.as_type())` -
-`oag_game::hud::pickup_icon_name` - and needs nothing recovered. Pinned against
+`oag_hud::pickup_icon_name` - and needs nothing recovered. Pinned against
 the shipped file for all thirteen by
 `crates/game/tests/hud_layout_ground_truth.rs`. The numeric ids are real
 (`0x0883b3b8` forces `6`) and simply are not needed.
@@ -724,7 +724,7 @@ nothing to hide there.
 
 The rule this build applies is [`oag_title::HudArt::total_time_timed_modes_only`]
 (true for Pulse alone): outside Time Trial and Speed Lap both widgets are hidden.
-`oag_game::hud::place_owns_the_anchor` stays for the titles the flag is `false`
+`oag_hud::place_owns_the_anchor` stays for the titles the flag is `false`
 for - 2048 draws `TOTAL` beside `POS` on a live frame, and HD and Pure are
 unmeasured - where it asks the *layout*, not just the readout. **The caption pair was measured directly on a single race, 2026-09-30**
 (own PPSSPP, Venom single race on Talon's Junction, `g_game_mode` 3, at `0.23.7`):
@@ -748,7 +748,7 @@ original as well as with common sense. See [ai.md](../gameplay/ai.md#the-field-i
 
 Found by `no_two_live_widgets_share_an_anchor_on_any_shipped_layout`, which is a
 new ground-truth check and reported this collision the first time it ran. Its unit
-counterpart in `oag_game::hud` had claimed for months that the shipped layouts were
+counterpart in `oag_hud` had claimed for months that the shipped layouts were
 checked; they were not.
 
 **A bar and its background share a rectangle exactly**, differing only in colour -
@@ -813,7 +813,7 @@ Everything except committing the file:
 
 ### And the decision is cheap to defer
 
-[`hud::Layout`](../../crates/game/src/hud.rs) is already the seam. It is a plain
+[`hud::Layout`](../../crates/hud/src/lib.rs) is already the seam. It is a plain
 geometry type; `Layout::from_xml` is *one constructor*. A `from_toml` beside it is
 additive, and nothing downstream - `draw_list`, the renderer, the tests - changes.
 So there is no lock-in either way, and no reason to decide now.
@@ -974,7 +974,7 @@ Recorded so none of this reads as undiscovered work.
   of its own - only a per-quad rotation. **The quad's size is a title
   difference, not a constant**: Pulse's three measure `7.9978027` units square
   and Pure's `missile_sight_inner.vex` measures `11.999471`, both read off the
-  vertices at load into `oag_game::sprite::Placed::quad_extent`.
+  vertices at load into `oag_hud::sprite::Placed::quad_extent`.
   `hud::sight_draw::SIGHT_SIZE` still draws all of them at Pulse's `8.0`,
   which is a known flattening rather than a reading - `model_draw` already
   takes the per-model extent and `bracket_draws` does not. See
@@ -982,7 +982,7 @@ Recorded so none of this reads as undiscovered work.
   identifies the lock tone as `~ROCKLOCK`.
 - **Eliminator's HUD.** Its layout parses; nothing drives its own widgets yet.
   **Zone's no longer belongs on this line** - `"Zone"` and `"Score"` in
-  [`text_for`](../../crates/game/src/hud/draw.rs) draw the counter and the
+  [`text_for`](../../crates/hud/src/draw.rs) draw the counter and the
   score, and as of 2026-08-28 so does a voice line at each milestone this
   title's own `speech_zone.bnk` names one for, see
   [`oag_sound::sfx::Announcer`](../../crates/sound/src/sfx/announcer.rs).
@@ -1042,14 +1042,14 @@ the track's own best time - which is what the frame `hud.md`'s own
 personal-best/track-record pair rather than a medal at all.
 
 **Implemented for the whole target-time block, 2026-09-30.**
-[`oag_game::hud::TimeTrialPace`](../../crates/game/src/hud/time_trial_pace.rs)
+[`oag_hud::TimeTrialPace`](../../crates/hud/src/time_trial_pace.rs)
 reimplements the live tier as a pure function of the elapsed tick count
 (`race_ticks` for Time Trial, `lap_ticks` for Speed Lap). A campaign cell
 races `oag_tables::race_campaign::Cell::gold`/`silver`/`bronze`; any other
 Time Trial or Speed Lap is `RECORD` throughout, counting down to
 `min(stored best, authored time)` - `<RaceTimes>` for Time Trial, `<LapTimes>`
 for Speed Lap, both from the circuit's own `stats.xml`
-(`oag_game::hud::RecordTarget`, read at load off `FEData.wad` like the
+(`oag_hud::RecordTarget`, read at load off `FEData.wad` like the
 campaign's AI-skill lookup). A campaign cell whose stored best already beats
 gold shows `RECORD` while the run is ahead of it, as the original does.
 `RaceStage::draw_hud` and the headless capture path both compute it.

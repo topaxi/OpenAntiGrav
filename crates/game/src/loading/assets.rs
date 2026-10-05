@@ -136,7 +136,7 @@ pub struct Palette {
 #[derive(Debug)]
 pub struct Art {
     /// The stacked sheet.
-    pub sheet: crate::sprite::Sheet,
+    pub sheet: oag_hud::sprite::Sheet,
     /// Where each feature's illustration sits in it, in the title's own order.
     ///
     /// **All of them, not the one on show.** The original draws a feature at
@@ -382,7 +382,7 @@ impl Assets {
 
         let art = (!blobs.is_empty()).then(|| {
             let mut sheet_notes = Vec::new();
-            let sheet = crate::sprite::Sheet::build(&blobs, &mut sheet_notes);
+            let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut sheet_notes);
             notes.append(&mut sheet_notes);
             // A sheet that decoded nothing is `Sheet::default` - one
             // transparent texel - and every lookup below misses, which draws

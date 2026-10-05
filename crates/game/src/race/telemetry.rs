@@ -93,20 +93,20 @@ impl Race {
     /// Separate from [`Telemetry`], which is a log line and carries diagnostics
     /// no player sees. The fields with no source yet are left at their "unknown"
     /// value rather than filled with a plausible number - `lap` and `place` read
-    /// zero, and [`crate::hud`] omits a widget rather than claiming a value it does
+    /// zero, and [`oag_hud`] omits a widget rather than claiming a value it does
     /// not have. See `docs/ui/hud.md`.
     #[must_use]
-    pub fn readout(&self) -> crate::hud::Readout {
+    pub fn readout(&self) -> oag_hud::Readout {
         let ship = self.ship();
         let race = self.sim.world.primary_race();
         // Zero still means "unknown", and a track with no closed ring still has
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.
         let counted = self.sim.course.is_some();
-        crate::hud::Readout {
+        oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length()
                 * oag_render::exhaust::SPEED_TO_KMH,
-            speed_full_kmh: crate::hud::DEFAULT_SPEED_FULL_KMH,
+            speed_full_kmh: oag_hud::DEFAULT_SPEED_FULL_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
             // pickup pays back into - `oag_physics::damage`. (This comment said
             // "nothing depletes this yet" until 2026-08-11, three subsystems
@@ -195,9 +195,9 @@ impl Race {
     }
 
     /// The Eliminator's kill column, top row first, in the order the original
-    /// draws it - see [`crate::hud::kill_tags`]. Empty in every other mode, and
+    /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
     /// for a slot with no team on record (a `Setup` built by hand).
-    fn kill_tags(&self) -> Vec<crate::hud::KillTag> {
+    fn kill_tags(&self) -> Vec<oag_hud::KillTag> {
         let world = &self.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {
             return Vec::new();
@@ -210,11 +210,11 @@ impl Race {
             .map(|&slot| world.ships[slot].standing.kills)
             .collect();
         let player = self.player_slot();
-        crate::hud::kill_tags::ranked(&kills)
+        oag_hud::kill_tags::ranked(&kills)
             .into_iter()
             .filter_map(|row| {
                 let slot = slots[row];
-                Some(crate::hud::KillTag {
+                Some(oag_hud::KillTag {
                     team: self.view.slot_teams.get(slot)?.clone(),
                     kills: kills[row],
                     player: slot == player,
@@ -230,7 +230,7 @@ impl Race {
     /// (`FUN_0881d458`), and [`oag_race::Standing::distance`] is this
     /// engine's `craft+0xad0` with the same lap-1 wrap fix, in the same
     /// arc-length units. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
-    fn head_to_head(&self) -> Option<crate::hud::HeadToHead> {
+    fn head_to_head(&self) -> Option<oag_hud::HeadToHead> {
         if self.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
@@ -242,7 +242,7 @@ impl Race {
         let gap = (world.ships[player].standing.distance(course)
             - world.ships[opponent].standing.distance(course))
         .abs();
-        Some(crate::hud::HeadToHead {
+        Some(oag_hud::HeadToHead {
             gap,
             player_leads: self.player_place() == 1,
         })
@@ -333,7 +333,7 @@ impl Race {
     /// (`docs/architecture/determinism.md`), so a literal per-tick port is
     /// the closest reproduction available without a recovered original
     /// frame rate for this function specifically. See
-    /// [`crate::hud::Readout::energy_bar_delay_fraction`] for the formula
+    /// [`oag_hud::Readout::energy_bar_delay_fraction`] for the formula
     /// and the decompile it is read off.
     pub(super) fn advance_energy_bar_delay(&mut self) {
         let target = self.readout().shield_fraction();

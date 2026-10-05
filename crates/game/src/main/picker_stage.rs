@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use oag_game::preview::Preview;
-use oag_game::sprite::Sheet;
+use oag_hud::sprite::Sheet;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_mesh::orbit::Orbit;
 use oag_ui::frontend::{Draw, Placed};

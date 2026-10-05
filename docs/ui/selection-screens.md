@@ -120,7 +120,7 @@ clock, so `--menu-page track-select` is always the first card. Read by
 [`oag_ui::picker::slideshow`](../../crates/ui/src/picker/slideshow.rs),
 loaded by `oag_game::preview::slideshow`, and drawn off the front end's own
 sprite sheet **extended** with the circuit's cards
-(`crate::sprite::Sheet::extended`) - every widget the menus already placed
+(`oag_hud::sprite::Sheet::extended`) - every widget the menus already placed
 keeps its rectangle, so nothing is swapped back when the screen closes.
 
 Zone mode enters `Zone` rather than `Info`, off `screen_zone.xml` on the

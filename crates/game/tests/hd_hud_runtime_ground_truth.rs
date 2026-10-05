@@ -1,4 +1,4 @@
-//! What `oag_game::hud::runtime` finds to work on in **Wipeout HD / Fury's own
+//! What `oag_hud::runtime` finds to work on in **Wipeout HD / Fury's own
 //! composed HUD layouts**: which `DamageBar` is the shield fill, and whether
 //! the lap and place arcs it shows are authored where it looks for them.
 //!
@@ -10,7 +10,7 @@
 //!     -E 'binary(hd_hud_runtime_ground_truth)'
 //! ```
 
-use oag_game::hud;
+use oag_hud as hud;
 
 fn open() -> Option<oag_assets::Archives> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;

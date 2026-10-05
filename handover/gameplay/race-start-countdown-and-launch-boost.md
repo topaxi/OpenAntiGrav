@@ -293,7 +293,7 @@ loops a **0.983 s** texture sweep with no recovered gate - not drawn, since play
 against the race clock would blink it roughly 4.6 times through a 272-tick countdown, a
 duration nothing here measured.
 
-**Rendered through a new, dedicated pass** (`crates/game/src/hud/countdown.rs`,
+**Rendered through a new, dedicated pass** (`crates/game/src/hud_countdown.rs`,
 `oag_mesh::mesh_render::write_uniforms_raw` added for it), reusing the generic
 `TexAnims`/`NodeAnims` playback `start-gantry.md` already said needed no new mechanism -
 true here too, once the actual bug was found. **The bug, worth recording because it will
@@ -332,10 +332,10 @@ regardless of `scale`) - centred, not a placeholder. That is derivable without
 reconstructing the original's actual camera, which is why no projection matrix needed
 to be built: a guessed FOV would still contribute nothing to `x=y=0` and would only
 risk misplacing a future nonzero-authored widget in this dialect.
-`oag_game::hud::Layout::collect` now parses `mode`/`OriginX`/`OriginY` per `<Mode3D>`
+`oag_hud::Layout::collect` now parses `mode`/`OriginX`/`OriginY` per `<Mode3D>`
 block (new `hud::Model::orthographic`/`::origin` fields, threaded down `collect`'s
 recursion the same way `<Item>`'s offset already is), and
-`crates/game/src/hud/countdown.rs` derives the screen position as
+`crates/game/src/hud_countdown.rs` derives the screen position as
 `(240, 136) + (OriginX, OriginY) = (240, 171)` for the zero case every layout actually
 ships, erroring rather than guessing if a future widget in this dialect ever authors a
 nonzero `x`/`y`. Screenshots at ticks 47/92/137/210 (matching each glyph's predicted

@@ -1,7 +1,7 @@
 use super::*;
-use crate::hud::draw::draw_list;
-use crate::hud::tests::{context, strings};
-use crate::hud::{Draw, Layout};
+use crate::draw::draw_list;
+use crate::tests::{context, strings};
+use crate::{Draw, Layout};
 
 /// The five widgets, verbatim from `Arcade_HUD.xml`'s `<Item OffsetX="445"
 /// OffsetY="5">`.

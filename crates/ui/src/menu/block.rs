@@ -414,7 +414,7 @@ pub fn draw_split_fill(
 ///
 /// **`v` is flipped on the way.** The executable's `v` counts from the
 /// file's first row, and a `.gtf`'s rows run bottom-up - which is why
-/// `oag_game::sprite::Sheet` reverses them into its top-down sheet (measured
+/// `oag_hud::sprite::Sheet` reverses them into its top-down sheet (measured
 /// on the loading screen's craft, see that module). So the file's row `r`
 /// is the sheet's row `63 - r`, and a rectangle authored against the file
 /// is the same rectangle against the sheet with its top and bottom swapped.

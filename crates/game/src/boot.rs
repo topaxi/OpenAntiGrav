@@ -57,7 +57,7 @@ pub struct Boot {
     /// rather than handed over.
     pub after_language_movie_sound: Option<oag_music::at3::Pcm>,
     /// Every front-end image the screens reference, in one texture.
-    pub sprites: crate::sprite::Sheet,
+    pub sprites: oag_hud::sprite::Sheet,
     /// How this title lays its menus out and colours them. See
     /// [`Shell::menu_skin`].
     pub menu_skin: &'static oag_title::MenuSkin,
@@ -229,7 +229,7 @@ pub struct Shell {
     /// The text atlas.
     pub font: oag_ui::font::Atlas,
     /// The front-end sprite sheet.
-    pub sprites: crate::sprite::Sheet,
+    pub sprites: oag_hud::sprite::Sheet,
     /// The grid this source authors its widgets in, read off the archives'
     /// own platform while they are still in hand - [`assemble`] has no
     /// archives to ask by the time it needs this.

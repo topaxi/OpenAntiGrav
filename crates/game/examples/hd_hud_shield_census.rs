@@ -8,7 +8,7 @@
 //! cargo run -q -p oag-game --example hd_hud_shield_census -- data/images/pulse-psp-usa.chd
 //! ```
 
-use oag_game::hud;
+use oag_hud as hud;
 
 fn dump_labels(name: &str, layout: &hud::Layout) {
     for label in &layout.labels {

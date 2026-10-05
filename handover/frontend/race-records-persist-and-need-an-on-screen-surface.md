@@ -104,7 +104,7 @@ all, so there is no medal to credit.
 
 **The in-race HUD caption tier is unrelated and still blocked on RE** - see
 `handover/frontend/the-huds-four-remaining-items.md`. Nothing in this change
-touches `crates/game/src/hud/**` or feeds a campaign medal into
+touches `crates/hud/src/**` or feeds a campaign medal into
 `Hud_UpdateTimeCluster_q`'s tier; the two are different encodings of
 different things, by design - see `records.rs`'s own `Medal` doc comment for
 why it round-trips as a word rather than the HUD's own ordinal.

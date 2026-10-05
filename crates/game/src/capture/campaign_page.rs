@@ -165,7 +165,7 @@ pub(super) fn campaign_page(
     // idiom `picker_stills` already uses, so the sheet `Renderer::new` builds
     // from further down `run` is the one these two textures actually landed
     // on.
-    sprites: &mut crate::sprite::Sheet,
+    sprites: &mut oag_hud::sprite::Sheet,
     // The front-end root's own `FEGlobals` - see `crate::campaign::load`'s
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],

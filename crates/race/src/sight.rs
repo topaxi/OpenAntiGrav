@@ -29,10 +29,10 @@
 //! # Why this lives in a gameplay crate
 //!
 //! It draws nothing. It is arithmetic over a view-projection matrix and a world
-//! position, and the pixels are `oag_game::hud::sight_draw`'s. Nothing here
+//! position, and the pixels are `oag_hud::sight_draw`'s. Nothing here
 //! reaches `oag_render`, `oag_audio`, `oag_input`, `winit` or `wgpu`, which is
 //! what let it move down out of `oag-game` on 2026-09-09 - and moving it is
-//! what breaks the `hud -> race` module cycle that had `oag_game::hud`
+//! what breaks the `hud -> race` module cycle that had `oag_hud`
 //! reaching back up into `oag_game::race` for these five types.
 
 use oag_core::math::{Mat4, Vec3, Vec4};
@@ -42,7 +42,7 @@ use oag_core::math::{Mat4, Vec3, Vec4};
 /// **A default, not the only answer.** Wipeout HD authors its HUD - the sights
 /// included - in 1920x1080, and the reticle has to project into whichever grid
 /// the layout it is drawn beside uses or it lands in the top-left corner of it.
-/// [`Sight::new`] takes the real one off `oag_game::hud::Assets::space`; this is
+/// [`Sight::new`] takes the real one off `oag_hud::Assets::space`; this is
 /// what [`Sight::default`] uses and what the PSP titles pass.
 ///
 /// **The placement law does not change with it.** The original's `240` and `136`
@@ -364,7 +364,7 @@ pub struct Sight {
     blink: bool,
     /// The grid this reticle's coordinates are in.
     ///
-    /// The title's own, off `oag_game::hud::Assets::space` - see [`SCREEN`] for
+    /// The title's own, off `oag_hud::Assets::space` - see [`SCREEN`] for
     /// why it is a field rather than a constant.
     screen: [f32; 2],
     /// Which weapon's art the reticle is wearing.

@@ -584,7 +584,7 @@ mod tests {
     ///
     /// [`ZONE_STAGES`] is indexed by zone and [`crate::hud::ZONE_SPEED_CLASSES`]
     /// by rung, and both carry the same fourteen string ids because both were
-    /// read off the same fourteen records. `oag_game::hud` reads the second and
+    /// read off the same fourteen records. `oag_hud` reads the second and
     /// the colour grade the first, so a drift would put a class name on screen
     /// that disagrees with the palette the circuit is graded with.
     #[test]

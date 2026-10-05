@@ -206,7 +206,7 @@ pub struct Observation {
     pub laps_completed: u32,
     /// The player's own finishing tick if they had one, or however far the
     /// clock had got when the race was left. Ticks, never a formatted
-    /// string - `crate::hud::format_lap_time` takes ticks too, so nothing
+    /// string - `oag_hud::format_lap_time` takes ticks too, so nothing
     /// here forces a caller to format before it can persist.
     pub tick: u64,
     /// The player's own quickest completed lap, in ticks - `None` if they

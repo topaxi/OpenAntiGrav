@@ -48,7 +48,7 @@
 ///
 /// A **root**, not a whole layout: HD composes a mode's HUD out of a shell plus
 /// up to sixteen `<LoadXML SrcRel=>` fragments, and splicing those is
-/// `oag_game::hud::compose`'s job. Both PSP titles ship self-contained files,
+/// `oag_hud::compose`'s job. Both PSP titles ship self-contained files,
 /// which compose to themselves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudLayouts {
@@ -190,7 +190,7 @@ pub enum Sights {
         /// Outer, `0.125 < t <= 0.25` shows Middle, `0.25 < t <= 0.375` shows
         /// Inner, past that only BG shows until the lock completes), read off
         /// three literal TOC-relative float constants - not a distance table
-        /// as an earlier pass of that page guessed. `oag_game::hud::sight_draw`
+        /// as an earlier pass of that page guessed. `oag_hud::sight_draw`
         /// (`leach_reveal_draws`) drives this off
         /// [`oag_race::sight::Sight::hold_progress`] - a 0..1 fraction of
         /// *this engine's own* `HOLD_SECONDS` (the PSP's `0.8`, not HD's
@@ -217,7 +217,7 @@ pub enum Sights {
 /// A fifth axis, on the same terms as [`HudLayouts`] above: it exists because
 /// the corpus measurably disagrees on all three rows, not because a HUD
 /// obviously needs a table. Every one of them was a `const` inside
-/// `oag_game::hud` giving Pulse's answer to every title until 2026-08-25.
+/// `oag_hud` giving Pulse's answer to every title until 2026-08-25.
 ///
 /// | | Pulse / Pure | HD / Fury |
 /// | --- | --- | --- |
@@ -255,7 +255,7 @@ pub struct HudArt {
     pub texture_extension: Option<&'static str>,
     /// The sprite widgets drawn whenever this title's HUD is up.
     ///
-    /// **An allow-list, deliberately**, for the reason `oag_game::hud`'s label
+    /// **An allow-list, deliberately**, for the reason `oag_hud`'s label
     /// list is one: a layout carries every widget every mode and state could
     /// want - warnings, opponent tags, weapon sights, mode-specific pieces -
     /// and drawing them all at once is a picture the original never shows. A
@@ -278,7 +278,7 @@ pub struct HudArt {
     /// Pulse needs the substitution and it is measured: its `PickupBackground`
     /// samples a **filled** hexagon whose alpha is 255, authored in the same
     /// opaque white as the icon that sits on it, so drawn as authored the icon
-    /// is invisible. `oag_game::hud` carries the measurement and the reasoning.
+    /// is invisible. `oag_hud` carries the measurement and the reasoning.
     ///
     /// HD authors the same widget as a hexagon **outline**, and a race frame
     /// captured off the running original shows it in its authored grey with the
@@ -295,13 +295,13 @@ pub struct HudArt {
     /// Bomb, Mine, LeachBeam, Repulser, Shuriken]` - rather than carrying that
     /// type, the same reason this crate is `oag-disc` and nothing heavier per
     /// its own module doc: the vocabulary lives here, the `Weapon` type and
-    /// the index into it stay in `oag_game::hud`, which already depends on
+    /// the index into it stay in `oag_hud`, which already depends on
     /// `oag-formats` to draw a pickup at all. A slot's own `None` draws
     /// [`Self::pickup_backdrop_colour`] instead, the same way that field's
     /// `None` falls back to the layout's own authored colour - two widening
     /// rings, each optional.
     ///
-    /// **Why a colour per weapon at all**: `oag_game::hud::pickup_sprites`
+    /// **Why a colour per weapon at all**: `oag_hud::pickup_sprites`
     /// drew every pickup in one placeholder colour until 2026-09-04, because
     /// the runtime writer that tints `PickupBackground` was unrecovered. It
     /// still is, but the *picture* is no longer unread - see
@@ -328,7 +328,7 @@ pub struct HudArt {
     ///
     /// Indexed in `Weapon::ALL`'s declared order, the same convention
     /// [`Self::pickup_colours`] uses and for the same reason: the vocabulary
-    /// lives here, `Weapon` and the index into it stay in `oag_game::hud`. A
+    /// lives here, `Weapon` and the index into it stay in `oag_hud`. A
     /// slot's own `None` means this title's disc authors no icon for that
     /// weapon at all - measured absent, not unmeasured, the distinction
     /// [`Self::pickup_colours`]'s own doc draws. Pure's own table has ten of
@@ -357,7 +357,7 @@ pub struct HudArt {
     /// `HUD_pickups.xml`'s `PickupIcon` is the single widget every weapon's
     /// icon draws through; the runtime rewrites its source rectangle rather
     /// than the engine picking between differently-named widgets the way
-    /// `oag_game::hud::pickup_icon_name` does for Pulse and HD, or between
+    /// `oag_hud::pickup_icon_name` does for Pulse and HD, or between
     /// `<Mode3D><Model>`s the way [`Self::pickup_icon_models`] does for Pure.
     /// Confirmed from `Hud_UpdatePickupIcon`
     /// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`),
@@ -365,7 +365,7 @@ pub struct HudArt {
     /// anything for this widget to select between.
     ///
     /// `[U, V, W, H]` in atlas pixels, `u16` rather than `f32` because the
-    /// executable's own table is raw integers - `oag_game::hud::Sprite::uv`
+    /// executable's own table is raw integers - `oag_hud::Sprite::uv`
     /// converts on use, the same four components it carries - indexed in
     /// `oag_tables::weapons::Weapon::ALL`'s declared order, the same axis
     /// [`Self::pickup_colours`] and [`Self::pickup_icon_models`] use and for
@@ -386,7 +386,7 @@ pub struct HudArt {
     /// Whether `ShieldBarText` carries a `%` after its digits.
     ///
     /// Pulse's own reference frame reads `100%`, which is what
-    /// `oag_game::hud::draw::text_for` drew for every title until this axis
+    /// `oag_hud::draw::text_for` drew for every title until this axis
     /// existed. Three HD/Fury frames of the running original
     /// (`data/reference/hd-capture/talons-matched/{00,01,03}.png`: full shield
     /// at the grid, 529 km/h mid-race, and 98% shield after a hit) all read a
@@ -473,7 +473,7 @@ pub struct HudArt {
     /// `scale=1.0`, both `font="HUD"`; `RaceXPTxt`/`RaceXP` (`"XP"`/its
     /// value) are both `scale=0.6`, which is why that pair reads as one
     /// size in the frame while `LAP`/`1/3` reads as two. Every widget's own
-    /// `oag_game::hud::widget::Label::scale` carries the size, on one atlas -
+    /// `oag_hud::widget::Label::scale` carries the size, on one atlas -
     /// not a guess standing in for an unlocated second `.fnt`.
     ///
     /// So `oag_game::race::hud::hud_font` falling back to
@@ -516,7 +516,7 @@ pub struct HudArt {
     /// every title but HD, whose `Hud_UpdateShieldReadout`,
     /// `Hud_UpdateLapCounter` and `Hud_UpdatePositionCounter` are what
     /// `oag_hd::hud::RUNTIME` carries. Pulse's own shield rule is a
-    /// different shape and lives on `oag_game::hud::Readout::shield_forced_red`.
+    /// different shape and lives on `oag_hud::Readout::shield_forced_red`.
     pub runtime: Option<&'static RuntimeHud>,
 }
 
@@ -524,7 +524,7 @@ pub struct HudArt {
 /// and the values it does it with - the layout authors none of them.
 ///
 /// The values are the executable's; the rules that apply them live in
-/// `oag_game::hud::runtime`, and this type holds nothing a rule could not
+/// `oag_hud::runtime`, and this type holds nothing a rule could not
 /// name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeHud {

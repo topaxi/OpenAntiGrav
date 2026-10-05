@@ -35,7 +35,8 @@ pub mod drs;
 pub mod endrace;
 pub mod flyer;
 pub mod ghosts;
-pub mod hud;
+pub mod hud_countdown;
+pub mod hud_overlay;
 pub mod icon;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
@@ -66,7 +67,6 @@ pub mod screen;
 pub mod settings;
 pub mod sound;
 pub mod source;
-pub mod sprite;
 pub mod title;
 pub mod track_panel;
 pub mod unlock;

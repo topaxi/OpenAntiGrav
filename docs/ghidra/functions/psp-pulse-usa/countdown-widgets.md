@@ -148,7 +148,7 @@ its envelope would show a near-opaque shape for the model's entire visible
 window rather than the original's brief eased flash - the kind of
 plausible-looking stand-in this project's own rule against inventing a
 gate exists to prevent. The widget stays loaded and undrawn.
-`crates/game/src/hud/countdown.rs`'s module doc carries the same account.
+`crates/game/src/hud_countdown.rs`'s module doc carries the same account.
 
 **No store to a screen-position field appears anywhere in this function.**
 Contrast `HudSight_Update` (`0x0881dbcc`, see `lock-sight.md`), which writes
@@ -228,7 +228,7 @@ on `Team Selection`'s `ShipModel`, an intentionally off-centre camera anchor
 for a preview turntable (see `docs/formats/race-setup.md` and
 `docs/formats/hd-frontend.md`). Both read as "where this `<Mode3D>` block's
 local origin lands on the real screen," which is exactly what
-`crates/game/src/hud/countdown.rs`'s own `ORIGIN_Y` constant already assumes.
+`crates/game/src/hud_countdown.rs`'s own `ORIGIN_Y` constant already assumes.
 That raises the *semantics* of the attribute to confidence 80 - it does not
 change the conclusion above, since Pulse's own value for this block,
 `(0, 35)`, is simply not a centred one.

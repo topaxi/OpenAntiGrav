@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use oag_game::hud;
+use oag_hud as hud;
 use oag_texture::gxt;
 
 fn decode(blob: &[u8]) -> Option<(u32, u32, Vec<u8>)> {

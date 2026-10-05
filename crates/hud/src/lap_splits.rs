@@ -171,7 +171,7 @@ mod tests {
   </Image>
 </Text>
 "#;
-        let layout = crate::hud::Layout::from_xml(FRAGMENT);
+        let layout = crate::Layout::from_xml(FRAGMENT);
         let strings = oag_ui::language::StringTable::default();
         let sheet = crate::sprite::Sheet::placed_at(&[(
             oag_hd::hud::TEXTURES[0],

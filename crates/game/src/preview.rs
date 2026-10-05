@@ -9,7 +9,7 @@
 //!
 //! One model, one small pass with its own depth buffer, composited over
 //! whatever the UI has already drawn - the same shape
-//! [`crate::hud::Countdown`] takes for the start-line glyph, and the same
+//! [`oag_hud::Countdown`] takes for the start-line glyph, and the same
 //! pipeline every mesh in this project draws through. The difference is the
 //! camera: the countdown's is orthographic over the HUD grid, `Team
 //! Selection`'s ship still frames the model from its own bounding sphere the
@@ -140,7 +140,7 @@ pub fn mode3d_view_projection(
 }
 
 /// One still of a slideshow as read off the disc: its entry name and its
-/// bytes, the pair `crate::sprite::Sheet::extended` takes.
+/// bytes, the pair `oag_hud::sprite::Sheet::extended` takes.
 pub type Still = (String, Vec<u8>);
 
 /// A circuit's slideshow - the stills behind `Track Creation`'s hexagonal

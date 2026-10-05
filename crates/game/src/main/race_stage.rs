@@ -18,7 +18,7 @@ pub(crate) struct RaceStage {
     pub(crate) scene: race::Scene,
     pub(crate) race: race::Race,
     /// The HUD, or `None` when the disc's layout could not be read.
-    pub(crate) hud: Option<oag_game::hud::Overlay>,
+    pub(crate) hud: Option<oag_game::hud_overlay::Overlay>,
     /// The results table, drawn once the race has one.
     ///
     /// Not an `Option`, unlike the HUD: that one needs a layout off the disc and
@@ -27,8 +27,8 @@ pub(crate) struct RaceStage {
     pub(crate) scoreboard: oag_game::scoreboard::Overlay,
     /// The start-line countdown's own `<Mode3D>` model, or `None` when this
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
-    /// `oag_game::hud::countdown`.
-    pub(crate) countdown: Option<oag_game::hud::Countdown>,
+    /// `oag_game::hud_countdown`.
+    pub(crate) countdown: Option<oag_game::hud_countdown::Countdown>,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
@@ -42,8 +42,8 @@ pub(crate) struct RaceStage {
     /// What the HUD's `RECORD` readout counts down to: the stored best under
     /// [`Self::result_key`] as it stood at load, and the track's authored
     /// time. `None` for a mode with no such readout and whenever the track's
-    /// `stats.xml` did not load. See `oag_game::hud::RecordTarget`.
-    pub(crate) record_target: Option<oag_game::hud::RecordTarget>,
+    /// `stats.xml` did not load. See `oag_hud::RecordTarget`.
+    pub(crate) record_target: Option<oag_hud::RecordTarget>,
     /// This race's own personal-best comparison, computed once at the finish
     /// transition and drawn on the results table alongside
     /// [`oag_game::scoreboard::Board`] - see [`RaceStage::draw_hud`].
@@ -496,14 +496,14 @@ impl RaceStage {
                         .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
                     // A campaign cell races its own ladder; any other Time
                     // Trial or Speed Lap races the record. See
-                    // `oag_game::hud::Readout::time_trial_pace`. `campaign_cell`
+                    // `oag_hud::Readout::time_trial_pace`. `campaign_cell`
                     // is title-blind (HD reuses the same
                     // `oag_tables::race_campaign::Cell`), so nothing here
                     // stops it computing on HD - what keeps this Pulse-only is
                     // `record_target` (`stats.xml` is read off Pulse's PSP disc
                     // alone) and `draw.rs`'s widget-name match: no shipped HD
                     // layout authors a widget named `TotalTime`/`TotalTimeTxt`.
-                    readout.time_trial_pace = oag_game::hud::pace_for(
+                    readout.time_trial_pace = oag_hud::pace_for(
                         readout.mode,
                         readout.race_ticks,
                         readout.lap_ticks,
@@ -512,7 +512,7 @@ impl RaceStage {
                     );
                     hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
-                    // span and no other window - see `oag_game::hud::countdown`
+                    // span and no other window - see `oag_game::hud_countdown`
                     // and `oag_race::RaceState::thrust_gated`, whose own doc
                     // names the three live captures behind the 272-tick figure.
                     // Not gated further by mode: the capture that measured it
@@ -577,7 +577,7 @@ impl RaceStage {
     /// the scene target is letterboxed smaller than the window, and passing
     /// the window's own size on to [`RaceStage::draw_hud`] is the mismatch
     /// that surfaced as a `depth attachment`/`color attachment` size
-    /// validation error - see `oag_game::hud::Countdown::draw`'s doc for why
+    /// validation error - see `oag_game::hud_countdown::Countdown::draw`'s doc for why
     /// that pass in particular is where it shows.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn warm_up(

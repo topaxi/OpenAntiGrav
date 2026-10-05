@@ -8,10 +8,10 @@
 //!
 //! All three rules are `Hud_UpdateEnergyBar`'s own - see
 //! `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`
-//! for the decompile, and [`crate::hud::Readout::shield_absorbing`],
-//! [`crate::hud::Readout::shield_forced_red`] and
-//! [`crate::hud::Readout::shield_forced_red`]'s neighbour
-//! [`crate::hud::Readout::shield_blinking`] for what each field measures.
+//! for the decompile, and [`crate::Readout::shield_absorbing`],
+//! [`crate::Readout::shield_forced_red`] and
+//! [`crate::Readout::shield_forced_red`]'s neighbour
+//! [`crate::Readout::shield_blinking`] for what each field measures.
 
 use super::{Draw, Readout, Sprite, sprite_draw};
 

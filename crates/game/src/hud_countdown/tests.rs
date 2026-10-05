@@ -83,8 +83,8 @@ fn one_triangle_model(label: &str) -> Model {
 /// case [`Countdown::screen_position`] resolves without a recovered
 /// perspective camera. What the widget draws is irrelevant to this file; only
 /// that [`Countdown::new`] accepts it.
-fn origin_widget() -> crate::hud::Model {
-    crate::hud::Model {
+fn origin_widget() -> oag_hud::Model {
+    oag_hud::Model {
         name: "test".to_string(),
         src: "test.vex".to_string(),
         position: [0.0, 0.0, -70.0],

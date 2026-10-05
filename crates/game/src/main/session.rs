@@ -269,7 +269,7 @@ pub(crate) struct Session {
     /// The cursor's own sprite, on `overlay`'s sheet - see
     /// `oag_game::cursor`. Rebuilt whenever the title changes, which is
     /// once: the chooser's own until a disc is picked, the title's after.
-    pub(crate) cursor_sheet: oag_game::sprite::Sheet,
+    pub(crate) cursor_sheet: oag_hud::sprite::Sheet,
     /// Which title `cursor_sheet` was built for; `None` is the chooser's.
     pub(crate) cursor_title: Option<&'static str>,
     /// Set whenever the loop is about to stall on a load, so the frame that
@@ -654,7 +654,7 @@ pub(crate) struct Shell {
     /// labelled by its own `FE_ON`/`FE_OFF` strings.
     pub(crate) weapons: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
-    pub(crate) sprites: oag_game::sprite::Sheet,
+    pub(crate) sprites: oag_hud::sprite::Sheet,
     /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
     /// parsed screens for the one thing that re-reads the disc's XML after
     /// boot: a selection screen's per-entity `screen.xml` declares no globals

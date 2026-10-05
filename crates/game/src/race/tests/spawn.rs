@@ -28,7 +28,7 @@ fn a_field_of_one_reports_no_place() {
     let readout = race.readout();
     assert_eq!(readout.place, 0);
     // Known regardless of the field size. The HUD is what decides not to draw a
-    // field size with no place beside it - see `oag_game::hud::text_for`.
+    // field size with no place beside it - see `oag_hud::text_for`.
     assert_eq!(readout.ships, 1);
     // The *table* still says first, because a lone craft leads the race it is
     // in. The readout is where that stops being reported as a standing, so a

@@ -1544,7 +1544,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
 ///
 /// A single race is the mode that has a field at all, and `Arcade_HUD.xml` is the
 /// only shipped layout with the place widgets - see
-/// `oag_game::hud::place_owns_the_anchor`.
+/// `oag_hud::place_owns_the_anchor`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_players_place_reaches_the_hud() {
@@ -1592,7 +1592,7 @@ fn the_players_place_reaches_the_hud() {
         .hud
         .context()
         .expect("Arcade_HUD.xml parses; the widget-count test pins it");
-    let frame = oag_game::hud::draw_list(&context, &readout);
+    let frame = oag_hud::draw_list(&context, &readout);
     let drawn: Vec<&str> = frame
         .hud_text
         .iter()

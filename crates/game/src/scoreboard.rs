@@ -19,7 +19,7 @@
 //! `CLAUDE.md`.
 //!
 //! What would retire it: reading `Race End Records`' layout out of the front-end
-//! XML the way `crate::hud` reads `Arcade_HUD.xml`, and the transitions that
+//! XML the way `oag_hud` reads `Arcade_HUD.xml`, and the transitions that
 //! reach it out of the state machine.
 //!
 //! # What is not in a row, and why
@@ -37,8 +37,8 @@
 //! player's clock repeated eight times. The `TIME` column is the tick a craft
 //! crossed for the last time, and empty for one the race ended under.
 
-use crate::hud::{Precision, format_lap_time};
 use crate::records;
+use oag_hud::{Precision, format_lap_time};
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::menu;
 
@@ -117,7 +117,7 @@ impl Board {
     ///
     /// **The HUD's own rule, deliberately the same one.** A place is a position
     /// among opponents, and a time trial, a speed lap and a Zone run all grid
-    /// the player alone: `crate::hud::Readout` omits its position widget on a
+    /// the player alone: `oag_hud::Readout` omits its position widget on a
     /// field of one because `1 / 1` is arithmetic rather than a standing, and a
     /// results table that printed `POS 1` under it would contradict the screen
     /// the player was looking at a tick earlier.
@@ -576,10 +576,10 @@ fn craft_label(row: &Row) -> String {
 
 /// Draws a board over whatever is already in the target.
 ///
-/// A renderer of its own rather than a method on [`crate::hud::Overlay`]: that
+/// A renderer of its own rather than a method on [`crate::hud_overlay::Overlay`]: that
 /// one draws a *layout* read off the disc and this draws a table of ours, and
 /// the two share nothing but a font. It is built from the same
-/// [`crate::hud::Assets`] the HUD is, so a source whose `HUDSmall` face is
+/// [`oag_hud::Assets`] the HUD is, so a source whose `HUDSmall` face is
 /// unreadable draws this in the built-in 5x7 set and says so once, where the HUD
 /// already said it.
 pub struct Overlay {
@@ -605,7 +605,7 @@ impl Overlay {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
-        assets: &crate::hud::Assets,
+        assets: &oag_hud::Assets,
     ) -> anyhow::Result<Self> {
         let renderer = crate::render::Renderer::new(
             device,

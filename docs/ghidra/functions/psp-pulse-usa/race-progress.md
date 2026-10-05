@@ -194,7 +194,7 @@ if DAT_08ab0de0 != 0 {                      // a global gate, unread past this
     elif    ghost < gold && uVar14 < ghost: tier[0x7c] = 3         // RECORD - a campaign cell too, when
                                                                     // the player's own stored best already
                                                                     // beats gold and current pace beats it.
-                                                                    // oag_game::hud::TimeTrialPace does not
+                                                                    // oag_hud::TimeTrialPace does not
                                                                     // reproduce this branch - see its own doc.
     elif    uVar14 <= gold:   tier[0x7c] = 2  // GOLD
     elif    uVar14 <= silver: tier[0x7c] = 1  // SILVER
@@ -213,7 +213,7 @@ same tier a fresh per-tick evaluation against the current `uVar14` alone
 would show, past the point every target is missed: the last real write
 before that point necessarily left it at `0` (bronze), which is exactly what
 a stateless re-evaluation also produces once `uVar14 > bronze`. See
-[`oag_game::hud::TimeTrialPace::evaluate`](../../../../crates/game/src/hud/time_trial_pace.rs)'s
+[`oag_hud::TimeTrialPace::evaluate`](../../../../crates/hud/src/time_trial_pace.rs)'s
 own doc comment for the branch-by-branch argument this reimplementation is
 built on - it needed no persistent per-race state as a result, only
 `race_ticks`/`lap_ticks`, already on `Readout`.
@@ -224,9 +224,9 @@ Lap cell's own `gold`/`silver`/`bronze` fields
 numbers `campaign_cell->0xa0/0xa4/0xa8` read) are what the original compares
 the live elapsed time against - the mapping this project needed to draw the
 HUD tier is honest, not invented.
-[`oag_game::hud::Readout::time_trial_pace`](../../../../crates/game/src/hud.rs)
+[`oag_hud::Readout::time_trial_pace`](../../../../crates/hud/src/lib.rs)
 carries it, computed at `RaceStage::draw_hud` (where the campaign cell
-lives) and consumed by `oag_game::hud::draw`'s `TotalTime`/`TotalTimeTxt`
+lives) and consumed by `oag_hud::draw`'s `TotalTime`/`TotalTimeTxt`
 arms - see [hud.md](../../../ui/hud.md#medal-targets-closed-2026-09-28).
 `RECORD` followed on 2026-09-30; see "The stored best" below.
 
@@ -267,7 +267,7 @@ attribute name**, and the file's own `<code>` dictionary spells them `p`, `n`,
 `o`, `m` - so the class is the dictionary's word, not its position. Both figures
 are seconds.
 
-What `oag_game::hud` does now: `RecordTarget` carries
+What `oag_hud` does now: `RecordTarget` carries
 `min(stored best, authored)`, `TimeTrialPace::evaluate` applies the branch
 structure above (a campaign cell's `RECORD` needs `best < gold` and the run
 ahead of it; a plain race is `RECORD` throughout), and a track whose `stats.xml`
@@ -323,7 +323,7 @@ Confidence **95** (was an inference from the decompile alone, no frame taken).
   `g_game_mode = 6` hung the loader, see [`countdown-voice.md`](countdown-voice.md)),
   so the Zone half is the layout read plus the bind gate, not a live frame.
 - **What this build does now.** `oag_title::HudArt::total_time_timed_modes_only`
-  is `true` for Pulse only, and `oag_game::hud::time_trial_pace::mode_hides_total_time`
+  is `true` for Pulse only, and `oag_hud::time_trial_pace::mode_hides_total_time`
   hides both widgets outside Time Trial and Speed Lap - the modes this build races
   from the original's `{5, 10}`; Free Play (7) and Multiplayer Time Trial (`0x11`)
   are not modes it runs. That also hides the clock in a single race, Tournament and

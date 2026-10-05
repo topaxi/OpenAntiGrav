@@ -222,7 +222,7 @@ frames it runs on, and exactly which frames those are is not proven past
 **Not adopted here either, for the same reason `HOLD_SECONDS` is not**:
 `oag_race::sight::Sight` has no accessor for the hold-time accumulator or a
 0-1 progress fraction derived from it - only `locked()` and `visible()`,
-both hard booleans - so `oag_game::hud::sight_draw` cannot drive this table
+both hard booleans - so `oag_hud::sight_draw` cannot drive this table
 without a new `crates/race` API. `oag_title::hud::Sights::Concentric::leach`
 still draws all four together in code and its own doc comment still says
 chosen, not measured, for the *runtime* behaviour; what moved is that the

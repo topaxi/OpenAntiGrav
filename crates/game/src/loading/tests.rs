@@ -722,7 +722,7 @@ pub(super) fn feature_screen_with(labels: Option<Labels>) -> Screen {
             caption: Some("LOADING...".to_string()),
             wave: false,
             art: Some(Art {
-                sheet: crate::sprite::Sheet::default(),
+                sheet: oag_hud::sprite::Sheet::default(),
                 illustrations: vec![[0.0, 0.0, 64.0, 32.0]],
                 title_arrow: Some([0.0, 0.0, 8.0, 8.0]),
                 subtitle_arrow: Some([0.0, 0.0, 8.0, 8.0]),

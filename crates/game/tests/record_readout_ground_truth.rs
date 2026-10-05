@@ -18,9 +18,9 @@
 //! puts `Venom` on the 117, not the attribute order: a reader that took the
 //! order the way the page reads would show 138 s.
 
-use oag_game::hud::{RecordTarget, pace_for};
 use oag_game::records::Record;
 use oag_gameplay::PlayerInputs;
+use oag_hud::{RecordTarget, pace_for};
 use oag_ui::frontend::Draw;
 
 fn image() -> Option<std::path::PathBuf> {
@@ -40,7 +40,7 @@ fn load(image: &std::path::Path, mode: oag_race::Mode) -> oag_game::race::Loaded
 }
 
 /// The texts the frame draws, small font and HUD font.
-fn texts(frame: &oag_game::hud::Frame) -> (Vec<String>, Vec<String>) {
+fn texts(frame: &oag_hud::Frame) -> (Vec<String>, Vec<String>) {
     let of = |list: &[Draw]| {
         list.iter()
             .filter_map(|draw| match draw {
@@ -60,7 +60,7 @@ fn the_load_carries_venoms_authored_time_off_the_disc() {
     let stats = loaded.track_stats.expect("16_Track's stats.xml reads");
     assert_eq!(stats.race_times[0], 117.0, "Venom's <RaceTimes>");
     assert_eq!(stats.lap_times[0], 38.0, "Venom's <LapTimes>");
-    let target = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None)
+    let target = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None, None)
         .expect("a Time Trial has a record target");
     assert_eq!(target.authored_centis, Some(11_700));
 }
@@ -89,9 +89,9 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
     // Ticks in the countdown are not race time: the clock has not started.
     assert_eq!(readout.race_ticks, 0);
 
-    let fresh = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None);
+    let fresh = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None, None);
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, fresh.as_ref());
-    let (small, hud) = texts(&oag_game::hud::draw_list(&context, &readout));
+    let (small, hud) = texts(&oag_hud::draw_list(&context, &readout));
     assert!(small.contains(&record_word), "small text {small:?}");
     assert!(!small.contains(&total_word), "small text {small:?}");
     assert!(hud.contains(&"1.57.0".to_string()), "hud text {hud:?}");
@@ -105,15 +105,16 @@ fn a_time_trial_draws_the_record_caption_and_counts_down_to_it() {
         oag_race::Mode::TimeTrial,
         "VENOM",
         Some(&stats),
-        Some(&best),
+        best.best_total_ticks,
+        best.best_lap_ticks,
     );
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, faster.as_ref());
-    let (_, hud) = texts(&oag_game::hud::draw_list(&context, &readout));
+    let (_, hud) = texts(&oag_hud::draw_list(&context, &readout));
     assert!(hud.contains(&"1.40.0".to_string()), "hud text {hud:?}");
 
     // Without the target the cluster falls back to the plain clock.
     readout.time_trial_pace = pace_for(readout.mode, 0, 0, None, None);
-    let (small, _) = texts(&oag_game::hud::draw_list(&context, &readout));
+    let (small, _) = texts(&oag_hud::draw_list(&context, &readout));
     assert!(small.contains(&total_word), "small text {small:?}");
 }
 
@@ -145,7 +146,7 @@ fn an_eliminator_draws_the_kill_column_in_the_default_face() {
     readout = race.readout();
     assert_eq!(readout.kill_tags[0].kills, 2);
 
-    let frame = oag_game::hud::draw_list(&context, &readout);
+    let frame = oag_hud::draw_list(&context, &readout);
     assert!(
         frame.default_text.len() >= 8,
         "eight rows in the default face, drew {:?}",
@@ -189,7 +190,7 @@ fn a_single_race_draws_pos_and_no_total() {
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
     assert_eq!(readout.place, 8, "the parked player is 8th of 8");
-    let (small, _) = texts(&oag_game::hud::draw_list(&context, &readout));
+    let (small, _) = texts(&oag_hud::draw_list(&context, &readout));
     assert!(small.contains(&pos), "small text {small:?}");
     assert!(!small.contains(&total), "small text {small:?}");
 }

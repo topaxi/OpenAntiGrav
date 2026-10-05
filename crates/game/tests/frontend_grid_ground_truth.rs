@@ -34,7 +34,7 @@
 //!
 //! Anything sweeping a PS2 layout for out-of-screen widgets has to know which
 //! kind of `x` it is holding before it can check it against a screen at all.
-//! This is what `oag_game::hud::inside_screen`'s doc comment warns about, and
+//! This is what `oag_hud::inside_screen`'s doc comment warns about, and
 //! this file is the second, independent instance of it.
 
 use std::collections::BTreeMap;

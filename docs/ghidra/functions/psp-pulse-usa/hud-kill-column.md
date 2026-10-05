@@ -95,7 +95,7 @@ the first-boot name entry. A solo single race reads `pos 8/8` and no rows.
 
 ## What this build does with it
 
-[`oag_game::hud::kill_tags`](../../../../crates/game/src/hud/kill_tags.rs):
+[`oag_hud::kill_tags`](../../../../crates/hud/src/kill_tags.rs):
 `ranked` is the row rule, `Readout::kill_tags` carries the rows, and `draw.rs`
 puts them in a new `Default`-face text bucket (`Frame::default_text`, a third
 `Renderer` in `Overlay`, the face loaded only for a layout that names it).

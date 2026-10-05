@@ -244,7 +244,7 @@ weapon's own `type` string: `TurboIcon`, `ShieldIcon`, `RocketIcon`,
 `LeachBeamIcon` and `RepulserIcon` misspellings included. That is exactly
 `oag_tables::weapons::Weapon::ALL`, so the lookup is
 `format!("{}Icon", weapon.as_type())` and nothing else -
-`oag_game::hud::pickup_icon_name`. Pinned against the shipped file for all
+`oag_hud::pickup_icon_name`. Pinned against the shipped file for all
 thirteen by `every_weapon_has_an_icon_widget_named_after_it`.
 
 The numeric ids are still real - `0x0883b3b8` forces one, and it is `6` - they
@@ -414,7 +414,7 @@ both in `crates/pure/src/hud.rs` now.
 `<WEAPON>_icon` widget for nine of the nine weapons `oag_gameplay::
 pickup::IMPLEMENTED` can hand out on Pure, plus `Quake` for when it joins that
 pool; `pickup_icon_backdrop_model` names `weapon_icon_grid`, the frame they
-sit in. `oag_game::hud::draw::pickup_model_draws` reads the held weapon's
+sit in. `oag_hud::draw::pickup_model_draws` reads the held weapon's
 model, tints it with its own authored `colour` (Pure's model widgets carry
 one, so there is nothing to substitute the way Pulse's backdrop needs), and
 draws it centred on the widget's authored position.
@@ -433,7 +433,7 @@ wrong for at least eight of them.
 in `IMPLEMENTED` and has no icon on Pure's disc - the title predates the
 weapon - so a Pure race that hands one out draws the backdrop grid and no
 icon inside it, which is what `crates/game/tests/pickup_icon_ground_truth.rs`
-and `oag_game::hud::pickup_model_tests` both pin rather than leave to chance.
+and `oag_hud::pickup_model_tests` both pin rather than leave to chance.
 
 Verified two ways: a ground-truth test against `pure-psp-usa.chd` confirms
 all nine implemented icons plus the grid decode with a real quad extent, and

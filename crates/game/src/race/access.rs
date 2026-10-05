@@ -84,7 +84,7 @@ impl Race {
 
     /// Which grid the lock-on reticle's coordinates are in.
     ///
-    /// The title's own HUD space - `oag_game::hud::Assets::space` - because the
+    /// The title's own HUD space - `oag_hud::Assets::space` - because the
     /// reticle is drawn beside that layout's widgets and has to project into the
     /// same grid. Wipeout HD authors 1920x1080 and the PSP titles 480x272; a
     /// reticle left at the default on HD lands in the top-left ninth of the

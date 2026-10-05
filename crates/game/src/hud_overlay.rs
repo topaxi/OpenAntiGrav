@@ -1,12 +1,12 @@
 //! The HUD's GPU half: three [`crate::render::Renderer`]s and the pass that drives
 //! them.
 //!
-//! Split out of [`super`] so the layout model and the draw list stay testable
+//! Split out of `oag_hud` so the layout model and the draw list stay testable
 //! without a GPU, which is the reason those two are separated from each other in
 //! the first place. Nothing here decides anything - every widget, string and
 //! colour is already resolved by the time [`Overlay::draw`] runs.
 
-use super::{Assets, Context, Layout, Readout, draw_list};
+use oag_hud::{Assets, Context, Layout, Readout, draw_list};
 
 /// The HUD's three renderers and the data they draw.
 ///
@@ -28,7 +28,7 @@ pub struct Overlay {
     /// Every texture the layout names, packed into one sheet. Held rather than
     /// reduced to one origin, because a layout may name six - see
     /// [`Assets::sheet`].
-    sheet: crate::sprite::Sheet,
+    sheet: oag_hud::sprite::Sheet,
     art: &'static oag_title::HudArt,
     hud_line_height: f32,
     small_line_height: f32,

@@ -47,27 +47,24 @@ use oag_tables::fexml::{self, Node};
 
 mod assets;
 mod compose;
-pub mod countdown;
 mod dialect_2048;
 mod draw;
 mod head_to_head;
 pub mod kill_tags;
 mod lap_splits;
-mod overlay;
 mod pickup;
 mod runtime;
 mod shield_bar;
 mod sight_draw;
+pub mod sprite;
 mod time_trial_pace;
 mod widget;
 
 pub use assets::Assets;
 pub use compose::{Composed, compose};
-pub use countdown::Countdown;
 pub use draw::{Context, Frame, draw_list, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
-pub use overlay::Overlay;
 pub use pickup::pickup_icon_name;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
@@ -874,7 +871,7 @@ pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
 ///   `rect`/`x,y` before this function ever sees it. A pixel or two of
 ///   uncorrected nudge on a widget whose enclosing offset already moved it
 ///   most of the way is not enough to push any of the four off a screen nearly
-///   a third larger; [`crate::hud::tests`] and the ground-truth sweep below
+///   a third larger; [`crate::tests`] and the ground-truth sweep below
 ///   confirm none does.
 ///
 /// So, measured against the **composed** rect every [`Sprite`] and [`Label`]

@@ -35,7 +35,7 @@ fn pulses_race_end_photo_loads_with_both_lines_resolved() {
         &strings,
         oag_ui::picker::FaceScales::default(),
         [space.size.0, space.size.1],
-        &oag_game::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
         &[],
         oag_pulse::TITLE,
     )

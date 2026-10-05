@@ -82,7 +82,7 @@ fn a_translucent_fill_blends_over_whatever_load_kept() {
         format,
         None,
         Atlas::build(),
-        &crate::sprite::Sheet::default(),
+        &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
     // A 1:1 grid over the 4x4 target below, so a full-screen `Draw::Fill`
