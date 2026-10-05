@@ -6,8 +6,11 @@
 //! for shape against the PS3 `EBOOT.elf`'s `MagstripWake.cpp` (`0x0010a0c0`).
 //! Evidence and the confidence of each claim:
 //! `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`, "2026-10-05,
-//! magstrip-wire-hd lane". **PS4 static reading, 65. HD's own arc build
-//! (`0x00109858`, `0x001095e0`, `0x00109720`) was not read.**
+//! magstrip-wire-hd lane". **PS4 static reading, 65; HD's own arc pool
+//! (`0x002bbd60` update, `0x002bb530` spawn, `0x002bc7b0` draw, 2026-10-05,
+//! magstrip-hd-measure lane) agrees on life, scale, spread, shed radius and the
+//! `0.85` smoothing, and supplies the jitter scales (90). It DISAGREES on
+//! brightness and alpha: see "Chosen" below.**
 //!
 //! Two halves, the split [`crate::beam`] uses: this file is the state and the
 //! geometry with no `wgpu` in it, and [`crate::beam::Pipeline`] (built with
@@ -46,13 +49,20 @@
 //! - **`rand()`'s range.** Every constant (`0.9 / 2^30`, `3.26e-9 = 3.5 / 2^30`,
 //!   `2^-29` around a `-s` offset) is written for `[0, 2^30)`, so a uniform draw
 //!   in `[0, 1)` is used. The draws come from the seeded [`Rng`], not libc.
-//! - **The five jitter scales** `DAT_02134210..20`: zero in the executable's
-//!   image (set at run time), so [`JITTER_SCALE`] is `1.0`.
 //! - **The end point's placement.** Our spline stands in for the AI-track walk:
 //!   `ahead` metres along it, then across the road, clamped to its width.
 //! - **Vertex alpha and depth** (see [`crate::beam::pipeline::Style::MAGSTRIP`]):
 //!   `0xb2` is multiplied into the fragment as `beam.wgsl` does; whether
 //!   `MagStripArc_fp` does is unread.
+//! - **Brightness and alpha are the PS4's, and HD differs.** Spawn
+//!   `intensity = 0.125 + 0.575u`, `glow = 0.05 + 0.65u`, the per-tick `0.0862`
+//!   and `0.0975` terms and `ALPHA = 0xb2` are the PS4 reading. HD's own table
+//!   (`0x008c2610`, read live) has body `0.125..0.2`, contact `0.05..0.1`, float
+//!   alpha `0.3` body / `0.25` contact, and no spawn-time brightness. Not wired:
+//!   `INTENSITY` would have to be re-chosen with `MagStripArc_fp`'s gain
+//!   unread. See `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`.
+//! - **The spawn-time jitter seed.** HD's spawn writes no jitter; the seed here
+//!   is `spread * (2u - 1) * scale`, this port's.
 //! - **Brightness above 1.** The original packs `(uint)(x * 255)` into three
 //!   bytes unclamped; here it is clamped.
 //!
@@ -106,8 +116,19 @@ pub const SHED_SLOPE: f32 = 0.008_668_517;
 /// linearised, which the original's picture does not.
 pub const INTENSITY: f32 = 3.0;
 
-/// The five jitter scales. **Chosen, not measured** - see the module docs.
-pub const JITTER_SCALE: [f32; 5] = [1.0; 5];
+/// The five jitter scales: `0.4 + 0.6 * sin(k * pi / 4)` for `k = 0..=4`, a bell
+/// that leaves the two ends of the arc nearly still and swings the middle.
+///
+/// **Measured, HD `EBOOT.elf`, confidence 90** (static reading, then the five
+/// floats read back from RPCS3 memory on two cold boots): the two class initialisers
+/// (`0x002bd750`, `0x002bde18`) store five `_FSin(arg) * 0.6 + 0.4` results at
+/// `0x00ad8984..0x00ad8998`, with the arguments `0`, `pi/4`, `pi/2`, `3pi/4`,
+/// `pi` read from TOC slots `0x6378`, `0x6434`, `0x6438`, `0x643c`, `0x6440`;
+/// the arc update `0x002bbd60` reads the array term for term. The PS4's
+/// `DAT_02134210..20`, zero in its image, is presumably the same run-time
+/// table (not read there). See `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`,
+/// "2026-10-05, magstrip-hd-measure lane".
+pub const JITTER_SCALE: [f32; 5] = [0.4, 0.824_264_1, 1.0, 0.824_264_1, 0.4];
 
 /// The atlas is eight cells square.
 const CELL: f32 = 0.125;
@@ -319,8 +340,20 @@ impl Wake {
             }
         }
         if arc.life > 0.0 {
-            for (term, scale) in arc.jitter.iter_mut().zip(JITTER_SCALE) {
-                let draw = arc.spread * (2.0 * unit(rng) - 1.0);
+            let spread = arc.spread;
+            let fresh = |rng: &mut Rng| spread * (2.0 * unit(rng) - 1.0);
+            let mut draw = fresh(rng);
+            for (index, (term, scale)) in arc.jitter.iter_mut().zip(JITTER_SCALE).enumerate() {
+                if index % 2 == 1 {
+                    // HD's `0x002bbd60` pairs terms (0,1) and (2,3): the odd
+                    // term reuses its neighbour's draw unless `rand() & 7` is
+                    // zero, and the even terms start on a fresh draw.
+                    if rng.next_u32() & 7 == 0 {
+                        draw = fresh(rng);
+                    }
+                } else if index > 0 {
+                    draw = fresh(rng);
+                }
                 *term = *term * DECAY + draw * 0.15 * scale;
             }
         }

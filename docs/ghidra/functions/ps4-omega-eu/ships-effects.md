@@ -516,8 +516,11 @@ implementation is `oag_fx::magstrip` (module doc lists each rule), `oag_raceplay
   `v` stepping `1/48` down from the cell's bottom; the last quad's far edge is colour `0.3`. Colour grey
   `(uint)(x * 255)` with alpha `0xb2`. Contact: a diamond at the end, corners `-T, -L, +T, +L` scaled by `+0xd0`, uv
   `(0,0) (1,0) (1,1) (0,1)`.
-- **Unread, chosen:** `DAT_02134210..20` (jitter scales) and `DAT_020e52a0 + 0x1e0` (`kIntensity`) are zero in the
-  image (run-time tuning); `1.0` and `INTENSITY = 3.0` are this port's. The end point's spline walk is replaced by our
+- **Jitter scales, measured on HD 2026-10-05 (magstrip-hd-measure, 90):** `DAT_02134210..20` is zero in the image because it is
+  computed at start-up; HD's identical table reads `0.4, 0.824264, 1.0, 0.824264, 0.4` live (`0.4 + 0.6 sin(k pi/4)`), see
+  `ps3-hdfury-eu/magstrip-wake.md`, and the PS4 table is assumed the same (not read). HD's brightness and alpha differ from the
+  numbers above (`0.125..0.2`, alpha `0.3`/`0.25` float), same page. **Unread, chosen:** `DAT_020e52a0 + 0x1e0` (`kIntensity`)
+  is zero in the image; `INTENSITY = 3.0` is this port's. The end point's spline walk is replaced by our
   spline (`ahead` metres, then across the road). The two speed ribbons are not drawn.
 - **Textures** `Data/Tex/HD_electric_arc_8x8.gtf` (512x512, 64 purple lightning frames, one bolt a cell, `v` along it) and
   `HD_ElectricArc_Contact.gtf` (64x64) decode through the existing `.gtf` reader.

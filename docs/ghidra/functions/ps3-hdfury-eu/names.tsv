@@ -527,3 +527,9 @@
 0x00109e40	function	MagstripWake_ConstructAlt	75	magstrip-wake.md
 0x00109028	function	MagstripWake_EnqueueRender	78	magstrip-wake.md
 0x00337d78	function	ShipNet_CheckSendState	65	magstrip-wake.md
+0x001095e0	function	MagstripWake_DeletingDestruct	80	magstrip-wake.md
+0x00109720	function	MagstripWake_Destruct	80	magstrip-wake.md
+0x00109858	function	MagstripWake_UpdateRibbons	70	magstrip-wake.md
+0x002bbd60	function	MagstripArcs_Update	85	magstrip-wake.md
+0x002bb530	function	MagstripArcs_Spawn	75	magstrip-wake.md
+0x002bc7b0	function	MagstripArcs_Draw	65	magstrip-wake.md
