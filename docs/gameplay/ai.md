@@ -3649,7 +3649,8 @@ is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-c
 - **Lap progress** on a route is read off the ring span it replaces - see
   [lap counting](lap-counting.md#where-we-differ).
 
-Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no.
+Which routes are driven (Ace, VENOM, 2026-10-05): Pulse 05 and 14 yes, 07 no;
+Omega's copy of `altima` both.
 2048: every route on `square`, `park`, `tower`, `mall`, `bridge`, `arena`,
 `subway` and `altima`; none on `cathedral` (both verify with failures) or `sol`
 (no route laps, and the ring's own plan does not verify there either).

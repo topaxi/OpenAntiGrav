@@ -77,6 +77,10 @@ checked instruction by instruction. **Not ported.**
 
 ## Status against the port
 
-The override, the per-craft construction coin and the 2048 re-commit are not
-ported; what is, is recorded on
+The coin, routes and progress are ported title-agnostically and run on 2048's
+own circuits (eight of ten drive every route). **Omega: ported** - its copy of
+`altima` (`Data\environments2048\altima\track.vex`, the same 6 paths and 4
+junctions) loads with 2 routes round 2 forks, both plans verifying clean and
+driven (headless 1-tick load, 2026-10-05). The override, the per-craft
+construction coin and the 2048 re-commit are not ported; what is, is recorded on
 [`docs/gameplay/ai.md`](../../../gameplay/ai.md#branch-choice-at-a-fork).
