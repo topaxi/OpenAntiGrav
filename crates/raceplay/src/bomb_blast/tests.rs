@@ -211,3 +211,44 @@ fn the_basis_is_orthonormal_and_puts_dir_in_the_y_column() {
     assert!(overhead.x_axis.truncate().is_finite());
     assert!((overhead.x_axis.truncate().length() - 1.0).abs() < 1e-5);
 }
+
+/// Both models' texture tracks play on the blast's own age: `BombBlast_Construct`
+/// seeds each with `Node_SetAnimTimeTree(0.0)` and the mesh update adds the clock's
+/// delta from there, so the time is `0` at spawn and the age at rate 1 (measured
+/// live: three detonations at race clocks 60.9, 294.1 and 75.1 all start at `0.000`
+/// or at the age they were first seen at, with slope `1.0000`). `write_bomb_blasts`
+/// hands `age` to `write_anims`; a draw that did not carry it would leave both
+/// tracks at phase 0 for the blast's four seconds.
+#[test]
+fn the_draw_carries_the_age_the_texture_tracks_play_at() {
+    let mut race = race_with_a_grid();
+    race.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
+    assert_eq!(race.bomb_blast_draws()[0].expect("live").age, 0.0);
+
+    let dt = 1.0 / 60.0;
+    for _ in 0..90 {
+        race.advance_bomb_blast_models(dt);
+    }
+    let draw = race.bomb_blast_draws()[0].expect("live");
+    assert!(
+        (draw.age - 1.5).abs() < 1e-3,
+        "90 ticks of 1/60 s are 1.5 s, not {}",
+        draw.age
+    );
+    assert_eq!(draw.age, race.view.bomb_blasts[0].unwrap().age);
+}
+
+/// The ship explosion's shockwave is the same `Bomb_Shockwave.vex` and
+/// `ShipShockwave_Construct` seeds it with the same `Node_SetAnimTimeTree(0.0)`
+/// (`0x0885ee44`; read statically, not measured live).
+#[test]
+fn a_ship_explosions_shockwave_texture_also_plays_on_its_age() {
+    let mut race = race_with_a_grid();
+    race.spawn_ship_shockwave(Vec3::ZERO, Vec3::Y * 0.75);
+    let dt = 1.0 / 60.0;
+    for _ in 0..30 {
+        race.advance_bomb_blast_models(dt);
+    }
+    let draw = race.bomb_blast_draws()[0].expect("live");
+    assert!((draw.age - 0.5).abs() < 1e-3, "{}", draw.age);
+}

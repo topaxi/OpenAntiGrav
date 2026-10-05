@@ -1,13 +1,14 @@
-//! Draws one magstrip-wave surface through the mesh pipeline and asserts the
-//! wave moves with `scene.time`, on a fixture needing no game content.
+//! Draws one light-cone surface through the mesh pipeline on a fixture needing
+//! no game content, and pins what `mesh.wgsl` does with the combine
+//! `mesh::rcs::light_cone` reads off `dc_lightcone.rcsmaterial`:
 //!
-//! `hd_mag_wave_ground_truth.rs` checks the real circuit builds the bindings;
-//! this one checks `mesh.wgsl` reads them: the emissive picture dodged by a
-//! wave sampled at `uv * k + time`, `d = e / (1 - lerp(e, wave, e.a) * Colour)`
-//! (`mesh::rcs::mag_wave`). The wave texture is four texels across, three black
-//! and one white, so the clock sweeps the white texel across the sampled point
-//! and the dodge swings from `e` to its clamp.
+//! - the colour is `noise * K`, **saturated** before it blends (Talon's
+//!   Junction's `K` is 100);
+//! - the alpha is `noise * s * ramp` where the variant's ramp tap executes and
+//!   `noise * s * noise` where it is predicated away (`Emissive::rate` 1 and
+//!   a zero normal `y`).
 //!
+//! `hd_light_cone_ground_truth.rs` checks a real circuit reaches this shader.
 //! Skips when there is no adapter. Runs in `just test`.
 
 use std::sync::Arc;
@@ -17,12 +18,9 @@ use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
-
-/// `Colour`: only green takes the dodge.
-const TINT: [f32; 3] = [0.0, 1.0, 0.0];
 const GLOW_SLOT: u32 = 1 << slots::MATERIAL_SHIFT;
 
-fn vertex(position: [f32; 3], wave: bool) -> GpuVertex {
+fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {
         position,
         normal: [0.0, 0.0, 1.0],
@@ -33,33 +31,32 @@ fn vertex(position: [f32; 3], wave: bool) -> GpuVertex {
         anim: 0,
         xform: 0,
         sun_mask: 1.0,
-        slots: slots::DEFAULT
-            | slots::EMISSIVE
-            | GLOW_SLOT
-            | if wave { slots::MAG_WAVE } else { 0 },
+        slots: slots::DEFAULT | slots::EMISSIVE | GLOW_SLOT | slots::LIGHT_CONE,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
     }
 }
 
-fn texture(label: &str, width: u32, rgba: Vec<u8>) -> Arc<ModelTexture> {
+fn texture(label: &str, value: u8) -> Arc<ModelTexture> {
     Arc::new(ModelTexture {
         label: label.into(),
-        width,
+        width: 1,
         height: 1,
-        texels: Texels::Rgba8(rgba),
+        texels: Texels::Rgba8(vec![value, value, value, 255]),
         mip_count: None,
     })
 }
 
-fn model(wave: bool) -> Model {
+/// A cone quad: `ramp` bound as the albedo, `noise` as the second texture.
+fn model(noise: u8, ramp: u8, entry: Emissive) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
         lod_groups: Default::default(),
-        label: "hd mag wave quad".into(),
+        label: "hd light cone quad".into(),
         indices: vec![0, 1, 2],
-        draws: vec![DrawCall {
+        draws: Vec::new(),
+        transparent_draws: vec![DrawCall {
             moving: false,
             blend: None,
             blend_state: None,
@@ -76,15 +73,10 @@ fn model(wave: bool) -> Model {
             alpha_test_ref: None,
         }],
         alpha_tested_draws: Vec::new(),
-        transparent_draws: Vec::new(),
-        textures: vec![Some(texture("black albedo", 1, vec![0, 0, 0, 255]))],
-        lightmaps: Vec::new(),
-        pad_masks: vec![Some(texture("emissive", 1, vec![128, 128, 128, 255]))],
-        wave_maps: vec![Some(texture(
-            "wave",
-            4,
-            vec![0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255],
-        ))],
+        textures: vec![Some(texture("ramp", ramp))],
+        lightmaps: vec![Some(texture("noise", noise))],
+        pad_masks: Vec::new(),
+        wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
@@ -101,74 +93,26 @@ fn model(wave: bool) -> Model {
         mesh_count: 1,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
-        emissive: vec![Emissive {
-            tint: TINT,
-            offset: 0.0,
-            scale: 1.0,
-            rate: 1.0,
-        }],
+        emissive: vec![entry],
         vertices: vec![
-            vertex([-0.9, -0.9, 0.5], wave),
-            vertex([0.9, -0.9, 0.5], wave),
-            vertex([0.0, 0.9, 0.5], wave),
+            vertex([-0.9, -0.9, 0.5]),
+            vertex([0.9, -0.9, 0.5]),
+            vertex([0.0, 0.9, 0.5]),
         ],
     }
 }
 
-#[test]
-fn the_wave_moves_with_the_clock_and_repeats_each_second() {
-    let instance = wgpu::Instance::default();
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
-        eprintln!("no GPU adapter: skipping");
-        return;
-    };
-    let (device, queue) =
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .expect("requesting the device");
-
-    let at = |model: &Model, seconds: f32| {
-        let mut scene = Scene::off();
-        scene.light.enabled = 1.0;
-        scene.fog.camera = [0.0, 0.0, 100.5];
-        scene.time = [seconds; 4];
-        draw(&device, &queue, model, scene)
-    };
-    // Texel 0's centre is at 0.125 and the white texel 3's at 0.875.
-    let dark = at(&model(true), 0.125);
-    let bright = at(&model(true), 0.875);
-    assert!(
-        bright[1] > dark[1],
-        "the wave's white texel must brighten the dodge: {dark:?} then {bright:?}"
-    );
-    assert_eq!(
-        dark[0], bright[0],
-        "red is not in Colour, so the wave leaves it at the emissive picture"
-    );
-    assert!(
-        dark[0] > 0,
-        "the emissive picture reaches the pixel: {dark:?}"
-    );
-    assert_eq!(
-        at(&model(true), 1.125),
-        dark,
-        "the wave repeats once a second: the clock plus one is the same pixel"
-    );
-    let still = at(&model(false), 0.875);
-    assert_eq!(
-        (still[0], still[1], still[2]),
-        (0, 0, 0),
-        "without the wave bit the surface is its black albedo"
-    );
+fn entry(k: f32, rate: f32) -> Emissive {
+    Emissive {
+        tint: [k; 3],
+        offset: 0.0,
+        scale: 1.0,
+        rate,
+    }
 }
 
-/// **A Zone race draws the strip as the plain Zone surface.** Every `ZoneMode`
-/// variant of the wave materials declares no wave, emissive, clock or ramp, so
-/// with `scene.zone.enabled` set the wave bit must change nothing: the pixel
-/// equals the same surface without the bit, and does not move with the clock.
-/// Without the gate the wave escapes the grade, which is what a Zone race
-/// showed on Talon's Junction (the strip drew as it does in Time Trial).
 #[test]
-fn a_zone_race_draws_the_strip_without_its_wave() {
+fn the_cone_saturates_its_colour_and_skips_a_predicated_ramp() {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -177,30 +121,42 @@ fn a_zone_race_draws_the_strip_without_its_wave() {
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
-
-    let at = |model: &Model, seconds: f32, zone: bool| {
+    let at = |model: &Model| {
         let mut scene = Scene::off();
         scene.light.enabled = 1.0;
         scene.fog.camera = [0.0, 0.0, 100.5];
-        scene.time = [seconds; 4];
-        if zone {
-            scene.zone.enabled = 1.0;
-        }
         draw(&device, &queue, model, scene)
     };
-    let off_zone = at(&model(true), 0.875, false);
+
+    // The cone is drawn into a black target through the blend list, so the red
+    // channel is `colour * alpha * 255`.
+    //
+    // Noise 0.5, ramp 1.0. K = 100 saturates the colour to 1, and the ramp tap
+    // runs on the ungated variant, so alpha is 0.5 * 1.0 * 1.0: red is 128.
+    let ungated = at(&model(128, 255, entry(100.0, 0.0)));
     assert!(
-        off_zone[1] > 0,
-        "the fixture's wave must be visible off Zone: {off_zone:?}"
+        (i32::from(ungated[0]) - 128).abs() <= 3,
+        "saturated white at alpha noise * ramp = 0.5: {ungated:?}"
     );
-    let plain = at(&model(false), 0.875, true);
-    for seconds in [0.125, 0.875, 1.125] {
-        assert_eq!(
-            at(&model(true), seconds, true),
-            plain,
-            "in Zone the wave bit must not reach the pixel (t = {seconds})"
-        );
-    }
+
+    // The gated variant (the normal's y is 0) leaves the noise in the register
+    // the ramp would have overwritten: alpha is noise * noise = 0.25, whatever
+    // the ramp holds.
+    let gated = at(&model(128, 255, entry(100.0, 1.0)));
+    assert!(
+        (i32::from(gated[0]) - 64).abs() <= 3,
+        "a predicated-away ramp leaves alpha at noise^2 = 0.25: {gated:?}"
+    );
+    let gated_dark_ramp = at(&model(128, 0, entry(100.0, 1.0)));
+    assert_eq!(gated, gated_dark_ramp, "the skipped ramp is never read");
+
+    // K = 1 does not saturate: the colour is the noise's own 0.5, so the red is
+    // 0.5 * alpha 0.5.
+    let plain = at(&model(128, 255, entry(1.0, 0.0)));
+    assert!(
+        (i32::from(plain[0]) - 64).abs() <= 3,
+        "K = 1 leaves the noise's mid grey: {plain:?}"
+    );
 }
 
 /// Identity camera and model, so clip space is model space.
@@ -311,7 +267,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_pipeline(&built.pipeline);
+        pass.set_pipeline(&built.blend_pipeline[0]);
         pass.set_bind_group(0, &bind_group, &[]);
         // Slot 1: the model's own textures. Slot 0 is `build`'s white 1x1.
         pass.set_bind_group(1, &built.texture_binds[1], &[]);

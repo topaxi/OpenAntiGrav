@@ -2183,6 +2183,32 @@ the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the 
 is from the code), 2048's Vita `mageffect08` program, and the `mageffect08` floor's
 own diffuse-plus-normal-plus-lightmap composition (only the wave term is added to it).
 
+## A Zone race draws the magstrip family without its wave (2026-10-05, `hd-zone-magfloor`)
+
+**The report from play:** a Zone race on Talon's Junction no longer looked like it did before the wave
+landed. Cause: `slots::MAG_WAVE`/`MAG_LOOP` replaced the shaded result outright, so the strip floor drew
+exactly as in Time Trial while the walls and sky took the Zone grade.
+
+**What the original does.** The six wave materials (`mageffect08`, `mageffect08_floor`, `mageffectloop`,
+`mag_effect_loop_opaque`, `chevron_pulse`, `mageffect_modded`) each ship `ZoneMode` fragment variants. Those
+declare `zoneColourTint`, `zoneEffectInner` (and `Outer`), the zone textures, the grid and the paraboloid
+reflection - and **no wave sampler (`0x85c9fd48`), no emissive picture (`0x1202d8df`), no `time`, no iridescent
+ramp (`0xcc98c527`)**. Read with `scripts/ps3-microcode.py fp-file` on Talon's `mag_effect_loop_opaque`,
+block #15 (`@0xbb40`): the colour is `light * (zoneTex * zoneEffect + zoneBase * rim^10 + zoneBaseAlt *
+rim^5 [+ grid-alpha glow]) + reflection`, the same Zone surface every other material gets. So in Zone the
+strip is recoloured by the stage, not scrolled. Census: `crates/render/examples/hd_zone_variants.rs` prints
+the per-variant table; `hd_zone_wave_census_ground_truth.rs` asserts no Zone variant of any wave material
+declares the wave, across all four PS3 archives. Not one exception, so one gate serves the family.
+
+**Wired as** a `scene.zone.enabled == 0.0` condition on both branches in `mesh.wgsl` (the wave dodge and the
+floor combine); the floor then falls through to the generic Zone surface. A branch, not a mix: the Time Trial
+frame at the lead's matched pose is byte-identical before and after. Test:
+`hd_mag_wave_lit_path::a_zone_race_draws_the_strip_without_its_wave` (fails without the gate).
+
+**Not done:** an RPCS3 Zone frame of the strip for a side-by-side (the decoded program is the evidence); the
+Zone variant's own grid-alpha glow term and paraboloid reflection are not drawn (as off Zone); whether the
+Zone floor's alpha (`@0x82 MOV H0.w`, a literal the decoder prints as 0) means anything for a blended pass.
+
 ## Omega and 2048 draw their see-through materials off the state word (2026-10-05, `transparent-floors`)
 
 Omega and 2048 authored HD's state word on every material (PS4 header `+0x22`, Vita `+0x12`; evidence
@@ -2344,6 +2370,49 @@ materially different, unread layout from a handful of samples is a
 reverse-engineering project of its own, and this session's evidence supports
 measuring and naming the container's existence, not guessing its fields.
 `oag_rcs::rcsmaterial`'s existing container reader is untouched.
+
+## HD's light cone was a grey wedge; its combine is two taps and a saturate (2026-10-05)
+
+`dc_lightcone.rcsmaterial` (Talon's Junction slot 440, Amphiseum slot 610 -
+exactly two materials disc-wide, `crates/render/examples/hd_light_cone_census.rs`)
+drew as opaque grey radial wedges across the upper left of
+`talons-matched/03`, where the original draws pale translucent streaks over
+the blue tunnel. Cause: the picture was `Texture1` (`dc_gradient_noise.gtf`,
+grey, alpha 255 everywhere) with the texture's own alpha as coverage.
+
+**The program** (resolved fogged variant, `scripts/ps3-microcode.py fp-file`;
+confidence 85 for the arithmetic, read instruction by instruction):
+
+    colour = fog-lerp(noise.x * K)         K = parameter 0x60eaf40d, 100 on Talon's Junction, absent (1) on Amphiseum
+    alpha  = noise.x * s * ramp(N.V)       s = parameter 0x7611a2d8, 1.0 on Talon's Junction, 0.49596 on Amphiseum
+    N.V    = (N . V) / sqrt(|N|^2 |V|^2)   ramp = dc_gradient_e.gtf at (cos, cos); its red is a function of u alone, 0 at 0 and 1 from 0.5 up
+
+The vertex program writes the attribute in slot 1 into the `w` of three
+interpolators and `eyePositionWorldSpace - position` into `TC2.xyz`. **That
+attribute is a constant `(0, 0, 1)` on every authored cone** (a `CMP` field,
+raw bytes `7f 80 00 00` in every vertex, `hd_unlit_probe`), not a surface
+normal: the fade is against a fixed axis. Confidence 90.
+
+**The colour saturates before it blends.** With `K` = 100 an unclamped
+colour on this project's float target is `100 * noise` of light times the
+alpha, and it drew a white wall; the original's 8-bit surface clamps to 1
+first. The clamp is the cone's own in `mesh.wgsl`, not a global one.
+
+**The ramp tap is predicated on Talon's Junction's variant** (`@0x1550`: `FENCT
+R63, R0, R0` then `TEX H2.x, R2.wwww unit1 [NE(wwww)]`) and not on
+Amphiseum's (`@0x1520`). `H2.x` already holds the noise, so a skipped tap
+makes the alpha `s * noise^2`. `R0` is `f[TC1]`, whose `w` is the normal's
+`y`, which is zero on every cone. **Confidence 60, one matched frame**: that
+`FENCT` sets the condition register from its source is a hypothesis (the
+opcode writes no register, 59,256 of 59,256 uses name 63). The alternative
+reading draws the shafts as an opaque white wall; the skipped-ramp reading
+reproduces the translucent streaks of `talons-matched/03`. Amphiseum's
+variant, whose tap is unconditional, is read from its microcode only: no
+matched pose frames its cone.
+
+Implemented in `mesh::rcs::light_cone` (`slots::LIGHT_CONE`, bit 19, which
+moved `MATERIAL_SHIFT` from 19 to 20) and `mesh.wgsl`; pinned by
+`hd_light_cone_lit_path` (fixture) and `hd_light_cone_ground_truth` (disc).
 
 ## See also
 

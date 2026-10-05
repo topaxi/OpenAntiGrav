@@ -277,6 +277,11 @@ pub(super) struct BombBlastDraw {
     pub(super) shockwave_visible: bool,
     /// The alpha [`Drawable::tint`] multiplies the shockwave's vertex colours by.
     pub(super) shockwave_alpha: f32,
+    /// The blast's age in seconds: the time both models' texture tracks play at.
+    /// `BombBlast_Construct` seeds each model with `Node_SetAnimTimeTree(0.0)` and
+    /// the mesh update then integrates the clock's delta, so the texture time *is*
+    /// the age at rate 1 (measured live, `docs/rendering/scenery-animation.md`).
+    pub(super) age: f32,
 }
 
 impl Race {
@@ -371,6 +376,7 @@ impl Race {
                             * Mat4::from_scale(Vec3::splat(blast.shockwave_scale)),
                         shockwave_visible: true,
                         shockwave_alpha: blast.shockwave_alpha,
+                        age: blast.age,
                     };
                 }
                 let basis = bomb_blast_basis(blast.position, blast.dir);
@@ -396,6 +402,7 @@ impl Race {
                         )),
                     shockwave_visible: true,
                     shockwave_alpha: blast.shockwave_alpha,
+                    age: blast.age,
                 }
             })
         })

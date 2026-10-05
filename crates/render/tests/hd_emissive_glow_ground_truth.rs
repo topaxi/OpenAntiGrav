@@ -155,6 +155,8 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
         // chunk (`hd_original_speed_pad_ground_truth`). `slots::MAG_WAVE` and
         // `slots::MAG_LOOP` (bits 17 and 18) are the twelfth and thirteenth:
         // the magstrip wave, 2026-10-05 - see `mesh::rcs::mag_wave`.
+        // `slots::LIGHT_CONE` (bit 19) is the fourteenth: `dc_lightcone`'s
+        // combine - see `mesh::rcs::light_cone`.
         for packed in &model.material_slots {
             assert_eq!(
                 packed
@@ -163,7 +165,8 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
                         | slots::FACING_RAMP_SHEEN
                         | slots::PAD_NE
                         | slots::MAG_WAVE
-                        | slots::MAG_LOOP),
+                        | slots::MAG_LOOP
+                        | slots::LIGHT_CONE),
                 0,
                 "a role bit outside the ten this reading defines"
             );

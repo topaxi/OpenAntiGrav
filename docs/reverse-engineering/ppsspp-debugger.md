@@ -111,6 +111,17 @@ or whatever the compositor offers) before timing anything - this trap is
 specific to a real compositor session; see below for whether it also applies
 under Xvfb (not yet confirmed either way).
 
+## Two probe findings (2026-10-05, fx-age-clocks)
+
+- **A breakpoint condition can dereference memory and compare it with a raw float bit pattern.**
+  `cpu.breakpoint.add` takes `condition`, and `[a0+0x40] < 0x40a00000` keeps only hits where the word at
+  `a0+0x40` is below `5.0f` (positive floats order like integers). That cut a probe on a function hit
+  for every animated mesh every frame down to the few objects of interest.
+  `Debugger.add_breakpoint(address, condition)` and `each_hit(..., condition=...)` carry it.
+- **A `timeout`-killed probe leaves the CPU stepping with its breakpoint still armed**, and the
+  debugger then looks hung (`state` times out). `brk()`, `remove_breakpoint` for each entry of
+  `cpu.breakpoint.list`, `resume()` clears it.
+
 ## Running without a real display: Xvfb works, no compositor needed
 
 Verified 2026-08-04, PPSSPP v1.20.4, `pulse-psp-usa.iso`, on a machine with no

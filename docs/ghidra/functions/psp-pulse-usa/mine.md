@@ -999,6 +999,16 @@ convention rather than these two meshes' own authored vertical axis; caught
 by comparing a rendered capture against the `oag-view --mesh` screenshots
 above, not by re-reading this page.)
 
+### 2026-10-05: the blast's two models play their texture on the blast's age
+
+`BombBlast_Construct` seeds each model with `Node_SetAnimTimeTree(0.0)` (`0x08872268` hemisphere,
+`0x08872470` shockwave) and never calls it again, so the `Mesh` update that adds the clock's delta
+leaves `mesh+0x40` equal to the blast's age at rate 1. Read at the instruction and measured live on two
+boots (spawn clock = detonation clock, slope `1.0000`); confidence 88. The derivation and the table are in
+[`anim-transform.md`](anim-transform.md#a-meshs-texture-time-seeded-per-spawn-so-object-age-2026-10-05).
+`BombBlast_Update` scrubs no *node* animation, but the models' texture tracks do play, and
+`write_bomb_blasts` uploads them.
+
 ## 2026-09-16: the fuse and the trip spend differently, and the pool is named
 
 `FUN_08867370` and `FUN_08867b50` decompile cleanly on the relocated database

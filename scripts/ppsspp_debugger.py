@@ -99,8 +99,8 @@ class Debugger:
         if self.is_stepping():
             self.call("cpu.resume")
 
-    def add_breakpoint(self, address):
-        """Arm an execution breakpoint.
+    def add_breakpoint(self, address, condition=None):
+        """Arm an execution breakpoint, optionally conditional (`"a0 >= 0x90af000 && a0 < 0x90b1000"`).
 
         The CPU **must be stepping** for this to take: a breakpoint added while
         the CPU runs is accepted, appears in `cpu.breakpoint.list`, and never
@@ -110,7 +110,8 @@ class Debugger:
             raise DebuggerError(
                 "breakpoints only arm while the CPU is stepping; call brk() first"
             )
-        self.call("cpu.breakpoint.add", address=address, enabled=True)
+        extra = {} if condition is None else {"condition": condition}
+        self.call("cpu.breakpoint.add", address=address, enabled=True, **extra)
 
     def remove_breakpoint(self, address):
         self.call("cpu.breakpoint.remove", address=address)
@@ -147,16 +148,16 @@ class Debugger:
             "never stopped at any of %s" % ", ".join("0x%08x" % a for a in addresses)
         )
 
-    def each_hit(self, address, count, timeout=30.0):
+    def each_hit(self, address, count, timeout=30.0, condition=None):
         """Yield at every one of the next `count` hits of `address`.
 
         The CPU is stopped inside the loop body, which is where reads are cheap,
         and resumed on the way to the next hit.
         """
-        for index, msg in self.each_hit_any((address,), count, timeout=timeout):
+        for index, msg in self.each_hit_any((address,), count, timeout=timeout, condition=condition):
             yield index, msg
 
-    def each_hit_any(self, addresses, count, timeout=30.0):
+    def each_hit_any(self, addresses, count, timeout=30.0, condition=None):
         """Yield `(index, msg)` at each of the next `count` hits of any address.
 
         The sibling of `each_hit` for more than one breakpoint; the pc that was
@@ -176,7 +177,7 @@ class Debugger:
         """
         self.brk()
         for address in addresses:
-            self.add_breakpoint(address)
+            self.add_breakpoint(address, condition)
         try:
             for index in range(count):
                 # Everything queued so far describes a stop that is already
