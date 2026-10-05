@@ -2183,6 +2183,7 @@ dependencies = [
  "log",
  "oag-assets",
  "oag-core",
+ "oag-fx",
  "oag-mesh",
  "oag-pulse",
  "oag-race",
