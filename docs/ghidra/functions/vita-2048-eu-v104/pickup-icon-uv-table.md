@@ -260,8 +260,11 @@ are up, and all ten when `X == 0`. While the counter is positive it instead
 blinks every light on `counter % 10 >= 6` and counts down. `X` is written
 elsewhere and not read: the Zone frames show two lights at zone 2 and five at
 zone 5 (the bottom dashes, `68-zone-5.png`), so `X` is the zone minus one
-there. Wired as one light per zone, last index first, capped at ten:
-chosen, not measured, past what those two frames show.
+there. The only `str.w` to `+0x73c` found is the constructor
+(`0x81197b88`, zeroes it); the writer was not found. Wired as `X = zone - 1`
+through the decompiled branch: zone 0 none, zone 1 all ten, zones 2-10 one
+per zone from the last index, past 10 none (`9u - X` wraps). Zones 2 and 5
+are the only measured points.
 
 ## See also
 

@@ -76,11 +76,26 @@ fn zone_lights_fill_from_the_last_index_one_per_zone() {
         names(&layout, &readout, oag_2048::hud::ART),
         ["ZoneLight8", "ZoneLight9"]
     );
-    let past = Readout {
-        zone: 40,
-        ..Readout::blank()
+    let at = |zone: u32| {
+        names(
+            &layout,
+            &Readout {
+                zone,
+                ..Readout::blank()
+            },
+            oag_2048::hud::ART,
+        )
+        .len()
     };
-    assert_eq!(names(&layout, &past, oag_2048::hud::ART).len(), 10);
+    assert_eq!(at(0), 0);
+    assert_eq!(
+        at(1),
+        10,
+        "X == 0 lights every dash in the decompiled branch"
+    );
+    assert_eq!(at(5), 5);
+    assert_eq!(at(10), 10);
+    assert_eq!(at(11), 0, "9u - X wraps past zone 10");
 }
 
 #[test]

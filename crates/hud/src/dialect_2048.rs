@@ -184,9 +184,12 @@ const ZONE_LIGHTS: u32 = 10;
 ///   light `i` while `i < 9 - X` for a non-zero counter `X`, which lights
 ///   `X + 1`, and the Zone frames show two lit at zone 2 and five at zone 5
 ///   (`68-zone-5.png`: the bottom dashes), so `X` is the zone minus one
-///   there. **Past zone 10, and where `X` is zero, the original's counter
-///   (`hud+0x73c`) is not read**, so the arc stops at ten and zone 1 lights
-///   one dash: **chosen, not measured**.
+///   there. The counter itself (`hud+0x73c`, constructor-zeroed by
+///   `0x81197b88`) has no reader of its writer found, so this takes
+///   `X = zone - 1` and **follows the decompiled branch from there**, which
+///   is unmeasured at the edges: zone 0 hides every light (`9 - (-1)` is
+///   ten), zone 1 (`X == 0`) lights all ten, and past zone 10 the unsigned
+///   `9 - X` wraps and hides them all again. Only zones 2 and 5 are seen.
 ///
 /// The `SpeedPad*` family is not drawn: the original picks it **once at
 /// bind** from a ship-definition float, not from touching a pad.
@@ -216,7 +219,12 @@ pub(super) fn state_sprites(
     {
         out.push(icon.clone());
     }
-    let lit_lights = readout.zone.min(ZONE_LIGHTS);
+    let lit_lights = match readout.zone {
+        0 => 0,
+        1 => ZONE_LIGHTS,
+        zone if zone <= ZONE_LIGHTS => zone,
+        _ => 0,
+    };
     for i in (ZONE_LIGHTS - lit_lights)..ZONE_LIGHTS {
         if let Some(light) = layout.sprite(&format!("ZoneLight{i}")) {
             out.push(light.clone());
