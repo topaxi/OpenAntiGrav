@@ -111,11 +111,18 @@ arc wake and none plays `WO_MAGSTRIP_SPARKS` / `WO_MAGSTRIP_ZONE`**, Zone (`6`) 
 included. The `.POB` branch is reached only by a mode whose name is absent from the table (a CRC id,
 `>= 0x17`). The Omega law (`DAT_01f999e4 < 0x17`) is the same test on the same ids.
 
-**A second finding, not acted on:** because `Particles_BuildEffectPath` uses the same predicate, a
-named mode reads its effects from `Data/Particles/` and not `Data/Particles2048/`. The port's
-`oag_2048::race::EFFECT_DIR` (`Particles2048`, inferred at 80) is therefore the unreached side for
-every named mode. The two directories hold different bytes for nearly every stem
-(`docs/formats/pob.md`), so this is worth its own lane.
+**A second finding, checked 2026-10-05 (fix-2048-particles-floor), conf. 70:** `Particles_BuildEffectPath` uses the
+same predicate, so a *named* mode reads `Data/Particles/` and a CRC-id mode `Data/Particles2048/`. But a
+campaign or multiplayer event's id comes from its own `m_name` (`GameModeBase+0xc4`, `FUN_812b0d52` called by
+`CampaignEventCard_HandleInput`, then `FUN_810016ba`), and none of the 577 instance names in `SP.xml` and `MP.xml`
+is in the 23-name table or hashes below 23 (standard CRC-32, both polarities). So **2048's own events are CRC
+ids: they read `Data/Particles2048` (the port is right) and take the `WO_MAGSTRIP_*` `.POB` branch, not the arc
+wake.** The named modes are the HD-lineage racebox and Fury/HD campaign cards
+(`FE3DCanvas_Add{HD,Fury}CampaignEventButtons`, `FUN_81077462` reading a `Class`/`SkillLevel` grid). Not walked:
+every other writer of `state+0xe4` (`FUN_810924e8` writes 0 after the card path, `FUN_8123efc6` copies the
+session id), so a Vita3K read of `0x8153fd24` during a campaign race is the arbiter. Census: `Data/Particles` has
+64 `.pob` stems, `Data/Particles2048` 100; all 64 exist in both with different bytes in 42, and the 36 only in
+`Particles2048` include `WO_FORCE_FIELD`, `WO_MAGSTRIP_*` and `WO_ZONE_SHIP_EXPLOSION`.
 
 **Assets (base `data.psarc`):** `data/particles2048/WO_MAGSTRIP_{ZONE,SPARKS}.pob` (3,472 and 6,784 bytes,
 both parse with `oag-pob`), `data/Tex/HD_electric_arc_8x8.gxt` (512x512), `data/Tex/HD_ElectricArc_Contact.gxt`
