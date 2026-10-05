@@ -24,13 +24,14 @@ per-subsystem matrix, before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
 just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
 just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
+just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)

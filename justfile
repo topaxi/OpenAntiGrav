@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args check-status
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -1000,6 +1000,11 @@ audit-leakage:
 # Assert the two architecture dependency rules from CLAUDE.md still hold
 check-deps:
     python3 scripts/check-dependency-rules.py
+
+# Assert no workspace crate declares a dependency its code never uses, or a
+# normal dependency only its tests and examples use (`cargo shear` exits 1)
+check-unused-deps:
+    cargo shear
 
 # Assert no platform transcendental reaches simulation code - determinism.md's
 # rule, which was enforced by review alone until an `acos` sat in `oag-ai` for
