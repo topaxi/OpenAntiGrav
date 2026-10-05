@@ -80,4 +80,11 @@ pub struct Authored {
     /// on HD and `.gxt` on 2048 - both executables carry the literal. The
     /// extension says which decoder reads it.
     pub sprite: &'static str,
+    /// Whether the craft's `EngineLightData.xml` hangs an SPU vertex light off
+    /// the nozzle. HD: yes, measured (`EngineFlare_SubmitSpuLight`). 2048: no -
+    /// the SPU is the PS3's, its Vita consumer is unread, and the 20 native
+    /// craft all author `Distance 3` / `Radius 30` against HD's 0.7-2.0 on a
+    /// hull of the same length (13.8 against 13.8 units), which floods the
+    /// circuit white when drawn on HD's law.
+    pub engine_light: bool,
 }

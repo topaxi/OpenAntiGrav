@@ -102,6 +102,8 @@ pub const TITLE: &Title = &Title {
         always: "EF_Main",
         boost: "EF_Boost",
         sprite: "/data/tex/engineflare/engine_flare_rich.gxt",
+        // **Off, chosen, not measured.** See `Authored::engine_light`.
+        engine_light: false,
     }),
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),

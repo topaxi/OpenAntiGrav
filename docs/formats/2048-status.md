@@ -326,6 +326,16 @@ drawn `SrcAlpha`/`One` **chosen, not measured**. The flame's own Vita fragment
 program (rim and noise terms) is unread, so the flare is geometry plus
 `flame_01`. Opponent flares and trails draw the same way.
 
+**The SPU engine light is off on 2048 - chosen, not measured.** Loading
+`EngineLightData.xml` on HD's law (`flare::Authored::engine_light`) washed the
+whole circuit blue-white: all 20 native craft author `Distance 3` /
+`Radius 30` against HD's 0.7-2.0, on a hull of the same length (13.8 units
+against 13.8, so not a units mismatch). The SPU is the PS3's and its Vita
+consumer is unread, so the light is not drawn and the load report says so.
+Switch-off bisect at tick 0: with only the light off the frame is pixel-identical
+to the pre-change one; the flare model, sprite, trail and quad are not visible
+for the player at rest.
+
 **Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
 never read, so the 24 re-shipped flares are not the ones drawn.
 
