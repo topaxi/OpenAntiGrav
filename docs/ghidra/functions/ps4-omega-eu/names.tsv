@@ -69,3 +69,12 @@
 0x015c6120	function	Scene_BindFrameConstants	72	lightmap-prelit.md
 0x015c63a0	function	Scene_PrepareFrame	66	lightmap-prelit.md
 0x01e3de80	data	EnvSettings_NovaPrelitScaleBiasPower	88	lightmap-prelit.md
+0x01620980	function	ToneMap_ApplyEnvSettings	80	tonemap.md
+0x0178a160	function	PostTarget_Create	66	tonemap.md
+0x0178bfb0	function	ToneMap_SetHistoryWeights	74	tonemap.md
+0x0178c490	function	ToneMap_UpdateCoefficients	72	tonemap.md
+0x017864a0	function	PostTarget_Resolve	70	tonemap.md
+0x0178b970	function	ToneMap_RegisterPrograms	82	tonemap.md
+0x01610df0	function	Composite_RegisterPrograms	72	tonemap.md
+0x017a4eb0	function	Display_SetCheckerboard	74	tonemap.md
+0x0212a7d8	data	ToneMap_Instance	80	tonemap.md
