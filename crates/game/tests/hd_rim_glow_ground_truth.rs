@@ -109,3 +109,39 @@ fn the_plasma_head_earns_rim_edge_and_its_inline_sphere_reads_a_real_uv() {
         });
     assert!(hi - lo > 0.9, "u spans {lo}..{hi}");
 }
+
+/// The Plasma explosion's ring and halo each earn their own clock-scroll bit
+/// (and none of the rim bits), off their own `UV_offset` programs; the
+/// sphere's lit program matches neither and keeps the plain path.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_explosion_ring_and_halo_earn_their_clock_scroll_bits() {
+    let Some(image) = image() else { return };
+    for (path, bit, other) in [
+        (
+            "/data/weapons/hd_plasma_ring.vex",
+            slots::CLOCK_SCROLL_RING,
+            slots::CLOCK_SCROLL_HALO,
+        ),
+        (
+            "/data/weapons/hd_plasma_halo.vex",
+            slots::CLOCK_SCROLL_HALO,
+            slots::CLOCK_SCROLL_RING,
+        ),
+    ] {
+        let roles = roles(&build(&image, path));
+        assert!(!roles.is_empty(), "{path}");
+        for r in &roles {
+            assert_eq!(r & bit, bit, "{path}: {r:#x}");
+            assert_eq!(r & other, 0, "{path}: {r:#x}");
+            assert_eq!(r & (slots::RIM_GLOW | slots::RIM_EDGE), 0, "{path}: {r:#x}");
+        }
+    }
+    for r in roles(&build(&image, "/data/weapons/hd_plasma_sphere.vex")) {
+        assert_eq!(
+            r & (slots::CLOCK_SCROLL_RING | slots::CLOCK_SCROLL_HALO),
+            0,
+            "the sphere is a lit program: {r:#x}"
+        );
+    }
+}

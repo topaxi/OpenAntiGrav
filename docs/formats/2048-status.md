@@ -251,3 +251,10 @@ its own, naming a directory of its own and the twelve team ids and `_c1`/`_n1`
 suffixes that resolve under it - `RaceDefaults::ships_for`/`handling_dir_for`
 route an already-combined id (`Assegai_c1`) to whichever tree it belongs to.
 See [ADR-0035](../architecture/adr/0035-a-craft-pick-may-fall-back-to-a-title-that-reships-the-same-roster.md).
+
+## Particles - 2026-10-05
+
+A 2048 race plays `Data\Particles2048` effects with their own `.gxt` sprites:
+27 of the 36 wired names load (the 9 that do not are listed in
+`psys_inventory_ground_truth.rs`'s `v2048` module). Census, directory choice and
+what is not wired: [pob.md](pob.md), "Wipeout 2048 carries the same container".

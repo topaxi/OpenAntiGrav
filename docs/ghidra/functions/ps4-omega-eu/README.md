@@ -57,6 +57,8 @@ unnamed rather than forced.
 
 ## Pages
 
+- [particle-paths.md](particle-paths.md) - the `Data/Particles` versus
+  `Data/Particles2048` choice and its runtime flag; no names applied.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, the first
   name recovered here, transferred from and to `vita-2048-eu-v104` in the
   same pass.

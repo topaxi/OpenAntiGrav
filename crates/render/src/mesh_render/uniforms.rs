@@ -23,7 +23,11 @@ pub(super) struct Uniforms {
     /// layout `mesh.wgsl`, four other pipelines and the asset viewer mirror
     /// stays the same size.
     sun_occlusion_layer: f32,
-    _pad0: f32,
+    /// The model's own animation clock in seconds - what an HD material's
+    /// `UV_offset` is bound to (`node + 0xc0`, see
+    /// [`crate::mesh::slots::CLOCK_SCROLL_RING`]). `0.0` for every draw that
+    /// is not a clock-scrolled material. Padding until 2026-10-05.
+    model_clock: f32,
     _pad1: f32,
     _pad2: f32,
     /// The previous simulation tick's `view_projection * model`,
@@ -55,7 +59,7 @@ fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
         view_projection: view_projection.to_cols_array_2d(),
         model: model_matrix.to_cols_array_2d(),
         sun_occlusion_layer: 0.0,
-        _pad0: 0.0,
+        model_clock: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
         // The viewer has no previous tick; previous equals current, which is
@@ -139,7 +143,7 @@ pub fn write_uniforms_raw(
         view_projection: view_projection.to_cols_array_2d(),
         model: model.to_cols_array_2d(),
         sun_occlusion_layer: 0.0,
-        _pad0: 0.0,
+        model_clock: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
         prev_mvp: mvp.to_cols_array_2d(),

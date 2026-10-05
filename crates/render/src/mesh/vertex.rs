@@ -287,6 +287,20 @@ pub mod slots {
     /// [`ADD_SECOND`]).
     pub const PAD_NE: u32 = 1 << 14;
 
+    /// This material's resolved fragment program is the Plasma explosion
+    /// ring's (`hd_plasmaring_glow.rcsmaterial`, block `@0x1900`): its
+    /// texture is addressed by the **model's own clock**, the declared
+    /// `UV_offset` parameter - `AnimNode_GetTime`'s `node + 0xc0`, which
+    /// `WeaponExplosions_Draw` sets to the blast's age - not the scene's
+    /// `time`. Matched by `mesh::rcs::rim_glow`'s fingerprint. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, 2026-10-05.
+    pub const CLOCK_SCROLL_RING: u32 = 1 << 15;
+
+    /// The same for the explosion halo's program
+    /// (`hd_plasmahalo_glow.rcsmaterial`, block `@0x1960`): a different
+    /// set of rates over the same `UV_offset`. See [`CLOCK_SCROLL_RING`].
+    pub const CLOCK_SCROLL_HALO: u32 = 1 << 16;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
@@ -296,7 +310,11 @@ pub mod slots {
     /// `@interpolate(flat)`, and every shader read of the low half is a masked
     /// bit test that an index above bit 15 cannot disturb. A circuit's
     /// materials number in the hundreds against the 65,535 this allows.
-    pub const MATERIAL_SHIFT: u32 = 16;
+    ///
+    /// Seventeen rather than sixteen since the two clock-scroll bits
+    /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
+    /// index keeps 32,767 values, against the hundreds a circuit uses.
+    pub const MATERIAL_SHIFT: u32 = 17;
 
     /// The mask covering every role bit - the low half of the word, with
     /// [`MATERIAL_SHIFT`]'s index excluded.

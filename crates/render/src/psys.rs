@@ -33,11 +33,10 @@
 //! Each of these is authored in files this module already parses, and each
 //! would be a visible difference on some effect:
 //!
-//! - **Sprites off anything but a PSP disc.** A PSP `.pob`'s own sprite is
-//!   sampled since 2026-09-24, atlas cell and all - see [`sprite`], and
-//!   [`streak`] for the two-point classes, which Pulse's alone builds as
-//!   read. A PS2 `.pob` embeds none and HD's `.gtf` sprites are not loaded,
-//!   so those draw the procedural radial falloff in `psys.wgsl`.
+//! - **Sprites on the PS2 and HD.** A PSP `.pob`'s own sprite is sampled, and
+//!   2048's `.gxt` ones through [`Effect::parse_with`] - see [`sprite`] and
+//!   [`streak`]. A PS2 `.pob` embeds none and HD's `.gtf` are not loaded, so
+//!   those draw the procedural falloff in `psys.wgsl`.
 //! - The animated-attribute selectors `1`, `3`, `4` and `6`, which nothing on
 //!   the Pulse discs authors.
 
@@ -51,9 +50,11 @@ mod emitter_state;
 pub mod field;
 pub mod frames;
 mod library;
+mod path;
 pub mod playback;
 pub mod spawn;
 pub mod sprite;
+pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
 use emitter_state::EmitterState;
@@ -435,6 +436,19 @@ impl Effect {
     /// class or channel mode with no traced consumer - each of which would
     /// otherwise reach the pool as a silent no-draw.
     pub fn parse(data: &[u8], scale: ColourScale) -> Result<Self, Error> {
+        Self::parse_with(data, scale, &mut |_| None)
+    }
+
+    /// [`Self::parse`], taking a sprite the file embeds none of from `external`
+    /// (given the authored texture path): 2048's `.gxt` files.
+    ///
+    /// # Errors
+    /// As [`Self::parse`].
+    pub fn parse_with(
+        data: &[u8],
+        scale: ColourScale,
+        external: &mut dyn FnMut(&str) -> Option<Sprite>,
+    ) -> Result<Self, Error> {
         let system = ParticleSystem::parse(data)?;
         let records = system.emitters(data)?;
         if records.len() > MAX_EMITTER_STATES {
@@ -446,7 +460,7 @@ impl Effect {
         let emitters = records
             .iter()
             .map(|record| {
-                let sprite = Sprite::from_pob(&system, data, record);
+                let sprite = Sprite::of_record(&system, data, record, external);
                 EmitterSpec::from_record(record, scale, sprite)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -476,7 +490,7 @@ impl Effect {
             roots,
             skipped_templates: 0,
         };
-        effect.add_templates(&system, data, &records, scale);
+        effect.add_templates(&system, data, &records, scale, external);
         Ok(effect)
     }
 
@@ -1187,16 +1201,6 @@ impl System {
             out.extend_from_slice(&corners);
         }
     }
-}
-
-/// Where the original looks an effect up: `Data\Psys\<name>.POB`, built at
-/// `FUN_089156a0` and hashing to the blob's own WAD entry on all 35 PSP
-/// systems.
-///
-/// Backslashes, the way the executable writes them.
-#[must_use]
-pub fn effect_path(name: &str) -> String {
-    format!(r"Data\Psys\{name}.POB")
 }
 
 /// Effects a [`Stage`] plays at once.

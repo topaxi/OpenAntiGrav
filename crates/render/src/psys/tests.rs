@@ -714,3 +714,15 @@ fn an_animated_extent_widens_the_ring_over_the_emitters_run() {
     // Born at the ninth tick, 80 % through a ten-tick run: `10 * (1 + 0.8)`.
     assert!((last - 18.0).abs() < 0.2, "{last}");
 }
+
+#[test]
+fn a_titles_effect_directory_replaces_data_psys_and_nothing_else() {
+    assert_eq!(
+        effect_path_in(r"Data\Psys", "WO_QUAKE"),
+        effect_path("WO_QUAKE")
+    );
+    assert_eq!(
+        effect_path_in(r"Data\Particles2048", "WO_QUAKE"),
+        r"Data\Particles2048\WO_QUAKE.POB"
+    );
+}
