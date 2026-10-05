@@ -514,3 +514,6 @@
 0x00623e40	function	Scream_UpdateVoiceBend	82	xfade.md
 0x00624158	function	Scream_SetVoiceBend	80	xfade.md
 0x0062bb58	function	Scream_SetVoiceParams	76	xfade.md
+0x0062d948	function	Scream_GetVoice	88	xfade.md
+0x006249a8	function	Scream_SetVoiceVolume	76	xfade.md
+0x00630820	function	Scream_ComputeHwLevel	90	xfade.md
