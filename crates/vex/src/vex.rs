@@ -145,7 +145,7 @@ pub const CLASS_ENGINE_FLARE: u32 = 0x3bf;
 
 /// Class ID of a `ParticleSystem` node.
 ///
-/// The `.pob` it names parses through [`crate::pob`], emitter tree and all.
+/// The `.pob` it names parses through the `oag-pob` crate, emitter tree and all.
 pub const CLASS_PARTICLE_SYSTEM: u32 = 0x3c4;
 
 /// Class ID of a `Trail` node: a position-history ribbon.

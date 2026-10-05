@@ -5,7 +5,7 @@
 //! cargo run -q -p oag-formats --example quake_colour_probe -- /tmp/wo_quake.pob
 //! ```
 
-use oag_vex::pob::ParticleSystem;
+use oag_pob::ParticleSystem;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     for path in std::env::args().skip(1) {

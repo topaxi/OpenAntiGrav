@@ -14,14 +14,15 @@
 //! different question: once the tree is walked, what fraction of the file
 //! did reaching it actually claim? `docs/formats/pob.md`'s own "Not
 //! determined" already names the slot-resolved records as a dead end after
-//! two passes, so [`oag_vex::pob_coverage::coverage`] measures around them
+//! two passes, so [`oag_pob::coverage::coverage`] measures around them
 //! rather than trying a third: a string target is claimed, a non-string one
 //! is an honest, reported gap.
 
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_vex::{pob, pob_coverage};
+use oag_pob as pob;
+use oag_pob::coverage as pob_coverage;
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const PSP_SYSTEMS: usize = 35;

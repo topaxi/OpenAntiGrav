@@ -2,7 +2,7 @@
 //! needs game content (`just test-data`).
 
 use oag_assets::Archive;
-use oag_vex::pob::{self, ChannelMode, ParticleSystem};
+use oag_pob::{self as pob, ChannelMode, ParticleSystem};
 
 fn emitters() -> Vec<(String, pob::Emitter)> {
     let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {

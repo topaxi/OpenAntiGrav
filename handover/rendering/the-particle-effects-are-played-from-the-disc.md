@@ -1,6 +1,6 @@
 # The particle effects are played from the disc; 32 of the PSP's 35 play, 3 wait on a trigger
 
-2026-08-12, census rewritten 2026-10-02. `oag_vex::pob` parses every emitter
+2026-08-12, census rewritten 2026-10-02. `oag_pob` parses every emitter
 tree, `oag_render::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
 `psys::Stage` plays any number at once (`attach`/`follow`/`detach` for one riding
 a moving owner, `play` for a burst). **The mechanism is generic and finished;

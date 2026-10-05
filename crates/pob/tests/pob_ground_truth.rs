@@ -10,7 +10,7 @@
 //!
 //! # What this is for
 //!
-//! [`oag_vex::pob::ParticleSystem::emitters`] reads an emitter record at
+//! [`oag_pob::ParticleSystem::emitters`] reads an emitter record at
 //! fixed offsets and follows three pointer fields into a tree, all straight
 //! out of the file's own bytes. Both halves of that are unverifiable from a
 //! single hand-checked file:
@@ -37,7 +37,7 @@
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_vex::pob::{self, ChannelMode, Emitter, ParticleSystem};
+use oag_pob::{self as pob, ChannelMode, Emitter, ParticleSystem};
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const PSP_SYSTEMS: usize = 35;
@@ -209,7 +209,7 @@ fn walk_archive(label: &str, spec: &str, expected: usize, assert_no_texture: boo
 /// root-emitter, by
 /// [`every_psp_root_emitter_texture_is_where_the_layout_says`]) and on HD
 /// (never checked here - HD ships separate `.gtf` sprites instead, see
-/// `oag_vex::pob::texture`'s module doc).
+/// `oag_pob::texture`'s module doc).
 fn walk_systems(
     label: &str,
     blobs: &[(usize, Vec<u8>)],
@@ -305,12 +305,12 @@ fn every_psp_particle_system_walks_its_emitter_tree() {
 /// offset: **none**. There used to be six (`WO_PLASMA_FLASH`, `WO_RAIN`,
 /// `WO_SNOW`, `WO_LEACHBEAM_CHARGING`, `WO_REPULSER`, `WO_ROCKET_FLARE`) and
 /// the reader refused them because their headers are 4 bits per pixel, which
-/// it did not accept until 2026-10-01 (`oag_vex::pob::texture`, "Four bits per
+/// it did not accept until 2026-10-01 (`oag_pob::texture`, "Four bits per
 /// pixel"). A file entering this set is a real change to what the corpus
 /// measures, not noise - update this list and `pob.md` together.
 const PSP_ROOTS_WITH_NO_TEXTURE: &[&str] = &[];
 
-/// [`oag_vex::pob::ParticleSystem::embedded_texture`] over the whole PSP
+/// [`oag_pob::ParticleSystem::embedded_texture`] over the whole PSP
 /// corpus: every root emitter either has one, or is on
 /// [`PSP_ROOTS_WITH_NO_TEXTURE`] - nothing else silently returns `None`. A
 /// found texture's own bytes must be internally consistent (level 0 no
@@ -377,7 +377,7 @@ fn every_psp_root_emitter_texture_is_where_the_layout_says() {
 /// palette) are entries of the file's own pointer-fixup table - the
 /// structural proof that both are offsets from the resource base, which the
 /// loader turns into pointers, rather than offsets from the blob's start.
-/// See `oag_vex::pob::texture`'s "from the resource base" section.
+/// See `oag_pob::texture`'s "from the resource base" section.
 ///
 /// Also checks what the corrected reading draws: palette entry 0 is black
 /// on every additive (blend class 2) emitter's sprite. An additive sprite's
@@ -442,7 +442,7 @@ fn every_psp_texture_pointer_is_a_fixup_site() {
 
 /// The rubric's "a second binary is worth more than a second reading of the
 /// first": the PS2 port's own 41 systems, through the same parser, with no
-/// adjustment. Also the negative control `oag_vex::pob::texture`'s module
+/// adjustment. Also the negative control `oag_pob::texture`'s module
 /// doc cites: every emitter of every PS2 system is asserted to carry no
 /// embedded texture at all, folded into this same walk rather than a
 /// second ~15-18s decompress of the whole 377 MiB `WADS2.WAD` - see
@@ -599,7 +599,7 @@ fn own_texture_path(system: &ParticleSystem, blob: &[u8], emitter: &Emitter) -> 
 }
 
 /// HD does not embed sprite pixels the way PSP does (see
-/// `oag_vex::pob::texture`'s module doc), but every emitter still names its
+/// `oag_pob::texture`'s module doc), but every emitter still names its
 /// own texture through the identical `+0x4c4` field, and HD ships the
 /// sprites as separate `/data/psys/tex/*.gtf` PSARC entries rather than a
 /// hash the way PSP's `.wad` does - so a name resolves by simple basename

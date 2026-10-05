@@ -1,0 +1,26 @@
+[package]
+name = "oag-pob"
+description = "The .pob particle system: a SYSP container around a tree of emitters, their channels, modifiers and embedded sprites"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-formats` for `ByteOrder`, the parser-coverage instrumentation and the GE
+# block swizzle. Nothing from `oag-vex`: a `.pob` is a standalone file the
+# scene only names (class 0x3c4), so the edge runs from neither crate to the
+# other.
+[dependencies]
+oag-formats.workspace = true
+
+# Ground-truth tests read every `.pob` out of a disc image. Tests only: the
+# parser knows nothing about discs. See `crates/tables/Cargo.toml` for why a
+# dev-dependency back onto a crate that depends on a sibling is permitted.
+[dev-dependencies]
+oag-testdata.workspace = true
+oag-assets.workspace = true
+oag-disc.workspace = true
+
+[lints]
+workspace = true

@@ -15,7 +15,7 @@
 //!   circle). Under an aimed velocity (mode 1, which every shape-3 emitter with an extent
 //!   authors) the particle then flies along the heading of that offset - see [`place`].
 //!   `r` is **not constant**: the emitter's animated-attribute record (selector 2,
-//!   [`oag_vex::pob::attribute`]) scales the extent over its run, so the smoke ring's
+//!   [`oag_pob::attribute`]) scales the extent over its run, so the smoke ring's
 //!   particles were born 13.1, 13.7, 15.0, 17.6 and 23.4 units out at emitter ticks 0, 1,
 //!   3, 7 and 16 (two boots) against the authored `12.94`, and
 //!   [`super::EmitterSpec::extent_animation`] plays it. Until then shape 3 was a point, on
@@ -67,7 +67,7 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_vex::pob;
+use oag_pob as pob;
 
 use super::Effect;
 

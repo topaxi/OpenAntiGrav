@@ -1,6 +1,6 @@
 //! A particle field that fills a wrapping box and keeps still in the world: what
 //! the weather's `WO_RAIN` and `WO_SNOW` do, through modifier type `0x13`
-//! (`FUN_088fb11c`, `oag_vex::pob::field`).
+//! (`FUN_088fb11c`, `oag_pob::field`).
 //!
 //! The pool holds **field coordinates**: the box is `[-e, e]` on every axis,
 //! centred on the field's own origin, and [`Anchor`] says where that origin

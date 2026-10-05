@@ -12,7 +12,7 @@
 //! needed to find *this* copy.
 //!
 //! Confirmed two ways. First, a corpus-wide structural scan
-//! (`crates/assets/tests/pob_ground_truth.rs`,
+//! (`crates/pob/tests/pob_ground_truth.rs`,
 //! `every_psp_root_emitter_texture_is_where_the_layout_says`) finds a
 //! header-shaped record at exactly that offset for every PSP file's root
 //! emitter (35 of 35: this said 29, the other six being 4 bits per pixel,
@@ -96,7 +96,7 @@
 //! - **The slot table names them.** On every PSP emitter carrying a header,
 //!   the header's `+0x10` and `+0x14`, taken relative to the resource base,
 //!   are both entries of the file's own slot table
-//!   (`crates/assets/tests/pob_ground_truth.rs`,
+//!   (`crates/pob/tests/pob_ground_truth.rs`,
 //!   `every_psp_texture_pointer_is_a_fixup_site`). Relative to the emitter
 //!   record those are `+0x9c8` and `+0x9cc` - the two slot targets
 //!   `docs/ghidra/functions/psp-pulse-usa/particle-system.md` had listed as
@@ -157,7 +157,7 @@ use oag_formats::ByteOrder;
 pub const TEXTURE_HEADER_LEN: usize = 0x20;
 
 /// A texture embedded in a `.pob` blob, borrowed from the same bytes
-/// [`crate::pob::ParticleSystem::parse`] was given.
+/// [`crate::ParticleSystem::parse`] was given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmbeddedTexture<'a> {
     /// `+0x00`.
@@ -183,7 +183,7 @@ pub struct EmbeddedTexture<'a> {
     pub palette: &'a [u8],
     /// Where [`EmbeddedTexture::palette`] starts in the blob [`parse_at`] was
     /// given: the stored `+0x14` value plus the resource base - see the
-    /// module documentation. Exists so a caller (`pob_coverage`) can claim
+    /// module documentation. Exists so a caller (`coverage`) can claim
     /// the span without recovering it from the slice's own address.
     pub palette_offset: usize,
     /// Level 0's palette indices **as stored**: `width * height` bytes at 8 bpp,
@@ -241,12 +241,12 @@ impl EmbeddedTexture<'_> {
 }
 
 /// Reads the texture positioned at `base + offset`, the way
-/// [`crate::pob::ParticleSystem::embedded_texture`] calls it: `base` is the
-/// resource base, `offset` is `emitter.offset + `[`crate::pob::EMITTER_LEN`].
+/// [`crate::ParticleSystem::embedded_texture`] calls it: `base` is the
+/// resource base, `offset` is `emitter.offset + `[`crate::EMITTER_LEN`].
 ///
 /// `None` for anything that does not look like a real header - out of
 /// range, an implausible width/height/depth, or a palette/pixel region that
-/// does not fit `data`. There is no [`crate::pob::Error`] variant for this:
+/// does not fit `data`. There is no [`crate::Error`] variant for this:
 /// unlike every other field this module's sibling reads, a missing embedded
 /// texture is not a corrupt file, it is the documented common case (all of
 /// PS2's; no PSP emitter lacks one now that 4 bits per pixel parses).
@@ -322,8 +322,8 @@ mod tests;
 pub const TEMPLATE_TEXTURE_OFFSET: usize = 0x890;
 
 /// [`parse_at`] for a sprite template: `offset` is the template record's own
-/// resource-relative offset ([`crate::pob::Emitter::offset`] of an entry of
-/// [`crate::pob::Emitter::initial_particles`]).
+/// resource-relative offset ([`crate::Emitter::offset`] of an entry of
+/// [`crate::Emitter::initial_particles`]).
 #[must_use]
 pub fn parse_template(
     data: &[u8],

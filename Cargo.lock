@@ -2051,6 +2051,7 @@ dependencies = [
  "oag-music",
  "oag-omega",
  "oag-physics",
+ "oag-pob",
  "oag-pulse",
  "oag-pure",
  "oag-race",
@@ -2151,6 +2152,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-pob"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-testdata",
+]
+
+[[package]]
 name = "oag-pulse"
 version = "0.1.0"
 dependencies = [
@@ -2207,6 +2218,7 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-pob",
  "oag-pulse",
  "oag-pure",
  "oag-rcs",
@@ -2333,6 +2345,7 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-formats",
+ "oag-pob",
  "oag-pulse",
  "oag-testdata",
  "oag-texture",

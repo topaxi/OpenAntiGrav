@@ -813,7 +813,7 @@ rocket, and the ring sprites are the fine orange structure round it.
 **Cause 1: the flare's sprite was not a disc.** `WO_ROCKET_FLARE`'s root has an
 embedded sprite like the other 29, a 128x64, 4-level, **4 bits a pixel** header (a
 4x4 atlas of ragged orange rings, a black-to-orange 16-entry palette, alpha 255), and
-`oag_vex::pob::texture::parse_at` refused every header whose depth was not 8, so the
+`oag_pob::texture::parse_at` refused every header whose depth was not 8, so the
 root drew the procedural radial disc: white and bright at the core where the
 original draws rings. Found independently on this lane and on `pulse-wreck-2` the same
 day (from a Bomb's `FIRE`, there); the wreck lane's reader merged first and is the one

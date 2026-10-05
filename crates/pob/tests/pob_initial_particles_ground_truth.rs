@@ -7,7 +7,7 @@
 //! that has none - or stops finding the two that exist - fails here.
 
 use oag_assets::Archive;
-use oag_vex::pob::{self, ChannelMode, ParticleSystem};
+use oag_pob::{self as pob, ChannelMode, ParticleSystem};
 
 /// Every `(system, parent emitter, template)` on `spec`, in directory order.
 fn templates(spec: &str) -> Vec<(String, String, pob::Emitter)> {

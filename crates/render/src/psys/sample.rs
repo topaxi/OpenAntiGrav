@@ -2,7 +2,7 @@
 
 use oag_core::Rng;
 
-use oag_vex::pob;
+use oag_pob as pob;
 
 use super::{Channel, ChannelMode};
 

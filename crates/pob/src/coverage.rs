@@ -1,12 +1,12 @@
 //! Byte coverage of a `.pob` particle system.
 //!
-//! Everything [`ParticleSystem`](oag_vex::pob::ParticleSystem) itself claims
+//! Everything [`ParticleSystem`](oag_pob::ParticleSystem) itself claims
 //! (the container header, the slot table, the resource name, the emitter
-//! tree, its modifier lists, and - PSP only, see `crate::pob::texture` -
+//! tree, its modifier lists, and - PSP only, see `crate::texture` -
 //! each emitter's own positionally-addressed embedded texture) is
 //! straightforward to re-derive here the same way `oag_rcs::rcsmodel::coverage`
 //! does. Landing the texture claim alone moved the PSP corpus from 25.62% to
-//! 56.76% (`crates/assets/tests/pob_coverage_ground_truth.rs`, 2026-09-17) -
+//! 56.76% (`crates/pob/tests/pob_coverage_ground_truth.rs`, 2026-09-17) -
 //! more than half of what was an "unlocated" gap was sitting on disc the
 //! whole time, just not addressed through the slot table. **The slot-resolved records
 //! are the deliberate exception**, per `docs/formats/pob.md`'s own "Not
@@ -20,7 +20,7 @@
 
 use oag_formats::coverage::Coverage;
 
-use crate::pob::{EMITTER_LEN, HEADER_LEN, NAME_LEN, ParticleSystem, SLOT_LEN};
+use crate::{EMITTER_LEN, HEADER_LEN, NAME_LEN, ParticleSystem, SLOT_LEN};
 
 /// Bytes of one modifier list node, up to and including its `next` pointer.
 /// Matches `pob.rs`'s own private `NODE_LEN`.
@@ -78,13 +78,13 @@ pub fn coverage(data: &[u8]) -> Coverage {
                 &emitter.modifiers,
                 emitter.offset,
             );
-            // See `crate::pob::texture` for why this is positional (right
+            // See `crate::texture` for why this is positional (right
             // after the record) rather than resolved through a slot -
             // PSP only; never present on a PS2 or HD file.
             if let Some(texture) = system.embedded_texture(data, emitter) {
                 seen.claim(
                     start + EMITTER_LEN,
-                    crate::pob::texture::TEXTURE_HEADER_LEN,
+                    crate::texture::TEXTURE_HEADER_LEN,
                     "an embedded texture header",
                 );
                 seen.claim(
@@ -105,7 +105,7 @@ pub fn coverage(data: &[u8]) -> Coverage {
 }
 
 /// Modifier list nodes are not returned with their own file offset - only
-/// [`crate::pob::Emitter::offset`] is public - so this re-walks the same
+/// [`crate::Emitter::offset`] is public - so this re-walks the same
 /// `+0x9b4` chain `pob::parse_modifiers` does, purely to claim each node's
 /// span; nothing here re-derives a field `pob` does not already expose.
 fn claim_modifiers(
@@ -113,7 +113,7 @@ fn claim_modifiers(
     data: &[u8],
     order: oag_formats::ByteOrder,
     base: usize,
-    modifiers: &[crate::pob::Modifier],
+    modifiers: &[crate::Modifier],
     emitter_offset: usize,
 ) {
     if modifiers.is_empty() {

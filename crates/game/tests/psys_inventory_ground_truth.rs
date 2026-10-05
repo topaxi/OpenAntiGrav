@@ -40,7 +40,7 @@ use std::path::PathBuf;
 
 use oag_assets::Archive;
 use oag_game::race::RACE_EFFECTS;
-use oag_vex::pob::{self, ParticleSystem};
+use oag_pob::{self as pob, ParticleSystem};
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
@@ -433,11 +433,11 @@ mod hd {
     use std::path::{Path, PathBuf};
 
     use oag_game::race::RACE_EFFECTS;
-    use oag_vex::pob::ParticleSystem;
+    use oag_pob::ParticleSystem;
 
     /// Distinct system names across all seven archives.
     ///
-    /// **Not the same number as `crates/assets/tests/pob_ground_truth.rs`'s
+    /// **Not the same number as `crates/pob/tests/pob_ground_truth.rs`'s
     /// `HD_SYSTEMS = 88`** - that counts every `.pob` blob, one per archive
     /// entry; this counts each name once. `the_inventory_count_is_pinned`
     /// prints which five names those six extra blobs belong to: three are the

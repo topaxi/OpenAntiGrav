@@ -4,7 +4,7 @@
 container, the slot table (including the pointer fixup it drives at load
 time, confirmed live), the name field, and **the emitter tree** are all
 decoded, implemented in
-[`oag-vex::pob`](../../crates/vex/src/pob.rs) and validated against
+[`oag-pob`](../../crates/pob/src/lib.rs) and validated against
 all 35 `.pob` files on the PSP disc, all 41 on the PS2 disc and all 88 across
 HD's seven PSARC archives. What is
 **not** decoded is the record layout at a *slot-resolved* target: 43% of
@@ -96,7 +96,7 @@ fixup_site = resource_base + slots[i]
 target     = resource_base + read_u32(fixup_site)   // read *before* the add
 ```
 
-[`ParticleSystem::resolve_slot`](../../crates/vex/src/pob.rs) replays
+[`ParticleSystem::resolve_slot`](../../crates/pob/src/lib.rs) replays
 this arithmetic entirely from the file's own bytes.
 
 This closes the question the previous pass left open ("slot 0 is exactly
@@ -515,7 +515,7 @@ table and the repository per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) - the
 "orange→ember" and "yellow→orange" columns above name only the two
 endpoints for a human reader. **The committed port reads all 256 of each
-emitter's own entries from the user's disc at runtime** (`crates/vex/src/pob.rs`,
+emitter's own entries from the user's disc at runtime** (`crates/pob/src/lib.rs`,
 `+0xc4` below), the same as every other field in this table; nothing is
 committed and nothing is sampled down to two colours any more. This closes
 what used to be the recorded follow-up here (until 2026-08-12, the port
@@ -538,7 +538,7 @@ the per-emitter parameter semantics (they inherit the table above).
 
 The table above was, until now, transcribed by hand into
 `oag_render::sparks::EMITTERS` for one file. It is now **parsed**:
-[`ParticleSystem::emitters`](../../crates/vex/src/pob.rs) reads an
+[`ParticleSystem::emitters`](../../crates/pob/src/lib.rs) reads an
 `Emitter` per record and follows `+0x944`/`+0x948`/`+0x94c` into a tree,
 returning it depth-first with the root first and the two child fields as
 indices into the same vector. Nothing is converted on the way out - speeds
@@ -564,7 +564,7 @@ WO_ROCKET_EXPLO
 `WO_ROCKET_EXPLO_TRACK` five.
 
 **Corpus check, 2026-08-12, both discs, one parser, no adjustments** -
-`crates/assets/tests/pob_ground_truth.rs`, run with `just test-data`:
+`crates/pob/tests/pob_ground_truth.rs`, run with `just test-data`:
 
 | | systems | emitters | largest tree |
 | --- | --- | --- | --- |
@@ -741,7 +741,7 @@ the executable's `+0x160` mechanism, which is per-instance and so per-emitter
 already. What is retired is the corpus inference layered on top of it. A
 consumer must read each emitter's own flag and must not take the root's as the
 effect's. Pinned in
-`crates/assets/tests/pob_ground_truth.rs::every_hd_particle_system_walks_the_same_way_byte_swapped`,
+`crates/pob/tests/pob_ground_truth.rs::every_hd_particle_system_walks_the_same_way_byte_swapped`,
 which asserts *which* four mix rather than tolerating any number that do.
 
 ### The colour table is RGB-only, and `+0xbc` says whether it animates - 2026-08-12
@@ -842,7 +842,7 @@ pass at all - readable straight from disk with no runtime needed.
 - **Static.** Extracting the same resource
   (`WO_SHIP_COLL_SPARK_DAMAGE.POB`, PSP `Data.wad` entry `0xeff1f331`, see
   "Reproducing" above) and computing `resource_base = HEADER_LEN +
-  slots.len() * SLOT_LEN` with [`ParticleSystem::parse`](../../crates/vex/src/pob.rs)
+  slots.len() * SLOT_LEN` with [`ParticleSystem::parse`](../../crates/pob/src/lib.rs)
   lands on bytes that spell out the same name, and all six fields at
   `resource_base + {0x34, 0x38, 0x40, 0x48, 0x4c, 0x74}` read back **exactly**
   the values the live capture saw: `0.0144`, `-0.00035750002`, `0.0`,
@@ -882,7 +882,7 @@ between `+0x4c` and `+0x74`, is unstarted.
 [WAD container](wad.md) as PSP) carries **41** `SYSP` blobs. Scanning it
 in-memory with `oag_assets::Archive` (no extraction needed - decompressing
 each candidate entry through the crate's own LZSS path and checking the
-first four bytes) and running the unmodified `oag_vex::pob` parser
+first four bytes) and running the unmodified `oag_pob` parser
 against every one, with no code changes:
 
 - **41 of 41 parse.** Same magic, same header shape, same two constant
@@ -918,7 +918,7 @@ corroboration, not just a bigger PSP sample.
 
 **Confidence 93**, over all **88** `.pob` under `data/psys/` on the PS3 disc;
 the survey is [hd-status](hd-status.md) and the parser runs on them in
-`crates/assets/tests/pob_ground_truth.rs`. Read big-endian the container is
+`crates/pob/tests/pob_ground_truth.rs`. Read big-endian the container is
 this one - the magic reads `PSYS` where the PSP and PS2 write `SYSP`:
 
 - **88 of 88** carry the magic.
@@ -982,7 +982,7 @@ same wrong check would have reported the same "shortfall" on all 35 PSP and
 all 41 PS2 files. The observed 48-208 range is `base + 16` - which is why it
 was always a multiple of 16, the slot table being four bytes per slot.
 
-`crates/assets/tests/pob_ground_truth.rs` now asserts
+`crates/pob/tests/pob_ground_truth.rs` now asserts
 `len(blob) - declared == resource_base() + 16` on **every file of all three
 discs**, so the identity is checked rather than reasoned about.
 
@@ -1063,7 +1063,7 @@ name** - `crates/render/tests/psys_2048_ground_truth.rs`.
   to a `...\Tex\<stem>.tga` developer path on all emitters of the 85
   `Particles2048` effects: 76 distinct stems, every one a
   `data/particles2048/tex/<stem>.gxt` that decodes
-  (`oag_vex::pob::ParticleSystem::texture_path`,
+  (`oag_pob::ParticleSystem::texture_path`,
   `oag_render::psys::Effect::parse_with`). Before this the 2048 effects drew
   the procedural radial falloff, which on a colour table authored for a sprite
   is a white blowout.
@@ -1161,7 +1161,7 @@ just wad cat 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' 0xeff1f331
 # space-constrained /tmp
 ```
 
-`oag_vex::pob::ParticleSystem::parse`, `resolve_slot` and `emitters`
+`oag_pob::ParticleSystem::parse`, `resolve_slot` and `emitters`
 recover the name, slot table, every fixup target and the whole emitter tree
 from any of the 35 PSP or 41 PS2 blobs. Per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) only
@@ -1190,7 +1190,7 @@ off the disc entirely. They are not, on PSP: **each `.pob` embeds a texture
 record directly after an emitter's own fixed-size record**, at
 `resource_base + emitter.offset + EMITTER_LEN` - addressed purely
 positionally, with no slot, fixup or string lookup needed to reach it.
-`oag_vex::pob::texture` is the parser and carries the full evidence and
+`oag_pob::texture` is the parser and carries the full evidence and
 confidence scores in its own module doc; the summary:
 
 - **32-byte header**: `u16 width, u16 height, u8 bpp(8), u8 levels(3-4),
@@ -1200,7 +1200,7 @@ confidence scores in its own module doc; the summary:
 - **Every PSP root emitter carries one** (35 of 35), and so does every other
   emitter: 76 headers across the corpus, 64 at 8 bits per pixel and **12 at 4**
   (128x64 or 64x128, a 16-entry palette), measured by
-  `crates/assets/tests/pob_ground_truth.rs`'s
+  `crates/pob/tests/pob_ground_truth.rs`'s
   `every_psp_root_emitter_texture_is_where_the_layout_says`. **This page used
   to say 29 of 35, with `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`,
   `WO_LEACHBEAM_CHARGING`, `WO_REPULSER` and `WO_ROCKET_FLARE` carrying none
@@ -1218,7 +1218,7 @@ confidence scores in its own module doc; the summary:
   three siblings' positional textures all point at one shared 64x64/4-level
   pool matching `orange_glow2.tga`, which decodes to the documented
   white-hot-core-to-orange glow. `WO_PLASMA_HEAD` is the counter-example -
-  see `oag_vex::pob::texture`'s own "positional texture is not proven to be
+  see `oag_pob::texture`'s own "positional texture is not proven to be
   the one a slot names" section for what it shows there.
 - **PS2 embeds none of this**: the identical positional scan over all 41
   PS2 files, at every emitter offset, finds zero header-shaped records -
@@ -1226,8 +1226,8 @@ confidence scores in its own module doc; the summary:
   HD/Fury doesn't use this mechanism either; its sprites are separate
   `data/psys/tex/*.gtf` PSARC entries.
 - **Coverage moved from 25.62% to 56.76%** of the PSP corpus's 781,104
-  bytes (`crates/assets/tests/pob_coverage_ground_truth.rs`,
-  `oag_vex::pob_coverage`) once the header, palette and level-0 pixels of
+  bytes (`crates/pob/tests/pob_coverage_ground_truth.rs`,
+  `oag_pob::coverage`) once the header, palette and level-0 pixels of
   every found texture were claimed - more than half of what read as an
   unlocated gap was sitting on disc under a positional address the whole
   time.
@@ -1255,7 +1255,7 @@ resource_base` turns each into a live pointer at `resource_base + value`:
 - On **every** PSP emitter that carries a header (64 of them over the 35
   files), the header's `+0x10` and `+0x14`, taken relative to the resource
   base, are entries of that file's own slot table -
-  `crates/assets/tests/pob_ground_truth.rs`,
+  `crates/pob/tests/pob_ground_truth.rs`,
   `every_psp_texture_pointer_is_a_fixup_site`. Relative to the emitter record
   they are `+0x9c8` and `+0x9cc`: the two slot targets the bullet below and
   [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)
@@ -1294,12 +1294,12 @@ above, and these two fields are in its table.
   `+0x9c8`/`+0x9cc` targets once listed here are the embedded sprite's
   pixels and palette - see the 2026-09-24 correction above.
 
-  **Measured rather than left as a bare statement**: `oag_vex::pob_coverage`
+  **Measured rather than left as a bare statement**: `oag_pob::coverage`
   claims everything else this page already decodes (header, slot table, name,
   each slot's own fixup site, every emitter record and modifier node) and
   claims a slot's *target* only where it is a NUL-terminated string, per the
   43%/rest-are-floats split above. Swept over
-  `crates/assets/tests/pob_coverage_ground_truth.rs`: the PSP corpus first
+  `crates/pob/tests/pob_coverage_ground_truth.rs`: the PSP corpus first
   reached **25.62%** of 781,104 bytes across 35 files this way (436 resolved
   slots, of which every string target is claimed); the PS2 corpus reaches
   **62.24%** of 374,128 bytes across 41 files. Adding the embedded-texture
@@ -1320,7 +1320,7 @@ above, and these two fields are in its table.
   signifies** beyond "these channels fall back to the same default."
 - **The two constant header words at `+0x0a` and `+0x0c`.** Always 1 across
   both the PSP and PS2 corpora; whether that is a version, a type tag, or
-  something else is unknown. [`ParticleSystem::parse`](../../crates/vex/src/pob.rs)
+  something else is unknown. [`ParticleSystem::parse`](../../crates/pob/src/lib.rs)
   refuses any other value rather than silently accepting an unrecognised
   header, the same choice `sblk.rs` makes for its own version field.
 - **Where the interpreter that reads a resolved record lives in the
@@ -1343,7 +1343,7 @@ switches the atlas animation on in `ParticleSystem_CacheModeFlags`.
 `ParticleSystem_UpdateParticles` reads its value as frames per tick. Read
 and confidence in
 [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md#the-atlas-frame-advances).
-`oag_vex::pob::Emitter::frame_rate` parses it.
+`oag_pob::Emitter::frame_rate` parses it.
 
 On the PSP disc every emitter authors the block, and every one parses. The
 ones that animate - `hi > 0` and a grid of more than one frame - are:
@@ -1418,7 +1418,7 @@ sparks' templates carry the pool their parent shares (`orange_glow2` 64x64, read
 which is what had been read as a rule. Elsewhere they differ: the ship explosion's `Glow` hangs on `SHIP_DEBRIS`
 (128x64, 4 bpp, a grey atlas) and carries a **32x32, 8 bpp, 3-level radial glow** (centre white, corner black); the GE
 dump of the running original binds exactly that (`TEXSIZE 0x505`, `CLUT8`, a grey palette whose alpha equals its colour).
-All 28 PSP templates parse a header at `+0x890` (`crates/assets/tests/pob_initial_particles_ground_truth.rs`).
+All 28 PSP templates parse a header at `+0x890` (`crates/pob/tests/pob_initial_particles_ground_truth.rs`).
 Confidence **90** (decompile, GE dump and the file agree).
 
 **Where they are.** 28 on the PSP disc, on 20 effects (31 in the PS2 port's, unread): the collision sparks'
@@ -1427,9 +1427,9 @@ Confidence **90** (decompile, GE dump and the file agree).
 and `booga` (72 to 100), the Quake's and the Repulser's `shazzam`, the Shuriken's
 `glow`, the ship explosions' `Glow`, the absorb effect's `glow`. **None of it
 was drawn before this**: the parser never reached them. The struck hull's warm
-envelope in the original is this pair. Read by `oag_vex::pob::initial`,
+envelope in the original is this pair. Read by `oag_pob::initial`,
 played by `oag_render::psys::template`; pinned by
-`crates/assets/tests/pob_initial_particles_ground_truth.rs`.
+`crates/pob/tests/pob_initial_particles_ground_truth.rs`.
 
 **Not played:** a template on an emitter that is itself a child (it would start
 with the child's own instances; `Effect::skipped_templates` counts them).

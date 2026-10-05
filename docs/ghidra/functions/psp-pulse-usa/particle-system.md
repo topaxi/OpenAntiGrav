@@ -390,7 +390,7 @@ header directly after each emitter's fixed-size record - no WAD lookup
 needed at all - and the three bright emitters' headers all point at one
 shared 64x64/4-level palette+pixel pool that decodes to exactly this
 radial glow: white-hot core, saturated orange, the same measurements this
-section records. `oag_vex::pob::texture` has the header layout and the
+section records. `oag_pob::texture` has the header layout and the
 positional-addressing rule; `docs/formats/pob.md`'s "The sprite pixels are
 on the disc after all" section has the corpus-wide evidence. This was the
 "unlocated texture-reference gap" `pob.md` used to record - it is located.
@@ -903,7 +903,7 @@ Confidence **85**.
 is above 1. What reads those bits is not traced.
 
 **Implemented** as `oag_render::psys::frames`, and the channel is parsed as
-`oag_vex::pob::Emitter::frame_rate`.
+`oag_pob::Emitter::frame_rate`.
 
 ### The screen flash's consumer, read and measured (2026-09-24)
 
@@ -1318,7 +1318,7 @@ extent authors velocity mode 1.
 record (`+0x93c` count 1, selector `2`, a keyed channel `1 + 1 * (0.0068 .. 1)`), which
 `ParticleSystem_Update` evaluates at the emitter's normalised age every tick and stores into
 instance `+0x48`, the extent's co-factor, before `ParticleSystem_DeriveScaledParams` runs
-again (`oag_vex::pob::attribute`). So the ring is `12.94` at the first tick and `23.3` at
+again (`oag_pob::attribute`). So the ring is `12.94` at the first tick and `23.3` at
 the sixteenth.
 
 **Live, two boots** (a Bomb moved 120 units ahead and run out,
@@ -1424,7 +1424,7 @@ tick 18, and the two-boot measurement in the section above saw births at ticks `
 held to `0.287`, then to `0`) was logged by `ParticleSystem_DrawParticle` (`scripts/psp-wreck-capture.py
 --templates`) at sizes `30.00, 30.00, 28.04, 21.00, 14.09` and colours `ffffffff, fff3d9ff, ffe7b2ff,
 ffdc8ccd, ffd06689` - five draws, ages `0` to `4`; ours drew a sixth at `7.17`, alpha `0.27`. The five match the
-size and colour channels to the last digit (`oag_vex::pob::initial`). Confidence **75** (one boot).
+size and colour channels to the last digit (`oag_pob::initial`). Confidence **75** (one boot).
 
 **Probably the same law, unmeasured:** the hull's own collision sparks and the other effects parented to a craft's node ride the same
 `0.75`-row matrices and are still played at frame scale `1.0` (`oag_game::race::hit_sparks` and friends).

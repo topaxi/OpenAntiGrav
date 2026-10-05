@@ -1,10 +1,9 @@
 //! `.pob` particle systems: a `SYSP` container around a tree of emitters.
-//!
 //! These are the `Data\Psys\*.POB` blobs the front-end and weapon effects
 //! load by name (`Data\Psys\%s.POB`, built at `FUN_089156a0` in the PSP
 //! `BOOT.BIN`). 35 exist in `Data.wad` on the PSP disc, one per authored
-//! effect - `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_MISSILE_EXPLO`, `WO_RAIN`, and so
-//! on. The PS2 port ships the identical container: 41 `SYSP` blobs in
+//! effect - `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_MISSILE_EXPLO`, `WO_RAIN`, ...
+//! The PS2 port ships the identical container: 41 `SYSP` blobs in
 //! `WADS2.WAD`, 32 sharing a name hash (and so a path) with PSP, parsed and
 //! resolved by this same module with no code changes. See
 //! `docs/formats/pob.md` for the evidence and open questions.
@@ -468,6 +467,7 @@ pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 
 /// The records `+0x93c` counts: what re-derives an emitter's extents every tick.
 pub mod attribute;
+pub mod coverage;
 /// The weather's wrapping box.
 pub mod field;
 /// Emitter-record flag bits, `+0x20`. Its own file: the evidence behind

@@ -18,7 +18,7 @@
 ///
 /// **Recovered, confidence 72.** `Rocket_Init` (`0x0885cdb8`) spawns it through
 /// `Psys_Spawn_q` with the tag `ROFL`; the string is at `0x08a7c100`. Two
-/// emitters, both [`oag_vex::pob::flags::LOOPING`], so it runs for as long
+/// emitters, both [`oag_pob::flags::LOOPING`], so it runs for as long
 /// as the rocket does rather than for its authored 100 ticks - see
 /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
 ///

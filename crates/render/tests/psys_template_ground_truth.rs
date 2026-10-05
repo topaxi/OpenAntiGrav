@@ -4,7 +4,7 @@
 //! The numbers are the live PPSSPP capture's (2026-09-30), a hit on the player
 //! at severity 2.4: `shazam` half-sizes `9.36, 9.36, 8.73, 6.54, 4.33` over
 //! the frames after it starts, then gone; `glow` flickering between `0.748`
-//! and `4.8`. See `oag_vex::pob`'s `initial` module and `psys::template`.
+//! and `4.8`. See `oag_pob`'s `initial` module and `psys::template`.
 
 use oag_assets::Archive;
 use oag_core::Rng;

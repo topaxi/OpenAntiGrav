@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             e.palette[128]
         );
     }
-    let system = oag_vex::pob::ParticleSystem::parse(&blob)?;
+    let system = oag_pob::ParticleSystem::parse(&blob)?;
     for e in system.emitters(&blob)? {
         for t in &e.initial_particles {
             println!(
@@ -61,7 +61,7 @@ fn jumps(
     archives: &mut oag_assets::Archives,
     names: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use oag_vex::pob::{Channel, ChannelMode};
+    use oag_pob::{Channel, ChannelMode};
     let jumpy = |c: &Channel| {
         c.period > 0.0
             && c.mode == ChannelMode::Keyframed
@@ -71,7 +71,7 @@ fn jumps(
     };
     for name in names {
         let blob = archives.read_name(&psys::effect_path(&name))?;
-        let system = oag_vex::pob::ParticleSystem::parse(&blob)?;
+        let system = oag_pob::ParticleSystem::parse(&blob)?;
         for e in system.emitters(&blob)? {
             let mut records = vec![(false, &e)];
             records.extend(e.initial_particles.iter().map(|t| (true, t)));

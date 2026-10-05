@@ -34,7 +34,7 @@ names.
 - Sibling titles share families with drift. PS3, Vita and PS4 often differ
   only in pointer width or byte order. Keep every existing title's output
   unchanged and its ground-truth tests green, and say which you checked.
-- Crates are split by format family (ADR-0050): `oag-vex`, `oag-rcs`,
+- Crates are split by format family (ADR-0050): `oag-vex`, `oag-pob`, `oag-rcs`,
   `oag-texture`, `oag-tables`, `oag-video`, and `oag-formats` for
   containers and sound. `oag-tables` stays dependency-free.
   `oag-formats` is determinism-bound.

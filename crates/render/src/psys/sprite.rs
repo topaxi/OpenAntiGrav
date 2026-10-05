@@ -17,7 +17,7 @@
 //!
 //! # Where a sprite comes from
 //!
-//! PSP only: [`oag_vex::pob::texture`] reads the sprite a `.pob` embeds
+//! PSP only: [`oag_pob::texture`] reads the sprite a `.pob` embeds
 //! right after an emitter's record. A PS2 `.pob` embeds none, and Wipeout
 //! HD ships its sprites as separate `.gtf` files this module does not load
 //! yet; both keep the procedural profile in `psys.wgsl`, unchanged.
@@ -26,7 +26,7 @@
 //!
 //! `+0x9a0` authors a grid of frames. `FUN_088f58a4` (the instance init)
 //! copies it to the instance and multiplies it out as the frame count; under
-//! [`oag_vex::pob::flags::RANDOM_ATLAS_FRAME`] `ParticleSystem_InitParticle`
+//! [`oag_pob::flags::RANDOM_ATLAS_FRAME`] `ParticleSystem_InitParticle`
 //! draws each particle's frame from `Psys_RandIntRange(0, count - 1)`, and
 //! otherwise starts it at frame 0. `ParticleSystem_DrawParticle` then picks
 //! the cell with `Gu_TexScale(1/columns, 1/rows)` and
@@ -45,7 +45,7 @@
 
 use std::sync::Arc;
 
-use oag_vex::pob::{self, ParticleSystem};
+use oag_pob::{self as pob, ParticleSystem};
 
 /// The sheet's width and height in texels.
 ///
@@ -159,7 +159,7 @@ pub struct Atlas {
     /// Cells down, at least 1.
     pub rows: u16,
     /// Each particle takes a random cell at spawn -
-    /// [`oag_vex::pob::flags::RANDOM_ATLAS_FRAME`]; otherwise cell 0.
+    /// [`oag_pob::flags::RANDOM_ATLAS_FRAME`]; otherwise cell 0.
     pub random_frame: bool,
 }
 

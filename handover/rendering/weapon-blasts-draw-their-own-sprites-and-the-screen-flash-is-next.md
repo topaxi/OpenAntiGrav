@@ -16,7 +16,7 @@ blowouts where the original draws orange fire. Measured, not re-tinted:
      packed sheet, atlas cell included (`oag_render::psys::sprite`).
   2. **The sprite reader had the wrong offsets.** The header's pixel and palette
      words are relative to the resource base: they are fixup sites. Fixed in
-     `oag_vex::pob::texture`, locked by `every_psp_texture_pointer_is_a_fixup_site`.
+     `oag_pob::texture`, locked by `every_psp_texture_pointer_is_a_fixup_site`.
   3. **The Quake's `/ 50` went into severity.** It belongs in the extent
      co-factor. Severity made every fireball `width / 50` too big and stacked
      them all on one point. `WO_QUAKE` is a line emitter (shape 1); lines and
@@ -53,7 +53,7 @@ landed, Pulse PSP only.** Evidence:
   `0x08916ba0`. Class 7 is the capped bar, as read before.
 - **The atlas frame advances** (`oag_render::psys::frames`, 85). The frame
   rate is the unparsed `+0x778` channel, now
-  `oag_vex::pob::Emitter::frame_rate`.
+  `oag_pob::Emitter::frame_rate`.
 
 Frames are in `data/scratch/psys-draw/` (gitignored):
 

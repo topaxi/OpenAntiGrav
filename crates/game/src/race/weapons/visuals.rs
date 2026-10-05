@@ -608,7 +608,7 @@ impl Race {
     /// The trigger needs no reverse-engineering: an engine flare is on for
     /// as long as the craft is, which is why this one is wired where the
     /// other PS2-only effects are not. Both its emitters are
-    /// [`oag_vex::pob::flags::LOOPING`], so it runs until detached.
+    /// [`oag_pob::flags::LOOPING`], so it runs until detached.
     ///
     /// Anchored at the `Engine Flare` locator under the craft's *current*
     /// transform, the same point the procedural flare uses, so the two are
@@ -645,7 +645,7 @@ impl Race {
     /// **Recovered, one weapon at a time; see [`flare_effect_for`] for the
     /// map.** `Rocket_Init` (`0x0885cdb8`) and `Missile_Init` (`0x0885a160`)
     /// each attach their own file at launch and ride it for the whole
-    /// flight; every emitter involved is [`oag_vex::pob::flags::LOOPING`],
+    /// flight; every emitter involved is [`oag_pob::flags::LOOPING`],
     /// so the authored duration is not a countdown and the effect does not
     /// need re-triggering to outlast it.
     ///

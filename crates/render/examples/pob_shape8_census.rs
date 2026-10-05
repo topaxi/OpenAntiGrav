@@ -6,7 +6,7 @@
 //! ```
 
 use oag_assets::Archive;
-use oag_vex::pob;
+use oag_pob as pob;
 
 fn line(system: &str, kind: &str, e: &pob::Emitter) {
     println!(

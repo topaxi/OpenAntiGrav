@@ -16,11 +16,11 @@
 //! ripples. Each is a `vex::Node` payload, not a
 //! neighbouring format, and splitting them out would cut a tree into chunks.
 //!
-//! Three are standalone files rather than nodes, kept here because the same
+//! Two are standalone files rather than nodes, kept here because the same
 //! scene is what reads them: [`vif`] walks the PS2 VIF1 packets a `.vex` batch
 //! header points at, [`kdcol`] is Wipeout 2048's collision (it reuses
 //! [`collision`]'s own types, which is one reason this crate is not split by
-//! console), and [`pob`] holds the particle systems the scene triggers.
+//! console). The `.pob` particle systems a scene triggers live in `oag-pob`.
 //!
 //! See [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md).
 
@@ -34,8 +34,6 @@ pub mod lighting;
 pub mod mesh_coverage;
 pub mod pads;
 pub mod placed_psys;
-pub mod pob;
-pub mod pob_coverage;
 pub mod pvs;
 pub mod quake;
 pub mod shadow_occluder;

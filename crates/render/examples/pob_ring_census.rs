@@ -5,7 +5,7 @@
 //! ```
 
 use oag_assets::Archive;
-use oag_vex::pob;
+use oag_pob as pob;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);

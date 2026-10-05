@@ -16,7 +16,7 @@ units (`oag_render::camera::destroy`, pinned to the running original's per-frame
 field of view and view matrix; `destroy_camera_ground_truth.rs` pins it on the disc). The
 player's own state-5 wash is no longer skipped and the player's two explosion shakes are
 armed. **The fireballs read white because twelve PSP sprites were 4 bits per pixel and the
-reader refused them** (`oag_vex::pob::texture`); fixed, and the picture now matches the
+reader refused them** (`oag_pob::texture`); fixed, and the picture now matches the
 original's orange textured fireball frame for frame at 480x272 (the opponent wreck,
 `cap-opp` against ours, k 36 to 140).
 

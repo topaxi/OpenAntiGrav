@@ -382,7 +382,7 @@ pub struct RaceView {
     /// comes from.
     pub(super) sparks_anchor_up: Option<Vec3>,
     /// Whether the sparks are currently *attached* to a wall contact, for the
-    /// effects that author [`oag_vex::pob::flags::LOOPING`].
+    /// effects that author [`oag_pob::flags::LOOPING`].
     ///
     /// A looping emitter has no countdown -
     /// `oag_render::psys::EmitterSpec::run_ticks` is infinite and

@@ -609,9 +609,9 @@ file, the locator and the boost blend - see the "SPU vertex lights" entry in
 ## `.pob` reads byte-swapped, and the parser reads it
 
 **Confidence 93.** The [container](pob.md) is byte-swapped: the magic reads
-`PSYS` where Pulse writes `SYSP`. `oag_vex::pob` takes a byte order and
+`PSYS` where Pulse writes `SYSP`. `oag_pob` takes a byte order and
 reads all 88 with no offset changed, checked against the disc by
-`crates/assets/tests/pob_ground_truth.rs`. Over all **88** effects:
+`crates/pob/tests/pob_ground_truth.rs`. Over all **88** effects:
 
 - magic on 88 of 88;
 - the two constant words - `1` at `+0x0a` and `1` at `+0x0c` - on 88 of 88;

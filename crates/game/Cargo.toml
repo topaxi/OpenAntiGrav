@@ -28,6 +28,7 @@ path = "src/bin/headless_sim.rs"
 [dependencies]
 oag-display.workspace = true
 oag-rcs.workspace = true
+oag-pob.workspace = true
 oag-vex.workspace = true
 oag-texture.workspace = true
 oag-tables.workspace = true

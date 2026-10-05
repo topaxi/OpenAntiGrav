@@ -36,13 +36,13 @@ use std::path::{Path, PathBuf};
 use oag_assets::Archive;
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_pob as pob;
 use oag_render::psys::spawn::Spawn;
 use oag_render::psys::streak::StreakDraw;
 use oag_render::psys::{
     Blend, ColourMode, ColourScale, Direction, Effect, Render, System, TICK_HZ,
 };
 use oag_render::sparks;
-use oag_vex::pob;
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
@@ -197,7 +197,7 @@ fn the_collision_spark_effect_matches_the_values_it_replaced() {
 ///
 /// [`Effect::parse`] has read every entry of every emitter's real table off
 /// the disc since [`the_collision_spark_effect_matches_the_values_it_replaced`]
-/// landed - `crates/vex/src/pob.rs` decodes `+0xc4`'s 256 `u32`s, and
+/// landed - `crates/pob/src/lib.rs` decodes `+0xc4`'s 256 `u32`s, and
 /// `EmitterSpec::from_record` normalises all 256 by [`ColourScale`], not
 /// just two of them. What was missing was a test that looked past entry `0`
 /// and entry `255` to say so: the smoke and bright-spark endpoints below are
@@ -435,8 +435,8 @@ fn every_effect_on_the_disc_plays_without_panicking() {
 
 /// The same translation on Wipeout HD/Fury's effects, which are big-endian.
 ///
-/// [`oag_vex::pob`] reading them is asserted on the disc in
-/// `crates/assets/tests/pob_ground_truth.rs`; this is the layer above - that a
+/// [`oag_pob`] reading them is asserted on the disc in
+/// `crates/pob/tests/pob_ground_truth.rs`; this is the layer above - that a
 /// record read the other way round still becomes an [`EmitterSpec`] this
 /// renderer can play, with no field landing outside a range the spec builder
 /// accepts.

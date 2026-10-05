@@ -42,7 +42,7 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_vex::pob::{self, Channel};
+use oag_pob::{self as pob, Channel};
 
 use super::sample::channel_sample;
 use super::{Playing, Stage, System};

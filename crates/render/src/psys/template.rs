@@ -1,6 +1,6 @@
 //! The sprite templates an emitter starts with, played as one-shot emitters.
 //!
-//! `oag_vex::pob::Emitter::initial_particles` reads what
+//! `oag_pob::Emitter::initial_particles` reads what
 //! `FUN_088f58a4` (the emitter instance's initialiser) makes a particle from
 //! the moment an instance exists: a white `shazam` flash on the collision
 //! sparks, a `glow` on nearly every effect, the Quake's 100-unit `shazzam`,
@@ -32,7 +32,7 @@
 //! curve without giving the pool a second notion of age.
 
 use oag_core::math::Vec3;
-use oag_vex::pob::{self, Channel, ChannelMode};
+use oag_pob::{self as pob, Channel, ChannelMode};
 
 use super::roll::Rotation;
 use super::{ColourScale, Effect, EmitterSpec, Particle, System};

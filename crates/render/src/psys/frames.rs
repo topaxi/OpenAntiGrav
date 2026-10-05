@@ -20,7 +20,7 @@
 //!
 //! **Pulse on the PSP only** - see [`super::Effect::without_pulse_psp_draw`].
 
-use oag_vex::pob::{self, Channel, ChannelMode};
+use oag_pob::{self as pob, Channel, ChannelMode};
 
 use super::Particle;
 

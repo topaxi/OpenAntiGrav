@@ -18,7 +18,7 @@ pub(super) struct Particle {
     pub(super) spec: u16,
     /// The palette entry drawn at spawn, under [`super::ColourMode::RandomEntry`].
     pub(super) colour_index: u8,
-    /// The `0..=1` samples the two [`oag_vex::pob::ChannelMode::Random`] channels draw
+    /// The `0..=1` samples the two [`oag_pob::ChannelMode::Random`] channels draw
     /// once at spawn; unused for the other modes.
     pub(super) size_sample: f32,
     pub(super) alpha_sample: f32,

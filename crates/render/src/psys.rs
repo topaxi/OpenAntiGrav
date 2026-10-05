@@ -2,7 +2,7 @@
 //! authored, from the user's own disc.
 //!
 //! Every number this module acts on comes out of
-//! [`oag_vex::pob::Emitter`] - schedules, shapes, speeds, lifetimes, the
+//! [`oag_pob::Emitter`] - schedules, shapes, speeds, lifetimes, the
 //! 256-entry colour tables, the keyframed size and alpha channels, the drag
 //! modifier, the child/sibling tree. Nothing is transcribed. That is the
 //! whole point of it: the previous pass hand-copied one file's four emitters
@@ -42,7 +42,7 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_vex::pob::{self, Channel, ChannelMode, ParticleSystem};
+use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
 use crate::mesh::GpuVertex;
 
@@ -223,7 +223,7 @@ pub enum ColourMode {
 
 /// One emitter of an [`Effect`], in the original's own units.
 ///
-/// A translation of [`oag_vex::pob::Emitter`], not a re-reading of it:
+/// A translation of [`oag_pob::Emitter`], not a re-reading of it:
 /// the fields this module cannot yet act on are left behind in the parsed
 /// record rather than carried here (see the module doc comment).
 #[derive(Debug, Clone, PartialEq)]
@@ -234,7 +234,7 @@ pub struct EmitterSpec {
     pub duration_ticks: f32,
     /// The emitter runs until its owner stops it, and
     /// [`EmitterSpec::duration_ticks`] is not a countdown -
-    /// [`oag_vex::pob::flags::LOOPING`].
+    /// [`oag_pob::flags::LOOPING`].
     ///
     /// This is what separates an effect a caller *attaches* - the rocket's
     /// flare, a craft's engine flare, the rain - from one it *fires*. An
@@ -341,7 +341,7 @@ pub struct EmitterSpec {
 }
 
 /// A parsed `.pob` ready to play: the root emitter first, then the tree
-/// depth-first, exactly as [`oag_vex::pob::ParticleSystem::emitters`]
+/// depth-first, exactly as [`oag_pob::ParticleSystem::emitters`]
 /// returns it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Effect {

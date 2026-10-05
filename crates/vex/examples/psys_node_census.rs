@@ -32,9 +32,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut systems = Vec::new();
     for index in 0..wad.len() as usize {
         if let Ok(head) = wad.peek(index, 4)
-            && oag_vex::pob::looks_like_particle_system(&head)
+            && oag_pob::looks_like_particle_system(&head)
             && let Ok(blob) = wad.read(index)
-            && let Ok(system) = oag_vex::pob::ParticleSystem::parse(&blob)
+            && let Ok(system) = oag_pob::ParticleSystem::parse(&blob)
         {
             systems.push(system.name.clone());
         }
@@ -113,13 +113,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "WO_SNOW",
     ] {
         let blob = archives.read_name(&format!(r"Data\Psys\{name}.POB"))?;
-        let system = oag_vex::pob::ParticleSystem::parse(&blob)?;
+        let system = oag_pob::ParticleSystem::parse(&blob)?;
         for e in system.emitters(&blob)? {
             println!(
                 "{name}: emitter {:?} flags {:#x} looping {} duration {} interval {:?} per {:?} life {:?}",
                 e.name,
                 e.flags,
-                e.flags & oag_vex::pob::flags::LOOPING != 0,
+                e.flags & oag_pob::flags::LOOPING != 0,
                 e.duration_ticks,
                 e.interval_ticks,
                 e.per_emission,

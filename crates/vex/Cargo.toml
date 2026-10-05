@@ -21,6 +21,7 @@ oag-formats.workspace = true
 oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
+oag-pob.workspace = true
 oag-pulse.workspace = true
 oag-texture.workspace = true
 
