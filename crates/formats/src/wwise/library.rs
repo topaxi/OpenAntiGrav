@@ -327,28 +327,6 @@ impl Library<'_> {
         Err(WalkError::Dead(at))
     }
 
-    /// Every music switch keyed on exactly `group`, as `(id, switch)`.
-    ///
-    /// # Errors
-    ///
-    /// The first music switch a reader refuses.
-    pub fn music_switches(&self, group: u32) -> Result<Vec<(u32, Switch)>, WalkError> {
-        let mut out = Vec::new();
-        for bank in &self.banks {
-            for object in bank.objects() {
-                if object.kind != Kind::MusicSwitch {
-                    continue;
-                }
-                let switch = Switch::parse(object.kind, bank.body(object))
-                    .map_err(|e| WalkError::Unread(object.id, e))?;
-                if switch.groups.len() == 1 && switch.groups[0].0 == group {
-                    out.push((object.id, switch));
-                }
-            }
-        }
-        Ok(out)
-    }
-
     /// Walks one container to its segments, tracks and media.
     ///
     /// # Errors
@@ -394,24 +372,5 @@ impl Library<'_> {
             ranseq,
             segments,
         })
-    }
-
-    /// The song a state of `group` selects in every music switch keyed on it.
-    ///
-    /// # Errors
-    ///
-    /// The id a walk stopped at.
-    pub fn songs_for_state(&self, group: u32, state: u32) -> Result<Vec<SongChain>, WalkError> {
-        let mut out = Vec::new();
-        for (id, switch) in self.music_switches(group)? {
-            if let Some(target) = switch.select(&[state])
-                && self
-                    .first(target)
-                    .is_some_and(|(k, _)| k == Kind::MusicRanSeq)
-            {
-                out.push(self.song(id, target)?);
-            }
-        }
-        Ok(out)
     }
 }

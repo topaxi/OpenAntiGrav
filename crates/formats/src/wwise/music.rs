@@ -18,6 +18,9 @@
 
 use super::hirc::Kind;
 
+#[cfg(test)]
+mod tests;
+
 /// Why a music object was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MusicError {

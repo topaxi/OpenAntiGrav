@@ -81,10 +81,10 @@
 //! the `HIRC` framing, events, `Play` actions, sounds, music tracks' source
 //! lists and the **parent id** at the head of each node's base parameters.
 //! **Not read:** the rest of the base parameters (positioning, auxiliary
-//! sends, state chunks, RTPCs - the parent id is the only thing this crate
-//! needs from them), a container's own playlist, and music segments,
-//! switches and sequences, so an event that plays one is reported as
-//! unresolved rather than guessed at. `STID` (bank names) is absent from every
+//! sends, RTPCs - the parent id is the only thing this crate needs from
+//! them for sounds) and a sound container's own playlist. **Music is read**
+//! in [`music`]: segments, switches, random/sequence containers and a track's
+//! clips, field by field, refusing by name what was not measured. `STID` (bank names) is absent from every
 //! bank here. Evidence and counts: `docs/formats/wwise.md`.
 
 use std::ops::Range;

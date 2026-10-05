@@ -14,6 +14,7 @@
 
 use anyhow::{Context, Result, anyhow, ensure};
 use oag_assets::Archives;
+use oag_formats::wwise::hirc::StreamType;
 use oag_formats::wwise::music::Clip;
 use oag_formats::wwise::{Bank, Library, SongChain, name_hash, wem::Wem};
 use oag_title::StateTracks;
@@ -34,6 +35,8 @@ pub struct Song {
     pub seconds: f64,
     /// The media ids of its tracks, in segment order.
     pub stems: Vec<u32>,
+    /// Which of them are embedded in the bank's own `DATA` rather than loose.
+    pub embedded: Vec<bool>,
     /// Each stem's clip: where it plays and how it is trimmed.
     pub clips: Vec<Clip>,
 }
@@ -91,11 +94,12 @@ fn walk(
         .map_err(|e| format!("{e:?}"))
 }
 
-fn stems_of(chain: &SongChain) -> Result<(f64, Vec<u32>, Vec<Clip>), String> {
+fn stems_of(chain: &SongChain) -> Result<(f64, Vec<u32>, Vec<bool>, Vec<Clip>), String> {
     let [segment] = chain.segments.as_slice() else {
         return Err(format!("{} segments, expected one", chain.segments.len()));
     };
     let mut stems = Vec::new();
+    let mut embedded = Vec::new();
     let mut clips = Vec::new();
     for track in &segment.tracks {
         let [media] = track.media.as_slice() else {
@@ -113,9 +117,10 @@ fn stems_of(chain: &SongChain) -> Result<(f64, Vec<u32>, Vec<Clip>), String> {
             ));
         };
         stems.push(media.source.media_id);
+        embedded.push(media.source.stream == StreamType::Embedded);
         clips.push(*clip);
     }
-    Ok((segment.duration / 1000.0, stems, clips))
+    Ok((segment.duration / 1000.0, stems, embedded, clips))
 }
 
 fn bank_blob(archives: &mut Archives, st: &StateTracks) -> Result<Vec<u8>> {
@@ -163,7 +168,7 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
                 continue;
             }
         };
-        let (seconds, stems, clips) = match stems_of(&chain) {
+        let (seconds, stems, embedded, clips) = match stems_of(&chain) {
             Ok(found) => found,
             Err(why) => {
                 skip(Skip::Walk(why));
@@ -171,8 +176,12 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
             }
         };
         if check_media {
-            let name = wem_name(st, stems[0]);
-            let Ok(first) = archives.read_name(&name) else {
+            let first = if embedded[0] {
+                lib.banks()[0].embedded(stems[0]).map(<[u8]>::to_vec)
+            } else {
+                archives.read_name(&wem_name(st, stems[0])).ok()
+            };
+            let Some(first) = first else {
                 skip(Skip::MissingMedia(stems[0]));
                 continue;
             };
@@ -194,6 +203,7 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
             state,
             seconds,
             stems,
+            embedded,
             clips,
         });
     }
@@ -214,13 +224,14 @@ pub fn front_end(archives: &mut Archives, st: &StateTracks) -> Result<Option<Son
     let bank = Bank::parse(&blob).map_err(|e| anyhow!("{}: {e}", st.bank))?;
     let lib = Library::new(vec![bank]);
     let chain = walk(&lib, st, st.front_end_flow, None).map_err(|e| anyhow!("{e}"))?;
-    let (seconds, stems, clips) = stems_of(&chain).map_err(|e| anyhow!("{e}"))?;
+    let (seconds, stems, embedded, clips) = stems_of(&chain).map_err(|e| anyhow!("{e}"))?;
     Ok(Some(Song {
         title: format!("music container {}", chain.ranseq),
         location: 0,
         state: 0,
         seconds,
         stems,
+        embedded,
         clips,
     }))
 }
@@ -242,19 +253,35 @@ pub fn front_end(archives: &mut Archives, st: &StateTracks) -> Result<Option<Son
 /// A stem that will not read or decode, or one that is not stereo at the
 /// same rate as the first.
 pub fn mix(archives: &mut Archives, st: &StateTracks, song: &Song) -> Result<Pcm> {
-    let blobs = song
-        .stems
-        .iter()
-        .map(|&id| {
-            archives
-                .read_name(&wem_name(st, id))
-                .with_context(|| format!("reading stem {id}"))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let bank_data = if song.embedded.contains(&true) {
+        Some(bank_blob(archives, st)?)
+    } else {
+        None
+    };
+    let bank = bank_data
+        .as_deref()
+        .map(|blob| Bank::parse(blob).map_err(|e| anyhow!("{}: {e}", st.bank)))
+        .transpose()?;
+    let mut blobs: Vec<std::borrow::Cow<'_, [u8]>> = Vec::new();
+    for (&id, &embedded) in song.stems.iter().zip(&song.embedded) {
+        blobs.push(if embedded {
+            let bank = bank.as_ref().context("an embedded stem needs the bank")?;
+            std::borrow::Cow::Borrowed(
+                bank.embedded(id)
+                    .with_context(|| format!("stem {id} is not in the bank's DATA"))?,
+            )
+        } else {
+            std::borrow::Cow::Owned(
+                archives
+                    .read_name(&wem_name(st, id))
+                    .with_context(|| format!("reading stem {id}"))?,
+            )
+        });
+    }
     let decoded: Vec<Result<Pcm>> = std::thread::scope(|scope| {
         let handles: Vec<_> = blobs
             .iter()
-            .map(|blob| scope.spawn(|| crate::wem::decode(blob)))
+            .map(|blob| scope.spawn(|| crate::wem::decode(blob.as_ref())))
             .collect();
         handles
             .into_iter()
