@@ -1981,7 +1981,6 @@ dependencies = [
  "anyhow",
  "cpal",
  "log",
- "oag-assets",
  "oag-core",
  "oag-formats",
  "rtrb",
@@ -2099,7 +2098,6 @@ dependencies = [
  "pollster",
  "resvg",
  "serde",
- "thiserror 2.0.19",
  "toml",
  "wgpu",
  "winit",
@@ -2111,7 +2109,6 @@ version = "0.1.0"
 dependencies = [
  "oag-ai",
  "oag-core",
- "oag-formats",
  "oag-physics",
  "oag-race",
  "oag-tables",
@@ -2151,7 +2148,6 @@ name = "oag-hud"
 version = "0.1.0"
 dependencies = [
  "oag-2048",
- "oag-core",
  "oag-display",
  "oag-hd",
  "oag-physics",
@@ -2180,7 +2176,6 @@ name = "oag-livery"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "log",
  "oag-assets",
  "oag-core",
  "oag-fx",
@@ -2208,8 +2203,6 @@ dependencies = [
  "oag-gpu",
  "oag-pulse",
  "oag-rcs",
- "oag-tables",
- "oag-testdata",
  "oag-texture",
  "oag-vex",
  "pollster",
@@ -2309,7 +2302,6 @@ version = "0.1.0"
 dependencies = [
  "oag-assets",
  "oag-disc",
- "oag-formats",
  "oag-pulse",
  "oag-tables",
  "oag-testdata",
@@ -2322,7 +2314,6 @@ name = "oag-race"
 version = "0.1.0"
 dependencies = [
  "oag-core",
- "oag-formats",
  "oag-tables",
  "oag-vex",
 ]
@@ -2384,10 +2375,8 @@ name = "oag-rcs"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
- "oag-disc",
  "oag-formats",
  "oag-tables",
- "oag-texture",
  "oag-vex",
 ]
 
@@ -2446,7 +2435,6 @@ dependencies = [
  "oag-pure",
  "oag-race",
  "oag-tables",
- "oag-testdata",
  "oag-title",
  "oag-ui",
  "oag-vex",
@@ -2460,10 +2448,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
- "log",
  "oag-2048",
  "oag-assets",
- "oag-disc",
  "oag-formats",
  "oag-hd",
  "oag-omega",
@@ -2517,10 +2503,8 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-hd",
- "oag-pulse",
  "oag-tables",
  "oag-texture",
- "oag-title",
 ]
 
 [[package]]
@@ -2532,9 +2516,7 @@ dependencies = [
  "env_logger",
  "log",
  "oag-ai",
- "oag-assets",
  "oag-core",
- "oag-formats",
  "oag-gameplay",
  "oag-physics",
  "oag-pulse",
@@ -2583,8 +2565,6 @@ dependencies = [
  "oag-race",
  "oag-tables",
  "oag-testdata",
- "oag-texture",
- "oag-title",
  "oag-ui",
 ]
 
@@ -2598,7 +2578,6 @@ dependencies = [
  "oag-pob",
  "oag-pulse",
  "oag-testdata",
- "oag-texture",
 ]
 
 [[package]]

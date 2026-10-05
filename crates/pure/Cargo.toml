@@ -20,7 +20,6 @@ oag-testdata.workspace = true
 oag-vex.workspace = true
 oag-tables.workspace = true
 oag-disc.workspace = true
-oag-formats.workspace = true
 oag-pulse.workspace = true
 
 [lints]

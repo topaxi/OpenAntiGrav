@@ -26,9 +26,5 @@ pollster.workspace = true
 [features]
 perf-probe = ["oag-gpu/perf-probe"]
 
-[dev-dependencies]
-oag-tables.workspace = true
-oag-testdata.workspace = true
-
 [lints]
 workspace = true

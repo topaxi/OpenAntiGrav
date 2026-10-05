@@ -21,7 +21,6 @@ oag-texture.workspace = true
 oag-title.workspace = true
 oag-vex.workspace = true
 anyhow.workspace = true
-log.workspace = true
 
 [lints]
 workspace = true

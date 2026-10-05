@@ -9,16 +9,13 @@ rust-version.workspace = true
 
 [dependencies]
 oag-rcs.workspace = true
-oag-pob.workspace = true
 oag-vex.workspace = true
 oag-texture.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true
-oag-formats.workspace = true
 oag-gpu.workspace = true
 oag-fx.workspace = true
 oag-mesh.workspace = true
-oag-post.workspace = true
 oag-pulse.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
@@ -43,3 +40,6 @@ workspace = true
 oag-tables.workspace = true
 oag-pure.workspace = true
 oag-testdata.workspace = true
+oag-formats.workspace = true
+oag-pob.workspace = true
+oag-post.workspace = true
