@@ -24,12 +24,12 @@
 //! rather than that pose, so a volley from *our* craft cannot be compared with
 //! the original's range: the road curves away from the line it flies. This
 //! places the craft at the original's pose and fires through
-//! [`oag_gameplay::projectile::fire_rocket`], the call both the player and an
+//! [`oag_weapons::projectile::fire_rocket`], the call both the player and an
 //! opponent make.
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_game::race;
-use oag_gameplay::projectile;
+use oag_weapons::projectile;
 
 const TRACK: &str = "Data\\Environments\\16_Track\\track.vex";
 
@@ -101,7 +101,8 @@ fn a_volley_from_the_originals_pose_is_laid_at_the_craft_and_cruises_at_the_clas
             .map(|s| world.projectiles.slots[s].position)
             .collect();
         let impacts = projectile::step(
-            &mut world,
+            &mut world.projectiles,
+            &mut world.ships[..world.ship_count as usize],
             dt,
             race.collision(),
             None,

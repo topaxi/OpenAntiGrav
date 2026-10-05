@@ -364,9 +364,9 @@ const _: () = assert!(oag_render::exhaust::MAX_TRAILS >= MAX_SHIPS);
 /// Same reason as [`EXHAUST_SEED`]'s assertion above, for the Cannon's own
 /// two quads: `oag_render::weapon_quads` sizes its buffers for
 /// [`oag_render::weapon_quads::MAX_ROUNDS`] and cannot import
-/// `oag_gameplay::projectile::MAX_PROJECTILES` itself.
+/// `oag_weapons::projectile::MAX_PROJECTILES` itself.
 const _: () =
-    assert!(oag_render::weapon_quads::MAX_ROUNDS >= oag_gameplay::projectile::MAX_PROJECTILES);
+    assert!(oag_render::weapon_quads::MAX_ROUNDS >= oag_weapons::projectile::MAX_PROJECTILES);
 
 /// Seed for spark spawn parameters, kept distinct from [`SEED`] and
 /// [`EXHAUST_SEED`] for the same determinism reason.

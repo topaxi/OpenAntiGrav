@@ -38,14 +38,14 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
     assert_eq!(beam.owner, 0);
     assert_eq!(
         beam.kind,
-        oag_gameplay::projectile::leach_beam::Kind::Unlocked,
+        oag_weapons::projectile::leach_beam::Kind::Unlocked,
         "nothing is in the window, so this must be the unlocked arm"
     );
 
     // Past the 0.75-second fizzle the unlocked arm runs on - which is an engine
     // literal rather than this fixture's `active_time`, so the loop is sized on
     // the constant itself rather than on the table.
-    let ticks = (oag_gameplay::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.dt()).ceil()
+    let ticks = (oag_weapons::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.dt()).ceil()
         as usize
         + 2;
     for _ in 0..ticks {
@@ -120,7 +120,7 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
     };
     let mut control = build();
     let mut beamed = build();
-    beamed.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+    beamed.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
         0, 1, &stats,
     ));
 
@@ -320,7 +320,7 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
         }
         race.sim.world.leach_beam.expect("the press must fire").kind
     };
-    use oag_gameplay::projectile::leach_beam::Kind;
+    use oag_weapons::projectile::leach_beam::Kind;
     // The Pulse arrowheads close in about 0.34 s (20 ticks); 5 ticks is a first
     // sighting, 40 is well after it.
     let early = kind_at(true, 5);

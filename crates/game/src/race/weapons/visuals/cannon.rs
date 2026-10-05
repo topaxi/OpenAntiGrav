@@ -46,7 +46,7 @@ impl Race {
     /// (`0x088651d8`) loads [`CANNON_MODEL_ENTRY`] into every round instance's
     /// own scene node, velocity-oriented like the Rocket's: a round is a body
     /// in flight with a direction of travel, and
-    /// `oag_gameplay::projectile::cannon::launch` gives it no independent
+    /// `oag_weapons::projectile::cannon::launch` gives it no independent
     /// orientation to read.
     ///
     /// **On Wipeout HD, one per round under the flash window, at the muzzle** -
@@ -149,7 +149,7 @@ impl Race {
     /// Every live Cannon round still inside the flash window, with its slot.
     fn flashing_cannon_rounds(
         &self,
-    ) -> impl Iterator<Item = (usize, &oag_gameplay::projectile::Projectile)> {
+    ) -> impl Iterator<Item = (usize, &oag_weapons::projectile::Projectile)> {
         use oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS;
         self.sim
             .world
@@ -159,7 +159,7 @@ impl Race {
             .enumerate()
             .filter(|(_, projectile)| {
                 projectile.kind == Some(oag_tables::weapons::Weapon::Cannon)
-                    && oag_gameplay::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime
+                    && oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime
                         < FLASH_WINDOW_SECONDS
             })
     }
@@ -177,7 +177,7 @@ impl Race {
     /// off one bit of the craft's own round count (`0x0010fc4c`), and this
     /// engine's spawn already picked a side off the same parity when it laid
     /// the round a quarter-hull to the left or right of the nose
-    /// (`oag_gameplay::projectile::cannon::launch`). The side is read back
+    /// (`oag_weapons::projectile::cannon::launch`). The side is read back
     /// from which side of the craft the round is on rather than carried as
     /// new simulation state, so the flash sits on the side the round's own
     /// streak starts from; whether this engine's left is the original's
@@ -189,7 +189,7 @@ impl Race {
     fn cannon_muzzle_matrix(
         &self,
         draw: &CannonDraw,
-        projectile: &oag_gameplay::projectile::Projectile,
+        projectile: &oag_weapons::projectile::Projectile,
     ) -> Option<(Vec3, [Vec3; 3])> {
         let slot = usize::from(projectile.owner);
         let body = &self.sim.world.ships.get(slot)?.physics.body;

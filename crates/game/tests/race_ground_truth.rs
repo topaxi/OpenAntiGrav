@@ -1214,7 +1214,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
          trigger missed the volume or the class's <Pickupodds> did not resolve",
     );
     assert!(
-        oag_gameplay::pickup::IMPLEMENTED.contains(&granted),
+        oag_weapons::pickup::IMPLEMENTED.contains(&granted),
         "the pad handed out {granted:?}, which nothing can fire or absorb"
     );
     println!("granted {granted:?} off the disc's own odds");
@@ -1316,7 +1316,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
 ///
 /// # What this is for, and what the unit tests cannot do
 ///
-/// `oag_gameplay::projectile`'s own tests fly rockets down a synthetic corridor:
+/// `oag_weapons::projectile`'s own tests fly rockets down a synthetic corridor:
 /// one quad, authored by the test, at a distance the test chose. **Every
 /// number in them is invented**, including the geometry. This is the only check
 /// that a rocket at the disc's own authored speed, launched from the disc's own
@@ -1392,7 +1392,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
         race.sim.world.projectiles.live(),
-        oag_gameplay::projectile::ROCKET_SHOTS,
+        oag_weapons::projectile::ROCKET_SHOTS,
         "firing a rocket on a real track did not put a full volley in the air"
     );
 
@@ -1402,7 +1402,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // asserted as a *fan* rather than eyeballed: at this angle a volley and
     // three copies of one shot look identical in a screenshot.
     let right = race.ship().physics.body.right();
-    let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
+    let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
         .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
         .collect();
     println!("lateral velocity components off the disc's own spread: {lateral:?}");
@@ -1429,7 +1429,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // authored `venomspeed` 800 alone over [`KMH_PER_UNIT_PER_SECOND`]
     // (277.78 with `launchSpeed` 200 added until 2026-10-01).
     let mut ticks = 1;
-    let mut last_alive = [0usize; oag_gameplay::projectile::ROCKET_SHOTS];
+    let mut last_alive = [0usize; oag_weapons::projectile::ROCKET_SHOTS];
     let mut furthest = 0.0f32;
     let mut travelled = 0.0f32;
     let mut previous = race.sim.world.projectiles.slots[0].position;
@@ -1463,7 +1463,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
 
     // The reap in ticks, so a shot that ended on geometry is the one that
     // ended sooner than it.
-    let reap = (oag_gameplay::projectile::MAX_FLIGHT_SECONDS / race.dt()) as usize;
+    let reap = (oag_weapons::projectile::MAX_FLIGHT_SECONDS / race.dt()) as usize;
     let stopped = last_alive.iter().filter(|&&t| t < reap).count();
 
     // The middle shot is aimed down the craft's own forward axis, so it is
@@ -1481,7 +1481,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     assert!(
         stopped >= 2,
         "only {stopped} of {} rockets met the collision soup: {last_alive:?}",
-        oag_gameplay::projectile::ROCKET_SHOTS
+        oag_weapons::projectile::ROCKET_SHOTS
     );
 }
 

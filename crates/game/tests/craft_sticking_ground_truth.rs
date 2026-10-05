@@ -132,7 +132,7 @@ fn image() -> Option<PathBuf> {
 ///
 /// **Re-baselined to `2_000` when the Cannon's base speed stopped being a
 /// guess, and the midpoint rule it used to follow no longer applies.**
-/// `oag_gameplay::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it
+/// `oag_weapons::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it
 /// is a *measured* `500.0` (confidence 90 - `func_0x00060af4` is three
 /// instructions returning a flat `500.0f`). This scenario is a `SingleRace`
 /// with weapons live, so faster rounds land more hits, more hits mean more

@@ -202,7 +202,7 @@ impl Body {
     ///
     /// **Ours.** The original applies `<Rocket blastforce>` through something
     /// unread; that it is an impulse rather than a force held over some duration
-    /// is this project's reading. See `oag_gameplay::projectile`.
+    /// is this project's reading. See `oag_weapons::projectile`.
     pub fn apply_impulse(&mut self, impulse: Vec3) {
         if self.mass > 0.0 {
             self.linear_velocity += impulse / self.mass;

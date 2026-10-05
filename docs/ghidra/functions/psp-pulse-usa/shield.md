@@ -233,7 +233,7 @@ if (FUN_0883e37c(entity) && source == 2 && entity->fx_count /* +0xca8 */ != 0) {
 
 Confidence **88**: a clean decompile, both call sites read, and measured.
 
-**Ported** as `oag_game::race::hit_sparks`, Pulse only. `oag_gameplay::projectile::WeaponHit::landed`
+**Ported** as `oag_game::race::hit_sparks`, Pulse only. `oag_weapons::projectile::WeaponHit::landed`
 reports each hit that got through `Ship_Damage`'s gate as a per-tick output.
 Three choices are not measured. The cooldown is per locator but not shared
 with wall contacts. The display-mask gate is not modelled. The locator picks
@@ -1097,7 +1097,7 @@ exactly four callers:
 | Caller | What it adds | Port |
 | --- | --- | --- |
 | `Zone_Update` (`0x0882f700`) | `g_zone_recharge` on a clean zone ([zone-mode.md](zone-mode.md)) | `oag_race::zone` |
-| `Ship_ApplyPendingWeaponRepair` (`0x0883f228`) | the LeachBeam's repair ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)) | `oag_gameplay::projectile::leach_beam` |
+| `Ship_ApplyPendingWeaponRepair` (`0x0883f228`) | the LeachBeam's repair ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)) | `oag_weapons::projectile::leach_beam` |
 | `FUN_08844ec4`, the absorb handler | the held weapon's own `<Stats absorb>`, thirteen arms ([pickups.md](../../../gameplay/pickups.md)) | `Race::spend_pickup` |
 | **`Ship_RefillLapShield` (`0x0883de30`)** | **a fifth of the maximum, on a completed lap in an Eliminator** | `Race::eliminator_lap_health_refill` |
 

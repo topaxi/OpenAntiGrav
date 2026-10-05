@@ -149,7 +149,7 @@ impl Race {
     /// on this tick. `leach` selects the LeachBeam's variant.
     pub(super) fn throw_hit_sparks(
         &mut self,
-        hits: &[oag_gameplay::projectile::WeaponHit],
+        hits: &[oag_weapons::projectile::WeaponHit],
         leach: bool,
     ) {
         let player = self.sim.world.primary_slot();

@@ -204,8 +204,8 @@ fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
 #[test]
 fn the_plasma_flare_scale_follows_the_charge() {
     use crate::race::weapons::plasma_flare_scale;
-    use oag_gameplay::projectile::plasma::CHARGE_SECONDS;
     use oag_tables::weapons::Weapon;
+    use oag_weapons::projectile::plasma::CHARGE_SECONDS;
 
     let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0, false);
     assert!(
@@ -252,8 +252,8 @@ fn the_plasma_flare_scale_follows_the_charge() {
 #[test]
 fn the_plasma_flare_scale_halves_in_the_cockpit() {
     use crate::race::weapons::plasma_flare_scale;
-    use oag_gameplay::projectile::plasma::CHARGE_SECONDS;
     use oag_tables::weapons::Weapon;
+    use oag_weapons::projectile::plasma::CHARGE_SECONDS;
 
     let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0, true);
     assert!(

@@ -267,18 +267,18 @@ pub struct RaceView {
     /// source that authors one. All `None` on a PSP-sourced race.
     pub(super) engine_flare: [Option<psys::Playing>; MAX_SHIPS],
     /// The flare instance riding each live projectile's **primary** anchor,
-    /// indexed by its [`oag_gameplay::projectile`] slot.
+    /// indexed by its [`oag_weapons::projectile`] slot.
     ///
     /// The slot **is** the identity: it is fixed for a projectile's whole
     /// life and reused the moment the projectile is gone, which is exactly
     /// when the flare should be a fresh one.
-    pub(super) projectile_flare: [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
+    pub(super) projectile_flare: [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
     /// The Missile's own **second**, orbiting flare instance - see
     /// [`weapons::missile_flare_anchors`]. `None` for every slot that is not
     /// currently a live Missile; every other kind rides [`Self::projectile_flare`]
     /// alone.
     pub(super) projectile_flare_orbit:
-        [Option<psys::Playing>; oag_gameplay::projectile::MAX_PROJECTILES],
+        [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
     /// The [`weapons::visuals::QUAKE_EFFECT`] instance riding the travelling
     /// wave, or `None` when no Quake is in flight. One slot, not an array,
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
@@ -288,11 +288,11 @@ pub struct RaceView {
     /// Repulser carries: its blast, its forward and backward wave, then its
     /// fork wave. See `Race::advance_repulser_visual`.
     pub(super) repulser_effects:
-        [[Option<psys::Playing>; 4]; oag_gameplay::projectile::repulser::POOL_SIZE],
+        [[Option<psys::Playing>; 4]; oag_weapons::projectile::repulser::POOL_SIZE],
     /// Per [`oag_gameplay::World::repulsers`] slot, its field model's eases -
     /// see [`repulser_field`].
     pub(super) repulser_fields:
-        [Option<repulser_field::Field>; oag_gameplay::projectile::repulser::POOL_SIZE],
+        [Option<repulser_field::Field>; oag_weapons::projectile::repulser::POOL_SIZE],
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,
@@ -313,7 +313,7 @@ pub struct RaceView {
     /// one; see [`Race::advance_leach_beam_visual`].
     pub(super) leach_charge_effect: [Option<psys::Playing>; MAX_SHIPS],
     /// The LeachBeam ribbon's own render-side state - the amplitude table and
-    /// scroll phase [`oag_gameplay::projectile::leach_beam::Beam`]
+    /// scroll phase [`oag_weapons::projectile::leach_beam::Beam`]
     /// deliberately does not carry, see `oag_render::beam`'s module doc
     /// comment. `Some` for exactly as long as [`oag_gameplay::World::leach_beam`]
     /// is `Some(Kind::Locked)`, rebuilt fresh each time a new beam locks on.

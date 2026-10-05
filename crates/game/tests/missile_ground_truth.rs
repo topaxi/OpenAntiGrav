@@ -362,10 +362,10 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
 
     let mut rng = oag_core::Rng::new(1);
     let drawn = (0..256).any(|_| {
-        oag_gameplay::pickup::draw(
+        oag_weapons::pickup::draw(
             &mut rng,
             table,
-            oag_gameplay::pickup::Driver::HUMAN_UNPLACED,
+            oag_weapons::pickup::Driver::HUMAN_UNPLACED,
             None,
             None,
         ) == Some(Weapon::Missile)
@@ -421,7 +421,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
-    use oag_gameplay::projectile::missile::SELF_DETONATE_SECONDS;
+    use oag_weapons::projectile::missile::SELF_DETONATE_SECONDS;
 
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);

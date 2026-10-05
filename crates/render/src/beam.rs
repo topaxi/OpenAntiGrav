@@ -127,7 +127,7 @@ pub const MAX_VERTICES: usize = 4 * (MAX_SEGMENTS as usize + 1);
 
 /// The ribbon's own render-side state: the amplitude table, the scroll phase,
 /// the per-tick cursor and the pulse clock, none of which
-/// [`oag_gameplay::projectile::leach_beam::Beam`] carries - the simulation
+/// [`oag_weapons::projectile::leach_beam::Beam`] carries - the simulation
 /// must not hold render geometry, and this state is driven by it.
 #[derive(Debug, Clone)]
 pub struct Ribbon {
@@ -247,7 +247,7 @@ pub struct Frame {
     /// its two strips along view-space `x` and `y`.
     pub camera_right: Vec3,
     pub camera_up: Vec3,
-    /// [`oag_gameplay::projectile::leach_beam::Beam::range`].
+    /// [`oag_weapons::projectile::leach_beam::Beam::range`].
     pub range: f32,
     /// The link's coverage: `1.0` while connected, the disconnect fade after.
     pub alpha: f32,

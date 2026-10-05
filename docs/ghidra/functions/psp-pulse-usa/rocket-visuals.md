@@ -199,7 +199,7 @@ Both branch on the same return code:
 A rocket therefore skims the surface, glances off walls and drops when it runs
 out of track - it is not a straight-line projectile.
 
-**Now implemented, in its own commit.** `oag_gameplay::projectile` probes toward
+**Now implemented, in its own commit.** `oag_weapons::projectile` probes toward
 the surface each tick, rides `3.0` above what it finds, turns its velocity
 parallel to it, falls at `50.0` when it finds nothing, and stops only on a craft
 or a wall. It is weapon-agnostic, so the Missile and the rest inherit it.
@@ -225,7 +225,7 @@ decompile the same day, reads `0`/`4` on the *probe* as nothing at all - no
 fall, no ride - and on the *travel segment* as bounce/detonate, with a floor
 code pushing the missile to `hit + normal * g_ride_height` and nothing more.
 
-Until 2026-09-13 `oag_gameplay::projectile` decided wall-versus-floor from the
+Until 2026-09-13 `oag_weapons::projectile` decided wall-versus-floor from the
 **angle** of the hit instead, under a comment claiming the raycaster returned no
 code, and that was a bug on every title: a wall met at under ~15 degrees was
 treated as floor clipping and ignored, so the rocket flew *through* the barrier
@@ -284,7 +284,7 @@ names at confidence 92 but **does not state a unit**, so this adds to that page
 rather than contradicting it.
 
 **This one is now implemented**, in its own commit separate from the visuals:
-`oag_gameplay::projectile::launch` divides by
+`oag_weapons::projectile::launch` divides by
 [`oag_core::math::SPEED_TO_KMH`](../../../../crates/core/src/math.rs) at the call
 site, mirroring the original, which converts in the consumer rather than in the
 lookup. A Venom rocket went from `1000` units/s - **3600 km/h** on our own HUD's
@@ -398,7 +398,7 @@ anyone ([mine.md](mine.md)'s 2026-09-16 section). **Ported the same day** as
 `Projectiles::sweep_rockets_through_laid`: the mine or bomb reports an
 ending with no blast, the rocket is spent without one.
 
-**Ported the same day**: `oag_gameplay::projectile::flight` gives the Rocket
+**Ported the same day**: `oag_weapons::projectile::flight` gives the Rocket
 the Plasma's two arms - a craft hit routes to `blast::blast_direct_hit`, a
 wall hit carries `blast: false` - and `crates/gameplay/tests/determinism.rs`
 moved its constants for it, with the scenario's target moved into the
@@ -417,7 +417,7 @@ measured `600.0` radius) and `Cue::RocketHitWall`/`Cue::RocketHitShip` (off
 `Impact::struck`, on the same bolt emitter) are in
 `crates/game/src/audio/sfx/cue.rs`. The 5.0 s pool-reap timeout this page's
 own "What a rocket hit spends" section leaves silent turned out not to need
-disambiguating: `crates/gameplay/src/projectile/flight.rs`'s own Rocket
+disambiguating: `crates/weapons/src/projectile/flight.rs`'s own Rocket
 timeout branch resets the slot without writing an `Impact` at all, so the
 port's own impacts loop never sees a `struck: None` from that path - only
 from a real wall hit.

@@ -66,7 +66,7 @@ impl Race {
         // `None` where the weapon table authors a speed per class and this
         // race's rung is outside them - the shot does not happen rather than
         // flying at a rung it was not tuned for.
-        let Some(fired) = oag_gameplay::projectile::fire_rocket(
+        let Some(fired) = oag_weapons::projectile::fire_rocket(
             &mut self.sim.world.projectiles,
             &ship.physics,
             &stats,
@@ -116,7 +116,7 @@ impl Race {
             .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
             .map(|tangent| tangent.dot(ship.physics.body.forward()))
             .unwrap_or(1.0);
-        self.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
             slot as u8,
             progress,
             forward_dot_tangent,
@@ -167,7 +167,7 @@ impl Race {
         // The same window `Race::sight_target` runs for the player, from the
         // craft's own position - the LeachBeam has no recovered launch offset to
         // measure from, so neither path invents one.
-        let Some(target) = oag_gameplay::projectile::missile::lock_window(
+        let Some(target) = oag_weapons::projectile::missile::lock_window(
             &self.sim.world.ships[..count],
             slot as u8,
             ship.physics.body.position,
@@ -186,7 +186,7 @@ impl Race {
             crate::audio::sfx::Cue::Leach,
             slot,
         ));
-        self.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+        self.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
             slot as u8, target, &stats,
         ));
         true
@@ -212,7 +212,7 @@ impl Race {
             return false;
         };
         let ship = &self.sim.world.ships[slot];
-        let Some((position, velocity)) = oag_gameplay::projectile::plasma::launch(
+        let Some((position, velocity)) = oag_weapons::projectile::plasma::launch(
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
@@ -222,14 +222,14 @@ impl Race {
         };
         // The same wind-up the player's bolt takes - see
         // `Race::spend_pickup`'s Plasma arm and
-        // `oag_gameplay::projectile::plasma::CHARGE_SECONDS`. An opponent's
+        // `oag_weapons::projectile::plasma::CHARGE_SECONDS`. An opponent's
         // charging bolt occupies the array the same way, so the
         // "none already in flight" gate above sees it.
         self.sim.world.projectiles.charge_up(
             position,
             velocity,
             slot as u8,
-            oag_gameplay::projectile::plasma::CHARGE_SECONDS,
+            oag_weapons::projectile::plasma::CHARGE_SECONDS,
         )
     }
 
@@ -253,12 +253,12 @@ impl Race {
         else {
             return false;
         };
-        if self.sim.world.projectiles.live() >= oag_gameplay::projectile::MAX_PROJECTILES {
+        if self.sim.world.projectiles.live() >= oag_weapons::projectile::MAX_PROJECTILES {
             return false;
         }
         let physics = self.sim.world.ships[slot].physics;
         let dimensions = self.sim.world.ships[slot].handling.dimensions;
-        let Some((position, velocity)) = oag_gameplay::projectile::shuriken::launch(
+        let Some((position, velocity)) = oag_weapons::projectile::shuriken::launch(
             &physics,
             &dimensions,
             &stats,
@@ -540,7 +540,7 @@ impl Race {
         let Some(weapons) = self.sim.weapons.as_ref() else {
             return false;
         };
-        let Some(drop) = oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons) else {
+        let Some(drop) = oag_weapons::projectile::mine::Drop::for_weapon(weapon, weapons) else {
             // The table authors no block for this weapon, so nothing to lay.
             // Falls through to absorb, which is the right answer for a pickup
             // that cannot be spent.
@@ -607,7 +607,7 @@ impl Race {
         forward: oag_core::math::Vec3,
         right: oag_core::math::Vec3,
     ) -> Option<oag_ai::Hazard> {
-        let radii = oag_gameplay::projectile::TriggerRadii::from_table(self.sim.weapons.as_ref());
+        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_ref());
         let origin = self.sim.world.ships[slot].physics.body.position;
         // Half the hull's width, so a charge the craft would clip with a wingtip
         // counts as much as one it would drive over.

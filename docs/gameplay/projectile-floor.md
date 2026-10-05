@@ -3,9 +3,9 @@
 How a Rocket (and the Missile, Plasma and Shuriken with it) rides the track,
 why it used to leave the circuit through the barrier or blow up on a dip, and
 what the fix was. Implemented in
-[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs)
+[`oag_weapons::projectile`](../../crates/weapons/src/projectile.rs)
 (`Projectiles::advance`) and
-[`projectile/geometry.rs`](../../crates/gameplay/src/projectile/geometry.rs)
+[`projectile/geometry.rs`](../../crates/weapons/src/projectile/geometry.rs)
 (`nearest_hit`); the recovered model is on
 [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#flight-follows-the-track).
 

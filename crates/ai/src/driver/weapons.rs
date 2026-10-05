@@ -39,7 +39,7 @@ const WEAPON_RANGE: f32 = 200.0;
 
 /// And how close is too close.
 ///
-/// `oag_gameplay::projectile::blast` damages **every** craft in radius,
+/// `oag_weapons::projectile::blast` damages **every** craft in radius,
 /// including the one that fired, so a rocket let go at point-blank is a rocket
 /// fired at yourself.
 const WEAPON_MIN_RANGE: f32 = 20.0;

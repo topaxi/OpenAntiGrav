@@ -4,7 +4,7 @@
 `Weapon_DropMines` (`0x088675cc`) lays one mine every `0.1 s` and decrements a
 per-craft round counter at `craft+0x1ac` until it reaches zero, at which point
 it clears its own fire bit. Two static sweeps found nothing else that writes
-that counter, so the number a press starts it at - `oag_gameplay::projectile::
+that counter, so the number a press starts it at - `oag_weapons::projectile::
 mine::CLUSTER` - was invented. This measures it instead, and records who
 writes the counter while it is at it.
 

@@ -192,6 +192,7 @@ Existing crates:
 | `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
 | `oag-race` | `crates/race` | Race rules: modes, lap timing, track progress. |
 | `oag-ai` | `crates/ai` | Opponent behaviour: a driver that follows the authored racing line and emits ship controls. Depends on `oag-core` and `oag-physics` only. |
+| `oag-weapons` | `crates/weapons` | Pickups, projectiles, blasts, beams, disruption and slowdown. Below `oag-gameplay`, which embeds its state; it reaches a craft only through the `Craft` trait. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct, the `InputSnapshot` type the simulation consumes, spline spawning. |
 | `oag-replay` | `crates/replay` | Replays and ghosts: the per-slot input stream as the truth, a state hash a second so playback reports a desync instead of diverging, and a ghost lap's pose track. See [ADR-0055](docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
@@ -203,8 +204,7 @@ Existing crates:
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 | `oag-testdata` | `crates/testdata` | **A dev-dependency, never a runtime one.** Where a test finds the disc images this project does not ship, and the `OAG_REQUIRE_GAME_DATA` skip-or-fail contract, in one place instead of 130 copies. Holds no game knowledge at all - no image names, no archive names, no title. |
 
-Later crates (`oag-weapons`,
-`oag-net`) are
+Later crates (`oag-net`) are
 added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.

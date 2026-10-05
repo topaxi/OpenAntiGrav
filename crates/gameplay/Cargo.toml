@@ -18,6 +18,7 @@ oag-core.workspace = true
 oag-formats.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
+oag-weapons.workspace = true
 
 [lints]
 workspace = true

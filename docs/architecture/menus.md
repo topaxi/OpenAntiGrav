@@ -179,7 +179,7 @@ rather than a gap.** Wipeout Pure's own front end authors **five**
 of them: see
 [handling-stats.md](../formats/handling-stats.md#pures-fifth-rung-is-raceable-and-speedclass-still-has-four-variants)
 for how `Stats::class_named`, `Global::class_named` and
-`oag_gameplay::pickup::table_for` resolve a rung by the name the disc spells,
+`oag_weapons::pickup::table_for` resolve a rung by the name the disc spells,
 with no enum widened to fit it. Despite that, **the ordinary per-title RACE
 page offers four**, even when the booted title is Wipeout Pure - `VECTOR` is
 offered on the RACE REMIX page only.

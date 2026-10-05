@@ -32,7 +32,7 @@ went off and hurts nobody. Carried as `Impact::blast`, a flag rather than a seco
 array so the visual side still plays the explosion.
 
 **Two live claims fell over on the way and are corrected in place but not
-fixed.** (1) `oag_gameplay::projectile`'s `Impact` says a flat blast is ours
+fixed.** (1) `oag_weapons::projectile`'s `Impact` says a flat blast is ours
 because "nothing has been read that says" the original falls off. Something has:
 `Missile_ApplyBlastForce` adds
 `normalize(d) * (1 - |d|/blastradius) * blastforce` and **excludes the craft

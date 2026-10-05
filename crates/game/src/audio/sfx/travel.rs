@@ -17,7 +17,7 @@
 use oag_audio::{Emitter, Listener, Mixer, Play, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_gameplay::projectile::{MAX_PROJECTILES, Projectile};
+use oag_weapons::projectile::{MAX_PROJECTILES, Projectile};
 
 use super::{Banks, Cue};
 

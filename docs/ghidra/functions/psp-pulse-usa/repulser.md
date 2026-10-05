@@ -475,7 +475,7 @@ aimed (`+0x58`). No Repulser-specific rule exists.
 ## What is built (2026-10-04)
 
 `oag_tables::weapons::RepulserStats`, `oag_race::Course::{centre, corridor_width}`,
-`oag_gameplay::projectile::repulser` (the timeline, the walk, the sweep, the hit)
+`oag_weapons::projectile::repulser` (the timeline, the walk, the sweep, the hit)
 and, in `oag_game`, `Race::fire_repulser`, `advance_repulsers` (the craft sweep,
 the Mine/Bomb sweep, `REPULSOR`/`REPULSORHIT`) and `advance_repulser_visual`
 (`WO_REPULSER_BLAST`, two `WO_REPULSER`, screen flash kind 2). Chosen, not
@@ -490,7 +490,7 @@ once, which is a chosen rate. Its basis comes from the nearest spline sample to
 the firer, where the original reads the AI-track point under the firer's
 cursor. `WO_REPULSER_BLAST` takes the field's basis turned by the `+0x21c` spin,
 through `Stage::orient`/`stretch`. The third wave forks at a split
-(`oag_gameplay::projectile::repulser::fork` on `oag_race::Course::branches`;
+(`oag_weapons::projectile::repulser::fork` on `oag_race::Course::branches`;
 05, 07, 14 and 23 carry a branch, `repulser_fork_ground_truth`), off the
 forward wave only. The fork is
 hashed only while live, so every committed reference reproduced unchanged.

@@ -278,7 +278,7 @@ the subsystem.
 
 ## What this changes for the engine
 
-`oag_gameplay::projectile` fired one rocket per press, with `spread` decoded
+`oag_weapons::projectile` fired one rocket per press, with `spread` decoded
 in name only and the count recorded as an open question. **Both are now
 recovered**: it fires three, together, at `-spread`, `0` and `+spread` about the
 craft's up axis, and `spread` is decoded and consumed. See

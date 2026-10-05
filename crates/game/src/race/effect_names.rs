@@ -98,7 +98,7 @@ pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
 /// The Plasma pool walker `Plasmas_Update` (`0x0886b490`) runs a teardown pass
 /// over every entity whose destroy bit (`+0x3c & 4`) is set - raised by
 /// `Plasma_Update`'s wall branch and by the walker's own hard
-/// [`oag_gameplay::projectile::plasma::MAX_FLIGHT_SECONDS`] reap - and that
+/// [`oag_weapons::projectile::plasma::MAX_FLIGHT_SECONDS`] reap - and that
 /// pass calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the bolt's own
 /// position (`entity+0xa0`). That function allocates a `0x170`-byte blast
 /// object and constructs it with `PlasmaBlast_Construct` (`0x0885fd90`),
@@ -226,7 +226,7 @@ pub const MISSILE_EXPLO_EFFECT: &str = "WO_MISSILE_EXPLO";
 /// **Recovered, confidence 92** (the same reading as the flight model's
 /// 12.0 probe length). `Missile_Update`'s wall branch mirrors the velocity,
 /// pushes off the surface and "fires `WO_MISSILE_BOUNCE` with the
-/// `MISSILEEXPWALL` cue" up to [`oag_gameplay::projectile::missile::MAX_BOUNCES`]
+/// `MISSILEEXPWALL` cue" up to [`oag_weapons::projectile::missile::MAX_BOUNCES`]
 /// times before the fifth attempt gives up and reaches
 /// [`MISSILE_EXPLO_EFFECT`] instead - see
 /// `docs/ghidra/functions/psp-pulse-usa/missile.md#the-flight-model-the-rockets-with-one-literal-changed`.
@@ -350,7 +350,7 @@ pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
 ///
 /// **A craft hit does not reach this call at all** - the struck hull throws
 /// its own damage sparks instead, from `Ship_Damage` (`race::hit_sparks`). See
-/// `oag_gameplay::projectile::cannon`'s own module doc, "The wall hit spawns
+/// `oag_weapons::projectile::cannon`'s own module doc, "The wall hit spawns
 /// a spark effect; the craft hit does not", for the separate cylinder-test
 /// path that applies damage and a sound cue but never calls `Psys_Spawn_q`.
 /// [`Race::blast_for`] mirrors that split: `Weapon::Cannon` only reaches this

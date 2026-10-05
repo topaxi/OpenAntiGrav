@@ -22,7 +22,7 @@
 //!
 //! **Every other title keeps the frozen craft pose**, which is chosen, not
 //! measured: HD's own laid-charge poses live in a different binary and were
-//! not read. See `oag_gameplay::projectile::mine::frozen_pose`.
+//! not read. See `oag_weapons::projectile::mine::frozen_pose`.
 
 use super::super::*;
 
@@ -39,7 +39,11 @@ pub(in crate::race) const PULSE_MINE_SPIN_RATE: f32 = 4.0;
 
 /// One laid charge's model matrix. `pulse` selects Pulse's own measured poses
 /// over the frozen craft pose - see this module's doc comment.
-pub(super) fn matrix(slot: usize, projectile: &oag_gameplay::Projectile, pulse: bool) -> Mat4 {
+pub(super) fn matrix(
+    slot: usize,
+    projectile: &oag_weapons::projectile::Projectile,
+    pulse: bool,
+) -> Mat4 {
     use oag_tables::weapons::Weapon;
     match (pulse, projectile.kind) {
         (true, Some(Weapon::Mine)) => pulse_mine(slot, projectile.position, projectile.lifetime),

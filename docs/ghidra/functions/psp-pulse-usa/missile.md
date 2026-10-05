@@ -8,8 +8,8 @@ distances are authored, and the lock rule, the guidance law, the speed ramp and
 the flight model are all read at instruction level. What is left invented is
 listed under [What is still ours](#what-is-still-ours), and it is short.
 
-Ported in `crates/gameplay/src/projectile/missile.rs` and
-`crates/gameplay/src/projectile.rs`.
+Ported in `crates/weapons/src/projectile/missile.rs` and
+`crates/weapons/src/projectile.rs`.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
@@ -275,7 +275,7 @@ So the original refuses to lock a craft that is already taking a hit this frame.
 
 This engine applies a blast the moment it lands, so it has no deferred-damage
 queue for such a count to count. The condition is recorded and deliberately not
-ported; `oag_gameplay::projectile::missile::lock` says so at its definition.
+ported; `oag_weapons::projectile::missile::lock` says so at its definition.
 
 **That function is also the consumer `<Global slowdown_limit>` has been missing.**
 `docs/gameplay/pickups.md` records the slowdown mechanic as having none;
@@ -360,7 +360,7 @@ that is, **the firing craft's own speed in km/h plus `launchSpeed`**, with a
 but *not* to the stored ramp base.
 
 **This is the consumer `launchSpeed` was missing.**
-`crates/gameplay/src/projectile.rs` records, of the Rocket, that "what
+`crates/weapons/src/projectile.rs` records, of the Rocket, that "what
 `launchSpeed` *is* for has not been found". For the Missile it is an additive
 muzzle velocity over the launcher, and the class speed is where the ramp *ends*.
 **Not propagated to the Rocket**, which has its own `Rocket_Init` and has not been
@@ -499,7 +499,7 @@ for (i = 0; i < ship_count; i++) {
 ```
 
 **Linear falloff to nothing at the radius**, and the *damage* does not go through
-it at all. `oag_gameplay::projectile::blast` spends both flat and includes the
+it at all. `oag_weapons::projectile::blast` spends both flat and includes the
 firer; both are recorded there as ours and are now known to be wrong rather than
 merely unevidenced. Not changed in the same pass, because it moves how every
 weapon lands.
@@ -735,7 +735,7 @@ table were **ours** on the grounds that no grant existed to read:
 - the weighted draw;
 - the inventory being one slot.
 
-All three are recovered now. **The implementation in `oag_gameplay::pickup` was
+All three are recovered now. **The implementation in `oag_weapons::pickup` was
 not changed in the same pass** - matching the original means adding the
 front/back blend, the no-repeat rule and the `ai`-versus-`human` split, and that
 moves the world hash for a reason that has nothing to do with the Missile.
@@ -752,7 +752,7 @@ Short, and each is labelled where it lives:
   so `MAX_FLIGHT_SECONDS` is the same safety net the Rocket already had.
 - **Wall versus floor as a geometric test.** Inherited from the Rocket's model;
   this engine's raycaster returns no collision code, so `WALL_FACING` and
-  `RIDEABLE_COS` stand in for one. See `crates/gameplay/src/projectile.rs`.
+  `RIDEABLE_COS` stand in for one. See `crates/weapons/src/projectile.rs`.
 - **Not firing at all when nothing locks.** The original's behaviour on an
   unlocked press has not been read.
 - **The pending-hit condition of the lock**, dropped for the reason above.

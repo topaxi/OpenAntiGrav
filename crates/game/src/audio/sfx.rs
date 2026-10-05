@@ -211,8 +211,8 @@ pub(super) struct SfxVoices {
     /// [`TravelVoices`]: the LeachBeam is `crate::race::Race`'s own single
     /// world-wide instance, the same shape [`Self::shield`] and
     /// [`Self::blowup`] already take for one activation at a time, not a
-    /// slot in [`oag_gameplay::projectile::Projectiles`] - see
-    /// `oag_gameplay::projectile::leach_beam`'s own module doc. Read and
+    /// slot in [`oag_weapons::projectile::Projectiles`] - see
+    /// `oag_weapons::projectile::leach_beam`'s own module doc. Read and
     /// written directly off `race.sim.world.leach_beam` every tick, the same
     /// reason [`Self::plasma_travel`] reads the projectile array directly:
     /// a moving held voice needs this tick's own position.
@@ -597,7 +597,7 @@ impl Audio {
                 .sim
                 .world
                 .leach_beam
-                .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
+                .filter(|beam| beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked);
             match (leach_locked, voices.leach_attach) {
                 (Some(beam), None) => {
                     if let Some(started) = banks.voices(Cue::LeachAttach, &mut voices.rng)
@@ -828,7 +828,7 @@ fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gamepl
 /// ribbon between.
 fn leach_attach_point(
     craft: &[Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],
-    beam: oag_gameplay::projectile::leach_beam::Beam,
+    beam: oag_weapons::projectile::leach_beam::Beam,
 ) -> Option<Vec3> {
     let (owner, _) = (*craft.get(usize::from(beam.owner))?)?;
     let (target, _) = (*craft.get(usize::from(beam.target))?)?;

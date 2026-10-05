@@ -36,12 +36,12 @@ use oag_core::hash::StateHasher;
 use oag_race::{LapGate, Mode, RaceState};
 use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 
-use crate::pickup::Held;
-use crate::projectile::leach_beam::{Beam, Kind as BeamKind};
-use crate::projectile::quake::Wave;
-use crate::projectile::repulser::Repulser;
-use crate::projectile::{Projectile, Projectiles};
 use crate::world::{Controller, Ship, World};
+use oag_weapons::pickup::Held;
+use oag_weapons::projectile::leach_beam::{Beam, Kind as BeamKind};
+use oag_weapons::projectile::quake::Wave;
+use oag_weapons::projectile::repulser::Repulser;
+use oag_weapons::projectile::{Projectile, Projectiles};
 
 /// One 64-bit fingerprint of a whole world.
 ///
@@ -171,13 +171,13 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // shape `write_weapon` gives a pickup. Zero and `0.0` through every
     // scenario the gate runs, so five fixed bytes per ship per tick: adding
     // it moved the committed hashes with no behaviour changing, the third
-    // time this struct has done that. See `crate::disruption`.
+    // time this struct has done that. See `oag_weapons::disruption`.
     write_disruption(hasher, disruption);
     hasher.write_u8(u8::from(*active));
 }
 
-fn write_disruption(hasher: &mut StateHasher, disruption: &crate::disruption::Disruption) {
-    let crate::disruption::Disruption { kind, timer } = disruption;
+fn write_disruption(hasher: &mut StateHasher, disruption: &oag_weapons::disruption::Disruption) {
+    let oag_weapons::disruption::Disruption { kind, timer } = disruption;
     write_effect_kind(hasher, *kind);
     hasher.write_f32(*timer);
 }
@@ -367,7 +367,7 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
     // **The previous grant is state, not a convenience.** The draw refuses to
     // hand out the same weapon twice running, so two runs whose craft carry the
     // same thing but remember different last grants are about to be handed
-    // different pickups. See `crate::pickup::draw`.
+    // different pickups. See `oag_weapons::pickup::draw`.
     write_weapon(hasher, *last);
     // **A drop in progress is state too, and it is the first pickup state that
     // spans ticks.** Two worlds carrying the same Mine differ if one has three
@@ -375,14 +375,14 @@ fn write_held(hasher: &mut StateHasher, held: &Held) {
     // a different number of mines on the track, in different places. The reload
     // goes in for the same reason at finer grain: it decides *which* tick the
     // next one leaves on, and a mine's position is where the craft was on that
-    // tick. See `crate::pickup::Held::advance_drop`.
+    // tick. See `oag_weapons::pickup::Held::advance_drop`.
     hasher.write_u8(*dropping);
     hasher.write_f32(*drop_reload);
     // **The Cannon's own countdown is state that spans ticks too**, for the
     // same two reasons the drop's is: how many rounds are left decides how
     // much longer this craft goes on firing, and the reload decides which
     // tick the next one leaves on. See
-    // `crate::pickup::Held::advance_cannon_reload`.
+    // `oag_weapons::pickup::Held::advance_cannon_reload`.
     hasher.write_u8(*cannon_rounds);
     hasher.write_f32(*cannon_reload);
 }
@@ -664,7 +664,7 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     // state - unlike `orientation` below. `0.0` for every other weapon and for
     // a bolt already in the air, so this only moves the reference for a race
     // that actually fires a Plasma. See
-    // `crate::projectile::plasma::CHARGE_SECONDS`.
+    // `oag_weapons::projectile::plasma::CHARGE_SECONDS`.
     hasher.write_f32(*charge);
     // The surface being ridden decides which way next tick probes, so it is
     // simulation state and not a cached convenience.
@@ -754,7 +754,7 @@ mod tests {
 
     /// A rocket in slot 0 and the same rocket in slot 1 are different worlds -
     /// which is what makes the "first free slot in index order" rule in
-    /// `crate::projectile::Projectiles::spawn` something the gate can see.
+    /// `oag_weapons::projectile::Projectiles::spawn` something the gate can see.
     #[test]
     fn which_slot_a_projectile_is_in_moves_the_hash() {
         let mut first = World::new(1);

@@ -12,8 +12,9 @@ use oag_race::{Mode, RaceState};
 ///
 /// Eight, which is what Pulse grids. A hard array bound rather than a `Vec`
 /// capacity: the limit is real, and making it visible is what keeps the world
-/// snapshot a fixed size.
-pub const MAX_SHIPS: usize = 8;
+/// snapshot a fixed size. Defined once, in `oag-weapons`, which is the lowest crate
+/// that needs it; this is that constant, not a second eight.
+pub const MAX_SHIPS: usize = oag_weapons::MAX_SHIPS;
 
 /// The most players a race can hold, which is the whole grid.
 ///
@@ -98,7 +99,7 @@ pub struct Ship {
     /// What this craft is carrying, if anything.
     ///
     /// Filled by crossing a `Weapon Pad` and emptied by firing or absorbing;
-    /// see [`crate::pickup`], which carries the recovered-versus-ours split for
+    /// see [`oag_weapons::pickup`], which carries the recovered-versus-ours split for
     /// the whole system. Always empty in a mode that races with weapons off,
     /// because such a race has no armed pads at all - the original does not
     /// merely ignore a crossing, it empties the trigger list.
@@ -110,7 +111,7 @@ pub struct Ship {
     /// pickup does to the simulation reaches the hash through
     /// `ShipState::turbo_timer` instead, and the inventory itself changes no
     /// force.
-    pub pickup: crate::pickup::Held,
+    pub pickup: oag_weapons::pickup::Held,
     /// Where this craft's driver last found itself on the racing line.
     ///
     /// Only an opponent uses it - slot 0 is flown by the player - and it is the
@@ -167,7 +168,7 @@ pub struct Ship {
     /// `<Stats slowdown_time>` here - nine writers, all in the weapon
     /// subsystems - and exactly one consumer drains it, once a tick, into
     /// [`oag_physics::ShipState::slowdown_timer`]. That is
-    /// [`crate::slowdown::drain`], and it carries the shield gate: a shielded
+    /// [`oag_weapons::slowdown::drain`], and it carries the shield gate: a shielded
     /// craft takes no slowdown, **and this slot is cleared anyway** rather than
     /// banked, so a hit landed one tick before a shield expires is simply lost.
     ///
@@ -204,12 +205,12 @@ pub struct Ship {
     /// The Disruptor effect this craft is under, if any.
     ///
     /// Pure's `craft+0x134`/`+0x138`/`+0x13c` - a flag, a kind and the seconds
-    /// left - as one [`crate::disruption::Disruption`]. **Here rather than on
+    /// left - as one [`oag_weapons::disruption::Disruption`]. **Here rather than on
     /// [`ShipState`]**, for [`Self::autopilot_timer`]'s reason exactly: what
     /// it changes is which controls the craft is handed, and the composition
     /// root decides that. Hashed, because a craft that cannot thrust is a
     /// different race from one that can.
-    pub disruption: crate::disruption::Disruption,
+    pub disruption: oag_weapons::disruption::Disruption,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -220,14 +221,14 @@ impl Default for Ship {
             physics: ShipState::default(),
             handling: Handling::ZERO,
             segment: 0,
-            pickup: crate::pickup::Held::empty(),
+            pickup: oag_weapons::pickup::Held::empty(),
             driver: oag_ai::Driver::default(),
             weapon_ai: oag_ai::weapon_ai::WeaponAi::default(),
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
             pending_slowdown: 0.0,
             pending_thrust_scale: 1.0,
-            disruption: crate::disruption::Disruption::default(),
+            disruption: oag_weapons::disruption::Disruption::default(),
             active: false,
         }
     }
@@ -357,7 +358,7 @@ pub struct World {
     /// Everything a weapon has put in the air.
     ///
     /// **The field that grows the snapshot**, and it grows it by a constant:
-    /// [`crate::projectile::MAX_PROJECTILES`] slots of plain `Copy` data, sized
+    /// [`oag_weapons::projectile::MAX_PROJECTILES`] slots of plain `Copy` data, sized
     /// the same way `[Ship; MAX_SHIPS]` is and for the same reason. A race must
     /// not change the size of a snapshot, so the array holds free slots rather
     /// than shrinking - see [ADR-0003].
@@ -365,33 +366,33 @@ pub struct World {
     /// Unlike [`Ship::pickup`] this **is** simulation state that moves every
     /// tick, so it is covered by [`crate::hash::hash_world`] rather than left to
     /// reach the determinism gate indirectly.
-    pub projectiles: crate::projectile::Projectiles,
+    pub projectiles: oag_weapons::projectile::Projectiles,
     /// The single travelling Quake wave, or `None` when none is in flight.
     ///
-    /// Not part of [`Self::projectiles`] - see `crate::projectile::quake`'s
+    /// Not part of [`Self::projectiles`] - see `oag_weapons::projectile::quake`'s
     /// module doc comment for why: the original's own pool is a single slot,
     /// not an array, and it carries a travelling *distance* rather than a
     /// position and a velocity. Simulation state all the same, so it is
     /// covered by [`crate::hash::hash_world`] exactly as [`Self::projectiles`]
     /// is.
-    pub quake: Option<crate::projectile::quake::Wave>,
+    pub quake: Option<oag_weapons::projectile::quake::Wave>,
     /// The single LeachBeam link, or `None` when none is in flight.
     ///
     /// Beside [`Self::quake`] and for the same reason - see
-    /// `crate::projectile::leach_beam`'s module doc comment: the original's own
+    /// `oag_weapons::projectile::leach_beam`'s module doc comment: the original's own
     /// pool cursor allows exactly one beam **in the whole race** at a time, a
     /// stricter gate than any other weapon has, and a beam carries a link
     /// between two craft rather than a position and a velocity. Simulation
     /// state, so [`crate::hash::hash_world`] covers it.
-    pub leach_beam: Option<crate::projectile::leach_beam::Beam>,
+    pub leach_beam: Option<oag_weapons::projectile::leach_beam::Beam>,
     /// The live Repulsers, in pool order, `None` for a free slot.
     ///
     /// Sixteen, `Weapon_FireRepulser`'s own cap. Beside [`Self::quake`] rather
     /// than in [`Self::projectiles`] for the Quake's reason: a Repulser walks the
     /// track's own points and has no position or velocity of its own. See
-    /// `crate::projectile::repulser`. Covered by [`crate::hash::hash_world`].
-    pub repulsers:
-        [Option<crate::projectile::repulser::Repulser>; crate::projectile::repulser::POOL_SIZE],
+    /// `oag_weapons::projectile::repulser`. Covered by [`crate::hash::hash_world`].
+    pub repulsers: [Option<oag_weapons::projectile::repulser::Repulser>;
+        oag_weapons::projectile::repulser::POOL_SIZE],
 }
 
 impl World {
@@ -405,10 +406,10 @@ impl World {
             ship_count: 0,
             race: [RaceState::default(); MAX_PLAYERS],
             controllers: Self::SINGLE_PLAYER,
-            projectiles: crate::projectile::Projectiles::new(),
+            projectiles: oag_weapons::projectile::Projectiles::new(),
             quake: None,
             leach_beam: None,
-            repulsers: [None; crate::projectile::repulser::POOL_SIZE],
+            repulsers: [None; oag_weapons::projectile::repulser::POOL_SIZE],
         }
     }
 

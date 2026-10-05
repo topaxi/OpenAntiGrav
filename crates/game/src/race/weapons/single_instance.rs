@@ -7,7 +7,7 @@
 //!
 //! **They share a seam rather than only a line budget.** Both are an
 //! `Option<_>` on `oag_gameplay::World` instead of a slot in
-//! `oag_gameplay::projectile::Projectiles`, because both originals gate on a
+//! `oag_weapons::projectile::Projectiles`, because both originals gate on a
 //! *world* cursor rather than a per-craft cooldown - `Weapon_FireQuake`'s
 //! `q->active != 0` and `Weapon_FireLeachBeam`'s `pool->live != 0`. Both are
 //! therefore advanced once a tick from here rather than inside the projectile
@@ -24,11 +24,11 @@ impl Race {
     /// A no-op with no course loaded (nothing for the wave to travel round)
     /// and a no-op with no wave in flight - see `Race::spend_pickup`'s own
     /// Quake arm for what launches one. See
-    /// `oag_gameplay::projectile::quake` for the recovered advance rate and
+    /// `oag_weapons::projectile::quake` for the recovered advance rate and
     /// the hit test this reuses whole.
     ///
     /// **Retires the wave once it outlives
-    /// `oag_gameplay::projectile::quake::LIFETIME_SECONDS`**, which is what
+    /// `oag_weapons::projectile::quake::LIFETIME_SECONDS`**, which is what
     /// re-opens `Race::spend_pickup`'s `world.quake.is_some()` guard for the
     /// next Quake in the race. In the original that guard is a byte on the
     /// weapon instance (`q+0x48`) and `Quake_UpdateSpans` (`0x08874a30`) clears
@@ -55,7 +55,7 @@ impl Race {
             return;
         }
         let rules = self.sim.damage_rules();
-        let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
+        let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
         // Snapshotted before `apply_hits` runs, for `Cue::QuakeHit`'s own
         // rising edge below - the same before/after shape `Race::tick`'s own
         // `bounces_before` already takes for the Missile's bounce cue.
@@ -109,8 +109,7 @@ impl Race {
             })
             .collect();
         for (slot, point) in tripped {
-            self.sim.world.projectiles.slots[slot] =
-                oag_gameplay::projectile::Projectile::default();
+            self.sim.world.projectiles.slots[slot] = oag_weapons::projectile::Projectile::default();
             // Identity: only a Mine reaches this filter above, and
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
@@ -137,7 +136,7 @@ impl Race {
     ///
     /// A no-op with no beam in flight - see `Race::spend_pickup`'s own
     /// LeachBeam arm for what fires one, and
-    /// `oag_gameplay::projectile::leach_beam` for the recovered transfer and
+    /// `oag_weapons::projectile::leach_beam` for the recovered transfer and
     /// the one place it knowingly departs from the original.
     ///
     /// Called from the tick beside `Race::advance_quake`, on this tick's own
@@ -169,7 +168,7 @@ impl Race {
         // other hit - see `race::hit_sparks`.
         if report.landed {
             self.record_pending_hit(beam.target as usize, beam.owner);
-            let mut hits = [oag_gameplay::projectile::WeaponHit::default(); MAX_SHIPS];
+            let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;
             }

@@ -2065,6 +2065,7 @@ dependencies = [
  "oag-ui",
  "oag-vex",
  "oag-video",
+ "oag-weapons",
  "pollster",
  "resvg",
  "serde",
@@ -2087,6 +2088,7 @@ dependencies = [
  "oag-race",
  "oag-tables",
  "oag-vex",
+ "oag-weapons",
 ]
 
 [[package]]
@@ -2300,6 +2302,7 @@ dependencies = [
  "oag-tables",
  "oag-title",
  "oag-vex",
+ "oag-weapons",
  "thiserror 2.0.19",
 ]
 
@@ -2365,6 +2368,17 @@ dependencies = [
  "pollster",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "oag-weapons"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-physics",
+ "oag-race",
+ "oag-tables",
+ "oag-vex",
 ]
 
 [[package]]

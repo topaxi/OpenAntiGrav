@@ -92,7 +92,7 @@ pub struct Standing {
     ///
     /// **This crate does not credit one.** `oag_game::race` is the only layer
     /// that knows which craft's weapon struck which - `struck`/`owner` on
-    /// `oag_gameplay::projectile::Impact` - so it is the one that increments
+    /// `oag_weapons::projectile::Impact` - so it is the one that increments
     /// this; this crate only carries the count and orders by it nowhere,
     /// because place in Eliminator is not what `places` computes. See
     /// `docs/gameplay/race-modes.md#eliminator`.

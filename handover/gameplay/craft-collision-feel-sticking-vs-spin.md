@@ -172,7 +172,7 @@ fixed 2026-09-10 - `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 ## 2026-09-09: a correctness fix reopened the sticking question
 
 **The Cannon's base speed stopped being a guess, and the field got stickier.**
-`oag_gameplay::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it is
+`oag_weapons::projectile::cannon::BASE_SPEED_KMH` was a chosen `400.0`; it is
 a measured `500.0` (confidence 90 - `func_0x00060af4` is three instructions
 returning a flat `500.0f` and ignoring the class pointer it is handed, so the
 "per-class" premise the constant's name carried was also wrong). See

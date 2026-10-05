@@ -34,7 +34,7 @@ impl Race {
     /// everything after that switch - the `0.9` cone, the along-track screen,
     /// the nearest-by-longitudinal-distance tie-break - is shared. So the two
     /// differ by two numbers, and this reaches them through
-    /// `oag_gameplay::projectile::missile::lock_window`.
+    /// `oag_weapons::projectile::missile::lock_window`.
     ///
     /// The **art** differs too, and that is carried on the reticle rather than
     /// here: [`sight::Sight::set_held`] records which of the two is up, and the
@@ -125,7 +125,7 @@ impl Race {
                 // From the nose and along the craft's forward, the same two the
                 // fire path takes the lock from - see [`Race::fire_missile`] on
                 // why the nose and not the centre.
-                let (origin, _, _) = oag_gameplay::projectile::missile::launch(
+                let (origin, _, _) = oag_weapons::projectile::missile::launch(
                     &ship.physics,
                     &ship.handling.dimensions,
                     &missile,
@@ -142,7 +142,7 @@ impl Race {
                 )
             }
         };
-        oag_gameplay::projectile::missile::lock_window(
+        oag_weapons::projectile::missile::lock_window(
             &self.sim.world.ships[..count],
             0,
             origin,

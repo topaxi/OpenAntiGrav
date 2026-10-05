@@ -176,7 +176,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// `Cannon`, `LeachBeam` and `Repulser` have no icon on this disc, and
 /// `Disruptor` has one nothing else does, matching [ART]'s finding that
 /// Pure's own weapon roster is not Pulse's. Neither does
-/// `Shuriken` - Pure predates it - even though `oag_gameplay::pickup::
+/// `Shuriken` - Pure predates it - even though `oag_weapons::pickup::
 /// IMPLEMENTED` can hand one out on this title, same as any other; a Pure race
 /// that grants one draws no icon for it, which is the disc's own gap rather
 /// than a reading this project has not done. `Quake`'s slot is filled even

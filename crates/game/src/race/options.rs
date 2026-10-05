@@ -271,7 +271,7 @@ pub struct Options {
     /// thing became untestable without it: `crates/game/tests/race_ground_truth.rs`
     /// asserts a fired Turbo's *magnitude* off the disc's own `<Engine turbo>`,
     /// which needs a pad crossing that actually draws a Turbo. That was
-    /// automatic while `oag_gameplay::pickup::IMPLEMENTED` held one weapon and
+    /// automatic while `oag_weapons::pickup::IMPLEMENTED` held one weapon and
     /// stopped being so the moment it held two. A seed the test can choose is
     /// what keeps that assertion pointed at the weapon it is about, rather than
     /// weakening it to "whatever the pad handed over".
@@ -653,7 +653,7 @@ pub struct Setup {
     /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section).
     /// Every non-2048 race, and a 2048 event whose weapon set decodes to
     /// nothing recognised, draws exactly as it always did - see
-    /// [`oag_gameplay::pickup::draw`]'s own `allowed` parameter.
+    /// [`oag_weapons::pickup::draw`]'s own `allowed` parameter.
     pub allowed_weapons: Vec<oag_tables::weapons::Weapon>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.

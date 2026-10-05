@@ -877,7 +877,7 @@ capture before trusting a before/after comparison** - `cargo check`'s silence
 proves the types line up, not that the picture on screen has moved, and a
 wgpu validation error only fires at draw time, never at compile time.
 
-**Adding a weapon to `oag_gameplay::pickup::IMPLEMENTED` re-rolls every
+**Adding a weapon to `oag_weapons::pickup::IMPLEMENTED` re-rolls every
 statistic downstream of `pickup::draw`, and a sparse one will flip.**
 2026-09-08. Landing the LeachBeam turned
 `oag-game::ai_roll_ground_truth a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less`

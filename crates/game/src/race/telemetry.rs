@@ -252,7 +252,7 @@ impl Race {
     ///
     /// Called once a tick, from [`Self::tick`], **after every writer of the
     /// pool has run** - the wall contact `oag_physics::step` itself applies,
-    /// the weapon damage `oag_gameplay::projectile::step` applies (which does
+    /// the weapon damage `oag_weapons::projectile::step` applies (which does
     /// not surface through `evaluated.shield`, unlike the contact case), and
     /// the perfect-zone recharge. Sampling any earlier would flash a weapon
     /// hit a tick late. Comparing the percentage itself, rather than keying

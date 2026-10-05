@@ -96,7 +96,7 @@ title showing the reticle over a craft ahead.
   The roster is compared in `docs/formats/weapon-stats.md`'s Pure dialect
   section (ten weapons, not nine - the fuse-less Bomb was the tenth and the
   decoder used to skip it); the `Disruptor` is decoded, fired, flown and
-  landed - `oag_gameplay::projectile::disruptor`, `oag_gameplay::disruption`,
+  landed - `oag_weapons::projectile::disruptor`, `oag_weapons::disruption`,
   `docs/ghidra/functions/psp-pure-usa/weapons.md`. **Still open on it**: the
   three effects that land without a force (Drunk - its `amount`'s input scale
   in `Ship_ApplySteeringTorque` `0x0892edfc`; Rubber Ship - `FUN_0892dea8`'s

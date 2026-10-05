@@ -63,6 +63,7 @@ oag-formats.workspace = true
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.
 oag-video = { workspace = true, features = ["av1"] }
 oag-gameplay.workspace = true
+oag-weapons.workspace = true
 oag-input.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true

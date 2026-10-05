@@ -116,7 +116,7 @@ fn a_missile_that_outlives_its_fuse_raises_the_cue_the_original_names_shurikenex
 /// (`blast: false`), and a wall ending after the bounce budget, which is neither.
 #[test]
 fn a_missile_that_spends_its_bounces_is_neither_the_fuse_nor_a_craft_hit() {
-    use oag_gameplay::projectile::Impact;
+    use oag_weapons::projectile::Impact;
     let base = Impact {
         point: Vec3::ZERO,
         kind: oag_tables::weapons::Weapon::Missile,

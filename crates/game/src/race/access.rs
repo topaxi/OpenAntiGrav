@@ -492,7 +492,7 @@ impl Race {
     /// did not load.
     ///
     /// The ceiling on **seconds of weapon slowdown outstanding** that
-    /// [`oag_gameplay::slowdown::drain`] is handed every tick. An accessor for
+    /// [`oag_weapons::slowdown::drain`] is handed every tick. An accessor for
     /// [`Self::missile_stats`]'s reason, and the one figure of the mechanic a
     /// test can reach without reproducing an authored number: it is what a
     /// craft's timer is asserted *against* rather than a value to assert.

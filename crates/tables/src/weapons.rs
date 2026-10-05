@@ -42,20 +42,20 @@
 //!   human, front and back of the grid.
 //! - **`<Global>`'s `slowdown_limit`**.
 //! - **The Rocket's block**, since [`crate::weapons`]'s first consumer -
-//!   `oag_gameplay::projectile` - flies one.
+//!   `oag_weapons::projectile` - flies one.
 //! - **The Missile's block, lock distances included**, since a missile now locks
 //!   and homes. That is what moved them out of the undecoded list below: the
 //!   rule is "only what a consumer exists for", and the consumer is
-//!   `oag_gameplay::projectile::lock`.
-//! - **The Mine's block**, since `oag_gameplay::projectile::mine` drops one.
+//!   `oag_weapons::projectile::lock`.
+//! - **The Mine's block**, since `oag_weapons::projectile::mine` drops one.
 //!   Seven attributes and no speed, which is the shape of a weapon that is not
 //!   launched so much as left behind.
 //! - **The Bomb's block**, less `damageradius`, since the same module drops one
 //!   of those too. That weapon is the Mine one size up and its block says so.
-//! - **The Cannon's block**, since `oag_gameplay::projectile::cannon` fires
+//! - **The Cannon's block**, since `oag_weapons::projectile::cannon` fires
 //!   itself off it. Five attributes and no speed at all - not even a
 //!   per-class one, the shape every other projectile weapon here has - which
-//!   is what `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s own doc
+//!   is what `oag_weapons::projectile::cannon::BASE_SPEED_KMH`'s own doc
 //!   comment reads as evidence for rather than restates.
 //!
 //! - **The LeachBeam's block, in full, from 2026-09-08.** It was the lock
@@ -66,7 +66,7 @@
 //!   `leachbeam_sight_*` widgets off. `repair`, `damage`, `slowShipFactor`,
 //!   `range`, `active_time` and `energy_multiplier` stayed named and unread
 //!   because nothing drained a craft's energy or held an attachment open.
-//!   `oag_gameplay::projectile::leach_beam` now does both, so all six are
+//!   `oag_weapons::projectile::leach_beam` now does both, so all six are
 //!   decoded and each one's own doc comment on [`LeachBeamStats`] names the
 //!   function that spends it. That type also records the one attribute this
 //!   block does **not** author, and why the absence is design.
@@ -76,7 +76,7 @@
 //!   `<Effect>` children rather than a row of attributes. It has its own
 //!   module, [`disruptor`], because the original's parser for it is three
 //!   times the size of any other weapon's. Its consumer is
-//!   `oag_gameplay::projectile::disruptor`.
+//!   `oag_weapons::projectile::disruptor`.
 //! - **The Bomb's `timetodie` is an `Option`** since the same day, because
 //!   Pure's Bomb authors none and Pure's pool reads none: a `None` fuse is a
 //!   charge that sits until tripped. See [`BombStats::timetodie`].
@@ -505,7 +505,7 @@ impl WeaponStats {
     /// `None` is a real state rather than a failure, and here it is the usual
     /// one: **only Pure authors this weapon**. Both Pulse tables and HD's
     /// answer `None`, which is what keeps a pad on those titles from ever
-    /// handing one out - `oag_gameplay::pickup` draws only weapons the table
+    /// handing one out - `oag_weapons::pickup` draws only weapons the table
     /// weights, and a weapon with no block has no odds row either.
     #[must_use]
     pub fn disruptor(&self) -> Option<DisruptorStats> {

@@ -660,7 +660,7 @@ despawn pass, which reads the `0x10`/`0x20` split to choose `CANNONEXPLSHIP`
 over `CANNONEXPLWALL`) plays a sound, but throws no spark at all - only a
 wall hit does.
 
-This is exactly what `oag_gameplay::projectile::cannon::direct_hit` already
+This is exactly what `oag_weapons::projectile::cannon::direct_hit` already
 did before this pass read the handler: apply `damage_per_bullet` and
 `slowdown_time` unconditionally on a craft hit. The handler confirms the
 shape rather than changing it.
@@ -704,7 +704,7 @@ inside either - the binding this section reads is entirely in the caller.
 on both pressings - `lui a0,0x43fa`; `mtc1 a0,f0`; `jr ra` - and never reads
 its own argument. `Cannon_Init` calls it as `FUN_08864af4(param_2)` and adds
 the result to `speed_kmh`, so the earlier "per-class base speed" framing this
-page and `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s doc comment
+page and `oag_weapons::projectile::cannon::BASE_SPEED_KMH`'s doc comment
 both carried was wrong about the shape, not the existence: it is a real,
 disc-authored constant, just the same one for every craft. `BASE_SPEED_KMH`
 is now `500.0`, not the `400.0` chosen placeholder.
@@ -1054,7 +1054,7 @@ DAT literal was tracked down to a real cue name this pass; both are read as
 >
 > **2026-09-23: wired.** `Cue::QuakeHit` is in
 > `crates/game/src/audio/sfx/cue.rs`, fired on the rising edge of
-> `oag_gameplay::projectile::quake::Wave::hit`, snapshotted before
+> `oag_weapons::projectile::quake::Wave::hit`, snapshotted before
 > `Race::advance_quake`'s own `apply_hits` call and compared after - and
 > placed on the **struck** craft, settling this section's own naming
 > ambiguity (`owner_craft_cue_slot`) in favour of the victim, the same craft
@@ -2479,7 +2479,7 @@ is design.** `craft+0x31c` is not a slowdown at all: `engine.md`'s
 the block above on every tick the beam drains. A craft under a beam is throttled
 to 80 % (Race) or 50 % (Eliminator) of its thrust for exactly as long as the link
 holds, rather than charged a fixed number of seconds on impact the way every
-other weapon is. **Ported 2026-09-16**: `oag_gameplay::projectile::leach_beam::Beam::drain`
+other weapon is. **Ported 2026-09-16**: `oag_weapons::projectile::leach_beam::Beam::drain`
 arms `Ship::pending_thrust_scale` under the same three gates (positive amount,
 racing, no Shield pickup), the composition root hands it to
 `oag_physics::Environment::thrust_scale` at the next step, and
@@ -2685,7 +2685,7 @@ closes the page's oldest open item.** It reads:
 disconnected, alpha becomes
 `(1.0 - (age - disconnected_at) * 2.0) * 255`, i.e. a **linear fade to zero
 over exactly 0.5 seconds** - [`DISCONNECT_LINGER_SECONDS`] in
-`oag_gameplay::projectile::leach_beam`, already ported and unchanged by this
+`oag_weapons::projectile::leach_beam`, already ported and unchanged by this
 finding. Confidence **88**. **The two chain endpoints (`i == 0` and
 `i == segment_count - 1`) are forced to `0xffffff`** - RGB white, alpha
 **zero** - regardless of the connected/disconnected branch, so the ribbon is
@@ -2748,7 +2748,7 @@ geometry is chosen any more, see below):
   strips displace along (this engine has no per-craft node basis to read
   them from), and the amplitude re-roll cadence (recovered as "about once a
   second, tied to the ribbon's own scroll cursor" - the same cursor
-  `oag_gameplay::projectile::leach_beam`'s own doc comment already declines to
+  `oag_weapons::projectile::leach_beam`'s own doc comment already declines to
   model, for the reason given there: reproducing it needs render geometry the
   simulation crate must not carry). The build re-rolls each bucket on a fixed
   one-second render-side timer instead, seeded from a `RaceView`-owned `Rng`

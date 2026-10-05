@@ -59,7 +59,7 @@ use oag_core::TickRate;
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
-use oag_gameplay::projectile::{BlastStats, blast};
+use oag_weapons::projectile::{BlastStats, blast};
 
 /// Long enough that the craft is genuinely up to speed before anything is
 /// measured, and past the start-line countdown. See `plasma_ground_truth.rs`,
@@ -137,7 +137,7 @@ fn speed(race: &race::Race) -> f32 {
 /// **This calls [`blast`] directly, which is deliberate and still correct for
 /// what this file measures, but is no longer the whole Plasma rule.** Since
 /// 2026-09-16 a real Plasma craft hit routes through
-/// `oag_gameplay::projectile::blast::blast_direct_hit` instead:
+/// `oag_weapons::projectile::blast::blast_direct_hit` instead:
 /// `slowdown_time` (and `damage`) reach only the struck craft, unconditionally,
 /// while every other craft in `blastradius` - except the bolt's own firer -
 /// takes the `blastforce` impulse alone, no slowdown and no damage. This

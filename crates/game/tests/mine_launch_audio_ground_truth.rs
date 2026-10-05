@@ -109,7 +109,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
         .pickup
-        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+        .begin_drop(oag_weapons::projectile::mine::CLUSTER);
 
     // Comfortably past the whole cluster: `DROP_INTERVAL` is a tenth of a
     // second apart, so `CLUSTER` charges are out well inside a second and a
@@ -133,7 +133,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
 
     assert_eq!(
         launches,
-        usize::from(oag_gameplay::projectile::mine::CLUSTER),
+        usize::from(oag_weapons::projectile::mine::CLUSTER),
         "the drop did not raise one MINELAUNCH per mine in the cluster"
     );
 

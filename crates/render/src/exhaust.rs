@@ -242,7 +242,7 @@ pub const LAYER_GAIN: [f32; LAYERS] = [1.0, 1.33, 2.0];
 ///
 /// Re-exported from [`oag_core::math`] rather than defined here: the same
 /// conversion turns an authored weapon speed into a velocity in
-/// `oag_gameplay::projectile`, which cannot see this crate.
+/// `oag_weapons::projectile`, which cannot see this crate.
 pub use oag_core::math::SPEED_TO_KMH;
 
 /// Speed at which the speed term starts to contribute, in km/h.
@@ -1016,7 +1016,7 @@ pub const MAX_TRAILS: usize = 8;
 /// The rest of the budget is [`sprite`]'s, which is **not** recovered - it is
 /// there so a caller with something else to billboard reuses this pipeline
 /// rather than standing up a second one. Sized for a projectile and a blast
-/// flash per slot of `oag_gameplay::projectile::MAX_PROJECTILES`, which is 16;
+/// flash per slot of `oag_weapons::projectile::MAX_PROJECTILES`, which is 16;
 /// the number is duplicated rather than imported for the same reason
 /// [`MAX_TRAILS`] is.
 ///
@@ -1031,7 +1031,7 @@ pub const MAX_TRAILS: usize = 8;
 /// | three puffs per blast flash (3 x 128) | 384 |
 /// | **total** | **1544** |
 ///
-/// `oag_gameplay::projectile::MAX_PROJECTILES` is 128 - sized for an Eliminator
+/// `oag_weapons::projectile::MAX_PROJECTILES` is 128 - sized for an Eliminator
 /// race rather than for the original's 48-slot pool, since the hardware this
 /// runs on is not a 2007 handheld. At six vertices a quad this buffer is about
 /// half a megabyte, allocated once; only the quads actually produced are

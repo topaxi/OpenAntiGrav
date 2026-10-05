@@ -44,12 +44,12 @@ use super::*;
 
 /// How many render-side Plasma-blast instances can be live at once.
 ///
-/// Matches [`oag_gameplay::projectile::MAX_PROJECTILES`], the Plasma bolt
+/// Matches [`oag_weapons::projectile::MAX_PROJECTILES`], the Plasma bolt
 /// pool's own cap - which bounds how many bolts could detonate on the same
 /// tick - not a measured figure for how many blasts the original itself
 /// keeps around at once (its own object is heap-allocated per detonation, in
 /// `Plasma_SpawnDetonation`, with no fixed pool this project has found).
-pub(super) const PLASMA_BLAST_SLOTS: usize = oag_gameplay::projectile::MAX_PROJECTILES;
+pub(super) const PLASMA_BLAST_SLOTS: usize = oag_weapons::projectile::MAX_PROJECTILES;
 
 /// `PlasmaBlast_Update`'s own hardcoded retire time.
 ///

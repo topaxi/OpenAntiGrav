@@ -28,7 +28,7 @@ pub struct Simple {
 ///
 /// The module's rule is that an attribute is decoded when something reads it,
 /// and this is the first weapon with a projectile behind it: see
-/// `crates/gameplay/src/projectile.rs`. The nine still undecoded need a lock, a
+/// `crates/weapons/src/projectile.rs`. The nine still undecoded need a lock, a
 /// beam or track deformation, and none of those exists.
 ///
 /// **All eleven are now decoded.** `slowdown_time` was the last one out, and it
@@ -196,7 +196,7 @@ pub struct MissileStats {
     /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
     pub slowdown_time: f32,
     /// Added to the *firing craft's own speed* at launch - see
-    /// `oag_gameplay::projectile::launch_missile`, which is where that
+    /// `oag_weapons::projectile::launch_missile`, which is where that
     /// distinction is argued and where the recovered arithmetic lives.
     pub launch_speed: f32,
     /// How far ahead a target must be before it can be locked.
@@ -232,7 +232,7 @@ impl MissileStats {
     /// **The unit matters and it is not units per second.** A missile does not
     /// fly at this from launch either: `Missile_SpeedNow` (`0x0885a038`) ramps
     /// linearly from the launch speed to this over one second. See
-    /// `oag_gameplay::projectile::missile_speed_kmh`.
+    /// `oag_weapons::projectile::missile_speed_kmh`.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
@@ -345,7 +345,7 @@ impl PlasmaStats {
     /// How fast a plasma bolt flies in one speed class, in km/h.
     ///
     /// The unit is the Rocket's, for the Rocket's reason - see
-    /// [`RocketStats::speed_for`] and `oag_gameplay::projectile::plasma::launch`.
+    /// [`RocketStats::speed_for`] and `oag_weapons::projectile::plasma::launch`.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
         self.speeds[class as usize]
@@ -385,7 +385,7 @@ impl PlasmaStats {
 /// basis by a literal `0.349066` radians - `20.000` degrees - or by its exact
 /// negation, chosen by a `rand() > 0.5` the fire handler draws. See
 /// [`crate::weapons::ShurikenStats::speed_for`]'s neighbour,
-/// `oag_gameplay::projectile::shuriken::launch`.
+/// `oag_weapons::projectile::shuriken::launch`.
 ///
 /// # Two of the thirteen are authored and decoded nowhere
 ///
@@ -455,7 +455,7 @@ impl ShurikenStats {
     /// multiplied by `3.6` - that is, in km/h - and the constructor computes
     /// `(craft_kmh + authored) / 3.6` for the launch velocity. That settles for
     /// this weapon the open question
-    /// `oag_gameplay::projectile::rocket::launch` records for the Rocket, and it
+    /// `oag_weapons::projectile::rocket::launch` records for the Rocket, and it
     /// is a second, independent statement that the authored speeds are km/h.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
@@ -540,7 +540,7 @@ pub struct MineStats {
 /// `craft->entity->body->speed` - the firing craft's own current speed, not a
 /// class figure - and `Cannon_Init` (`0x088648ec`) adds a *base* speed this
 /// schema does not carry at all (`func_0x00060af4`, unread). See
-/// `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`, this engine's own
+/// `oag_weapons::projectile::cannon::BASE_SPEED_KMH`, this engine's own
 /// stand-in for that base, and
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
 /// whole reading.
@@ -572,7 +572,7 @@ pub struct CannonStats {
     /// weapon that, held down for a whole race, fires about twenty times and
     /// reads as broken. The reciprocal gives twenty rounds a second and
     /// empties a thirty-round magazine in a second and a half, which is what
-    /// a cannon is. See `oag_gameplay::projectile::cannon` and
+    /// a cannon is. See `oag_weapons::projectile::cannon` and
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     pub rate: f32,
     /// Energy one round costs a craft it hits directly.
@@ -593,7 +593,7 @@ pub struct CannonStats {
 
 /// The Quake's `<Stats>`: four attributes, and no speed at all - the wave's
 /// own travel rate is not authored, see
-/// `oag_gameplay::projectile::quake::SPEED_UNITS_PER_SECOND`.
+/// `oag_weapons::projectile::quake::SPEED_UNITS_PER_SECOND`.
 ///
 /// `WeaponStats_ParseQuake` (`0x0880c60c`), offsets `+0x60`..`+0x6c` measured
 /// off the parser itself. See
@@ -753,7 +753,7 @@ pub struct BombStats {
 /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
 ///
 /// The second, from 2026-09-08, is the **beam itself**:
-/// `oag_gameplay::projectile::leach_beam` now holds a link open and drains it.
+/// `oag_weapons::projectile::leach_beam` now holds a link open and drains it.
 /// The six attributes that had stayed named and unread until then are read now
 /// because that consumer exists, and each one's own doc comment below names the
 /// function that spends it.
@@ -828,7 +828,7 @@ pub struct LeachBeamStats {
     ///
     /// **Per tick, not per second** - neither the rate function nor the drain
     /// scales by `dt`. See [`Self::energy_multiplier`] for the one-shot the
-    /// first tick gets, and `oag_gameplay::projectile::leach_beam` for what
+    /// first tick gets, and `oag_weapons::projectile::leach_beam` for what
     /// that means at this project's fixed 60 Hz against the original's own
     /// variable timestep.
     pub damage: f32,
@@ -850,7 +850,7 @@ pub struct LeachBeamStats {
     ///
     /// **This is why the block authors no `slowdown_time` and the absence is
     /// design rather than omission.** Every other weapon adds *seconds* to the
-    /// shared `entity+0x130` slowdown channel `oag_gameplay::slowdown` drains.
+    /// shared `entity+0x130` slowdown channel `oag_weapons::slowdown` drains.
     /// The LeachBeam does not touch that channel at all: `LeachBeam_Drain`
     /// copies this attribute into the victim's `entity+0x134`, and
     /// `Ship_ApplyPendingWeaponDamage` writes it on into the victim's *handling*

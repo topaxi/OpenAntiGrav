@@ -82,7 +82,7 @@ impl SpeedClasses {
     /// file that authored it -
     /// `oag_tables::handling::Stats::class_named`,
     /// `oag_tables::handling::Global::class_named` and
-    /// `oag_gameplay::pickup::table_for`. A title that authors four is asked
+    /// `oag_weapons::pickup::table_for`. A title that authors four is asked
     /// for four and grows nothing; Pure is asked for five and answers with
     /// five. `oag_physics::SpeedClass` still has exactly four variants and its
     /// `ALL` still means "the rungs every measured title has", which is what

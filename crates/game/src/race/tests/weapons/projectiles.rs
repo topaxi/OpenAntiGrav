@@ -26,7 +26,7 @@ use oag_gameplay::PlayerInputs;
 /// below asserts that both sides are reachable.
 #[test]
 fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
-    use oag_gameplay::projectile::shuriken;
+    use oag_weapons::projectile::shuriken;
 
     let mut race = race_with_weapon_table(
         Mode::SingleRace,
@@ -175,7 +175,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
     // Venom's authored speed plus `launchSpeed`, both km/h in the file, so the
     // velocity is the sum over `KMH_PER_UNIT_PER_SECOND` - spelled as the
     // arithmetic so the unit stays legible, as the Rocket's test does.
-    let expected = (650.0 + 26.0) / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+    let expected = (650.0 + 26.0) / oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND;
     assert!(
         (bolt.velocity.length() - expected).abs() < 1e-2,
         "expected (650 + 26) km/h as units per second, got {}",
@@ -201,7 +201,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 /// three literal spawn calls in one invocation. See
 /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
 ///
-/// **The fan's geometry is pinned in `oag_gameplay::projectile`'s own
+/// **The fan's geometry is pinned in `oag_weapons::projectile`'s own
 /// tests**, the same split the Shield's wiring test uses. What this owns is
 /// the wiring: that the button reaches the array, three times, with the
 /// disc's numbers, and that the slot empties.
@@ -229,11 +229,11 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
         race.sim.world.projectiles.live(),
-        oag_gameplay::projectile::ROCKET_SHOTS,
+        oag_weapons::projectile::ROCKET_SHOTS,
         "one press is a volley of three"
     );
 
-    for slot in 0..oag_gameplay::projectile::ROCKET_SHOTS {
+    for slot in 0..oag_weapons::projectile::ROCKET_SHOTS {
         let rocket = race.sim.world.projectiles.slots[slot];
         assert_eq!(rocket.kind, Some(oag_tables::weapons::Weapon::Rocket));
         assert_eq!(rocket.owner, 0);
@@ -249,8 +249,8 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         // figures are km/h in the file, so the velocity is over
         // `KMH_PER_UNIT_PER_SECOND` - spelled as the arithmetic so the unit
         // stays legible.
-        let expected = 600.0 * oag_gameplay::projectile::ROCKET_LAUNCH_SPEED_SCALE
-            / oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+        let expected = 600.0 * oag_weapons::projectile::ROCKET_LAUNCH_SPEED_SCALE
+            / oag_weapons::projectile::KMH_PER_UNIT_PER_SECOND;
         assert!(
             (rocket.velocity.length() - expected).abs() < 1e-2,
             "rocket {slot}: expected 0.75 x 600 km/h as units per second, got {}",
@@ -265,7 +265,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     // And they really are fanned rather than three copies of one shot,
     // which the count alone would not catch.
     let right = race.ship().physics.body.right();
-    let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
+    let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
         .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
         .collect();
     assert!(
