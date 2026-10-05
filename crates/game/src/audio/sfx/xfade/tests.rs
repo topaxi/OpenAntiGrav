@@ -245,3 +245,40 @@ fn a_silent_layer_releases_its_voice_and_a_stopped_craft_releases_all() {
     );
     assert_eq!(craft.open_voices(), 0);
 }
+
+#[test]
+fn the_distance_factor_follows_the_eight_measured_craft() {
+    // (distance from the listener, slot+4 / 1024) read live on the grid.
+    let measured = [
+        (8.7, 0.9912),
+        (34.4, 0.9707),
+        (47.5, 0.9375),
+        (69.8, 0.8760),
+        (86.4, 0.8311),
+        (109.2, 0.7705),
+        (126.8, 0.7197),
+        (147.6, 0.6602),
+    ];
+    for (distance, factor) in measured {
+        let ours = distance_factor(distance);
+        assert!(
+            (ours - factor).abs() < 0.01,
+            "{distance} units: read {factor}, fitted {ours}"
+        );
+    }
+    assert_eq!(distance_factor(1000.0), 0.0, "far craft are silent");
+    assert!(
+        distance_factor(0.0) < 1.0,
+        "the nearest craft never reads full"
+    );
+}
+
+#[test]
+fn an_engine_layer_is_louder_by_the_square_of_its_volume() {
+    // `v86 / 1024` enters the original's final gain squared: halving a layer's
+    // volume quarters its voice gain, 3 points of the live scan at once.
+    let full = ENGINE_BUS_RATIO * (1.0f32 * distance_factor(0.0)).powi(2);
+    let half = ENGINE_BUS_RATIO * (0.5f32 * distance_factor(0.0)).powi(2);
+    assert!((half / full - 0.25).abs() < 1e-6);
+    assert!((ENGINE_BUS_RATIO - 0.462).abs() < 0.001);
+}

@@ -297,3 +297,39 @@ the original is unchecked.
 | `0x00623e40` | `Scream_UpdateVoiceBend` | 82 |
 | `0x00624158` | `Scream_SetVoiceBend` | 80 |
 | `0x0062bb58` | `Scream_SetVoiceParams` | 76 |
+
+## 2026-10-05, lane hd-engine-level: the level, measured
+
+Full results and the reproducer are in
+[`hd-xfx.md`](../../../formats/hd-xfx.md#level-measured-live-2026-10-05); this is
+the instruction-level half.
+
+The layer update (`XFadeSystem_UpdateLayers`, `0x00314b00`) passes the layer's volume
+`A[x] * slot[+4] * slot[+6] >> 20` as word 0 of the voice-parameter block
+`FUN_0031c948` builds, and `Scream_SetVoiceParams` (`0x0062bb58`) hands it, through
+the per-engine dispatch `0x0062b9e8`, to `0x006249a8` for a SCREAM voice (type 5).
+
+| Address | Name | What it does | Confidence |
+| --- | --- | --- | --- |
+| `0x0062d948` | `Scream_GetVoice` | a voice handle (`type << 24 | index << 16 | ...`, type 5) to the voice record: `*0x008c0100 + index * 0x18c`, accepted when the record's first word equals the handle | 88 |
+| `0x006249a8` | `Scream_SetVoiceVolume` | stores the volume word at voice `+0x86` and `+0x16`, then for each hardware voice the record owns (bitmask at `+0x24`, four words, bits `0..0x80`) calls `0x00630820` with the cue's volume `voice[+0xc] + voice[+0x84]` and writes `0x00623998`'s byte into the slot's `+0x1a` | 76 |
+| `0x00630820` | `Scream_ComputeHwLevel` | `((a*a/127) * (t*t/127) * 258) / 127` clamped to `0x7ffe` into the slot's `+0x20`, and the azimuth (`+0x24`, wrapped to `0..360`) | 90 |
+
+`Scream_ComputeHwLevel` was verified by integers, not by reading: `(70, 100)` gives
+`38 * 78 * 258 / 127 = 6021` and `(110, 120)` gives `95 * 113 * 258 / 127 = 21808`,
+the two `level` values every jet and noise voice read live, and `(80, 110)` gives
+the `9649` of the other cue. **The volume word (`+0x86`) is not in that product.**
+It reaches the sound through the float gains the slot carries at `+0x28`/`+0x2c`,
+which `K * level / 32766 * (word / 1024)^2` reproduces to four digits on 126 voices;
+the function that writes those floats was not located (the slot's `+0x28` is
+written after `0x00630820` returns and its writer sits behind `0x0062b738`).
+`0x00623998` is a velocity-sensitivity attenuation of a byte parameter, not the
+amplitude, which is why the first reading of `0x3b7` as the volume's top was wrong.
+
+`slot[+4]` is written by something other than `Ship_UpdateEngineCrossfade`
+(`0x000d5968`, which only feeds `XFadeSystem_SetInput` and `FUN_003143a8`). One
+decompile of it, the layer update and `XFadeSystem_Update` found no store to it; the
+instruction search in this tool does not filter by operand. The distance law is a fit
+(confidence 55) until the writer is.
+
+Names added: `Scream_GetVoice`, `Scream_SetVoiceVolume`, `Scream_ComputeHwLevel`.
