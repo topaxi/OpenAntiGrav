@@ -233,21 +233,21 @@ pub struct Display {
     /// **`off` by default**, because this is a racing game and vsync's cost is
     /// a frame of latency. `smooth` is what "triple buffering" means on a
     /// modern API - no tearing and no half-rate cliff, at the price of the
-    /// frames it discards. See [`crate::perf::Vsync`].
+    /// frames it discards. See [`oag_present::perf::Vsync`].
     ///
     /// A file that still says `vsync = true` or `false` is read, and rewritten
     /// as a name.
     #[serde(default)]
-    pub vsync: crate::perf::Vsync,
+    pub vsync: oag_present::perf::Vsync,
     /// How many frames a second the loop may produce: `unlimited`, or a rate up
     /// to 1000. Defaults to 240.
     ///
     /// **Ignored under `vsync = "on"`**, where the display decides - and only
     /// there. Under `smooth` the loop is not blocked, so without this it
     /// renders frames the compositor throws away. See
-    /// [`crate::perf::FrameLimit`].
+    /// [`oag_present::perf::FrameLimit`].
     #[serde(default)]
-    pub frame_limit: crate::perf::FrameLimit,
+    pub frame_limit: oag_present::perf::FrameLimit,
     /// What the finished picture is multiplied by, as a percentage. See
     /// [`oag_display::display::Brightness`].
     #[serde(default)]
@@ -295,7 +295,7 @@ pub struct Graphics {
     /// The performance overlay: `off`, `fps`, `pacing` or `dev`.
     ///
     /// Off by default, because it is a diagnostic and not decoration. See
-    /// [`crate::perf`] for what each live mode shows and why `pacing` exists at
+    /// [`oag_present::perf`] for what each live mode shows and why `pacing` exists at
     /// all - an average frame rate cannot show uneven frames, which is the
     /// thing a player actually sees.
     ///
@@ -303,7 +303,7 @@ pub struct Graphics {
     /// frame, at the render scale, over whatever stage is running - measuring a
     /// frame nobody is presenting is the one way to get it wrong.
     #[serde(default)]
-    pub perf_overlay: crate::perf::Overlay,
+    pub perf_overlay: oag_present::perf::Overlay,
     /// Whether the track's draw calls are tested against the camera's view
     /// frustum before being submitted, skipping the ones entirely outside it.
     ///
@@ -412,7 +412,7 @@ impl Default for Graphics {
             renderer: oag_display::display::Renderer::default(),
             anisotropy: Anisotropy::default(),
             fov: oag_display::display::Fov::default(),
-            perf_overlay: crate::perf::Overlay::default(),
+            perf_overlay: oag_present::perf::Overlay::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),

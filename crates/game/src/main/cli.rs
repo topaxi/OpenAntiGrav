@@ -473,7 +473,7 @@ pub(crate) struct Cli {
     ///
     /// **Which skin a race flies is this project's choice, not the
     /// original's**, and no unlock is checked - see
-    /// `oag_game::livery`'s `ship_skin` module docs.
+    /// `oag_livery`'s `ship_skin` module docs.
     #[arg(long)]
     pub(crate) skin: Option<String>,
 

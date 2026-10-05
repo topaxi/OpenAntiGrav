@@ -465,7 +465,7 @@ impl Scene {
         // The always-on flame, on the craft's own matrix and nothing else: its
         // vertices were already moved to the `Engine Flare` locator at load, so
         // it rides the hull exactly as the plume does. See
-        // `crate::livery::flare::per_team` for why the placement is baked.
+        // `oag_livery::flare::per_team` for why the placement is baked.
         for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
             let Some(flare) = flare else {
                 continue;

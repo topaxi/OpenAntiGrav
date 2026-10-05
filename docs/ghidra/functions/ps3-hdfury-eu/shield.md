@@ -23,7 +23,7 @@ includes `%s\vr_shield_cockpit.vex` (`0x00783b38`), `%s\%sshield.vex`
 same two format strings and the same literal fallback path
 [`shield-pickup.md`](../psp-pulse-usa/shield-pickup.md) reads off Pulse's
 binary. `Data\Weapons\vr_shield_cockpit.vex` is byte-for-byte the path
-`oag_game::livery::cockpit_shield` already hardcodes from
+`oag_livery::cockpit_shield` already hardcodes from
 `oag_pulse::race::COCKPIT_SHIELD` - which this page confirms is not a Pulse
 constant leaking onto HD by accident, since HD's own executable builds the
 identical literal.

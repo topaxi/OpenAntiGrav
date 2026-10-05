@@ -24,6 +24,7 @@ mod pulse_ps2;
 mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
+mod skin;
 mod surfaces;
 mod track_stats;
 mod variant;
@@ -366,7 +367,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
     let shield_cockpit =
-        crate::livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
+        oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its

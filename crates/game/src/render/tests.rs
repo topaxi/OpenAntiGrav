@@ -193,7 +193,7 @@ fn a_translucent_fill_blends_over_whatever_load_kept() {
     // `src * a + dst * (1 - a)`, at `a = 0.5`: half the seeded colour.
     // `Rgba8Unorm` writes straight through with no sRGB encode, so this
     // is an ordinary linear blend rather than one that needs decoding
-    // first - unlike `crate::upscale::tests::both_paths`, which is
+    // first - unlike `oag_present::upscale::tests::both_paths`, which is
     // exactly why that one exists.
     let expect = |channel: f64| ((channel * 0.5) * 255.0).round() as i32;
     for (index, channel) in [0.8, 0.4, 0.2].into_iter().enumerate() {

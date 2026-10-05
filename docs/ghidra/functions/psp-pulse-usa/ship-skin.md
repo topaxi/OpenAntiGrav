@@ -324,7 +324,7 @@ claim above does not depend on either address.
 alone.** `--skin Alternative` / `--skin Eliminator` on `oag-game`, resolved
 against what the team's own `PI_ModelSkin` declares and applied to grid slot 0
 only. **No confidence score, because nothing was measured to arrive at it** -
-it is a stand-in on the same footing `crates/game/src/livery.rs`'s
+it is a stand-in on the same footing `crates/livery/src/lib.rs`'s
 `teams_for_slots` already stands on, and it is labelled so in the load report
 every run prints.
 

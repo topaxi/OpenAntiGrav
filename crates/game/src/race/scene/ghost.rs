@@ -44,7 +44,7 @@ impl Scene {
         queue: &wgpu::Queue,
         caller_format: wgpu::TextureFormat,
         mode: oag_race::Mode,
-        liveries: &[crate::livery::Livery],
+        liveries: &[oag_livery::Livery],
         static_glow: Option<&FlareTexture>,
     ) {
         if !crate::ghosts::races_a_ghost(mode) {

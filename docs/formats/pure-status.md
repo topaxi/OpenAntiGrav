@@ -578,7 +578,7 @@ decrypts (see
 [dlc-pack.md](dlc-pack.md#pures-packs-decrypt-with-an-external-key-table) for
 the algorithm and key table) and its manifest declares
 `<PI_Team name="Vanuber" ... location="Data\Ships\Vanuber">` - no underscore,
-the id `race::ship_entry_name` actually composes a path from, unlike the
+the id `oag_livery::entry::ship_entry_name` actually composes a path from, unlike the
 underscored `Van_Uber` spelling every external source and this project's own
 earlier name-hash checks used. `Data\Ships\Vanuber\Ship.vex` (`9e62d495`) and
 `\handlingstats.xml` (`7e135ec1`) both hash-match real entries in the

@@ -1267,7 +1267,7 @@ recipe and its three traps.
       **Frame pacing is in too**: a three-way vsync (off, on, or `smooth` - the mailbox present mode, which is triple buffering done properly), an **unlocked or limited frame rate**
       (unlimited, or up to 1000), and a performance overlay that shows the rate,
       the mean, the 99th percentile and a per-frame graph - because an average
-      frame rate is exactly what hides uneven frames. `oag_game::perf`.
+      frame rate is exactly what hides uneven frames. `oag_present::perf`.
       **Spatial upscaling is in**: FSR 1 (EASU then RCAS), ported to WGSL from
       AMD's MIT source, behind `[graphics] upscaler` and off by default until a
       wider screenshot comparison earns the change. It runs only where it is
@@ -1317,7 +1317,7 @@ recipe and its three traps.
       reading naming the frame it was taken on; FSR 1, FXAA, SMAA and both
       blooms each take a resource size and a viewport separately, FSR 1's being
       a restoration of `ffx_fsr1.h`'s own two arguments; and
-      `crates/game/src/drs.rs` turns the reading into a rectangle behind
+      `crates/present/src/drs.rs` turns the reading into a rectangle behind
       `[render_profiles.<title> (<platform>)] target_fps` and its floor, per
       (title, platform) beside the ceiling they pair with. The
       budget is measured against the target frame period rather than anything

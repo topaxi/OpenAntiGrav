@@ -206,7 +206,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
     // rule + one column per frame.
     assert_eq!(bare.len(), 4 + WINDOW);
 
-    let scene = crate::race::SceneStats {
+    let scene = SceneStats {
         blur_encoded: false,
         hd_bloom_encoded: false,
         draws_submitted: 12,
@@ -412,7 +412,7 @@ fn nothing_is_drawn_outside_the_panel() {
     for i in 0..WINDOW {
         meter.record(if i == 7 { 0.5 } else { 1.0 / 60.0 });
     }
-    let scene = crate::race::SceneStats {
+    let scene = SceneStats {
         blur_encoded: false,
         hd_bloom_encoded: false,
         draws_submitted: 12,

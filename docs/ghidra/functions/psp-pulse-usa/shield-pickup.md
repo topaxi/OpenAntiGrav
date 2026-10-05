@@ -322,7 +322,7 @@ for Feisar and Triakis. **`extrawreck.vex` is on the disc too** (19,536 to
 registry value a Concept craft's wreck is not `shipwreck.vex`; this port does not
 do that yet.
 
-**Ours**: `race::shield_entry_names` takes the player's hull stem
+**Ours**: `oag_livery::entry::shield_entry_names` takes the player's hull stem
 (`Options::hull_variant`) and names every slot's shell from it on the PSP
 (`extra` -> `extrashield`, none or `Ship` -> `shipshield`); the PS2 build still
 passes the literal `extra`. Pinned by

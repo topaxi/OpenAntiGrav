@@ -63,7 +63,7 @@ pub struct Options {
     /// no such axis at all.
     ///
     /// **Not a team-identity change**, unlike [`Self::team`]'s own RACE-page
-    /// VARIANT sibling on HD/2048: [`crate::livery::load`] applies this to
+    /// VARIANT sibling on HD/2048: [`oag_livery::load`] applies this to
     /// slot 0 alone, and everything else about the team - its tuning, its
     /// label, its roster membership - stays exactly `team`'s. See
     /// `oag_title::race::HullVariant`.
@@ -78,7 +78,7 @@ pub struct Options {
     /// original's, and no unlock is checked.** The original appears to select
     /// `Eliminator` on a global state check rather than on a player pick, but
     /// what that state *is* is not settled - see
-    /// `crate::livery::ship_skin`'s own module docs for the evidence, and for
+    /// `oag_livery::ship_skin`'s own module docs for the evidence, and for
     /// what would replace this. Labelled chosen rather than measured.
     ///
     /// Applied to slot 0 alone, like [`Self::hull_variant`] and for the same
@@ -93,15 +93,15 @@ pub struct Options {
     /// what this engine did before liveries and what a source with no readable
     /// definition still gets.
     ///
-    /// Which of them ends up in which slot is [`crate::livery::teams_for_slots`],
+    /// Which of them ends up in which slot is [`oag_livery::teams_for_slots`],
     /// Pulse's own roster draw off the race seed.
     pub opponent_teams: Vec<String>,
     /// A per-AI-slot team override, index `0` being grid slot `1` (slot `0`
     /// is always the player) - **what authored data replaces
-    /// [`crate::livery::teams_for_slots`]'s own draw with**, where a caller has one to offer.
+    /// [`oag_livery::teams_for_slots`]'s own draw with**, where a caller has one to offer.
     ///
     /// `None` at an index leaves that slot exactly what
-    /// [`crate::livery::teams_for_slots`] would already give it; an index
+    /// [`oag_livery::teams_for_slots`] would already give it; an index
     /// past the end of this list is the same as `None` there. Empty
     /// (`Vec::new()`, [`Default`]'s own value) changes nothing anywhere -
     /// every caller outside the one below.
@@ -468,10 +468,10 @@ pub struct Setup {
     /// Each slot's `Ship Collision Fx` locators for the hit sparks a landed
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
-    pub hit_spark_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    pub hit_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
-    pub wreck_anchors: Vec<Vec<crate::livery::SparkAnchor>>,
+    pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
@@ -528,7 +528,7 @@ pub struct Setup {
     /// flare locator's Z axis - or `None` on every other title and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
     /// carries the locator's position. See [`crate::race::engine_light`].
-    pub engine_lights: Vec<Option<crate::livery::engine_light::EngineLight>>,
+    pub engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// Whether the circuit's `.envsettings` leaves the SPU vertex lights on -
     /// `"Lighting.Enable spu vertex lights"`, on by default and authored off
     /// on two HD circuits. See `race::load::engine_light`.
@@ -548,7 +548,7 @@ pub struct Setup {
     /// node, and along its authored `+Y`, as it rides the hull. Empty means
     /// the model authors none, and the burst falls back to anchoring at the
     /// contact point itself, aimed along world up.
-    pub collision_fx: Vec<crate::livery::SparkAnchor>,
+    pub collision_fx: Vec<oag_livery::SparkAnchor>,
     /// The circuit's own placed effects - see `race::scenery_fx`. Empty off Pulse PSP.
     pub scenery_fx: super::scenery_fx::Plan,
     /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
@@ -722,7 +722,7 @@ pub struct Loaded {
     /// Per slot rather than one shared model since 2026-08-15: the eight teams
     /// the disc declares are eight *different* hulls (845 to 1,497 triangles),
     /// not one hull repainted, so a shared model was visibly one team's ship
-    /// eight times over. See [`crate::livery`], which also records which half
+    /// eight times over. See [`oag_livery`], which also records which half
     /// of this is recovered and which half is this project's.
     /// The model a Rocket in flight is drawn as: `Data\Weapons\Rocket.vex`.
     ///

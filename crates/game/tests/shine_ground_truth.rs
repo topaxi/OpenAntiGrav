@@ -19,7 +19,7 @@
 //! or the wrong file comes back with another count or another texture and
 //! fails here rather than drawing nothing quietly.
 
-use oag_game::livery::{self, LoadContext};
+use oag_livery::{self as livery, LoadContext};
 use oag_race::Mode;
 
 /// Every Pulse PSP team, by the directory the disc keeps it in.

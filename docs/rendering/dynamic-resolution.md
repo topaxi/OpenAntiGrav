@@ -10,7 +10,7 @@ same scene as a PSP-sourced one either - the whole point of the feature is
 that the answer depends on how expensive the scene is - the controller reads
 it and never writes it. Every scene-resolution pass takes a resource size and a
 viewport separately, the scene pass is timed on the GPU every frame, and
-`crates/game/src/drs.rs` turns the second into the first.
+`crates/present/src/drs.rs` turns the second into the first.
 
 A build with the whole feature in it produces **byte-identical frames** to one
 without, at the default. That is measured rather than argued: six `--presented`
@@ -379,7 +379,7 @@ Three things this settles:
 
 ## The controller
 
-`crates/game/src/drs.rs`, and it reads nothing: fed one `drs::Cost` a frame - the
+`crates/present/src/drs.rs`, and it reads nothing: fed one `drs::Cost` a frame - the
 scalable readings summed, the fixed reading carried separately - it emits a
 rectangle. Never a clock, never a GPU, never a settings file - the argument
 `perf.rs` already makes for why a presentation-side module is not a
@@ -633,7 +633,7 @@ which is the same thing `restart_required` already means.
   constructs a controller; the front-end capture has no `Framebuffer` at all,
   which since ADR-0038 is correct rather than a gap. This project's comparisons are
   byte-identical screenshot diffs, and a controller driven by how busy the
-  machine is makes every one of them irreproducible. `crate::perf` already makes
+  machine is makes every one of them irreproducible. `oag_present::perf` already makes
   exactly this argument for why the performance overlay is window-only; it
   applies verbatim. A load is not a frame either - `Session::stalled` exists for
   that and clears the meter, and a controller needs the same guard or a track

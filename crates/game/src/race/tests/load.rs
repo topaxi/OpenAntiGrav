@@ -5,6 +5,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_livery::entry::{boost_entry_name, shield_entry_names, ship_entry_name};
 
 /// The hull and its plume must come from the same family, which is the
 /// regression this guards: the plume load hardcoded `shipboost.vex` while

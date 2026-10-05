@@ -10,7 +10,7 @@ use super::*;
 pub(super) struct Build<'a> {
     pub(super) device: &'a wgpu::Device,
     pub(super) queue: &'a wgpu::Queue,
-    pub(super) liveries: &'a [crate::livery::Livery],
+    pub(super) liveries: &'a [oag_livery::Livery],
     pub(super) format: wgpu::TextureFormat,
     pub(super) anisotropy: Anisotropy,
     pub(super) sample_count: u32,
@@ -61,7 +61,7 @@ impl Build<'_> {
     /// liveries repeats the last, as the hulls do.
     pub(super) fn drawables(
         &self,
-        pick: impl Fn(&crate::livery::Livery) -> Option<Model>,
+        pick: impl Fn(&oag_livery::Livery) -> Option<Model>,
         blend: wgpu::BlendState,
         depth: mesh_render::Depth,
         receiver: mesh_render::ShadowReceiver,

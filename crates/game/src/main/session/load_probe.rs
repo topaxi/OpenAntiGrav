@@ -1,7 +1,7 @@
 //! `--measure-race-load`: launching races straight from the menus and timing
 //! every main-thread frame of the loading screen's hand-off to each.
 //!
-//! The recording itself is [`oag_game::perf::transition::Recorder`]; this is
+//! The recording itself is [`oag_present::perf::transition::Recorder`]; this is
 //! only where the window's frame loop feeds it and what drives the run - the
 //! boot sequence skipped, `LAUNCH RACE` pressed on the first menu frame, the
 //! race left to run for [`RACE_FRAMES`] and then escaped from, as many times
@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use log::debug;
 
-use oag_game::perf::transition::{FRAME_BUDGET, Frame, Recorder};
+use oag_present::perf::transition::{FRAME_BUDGET, Frame, Recorder};
 
 use crate::stage::Stage;
 

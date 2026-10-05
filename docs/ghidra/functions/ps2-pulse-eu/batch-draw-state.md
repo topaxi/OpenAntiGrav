@@ -199,7 +199,7 @@ models whose own batches do not say they blend.
 **Confidence 70 that the original blends the PS2 shell**, as it blends the
 plume: same constructor, same sort word, same arguments, and a capture that
 settled it for the plume. No capture of the PS2 shield has been compared.
-`oag_game::livery` acts on it as a PS2-gated load-time reclassification
+`oag_livery` acts on it as a PS2-gated load-time reclassification
 (`blend_additively`) rather than through `Drawable::draw_additive`. The
 override is still model-scoped, not a decode. Following `0x0029a3a0`'s draw
 chain would now settle two models instead of one.

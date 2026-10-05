@@ -50,19 +50,20 @@ use oag_mesh::mesh::{self, Model};
 use oag_race::Mode;
 use oag_vex::vex;
 
-use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
+use entry::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
 mod absorb;
 mod cannon_flash;
 pub mod draw;
-pub(crate) mod engine_light;
+pub mod engine_light;
+pub mod entry;
 mod flare;
 mod shield;
-pub(crate) mod ship_skin;
+pub mod ship_skin;
 mod wreck;
 
 pub use draw::teams_for_slots;
-pub(crate) use shield::cockpit_shield;
+pub use shield::cockpit_shield;
 use shield::shell;
 pub use wreck::Wreck;
 

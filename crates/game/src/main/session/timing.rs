@@ -14,7 +14,8 @@
 //! [ADR-0045]: ../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md
 
 use log::{trace, warn};
-use oag_game::{drs, settings};
+use oag_game::settings;
+use oag_present::drs;
 
 use crate::stage::Stage;
 

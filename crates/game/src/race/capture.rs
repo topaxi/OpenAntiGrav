@@ -192,7 +192,7 @@ pub struct CaptureOptions {
     /// `None` is the ordinary capture: the scene, straight out of the target it
     /// was drawn into, ungraded, at exactly `size`. That is the right default
     /// for a bug report, and it is deliberately not a picture of a window - see
-    /// [`crate::upscale`].
+    /// [`oag_present::upscale`].
     ///
     /// `Some` puts the whole presentation path in the way: the render scale,
     /// the upscaler, the grade and the aspect bars. **This is the only way to
@@ -278,7 +278,7 @@ pub struct CaptureOptions {
 #[derive(Debug, Clone, Copy)]
 struct PresentedState {
     scene_size: (u32, u32),
-    presentation: crate::upscale::Presentation,
+    presentation: oag_present::upscale::Presentation,
 }
 
 /// The settings a `--presented` capture needs that an ordinary one does not.
@@ -287,7 +287,7 @@ pub struct Presented {
     /// What fraction of the aspect rectangle the scene is drawn at.
     pub render_scale: oag_display::display::Scale,
     /// The upscaler, its sharpness, and the grade.
-    pub presentation: crate::upscale::Presentation,
+    pub presentation: oag_present::upscale::Presentation,
 }
 
 /// Runs a race headless and writes one frame to a PNG.
@@ -447,12 +447,12 @@ pub fn capture(
     // whose texels were already re-encoded to compensate for the old upload.
     // The offscreen target's non-sRGB twin, and therefore FSR 1, still work -
     // `remove_srgb_suffix` on a format that has no suffix is the identity. See
-    // `crate::upscale`.
+    // `oag_present::upscale`.
     let format = wgpu::TextureFormat::Rgba8Unorm;
     // The scene's own size, which presented is the aspect rectangle scaled and
     // otherwise is the whole capture.
     let presented = options.presented.map(|state| PresentedState {
-        scene_size: crate::upscale::target_size(
+        scene_size: oag_present::upscale::target_size(
             oag_display::display::viewport((width, height), options.aspect),
             state.render_scale,
             device.limits().max_texture_dimension_2d,
@@ -545,7 +545,7 @@ pub fn capture(
     // itself, and the scene draws into a sub-rectangle of it directly.
     let mut framebuffer = match presented {
         Some(state) => Some(
-            crate::upscale::Framebuffer::new(&device, format, state.scene_size)
+            oag_present::upscale::Framebuffer::new(&device, format, state.scene_size)
                 .context("building the upscale pipeline")?,
         ),
         None => None,
@@ -593,7 +593,7 @@ pub fn capture(
     // rather than a shortcut**: without `--presented` nothing resolves the
     // frame at all, so nothing is reconstructing and only the flag can ask for
     // jitter. See `upscale::jitter_phases`.
-    let camera_jitter = crate::upscale::jitter_phases(
+    let camera_jitter = oag_present::upscale::jitter_phases(
         options.camera_jitter,
         presented.map_or(oag_display::display::Reconstruction::Off, |state| {
             state.presentation.reconstruction
@@ -775,7 +775,7 @@ pub fn capture(
         // be looked at**, which is what this flag exists for - so the temporal
         // path has to be reachable here too, not just from the window.
         let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
-            |(depth, velocity, frame)| crate::upscale::Temporal {
+            |(depth, velocity, frame)| oag_present::upscale::Temporal {
                 depth,
                 velocity,
                 sample_count: scene.sample_count(),
@@ -918,10 +918,10 @@ pub fn capture(
             &queue,
             &mut encoder,
             &surface,
-            crate::upscale::Composite {
+            oag_present::upscale::Composite {
                 brightness: state.presentation.brightness,
                 gamma: state.presentation.gamma,
-                screen: crate::upscale::ScreenFrame {
+                screen: oag_present::upscale::ScreenFrame {
                     native: hud.space.size,
                     strength: options.screen_filter_strength,
                 },

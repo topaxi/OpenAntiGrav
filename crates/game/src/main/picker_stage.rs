@@ -340,7 +340,7 @@ impl PickerStage {
         let mut model = oag_game::preview::model(&mut self.archives, &name)
             .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
         // The chosen paint over the hull's own texture slots - the same
-        // swap a race makes (`crate::livery::ship_skin`), and the same
+        // swap a race makes (`oag_livery::ship_skin`), and the same
         // rule when it fails: the hull keeps its own paint, and the log
         // says so.
         if let (PreviewSource::Ship { skins, .. }, Some(skin)) =

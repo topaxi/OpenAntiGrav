@@ -75,7 +75,7 @@ by a new `Mode::opponent_count` rather than the old all-or-nothing
 `has_opponents` boolean.
 
 **Chosen, not measured, same footing as Tournament's own gaps above:**
-which team the AI opponent flies (`crates/game/src/livery.rs`'s
+which team the AI opponent flies (`crates/livery/src/lib.rs`'s
 `teams_for_slots`, the identical open question `Single Race`'s own seven
 opponents already carry), and the sole opponent's grid slot (extrapolated
 by composing two separately-measured rules, not independently captured for

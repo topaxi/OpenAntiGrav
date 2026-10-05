@@ -198,6 +198,8 @@ Existing crates:
 | `oag-gameplay` | `crates/gameplay` | The `World` struct, the `InputSnapshot` type the simulation consumes, spline spawning. |
 | `oag-replay` | `crates/replay` | Replays and ghosts: the per-slot input stream as the truth, a state hash a second so playback reports a desync instead of diverging, and a ghost lap's pose track. See [ADR-0055](docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track ribbon, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
+| `oag-present` | `crates/present` | What happens to a frame between the scene and the glass: the upscale/grade/screen-filter composite, dynamic resolution scaling, and the performance meter. Plain data in; knows no race, menu or settings file. |
+| `oag-livery` | `crates/livery` | A race's ship hulls, skins, shields, plumes and wrecks built from a title's own archive entries, plus the entry-name rules for them. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |

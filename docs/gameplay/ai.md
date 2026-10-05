@@ -2774,7 +2774,7 @@ decision rather than a detail:
   ribbons, and `MAX_SPRITES` now carries its own arithmetic: eight flares plus a
   projectile and a blast flash per projectile slot, 40 of 48.
 
-**Liveries landed 2026-08-15** (`crates/game/src/livery.rs`), and with them
+**Liveries landed 2026-08-15** (`crates/livery/src/lib.rs`), and with them
 the per-slot nozzle this section used to want: `Setup::nozzles` is one locator
 per slot, read off that slot's own hull, so each plume samples its own team's
 UV keyframes rather than the player's. `Race::force_boost_state` stays slot
@@ -2853,7 +2853,7 @@ row is meant to say is - no `idstring`, no `string`, content unread.
 | Knowing the other craft are there | 2026-08-12 | `oag_ai::Field`, and the `courtesy`/`defence`/`caution` axes |
 | Mistake injection, with a recovery behaviour | 2026-08-12 | `Driver::blunder`, `Driver::mistake`; the rate comes from `Difficulty::tune`, **not** from a config key |
 | Difficulty selection | 2026-08-12 | `oag_ai::Difficulty`, and one `[ai] difficulty` key in `settings.rs` |
-| A livery that is not the player's | 2026-08-15 | `crates/game/src/livery.rs` |
+| A livery that is not the player's | 2026-08-15 | `crates/livery/src/lib.rs` |
 | **A lap time of its own** | **2026-08-17** | `oag_race::Standing::best_lap_ticks` |
 | **Being recovered when it stops** | **2026-08-17** | `Race::stalled`, `race::STALL_SPEED` |
 | **Reaction latency** | **2026-08-26** | [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice) |

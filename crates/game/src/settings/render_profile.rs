@@ -112,14 +112,14 @@ pub struct RenderProfile {
     /// with it. While it is on, `render_scale` above becomes the **ceiling**
     /// and keeps its meaning when it is off - the controller reads it and
     /// never writes it, so a loaded machine cannot make a chosen quality drift
-    /// downward between sessions. See [`crate::drs`].
+    /// downward between sessions. See [`oag_present::drs`].
     ///
     /// Per title beside the ceiling it pairs with, which is what this whole
     /// table is for: a target that Pulse holds comfortably is not one HD/Fury
     /// holds, and the point of dynamic resolution is that the answer depends
     /// on how expensive the scene is.
     #[serde(default)]
-    pub target_fps: crate::drs::Target,
+    pub target_fps: oag_present::drs::Target,
     /// The lowest render scale the controller may fall to.
     ///
     /// A percentage of the aspect rectangle, exactly as `render_scale` is, so
@@ -146,7 +146,7 @@ pub struct RenderProfile {
     ///
     /// **`fsr1` only has an effect below 100 % `render_scale`.** FSR 1 is a
     /// magnifier; asked to minify it undoes the supersampling it was handed.
-    /// See `crate::upscale::magnifies`. `fsr3` has something to do at every
+    /// See `oag_present::upscale::magnifies`. `fsr3` has something to do at every
     /// scale. See [`oag_display::display::Reconstruction`].
     #[serde(default)]
     pub reconstruction: oag_display::display::Reconstruction,
@@ -276,7 +276,7 @@ impl Default for RenderProfile {
     fn default() -> Self {
         Self {
             render_scale: oag_display::display::Scale::default(),
-            target_fps: crate::drs::Target::default(),
+            target_fps: oag_present::drs::Target::default(),
             // The one field whose default is not its type's - see
             // `default_minimum_resolution`, and the reason this impl is
             // written out rather than derived.

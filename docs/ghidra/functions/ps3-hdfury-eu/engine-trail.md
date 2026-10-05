@@ -1072,7 +1072,7 @@ driven Talon's Junction lap at 154 km/h) against `ours.png` (`just play hd
 craft framing). The original's core is a compact glow tucked at each nozzle,
 narrower than the hull; this engine's is one white disc that spans past both
 nozzles and reads as roughly the width of the hull itself. **Ruled out as the
-cause**: a second locator - `crates/game/src/livery.rs`'s `engine_flare`
+cause**: a second locator - `crates/livery/src/lib.rs`'s `engine_flare`
 already establishes every checked team's hull authors exactly one `Engine
 Flare` node, so the single-sprite-per-craft shape in
 `Race::hd_sprite_quad` matches the disc's own locator count and is not

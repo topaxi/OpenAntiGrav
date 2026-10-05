@@ -61,10 +61,10 @@ fn the_two_ways_of_getting_a_default_agree() {
     let loaded: Settings = toml::from_str("").expect("parse");
     assert_eq!(loaded.display.vsync, fresh.vsync);
     assert_eq!(loaded.display.frame_limit, fresh.frame_limit);
-    assert_eq!(fresh.vsync, crate::perf::Vsync::Off);
+    assert_eq!(fresh.vsync, oag_present::perf::Vsync::Off);
     assert_eq!(
         fresh.frame_limit,
-        crate::perf::FrameLimit::DEFAULT,
+        oag_present::perf::FrameLimit::DEFAULT,
         "a fresh install should be limited, not unlimited"
     );
     // The three settings this split added, so a fresh install is the game
@@ -84,9 +84,9 @@ fn the_two_ways_of_getting_a_default_agree() {
 #[test]
 fn a_boolean_vsync_still_loads_and_is_rewritten_as_a_name() {
     let off: Settings = toml::from_str("[display]\nvsync = false").expect("parse");
-    assert_eq!(off.display.vsync, crate::perf::Vsync::Off);
+    assert_eq!(off.display.vsync, oag_present::perf::Vsync::Off);
     let on: Settings = toml::from_str("[display]\nvsync = true").expect("parse");
-    assert_eq!(on.display.vsync, crate::perf::Vsync::On);
+    assert_eq!(on.display.vsync, oag_present::perf::Vsync::On);
 
     let written = toml::to_string_pretty(&on).expect("serialise");
     assert!(written.contains("vsync = \"on\""), "{written}");
@@ -136,12 +136,15 @@ perf_overlay = \"fps\"
         settings.display.window_size,
         oag_display::display::Size::new(1920, 1080)
     );
-    assert_eq!(settings.display.vsync, crate::perf::Vsync::Smooth);
+    assert_eq!(settings.display.vsync, oag_present::perf::Vsync::Smooth);
     assert_eq!(settings.display.frame_limit.hz(), Some(120));
     // Stayed in `[graphics]`, and must not have been carried across with the
     // rest.
     assert_eq!(settings.graphics.anisotropy, Anisotropy::X4);
-    assert_eq!(settings.graphics.perf_overlay, crate::perf::Overlay::Fps);
+    assert_eq!(
+        settings.graphics.perf_overlay,
+        oag_present::perf::Overlay::Fps
+    );
     // Moved a second time, out of `[graphics]` into every known
     // (title, platform) pair's own render profile - see
     // `a_file_written_before_the_render_profile_split_seeds_every_known_title`

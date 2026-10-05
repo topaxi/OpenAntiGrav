@@ -476,7 +476,7 @@ pub fn run(
                 pose_speed: None,
                 presented: options.presented.then_some(race::Presented {
                     render_scale: render_profile.render_scale,
-                    presentation: crate::upscale::Presentation {
+                    presentation: oag_present::upscale::Presentation {
                         reconstruction: render_profile.reconstruction,
                         sharpness: render_profile.upscale_sharpness.stops(),
                         brightness: options.settings.display.brightness,

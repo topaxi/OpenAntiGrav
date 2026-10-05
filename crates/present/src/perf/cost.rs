@@ -46,7 +46,7 @@
 //! [`crate::drs::Residual`] learns from, so the overlay showing exactly what
 //! the controller is fed is the point of it, and the three rows below it are
 //! what say **which** of sleep, CPU work and untimed GPU passes a large one is
-//! made of. See `crates/game/src/drs/residual.rs`, which spells out the same
+//! made of. See `crates/present/src/drs/residual.rs`, which spells out the same
 //! contamination from the controller's side.
 
 /// What the GPU spent on the passes this build actually times, in seconds.

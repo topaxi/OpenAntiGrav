@@ -522,7 +522,7 @@ names but no prior pass had read at runtime:
   drops an unauthored slot's own position along with its empty value) onto
   `race::Options::grid_teams`, a **per-slot** override
   `crates/game/src/race/load/roster.rs::apply_grid_teams` overlays onto
-  `oag_game::livery::teams_for_slots`' own "chosen, not measured" placement -
+  `oag_livery::teams_for_slots`' own "chosen, not measured" placement -
   slot by slot, not all-or-nothing: a slot this does not resolve (unauthored,
   or a dangling `WOShipModelData` reference - neither observed on the real
   file) keeps whatever `teams_for_slots` already gave it, and the loader's own

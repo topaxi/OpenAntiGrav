@@ -67,7 +67,7 @@ pub struct Race {
     /// the definition declares (`Alternative`), or empty for the baseline
     /// paint. What Ship Select's livery row picks on a title whose teams
     /// declare skins - Pulse - and what a race's `--skin` reads. See
-    /// `crate::livery::ship_skin`.
+    /// `oag_livery::ship_skin`.
     #[serde(default)]
     pub skin: String,
     /// The Eliminator kill target the `KILLS` row holds, as the disc's own

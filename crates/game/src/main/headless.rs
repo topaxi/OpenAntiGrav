@@ -575,7 +575,7 @@ pub(crate) fn run_race(
                 pose_speed: cli.pose_speed,
                 presented: cli.presented.then_some(race::Presented {
                     render_scale: render_profile.render_scale,
-                    presentation: oag_game::upscale::Presentation {
+                    presentation: oag_present::upscale::Presentation {
                         reconstruction: render_profile.reconstruction,
                         sharpness: render_profile.upscale_sharpness.stops(),
                         brightness: settings.display.brightness,

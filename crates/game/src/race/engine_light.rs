@@ -16,7 +16,7 @@
 //! ```
 //!
 //! where `Distance`/`Radius` are the ship directory's `EngineLightData.xml`
-//! (`crate::livery::engine_light`), the flare node is the `Engine Flare`
+//! (`oag_livery::engine_light`), the flare node is the `Engine Flare`
 //! locator under the craft's own world matrix, the Fury-skin byte is the
 //! one `Ship_SetFuryTrailFlag` writes (the same flag that turns the trail
 //! red - `RaceView::hd_trail_red`), and `boost_blend` is the sum
@@ -102,7 +102,7 @@ use oag_mesh::mesh_render::SpuLight;
 
 use super::Race;
 use super::drawable::model_matrix_of;
-use crate::livery::engine_light::EngineLight;
+use oag_livery::engine_light::EngineLight;
 
 /// Seed for the engine light's jitter draws. Distinct from every other seed
 /// in `race.rs` for the same determinism reason those are distinct from

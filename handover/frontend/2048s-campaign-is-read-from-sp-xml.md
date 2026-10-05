@@ -78,7 +78,7 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   added - inventing one the disc does not author would violate this project's
   own rule. See `docs/formats/2048-campaign.md`'s "Craft choice" section.
 - **Closed 2026-09-28: `M_PGRIDSHIPMODELDATA`'s authored grid is wired against
-  `oag_game::livery::teams_for_slots`'s own "chosen, not measured" one.**
+  `oag_livery::teams_for_slots`'s own "chosen, not measured" one.**
   `oag_2048::campaign::craft::grid_craft` resolves the field slot-by-slot
   (not `Field::references`, which drops an unauthored slot's own position);
   `race::Options::grid_teams` (new, per-slot, defaults to "no override" so

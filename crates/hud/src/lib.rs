@@ -26,7 +26,7 @@
 //! text* they carry, from a [`Readout`], and is [`draw`] - its own file since
 //! 2026-08-25, because the division is the point and a reader should be able to
 //! see which side of it a given rule is on. Keeping the two apart is what lets
-//! the whole HUD be tested without a GPU, the way [`crate::perf`] is - and it
+//! the whole HUD be tested without a GPU, the way [`oag_present::perf`] is - and it
 //! means a layout change is a data change rather than a code change.
 //!
 //! Which widgets those are, out of which texture, and with which colour

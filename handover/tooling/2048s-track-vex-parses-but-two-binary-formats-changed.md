@@ -63,7 +63,7 @@ match after the normal backslash/case fold). This is the third-title
 disagreement [ADR-0022] asks for before an axis becomes a field, and it is not
 just `handling::entry_name` - `oag_pulse::race::ships::entry_name(team, model)`
 builds the same `Data\Ships\{team}\{model}` shape and several call sites in
-`oag-game` (`race/assets.rs`'s `ship_entry_name`/`boost_entry_name`/`shield_entry_names`,
+`oag-livery` (`entry.rs`'s `ship_entry_name`/`boost_entry_name`/`shield_entry_names`,
 `livery/flare.rs`, `boot/roster.rs`) go through it for the hull, boost plume,
 shield and flare. None of that is wired yet - see Next Steps.
 

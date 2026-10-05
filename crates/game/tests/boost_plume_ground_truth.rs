@@ -118,7 +118,7 @@ const PS2_TEAMS: [&str; 12] = [
 ];
 
 /// Both plume files every PS2 team ships, in the pairing
-/// `race::boost_entry_name` picks between on mode.
+/// `oag_livery::entry::boost_entry_name` picks between on mode.
 const PS2_STEMS: [&str; 2] = ["shipboost", "Zoneboost"];
 
 fn image() -> Option<PathBuf> {

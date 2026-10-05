@@ -430,7 +430,7 @@ up **there**.
 
 That "there" is doing real work: a locator's own matrix places it in the
 *hull's* model space, not the world's, and the hull itself keeps turning as
-a craft flies. `oag_render::livery::SparkAnchor` (`crates/game/src/livery.rs`)
+a craft flies. `oag_render::livery::SparkAnchor` (`crates/livery/src/lib.rs`)
 carries both halves of the same locator matrix an earlier revision of this
 engine read only the translation from - `position` (row 3) and `up` (row
 1) - and `oag_render::psys::System::advance` composes `up` with the ship's

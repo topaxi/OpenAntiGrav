@@ -230,7 +230,7 @@ pub struct RaceView {
     pub(super) nozzles: Vec<Option<Vec3>>,
     /// Wipeout HD's engine light per slot - see [`Setup::engine_lights`] and
     /// `race::engine_light`. Render-side, out of the hash.
-    pub(super) engine_lights: Vec<Option<crate::livery::engine_light::EngineLight>>,
+    pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.
     pub(super) spu_vertex_lights: bool,
     /// Each craft's engine-light jitter this tick, and the stream it is
@@ -244,7 +244,7 @@ pub struct RaceView {
     pub(super) slot_teams: Vec<String>,
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
-    pub(super) collision_fx: Vec<crate::livery::SparkAnchor>,
+    pub(super) collision_fx: Vec<oag_livery::SparkAnchor>,
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
