@@ -37,6 +37,7 @@ use serde::{Deserialize, Serialize};
 
 use oag_display::percentage;
 
+pub mod hd_mix;
 pub mod sfx;
 
 mod race_music;
@@ -453,6 +454,8 @@ fn find_release(
 /// sequence or `--race` - because both want sound and neither owns the other.
 pub struct Audio {
     output: Output,
+    /// HD's authored mix, when the booted title has one. See [`hd_mix`].
+    hd: hd_mix::Hd,
     /// Where `--dump-audio` writes, and what has been rendered so far.
     ///
     /// `None` is the ordinary case: a run with a device attached has nothing to
@@ -726,6 +729,7 @@ impl Audio {
         }
         let audio = Self {
             output,
+            hd: hd_mix::Hd::default(),
             dump: dump.map(|path| Dump {
                 path,
                 samples: Vec::new(),
@@ -763,9 +767,18 @@ impl Audio {
     /// chain that never touches this constant. See `MUSIC_MASTER_TRIM`'s own
     /// doc comment for the evidence.
     pub fn apply(&self, settings: &crate::settings::Audio) {
+        // HD sets music and effects from its authored mix every tick, so only
+        // the sliders are kept here. See `hd_mix`.
+        self.hd.sliders.set([
+            settings.music_volume.gain(),
+            settings.sfx_volume.gain(),
+            settings.speech_volume.gain(),
+        ]);
         self.output.with_mixer(|mixer| {
-            mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
-            mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+            if self.hd.live.is_none() {
+                mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM);
+                mixer.set_bus_gain(Bus::Sfx, settings.sfx_volume.gain());
+            }
             mixer.set_bus_gain(Bus::Speech, settings.speech_volume.gain());
             // After both buses, which is the order the original's own chain
             // has: a group volume, then the master the output thread scales
@@ -825,6 +838,11 @@ impl Audio {
             return;
         }
         self.music_attempted = true;
+        if discs.booted() == Some(Platform::Ps3)
+            && let Some((source, _)) = discs.pick(MusicSource::Auto)
+        {
+            self.load_hd_mix(source);
+        }
         // The PS2's front-end music **is** a soundtrack track, so it goes
         // through `fetch` and comes back stamped with the release it came off -
         // which is what makes the row able to move it. The PSP's is not one,
@@ -1269,6 +1287,8 @@ impl Audio {
         // first keeps the two from racing each other over which one moves
         // `race_voice` on a tick they would otherwise both touch it.
         self.poll_source_switch();
+        let state = self.hd.state.take().unwrap_or(hd_mix::State::FrontEnd);
+        self.hd_mix_tick(state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))
         {

@@ -57,7 +57,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use oag_assets::source::Archives;
-use oag_audio::{Mixer, Play, Sound, VoiceId};
+use oag_audio::{Bus, Mixer, Play, Sound, VoiceId};
 use oag_formats::sblk;
 use oag_formats::xfx::Xfx;
 
@@ -443,6 +443,10 @@ pub struct Craft {
     elapsed: f32,
     /// Whether the smoothers have been seeded from the first inputs.
     started: bool,
+    /// The authored volume group the layers play on, when the title has an
+    /// authored mix (`user7`, [`crate::audio::hd_mix`]). `None` plays on the
+    /// effects bus at [`ENGINE_BUS_RATIO`].
+    bus: Option<Bus>,
 }
 
 impl Craft {
@@ -459,7 +463,17 @@ impl Craft {
             last_ms: None,
             elapsed: 0.0,
             started: false,
+            bus: None,
         }
+    }
+
+    /// Plays the layers on `bus`, an authored group. The group's own law
+    /// ([`crate::audio::hd_mix::sfx_gain`]) then carries the level
+    /// [`ENGINE_BUS_RATIO`] stood in for.
+    #[must_use]
+    pub fn on_bus(mut self, bus: Option<Bus>) -> Self {
+        self.bus = bus;
+        self
     }
 
     /// The four channel inputs for `inputs`, in channel order, `None` for a
@@ -537,7 +551,10 @@ impl Craft {
             let placed = everywhere.place(listener, 1.0);
             let (gain, pan) = placed.map_or((0.0, None), |p| {
                 let a = level.gain * distance_factor(p.distance);
-                (ENGINE_BUS_RATIO * a * a, Some(p.pan))
+                (
+                    self.bus.map_or(ENGINE_BUS_RATIO, |_| 1.0) * a * a,
+                    Some(p.pan),
+                )
             });
             if let Some(p) = placed {
                 distance = Some(p.distance);
@@ -562,7 +579,10 @@ impl Craft {
                     gain,
                     pitch: bend_ratio(level.bend, sound.down, sound.up),
                     pan,
-                    ..Play::looping(Arc::clone(&sound.sound), Cue::Engine.bus())
+                    ..Play::looping(
+                        Arc::clone(&sound.sound),
+                        self.bus.unwrap_or_else(|| Cue::Engine.bus()),
+                    )
                 });
             }
         }
