@@ -602,9 +602,17 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `write_world` and nothing else changed, the previous constants reproduced
 ///   bit for bit at both tick counts for both scenarios. Replaces `0x5879_0798_3068_5567` /
 ///   `0x2c97_d702_c8e1_58b1` at 60 ticks and `0xac74_cd4a_cb3b_9dd2` / `0x11eb_c0b9_fd45_0178` at 600.
+///
+/// - **Moved 2026-10-05**, when `Driver::branching` (which line a driver is on
+///   at a fork, `oag_ai::branch`) joined the hash: thirteen more bytes per ship
+///   per tick. The synthetic track here has no fork, so every field stays at its
+///   default. Isolated the documented way: with the four writes taken out of
+///   `write_driver` and nothing else changed, the previous constants reproduced
+///   bit for bit at both tick counts. Replaces `0x393b_148b_b8f2_5727` /
+///   `0x7f62_1ea3_430c_a071` at 60 ticks and `0x5e00_c1b5_b928_c252` / `0x7838_5bc9_954f_c738` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x393b_148b_b8f2_5727, 0x7f62_1ea3_430c_a071),
-    (600, 0x5e00_c1b5_b928_c252, 0x7838_5bc9_954f_c738),
+    (60, 0x6f3a_9672_4942_4caf, 0x6423_786d_5305_88bb),
+    (600, 0xdbb7_da22_3b37_4562, 0x46e0_cbc8_9e6a_ea96),
 ];
 
 #[test]

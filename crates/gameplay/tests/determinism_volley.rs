@@ -271,9 +271,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `write_world` and nothing else changed, the previous constants reproduced
 ///   bit for bit at both tick counts for both scenarios. Replaces `0x3fa9_0a39_7bac_41b4` /
 ///   `0xa334_e125_421c_f896` at 60 ticks and `0xfe22_9e45_21ac_9c67` / `0xbc86_1210_e167_7831` at 600.
+///
+/// - **Moved 2026-10-05**, when `Driver::branching` (which line a driver is on
+///   at a fork, `oag_ai::branch`) joined the hash: thirteen more bytes per ship
+///   per tick. The synthetic track here has no fork, so every field stays at its
+///   default. Isolated the documented way: with the four writes taken out of
+///   `write_driver` and nothing else changed, the previous constants reproduced
+///   bit for bit at both tick counts. Replaces `0xe655_02d2_4ca9_8eb4` /
+///   `0x7d19_2a0c_9ac6_6496` at 60 ticks and `0xeaac_e0f2_34f0_5e27` / `0x998b_ec4e_b275_9eb1` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xe655_02d2_4ca9_8eb4, 0x7d19_2a0c_9ac6_6496),
-    (600, 0xeaac_e0f2_34f0_5e27, 0x998b_ec4e_b275_9eb1),
+    (60, 0x8731_a61e_e41b_a9e8, 0x9df3_6a61_7315_16d6),
+    (600, 0x1a03_923d_2d2f_0787, 0xaefe_b285_a14e_81a1),
 ];
 
 #[test]
