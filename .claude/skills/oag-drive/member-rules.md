@@ -61,6 +61,12 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 - Build once. Avoid `--release` unless the lane needs it. On
   `No space left on device` or `rustc-LLVM ERROR: IO failure on output stream`,
   **stop and report**: these are not flaky errors, so don't retry.
+- **Run a new or changed test under a memory cap first**, before it goes
+  near the gate: `systemd-run --user --scope -q -p MemoryMax=8G -p
+  MemorySwapMax=0 cargo nextest run -p <crate> <test>`. On 2026-10-05 an
+  unfinished `oag-post` test reached 51 GB resident; the kernel's OOM
+  pressure killed two members and the lead's own session before the test
+  itself died. A capped run fails alone instead.
 - Gate before reporting, always through the shared lock:
 
   ```sh
