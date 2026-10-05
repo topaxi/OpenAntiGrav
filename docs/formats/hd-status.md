@@ -517,6 +517,16 @@ and per-class `<Engine accelcap amount falloff gain turbo>`, `<Brakes>`,
 `<Turning>`, `<Airbrake>`, `<Antigrav>`, `<Physical>` blocks for
 VENOM/FLASH/RAPIER/PHANTOM.
 
+**Airbrake flaps swing** (2026-10-05, `airbrake-flaps`). HD's `Ship.vex` authors the `Airbrake` tree (`Airbrake_L` hinge, an `Anim Transform` `0x3c0` with one static key, then `Airbrake_Left`, then the `Mesh`), the `.rcsmodel` supplies the triangles, and `mesh::rcs::build` now records the flap's vertex span (`Flap::collect`, shared with the PSP builder). The vertices are in the hinge's own space (the hinge is the anchor), so `Flap::hinge` is the identity.
+The swing is the same `Flap::deflect` Pulse uses (`hinge * Rx(angle) * hinge^-1`,
+about the hinge frame's local X), scaled by the title's own `<AirbrakeGraphics>`
+`amount` and rates through `RaceView::airbrake_flaps`. **Which way it turns is
+checked, not read:** the title's own `Airbrake` handler is unread, so
+`hd_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
+deflection raises the flap and flares it outward, both sides) on all twelve teams (Auricom's flap swings sideways like a door, `y` 0.000). Only
+the player's craft swings, as on Pulse; a rival's flaps stay stowed.
+Frames: `data/scratch/airbrake-flaps/` (`hd_*.png, strip_hd.png`).
+
 **Tried, 2026-08-17: the parser accepts them after one change**, and the change
 is one attribute. `handling::from_blob`'s existing dispatch already sends HD
 down the right branch - the file begins `<?xml`, so it is read as plain text

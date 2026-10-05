@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result, bail};
 use oag_assets::Container;
-use oag_core::math::Mat4;
 use oag_vex::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
@@ -857,59 +856,14 @@ fn build_class(
         // See `Model::node_vertex_ranges`'s own doc comment.
         node_vertex_ranges.push(node_first_vertex..vertices.len() as u32);
 
-        // An airbrake flap is a `Mesh` whose parent is an `Airbrake` node. The
-        // hinge is the `Airbrake`'s own parent - the locator `Transform` that
-        // carries the 4x4 - and `world` already holds its composed pose, which
-        // is why this reads the ancestor rather than re-composing anything.
-        //
-        // Left and right by the artists' own node names, not by the sign of a
-        // translation: `Airbrake_Left` sits on the `+x` locator in Assegai's
-        // file, so a reimplementation that inferred sides from geometry would
-        // have to decide what `+x` means and could get it backwards silently.
-        if let Some(brake) = node.parent
-            && nodes
-                .get(brake)
-                // Version-keyed, as `LodGroups::collect` is and for the same
-                // reason: `None` leaves a ship with no recovered flaps rather than
-                // mounting whatever version 4 happens to number `0x3c0`.
-                .is_some_and(|n| Some(n.class_id) == classes.airbrake)
-            && let Some(hinge) = nodes[brake].parent
-        {
-            let name = nodes[brake].name.as_deref().unwrap_or_default();
-            let side = if name.eq_ignore_ascii_case("Airbrake_Left") {
-                Some(0)
-            } else if name.eq_ignore_ascii_case("Airbrake_Right") {
-                Some(1)
-            } else {
-                None
-            };
-            let span = node_first_vertex..vertices.len() as u32;
-            if let Some(side) = side
-                && !span.is_empty()
-            {
-                // **An `Airbrake` can carry more than one `Mesh`**: Feisar's and
-                // Triakis's has `AirBrake_*Shape` (the flap, with its `0x2000`
-                // batch) and then `underbrake_flash*Shape`. Replacing the flap
-                // by each child in turn left the *last* one - the flash - as
-                // the "flap", so the flap proper never moved and the flash
-                // swung alone. The children's vertices are adjacent (the
-                // builder appends a node at a time and an `Airbrake`'s meshes
-                // are consecutive), so a second child extends the first's span.
-                match &mut airbrakes[side] {
-                    Some(flap) if flap.vertices.end == span.start => flap.vertices.end = span.end,
-                    slot => {
-                        *slot = Some(Flap {
-                            vertices: span,
-                            // `anchors` rather than a separate world pass: a flap
-                            // is on a ship, no ship authors an `Anim Transform`,
-                            // and with no anchor above it `Anchored::local` *is*
-                            // the world matrix.
-                            hinge: Mat4::from_cols_array(&anchors[hinge].local),
-                        });
-                    }
-                }
-            }
-        }
+        Flap::collect(
+            &mut airbrakes,
+            &nodes,
+            classes,
+            &anchors,
+            node,
+            node_first_vertex..vertices.len() as u32,
+        );
     }
 
     if indices.is_empty() {

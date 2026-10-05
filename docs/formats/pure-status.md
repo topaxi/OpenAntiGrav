@@ -263,6 +263,16 @@ with no deflection at all, on every team, because the field it needed was
 same way `mesh`/`transform` were - a property of their own node shape, since
 neither is a name in this run.
 
+**Airbrake flaps swing** (2026-10-05, `airbrake-flaps`). Checked with frames, not trusted from this page: holding left then right on Pure (EU) raises the matching flap.
+The swing is the same `Flap::deflect` Pulse uses (`hinge * Rx(angle) * hinge^-1`,
+about the hinge frame's local X), scaled by the title's own `<AirbrakeGraphics>`
+`amount` and rates through `RaceView::airbrake_flaps`. **Which way it turns is
+checked, not read:** the title's own `Airbrake` handler is unread, so
+`airbrake_flaps_ground_truth (Pulse's)` asserts the physical claim Pulse's recovered axis makes (a positive
+deflection raises the flap and flares it outward, both sides) on Pure by eye only - no Pure disc test was added. Only
+the player's craft swings, as on Pulse; a rival's flaps stay stowed.
+Frames: `data/scratch/airbrake-flaps/` (`pure_*.png, pure_strip.png`).
+
 ### The geometry is there and it is sane
 
 Decoding the same file through the *same* rules, only with `0x11e` as the mesh

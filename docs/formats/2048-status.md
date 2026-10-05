@@ -239,6 +239,16 @@ the start line and runs the simulation. What it does **not** do, and why:
   this feature was built expecting to have to refuse. See
   [2048-campaign.md](2048-campaign.md).
 
+**Airbrake flaps swing** (2026-10-05, `airbrake-flaps`). A node-bound mesh named `Airbrake_Left`/`Airbrake_Right` is baked through its node's bind matrix, and `mesh::rcs::psp2::build` records that matrix as the hinge. `qirex2048/2` authors its flaps at the nose (z +5.5) and they rise without flaring.
+The swing is the same `Flap::deflect` Pulse uses (`hinge * Rx(angle) * hinge^-1`,
+about the hinge frame's local X), scaled by the title's own `<AirbrakeGraphics>`
+`amount` and rates through `RaceView::airbrake_flaps`. **Which way it turns is
+checked, not read:** the title's own `Airbrake` handler is unread, so
+`psp2_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
+deflection raises the flap and flares it outward, both sides) on all 20 native craft and the 12 HD-derived hulls. Only
+the player's craft swings, as on Pulse; a rival's flaps stay stowed.
+Frames: `data/scratch/airbrake-flaps/` (`2048_*.png, k_2048_*.png, kcs_2048.png`).
+
 ## The one axis 2048 forced into existence
 
 `oag_title::RaceDefaults::ship_dir`. Pulse, Pure and Wipeout HD all keep their
