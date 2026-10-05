@@ -496,8 +496,12 @@ mod hd {
         let Some(image) = image() else { return };
         let found = scan(&image);
         for name in RACE_EFFECTS {
-            // Pulse's weather is not on HD's disc; `RACE_EFFECTS` is a superset.
-            if matches!(name, "WO_RAIN" | "WO_RAIN_LENS" | "WO_SNOW") {
+            // Pulse's weather and 2048's magstrip pair are not on HD's disc;
+            // `RACE_EFFECTS` is a superset.
+            if matches!(
+                name,
+                "WO_RAIN" | "WO_RAIN_LENS" | "WO_SNOW" | "WO_MAGSTRIP_SPARKS" | "WO_MAGSTRIP_ZONE"
+            ) {
                 continue;
             }
             assert!(

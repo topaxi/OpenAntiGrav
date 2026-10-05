@@ -115,6 +115,14 @@ pub struct WeaponModels {
     /// title that does not build the class - Pulse and Pure draw their own
     /// two-mesh `mag_floor` instead, and the 2048 modes play a `.pob`.
     pub magstrip_wake: Option<MagstripWake>,
+    /// The `.pob` magstrip effect a craft plays over a strip instead of the
+    /// arc wake: `WO_MAGSTRIP_SPARKS`, or `WO_MAGSTRIP_ZONE` in a Zone. The
+    /// Vita 2048 build gates it on the opposite sense of the predicate that
+    /// builds the wake, so a title sets this or [`Self::magstrip_wake`], never
+    /// both. 2048's own events carry a CRC-id mode (`>= 0x17`), which is the
+    /// `.pob` side - measured live, `docs/ghidra/functions/vita-2048-eu-v104/
+    /// ships-effects.md`. See `oag_raceplay::magstrip_wake`.
+    pub magstrip_pob: bool,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -165,6 +173,7 @@ impl WeaponModels {
         repulser_field: None,
         mag_floor: None,
         magstrip_wake: None,
+        magstrip_pob: false,
         leachbeam_ball: None,
         cannon_look: None,
     };

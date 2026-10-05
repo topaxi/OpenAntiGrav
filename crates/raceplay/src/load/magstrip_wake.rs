@@ -26,8 +26,24 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Loaded {
     let Some(wake) = models.magstrip_wake else {
+        // The `.pob` side needs only the anchors: it draws no arc.
+        if !models.magstrip_pob {
+            return Loaded {
+                anchors: None,
+                textures: None,
+            };
+        }
+        let mut anchors = [None; oag_gameplay::MAX_SHIPS];
+        for (slot, livery) in liveries.iter().enumerate().take(anchors.len()) {
+            anchors[slot] = livery.arc_anchor;
+        }
+        report.push(format!(
+            "magstrip effect (.pob): {} of {} craft carry an arc_anchor_point",
+            anchors.iter().flatten().count(),
+            liveries.len().min(anchors.len())
+        ));
         return Loaded {
-            anchors: None,
+            anchors: Some(anchors),
             textures: None,
         };
     };

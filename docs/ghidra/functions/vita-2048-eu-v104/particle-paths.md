@@ -16,8 +16,8 @@ game-mode id. **Which modes are `>= 23`, answered 2026-10-05 (conf. 70):** an ev
 `CampaignEventCard_HandleInput`). None of the 577 `SP.xml`/`MP.xml` instance names is in the 23-name
 table or hashes below 23, so 2048's own events read `Data/Particles2048` and the port's
 `oag_2048::race::EFFECT_DIR` is right for them. Only the HD-lineage named modes read `Data/Particles/`,
-and the port plays none. Later writers of `state+0xe4` were not walked; a Vita3K read of `0x8153fd24` in a
-campaign race would settle it.
+and the port plays none. Read live 2026-10-05 (conf. 80, seen once): `0x8153fd24 = 0x026886dc` in a campaign Time Trial, and the
+path buffer reads `Data/Particles2048/...` - see `ships-effects.md`, magstrip-2048-mode-check.
 
 The two directories hold the same stems with different bytes on nearly every
 one (`docs/formats/pob.md`, "Wipeout 2048").

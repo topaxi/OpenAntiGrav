@@ -138,3 +138,98 @@ fn a_hull_with_no_anchor_draws_no_wake_but_still_hums() {
     assert_eq!(race.magstrip_wake_live(SLOT), 0);
     assert_eq!(seen[0], (1, 0), "the sound does not need the locator");
 }
+
+/// A `.pob` title's grid with `names` loaded as one-emitter stand-ins.
+fn pob_race(names: &[&str]) -> Race {
+    let mut race = race_with_a_grid();
+    race.view.magstrip_wake = Some(Wakes::pob([Some(Mat4::IDENTITY); MAX_SHIPS]));
+    for name in names {
+        let blob = crate::tests::respawn::one_emitter_pob(name, oag_pob::flags::LOOPING);
+        let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+            .expect("the hand-laid effect parses");
+        race.view.effects.insert(name, effect);
+    }
+    race.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
+    race
+}
+
+const BOTH: [&str; 2] = [
+    crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
+    crate::effect_names::MAGSTRIP_ZONE_EFFECT,
+];
+
+#[test]
+fn a_pob_title_plays_the_effect_only_while_over_a_strip_and_draws_no_arc() {
+    let mut race = pob_race(&BOTH);
+    assert!(!race.has_magstrip_wake(), "no arc wake on a .pob title");
+    assert!(race.magstrip_pob_of(SLOT).is_none());
+    run(&mut race, &[true; 10]);
+    assert!(
+        race.magstrip_pob_of(SLOT).is_some(),
+        "no effect over the strip"
+    );
+    assert!(
+        race.magstrip_pob_of(0).is_none(),
+        "a craft off the strip plays none"
+    );
+    assert_eq!(race.magstrip_wake_live(SLOT), 0, "and no arcs");
+    let (atlas, contact) = race.magstrip_wake_vertices();
+    assert!(atlas.is_empty() && contact.is_empty());
+
+    run(&mut race, &[false; 3]);
+    assert!(race.magstrip_pob_of(SLOT).is_none(), "released on leaving");
+}
+
+#[test]
+fn a_pob_title_still_raises_the_sound_edges() {
+    let mut race = pob_race(&BOTH);
+    let seen = run(&mut race, &[true, true, false]);
+    assert_eq!(seen[0], (1, 0));
+    assert_eq!(seen[2], (0, 1));
+}
+
+#[test]
+fn a_pob_title_without_the_effect_plays_nothing() {
+    let mut race = pob_race(&[]);
+    run(&mut race, &[true; 10]);
+    assert!(race.magstrip_pob_of(SLOT).is_none());
+}
+
+/// Zone picks `WO_MAGSTRIP_ZONE` and every other mode `WO_MAGSTRIP_SPARKS`;
+/// told apart by loading only the one.
+#[test]
+fn zone_picks_the_zone_effect_and_other_modes_the_sparks_one() {
+    for (mode, only, plays) in [
+        (
+            oag_race::Mode::Zone,
+            crate::effect_names::MAGSTRIP_ZONE_EFFECT,
+            true,
+        ),
+        (
+            oag_race::Mode::Zone,
+            crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
+            false,
+        ),
+        (
+            oag_race::Mode::SingleRace,
+            crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
+            true,
+        ),
+        (
+            oag_race::Mode::SingleRace,
+            crate::effect_names::MAGSTRIP_ZONE_EFFECT,
+            false,
+        ),
+    ] {
+        let mut race = pob_race(&[only]);
+        for state in &mut race.sim.world.race {
+            state.mode = mode;
+        }
+        run(&mut race, &[true; 4]);
+        assert_eq!(
+            race.magstrip_pob_of(SLOT).is_some(),
+            plays,
+            "{mode:?} with only {only} loaded"
+        );
+    }
+}

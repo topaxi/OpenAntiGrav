@@ -130,3 +130,33 @@ both parse with `oag-pob`), `data/Tex/HD_electric_arc_8x8.gxt` (512x512), `data/
 race loads. **Sound:** `~magstrip01` is a string in `shipHD.bnk`, `Ship_NGP.bnk` and `Ship_NGP_Zone.bnk`, but
 the reader resolves no cue by name in the Vita's `shipHD.bnk` at all (`.COLLISIONS` fails the same way), so
 the hum is silent until the Vita bank reads.
+
+## 2026-10-05, magstrip-2048-mode-check lane: the two readings reconciled, live
+
+**Answer (conf. 80): a 2048 campaign race takes the `.POB` side. It plays `WO_MAGSTRIP_SPARKS` /
+`WO_MAGSTRIP_ZONE` and builds no `MagstripWake`; the arc wake is the HD-lineage named-mode side.**
+This corrects the "every named mode builds the arc wake" result above as a statement about 2048
+*events*: it holds for the named modes, none of which a 2048 event carries.
+
+- **Method.** Vita3K v0.2.1 (own pref copy), EU v1.04, a supervised launch whose parent read the guest
+  address space through `/proc/PID/mem` (host = `0x400000000` + guest; the bytes at `0x81000930` match the
+  ELF) every 200 ms, logging `0x8153fd24` and the 128-byte buffer `Particles_BuildEffectPath` formats
+  into (`0x819641e8`). Falsifier written before the run: `>= 0x17` in a race falsifies the arc reading,
+  `< 0x17` falsifies the CRC reading.
+- **Measured.** Single Player Campaign, Queens Mall Time Trial: `0x8153fd24` goes `0` (front end) to
+  **`0x026886dc`** at load, and the buffer reads `Data/Particles2048/Tex/explosion_fijets_8x8.gxt` then
+  `.../smoke_256x256_plain.gxt` (the predicate false side), back to `0` on quitting to the map. Log:
+  `data/scratch/magstrip-2048-mode-check/watch-final.log`. **Seen once, on one boot**: a second load
+  of an event was not reached (the menu walk is touch-fragile). It agrees with the static CRC reading
+  of the 577 `SP.xml`/`MP.xml` names, which is why the confidence is 80 and not 90.
+- **Not seen.** A Vita3K frame of the `.POB` sparks on a strip: Queens Mall's strip (50 surface-3
+  triangles) was not reached in a 90 s hold of accelerate with assist, and `tower` (Empire Climb) was
+  not reachable from the campaign map on this save. The `.POB` branch is read from `FUN_812c847a`'s
+  code plus the measured mode, not from a picture.
+- **Writers of `0x8153fd24` (19 callers of its setter `FUN_810009f8`).** Not all walked. The campaign
+  path is `FUN_812b0d52` / `FUN_810b7f5c` (the CRC of the event's `m_name`), and the live value is that
+  CRC. `FUN_810a1e50`, `FUN_810a4ae2`, `FUN_810f041e`, `FUN_81077462` are the HD/Fury and racebox
+  writers, which pass the named ids.
+- **Zone choice.** `FUN_810018d4` (conf. 65) is true for ids 6, 0xd, 0xe, 0x15 and otherwise defers to
+  `FUN_812b5890` and the `DAT_818bbf88` session object, so a CRC-id Zone event's answer is read off the
+  event, not the id. The port uses `Mode::Zone` (**chosen, not measured**).

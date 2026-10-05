@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 36] = [
+pub const RACE_EFFECTS: [&str; 38] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -98,6 +98,9 @@ pub const RACE_EFFECTS: [&str; 36] = [
     super::wreck_fx::FXNODE_EXPLO_EFFECT,
     super::wreck_fx::DEATH_SPARKS_EFFECT,
     super::wreck_fx::EXPLOSION_EFFECT,
+    // 2048's magstrip contact effect - see `race::magstrip_wake`.
+    super::effect_names::MAGSTRIP_SPARKS_EFFECT,
+    super::effect_names::MAGSTRIP_ZONE_EFFECT,
     // What a circuit places on its own scenery, from load - see
     // `race::scenery_fx`.
     BLUE_WELDER_EFFECT,
