@@ -414,6 +414,79 @@ that differ by 3 levels out of 198, and a constant velocity over that road
 depth gives no structure at all. Worth fixing on its own terms; not worth
 blaming for this.
 
+### Grain, and what replaced the tile wobble (2026-10-05)
+
+Reported from play: "the motion blur feels quite grainy and not smooth".
+Measured, not assumed; all of it *chosen, not measured off the original*, as
+the effect is this project's own.
+
+**Cause.** Two per-pixel `sin`-hash noises, both spatially white, both a pure
+function of the pixel (no frame index), so the pattern is *static in screen
+space* while the scene moves under it. (1) the +/-half-tile wobble of the tile
+lookup that hid the lattice above: neighbouring pixels landed on different
+tiles, so they gathered along different spans, which is noise in the *value*
+of the smear and not only in where the taps fall; (2) the tap-offset dither.
+
+**Method.** Pulse, `--race --autopilot --motion-blur high --size 1280x720
+--ticks 400` and 401, headless. Reference: the same frame with wobble and
+dither off and 63 taps at 1 px spacing. Metric: RMS of the 5x5 high-passed
+difference (variant minus reference), over the pixels blur visibly changed
+(55,693 of them, HUD rows excluded), plus the frame-to-frame correlation of
+that residual between ticks 400 and 401.
+
+| variant | hp-RMS vs reference (0-255) | frame-to-frame corr |
+| --- | --- | --- |
+| as shipped (wobble + dither, 15 taps) | **4.12** | 0.28 |
+| wobble off | 3.24 | 0.08 |
+| dither off | 3.96 | 0.23 |
+| both off (15 taps, 4 px) | 2.98 | -0.09 |
+| **bilinear tile lookup, dither kept** | **3.44** | 0.13 |
+| bilinear tile lookup, dither off | 3.08 | 0.06 |
+| half-resolution gather | 4.81 | 0.21 |
+
+Attribution, in quadrature over the 2.98 floor (the 15-tap sampling itself):
+the wobble is about 2.6, the dither about 1.3, so **the wobble was roughly
+80 % of the grain energy in a real frame**. Half resolution adds about 0.7
+on top of full. Raising the cap to 63 taps changes nothing here, because the
+tap count follows the reach (`TAP_SPACING_PX`) and the cap is not what limits
+it at 1280x720.
+
+**What landed: a bilinear tile lookup.** The gather reads the neighbour-max
+of the four nearest tile centres and interpolates, so the span is a continuous
+function of the pixel: no lattice and no per-pixel noise. Pulse 1280x720,
+4.12 -> 3.44 hp-RMS (77 % of the way to wobble-off's 3.24; the
+remainder is the dither and the smoother span itself differing from the
+nearest-lookup reference), and HD shows the same on the right-hand wall.
+GPU cost, `OAG_RENDER_GPU_BENCH=150` at 1600x900 on a discrete GPU, `high`:
+the chain 441 -> 427 us (four tile loads in place of two hashes and one; no
+measurable cost). The synthetic ramp of the section above is now a test,
+`lattice_tests::the_tile_lookup_leaves_neither_a_lattice_nor_grain_on_a_ramp`:
+peak/median of the per-phase mean `|2nd difference|`, 1.62 / 1.58 at
+`strength` 0.5 / 0.75 (the hash wobble measured 1.68 / 1.47; a nearest lookup
+1.98 at phase 86, the tile edge, and the test fails there). Cap interpretation:
+at a hard edge of a fast object the blended span now ramps over a tile width
+where the nearest lookup stepped; the two neighbour-max tiles still bound it.
+Opposing velocities in adjacent tiles cancel in the lerp; not seen in a
+race frame, noted.
+
+**Tried, and not worth it.** Interleaved gradient noise for the dither in
+place of the `sin` hash: 3.48 vs 3.44, no change in hp-RMS or in a 3x3
+low-passed residual (0.96-1.04 across hash, half amplitude and a 4x4 Bayer).
+Halving the dither amplitude: 3.20, but it trades grain for banding at a
+hard edge (the dither-off synthetic ramp: grain 0.08 but 2.18x peak/median
+from tap staircase, against 6.1 grain with dither on). Tap spacing 3 px
+(21 taps): 3.16 for roughly 1.4x the gather.
+
+**What is left, and why it is not landed.** The dither is the remaining
+grain (about 1.3 of the 3.44) and on the synthetic block-on-black ramp it is
+the whole of it (mean 6 levels per pixel against 0.08 without). It can only
+be removed by more taps (cost), a temporal resolve (the FSR 3 history could
+accumulate it; the dither would need a frame index in the uniform) or a
+post-filter on the blurred region. Ranked by quality over cost: temporal
+accumulation of an animated dither > tap spacing 3 px > a depth-aware 3x3
+filter on the blurred region only > full-res gather as the default. See the
+handover thread `motion-blur-grain`.
+
 ## What the velocity buffer does not solve
 
 Both of these read as solved once an MRT target exists. Neither is.

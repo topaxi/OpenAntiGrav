@@ -35,11 +35,12 @@ the original running.
 
 ## Open
 
-- **No runtime confirmation on the original.** A PPSSPP read of
-  `craft+0x8bc` -> `+0xac`/`+0xb0` world matrices on a strip, or a forced
-  Show (`obj+0xb4 = 1`, bit `4` into both models' `+0x2c`) on the grid
-  under the software renderer, would take the anchor from 88 to 95. It
-  would also give the side-by-side look reference this lane did not have.
+- **Runtime check done 2026-10-05** (anchor 95, see the page's runtime
+  section): offset, scale, ride-versus-lie and tint read live. Left open:
+  the original's streaks **flicker per frame** (patch delta 2-54) and ours
+  holds 14-15 at about 70 % of the mean brightness; cause unknown (the
+  original's capture has bloom and blur ours lacks, or the Anim Transform
+  rate differs). A `MagFloorFx_Show` breakpoint hit is also uncaught.
 - The track's down for MagEffect2 comes from the nearest spline sample
   (chosen, the sim's own stand-in), not the located sample `craft+0xb10`.
 - Pure: closed, a negative. Its executable has no magstrip class, no
@@ -50,7 +51,9 @@ the original running.
 
 ## Next Steps
 
-- Boot any Pulse race in PPSSPP (no need to reach Talon's Junction's loop),
-  force Show on the player's effect object, and capture a software-renderer
-  frame. Compare it with `oag-game --race --pose 348.8,14,434.2 --track
-  'Data\Environments\01_Track\track.vex' --ticks 300 --screenshot`.
+- Find what makes the original flicker: compare the Anim Transform's
+  sampled values over the original's clock against ours, with the `--presented`
+  path on our side. Matched-view recipe: Talon's Junction is `16_Track`
+  (not `01_Track`), start pose `6.07,-50.07,-196.05`; ours needs a way to force
+  the effect on there (a local env patch was used, `force-on.patch` in the
+  lane scratch, not committed).
