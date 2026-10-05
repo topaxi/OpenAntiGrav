@@ -248,6 +248,13 @@ If a new failure mode shows up mid-drive, relay it to the running members at
 once, then add it to `member-rules.md` so the next spawn inherits it. Don't
 bury it in one brief.
 
+**Do not widen a running lane by message.** A scope extension sent mid-lane
+was dropped twice on 2026-10-05: Omega particles and Omega music each went to
+a member already deep in its brief, and each report came back without a word
+about Omega. Put the extra scope in a fresh member's brief instead, or in the
+original brief if it is known at spawn time. Short corrections, such as "main
+moved" or a new rule, do arrive and are acted on.
+
 ## Hard rules to put in briefs, as they apply
 
 - **Never invent what the assets already author.** Parse it and play it, or draw
