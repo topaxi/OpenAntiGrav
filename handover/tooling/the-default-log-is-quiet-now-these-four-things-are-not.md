@@ -22,7 +22,7 @@ what that work found and did not touch.
    drivers. It is ours to fix in the WGSL, not to filter. The Vulkan validation
    `PERFORMANCE` lines beside it are a debug-build artefact.
 3. **The track-audio report prints twice per race**
-   (`track audio: N node(s) name ... and play nothing`, `crates/game/src/audio/sfx/track.rs`):
+   (`track audio: N node(s) name ... and play nothing`, `crates/sound/src/sfx/track.rs`):
    two report passes over the same circuit. Harmless, and it doubles the
    warns that line produces.
 4. **A DLC pack that fails to open is not a warning on the race path.**

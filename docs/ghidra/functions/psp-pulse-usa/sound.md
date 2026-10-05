@@ -1123,8 +1123,8 @@ byte order, so `oag_title::SequenceTick` carries it per title: `Psp` for Pulse
   **Decoded.** `0x19` is `Scream_OpAlternate`, corroborating
   [HD's reading](#four-opcodes-corroborated-against-hd-2026-09-04): a random
   pick among the key-ons that follow, never repeating the immediately
-  previous pick. Wired into `oag_game::audio::sfx::Banks::pick`
-  (`crates/game/src/audio/sfx/banks.rs`), 2026-09-04.
+  previous pick. Wired into `oag_sound::sfx::Banks::pick`
+  (`crates/sound/src/sfx/banks.rs`), 2026-09-04.
 - **The name hash**, `FUN_089924ec`. Not needed to extract names - the entry
   array walks linearly - but needed to reproduce a lookup faithfully.
 - **What consumes the cue-request list.** `Sound_Play` pushes 0x30-byte nodes
@@ -1190,7 +1190,7 @@ mid-list takes hold at the next pass of the loop, because the guards run before
 the delay, not after it: the key-on already waiting still fires.
 
 **Modelled** by `oag_formats::sblk::runner::Runner` and played by
-`oag_game::audio::sfx::repeating::Playing`; the ground truth is
+`oag_sound::sfx::repeating::Playing`; the ground truth is
 `crates/game/tests/sfx_repeating_ground_truth.rs`. **Chosen, not measured (no
 confidence score):** the phase of the master tick against the game tick is taken
 as zero, and a beep is started on the mixer with the sub-tick delay its authored

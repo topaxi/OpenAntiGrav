@@ -176,8 +176,8 @@ impl Race {
         if let Some(shell) = self.view.absorb_shell.get_mut(slot) {
             shell.stamp();
         }
-        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-            crate::audio::sfx::Cue::Absorb,
+        self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+            oag_sound::sfx::Cue::Absorb,
             slot,
         ));
         let Some(burst) = self.view.absorb_burst else {

@@ -13,7 +13,7 @@ use super::*;
 pub(super) fn advance_one_tick(
     race: &mut Race,
     held: &mut HeldButtons,
-    audio: &mut crate::audio::Audio,
+    audio: &mut oag_sound::Audio,
     options: &CaptureOptions,
     tick: u32,
 ) {
@@ -57,7 +57,7 @@ pub(super) fn advance_one_tick(
     // only end-to-end evidence a headless run has that a sound was made at
     // all, so a capture that silently held only half the mix is worse than
     // no capture.
-    audio.race_tick(race);
+    crate::sound::race_tick(audio, race);
     // Beside the race step and not outside the loop, for the reason the
     // exhaust and the chase camera are advanced from inside `Race::tick`:
     // what a capture produces has to be a function of the tick count and

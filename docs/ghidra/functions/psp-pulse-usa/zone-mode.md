@@ -349,7 +349,7 @@ line per threshold. Pure's own `speech_zone.bnk` carries a different ladder -
 `SpeedClass`/`NextSpeedClass` HUD widgets - unread on either title's own
 executable, so each ladder is this title's own data rather than a shared
 table, and HD's speed-class layer stays out of scope here. See
-`crates/game/src/audio/sfx/announcer.rs` for what is ported: playing the
+`crates/sound/src/sfx/announcer.rs` for what is ported: playing the
 numbered cue whenever the zone counter reaches a threshold this title's own
 bank names one for, on the same three-titles-and-no-hole standing
 [`oag_title::ZoneCraft`] already has.
@@ -470,7 +470,7 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    find. Confidence **85** on the cue and the path; the argument order is
    `FUN_0883e9b0`'s, read once here and once on the autopilot's warning.
 
-   **Ported**: `oag_game::audio::sfx::Cue::Blowup`, held on
+   **Ported**: `oag_sound::sfx::Cue::Blowup`, held on
    `Race::craft_is_exploding` - the state's own `0.5 s`, because where the
    original releases `craft+0xcac` is unread and that is the shortest lifetime
    the evidence supports.

@@ -53,11 +53,13 @@ oag-core.workspace = true
 # `oag_assets::read_loose_file` reads a loose file whole, so a single
 # 35 MiB track would cost the other fifteen. `DiscImage::read_entry_range`
 # reads the 196-byte directory and then exactly one entry. See
-# `crate::audio::load_ps2_track`.
+# `oag_sound::load_ps2_track`.
 oag-disc.workspace = true
-# Music: the soundtrack listing, ATRAC3+/ATRAC9/MP3/Wwise decoding. `crate::at3`
-# and friends re-export it so the old paths keep working.
+# Music: the soundtrack listing, ATRAC3+/ATRAC9/MP3/Wwise decoding.
 oag-music.workspace = true
+# What the game plays: soundtrack selection, effect banks, the mixer's buses.
+# `crate::sound` is the half of it that needs a `Race` or a title opener.
+oag-sound.workspace = true
 oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.

@@ -9,9 +9,7 @@ use oag_core::{TickClock, TickRate};
 
 use oag_display::display;
 use oag_game::render::Renderer;
-use oag_game::{
-    audio, boot, launcher, loading, perf, pilots, prefetch, race, settings, source, upscale,
-};
+use oag_game::{boot, launcher, loading, perf, pilots, prefetch, race, settings, source, upscale};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
@@ -103,14 +101,14 @@ pub(crate) struct App {
     /// Taken by [`Session`] on the first resume, which is why it is an
     /// `Option`: there is one of these per run, not one per window, and winit
     /// may resume more than once.
-    pub(crate) audio: Option<audio::Audio>,
+    pub(crate) audio: Option<oag_sound::Audio>,
     /// Which Pulse releases this machine has, surveyed once before the window
     /// opened.
     ///
     /// Beside `audio` because it is the same kind of thing - a property of the
     /// run rather than of what is on screen - and it is here rather than in
     /// `Shell` because `--race` has no shell and still has music.
-    pub(crate) music_discs: audio::MusicDiscs,
+    pub(crate) music_discs: oag_sound::MusicDiscs,
     /// What `--prefetch` asked for, **not started yet**.
     ///
     /// It may not start until the boot's own movies are done: both convert

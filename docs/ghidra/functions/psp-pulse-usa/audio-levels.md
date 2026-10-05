@@ -412,7 +412,7 @@ further isolation of the original at all:
   `data/cache/audio/` lands within a second of it). Its own RMS, computed
   directly off the raw samples with no mixer involved at all: **-11.37
   dBFS** - within 0.16 dB of our music-alone dump above. This directly
-  confirms `crates/game/src/audio.rs`'s own documented claim that an
+  confirms `crates/sound/src/lib.rs`'s own documented claim that an
   unattenuated voice "round-trips the disc's own PCM sample-for-sample": our
   music path adds no gain of its own, and the disc's own track is simply
   mastered this loud.
@@ -757,7 +757,7 @@ against below).
 
 `crates/audio/src/mixer.rs` gains `pub const MUSIC_MASTER_TRIM: f32 = 0.44`,
 documented with this evidence and confidence, applied to `Bus::Music` alone -
-`Audio::apply` (`crates/game/src/audio.rs`) now sets
+`Audio::apply` (`crates/sound/src/lib.rs`) now sets
 `mixer.set_bus_gain(Bus::Music, settings.music_volume.gain() * MUSIC_MASTER_TRIM)`,
 leaving the SFX and Speech buses untouched, matching the original's chain
 exactly: this trim has no analogue on the SFX/Speech side because the
@@ -919,7 +919,7 @@ mode mask** the page already reads (mask `10`) but does not yet know the
 **This entire stage is absent from the port.** `crates/audio/src/spatial.rs`
 takes `SoundEmitter_ComputeVolumeAndAngle`'s output (`volume_curve(atten *
 volume)`) and hands it to the mixer as the *final* linear gain; `grep` across
-`crates/audio` and `crates/game/src/audio` for `Scream`/`PanVolumePair` finds
+`crates/audio` and `crates/sound/src` for `Scream`/`PanVolumePair` finds
 nothing. The original does not stop at that `0..1024` value - it is one of
 (at least) four inputs multiplied together, with two of them squared, before
 the result divides by `0x3fff` into the actual channel gain. A product of
@@ -982,7 +982,7 @@ voice?). Without that, wiring the same arithmetic into
 port's own values maps to which of these three terms - exactly the invented
 mapping `CLAUDE.md` forbids, even though the arithmetic itself is now
 exactly known. **Nothing is changed in `crates/audio` or
-`crates/game/src/audio` by this pass.** The next step is tracing
+`crates/sound/src` by this pass.** The next step is tracing
 `Scream_PanVolumePair`'s callers (`Scream_SetSoundVolume` and neighbours,
 reached from `SoundInstance_UpdateSpatial`) to learn what feeds `a0`/`a1`/`t1`
 - either with the Ghidra bridge once it is available again, or with more of
@@ -1014,7 +1014,7 @@ this pass to confirm nothing drifted, not because anything was expected to:
 
 The small differences from the previously-recorded row (0.24 dB, 0.31 points)
 are **not attributed to a code effect - no line in `crates/audio` or
-`crates/game/src/audio` changed this pass** - but the exact cause of the
+`crates/sound/src` changed this pass** - but the exact cause of the
 drift itself is not pinned down either: candidates include a different
 debug-profile build, a fresh settings file resolving a different default
 track than the prior pass's own pin directory, and ordinary autopilot/AI

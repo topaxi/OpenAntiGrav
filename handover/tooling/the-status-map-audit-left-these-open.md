@@ -92,7 +92,7 @@ Checked still stale at the time of writing unless marked:
 - `crates/hd/src/loading.rs` module doc (lines 1-90): presents the `LSAD_*`
   stills as the retail loading screen. `docs/formats/hd-loading.md` "What the
   emulator settled" says RPCS3 disproved that.
-- `crates/game/src/audio/sfx/announcer.rs` about 20-23: says 2048 has no zone
+- `crates/sound/src/sfx/announcer.rs` about 20-23: says 2048 has no zone
   announcer.
 - `docs/ghidra/functions/psp-pulse-usa/shuriken.md` about 112 (the blade loads
   `pulse_shuriken.vex`) against the `projectile_sprites` doc comment in

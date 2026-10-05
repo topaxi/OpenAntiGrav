@@ -589,7 +589,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The race mix saturates; the per-voice SAS volume would settle whether it should](handover/audio/the-race-mix-saturates-the-per-voice-sas.md)
 - [The Autopilot pickup is built off its own two handlers; three of its parts are still ours](handover/gameplay/the-autopilot-pickup-is-built-off-its-own.md)
 - [Positional audio is recovered whole, and the pan is a table the disc computes from `cos` and `sin`](handover/audio/positional-audio-is-recovered-whole-and-the-pan.md)
-- [A circuit's sound emitters parse, and nothing plays them](handover/audio/a-circuits-sound-emitters-parse-and-nothing.md) - **both `sound` and `soundcone` are audible now, and both without an emulator.** `oag_game::audio::sfx::TrackEmitters` opens a held voice for every in-range `sound`/`soundcone` node.
+- [A circuit's sound emitters parse, and nothing plays them](handover/audio/a-circuits-sound-emitters-parse-and-nothing.md) - **both `sound` and `soundcone` are audible now, and both without an emulator.** `oag_sound::sfx::TrackEmitters` opens a held voice for every in-range `sound`/`soundcone` node.
 - [HD's exhaust is measured from the running game now: the trail is a 54-sample three-fin tube, the flame breathes with the throttle, and the plume scales rather than blinks](handover/rendering/hds-exhaust-is-measured-from-the-running-game.md)
 - [HD's engine trail is one of four ribbons, and a craft flying through one sparks](handover/rendering/hds-engine-trail-is-one-of-four-ribbons.md)
 - [HD's frame was too bright and too bloomy; the bloom chain was not what was wrong](handover/rendering/hds-frame-was-too-bright-and-too-bloomy.md)
@@ -1086,7 +1086,7 @@ without needing `--dump-audio`'s `--screenshot` pairing or its growing WAV
 buffer. Verified against both Pulse's `LogoFMV` reel and Pure's
 `Developer Publisher Screen` reel (which has two 2-second frame holds -
 the one place tick-clock and audio-clock provably diverge, and it still
-lands on the correct next state). See `crates/game/src/audio.rs`'s
+lands on the correct next state). See `crates/sound/src/lib.rs`'s
 `Audio::open`/`Audio::movie_playhead` and `crates/game/src/main/cli.rs`'s
 `--no-audio`.
 

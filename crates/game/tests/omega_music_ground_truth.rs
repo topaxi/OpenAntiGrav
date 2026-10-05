@@ -2,8 +2,9 @@
 //!
 //! **`#[ignore]`d and never run in CI**; needs `data/extracted/ps4`.
 
-use oag_game::music;
+use oag_game::sound::GameLibrary;
 use oag_music::omega;
+use oag_sound::library;
 
 fn source() -> Option<String> {
     let path = oag_testdata::exact("data/extracted/ps4")?;
@@ -57,7 +58,7 @@ fn the_playlist_resolves_seventeen_songs_and_names_why_twelve_do_not() {
 #[ignore = "needs data/extracted/ps4"]
 fn the_listing_and_a_song_load_through_the_engines_path() {
     let Some(source) = source() else { return };
-    let listing = music::listing(&source)
+    let listing = library::listing(&GameLibrary, &source)
         .expect("lists")
         .expect("Omega is an archived title");
     assert_eq!(listing.len(), 17);
@@ -68,7 +69,7 @@ fn the_listing_and_a_song_load_through_the_engines_path() {
     );
 
     let cache = std::env::temp_dir();
-    let sound = music::load_entry(&source, listing[0].at, &cache).expect("loads");
+    let sound = library::load_entry(&GameLibrary, &source, listing[0].at, &cache).expect("loads");
     let seconds = sound.frames() as f64 / f64::from(sound.sample_rate());
     assert!((seconds - listing[0].seconds).abs() < 0.001, "{seconds}");
 }
@@ -109,7 +110,7 @@ fn every_song_mixes_to_its_segment_length() {
 #[ignore = "needs data/extracted/ps4"]
 fn the_front_ends_loop_is_walked_from_the_menus_state() {
     let Some(source) = source() else { return };
-    let (name, sound) = music::load_front_end(&source, &std::env::temp_dir())
+    let (name, sound) = library::load_front_end(&GameLibrary, &source, &std::env::temp_dir())
         .expect("loads")
         .expect("Omega has a front-end loop");
     let seconds = sound.frames() as f64 / f64::from(sound.sample_rate());

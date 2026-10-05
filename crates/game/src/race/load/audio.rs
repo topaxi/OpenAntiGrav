@@ -5,8 +5,8 @@
 
 use super::*;
 
-/// [`crate::audio::sfx::Banks`], [`crate::audio::sfx::Announcer`] and
-/// [`crate::audio::sfx::ClassAnnouncer`], each loaded on the same "never
+/// [`oag_sound::sfx::Banks`], [`oag_sound::sfx::Announcer`] and
+/// [`oag_sound::sfx::ClassAnnouncer`], each loaded on the same "never
 /// fails, an empty result costs nothing to carry" terms.
 pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
@@ -15,9 +15,9 @@ pub(super) fn banks_and_announcers(
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
-    crate::audio::sfx::Banks,
-    crate::audio::sfx::Announcer,
-    crate::audio::sfx::ClassAnnouncer,
+    oag_sound::sfx::Banks,
+    oag_sound::sfx::Announcer,
+    oag_sound::sfx::ClassAnnouncer,
 ) {
     // Adding a cue is adding its name and its trigger, never a loader. Zone
     // races read `ship_zone.bnk` instead of `ship.bnk` - a different bank
@@ -25,8 +25,8 @@ pub(super) fn banks_and_announcers(
     let tick = race
         .zone_announcer
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
-    let mut sounds =
-        crate::audio::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
+    let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
+    crate::loader_log::lines_at(log::Level::Trace, &sounds.report);
     // The start-of-race voice, from the speech bank this mode opened rather
     // than the title's: Zone and Eliminator each load their own. See
     // `oag_title::CountdownVoice`.
@@ -36,10 +36,12 @@ pub(super) fn banks_and_announcers(
             Mode::Eliminator => voice.eliminator_bank,
             _ => race.sounds.speech,
         };
+        let before = sounds.report.len();
         sounds.load_countdown(archives, entry, tick);
+        crate::loader_log::lines_at(log::Level::Trace, &sounds.report[before..]);
     }
     // HD's engine is a per-team crossfade table, not a cue: loaded only where
-    // the ship bank has no `~ENGINE`. See `crate::audio::sfx::XfadeTeam`.
+    // the ship bank has no `~ENGINE`. See `oag_sound::sfx::XfadeTeam`.
     let ship_bank = if mode == Mode::Zone {
         race.sounds.ship_zone
     } else {
@@ -51,12 +53,11 @@ pub(super) fn banks_and_announcers(
     // Loaded regardless of mode, on the same terms `sounds` is: an announcer
     // with nothing to say (not Zone, or a title with no recovered ladder) is
     // an empty map.
-    let announcer = crate::audio::sfx::Announcer::load(archives, race.zone_announcer);
+    let announcer = oag_sound::sfx::Announcer::load(archives, race.zone_announcer);
     report.extend(announcer.report.iter().cloned());
 
     // `announcer`'s sibling, keyed by stage instead of milestone.
-    let class_announcer =
-        crate::audio::sfx::ClassAnnouncer::load(archives, race.zone_class_announcer);
+    let class_announcer = oag_sound::sfx::ClassAnnouncer::load(archives, race.zone_class_announcer);
     report.extend(class_announcer.report.iter().cloned());
 
     (sounds, announcer, class_announcer)
@@ -68,15 +69,16 @@ pub(super) fn banks_and_announcers(
 /// Separate from [`banks_and_announcers`] because it is keyed by *circuit*
 /// rather than by title: one disc's twelve tracks author twelve different sets
 /// and a Zone circuit authors none, where the bank table is one per release.
-/// See [`crate::audio::sfx::TrackEmitters`].
+/// See [`oag_sound::sfx::TrackEmitters`].
 pub(super) fn track_emitters(
     archives: &mut oag_assets::Archives,
     banks: &oag_title::SoundBanks,
     track: &str,
     blob: &[u8],
     report: &mut Vec<String>,
-) -> crate::audio::sfx::TrackEmitters {
-    let loaded = crate::audio::sfx::TrackEmitters::load(archives, banks, track, blob);
+) -> oag_sound::sfx::TrackEmitters {
+    let loaded = oag_sound::sfx::TrackEmitters::load(archives, banks, track, blob);
+    crate::loader_log::lines(&loaded.report);
     report.extend(loaded.report.iter().cloned());
     loaded
 }

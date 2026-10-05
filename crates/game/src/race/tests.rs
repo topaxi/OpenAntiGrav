@@ -243,13 +243,13 @@ fn setup(handling: Handling) -> Setup {
         effects: psys::Library::new(),
         // No disc, so no banks: a headless race raises its cues and plays none
         // of them, which is the same path a source with no sound banks takes.
-        sounds: crate::audio::sfx::Banks::default(),
+        sounds: oag_sound::sfx::Banks::default(),
         // No circuit `.vex` either, so no authored ambience - the same path a
         // Zone circuit takes, which authors none of the three audio classes.
-        track_emitters: crate::audio::sfx::TrackEmitters::default(),
+        track_emitters: oag_sound::sfx::TrackEmitters::default(),
         // Same path: no title data, so no ladder, so nothing decodes.
-        announcer: crate::audio::sfx::Announcer::default(),
-        class_announcer: crate::audio::sfx::ClassAnnouncer::default(),
+        announcer: oag_sound::sfx::Announcer::default(),
+        class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.

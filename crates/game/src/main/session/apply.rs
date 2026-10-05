@@ -3,7 +3,7 @@
 use log::{error, warn};
 use oag_display::display;
 use oag_game::settings::TriggerSensitivity;
-use oag_game::{audio, drs, input, perf, settings};
+use oag_game::{drs, input, perf, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_input::pad::TriggerMode;
@@ -164,7 +164,7 @@ impl Session {
             // read by whatever the mixer renders next, which on a device is
             // already in flight. That is what makes the row audible while the
             // player is standing on it, the way the two above are visible.
-            "audio.music_volume" => match text.parse::<audio::Volume>() {
+            "audio.music_volume" => match text.parse::<oag_sound::Volume>() {
                 Ok(volume) => {
                     self.settings.audio.music_volume = volume;
                     self.audio.apply(&self.settings.audio);
@@ -178,7 +178,7 @@ impl Session {
             // mechanism: straight onto `Bus::Sfx`'s gain. A held `~ENGINE`
             // voice follows it without being restarted, because a bus gain is
             // applied at mix time rather than at play time.
-            "audio.sfx_volume" => match text.parse::<audio::Volume>() {
+            "audio.sfx_volume" => match text.parse::<oag_sound::Volume>() {
                 Ok(volume) => {
                     self.settings.audio.sfx_volume = volume;
                     self.audio.apply(&self.settings.audio);
@@ -190,7 +190,7 @@ impl Session {
             },
             // The voice bus, which a cue reaches by living in `speech.bnk`
             // rather than by being listed anywhere - see `sfx::Cue::bus`.
-            "audio.speech_volume" => match text.parse::<audio::Volume>() {
+            "audio.speech_volume" => match text.parse::<oag_sound::Volume>() {
                 Ok(volume) => {
                     self.settings.audio.speech_volume = volume;
                     self.audio.apply(&self.settings.audio);
@@ -204,7 +204,7 @@ impl Session {
             // master rather than a bus, so a player who finds the race
             // distorting turns one thing down instead of keeping two in step.
             // Same mechanism as the two above.
-            "audio.master_volume" => match text.parse::<audio::Volume>() {
+            "audio.master_volume" => match text.parse::<oag_sound::Volume>() {
                 Ok(volume) => {
                     self.settings.audio.master_volume = volume;
                     self.audio.apply(&self.settings.audio);
@@ -220,7 +220,7 @@ impl Session {
             // move onto a release reads it off its disc - measured at 2.0 s
             // for the PS2's 36 MiB of PCM and 0.4 s for the PSP's cached
             // decode - and every move after that is instant, because the sound
-            // is held. See `audio::Audio::set_music_source`.
+            // is held. See `oag_sound::Audio::set_music_source`.
             // **Re-read rather than remembered.** The illustration is a decoded
             // image off the disc, so changing the styling means opening the
             // source again - cheap, and done here in the menus rather than at
@@ -230,7 +230,7 @@ impl Session {
                 self.settings.display.front_end_style = text.to_string();
                 self.reload_loading_assets();
             }
-            "audio.music_source" => match text.parse::<audio::MusicSource>() {
+            "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;
                     self.audio.set_music_source(

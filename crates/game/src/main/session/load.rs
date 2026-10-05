@@ -5,7 +5,7 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 
 use oag_game::render::VideoFormat;
-use oag_game::{audio, boot, loading, movie, prefetch, race, records};
+use oag_game::{boot, loading, movie, prefetch, race, records};
 use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
@@ -472,9 +472,9 @@ impl Session {
         // `reserve_race_music_index` settles which track before the worker
         // starts, so it and `Audio::finish_race_music` (called once this
         // stage's fade runs out) agree on one without either asking `discs`
-        // twice. See `LoadingStage::music` and `audio::MusicFetchWorker`.
+        // twice. See `LoadingStage::music` and `oag_sound::MusicFetchWorker`.
         let music_index = self.audio.reserve_race_music_index(&self.music_discs);
-        let music = audio::MusicFetchWorker::spawn(
+        let music = oag_sound::MusicFetchWorker::spawn(
             self.music_discs.clone(),
             self.settings.audio.music_source,
             boot::default_audio_cache_dir(),

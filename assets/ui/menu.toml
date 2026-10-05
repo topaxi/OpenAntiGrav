@@ -1109,7 +1109,7 @@ title_string_id = "OAG_OPTIONS_AUDIO"
 # Two bus rows, because the original's options menu has exactly two volumes and
 # no more: `"Music Volume"` at `0x08a78658` and `"SFX Volume"` at `0x08a78668`.
 # The second one earned its row when the sound banks started decoding - see
-# `oag_game::audio::sfx`.
+# `oag_sound::sfx`.
 #
 # Applied on the next tick - the change goes straight onto the bus's gain, so it
 # is audible on the row the player is standing on rather than after a restart,
@@ -1131,7 +1131,7 @@ values = ["0", "25", "50", "75", "90", "100"]
 
 # The announcer, on its own row because the original puts voice lines in their
 # own bank: `shieldactive` is in `speech.bnk` and not beside the `~SHIELD` loop
-# it fires with, which is already how `oag_game::audio::sfx` tells a callout
+# it fires with, which is already how `oag_sound::sfx` tells a callout
 # from an effect. See `docs/architecture/adr/0027-three-mix-buses.md`.
 #
 # **Two cues reach it today** - the shield callout and the Autopilot's
@@ -1184,7 +1184,7 @@ values = ["0", "25", "50", "75", "90", "100"]
 #
 # Changing it **seeks rather than restarts**: the playhead is carried across in
 # seconds, and the two encodes of a track agree in length to 11 ms, so the same
-# offset lands in the same bar. See `crates/game/src/audio.rs`.
+# offset lands in the same bar. See `crates/sound/src/lib.rs`.
 [[page.entry]]
 kind = "choice"
 label = "MUSIC SOURCE"

@@ -8,7 +8,7 @@
 use oag_audio::Bus;
 
 use super::Cue;
-use crate::audio::sfx::{BankName, Placement};
+use crate::sfx::{BankName, Placement};
 
 impl Cue {
     /// The two start-of-race cues, loaded on their own because their bank is

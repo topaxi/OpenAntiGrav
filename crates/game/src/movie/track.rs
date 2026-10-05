@@ -97,7 +97,7 @@ pub struct MovieAudio {
     kind: MovieAudioKind,
 }
 
-// Written out rather than derived for the reason `crate::audio::Dump` gives:
+// Written out rather than derived for the reason `oag_sound::Dump` gives:
 // the ATRAC3+ case is most of a megabyte of codec payload, and a `{:?}` of a
 // `Movie` should say how much there is rather than print it.
 impl std::fmt::Debug for MovieAudio {

@@ -5,7 +5,7 @@ How a cue fired somewhere in the world becomes a volume and a stereo position.
 [`sound.md`](sound.md) walks a cue name down to `sceSasSetVoice`; this page is
 the other axis - what the game multiplies into that voice because the thing
 making the noise is 80 units away and to the left. It is the reading
-[`oag_game::audio::sfx`](../../../../crates/game/src/audio/sfx.rs) was missing
+[`oag_sound::sfx`](../../../../crates/sound/src/sfx.rs) was missing
 when it said "only the player's craft is audible here".
 
 **Everything below is static reading of `psp-pulse-usa`'s `BOOT.BIN`, except the
@@ -705,7 +705,7 @@ The 720-byte table was searched for byte-for-byte in every executable under
 | `ps2/pulse-eu/SCES_547.48` | **absent, in both byte orders** |
 
 Pure and Wipeout HD carrying the identical curve is what lets
-`oag_game::audio::sfx` pan on all three titles without that being a Pulse
+`oag_sound::sfx` pan on all three titles without that being a Pulse
 reading applied to another game - the caveat that module's doc comment carries
 about *triggers* does not extend to this. HD holding it byte-swapped is the same
 pattern the rest of that disc shows.
@@ -750,7 +750,7 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
   `oag_audio::spatial::Doppler` is `2^(-(dd/dt) * 0.0005)` as a ratio on the
   voice, `oag_audio::LISTENER_JUMP` is the `24.0` camera-cut guard, and both
   the eight engine notes and the circuit's held ambience voices carry it
-  (`crates/game/src/audio/sfx/engine.rs`, `track.rs`). One-shots do not:
+  (`crates/sound/src/sfx/engine.rs`, `track.rs`). One-shots do not:
   they are fired and forgotten here, where the original keeps writing pitch
   to a live instance until it ends - a rocket passing the ear does not bend
   yet.

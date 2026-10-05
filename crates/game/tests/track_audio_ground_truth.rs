@@ -21,9 +21,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::audio::sfx::{TrackEmitters, listener_of};
 use oag_game::race;
+use oag_game::sound::listener_of;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::TrackEmitters;
 
 /// `01_Track`, the circuit the thread names: 86 `sound` nodes and no cone.
 const TRACK: &str = r"Data\Environments\01_Track\track.vex";
@@ -269,8 +270,8 @@ fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
         .join("track-ambience-01_track.wav");
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // on a machine with no sound card - see `Audio::open`.
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
         None,
         oag_audio::MIN_BUFFER,
@@ -286,7 +287,7 @@ fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
     let mut last = None;
     for _ in 0..TICKS {
         race.tick(&PlayerInputs::none());
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
         let live = audio.ambient_voices();
         peak_voices = peak_voices.max(live);

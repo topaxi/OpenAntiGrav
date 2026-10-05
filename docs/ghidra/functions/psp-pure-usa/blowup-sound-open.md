@@ -5,7 +5,7 @@
 project's own rule that a search dead end is worth writing down so the next
 pass does not repeat it.
 
-Answers, incompletely, `oag_game::audio::sfx::Cue::Blowup` for Pure - the
+Answers, incompletely, `oag_sound::sfx::Cue::Blowup` for Pure - the
 last of the nine `Cue` variants still unconfirmed there after
 [`rocket-and-collision-fx.md`](rocket-and-collision-fx.md),
 [`shield-sound.md`](shield-sound.md), [`dry-play-cues.md`](dry-play-cues.md),
@@ -97,7 +97,7 @@ which none of the other eight cues needed) or a Ghidra project session spent
 specifically walking `Ship_SetState`'s Pure counterpart from scratch, neither
 of which is a small next step. Per this project's reverse-engineering
 methodology, a search dead end is written down rather than pushed through on
-a guess - nothing here is renamed, and `oag_game::audio::sfx::Cue::Blowup`
+a guess - nothing here is renamed, and `oag_sound::sfx::Cue::Blowup`
 stays on the module-level confidence-50 bet for Pure, same as it already was
 for every cue before this thread started.
 

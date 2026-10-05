@@ -16,7 +16,7 @@
 //! `/data/plugins/frontend/definition.xml` declares one `PI_Music` node per
 //! track. Each of those is a measurement, so each is asserted here.
 //!
-//! It is also the only place the **MP3 half** of `oag_game::music`'s container
+//! It is also the only place the **MP3 half** of `oag_sound::library`'s container
 //! dispatch is exercised against real streams. A synthetic MPEG frame is not
 //! something a decoder will open, so the unit tests beside that module can only
 //! assert what is *not* MPEG; the case that matters is here.
@@ -31,7 +31,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::Platform;
-use oag_game::{audio, music};
+use oag_game::sound::GameLibrary;
+use oag_sound::{self as audio, library};
 
 /// The decrypted HD/Fury image, if it is there.
 ///
@@ -42,9 +43,9 @@ fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
 
-/// What `oag_game::music` reports for the disc.
+/// What `oag_sound::library` reports for the disc.
 fn listing(image: &Path) -> Vec<oag_music::Entry> {
-    music::listing(&image.display().to_string())
+    library::listing(&GameLibrary, &image.display().to_string())
         .expect("reading the soundtrack listing")
         .expect("a disc of a title this build knows")
 }
@@ -217,7 +218,7 @@ fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
 fn the_front_ends_music_loads_through_the_engines_own_path() {
     let Some(image) = image() else { return };
     let cache = std::env::temp_dir().join("oag-hd-music-ground-truth");
-    let (name, sound) = music::load_front_end(&image.display().to_string(), &cache)
+    let (name, sound) = library::load_front_end(&GameLibrary, &image.display().to_string(), &cache)
         .expect("loading the front end's music")
         .expect("HD names one");
 
@@ -313,7 +314,7 @@ fn the_listing_is_in_the_declared_order() {
 fn an_hd_boot_reports_its_own_disc_and_offers_no_choice() {
     let Some(image) = image() else { return };
     let source = image.display().to_string();
-    let discs = audio::MusicDiscs::survey(&source);
+    let discs = audio::MusicDiscs::survey(&source, &GameLibrary);
 
     assert_eq!(discs.booted(), Some(Platform::Ps3));
     assert!(!discs.both(), "{}", discs.describe());

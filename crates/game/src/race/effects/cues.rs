@@ -46,8 +46,8 @@ impl Race {
             return;
         }
         *cooldown = oag_render::sparks::COLLISION_COOLDOWN;
-        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-            crate::audio::sfx::Cue::Collision,
+        self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+            oag_sound::sfx::Cue::Collision,
             slot,
         ));
     }
@@ -63,31 +63,31 @@ impl Race {
     /// a race that is never drained grows it by at most a handful of entries a
     /// second, all of them fixed-size - but the composition root does drain it,
     /// and a headless test that does not is bounded by its own tick count.
-    pub fn drain_cues(&mut self) -> Vec<crate::audio::sfx::CueEvent> {
+    pub fn drain_cues(&mut self) -> Vec<oag_sound::sfx::CueEvent> {
         std::mem::take(&mut self.sim.cues)
     }
 
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
-    pub fn pending_cues(&self) -> &[crate::audio::sfx::CueEvent] {
+    pub fn pending_cues(&self) -> &[oag_sound::sfx::CueEvent] {
         &self.sim.cues
     }
 
     /// The decoded sound banks this race loaded.
     #[must_use]
-    pub fn sounds(&self) -> &crate::audio::sfx::Banks {
+    pub fn sounds(&self) -> &oag_sound::sfx::Banks {
         &self.view.sounds
     }
 
     /// The circuit's own authored sound emitters, as this race loaded them.
     #[must_use]
-    pub fn track_emitters(&self) -> &crate::audio::sfx::TrackEmitters {
+    pub fn track_emitters(&self) -> &oag_sound::sfx::TrackEmitters {
         &self.view.track_emitters
     }
 
     /// The decoded Zone milestone announcer this race loaded.
     #[must_use]
-    pub fn announcer(&self) -> &crate::audio::sfx::Announcer {
+    pub fn announcer(&self) -> &oag_sound::sfx::Announcer {
         &self.view.announcer
     }
 
@@ -96,7 +96,7 @@ impl Race {
     /// Whether `milestone` actually names a loaded cue is
     /// [`Self::announcer`]'s question, not this call's - see
     /// [`Self::drain_announcements`] for why the split is the same one
-    /// [`Self::raise_contact_cue`] and [`Banks::pick`](crate::audio::sfx::Banks::pick)
+    /// [`Self::raise_contact_cue`] and [`Banks::pick`](oag_sound::sfx::Banks::pick)
     /// already keep.
     pub(in crate::race) fn push_announcement(&mut self, milestone: u16) {
         self.sim.announcements.push(milestone);
@@ -110,7 +110,7 @@ impl Race {
 
     /// The decoded Zone speed-class announcer this race loaded.
     #[must_use]
-    pub fn class_announcer(&self) -> &crate::audio::sfx::ClassAnnouncer {
+    pub fn class_announcer(&self) -> &oag_sound::sfx::ClassAnnouncer {
         &self.view.class_announcer
     }
 

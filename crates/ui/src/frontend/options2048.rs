@@ -30,7 +30,7 @@
 //! **`OptionsCamera`'s `CameraP1` list** cycles
 //! [`oag_display::display::CameraView`]'s three values in the file's own
 //! order (`OPT_CLOSE`/`OPT_FAR`/`OPT_INT`) and **`OptionsAudio`'s two
-//! `TouchSlider`s** step [`crate::audio::Volume`] - wait, this crate is
+//! `TouchSlider`s** step [`oag_sound::Volume`] - wait, this crate is
 //! `oag-ui` and does not know that type; see [`Frontend::camera_choice`]/
 //! [`Frontend::music_choice`]/[`Frontend::sfx_choice`], which carry a plain
 //! index/percentage for the composition root to apply, the same "`None`

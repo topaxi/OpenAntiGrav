@@ -77,8 +77,8 @@ pub struct Banks {
     /// [`super::xfade`].
     pub(super) xfade: BTreeMap<String, Arc<super::xfade::Team>>,
     /// HD's authored group volumes, read with the engine tables and gated the
-    /// same way. See [`crate::audio::hd_mix`].
-    pub(super) mix: Option<Arc<crate::audio::hd_mix::Maps>>,
+    /// same way. See [`crate::hd_mix`].
+    pub(super) mix: Option<Arc<crate::hd_mix::Maps>>,
 }
 
 impl Banks {
@@ -131,7 +131,7 @@ impl Banks {
                 &mut report,
             );
         }
-        crate::loader_log::lines_at(log::Level::Trace, &report);
+
         Self {
             sounds,
             report,
@@ -180,7 +180,7 @@ impl Banks {
                 &mut report,
             );
         }
-        crate::loader_log::lines_at(log::Level::Trace, &report);
+
         self.report.extend(report);
     }
 
@@ -204,7 +204,7 @@ impl Banks {
         // Only where tables loaded: the mix is HD's, and a title that reads no
         // `.xfx` keeps its own buses.
         if !self.xfade.is_empty() {
-            self.mix = crate::audio::hd_mix::Maps::load(archives).map(Arc::new);
+            self.mix = crate::hd_mix::Maps::load(archives).map(Arc::new);
         }
     }
 

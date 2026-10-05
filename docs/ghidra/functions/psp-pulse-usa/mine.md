@@ -562,7 +562,7 @@ pointer hops off the subsystem's per-craft slot, landing on a `+0x50` field.
 `+0x50` is the same offset `ShipCollisionFx_Trigger` (`0x089246b4`) reads as
 the craft's own emitter for `.COLLISIONS` and `Shield_Activate`
 (`0x0883e544`) reads it for `~SHIELD` - see
-[`Cue::Collision`/`Cue::Shield`'s placement reading](../../../../crates/game/src/audio/sfx.rs).
+[`Cue::Collision`/`Cue::Shield`'s placement reading](../../../../crates/sound/src/sfx.rs).
 Two levels of indirection is more inferential than either of those single-hop
 reads, so this is scored **78** (probable: strong structural fit, the same
 offset three call sites now agree on, not runtime-verified) rather than
@@ -578,7 +578,7 @@ cluster is coming out.
 matrix* (`param_1 + 0x60`, i.e. `entity->matrix`), and the handle this call
 returns is stored at `entity + 0x50` - the mine's own field, not the craft's.
 That is a per-projectile emitter with a held handle, the shape
-`docs/`'s own audio module (`crates/game/src/audio/sfx.rs`) calls a *held*
+`docs/`'s own audio module (`crates/sound/src/sfx.rs`) calls a *held*
 voice - and every held voice this engine plays today (`Engine`, `Shield`,
 `Blowup`) is anchored to a **craft**, keyed by grid slot; nothing in
 `CueEvent` or `SfxVoices` can anchor one to a projectile pool slot instead.

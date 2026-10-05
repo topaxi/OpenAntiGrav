@@ -360,7 +360,7 @@ impl Race {
             // wall hit or the 10 s timeout (`struck: None` either way) plays
             // `PlasmaHitWall` as before. See
             // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
-            // is the third ending" section and `crate::audio::sfx::Cue::PlasmaHitShip`'s
+            // is the third ending" section and `oag_sound::sfx::Cue::PlasmaHitShip`'s
             // own doc comment.
             //
             // The Rocket and the Cannon share the same wall/craft split, each
@@ -374,16 +374,16 @@ impl Race {
             use oag_tables::weapons::Weapon;
             let hit_cues = match impact.kind {
                 Weapon::Plasma => Some((
-                    crate::audio::sfx::Cue::PlasmaHitWall,
-                    crate::audio::sfx::Cue::PlasmaHitShip,
+                    oag_sound::sfx::Cue::PlasmaHitWall,
+                    oag_sound::sfx::Cue::PlasmaHitShip,
                 )),
                 Weapon::Rocket => Some((
-                    crate::audio::sfx::Cue::RocketHitWall,
-                    crate::audio::sfx::Cue::RocketHitShip,
+                    oag_sound::sfx::Cue::RocketHitWall,
+                    oag_sound::sfx::Cue::RocketHitShip,
                 )),
                 Weapon::Cannon => Some((
-                    crate::audio::sfx::Cue::CannonHitWall,
-                    crate::audio::sfx::Cue::CannonHitShip,
+                    oag_sound::sfx::Cue::CannonHitWall,
+                    oag_sound::sfx::Cue::CannonHitShip,
                 )),
                 _ => None,
             };
@@ -397,13 +397,13 @@ impl Race {
             if let Some(cue) = weapons::missile_ending_cue(impact) {
                 self.sim
                     .cues
-                    .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
             }
             if let Some((wall, ship)) = hit_cues {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
                     .cues
-                    .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
             }
         }
         // After the loop above, so a Plasma detonated this tick is already
@@ -431,15 +431,15 @@ impl Race {
             }
             match projectile.kind {
                 Some(oag_tables::weapons::Weapon::Missile) => {
-                    self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
-                        crate::audio::sfx::Cue::MissileHitWall,
+                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
+                        oag_sound::sfx::Cue::MissileHitWall,
                         projectile.position,
                     ));
                 }
                 // On the blade's own emitter - see `Cue::ShurikenHit`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
-                    self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
-                        crate::audio::sfx::Cue::ShurikenHit,
+                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
+                        oag_sound::sfx::Cue::ShurikenHit,
                         projectile.position,
                     ));
                 }
@@ -810,8 +810,8 @@ impl Race {
         // level the edge starts. The level half is `Race::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
         if shielded && !self.view.shield_was_up {
-            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                crate::audio::sfx::Cue::ShieldActive,
+            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                oag_sound::sfx::Cue::ShieldActive,
                 0,
             ));
         }

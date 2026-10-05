@@ -39,7 +39,7 @@ pub(super) fn locate(
     source: &str,
     index: usize,
 ) -> Result<Option<Track>> {
-    let Some(soundtrack) = Soundtrack::read(source, platform)? else {
+    let Some(soundtrack) = Soundtrack::read(discs.library, source, platform)? else {
         return Ok(None);
     };
     if discs.booted() == Some(platform) {
@@ -49,7 +49,7 @@ pub(super) fn locate(
     let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
         return Ok(soundtrack.tracks.get(index).copied());
     };
-    let Some(booted) = Soundtrack::read(booted_source, booted_platform)? else {
+    let Some(booted) = Soundtrack::read(discs.library, booted_source, booted_platform)? else {
         return Ok(soundtrack.tracks.get(index).copied());
     };
     let Some(wanted) = booted.tracks.get(index) else {
@@ -176,7 +176,13 @@ fn fetch_track(
     let Some(track) = locate(discs, platform, source, index)? else {
         return Ok(None);
     };
-    let sound = Arc::new(load_track(source, platform, track, cache_dir)?);
+    let sound = Arc::new(load_track(
+        discs.library,
+        source,
+        platform,
+        track,
+        cache_dir,
+    )?);
     Ok(Some(Loaded {
         from: Some(platform),
         sound,

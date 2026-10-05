@@ -41,6 +41,7 @@ fn a_music_source_round_trips_through_its_own_text() {
 #[test]
 fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let psp_only = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,
@@ -58,6 +59,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     }
 
     let both = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -254,6 +256,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     // music is a soundtrack track and so the one the row can move. See
     // `MusicSource`, and the test below for the PSP boot.
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -355,6 +358,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
 #[test]
 fn asking_for_the_music_again_never_restarts_it() {
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -412,6 +416,7 @@ fn asking_for_the_music_again_never_restarts_it() {
 #[test]
 fn a_source_with_no_music_is_not_retried_every_tick() {
     let nothing = MusicDiscs {
+        library: &NoLibrary,
         psp: None,
         ps2: None,
         ps3: None,
@@ -447,6 +452,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     // and so certain to load. It is declined anyway: the first ask is the
     // only one, whatever it decided.
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: None,
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -475,6 +481,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
 #[test]
 fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,

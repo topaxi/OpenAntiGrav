@@ -572,8 +572,8 @@ pub struct Setup {
     /// Decoded PCM and nothing device-shaped, so this belongs beside the
     /// simulation the way the particle library does; the mixer, the voices and
     /// the choice of which alternate sounds all live in
-    /// [`crate::audio::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
-    pub sounds: crate::audio::sfx::Banks,
+    /// [`oag_sound::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
+    pub sounds: oag_sound::sfx::Banks,
     /// The circuit's **own** authored sound emitters, the ambience that belongs
     /// to the track rather than to any craft.
     ///
@@ -581,18 +581,18 @@ pub struct Setup {
     /// with nothing device-shaped in it. Empty on a Zone circuit, which authors
     /// none of the three `.vex` audio classes at all, and on any title whose
     /// circuits have never been swept for them.
-    pub track_emitters: crate::audio::sfx::TrackEmitters,
+    pub track_emitters: oag_sound::sfx::TrackEmitters,
     /// Zone mode's milestone announcer, decoded from this title's own
     /// `oag_title::ZoneAnnouncer` when it has one.
     ///
     /// Empty on every other mode and on a title with no recovered ladder -
     /// [`Self::sounds`]'s rule applies unchanged: a milestone that will not
     /// resolve plays nothing rather than a substitute.
-    pub announcer: crate::audio::sfx::Announcer,
+    pub announcer: oag_sound::sfx::Announcer,
     /// Zone mode's speed-class announcer, [`Self::announcer`]'s sibling,
     /// decoded from this title's own `oag_title::ZoneClassAnnouncer` when it
     /// has one.
-    pub class_announcer: crate::audio::sfx::ClassAnnouncer,
+    pub class_announcer: oag_sound::sfx::ClassAnnouncer,
     /// This title's own zone-number-to-speed-class ladder, when it is
     /// recovered - the same [`oag_title::ZoneStages`]
     /// [`crate::race::zone_grade::ZoneGrade`] carries, copied here so
@@ -601,8 +601,8 @@ pub struct Setup {
     /// title but HD/Fury, which is `oag_title::ZoneStages`' own standing today.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
     /// Whether this title's `ready` and `go` start-of-race voice has been
-    /// measured, so the race raises [`crate::audio::sfx::Cue::Ready`] and
-    /// [`crate::audio::sfx::Cue::Go`] at the ticks [`crate::race::countdown`]
+    /// measured, so the race raises [`oag_sound::sfx::Cue::Ready`] and
+    /// [`oag_sound::sfx::Cue::Go`] at the ticks [`crate::race::countdown`]
     /// pins. Straight from `oag_title::RaceDefaults::countdown_voice` being
     /// `Some`.
     ///

@@ -298,7 +298,7 @@ player being lapped and the race ending; they read the engine at `0.124` and the
 at `0.05` then `0.00` (no source left). The numbers above are from a fresh race, 10 to 100 s after the
 start, with the other craft's `slot+4` words read at each window.
 
-**What the port does** (`crates/game/src/audio/hd_mix.rs`, `Bus::Group(n)` in `oag_audio`): the Stereo
+**What the port does** (`crates/sound/src/hd_mix.rs`, `Bus::Group(n)` in `oag_audio`): the Stereo
 rows are parsed (no hand-copied table), a live array chases the grid (`Countdown`) or race
 (`RaceNormal`) row at `0.025` per 256-sample frame (**chosen**: one reading), the music bus is
 `0.8 * slider * group0` and group bus `n` is `(0.8 * slider * group_n)^2 / 2`. The division by two is the
@@ -366,4 +366,4 @@ templates, `Auto Volume` (default on; its flag's readers are persistence accesso
 
 The wiring and what it chooses are in
 [`xfade.md`](../ghidra/functions/ps3-hdfury-eu/xfade.md); the code is
-`crates/game/src/audio/sfx/xfade.rs`.
+`crates/sound/src/sfx/xfade.rs`.

@@ -150,7 +150,7 @@ against Pulse's sixteen at 177.2 to 204.3 s. The two populations very nearly
 touch: Pure's shortest is 0.87 s from Pulse's longest. So a single track
 matching a length proves nothing, and only a complete sixteen-for-sixteen
 assignment does. `oag-game` relies on that when it goes looking for the other
-disc - see `MusicDiscs` in `crates/game/src/audio.rs`, where trusting the disc
+disc - see `MusicDiscs` in `crates/sound/src/lib.rs`, where trusting the disc
 serial instead reported `pure-psp-eu.chd` as a Pulse PSP counterpart.
 
 The population on the PSP side is picked out by what the entries **are**, not by
@@ -345,7 +345,7 @@ ATRAC3+ block and none of them mean anything - see `crates/music/src/at3.rs`.
 
 The engine reads the same populations at run time rather than from a table:
 `crates/music/src/lib.rs` and `Soundtrack::nearest` in
-`crates/game/src/audio.rs`.
+`crates/sound/src/lib.rs`.
 
 ## The PSP names are recovered; the PS2 archive still has none
 
@@ -378,7 +378,7 @@ and `oag_title::Music::tracks`.
 - **Which circuit or menu plays which track.** The pairing above says which two
   entries are one recording; nothing says which recording belongs where.
   `oag-game`'s menu plays index 0 of whichever disc booted for exactly that
-  reason - see `crates/game/src/audio.rs`. **A race plays a cycling playlist
+  reason - see `crates/sound/src/lib.rs`. **A race plays a cycling playlist
   through all sixteen, in the booted disc's own order, starting one past the
   menu's own track** - this is an authored choice for this reimplementation,
   not a recovered mapping, and does not narrow the open question above: it is

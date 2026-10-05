@@ -34,6 +34,7 @@
 use oag_audio::{Bus, GROUPS, Mixer};
 
 use super::Audio;
+use super::library::Library;
 
 /// The options screen's authored default for both sliders, `default="80%"`.
 pub const SLIDER_DEFAULT: f32 = 0.8;
@@ -300,11 +301,11 @@ impl Audio {
     ///
     /// A title with no `GlobalAudioConfig.xml` (Pulse, Pure) leaves
     /// [`Hd::live`] `None`, which keeps it on the three buses it had.
-    pub(crate) fn load_hd_mix(&mut self, source: &str) {
+    pub(crate) fn load_hd_mix(&mut self, library: &dyn Library, source: &str) {
         if self.hd.live.is_some() {
             return;
         }
-        let Ok(mut opened) = crate::title::open_source(source, Vec::new(), Vec::new()) else {
+        let Some(mut opened) = library.open(source) else {
             return;
         };
         if let Some(maps) = Maps::load(&mut opened.archives) {

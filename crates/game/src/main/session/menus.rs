@@ -5,7 +5,7 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, boot, catalogue, movie, pilots, settings};
+use oag_game::{boot, catalogue, movie, pilots, settings};
 use oag_ui::{marquee, menu, strings};
 
 use crate::frontend_stage::HeldFrame;
@@ -258,9 +258,9 @@ impl Session {
         // unusable rather than offering a swap that cannot happen. Kept from
         // the boot survey rather than re-derived here: answering it means
         // opening every image on the search path, and a menu opening is not
-        // the moment for that. See `audio::MusicDiscs`.
+        // the moment for that. See `oag_sound::MusicDiscs`.
         let music_sources: Vec<menu::Choice> = if self.music_discs.both() {
-            audio::MusicSource::ALL
+            oag_sound::MusicSource::ALL
                 .iter()
                 .map(|source| menu::Choice::plain(source.name()))
                 .collect()

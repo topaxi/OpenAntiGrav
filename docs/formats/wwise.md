@@ -261,7 +261,7 @@ any device.
 
 Read 2026-10-05 off `data08`'s `Music.bnk` (21,658,812 bytes), the patch's
 `data/plugins/music/Definition.xml` (`data09`) and `data/audio/sound/Music.txt`,
-in `oag_formats::wwise::music` and `oag_game::music::omega`. Ground truth:
+in `oag_formats::wwise::music` and `oag_music::omega`. Ground truth:
 `crates/formats/tests/wwise_music_ground_truth.rs` and
 `crates/game/tests/omega_music_ground_truth.rs`. Omega races play it.
 
@@ -384,7 +384,7 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **Loop points.** 173 embedded files carry a `smpl` chunk; nothing reads it.
 * **The 1,450 dangling Play targets.**
 * **Race sound effects on this title** are not wired: the simulation's cues go
-  through `oag_game::audio::sfx`, which reads `SBlk` banks by name. (Music is.)
+  through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.)
 
 ## Confidence
 

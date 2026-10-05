@@ -20,7 +20,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use oag_audio::{Listener, Mixer};
-use oag_game::audio::sfx::{Banks, XfadeCraft, XfadeInputs, XfadeTeam};
+use oag_sound::sfx::{Banks, XfadeCraft, XfadeInputs, XfadeTeam};
 
 const SAMPLE_RATE: u32 = 48_000;
 const TICK_HZ: u32 = 60;

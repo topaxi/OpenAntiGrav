@@ -6,8 +6,8 @@
 //! *sounds like* is `crates/game/tests/sfx_weapon_ground_truth.rs`.
 
 use super::*;
-use crate::audio::sfx::Cue;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::Cue;
 
 /// One craft parked at the origin with `weapon`, and, when `target` is set, a
 /// second 15 units down its nose (60 for the LeachBeam's lock window). The

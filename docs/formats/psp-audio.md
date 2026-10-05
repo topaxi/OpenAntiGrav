@@ -194,7 +194,7 @@ been read, so **how the game joins the filename to a directory is still
 inferred** rather than seen. `soundregister="N"` in the track `Definition.xml`
 remains unexplained and is no longer needed to find a bank.
 
-`oag_game::audio::sfx::TrackEmitters::load` is what does this, and reaches the
+`oag_sound::sfx::TrackEmitters::load` is what does this, and reaches the
 shared `generaltrack.bnk` through `oag_title::SoundBanks::track_general`.
 
 ### `speech_zone.bnk` names the zone announcer, one ladder per title
@@ -249,7 +249,7 @@ same order, are also folded into the general `speech_zone.bnk` at cue indices
 `26`-`39`. That is a 14/14 order match against [`oag_title::ZoneStages`]'
 (`crates/title/src/race.rs`) own fourteen non-`Start` HD stage names, and it is
 what `oag_title::ZoneClassAnnouncer` and
-[`crate::audio::sfx::ClassAnnouncer`](../../crates/game/src/audio/sfx/announcer.rs)
+[`oag_sound::sfx::ClassAnnouncer`](../../crates/sound/src/sfx/announcer.rs)
 now play - fired on the same `ZoneStages::stage_for` edge the HUD text and the
 colour grade already key off, since no call site in HD's own executable has
 been read for this ladder either. See `crates/hd/tests/hd_title_ground_truth.rs`'s
@@ -290,10 +290,10 @@ a real run - but "both start" is as far as the code proves it.**
 `crate::race::tick` pushes a milestone announcement and, when the same
 `zone_advanced` edge also crosses a `ZONE_STAGES` boundary, a class
 announcement into two separate per-tick queues unconditionally
-(`crates/game/src/race/tick.rs`); `crate::audio::sfx::race_tick` drains both
+(`crates/game/src/race/tick.rs`); `oag_game::sound::race_tick` drains both
 and calls `mixer.play` once per entry, both to `Bus::Speech`, with nothing
 between the two calls that checks whether the bus already has a voice open
-(`crates/game/src/audio/sfx.rs`) - each call's own `Result` is even discarded
+(`crates/sound/src/sfx.rs`) - each call's own `Result` is even discarded
 (`let _ = mixer.play(...)`), so a refusal is not surfaced either. Zones 20 and
 35 were both crossed live in an autopiloted 40,000-tick capture on
 `/data/environments/zone_1`; the run's own health log shows voice refusals scattered throughout
@@ -376,7 +376,7 @@ number. **The hypothesis "the two waveforms are an alternate take" is dead**
 grains were sampled instead of played" is confirmed**. The class announcer
 stealing the voice, the other candidate, does not apply to Pulse (it has none).
 
-**The fix** (`oag_formats::sblk::timeline`, `oag_game::audio::sfx::compose`):
+**The fix** (`oag_formats::sblk::timeline`, `oag_sound::sfx::compose`):
 walk the timeline (key-ons and `0x05` children with their delays; any other
 opcode is reported, not skipped) and lay the grains down at their tick, at
 their pan, with their volume law, in one stereo sound on `Bus::Speech` - a
@@ -430,7 +430,7 @@ is `[0x1b, 0x01, 0x01, 0x2b]`, two distinct waveforms (0.501 s and 1.087 s)
 and no alternate group. Which of the 683 are audible in play, and which are
 layers rather than sequences, is not established here.
 
-Ported as [`crate::audio::sfx::Announcer`](../../crates/game/src/audio/sfx/announcer.rs):
+Ported as [`oag_sound::sfx::Announcer`](../../crates/sound/src/sfx/announcer.rs):
 one bank loaded per race, the numbered cues decoded by name, and a cue fires
 when `RaceState::zone` reaches a threshold the loaded title names one for. A
 title with no announcer entry plays nothing rather than guessing at Pulse's
@@ -447,7 +447,7 @@ contents have not been checked against the reading. See
 The Zone announcer was the first cue found played as one random leaf of a
 sequence. The same is true of any cue whose command list keys several waveforms
 on, and `Banks::pick` did it for the weapon and pickup cues too. **Pulse cues
-now play as the list authors them** (`oag_game::audio::sfx::layers`), on the
+now play as the list authors them** (`oag_sound::sfx::layers`), on the
 PSP tick. **Wipeout HD's cues follow at its own measured 240 Hz** (2026-09-29,
 `SequenceTick::Ps3`; seven sfx cues and the fifteen `zone_N` lines), while Pure
 and 2048 have an unmeasured tick, so their `SequenceTick` is `Unknown` and
@@ -503,7 +503,7 @@ this table.
 A list with a `0x15`/`0x16` loop has no end, so it cannot be laid down as a
 timeline. `oag_formats::sblk::runner::Runner` runs it as the handler does, one
 master tick at a time, with the four cue parameters and `0x22` guards, and
-`oag_game::audio::sfx::repeating` holds it open from the simulation tick.
+`oag_sound::sfx::repeating` holds it open from the simulation tick.
 
 | Cue | List | Played as |
 | --- | --- | --- |
@@ -539,7 +539,7 @@ Time Trial, a single race and Eliminator were captured (`SPEECH` 11/12 and
 the cue starts** in the original (first `Scream_KeyOnVoice` after it) and 23.3 in
 this port's render; the other two banks' `ready` speaks from the cue's own start.
 
-`oag_game::audio::sfx::Cue::{Ready, Go}` play them through the timeline path,
+`oag_sound::sfx::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
 `RaceDefaults::countdown_voice` is measured (Pulse only), and raised by
 `oag_game::race::countdown`. Pinned per mode, with a speech-only WAV render, by
@@ -677,7 +677,7 @@ has: `~hum`'s wrap step falls from 0.256 to 0.095, `~FLUID_PUMP`'s from 0.201
 to 0.065, `~SHIELD`'s from 0.132 to 0.003.
 
 `oag_formats::sblk::adpcm_played` is the trim, and
-`oag_game::audio::sfx::banks::load_named_cue` is the one playback path that
+`oag_sound::sfx::banks::load_named_cue` is the one playback path that
 applies it. `decode_adpcm` itself still decodes whatever it is handed: the
 surveys on this page measure spans as authored, and moving the trim into the
 decoder would silently change what they report.
@@ -928,10 +928,10 @@ What the *data* says regardless of the opcode is that these are **alternates,
 not layers** - for `.COLLISIONS`, which is a fact about that cue and not about
 every cue with several key-ons (see
 [`zone_N`](#a-cue-can-be-a-sequence-and-zone_n-is-one)): `.COLLISIONS`'s fifteen samples all fall between 0.20 s and
-0.35 s, which is fifteen recordings of one event. `oag_game::audio::sfx` plays
+0.35 s, which is fifteen recordings of one event. `oag_sound::sfx` plays
 one of them, chosen by its own generator, and says so - **`Banks::pick`
 matches "random, never repeats the immediately previous pick" as of
-2026-09-04** (`crates/game/src/audio/sfx/banks.rs`), the same
+2026-09-04** (`crates/sound/src/sfx/banks.rs`), the same
 roll-once-advance-and-wrap shape the decoded opcode uses rather than a naive
 reject-and-retry.
 
@@ -1090,7 +1090,7 @@ the byte census knows nothing about. The bit is a codec selector.
 **Identified 2026-09-02 as 16-bit PCM, big-endian, behind a 16-byte header** -
 see [the fuller section below](#a-third-of-hds-waveforms-are-not-ps-adpcm-and-are-16-bit-pcm)
 for the evidence. `oag_formats::sblk::Sound::is_adpcm` is still the predicate
-that says which decoder applies; `oag_game::audio::sfx` used to **drop** a
+that says which decoder applies; `oag_sound::sfx` used to **drop** a
 non-ADPCM waveform rather than run the ADPCM decoder over it, which would have
 produced 28 samples of noise per block - `CLAUDE.md`'s plausible-looking
 stand-in exactly - and now calls `oag_formats::sblk::decode_pcm16` instead.
@@ -1184,7 +1184,7 @@ is every centre note on every Pulse and Pure disc - is negated first and the
 result scaled by `0x1278b / 0x10000`. The port is
 [`oag_formats::sblk::pitch`](../../crates/formats/src/sblk/pitch.rs), integer
 arithmetic only, and [`Sound::sample_rate`](../../crates/formats/src/sblk.rs)
-is what `oag_game::audio::sfx` and `oag-wad sounds` now play and print.
+is what `oag_sound::sfx` and `oag-wad sounds` now play and print.
 
 This page's earlier reading of the first word - `0x42aa7f00` as "a constant
 `0x42` plus a per-sound byte" - was the right bytes read in the wrong order.
@@ -1320,7 +1320,7 @@ The self-names are the same set the PSP carries - `HUD`, `SHIP`, `SHIP_ZM`,
 `basilic`, `metropi`, `talonsj` and so on - and the banks the game asks for by
 path resolve identically: `Data\Sound\hud.bnk`, `ship.bnk`, `ship_zone.bnk` and
 `weapons.bnk` all hash to entries in `WADS2.WAD`, and the four cues
-`oag_game::audio::sfx` wires resolve to **the same frame counts on all three
+`oag_sound::sfx` wires resolve to **the same frame counts on all three
 discs** - `pulse-psp-usa`, `pulse-psp-eu` and `pulse-ps2-eu` - down to the
 individual sample. `SPEEDUPPAD` is 20,384 frames on every one.
 
@@ -1340,7 +1340,7 @@ alignment changes and is deliberately not implemented - see `HANDOVER.md`.
 **Corrected 2026-08-23.** This page carried, at confidence 85, the claim that
 *"not one entry in any of Pure's three archives begins with that magic"*. Pure
 has **29 `SBlk` banks**, every one of which `Bank::parse` accepts unmodified,
-and the six cues `oag_game::audio::sfx` fires all resolve in them.
+and the six cues `oag_sound::sfx` fires all resolve in them.
 
 ### The trap, which is worth more than the correction
 
@@ -1507,7 +1507,7 @@ addition with no PSP or PS2 build to corroborate it against as a second
 binary.
 
 `oag_formats::sblk::Sound::is_adpcm` is still the predicate for which decoder
-applies; `oag_game::audio::sfx` now calls `decode_pcm16` rather than dropping
+applies; `oag_sound::sfx` now calls `decode_pcm16` rather than dropping
 what it rejects.
 
 ### HD makes eight of the nine sounds
@@ -1563,7 +1563,7 @@ at all - it could not have loaded any other way.
   ```
 
   **Nothing is wired off the split.** Which child a parent plays is guarded by
-  opcode `0x22`, whose operand is not decoded, so `oag_game::audio::sfx` takes
+  opcode `0x22`, whose operand is not decoded, so `oag_sound::sfx` takes
   every reachable leaf and chooses among them with its own generator - the same
   approximation it already makes among a single cue's alternates, one level
   further down. The game does know whether it hit a wall or a ship, and
@@ -1578,7 +1578,7 @@ could not load at all until the second codec did.
 
 **2026-09-23: fourteen more cues wired, and HD now loads 27 of 28.** The
 Rocket, the Missile, the Cannon, `QUAKEHIT`, the LeachBeam and the Shuriken's
-cues joined `oag_game::audio::sfx::Cue::ALL`, and every one of them resolves
+cues joined `oag_sound::sfx::Cue::ALL`, and every one of them resolves
 on HD's own `weapons.bnk` with no per-title work at all - the same bank
 presence caveat as `MINELAUNCH` and the Plasma's four above, not a confirmed
 HD trigger. `~ENGINE` is still the sole miss, for the reason already given.

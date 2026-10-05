@@ -98,8 +98,8 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         .join("mine-launch.wav");
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // headlessly - see `Audio::open`.
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio::default(),
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
         None,
         oag_audio::MIN_BUFFER,
@@ -124,9 +124,9 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         launches += race
             .pending_cues()
             .iter()
-            .filter(|e| e.cue == oag_game::audio::sfx::Cue::MineLaunch)
+            .filter(|e| e.cue == oag_sound::sfx::Cue::MineLaunch)
             .count();
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     audio.finish().expect("writing the dump");

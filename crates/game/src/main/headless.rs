@@ -8,7 +8,7 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
 
-use oag_game::{audio, boot, capture, loading, prefetch, race, records, settings};
+use oag_game::{boot, capture, loading, prefetch, race, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
 use oag_ui::frontend::EarnedTier;
@@ -40,8 +40,8 @@ pub(crate) fn run_windowless(
     settings: &settings::Settings,
     race_options: race::Options,
     anisotropy: Anisotropy,
-    mut audio: audio::Audio,
-    music_discs: audio::MusicDiscs,
+    mut audio: oag_sound::Audio,
+    music_discs: oag_sound::MusicDiscs,
 ) -> Result<()> {
     let mut loaded = boot::load(options)?;
     log::info!("{}: {}", loaded.title.name, options.source);
@@ -434,8 +434,8 @@ pub(crate) fn run_race(
     options: race::Options,
     settings: &settings::Settings,
     anisotropy: Anisotropy,
-    mut audio: audio::Audio,
-    music_discs: audio::MusicDiscs,
+    mut audio: oag_sound::Audio,
+    music_discs: oag_sound::MusicDiscs,
 ) -> Result<()> {
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it

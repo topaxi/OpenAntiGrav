@@ -283,7 +283,7 @@ impl TrackEmitters {
                 "track audio: {nodes} node(s) name {bank}{cue} and play nothing: {why}"
             ));
         }
-        crate::loader_log::lines(&parsed.report);
+
         parsed
     }
 
@@ -363,7 +363,7 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
 ///
 /// One read for everything a circuit asks for beside its `.vex`: the sound bank
 /// above and, from `race::scenery_fx`, its weather.
-pub(crate) fn circuit_manifest(
+pub fn circuit_manifest(
     archives: &mut Archives,
     track: &str,
 ) -> Option<oag_tables::trackstartup::TrackStartup> {

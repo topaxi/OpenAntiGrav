@@ -884,7 +884,7 @@ reset on every race, well before the World did. That was audio state outside
 the simulation, the same way `docs/architecture/determinism.md` already puts
 every other sound outside it, not race state being kept alive - but it meant
 `Session::resume_race` had `Audio::start_race_music` to call rather than
-anything to invent. See `crates/game/src/audio.rs`'s `start_race_music` and
+anything to invent. See `crates/sound/src/lib.rs`'s `start_race_music` and
 `pause_race_music`.
 
 ## Wipeout 2048 reaches these menus from two tiles of its own

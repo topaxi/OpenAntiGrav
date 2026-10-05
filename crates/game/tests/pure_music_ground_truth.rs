@@ -33,7 +33,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::Platform;
-use oag_game::{audio, music};
+use oag_game::sound::GameLibrary;
+use oag_sound::{self as audio, library};
 
 /// Every Pure pressing present, as `(label, path)`.
 ///
@@ -66,9 +67,9 @@ fn pure_images() -> Vec<(&'static str, PathBuf)> {
     ])
 }
 
-/// What `oag_game::music` reports for one source.
+/// What `oag_sound::library` reports for one source.
 fn listing(image: &Path) -> Vec<oag_music::Entry> {
-    music::listing(&image.display().to_string())
+    library::listing(&GameLibrary, &image.display().to_string())
         .expect("reading the soundtrack listing")
         .expect("a PSP disc of a title this build knows")
 }
@@ -79,7 +80,7 @@ const DECLARED: usize = 19;
 /// The count, on both pressings and through the declared route.
 ///
 /// Nineteen to Pulse's sixteen, which is the difference
-/// `oag_game::audio`'s pairing test leans on to refuse a Pure disc as Pulse's
+/// `oag_sound`'s pairing test leans on to refuse a Pure disc as Pulse's
 /// counterpart.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -160,7 +161,7 @@ fn the_listing_is_in_the_declared_order_and_not_the_archives() {
 
 /// The two pressings carry the same recordings, one for one.
 ///
-/// The same test `oag_game::audio` applies to a candidate counterpart disc,
+/// The same test `oag_sound` applies to a candidate counterpart disc,
 /// turned on the pair that really is one release twice. It is what says the
 /// names recovered from the USA executable describe the EU pressing too.
 #[test]
@@ -248,7 +249,7 @@ fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_pure_boot_finds_no_counterpart_release() {
     for (label, image) in pure_images() {
-        let discs = audio::MusicDiscs::survey(&image.display().to_string());
+        let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
         assert_eq!(
             discs.booted(),
             Some(Platform::Psp),

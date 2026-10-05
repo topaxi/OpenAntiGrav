@@ -231,7 +231,7 @@ pub(crate) struct Cli {
     /// device attached to the machine otherwise makes that a wall-clock race a
     /// headless run always loses - it finishes in far less real time than the
     /// movie takes to play, so `--until` spends its tick ceiling on a picture
-    /// that has barely moved. See `crate::audio::Audio::movie_playhead` and
+    /// that has barely moved. See `oag_sound::Audio::movie_playhead` and
     /// ADR-0019. `--dump-audio` forces the same backend and works too, but also requires
     /// `--screenshot` and grows a sample buffer for the run; this is the plain way to ask for the
     /// tick-clocked movie leg alone. Conflicts with `--tap-audio`, which needs a real stream.

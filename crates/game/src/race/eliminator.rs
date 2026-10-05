@@ -442,8 +442,8 @@ impl Race {
             *timer -= self.sim.dt;
             if *timer <= 0.0 {
                 *timer = -1.0;
-                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                    crate::audio::sfx::Cue::ContElim,
+                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                    oag_sound::sfx::Cue::ContElim,
                     player,
                 ));
             }

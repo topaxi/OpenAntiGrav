@@ -300,7 +300,7 @@ fn wipeout_hd_collisions_reaches_the_ship_and_wall_trees() {
     );
 
     // One level further: each of those splits three ways by a suffix that is
-    // *not* wired to anything - see `oag_game::audio::sfx`.
+    // *not* wired to anything - see `oag_sound::sfx`.
     for child in &children {
         let cue = bank.resolve_child(child).expect("a child of .COLLISIONS");
         let leaves: Vec<String> = bank

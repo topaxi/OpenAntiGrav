@@ -122,7 +122,7 @@ All four `WO_SHURIKEN_*` files are in `docs/formats/pob.md`'s 35-name list, so
 nothing here needs an asset this project cannot reach.
 
 **2026-09-23: wired.** `Cue::ShurikenTravel` and `Cue::ShurikenHit` are in
-`crates/game/src/audio/sfx/cue.rs`, both placed on the **firing craft's** own
+`crates/sound/src/sfx/cue.rs`, both placed on the **firing craft's** own
 emitter rather than the blade's. `craft->emitter` being handed to
 `Shuriken_Init` directly, above, is read at this page's own confidence 88 -
 what is not read is either play call's own emitter argument, so the

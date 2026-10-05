@@ -13,7 +13,7 @@
 
 use std::path::Path;
 
-use oag_game::audio::hd_mix::{Maps, State};
+use oag_sound::hd_mix::{Maps, State};
 
 fn maps() -> Option<Maps> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -510,7 +510,7 @@ struct State {
 /// cannot influence the player, and a decode that ran long still cannot move a
 /// state transition. What is new is a second clock, not a second writer, and it
 /// is not the renderer's. Headless runs are unaffected either way: with no
-/// device the mixer is advanced by [`crate::audio::Audio::tick`] at exactly the
+/// device the mixer is advanced by [`oag_sound::Audio::tick`] at exactly the
 /// tick rate, so the two clocks are the same number.
 #[derive(Debug)]
 pub struct Feed {

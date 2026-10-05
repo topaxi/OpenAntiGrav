@@ -101,11 +101,11 @@ pub const GROUPS: usize = 12;
 /// whole - `Audio_SetSfxFadeTarget`'s chain (the SFX/Speech side) never
 /// touches this global at all, so multiplying it into every bus would be
 /// exactly the kind of invention this project's rules forbid. The caller
-/// (`Audio::apply` in `crates/game/src/audio.rs`) folds it into the gain it
+/// (`Audio::apply` in `crates/sound/src/lib.rs`) folds it into the gain it
 /// hands [`Mixer::set_bus_gain`] for [`Bus::Music`] alone.
 ///
 /// **A movie's own sound also lands on [`Bus::Music`]** (`Audio::start_movie`
-/// in `crates/game/src/audio.rs`, by this port's own pre-existing design -
+/// in `crates/sound/src/lib.rs`, by this port's own pre-existing design -
 /// there is no separate movie bus on the original either) and so now also
 /// carries this trim. That is unverified for movies specifically: the
 /// original's movie audio decodes through `sceMpegAtracDecode`, a
@@ -210,7 +210,7 @@ impl Sound {
 
     /// Overrides [`Sound::pan_volume_gain`] on an already-built `Sound`.
     ///
-    /// The one caller is `oag_game::audio::sfx::banks::load_named_cue`, which
+    /// The one caller is `oag_sound::sfx::banks::load_named_cue`, which
     /// has the SBLK cue and waveform this sound came from and therefore the
     /// two bytes [`crate::spatial::pan_volume_gain`] needs - this crate itself
     /// never reads an SBLK bank.

@@ -16,6 +16,7 @@ use super::*;
 fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -50,6 +51,7 @@ fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
 fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -88,6 +90,7 @@ fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
 fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -118,6 +121,7 @@ fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
 #[test]
 fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -181,6 +185,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
 #[test]
 fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
     let discs = MusicDiscs {
+        library: &NoLibrary,
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,

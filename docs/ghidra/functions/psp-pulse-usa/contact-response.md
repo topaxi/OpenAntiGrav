@@ -657,7 +657,7 @@ all read on [shield.md](shield.md) and none is a contact, and the contact
 loop's own shield branch plays nothing - the shell bulges and that is all. One
 caveat, corrected below, is recorded rather than papered over. See
 [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table)
-and `oag_game::audio::sfx`.
+and `oag_sound::sfx`.
 
 **Correction, 2026-09-04: the executable passes `".COLLISIONS"`, dot
 included - this page's own earlier reading of the call site's string argument
@@ -672,7 +672,7 @@ the *table slot's* apparent literal, not the string it points at. The pointer
 stored there, read directly as memory rather than inferred, is `0x002846e0`;
 correcting that the same way lands on `0x08a886e0`, which reads
 `.COLLISIONS\0` - the dot is in the executable's own data, not something
-`ship.bnk`/`ship_zone.bnk` add and the port bridges to. `oag_game::audio::sfx`'s
+`ship.bnk`/`ship_zone.bnk` add and the port bridges to. `oag_sound::sfx`'s
 own `# COLLISIONS is stored as .COLLISIONS` section carried the same wrong
 premise and is corrected alongside this page.
 

@@ -889,7 +889,7 @@ impl Race {
     /// A *level*, the same shape [`Self::shield_is_up`] already is:
     /// `Ship_FireHeldWeapon`'s case 6 opens `~AUTOPILOT` with a handle at
     /// `entity+0x58`, so the voice's lifetime is this timer's, not an edge's.
-    /// See [`crate::audio::sfx::Cue::Autopilot`] and
+    /// See [`oag_sound::sfx::Cue::Autopilot`] and
     /// `docs/ghidra/functions/psp-pulse-usa/autopilot.md`'s
     /// "`Ship_FireHeldWeapon` opens both cues" section.
     #[must_use]
@@ -898,7 +898,7 @@ impl Race {
     }
 
     /// Where the Quake wave is on the road, while one travels: the point
-    /// [`crate::audio::sfx::Cue::QuakeTravel`] is heard from.
+    /// [`oag_sound::sfx::Cue::QuakeTravel`] is heard from.
     #[must_use]
     pub fn quake_point(&self) -> Option<oag_core::math::Vec3> {
         self.view.quake_point

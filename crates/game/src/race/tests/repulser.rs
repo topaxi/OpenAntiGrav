@@ -2,8 +2,8 @@
 //! The law itself is `oag_gameplay::projectile::repulser`'s own tests.
 
 use super::*;
-use crate::audio::sfx::Cue;
 use oag_gameplay::PlayerInputs;
+use oag_sound::sfx::Cue;
 
 /// Two craft on the fixture's straight, the target `ahead` units down the
 /// firer's nose, both held still. The button is pressed on tick 1.

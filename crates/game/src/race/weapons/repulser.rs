@@ -29,8 +29,8 @@ impl Race {
         };
         if let Some(free) = self.sim.world.repulsers.iter_mut().find(|r| r.is_none()) {
             *free = Some(Repulser::launch(owner, &stats));
-            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                crate::audio::sfx::Cue::Repulsor,
+            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                oag_sound::sfx::Cue::Repulsor,
                 slot,
             ));
         }
@@ -75,8 +75,8 @@ impl Race {
             );
             for (slot, &was_struck) in struck.iter().enumerate() {
                 if was_struck {
-                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                        crate::audio::sfx::Cue::RepulsorHit,
+                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                        oag_sound::sfx::Cue::RepulsorHit,
                         slot,
                     ));
                     credits.push((slot, repulser.owner));

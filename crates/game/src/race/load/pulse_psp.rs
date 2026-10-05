@@ -124,7 +124,7 @@ fn place_weather(
     track: &str,
 ) {
     let Some(config) =
-        crate::audio::sfx::circuit_manifest(archives, track).and_then(|manifest| manifest.weather)
+        oag_sound::sfx::circuit_manifest(archives, track).and_then(|manifest| manifest.weather)
     else {
         return;
     };

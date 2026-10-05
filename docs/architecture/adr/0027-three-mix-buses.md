@@ -39,7 +39,7 @@ eight `~ENGINE` voices sit inside the 50-unit engine radius together. The
 console's answer is to saturate, which `Mixer::render` now reproduces. A player
 who wants the race not to distort has no single control to reach for.
 
-**Voice lines are already separated by bank.** `oag_game::audio::sfx` records
+**Voice lines are already separated by bank.** `oag_sound::sfx` records
 that `shieldactive` "lives in `speech.bnk` rather than `weapons.bnk`, which is
 what says it is a voice line and not an effect", and that `Autopilot_Update`
 plays `disengaging` through the dry, full-volume path rather than the craft's

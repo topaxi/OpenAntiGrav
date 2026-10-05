@@ -9,7 +9,7 @@
 //!
 //! **Scope note**: this measures bytes only. It does not touch
 //! `ASSUMED_SAMPLE_RATE`, the SAS pitch question, opcode decoding or
-//! `crates/game/src/audio` - see `oag_formats::sblk_coverage`'s own module
+//! `crates/sound/src` - see `oag_formats::sblk_coverage`'s own module
 //! doc.
 
 use std::path::PathBuf;

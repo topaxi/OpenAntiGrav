@@ -349,7 +349,7 @@ looping voice the tick a bolt's `charge` first reads `<= 0.0` and follows its
 position every tick after, keyed by **projectile slot** rather than by grid
 slot - the shape `mine.md`'s own `MINERADAR` note names as the gap nothing in
 this engine could address before now (`SfxVoices::plasma_travel`,
-`crates/game/src/audio/sfx.rs`). `Cue::PlasmaHitWall` (`PLASMAHITWALL`) fires
+`crates/sound/src/sfx.rs`). `Cue::PlasmaHitWall` (`PLASMAHITWALL`) fires
 for a wall hit and the 10 s timeout, matching this teardown's own "identical
 for either ending" reading; a craft hit (`Impact::struck.is_some()`) plays the
 bank's own distinct `Cue::PlasmaHitShip` (`PLASMAHITSHIP`) instead - measured,
@@ -1266,7 +1266,7 @@ here since the Bomb's teardown is outside this page's own function set.
 
 - **2026-09-16, later still.** `PLASMAHITSHIP` wired for the craft-hit ending,
   closing the "chosen, not measured" gap the `plasma-cues` session left open
-  the same day: `crate::audio::sfx::Cue::PlasmaHitShip` fires for
+  the same day: `oag_sound::sfx::Cue::PlasmaHitShip` fires for
   `Impact { kind: Plasma, struck: Some(_), .. }` and `PlasmaHitWall` for
   everything else, matching `Plasma_SweepCraftHit`'s own emitter-clear-then-play
   order read above. Confirmed in `weapons.bnk` (bank `#866`, hash `01bec824`)

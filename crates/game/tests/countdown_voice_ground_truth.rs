@@ -28,10 +28,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::audio::Volume;
-use oag_game::audio::sfx::Cue;
 use oag_game::race;
 use oag_gameplay::PlayerInputs;
+use oag_sound::Volume;
+use oag_sound::sfx::Cue;
 
 /// The tick `ready` is raised on, in `World::tick` terms: measured 90.0 entries
 /// after the first `InGame` craft update on the docs' axis, one behind the
@@ -43,9 +43,9 @@ const GO_TICK: u64 = 271;
 /// Ticks of audio to render: past `go`'s own 0.8 s.
 const RENDER_TICKS: u64 = 340;
 /// Frames of audio per tick at the dump's own sample rate.
-const FRAMES_PER_TICK: usize = (oag_game::audio::DUMP_SAMPLE_RATE / 60) as usize;
+const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
 /// A run of speech ends after this many silent frames (a fifth of a second).
-const RUN_GAP: usize = (oag_game::audio::DUMP_SAMPLE_RATE / 5) as usize;
+const RUN_GAP: usize = (oag_sound::DUMP_SAMPLE_RATE / 5) as usize;
 /// Below this a frame counts as silence.
 const SILENCE: i16 = 8;
 
@@ -111,8 +111,8 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/shots")
         .join(format!("countdown-voice-{name}.wav"));
-    let mut audio = oag_game::audio::Audio::open(
-        &oag_game::settings::Audio {
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings {
             music_volume: Volume::OFFERED[0],
             sfx_volume: Volume::OFFERED[0],
             ..Default::default()
@@ -134,7 +134,7 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
                 raised.push((stepped, event.cue));
             }
         }
-        audio.race_tick(&mut race);
+        oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();
     }
     audio.finish().expect("writing the dump");
@@ -147,7 +147,7 @@ fn countdown(mode: oag_race::Mode, name: &str) -> Option<Rendered> {
             run.start,
             run.start as f32 / FRAMES_PER_TICK as f32,
             run.end,
-            (run.end - run.start) as f32 / oag_game::audio::DUMP_SAMPLE_RATE as f32
+            (run.end - run.start) as f32 / oag_sound::DUMP_SAMPLE_RATE as f32
         );
     }
     Some((raised, found))

@@ -1,13 +1,14 @@
 //! Scratch probe for a streaming-audio decode investigation:
 //! the longest race-music track on each disc, decoded through the same path
-//! [`MusicFetchWorker`](oag_game::audio::MusicFetchWorker) uses
-//! (`oag_game::music::load_entry`), and the process RSS delta that decode
+//! [`MusicFetchWorker`](oag_sound::MusicFetchWorker) uses
+//! (`oag_sound::library::load_entry`), and the process RSS delta that decode
 //! actually costs.
 //!
 //! ```sh
 //! cargo run --release -p oag-game --example audio_memory_probe
 //! ```
-use oag_game::music;
+use oag_game::sound::GameLibrary;
+use oag_sound::library;
 
 fn mib(bytes: f64) -> f64 {
     bytes / (1024.0 * 1024.0)
@@ -18,7 +19,7 @@ fn rss_mib() -> Option<f64> {
 }
 
 fn report(label: &str, source: &str) {
-    let Ok(Some(entries)) = music::listing(source) else {
+    let Ok(Some(entries)) = library::listing(&GameLibrary, source) else {
         println!("{label}: no soundtrack read from {source}");
         return;
     };
@@ -32,7 +33,7 @@ fn report(label: &str, source: &str) {
     };
     let cache_dir = std::env::temp_dir().join("oag-audio-memory-probe-cache");
     let before = rss_mib();
-    let sound = match music::load_entry(source, entries[index].at, &cache_dir) {
+    let sound = match library::load_entry(&GameLibrary, source, entries[index].at, &cache_dir) {
         Ok(sound) => sound,
         Err(err) => {
             println!("{label}: decode of track {index} failed: {err:#}");
@@ -64,7 +65,7 @@ fn main() {
     report("Pure PSP EU", "data/images/pure-psp-eu.chd");
     report("HD/Fury PS3", "data/images/hdfury-ps3-eu-dec.iso");
     // The PS2's soundtrack is loose PS2MUSIC.WAD entries rather than a
-    // catalogue `music::listing` reads (`crate::audio::ps2_soundtrack` is
+    // catalogue `music::listing` reads (`oag_sound::ps2_soundtrack` is
     // private to that module) - `docs/formats/ps2-audio.md` already measured
     // its range as 177.2-204.3 s, well under the two above, so it is not
     // reprobed here.

@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use log::debug;
 
-use oag_game::{audio, boot, loading, movie, prefetch, race, settings};
+use oag_game::{boot, loading, movie, prefetch, race, settings};
 use oag_ui::frontend;
 use oag_ui::{menu, strings};
 
@@ -57,7 +57,7 @@ pub(crate) struct Prepared {
     pub(crate) shell: Shell,
     pub(crate) loading_assets: loading::Assets,
     pub(crate) race_options: race::Options,
-    pub(crate) music_discs: audio::MusicDiscs,
+    pub(crate) music_discs: oag_sound::MusicDiscs,
     /// What `--prefetch` asked for, not started. See `Session::start_prefetch`.
     pub(crate) prefetch: Option<prefetch::Options>,
 }
@@ -187,11 +187,11 @@ impl Pending {
     /// not something to do while a menu is on screen - so it happens here, with
     /// the rest of the load, rather than when the AUDIO page is opened. Skipped
     /// under `--dry-run` for the same reason the music is.
-    pub(crate) fn music_discs(&self, source: &str) -> audio::MusicDiscs {
+    pub(crate) fn music_discs(&self, source: &str) -> oag_sound::MusicDiscs {
         if self.cli.dry_run {
-            return audio::MusicDiscs::default();
+            return oag_sound::MusicDiscs::default();
         }
-        let discs = audio::MusicDiscs::survey(source);
+        let discs = oag_sound::MusicDiscs::survey(source, &oag_game::sound::GameLibrary);
         debug!("audio: music discs, {}", discs.describe());
         discs
     }

@@ -25,7 +25,6 @@
 //! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
-pub mod audio;
 pub mod boot;
 pub mod campaign;
 pub mod capture;
@@ -54,7 +53,6 @@ pub mod livery;
 pub mod loader_log;
 pub mod loading;
 pub mod movie;
-pub mod music;
 pub mod perf;
 pub mod pilots;
 pub mod prefetch;
@@ -66,6 +64,7 @@ pub mod render;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;
+pub mod sound;
 pub mod source;
 pub mod sprite;
 pub mod title;

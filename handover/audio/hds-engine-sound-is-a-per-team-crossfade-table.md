@@ -1,7 +1,7 @@
 # HD/Fury's engine sound: level and authored mix are measured; the stereo pair, per-cue groups and the distance writer are open
 
 2026-10-05 (second pass). An HD race plays each craft's own `xfship_<team>.xfx` layers
-(`crates/game/src/audio/sfx/xfade.rs`). The evidence is
+(`crates/sound/src/sfx/xfade.rs`). The evidence is
 [`docs/formats/hd-xfx.md`](../../docs/formats/hd-xfx.md) ("Level, measured live") and the
 2026-10-05 sections of
 [`docs/ghidra/functions/ps3-hdfury-eu/xfade.md`](../../docs/ghidra/functions/ps3-hdfury-eu/xfade.md);
@@ -24,7 +24,7 @@ this file is only what is left.
 
 ## Open
 
-- **Every HD cue's group.** The mix is read and the buses exist (`crates/game/src/audio/hd_mix.rs`,
+- **Every HD cue's group.** The mix is read and the buses exist (`crates/sound/src/hd_mix.rs`,
   `Bus::Group(n)`); only the engine (group 7) and the circuit's emitters (group 8) are on theirs.
   Every other cue plays on the effects bus at group `1.0`, which is chosen, not measured: read the
   group each cue's voice carries (a SCREAM voice's bus field, or the bank's cue record) and move

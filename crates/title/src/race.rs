@@ -521,7 +521,7 @@ impl RaceDefaults {
 /// | `shieldactive` | `speech.bnk` | `speech.bnk` |
 ///
 /// So this is a five-field path table, measured per title, and not a
-/// re-derivation of anything. `oag_game::audio::sfx::Cue` maps a cue to a field
+/// re-derivation of anything. `oag_sound::sfx::Cue` maps a cue to a field
 /// here; nothing else knows a filename.
 ///
 /// # A missing cue is an ordinary state
@@ -561,7 +561,7 @@ pub struct SoundBanks {
     ///
     /// [`None`] where a title has no bank at the analogous path - Wipeout HD
     /// and 2048 - which is also where no circuit has been swept for the three
-    /// `.vex` audio classes. See `crate::audio::sfx::TrackEmitters` in
+    /// `.vex` audio classes. See `oag_sound::sfx::TrackEmitters` in
     /// `oag-game`.
     pub track_general: Option<&'static str>,
 }

@@ -406,17 +406,17 @@ pub struct RaceView {
     /// still unread; do not treat that page as having settled this.
     pub(super) sparks_attached: bool,
     /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
-    /// device - the mixer and the held voices are [`crate::audio::Audio`]'s.
-    pub(super) sounds: crate::audio::sfx::Banks,
+    /// device - the mixer and the held voices are [`oag_sound::Audio`]'s.
+    pub(super) sounds: oag_sound::sfx::Banks,
     /// The circuit's own authored emitters, straight out of
     /// [`Setup::track_emitters`]. Data, on the same terms [`Self::sounds`] is:
-    /// the held voices they open live in [`crate::audio::Audio`].
-    pub(super) track_emitters: crate::audio::sfx::TrackEmitters,
+    /// the held voices they open live in [`oag_sound::Audio`].
+    pub(super) track_emitters: oag_sound::sfx::TrackEmitters,
     /// Zone mode's milestone announcer, straight out of [`Setup::announcer`].
-    pub(super) announcer: crate::audio::sfx::Announcer,
+    pub(super) announcer: oag_sound::sfx::Announcer,
     /// Zone mode's speed-class announcer, straight out of
     /// [`Setup::class_announcer`].
-    pub(super) class_announcer: crate::audio::sfx::ClassAnnouncer,
+    pub(super) class_announcer: oag_sound::sfx::ClassAnnouncer,
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason

@@ -78,8 +78,8 @@ impl Race {
         // slot means for a `Placement::Craft` cue.
         for (slot, &now) in wave.hit.iter().enumerate() {
             if now && !hit_before[slot] {
-                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-                    crate::audio::sfx::Cue::QuakeHit,
+                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                    oag_sound::sfx::Cue::QuakeHit,
                     slot,
                 ));
             }

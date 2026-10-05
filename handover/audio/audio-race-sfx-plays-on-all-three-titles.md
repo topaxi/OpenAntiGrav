@@ -27,7 +27,7 @@
 - ~~Which alternate sounds play is decoded on HD but not corroborated on
   PSP/PS2.~~ **Corroborated on PSP 2026-09-04** (`0x19`, confidence 88 both
   sides now) and wired into `Banks::pick`
-  (`crates/game/src/audio/sfx/banks.rs`, 2026-09-04): a uniform draw that
+  (`crates/sound/src/sfx/banks.rs`, 2026-09-04): a uniform draw that
   never repeats the immediately previous pick for a cue. PS2's own binary is
   not independently checked - it is grouped with PSP/Pure as the same
   library generation by operand byte layout, not by having been read itself.
@@ -35,7 +35,7 @@
   other way, 2026-09-16**: the unit is 1/128 of a semitone, 1536 to the
   octave, confidence 92 - the same live capture caught the engine at rest
   with an offset of `-1148` and a pitch word that is `2^(-1148/1536)` of its
-  descriptor's rate. `crates/game/src/audio/sfx/engine.rs` divides by 1536
+  descriptor's rate. `crates/sound/src/sfx/engine.rs` divides by 1536
   now. Still not carried: the Doppler term.
 - The track's own authored sound sources (as opposed to craft positional audio) remain open.
 

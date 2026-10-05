@@ -3,7 +3,7 @@
 **Binary:** `pure-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** decompilation only, no PPSSPP leg for either title.
 
-Answers `oag_game::audio::sfx::Cue::LockOn`. Found the fast way: `search_strings`
+Answers `oag_sound::sfx::Cue::LockOn`. Found the fast way: `search_strings`
 directly for the cue's literal (`~ROCKLOCK`, matching `sfx.rs`'s `Cue::name()`),
 then a `lui`/`addiu` search on the derived offset - no dry-play-chain caller
 search needed, and for good reason: this cue calls the chain's *middle* hop

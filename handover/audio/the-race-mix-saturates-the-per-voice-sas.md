@@ -95,7 +95,7 @@ plate comments: [audio-levels.md](../../docs/ghidra/functions/psp-pulse-usa/audi
 
 **Ported**: `oag_audio::mixer::MUSIC_MASTER_TRIM` (`crates/audio/src/mixer.rs`,
 `= 0.44`, documented with the same evidence), folded into `Bus::Music`'s gain
-alone in `Audio::apply` (`crates/game/src/audio.rs`) - `settings.music_volume
+alone in `Audio::apply` (`crates/sound/src/lib.rs`) - `settings.music_volume
 .gain() * MUSIC_MASTER_TRIM`, leaving SFX and Speech untouched, matching the
 original's own chain (`Audio_SetSfxFadeTarget`'s side never reaches this
 constant either).
@@ -139,8 +139,8 @@ either capture, and the music bus's own clip count went from 2 samples to 0 -
 quieter, not gone.
 
 **Gate**: `.rs` changed (`crates/audio/src/mixer.rs`,
-`crates/game/src/audio.rs`, `crates/game/src/settings.rs` doc comment,
-`crates/game/src/audio/tests/volumes.rs`), so the full gate applies. `just
+`crates/sound/src/lib.rs`, `crates/game/src/settings.rs` doc comment,
+`crates/sound/src/tests/volumes.rs`), so the full gate applies. `just
 fmt-check`, `just lint` and `just test` all pass; `OAG_REQUIRE_GAME_DATA=1
 just test-data` gives the same 5 pre-existing failures this pass's own
 instructions named as baseline (`pure_dlc` x2, `shuriken`,
@@ -149,7 +149,7 @@ see the pass's own scratch note for the exact run.
 
 ## Resolved
 
-- **The ordering fix landed.** `Engine::tick` (`crates/game/src/audio/sfx/engine.rs`)
+- **The ordering fix landed.** `Engine::tick` (`crates/sound/src/sfx/engine.rs`)
   now builds the engine law (`intensity * 0.6 + 0.4`, `x 0.85` for
   non-player craft) into the `volume` argument `oag_audio::Emitter::place`
   takes, instead of multiplying it onto the already-curved gain afterwards -
@@ -238,7 +238,7 @@ see the pass's own scratch note for the exact run.
   decode itself is faithful, not the source of the excess: the actual disc
   track this race plays has an already-cached raw decode on this machine,
   RMS -11.37 dBFS off the raw PCM alone, no mixer involved - within 0.16 dB
-  of our own dump, confirming `crates/game/src/audio.rs`'s own documented
+  of our own dump, confirming `crates/sound/src/lib.rs`'s own documented
   claim that an unattenuated voice "round-trips the disc's own PCM
   sample-for-sample." So the decode is right, and something downstream of
   it is not attenuating the way the original's own playback does.
@@ -289,7 +289,7 @@ volume/angle computation this port *does* have
 actual hardware channel volumes: `Scream_PanVolumePair` multiplies **four**
 terms together, two of them squared, before dividing into the final gain.
 **This stage does not exist anywhere in `crates/audio` or
-`crates/game/src/audio`** - confirmed by grep, not inferred.
+`crates/sound/src`** - confirmed by grep, not inferred.
 
 The theoretical ceiling of that stage (all four terms maxed) is a *gain* of
 2.0, not an attenuation - so which way it actually points at real gameplay
@@ -318,7 +318,7 @@ the PSP databases), or more of the same live-breakpoint technique walked one
 call frame further out.
 
 **Gate: no `.rs` file changed.** This pass's own conclusion is "identified,
-not yet portable" - nothing in `crates/audio` or `crates/game/src/audio`
+not yet portable" - nothing in `crates/audio` or `crates/sound/src`
 moved. `just check-docs`, `just check-handover` both pass; the full gate was
 not re-run since no code changed (per `CLAUDE.md`'s docs-only carve-out) -
 `just fmt-check`/`just lint` were not re-run either since the two `.rs` files
@@ -330,7 +330,7 @@ touched by the third pass are unchanged by this one.
 each, out of this pass's assigned lane - flagged rather than left for the
 orchestrator to find in the diff, since both records were already located and
 bounds-checked and the two new fields are a couple of lines each); and
-`crates/game/src/audio/sfx/banks.rs` (wires the two new fields into the
+`crates/sound/src/sfx/banks.rs` (wires the two new fields into the
 `Sound` each waveform decodes to). `just fmt-check`, `just lint` both pass.
 `cargo nextest run -p oag-audio -p oag-formats -p oag-game`: 1828 passed, 558
 skipped (the ground-truth tests needing `data/images/`, run separately below),

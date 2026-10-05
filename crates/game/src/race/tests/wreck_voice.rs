@@ -3,9 +3,9 @@
 //! Eliminator, for the player never. `Race::tick_wreck_voice`.
 
 use super::*;
-use crate::audio::sfx::Cue;
 use oag_gameplay::PlayerInputs;
 use oag_physics::CraftState;
+use oag_sound::sfx::Cue;
 
 /// The ticks `cont_elim` was raised on, with `down` slots set `Eliminated`
 /// from the first tick.

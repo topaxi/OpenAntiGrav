@@ -146,7 +146,7 @@ BASELINE = {
     # `Particle` moved into `psys/particle.rs` to make room for the rotating
     # template sprite's roll.
     "crates/render/src/psys.rs": 1549,
-    "crates/game/src/audio.rs": 1798,
+    "crates/sound/src/lib.rs": 1753,
     "crates/trace/src/main.rs": 1543,
     # Ratcheted down from 1,506 when `FlareTexture` moved out into
     # `exhaust/texture.rs`, which is where the ribbon's second texture is

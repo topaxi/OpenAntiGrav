@@ -2,8 +2,8 @@
 
 use anyhow::{Result, bail};
 
+use oag_game::movie;
 use oag_game::render::Renderer;
-use oag_game::{audio, movie};
 use oag_music::at3;
 use oag_ui::frontend::{self, Frontend};
 
@@ -19,7 +19,7 @@ pub(crate) struct FrontendStage {
     /// Every movie still waiting for the screen that plays it.
     ///
     /// Held rather than started up front because they share one voice:
-    /// [`crate::audio::Audio::start_movie`] stops whatever was playing, so
+    /// [`oag_sound::Audio::start_movie`] stops whatever was playing, so
     /// starting two at load would mean the second silenced the first. Each is
     /// installed on the tick its own screen is entered - see
     /// [`FrontendStage::install_movie`].
@@ -87,7 +87,7 @@ impl FrontendStage {
     ///
     /// Idempotent by construction - the entry is taken out of `pending` - so a
     /// state re-entered later does not restart its movie.
-    pub(crate) fn install_movie(&mut self, state: &str, audio: &mut audio::Audio) {
+    pub(crate) fn install_movie(&mut self, state: &str, audio: &mut oag_sound::Audio) {
         let Some(at) = self.pending.iter().position(|movie| movie.state == state) else {
             return;
         };

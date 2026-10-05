@@ -31,7 +31,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::Platform;
-use oag_game::{audio, music};
+use oag_game::sound::GameLibrary;
+use oag_sound::{self as audio, library};
 
 fn source() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -61,9 +62,10 @@ fn source() -> Option<PathBuf> {
 fn the_front_ends_music_loads_through_the_engines_own_path() {
     let Some(source) = source() else { return };
     let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
-    let (name, sound) = music::load_front_end(&source.display().to_string(), &cache)
-        .expect("loading the front end's music")
-        .expect("2048 names one");
+    let (name, sound) =
+        library::load_front_end(&GameLibrary, &source.display().to_string(), &cache)
+            .expect("loading the front end's music")
+            .expect("2048 names one");
 
     assert_eq!(name, oag_2048::names::FRONT_END_MUSIC);
     assert_eq!(sound.channels(), 2);
@@ -146,7 +148,7 @@ fn the_banks_cue_table_is_empty() {
 #[ignore = "needs game content in data/extracted/vita/PCSF00007"]
 fn the_boots_own_music_discs_survey_finds_it() {
     let Some(source) = source() else { return };
-    let discs = audio::MusicDiscs::survey(&source.display().to_string());
+    let discs = audio::MusicDiscs::survey(&source.display().to_string(), &GameLibrary);
     assert_eq!(discs.booted(), Some(Platform::Vita));
     assert!(
         discs.describe().starts_with("Vita "),
@@ -163,7 +165,7 @@ fn the_boots_own_music_discs_survey_finds_it() {
 fn the_eleven_declared_race_tracks_are_listed_and_decode() {
     let Some(path) = source() else { return };
     let source = path.display().to_string();
-    let entries = music::listing(&source)
+    let entries = library::listing(&GameLibrary, &source)
         .expect("reading the listing")
         .expect("a title this build knows");
     assert_eq!(entries.len(), 11, "one entry per PI_Music, none skipped");
@@ -177,6 +179,7 @@ fn the_eleven_declared_race_tracks_are_listed_and_decode() {
     }
 
     let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
-    let sound = music::load_entry(&source, entries[0].at, &cache).expect("decoding track 01");
+    let sound = library::load_entry(&GameLibrary, &source, entries[0].at, &cache)
+        .expect("decoding track 01");
     assert!((f64::from(sound.seconds()) - entries[0].seconds).abs() < 1.0);
 }

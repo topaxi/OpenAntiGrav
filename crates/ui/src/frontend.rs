@@ -859,7 +859,7 @@ impl Frontend {
     /// `movie_playhead` is how far the movie's **own sound** has got, in
     /// seconds, and `None` - the ordinary case - means it has none to pace
     /// against. See [`Self::advance_movie`] for what it does with it, and
-    /// `crate::audio::Audio::movie_playhead` for every reason it is `None`.
+    /// `oag_sound::Audio::movie_playhead` for every reason it is `None`.
     /// It is a parameter rather than something set beforehand because there are
     /// two tick loops - the window's and the headless capture's - and an
     /// argument makes forgetting one a compile error instead of a movie that

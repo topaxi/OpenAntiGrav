@@ -209,7 +209,7 @@ Settles every open question the two bullets below used to carry:
   `player` (`crates/game/src/race/tick.rs`).
 - **`~AUTOPILOT` goes through `FUN_0883e9b0`**, the same dry, no-position
   helper `Cue::Blowup` and `Cue::Disengaging`
-  (`crates/game/src/audio/sfx/cue.rs`) already cite for the player's own ear
+  (`crates/sound/src/sfx/cue.rs`) already cite for the player's own ear
   rather than a craft's emitter - and its return is stored at `param_1+0x58`,
   matching this page's own note two sections up that `Autopilot_Update`
   "stops a held handle at `entity+0x58`". The two now agree on the same
