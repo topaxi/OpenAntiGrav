@@ -100,3 +100,7 @@
 0x81298f58	function	Ship_RegisterEffectSet	65	particle-paths.md
 0x811aefba	function	MagstripWake_Destruct	78	ships-effects.md
 0x811a8064	function	Ship_StartMagstripSound	55	ships-effects.md
+# Which mode a 2048 race is, and which side of the magstrip split it lands on (2026-10-05, magstrip-2048-pob lane).
+0x81000930	function	GameMode_IsHdLineage	85	ships-effects.md
+0x810016ba	function	GameMode_IdFromName	85	ships-effects.md
+0x810018d4	function	GameMode_IsZoneFamily	65	ships-effects.md
