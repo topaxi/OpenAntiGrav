@@ -265,12 +265,12 @@ Scratch decompiles sit under `data/scratch/magstrip-omega-law/`.
 
 ### The over-strip predicate (`vtable + 200`): `Ship_IsOverMagStrip`, conf 85
 
-`FUN_01762e80` calls `(**(code **)(*ship + 200))(..., ship)` at `0x017659bb`. The two
-ship vtables that carry `FUN_01773ef0` (the constructor tail that reaches
-`FUN_0176d240` and so `FUN_01309e90`) are `0x0192d840` (stored by `FUN_01772fb0`) and
-`0x0192da00` (a copy at a constant `+0x1c0`: `FUN_01773ef0` sits at `0x0192db38`, which is
-slot 39 of it, as `FUN_0176d240` is slot 39 of the first); slot 25 (`+200`) of **both**
-holds `0x01768a40`. Read as bytes, not inferred.
+`FUN_01762e80` calls `(**(code **)(*ship + 200))(..., ship)` at `0x017659bb`. The
+ship vtable `0x0192da00` carries `FUN_01773ef0` (the constructor tail that reaches
+`FUN_0176d240` and so `FUN_01309e90`) at `0x0192db38`, slot 39; its sibling `0x0192d840`
+(stored by `FUN_01772fb0`) carries `FUN_0176d240` itself in the same slot, at a constant
+`-0x1c0`. Slot 25 (`+200`) of **both** holds `0x01768a40`. Read as bytes, not inferred.
+The call passes the ship alone (`MOV RDI, RBX` then `CALL [RAX+0xc8]`, `0x017659bb`).
 
 `Ship_IsOverMagStrip` (`0x01768a40`):
 
@@ -307,7 +307,13 @@ is that record's `+0x20`. `FUN_012582a0` (`0x012582a0`) fills a hit record: `+0x
 
 > **over a magstrip = the fifth surface probe hit a triangle whose surface-type byte is `3`.**
 
-That is the same literal Pulse compares: `oag_vex::collision::SurfaceKind::MagFloor.surface_type()`
+That byte is the **HD-lineage per-triangle surface class**, and the value is not an
+accident: `oag_vex::kdcol::class_of` documents the table `TrackCollision_MeshFromNode`
+(Vita `0x8126f800`) passes to the mesh builder - `Floor Collision` `0x3b9` = 2,
+**`Mag Floor Collision` `0x3e6` = 3**, `Wall Collision` = 4, `Reset Collision` = 7 - and
+re-derived over 170,744 HD/2048 triangle pairs. So `+0x4d0 == 3` is "the triangle came
+from a `Mag Floor Collision` node", the class HD authors (`docs/formats/hd-status.md`:
+Talon's Junction has 14 such objects). It is also the same literal Pulse compares: `oag_vex::collision::SurfaceKind::MagFloor.surface_type()`
 is `Some(3)` and `Ship_CastHoverProbes`'s tail writes `craft+0x240` from a probe
 "restricted to surface type 3" and edge-detects it into `Ship_MagFloorEnter`/`Exit`
 (`psp-pulse-usa/engine.md`, "The tail of `Ship_CastHoverProbes`"). **Same law, same
@@ -327,10 +333,15 @@ Other readers of the same two bytes: `FUN_012ed9b0` packs it into the replicated
 (`byte41 = (byte41 & 0xfffc) | bit0 | (c+0x5d0) << 1`, stride `0x21`), which is the
 `m_overMagStrip` field HD logs - see the HD page. And `FUN_01762e80`'s activate branch
 reads `c+0x4d0` too: for surface classes `2, 3, 10, 11, 12` (mask `0x703` over
-`class - 2`) it copies the probe record's point and normal (`c+0x4b0`/`+0x4c0`) into
+`class - 2`: `Floor`, `Mag Floor`, and 2048's own measured-floor bytes `10`..`12`, so
+"any drivable floor") it copies the probe record's point and normal (`c+0x4b0`/`+0x4c0`) into
 the 2048-style POB's anchor frame at `ship+0x8860..` (`param_2[0x110c..0x1113]`, conf 60:
 the copy is read, the consumer is not). The activation is also vetoed when `ship+0x71f5 & 0x10` is set (the
-flag's meaning is unread).
+flag's meaning is unread). `FUN_0131b510` also **returns before touching `+0x5d0`** while
+`c+0x2d8 == 0` or `c+0x2c5 & 4` (checked at entry and again after the probes): the flag
+is then held, no edge fires, and a held "on" stays on. Neither field is identified.
+(`FUN_0125e9b0`'s `+0x5d0` test and clear is a different object: the global
+`DAT_02039628`, the pause-menu one `FUN_012e6890` also writes. Not a reset path.)
 
 ### The blend: **additive RGB**, decoded (conf 85)
 
@@ -359,17 +370,16 @@ ZERO/ADD/ONE. That pins `0` ZERO, `1` ONE, `4` SRC_ALPHA, `5` ONE_MINUS_SRC_ALPH
 word (`0x65000101`) in `DAT_020e2f88`; `MagstripWake_Draw` copies that word into the
 draw item at `+0x58` for both batches (`0x012e2fd3`, `0x012e3194`).
 
-> **Colour: `out.rgb = src.rgb * 1 + dst.rgb * 1` - additive, with the source colour NOT
-> scaled by its alpha. Alpha: `out.a = dst.a * (1 - src.a)`** (it never reaches the frame
-> in an opaque target, so it is irrelevant to the picture).
+> **Colour: `out.rgb = src.rgb * 1 + dst.rgb * 1` - additive, with the blend stage NOT
+> scaling the source colour by its alpha. Alpha: `out.a = dst.a * (1 - src.a)`** (it never
+> reaches the frame in an opaque target, so it is irrelevant to the picture).
 
-So "additive" is now decoded rather than guessed, and with a consequence the texture
-names could not tell: the arc's `0xb2` vertex alpha does **not** dim it (alpha is not a
-colour factor here). The brightness is the RGB alone: `intensity * 255` for the body,
-`intensity * 76.5` for the soft strip, `contact_scale * 255` for the contact quad. The
-fragment program `MagStripArc_fp` is Orbis shader code and was not decompiled, so
-whether it multiplies by the vertex alpha before output is **not known**; the batch
-state is. The second state word, `DAT_020e2f68` (`FUN_01209170` output), is zero (depth
+So "additive" is now decoded rather than guessed. What the decode does not say: the
+vertex alpha (`0xb2`) is not a blend factor, but the fragment program may still use it.
+The brightness the vertices carry is `intensity * 255` for the body, `intensity * 76.5`
+for the soft strip, `contact_scale * 255` for the contact quad. `MagStripArc_fp` is Orbis
+shader code and was not decompiled, so **the alpha handling is chosen, not measured**; the
+batch state is measured. The second state word, `DAT_020e2f68` (`FUN_01209170` output), is zero (depth
 and cull state, meaning not decoded). Depth-test and write for the draw are therefore
 **unknown**, not "off".
 

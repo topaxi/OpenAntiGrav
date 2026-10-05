@@ -57,22 +57,31 @@ Not done: the Vita PSARCs and the Omega sound banks were not listed or extracted
 Evidence in the Omega page's "2026-10-05, magstrip-omega-law lane" section. All static, no
 live PS4, so these are 80-90 reads, not captures.
 
+- **Wiring target: HD/Fury first.** Omega racing is out of scope (CLAUDE.md) and HD has no
+  mode split: it builds the arc wake only, never the POB. **Precondition, unverified:** the
+  HD race path must produce `mag_contact`. The pieces exist - HD's `.vex` version 6 declares
+  `Mag Floor Collision` (`0x3e6`, 14 objects on Talon's Junction) and
+  `oag_gameplay::collision` maps it to `Surface::MagFloor` - but nobody has watched an HD
+  race report `mag_contact.is_some()` over a strip, and `maglock::probe` also needs a
+  `track_sample` (the AI spline). Check that first with a headless HD race over a strip.
 - **Contact predicate (85).** Over a magstrip = the ship's surface probe hit a triangle of
-  surface type `3` this tick. In our physics that is `ShipState::mag_contact.is_some()`
+  surface type `3` this tick (`3` is the HD-lineage `Mag Floor Collision` class byte, the
+  same table `oag_vex::kdcol::class_of` reads). In our physics that is `ShipState::mag_contact.is_some()`
   (`oag_physics::maglock::probe`, the same `Surface::MagFloor` literal `3` as Pulse's
   `craft+0x240`). Use the **instantaneous** contact, not the mag-lock blend (the blend ramps
   and lingers). Edges: rising = `contact && !prev`, falling = `!contact && prev`. The
-  activation is also vetoed by `ship+0x71f5 & 0x10` (meaning unread; ignore, say so).
+  activation is also vetoed by `ship+0x71f5 & 0x10`, and the original freezes the flag
+  (no edges) while `controller+0x2d8 == 0` or `+0x2c5 & 4`; none of the three is identified,
+  so a port omits them and says so.
 - **Which effect (80).** `mode < 0x17` Omega-style (HD-lineage modes) builds the procedural
   arc wake; the 2048-lineage modes play `WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` instead,
   never both. A title with no 2048 modes (Pulse's own two-`.vex` mechanism is a different
   thread) wires only the arc wake.
 - **Blend of both arc batches (85): additive RGB.** `out.rgb = src.rgb + dst.rgb` (factors
   ONE/ONE, **not** SRC_ALPHA), alpha channel `dst.a * (1 - src.a)`. Vertex alpha is fixed
-  `0xb2` but is NOT a colour factor, so it does not dim the arc; brightness is the RGB.
-  Unknown: the fragment program's own use of vertex alpha (Orbis shader, not decompiled) and
-  the draw's depth test/write (second state word is zero, meaning undecoded). Choose and
-  label depth as chosen, not measured.
+  `0xb2` and is not a blend factor; whether `MagStripArc_fp` uses it is unread, so alpha
+  handling and the draw's depth test/write (second state word is zero, meaning undecoded)
+  are **chosen, not measured**: label them so.
 - **Anchor (90).** One `arc_anchor_point` node per hull in `Locators.vex`, class `110`,
   centreline, model space, translation in row 3. HD and Omega agree on all 38 hulls; the
   per-hull values are in the Omega page and printed by
