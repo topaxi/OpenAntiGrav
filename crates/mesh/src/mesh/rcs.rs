@@ -171,6 +171,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod cutout;
 mod isolate;
+mod light_cone;
 mod mag_wave;
 mod pad_ne;
 mod pads;

@@ -211,6 +211,9 @@ pub struct Report {
     /// Magstrip materials that declare the wave and could not be bound: a
     /// texture did not decode or an authored value is missing. Drawn without.
     pub mag_wave_unread: usize,
+    /// HD light-cone materials whose noise and ramp were bound - see
+    /// `super::light_cone`.
+    pub light_cone_bound: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -320,6 +323,9 @@ impl Report {
         } + &match self.mag_wave_unread {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) whose wave could not be read (drawn without)"),
+        } + &match self.light_cone_bound {
+            0 => String::new(),
+            n => format!(", {n} light-cone material(s) with their facing ramp bound"),
         } + &match self.isolated {
             0 => String::new(),
             n => format!(

@@ -317,6 +317,14 @@ pub mod slots {
     /// (grid + ramp) * d`. `c` rides in the glow-table entry's `offset`.
     pub const MAG_LOOP: u32 = 1 << 18;
 
+    /// This material's resolved fragment program is HD's light cone -
+    /// `dc_lightcone.rcsmaterial`'s shape, matched by
+    /// `mesh::rcs::light_cone`'s fact-based classifier: `albedo` is the cone's
+    /// facing ramp (sampled at `dot(V, N)`) and `lightmap` the noise
+    /// (`Texture1`), the output being `(noise * K, noise * s * ramp)`. `K` rides
+    /// in the glow-table entry's tint and `s` in its scale.
+    pub const LIGHT_CONE: u32 = 1 << 19;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
@@ -327,10 +335,11 @@ pub mod slots {
     /// bit test that an index above bit 15 cannot disturb. A circuit's
     /// materials number in the hundreds against the 65,535 this allows.
     ///
-    /// Nineteen since [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
+    /// Twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
+    /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
     /// index keeps 32,767 values, against the hundreds a circuit uses.
-    pub const MATERIAL_SHIFT: u32 = 19;
+    pub const MATERIAL_SHIFT: u32 = 20;
 
     /// The mask covering every role bit - the low half of the word, with
     /// [`MATERIAL_SHIFT`]'s index excluded.
