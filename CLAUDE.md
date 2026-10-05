@@ -328,6 +328,32 @@ Consequences that affect how you name and touch things in Ghidra / decompiled co
 - The `ghidra-mcp` MCP server (configured in `.mcp.json`) drives Ghidra directly when
   a Ghidra project is open.
 
+### A 2048 finding is checked against Omega, and the reverse
+
+**Wipeout 2048 (Vita) and the Omega Collection (PS4) share an asset lineage**:
+Omega reads through 2048's `.rcsmodel` readers (8-byte pointers aside), keeps its
+ships in 2048's directory scheme, splits its plugin definitions three ways like
+2048, and re-ships 2048's own circuits byte-for-byte at the same layouts (see
+[`docs/formats/omega-status.md`](docs/formats/omega-status.md)). Omega's front end
+is HD's instead, so a front-end finding is checked against HD.
+
+So **anything recovered or wired for one of the two - a format field, a law, a
+material rule, a table, an asset path - gets a quick check against the other in the
+same change**: does the other title ship the same file or code, and does the reader
+or the wiring hold there? Record the answer in the finding's doc page either way,
+as one of:
+
+- **ported**: the other title now uses it too, with its own test or ground truth;
+- **checked, applies, not wired**: same data or code, wiring left open, named in a
+  `handover/` thread;
+- **checked, differs**: what differs, with evidence;
+- **not checkable**: why (no capture path for Omega's executable, say), never silence.
+
+The check is quick by design - a census and a reader run, not a second lane. When it
+turns into real work, write it down as open rather than widening the current lane.
+Omega racing being out of scope does not exempt a format or asset finding from the
+check.
+
 ### Never invent what the assets already author
 
 **If a thing exists in the disc's own data, play the data. Do not author a
