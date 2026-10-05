@@ -310,6 +310,60 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
     rings
 }
 
+/// Lays a projected hull on the road that is actually under it, rather than on
+/// the single plane the craft's own cast found.
+///
+/// [`hull_triangles`] projects every vertex onto one plane, the plane of the
+/// one collision triangle the craft's downward ray hit. A hull is several
+/// units across and a road is not flat, so away from that triangle the plane
+/// stands off the surface, and **which** triangle the ray hit changes tick to
+/// tick as the craft crosses seams. Measured on Pulse's default circuit in
+/// Zone, a point of the polygon ended up buried under the road by up to 0.7
+/// units - against a [`LIFT`] of 0.05 - on more than a third of the ticks of
+/// a late-lap window, and by nothing on the ticks between, which is a shadow
+/// whose edge blinks.
+///
+/// `floor` answers "how far above this point, along the surface normal, is the
+/// road?". Each triangle from `first` on is split once at its edge midpoints,
+/// because a flat triangle over a concave road is buried between its own
+/// vertices however well they are placed (a fitted triangle still measured
+/// 0.12 buried at its centre), and every vertex is then moved to [`LIFT`]
+/// above the road. A point `floor` has no answer for stays where it was; how
+/// far `floor` looks is its own bound, so that a deck overhead is not mistaken
+/// for the road.
+///
+/// A shared edge's midpoint is the same point in both triangles it belongs to,
+/// so the surface it makes has no crack.
+pub fn conform_to_floor(
+    vertices: &mut Vec<GpuVertex>,
+    first: usize,
+    mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
+) {
+    let coarse: Vec<GpuVertex> = vertices.drain(first..).collect();
+    let mut place = |vertex: GpuVertex| {
+        let at = Vec3::from_array(vertex.position);
+        let normal = Vec3::from_array(vertex.normal);
+        match floor(at, normal) {
+            Some(above) => GpuVertex {
+                position: (at + normal * (above + LIFT)).to_array(),
+                ..vertex
+            },
+            None => vertex,
+        }
+    };
+    let middle = |a: &GpuVertex, b: &GpuVertex| GpuVertex {
+        position: (Vec3::from_array(a.position).midpoint(Vec3::from_array(b.position))).to_array(),
+        ..*a
+    };
+    for triangle in coarse.chunks_exact(3) {
+        let [a, b, c] = [&triangle[0], &triangle[1], &triangle[2]];
+        let (ab, bc, ca) = (middle(a, b), middle(b, c), middle(c, a));
+        for corners in [[*a, ab, ca], [ab, *b, bc], [ca, bc, *c], [ab, bc, ca]] {
+            vertices.extend(corners.map(&mut place));
+        }
+    }
+}
+
 /// Triangulates a simple polygon by ear clipping, in the plane it lies in.
 ///
 /// Returns index triples into `points`. **Ear clipping rather than a fan**
