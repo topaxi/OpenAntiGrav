@@ -28,6 +28,10 @@ games): both a visible spark/glow below the craft and an audible hum were
 reported. This page recovers the gfx half in full down to the trigger; the sfx
 half is open - see below.
 
+**Implemented 2026-10-05** in `oag_raceplay::mag_floor_fx` from the anchor
+below: both models under every craft on a strip, no sound (there is none to
+play, see [The sfx half](#the-sfx-half-is-open)).
+
 ## The two assets are real and on the disc
 
 Both filenames appear twice in `BOOT.BIN`'s data segment: once mixed-case

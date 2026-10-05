@@ -84,6 +84,24 @@ fn main() {
                 continue;
             }
             println!("{name}: {hums} *hum* emitters in all");
+            // One strip point, for `oag-game --pose`: the mean of the first
+            // MagFloor node's first mesh.
+            if let Some(first) = collision::from_vex(&model)
+                .unwrap_or_default()
+                .into_iter()
+                .find(|n| n.kind == collision::SurfaceKind::MagFloor)
+                && let Some(mesh) = first.geometry.meshes.first()
+            {
+                let m = world[first.node_index];
+                let mut sum = [0.0f32; 3];
+                for v in &mesh.vertices {
+                    let w = transform(&m, *v);
+                    for axis in 0..3 {
+                        sum[axis] += w[axis] / mesh.vertices.len() as f32;
+                    }
+                }
+                println!("  strip point {:.1},{:.1},{:.1}", sum[0], sum[1], sum[2]);
+            }
             println!(
                 "{name}: {} MagFloor vertices, {} emitters",
                 strip.len(),
