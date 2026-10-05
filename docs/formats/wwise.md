@@ -256,6 +256,43 @@ between 200 and 1,000: a low bed, not an effect - which "first qualifying event"
 gives, and is *chosen, not measured* as the cue to play. Nothing was played on
 any device.
 
+## Music: a `Music_Track` state per artist
+
+Read 2026-10-05 off `data08`'s `Music.bnk` (21,658,812 bytes) and the patch's
+`data/plugins/music/Definition.xml` (`data09`), by the lead, with a scratch
+probe (`data/scratch/omega-music/hirc.py`, `states.py`; not committed). Nothing
+is wired yet.
+
+* **The playlist is plugin XML.** `Definition.xml` holds 29 `PI_Music`
+  entries: `name` is the song title, `<Values location="00">` to `"28"`,
+  `Artist`, an empty `Label` and `PlaylistId` 1 or 2. `Definition_demo.xml`
+  holds 28.
+* **`Music.bnk`'s objects**: 62 actions, 33 events, 169 music segments, 993
+  music tracks, 10 music switches and 63 music random/sequence containers;
+  nothing else.
+* **The switch group is `Music_Track`** (confidence 85): `fnv1("music_track")`
+  is the group id of 57 actions and appears in 4 of the 10 music switches.
+  `fnv1("race")` appears in one music switch.
+* **Its states are the artist names, with spaces removed** (confidence 88): 28
+  SetState actions (kind `0x1204`, group at body `+9`, state at `+13`) set
+  `Music_Track` to 28 distinct values. 25 of them are FNV-1 hashes of an
+  artist from `Definition.xml` with spaces removed, or of its first credited
+  name when the artist is a collaboration (`BoysNoize`, `TheChemicalBrothers`,
+  `BlackSunEmpire`, `DJKentaro`, `SwedishHouseMafia`, ...). Three hashes
+  (`404193461`, `3252658421`, `4067886831`) match no spelling tried; Code
+  Manta, Burufunk and Noisia are the unmatched artists. Code Manta is
+  `location="00"`, and 29 entries against 28 states suggests one entry with no
+  state of its own. Unverified.
+* **Music track media are ATRAC9 streams** (confidence 90): all 993 tracks
+  carry one source with plugin `0x000C0001`. 990 are streamed (type 1) with a
+  prefetch head in the bank's `DIDX` and 3 are embedded. 168 distinct media
+  ids, 165 of them loose `<id>.wem` in the archives. Of those 165, **154 are
+  stereo and 11 are 8-channel** (48 kHz), so most of the soundtrack decodes
+  with what `oag_formats::wwise::wem` already does.
+* **Not read**: the music switch's association tree (state to child), segment
+  child lists and playlist containers, so the chain from a state to its
+  segment's tracks is inferred, not walked. `PlaylistId` 1 vs 2 is unread.
+
 ## What is not done
 
 * **Event names.** A bank carries ids only: an event id is a hash of a name the

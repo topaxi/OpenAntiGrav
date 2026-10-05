@@ -115,16 +115,23 @@ pub const TITLE: &Title = &Title {
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
 };
 
-/// 2048's front-end music. No declared soundtrack (`tracks: None`), on the
-/// same terms Pulse's is: nothing has located a `PI_Music`-shaped listing
-/// for 2048's own races yet, so [`crate::race`] does not read one.
+/// 2048's music: the front end's loop and the eleven race tracks.
+///
+/// The soundtrack is declared in [`names::MUSIC_PLUGIN_DEFINITION`], eleven
+/// `PI_Music` nodes whose `location` is a directory holding
+/// [`names::MUSIC_TRACK_FILE`] (read 2026-10-05, `data/audio/music/01` to
+/// `11`). Each track carries an `.fft` sidecar beside it, which nothing here
+/// reads.
 ///
 /// [`oag_title::Music::front_end`] is [`names::FRONT_END_MUSIC`] - see that
 /// constant's own doc for the evidence and for why it names a standalone
 /// file rather than a `frontend.bnk` cue.
 pub const MUSIC: &oag_title::Music = &oag_title::Music {
     front_end: names::FRONT_END_MUSIC,
-    tracks: None,
+    tracks: Some(oag_title::DeclaredTracks {
+        declared_in: names::MUSIC_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    }),
 };
 
 /// Paths inside the packages.
@@ -141,9 +148,9 @@ pub mod names {
     /// [`oag_title::Title::plugin_definition`] holds one name, so this holds
     /// the teams one - the roster is what a race needs before it can fly
     /// anything. The circuit list is [`oag_title::Title::track_plugin_definition`],
-    /// [`TRACK_PLUGIN_DEFINITION`] below; the soundtrack list has no
-    /// equivalent axis yet and this build still sees none, see
-    /// `docs/formats/2048-status.md`.
+    /// [`TRACK_PLUGIN_DEFINITION`] below; the soundtrack list is
+    /// [`MUSIC_PLUGIN_DEFINITION`] below, reached through [`crate::MUSIC`]'s
+    /// `tracks`, see `docs/formats/2048-status.md`.
     pub const TEAM_PLUGIN_DEFINITION: &str = r"Data\Plugins\teams\Definition.xml";
 
     /// The circuits plugin - [`oag_title::Title::track_plugin_definition`],
@@ -152,6 +159,10 @@ pub mod names {
 
     /// The soundtrack plugin, on the same terms as [`TRACK_PLUGIN_DEFINITION`].
     pub const MUSIC_PLUGIN_DEFINITION: &str = r"Data\Plugins\music\Definition.xml";
+
+    /// The file a `PI_Music` location holds: RIFF-wrapped ATRAC9, stereo.
+    /// Where Pure's is `music.at3` and HD's `music_stereo.mp3`.
+    pub const MUSIC_TRACK_FILE: &str = "music_stereo.at9";
 
     /// The music the front end loops under its menus.
     ///

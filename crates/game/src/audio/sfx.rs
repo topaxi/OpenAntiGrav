@@ -97,6 +97,7 @@ mod banks;
 mod compose;
 mod cue;
 mod engine;
+mod hd;
 mod layers;
 mod repeating;
 mod track;
@@ -241,6 +242,7 @@ impl Audio {
     /// the held voices and the generator that chooses between a cue's
     /// alternates. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
     pub fn race_tick(&mut self, race: &mut crate::race::Race) {
+        self.hd_race_mix(race);
         let cues = race.drain_cues();
         let announcements = race.drain_announcements();
         let class_announcements = race.drain_class_announcements();
@@ -259,7 +261,7 @@ impl Audio {
                 xfade: std::array::from_fn(|slot| {
                     race.slot_team(slot)
                         .and_then(|team| race.sounds().xfade_team(team))
-                        .map(XfadeCraft::new)
+                        .map(|t| XfadeCraft::new(t).on_bus(race.sounds().group_bus(7)))
                 }),
                 last_listener: None,
                 sight: oag_race::sight::State::Absent,
@@ -270,7 +272,7 @@ impl Audio {
                 blowup_open: false,
                 autopilot: Vec::new(),
                 autopilot_open: false,
-                ambience: track::Ambience::default(),
+                ambience: track::Ambience::default().on_bus(race.sounds().group_bus(8)),
                 plasma_travel: TravelVoices::new(),
                 rocket_travel: TravelVoices::new(),
                 missile_travel: TravelVoices::new(),
@@ -773,6 +775,7 @@ impl Audio {
             });
         }
         self.sfx = None;
+        self.hd.state = super::hd_mix::State::FrontEnd;
     }
 }
 

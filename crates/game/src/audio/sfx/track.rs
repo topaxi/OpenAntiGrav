@@ -393,9 +393,19 @@ pub struct Ambience {
     /// distance, for the doppler term. An authored emitter does not move, so
     /// the change it reads is the listener's own approach and departure.
     dopplers: Vec<oag_audio::Doppler>,
+    /// The authored volume group the emitters play on (`user8`), when the
+    /// title has an authored mix; the effects bus otherwise.
+    bus: Option<oag_audio::Bus>,
 }
 
 impl Ambience {
+    /// Plays every emitter on `bus`, an authored group.
+    #[must_use]
+    pub fn on_bus(mut self, bus: Option<oag_audio::Bus>) -> Self {
+        self.bus = bus;
+        self
+    }
+
     /// How many of the circuit's emitters are sounding right now.
     ///
     /// Asked of the mixer rather than counted off the slots, because a slot
@@ -478,10 +488,11 @@ impl Ambience {
                     doppler.ratio(placed.distance, dt, false);
                     *held = node.sound.as_ref().and_then(|loaded| {
                         let (sound, looping) = pick(loaded, rng)?;
+                        let bus = self.bus.unwrap_or(oag_audio::Bus::Sfx);
                         let play = if looping {
-                            oag_audio::Play::looping(sound, oag_audio::Bus::Sfx)
+                            oag_audio::Play::looping(sound, bus)
                         } else {
-                            oag_audio::Play::once(sound, oag_audio::Bus::Sfx)
+                            oag_audio::Play::once(sound, bus)
                         };
                         mixer.play(oag_audio::Play {
                             gain: placed.gain,

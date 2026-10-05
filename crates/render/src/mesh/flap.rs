@@ -4,6 +4,7 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use oag_core::math::{Mat4, Vec3};
+use oag_vex::vex;
 
 use super::GpuVertex;
 
@@ -36,6 +37,70 @@ pub struct Flap {
 }
 
 impl Flap {
+    /// Records `node`'s vertices as part of an airbrake flap, when it is one.
+    ///
+    /// A flap is a `Mesh` whose parent is an `Airbrake` node, and its hinge is
+    /// the `Airbrake`'s own parent: the locator `Transform` that carries the
+    /// 4x4. `anchors` holds that pose (no ship authors an `Anim Transform`, so
+    /// with no anchor above it `Anchored::local` *is* the world matrix).
+    ///
+    /// Left and right by the artists' own node names (`Airbrake_Left`,
+    /// `Airbrake_Right`), not by the sign of a translation. `span` is the
+    /// node's vertices in the model being built; a second mesh under the same
+    /// `Airbrake` (Feisar's and Triakis's `underbrake_flash`) extends the
+    /// first's span, since a builder appends a node at a time.
+    ///
+    /// Version-keyed through `classes.airbrake`, so a `.vex` version whose
+    /// class id is unrecovered leaves a ship with no flaps.
+    pub(super) fn collect(
+        airbrakes: &mut [Option<Self>; 2],
+        nodes: &[vex::Node],
+        classes: vex::classes::Classes,
+        anchors: &[vex::Anchored],
+        node: &vex::Node,
+        span: std::ops::Range<u32>,
+    ) {
+        let Some(brake) = node.parent else { return };
+        if span.is_empty()
+            || !nodes
+                .get(brake)
+                .is_some_and(|n| Some(n.class_id) == classes.airbrake)
+        {
+            return;
+        }
+        let Some(hinge) = nodes[brake].parent else {
+            return;
+        };
+        let name = nodes[brake].name.as_deref().unwrap_or_default();
+        let side = if name.eq_ignore_ascii_case("Airbrake_Left") {
+            0
+        } else if name.eq_ignore_ascii_case("Airbrake_Right") {
+            1
+        } else {
+            return;
+        };
+        Self::record(
+            &mut airbrakes[side],
+            span,
+            Mat4::from_cols_array(&anchors[hinge].local),
+        );
+    }
+
+    /// Adds `span` to `slot`: the flap's first vertices, or an extension of
+    /// them when it begins where they end (a second mesh under the same flap,
+    /// since a builder appends one mesh at a time).
+    pub(super) fn record(slot: &mut Option<Self>, span: std::ops::Range<u32>, hinge: Mat4) {
+        match slot {
+            Some(flap) if flap.vertices.end == span.start => flap.vertices.end = span.end,
+            slot => {
+                *slot = Some(Self {
+                    vertices: span,
+                    hinge,
+                })
+            }
+        }
+    }
+
     /// The model-space transform that swings this flap by `angle` radians.
     ///
     /// `hinge * R * hinge^-1`, because the builder has already baked every

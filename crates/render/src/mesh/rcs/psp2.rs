@@ -37,7 +37,7 @@ use oag_rcs::rcsmodel::psp2;
 use oag_texture::gxt;
 
 use super::Textures;
-use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
+use crate::mesh::{Bounds, DrawCall, Flap, GpuVertex, Model, ModelTexture};
 
 mod glow;
 pub mod placement;
@@ -382,6 +382,21 @@ pub fn build_with_vex(
     )
 }
 
+/// Which side an airbrake mesh is, by the artists' own name: the last
+/// component of its Maya path, `Airbrake_Left` or `Airbrake_Right` (the shape
+/// node under it, `Airbrake_LeftShape`, is the same mesh).
+fn flap_side(path: &str) -> Option<usize> {
+    let leaf = path.rsplit(['|', '/']).next().unwrap_or(path);
+    let leaf = leaf.strip_suffix("Shape").unwrap_or(leaf);
+    if leaf.eq_ignore_ascii_case("Airbrake_Left") {
+        Some(0)
+    } else if leaf.eq_ignore_ascii_case("Airbrake_Right") {
+        Some(1)
+    } else {
+        None
+    }
+}
+
 fn build_planned(
     label: &str,
     model_blob: &[u8],
@@ -555,6 +570,19 @@ fn build_planned(
         if !place.hidden {
             for &index in &submesh.indices {
                 model.indices.push(base + u32::from(index));
+            }
+            // An airbrake is a node-bound mesh named `Airbrake_Left` or
+            // `Airbrake_Right` whose vertices are about the flap's own hinge,
+            // which is the node's matrix the bake above has just applied: the
+            // same hinge-frame arrangement a Pulse flap has, so the same
+            // `Flap` swings it. See `Flap::deflect`.
+            let side = submesh
+                .mesh
+                .and_then(|m| decoded.scene.meshes.get(m))
+                .and_then(|m| flap_side(&m.name));
+            if let (Some(side), true) = (side, place.xform == 0) {
+                let end = u32::try_from(model.vertices.len()).unwrap_or(u32::MAX);
+                Flap::record(&mut model.airbrakes[side], base..end, to_world);
             }
         }
         let centre: [f32; 3] = if place.hidden {

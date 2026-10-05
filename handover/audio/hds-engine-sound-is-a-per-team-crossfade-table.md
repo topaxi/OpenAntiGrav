@@ -1,4 +1,4 @@
-# HD/Fury's engine sound: the level is measured; the global HD gap, the stereo pair and the distance writer are open
+# HD/Fury's engine sound: level and authored mix are measured; the stereo pair, per-cue groups and the distance writer are open
 
 2026-10-05 (second pass). An HD race plays each craft's own `xfship_<team>.xfx` layers
 (`crates/game/src/audio/sfx/xfade.rs`). The evidence is
@@ -10,6 +10,9 @@ this file is only what is left.
 ## Done
 
 - The pitch unit (a SCREAM bend), `X` (the first hover probe's length), the wiring.
+- **The authored mix** (2026-10-05, lane `hd-mix-level`): the global gap was `GlobalAudioConfig.xml`'s
+  per-state group volumes (music linear, effects squared), sliders default 80 %. See
+  [`hd-xfx.md`](../../docs/formats/hd-xfx.md) "The authored mix".
 - **The level**: `0x400` is unity, a layer's volume word is **squared**, every engine voice reads
   `K = 0.295` against `level` (two boots, 126 hardware voices). The port now plays
   `ENGINE_BUS_RATIO * (curve * distance_factor)^2` instead of Pulse's `x^0.59`; a goteki
@@ -21,12 +24,20 @@ this file is only what is left.
 
 ## Open
 
-- **A global HD level gap, not the engine's.** The front-end music is 2.7x hotter here than in the
-  original, ordinary SCREAM voices about 3.1x, the circuit ambience alone louder than the original's
-  whole grid mix. One factor of about 3 on every HD cue would explain all three; the profile the
-  original ran on had unknown music and SFX slider values (an existing save), so it may simply be
-  a default. Decide HD's bus trims (`MUSIC_MASTER_TRIM` is Pulse's `0.44`) from a capture on a
-  fresh save, or photograph Options > Audio first. Touches music, collisions, the countdown.
+- **Every HD cue's group.** The mix is read and the buses exist (`crates/game/src/audio/hd_mix.rs`,
+  `Bus::Group(n)`); only the engine (group 7) and the circuit's emitters (group 8) are on theirs.
+  Every other cue plays on the effects bus at group `1.0`, which is chosen, not measured: read the
+  group each cue's voice carries (a SCREAM voice's bus field, or the bank's cue record) and move
+  collisions (6, `Cue::Collision`), pads and turbo (4), HUD cues (2), weapons (3, hd-weapons lane),
+  explosions (5) and the announcer (1) onto theirs. The `USER1..12` comment is the only list.
+- **The original's mix beyond the group rows**: the `MasterCompressor` (ratio 0.2, -6 dB), the
+  ducking templates and their `DuckerEvents`, `Auto Volume` (default on), the `PreRace`,
+  critical-energy and player-dead rows, and the transition speed (`SMOOTHING` is one reading).
+- **The front end's music has no side energy in the original** (stereo RMS `0.072` against mono-mean
+  `0.070`) and a lot in ours (`0.13` against `0.070`): the same loudness, a different stereo image.
+- **Ours is half of the original on the engine and the ambience** at the matched law (measured ratios
+  1.8 to 2.3). Candidates, none confirmed: the second voice of each pair (1.93 in phase, about 1.37 if
+  decorrelated), the ambience distance law, the engine's held `X`. The mixer's pan law is not it (hypot 1).
 - **The per-craft distance factor is a fit** (`slot[+4] / 1024`, confidence 55): its writer was not
   found, `Ship_UpdateEngineCrossfade` does not write it. Find the store (a short at `+4` of every layer
   slot; slots are `0x80` apart from word 2 of each `0x10`-byte instance at `*(*0x008b5064 + 0x18)`) with a data watchpoint on RPCS3's

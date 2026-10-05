@@ -37,8 +37,8 @@
 //! keeps a title package to naming files rather than describing them. This
 //! axis ([`load_entry`], the declared/sniffed soundtrack) and
 //! [`load_front_end`] below both go through [`decode`], so 2048's music -
-//! today only [`oag_title::Music::front_end`], no declared soundtrack - reads
-//! the same way the other three titles' does.
+//! its front end and its eleven declared race tracks - reads the same way the
+//! other three titles' does.
 
 use std::path::Path;
 
@@ -267,9 +267,15 @@ fn seconds_of(blob: &[u8]) -> Option<f64> {
 /// finding rather than something to play at the wrong speed. MPEG carries no
 /// such rule, because there the declaration is the whole population - there is
 /// nothing to sort a track out from.
+///
+/// **ATRAC9 is stereo and 48,000 Hz** (2048's tracks), so it is told apart by
+/// its subformat GUID rather than by widening the PSP rate test, which would
+/// let a 48 kHz stream into the population search over `Data.wad`.
 fn riff_seconds(header: &[u8]) -> Option<f64> {
     let stream = crate::at3::describe(header).ok()?;
-    if stream.format.channels != 2 || stream.format.sample_rate != 44_100 {
+    let rate_ok = stream.format.sample_rate == 44_100
+        || (stream.format.sample_rate == 48_000 && crate::at9::describe(header).is_ok());
+    if stream.format.channels != 2 || !rate_ok {
         return None;
     }
     stream.seconds()

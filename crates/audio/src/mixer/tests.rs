@@ -545,7 +545,10 @@ fn every_bus_has_its_own_gain_slot() {
     // mapping is written, so a variant added without extending either would
     // silently share somebody else's gain. See ADR-0027.
     let mut seen = [false; Bus::COUNT];
-    for bus in [Bus::Music, Bus::Sfx, Bus::Speech] {
+    let all = [Bus::Music, Bus::Sfx, Bus::Speech]
+        .into_iter()
+        .chain((1..=12).map(Bus::Group));
+    for bus in all {
         let at = bus.index();
         assert!(at < Bus::COUNT, "{bus:?} indexes past Bus::COUNT");
         assert!(!seen[at], "{bus:?} shares a gain slot with another bus");
