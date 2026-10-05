@@ -109,6 +109,7 @@ use std::fmt;
 use container::u32_at;
 
 pub mod container;
+pub mod lineage_blend;
 pub mod material;
 pub mod nodes;
 pub mod vertex_decl;

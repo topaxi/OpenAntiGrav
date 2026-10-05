@@ -102,10 +102,8 @@ live PS4, so these are 80-90 reads, not captures.
 - **Which probe is the fifth `FUN_012582a0` call** (segment endpoints `local_db8`/`local_dc8`
   in `FUN_0131b510`); until read, "same probe as Pulse's mag-floor probe" is a reading (85
   on the literal, 65 on the index).
-- **The arc's per-arc constants** (spawn rates, widths, decay `0.85`, spline walk) are still
-  single-source PS4 (65): HD's `0x00109858`, `0x001095e0`, `0x00109720` were not read, and HD
-  slot order differs from the PS4's.
-- **The `MagStripArc_fp` fragment program** and the draw's depth state; the **loop flag of
+- ~~The arc's per-arc constants~~ - read 2026-10-05 (magstrip-hd-measure): HD's own pool (`0x002bbd60`, `0x002bb530`, `0x002bc7b0`) agrees with the PS4 on life, reach, speed blend, scale, spread, shed radius and smoothing; the five jitter scales are `0.4 + 0.6 sin(k pi/4)` (read live, two boots, 90); **HD's brightness (`0.125..0.2`), contact brightness (`0.05..0.1`) and vertex alpha (`0.3` body, `0.25` contact, float) differ from the PS4 reading** - wired 2026-10-05 (magstrip-arc-fp): `INTENSITY` deleted, `MagStripArc_fp` decoded (`rgb = vertex.rgb * tex.rgb * tex.a`, `a = vertex.a * tex.a`, no constant, no transfer function), blend `ONE, ONE`, depth test on and write off measured on HD. See the HD page's last section.
+- **The `MagStripArc_fp` fragment program** (compiled into the EBOOT, no shader file on the disc) and the draw's depth state; HD names no `kIntensity`, so `INTENSITY = 3.0` has no counterpart to read and stays chosen; the **loop flag of
   `~magstrip01`**; `ship+0x648b`, `ship+0x71f5 & 0x10`, `DAT_01f998e8`.
 - ~~Which side a 2048 mode lands on~~ - settled 2026-10-05 (magstrip-2048-pob, 70): every named mode is `< 0x17`, so the arc wake; see the Vita `ships-effects.md`.
 - **The HD writer of the replicated `m_overMagStrip` bit** (bit 9 of the network flag word;
@@ -117,7 +115,7 @@ live PS4, so these are 80-90 reads, not captures.
 
 1. ~~The arc wake on the HD-lineage path~~ - landed 2026-10-05 (magstrip-wire-hd): predicate off the blend, arming law,
    `~magstrip01`, additive draw, `magstrip_wire_hd_ground_truth`. Still open from it: the two speed ribbons are not drawn;
-   `INTENSITY`, jitter scales and the end-point walk are chosen; `~magstrip01` is a 35-leaf tree the reader flattens
+   the end-point walk is chosen (`INTENSITY` deleted 2026-10-05, magstrip-arc-fp) (jitter scales measured 2026-10-05); `~magstrip01` is a 35-leaf tree the reader flattens
    (leaf choice unresolved); rumble edges not wired (no rumble layer checked); the Omega `WEAPON_MODELS` row waits for Omega racing.
 2. ~~`WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes~~ - **settled 2026-10-05 (magstrip-2048-mode-check): 2048 plays the POB, no arc wake.**
    Live Vita3K read: a campaign Time Trial has `0x8153fd24 = 0x026886dc` (a CRC id, `>= 0x17`) and `Particles_BuildEffectPath` formats
@@ -125,5 +123,5 @@ live PS4, so these are 80-90 reads, not captures.
    `arc_anchor_point` while over the strip (`oag_raceplay::magstrip_wake`, `WeaponModels::magstrip_pob`), and the arc is off for it; HD keeps the arc.
    Open from it: no Vita3K frame of the POB sparks on a strip (not reached); the effect's start/stop timing is chosen (on contact, detach on leaving);
    the hum is silent (the Vita `shipHD.bnk` resolves no cue by name).
-3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build (`0x00109858`, `0x001095e0`, `0x00109720`),
-   the `kIntensity` source and the jitter-scale globals, to lift the chosen values off.
+3. ~~Read HD's arc build~~ - done 2026-10-05 (magstrip-hd-measure): jitter scales and paired draws wired (`oag_fx::magstrip::JITTER_SCALE`); the HD brightness/alpha law is documented, not wired. Next (2 hours, `oag-re`): decode `MagStripArc_fp` (find the program blob via TOC slot `0x008b389c`) to learn what the float vertex colour is multiplied by - that is the only route to a measured `INTENSITY`, and to why the original's arcs look several times wider (fragment gain or HD bloom - **not from a matched pose**: the original frames are on the lavender grid at ~0:18, ours over the dark floor at tick 1136, and the hull may differ, so "wider/whiter" is an impression, not a measurement). Then wire HD's brightness ramp (slots start at zero, no spawn write), the `0.3`/`0.25` alphas and the two ribbons (`0x00109858` is HD's ribbon update).
+4. ~~Decode `MagStripArc_fp`~~ - done 2026-10-05 (magstrip-arc-fp): no gain anywhere in the program; the arcs now run the original's law and read **faint** at player size (`cmp_g1138` in that lane's scratch). **Open (2 hours, `oag-capture`)**: a matched-pose arc frame and arc-free frame on RPCS3 to measure what the original adds beyond `brightness * tex.rgb * tex.a`: HD's bloom on the arcs, the destination alpha the original's `ONE, ONE` adds, and the sampler's sRGB-remap bit. Do not re-choose a gain. The two speed-driven ribbons (`0x00109858`) are still not drawn.

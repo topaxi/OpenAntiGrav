@@ -2191,13 +2191,48 @@ and `oag_mesh::mesh::rcs::psp2::transparency` routes a textured draw with mode 1
 mode 2 to the alpha-tested list, where before **every** Omega and 2048 draw was opaque.
 
 - **Law recovered:** mode bits as HD (confidence 75), sort priority bits 9 to 11 (75, not yet used for ordering).
-- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair, so the
-  additive family - `emissive_bloom`, `hd_enginetrail`, light cones - draws as a dim sheet, not a glow) and the
-  alpha-test reference `0.5` (HD's).
+- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair - the additive
+  family is now HD's own pair by name, see the next section) and the alpha-test reference `0.5` (HD's).
 - **Looks:** Tech De Ra's glass tubes now show the crowd through them and its road panels take their see-through
   layer; 2048's cockpit glass and billboard signs draw. Frames `data/scratch/transparent-floors/shots/{before,after}_{tdr,2048}_300.png`.
 - **Not done:** HD is untouched (its own factor path); the `etched_glass_tech` sheen and `Transparency` param on
   Omega are not read; GCN pixel programs were not read for an alpha source, so a blended draw uses the first texture's alpha.
+
+## Omega and 2048 blend with HD's own factors where the material name is HD's (2026-10-05, `omega-2048-materials`)
+
+The previous section drew every Omega and 2048 blended material alpha-over and left the additive family a
+dim sheet. This pass looked for the real equation and found it nowhere in the two titles' own data, then took
+the one honest source left: **Wipeout HD authors a factor pair beside the state word, and the three discs
+share material names.**
+
+- **Not found in Omega or 2048.** Omega's header holds no pair (see the evidence page
+  [`material-state.md`](../ghidra/functions/ps4-omega-eu/material-state.md)). In 2048 the blend is a
+  `SceGxmBlendInfo` given at runtime to `sceGxmShaderPatcherCreateFragmentProgram`, whose single wrapper
+  `FUN_812f6bee` has 22 callers and none is the model-material pass
+  ([`fragment-programs.md`](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md), 80). The one blend table
+  readable there (a sprite batcher) holds alpha-over, `SRC_ALPHA`/`ONE` and a reverse-subtract, so the engine
+  does draw additive, which the state word cannot say. No GCN pixel program was read: no decoder exists, so the
+  **alpha source stays the first texture's alpha, chosen, not measured**.
+- **Census (disc, `crates/rcs/tests/hd_lineage_blend_ground_truth.rs`).** HD's blended materials author
+  `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA` on 1,648 of 2,362 and the rest `SRC_ALPHA`/`ONE` (348), `ONE`/`ONE` (144),
+  `ONE`/`ONE_MINUS_SRC_ALPHA` (142), `SRC_COLOR`/`ONE` (57), and two odd pairs. Over Omega's five base archives 1,738
+  materials are mode 1 on 211 names, 2048's base package 1,481 on 134; 156 and 92 of those names exist in HD. Three HD names
+  author two pairs (`basicalpha`, `lambert`, `dc_lightcone`) and are left alone.
+- **What ships.** `oag_rcs::rcsmodel::psp2::lineage_blend::INHERITED`: 70 names whose HD pair is single and not
+  the default, each a name Omega or 2048 draws in mode 1; `psp2::transparency::route` gives such a draw HD's
+  pair through the same `blend_state` HD's own path uses, and every other blended draw stays alpha-over. 363 of Omega's
+  1,738 and 260 of 2048's 1,481 blended materials take an inherited pair (`Report::inherited_blend_draws`
+  counts the draws, and the load report says so). The ground-truth test rebuilds the table from the three discs, so a dropped,
+  added or edited row fails. **Inherited from HD, not measured on Omega or 2048**: no confidence score.
+  Names only the two later titles have (388 Omega and 893 2048 blended materials, `fc06_lambert_alpha`,
+  `fc01_emissive_alpha_emistint`, `2048_ship_glass_dg`, `2048_engine_additive`, ...) draw alpha-over, chosen.
+- **Looks.** Tech De Ra's start beam (`cf_startbeam_glow`, `SRC_COLOR`/`ONE`) and the hex glass band
+  (`glass_texture`, `ONE`/`ONE_MINUS_SRC_ALPHA`) change; most of the inherited names are weapon and shield
+  effects that a stationary lap never meets, and Altima and Tower, whose floors are `fc01`/`fc12` families HD
+  does not have, are byte-identical. HD's `talons-matched/03` pose is byte-identical before and after (the
+  code path is Omega and 2048's only).
+- **A third mode.** 16 2048 materials (`fc06_lambert_alpha`) carry low bits `3`, which `Material::mode`
+  reads as none and draws opaque; on HD's register reading that is a blend and an alpha test together. Not wired.
 
 ## Open
 
@@ -2309,6 +2344,49 @@ materially different, unread layout from a handful of samples is a
 reverse-engineering project of its own, and this session's evidence supports
 measuring and naming the container's existence, not guessing its fields.
 `oag_rcs::rcsmaterial`'s existing container reader is untouched.
+
+## HD's light cone was a grey wedge; its combine is two taps and a saturate (2026-10-05)
+
+`dc_lightcone.rcsmaterial` (Talon's Junction slot 440, Amphiseum slot 610 -
+exactly two materials disc-wide, `crates/render/examples/hd_light_cone_census.rs`)
+drew as opaque grey radial wedges across the upper left of
+`talons-matched/03`, where the original draws pale translucent streaks over
+the blue tunnel. Cause: the picture was `Texture1` (`dc_gradient_noise.gtf`,
+grey, alpha 255 everywhere) with the texture's own alpha as coverage.
+
+**The program** (resolved fogged variant, `scripts/ps3-microcode.py fp-file`;
+confidence 85 for the arithmetic, read instruction by instruction):
+
+    colour = fog-lerp(noise.x * K)         K = parameter 0x60eaf40d, 100 on Talon's Junction, absent (1) on Amphiseum
+    alpha  = noise.x * s * ramp(N.V)       s = parameter 0x7611a2d8, 1.0 on Talon's Junction, 0.49596 on Amphiseum
+    N.V    = (N . V) / sqrt(|N|^2 |V|^2)   ramp = dc_gradient_e.gtf at (cos, cos); its red is a function of u alone, 0 at 0 and 1 from 0.5 up
+
+The vertex program writes the attribute in slot 1 into the `w` of three
+interpolators and `eyePositionWorldSpace - position` into `TC2.xyz`. **That
+attribute is a constant `(0, 0, 1)` on every authored cone** (a `CMP` field,
+raw bytes `7f 80 00 00` in every vertex, `hd_unlit_probe`), not a surface
+normal: the fade is against a fixed axis. Confidence 90.
+
+**The colour saturates before it blends.** With `K` = 100 an unclamped
+colour on this project's float target is `100 * noise` of light times the
+alpha, and it drew a white wall; the original's 8-bit surface clamps to 1
+first. The clamp is the cone's own in `mesh.wgsl`, not a global one.
+
+**The ramp tap is predicated on Talon's Junction's variant** (`@0x1550`: `FENCT
+R63, R0, R0` then `TEX H2.x, R2.wwww unit1 [NE(wwww)]`) and not on
+Amphiseum's (`@0x1520`). `H2.x` already holds the noise, so a skipped tap
+makes the alpha `s * noise^2`. `R0` is `f[TC1]`, whose `w` is the normal's
+`y`, which is zero on every cone. **Confidence 60, one matched frame**: that
+`FENCT` sets the condition register from its source is a hypothesis (the
+opcode writes no register, 59,256 of 59,256 uses name 63). The alternative
+reading draws the shafts as an opaque white wall; the skipped-ramp reading
+reproduces the translucent streaks of `talons-matched/03`. Amphiseum's
+variant, whose tap is unconditional, is read from its microcode only: no
+matched pose frames its cone.
+
+Implemented in `mesh::rcs::light_cone` (`slots::LIGHT_CONE`, bit 19, which
+moved `MATERIAL_SHIFT` from 19 to 20) and `mesh.wgsl`; pinned by
+`hd_light_cone_lit_path` (fixture) and `hd_light_cone_ground_truth` (disc).
 
 ## See also
 

@@ -106,6 +106,10 @@ pub struct Report {
     /// Textured draws routed to the blended list by their material's state word
     /// (alpha-over, chosen) - see [`transparency`].
     pub blended_draws: usize,
+    /// Of [`Self::blended_draws`], those drawn with the factor pair Wipeout HD
+    /// authors for a material of the same name, not the alpha-over default - see
+    /// [`psp2::lineage_blend`].
+    pub inherited_blend_draws: usize,
     /// Textured draws routed to the alpha-tested list (reference `0.5`, chosen).
     pub cutout_draws: usize,
     /// Draws whose material named a texture that did not resolve in the
@@ -210,8 +214,8 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} draw(s) blended off the state word (alpha-over, chosen: Omega authors no factors) and {} alpha-tested at 0.5 (chosen)",
-                self.blended_draws, self.cutout_draws
+                "; {} draw(s) blended off the state word ({} with HD's authored factors for the same material name, the rest alpha-over, chosen: neither title authors factors) and {} alpha-tested at 0.5 (chosen)",
+                self.blended_draws, self.inherited_blend_draws, self.cutout_draws
             )
         };
         let lightmaps = if self.lightmaps == 0 && self.lightmap_misses == 0 {

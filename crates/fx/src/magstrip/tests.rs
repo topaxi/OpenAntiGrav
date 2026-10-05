@@ -116,11 +116,11 @@ fn the_body_samples_one_atlas_cell_and_ends_dim() {
             cell(v.texcoord[0], col) && cell(v.texcoord[1], row),
             "{v:?}"
         );
-        assert_eq!(v.colour[3], ALPHA);
+        assert_eq!(v.colour[3], BODY_ALPHA);
     }
     let last = &atlas[(BODY_QUADS - 1) * 6..BODY_QUADS * 6];
     let dimmest = last.iter().map(|v| v.colour[0]).fold(f32::MAX, f32::min);
-    assert!((dimmest - arc.intensity.min(1.0) * SOFT * INTENSITY).abs() < 1e-5);
+    assert!((dimmest - arc.intensity * SOFT).abs() < 1e-5);
 }
 
 #[test]
@@ -134,4 +134,80 @@ fn an_arc_left_behind_is_shed_far_out() {
         wake.advance(1.0 / 60.0, false, &moved, &road);
     }
     assert_eq!(wake.live(), 0, "an arc 500 units astern is shed at once");
+}
+
+#[test]
+fn the_jitter_scales_are_the_measured_sine_bell() {
+    for (k, scale) in JITTER_SCALE.iter().enumerate() {
+        let want = 0.4 + 0.6 * (k as f64 * std::f64::consts::FRAC_PI_4).sin();
+        assert!((f64::from(*scale) - want).abs() < 1e-6, "term {k}");
+    }
+}
+
+#[test]
+fn colours_are_the_brightness_itself_with_no_gain() {
+    let mut wake = Wake::new(11);
+    wake.advance(0.0, true, &craft(), &road);
+    for _ in 0..40 {
+        wake.advance(1.0 / 60.0, true, &craft(), &road);
+    }
+    let arc = *wake.arcs().iter().find(|a| a.life > 0.0).expect("an arc");
+    let (mut atlas, mut contact) = (Vec::new(), Vec::new());
+    wake.build(
+        &craft(),
+        Vec3::new(0.0, 6.0, -10.0),
+        &mut atlas,
+        &mut contact,
+    );
+    // `MagStripArc_fp` adds `vertex.rgb * tex.rgb * tex.a`: whatever scale the
+    // vertex colour carries is the whole gain, so the port may not add one.
+    assert_eq!(
+        atlas[0].colour,
+        [arc.intensity, arc.intensity, arc.intensity, BODY_ALPHA]
+    );
+    assert_eq!(
+        contact[0].colour,
+        [arc.glow, arc.glow, arc.glow, CONTACT_ALPHA]
+    );
+    assert_eq!((BODY_ALPHA, CONTACT_ALPHA), (0.3, 0.25));
+}
+
+#[test]
+fn brightness_settles_inside_hds_sample_ranges() {
+    let mut wake = Wake::new(12);
+    wake.advance(0.0, true, &craft(), &road);
+    for _ in 0..200 {
+        wake.advance(1.0 / 60.0, true, &craft(), &road);
+        for arc in wake.arcs().iter().filter(|a| a.life > 0.0) {
+            // A slot may still be climbing from zero; it never overshoots the
+            // top of its sample range.
+            assert!(arc.intensity <= BODY_SAMPLE.1 + 1e-6, "{arc:?}");
+            assert!(arc.glow <= CONTACT_SAMPLE.1 + 1e-6, "{arc:?}");
+        }
+    }
+    let settled = wake
+        .arcs()
+        .iter()
+        .filter(|a| a.life > 0.0)
+        .map(|a| a.intensity)
+        .fold(f32::MAX, f32::min);
+    assert!(
+        settled > 0.0,
+        "a slot that ticks smooths up from its held value"
+    );
+}
+
+#[test]
+fn the_arc_draw_leaves_vertex_alpha_out_of_the_colour() {
+    use crate::beam::pipeline::Style;
+    let arc = std::hint::black_box(Style::magstrip(1));
+    assert!(!arc.vertex_alpha_weights_colour);
+    let beam = std::hint::black_box(Style::BEAM);
+    assert!(beam.vertex_alpha_weights_colour);
+    // No transfer function in the program: the arc adds gamma values as they
+    // are, the beam keeps the decode every other additive draw has.
+    assert!(!arc.decodes_source && beam.decodes_source);
+    let shader = include_str!("../beam.wgsl");
+    assert!(shader.contains("mix(1.0, in.colour.a, vertex_alpha_weight)"));
+    assert!(shader.contains("linear_out * decode_source"));
 }

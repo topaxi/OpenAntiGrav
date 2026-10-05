@@ -175,3 +175,21 @@ and by drawing unlit; frames in `data/scratch/fix-2048-particles-floor/`.
 instruction set is unread) for how sun, ambient and the exposure keys combine; the Vita3K reference frames
 in `data/reference/2048-hud/` are other circuits, so a same-circuit capture of Altima or Tower is needed to
 compare.
+
+## Altima's floor, Tower's floor, and what was not found (2026-10-05, `omega-2048-materials`)
+
+- **Altima: `track_a_glass_etched` is a texture, not a material, and the white floor no longer reproduces.**
+  No Vita header names `etched`; the two materials the floor draws with are `fc01_emissive_alpha_emistint`
+  (79 blended materials in the base package) and `fc12_phong_alpha_emistint_spectint_specpow` (6), both state
+  mode 1 (blended). Before `transparent-floors` routed mode 1 they drew opaque, which is the blown-white sheet the
+  previous section describes; at tick 300 and 600 on current main Altima's floor is grey panelling with the
+  bright pads as glow decals (`data/scratch/omega-2048-materials/shots/before_altima_*.png`). The blend those two
+  use is alpha-over, **chosen**: neither name is in HD, so nothing is inherited.
+- **Tower: not solved.** Its floor is still peach where drawn unlit it is grey. Re-read this pass: the file authors
+  `Lighting.ExposureScale 0.4`, `ExposureMax 12` and `ExposureSpeed` (strings `0x81508818`, `0x81508830`,
+  `0x81508848`) and no consumer was located, so how the exposure enters the lit sum is unread. Omega's tone map
+  ([tonemap.md](../ghidra/functions/ps4-omega-eu/tonemap.md)) is a different, adaptive cubic and was **not**
+  assumed to apply. A second Omega shader (`0x01968180`, `ExposureMin`/`Max` clamping `m_cExposure / max(L,
+  0.001)`, referenced by no Omega code) has the shape of this triple, a hypothesis below 50 and not applied.
+  No term was scaled on a guess, so Tower is unchanged.
+- **Fragment-program blend in the executable:** [fragment-programs.md](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md).

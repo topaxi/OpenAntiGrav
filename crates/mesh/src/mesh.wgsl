@@ -1406,7 +1406,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 19u;
+    let glow_slot = in.slots >> 20u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
@@ -1740,6 +1740,37 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         mag_floor = vec4<f32>(loop_rgb, grid * in.colour.a);
     }
 
+    // **HD's light cone** (`slots::LIGHT_CONE`, `oag_mesh::mesh::rcs::light_cone`):
+    // the program's colour is the noise's red times the authored intensity `K`
+    // (`MAD R2.xyz, H2.xxxx, K, -fog`, then the fog lerp `fogged` does) and its
+    // alpha is `noise * s * H2.x` where `H2.x` is the ramp tap at `dot(N, V)`
+    // **only when the program's predicated `TEX` executes** and the noise
+    // itself (register `H2.x` is left holding it) when it does not. The
+    // predicate is `NE(wwww)` on a condition set from `f[TC1]`, whose `w` is
+    // the vertex normal's `y` - zero on every authored cone, whose normal is
+    // the constant `(0, 0, 1)` - so on a gated variant the ramp is skipped and
+    // the alpha is `s * noise^2`. `glow_scale.y` says the variant is gated.
+    // That reading of the condition register is a hypothesis (confidence 60,
+    // light_cone's doc): it is what a matched frame favours, not something the
+    // instruction set documents. `albedo` is the ramp and `lightmap` the
+    // noise, `K` the glow entry's tint, `s` its scale.
+    // Raw samples, undecoded: the program applies no transfer function. **The
+    // colour is saturated before it blends**, as the 8-bit surface the original
+    // draws into does: `K` is 100 on Talon's Junction, so an unclamped colour
+    // on this linear float target is `100 * noise` of light times the alpha, a
+    // white wall, where the original's is a white of at most 1 at that alpha.
+    var cone_or_floor = mag_floor;
+    if (in.slots & 524288u) != 0u {
+        let noise = textureSample(lightmap, albedo_sampler, in.texcoord).r;
+        let cone_facing = clamp(ramp_facing, 0.0, 1.0);
+        let ramp = textureSample(albedo, albedo_sampler, vec2<f32>(cone_facing)).r;
+        let ramp_skipped = glow_scale.y > 0.5 && in.normal.y == 0.0;
+        cone_or_floor = vec4<f32>(
+            clamp(vec3<f32>(noise) * glow_tint_offset.rgb, vec3<f32>(0.0), vec3<f32>(1.0)),
+            noise * glow_scale.x * select(ramp, noise, ramp_skipped),
+        );
+    }
+
     // **The absorb shell, when this model is one.** Fragment block #1 of
     // `hd_absorbinternal.rcsmaterial`, which the fogged blocks repeat before
     // their fog lerp (`fogged` below does that part):
@@ -1767,7 +1798,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         ).rgb;
         absorb = vec4<f32>(absorb_rgb, in.colour.a);
     }
-    let composed = mix(mix(mag_floor, flame, flame_shading), absorb, absorb_shading);
+    let composed = mix(mix(cone_or_floor, flame, flame_shading), absorb, absorb_shading);
 
     // **Wipeout HD's two rim-shaded weapon glows**, `slots::RIM_GLOW` (the
     // LeachBall) and `slots::RIM_EDGE` (the Plasma bolt's head), each set only
