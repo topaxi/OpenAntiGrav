@@ -52,7 +52,7 @@ pub struct Settings {
     ///
     /// **A third row the original's menu does not have, on a line the original
     /// does draw**: a cue is a voice line when it lives in `speech.bnk` rather
-    /// than beside the effects, which is already how `oag_game::audio::sfx`
+    /// than beside the effects, which is already how `oag_sound::sfx`
     /// tells `shieldactive` from the `~SHIELD` loop it fires with. See
     /// [`crate::sfx::Cue::bus`] and
     /// `docs/architecture/adr/0027-three-mix-buses.md`.

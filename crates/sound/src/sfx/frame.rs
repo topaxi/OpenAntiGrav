@@ -8,8 +8,8 @@
 //! nothing in it can step the simulation.
 
 use oag_core::math::Vec3;
-use oag_gameplay::projectile::leach_beam::Beam;
-use oag_gameplay::projectile::{MAX_PROJECTILES, Projectile};
+use oag_weapons::projectile::leach_beam::Beam;
+use oag_weapons::projectile::{MAX_PROJECTILES, Projectile};
 
 use super::{Announcer, Banks, ClassAnnouncer, CueEvent, TrackEmitters};
 

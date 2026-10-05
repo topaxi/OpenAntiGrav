@@ -291,7 +291,7 @@ pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
 ///
 /// Enough to decide whether a `Data.wad` entry is a soundtrack track without
 /// handing 2 MiB of ATRAC3+ to `ffmpeg` to find out - see
-/// `oag_game::audio::MusicSource`, which pairs the two discs' soundtracks by
+/// `oag_sound::MusicSource`, which pairs the two discs' soundtracks by
 /// length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stream {

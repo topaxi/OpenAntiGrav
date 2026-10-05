@@ -15,6 +15,7 @@ oag-disc.workspace = true
 oag-display.workspace = true
 oag-formats.workspace = true
 oag-gameplay.workspace = true
+oag-weapons.workspace = true
 oag-music.workspace = true
 oag-race.workspace = true
 oag-tables.workspace = true

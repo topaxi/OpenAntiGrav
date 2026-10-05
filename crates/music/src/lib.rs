@@ -1,6 +1,6 @@
 //! Which entries of a disc hold music, and how one of them is read.
 //!
-//! The half of `oag_game::audio` that has to know **which title booted**.
+//! The half of `oag_sound` that has to know **which title booted**.
 //! Everything else in that module is policy over a listing - what to play, when
 //! to seek, which release to prefer - and none of it changes between three
 //! Wipeout discs. Finding the listing does, so it lives here.
@@ -85,10 +85,10 @@ pub struct Entry {
     /// Opaque rather than a hash for every title because there is nothing one
     /// number could be for all three: a PSARC has no name hash at all. That
     /// makes this the *third* meaning the token already carries -
-    /// `oag_game::audio::load_track` reads it as a `PS2MUSIC.WAD` directory index
+    /// `oag_sound::load_track` reads it as a `PS2MUSIC.WAD` directory index
     /// on the PS2 path - rather than a new kind of thing.
     ///
-    /// `oag_game::audio` never interprets it. It comes back here through
+    /// `oag_sound` never interprets it. It comes back here through
     /// [`load_entry`].
     pub at: u32,
     /// How long it is, as the stream itself declares.
@@ -214,7 +214,7 @@ fn found(archives: &mut Archives) -> Result<Vec<Entry>> {
 /// track; `oag_assets::psarc::Archive` exposes no ranged read, because a PSARC
 /// entry is block-compressed and has no offset to seek to, so a Wipeout HD
 /// listing reads all fifteen tracks whole - about 75 MiB, and it is done once
-/// per boot inside `oag_game::audio::MusicDiscs::survey`. Measured at well under a
+/// per boot inside `oag_sound::MusicDiscs::survey`. Measured at well under a
 /// second off a local image; if that ever stops being true, a first-block read
 /// on `psarc::Archive` is the fix rather than caching the answer.
 fn measure(archives: &mut Archives, name: &str) -> Option<f64> {
@@ -349,7 +349,7 @@ pub fn load_entry(
 ///
 /// **Not one of the soundtrack tracks, and that is the point.** It is short, it
 /// loops, and no PS2 entry has ever been matched to one - which is why
-/// `oag_game::audio::MusicSource` cannot reach it. Each title names its own; see
+/// `oag_sound::MusicSource` cannot reach it. Each title names its own; see
 /// [`oag_title::Music::front_end`].
 ///
 /// `Ok(None)` when the title names no such entry, or the archives hold none -
