@@ -27,6 +27,9 @@ pub(super) struct MaterialSetup {
     pub(super) material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
     pub(super) emissive: Vec<crate::mesh::Emissive>,
     pub(super) alpha_test_ref: Option<f32>,
+    /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
+    pub(super) mag_emissive: TextureSlots,
+    pub(super) wave_maps: TextureSlots,
     /// Which of [`crate::mesh::Model::anim_tracks`] each material slot
     /// drives - see [`curve_track::material_anim_tracks`].
     pub(super) material_anim: Vec<u32>,
@@ -47,7 +50,7 @@ pub(super) fn material_setup(
     // `skin::picks`.
     let material_variants = variants(model, textures, report);
     let picks = picks(model, &material_variants, textures);
-    let (skins, seconds) = skin(model, &picks, textures, report);
+    let (mut skins, mut seconds) = skin(model, &picks, textures, report);
     // After the variants, because the roles are read off the resolved one.
     let skin::Roles {
         packed: mut material_slots,
@@ -85,6 +88,18 @@ pub(super) fn material_setup(
         textures,
         report,
     );
+    // After the glow table, because it clears a slot's `ADD_SECOND` and
+    // writes its own entry into the same table.
+    let mut emissive = emissive;
+    let (mag_emissive, wave_maps) = super::mag_wave::mag_wave(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.
@@ -101,6 +116,8 @@ pub(super) fn material_setup(
         material_variants,
         emissive,
         alpha_test_ref,
+        mag_emissive,
+        wave_maps,
         material_anim,
         anim_tracks,
     }

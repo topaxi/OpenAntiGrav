@@ -90,14 +90,17 @@ pub(super) fn bind_scene_pad_masks(
             }
         }
     }
-    out.pad_masks = pad_ne::pad_ne(
-        model,
-        &out.material_variants,
-        textures,
-        &mut out.material_slots,
-        &mut out.emissive,
-        Some(&pad_slots),
-        report,
+    super::mag_wave::merge(
+        &mut out.pad_masks,
+        pad_ne::pad_ne(
+            model,
+            &out.material_variants,
+            textures,
+            &mut out.material_slots,
+            &mut out.emissive,
+            Some(&pad_slots),
+            report,
+        ),
     );
 }
 
@@ -189,6 +192,7 @@ pub(super) fn build_pad_class(
         alpha_test_ref,
         material_anim,
         anim_tracks,
+        ..
     } = material_setup(&model, model_blob, textures, &mut report);
     out.textures = skins;
     out.lightmaps = seconds;

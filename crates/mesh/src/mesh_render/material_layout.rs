@@ -56,6 +56,17 @@ pub fn material_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayou
                 },
                 count: None,
             },
+            // HD's magstrip wave, sampled only where `slots::MAG_WAVE` is set.
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
         ],
     })
 }
