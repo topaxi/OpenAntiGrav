@@ -107,6 +107,9 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   `Image_SetVertexColours` to the GE's ambient light alpha (`0x5d`, written before each strip: `0xf4`, `0xb8` on the ship
   explosion's ring, which is the same `.vex`), vertex colours the material: `Drawable::tint([1, 1, 1, alpha])`
   (`ship-shockwave.md`). The Bomb's own ring was not dumped. The ring, plate, dome and +50 smoke differences above were **not** re-looked at.
+- *Bomb blast and Repulser field textures, 2026-10-05 (fx-age-clocks)*: **wired and measured.** Their texture tracks play on the object's own age
+  (seeded `0` at spawn, rate 1; `anim-transform.md`, "A mesh's texture time"), uploaded through `write_anims` in `write_bomb_blasts`. Open: no `oag-game`
+  scenario detonates the player's own bomb, so the Bomb has no before/after picture, only the live measurement and the draw-struct test.
 - *Pulse Shield* - **matched 2026-10-01 (third pass)**, pixel for pixel at a pinned
   clock. The "ours dimmer, banding softer" gap was two defects, both fixed:
   `pulse_shield_test_ADD` (flags `0xe5`, pre-swizzled) was decoded linearly, and the

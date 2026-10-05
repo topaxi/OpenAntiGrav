@@ -442,6 +442,56 @@ own data that the engine's `strcmp` does not match, so those three nodes do not
 loop in the original either. Reproducing that is a decision, not an oversight;
 matching them case-insensitively would be a departure.
 
+## A mesh's texture time: seeded per spawn, so object age (2026-10-05)
+
+Read for the three effects whose tracks look like object-age shapes (`explosion_hemisphere`,
+`Bomb_Shockwave`, `pulse_repulsorwave`), then measured live. The clock above is not the only
+phase a mesh can have: **what `Mesh_SetAnimTime` seeds decides it.**
+
+```c
+void Mesh_SetAnimTime(float t, Mesh *m) {                 // 0x0890e240
+    m->0x40  = t;                                          // the texture time
+    m->0x194 = (g_ingame ? g_ingame : fallback)->0x40;     // cache: the clock now
+}
+// the per-frame update, no Ghidra function covers it (0x0890cef8..0x0890cf80):
+dt = clock->0x40 - m->0x194;
+if (m->0xc0 == 0) { m->0x40 += dt; }                       // 0xc0 is the pause byte
+m->0x194 = clock->0x40;
+```
+
+A model that is never seeded has `+0x40 = +0x194 = 0`, so its first update adds the whole session
+clock: the **race clock** (the laid Mine and Bomb, the scenery). A model seeded with
+`Node_SetAnimTimeTree(0.0)` at construction has `+0x194` set to the clock *then*, so `+0x40` counts
+**the object's age at rate 1**: `BombBlast_Construct` (`0x08872078`, at `0x08872268` for the
+hemisphere and `0x08872470` for the shockwave), `Repulser_Init` (`0x08875210`, at `0x08875324`)
+and `ShipShockwave_Construct` (`0x0885ecf0`, at `0x0885ee44`, `f12 = 0.0`). None calls
+`Node_SetAnimTimeTree` again (the Plasma's `PlasmaBlast_Update` does, with `age * rate`), so no rate
+other than 1 and no reset.
+
+**Measured on PPSSPP** (v1.20.4, software renderer, 2026-10-05, two boots; a conditional breakpoint on
+`Mesh_UpdateTextureTransforms` `0x0890e160`, `a0 = mesh`, logging `mesh+0x40`, `mesh+0x194` and
+`g_ingame->0x40`; `scripts/psp-weapon-pair.py --probe meshtex`):
+
+| Effect | Spawn clock (= detonation or fire clock) | `+0x40` at first sight | Slope against the clock | Residual |
+| --- | --- | --- | --- | --- |
+| Bomb hemisphere and shockwave, boot 1, moving craft | 60.889 | `0.000` | `1.0000` over 84 samples | `0.0000` |
+| Same, stationary craft | 294.072 | `0.567-0.818` (blast out of view until then) | `1.0000` | `0.0000` |
+| Same, boot 2 | 75.125 | `0.567-0.734` | `1.0000` | `0.0000` |
+| Repulser field model, boot 1 | 341.338 | `0.000` | `1.0000` over 95 samples | `0.0000` |
+| Same, boot 2 | 168.616 | `0.000` | `1.0000` over 95 samples | `0.0000` |
+
+The two falsifiers both came out for age: detonations at race clocks 60.9, 294.1 and 75.1 (mesh time read) each
+start from `0`; a third probe read the blast object's own age (`+0xd0`), which starts at `0.0` and ticks 0.0166 per frame (clock 157.5), but not a mesh time (a race clock would carry the session's tens of seconds), and the three meshes of one
+blast, first seen 0.15 s apart, share one spawn clock equal to the detonation's own, so the time counts
+from spawn, not from first sight. The updates stop at 1.535 s (hemisphere hide, 1.55 s) and 1.569 s (the
+repulser's `blast_time + wave_time`), once the meshes are not drawn. The wrap period is each block's own
+`+0x2c`, applied by `TexAnim_UpdateTransform`'s `fmodf` (`texture-animation.md`), which the renderer's
+sampler already does.
+
+Confidence **88** for the Bomb and the Repulser (the ship explosion's shockwave is **80**: the seed is read, nothing was captured of it): both seeds read at the instruction, the update read at the instruction, and five
+captures of those two over two boots agree to four decimals. Not 90+ because the update has no Ghidra function, so its
+caller and the class slot it sits in were not traced. Unnamed for the same reason (no function to name).
+
 ## What is still open
 
 - **`node+0x5c`**, the rate multiplier's numerator. Nothing read writes it, so

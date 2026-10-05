@@ -103,6 +103,15 @@ ran about a third slow on PPSSPP in every capture taken so far. **`ParticleSyste
 count (`60 * dt * the clock's scale`, clamped at `3.0`), so a particle's age follows the emulated clock proportionally and frame jitter
 drops nothing there.
 
+## The ring's texture time is seeded `0` at construction (2026-10-05, static only)
+
+`ShipShockwave_Construct` stores `0.0` to `+0x88` and calls `Node_SetAnimTimeTree(0.0)` on the ring's
+model at `0x0885ee44` (`f12 = f20 = 0`), the same seed `BombBlast_Construct` uses, so the ring's texture
+should play on its age at rate 1 as the Bomb's does. **Confidence 80, below the 88 the Bomb and Repulser
+carry:** this is the instruction read plus the shared model, not a live capture, and the ship explosion was
+not among the five measured. `write_bomb_blasts` uploads it at the blast's age on that reading. See
+[`anim-transform.md`](anim-transform.md#a-meshs-texture-time-seeded-per-spawn-so-object-age-2026-10-05).
+
 ## Not read, open
 
 - ~~The ring's brightness~~: closed above (the scheduler for the late band, the `Glow` template for the first five frames).

@@ -197,6 +197,15 @@ Whether it draws over the blast effect is not separately settled. Both are
 additive (`_ADD_GLOW`, the psys's own blend), so the order does not change the
 picture.
 
+### The field model's texture plays on the Repulser's age (2026-10-05, fx-age-clocks)
+
+`Repulser_Init` calls `Node_SetAnimTimeTree(0.0)` on the field model at `0x08875324` (`f12 = f22 = 0`) and
+nothing calls it again, so the model's texture time is the entity's age at rate 1. Measured live on two
+boots with a conditional breakpoint on `Mesh_UpdateTextureTransforms`: the one fresh mesh read `+0x40 =
+0.000` on the fire frame (clocks 341.338 and 168.616), slope `1.0000` against `g_ingame->0x40` over 95
+samples, and stopped at 1.569 s, the entity's `blast_time + wave_time`. Confidence 88. See
+[`anim-transform.md`](anim-transform.md#a-meshs-texture-time-seeded-per-spawn-so-object-age-2026-10-05).
+
 ## `Repulser_Update` (`0x08875400`): two phases and a lifetime
 
 ```c
