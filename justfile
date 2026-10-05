@@ -603,6 +603,13 @@ ps3iso *ARGS:
 psarc *ARGS:
     python3 scripts/psarc.py "$@"
 
+# Classify one set of PSARC archives against another (new / replaced / identical,
+# grouped by asset family): a patch or DLC pack against its base. Names, sizes and
+# MD5s only. `just psarc-diff --other <patch.psarc>... --base <base.psarc>... --tsv out.tsv`
+# See docs/formats/patches.md.
+psarc-diff *ARGS:
+    cargo run -q -p oag-tools --bin oag-psarc-diff -- {{ARGS}}
+
 # Re-derive every number on docs/formats/hd-status.md from the discs themselves.
 # The second argument is optional and only feeds the Pulse control column.
 hd-survey hd="data/images/hdfury-ps3-eu-dec.iso" pulse="":

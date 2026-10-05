@@ -2,3 +2,4 @@
 
 pub mod glob;
 pub mod humanise;
+pub mod patch_diff;
