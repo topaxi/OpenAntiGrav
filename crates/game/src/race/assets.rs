@@ -78,9 +78,10 @@ pub(super) fn leach_beam_texture(
 /// `--give` flag exists to remove for weapons.
 pub(super) fn particle_effect(
     archives: &mut oag_assets::Archives,
+    dir: &str,
     name: &str,
 ) -> std::result::Result<(psys::Effect, String), String> {
-    let path = sparks::effect_path(name);
+    let path = psys::effect_path_in(dir, name);
     let blob = archives
         .read_name(&path)
         .map_err(|e| format!("{path}: not in the archive set ({e})"))?;
@@ -91,10 +92,49 @@ pub(super) fn particle_effect(
         oag_assets::Platform::Ps2 => psys::ColourScale::Half,
         _ => psys::ColourScale::Full,
     };
-    let effect = psys::Effect::parse(&blob, scale)
-        .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
+    // Wipeout 2048 ships its sprites beside its effects, `<dir>\Tex\<stem>.gxt`
+    // for an authored `...\Tex\<stem>.tga`: all 76 distinct names across its
+    // 85 `Particles2048` effects resolve (`psys_2048_ground_truth.rs`). Every other title's
+    // sprites are embedded or not loaded yet, and keep the procedural profile.
+    let vita = matches!(archives.layout.platform, oag_assets::Platform::Vita);
+    let (mut sprites, mut absent) = (0usize, Vec::new());
+    let effect = psys::Effect::parse_with(&blob, scale, &mut |authored| {
+        if !vita {
+            return None;
+        }
+        let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
+        let entry = format!(r"{dir}\Tex\{stem}.gxt");
+        match archives
+            .read_name(&entry)
+            .ok()
+            .and_then(|blob| psys::sprite::Sprite::from_gxt(&blob))
+        {
+            Some(sprite) => {
+                sprites += 1;
+                Some(sprite)
+            }
+            None => {
+                absent.push(entry);
+                None
+            }
+        }
+    })
+    .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
+    let sprite_note = if vita {
+        let mut note = format!(", {sprites} sprite(s) read");
+        if !absent.is_empty() {
+            note.push_str(&format!(
+                ", {} not read and drawn procedurally: {}",
+                absent.len(),
+                absent.join(", ")
+            ));
+        }
+        note
+    } else {
+        String::new()
+    };
     let note = format!(
-        "{name}: {} emitter(s) - {}",
+        "{name}: {} emitter(s) - {}{sprite_note}",
         effect.emitters.len(),
         effect
             .emitters

@@ -95,3 +95,6 @@
 0x81055006	function	CampaignEventCard_GlyphRowWidth	80	weapon-callout.md
 0x81061808	function	CampaignEventCard_DrawForcedCraft	75	weapon-callout.md
 0x8104d1d0	function	FrontEnd_LoadTrophyTextures	80	weapon-callout.md
+# Where a race's particle effect files are read from (2026-10-05).
+0x812a6a2e	function	Particles_BuildEffectPath	85	particle-paths.md
+0x81298f58	function	Ship_RegisterEffectSet	65	particle-paths.md

@@ -203,7 +203,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1276 (1145 fn, 131 data) | 32 (2%) | 79 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-10-04, [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 73 (72 fn, 1 data) | 2 (2%) | 10 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-10-01, [camera.md](../ghidra/functions/psp-pure-usa/camera.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 80 (71 fn, 9 data) | 1 (1%) | 14 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-05, [campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 82 (73 fn, 9 data) | 2 (2%) | 15 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-05, [campaign-event-card.md](../ghidra/functions/vita-2048-eu-v104/campaign-event-card.md) |
 
 <!-- re-coverage:end -->
 

@@ -90,6 +90,36 @@ impl Sprite {
         })
     }
 
+    /// A Vita `.gxt`'s one texture, level 0 - the sprite Wipeout 2048 ships as
+    /// a separate file beside its `.pob`. `None` for a blob that is not a
+    /// `.gxt`, names a format this build does not decode, or is larger than a
+    /// `u16` can say.
+    #[must_use]
+    pub fn from_gxt(blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gxt::Gxt::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        Some(Self {
+            width: texture.width,
+            height: texture.height,
+            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+        })
+    }
+
+    /// `record`'s embedded sprite, else the one `external` makes of its authored
+    /// texture path.
+    pub(super) fn of_record(
+        system: &ParticleSystem,
+        data: &[u8],
+        record: &pob::Emitter,
+        external: &mut dyn FnMut(&str) -> Option<Self>,
+    ) -> Option<Self> {
+        Self::from_pob(system, data, record).or_else(|| {
+            let path = system.texture_path(data, record)?;
+            external(path)
+        })
+    }
+
     /// The sprite `record` embeds, if it embeds one and the file is a PSP
     /// one - see the module documentation for why the byte order is the
     /// test.

@@ -59,6 +59,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `oag_tables::handling` reads it unmodified, so the handling file sits
     // beside the hull, as it does for every title but 2048's native roster.
     handling_dir: SHIP_DIR,
+    effect_dir: oag_title::race::EFFECT_DIR,
     // **Zero-fabrication placeholder, not a finding.** `SameCircuit` is the
     // one `ZoneCircuit` variant that names no path at all - 2048's own shape,
     // picked here only because it requires inventing nothing. Omega's Zone

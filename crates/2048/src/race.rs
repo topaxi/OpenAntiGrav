@@ -42,6 +42,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     team: DEFAULT_TEAM,
     ship_dir: SHIP_DIR,
     handling_dir: HANDLING_DIR,
+    effect_dir: EFFECT_DIR,
     zone: oag_title::ZoneCircuit::SameCircuit,
     zone_craft: oag_title::ZoneCraft::PlayerShip,
     // Unread: this title's own boost-plume path (if it authors a standalone
@@ -193,6 +194,20 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
 /// `Data\art\published\hdships\<Team>\`, the way every other title does -
 /// so the split is a fact about *this roster*, not about the title.
 pub const HANDLING_DIR: &str = r"Data\HandlingStats";
+
+/// Where this title keeps the `.pob` effects a race plays.
+///
+/// The executable builds an effect's path in `FUN_812a6a2e` (v1.04 eboot): a
+/// game-mode id below 23 gets `Data/Particles2048/%s`, anything else
+/// `Data/Particles/%s`, and the effect names it passes are the ones a ship's
+/// setup preloads (`FUN_81298f58`). **Every mode this build plays is on the
+/// first side of that test** - which ids are on the second was not read - so
+/// this is the one directory, and the `Data/Particles` copies (HD's older
+/// authoring of the same stems) are not read. The two directories differ in
+/// bytes on nearly every shared stem, so this is not interchangeable with
+/// the other. Confidence 80: the branch is read, which modes this port
+/// reaches is inferred from the ids it plays being below 23.
+pub const EFFECT_DIR: &str = r"Data\Particles2048";
 
 /// Where this title keeps its roster - **the one axis 2048 forced into
 /// existence**.
@@ -503,5 +518,14 @@ mod zone_stage_tests {
             boundaries,
             vec![0, 2, 9, 17, 33, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90],
         );
+    }
+}
+
+#[cfg(test)]
+mod effect_dir_tests {
+    #[test]
+    fn this_title_reads_its_own_particle_directory_not_the_shared_one() {
+        assert_eq!(super::DEFAULTS.effect_dir, r"Data\Particles2048");
+        assert_ne!(super::DEFAULTS.effect_dir, oag_title::race::EFFECT_DIR);
     }
 }

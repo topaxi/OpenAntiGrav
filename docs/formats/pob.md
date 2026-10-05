@@ -1036,6 +1036,43 @@ all of them), but the field's role at *render time* on HD specifically
 the way `particle-system.md` traces for PSP) is not independently traced
 here.
 
+## Wipeout 2048 carries the same container, and the existing reader takes it unchanged - 2026-10-05
+
+`SYSP`, little-endian, the same emitter record. **174 `.pob` across the five
+archives that could hold one; 170 parse and play 240 ticks, 4 are refused by
+name** - `crates/render/tests/psys_2048_ground_truth.rs`.
+
+| Archive | `.pob` |
+| --- | ---: |
+| base `data.psarc` | 151 (`data/particles` 66 incl. 2 `Get/`, `data/particles2048` 85 incl. 2 `Get/`) |
+| `dlc1.psarc`, `dlc2.psarc`, patch `data1.psarc` | 0 |
+| patch `data2.psarc` | 23 (17 `particles2048`, 6 `particles`) |
+
+- **The two directories are two authorings.** 64 stems exist in both with
+  different bytes (`WO_ROCKET_EXPLO` is 48,384 bytes in `Data/Particles` and
+  12,656 in `Data/Particles2048`); 19 exist only in `Particles2048`. The
+  executable's path builder chooses between them by game mode
+  (`docs/ghidra/functions/vita-2048-eu-v104/particle-paths.md`), and the port
+  reads `Particles2048`.
+- **The refusals are the dialects the reader already names**: `render mode 3`
+  on `WO_BARRIER_COLLISION` and `blend class 4` on `WO_NITRO_SHIP_DEATH`, each
+  in both directories. Neither is wired anywhere.
+- **Palettes run to 255**, so `ColourScale::Full` is right for Vita (asserted).
+- **Sprites are separate `.gxt` files, and every emitter names one.** The
+  field at `record + 0x4c4` (HD's own-texture field) is a base-relative offset
+  to a `...\Tex\<stem>.tga` developer path on all emitters of the 85
+  `Particles2048` effects: 76 distinct stems, every one a
+  `data/particles2048/tex/<stem>.gxt` that decodes
+  (`oag_vex::pob::ParticleSystem::texture_path`,
+  `oag_render::psys::Effect::parse_with`). Before this the 2048 effects drew
+  the procedural radial falloff, which on a colour table authored for a sprite
+  is a white blowout.
+- **The 17 patch-only effects** (chimney smoke, globes, lens flares,
+  `WO_ZONE_CRACKLE`, pyramid lights, `WO_STEAM`, ...) are unreachable at
+  runtime: `oag_2048::open` does not mount the 1.04 patch archives.
+- **No 2048 circuit places a `ParticleSystem` node** (class `0x3c4`: none in
+  any `track.vex`); only `weatherPos` nodes (`0x3da`) appear, on 11 circuits.
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the
