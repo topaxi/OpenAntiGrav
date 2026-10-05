@@ -154,7 +154,7 @@ tests.rs`.
 `crate::records_page::table_for` calls for the live session - supplying a
 track lookup over the capture's own boot-survey `tracks` list rather than
 `Shell::tracks_for(mode)`, and draws the resulting rows through
-`oag_ui::prompt::record_row_draw`, the identical function
+`oag_ui_screens::prompt::record_row_draw`, the identical function
 `crate::menu_stage::MenuStage::render` draws them through live. The
 `menu_page` function calls `records_draws` in the same two branches
 `axis_preview_draw` already draws in. The one real difference from the live

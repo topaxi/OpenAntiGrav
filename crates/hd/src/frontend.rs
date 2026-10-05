@@ -376,7 +376,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // does (`ShipModel`). The one preview path this build has reads
     // `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and
     // no HD archive carries; the race hull is a `.vex`/`.rcsmodel` pair the
-    // preview does not load yet. See `oag_ui::picker::hd`.
+    // preview does not load yet. See `oag_ui_screens::picker::hd`.
     preview_meshes: false,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
@@ -498,7 +498,7 @@ pub mod names {
     /// global; they do not agree on the screen list. See `hd-frontend.md`.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
 
-    /// HD's own `Team Selection` - see `oag_ui::picker::hd` for the screen.
+    /// HD's own `Team Selection` - see `oag_ui_screens::picker::hd` for the screen.
     /// **`DATA06` alone carries it**, and `DATA00`'s live [`FRONTEND_ROOT`]
     /// includes it by `SrcRel="Team_Selection_Definition.xml"` - so there is
     /// no precedence question for this file, unlike most of HD's front end.
@@ -507,7 +507,7 @@ pub mod names {
     pub const TEAM_SELECTION_DEFINITION: &str =
         r"Data\Plugins\Frontend\Gui\Team_Selection_Definition.xml";
 
-    /// HD's own `Track Creation` - see `oag_ui::picker::hd::track`. Like
+    /// HD's own `Track Creation` - see `oag_ui_screens::picker::hd::track`. Like
     /// [`TEAM_SELECTION_DEFINITION`], **`DATA06` alone carries it** and
     /// `DATA00`'s live skin includes it by `SrcRel`. `racebox_definition.xml`
     /// only *names* `Track Creation` as a `goto` target; the screen is not in

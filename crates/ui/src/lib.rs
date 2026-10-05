@@ -12,20 +12,13 @@
 
 pub mod anim;
 pub mod backdrop;
-pub mod campaign;
-pub mod endrace;
 pub mod font;
 pub mod frontend;
 pub mod language;
-pub mod marquee;
 pub mod menu;
-pub mod picker;
 pub mod placeholder;
 pub mod pointer;
-pub mod prompt;
 pub mod scene_backdrop;
 pub mod screen;
 pub mod state_machine;
 pub mod strings;
-pub mod tag_entry;
-pub mod track_panel;

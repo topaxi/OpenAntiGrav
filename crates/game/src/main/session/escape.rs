@@ -151,13 +151,13 @@ impl Session {
         // A selection screen takes escape first, as Back - the same rule the
         // modal prompt below follows, one layer up.
         if matches!(&self.stage, Stage::Menu(stage) if stage.picker.is_some()) {
-            self.handle_picker(oag_ui::picker::Event::Back);
+            self.handle_picker(oag_ui_screens::picker::Event::Back);
             return;
         }
         // The Race Campaign's own screens, same rule: `Cell Selection` steps
         // back to `Grid Selection`, which steps back to the menus.
         if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some()) {
-            self.handle_campaign(oag_ui::campaign::Event::Back);
+            self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
         // Collected before anything else touches `self`: `handle_menu` takes

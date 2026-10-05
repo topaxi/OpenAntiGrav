@@ -123,7 +123,7 @@ impl super::Renderer {
     ///
     /// **No role parameter, unlike [`Self::set_face_atlas`].** The role this
     /// slot answers to is always `crate::language::roles::BUTTONS` - see
-    /// `oag_ui::campaign::footer::face_role`'s own doc - and
+    /// `oag_ui_screens::campaign::footer::face_role`'s own doc - and
     /// `super::render_with`'s `Draw::FacedText` arm never falls back to the
     /// primary atlas for it the way it does for [`Self::face_atlas`]; see
     /// `super::text::GlyphSlot::Buttons`'s own doc for why not.

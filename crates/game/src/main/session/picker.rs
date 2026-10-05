@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use log::{debug, warn};
 use oag_game::{catalogue, records, unlock};
-use oag_ui::picker::{self, Details, Entry, Event, Kind, Picker};
+use oag_ui_screens::picker::{self, Details, Entry, Event, Kind, Picker};
 
 use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
 use crate::session::menus::variant_choices;

@@ -80,7 +80,7 @@ row edits. The tree is still ours: which rows exist and where START leads is
 this file's call, and a title whose front end authors no such screen
 launches from START directly. See
 [selection-screens.md](../ui/selection-screens.md) for what they draw and
-[`oag_ui::picker`](../../crates/ui/src/picker.rs) for how.
+[`oag_ui_screens::picker`](../../crates/ui-screens/src/picker.rs) for how.
 
 Not the *structure*, but the *contents*, wherever the contents are a property of
 the release rather than of this project:
@@ -682,7 +682,7 @@ best total.
 slot above.** Three real rows (MODE, TRACK, BACK) plus four class rows is
 seven - exactly the row budget Pulse's own skin already fits with nothing
 reserved (see the AI PILOTS section above), so nothing here needed a new
-reservation, and `oag_ui::prompt::record_row_draw` continues the ordinary
+reservation, and `oag_ui_screens::prompt::record_row_draw` continues the ordinary
 row pitch and colour rather than the smaller, amber note text
 `axis_preview_draw` draws in. Widening the note slot to fit several lines
 was the other option and was not taken: `menu::visible_rows`'s
@@ -703,7 +703,7 @@ pieces, each unit-tested with a hand-built class list, `Menu` fixture and
 fabricate. `crates/game/src/main/records_page.rs` is now a thin wrapper: its
 `table_for` supplies `records_table` with the one thing that differs for the
 live session, a track lookup drawn from `Shell::tracks_for(mode)` (which
-carries a distinct Zone list). `oag_ui::prompt::record_row_draw` is the
+carries a distinct Zone list). `oag_ui_screens::prompt::record_row_draw` is the
 drawing half, and `crate::menu_stage::MenuStage::render` wires it in next to
 `axis_preview`'s own chain.
 
@@ -712,7 +712,7 @@ MODE/TRACK/BACK.** `crates/game/src/capture/menu_page.rs`'s own
 `records_draws(model, skin, title, tracks, records)` calls the same
 `scoreboard::records_table`, supplying a track lookup over its own
 boot-survey `tracks` list in place of `Shell::tracks_for`, and draws the
-result through `oag_ui::prompt::record_row_draw` the same way
+result through `oag_ui_screens::prompt::record_row_draw` the same way
 `MenuStage::render` does - the one
 difference is that a capture's list carries no distinct Zone tracks, so a
 capture with `race.mode` seeded to `zone` resolves no track and draws no
@@ -1049,7 +1049,7 @@ Wipeout HD/Fury's and Omega's own carry an identical shape: one
 `Confirm`/`Back` (plus, on HD/Omega, an online `Invite` pair,
 `StartEnabled="false"` and irrelevant here) - the literal wrapper name on
 HD/Omega's own disc is `BodgeScreenContainingNavigationController`, not this
-project's own naming. `oag_ui::campaign::footer::NavigationLegend` reads it
+project's own naming. `oag_ui_screens::campaign::footer::NavigationLegend` reads it
 directly off the raw parsed tree (`oag_tables::fexml::parse`, not
 `Screens::from_xml`, which never keeps the tree this needs), and is now read
 once at boot (`boot::screens::read_nav_legend`) and carried on `Shell`/

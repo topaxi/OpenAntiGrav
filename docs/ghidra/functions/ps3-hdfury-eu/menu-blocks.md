@@ -419,7 +419,7 @@ Vtable slot 3. For a block with `+0x159` set:
 So a focused standalone block is its `ActiveColor`, sixty units wider once
 eased, with a blinking arrow at its left edge; nothing brightens its label.
 Implemented in `oag_ui::menu::block::Focus` and
-`oag_ui::endrace::hd::hd_menu_draw_list`; the parsed attributes are
+`oag_ui_screens::endrace::hd::hd_menu_draw_list`; the parsed attributes are
 `oag_ui::screen::BlockWidget`.
 
 ## `FrontEnd_IsFuryStyle` - `0x0015b620`

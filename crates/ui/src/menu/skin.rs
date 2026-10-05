@@ -502,7 +502,7 @@ impl Skin {
     /// Room under the last row for the noted-row message. Ours; see
     /// [`MESSAGE_GAP`].
     ///
-    /// **`pub`, not `pub(super)`**: [`crate::prompt::axis_preview_draw`]
+    /// **`pub`, not `pub(super)`**: `oag_ui_screens::prompt::axis_preview_draw`
     /// reuses this same gap to sit above [`super::Frame::content_bottom`]
     /// rather than inventing a second margin for the same purpose.
     #[must_use]
@@ -608,7 +608,7 @@ impl Skin {
     /// title reaching this is a title whose frame authored a background
     /// widget and then left it with no way to resolve one.
     #[must_use]
-    pub(crate) fn background(&self) -> Option<crate::frontend::Draw> {
+    pub fn background(&self) -> Option<crate::frontend::Draw> {
         self.skin
             .background
             .map(|color| crate::frontend::Draw::Fill {
@@ -636,7 +636,7 @@ impl Skin {
     /// The scale is dimensionless and stays as authored: it multiplies a face
     /// that already came off this source.
     #[must_use]
-    pub(crate) fn title_at(&self) -> (f32, f32, f32) {
+    pub fn title_at(&self) -> (f32, f32, f32) {
         (
             self.skin.title_x * self.from_theirs.0,
             self.skin.title_y * self.from_theirs.1,
@@ -648,7 +648,7 @@ impl Skin {
     /// whatever face the rest of the frame is already bound to - see
     /// [`oag_title::MenuSkin::title_font`].
     #[must_use]
-    pub(crate) fn title_font(&self) -> Option<&'static str> {
+    pub fn title_font(&self) -> Option<&'static str> {
         self.skin.title_font
     }
 
@@ -679,7 +679,7 @@ impl Skin {
     /// substitution's premise - nothing draws the bar - is gone, and the
     /// declared black wins as it would for any other title.
     #[must_use]
-    pub(crate) fn title_color(&self, frame_ink: Option<[f32; 4]>) -> [f32; 4] {
+    pub fn title_color(&self, frame_ink: Option<[f32; 4]>) -> [f32; 4] {
         self.skin
             .title
             .map_or_else(|| frame_ink.unwrap_or(OUR_SELECTED), argb)
@@ -749,13 +749,13 @@ pub struct Strip {
 /// AI PILOTS page's own axis preview land on top of it. See
 /// `docs/architecture/menus.md`'s "AI PILOTS: the axis preview" section for
 /// the capture that found the gap between the two, and [`Skin::message_gap`]
-/// for why [`crate::prompt::axis_preview_draw`] reads the same figures this
+/// for why `oag_ui_screens::prompt::axis_preview_draw` reads the same figures this
 /// reserves room for rather than a tuned offset of its own.
 ///
 /// `reserve_note` adds one more line, at [`Skin::message_scale`], plus
 /// [`Skin::message_gap`], under the last row - for a page whose rows can
 /// carry a warning or restart mark, or (today, the one caller that sets
-/// this) draws [`crate::prompt::axis_preview_draw`]'s own line underneath
+/// this) draws `oag_ui_screens::prompt::axis_preview_draw`'s own line underneath
 /// them. **This has to be a fact about the page, not about a row's live
 /// value**: reserving room only once a note happens to be showing would
 /// resize the grid on the very keystroke that makes one appear, which is
@@ -816,7 +816,7 @@ const MESSAGE_GAP: f32 = 6.0;
 
 /// The reserved note/preview line's own scale, as a multiple of a row's -
 /// read through [`Skin::message_scale`] and shared by [`super::rows::draw`]'s
-/// own warning/restart message and [`crate::prompt::axis_preview_draw`],
+/// own warning/restart message and `oag_ui_screens::prompt::axis_preview_draw`,
 /// since [`visible_rows`]'s reserved room is sized for exactly one line at
 /// this scale: a caller drawing at a different one would either waste the
 /// reservation or overflow it, the latter being how the axis preview ended

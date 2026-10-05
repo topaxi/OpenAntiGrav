@@ -2,7 +2,7 @@
 //! piece of art this pass draws beyond the screen's own text and fills.
 //!
 //! See `docs/formats/hd-endrace-screens.md` for the widget-by-widget read
-//! [`oag_ui::endrace::hd`] draws off, and `oag_game::endrace`'s own title
+//! [`oag_ui_screens::endrace::hd`] draws off, and `oag_game::endrace`'s own title
 //! dispatch for the loader that reads this module's constants.
 
 /// `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - see
@@ -27,7 +27,7 @@ pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
 /// unlike [`crate::campaign::HEX_TEXTURES`]'s own `.mip`-to-`.gtf` respell.
 /// Every other image either widget names - the ship-badge column, the
 /// target/medal/record-notify art - is left unresolved on purpose; see
-/// `oag_ui::endrace::hd`'s own module doc for why.
+/// `oag_ui_screens::endrace::hd`'s own module doc for why.
 pub const EXTRA_TEXTURES: [&str; 1] = [r"Data\FE\Images\Title_Arrow_HD.gtf"];
 
 #[cfg(test)]

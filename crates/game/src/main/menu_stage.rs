@@ -6,7 +6,8 @@ use oag_game::input::Button;
 use oag_game::render::{Renderer, letterbox_in};
 use oag_game::{movie, pilots};
 use oag_ui::frontend::{self, Draw};
-use oag_ui::{font, marquee, menu};
+use oag_ui::{font, menu};
+use oag_ui_screens::marquee;
 
 use crate::frontend_stage::HeldFrame;
 use crate::gpu::Gpu;
@@ -49,7 +50,7 @@ pub(crate) struct MenuStage {
     /// own, private atlas. Cheap to hold twice: [`font::Atlas`] is a small
     /// glyph table, not a GPU resource. See [`marquee::apply`].
     pub(crate) text_atlas: font::Atlas,
-    /// The `Default`-role face `oag_ui::campaign::footer`'s own prompts and
+    /// The `Default`-role face `oag_ui_screens::campaign::footer`'s own prompts and
     /// tips draw through when their own `font` routes there (see
     /// `Draw::in_role`) - kept a second time for the same reason
     /// [`Self::text_atlas`] is: measuring `FE_CONFIRM`'s own shrink-to-fit
@@ -70,10 +71,10 @@ pub(crate) struct MenuStage {
     /// `Confirm` unconditionally and `Back` only past the tree's own root -
     /// see [`Self::render`]'s own call site for why that boundary and not
     /// a disc-measured one.
-    pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    pub(crate) nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// The footer ticker layout, from `Shell::ticker`, and its free-running
     /// clock (advanced by [`Self::tick`]). See `footer::ticker_overlay`.
-    pub(crate) ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub(crate) ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     pub(crate) ticker_elapsed: f32,
     /// The value marquee's clock: which row it is timing, and for how long.
     pub(crate) marquee: marquee::Timer,
@@ -393,7 +394,7 @@ impl MenuStage {
         // and off `Session::awaiting_binding` - `Session::draw`'s call site
         // again, for the same reason `bound_keys` and `frozen_race` both
         // are: this stage holds no session state of its own. `Some` draws
-        // `oag_ui::prompt::message_draw` over everything else, last, so a
+        // `oag_ui_screens::prompt::message_draw` over everything else, last, so a
         // capture reads as the page being frozen rather than broken - the
         // gap `docs/architecture/menus.md`'s Rebinding section names as this
         // project's own, not the disc's.
@@ -402,7 +403,7 @@ impl MenuStage {
         // `Session::draw`'s call site - this stage holds no `StringTable` of
         // its own to read `pilots::axis_preview_for` with. `Some` draws one
         // more line under the rows, in the same slot a warning or a restart
-        // note would use; see `oag_ui::prompt::axis_preview_draw`'s own
+        // note would use; see `oag_ui_screens::prompt::axis_preview_draw`'s own
         // doc for why that is not `message_draw`'s modal shape.
         axis_preview: Option<&str>,
         // The RECORDS page's own per-class table, off `Session::draw`'s call
@@ -410,7 +411,7 @@ impl MenuStage {
         // `records::Store` either. Empty off any page but RECORDS; see
         // `crate::records_page::table_for`'s own doc for why this is several
         // lines rather than the single one `axis_preview` occupies, and
-        // `oag_ui::prompt::record_row_draw` for how each pair is drawn.
+        // `oag_ui_screens::prompt::record_row_draw` for how each pair is drawn.
         records_table: &[(String, String)],
         // This source's honest tip rotation - see `oag_game::records::ticker_tips`.
         ticker_tips: &[String],
@@ -462,7 +463,7 @@ impl MenuStage {
             if let Some(sheet) = picker.take_sheet() {
                 self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
             }
-            let mut layers = oag_ui::picker::draw_list(
+            let mut layers = oag_ui_screens::picker::draw_list(
                 &picker.model,
                 &picker.layout,
                 &self.skin,
@@ -537,7 +538,7 @@ impl MenuStage {
             // on that branch.
             let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
-            // same two names - see `oag_ui::campaign::hd`'s own module doc.
+            // same two names - see `oag_ui_screens::campaign::hd`'s own module doc.
             // `default_measure` is the footer legend's fit-to-gap measure.
             let default_measure = |text: &str| font::measure(&self.default_atlas, text);
             let layers = if campaign.is_hd() {
@@ -555,7 +556,7 @@ impl MenuStage {
                                 let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
                                 let footer_overlay =
                                     campaign.nav_legend_draw(&layout.faces, &default_measure);
-                                oag_ui::campaign::selection::draw_list(
+                                oag_ui_screens::campaign::selection::draw_list(
                                     model,
                                     layout,
                                     &self.skin,
@@ -576,7 +577,7 @@ impl MenuStage {
                     crate::campaign_stage::Screen::Grid(model) => {
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.grid_layout().faces, &default_measure);
-                        oag_ui::campaign::hd::hd_grid_draw_list(
+                        oag_ui_screens::campaign::hd::hd_grid_draw_list(
                             model,
                             campaign.grid_layout(),
                             &self.skin,
@@ -589,13 +590,14 @@ impl MenuStage {
                         )
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
-                        let (grid_index, grid_count, grid_summary) = campaign
-                            .cell_grid_summary()
-                            .unwrap_or_else(|| (0, 1, oag_ui::campaign::GridSummary::empty()));
+                        let (grid_index, grid_count, grid_summary) =
+                            campaign.cell_grid_summary().unwrap_or_else(|| {
+                                (0, 1, oag_ui_screens::campaign::GridSummary::empty())
+                            });
                         // No ticker: HD's shared `Skin.xml` has no `TextInfoIsAlwaysLast` viewport.
                         let footer_overlay = campaign
                             .nav_legend_draw(&campaign.cell_layout().faces, &default_measure);
-                        oag_ui::campaign::hd::hd_cell_draw_list(
+                        oag_ui_screens::campaign::hd::hd_cell_draw_list(
                             model,
                             campaign.cell_layout(),
                             &self.skin,
@@ -628,7 +630,7 @@ impl MenuStage {
                         let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
                         ticker_draw = ticker.clone();
                         let footer_overlay: Vec<Draw> = ticker.into_iter().collect();
-                        oag_ui::campaign::grid_draw_list(
+                        oag_ui_screens::campaign::grid_draw_list(
                             model,
                             campaign.grid_layout(),
                             &self.skin,
@@ -648,17 +650,17 @@ impl MenuStage {
                         footer_overlay.extend(ticker);
                         // `Cell Help`'s own static overlay - drawn last, over
                         // everything else, while `triangle` has it open. See
-                        // `oag_ui::campaign::draw::cell_help_draw`'s own doc
+                        // `oag_ui_screens::campaign::draw::cell_help_draw`'s own doc
                         // for why it is static rather than scripted.
                         if model.help_open()
                             && let Some(cell_help) = campaign.cell_help_layout()
                         {
-                            footer_overlay
-                                .extend(oag_ui::campaign::cell_help_draw(cell_help, &|src| {
-                                    campaign.sprites.get(src)
-                                }));
+                            footer_overlay.extend(oag_ui_screens::campaign::cell_help_draw(
+                                cell_help,
+                                &|src| campaign.sprites.get(src),
+                            ));
                         }
-                        oag_ui::campaign::cell_draw_list(
+                        oag_ui_screens::campaign::cell_draw_list(
                             model,
                             campaign.cell_layout(),
                             &self.skin,
@@ -794,12 +796,12 @@ impl MenuStage {
         // site. Skipped mid-transition (`self.change.is_some()`), the same
         // guard the marquee above uses and for the same reason: the row
         // list it is positioned against is a zoomed, fading picture during a
-        // tween, not the still one `oag_ui::prompt::axis_preview_draw`
+        // tween, not the still one `oag_ui_screens::prompt::axis_preview_draw`
         // reads `self.menu`'s scroll and visible-row count off.
         let list: Vec<Draw> = match (axis_preview, self.change.is_none()) {
             (Some(text), true) => list
                 .into_iter()
-                .chain(std::iter::once(oag_ui::prompt::axis_preview_draw(
+                .chain(std::iter::once(oag_ui_screens::prompt::axis_preview_draw(
                     &self.menu, &self.skin, text,
                 )))
                 .collect(),
@@ -816,7 +818,7 @@ impl MenuStage {
                         .iter()
                         .enumerate()
                         .flat_map(|(index, (label, value))| {
-                            oag_ui::prompt::record_row_draw(
+                            oag_ui_screens::prompt::record_row_draw(
                                 &self.menu, &self.skin, index, label, value,
                             )
                         }),
@@ -864,7 +866,7 @@ impl MenuStage {
         // maybe_begin_binding` reads ahead of `Menu::update`), but there is
         // no invariant enforcing that here, so "last" is the same safe
         // default the pilot-editor prompt above picked for itself.
-        // `oag_ui::prompt::message_draw` is the shared drawing code -
+        // `oag_ui_screens::prompt::message_draw` is the shared drawing code -
         // `--menu-page --menu-prompt binding`'s own headless capture calls
         // the same function, off `crate::capture::menu_page::prompt_draws`,
         // so this and that flag cannot draw two different pictures for the
@@ -872,7 +874,7 @@ impl MenuStage {
         let list: Vec<Draw> = match binding_prompt {
             Some(text) => list
                 .into_iter()
-                .chain(oag_ui::prompt::message_draw(&self.skin, text))
+                .chain(oag_ui_screens::prompt::message_draw(&self.skin, text))
                 .collect(),
             None => list,
         };

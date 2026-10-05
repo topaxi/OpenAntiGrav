@@ -136,7 +136,7 @@ impl Frame {
     /// against `space`, the same parameter [`Self::content_bottom`] already
     /// takes and for the same reason: this type holds no `Space` of its own.
     #[must_use]
-    pub(crate) fn backdrops(
+    pub fn backdrops(
         &self,
         space: Space,
         skin_background: Option<Draw>,
@@ -171,7 +171,7 @@ impl Frame {
     /// lower half.
     ///
     /// **The real answer to "where does the content area end and the chrome
-    /// begin"** - [`super::visible_rows`] and [`crate::prompt::axis_preview_draw`]
+    /// begin"** - [`super::visible_rows`] and `oag_ui_screens::prompt::axis_preview_draw`
     /// both read this instead of assuming a page's own rows may use the whole
     /// screen down to `space.size.1`, which is what let a menu draw straight
     /// through Pulse's own footer strips. See `docs/architecture/menus.md`'s

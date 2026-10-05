@@ -116,7 +116,7 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
 - ~~**The Tournament/Zone/Elimination/split-screen variants of `EndRace
   Results`'s own populate**~~ **Closed 2026-09-30**: all four are read, the
   Eliminator table and the sort behind it are confirmed on a live PPSSPP frame, and
-  both Zone and Eliminator now draw (`oag_ui::endrace::modes`). `FUN_088d9588` is the
+  both Zone and Eliminator now draw (`oag_ui_screens::endrace::modes`). `FUN_088d9588` is the
   *network-play* table (`g_game_mode > 0xd`), not split-screen. `boostimg` is shown by
   the lap table only; `Line2`..`Line8` are never filled in any mode.
   **Still open inside them**: Zone's `Laps cleared` and `Perfect laps` (what steps
@@ -142,7 +142,7 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
 
 ## Next Steps
 
-**All three screens now draw**, 2026-09-14 - `oag_ui::endrace` (model/draw/
+**All three screens now draw**, 2026-09-14 - `oag_ui_screens::endrace` (model/draw/
 pointer), `oag_game::endrace` (the disc read), `crate::race_stage::endrace`
 (the runtime a finished race holds open, drawn inside `Stage::Race` over the
 already-frozen scene rather than through `MenuStage`) and

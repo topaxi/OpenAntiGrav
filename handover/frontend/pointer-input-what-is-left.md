@@ -15,7 +15,7 @@ from the face's ink" - after which the maintainer reported the picker
 `menu::Skin::set_row_ink`, unverified live). **The Race Campaign's `Grid
 Selection`/`Cell Selection` joined this set the same day**, in the
 `campaign-pointer` lane, after this file's own opening line was already
-written ahead of them - see `oag_ui::campaign::pointer` and
+written ahead of them - see `oag_ui_screens::campaign::pointer` and
 `docs/ui/campaign-screens.md`.
 
 ## Open

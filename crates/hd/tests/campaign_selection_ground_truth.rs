@@ -4,7 +4,7 @@
 //! for why this is a different archive than [`oag_assets::Archives::read_name`]'s
 //! own precedence resolves (still `DATA02`, unlike `oag_game::campaign::load_hd`'s
 //! own `Grid Selection`/`Cell Selection` read, which now also reads `DATA06`
-//! directly - see `oag_ui::campaign::hd`'s own module doc, "The winning
+//! directly - see `oag_ui_screens::campaign::hd`'s own module doc, "The winning
 //! archive"), and `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign
 //! Selection`" section for the full measurement this file proves.
 //!
@@ -114,7 +114,7 @@ fn data06s_copy_carries_all_four_screens_in_document_order() {
 
 /// `campaignList`'s own two `<Entry>`s, in the disc's own document order -
 /// `FE_RC_FURY` before `FE_RC_HD`, which is what
-/// `oag_ui::campaign::selection::CampaignSelection::new`'s own `index: 0`
+/// `oag_ui_screens::campaign::selection::CampaignSelection::new`'s own `index: 0`
 /// landing on `Fury` is read off.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -178,7 +178,7 @@ fn each_grid_screens_own_flyerlist_matches_its_campaigns_grid_range() {
 }
 
 /// `DATA06`'s own `Cell Selection`'s `Target0/1/2 Medal` widgets author the
-/// crop `oag_ui::campaign::hd::hd_medal_frame` reads for `DATA02`'s own
+/// crop `oag_ui_screens::campaign::hd::hd_medal_frame` reads for `DATA02`'s own
 /// `Medal_{x}_{y}` (a different widget on a different archive's copy of the
 /// screen, but the same shared `Hexmedal_HD` atlas) - the only place on
 /// either disc that authors a `u`/`v`/`TxtrWidth`/`TxtrHeight` crop of this

@@ -33,6 +33,7 @@ members = [
   "crates/tools",
   "crates/trace",
   "crates/ui",
+  "crates/ui-screens",
   "crates/vex",
   "crates/video",
   "crates/view",
@@ -77,6 +78,7 @@ oag-texture = { path = "crates/texture" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 oag-ui = { path = "crates/ui" }
+oag-ui-screens = { path = "crates/ui-screens" }
 oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
 oag-weapons = { path = "crates/weapons" }
@@ -307,6 +309,11 @@ opt-level = 2
 # The front end: `menu_layout_ground_truth.rs` and `menu_skin.rs` decode a real
 # sprite sheet and parse a whole title's front-end XML per test.
 [profile.dev.package.oag-ui]
+opt-level = 2
+
+# The screens built on it: `endrace_screens_ground_truth.rs` and the other
+# disc-backed tests parse a whole title's screen XML per test.
+[profile.dev.package.oag-ui-screens]
 opt-level = 2
 
 # The race itself: `oag-game` holds `race/`, the whole front-to-back tick that

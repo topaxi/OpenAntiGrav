@@ -659,7 +659,7 @@ pub(crate) struct Shell {
     /// parsed screens for the one thing that re-reads the disc's XML after
     /// boot: a selection screen's per-entity `screen.xml` declares no globals
     /// and still names them for its stills' colour. See
-    /// `oag_ui::picker::slideshow::Slideshow::read`.
+    /// `oag_ui_screens::picker::slideshow::Slideshow::read`.
     pub(crate) globals: Vec<(String, String)>,
     /// Wipeout HD/Fury's own circuit-name fold, carried from
     /// `boot::Shell::circuit_names` for
@@ -668,7 +668,7 @@ pub(crate) struct Shell {
     /// rows (which use [`Self::tracks`]/[`Self::zone_tracks`], already
     /// folded above). `CircuitNames::default()` on every other title, which
     /// is free to carry and a no-op to consult - see
-    /// `oag_ui::campaign::draw::track_line`'s own doc.
+    /// `oag_ui_screens::campaign::draw::track_line`'s own doc.
     pub(crate) circuit_names: oag_ui::language::CircuitNames,
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
@@ -719,15 +719,15 @@ pub(crate) struct Shell {
     /// `boot::Shell::nav_legend` for the same reason [`Self::frame`] is - a
     /// property of the source, read once while the archives were open.
     /// `None` for a source whose root authors no `NavigationController`
-    /// with either half [`oag_ui::campaign::footer::NavigationLegend::read`]
+    /// with either half [`oag_ui_screens::campaign::footer::NavigationLegend::read`]
     /// reads.
-    pub(crate) nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    pub(crate) nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// The front-end root's own footer ticker layout, carried from
     /// `boot::Shell::ticker` on the same terms `nav_legend` is - a property
     /// of the source, read once while the archives were open. `None` for a
     /// source whose root authors no `TextInfoIsAlwaysLast` viewport, which is
     /// every title but Pulse today.
-    pub(crate) ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub(crate) ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// The style's menu backdrop, read at boot - see `oag_game::boot::backdrop`.
     /// `None` where the source has none, and then the menus sit on the movie or
     /// the page's clear.
@@ -735,8 +735,8 @@ pub(crate) struct Shell {
     /// The race box's two selection screens, read at boot - see
     /// `oag_game::boot::Shell::track_select`. `None` launches straight from
     /// the RACE page.
-    pub(crate) track_select: Option<oag_ui::picker::Layout>,
-    pub(crate) ship_select: Option<oag_ui::picker::Layout>,
+    pub(crate) track_select: Option<oag_ui_screens::picker::Layout>,
+    pub(crate) ship_select: Option<oag_ui_screens::picker::Layout>,
     /// Every team with what the ship picker shows for it - its ratings and
     /// its skins - where [`Self::teams`] is only the id and the label the
     /// RACE page's own row needs.

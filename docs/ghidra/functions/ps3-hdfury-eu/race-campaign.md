@@ -299,7 +299,7 @@ whoever picks this up with more Ghidra time.
 **Consequence for this project's own implementation, stated plainly**:
 `oag_game::records::CampaignRecord::best_difficulty` (a per-cell stored
 rung, never downgraded, tie-breaking a harder rung over a better medal at
-an easier one) and `oag_ui::campaign::hd::hd_medal_frame`'s own
+an easier one) and `oag_ui_screens::campaign::hd::hd_medal_frame`'s own
 earned-difficulty keying for `Medal_{x}_{y}` are this project's own
 **chosen, not measured** design - plausible, and not contradicted by
 anything found this pass, but not read off a confirmed original consumer
@@ -466,7 +466,7 @@ doesn't cover them; this page's own earlier section already found `0xe` as
 "possibly `NitroBattle`/`Detonator`, not chased further" on a *different*
 struct's mode field - `0xd`/`0x14`/`0x15` here plausibly the same two
 spellings' Fury-grid ordinals, not independently confirmed this pass either).
-[`oag_ui::campaign::hd::hd_difficulty_button_line`] reuses this exact mode
+[`oag_ui_screens::campaign::hd::hd_difficulty_button_line`] reuses this exact mode
 set to decide whether it returns computed text at all, and keeps `Tournament`
 on the disc's own static `"Change Difficulty"` string on that basis - see its
 own doc comment for the full reasoning and confidence per mode.

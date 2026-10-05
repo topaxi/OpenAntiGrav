@@ -33,7 +33,8 @@ use oag_game::render::to_grid;
 use oag_gameplay::input::Button;
 use oag_input::Controls;
 use oag_ui::pointer::Pointer;
-use oag_ui::{font, menu, picker};
+use oag_ui::{font, menu};
+use oag_ui_screens::picker;
 
 use crate::menu_stage::MenuStage;
 
@@ -91,7 +92,7 @@ pub(super) fn menu_pointer(
 }
 
 /// A selection screen answering the pointer, against the targets it just
-/// drew. See `oag_ui::picker::pointer`.
+/// drew. See `oag_ui_screens::picker::pointer`.
 pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<picker::Event> {
     let Some(stage_picker) = stage.picker.as_mut() else {
         return Vec::new();
@@ -109,7 +110,7 @@ pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<pi
 }
 
 /// `Grid Selection`/`Cell Selection` answering the pointer, against the
-/// targets they just drew. See `oag_ui::campaign::pointer`.
+/// targets they just drew. See `oag_ui_screens::campaign::pointer`.
 ///
 /// The targets are built off a shared borrow of `campaign` first - its
 /// layout and sprite sheet never change while a screen is open, only the
@@ -118,7 +119,7 @@ pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<pi
 pub(super) fn campaign_pointer(
     stage: &mut MenuStage,
     pointer: &Pointer,
-) -> Vec<oag_ui::campaign::Event> {
+) -> Vec<oag_ui_screens::campaign::Event> {
     let Some(campaign) = stage.campaign.as_mut() else {
         return Vec::new();
     };
@@ -126,14 +127,14 @@ pub(super) fn campaign_pointer(
         return Vec::new();
     }
     // Wipeout HD/Fury draws a completely different screen behind the same
-    // two names - see `oag_ui::campaign::hd`'s own module doc - so its
+    // two names - see `oag_ui_screens::campaign::hd`'s own module doc - so its
     // pointer targets are built and consumed by that module's own
-    // functions, not Pulse's `oag_ui::campaign::pointer`.
+    // functions, not Pulse's `oag_ui_screens::campaign::pointer`.
     if campaign.is_hd() {
         return match &campaign.screen {
             // `CampaignSelection::pointer` computes its own two click
             // targets internally (from the screen's own measured `Bracket`
-            // rect - see `oag_ui::campaign::selection`'s own module doc), so
+            // rect - see `oag_ui_screens::campaign::selection`'s own module doc), so
             // no external target list is needed - only the same "re-borrow
             // mutably once matched" step `Grid`/`Cell` also take below.
             crate::campaign_stage::Screen::Selection(_) => {
@@ -144,7 +145,7 @@ pub(super) fn campaign_pointer(
             }
             crate::campaign_stage::Screen::Grid(_) => {
                 let card = campaign.flyer_card_rect();
-                let targets = oag_ui::campaign::hd::hd_grid_targets(
+                let targets = oag_ui_screens::campaign::hd::hd_grid_targets(
                     campaign.grid_layout(),
                     &|src| campaign.sprites.get(src),
                     card,
@@ -160,8 +161,9 @@ pub(super) fn campaign_pointer(
                     campaign.cell_layout(),
                     &campaign.sprites,
                 );
-                let difficulty_rect =
-                    oag_ui::campaign::hd::difficulty_button_rect(&campaign.cell_layout().screen);
+                let difficulty_rect = oag_ui_screens::campaign::hd::difficulty_button_rect(
+                    &campaign.cell_layout().screen,
+                );
                 let crate::campaign_stage::Screen::Cell { model, .. } = &mut campaign.screen else {
                     unreachable!("just matched Screen::Cell above")
                 };

@@ -2281,7 +2281,7 @@ carries the picture half (what draws and why) and this project's live
 verification against a real disc-driven HD race.
 
 [`FrontEnd::root`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
-[`MenuOption`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/ui/src/endrace.rs
+[`MenuOption`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/ui-screens/src/endrace.rs
 
 ## What could not be determined
 

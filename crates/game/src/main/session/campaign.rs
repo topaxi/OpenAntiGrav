@@ -1,11 +1,11 @@
 //! Opens and drives the Race Campaign's two screens over the menus - the
 //! same shape `session::picker` opens the race box's selection screens in.
-//! See `oag_ui::campaign` for the model and `crate::campaign_stage` for what
+//! See `oag_ui_screens::campaign` for the model and `crate::campaign_stage` for what
 //! this holds open.
 
 use log::warn;
 use oag_game::campaign::launch::Refusal;
-use oag_ui::campaign::Event;
+use oag_ui_screens::campaign::Event;
 
 use crate::campaign_stage::{CampaignStage, Screen};
 use crate::stage::Stage;
@@ -44,14 +44,12 @@ impl Session {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
-        let faces = oag_ui::picker::FaceScales {
-            default: shell
-                .menu_font
-                .as_ref()
-                .map_or(oag_ui::picker::FaceScales::default().default, |menu| {
-                    shell.font.line_height / menu.line_height
-                }),
-            ..oag_ui::picker::FaceScales::default()
+        let faces = oag_ui_screens::picker::FaceScales {
+            default: shell.menu_font.as_ref().map_or(
+                oag_ui_screens::picker::FaceScales::default().default,
+                |menu| shell.font.line_height / menu.line_height,
+            ),
+            ..oag_ui_screens::picker::FaceScales::default()
         };
         let grid = [shell.space.size.0, shell.space.size.1];
         let mut strings = shell.strings.clone();
@@ -261,7 +259,7 @@ impl Session {
                 // `DifficultyChanged` is HD-only, ours, and needs nothing
                 // from the composition root - `CellSelection::cycle_difficulty`
                 // already moved the model's own state before this event
-                // reached here. See `oag_ui::campaign::Event::DifficultyChanged`'s
+                // reached here. See `oag_ui_screens::campaign::Event::DifficultyChanged`'s
                 // own doc.
                 (_, Event::Moved | Event::Help | Event::DifficultyChanged) => {}
             }

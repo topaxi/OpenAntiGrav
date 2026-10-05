@@ -5,8 +5,8 @@
 //!
 //! # Why this is a test of its own
 //!
-//! `oag_ui::campaign::footer::TickerLayout::read` already had a fixture-based
-//! unit test (`crates/ui/src/campaign/footer/tests.rs`) against a miniature
+//! `oag_ui_screens::campaign::footer::TickerLayout::read` already had a fixture-based
+//! unit test (`crates/ui-screens/src/campaign/footer/tests.rs`) against a miniature
 //! hand-written `Skin.xml`, and `oag_game::campaign::load`'s own
 //! `read_footer` reads the ticker for the Race Campaign's screens - but
 //! nothing before this pinned the *real* disc's own `TextInfoIsAlwaysLast`
@@ -19,8 +19,8 @@
 use std::path::PathBuf;
 
 use oag_tables::fexml;
-use oag_ui::campaign::footer::TickerLayout;
 use oag_ui::screen::{Screens, parse};
+use oag_ui_screens::campaign::footer::TickerLayout;
 
 /// `(label, image)` for each Pulse PSP pressing present - EU first, per this
 /// project's own default preference between the two when both are on disk.
@@ -120,11 +120,11 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
     );
 
     let measure = |text: &str| f32::from(u16::try_from(text.chars().count()).unwrap_or(0)) * 8.0;
-    let draw = oag_ui::campaign::footer::ticker_draw(
+    let draw = oag_ui_screens::campaign::footer::ticker_draw(
         &layout,
         0.0,
         &tips,
-        &oag_ui::picker::FaceScales::default(),
+        &oag_ui_screens::picker::FaceScales::default(),
         &measure,
     );
     assert!(

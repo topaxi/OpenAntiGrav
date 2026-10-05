@@ -9,9 +9,9 @@
 
 use anyhow::{Context, Result};
 use oag_tables::race_campaign::{self, Grid};
-use oag_ui::campaign::Layout;
 use oag_ui::language::StringTable;
-use oag_ui::picker::FaceScales;
+use oag_ui_screens::campaign::Layout;
+use oag_ui_screens::picker::FaceScales;
 
 use crate::sprite::Sheet;
 
@@ -51,23 +51,23 @@ pub struct Campaign {
     /// HD/Fury's own copy does not).
     pub cell_help: Option<Layout>,
     /// The shared front-end root's own `NavigationController` - `Confirm`/
-    /// `Back`, see [`oag_ui::campaign::footer::NavigationLegend`]'s own doc.
+    /// `Back`, see [`oag_ui_screens::campaign::footer::NavigationLegend`]'s own doc.
     /// Read on every title now: Pulse's own `Data\Plugins\PI001\GUI\Skin.xml`
     /// and Wipeout HD/Fury's and Omega's shared
     /// `Data\Plugins\Frontend\Gui\Skin.xml` alike, off [`read_footer`]. `None`
     /// when that read fails, or the root authors no `NavigationController`
     /// with either half this build draws.
-    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    pub nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
     /// The shared front-end root's own scrolling tip ticker - see
-    /// [`oag_ui::campaign::footer::TickerLayout`]'s own doc. Read the same
+    /// [`oag_ui_screens::campaign::footer::TickerLayout`]'s own doc. Read the same
     /// way [`Self::nav_legend`] is, on every title - `None` in practice on
     /// Wipeout HD/Fury and Omega regardless, since neither's own `Skin.xml`
     /// authors the `TextInfoIsAlwaysLast` viewport that read looks for
     /// (confirmed by direct read, not assumed).
-    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    pub ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
     /// `base` extended with the title's own hex/other textures - the same
     /// "front end's own sheet plus this screen's own art" shape
-    /// `oag_ui::picker::slideshow`'s stills already extend it with.
+    /// `oag_ui_screens::picker::slideshow`'s stills already extend it with.
     pub sprites: Sheet,
     /// **HD/Fury only.** `Campaign Selection`'s own layout, ahead of
     /// [`Self::grid_layout`] - `None` on every other title, and on an HD
@@ -100,7 +100,7 @@ pub struct Campaign {
 /// neither [`oag_ui::screen::Screens::collect_widgets`] nor this crate's
 /// existing `Screens` value for that file (`Shell::screens`, already merged
 /// with every `LoadXML` include) keeps the raw node tree
-/// [`oag_ui::campaign::footer`] needs. `oag_tables::fexml::text` reads
+/// [`oag_ui_screens::campaign::footer`] needs. `oag_tables::fexml::text` reads
 /// either encoding this file comes in - Pulse's own dictionary-shortened
 /// copy or Wipeout HD/Fury and Omega's plain UTF-8 one - so this needs no
 /// dispatch of its own, unlike [`load_hd`]'s screen-XML read a few
@@ -112,8 +112,8 @@ fn read_footer(
     strings: &StringTable,
     fallback_globals: &[(&str, &str)],
 ) -> (
-    Option<oag_ui::campaign::footer::NavigationLegend>,
-    Option<oag_ui::campaign::footer::TickerLayout>,
+    Option<oag_ui_screens::campaign::footer::NavigationLegend>,
+    Option<oag_ui_screens::campaign::footer::TickerLayout>,
 ) {
     let blob = match archives.read_name(front_end_root) {
         Ok(blob) => blob,
@@ -136,8 +136,9 @@ fn read_footer(
     let globals =
         oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals).globals;
     let root = oag_ui::screen::parse(&xml);
-    let nav_legend = oag_ui::campaign::footer::NavigationLegend::read(&root, &globals, strings);
-    let ticker = oag_ui::campaign::footer::TickerLayout::read(&root, &globals);
+    let nav_legend =
+        oag_ui_screens::campaign::footer::NavigationLegend::read(&root, &globals, strings);
+    let ticker = oag_ui_screens::campaign::footer::TickerLayout::read(&root, &globals);
     (nav_legend, ticker)
 }
 
@@ -160,7 +161,7 @@ pub fn static_footer_overlay(
         .as_ref()
         .map_or_else(Vec::new, |legend| legend.draw(faces, measure));
     if let Some(ticker) = &campaign.ticker {
-        overlay.extend(oag_ui::campaign::footer::ticker_draw(
+        overlay.extend(oag_ui_screens::campaign::footer::ticker_draw(
             ticker,
             0.0,
             &[],
@@ -175,7 +176,7 @@ pub fn static_footer_overlay(
 /// whose front end is HD's `PI001` plugin carried forward
 /// (`docs/formats/omega-frontend.md`).
 ///
-/// Every dispatch that picks `oag_ui::campaign::hd`'s draw list over Pulse's
+/// Every dispatch that picks `oag_ui_screens::campaign::hd`'s draw list over Pulse's
 /// asks this. Omega used to fall through to Pulse's, which has no arm for
 /// HD's widget names (`Event`, `RC Laps`, `NextPoints`, `EPoints Title`), so
 /// their raw ids and the `%d` template drew on screen.
@@ -334,9 +335,9 @@ fn read_hd_texture(
 /// [`load`]'s Wipeout HD/Fury branch - the same shape, off
 /// [`oag_hd::campaign`]'s own entry names, HD's own authored grid
 /// ([`oag_hd::campaign::AUTHORED_GRID`], not the PSP's `PSP_GRID`
-/// [`oag_ui::campaign::Layout::read`] assumes), and no `oag_tables::fexml`
+/// [`oag_ui_screens::campaign::Layout::read`] assumes), and no `oag_tables::fexml`
 /// expansion of the screen XML - it is plain UTF-8 on this title, unlike
-/// Pulse's dictionary-shortened copy. See `oag_ui::campaign::hd`'s own
+/// Pulse's dictionary-shortened copy. See `oag_ui_screens::campaign::hd`'s own
 /// module doc for what the two screens draw once resolved this way.
 fn load_hd(
     archives: &mut oag_assets::Archives,
@@ -348,7 +349,7 @@ fn load_hd(
 ) -> Result<Campaign> {
     // `DATA06`'s copy, not `oag_assets::Archives::read_name`'s own
     // precedence (which lands on `DATA02`'s) - **switched 2026-09-27**, see
-    // `oag_ui::campaign::hd`'s own module doc ("The winning archive is
+    // `oag_ui_screens::campaign::hd`'s own module doc ("The winning archive is
     // `DATA06`") for the full archive-precedence argument and
     // `oag_hd::campaign::SCREEN_ENTRY`'s doc for the file-level summary.
     // One parse now covers all four screens `CellMode_Definition.xml`
@@ -410,8 +411,8 @@ fn load_hd(
         })
     });
     let campaign_cards = [
-        oag_ui::campaign::flyer::FURY_CAMPAIGN_FLYER,
-        oag_ui::campaign::flyer::HD_CAMPAIGN_FLYER,
+        oag_ui_screens::campaign::flyer::FURY_CAMPAIGN_FLYER,
+        oag_ui_screens::campaign::flyer::HD_CAMPAIGN_FLYER,
     ]
     .map(|name| crate::flyer::CardSpec {
         flyer: name.to_string(),
@@ -419,10 +420,10 @@ fn load_hd(
         stretch: crate::flyer::CAMPAIGN_STRETCH,
     });
     let cards: Vec<crate::flyer::CardSpec> = grid_cards.chain(campaign_cards).collect();
-    let widgets = oag_ui::campaign::flyer::read(&xml, &screens);
+    let widgets = oag_ui_screens::campaign::flyer::read(&xml, &screens);
     let flyers = widgets
         .iter()
-        .any(|widget| widget.name == oag_ui::campaign::flyer::GRID_WIDGET)
+        .any(|widget| widget.name == oag_ui_screens::campaign::flyer::GRID_WIDGET)
         .then(|| crate::flyer::Flyers::load(archives, widgets, &cards));
     if let Some(flyers) = &flyers {
         for line in &flyers.report {
@@ -468,10 +469,10 @@ fn load_hd(
         }
     }
     // Each grid's own `Logo.gtf`, which the unlock box under the card names
-    // by grid - see `oag_ui::campaign::hd`'s `UnlockBox`. Keyed by the same
+    // by grid - see `oag_ui_screens::campaign::hd`'s `UnlockBox`. Keyed by the same
     // spelling the screen's `flyerlogo` widget authors.
     for name in &flyer_names {
-        let entry = oag_ui::campaign::flyer::logo_entry(name);
+        let entry = oag_ui_screens::campaign::flyer::logo_entry(name);
         match read_hd_texture(archives, &entry) {
             Ok(blob) => blobs.push((entry, blob)),
             Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
@@ -516,8 +517,8 @@ fn load_hd(
 /// falls back to opening straight on `Grid Selection`, the pre-this-pass
 /// behaviour, rather than refusing the whole campaign over one missing
 /// screen.
-/// `Campaign Selection`'s own four idstrings - [`oag_ui::campaign::selection::TITLE_ID`]/
-/// `SUBTITLE_ID` and both campaigns' own [`oag_ui::campaign::selection::Campaign::entry_id`] -
+/// `Campaign Selection`'s own four idstrings - [`oag_ui_screens::campaign::selection::TITLE_ID`]/
+/// `SUBTITLE_ID` and both campaigns' own [`oag_ui_screens::campaign::selection::Campaign::entry_id`] -
 /// resolved off `entries_path`'s own `DATA06` copy rather than whichever
 /// archive `oag_assets::Archives::read_name`'s precedence would otherwise
 /// serve. **The reason this exists at all**: confirmed directly against
@@ -534,7 +535,7 @@ fn load_hd(
 /// (the live session) and `crate::capture::campaign_page` (`--menu-page
 /// campaign-select`) - so the two cannot resolve these four ids differently.
 /// Before this function existed, only the live path applied any overlay at
-/// all (just [`oag_ui::campaign::selection::TITLE_ID`]/`SUBTITLE_ID`, not
+/// all (just [`oag_ui_screens::campaign::selection::TITLE_ID`]/`SUBTITLE_ID`, not
 /// the two entry names), so a `--menu-page campaign-select` capture showed
 /// raw ids where a player's own session showed real text - the gap this
 /// closes.
@@ -547,10 +548,10 @@ pub fn hd_selection_string_overlay(
         archives,
         entries_path,
         &[
-            oag_ui::campaign::selection::TITLE_ID,
-            oag_ui::campaign::selection::SUBTITLE_ID,
-            oag_ui::campaign::selection::Campaign::Fury.entry_id(),
-            oag_ui::campaign::selection::Campaign::Hd.entry_id(),
+            oag_ui_screens::campaign::selection::TITLE_ID,
+            oag_ui_screens::campaign::selection::SUBTITLE_ID,
+            oag_ui_screens::campaign::selection::Campaign::Fury.entry_id(),
+            oag_ui_screens::campaign::selection::Campaign::Hd.entry_id(),
         ],
     )
 }
@@ -591,7 +592,7 @@ pub fn hd_data06_strings(
 /// four screens now**, where this function used to open and parse the file
 /// a second time on its own (`load_hd_campaign_selection`, before
 /// 2026-09-27 switched `load_hd`'s own screen source to `DATA06` too, making
-/// the second read redundant - see `oag_ui::campaign::hd`'s own module doc).
+/// the second read redundant - see `oag_ui_screens::campaign::hd`'s own module doc).
 ///
 /// `(None, None)` when this copy's own XML does not carry both screens - a
 /// base, non-Fury HD pressing this project has not seen, say.

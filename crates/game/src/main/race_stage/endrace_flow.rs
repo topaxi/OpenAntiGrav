@@ -5,11 +5,11 @@
 //! point at which a press may leave the first of them are tested without a
 //! device. The drawing of each screen stays with the runtime.
 
-use oag_ui::endrace::photo;
+use oag_ui_screens::endrace::photo;
 
 /// Which of the screens is on top. `Photo` is `Race End Photo`, the state
 /// the original sits in between the flag and `EndRace Results`; see
-/// [`oag_ui::endrace::photo`].
+/// [`oag_ui_screens::endrace::photo`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Which {
     Photo,

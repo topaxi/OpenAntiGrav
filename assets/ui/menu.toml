@@ -59,8 +59,8 @@ title_string_id = "OAG_MENU_MAIN_TITLE"
 # Opens `Grid Selection` over the menus rather than a submenu page of our
 # own. The disc authors `Grid Selection`/`Cell Selection` in
 # `CellMode_Definition.xml` the same way it authors `Track Creation`/`Team
-# Selection`, and `oag_ui::campaign` draws them the same way
-# `oag_ui::picker` draws those - so this is `kind = "action"`, like START on
+# Selection`, and `oag_ui_screens::campaign` draws them the same way
+# `oag_ui_screens::picker` draws those - so this is `kind = "action"`, like START on
 # the RACEBOX page, not a page in this tree. A source whose campaign has not
 # been read (everything but Wipeout Pulse today) logs why and leaves the
 # menus open, per `crate::session::campaign::open_campaign`'s own doc.

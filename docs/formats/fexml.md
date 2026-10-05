@@ -145,10 +145,10 @@ under an **anonymous** `<Screen type="FE_Default">`, which
 `Screens::collect` walks through without registering - see that function's
 own doc for why this project does not change that rule for one widget.
 `Create Profile Setup`'s own `Tag` (`length="3"`) is the one instance that
-*is* under a named `Screen`, and is what `crates/ui/tests/tag_input_ground_truth.rs`
+*is* under a named `Screen`, and is what `crates/ui-screens/tests/tag_input_ground_truth.rs`
 checks against the real disc. A reader after the anonymous instances (Pulse's
 own profile-name/tag screens) walks `oag_tables::fexml::parse`'s tree
-directly - see `oag_ui::tag_entry`.
+directly - see `oag_ui_screens::tag_entry`.
 
 **The alphabet is not in this file.** It is 70 bytes in `BOOT.BIN`, not the
 WAD - see `oag_pulse::tag_input::ALPHABET`.

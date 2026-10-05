@@ -216,7 +216,7 @@ original measurably does - see
 [race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md)'s
 "how a campaign event launches" - and needs no change to the four-part `Key`
 at all. `Store::campaign_medal`/`Store::record_campaign` are the two new
-methods; `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+methods; `oag_ui_screens::campaign::GridSummary::from_grid_with_medals`/
 `CellSelection::with_medals` are what `Grid Selection`'s `Medals`/`Points`
 rows and `Cell Selection`'s `Line6`/`Line7` read them through, fed by
 `crates/game/src/main/campaign_stage.rs`.

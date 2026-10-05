@@ -2068,6 +2068,7 @@ dependencies = [
  "oag-title",
  "oag-trace",
  "oag-ui",
+ "oag-ui-screens",
  "oag-vex",
  "oag-video",
  "oag-weapons",
@@ -2119,6 +2120,7 @@ dependencies = [
  "oag-texture",
  "oag-title",
  "oag-ui",
+ "oag-ui-screens",
  "oag-vex",
 ]
 
@@ -2415,6 +2417,24 @@ dependencies = [
  "serde",
  "thiserror 2.0.19",
  "toml",
+]
+
+[[package]]
+name = "oag-ui-screens"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-display",
+ "oag-gameplay",
+ "oag-hd",
+ "oag-pulse",
+ "oag-pure",
+ "oag-race",
+ "oag-tables",
+ "oag-testdata",
+ "oag-texture",
+ "oag-title",
+ "oag-ui",
 ]
 
 [[package]]

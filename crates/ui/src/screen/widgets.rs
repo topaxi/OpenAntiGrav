@@ -11,12 +11,12 @@ impl Screens {
     /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`
     /// gradient. A widget with neither is not a fill and is dropped.
     ///
-    /// `pub(crate)` for [`crate::tag_entry`], the same reason
+    /// `pub(crate)` for `oag_ui_screens::tag_entry`, the same reason
     /// [`Self::image_from_node`] already is: it walks a screen's own
     /// `TagInput` siblings (the cell backgrounds and confirm bars) directly,
     /// off a screen `collect_widgets` never registers - see that module's
     /// own doc.
-    pub(crate) fn fill_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Fill> {
+    pub fn fill_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Fill> {
         let argb = |attr: &str| {
             self.resolve(node.value(attr).unwrap_or_default())
                 .and_then(parse_argb)
@@ -45,9 +45,9 @@ impl Screens {
     }
 
     /// An `Image` widget off its node, `offset` added to its position.
-    /// `pub(crate)` for [`crate::picker::slideshow`], which walks a screen
+    /// `pub(crate)` for `oag_ui_screens::picker::slideshow`, which walks a screen
     /// tree of its own and wants its images read the same way.
-    pub(crate) fn image_from_node(&self, node: &Node, src: &str, offset: (f32, f32)) -> Image {
+    pub fn image_from_node(&self, node: &Node, src: &str, offset: (f32, f32)) -> Image {
         Image {
             name: node.attr("name").map(str::to_string),
             src: src.to_string(),
@@ -108,9 +108,9 @@ impl Screens {
         text
     }
 
-    /// `pub(crate)` for [`crate::tag_entry`] - see [`Self::fill_from_node`]'s
+    /// `pub(crate)` for `oag_ui_screens::tag_entry` - see [`Self::fill_from_node`]'s
     /// own note.
-    pub(crate) fn text_from_node(
+    pub fn text_from_node(
         &self,
         node: &Node,
         viewport_width: Option<f32>,

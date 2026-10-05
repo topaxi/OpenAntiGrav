@@ -71,7 +71,7 @@ impl Renderer {
         border: [f32; 4],
         align: Align,
         text: &str,
-        clip: Option<(f32, f32)>, // a value marquee's window; see `oag_ui::marquee`
+        clip: Option<(f32, f32)>, // a value marquee's window; see `oag_ui_screens::marquee`
     ) {
         // [`GlyphSlot::Buttons`] with [`Self::buttons_atlas`] still `None` -
         // see [`GlyphSlot`]'s own doc: no fallback, so there is nothing

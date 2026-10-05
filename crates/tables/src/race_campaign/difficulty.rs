@@ -74,7 +74,7 @@ pub enum Difficulty {
 
 impl Difficulty {
     /// Cycles `Easy -> Medium -> Hard -> Easy` -
-    /// `oag_ui::campaign::CellSelection::cycle_difficulty`'s own step.
+    /// `oag_ui_screens::campaign::CellSelection::cycle_difficulty`'s own step.
     #[must_use]
     pub fn next(self) -> Self {
         match self {

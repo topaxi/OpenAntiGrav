@@ -614,7 +614,7 @@ RESULTS AGAIN`. Frames: `data/reference/psp-tournament/er1.png`, `er2.png`,
 
 - ~~Team cells show the team's **display name**~~ **Fixed 2026-09-30**: the roster's folder
   ids (`AG_Systems`) are resolved through the string table at draw time
-  (`oag_ui::endrace`'s cell text, shared with the new Eliminator table), which is the
+  (`oag_ui_screens::endrace`'s cell text, shared with the new Eliminator table), which is the
   original's own `localise(craft+0x798)`; a live Eliminator run showed `AG SYSTEMS`,
   `EG-X` and `GOTEKI 45` on this build's own screen. It was not the catalogue the fix
   needed after all - the string table already carries every team under its folder id.
@@ -669,8 +669,8 @@ stated inline above rather than renamed.
 4. Head2Head's own `Race_RecordResult` arm and launch globals - deliverable
    4, not attempted this pass.
 5. Cross-check this page's addresses against `psp-pulse-eu`.
-6. **Draw the tournament standings table for real** - `oag_ui::endrace`
-   now has both pages (`crates/ui/src/endrace.rs`'s `TournamentResults`),
+6. **Draw the tournament standings table for real** - `oag_ui_screens::endrace`
+   now has both pages (`crates/ui-screens/src/endrace.rs`'s `TournamentResults`),
    fed by `oag_race::tournament`/`crate::race::tournament::Progress`
    (`crates/game/src/main/race_stage/endrace.rs`'s `tournament_results`).
    Not yet checked against a live PPSSPP capture of a real tournament leg

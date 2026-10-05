@@ -634,13 +634,13 @@ live against PPSSPP (`pulse-psp-usa.chd`, Xvfb, a genuinely fresh profile):
 `grid0`'s own default cursor is `grid0_3_1` (`Locked="false"`, fourth in
 `grid_00.xml`'s own document order), never `grid0_2_1` (no `Locked`
 attribute at all, first in document order) - matching this scan and
-falsifying the "first cell listed" reading `oag_ui::campaign::CellSelection::new`
+falsifying the "first cell listed" reading `oag_ui_screens::campaign::CellSelection::new`
 carried until this pass. Confidence **80**, the same band the rest of this
 function's own reads sit at - clean decompilation, corroborated by a live
 capture, not itself breakpoint-verified. `cell->flags & 8` was not chased
 this pass (no consumer of that bit found elsewhere in this file), and every
 authored cell this pass checked reads `0` there, so it has not yet excluded
-anything real; `oag_ui::campaign::CellSelection::with_medals_and_records`
+anything real; `oag_ui_screens::campaign::CellSelection::with_medals_and_records`
 reproduces the scan and falls back to document order when no cell answers
 `Locked="false"` at all (**chosen, not measured** for that fallback case -
 the decompile itself would leave the selection at whatever it already was,
@@ -1327,7 +1327,7 @@ code path ever names this key at runtime - the `FEGlobals->` resolver hashes
 whatever name the XML gives it, and `Skin.xml`'s own declared value is
 final, with no override to chase further. `crate::campaign::load` already
 threads the front-end root's own parsed globals through as
-`fallback_globals` and `oag_ui::campaign::draw::cell_draw_list`'s
+`fallback_globals` and `oag_ui_screens::campaign::draw::cell_draw_list`'s
 `Outline_x_y` arm already falls to the generic `image_draw` path, which
 applies `image.color` (the widget's own resolved attribute) unmodified - so
 this was fixed by the earlier pass's own `fallback_globals` plumbing, not
@@ -1399,7 +1399,7 @@ brighten, so a plain alpha-blended tint of that one sprite cannot bleed
 light past the hex's own edge the way every frame in the burst does.
 **Something does draw a second, softer element in sync with the pulse** -
 this is stronger than "one frame might have caught a bright phase", but
-still not a located geometry/texture to draw, so `oag_ui::campaign::draw`
+still not a located geometry/texture to draw, so `oag_ui_screens::campaign::draw`
 continues to draw nothing extra for it rather than invent a stand-in shape,
 per this project's own rule. Left open, now with a clearer description of
 what is missing: not necessarily the literal `"SelectorGlow"` widget this
@@ -1444,7 +1444,7 @@ down arrow: page == maxPage (+0xec)  ? 0xff505050 : 0xffffffff
 `CellMode_Definition.xml` authors both arrows at a fixed white
 (`i="0xffffffff"`), so - like the hex tiles and the selector - this build's
 previous plain-white draw was the XML's own untinted default with no runtime
-gate applied. Fixed (`ARROW_DISABLED_TINT`), `oag_ui::campaign::draw::grid_draw_list`.
+gate applied. Fixed (`ARROW_DISABLED_TINT`), `oag_ui_screens::campaign::draw::grid_draw_list`.
 `g_anCellNeighbourOffsets`'s two-parity table and
 `Grid_FindCellAtCoordinate` never write `cell->Locked`, `PI_Grid.Locked`,
 `Status`, or call any `Unlock_*` predicate - only the glyph's visibility and

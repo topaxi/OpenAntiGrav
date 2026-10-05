@@ -13,7 +13,7 @@ per-title axis this thread's own "Next Steps" called for - Pulse keeps
 (`Data\Plugins\Frontend\Gui\EndRace_Definition.xml`, five of seven archives,
 no two alike by MD5). `oag_game::endrace::load`/`load_hd` mirror
 `crate::campaign::load`/`load_hd`'s own title dispatch.
-[`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs) draws Results (the
+[`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs) draws Results (the
 whole field's own standings, `Grid{col}.{row}` - **four columns by ten rows**,
 not the "eight rows by ten columns" this thread originally guessed before the
 reading pass) and Menu (one `<Block>` per option, at its own authored
@@ -36,7 +36,7 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   names it; the EBOOT has no `EndRace Rewards` type string, no
   `EndRaceRewards_Screen.cpp` and zero `reward` strings - confidence 85,
   `docs/formats/hd-endrace-screens.md`). Drawn off its own widgets by
-  `oag_ui::endrace::hd::hd_rewards_draw_list`, reachable only by
+  `oag_ui_screens::endrace::hd::hd_rewards_draw_list`, reachable only by
   `--menu-page endrace-rewards`; the live flow stays Results -> Menu.
   **Still open under it**: `DFENGINE.SPRX` (encrypted) was not grepped; a
   live RPCS3 end-of-race walk is what would lift 85. The `Rewards` loyalty row

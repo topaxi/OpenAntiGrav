@@ -194,13 +194,13 @@ pub fn gates_variants(title: &str) -> bool {
 /// the way every capture reads them.
 #[must_use]
 pub fn offered_on(
-    kind: oag_ui::picker::Kind,
+    kind: oag_ui_screens::picker::Kind,
     archives: Option<&mut oag_assets::Archives>,
     title: &str,
     tracks: &[Track],
 ) -> Vec<Track> {
     match archives {
-        Some(archives) if kind == oag_ui::picker::Kind::Track => {
+        Some(archives) if kind == oag_ui_screens::picker::Kind::Track => {
             Gate::read(title, archives).offered(tracks, &records::load(), title)
         }
         _ => tracks.to_vec(),

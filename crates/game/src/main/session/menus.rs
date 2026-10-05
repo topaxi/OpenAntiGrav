@@ -6,7 +6,8 @@ use log::{error, info, warn};
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{boot, catalogue, movie, pilots, settings};
-use oag_ui::{marquee, menu, strings};
+use oag_ui::{menu, strings};
+use oag_ui_screens::marquee;
 
 use crate::frontend_stage::HeldFrame;
 use crate::hints;
@@ -415,7 +416,7 @@ impl Session {
         // The screen title's own face, when this title names a role for it -
         // mirrors `rows_face` above, one widget over. On both PSP titles,
         // whose chrome names no `Title` role, this slot instead carries the
-        // `Default`-role atlas so `oag_ui::campaign::footer`'s
+        // `Default`-role atlas so `oag_ui_screens::campaign::footer`'s
         // `Draw::FacedText { role: "Default", .. }` can draw its own body
         // face beside the unchanged `menu`-role primary - see
         // `boot::fonts::face_atlas_slot`'s own doc. See `capture::run`'s own
