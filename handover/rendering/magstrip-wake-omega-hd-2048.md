@@ -123,6 +123,6 @@ live PS4, so these are 80-90 reads, not captures.
    `GameMode_IsHdLineage` is true (`id < 0x17`) for every mode the executable names, Zone included, so no 2048 mode we have plays the `.POB` (both parse;
    they are the CRC-id-mode side, unreached). 2048 now builds the HD arc wake off its own `.gxt` pair; `magstrip_wire_2048_ground_truth` pins it on `tower`
    (Altima has no surface-3 triangle). Open from it: the hum is silent (the Vita `shipHD.bnk` resolves no cue by name); the arc reads faintly on 2048's
-   washed-out floor; and **`oag_2048::race::EFFECT_DIR` (`Particles2048`) is the unreached side for named modes - they read `Data/Particles/`** (own lane).
+   washed-out floor; and ~~`EFFECT_DIR` is the unreached side~~ **checked 2026-10-05: 2048's own events (SP/MP `m_name`) are CRC ids >= 0x17, so they read `Particles2048` (right) and, by the same predicate, take the `WO_MAGSTRIP_*` POB branch, not the arc wake - the arc wake we draw is the HD-lineage named-mode side, which no campaign event reaches (conf 70, arbiter: Vita3K read of `0x8153fd24`)**. Next: play the POB for 2048 events and decide which side `--mode` races stand for.
 3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build (`0x00109858`, `0x001095e0`, `0x00109720`),
    the `kIntensity` source and the jitter-scale globals, to lift the chosen values off.

@@ -145,3 +145,33 @@ same material family. Where `time` is authored on a 2048 material it is `1.0`,
   frame cycle.
 - **The names of 2 of `cf_uvanim_emssive_glowtint`'s uniforms** (`0x87d769dc`,
   `0x2481ef75`) and of `mt_uvanim_diffuse_emissive3tokey`'s `0xef18f362`.
+
+## Why a 2048 floor reads white (2026-10-05, fix-2048-particles-floor)
+
+Two causes, found by dropping materials from the build (a temporary needle on the material name, not kept)
+and by drawing unlit; frames in `data/scratch/fix-2048-particles-floor/`.
+
+- **Altima: the white floor is `track_a_glass_etched`.** Dropping materials whose name or texture contains
+  `glass_etched` (`fc01_emissive_alpha_emistint` 402 triangles, `fc12_phong_alpha_emistint_spectint_specpow`
+  260, technique `tracksurface:*`) removes it and shows the rock below. `psp2::build_planned` leaves
+  `blend: None` on every draw, so a glass floor whose material names `Alpha` draws opaque. Drawing the
+  blend is the queued transparent-materials lane, not this one; no blend rule was invented here.
+- **Tower: the lit sum saturates.** Drawn unlit, tower's floor is a grey panelled texture; lit, it is
+  peach, so the term is the light. Altima's authored rig is sun diffuse `2.0 1.8 1.7` over ambient
+  `0.15 0.25 0.38`, the file also authors `Lighting.ExposureScale 0.4`, `ExposureMax 12`, `BloomFactor 0.3`,
+  `BloomGate 0.3`, none read by this port, and the registrar's field addresses have no readable consumer
+  by absolute xref (Vita `movw/movt`). Scaling the sun to 0.2 or 0 still left the floor pale, so the sun
+  alone is not the whole of it.
+- **Not the merged `mag_wave` dodge:** tower at tick 3640 is byte-identical on main and in the render from
+  before that merge (`cmp`), so the white predates it and 2048 is untouched by it.
+- **Vita lightmaps are bindable and unbound.** `Material::lightmap` is `None` on every Vita material, but the
+  sampler table now carries the `lightmap` hash (`0x37b5db58`, HD's) with an `lmaps/*-lmap.gxt` path: 36
+  atlases on Altima, and the atlas is mostly white with dark patches. Binding them changed no pixel of the
+  floor (the floor submeshes declare no `lightmapUV`), so it was not shipped. Next step.
+- **Nova prelit and `NO_SUN` on lightmapped draws** (Omega's combination) changed nothing either; the
+  `no_sun` bit only feeds `emissive` in `mesh.wgsl`.
+
+**Next:** read the Vita `fc16_phong_alphaspec_normal_emissive` and `fc18` fragment programs (the GXP
+instruction set is unread) for how sun, ambient and the exposure keys combine; the Vita3K reference frames
+in `data/reference/2048-hud/` are other circuits, so a same-circuit capture of Altima or Tower is needed to
+compare.

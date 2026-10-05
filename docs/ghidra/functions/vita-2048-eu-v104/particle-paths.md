@@ -11,10 +11,13 @@ base `0x81000000`. Read 2026-10-05 for the `v2048-particles` lane.
 `FUN_81000930` reads the `u32` at `+0xe4` of the global state block and returns
 1 when it is below `0x17` (23). `FUN_810018d4`, read beside it, treats
 `+0xe4 == 6`, `0xd..0xe` and `0x15` as the Zone-family modes, so `+0xe4` is a
-game-mode id. **Which side of the test a mode lands on is read as
-written; which modes are `>= 23` was not read.** The port uses
-`Data\Particles2048` for every mode it plays
-(`oag_2048::race::EFFECT_DIR`, confidence 80 for that inference).
+game-mode id. **Which modes are `>= 23`, answered 2026-10-05 (conf. 70):** an event's id is
+`FUN_810016ba` of its own `m_name` (`GameModeBase+0xc4`, `FUN_812b0d52`, called from
+`CampaignEventCard_HandleInput`). None of the 577 `SP.xml`/`MP.xml` instance names is in the 23-name
+table or hashes below 23, so 2048's own events read `Data/Particles2048` and the port's
+`oag_2048::race::EFFECT_DIR` is right for them. Only the HD-lineage named modes read `Data/Particles/`,
+and the port plays none. Later writers of `state+0xe4` were not walked; a Vita3K read of `0x8153fd24` in a
+campaign race would settle it.
 
 The two directories hold the same stems with different bytes on nearly every
 one (`docs/formats/pob.md`, "Wipeout 2048").
