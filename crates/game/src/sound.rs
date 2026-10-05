@@ -61,7 +61,19 @@ impl Library for GameLibrary {
 /// Called from inside the fixed-timestep loop, immediately after `Race::tick`,
 /// and also on a finished race.
 pub fn race_tick(audio: &mut Audio, race: &mut Race) {
-    let cues = race.drain_cues();
+    race_tick_keeping(audio, race, |_| true);
+}
+
+/// [`race_tick`], handing the mixer only the cues `keep` accepts. A
+/// verification aid: a ground-truth test renders a race twice, once with a cue
+/// held back, and compares the two files to show what that cue added.
+pub fn race_tick_keeping(
+    audio: &mut Audio,
+    race: &mut Race,
+    keep: impl Fn(&oag_sound::sfx::CueEvent) -> bool,
+) {
+    let mut cues = race.drain_cues();
+    cues.retain(|event| keep(event));
     let announcements = race.drain_announcements();
     let class_announcements = race.drain_class_announcements();
     let frame = RaceFrame {

@@ -99,6 +99,13 @@ pub const SHED_RADIUS_SQUARED: f32 = 368.64;
 /// The shed probability's slope.
 pub const SHED_SLOPE: f32 = 0.008_668_517;
 
+/// Stands in for `kIntensity`, the shader constant `MagstripWake_Draw` writes
+/// from `W+0x5f8` (`DAT_020e52a0 + 0x1e0`, a tuning block the executable's image
+/// leaves zero). The vertex greys are multiplied by it. **Chosen, not measured**:
+/// with the greys alone the arcs vanish into the lit road once the scene is
+/// linearised, which the original's picture does not.
+pub const INTENSITY: f32 = 3.0;
+
 /// The five jitter scales. **Chosen, not measured** - see the module docs.
 pub const JITTER_SCALE: [f32; 5] = [1.0; 5];
 
@@ -337,7 +344,7 @@ impl Wake {
 }
 
 fn vertex(position: Vec3, grey: f32, uv: [f32; 2]) -> GpuVertex {
-    let grey = grey.clamp(0.0, 1.0);
+    let grey = grey.clamp(0.0, 1.0) * INTENSITY;
     GpuVertex {
         position: position.to_array(),
         normal: [0.0, 0.0, 1.0],

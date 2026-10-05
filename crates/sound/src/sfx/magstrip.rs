@@ -28,6 +28,32 @@ fn heard(slot: usize, listener: &oag_audio::Listener, craft: &[Option<(Vec3, f32
     }
 }
 
+/// How many draws to spend finding a looping waveform.
+const DRAWS: usize = 64;
+
+/// One draw of `~magstrip01` that loops, or failing that the first draw.
+///
+/// **Chosen, not measured.** The cue is a tree of 35 waveforms the reader
+/// flattens into uniform alternates (the load report says so), seven or so of
+/// which loop. The original starts the cue by name and stops the group on the
+/// falling edge, so what it holds is a loop; this port cannot yet tell which
+/// leaf the tree resolves to, and a one-shot would end a second into a visit it
+/// is meant to last the length of. So it keeps drawing until one loops.
+fn held_draw(banks: &Banks, rng: &mut Rng) -> Option<Vec<layers::CueVoice>> {
+    let first = banks.voices(Cue::Magstrip, rng)?;
+    if first.iter().all(|voice| voice.looping) {
+        return Some(first);
+    }
+    for _ in 0..DRAWS {
+        if let Some(draw) = banks.voices(Cue::Magstrip, rng)
+            && draw.iter().all(|voice| voice.looping)
+        {
+            return Some(draw);
+        }
+    }
+    Some(first)
+}
+
 impl Voices {
     /// Raises `slot`'s hum, replacing any it still holds.
     pub(super) fn start(
@@ -40,7 +66,7 @@ impl Voices {
         craft: &[Option<(Vec3, f32)>],
     ) {
         self.stop(slot, mixer);
-        let Some(started) = banks.voices(Cue::Magstrip, rng) else {
+        let Some(started) = held_draw(banks, rng) else {
             return;
         };
         if let Some(held) = self.held.get_mut(slot) {

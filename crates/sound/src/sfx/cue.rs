@@ -715,12 +715,14 @@ pub enum Cue {
     /// title that builds the class only.
     ///
     /// **Held** (the cue is the start; [`Self::MagstripStop`] is its end), so it
-    /// never reaches the one-shot path. Whether the waveform loops is the bank's
-    /// own flag: a one-shot plays once and the arming flag keeps it from
-    /// restarting until the craft has left the strip.
+    /// never reaches the one-shot path. A waveform that did not loop would play
+    /// once, and the arming flag keeps it from restarting until the craft has
+    /// left the strip.
     ///
     /// **Chosen, not measured**: the sound group has no mixer counterpart, so
-    /// the player's craft and a rival's differ in nothing but the slot.
+    /// the player's craft and a rival's differ in nothing but the slot; and the
+    /// bank's `~magstrip01` is a 35-waveform tree this reader flattens, so the
+    /// voice is drawn until one loops - see `sfx::magstrip`.
     Magstrip,
     /// The falling edge of [`Self::Magstrip`]: `Ship_StopMagstripSound`
     /// (`0x01312770`) sets the stop bit on the instance and on every voice of

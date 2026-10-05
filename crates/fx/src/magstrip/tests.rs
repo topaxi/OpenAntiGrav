@@ -120,7 +120,7 @@ fn the_body_samples_one_atlas_cell_and_ends_dim() {
     }
     let last = &atlas[(BODY_QUADS - 1) * 6..BODY_QUADS * 6];
     let dimmest = last.iter().map(|v| v.colour[0]).fold(f32::MAX, f32::min);
-    assert!((dimmest - arc.intensity.min(1.0) * SOFT).abs() < 1e-5);
+    assert!((dimmest - arc.intensity.min(1.0) * SOFT * INTENSITY).abs() < 1e-5);
 }
 
 #[test]
