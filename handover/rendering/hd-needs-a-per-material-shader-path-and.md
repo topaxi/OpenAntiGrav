@@ -86,7 +86,11 @@ effect should have when it does land on a non-default value.
 
 Omega (header `+0x22`) and 2048 (`+0x12`) author HD's state word; blended and alpha-tested draws now leave the
 opaque list (see `docs/formats/rcsmaterial.md`, "Omega and 2048 draw their see-through materials off the state
-word"). **Open:** where Omega's per-material blend equation lives (header has no factor pair; alpha-over is
-chosen, additive materials draw dim); read the GCN pixel programs for the real alpha source; use the priority
+word"). **Open:** where Omega's and 2048's own per-material blend equation lives (neither authors a factor pair; 2026-10-05
+`omega-2048-materials` inherits HD's pair by name for 70 names and draws the rest alpha-over, chosen; the
+2048 model-material pass that calls `sceGxmShaderPatcherCreateFragmentProgram` is not located, 22 callers of
+`FUN_812f6bee` are not it); read the GCN pixel programs for the real alpha source; 16 2048 materials carry state
+mode 3 (`fc06_lambert_alpha`) and draw opaque; 2048 Tower's lit floor still saturates (`Lighting.Exposure*`
+authored, no consumer found); use the priority
 bits (9 to 11) for draw order; Omega's `etched_glass_tech` sheen and `Transparency` param; HD retune not done
 (no HD code touched, no comparison taken).

@@ -2191,13 +2191,48 @@ and `oag_mesh::mesh::rcs::psp2::transparency` routes a textured draw with mode 1
 mode 2 to the alpha-tested list, where before **every** Omega and 2048 draw was opaque.
 
 - **Law recovered:** mode bits as HD (confidence 75), sort priority bits 9 to 11 (75, not yet used for ordering).
-- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair, so the
-  additive family - `emissive_bloom`, `hd_enginetrail`, light cones - draws as a dim sheet, not a glow) and the
-  alpha-test reference `0.5` (HD's).
+- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair - the additive
+  family is now HD's own pair by name, see the next section) and the alpha-test reference `0.5` (HD's).
 - **Looks:** Tech De Ra's glass tubes now show the crowd through them and its road panels take their see-through
   layer; 2048's cockpit glass and billboard signs draw. Frames `data/scratch/transparent-floors/shots/{before,after}_{tdr,2048}_300.png`.
 - **Not done:** HD is untouched (its own factor path); the `etched_glass_tech` sheen and `Transparency` param on
   Omega are not read; GCN pixel programs were not read for an alpha source, so a blended draw uses the first texture's alpha.
+
+## Omega and 2048 blend with HD's own factors where the material name is HD's (2026-10-05, `omega-2048-materials`)
+
+The previous section drew every Omega and 2048 blended material alpha-over and left the additive family a
+dim sheet. This pass looked for the real equation and found it nowhere in the two titles' own data, then took
+the one honest source left: **Wipeout HD authors a factor pair beside the state word, and the three discs
+share material names.**
+
+- **Not found in Omega or 2048.** Omega's header holds no pair (see the evidence page
+  [`material-state.md`](../ghidra/functions/ps4-omega-eu/material-state.md)). In 2048 the blend is a
+  `SceGxmBlendInfo` given at runtime to `sceGxmShaderPatcherCreateFragmentProgram`, whose single wrapper
+  `FUN_812f6bee` has 22 callers and none is the model-material pass
+  ([`fragment-programs.md`](../ghidra/functions/vita-2048-eu-v104/fragment-programs.md), 80). The one blend table
+  readable there (a sprite batcher) holds alpha-over, `SRC_ALPHA`/`ONE` and a reverse-subtract, so the engine
+  does draw additive, which the state word cannot say. No GCN pixel program was read: no decoder exists, so the
+  **alpha source stays the first texture's alpha, chosen, not measured**.
+- **Census (disc, `crates/rcs/tests/hd_lineage_blend_ground_truth.rs`).** HD's blended materials author
+  `SRC_ALPHA`/`ONE_MINUS_SRC_ALPHA` on 1,648 of 2,362 and the rest `SRC_ALPHA`/`ONE` (348), `ONE`/`ONE` (144),
+  `ONE`/`ONE_MINUS_SRC_ALPHA` (142), `SRC_COLOR`/`ONE` (57), and two odd pairs. Over Omega's five base archives 1,738
+  materials are mode 1 on 211 names, 2048's base package 1,481 on 134; 156 and 92 of those names exist in HD. Three HD names
+  author two pairs (`basicalpha`, `lambert`, `dc_lightcone`) and are left alone.
+- **What ships.** `oag_rcs::rcsmodel::psp2::lineage_blend::INHERITED`: 70 names whose HD pair is single and not
+  the default, each a name Omega or 2048 draws in mode 1; `psp2::transparency::route` gives such a draw HD's
+  pair through the same `blend_state` HD's own path uses, and every other blended draw stays alpha-over. 363 of Omega's
+  1,738 and 260 of 2048's 1,481 blended materials take an inherited pair (`Report::inherited_blend_draws`
+  counts the draws, and the load report says so). The ground-truth test rebuilds the table from the three discs, so a dropped,
+  added or edited row fails. **Inherited from HD, not measured on Omega or 2048**: no confidence score.
+  Names only the two later titles have (388 Omega and 893 2048 blended materials, `fc06_lambert_alpha`,
+  `fc01_emissive_alpha_emistint`, `2048_ship_glass_dg`, `2048_engine_additive`, ...) draw alpha-over, chosen.
+- **Looks.** Tech De Ra's start beam (`cf_startbeam_glow`, `SRC_COLOR`/`ONE`) and the hex glass band
+  (`glass_texture`, `ONE`/`ONE_MINUS_SRC_ALPHA`) change; most of the inherited names are weapon and shield
+  effects that a stationary lap never meets, and Altima and Tower, whose floors are `fc01`/`fc12` families HD
+  does not have, are byte-identical. HD's `talons-matched/03` pose is byte-identical before and after (the
+  code path is Omega and 2048's only).
+- **A third mode.** 16 2048 materials (`fc06_lambert_alpha`) carry low bits `3`, which `Material::mode`
+  reads as none and draws opaque; on HD's register reading that is a blend and an alpha test together. Not wired.
 
 ## Open
 
