@@ -107,7 +107,7 @@ live PS4, so these are 80-90 reads, not captures.
   slot order differs from the PS4's.
 - **The `MagStripArc_fp` fragment program** and the draw's depth state; the **loop flag of
   `~magstrip01`**; `ship+0x648b`, `ship+0x71f5 & 0x10`, `DAT_01f998e8`.
-- **Which side a 2048 mode lands on** (Vita `FUN_81000930`, `FUN_810018d4` unidentified).
+- ~~Which side a 2048 mode lands on~~ - settled 2026-10-05 (magstrip-2048-pob, 70): every named mode is `< 0x17`, so the arc wake; see the Vita `ships-effects.md`.
 - **The HD writer of the replicated `m_overMagStrip` bit** (bit 9 of the network flag word;
   `ShipNet_CheckSendState`, `0x00337d78`, reads it) was not located on the PS3.
 - **Whether the two ribbons are `trail-ribbon.md`'s class** (55).
@@ -119,7 +119,10 @@ live PS4, so these are 80-90 reads, not captures.
    `~magstrip01`, additive draw, `magstrip_wire_hd_ground_truth`. Still open from it: the two speed ribbons are not drawn;
    `INTENSITY`, jitter scales and the end-point walk are chosen; `~magstrip01` is a 35-leaf tree the reader flattens
    (leaf choice unresolved); rumble edges not wired (no rumble layer checked); the Omega `WEAPON_MODELS` row waits for Omega racing.
-2. (ready to wire) `WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes, enabled by
-   the same predicate (`Race::over_magstrip`); the `.pob` player already plays any `.POB` by name.
+2. ~~`WO_MAGSTRIP_ZONE` / `WO_MAGSTRIP_SPARKS` for the 2048 modes~~ - landed 2026-10-05 (magstrip-2048-pob) as the *arc wake*, not the POB: the Vita's
+   `GameMode_IsHdLineage` is true (`id < 0x17`) for every mode the executable names, Zone included, so no 2048 mode we have plays the `.POB` (both parse;
+   they are the CRC-id-mode side, unreached). 2048 now builds the HD arc wake off its own `.gxt` pair; `magstrip_wire_2048_ground_truth` pins it on `tower`
+   (Altima has no surface-3 triangle). Open from it: the hum is silent (the Vita `shipHD.bnk` resolves no cue by name); the arc reads faintly on 2048's
+   washed-out floor; and **`oag_2048::race::EFFECT_DIR` (`Particles2048`) is the unreached side for named modes - they read `Data/Particles/`** (own lane).
 3. (1 hour, `oag-re`) Read the fifth probe's endpoints and HD's arc build (`0x00109858`, `0x001095e0`, `0x00109720`),
    the `kIntensity` source and the jitter-scale globals, to lift the chosen values off.

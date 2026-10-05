@@ -112,7 +112,17 @@ pub const TITLE: &Title = &Title {
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`
     // does would be a claim this build has not checked.
-    weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
+    // Only the magstrip arc wake is read. `MagstripWake_Construct` (`0x811aeee2`)
+    // names these two `.gxt` and both ship in the base `data.psarc`; every
+    // other model stays unread. See
+    // `docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`.
+    weapon_models: &oag_title::weapons::WeaponModels {
+        magstrip_wake: Some(oag_title::weapons::MagstripWake {
+            atlas: r"Data\Tex\HD_electric_arc_8x8.gxt",
+            contact: r"Data\Tex\HD_ElectricArc_Contact.gxt",
+        }),
+        ..oag_title::weapons::WeaponModels::EMPTY
+    },
 };
 
 /// 2048's music: the front end's loop and the eleven race tracks.
