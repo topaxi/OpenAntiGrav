@@ -1210,7 +1210,7 @@ Setting `CARGO_TARGET_DIR=<repo>/target` from `.claude/worktrees/<name>` looks
 like a free win - the dependency builds are already there and a workspace build
 drops from minutes to seconds - and it works right up until the two trees'
 sources differ. Then `just test` in the worktree fails with
-`missing field 'lightmaps' in initializer of oag_render::mesh::Model` against a
+`missing field 'lightmaps' in initializer of oag_mesh::mesh::Model` against a
 `mesh.rs` that has no such field, because the field is in the *main* checkout's
 work in progress. Nothing in the error names the other directory.
 

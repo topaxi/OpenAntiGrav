@@ -36,7 +36,7 @@ layout are in
   `mesh_render::build` called `create_shader_module` on `mesh.wgsl` and built
   eight-to-thirteen render pipelines once per drawable, re-translating the
   same shader with the same override constants a sibling drawable had already
-  asked for. `oag_render::mesh_render::pipeline_cache` now shares the module
+  asked for. `oag_mesh::mesh_render::pipeline_cache` now shares the module
   and caches a pipeline by everything that can make one differ from another,
   opened for the one `race::Scene::new` call in `Stage::build_race_stage` - on
   Pulse PSP that turned 1,197 shader asks and 9,859 pipeline asks into 53

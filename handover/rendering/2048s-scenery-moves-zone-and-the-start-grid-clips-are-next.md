@@ -10,8 +10,8 @@ one table inside it - a node table in the model's own header, a
 5 Hz absolute keys. All three are read (`oag_rcs::rcsmodel::psp2::nodes`,
 `oag_rcs::rcsskeleton`, `oag_rcs::rcsanimclip`, evaluated by
 `oag_rcs::rig`), planned onto the shader's node table by
-`oag_render::mesh::rcs::psp2::placement`, and played through the same table
-Pulse's and HD's `Anim Transform`s already ride - `oag_render::mesh::Motion`
+`oag_mesh::mesh::rcs::psp2::placement`, and played through the same table
+Pulse's and HD's `Anim Transform`s already ride - `oag_mesh::mesh::Motion`
 is the two-variant enum that lets one table carry both. Full format, every
 confidence and every number in
 [2048-animation.md](../../docs/formats/2048-animation.md).

@@ -31,7 +31,7 @@ and is not repeated here.
   a pixel count. The white wing rims and the pink on the `_n1` wings stay
   with the binding removed. They are a separate term.
 
-- **The bloom is measured, not tuned.** `crates/render/src/post/hd_bloom.rs`:
+- **The bloom is measured, not tuned.** `crates/post/src/hd_bloom.rs`:
   every pass is the EBOOT's own fragment microcode (`scripts/ps3-microcode.py`),
   the parameters are the circuit's `.envsettings` `HDR and Bloom` values, and
   `hd_bloom.wgsl`'s `surface()` applies the original's `A8R8G8B8` clamp at the
@@ -57,7 +57,7 @@ and is not repeated here.
 - **The per-vertex formula and the combine are read**: `max(0, 1 - |d|/D)^w
   * max(0, N.L) * colour`, summed over lights within `D`, added to
   `ambient + sun * N.L (+ lightmap)` *before* the albedo multiply (confidence
-  80 / 88). `crates/render/src/mesh.wgsl::spu_light_sum` is that, with the
+  80 / 88). `crates/mesh/src/mesh.wgsl::spu_light_sum` is that, with the
   `256/255`.
 - **At ride height the light never reaches the track.** Measured on both
   sides (`crates/game/examples/hd_engine_light_reach_probe.rs`): all 40 of

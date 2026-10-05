@@ -10,7 +10,7 @@ own predecessors were `team-model-and-skin-variants-are-declared-and.md` and
 [per-team-hulls-are-drawn-which-team-flies.md](per-team-hulls-are-drawn-which-team-flies.md).
 
 **What landed.** `oag_texture::ship_skin::parse` and
-`oag_render::mesh::ship_skin::apply` landed 2026-09-07 with no caller;
+`oag_mesh::mesh::ship_skin::apply` landed 2026-09-07 with no caller;
 2026-09-09 gave them one end to end:
 
 - `catalogue::Team::skins` collects every `PI_ModelSkin` under a team's

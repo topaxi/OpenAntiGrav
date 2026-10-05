@@ -31,7 +31,7 @@ What is already established, do not re-derive:
 
 - ~~**Omega: HDR target plus its tone-map.**~~ **Closed 2026-10-05
   (`omega-tonemap`)**: consumer `ToneMap_ApplyEnvSettings` (`0x01620980`), law read
-  and wired as `oag_render::post::omega_tonemap`; see
+  and wired as `oag_post::omega_tonemap`; see
   `docs/ghidra/functions/ps4-omega-eu/tonemap.md` and `docs/formats/omega-status.md`.
   Left open from it:
   - **Altima's road is a flat colour** with the curve on (pink, untextured; it
