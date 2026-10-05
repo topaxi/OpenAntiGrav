@@ -81,3 +81,12 @@ effect should have when it does land on a non-default value.
 - Trace what feeds `200`/`250`/`260`/`35`'s own `Sum` operands' two `ADD` sources - superseded by the population move above, moved to the new thread rather than done against a population that just doubled
 - Separately: `renderer.md`'s own `@0x24 DP3 R2.z, normalize(half), normal` reads as a raw self-dot (`DP3(R2, R2)`, computing `|half|²`) once decoded exactly - not a contradiction (the transcript names semantic values, not raw operands, the same way `@0x17` names a raw register `normalize(f[TC1])`), but the actual `N.H` cross-dot in this block was not re-derived this pass and is worth doing properly rather than assumed
 - The unsaturated-`DP3` slice moved too (now `540` blocks in the fixed gate's `Lg2NotDp3Fed` bucket, still ~1.2 %) - still the narrower, better-founded candidate if the gate is ever widened further, still not cleanly sampled (the one block checked, `amphiseum/base_diffusespecular.rcsmaterial`, has four differently-fed `LG2`s in one program). Tracked alongside the population re-measurement in the new thread rather than here
+
+## 2026-10-05, `transparent-floors`: Omega and 2048 transparency
+
+Omega (header `+0x22`) and 2048 (`+0x12`) author HD's state word; blended and alpha-tested draws now leave the
+opaque list (see `docs/formats/rcsmaterial.md`, "Omega and 2048 draw their see-through materials off the state
+word"). **Open:** where Omega's per-material blend equation lives (header has no factor pair; alpha-over is
+chosen, additive materials draw dim); read the GCN pixel programs for the real alpha source; use the priority
+bits (9 to 11) for draw order; Omega's `etched_glass_tech` sheen and `Transparency` param; HD retune not done
+(no HD code touched, no comparison taken).

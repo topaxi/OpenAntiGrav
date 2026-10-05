@@ -95,3 +95,4 @@
 0x012091f0	function	BlendState_SetSeparateAlpha	85	ships-effects.md
 0x01209180	function	BlendState_SetEnable	85	ships-effects.md
 0x01209170	function	BlendState_Clear	85	ships-effects.md
+0x015fa610	function	Scene_BuildMaterialSortKeys	75	material-state.md

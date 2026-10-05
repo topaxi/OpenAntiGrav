@@ -144,6 +144,11 @@
 const HEADER_LEN: usize = 0x40;
 /// Offset of the `.rcsmaterial` path pointer within a material header.
 const NAME_POINTER: usize = 0x04;
+/// Offset of the `u16` render-state word of a Vita material header: 22,657
+/// headers, whose `+0x10` word takes 17 values, all of them `state << 16` and
+/// the same set the PS4 header and HD's own state word hold (`0x7c` opaque,
+/// `0x39`/`0x3d` blended, `0x3e` alpha-tested).
+const VITA_STATE: usize = 0x12;
 /// Offset of the technique/shading-group name pointer.
 const TECHNIQUE_POINTER: usize = 0x18;
 /// Offset of the parameter-entry count of a material header.
@@ -221,10 +226,10 @@ pub struct Material {
     pub samplers: Vec<(u32, String)>,
     /// The material's render-state word, where this reading has located it.
     ///
-    /// **PS4 only so far: the `u16` at header `+0x22`.** It is the same word
+    /// **The `u16` at header `+0x22` on PS4 and `+0x12` on the Vita.** It is the same word
     /// Wipeout HD authors at `+0x10` of its own material (low two bits the
     /// transparency mode, bit 7 the `_atoc` flag) - see [`Self::transparency`].
-    /// `None` on a Vita material, whose header has not been read for it.
+    /// `None` where the header is too short to hold it.
     pub state: Option<u16>,
 }
 
@@ -572,7 +577,9 @@ pub fn read(cpu: &[u8]) -> Vec<Material> {
                 lightmap: None,
                 params: params_at(cpu, header_at),
                 samplers: samplers_at(cpu, header_at),
-                state: None,
+                state: cpu
+                    .get(header_at + VITA_STATE..header_at + VITA_STATE + 2)
+                    .map(|b| u16::from_le_bytes([b[0], b[1]])),
             }
         })
         .collect()

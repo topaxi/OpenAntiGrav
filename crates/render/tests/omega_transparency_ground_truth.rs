@@ -70,3 +70,31 @@ fn tech_de_ras_glass_and_cutouts_leave_the_opaque_list() {
     assert_eq!(model.alpha_test_ref, Some(0.5));
     assert!(model.draws.len() > model.transparent_draws.len());
 }
+
+/// The Vita header carries the same word at `+0x12`, so 2048's circuits route
+/// the same way.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn altimas_glass_and_cutouts_leave_the_opaque_list_on_the_vita_too() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/extracted/vita/PCSF00007/base/PSP2/data.psarc");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        return;
+    }
+    let mut archive =
+        oag_assets::psarc::Archive::open(path.to_str().expect("utf-8")).expect("opens");
+    let blob = archive
+        .read_path("data/art/published/environments/altima/track.rcsmodel")
+        .expect("model");
+    let (model, report) =
+        psp2::build("altima", &blob, None, &mut |p| archive.read_path(p).ok()).expect("builds");
+    assert!(!model.transparent_draws.is_empty(), "{}", report.describe());
+    assert_eq!(report.blended_draws, model.transparent_draws.len());
+    assert!(model.draws.len() > model.transparent_draws.len());
+}
