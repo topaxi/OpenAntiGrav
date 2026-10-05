@@ -2,7 +2,8 @@
 //!
 //! **`#[ignore]`d and never run in CI**; needs `data/extracted/ps4`.
 
-use oag_game::music::{self, omega};
+use oag_game::music;
+use oag_music::omega;
 
 fn source() -> Option<String> {
     let path = oag_testdata::exact("data/extracted/ps4")?;

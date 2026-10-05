@@ -17,7 +17,7 @@
 //! is a standalone RIFF-wrapped ATRAC9 file the base package ships beside it,
 //! `data/audio/music/FEMusic/frontend_stereo.at9` - the same `FEMusic`
 //! folder and `frontend` stem Pulse's and HD's own front-end tracks use.
-//! [`oag_game::at9`] is the new decoder this needed: `oag_game::at3` only
+//! [`oag_music::at9`] is the new decoder this needed: `oag_music::at3` only
 //! ever saw RIFF-wrapped ATRAC3+ before this file existed.
 //!
 //! Mirrors `hd_music_ground_truth.rs`'s
@@ -76,7 +76,7 @@ fn the_front_ends_music_loads_through_the_engines_own_path() {
 
     // Rendered through a real `Mixer`, the same way `Audio::start_music`
     // plays it - not just decoded PCM, so a silent-but-parses regression in
-    // `oag_game::at9`'s cache path would still be caught here.
+    // `oag_music::at9`'s cache path would still be caught here.
     let mut mixer = oag_audio::Mixer::new(sound.sample_rate());
     let played = mixer.play(oag_audio::Play::looping(
         std::sync::Arc::new(sound),

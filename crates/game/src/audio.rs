@@ -1188,7 +1188,7 @@ impl Audio {
     /// "clocking the picture" regardless would have been exactly the kind of
     /// misleading capture output that cost two wrong readings before
     /// `--no-audio` existed.
-    pub fn start_boot_movie(&mut self, what: &str, sound: Option<crate::at3::Pcm>) {
+    pub fn start_boot_movie(&mut self, what: &str, sound: Option<oag_music::at3::Pcm>) {
         let Some(pcm) = sound else {
             warn!("audio: {what} plays silently");
             return;

@@ -1,0 +1,26 @@
+[package]
+name = "oag-music"
+description = "Music: reading a title's soundtrack off its archives and decoding ATRAC3+, ATRAC9, MP3 and Wwise media to PCM"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+oag-assets.workspace = true
+oag-audio.workspace = true
+oag-core.workspace = true
+oag-formats.workspace = true
+oag-tables.workspace = true
+oag-title.workspace = true
+anyhow.workspace = true
+log.workspace = true
+# Wipeout HD's music is MP3, read and decoded in process. See the workspace
+# manifest for why this codec does not go through `ffmpeg` the way ATRAC3+ does.
+symphonia.workspace = true
+# The Omega Collection's Wwise media is ATRAC9, decoded in process.
+atrac9dec.workspace = true
+
+[lints]
+workspace = true

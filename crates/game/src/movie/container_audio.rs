@@ -2,21 +2,21 @@
 //! `binkaudio_dct`/`_rdft` and MP4's AAC - rather than beside the picture the
 //! way a `.PMF`'s ATRAC3+ frames or a `.PSS`'s PCM samples do.
 //!
-//! Mirrors `crate::at3`'s shell-out-and-cache idiom, and the difference from
+//! Mirrors `oag_music::at3`'s shell-out-and-cache idiom, and the difference from
 //! it is the whole reason this is a separate module rather than a third case
 //! folded into that one: `at3::decode`/`decode_frames` are handed a codec
 //! payload with no picture in it at all, where a container track's own bytes
 //! *are* the file [`super::bink::transcode`]/[`super::mp4::transcode`] have
 //! already written to disk for `ffmpeg` to read the video out of. `ffmpeg` is
 //! told which stream to pull with `-map` instead of being handed a bespoke
-//! wrapper the way [`crate::at3::riff`] builds one for bare ATRAC3+ frames.
+//! wrapper the way [`oag_music::at3::riff`] builds one for bare ATRAC3+ frames.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use log::info;
 
-use crate::at3::Pcm;
+use oag_music::at3::Pcm;
 
 /// One audio stream inside a movie's own video container.
 ///
@@ -69,7 +69,7 @@ pub(super) struct ContainerTrack {
 ///
 /// `channels` and `sample_rate` come from the caller
 /// ([`super::track::MovieAudio::decode`]) rather than from `track` itself,
-/// the same split [`crate::at3::decode_frames`] makes: they are properties of
+/// the same split [`oag_music::at3::decode_frames`] makes: they are properties of
 /// the *stream*, already read off the container header when [`ContainerTrack`]
 /// was built, and handing them in here rather than storing a third copy on
 /// this struct keeps one place answering "what does this track sound like".
@@ -103,7 +103,7 @@ pub(super) fn decode(
 
 /// Where this stream's decoded samples land - keyed by the movie's own
 /// content-addressed [`ContainerTrack::key`] plus which stream and geometry,
-/// the same "geometry is in the name" rule [`crate::at3::cache_path`] states.
+/// the same "geometry is in the name" rule [`oag_music::at3::cache_path`] states.
 fn cache_path(
     track: &ContainerTrack,
     channels: u16,
@@ -119,7 +119,7 @@ fn cache_path(
 /// Reads a cache file back, or `None` if it is missing or the wrong shape.
 ///
 /// The same not-empty-and-a-whole-number-of-frames check
-/// [`crate::at3::read_cached`] applies, and for the same reason: an `ffmpeg`
+/// [`oag_music::at3::read_cached`] applies, and for the same reason: an `ffmpeg`
 /// killed partway through leaves a truncated file behind, and that must be
 /// re-decoded rather than played as a shorter track.
 fn read_cached(path: &Path, channels: u16, sample_rate: u32) -> Option<Pcm> {
@@ -242,7 +242,7 @@ mod tests {
 
     /// A cache file that is not a whole number of frames - the shape an
     /// `ffmpeg` killed partway through leaves behind - is not returned as a
-    /// track, the same rule `crate::at3::read_cached` applies.
+    /// track, the same rule `oag_music::at3::read_cached` applies.
     #[test]
     fn a_truncated_cache_file_is_rejected() {
         let dir = std::env::temp_dir().join("oag-container-audio-test");
@@ -254,7 +254,7 @@ mod tests {
     }
 
     /// A whole number of stereo frames reads back interleaved, left first -
-    /// the same round trip [`crate::at3::from_s16le`] is asserted against.
+    /// the same round trip [`oag_music::at3::from_s16le`] is asserted against.
     #[test]
     fn a_whole_cache_file_reads_back_as_pcm() {
         let dir = std::env::temp_dir().join("oag-container-audio-test");

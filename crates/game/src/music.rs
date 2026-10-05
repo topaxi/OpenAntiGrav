@@ -1,95 +1,18 @@
-//! Which entries of a disc hold music, and how one of them is read.
+//! Which entries of a disc hold music, found by opening a source as whichever
+//! title it turned out to be.
 //!
-//! The half of [`crate::audio`] that has to know **which title booted**.
-//! Everything else in that module is policy over a listing - what to play, when
-//! to seek, which release to prefer - and none of it changes between three
-//! Wipeout discs. Finding the listing does, so it lives here.
-//!
-//! # Two mechanisms, and the second one is not a fallback
-//!
-//! A title that declares its soundtrack ([`oag_title::DeclaredTracks`]) is read
-//! from its own plugin definition: one `PI_Music` node per track, each naming
-//! the directory the audio sits in. That is Wipeout Pure and Wipeout HD, whose
-//! executables each spell out both halves of the path, and whose nineteen and
-//! fifteen declarations all resolve.
-//!
-//! A title that does not is found by what its entries **are**: stereo ATRAC3+
-//! at 44,100 Hz over [`MIN_SOUNDTRACK_BYTES`]. That is Wipeout Pulse today, and
-//! it is a measurement rather than a guess - the disc also holds 32 *mono*
-//! ATRAC3+ streams at the same bitrate and a dozen shorter stereo ones, so the
-//! channel count is what carries it, the same population argument
-//! `docs/formats/ps2-voice.md` makes for the pre-race clips. Pulse declares its
-//! sixteen too; moving it over is a separate change, for the reason
-//! [`oag_title::Music::tracks`] records.
-//!
-//! The declared route is the better one wherever it is available, because the
-//! order it yields is the release's own rather than the archive directory's.
-//!
-//! # Three containers, told apart by content
-//!
-//! The PSP titles store music as RIFF-wrapped ATRAC3+, Wipeout HD stores it as
-//! MP3, and 2048 stores it as RIFF-wrapped ATRAC9 - the Vita's own codec, and
-//! otherwise the same wrapper shape as the PSP's. Nothing here branches on the
-//! *title* to decide which: a blob is offered to [`crate::at9`], then
-//! [`crate::at3`], then [`crate::mp3`], and whichever reads it is what it was.
-//! That is the same rule `crate::at3`'s own header already states - the
-//! content of the bytes decides, not a name or an archive - and it is what
-//! keeps a title package to naming files rather than describing them. This
-//! axis ([`load_entry`], the declared/sniffed soundtrack) and
-//! [`load_front_end`] below both go through [`decode`], so 2048's music -
-//! its front end and its eleven declared race tracks - reads the same way the
-//! other three titles' does.
+//! The reading and decoding live in [`oag_music`]; this module is the half that
+//! has to open a source, which needs [`crate::title::open_source`] and so cannot
+//! move out of the composition root.
 
 use std::path::Path;
 
-pub mod omega;
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use oag_assets::Archives;
 use oag_audio::Sound;
 use oag_disc::Platform;
+use oag_music::Entry;
 use oag_title::Title;
-
-use crate::at3::Pcm;
-
-/// The smallest a `Data.wad` entry can be and still hold a soundtrack track.
-///
-/// **Arithmetic, not a round number picked by eye.** The shortest of the
-/// sixteen PS2 tracks is 177.2 seconds; at 44,100 Hz and ATRAC3+'s 560 bytes
-/// per 2,048 samples that is `177.2 * 44100 / 2048 * 560` = 2,137,000 bytes of
-/// stored stream, so nothing shorter than about 2 MiB can be one of them. It is
-/// a prefilter and not the test - [`found`] still checks the codec, the channel
-/// count and the rate - and it exists because applying those checks to all
-/// 1,142 entries would mean 1,142 reads off a disc image where 61 will do.
-const MIN_SOUNDTRACK_BYTES: u32 = 2_000_000;
-
-/// Bytes of each candidate entry read to find its `fmt ` and `fact` chunks.
-///
-/// Both sit in front of `data` on every entry the disc carries, within the
-/// first 100 bytes; a kibibyte is slack for an entry that orders its chunks
-/// differently, and it is what stops this reading 2 MiB per candidate.
-const RIFF_HEADER_PEEK: u64 = 1024;
-
-/// One soundtrack entry: how to get back to it, and how long it is.
-#[derive(Debug, Clone, Copy)]
-pub struct Entry {
-    /// **An opaque token this module issues and consumes.** It addresses the
-    /// entry the way the route that found it addresses one: a `Data.wad` name
-    /// hash on the [`found`] route, and an index into the declaration on the
-    /// [`declared`] one.
-    ///
-    /// Opaque rather than a hash for every title because there is nothing one
-    /// number could be for all three: a PSARC has no name hash at all. That
-    /// makes this the *third* meaning the token already carries -
-    /// `crate::audio::load_track` reads it as a `PS2MUSIC.WAD` directory index
-    /// on the PS2 path - rather than a new kind of thing.
-    ///
-    /// `crate::audio` never interprets it. It comes back here through
-    /// [`load_entry`].
-    pub at: u32,
-    /// How long it is, as the stream itself declares.
-    pub seconds: f64,
-}
 
 /// A source opened as whichever title it turned out to be, for a music read.
 ///
@@ -101,15 +24,6 @@ pub struct Entry {
 /// **The PS2 release is excluded here and not by accident**: its music is loose
 /// in the filesystem rather than in an archive, so `crate::audio` reads it
 /// through its own `PS2MUSIC.WAD` path and never arrives in this module.
-///
-/// **`Platform::Vita` joined `Psp`/`Ps3` here 2026-09-25**, wiring 2048's
-/// front-end music: before this, `oag_2048::TITLE.music` being `Some` was
-/// not enough by itself - every call landed here first, and every 2048
-/// source failed this match and returned `None` before `title.music` was
-/// ever read, the same silent "this source carries no music" a title this
-/// build does not know at all produces. `Platform::Ps4` (Omega) is not
-/// added: `oag_omega::TITLE.music` is still `None`, so there is nothing yet
-/// for a widened match to reach.
 fn open_archived(source: &str) -> Option<(&'static Title, Archives)> {
     // Resolved through the layout rather than a literal `PSP_GAME/USRDIR/...`
     // path, so a directory somebody extracted with `oag-unpack` answers the
@@ -137,202 +51,11 @@ pub fn listing(source: &str) -> Result<Option<Vec<Entry>>> {
     let Some((title, mut archives)) = open_archived(source) else {
         return Ok(None);
     };
-    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
-        let plan = omega::plan(&mut archives, &state_tracks, true)?;
-        return Ok(Some(
-            plan.songs
-                .iter()
-                .map(|song| Entry {
-                    at: song.location,
-                    seconds: song.seconds,
-                })
-                .collect(),
-        ));
-    }
-    match title.music.and_then(|music| music.tracks) {
-        Some(tracks) => Ok(Some(self::declared(&mut archives, tracks))),
-        None => Ok(Some(found(&mut archives)?)),
-    }
+    oag_music::listing(title, &mut archives).map(Some)
 }
 
-/// The tracks a title's own plugin definition declares, in file order.
-///
-/// An entry that is declared and then absent is **skipped rather than
-/// reported**: a `PI_Music` node is a declaration, and the same caveat
-/// `oag_game::catalogue::all_tracks` records for a partial pack set applies
-/// here. The length always comes from the payload's own header, never from the
-/// declaration, which carries none.
-///
-/// [`Entry::at`] is the index into *this* list rather than into the
-/// declaration, so a declared-and-absent track does not leave a hole a later
-/// [`load_entry`] would fall into.
-fn declared(archives: &mut Archives, tracks: oag_title::DeclaredTracks) -> Vec<Entry> {
-    let mut out = Vec::new();
-    for name in declared_names(archives, tracks) {
-        let Some(seconds) = measure(archives, &name) else {
-            continue;
-        };
-        out.push(Entry {
-            at: u32::try_from(out.len()).unwrap_or(u32::MAX),
-            seconds,
-        });
-    }
-    out
-}
-
-/// Every entry name the declaration resolves to, in file order.
-///
-/// Shared by [`declared`] and [`load_entry`] so that an index means the same
-/// thing to both. Reading the definition twice is one small archive entry and
-/// costs less than holding a parsed catalogue across the two calls, which are
-/// minutes apart in a real session.
-fn declared_names(archives: &mut Archives, tracks: oag_title::DeclaredTracks) -> Vec<String> {
-    let Ok(definition) = archives.read_name(tracks.declared_in) else {
-        return Vec::new();
-    };
-    let Ok(definition) = String::from_utf8(definition) else {
-        return Vec::new();
-    };
-    crate::catalogue::music(&definition)
-        .iter()
-        .map(|track| track.entry_name(tracks.file))
-        .filter(|name| archives.locate(name).is_some())
-        .collect()
-}
-
-/// The tracks a title that declares none is found to carry, in `Data.wad`
-/// order.
-///
-/// The population argument the module docs set out. The length comes from the
-/// `fact` chunk, never from the stored size: ATRAC3+ pads its last block, so
-/// block count times samples per block overstates a track by a few hundred
-/// samples and the pairing tolerance would be spent on an avoidable error.
-///
-/// # Errors
-///
-/// An archive whose entry directory will not read.
-fn found(archives: &mut Archives) -> Result<Vec<Entry>> {
-    let data = archives.data.as_wad_mut("the entry directory")?; // WAD-shaped
-    let candidates: Vec<(usize, u32)> = data
-        .directory()
-        .entries
-        .iter()
-        .enumerate()
-        .filter(|(_, entry)| entry.size >= MIN_SOUNDTRACK_BYTES)
-        .map(|(index, entry)| (index, entry.name_hash))
-        .collect();
-
-    let mut out = Vec::new();
-    for (index, name_hash) in candidates {
-        let Ok(header) = data.peek(index, RIFF_HEADER_PEEK) else {
-            continue;
-        };
-        let Some(seconds) = riff_seconds(&header) else {
-            continue;
-        };
-        out.push(Entry {
-            at: name_hash,
-            seconds,
-        });
-    }
-    Ok(out)
-}
-
-/// How long the entry called `name` is, or `None` when it is not a stream this
-/// can measure.
-///
-/// **A WAD is peeked and anything else is read whole**, which is the one place
-/// the container leaks into this module. A `.wad` entry's header is reachable
-/// on its own through the directory, so a Pure listing costs a kibibyte a
-/// track; `oag_assets::psarc::Archive` exposes no ranged read, because a PSARC
-/// entry is block-compressed and has no offset to seek to, so a Wipeout HD
-/// listing reads all fifteen tracks whole - about 75 MiB, and it is done once
-/// per boot inside `crate::audio::MusicDiscs::survey`. Measured at well under a
-/// second off a local image; if that ever stops being true, a first-block read
-/// on `psarc::Archive` is the fix rather than caching the answer.
-fn measure(archives: &mut Archives, name: &str) -> Option<f64> {
-    if let Ok(data) = archives.data.as_wad_mut("a name")
-        && let Some(index) = data
-            .directory()
-            .entries
-            .iter()
-            .position(|entry| entry.name_hash == oag_formats::wad::hash_name(name))
-        && let Ok(header) = data.peek(index, RIFF_HEADER_PEEK)
-        && let Some(seconds) = riff_seconds(&header)
-    {
-        return Some(seconds);
-    }
-    seconds_of(&archives.read_name(name).ok()?)
-}
-
-/// How long a stream is, whichever of the two containers it is in.
-///
-/// The dispatch the module header describes: RIFF first because that is what a
-/// peeked header is, MPEG second.
-fn seconds_of(blob: &[u8]) -> Option<f64> {
-    riff_seconds(blob).or_else(|| crate::mp3::describe(blob)?.seconds)
-}
-
-/// A RIFF header's declared length, for a stereo ATRAC3+ stream at 44,100 Hz
-/// and nothing else.
-///
-/// The channel count and the rate are checked on **both** routes, not just the
-/// population one: a declared entry that turned out to be mono would be a
-/// finding rather than something to play at the wrong speed. MPEG carries no
-/// such rule, because there the declaration is the whole population - there is
-/// nothing to sort a track out from.
-///
-/// **ATRAC9 is stereo and 48,000 Hz** (2048's tracks), so it is told apart by
-/// its subformat GUID rather than by widening the PSP rate test, which would
-/// let a 48 kHz stream into the population search over `Data.wad`.
-fn riff_seconds(header: &[u8]) -> Option<f64> {
-    let stream = crate::at3::describe(header).ok()?;
-    let rate_ok = stream.format.sample_rate == 44_100
-        || (stream.format.sample_rate == 48_000 && crate::at9::describe(header).is_ok());
-    if stream.format.channels != 2 || !rate_ok {
-        return None;
-    }
-    stream.seconds()
-}
-
-/// Decodes a music blob, whichever of the three containers it is in.
-///
-/// ATRAC9 and ATRAC3+ both go out to `ffmpeg` through the cache in
-/// [`crate::at3`]/[`crate::at9`]; MP3 is decoded in process by [`crate::mp3`]
-/// and cached nowhere, for the reason that module's header gives.
-///
-/// **ATRAC9 is checked first.** [`crate::at9::describe`] verifies the real
-/// `WAVE_FORMAT_EXTENSIBLE` subformat GUID, where [`crate::at3::describe`]
-/// accepts any RIFF/WAVE with a readable `fmt ` chunk at all - deliberately
-/// loosely, since nothing reached this function with a non-ATRAC3+ RIFF
-/// stream before 2048's `frontend_stereo.at9` did. Checking the stricter one
-/// first is what stops the looser one from claiming it by accident.
-///
-/// # Errors
-///
-/// A blob that is none of the three, or a decode that failed - including
-/// `ffmpeg` being absent, which the two ATRAC halves can hit.
-fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
-    if crate::at9::describe(blob).is_ok() {
-        return crate::at9::decode(blob, cache_dir);
-    }
-    if crate::at3::describe(blob).is_ok() {
-        return crate::at3::decode(blob, cache_dir);
-    }
-    if crate::mp3::describe(blob).is_some() {
-        return crate::mp3::decode(blob);
-    }
-    bail!(
-        "this is neither a RIFF-wrapped ATRAC9 stream, a RIFF-wrapped ATRAC3+ \
-         stream, nor an MPEG one"
-    )
-}
-
-/// Reads one soundtrack entry and decodes it.
-///
-/// `at` is an [`Entry::at`] this module issued, and is interpreted the way the
-/// route that issued it does - which is why the title is looked up again here
-/// rather than the caller being asked to remember.
+/// Reads one soundtrack entry of `source` and decodes it; see
+/// [`oag_music::load_entry`].
 ///
 /// # Errors
 ///
@@ -341,87 +64,21 @@ fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
 pub fn load_entry(source: &str, at: u32, cache_dir: &Path) -> Result<Sound> {
     let (title, mut archives) =
         open_archived(source).with_context(|| format!("opening {source} as a known title"))?;
-
-    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks) {
-        let plan = omega::plan(&mut archives, &state_tracks, false)?;
-        let song = plan
-            .songs
-            .iter()
-            .find(|song| song.location == at)
-            .with_context(|| format!("no playable song at location {at}"))?;
-        let pcm = omega::mix(&mut archives, &state_tracks, song)
-            .with_context(|| format!("mixing {}", song.title))?;
-        return Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
-            .with_context(|| format!("location {at}"));
-    }
-
-    let blob = match title.music.and_then(|music| music.tracks) {
-        Some(tracks) => {
-            let names = declared_names(&mut archives, tracks);
-            let name = names
-                .get(at as usize)
-                .with_context(|| format!("track {at} is past the {} declared", names.len()))?
-                .clone();
-            archives
-                .read_name(&name)
-                .with_context(|| format!("reading {name}"))?
-        }
-        None => {
-            let data = archives.data.as_wad_mut("a name hash")?;
-            data.read_hash(at)
-                .with_context(|| format!("reading Data.wad entry {at:08x}"))?
-        }
-    };
-
-    let pcm = decode(&blob, cache_dir).with_context(|| format!("decoding track {at}"))?;
-    Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).with_context(|| format!("track {at}"))
+    oag_music::load_entry(title, &mut archives, at, cache_dir)
 }
 
-/// The front end's own music, decoded, and the name it came off.
-///
-/// **Not one of the soundtrack tracks, and that is the point.** It is short, it
-/// loops, and no PS2 entry has ever been matched to one - which is why
-/// [`crate::audio::MusicSource`] cannot reach it. Each title names its own; see
-/// [`oag_title::Music::front_end`].
+/// The front end's own music, decoded, and the name it came off; see
+/// [`oag_music::load_front_end`].
 ///
 /// `Ok(None)` when the source is not a disc of a title this knows, or is one
 /// that holds no such entry - an ordinary outcome, not an error.
 ///
 /// # Errors
 ///
-/// An entry that is not a readable stream, or a decode that failed - including
-/// `ffmpeg` being absent, which the caller reports rather than treating as
-/// fatal.
+/// An entry that is not a readable stream, or a decode that failed.
 pub fn load_front_end(source: &str, cache_dir: &Path) -> Result<Option<(String, Sound)>> {
     let Some((title, mut archives)) = open_archived(source) else {
         return Ok(None);
     };
-    if let Some(state_tracks) = title.music.and_then(|music| music.state_tracks)
-        && title.music.is_some_and(|music| music.front_end.is_none())
-    {
-        let Some(song) = omega::front_end(&mut archives, &state_tracks)? else {
-            return Ok(None);
-        };
-        let name = song.title.clone();
-        let pcm = omega::mix(&mut archives, &state_tracks, &song)
-            .with_context(|| format!("mixing the front end's {name}"))?;
-        let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name.clone())?;
-        return Ok(Some((name, sound)));
-    }
-    let Some(name) = title.music.and_then(|music| music.front_end) else {
-        return Ok(None);
-    };
-    if archives.locate(name).is_none() {
-        return Ok(None);
-    }
-
-    let blob = archives
-        .read_name(name)
-        .with_context(|| format!("reading {name}"))?;
-    let pcm = decode(&blob, cache_dir).with_context(|| format!("decoding {name}"))?;
-    let sound = Sound::new(pcm.samples, pcm.channels, pcm.sample_rate).context(name)?;
-    Ok(Some((name.to_string(), sound)))
+    oag_music::load_front_end(title, &mut archives, cache_dir)
 }
-
-#[cfg(test)]
-mod tests;

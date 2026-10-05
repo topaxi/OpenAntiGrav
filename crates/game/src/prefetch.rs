@@ -39,7 +39,7 @@
 //!
 //! # Resumability is free, and is kept that way
 //!
-//! Both caches are keyed by content: [`crate::at3`] on an FNV-1a of the RIFF
+//! Both caches are keyed by content: [`oag_music::at3`] on an FNV-1a of the RIFF
 //! bytes, [`crate::movie`] on the entry's name hash and size. So an interrupted
 //! run loses only the asset that was in flight, and the next one picks up
 //! whatever finished. The planning pass below checks for each cache file
@@ -276,7 +276,7 @@ impl Task {
 /// is not installed, one movie that fails to convert: each is a line on stdout
 /// naming what is missing, and the game goes on running lazily beside it. That
 /// is the same degradation a missing `ffmpeg` already gets from
-/// [`crate::movie`] and [`crate::at3`] - a black picture and silence rather
+/// [`crate::movie`] and [`oag_music::at3`] - a black picture and silence rather
 /// than a failed boot - and prefetching is strictly an optimisation, so failing
 /// a run over it would be worse than not having it.
 fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
@@ -353,7 +353,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
 
 /// Converts one asset through the path that already knows how.
 ///
-/// Nothing here transcodes: [`crate::at3::ensure_cached`] and
+/// Nothing here transcodes: [`oag_music::at3::ensure_cached`] and
 /// [`movie::open`] are the same calls the lazy path makes, which is what
 /// guarantees the file this writes is the file the game later reads. Both
 /// re-check the cache themselves, so the planning pass being wrong about an
@@ -361,7 +361,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
 fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options) -> Result<()> {
     match task {
         Task::Sound { riff, .. } => {
-            crate::at3::ensure_cached(riff, &options.audio)?;
+            oag_music::at3::ensure_cached(riff, &options.audio)?;
             Ok(())
         }
         Task::Movie {
@@ -524,7 +524,7 @@ fn plan(options: &Options) -> Result<Plan> {
                 let Ok(blob) = archive.read(index) else {
                     continue;
                 };
-                if crate::at3::is_cached(&blob, &options.audio) {
+                if oag_music::at3::is_cached(&blob, &options.audio) {
                     cached += 1;
                     continue;
                 }

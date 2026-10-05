@@ -131,7 +131,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   a standalone RIFF-wrapped ATRAC9 file, `FEMusic/frontend_stereo.at9`,
   named the same way Pulse's and HD's own front-end tracks are - see
   [2048-frontend.md](2048-frontend.md)'s "frontend.bnk" bullet for the
-  full account, including the new `oag_game::at9` decoder and the
+  full account, including the new `oag_music::at9` decoder and the
   `MusicDiscs::survey`/`pick` fix that was also needed for a Vita boot to
   reach it at all.
 - **The race soundtrack plays since 2026-10-05.** `data/plugins/music/Definition.xml`

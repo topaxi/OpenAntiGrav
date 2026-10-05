@@ -10,7 +10,7 @@ project's cue vocabulary, and nothing plays sound in a race on this title.
 
 Reader: [`oag_formats::wwise`](../../crates/formats/src/wwise.rs) (banks) and
 [`oag_formats::wwise::wem`](../../crates/formats/src/wwise/wem.rs) (media
-header). Decoder: [`oag_game::wem`](../../crates/game/src/wem.rs), over the
+header). Decoder: [`oag_music::wem`](../../crates/music/src/wem.rs), over the
 [`atrac9dec`](https://crates.io/crates/atrac9dec) crate.
 Ground truth: `crates/formats/tests/wwise_ground_truth.rs` (banks) and
 `crates/game/tests/omega_wem_ground_truth.rs` (media, the decoder, and a cue
@@ -219,7 +219,7 @@ The channel config is Wwise's `AkChannelConfig`: mask `0x4` mono, `0x3` stereo,
 
 ## Decoding
 
-`oag_game::wem::decode` turns an ATRAC9 `.wem` into the `Pcm` every other codec
+`oag_music::wem::decode` turns an ATRAC9 `.wem` into the `Pcm` every other codec
 here produces, skipping the delay and trimming the padding, so the length is
 exactly `samples`. **In process, no cache**: ADR-0024's order is a library
 first, our own decoder only for a format that is Wipeout's, `ffmpeg` last, and

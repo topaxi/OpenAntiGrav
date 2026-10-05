@@ -2028,7 +2028,6 @@ name = "oag-game"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "atrac9dec",
  "bytemuck",
  "clap",
  "dirs",
@@ -2049,6 +2048,7 @@ dependencies = [
  "oag-gameplay",
  "oag-hd",
  "oag-input",
+ "oag-music",
  "oag-omega",
  "oag-physics",
  "oag-pulse",
@@ -2068,7 +2068,6 @@ dependencies = [
  "pollster",
  "resvg",
  "serde",
- "symphonia",
  "thiserror 2.0.19",
  "toml",
  "toml_edit",
@@ -2115,6 +2114,22 @@ dependencies = [
  "log",
  "oag-gameplay",
  "winit",
+]
+
+[[package]]
+name = "oag-music"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "atrac9dec",
+ "log",
+ "oag-assets",
+ "oag-audio",
+ "oag-core",
+ "oag-formats",
+ "oag-tables",
+ "oag-title",
+ "symphonia",
 ]
 
 [[package]]

@@ -55,7 +55,7 @@ pub struct Boot {
     /// Kept apart because the two are played at different moments - each on the
     /// tick its own screen is entered - and one field would have to be reloaded
     /// rather than handed over.
-    pub after_language_movie_sound: Option<crate::at3::Pcm>,
+    pub after_language_movie_sound: Option<oag_music::at3::Pcm>,
     /// Every front-end image the screens reference, in one texture.
     pub sprites: crate::sprite::Sheet,
     /// How this title lays its menus out and colours them. See
@@ -111,7 +111,7 @@ pub struct Boot {
     /// no audio stream, a `Movie` widget carrying `sound="false"`, an
     /// `ffmpeg` that is missing or failed, or `--no-video`, which never reads
     /// the movie at all. See [`load_movie_sound`].
-    pub movie_sound: Option<crate::at3::Pcm>,
+    pub movie_sound: Option<oag_music::at3::Pcm>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
@@ -352,12 +352,12 @@ pub struct Media {
     /// The intro reel.
     pub movie: Option<Movie>,
     /// Its ATRAC3+ track, decoded.
-    pub movie_sound: Option<crate::at3::Pcm>,
+    pub movie_sound: Option<oag_music::at3::Pcm>,
     /// The looping menu backdrop.
     pub backdrop: Option<Movie>,
     /// The chain's second movie, and its own track.
     pub after_language_movie: Option<Movie>,
-    pub after_language_movie_sound: Option<crate::at3::Pcm>,
+    pub after_language_movie_sound: Option<oag_music::at3::Pcm>,
     /// What to print, kept separate because this half may finish on another
     /// thread and its lines must not interleave with the shell's.
     pub report: Vec<String>,
@@ -1419,7 +1419,7 @@ fn load_movie_sound(
     movie_region: &str,
     options: &Options,
     report: &mut Vec<String>,
-) -> Option<crate::at3::Pcm> {
+) -> Option<oag_music::at3::Pcm> {
     let movie = movie?;
     if options.no_video {
         // Said here rather than left to the branch below, which would report a

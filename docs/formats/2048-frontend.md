@@ -475,7 +475,7 @@ Textual corroboration only, no addresses, no names recovered or proposed:
   empty, `HAS_NAME_TABLE` clear, so nothing in it can be addressed by name
   the way a cue-based track is. `oag_title::Music::front_end` is filled from
   a standalone file instead: `data/audio/music/FEMusic/frontend_stereo.at9`,
-  RIFF-wrapped ATRAC9 (the Vita's own codec - the new `oag_game::at9`
+  RIFF-wrapped ATRAC9 (the Vita's own codec - the new `oag_music::at9`
   decoder this needed), 48000 Hz stereo, a 302-second `fact` chunk. Beside
   it sits a second, distinctly-named
   `data/audio/music/FEDemoMusic/frontend_stereo.at9` for the attract-mode

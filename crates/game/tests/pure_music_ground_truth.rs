@@ -33,7 +33,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::Platform;
-use oag_game::{audio, catalogue, music};
+use oag_game::{audio, music};
 
 /// Every Pure pressing present, as `(label, path)`.
 ///
@@ -67,7 +67,7 @@ fn pure_images() -> Vec<(&'static str, PathBuf)> {
 }
 
 /// What `oag_game::music` reports for one source.
-fn listing(image: &Path) -> Vec<music::Entry> {
+fn listing(image: &Path) -> Vec<oag_music::Entry> {
     music::listing(&image.display().to_string())
         .expect("reading the soundtrack listing")
         .expect("a PSP disc of a title this build knows")
@@ -112,7 +112,7 @@ fn every_declared_track_resolves_to_a_real_entry() {
         )
         .expect("the definition is UTF-8");
 
-        let declared = catalogue::music(&definition);
+        let declared = oag_music::playlist::music(&definition);
         assert_eq!(declared.len(), DECLARED, "{label}: declarations");
         assert_eq!(
             listing(&image).len(),
@@ -206,7 +206,7 @@ fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
         assert!(archives.locate(name).is_some(), "{label}: {name} is absent");
 
         let at3 = archives.read_name(name).expect("reading the menu loop");
-        let seconds = oag_game::at3::describe(&at3)
+        let seconds = oag_music::at3::describe(&at3)
             .expect("a RIFF/WAVE")
             .seconds()
             .expect("a fact chunk");
@@ -229,7 +229,7 @@ fn the_front_ends_own_music_is_a_short_loop_and_not_a_soundtrack_track() {
         )
         .expect("the definition is UTF-8");
         assert!(
-            catalogue::music(&definition)
+            oag_music::playlist::music(&definition)
                 .iter()
                 .all(|track| track.entry_name(tracks.file) != name),
             "{label}: the menu loop must not be one of the nineteen"

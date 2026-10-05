@@ -25,8 +25,6 @@
 //! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
-pub mod at3;
-pub mod at9;
 pub mod audio;
 pub mod boot;
 pub mod campaign;
@@ -56,7 +54,6 @@ pub mod livery;
 pub mod loader_log;
 pub mod loading;
 pub mod movie;
-pub mod mp3;
 pub mod music;
 pub mod perf;
 pub mod pilots;
@@ -75,7 +72,6 @@ pub mod title;
 pub mod track_panel;
 pub mod unlock;
 pub mod upscale;
-pub mod wem;
 
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///

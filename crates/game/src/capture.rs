@@ -258,7 +258,7 @@ pub fn run(
     // its own movie's sound (if it has one) starts here. On Pulse that is the
     // intro; on Pure the boot screen is the picker and plays nothing.
     let movie_states = frontend.movie_states();
-    let mut pending_sound: Vec<(&'static str, Option<crate::at3::Pcm>)> = Vec::new();
+    let mut pending_sound: Vec<(&'static str, Option<oag_music::at3::Pcm>)> = Vec::new();
     for (at, sound) in [(0usize, movie_sound), (1, after_language_movie_sound)] {
         if let Some(state) = movie_states.get(at).copied() {
             pending_sound.push((state, sound));

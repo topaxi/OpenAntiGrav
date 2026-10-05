@@ -31,7 +31,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_disc::Platform;
-use oag_game::{audio, catalogue, music};
+use oag_game::{audio, music};
 
 /// The decrypted HD/Fury image, if it is there.
 ///
@@ -43,7 +43,7 @@ fn image() -> Option<PathBuf> {
 }
 
 /// What `oag_game::music` reports for the disc.
-fn listing(image: &Path) -> Vec<music::Entry> {
+fn listing(image: &Path) -> Vec<oag_music::Entry> {
     music::listing(&image.display().to_string())
         .expect("reading the soundtrack listing")
         .expect("a disc of a title this build knows")
@@ -69,7 +69,7 @@ fn the_discs_own_mp3s_read_as_48_khz_stereo_with_a_declared_length() {
         .read_name(r"Data\Music\Gingy\music_stereo.mp3")
         .expect("reading one declared track");
 
-    let stream = oag_game::mp3::describe(&blob).expect("an MPEG stream");
+    let stream = oag_music::mp3::describe(&blob).expect("an MPEG stream");
     assert_eq!(stream.channels, 2);
     assert_eq!(stream.sample_rate, 48_000);
     let seconds = stream.seconds.expect("a declared frame count");
@@ -78,7 +78,7 @@ fn the_discs_own_mp3s_read_as_48_khz_stereo_with_a_declared_length() {
 
 /// And it decodes, in process, to the length it declares.
 ///
-/// The claim `oag_game::mp3`'s header makes - that no `ffmpeg` is involved for
+/// The claim `oag_music::mp3`'s header makes - that no `ffmpeg` is involved for
 /// this codec - is only worth anything if the decode actually happens, so this
 /// runs one. It is the slowest test here and the one that would catch a
 /// `symphonia` feature set that resolves but cannot decode.
@@ -91,7 +91,7 @@ fn a_declared_track_decodes_in_process_to_the_length_it_declares() {
         .read_name(r"Data\Music\Gingy\music_stereo.mp3")
         .expect("reading one declared track");
 
-    let pcm = oag_game::mp3::decode(&blob).expect("decoding it");
+    let pcm = oag_music::mp3::decode(&blob).expect("decoding it");
     assert_eq!(pcm.channels, 2);
     assert_eq!(pcm.sample_rate, 48_000);
     let seconds = pcm.samples.len() as f64 / f64::from(pcm.channels) / f64::from(pcm.sample_rate);
@@ -130,7 +130,7 @@ fn every_declared_track_resolves_to_a_real_entry() {
     )
     .expect("the definition is UTF-8");
 
-    let declared = catalogue::music(&definition);
+    let declared = oag_music::playlist::music(&definition);
     assert_eq!(declared.len(), DECLARED, "declarations");
     assert_eq!(
         listing(&image).len(),
@@ -191,7 +191,7 @@ fn the_front_ends_own_music_resolves_and_is_not_a_soundtrack_track() {
     )
     .expect("the definition is UTF-8");
     assert!(
-        catalogue::music(&definition)
+        oag_music::playlist::music(&definition)
             .iter()
             .all(|track| track.entry_name(tracks.file) != name),
         "the menu loop must not be one of the fifteen"
@@ -246,7 +246,7 @@ fn all_four_front_end_variants_exist_and_the_fury_one_is_different_music() {
     for (axis, name) in oag_hd::names::FRONT_END_MUSIC_VARIANTS {
         assert!(archives.locate(name).is_some(), "{axis}: {name} is absent");
         let blob = archives.read_name(name).expect("reading a variant");
-        let stream = oag_game::mp3::describe(&blob).expect("an MPEG stream");
+        let stream = oag_music::mp3::describe(&blob).expect("an MPEG stream");
         seconds.push((*axis, stream.seconds.expect("a declared frame count")));
     }
 
@@ -287,11 +287,11 @@ fn the_listing_is_in_the_declared_order() {
     .expect("the definition is UTF-8");
 
     let listing = listing(&image);
-    for (index, track) in catalogue::music(&definition).iter().enumerate() {
+    for (index, track) in oag_music::playlist::music(&definition).iter().enumerate() {
         let blob = archives
             .read_name(&track.entry_name(tracks.file))
             .expect("reading a declared track");
-        let declared = oag_game::mp3::describe(&blob)
+        let declared = oag_music::mp3::describe(&blob)
             .expect("an MPEG stream")
             .seconds
             .expect("a declared frame count");

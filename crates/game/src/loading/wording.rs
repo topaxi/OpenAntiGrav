@@ -180,7 +180,7 @@ const LOADING_SHARE: f32 = 0.2;
 /// only stepped.
 ///
 /// The sound loads report no step and so hold their slices at the boundary -
-/// [`crate::at3`] has its own cache and does not report through
+/// [`oag_music::at3`] has its own cache and does not report through
 /// [`crate::movie::Watch`]. They are normally the fast ones; on a cold audio
 /// cache they are two slices where the bar stands still, which is a real gap and
 /// not a hidden one.

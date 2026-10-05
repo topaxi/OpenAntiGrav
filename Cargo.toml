@@ -52,6 +52,7 @@ oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-hd = { path = "crates/hd" }
 oag-input = { path = "crates/input" }
+oag-music = { path = "crates/music" }
 oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
 oag-pulse = { path = "crates/pulse" }

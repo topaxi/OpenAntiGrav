@@ -20,7 +20,7 @@ use oag_formats::wwise::{Bank, Library, SongChain, name_hash, wem::Wem};
 use oag_title::StateTracks;
 
 use crate::at3::Pcm;
-use crate::catalogue;
+use crate::playlist;
 
 /// One playable song.
 #[derive(Debug, Clone, PartialEq)]
@@ -155,7 +155,7 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
     let lib = Library::new(vec![bank]);
     let group = name_hash(st.track_group);
     let mut plan = Plan::default();
-    for entry in catalogue::music(&xml) {
+    for entry in playlist::music(&xml) {
         let Ok(location) = entry.location.parse::<u32>() else {
             continue;
         };

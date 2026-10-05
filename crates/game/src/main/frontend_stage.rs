@@ -3,7 +3,8 @@
 use anyhow::{Result, bail};
 
 use oag_game::render::Renderer;
-use oag_game::{at3, audio, movie};
+use oag_game::{audio, movie};
+use oag_music::at3;
 use oag_ui::frontend::{self, Frontend};
 
 use crate::gpu::Gpu;

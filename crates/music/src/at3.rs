@@ -3,7 +3,7 @@
 //! Almost every sound on the PSP disc is ATRAC3+ and nothing in this workspace
 //! can decode one. [ADR-0019](../../../docs/architecture/adr/0019-atrac3plus-out-of-process.md)
 //! settled how that is answered, and it is the answer H.264 already has in
-//! [`crate::movie`]: shell out to `ffmpeg` once, keep the result under
+//! `oag_game::movie`: shell out to `ffmpeg` once, keep the result under
 //! `data/cache/`, read the cache every time after. GStreamer was measured first
 //! and cannot do it at all - not one of 1,401 installed elements advertises
 //! `atrac3plus` caps, because gst-libav's codec map has no entry for it.
@@ -18,7 +18,7 @@
 //! | Input | Where it comes from | What happens |
 //! | --- | --- | --- |
 //! | RIFF-wrapped `.at3` | A `Data.wad` entry | Handed to `ffmpeg` unaltered |
-//! | Bare ATRAC3+ frames | [`oag_video::pmf::Demuxed::audio`] | Wrapped by [`riff`] first |
+//! | Bare ATRAC3+ frames | `oag_video::pmf::Demuxed::audio` | Wrapped by [`riff`] first |
 //!
 //! The second shape exists because `ffmpeg`'s `mpegps` demuxer cannot see a
 //! `.PMF`'s audio track at all - probed to 50 MB on `Intro.PMF`, only the H.264
@@ -28,7 +28,7 @@
 //! # What the cache is keyed by
 //!
 //! The **content** of the bytes handed to `ffmpeg`, not a name or an archive
-//! offset. [`crate::movie`] keys on `{name hash}-{size}` because a movie is
+//! offset. `oag_game::movie` keys on `{name hash}-{size}` because a movie is
 //! always addressed by a WAD name; a sound may arrive wrapped, from a demux, or
 //! straight off the disc, and only the bytes themselves distinguish those. It
 //! also means changing [`riff`] invalidates every wrapped entry by itself,
@@ -112,7 +112,7 @@ const CODEC_EXTRA_PREFIX: [u8; 2] = [0x01, 0x00];
 /// inside a `.PMF`** carries this same word in its third and fourth bytes -
 /// `28 45` on the disc's 560-byte movie tracks, and `28 5c` on `Intro.PMF`,
 /// whose blocks are 744 bytes. `(8 + 2) << 10 | (744 / 8 - 1)` is `0x285c`.
-/// See [`crate::movie`] for that header.
+/// See `oag_game::movie` for that header.
 ///
 /// This matters because the constant it replaces was a **stereo 560** word.
 /// Writing it into `Intro.PMF`'s stereo 744 stream, or into any of the mono
@@ -158,7 +158,7 @@ pub fn decode(at3: &[u8], cache_dir: &Path) -> Result<Pcm> {
 /// Fills the cache for a RIFF-wrapped ATRAC3+ file without reading it back.
 ///
 /// [`decode`] minus the samples, and the difference is the whole reason it
-/// exists: [`crate::prefetch`] converts all 93 of the disc's streams and wants
+/// exists: `oag_game::prefetch` converts all 93 of the disc's streams and wants
 /// none of them, and reading each one back would be 0.70 GB of PCM through
 /// memory to be dropped a line later. Returns the cache file's path.
 ///
@@ -181,7 +181,7 @@ pub fn ensure_cached(at3: &[u8], cache_dir: &Path) -> Result<PathBuf> {
 
 /// Whether this stream's samples are already in the cache.
 ///
-/// The question [`crate::prefetch`] asks while planning, so that the total it
+/// The question `oag_game::prefetch` asks while planning, so that the total it
 /// reports is what is left to do rather than what exists. `false` for a blob
 /// that is not a readable RIFF at all: it has no cache file by construction,
 /// and [`ensure_cached`] is the one that reports why.
@@ -213,7 +213,7 @@ fn is_usable(path: &Path, format: Format) -> bool {
 /// PSMF header states the channel count and a frequency code, and the block
 /// size comes from the audio stream descriptor rather than from the frames.
 ///
-/// [`crate::movie::MovieAudio::decode`] is the caller, and the only one: it
+/// `oag_game::movie::MovieAudio::decode` is the caller, and the only one: it
 /// unwraps a `.PMF`'s own two layers of framing first, which is where the
 /// `block_align` this cannot infer comes from.
 ///
@@ -249,7 +249,7 @@ pub fn decode_frames(frames: &[u8], format: Format, cache_dir: &Path) -> Result<
 /// ```
 ///
 /// This is `ffmpeg`'s container rather than Wipeout's, which is why it is built
-/// here and not in `oag-formats` - the same argument [`crate::movie::ipum`]
+/// here and not in `oag-formats` - the same argument `oag_game::movie::ipum`
 /// makes for the `ipum` header it writes for the PS2's IPU bitstreams.
 #[must_use]
 pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
@@ -291,7 +291,7 @@ pub fn riff(frames: &[u8], format: Format) -> Vec<u8> {
 ///
 /// Enough to decide whether a `Data.wad` entry is a soundtrack track without
 /// handing 2 MiB of ATRAC3+ to `ffmpeg` to find out - see
-/// [`crate::audio::MusicSource`], which pairs the two discs' soundtracks by
+/// `oag_game::audio::MusicSource`, which pairs the two discs' soundtracks by
 /// length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Stream {
@@ -408,7 +408,7 @@ pub(crate) fn decode_riff(riff: &[u8], format: Format, cache_dir: &Path) -> Resu
 ///
 /// Geometry is in the **name**, so a cache file is self-describing and reading
 /// one back needs no sidecar and no header parse - the same reason
-/// [`crate::movie`] puts its codec in the filename rather than trusting the
+/// `oag_game::movie` puts its codec in the filename rather than trusting the
 /// contents.
 fn cache_path(riff: &[u8], format: Format, cache_dir: &Path) -> PathBuf {
     cache_dir.join(format!(
@@ -430,7 +430,7 @@ fn transcode(riff: &[u8], out: &Path, format: Format) -> Result<()> {
 
     // Written beside the cache because it is the exact input ffmpeg saw, so a
     // decode that comes out wrong can be reproduced by hand against the same
-    // bytes. Same reasoning as `crate::movie::transcode`'s `.h264` file.
+    // bytes. Same reasoning as `oag_game::movie::transcode`'s `.h264` file.
     let source = cache_dir.join(format!("{}.at3", content_key(riff)));
     std::fs::write(&source, riff).with_context(|| format!("writing {}", source.display()))?;
 
@@ -451,7 +451,7 @@ fn read_cached(path: &Path, format: Format) -> Option<Pcm> {
 /// whole number of frames.
 ///
 /// Split from [`read_cached`] so the shape rule is testable without a
-/// filesystem - the same split [`crate::movie::frame_at`] gets from its own
+/// filesystem - the same split `oag_game::movie::frame_at` gets from its own
 /// loop.
 fn from_s16le(bytes: &[u8], format: Format) -> Option<Pcm> {
     let per_frame = usize::from(format.channels) * 2;
@@ -501,7 +501,7 @@ fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
         output.display()
     );
 
-    // Captured rather than inherited, unlike `crate::movie::run_ffmpeg`, and
+    // Captured rather than inherited, unlike `oag_game::movie::run_ffmpeg`, and
     // for a reason particular to this codec: the ATRAC3+ decoder hands the
     // raw muxer one packet per block with a repeated dts, and ffmpeg logs
     // "non monotonically increasing dts" at **error** level for every one of

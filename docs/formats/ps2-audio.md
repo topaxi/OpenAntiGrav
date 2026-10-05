@@ -341,10 +341,10 @@ control first: without it the residual has no scale.
 
 `f32le` rather than `s16le` throughout, so the comparison is not measuring its
 own requantisation. `ffmpeg` logs a "non monotonically increasing dts" error per
-ATRAC3+ block and none of them mean anything - see `crates/game/src/at3.rs`.
+ATRAC3+ block and none of them mean anything - see `crates/music/src/at3.rs`.
 
 The engine reads the same populations at run time rather than from a table:
-`crates/game/src/music.rs` and `Soundtrack::nearest` in
+`crates/music/src/lib.rs` and `Soundtrack::nearest` in
 `crates/game/src/audio.rs`.
 
 ## The PSP names are recovered; the PS2 archive still has none

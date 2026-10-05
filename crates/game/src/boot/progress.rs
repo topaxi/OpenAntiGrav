@@ -30,7 +30,7 @@ pub struct MediaProgress {
     /// seconds of one.** `Some(Step::Cached)` and `Some(Step::Transcoding)` sit
     /// under the same entry name and mean entirely different things to whoever
     /// is looking at the screen. `None` before a load has said anything, which
-    /// includes the sound loads: [`crate::at3`] has its own cache and does not
+    /// includes the sound loads: [`oag_music::at3`] has its own cache and does not
     /// report through this.
     pub step: Option<crate::movie::Step>,
 }

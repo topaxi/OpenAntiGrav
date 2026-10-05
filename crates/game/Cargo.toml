@@ -55,14 +55,9 @@ oag-core.workspace = true
 # reads the 196-byte directory and then exactly one entry. See
 # `crate::audio::load_ps2_track`.
 oag-disc.workspace = true
-# Wipeout HD's music is MP3, and this reads and decodes it in process. The
-# composition root is where a decoder belongs for the same reason `av1` is here:
-# nothing below plays audio. See the workspace manifest for why this codec does
-# not go through `ffmpeg` the way ATRAC3+ does.
-symphonia.workspace = true
-# The Omega Collection's Wwise media is ATRAC9, decoded in process. See the
-# workspace manifest and `crate::wem`.
-atrac9dec.workspace = true
+# Music: the soundtrack listing, ATRAC3+/ATRAC9/MP3/Wwise decoding. `crate::at3`
+# and friends re-export it so the old paths keep working.
+oag-music.workspace = true
 oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.

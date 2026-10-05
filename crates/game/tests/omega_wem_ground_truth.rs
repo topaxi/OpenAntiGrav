@@ -18,7 +18,7 @@ use std::sync::Arc;
 use oag_audio::{Bus, Mixer, Play, Sound};
 use oag_formats::wwise::wem::{TAG_ATRAC9, TAG_PCM, Wem};
 use oag_formats::wwise::{Bank, Library};
-use oag_game::wem;
+use oag_music::wem;
 
 fn archive(dir: &str, name: &str) -> Option<oag_assets::psarc::Archive> {
     let path: PathBuf = oag_testdata::exact(&format!("data/extracted/ps4/{dir}/uroot/{name}"))?;

@@ -118,7 +118,7 @@ fn the_config_word_is_what_the_discs_own_entries_carry() {
         (560, 1, 0x2445),
         (560, 2, 0x2845),
         // Not a `Data.wad` entry but `Intro.PMF`'s frame header, which
-        // carries this same word - see `crate::movie`.
+        // carries this same word - see `oag_game::movie`.
         (744, 2, 0x285c),
     ] {
         let format = Format {

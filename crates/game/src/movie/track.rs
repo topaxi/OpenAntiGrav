@@ -14,7 +14,7 @@ use log::warn;
 use oag_video::{bik, pmf, pss};
 
 use super::container_audio::{self, ContainerTrack};
-use crate::at3;
+use oag_music::at3;
 
 /// Bytes of sub-header on every audio PES payload in a `.PMF`.
 ///
@@ -65,7 +65,7 @@ const ATRAC3PLUS_FRAME_HEADER_LEN: usize = 8;
 /// so far, and the "how to get to PCM" that differs between them.
 enum MovieAudioKind {
     /// ATRAC3+ blocks, headers off, back to back - exactly what
-    /// [`crate::at3::riff`] wants for its `data` chunk. Decoded through
+    /// [`oag_music::at3::riff`] wants for its `data` chunk. Decoded through
     /// `ffmpeg` and cached, because nothing in this workspace decodes
     /// ATRAC3+ itself.
     Atrac3Plus { blocks: Vec<u8>, block_align: u16 },
@@ -212,7 +212,7 @@ impl MovieAudio {
     ///
     /// # Errors
     ///
-    /// As [`crate::at3::decode_frames`]: an `ffmpeg` that is absent or fails,
+    /// As [`oag_music::at3::decode_frames`]: an `ffmpeg` that is absent or fails,
     /// or a cache file that will not write or read back. Never fails for a
     /// PCM track.
     pub fn decode(&self, cache_dir: &Path) -> Result<at3::Pcm> {
