@@ -680,7 +680,7 @@ impl Scene {
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
         // what reaches `view`, after the read bloom. See `Self::hd`.
-        let target = self.hd.as_ref().map_or(view, |hd| hd.scene_view());
+        let target = self.linear_scene_view().unwrap_or(view);
         // MSAA draws into its own multisampled attachment and resolves into
         // the target at the end of this one pass; everything else draws
         // straight into it, exactly as before this setting existed. See
@@ -925,6 +925,11 @@ impl Scene {
                 hd_bloom_timestamps,
             );
             stats.hd_bloom_encoded = true;
+        } else if let Some(omega) = &self.omega {
+            // Omega's tone map: the executable's exposure and curve over the
+            // linear scene, encoded into `view`. See `Self::omega`.
+            let rect = (viewport.2 as u32, viewport.3 as u32);
+            omega.run(queue, encoder, view, (viewport.0, viewport.1), rect);
         } else if self.bloom.is_some() || self.ps2_bloom.is_some() {
             // The recovered post-process, reading the alpha channel the scene
             // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and

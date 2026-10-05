@@ -538,7 +538,7 @@ pub(super) fn envsettings_bloom(
 }
 
 mod light;
-pub(super) use light::envsettings_light;
+pub(super) use light::{envsettings_light, envsettings_tonemap};
 
 /// Everything the four environment readers found, in one value.
 ///
@@ -553,6 +553,8 @@ pub(super) struct Staging {
     pub(super) authored_fog: Option<mesh_render::Fog>,
     /// The circuit's `HDR and Bloom` block, where it authors one.
     pub(super) hd_bloom: Option<oag_render::post::hd_bloom::Params>,
+    /// Omega's `Tonemap` block, where the circuit authors one.
+    pub(super) omega_tonemap: Option<oag_render::post::omega_tonemap::Params>,
     /// The Zone stage grade this title lays over the two above, in a Zone
     /// race on a title that ships a table. See [`zone_grade`].
     pub(super) zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
@@ -662,10 +664,14 @@ pub(super) fn staging(
     let hd_bloom = ps3_geometry
         .then(|| envsettings_bloom(archives, track, report))
         .flatten();
+    let omega_tonemap = (geometry == GeometryKind::Ps4)
+        .then(|| envsettings_tonemap(archives, track, report))
+        .flatten();
     Staging {
         light,
         authored_fog,
         hd_bloom,
+        omega_tonemap,
         zone_grade: zone_grade(archives, race, mode, zone_stage, track, report),
     }
 }

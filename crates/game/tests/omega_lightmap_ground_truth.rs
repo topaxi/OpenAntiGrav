@@ -72,11 +72,14 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
         loaded.report
     );
     assert!(
-        loaded
-            .report
-            .iter()
-            .any(|l| l.contains("Tonemap block read")),
+        loaded.report.iter().any(|l| l.contains("Tonemap applied")),
         "{:#?}",
         loaded.report
     );
+    // The block reaches the renderer: dropping the plumbing leaves `None`
+    // here and the race back on the saturating 8-bit target.
+    let tonemap = loaded
+        .omega_tonemap
+        .expect("Tech De Ra's Tonemap block is applied");
+    assert!(tonemap.exposure_maximum >= tonemap.exposure_minimum);
 }

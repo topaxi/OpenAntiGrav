@@ -36,6 +36,7 @@ pub mod fsr3;
 pub mod fxaa;
 pub mod hd_bloom;
 pub mod motion_blur;
+pub mod omega_tonemap;
 pub mod ps2_bloom;
 pub mod screen;
 pub mod smaa;

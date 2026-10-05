@@ -469,6 +469,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         light,
         authored_fog,
         hd_bloom,
+        omega_tonemap,
         zone_grade,
     } = environment::staging(
         &mut archives,
@@ -945,6 +946,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         light,
         authored_fog,
         hd_bloom,
+        omega_tonemap,
         zone_grade,
         liveries,
         rocket_model,
