@@ -364,8 +364,12 @@ pub fn conform_to_floor(
         position: (Vec3::from_array(a.position).midpoint(Vec3::from_array(b.position))).to_array(),
         ..*a
     };
-    for triangle in coarse.chunks_exact(3) {
-        let [a, b, c] = [&triangle[0], &triangle[1], &triangle[2]];
+    for [a, b, c] in coarse
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|t| [&t[0], &t[1], &t[2]])
+    {
         let (ab, bc, ca) = (middle(a, b), middle(b, c), middle(c, a));
         for corners in [[*a, ab, ca], [ab, *b, bc], [ca, bc, *c], [ab, bc, ca]] {
             vertices.extend(corners.map(&mut place));

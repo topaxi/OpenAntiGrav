@@ -85,7 +85,9 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         }
         let mut points: Vec<Vec3> = v.iter().map(|x| Vec3::from_array(x.position)).collect();
         points.extend(
-            v.chunks_exact(3)
+            v.as_chunks::<3>()
+                .0
+                .iter()
                 .map(|t| t.iter().map(|x| Vec3::from_array(x.position)).sum::<Vec3>() / 3.0),
         );
         let mut deepest = 0.0f32;
