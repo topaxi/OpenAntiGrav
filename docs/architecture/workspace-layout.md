@@ -43,7 +43,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
 | `oag-render` | `crates/render` | The wgpu renderer's scene: shadows, PVS placement, the track-ribbon builder, the gantry, the ghost and loading overlays and cameras. Owns no window, so the viewer and the game can each keep their own. Composes `oag-fx`, `oag-mesh`, `oag-post` and `oag-gpu`; callers import those directly, there are no re-exports. |
 | `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player (`psys`) and the collision-spark adapter, the exhaust, mist, clouds, the Leach beam, the screen flash, the Cannon's quads and the hull overlays. Split out of `oag-render` on 2026-10-05; depends on `oag-mesh` for the vertex type and the format crates, never on `oag-render`, so the effects need no camera, shadow or PVS code (the one shared leaf, `hull_overlay::pulse`, moved with them). Nothing gameplay may depend on it. |
-| `oag-mesh` | `crates/mesh` | The mesh pipeline: `.vex` and `RCSMODEL` models decoded into one portable vertex and index buffer, the pipeline that draws them offscreen or into a surface, the orbit camera it frames them with, and the headless capture. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` and the format crates, never on `oag-render` or `oag-post`. |
+| `oag-mesh` | `crates/mesh` | The mesh pipeline: `.vex` and `RCSMODEL` models decoded into one portable vertex and index buffer, the pipeline that draws them offscreen or into a surface, the orbit camera it frames them with, and the headless capture. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` and the format crates, never on `oag-render`, `oag-post` or a title package (dependency rule 3). Its `shine_pass` module holds the CPU half of the hull's extra pass, which `oag-livery` and `oag_render::shine` share. |
 | `oag-post` | `crates/post` | Post-processing between a scene and the surface: bloom (PSP, PS2, HD), the Omega tonemap, motion blur, SMAA, FXAA, FSR 1 and FSR 3, with the FSR 3 jitter sequence. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` only. |
 | `oag-gpu` | `crates/gpu` | The little the mesh pipeline and the post chain share and neither may own: the scene and velocity target formats, the `perf-probe` instrumentation and GPU timestamp timing. It is what keeps `oag-mesh` and `oag-post` from depending on each other. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
@@ -59,7 +59,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
 | `oag-present` | `crates/present` | The frame between the scene and the glass: `upscale` (blit, FSR/FXAA/SMAA/temporal, grade, screen filter, composite), `drs` (dynamic resolution controller) and `perf` (frame meter, cost breakdown, `SceneStats`). Depends on `oag-display`, `oag-gpu`, `oag-post` and `oag-ui`; the host passes plain data in. Its device-and-`Renderer` composite tests stay in `oag-game`. |
-| `oag-livery` | `crates/livery` | Per-slot ship assets for a race: hulls, skins (`ship_skin::apply`), shield shells, boost plumes, engine lights, wrecks, plus `entry`, the archive entry names they come from. The catalogue half of skin selection (`resolve`) stays beside the race load in `oag-raceplay` (`load/skin.rs`) because it reads `catalogue`. |
+| `oag-livery` | `crates/livery` | Per-slot ship assets for a race: hulls, skins (`ship_skin::apply`), shield shells, boost plumes, engine lights, wrecks, plus `entry`, the archive entry names they come from. Depends on `oag-mesh` and `oag-fx`, not `oag-render` (cut 2026-10-05). The catalogue half of skin selection (`resolve`) stays beside the race load in `oag-raceplay` (`load/skin.rs`) because it reads `catalogue`. |
 | `oag-music` | `crates/music` | Soundtrack reading and decoding: a title's music listing (declared, sniffed or Omega's Wwise states) and the ATRAC3+, ATRAC9, MP3 and Wwise decoders. `oag-sound` opens the source through its `Library` and calls it. |
 | `oag-sound` | `crates/sound` | What the game plays: soundtrack selection and the music playlist, the effect banks and cues, HD's authored mix, over the `oag-audio` mixer. Depends on neither `oag-game` nor a title package; the host supplies a `Library` (opens a source as a title, lists disc images) and, per tick, a plain-data `RaceFrame`. `oag-game` keeps `oag_game::sound`, which implements the first and builds the second from a `Race`. |
 | `oag-raceplay` | `crates/raceplay` | A race from load to finish line: `race::load`, the front-to-back tick (`Race`, `RaceSim`), the scene it draws, weapon visuals, scenery effects, the replay and ghost glue, plus what a race load reads with them (`catalogue`, `pilots`, `loader_log`, the `scoreboard` table and the track-panel assets). Renderer-coupled, so it sits above `oag-render`, `oag-fx`, `oag-mesh`, `oag-sound`, `oag-hud`, `oag-livery` and `oag-present` and below `oag-game`; classified in `NOT_TITLE_PACKAGES`, nothing gameplay-side may depend on it. It reaches nothing in `oag-game`: the host builds the loading screen's `Progress` from `LoadProgress`, and the headless capture path (`oag_game::race_capture`) stays behind because it composites the front end's overlays. |
@@ -562,3 +562,31 @@ of a `ram` run: a brute-force walk of every triangle. A spatial index there
 would speed every sim test and the game itself, but it must return hits in the
 same order to keep the state hashes, so it belongs to a physics lane and is
 recommended, not done.
+
+## Dependency graph clean-up (2026-10-05)
+
+`cargo shear` found 29 unused or misplaced dependencies; they were removed and
+`just check-unused-deps` now fails the gate on any new one. Three layering cuts
+shortened the longest normal-dependency chain from 10 crates
+(`oag-game -> oag-raceplay -> oag-livery -> oag-render -> oag-fx -> oag-mesh ->
+oag-pulse -> oag-assets -> oag-texture -> oag-formats`) to 8
+(`oag-game -> oag-raceplay -> oag-hud -> oag-ui -> oag-2048 -> oag-assets ->
+oag-texture -> oag-formats`):
+
+- `oag-mesh` no longer depends on `oag-pulse`. The PS2 texture-name rule
+  (`ps2_texture_name`, `ps2_strip_build_prefix`) lives in `oag_formats::wad`
+  beside `hash_name` and `oag-pulse` re-exports it; Pulse's animated-texture
+  table and its two consumers (`animated_v_cycles`, `is_blink_light_texture`)
+  moved into `oag_pulse::textures`.
+- `oag-livery` no longer depends on `oag-render`. `build`/`plain` of the hull's
+  extra pass moved to `oag_mesh::mesh::shine_pass`; `oag_render::shine` keeps
+  the blend state and the per-frame coordinates.
+- `oag-ui` no longer depends on `oag-gameplay`. `Button`, `Input` and
+  `button_from_name` moved to `oag_core::buttons` (plain bit vocabulary, no
+  floats; `oag-core` is already under both crates, so no new crate was worth
+  its weight) and `oag_gameplay::input` re-exports them.
+
+`scripts/check-dependency-rules.py` gained rule 3: `oag-fx`, `oag-gpu`,
+`oag-mesh` and `oag-post` may not reach a title data package. `oag-render` is
+not covered yet: it still reads `oag-pulse`'s presentation tables (`loading`,
+HUD). No ADR changes; none of the cuts alters a recorded decision.

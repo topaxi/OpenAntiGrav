@@ -118,6 +118,8 @@ fn the_report_names_both_kinds_of_absence() {
         emissive_role_unresolved: 0,
         pad_ne_bound: 0,
         pad_ne_unread: 0,
+        mag_wave_bound: 0,
+        mag_wave_unread: 0,
         isolated: 0,
     };
     let line = report.describe();

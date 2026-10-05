@@ -290,3 +290,55 @@ fn a_banked_surface_takes_the_projection_with_it() {
         );
     }
 }
+
+/// A road that is not the plane the cast found: it rises one unit for every
+/// ten along x, and the hull was projected onto `y = 0`.
+fn ramp(at: Vec3, normal: Vec3) -> Option<f32> {
+    let road = Vec3::new(at.x, at.x * 0.1, at.z);
+    Some((road - at).dot(normal))
+}
+
+#[test]
+fn a_conformed_hull_sits_the_lift_above_the_road_under_every_vertex() {
+    let hull = hull();
+    let mut out = Vec::new();
+    hull_triangles(&cast_from(&hull, 5.0, 1.0), &mut out);
+    let before = out.len();
+    conform_to_floor(&mut out, 0, ramp);
+    assert_eq!(
+        out.len(),
+        before * 4,
+        "each triangle is split once, into four"
+    );
+    for vertex in &out {
+        let at = Vec3::from_array(vertex.position);
+        let gap = at.y - at.x * 0.1;
+        assert!((gap - LIFT).abs() < 1e-5, "{at:?} is {gap} above the road");
+    }
+}
+
+#[test]
+fn a_hull_is_only_conformed_from_the_first_vertex_it_is_told_to() {
+    let hull = hull();
+    let mut out = Vec::new();
+    hull_triangles(&cast_from(&hull, 5.0, 1.0), &mut out);
+    hull_triangles(&cast_from(&hull, 5.0, 1.0), &mut out);
+    let first = out.len() / 2;
+    let kept: Vec<_> = out[..first].to_vec();
+    conform_to_floor(&mut out, first, ramp);
+    assert_eq!(
+        &out[..first].iter().map(|v| v.position).collect::<Vec<_>>(),
+        &kept.iter().map(|v| v.position).collect::<Vec<_>>()
+    );
+    assert_eq!(out.len(), first * 5);
+}
+
+#[test]
+fn a_point_with_no_road_under_it_stays_where_the_plane_put_it() {
+    let hull = hull();
+    let mut out = Vec::new();
+    hull_triangles(&cast_from(&hull, 5.0, 1.0), &mut out);
+    let planar: Vec<f32> = out.iter().map(|v| v.position[1]).collect();
+    conform_to_floor(&mut out, 0, |_, _| None);
+    assert!(out.iter().all(|v| (v.position[1] - planar[0]).abs() < 1e-6));
+}

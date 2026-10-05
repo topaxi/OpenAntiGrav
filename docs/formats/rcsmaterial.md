@@ -2106,6 +2106,99 @@ flat picture.
    sampler table carries `0x9edd3243` at all (the hash names an engine-supplied probe, not a `.gtf`), which is
    the file's own shape for "not authored here", not a gap in reading it.
 
+## The magstrip floor scrolls a wave texture off the engine clock (2026-10-05, `lane/magstrip-floor-anim`)
+
+**The player report**: "Magfloors themselves also have some (texture?) animations
+on their own, at least in the latest title." The law is in the fragment programs,
+and it is one law for the whole family.
+
+**Which materials.** `crates/render/examples/hd_mag_params.rs` sweeps all four PS3
+archives for fragment variants declaring the wave sampler `0x85c9fd48`
+(`ds_mag_wave_c.gtf`), the emissive sampler `0x1202d8df`, `time` (`0x906b67ba`),
+`Colour` (`0x02ab9f07`) and a scale `k` (`0x220cf0e6`) together: `mageffect08` and
+`mageffect08_floor` (Talon's Junction, Amphiseum, Modesto Heights, `02_track`,
+`03_track`), `mageffectloop`, `mag_effect_loop_opaque`, `chevron_pulse` and
+`mageffect_modded` (Ubermall). Talon's Junction's wall `mageffect08` (94 variants)
+declares the wave and `Colour` but **not** `time` or `k`: it is not scrolled by this
+law and is left alone.
+
+**The microcode** (`scripts/ps3-microcode.py fp-file`; `mageffectloop` block `@0x6b20`,
+`mag_effect_loop_opaque` `@0x6ae0`, `mageffect08_floor` `@0x61d0`, all lit blocks;
+unlit block #2 of `mageffectloop` has the same lines):
+
+```text
+MAD  R.xy, uv, {k}, time      ; time added, no multiplier, to BOTH axes
+TEX  wave, R.xy               ; ds_mag_wave_c.gtf (unit 3, or 4 on mageffect08)
+TEX  e, uv                    ; the emissive picture (1202d8df)
+m = e.rgb + e.a * (wave - e.rgb)
+d = e.rgb / (1 - m * Colour)  ; MAD 1 - x*c, RCP, per channel
+```
+
+`time` is the engine's seconds clock ([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md),
+"the engine's own parameter table"), so the wave **repeats exactly once a second on a
+diagonal**: measured on `oag-game`, frames 60 ticks apart match to 1 pixel of the
+panel region, frames 15, 30 and 45 ticks apart differ by 49k, 59k and 62k.
+Talon's Junction authors `k = 0.2` and `Colour = (0, 1, 0.147)` on the loop pair and
+`(0, 0.861, 0.127)` on `mageffect08_floor`: only green and blue take the dodge, which
+is why the panels swing to green-white as the band passes. The wave texture is a
+horizontal bright band (about 10% of its height) over vertical streaks. Talon's
+`mag_emiss_*` pictures carry alpha 255 everywhere, so `m` is the wave itself there;
+the lerp is implemented as read for circuits that author real alpha.
+
+**The floor loop pair's combine** (`mag_effect_loop_opaque`, `mageffectloop`, which
+this page called "open" on 2026-09-17), same blocks:
+
+```text
+grid = tex(a2d555b9).x                ; glass_etched_tech.gtf, unit 1
+ramp = tex(cc98c527, -dot(N, V))      ; dc_iridescent_gradient.gtf, unit 4
+colour = vertexLight * grid * (ramp + c) + (grid + ramp) * d     ; c = 0x6c57ba63
+alpha  = grid
+```
+
+`vertexLight` is the same `f[TC0] + f[TC1] + f[TC5].x * sun * N.L` the glass sheen
+reads (the same approximation: `in.colour`). `c` is `0.67188` here. Left out, named:
+the `paraboloidReflectionTex` term (unit 2, engine-supplied, no probe here), as
+`glass_sheen` leaves it.
+
+**Wired as** `mesh::rcs::mag_wave` and `slots::MAG_WAVE` / `slots::MAG_LOOP`
+(`MATERIAL_SHIFT` 17 to 19): the emissive picture rides in the third binding (the
+`pad_masks` slot, which no wave material shares with a pad), the wave in a new
+fourth (`Model::wave_maps`, binding 4), `Colour`, `k` and rate 1 in the material's
+`Emissive` entry (and `c` in its `offset` on the loop pair). The matched pose
+`talons-matched/03` now draws the blue grid with translucent panels the original's
+frame shows, where it drew black over a rainbow ramp before; `ADD_SECOND` is cleared
+on these materials because their second texture is not an additive glow.
+
+**Chosen, not measured** (no confidence): the dodge's divisor is floored at 0.05 and
+the result clamped to 1, because `Colour.g = 1` and the band reaches 1 so the quotient
+diverges and a black texel gives `0/0`; the RSX saturates at 8 bits. The dodge is
+taken on sRGB-decoded samples, the domain the existing glow uses, and encoded for the
+gamma path. `uv` stands for `f[TC3]`/`f[TC5].zw` on the same unproven-equality terms
+`skin::roles` already states.
+
+**Tests.** `crates/render/tests/hd_mag_wave_lit_path.rs` (no disc: the pixel swings
+with `scene.time` and repeats at +1 s) and `hd_mag_wave_ground_truth.rs` (Talon's
+builds the bindings and classifies the loop). **Not done:** a reference capture of
+the moving strip from RPCS3 (the stills agree with `03.png` in layout only; the rate
+is from the code), 2048's Vita `mageffect08` program, and the `mageffect08` floor's
+own diffuse-plus-normal-plus-lightmap composition (only the wave term is added to it).
+
+## Omega and 2048 draw their see-through materials off the state word (2026-10-05, `transparent-floors`)
+
+Omega and 2048 authored HD's state word on every material (PS4 header `+0x22`, Vita `+0x12`; evidence
+and the draw-order key in [`material-state.md`](../ghidra/functions/ps4-omega-eu/material-state.md)),
+and `oag_mesh::mesh::rcs::psp2::transparency` routes a textured draw with mode 1 to the blended list and
+mode 2 to the alpha-tested list, where before **every** Omega and 2048 draw was opaque.
+
+- **Law recovered:** mode bits as HD (confidence 75), sort priority bits 9 to 11 (75, not yet used for ordering).
+- **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair, so the
+  additive family - `emissive_bloom`, `hd_enginetrail`, light cones - draws as a dim sheet, not a glow) and the
+  alpha-test reference `0.5` (HD's).
+- **Looks:** Tech De Ra's glass tubes now show the crowd through them and its road panels take their see-through
+  layer; 2048's cockpit glass and billboard signs draw. Frames `data/scratch/transparent-floors/shots/{before,after}_{tdr,2048}_300.png`.
+- **Not done:** HD is untouched (its own factor path); the `etched_glass_tech` sheen and `Transparency` param on
+  Omega are not read; GCN pixel programs were not read for an alpha source, so a blended draw uses the first texture's alpha.
+
 ## Open
 
 - **63 of the 125 sampler hashes**, after the wider sweep below - down from

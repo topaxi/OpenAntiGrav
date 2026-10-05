@@ -1,5 +1,6 @@
 use super::*;
 use oag_core::math::Vec3;
+use oag_mesh::mesh::shine_pass::build;
 use oag_mesh::mesh::{Bounds, DrawCall, slots};
 
 fn vertex(normal: [f32; 3]) -> GpuVertex {
@@ -46,36 +47,6 @@ fn hull() -> Model {
     hull.transparent_draws = vec![draw(3..6, 5)];
     hull.shine_draws = vec![draw(3..6, 2)];
     hull
-}
-
-#[test]
-fn a_hull_with_no_extra_pass_batch_builds_no_shine_model() {
-    let mut bare = hull();
-    bare.shine_draws.clear();
-    assert!(build(&bare).is_none());
-}
-
-#[test]
-fn the_shine_model_draws_only_the_extra_pass_batches_under_their_second_texture() {
-    let model = build(&hull()).expect("a hull with an extra pass");
-    assert_eq!(model.draws.len(), 1);
-    assert_eq!(model.draws[0].range, 3..6, "the batch's own vertices");
-    assert_eq!(model.draws[0].texture, Some(2), "the second texture");
-    assert!(model.alpha_tested_draws.is_empty() && model.transparent_draws.is_empty());
-    assert!(
-        model.shine_draws.is_empty(),
-        "moved into `draws`, not kept twice"
-    );
-}
-
-#[test]
-fn the_pass_is_unlit_white_and_writes_no_glow() {
-    let model = build(&hull()).unwrap();
-    for v in &model.vertices {
-        assert_eq!(v.colour, [1.0; 4]);
-        assert_eq!((v.lit, v.anim, v.glow), (0.0, 0, 0.0));
-    }
-    assert!(!model.stamps_glow);
 }
 
 /// The equation over the fixed basis: a normal along light 0 is the far

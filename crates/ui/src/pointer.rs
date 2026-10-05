@@ -8,7 +8,7 @@
 //! screens read: where the pointer is, in the screen's own grid, and what it
 //! did this tick.
 //!
-//! # Why this is not an [`oag_gameplay::input::Input`] button
+//! # Why this is not an [`oag_core::buttons::Input`] button
 //!
 //! A pointer has a position, and a position is a pair of window-relative
 //! floats. `InputSnapshot` feeds the `World` and the committed state hash,
@@ -52,7 +52,7 @@ pub struct Pointer {
     /// The primary button went down, or a finger tapped, this tick.
     ///
     /// An edge, not a level: the models act once per press, the way
-    /// [`oag_gameplay::input::Input::take`] hands out one press per edge.
+    /// [`oag_core::buttons::Input::take`] hands out one press per edge.
     pub clicked: bool,
     /// The secondary button went down this tick. Read as "back" wherever a
     /// screen has a back, which is what circle means on the same screens.

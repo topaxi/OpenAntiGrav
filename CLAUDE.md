@@ -24,13 +24,14 @@ per-subsystem matrix, before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
 just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
-just check-deps   # asserts the two dependency-boundary rules below (scripts/check-dependency-rules.py)
+just check-deps   # asserts the three dependency-boundary rules below (scripts/check-dependency-rules.py)
+just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
@@ -217,7 +218,7 @@ added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.
 
-Two dependency rules, both enforced by `just check-deps` (part of the `just` gate,
+Three dependency rules, all enforced by `just check-deps` (part of the `just` gate,
 `scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
 review:
 
@@ -225,6 +226,10 @@ review:
    The simulation consumes an input *snapshot type* owned by `oag-gameplay`, never the
    input system itself.
 2. No crate depends on `oag-game` (the composition root).
+3. No generic render-side crate (`oag-fx`, `oag-gpu`, `oag-mesh`, `oag-post`) reaches a title
+   package (`oag-pulse`, `oag-pure`, `oag-hd`, `oag-omega`, `oag-2048`) - a title's tables are
+   injected by the caller, as the PS2 texture-name rule and Pulse's animation table were moved
+   out of `oag-mesh`. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 
 Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
 ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 20 as of

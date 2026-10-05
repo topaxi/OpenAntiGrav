@@ -121,8 +121,8 @@ impl Ps2TextureSet {
     /// never substituted with another entry.
     #[must_use]
     pub fn resolve(&self, declared_name: &str) -> Option<Arc<ModelTexture>> {
-        let stripped = oag_pulse::ps2_strip_build_prefix(declared_name);
-        let canonical = oag_pulse::ps2_texture_name(&stripped).unwrap_or(stripped);
+        let stripped = wad::ps2_strip_build_prefix(declared_name);
+        let canonical = wad::ps2_texture_name(&stripped).unwrap_or(stripped);
         self.by_hash.get(&wad::hash_name(&canonical)).cloned()
     }
 }

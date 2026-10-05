@@ -21,76 +21,6 @@ use oag_vex::vex;
 /// [`merge`] alike.
 pub const ANIM_TRACK_LIMIT: usize = 64;
 
-/// Which textures animate and how fast: `oag_pulse::textures::ANIMATED_TEXTURES`.
-///
-/// The table moved to the title package under [ADR-0022] - which surfaces move is
-/// a fact about what Pulse ships, and every key is a `Data\Tex\` entry off its
-/// disc. The evidence for each entry is on the constant itself and in
-/// `crates/render/tests/animated_uv_ground_truth.rs`.
-///
-/// **Nothing draws through this any more.** The renderer reads each material's
-/// authored keyframe block instead ([`GpuVertex::anim`]), which is the
-/// original's own mechanism rather than an inference from geometry - and the
-/// two disagree: the table scrolls `col_display7_GLOW` in V where the disc
-/// authors it in U. What the table and its measurement are still good for is
-/// the question they were built to answer, *which* surfaces on a circuit are
-/// meant to move, which is a useful cross-check on the authored reading and
-/// the only record of the narrow-V-band survey. Kept for that, and for
-/// [`is_blink_light_texture`], which several ship paths still key off.
-///
-/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
-pub use oag_pulse::textures::ANIMATED_TEXTURES;
-
-/// The V scroll rate for a decoded texture, or `None` if it does not animate.
-#[must_use]
-pub fn animated_v_cycles(label: &str) -> Option<f32> {
-    let key = label.to_ascii_lowercase();
-    // Longest match first, so `col_display7_BLEND_GLOW` is not claimed by the
-    // `col_display7_GLOW` entry through a shared prefix.
-    ANIMATED_TEXTURES
-        .iter()
-        .filter(|(name, _)| key.contains(name))
-        .max_by_key(|(name, _)| name.len())
-        .map(|&(_, cycles)| cycles)
-}
-
-/// Whether a decoded texture's name identifies its surface as the shared
-/// blink-light palette, animated by scrolling its V (row) coordinate.
-///
-/// **Confidence: 85.** Every one of the 8 playable PSP ships carries a mesh
-/// named `glowingShape` whose material resolves to the exact same shared
-/// texture, `Data\Tex\colours_flashing_GLOW.tga` - not a per-ship asset, a
-/// common one. The ship-specific mesh names first noticed on Feisar
-/// (`underbrake_flashrightShape`/`underbrake_flashleftShape`) and Triakis
-/// (`flasherShape`/`flasher1Shape`) resolve to the identical texture, which is
-/// why matching by mesh name generalised badly (each ship names its extra
-/// copies of this light differently, or not at all) while matching by the
-/// texture it actually paints generalises to all of them.
-///
-/// The texture's rows turned out to be the animation itself - see
-/// `docs/formats/vex.md`, "The animation is authored in the texture, on its V
-/// axis", for the full survey and the capture that confirmed it
-/// (`crates/render/tests/blink_lights_ground_truth.rs` checks the texture
-/// match against every real ship).
-///
-/// Matching on the texture rather than the mesh name also means a mesh with
-/// more than one material - Feisar's `self_illuminatedShape` has one batch on
-/// this texture and another on the ship's own steady-lit skin - is judged
-/// batch by batch instead of being wrongly all-or-nothing.
-///
-/// Kept as its own predicate, rather than folded into [`animated_v_cycles`],
-/// because the ship claim is evidenced far more strongly than any track entry:
-/// this one is worth naming and citing separately even though the table would
-/// match the same label. `blink_lights_ground_truth.rs` asserts it against every
-/// real ship.
-#[must_use]
-pub fn is_blink_light_texture(label: &str) -> bool {
-    label.to_ascii_lowercase().contains("flashing_glow")
-}
-
-#[cfg(test)]
-mod blink_texture_tests;
-
 /// A model flattened into one vertex and one index buffer.
 ///
 /// `Clone` so that one mesh can back several [`crate::mesh_render::Drawable`]s -
@@ -144,8 +74,11 @@ pub struct Model {
     /// hole. Empty on every title but Wipeout HD, and `None` on the majority of
     /// its materials.
     pub lightmaps: TextureSlots,
-    /// Each HD pad material's `_ne` mask, bound third (`mesh::rcs::pad_ne`); empty elsewhere.
+    /// Each HD pad material's `_ne` mask, bound third (`mesh::rcs::pad_ne`), and each
+    /// magstrip material's emissive picture in the same slot (`mesh::rcs::mag_wave`).
     pub pad_masks: TextureSlots,
+    /// Each magstrip material's scrolling wave texture, bound fourth; empty elsewhere.
+    pub wave_maps: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -317,6 +250,7 @@ impl Model {
             textures: Vec::new(),
             lightmaps: Vec::new(),
             pad_masks: Vec::new(),
+            wave_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
@@ -368,6 +302,7 @@ mod batch_placement;
 pub use batch_placement::{BatchPlacement, batch_placements};
 
 pub mod rcs;
+pub mod shine_pass;
 pub mod ship_skin;
 pub mod sky_cube;
 
@@ -909,6 +844,7 @@ fn build_class(
         textures,
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
+        wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),

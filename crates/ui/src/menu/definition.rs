@@ -30,7 +30,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::language::StringTable;
-use oag_gameplay::input::button_from_name;
+use oag_core::buttons::button_from_name;
 
 use super::{
     Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Pin, Restart, Value, ValueSource,

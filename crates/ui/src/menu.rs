@@ -52,7 +52,7 @@
 //! below run with no config directory, no disc and no window.
 
 use crate::frontend::Draw;
-use oag_gameplay::input::{Button, Input};
+use oag_core::buttons::{Button, Input};
 
 /// The menu tree this build ships with.
 ///

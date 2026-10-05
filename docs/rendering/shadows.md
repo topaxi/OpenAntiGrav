@@ -1022,6 +1022,76 @@ and the polygon's centre sits `0.836` units from the contact point under a
 craft whose hull is `10.5` long
 (`crates/game/tests/shadow_ground_truth.rs`).
 
+## The shadow blinked, 2026-10-05: a flat polygon on a road that is not flat
+
+The report from play: shadows "flickering a bit, especially pronounced on Pulse
+Zone races". The maintainer's Pulse (PSP) profile runs `original`, so the
+shadow in question is the projected occluder hull
+([`hull_triangles`](../../crates/render/src/shadow.rs)).
+
+**What the cause was.** `hull_triangles` lays the whole hull on one plane, the
+plane of the one collision triangle the craft's downward ray hit, a unit above
+nothing but that plane (`LIFT`, 0.05). A hull is five units across and a road
+curves; away from the hit triangle the plane stands under the road, and *which*
+triangle is hit changes tick to tick as the craft crosses seams (the contact
+normal steps by 0.02-0.04 per component when it does). So a part of the polygon
+is buried under the road on one tick and clear of it on the next: a shadow
+whose edge blinks. Faster craft cross more seams per second, which is why a
+Zone race, where the speed climbs, shows it more.
+
+**Measured, in this order** (all on the default Pulse circuit, `--autopilot`,
+the maintainer's profile of 4x MSAA and high motion blur):
+
+1. *Not the render settings.* The on-minus-off shadow mask swings 7-8 % tick to
+   tick in all four of {motion blur off, high} x {MSAA off, 4x}, identically
+   (`mean|d|` 1081, 1073, 1072, 1081 thousand). Upscaler and TAA were off in
+   this profile (`reconstruction = "off"`), so they are not in the path.
+2. *Not a placement jump.* Per tick the hull's area, centroid, strength and
+   height are smooth (area 27.3-27.7 over 40 ticks; the centroid moves 0.03
+   units at a seam).
+3. *The polygon is buried.* `Race::floor_above` casts from each polygon point
+   along the normal into the circuit's own floor. In Zone, late in a lap
+   (ticks 6000-6060), an unconformed polygon sat up to **0.70 units** under the
+   road at `LIFT` 0.05, on **22 of 60 ticks**; at 3000 ticks 0.28 on 9 of 60;
+   at 900 ticks 0.12 on 2 of 60. The same circuit as an ordinary race, at
+   `LIFT` 0.15: 0.10 on 1 of 60 at 3000 ticks and nothing at 6000.
+   [`shadow_stability_ground_truth.rs`](../../crates/game/tests/shadow_stability_ground_truth.rs)
+   prints all of it.
+4. *The picture agrees, and says more.* Changed pixels, shadow on minus off,
+   per tick over 20 ticks (Zone, tick 6000-6020): before, 3102 at worst against
+   a steady 10-11 thousand, with a tick-to-tick alternation of 13.8 %. The
+   collision floor is not what the player sees, though: conforming the polygon
+   to the collision floor alone still dipped to 5026 (8.8 %), because the
+   visible road stands a little proud of it. Raising `LIFT` is what closed
+   that: 0.15 gives a worst tick of 10610 and 3.7 % (the road's own texture
+   sliding under a shadow accounts for that residual); 0.3 and 0.6 look the
+   same. Conforming matters too: `LIFT` 0.15 *without* it still dipped to 9398
+   (7.2 %).
+
+**The fix, two parts, both in the render side** (no simulation change):
+
+- `oag_render::shadow::conform_to_floor` splits each hull triangle once at its
+  edge midpoints and moves every vertex to `LIFT` above the circuit's floor
+  under it (`Race::floor_above`: a unit above, two below, nearest hoverable
+  hit). A flat triangle over a concave road is buried between its own vertices
+  however well they are placed - fitting vertices alone left 0.12 at a
+  triangle's centre, one split brought it to 0.056.
+- `LIFT` from 0.05 to 0.15. **Chosen, not measured**: the smallest of the
+  values tried (0.05, 0.15, 0.3, 0.6) that removed the dips.
+
+The test is disc-backed (`the_shadow_polygon_is_not_buried_under_the_road`): the
+conformed polygon stays within 0.1 of the floor over three 60-tick Zone
+windows, and the unconformed one must still exceed 0.3, so the probe cannot
+lose its sensitivity unnoticed. The blob tier shares `LIFT`.
+
+**What was not done.** The original was not captured: nothing here says
+whether PPSSPP's software renderer shows the same blink, and Pulse's stencil
+volume is depth-tested against the visible road, so it plausibly cannot bury
+at all. The plume covers most of the shadow at the default chase camera, so
+the blink reads as a flicker at the craft's tail rather than a shape; the
+frames are in the lane's scratch report. `Race::floor_above` runs about 300
+casts per craft per frame at `original`; not profiled.
+
 ## Constraints this touches
 
 - **The occluder parser lands in `oag-formats`, which

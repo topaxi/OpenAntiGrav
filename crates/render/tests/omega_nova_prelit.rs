@@ -93,6 +93,7 @@ fn model(lightmapped: bool, texel: u8) -> Model {
         textures: vec![Some(texture("white albedo", [255, 255, 255, 255]))],
         lightmaps: vec![lightmapped.then(|| texture("atlas", [texel, texel, texel, 255]))],
         pad_masks: Vec::new(),
+        wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),

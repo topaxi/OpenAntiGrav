@@ -199,15 +199,17 @@ pub const HANDLING_DIR: &str = r"Data\HandlingStats";
 /// Where this title keeps the `.pob` effects a race plays.
 ///
 /// The executable builds an effect's path in `FUN_812a6a2e` (v1.04 eboot): a
-/// game-mode id below 23 gets `Data/Particles2048/%s`, anything else
-/// `Data/Particles/%s`, and the effect names it passes are the ones a ship's
-/// setup preloads (`FUN_81298f58`). **Every mode this build plays is on the
-/// first side of that test** - which ids are on the second was not read - so
-/// this is the one directory, and the `Data/Particles` copies (HD's older
-/// authoring of the same stems) are not read. The two directories differ in
-/// bytes on nearly every shared stem, so this is not interchangeable with
-/// the other. Confidence 80: the branch is read, which modes this port
-/// reaches is inferred from the ids it plays being below 23.
+/// game-mode id **below 23** gets `Data/Particles/%s` (HD's authoring), any
+/// other id `Data/Particles2048/%s`. A campaign or multiplayer event's id is
+/// `FUN_810016ba(name)` of its own `m_name` (`FUN_812b0d52`, called from
+/// `CampaignEventCard_HandleInput`); a name outside the 23-entry table
+/// (`Arcade`, `Zone`, ...) falls to a CRC-32, and none of the 577 instance names
+/// in `SP.xml` and `MP.xml` is in the table or hashes below 23. So **2048's own
+/// events read `Data/Particles2048`**, which is this directory. The named
+/// modes (HD-lineage content) read `Data/Particles`; this port plays none of
+/// them, so nothing here reaches that side. Confidence 70: the launch path is
+/// read, whether a later writer overwrites `state+0xe4` was not walked
+/// (`docs/ghidra/functions/vita-2048-eu-v104/particle-paths.md`).
 pub const EFFECT_DIR: &str = r"Data\Particles2048";
 
 /// Where this title keeps its roster - **the one axis 2048 forced into

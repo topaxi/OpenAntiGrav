@@ -90,7 +90,7 @@ fn shield_model(
 /// **No texture-transform track and no vertex rework**, unlike the plume: the
 /// model is one mesh with one `_ADD` texture, and the animation is entirely in
 /// the transform and the vertex colour that
-/// [`oag_render::shield::ShipShield`] computes. Anything done to the mesh here
+/// `oag_render::shield::ShipShield` computes. Anything done to the mesh here
 /// would be a second, invisible place for the look to come from. The PS2
 /// branch in [`shield_model`] touches only which texture a draw binds, never a
 /// vertex, and the PS2 shell is `extrashield.vex`, not the PSP's `shipshield.vex`

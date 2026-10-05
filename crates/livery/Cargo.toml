@@ -15,13 +15,11 @@ oag-mesh.workspace = true
 oag-pulse.workspace = true
 oag-race.workspace = true
 oag-rcs.workspace = true
-oag-render.workspace = true
 oag-tables.workspace = true
 oag-texture.workspace = true
 oag-title.workspace = true
 oag-vex.workspace = true
 anyhow.workspace = true
-log.workspace = true
 
 [lints]
 workspace = true

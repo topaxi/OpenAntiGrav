@@ -573,5 +573,66 @@ impl Blob {
     }
 }
 
+/// What the PS2 build calls the texture a PSP name asks for, if the name is one
+/// it would rewrite.
+///
+/// The two discs share their XML, their `.vex` models and their authored asset
+/// paths; what they do not share is the compiled texture container. The PS2
+/// build's texture resolver takes the declared name and **replaces the source
+/// art's extension with its own** before it hashes anything, so one name serves
+/// both pressings:
+///
+/// | Declared | PSP entry | PS2 entry |
+/// | --- | --- | --- |
+/// | `Data\Tex\engineFlare\Engine_noise.mip` | `008d70a2` | `e9f16c12` |
+///
+/// `.tga` is rewritten as well as `.mip` - the executable's own table lists
+/// both - because a good many names in it are still the artist's source path.
+/// Anything else is left alone, which is why this returns [`None`] rather than
+/// a name: a `.vex` or a `.pob` is found under its declared name on both discs.
+///
+/// # Where this comes from
+///
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) canonicalises the name
+/// before hashing it: it strips a leading `WIPEOUT PSP\PS2\` build path, then
+/// replaces `.TGA` and then `.MIP` with `.PCT`, hashes the result with the WAD
+/// name hash, and looks it up. A name that resolves to no file is replaced
+/// wholesale with `Data/Tex/Missing.pct` - itself entry 6910 of `WADS2.WAD` -
+/// and retried, which is the game's own visible "texture not found".
+///
+/// See `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`, and
+/// `oag_pulse::PS2_IMAGES` for the three entries that were found by their picture before
+/// the rule was known and now serve as its check.
+#[must_use]
+pub fn ps2_texture_name(name: &str) -> Option<String> {
+    let (stem, extension) = name.rsplit_once('.')?;
+    (extension.eq_ignore_ascii_case("mip") || extension.eq_ignore_ascii_case("tga"))
+        .then(|| format!("{stem}.pct"))
+}
+
+/// The build-time path prefix `Texture_FindOrLoad` strips before it hashes a
+/// name, if present.
+///
+/// A `Texture` node's own declared name is sometimes the artists' authoring
+/// path rather than the archive-relative one every other asset class uses.
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) removes this one
+/// substring, wherever it occurs in the name, before doing anything else -
+/// see the pseudocode in
+/// `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`. The disc's own
+/// constant is spelled uppercase and matched there with a case-sensitive
+/// `strstr`; stripped case-insensitively here instead, since a name that
+/// varies only in case would otherwise resolve on one disc and not the
+/// other for no reason the format cares about, and [`hash_name`]
+/// downstream lower-cases everything anyway.
+#[must_use]
+pub fn ps2_strip_build_prefix(name: &str) -> String {
+    const PREFIX: &str = r"WIPEOUT PSP\PS2\";
+    let lower = name.to_ascii_lowercase();
+    match lower.find(&PREFIX.to_ascii_lowercase()) {
+        Some(pos) => format!("{}{}", &name[..pos], &name[pos + PREFIX.len()..]),
+        None => name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests;
