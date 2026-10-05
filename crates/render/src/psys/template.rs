@@ -57,9 +57,8 @@ impl Effect {
                 // The template's own sprite, not its parent's: none is a stand-in.
                 let Some(sprite) =
                     super::Sprite::from_template(system, data, template).or_else(|| {
-                        system
-                            .texture_path(data, template)
-                            .and_then(|path| external(path))
+                        let path = system.texture_path(data, template)?;
+                        external(path)
                     })
                 else {
                     continue;

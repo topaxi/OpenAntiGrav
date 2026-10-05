@@ -592,7 +592,7 @@ mod v2048 {
         let Some(root) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
             return;
         };
-        let mut archive = oag_assets::psarc::Archive::open_file(&root.join("base/PSP2/data.psarc"))
+        let archive = oag_assets::psarc::Archive::open_file(&root.join("base/PSP2/data.psarc"))
             .expect("opens");
         let dir = oag_2048::race::EFFECT_DIR;
         let absent: Vec<&str> = RACE_EFFECTS
