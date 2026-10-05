@@ -58,7 +58,11 @@ fn run(source: &str, track: &str, ticks: u32) -> Option<(Forks, usize)> {
                     .chosen
                     .entry(branching.decided_at - 1)
                     .or_default()
-                    .entry(branching.route)
+                    .entry(if branching.pending != 0 {
+                        branching.pending
+                    } else {
+                        branching.route
+                    })
                     .or_default() += 1;
             }
             decided[slot] = branching.decided_at;
@@ -245,6 +249,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
             decided_at: 0,
             entered: true,
             visits: 1,
+            pending: 0,
         };
         ship.driver.index = on_route as u32;
         ship.physics.body.position = position;

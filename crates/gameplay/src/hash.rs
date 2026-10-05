@@ -291,11 +291,13 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         decided_at,
         entered,
         visits,
+        pending,
     } = branching;
     hasher.write_u32(u32::from(*route));
     hasher.write_u32(u32::from(*decided_at));
     hasher.write_u8(u8::from(*entered));
     hasher.write_u32(*visits);
+    hasher.write_u32(u32::from(*pending));
 }
 
 /// A craft's place in the race, which decides the finishing order and is

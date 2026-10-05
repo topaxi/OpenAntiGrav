@@ -624,6 +624,14 @@ impl Race {
         // countdown; granting it at tick 0 put a HUD icon on screen during
         // those 272 ticks that the disc never draws.
         race.sim.speed_plan = race.field_speed_plan();
+        for (route, plan) in race
+            .route_speed_plans()
+            .into_iter()
+            .enumerate()
+            .collect::<Vec<_>>()
+        {
+            race.sim.routes[route].plan = plan;
+        }
         race
     }
 }

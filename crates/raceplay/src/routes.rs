@@ -13,12 +13,31 @@
 //! unchanged, and leaving the route is the line wrapping back to its start.
 //! The driver's index is into whichever line it is on, so everything that
 //! pairs `driver.index` with a line or a sample goes through
-//! [`Race::line_of`] and [`Race::ai_sample_for`]. The speed plan is built for
-//! the ring alone, so a craft on a route drives the corner model.
+//! [`Race::line_of`] and [`Race::ai_sample_for`]. Each route has its own speed
+//! plan, built the way the ring's is ([`Race::route_speed_plans`]), and **a
+//! route whose plan does not lap clean is not offered to the coin** - chosen,
+//! not measured: the original sends half its field down every route, and a
+//! route our physics cannot drive (`07_Track`'s centre ramp) would park half
+//! of ours.
 
 use log::{info, warn};
 
 use super::*;
+
+/// How far short of a route's split, in line samples, a driver that drew it
+/// moves onto its line: about 480 units, past the furthest a driver looks or
+/// brakes ahead. **Chosen, not measured**: the original has no second line to
+/// move onto, its lookahead walks the excluded path from the moment it draws.
+const SWITCH_SAMPLES: usize = 320;
+
+/// Line samples either side of a driver's index its own line is scored over
+/// when deciding a re-commit - the driver's own search window. Ours.
+const RECOMMIT_WINDOW: usize = 48;
+
+/// How much better a sibling must score than the craft's own line before a
+/// re-commit moves it. Ours: one tenth of a track width outside, or one unit
+/// along.
+const RECOMMIT_MARGIN: f32 = 1.0;
 
 /// One route's AI line and the bookkeeping that maps it onto the ring.
 #[derive(Debug, Clone)]
@@ -36,6 +55,9 @@ pub(super) struct RouteLine {
     pub(super) pre_fork: u16,
     /// The coins that pick it - `oag_race::course::Route::choices`.
     pub(super) choices: Vec<bool>,
+    /// This line's speed plan, built after the field is seated
+    /// ([`Race::route_speed_plans`]); `None` drives the corner model.
+    pub(super) plan: Option<oag_ai::SpeedPlan>,
 }
 
 /// One line per route of `course`, built the way the ring's own line is.
@@ -99,6 +121,7 @@ pub(super) fn route_lines(
             merge: route.merge,
             pre_fork: route.pre_fork,
             choices: route.choices.clone(),
+            plan: None,
         });
     }
     info!("ai routes: {} way(s) round {} fork(s)", out.len(), {
@@ -107,6 +130,19 @@ pub(super) fn route_lines(
         forks.len()
     });
     out
+}
+
+/// The speed plan for a driver on `route`: the ring's for `0`, else that
+/// route's own.
+pub(super) fn plan_for<'a>(
+    routes: &'a [RouteLine],
+    ring: Option<&'a oag_ai::SpeedPlan>,
+    route: u16,
+) -> Option<&'a oag_ai::SpeedPlan> {
+    match route.checked_sub(1) {
+        None => ring,
+        Some(k) => routes.get(usize::from(k)).and_then(|r| r.plan.as_ref()),
+    }
 }
 
 /// The line a driver on `route` follows: the ring for `0`, else that route's.
@@ -125,6 +161,17 @@ pub(super) fn line_for<'a>(
 }
 
 impl Race {
+    /// The speed plan slot `slot`'s driver follows on its own line: the
+    /// ring's, a route's, or none.
+    #[must_use]
+    pub fn plan_of(&self, slot: usize) -> Option<&oag_ai::SpeedPlan> {
+        plan_for(
+            &self.sim.routes,
+            self.sim.speed_plan.as_ref(),
+            self.sim.world.ships[slot].driver.branching.route,
+        )
+    }
+
     /// The line slot `slot`'s driver is on - the ring, or a route.
     #[must_use]
     pub fn line_of(&self, slot: usize) -> &oag_ai::Line {
@@ -186,25 +233,36 @@ impl Race {
                 };
                 if !routes.iter().any(|r| r.pre_fork == path) {
                     branching.decided_at = 0;
+                    branching.pending = 0;
                 } else if branching.decided_at != path + 1 {
                     // State 0: one coin sequence per visit to the pre-fork path.
                     branching.decided_at = path + 1;
+                    // A route whose plan did not verify is not offered: its
+                    // share of the coin stays on the ring. Ours - see
+                    // `Race::route_speed_plans`.
                     let candidates = routes
                         .iter()
                         .enumerate()
-                        .filter(|(_, r)| r.pre_fork == path)
+                        .filter(|(_, r)| r.pre_fork == path && r.plan.is_some())
                         .map(|(k, r)| (k, r.choices.as_slice()));
                     let mut visits = branching.visits;
                     let chosen = oag_ai::branch::choose(driver.seed, &mut visits, candidates);
                     branching.visits = visits;
-                    if let Some(k) = chosen {
-                        let r = &routes[k];
-                        let into = (index % n + n - r.merge) % n;
-                        if into < r.kept {
-                            branching.route = u16::try_from(k + 1).unwrap_or(0);
-                            branching.entered = false;
-                            driver.index = u32::try_from(into).unwrap_or(0);
-                        }
+                    branching.pending = chosen.map_or(0, |k| u16::try_from(k + 1).unwrap_or(0));
+                }
+                // The coin is thrown on entering the pre-fork path; the driver
+                // moves onto the route's line only within `SWITCH_SAMPLES` of
+                // the split, so the shared stretch is driven on the ring's line
+                // and plan.
+                if let Some(k) = branching.pending.checked_sub(1).map(usize::from)
+                    && let Some(r) = routes.get(k)
+                {
+                    let into = (index % n + n - r.merge) % n;
+                    if into < r.kept && r.kept - into <= SWITCH_SAMPLES {
+                        branching.route = branching.pending;
+                        branching.pending = 0;
+                        branching.entered = false;
+                        driver.index = u32::try_from(into).unwrap_or(0);
                     }
                 }
             }
@@ -244,6 +302,13 @@ impl Race {
             return;
         };
         let ship = &self.sim.world.ships[slot];
+        // **Not in the air, ours.** Over a jump both lines are under the craft
+        // at once, neither is "the track", and scoring them flipped a craft
+        // between them every tick across `05_Track`'s first jump (328 switches
+        // in one five-minute run, 2026-10-05).
+        if ship.physics.time_airborne > 0.0 {
+            return;
+        }
         let position = ship.physics.body.position;
         let moving = ship.physics.body.linear_velocity.length() >= 0.1;
         let branching = ship.driver.branching;
@@ -270,18 +335,46 @@ impl Race {
             }
         };
         let Some(current) = current else { return };
-        let here = fit(current, position);
-        if !moving || here == 0.0 {
+        if !moving || fit(current, position) == 0.0 {
+            return;
+        }
+        // The craft's own line scored the way a sibling is - its best sample
+        // in the driver's own search window - so the comparison is like for
+        // like, and a sibling must beat it by `RECOMMIT_MARGIN`. Both ours.
+        let order: &[u32] = match branching.route.checked_sub(1).map(usize::from) {
+            Some(k) => &routes[k].order,
+            None => &self.sim.ai_order,
+        };
+        let here = (index.saturating_sub(RECOMMIT_WINDOW)..index + RECOMMIT_WINDOW)
+            .filter_map(|i| {
+                order
+                    .get(i % order.len().max(1))
+                    .and_then(|&s| self.sim.spline.sample(s as usize))
+            })
+            .map(|sample| fit(sample, position))
+            .fold(f32::INFINITY, f32::min)
+            - RECOMMIT_MARGIN;
+        if here <= 0.0 {
             return;
         }
         // Every sibling's own stretch: the ring's bypassed span, or a route's
         // own samples, each as (line, first index, end index, sample order).
         let mut best: Option<(u16, usize, f32)> = None;
+        // **Hysteresis, ours**: near the fork mouth the two lines lie on top
+        // of each other, and a wall scrape there would otherwise score the
+        // sibling better and flip a craft between them. A sibling sample only
+        // counts once it is more than a track width from where the craft's own
+        // line is.
+        let mouth = current.half_width_left + current.half_width_right;
+        let own = Vec3::from_array(current.pos);
         let mut consider = |route: u16, order: &[u32], from: usize, to: usize| {
             for i in from..to {
                 let Some(sample) = self.sim.spline.sample(order[i % order.len()] as usize) else {
                     continue;
                 };
+                if (Vec3::from_array(sample.pos) - own).length() <= mouth {
+                    continue;
+                }
                 let score = fit(sample, position);
                 if score < here && best.is_none_or(|(_, _, b)| score < b) {
                     best = Some((route, i % order.len(), score));
@@ -289,7 +382,8 @@ impl Race {
             }
         };
         for (k, r) in routes.iter().enumerate() {
-            if r.pre_fork != fork {
+            // Only a route the coin may draw is a sibling to switch to.
+            if r.pre_fork != fork || r.plan.is_none() {
                 continue;
             }
             let route = u16::try_from(k + 1).unwrap_or(0);

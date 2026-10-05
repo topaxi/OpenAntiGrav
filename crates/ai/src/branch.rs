@@ -36,6 +36,11 @@ pub struct Branching {
     pub entered: bool,
     /// Forks decided so far, the counter the coins are drawn against.
     pub visits: u32,
+    /// The route the last coins chose, `k + 1`, while the driver is still on
+    /// the ring short of the split; `0` for none. The decision is the
+    /// original's (on entering the pre-fork path); when the driver moves onto
+    /// the route's line is ours - see `oag_raceplay`'s `routes` module.
+    pub pending: u16,
 }
 
 impl Branching {

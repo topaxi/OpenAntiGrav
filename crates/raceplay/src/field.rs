@@ -257,8 +257,11 @@ impl Race {
                 pilot: &pilot,
                 field: &field,
                 yaw_ceiling: Some(yaw_ceiling),
-                // The plan is the ring's; a route drives the corner model.
-                plan: self.sim.speed_plan.as_ref().filter(|_| route == 0),
+                plan: super::routes::plan_for(
+                    &self.sim.routes,
+                    self.sim.speed_plan.as_ref(),
+                    route,
+                ),
             },
         )
     }
@@ -396,8 +399,11 @@ impl Race {
                         // global belief was wrong for all of them. See
                         // `oag_ai::hull_yaw_ceiling`.
                         yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
-                        // The ring's plan; a route drives the corner model.
-                        plan: self.sim.speed_plan.as_ref().filter(|_| route == 0),
+                        plan: super::routes::plan_for(
+                            &self.sim.routes,
+                            self.sim.speed_plan.as_ref(),
+                            route,
+                        ),
                     },
                 )
             } else {
