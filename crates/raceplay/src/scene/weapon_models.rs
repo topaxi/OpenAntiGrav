@@ -290,6 +290,12 @@ impl super::Scene {
                 }
                 if draw.hd_scale.is_none() {
                     drawable.write_node_anims(queue, seconds);
+                    // `Node_SetAnimTimeTree` hands the one scrubbed time to
+                    // the `Anim Transform` and `Mesh` nodes of the tree alike
+                    // (anim-transform.md), so the texture offsets ride the
+                    // same `age * rate`. `hemisphere1` has no node animation
+                    // at all: this is the only thing it writes.
+                    drawable.write_anims(queue, seconds);
                 }
             }
         }
@@ -509,6 +515,7 @@ fn write_one_kind(
         drawable.write(queue, view_projection, *matrix, prev_vp * previous);
         if let Some(seconds) = anim_seconds {
             drawable.write_node_anims(queue, seconds);
+            drawable.write_anims(queue, seconds);
         }
     }
 }
