@@ -347,14 +347,15 @@ The 3D audio and PS VR patch is a different one, **Omega's** Update 1.04 of
 So no published note says what 2048's patch changed; its archives are the
 only changelog there is.
 
-**Hypothesis: v1.04 is mostly the HD/Fury DLC's compatibility and setup
-(confidence 60).** Evidence: the patch and the WipEout HD/Fury add-on packs
-shipped on the same day, 19 June 2012 ([Shacknews](https://www.shacknews.com/article/74403/wipeout-2048-getting-hd-and-fury-add-on-packs);
-20 June in Europe, [PlayStation Blog FR](https://blog.fr.playstation.com/2012/06/19/wipeout-hd-et-le-pack-dextension-fury-dbarquent-sur-ps-vita-le-20-juin/)),
-and the only asset family the census above finds in the patch is `hdships`,
-the DLC's own twelve teams. Not checked: a full diff of the patch archives
-against `data.psarc` and the two DLC packages, and the patch eboot's code
-changes. Either could raise or kill this. The maintainer suggested the reading.
+**Hypothesis, tested 2026-10-05 (census in [patches.md](patches.md)).** The package is
+cumulative: Sony's own `changeinfo` inside it lists 1.01 to 1.04, with "DLC Support" at **1.03**
+and 1.04 only "Various Bug Fixes", so "v1.04 itself is DLC compatibility" is killed
+(confidence 85). "The patch package is mostly add-on support" is raised from 60 to 75: its
+executable gains DLC mounting, HD and Fury campaign screens, HD livery names and the HD Fury
+Zone shader, and its archives carry 481 `hdships` entries and the add-on circuits' skeleton -
+but 1,156 replaced `.rcsmaterial` and over a thousand other replaced files have no add-on
+explanation in the census (cause unread). The HD-named banks: the patch touches `speech.bnk`
+only (not `weapons.bnk` or `shipHD.bnk`); the DLC packs replace only the Detonator pair.
 
 **Omega check** (same test file, `omega_census`): Omega ships 69
 `engineflare.rcsmodel` (68 decode with geometry through the same reader) and 9

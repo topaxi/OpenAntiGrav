@@ -15,6 +15,10 @@ path = "src/bin/oag-unpack.rs"
 name = "oag-wad"
 path = "src/bin/oag-wad.rs"
 
+[[bin]]
+name = "oag-psarc-diff"
+path = "src/bin/oag-psarc-diff.rs"
+
 [dependencies]
 oag-texture.workspace = true
 oag-tables.workspace = true
