@@ -3610,6 +3610,40 @@ same coin. 2048 adds an authored per-circuit override after it (circuit record
 `+0x150`/`+0x154`/`+0x158`, source not found) and a different re-commit; neither
 is ported. See [the 2048 page](../ghidra/functions/vita-2048-eu-v104/ai-branch-choice.md).
 
+**Ported 2026-10-05**, for every title, since all four flip the same coin:
+
+- **The coin** is `oag_ai::branch::coin`: bit 8 of a draw off `oag_core::Rng`
+  seeded from the driver's own seed and a per-driver visit counter, so it moves
+  no other roll in the race. The draw source is ours; the fairness, the timing
+  (on entering the pre-fork path) and the hold to the merge are the original's.
+- **The geometry** is `oag_race::course::Route`: every way from a ring fork back
+  to the ring, including 2048's multi-path alternates and forks nested inside an
+  alternate (`square`, `mall`, `subway`), which `Course::branches` - the
+  Repulser's narrower view - drops. A nested route is picked by rolling its
+  coins in order (`oag_ai::branch::choose`), so two forks deep is one in four.
+- **The line** is ours: one AI line per route, the ring from the route's merge
+  round to its split and then the route's own samples, built by the same
+  `racing_line` the ring's is (`oag_raceplay`'s `routes` module). A driver's
+  index is into whichever line it is on, and every consumer that pairs it with
+  a line or a sample asks `Race::line_of` / `Race::ai_sample_for`.
+- **The re-commit** is the original's Pulse rule: off the track and moving, a
+  craft scored better on a sibling (`|across| * 10 + along`) switches to it.
+- **Lap progress** on a route is read off the ring span it replaces - see
+  [lap counting](lap-counting.md#where-we-differ).
+
+Measured on the result (`ai_fork_split_ground_truth.rs`): a full field on
+`05_Track` over a race decided 17 times for the ring and 24 for the route; on
+2048's `altima` over three laps, 13/8 at one fork and 6/16 at the other, every
+running craft within a lap of the rest. `race_ground_truth`'s lone-craft board
+stays all twelve clean with no respawns; the three fork circuits' best laps
+moved (05 34.8 -> 37.1 s, 14 42.5 -> 43.3 s, 07 45.0 -> 45.3 s) because a craft
+on a route drives the corner model, not the speed plan, which is built for the
+ring alone.
+
+**Not ported**: 2048's per-circuit override (circuit record `+0x150`), its
+per-craft construction coin and its own re-commit; a speed plan per route;
+pad-seeking while on a route (the pads sit on ring indices).
+
 ## Where this sits
 
 The prerequisites were all done before this landed: the

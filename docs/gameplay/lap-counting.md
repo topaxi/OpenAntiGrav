@@ -191,6 +191,17 @@ for the original in full; the divergences that remain are these, each a choice:
   and, as read, adds that fraction to a clock that already holds the whole tick,
   so every recorded lap is one frame long. Ours is whole ticks at 60 Hz. Neither
   is implemented as the other; the doc comment on `oag_race::Standing` says so.
+- **Progress on the far side of a fork.** The original locates a craft on
+  whichever path it is on (`Craft_UpdateLapProgress` passes the AI's excluded
+  path, `0x08842af4`) and reads that point's authored progress. Ours is a ring,
+  so a craft on a route (`oag_race::course::Route`) is located on the route and
+  read at the same fraction of the ring span the route stands in for
+  (`Course::locate_on_route`). **Chosen, not measured**: continuous at both ends,
+  and on nested routes (2048's `square`) a shared stretch can step back by up to
+  40 units where two routes diverge - a lap is 7,890 there and the gate needs
+  half of one. Before this a craft on a detour that strayed past the reacquire
+  distance could read a lap away (`park`: 4,388 units). See
+  `crates/game/tests/branch_progress_ground_truth.rs`.
 - **The split table, the perfect-lap flag, the twenty fastest laps** and the
   profile statistics the original updates on a crossing are not modelled.
 
