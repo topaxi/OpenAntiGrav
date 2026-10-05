@@ -107,6 +107,10 @@ impl<'a> Cursor<'a> {
     }
 }
 
+/// A bound state group: its id, the change-occurs byte and its
+/// `(state id, state instance id)` pairs.
+pub type StateGroup = (u32, u8, Vec<(u32, u32)>);
+
 /// What every music node carries before its own fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MusicNode {
@@ -118,7 +122,7 @@ pub struct MusicNode {
     pub flags: [u8; 4],
     /// State groups the node binds: `(group id, change-occurs byte, states)`
     /// with each state `(state id, state instance id)`.
-    pub state_groups: Vec<(u32, u8, Vec<(u32, u32)>)>,
+    pub state_groups: Vec<StateGroup>,
     /// The children, in file order.
     pub children: Vec<u32>,
     /// Tempo in beats per minute, and the time signature.
@@ -302,7 +306,7 @@ impl Switch {
         let types = c.take(depth)?.to_vec();
         let size = c.u32()? as usize;
         let mode = c.u8()?;
-        if size % 12 != 0 {
+        if !size.is_multiple_of(12) {
             return Err(MusicError::BadTree);
         }
         let raw = c.take(size)?;
@@ -310,7 +314,9 @@ impl Switch {
             return Err(MusicError::TrailingBytes { at: c.at });
         }
         let tree = raw
-            .chunks_exact(12)
+            .as_chunks::<12>()
+            .0
+            .iter()
             .map(|n| TreeNode {
                 key: u32::from_le_bytes(n[0..4].try_into().expect("four")),
                 target: u32::from_le_bytes(n[4..8].try_into().expect("four")),

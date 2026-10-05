@@ -94,7 +94,7 @@ fn walk(
         .map_err(|e| format!("{e:?}"))
 }
 
-fn stems_of(chain: &SongChain) -> Result<(f64, Vec<u32>, Vec<bool>, Vec<Clip>), String> {
+fn song_of(chain: &SongChain, title: String, location: u32, state: u32) -> Result<Song, String> {
     let [segment] = chain.segments.as_slice() else {
         return Err(format!("{} segments, expected one", chain.segments.len()));
     };
@@ -120,7 +120,15 @@ fn stems_of(chain: &SongChain) -> Result<(f64, Vec<u32>, Vec<bool>, Vec<Clip>), 
         embedded.push(media.source.stream == StreamType::Embedded);
         clips.push(*clip);
     }
-    Ok((segment.duration / 1000.0, stems, embedded, clips))
+    Ok(Song {
+        title,
+        location,
+        state,
+        seconds: segment.duration / 1000.0,
+        stems,
+        embedded,
+        clips,
+    })
 }
 
 fn bank_blob(archives: &mut Archives, st: &StateTracks) -> Result<Vec<u8>> {
@@ -168,7 +176,7 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
                 continue;
             }
         };
-        let (seconds, stems, embedded, clips) = match stems_of(&chain) {
+        let song = match song_of(&chain, entry.id.clone(), location, state) {
             Ok(found) => found,
             Err(why) => {
                 skip(Skip::Walk(why));
@@ -176,13 +184,14 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
             }
         };
         if check_media {
-            let first = if embedded[0] {
-                lib.banks()[0].embedded(stems[0]).map(<[u8]>::to_vec)
+            let lead = song.stems[0];
+            let first = if song.embedded[0] {
+                lib.banks()[0].embedded(lead).map(<[u8]>::to_vec)
             } else {
-                archives.read_name(&wem_name(st, stems[0])).ok()
+                archives.read_name(&wem_name(st, lead)).ok()
             };
             let Some(first) = first else {
-                skip(Skip::MissingMedia(stems[0]));
+                skip(Skip::MissingMedia(lead));
                 continue;
             };
             match Wem::parse(&first).map(|w| w.format().channels) {
@@ -192,20 +201,12 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
                     continue;
                 }
                 Err(_) => {
-                    skip(Skip::MissingMedia(stems[0]));
+                    skip(Skip::MissingMedia(lead));
                     continue;
                 }
             }
         }
-        plan.songs.push(Song {
-            title: entry.id.clone(),
-            location,
-            state,
-            seconds,
-            stems,
-            embedded,
-            clips,
-        });
+        plan.songs.push(song);
     }
     Ok(plan)
 }
@@ -224,16 +225,10 @@ pub fn front_end(archives: &mut Archives, st: &StateTracks) -> Result<Option<Son
     let bank = Bank::parse(&blob).map_err(|e| anyhow!("{}: {e}", st.bank))?;
     let lib = Library::new(vec![bank]);
     let chain = walk(&lib, st, st.front_end_flow, None).map_err(|e| anyhow!("{e}"))?;
-    let (seconds, stems, embedded, clips) = stems_of(&chain).map_err(|e| anyhow!("{e}"))?;
-    Ok(Some(Song {
-        title: format!("music container {}", chain.ranseq),
-        location: 0,
-        state: 0,
-        seconds,
-        stems,
-        embedded,
-        clips,
-    }))
+    let title = format!("music container {}", chain.ranseq);
+    song_of(&chain, title, 0, 0)
+        .map(Some)
+        .map_err(|e| anyhow!("{e}"))
 }
 
 /// Decodes every stem and sums them into one stereo stream.
