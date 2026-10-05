@@ -42,8 +42,10 @@ the original running.
   would also give the side-by-side look reference this lane did not have.
 - The track's down for MagEffect2 comes from the nearest spline sample
   (chosen, the sim's own stand-in), not the located sample `craft+0xb10`.
-- Pure: its code side is unread. Neither MagEffect hash is in its `Data.wad`.
-  `WeaponModels::mag_floor` is `None` there.
+- Pure: closed, a negative. Its executable has no magstrip class, no
+  `visual_effects` and no `MagEffect` string, on either pressing
+  ([magfloor-absent.md](../../docs/ghidra/functions/psp-pure-usa/magfloor-absent.md)).
+  `WeaponModels::mag_floor` is `None` there as a finding.
 - HD/Fury, 2048 and Omega belong to the `MagstripWake` lane, not this one.
 
 ## Next Steps
@@ -52,5 +54,3 @@ the original running.
   force Show on the player's effect object, and capture a software-renderer
   frame. Compare it with `oag-game --race --pose 348.8,14,434.2 --track
   'Data\Environments\01_Track\track.vex' --ticks 300 --screenshot`.
-- Pure lane: search Pure's `BOOT.BIN` for a `Craft_Construct` that stores
-  at an `+0x8bc`-like slot, and for `visual_effects` strings.

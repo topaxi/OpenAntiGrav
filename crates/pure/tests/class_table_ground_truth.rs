@@ -180,6 +180,20 @@ fn the_two_titles_share_one_class_name_table() {
             "Pure names {absent:?}, so it is not the absence V4 records"
         );
     }
+
+    // The effect Pulse's craft draws on a magstrip is absent from Pure's
+    // executable too: no `visual_effects` directory, no `MagEffect` name.
+    for absent in ["visual_effects", "MagEffect"] {
+        let needle = absent.as_bytes();
+        assert!(
+            pulse_boot.windows(needle.len()).any(|w| w == needle),
+            "Pulse should name {absent:?}"
+        );
+        assert!(
+            !pure_boot.windows(needle.len()).any(|w| w == needle),
+            "Pure names {absent:?}, so `mag_floor: None` is no longer a finding"
+        );
+    }
 }
 
 /// The run is consecutive class IDs with three gaps, and Pulse's 15 recovered

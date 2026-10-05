@@ -100,7 +100,9 @@ pub const TITLE: &Title = &Title {
         // see `oag_tables::weapons::BombStats::timetodie`.
         bomb_blast_pulse: None,
         repulser_field: None,
-        // Neither MagEffect hash is in Pure's `Data.wad`; its code is unread.
+        // Pure ships no magstrip and no magfloor effect: its executable has no
+        // `visual_effects` or `MagEffect` string and no `Mag Floor Collision`
+        // class (docs/ghidra/functions/psp-pure-usa/magfloor-absent.md).
         mag_floor: None,
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
