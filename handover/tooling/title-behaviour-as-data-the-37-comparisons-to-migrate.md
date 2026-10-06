@@ -1,10 +1,10 @@
-# Title behaviour as data: the 20 comparisons still to migrate
+# Title behaviour as data: the last comparison to migrate
 
 2026-10-06. [ADR-0058](../../docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md)
 decides that per-title behaviour is `Title` data with a provenance tag and that a
 generic crate never compares a title's identity. `just check-title-branching`
 (`scripts/check-title-branching.py`) freezes the sites below at the counts in its
-`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 20 remain (three more migrated 2026-10-06 by the `2048-endrace` lane). Each migration lowers the row it touches in the
+`BASELINE`; `oag-raceplay`'s 14 are migrated, and so are `oag-game`'s and `oag-source`'s (2026-10-06); one remains. Each migration lowers the row it touches in the
 same change. Sites are `file:line` at main b115ec3ef - `python3
 scripts/check-title-branching.py --list` prints the current ones.
 
@@ -12,10 +12,8 @@ scripts/check-title-branching.py --list` prints the current ones.
 
 1. ~~**Prove the shape on `oag-raceplay` effects**~~ - done, see the raceplay section below. Still open from it: a loader-report line for a title whose triggers are all `None` (2048, Omega) - no line is written today, as none was before.
 2. ~~**`oag-raceplay`'s other flags**~~ - done.
-3. **`oag-game`, `oag-ui`, `oag-source`**: the front-end quirks. Least uniform;
-   shape them from what step 1 proved. Race Remix's HD/2048 rules in `remix.rs`
-   are ADR-0035's fallback and become a `Title` field naming the title that
-   reships the roster.
+3. ~~**`oag-game`, `oag-source`**~~ - done, see below. **`oag-ui`'s** HD English
+   preselect (`frontend.rs:985`) is the last site; the language lane takes it.
 4. **Reconcile with merges.** Lanes running on 2026-10-06 (2048-sky-fog,
    hd-anim-textures) may have added sites; the lead lowers or corrects the
    baseline at merge.
@@ -53,37 +51,33 @@ note is in `crates/title/src/effects.rs`'s module doc):
 because nothing of it is read). The effect `None`s carry no tag at all, being
 absences.
 
-### oag-game (step 3) - 21
+### oag-game, oag-source (step 3) - done 2026-10-06 (`game-title-data`), 0 left
 
-- `crates/game/src/boot/movies.rs:53`: `if title.name == "Wipeout Pure" {`
-- `crates/game/src/boot/movies.rs:69`: `if title.name != "Wipeout Pure" {`
-- `crates/game/src/boot.rs:478`: `if title.name == "Wipeout Pure" {`
-- `crates/game/src/campaign.rs:185`: `title_name == oag_hd::TITLE.name || title_name == oag_omega::TITLE.name`
-- `crates/game/src/campaign.rs:238`: `if title.name == oag_hd::TITLE.name {`
-- `crates/game/src/campaign.rs:241`: `if title.name == oag_omega::TITLE.name {`
-- ~~`crates/game/src/capture/endrace_page.rs:209`: `if title.name == oag_hd::TITLE.name {`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
-- ~~`crates/game/src/endrace.rs:166`: `if title.name == oag_hd::TITLE.name {`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
-- `crates/game/src/main/args.rs:372`: `t if t == oag_pulse::TITLE.name => oag_pulse::campaign::DEFINITION_ENTRY,`
-- `crates/game/src/main/args.rs:373`: `t if t == oag_hd::TITLE.name => oag_hd::campaign::DEFINITION_ENTRY,`
-- `crates/game/src/main/session/campaign.rs:73`: `if shell.title.name == oag_hd::TITLE.name`
-- ~~`crates/game/src/main/session/endrace.rs:172`: `let is_hd = title_ref.name == oag_hd::TITLE.name;`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
-- `crates/game/src/main/session/remix.rs:77`: `let has_hd = titles.iter().any(|c| c.title() == oag_hd::TITLE.name);`
-- `crates/game/src/main/session/remix.rs:78`: `let has_2048 = titles.iter().any(|c| c.title() == oag_2048::TITLE.name);`
-- `crates/game/src/main/session/remix.rs:108`: `(craft_title == oag_hd::TITLE.name)`
-- `crates/game/src/main/session/remix.rs:109`: `.then(|| titles.iter().find(|c| c.title() == oag_2048::TITLE.name))`
-- `crates/game/src/main/session/remix.rs:292`: `if requested == oag_2048::TITLE.name {`
-- `crates/game/src/main/session/remix.rs:296`: `} else if requested == oag_hd::TITLE.name && candidate.title() != oag_hd::TITLE.name {`
-- `crates/game/src/settings/race.rs:157`: `if title.name == oag_hd::TITLE.name && self.variant.is_empty() && !self.variant_chosen {`
-- `crates/game/src/unlock.rs:133`: `if title != oag_pulse::TITLE.name {`
-- `crates/game/src/unlock.rs:189`: `title == oag_pulse::TITLE.name`
+Where each went (all `Title` data with an `Origin`, behaviour byte-identical:
+50 headless stills `cmp`-equal before and after on Pulse PSP EU, Pulse PS2,
+Pure EU and USA, HD, 2048, Omega):
 
-### oag-source (step 3) - 1
+- `oag_title::Campaign` (`Title::campaign`, `crates/title/src/campaign.rs`): the
+  campaign dialect (`campaign.rs` load and `draws_hd_campaign`, now taking the
+  `Title`), the grids file `--campaign-cell` reads (`args.rs`), the circuit and
+  loyalty unlock flags (`unlock.rs`, `Gate::read`, `gates_variants`) and HD's
+  `Campaign Selection` string overlay (`session/campaign.rs`). Pure and 2048
+  are `InheritedFrom("Wipeout Pulse")`, Omega `InheritedFrom("Wipeout HD")`.
+- `oag_title::Pressings` (`Title::pressings`, `crates/title/src/pressing.rs`):
+  Pure's per-serial movie region, TitleFrame and boot movies (`boot.rs`,
+  `boot/movies.rs`); `Measured` off both executables.
+- `RaceDefaults::fresh_variant` (`race/fresh.rs`): HD's fresh-profile model
+  (`settings/race.rs`), `Origin::Chosen`.
+- `GuestRoster::reships`: 2048 names HD as the title whose roster it reships;
+  Race Remix's three fallbacks (`session/remix.rs`) read it. Pinned to
+  `oag_hd::TITLE.name` by `crates/game/tests/title_behaviour_data.rs`.
+- `oag-source`'s Pure hand-over is a table of deny-list openers
+  (`PULSE_DENY_LIST_OPENERS`), not a name test; an error naming a title it does
+  not list is still Pulse's.
 
-- `crates/source/src/title.rs:106`: `Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => {`
-
-### oag-ui (step 3) - 1
-
-- `crates/ui/src/frontend.rs:985`: `title.name == oag_hd::TITLE.name && self.preselect_language("English")`
+**Still open**: `crates/ui/src/frontend.rs:985`, HD's English preselect - lane
+`ptbr-a` owns language selection and takes it. `check-title-branching`'s
+`BASELINE` is that one row.
 
 ## Next Steps
 

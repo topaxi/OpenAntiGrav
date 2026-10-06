@@ -119,6 +119,18 @@ pub const TITLE: &Title = &Title {
         elsewhere: oag_title::ShieldPalette::Pulse,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     }),
+    // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),
+    // read through its own `load_omega`; no grids file is read on its own and no
+    // unlock row is wired.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Omega,
+        definition_entry: None,
+        circuit_unlocks: false,
+        loyalty_unlocks: false,
+        selection_strings: false,
+        origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+    },
+    pressings: None,
 };
 
 /// Omega's music: no standalone files, a playlist in plugin XML and the audio

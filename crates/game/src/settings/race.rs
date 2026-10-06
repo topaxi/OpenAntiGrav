@@ -154,10 +154,9 @@ impl Race {
     /// what it had.
     #[must_use]
     pub fn opening_variant(&self, title: &oag_title::Title) -> &str {
-        if title.name == oag_hd::TITLE.name && self.variant.is_empty() && !self.variant_chosen {
-            oag_hd::race::FRESH_PROFILE_VARIANT
-        } else {
-            &self.variant
+        match title.race.fresh_variant {
+            Some(fresh) if self.variant.is_empty() && !self.variant_chosen => fresh.variant,
+            _ => &self.variant,
         }
     }
 }

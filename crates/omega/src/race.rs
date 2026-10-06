@@ -93,6 +93,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     team_variants: None,
     guest_roster: None,
     hull_variants: None,
+    fresh_variant: None,
     speed_classes: None,
 };
 

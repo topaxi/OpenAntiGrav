@@ -73,6 +73,17 @@ pub const TITLE: &Title = &Title {
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,
     looks: effects::LOOKS,
+    // Measured: `docs/ui/campaign-screens.md` (the grid and cell screens),
+    // `docs/formats/race-campaign.md`'s `<Unlock Grid>` and loyalty rows.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Pulse,
+        definition_entry: Some(campaign::DEFINITION_ENTRY),
+        circuit_unlocks: true,
+        loyalty_unlocks: true,
+        selection_strings: false,
+        origin: oag_title::Origin::Measured,
+    },
+    pressings: None,
 };
 
 /// Where Pulse keeps its music.

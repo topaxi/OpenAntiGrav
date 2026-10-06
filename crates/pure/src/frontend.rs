@@ -238,12 +238,7 @@ pub const FALLBACK_IMAGES: &[(&str, &str)] = &[
 /// [`TITLE_LOGO_EU`]: crate::hashes::TITLE_LOGO_EU
 #[must_use]
 pub fn title_frame_src(serial: Option<&str>) -> (&'static str, &'static str) {
-    match serial {
-        // Pure's own USA serial - see `oag_pure::tests` for where this is
-        // measured against the disc rather than assumed.
-        Some("UCUS-98612") => ("TitleFrame", "hash:3af18d90"),
-        _ => ("TitleFrame", "hash:b6677aab"),
-    }
+    PRESSINGS.of(serial).title_frame
 }
 
 /// Which of [`crate::names::INTRO_MOVIE_CUTS`]/[`crate::names::FMV_INTRO_MOVIE_CUTS`]
@@ -263,12 +258,32 @@ pub fn title_frame_src(serial: Option<&str>) -> (&'static str, &'static str) {
 /// default to `"EU"`, the same convention [`title_frame_src`] takes.
 #[must_use]
 pub fn localised_movie_region(serial: Option<&str>) -> &'static str {
-    match serial {
-        // Pure's own USA serial - see `oag_pure::tests`.
-        Some("UCUS-98612") => "US",
-        _ => "EU",
-    }
+    PRESSINGS.of(serial).movie_region
 }
+
+/// What each Pure pressing's own executable resolves, as [`oag_title::Title::pressings`].
+///
+/// Measured: `docs/ghidra/functions/psp-pure-eu/title-screen.md` (the
+/// wordmark) and `movie-localised-suffix.md` (`_EU`/`_US`), read off both
+/// executables. The USA serial is `oag_pure::tests`'s; an unlisted serial gets
+/// the EU row, this project's own "prefer EU" default.
+pub const PRESSINGS: &oag_title::Pressings = &oag_title::Pressings {
+    listed: &[oag_title::Pressing {
+        serial: "UCUS-98612",
+        movie_region: "US",
+        title_frame: ("TitleFrame", "hash:3af18d90"),
+        intro_movie: crate::names::INTRO_MOVIE_CUTS[1].1,
+        fmv_intro_movie: crate::names::FMV_INTRO_MOVIE_CUTS[1].1,
+    }],
+    unlisted: oag_title::Pressing {
+        serial: "",
+        movie_region: "EU",
+        title_frame: ("TitleFrame", "hash:b6677aab"),
+        intro_movie: crate::names::INTRO_MOVIE_CUTS[0].1,
+        fmv_intro_movie: crate::names::FMV_INTRO_MOVIE_CUTS[0].1,
+    },
+    origin: oag_title::Origin::Measured,
+};
 
 /// How Pure lays its menus out, as far as its own disc states it.
 ///

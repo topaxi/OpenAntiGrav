@@ -198,7 +198,7 @@ pub(super) fn campaign_page(
     // `campaign.sprites` moves out below.
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, measure);
     *sprites = campaign.sprites;
-    let is_hd = crate::campaign::draws_hd_campaign(title.name);
+    let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
     let medal_of = |cell_name: &str| {

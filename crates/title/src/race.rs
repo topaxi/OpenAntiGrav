@@ -92,11 +92,13 @@ pub struct ShipPaths {
 }
 
 mod announcer;
+mod fresh;
 mod sound;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
+pub use fresh::FreshVariant;
 pub use sound::{Crossfade, SoundBanks};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
@@ -275,6 +277,9 @@ pub struct RaceDefaults {
     /// is handled. An empty ladder would say something different and stronger
     /// - "this title authors no classes" - which nothing has established.
     pub speed_classes: Option<SpeedClasses>,
+    /// The model Ship Select opens on while the player has not picked one, or
+    /// `None` when the stored variant (empty) stands. See [`FreshVariant`].
+    pub fresh_variant: Option<FreshVariant>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by

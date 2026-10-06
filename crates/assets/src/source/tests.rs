@@ -90,6 +90,7 @@ const TITLE: &Title = &Title {
         guest_roster: None,
         hull_variants: None,
         // A fixture: this test needs a `Title` to exist, not a real ladder.
+        fresh_variant: None,
         speed_classes: None,
     },
     // Unread here for the same reason as the circuit above: an in-race HUD is
@@ -118,6 +119,16 @@ const TITLE: &Title = &Title {
         elsewhere: oag_title::ShieldPalette::Pulse,
         origin: oag_title::Origin::Chosen,
     }),
+    // A fixture: nothing here reads a campaign.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Pulse,
+        definition_entry: None,
+        circuit_unlocks: false,
+        loyalty_unlocks: false,
+        selection_strings: false,
+        origin: oag_title::Origin::Chosen,
+    },
+    pressings: None,
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

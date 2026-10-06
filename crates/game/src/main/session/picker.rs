@@ -116,7 +116,7 @@ impl Session {
     /// The circuit gate, read off the source's own archives. Open (nothing
     /// locked) when no source is at hand to read grids from.
     fn unlock_gate(&self) -> oag_game::unlock::Gate {
-        let title = self.shell.as_ref().map(|shell| shell.title.name);
+        let title = self.shell.as_ref().map(|shell| shell.title);
         let opened = self.race_options.as_ref().and_then(|options| {
             let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
                 &options.dlc,
@@ -193,7 +193,7 @@ impl Session {
             return false;
         };
         let title = shell.title;
-        let gates = unlock::gates_variants(title.name);
+        let gates = unlock::gates_variants(title);
         let records = if gates {
             records::load()
         } else {

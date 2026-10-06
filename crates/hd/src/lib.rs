@@ -142,6 +142,17 @@ pub const TITLE: &Title = &Title {
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,
     looks: effects::LOOKS,
+    // Measured: `docs/ui/campaign-screens.md`'s HD section. The
+    // `Campaign Selection` ids are in `DATA06`'s entries copy alone.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Hd,
+        definition_entry: Some(campaign::DEFINITION_ENTRY),
+        circuit_unlocks: false,
+        loyalty_unlocks: false,
+        selection_strings: true,
+        origin: oag_title::Origin::Measured,
+    },
+    pressings: None,
 };
 
 /// Where Wipeout HD keeps its music.

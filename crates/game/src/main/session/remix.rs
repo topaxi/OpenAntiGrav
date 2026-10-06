@@ -74,10 +74,15 @@ fn craft_title_choices(titles: &[oag_game::launcher::Candidate]) -> Vec<menu::Ch
         .iter()
         .map(|candidate| menu::Choice::plain(candidate.title()))
         .collect();
-    let has_hd = titles.iter().any(|c| c.title() == oag_hd::TITLE.name);
-    let has_2048 = titles.iter().any(|c| c.title() == oag_2048::TITLE.name);
-    if !has_hd && has_2048 {
-        choices.push(menu::Choice::plain(oag_hd::TITLE.name));
+    for reshipped in titles
+        .iter()
+        .filter_map(|c| c.playable()?.race.guest_roster)
+        .map(|guest| guest.reships)
+    {
+        let offered = choices.iter().any(|choice| choice.value == reshipped);
+        if !offered {
+            choices.push(menu::Choice::plain(reshipped));
+        }
     }
     choices
 }
@@ -105,9 +110,12 @@ fn resolve_craft_backing<'a>(
         .iter()
         .find(|candidate| candidate.title() == craft_title)
         .or_else(|| {
-            (craft_title == oag_hd::TITLE.name)
-                .then(|| titles.iter().find(|c| c.title() == oag_2048::TITLE.name))
-                .flatten()
+            titles.iter().find(|candidate| {
+                candidate
+                    .playable()
+                    .and_then(|title| title.race.guest_roster)
+                    .is_some_and(|guest| guest.reships == craft_title)
+            })
         })
 }
 
@@ -254,17 +262,14 @@ impl Session {
     /// that will actually be opened (2048), not the one named on screen.
     pub(super) fn craft_title(&self) -> Option<&'static oag_title::Title> {
         self.craft_backing()
-            .and_then(|candidate| match &candidate.state {
-                oag_game::launcher::State::Playable(title) => Some(*title),
-                oag_game::launcher::State::Unavailable(_) => None,
-            })
+            .and_then(|candidate| candidate.playable())
     }
 
-    /// Whether `id` is one of 2048's own twelve reused HD/Fury teams -
-    /// [`oag_2048::race::GUEST_TEAM_VARIANTS`]' own list, reused here rather
-    /// than duplicated a third time.
-    fn is_guest_team(id: &str) -> bool {
-        oag_2048::race::GUEST_TEAM_VARIANTS.teams.contains(&id)
+    /// Whether `id` is one of `guest`'s reused teams - its own
+    /// [`oag_title::GuestRoster::variants`] list (2048's twelve HD/Fury teams),
+    /// reused here rather than duplicated a third time.
+    fn is_guest_team(guest: &oag_title::GuestRoster, id: &str) -> bool {
+        guest.variants.teams.contains(&id)
     }
 
     /// CRAFT TITLE's own team list - [`Self::remix_catalogue_for`] scoped to
@@ -289,14 +294,19 @@ impl Session {
                 return None;
             }
         };
-        if requested == oag_2048::TITLE.name {
-            catalogue
-                .teams
-                .retain(|choice| !Self::is_guest_team(&choice.value));
-        } else if requested == oag_hd::TITLE.name && candidate.title() != oag_hd::TITLE.name {
-            catalogue
-                .teams
-                .retain(|choice| Self::is_guest_team(&choice.value));
+        if let Some(guest) = candidate
+            .playable()
+            .and_then(|title| title.race.guest_roster)
+        {
+            if candidate.title() == requested {
+                catalogue
+                    .teams
+                    .retain(|choice| !Self::is_guest_team(guest, &choice.value));
+            } else if requested == guest.reships {
+                catalogue
+                    .teams
+                    .retain(|choice| Self::is_guest_team(guest, &choice.value));
+            }
         }
         Some(catalogue)
     }
