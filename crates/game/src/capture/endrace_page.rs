@@ -60,6 +60,9 @@ pub(super) enum EndRaceKind {
     /// reachable, and two of the six statistics draw blank on purpose, as this
     /// build's own race would leave them.
     ZoneResults,
+    /// Wipeout 2048's `RaceSummary`/`ObjectiveSummary` - see
+    /// [`super::endrace_touch_page`].
+    Touch(super::endrace_touch_page::TouchPage),
 }
 
 #[must_use]
@@ -93,7 +96,7 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
             Some(EndRaceKind::EliminationResults)
         }
         "endrace-results-zone" | "endrace_results_zone" => Some(EndRaceKind::ZoneResults),
-        _ => None,
+        other => super::endrace_touch_page::touch_kind(other).map(EndRaceKind::Touch),
     }
 }
 
@@ -136,6 +139,7 @@ pub(super) fn capture(
     frame: &oag_ui::menu::Frame,
     sprites: &mut oag_hud::sprite::Sheet,
     title: &'static oag_title::Title,
+    (face_scales, event): (&[(String, f32)], Option<&str>),
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>)> {
     let mut archives = match race {
         Some(race) => open_for_previews(race)?,
@@ -155,6 +159,22 @@ pub(super) fn capture(
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
+    if let EndRaceKind::Touch(page) = kind {
+        let list = super::endrace_touch_page::draw(
+            page,
+            &mut archives,
+            race.context("a touch EndRace page needs --race options open")?,
+            event,
+            title,
+            strings,
+            [space.size.0, space.size.1],
+            sprites,
+            &globals,
+            face_scales,
+            font.line_height,
+        )?;
+        return Ok((list, None));
+    }
     endrace_page(
         kind,
         &mut archives,
@@ -206,7 +226,7 @@ fn endrace_page(
     )
     .context("this source has no EndRace screens to show")?;
     *sprites = screens.sprites;
-    if title.name == oag_hd::TITLE.name {
+    if crate::endrace::dialect(title) == Some(oag_title::EndRaceDialect::Field) {
         return hd_endrace_page(
             kind,
             &screens.results,
@@ -223,6 +243,7 @@ fn endrace_page(
     }
     let mut trophy = None;
     let layers = match kind {
+        EndRaceKind::Touch(_) => anyhow::bail!("a touch page is drawn before this point"),
         EndRaceKind::Results => {
             // The reference capture's own three laps and their third column
             // (`6`/`9`/`10`, total `25`): `results-01.png`.
@@ -465,6 +486,7 @@ fn hd_endrace_page(
     sprites: &mut oag_hud::sprite::Sheet,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let layers = match kind {
+        EndRaceKind::Touch(_) => anyhow::bail!("a touch page is drawn before this point"),
         EndRaceKind::Results => {
             let model = oag_ui_screens::endrace::FieldResults {
                 // **Chosen, not measured**: a capture has no race behind it, so

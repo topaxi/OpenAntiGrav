@@ -17,7 +17,7 @@ This build's own results table
 ([`oag_game::scoreboard`](../../crates/game/src/scoreboard.rs)) stays as the
 fallback for a title with no `EndRace_Definition.xml`, or whose read fails -
 see that crate's own module doc. Pure was not checked for this file this
-pass; it is not assumed to carry it. **Wipeout HD/Fury's own copy is now
+pass; it is not assumed to carry it. **Wipeout 2048's own pages are a third dialect** - [endrace-2048.md](endrace-2048.md); `oag_game::endrace` now dispatches on `oag_title::FrontEnd::endrace_style` rather than on a title's name. **Wipeout HD/Fury's own copy is now
 read and drawn** - see ["Wipeout HD/Fury: `Results`/`Menu`, off a completely
 different file"](#wipeout-hdfury-results-menu-off-a-completely-different-file)
 below.

@@ -17,6 +17,8 @@ use oag_ui_screens::picker::FaceScales;
 
 use oag_hud::sprite::Sheet;
 
+pub mod touch;
+
 /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - the file all three of
 /// Pulse's own screens are authored in. See [`oag_hd::endrace::SCREEN_ENTRY`]
 /// for Wipeout HD/Fury's own copy, at a different path, a different
@@ -138,6 +140,17 @@ fn load_trophies(archives: &mut oag_assets::Archives, rewards: &Layout) -> Vec<T
     out
 }
 
+/// The dialect `title`'s race-ending file is written in, off its own
+/// [`oag_title::FrontEnd::endrace_style`] - what [`load`] and its callers
+/// dispatch on instead of asking which title this is.
+#[must_use]
+pub fn dialect(title: &oag_title::Title) -> Option<oag_title::EndRaceDialect> {
+    title
+        .front_end
+        .and_then(|front_end| front_end.endrace_style)
+        .map(|style| style.dialect)
+}
+
 /// Reads this open title's own EndRace screens, title-dispatched: Pulse's
 /// [`SCREEN_ENTRY`], or Wipeout HD/Fury's own [`load_hd`] - picked by
 /// `title.name` against [`oag_hd::TITLE`]'s own `name`, the identical check
@@ -163,8 +176,16 @@ pub fn load(
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
 ) -> Result<EndRaceScreens> {
-    if title.name == oag_hd::TITLE.name {
-        return load_hd(archives, strings, faces, grid, base, fallback_globals);
+    match dialect(title) {
+        Some(oag_title::EndRaceDialect::Field) => {
+            return load_hd(archives, strings, faces, grid, base, fallback_globals);
+        }
+        Some(oag_title::EndRaceDialect::Touch) => {
+            anyhow::bail!("this title's EndRace screens are the touch dialect: use touch::load")
+        }
+        // `None` keeps the Pulse reader it always had: a title whose file is
+        // unread fails on the missing entry below, which is the answer.
+        Some(oag_title::EndRaceDialect::Pulse) | None => {}
     }
 
     let blob = archives

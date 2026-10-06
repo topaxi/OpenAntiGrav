@@ -1,10 +1,10 @@
-# Title behaviour as data: the 23 comparisons still to migrate
+# Title behaviour as data: the 20 comparisons still to migrate
 
 2026-10-06. [ADR-0058](../../docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md)
 decides that per-title behaviour is `Title` data with a provenance tag and that a
 generic crate never compares a title's identity. `just check-title-branching`
 (`scripts/check-title-branching.py`) freezes the sites below at the counts in its
-`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 23 remain. Each migration lowers the row it touches in the
+`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 20 remain (three more migrated 2026-10-06 by the `2048-endrace` lane). Each migration lowers the row it touches in the
 same change. Sites are `file:line` at main b115ec3ef - `python3
 scripts/check-title-branching.py --list` prints the current ones.
 
@@ -61,12 +61,12 @@ absences.
 - `crates/game/src/campaign.rs:185`: `title_name == oag_hd::TITLE.name || title_name == oag_omega::TITLE.name`
 - `crates/game/src/campaign.rs:238`: `if title.name == oag_hd::TITLE.name {`
 - `crates/game/src/campaign.rs:241`: `if title.name == oag_omega::TITLE.name {`
-- `crates/game/src/capture/endrace_page.rs:209`: `if title.name == oag_hd::TITLE.name {`
-- `crates/game/src/endrace.rs:166`: `if title.name == oag_hd::TITLE.name {`
+- ~~`crates/game/src/capture/endrace_page.rs:209`: `if title.name == oag_hd::TITLE.name {`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
+- ~~`crates/game/src/endrace.rs:166`: `if title.name == oag_hd::TITLE.name {`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
 - `crates/game/src/main/args.rs:372`: `t if t == oag_pulse::TITLE.name => oag_pulse::campaign::DEFINITION_ENTRY,`
 - `crates/game/src/main/args.rs:373`: `t if t == oag_hd::TITLE.name => oag_hd::campaign::DEFINITION_ENTRY,`
 - `crates/game/src/main/session/campaign.rs:73`: `if shell.title.name == oag_hd::TITLE.name`
-- `crates/game/src/main/session/endrace.rs:172`: `let is_hd = title_ref.name == oag_hd::TITLE.name;`
+- ~~`crates/game/src/main/session/endrace.rs:172`: `let is_hd = title_ref.name == oag_hd::TITLE.name;`~~ migrated 2026-10-06 by the `2048-endrace` lane: `oag_title::FrontEnd::endrace_style`, read through `oag_game::endrace::dialect`.
 - `crates/game/src/main/session/remix.rs:77`: `let has_hd = titles.iter().any(|c| c.title() == oag_hd::TITLE.name);`
 - `crates/game/src/main/session/remix.rs:78`: `let has_2048 = titles.iter().any(|c| c.title() == oag_2048::TITLE.name);`
 - `crates/game/src/main/session/remix.rs:108`: `(craft_title == oag_hd::TITLE.name)`

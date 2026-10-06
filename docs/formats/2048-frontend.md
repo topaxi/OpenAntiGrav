@@ -95,6 +95,17 @@ smaller tree - not because less survives, but because a touch UI needs far
 fewer discrete screens than a list-menu one built from nested `<Menu>`
 widgets and per-page redirects.
 
+**Resolved 2026-10-06: `EndRace_Definition.xml` is read and two of its pages
+draw.** Its `EndRace` tree (`RaceSummary`, `ObjectiveSummary`, `Results`, `Podium`,
+`Badges`) is what a finished race walks, in the touch idiom this document
+describes, not HD's `EndRace Results`/`EndRace Menu` (those are
+`LegacyEndRace_Definition.xml`, not reached by the chain). The patch's
+`data1.psarc` copy differs from the base by one attribute. See
+[`docs/ui/endrace-2048.md`](../ui/endrace-2048.md) and the decompiled chain in
+[`vita-2048-eu-v104/endrace-summary.md`](../ghidra/functions/vita-2048-eu-v104/endrace-summary.md).
+**Omega:** ships the same file byte-for-byte as `vita/vita_EndRace_Definition.xml`
+(`checked, applies, not wired`).
+
 ## The front end is a touch-icon grid, not `FEGlobals`/`MenuSkin`
 
 **Confidence 90.** `data/plugins/frontend/NEWGUI/Skin.xml`, quoted in full

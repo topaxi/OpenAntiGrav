@@ -407,9 +407,13 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // lives in `TOUCH::team_model_origin` instead - see that field's own doc
     // for why it is not routed through this flag.
     preview_meshes: false,
-    // Not checked this pass - a gap, not a measurement that 2048 ships no
-    // such screen. See `oag_title::FrontEnd::endrace_entry`.
-    endrace_entry: None,
+    // Plain XML (not dictionary-shortened) in the base package's `data.psarc`;
+    // `patch-v104/data2.psarc` re-ships only the `Legacy` sibling, so the base
+    // copy is the live one. See `docs/ui/endrace-2048.md`.
+    endrace_entry: Some(r"Data\Plugins\Frontend\NEWGUI\EndRace_Definition.xml"),
+    endrace_style: Some(oag_title::EndRaceStyle::measured(
+        oag_title::EndRaceDialect::Touch,
+    )),
 };
 
 #[cfg(test)]

@@ -383,6 +383,7 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the first entry of the catalogue, which is where `settle` falls when the stored
   id is not offered (the catalogue lists `AG_Systems`; `DEFAULTS.team` spells it
   `ag_systems`). **Chosen, not measured.**
+- **Omega also ships 2048's end-race file** (checked 2026-10-06, `checked, applies, not wired`): `data09.psarc`'s `data/plugins/frontend/gui/vita/vita_EndRace_Definition.xml` is byte-identical (22,098 bytes) to 2048 v1.04's `NEWGUI/EndRace_Definition.xml`, beside Omega's own HD-lineage `endrace_definition.xml`; nothing in Omega's front-end XML names the `vita/` file. See [endrace-2048.md](../ui/endrace-2048.md#omega).
 - **The EndRace screens are skipped, not wired.** (Census 2026-10-06: the three copies of `EndRace_Definition.xml` author Results, Menu and Podium and no Rewards - `hd-endrace-screens.md`.) `EndRace_Definition.xml` is at
   HD's path too, and dispatching Omega through HD's loader draws `EndRace
   Results`, but `--menu-page endrace-menu` then draws no option blocks where

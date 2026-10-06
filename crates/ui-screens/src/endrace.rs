@@ -65,6 +65,7 @@ mod modes;
 pub mod photo;
 pub mod pointer;
 mod table;
+pub mod touch;
 
 pub use draw::{
     endrace_menu_draw_list, results_draw_list, rewards_draw_list, tournament_results_draw_list,

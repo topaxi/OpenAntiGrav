@@ -37,6 +37,7 @@
 
 pub mod boot;
 pub mod effects;
+pub mod endrace;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
@@ -53,6 +54,7 @@ pub use effects::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
     Trigger,
 };
+pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
@@ -536,12 +538,17 @@ pub struct FrontEnd {
     /// the widget-by-widget read and `oag_game::endrace`'s own title dispatch
     /// for the two separate loaders this axis feeds.
     ///
-    /// `None` for Pure, Wipeout 2048 and Omega: neither this project's own
-    /// build nor a documented pass has read whether any of the three even
-    /// ships such a screen, so `None` here is a gap, not a measurement that
-    /// one is absent - the same distinction [`Self::race_box`]'s own doc
-    /// draws for the titles it is `None` on.
+    /// `None` for Pure and Omega: neither this project's own build nor a
+    /// documented pass has wired whether either ships such a screen, so `None`
+    /// here is a gap, not a measurement that one is absent - the same
+    /// distinction [`Self::race_box`]'s own doc draws for the titles it is
+    /// `None` on. Wipeout 2048 ships one (`NEWGUI/EndRace_Definition.xml`).
     pub endrace_entry: Option<&'static str>,
+    /// The dialect [`Self::endrace_entry`]'s file is written in, which picks
+    /// the reader - see [`endrace`]. `None` for a title whose file is unread
+    /// (Pure) or read and not wired (Omega), neither of which is a
+    /// measurement that the title ships no such screen.
+    pub endrace_style: Option<EndRaceStyle>,
 }
 
 impl FrontEnd {

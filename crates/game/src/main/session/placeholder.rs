@@ -199,6 +199,7 @@ impl Session {
             menu_skin: &placeholder::MENU_SKIN,
             space: oag_display::space::Space::default(),
             menu_font: None,
+            face_scales: Vec::new(),
             title_font: None,
             buttons_font: None,
             frame: menu::Frame::default(),
