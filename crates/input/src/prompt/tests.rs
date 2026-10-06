@@ -203,7 +203,7 @@ fn a_keyboards_system_control_interface_is_never_a_pad() {
 
 #[test]
 fn a_dpad_only_pad_without_a_mapping_is_a_pad() {
-    // The PSP had no stick: face buttons and a d-pad are a controller.
+    // Plenty of controllers have no stick: face buttons and a d-pad are one.
     let retro = pad("Acme Retro Pad", 0x1234, 0x5678);
     let caps = PadCaps {
         sdl_mapped: false,

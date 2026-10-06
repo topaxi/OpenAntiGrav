@@ -132,8 +132,8 @@ pub struct PadCaps {
     /// How many of the left stick's two axes the device really has.
     pub stick_axes: u8,
     /// The device has a d-pad: all four direction buttons, or a hat / axis
-    /// pair for both directions. The PSP had no stick, so this stands in for
-    /// one.
+    /// pair for both directions. Plenty of controllers have no stick, so this
+    /// stands in for one.
     pub dpad: bool,
 }
 
