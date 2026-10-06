@@ -86,6 +86,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::OwnShipAt {
         root: SHIP_DIR,
         ship: ZONE_SHIP,
+        livery_key: "zoneship_team",
     },
     // Not searched for: `None` is silence, not a finding.
     boost: None,
@@ -119,8 +120,10 @@ pub const ERA_2048_SHIP_DIR: &str = r"Data\art\published\ships";
 
 /// Where those craft's **tuning** sits, one tree away from the models, as on
 /// 2048 itself: `Data\handlingstats\<Team>2048\<n>\handlingstats.xml` for
-/// all twenty (listing of `data00.psarc`). **The loader's own handling path
-/// was not read**; the location is the census's, not a decompiled template.
+/// all twenty. **Measured**: the teams definition authors it per craft as
+/// `handlingstatslocation="Data\HandlingStats\feisar2048\3"` beside the
+/// craft's `modellocation`. Which of the two reads the loader makes of it was
+/// not decompiled (`Ship_LoadModelSet` reads only the model directory).
 pub const ERA_2048_HANDLING_DIR: &str = r"Data\handlingstats";
 
 /// 2048's four craft per team, joined as a numbered subdirectory

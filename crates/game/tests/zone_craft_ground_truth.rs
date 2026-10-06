@@ -76,3 +76,73 @@ fn omega_zone_hull_is_shared_by_hd_and_2048_era_craft() {
         &[oag_omega::race::DEFAULTS.team, "assegai"],
     );
 }
+
+/// The Zone livery is read off the definition and put on the hull: each
+/// HD-era team's own `zone` model names a `Zoneship_<x>\Team.gnf` that is on
+/// the disc, the swap reaches the hull's texture request, and a 2048-era team
+/// (which authors none) keeps the default and says so.
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn omega_zone_hull_wears_the_livery_its_definition_names() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
+    let xml = archives
+        .read_name(oag_omega::TITLE.plugin_definition)
+        .expect("teams definition");
+    let teams = oag_raceplay::catalogue::teams(&String::from_utf8_lossy(&xml));
+    let liveries: Vec<(String, String)> = teams
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.zone_livery.clone()?)))
+        .collect();
+    // Twelve teams name a `Zoneship_<x>` directory and all of them are on the
+    // disc; `Tigron` and `VanUber` name `livery1`, an HD paint name with no
+    // Zone directory, so the swap finds nothing and the hull keeps its default.
+    let named: Vec<_> = liveries
+        .iter()
+        .filter(|(_, livery)| livery.starts_with("zoneship_"))
+        .collect();
+    assert_eq!(named.len(), 12, "{liveries:?}");
+    for (team, livery) in named {
+        let name = format!(r"Data\art\published\hdships\Zone\{livery}\Team.gnf");
+        assert!(
+            archives.read_name(&name).is_ok_and(|blob| !blob.is_empty()),
+            "{team}: {name} is not on the disc"
+        );
+    }
+    let load = |archives: &mut oag_assets::Archives, team: &str| {
+        let mut report = Vec::new();
+        oag_livery::load(
+            archives,
+            &[team.to_string()],
+            &oag_livery::LoadContext {
+                race: oag_omega::TITLE.race,
+                mode: Mode::Zone,
+                flare: oag_omega::TITLE.flare,
+                hull_overlay: false,
+                hull_shine: false,
+                hull_wreck: false,
+                absorb_shell: false,
+                zone_liveries: &liveries,
+            },
+            None,
+            None,
+            &mut report,
+        )
+        .expect("the Zone hull loads");
+        report.join("\n")
+    };
+    let swapped = load(&mut archives, "Qirex");
+    assert!(
+        swapped.contains("Zone livery zoneship_quirex replaces zoneship_team"),
+        "{swapped}"
+    );
+    let absent = load(&mut archives, "Tigron");
+    assert!(
+        absent.contains("which the archive does not hold"),
+        "{absent}"
+    );
+    let kept = load(&mut archives, r"Feisar2048\3");
+    assert!(kept.contains("authors no Zone livery"), "{kept}");
+}

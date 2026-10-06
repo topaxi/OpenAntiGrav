@@ -364,6 +364,10 @@ pub struct Team {
     /// Zone). Empty rows for a model that authors none. Not the same list as
     /// [`Self::models`], which holds only HD's `<FE>`-carrying models.
     pub hull_unlocks: Vec<(String, Vec<LoyaltyRow>)>,
+    /// The livery this team's craft wears on the shared Zone hull: the
+    /// `texturelocation` of its `PI_TeamModel name="zone"` (`zoneship_faisar`).
+    /// `None` for a team that authors no such model - 2048's own five.
+    pub zone_livery: Option<String>,
 }
 
 /// One `<Unlock Team=".." loyalty=".." Exclusive="..">` row of a craft
@@ -539,7 +543,21 @@ fn read_team(node: &Node) -> Option<Team> {
         rating: read_rating(node),
         models: read_models(node),
         hull_unlocks: read_hull_unlocks(node),
+        zone_livery: read_zone_livery(node),
     })
+}
+
+/// [`Team::zone_livery`]: the `texturelocation` of the team's `PI_TeamModel
+/// name="zone"`, matched case-insensitively.
+fn read_zone_livery(team: &Node) -> Option<String> {
+    team.children_named("PI_TeamModel")
+        .find(|model| {
+            model
+                .attr("name")
+                .is_some_and(|name| name.eq_ignore_ascii_case("zone"))
+        })?
+        .value("texturelocation")
+        .map(str::to_string)
 }
 
 /// Every `PI_TeamModel` under `team` that authors an `<FE>` - see

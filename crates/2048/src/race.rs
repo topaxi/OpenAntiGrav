@@ -51,6 +51,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::OwnShipAt {
         root: HD_SHIP_DIR,
         ship: ZONE_SHIP,
+        livery_key: "zoneship_zone",
     },
     // Unread: this title's own boost-plume path (if it authors a standalone
     // one at all, off either roster) has not been searched for. `None` here

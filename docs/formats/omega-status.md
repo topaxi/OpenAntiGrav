@@ -1072,12 +1072,39 @@ ship-model loader (`Ship_LoadModelSet`, `0x01301ba0`, confidence 75) names
 `Data\Art\Published\HDShips\Zone\Ship.vex` for game mode 6 without reading the
 craft, now `oag_title::ZoneCraft::OwnShipAt`. A Zone race on `tech_de_ra` with
 `ag_systems` loads and draws it (`data/scratch/zone-craft/omega-zone-hd.png`).
-Livery key differs from 2048's (`zoneship_team` against `zoneship_zone`);
-the per-team `Zoneship_<Team>/Team.gnf` swap is not wired. **Open, not Zone's:**
-a 2048-era craft (`feisar2048\3`) cannot start any race on Omega - its
-`handlingstats.xml` is looked up under `hdships\`. 2048: **ported**, see
+Livery key differs from 2048's (`zoneship_team` against `zoneship_zone`).
+**Wired (2026-10-06, `omega-2048-craft`)**: an HD-era craft's `PI_TeamModel
+name="zone"` `texturelocation` (`zoneship_quirex`; all twelve match a
+`Zoneship_<Team>/Team.gnf` on disc, spelt as the disc spells them) replaces the
+key on the hull's team texture request; the pixels change in the hull's patches
+(`data/scratch/omega-2048-craft/ab-egx-default-vs-livery.png`). The five
+2048-era teams author no zone model, keep the default `Zoneship_Team` skin and
+the loader report says so (`Tigron` and `VanUber` name `livery1`, which has no Zone directory: the swap finds nothing and says so). 2048: **ported**, see
 [2048-status.md](2048-status.md). Evidence:
 [zone-craft.md](../ghidra/functions/ps4-omega-eu/zone-craft.md).
+
+## 2048-era craft start a race (2026-10-06, `omega-2048-craft`)
+
+Omega's `Data\plugins\teams\Definition.xml` lists nineteen raceable teams in
+two eras: five `*2048` teams whose `PI_Team location` is
+`Data\art\published\Ships\<Team>2048` (four craft each, `\1`..`\4`, with
+`handlingstatslocation="Data\HandlingStats\<team>\<n>"` authored per craft) and
+fourteen HD-era ones under `hdships`. The loader looked every craft up under
+`hdships\`, so `--team Feisar2048\3` died on `hdships\feisar2048\3\handlingstats.xml`
+(the old repro used a lowercase id, which no table recognises either way). Now
+`oag_title::GuestRoster` carries a second tuning directory (`handling_dir`,
+`None` for 2048's HD-derived twelve) and `oag_omega::race::ERA_2048_ROSTER`
+names Omega's: Subdirectory join, the five teams, `Measured` (the definition
+authors both directories). `omega_2048_era_craft_ground_truth` reads the
+roster off the disc and resolves Ship.vex, ship.rcsmodel and a parsing
+`handlingstats.xml` for all 34 craft ids, asserts each team's table directory
+equals its declared `location` and that no 2048-era craft exists under
+`hdships\`. A race on `Feisar2048\3` loads and draws
+(`data/scratch/omega-2048-craft/single-2048era.png`). Side effect, accepted:
+Omega now offers CRAFT TITLE "Wipeout 2048" in Race Remix when no 2048 disc is
+present, and its own list drops the 2048-era teams to that row.
+**2048 vs Omega: checked, differs** - 2048 keeps these craft as its own roster
+(`team_variants`), Omega as a guest of its HD-era one.
 
 ## See also
 
