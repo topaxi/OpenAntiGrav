@@ -312,6 +312,7 @@ const GUEST: TeamVariants = TeamVariants {
 
 const GUEST_ROSTER: GuestRoster = GuestRoster {
     dir: r"Data\art\published\hdships",
+    handling_dir: None,
     variants: &GUEST,
     reships: "A Fixture Title",
     origin: crate::effects::Origin::Chosen,

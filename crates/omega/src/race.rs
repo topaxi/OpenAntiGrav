@@ -99,10 +99,74 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stage_textures: None,
     zone_sky: None,
     team_variants: None,
-    guest_roster: None,
+    guest_roster: Some(&ERA_2048_ROSTER),
     hull_variants: None,
     fresh_variant: None,
     speed_classes: None,
+};
+
+/// Where Omega keeps the models of its **2048-era** craft: 2048's own tree,
+/// `Data\art\published\ships\<Team>2048\<n>\`, which is not [`SHIP_DIR`].
+///
+/// Omega's `Data\plugins\teams\Definition.xml` declares each team's own
+/// directory as its `PI_Team` `location` - the five `*2048` teams point here
+/// and the fourteen HD-era ones at [`SHIP_DIR`] (read by
+/// `crates/game/tests/omega_2048_era_craft_ground_truth.rs` on every run), and
+/// the ship-model loader's non-special-mode case builds `%s\ship.vex` off the
+/// craft entry's own directory (`Ship_LoadModelSet`, `0x01301ba0`, confidence
+/// 75, `docs/ghidra/functions/ps4-omega-eu/zone-craft.md`).
+pub const ERA_2048_SHIP_DIR: &str = r"Data\art\published\ships";
+
+/// Where those craft's **tuning** sits, one tree away from the models, as on
+/// 2048 itself: `Data\handlingstats\<Team>2048\<n>\handlingstats.xml` for
+/// all twenty (listing of `data00.psarc`). **The loader's own handling path
+/// was not read**; the location is the census's, not a decompiled template.
+pub const ERA_2048_HANDLING_DIR: &str = r"Data\handlingstats";
+
+/// 2048's four craft per team, joined as a numbered subdirectory
+/// (`Feisar2048\3`). **Duplicated from `oag_2048::race::TEAM_VARIANTS`**,
+/// not borrowed: a title package does not depend on another, and the test
+/// checks every combined id against Omega's own archive.
+pub const ERA_2048_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &[
+        "AG_Systems2048",
+        "Auricom2048",
+        "Feisar2048",
+        "Piranha2048",
+        "Qirex2048",
+    ],
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "1",
+            label: "fighter",
+        },
+        oag_title::TeamVariant {
+            suffix: "2",
+            label: "agility",
+        },
+        oag_title::TeamVariant {
+            suffix: "3",
+            label: "speed",
+        },
+        oag_title::TeamVariant {
+            suffix: "4",
+            label: "prototype",
+        },
+    ],
+    join: oag_title::VariantJoin::Subdirectory,
+};
+
+/// [`oag_title::RaceDefaults::guest_roster`] for Omega: its five 2048-era
+/// teams, whose directory and tuning tree are not the HD-era ones. Not a
+/// reshipped *copy* in the HD sense - these are Omega's own re-textured
+/// (`.gnf`) versions of 2048's craft - so [`oag_title::GuestRoster::reships`]
+/// names the title they come from.
+pub const ERA_2048_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
+    dir: ERA_2048_SHIP_DIR,
+    handling_dir: Some(ERA_2048_HANDLING_DIR),
+    variants: &ERA_2048_VARIANTS,
+    reships: "Wipeout 2048",
+    origin: oag_title::Origin::Measured,
 };
 
 /// Sound banks, confirmed present by name in `data00.psarc`'s listing -
