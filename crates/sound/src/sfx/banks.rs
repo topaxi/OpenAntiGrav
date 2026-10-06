@@ -1,12 +1,8 @@
-//! The engine's own fixed cue set, decoded once at race load: [`Banks`] and
-//! the one-per-cue [`Loaded`] audio it indexes.
-//!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change.
-//! [`load_named_cue`] is `pub(super)` rather than private because
+//! The engine's fixed cue set, decoded once at race load: [`Banks`] and the
+//! one-per-cue [`Loaded`] audio it indexes. Split out of [`super`] under the
+//! 1,000-line rule. [`load_named_cue`] is `pub(super)` because
 //! [`super::announcer::Announcer`] shares it: a milestone's cue name is built
-//! at load time from per-title data, not one of [`super::Cue`]'s fixed,
-//! statically-named set, so it cannot go through [`load_cue`] itself.
+//! at load time from per-title data, so it cannot go through [`load_cue`].
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -24,57 +20,47 @@ use super::{BankName, Cue};
 /// One cue's decoded audio: every waveform its command run binds.
 #[derive(Debug, Clone)]
 pub struct Loaded {
-    /// The alternates, in command order, each with **its own** loop flag from
-    /// the descriptor's `+0x0e`. Never empty.
+    /// The alternates, in command order, each with its own loop flag from the
+    /// descriptor's `+0x0e`. Never empty.
     ///
-    /// Per waveform rather than per cue, because the flag is per waveform and
-    /// several banked cues mix the two: `hud.bnk`'s `~BLOWUP` has one looping
-    /// waveform of two and `~AIRBRAKE_MONO` one of three. Every cue this port
-    /// currently fires happens to be uniform, so collapsing them would be
-    /// invisible today and would silently play a loop as a one-shot the first
-    /// time one of those was wired.
+    /// Per waveform, not per cue: several banked cues mix the two (`hud.bnk`'s
+    /// `~BLOWUP` has one looping waveform of two, `~AIRBRAKE_MONO` one of three).
+    /// Every cue fired today is uniform, so collapsing them would play a loop as
+    /// a one-shot the first time one of those was wired.
     pub waveforms: Vec<(Arc<Sound>, bool)>,
 }
 
 /// The sound banks a race needs, decoded and indexed by cue.
 #[derive(Debug, Default, Clone)]
 pub struct Banks {
-    // `pub(super)` (visible in `sfx` and its whole subtree) rather than
-    // private: `sfx::tests` and `sfx::engine::tests` build a `Banks` by
-    // struct literal to test `pick`/`pick_at` without decoding a real bank,
-    // and both are siblings of this module rather than descendants of it.
+    // `pub(super)`: `sfx::tests` and `sfx::engine::tests` build a `Banks` by
+    // struct literal to test `pick`/`pick_at` without decoding a bank, and are
+    // siblings, not descendants, of this module.
     pub(super) sounds: BTreeMap<Cue, Loaded>,
     /// What loading did, for the race's own report.
     pub report: Vec<String>,
-    /// The previous pick for each multi-alternate cue, mirroring
-    /// `operand[3]`, the byte `0x19`'s handler mutates in the cue's own
-    /// command data on every play. `RefCell` rather than a `&mut self` on
-    /// [`Self::pick`]: the original's cache is a property of the *bank*, not
-    /// of whichever voice or engine slot happens to be calling, and every
-    /// call site here holds only a shared `&Banks`. See
+    /// The previous pick for each multi-alternate cue, mirroring `operand[3]`,
+    /// the byte `0x19`'s handler mutates in the cue's command data on every
+    /// play. `RefCell`, not `&mut self` on [`Self::pick`]: the original's cache
+    /// belongs to the bank, not the calling voice, and every call site holds a
+    /// shared `&Banks`. See
     /// [`sound.md`](../../../../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#0x19---alternate-selection-decoded).
     ///
-    /// **One slot per [`Cue`], shared across every voice that ever plays it -
-    /// including [`Cue::Engine`]'s eight simultaneously-live craft.** That
-    /// `operand[3]` sits in command data rather than voice state is read
-    /// directly; that eight concurrently-open `~ENGINE` voices actually
-    /// contend on that one byte, rather than each craft's `ExhaustFlare`
-    /// holding a copy, is not - `sound.md`'s own `+0xa8` gate is scoped to
-    /// *one* voice's re-entry within a single play, and says nothing about
-    /// two different voices' plays of the same cue. Read as sharing here
-    /// because that is what the byte's storage location implies, not because
-    /// a multi-voice case was traced.
+    /// One slot per [`Cue`], shared by every voice that plays it, including
+    /// [`Cue::Engine`]'s eight live craft. That `operand[3]` sits in command
+    /// data is read directly; that eight open `~ENGINE` voices contend on that
+    /// one byte is not (`sound.md`'s `+0xa8` gate covers one voice's re-entry
+    /// within a play, not two voices). Read as sharing from the storage
+    /// location, not from a traced multi-voice case.
     pub(super) last_pick: RefCell<BTreeMap<Cue, usize>>,
     /// Cues that play as the timeline they author, one entry per alternate
-    /// combination. Absent for a cue whose flat [`Self::pick`] is what it
-    /// plays; see [`super::layers`].
+    /// combination; absent where the flat [`Self::pick`] plays. See [`super::layers`].
     pub(super) timelines: BTreeMap<Cue, Vec<Timeline>>,
     /// Cues that repeat while held and play as the list runs, in place of the
     /// flat pick or the one-shot timeline. See [`Cue::repeats`].
     pub(super) programs: BTreeMap<Cue, Program>,
-    /// HD's per-team engine crossfade tables, keyed by the disc's team name.
-    /// Empty on a title with a `~ENGINE` cue, which has no use for them. See
-    /// [`super::xfade`].
+    /// HD's per-team engine crossfade tables, keyed by the disc's team name;
+    /// empty on a title with a `~ENGINE` cue. See [`super::xfade`].
     pub(super) xfade: BTreeMap<String, Arc<super::xfade::Team>>,
     /// HD's authored group volumes, read with the engine tables and gated the
     /// same way. See [`crate::hd_mix`].
@@ -84,15 +70,13 @@ pub struct Banks {
 impl Banks {
     /// Reads and decodes every cue in [`Cue::ALL`] out of `archives`.
     ///
-    /// **Never fails, and reports every cue either way.** Every title in the
-    /// lineage does carry banks - a claim this project got wrong about Pure for
-    /// months - but a cue can still be missing for reasons that are ordinary
-    /// rather than broken: Wipeout HD has no `~ENGINE` at all, its ship audio
-    /// being a per-event `c_*` set rather than a held loop. Each miss is a line
-    /// in [`Self::report`] and silence, not an error and not a substitute.
-    ///
-    /// A race that refused to start because a bank was missing would make the
-    /// audio work a precondition for every other kind of work in the tree.
+    /// Never fails, and reports every cue either way: a cue can be missing for
+    /// ordinary reasons (HD has no `~ENGINE`, its ship audio being a per-event
+    /// `c_*` set), each a line in [`Self::report`] and silence, not an error or
+    /// a substitute. A race refusing to start over a missing bank would make
+    /// audio a precondition for every other kind of work. (Every title in the
+    /// lineage carries banks, a claim this project got wrong about Pure for
+    /// months.)
     #[must_use]
     pub fn load(
         archives: &mut Archives,
@@ -141,15 +125,12 @@ impl Banks {
         }
     }
 
-    /// Loads the start-of-race voice, [`Cue::COUNTDOWN`], from `entry` - the
-    /// speech bank the mode opened - into this table, beside what
-    /// [`Self::load`] already decoded.
+    /// Loads the start-of-race voice, [`Cue::COUNTDOWN`], from `entry` (the speech
+    /// bank the mode opened) beside what [`Self::load`] decoded.
     ///
-    /// A separate pass because the bank is not the title's but the mode's:
-    /// `speech.bnk` for most, `speech_elim.bnk` for Eliminator, `speech_zone.bnk`
-    /// for Zone (see [`oag_title::CountdownVoice`]). **Never fails**, on
-    /// [`Self::load`]'s own terms: a bank that will not read, or a cue it does
-    /// not name, is a report line and silence.
+    /// A separate pass because the bank is the mode's: `speech.bnk`,
+    /// `speech_elim.bnk` (Eliminator), `speech_zone.bnk` (Zone), see
+    /// [`oag_title::CountdownVoice`]. Never fails, on [`Self::load`]'s terms.
     pub fn load_countdown(
         &mut self,
         archives: &mut Archives,
@@ -185,11 +166,8 @@ impl Banks {
     }
 
     /// Loads the crossfaded engine tables a grid needs, when this title's ship
-    /// bank has no `~ENGINE` cue to hold.
-    ///
-    /// **Gated on the missing cue and nothing else**: a title with `~ENGINE`
-    /// plays that, and must not also play a table, so Pulse and Pure never read
-    /// an `.xfx`. Never fails; see [`super::xfade::load`].
+    /// bank has no `~ENGINE` cue. Gated on the missing cue alone, so Pulse and
+    /// Pure never read an `.xfx`. Never fails; see [`super::xfade::load`].
     pub fn load_xfade(
         &mut self,
         archives: &mut Archives,
@@ -231,15 +209,10 @@ impl Banks {
 
     /// One *named* waveform of a cue, by index, clamped to what it binds.
     ///
-    /// For the one cue whose alternates are **not** interchangeable:
-    /// [`Cue::LockOn`] binds two, and which of them plays is the original's
-    /// seeking/locked parameter rather than a draw. Every other cue goes
-    /// through [`Self::pick`] instead, which now matches the decoded `0x19`
-    /// shape - see its own doc comment.
-    ///
-    /// Clamped rather than `None` on an out-of-range index: a bank that binds
-    /// one waveform where this expects two should play the one it has, not go
-    /// silent.
+    /// For the one cue whose alternates are not interchangeable: [`Cue::LockOn`]
+    /// binds two and the original's seeking/locked parameter chooses, not a draw.
+    /// Every other cue uses [`Self::pick`]. Clamped, not `None`, out of range: a
+    /// bank binding one waveform where two are expected plays the one it has.
     #[must_use]
     pub fn pick_at(&self, cue: Cue, index: usize) -> Option<(Arc<Sound>, bool)> {
         let loaded = self.sounds.get(&cue)?;
@@ -256,11 +229,10 @@ impl Banks {
 
     /// Everything one play of a cue starts, drawn by `rng`.
     ///
-    /// A cue with a [timeline](super::layers) gives its voices for one
-    /// alternate combination (chosen with the same never-repeat rule as
-    /// [`Self::pick`]) and one shared bend draw per `0x1b`; any other cue gives
-    /// the single waveform [`Self::pick`] would. `None` when the cue did not
-    /// load. **Not for [`Cue::Engine`]**, whose layers one voice drives.
+    /// A cue with a [timeline](super::layers) gives its voices for one alternate
+    /// combination (never-repeat rule as [`Self::pick`]) and one shared bend draw
+    /// per `0x1b`; any other cue gives the waveform [`Self::pick`] would. `None`
+    /// when the cue did not load. Not for [`Cue::Engine`], whose layers one voice drives.
     #[must_use]
     pub fn voices(&self, cue: Cue, rng: &mut Rng) -> Option<Vec<CueVoice>> {
         let Some(variants) = self.timelines.get(&cue) else {
@@ -288,14 +260,11 @@ impl Banks {
         }
     }
 
-    /// One waveform for a cue, chosen by `rng` when the cue has alternates.
-    ///
-    /// `None` when the cue did not load. Opcode `0x19` is decoded now (see
-    /// [`Self::last_pick`]): a uniform draw that never repeats the
-    /// immediately previous pick for the same cue, re-rolled by advancing one
-    /// alternate and wrapping rather than by drawing again - matching the
-    /// original's own shape rather than a naive reject-and-retry, which would
-    /// bias a small `count` differently.
+    /// One waveform for a cue, chosen by `rng` when it has alternates; `None`
+    /// when the cue did not load. Opcode `0x19` ([`Self::last_pick`]): a uniform
+    /// draw never repeating the previous pick for the cue, re-rolled by
+    /// advancing one alternate and wrapping, as the original does (a
+    /// reject-and-retry would bias a small `count` differently).
     #[must_use]
     pub fn pick(&self, cue: Cue, rng: &mut Rng) -> Option<(Arc<Sound>, bool)> {
         let loaded = self.sounds.get(&cue)?;
@@ -306,16 +275,14 @@ impl Banks {
 }
 
 /// Decodes one cue out of an already-read bank blob into the maps [`Banks`]
-/// keeps, one report line either way.
-///
-/// The per-cue tables [`load_one`] fills beside the decoded waveforms.
+/// keeps, one report line either way ([`load_one`] fills the per-cue tables).
 struct Tables<'a> {
     timelines: &'a mut BTreeMap<Cue, Vec<Timeline>>,
     programs: &'a mut BTreeMap<Cue, Program>,
 }
 
 /// The body of [`Banks::load`]'s loop, lifted so [`Banks::load_countdown`] can
-/// load a cue from the *mode's* speech bank on the same terms.
+/// load from the *mode's* speech bank on the same terms.
 fn load_one(
     blob: &[u8],
     entry: &str,
@@ -370,9 +337,8 @@ fn load_one(
             report.extend(extra);
             sounds.insert(cue, loaded);
         }
-        // Deliberately a report line and not a fallback. Nothing is
-        // substituted for a cue that will not resolve; it stays silent
-        // and says so.
+        // A report line, not a fallback: nothing is substituted for a cue that
+        // will not resolve.
         Err(e) => report.push(format!("sfx: {} not loaded: {e}", cue.name())),
     }
 }
@@ -409,41 +375,35 @@ fn load_cue(
     Ok((loaded, skipped, timeline, program))
 }
 
-/// The length ratio past which a cue's waveforms cannot all be alternates of
-/// one event.
+/// The length ratio past which a cue's waveforms cannot all be alternates of one
+/// event.
 ///
-/// `crates/game/tests/sfx_ground_truth.rs` already applies this test to Pulse's
-/// `.COLLISIONS` and asserts the fifteen span under 0.2 s - "a cue whose
-/// commands were meant to play *together* would be a stack of different
-/// lengths". Two is generous against that: Pulse's fifteen span 0.204 s to
-/// 0.350 s, a ratio of 1.7.
+/// `crates/game/tests/sfx_ground_truth.rs` applies this to Pulse's `.COLLISIONS`
+/// and asserts the fifteen span under 0.2 s ("a cue whose commands were meant to
+/// play *together* would be a stack of different lengths"). Two is generous:
+/// Pulse's fifteen span 0.204 s to 0.350 s, a ratio of 1.7.
 const ALTERNATE_LENGTH_RATIO: f32 = 2.0;
 
 /// How many waveforms a cue needs before the ratio above means anything.
-///
-/// A cue that binds two is a pair, and a long one beside a short one is an
-/// ordinary way to author a pair - Pulse's `~SHIELD` is 0.501 s and 1.087 s and
-/// its `~BLOWUP` 0.091 s and 0.276 s, and neither is a severity tree. The thing
-/// worth reporting is *many* waveforms spanning a wide range, which is what a
-/// flattened tree looks like and what a set of takes does not.
+/// A cue binding two is a pair, and a long one beside a short one is ordinary
+/// (Pulse's `~SHIELD` is 0.501 s and 1.087 s, `~BLOWUP` 0.091 s and 0.276 s;
+/// neither is a severity tree). What is worth reporting is *many* waveforms over
+/// a wide range, a flattened tree rather than a set of takes.
 const ALTERNATE_COUNT: usize = 4;
 
 /// Says so when a cue's waveforms are too unalike to be alternates.
 ///
-/// **[`Banks::pick`] chooses uniformly among whatever a cue resolves to**,
-/// which is right when they are takes of one event and wrong when they are a
-/// tree. Wipeout HD's `.COLLISIONS` is the case that made this necessary: it
-/// binds nothing itself and plays `c_CShipShip` and `c_CShipWall`, each with
-/// Small/Medium/Large children of its own - **112 waveforms spanning 0.410 s to
-/// 3.266 s**, where the longest are 1.4 s impacts carrying half their energy
-/// below 120 Hz and peaking at 0.809 of full scale in that band. Picked at
-/// random for a light graze, one of those is a bass thump, and on HD it lands
-/// in near-silence because that title's ship bank has no `~ENGINE` cue at all.
+/// [`Banks::pick`] chooses uniformly among whatever a cue resolves to: right for
+/// takes of one event, wrong for a tree. HD's `.COLLISIONS` binds nothing itself
+/// and plays `c_CShipShip` and `c_CShipWall`, each with Small/Medium/Large
+/// children: 112 waveforms spanning 0.410 s to 3.266 s, the longest 1.4 s
+/// impacts with half their energy below 120 Hz (peak 0.809 of full scale in that
+/// band). Picked at random for a light graze, one is a bass thump, and on HD it
+/// lands in near-silence because the ship bank has no `~ENGINE`.
 ///
-/// Choosing correctly needs the contact's own surface and severity, and which
-/// of the two the original reads for which is not recovered - so this reports
-/// rather than guesses, on the same terms `Banks::load` reports a cue it could
-/// not decode.
+/// Choosing correctly needs the contact's surface and severity, and which the
+/// original reads for which is not recovered, so this reports rather than
+/// guesses, as `Banks::load` does for an undecodable cue.
 fn not_one_event(cue: Cue, loaded: &Loaded) -> Option<String> {
     let mut shortest = f32::MAX;
     let mut longest: f32 = 0.0;
@@ -466,13 +426,9 @@ fn not_one_event(cue: Cue, loaded: &Loaded) -> Option<String> {
 }
 
 /// Resolves one **named** cue in an already-parsed bank and decodes what it
-/// binds.
-///
-/// Split out of [`load_cue`] so [`super::announcer::Announcer`] can decode a
-/// cue by a name built at load time (`"zone_5"`, `"zone_10"`, ...) rather than
-/// through [`Cue`]'s closed, statically-named set - the milestone ladder is
-/// per-title data, not an engine-wide cue, so it cannot be a `Cue` variant
-/// without hard-coding one title's numbers into the engine.
+/// binds. Split from [`load_cue`] so [`super::announcer::Announcer`] can decode
+/// a name built at load time (`"zone_5"`, `"zone_10"`): the milestone ladder is
+/// per-title data, so it cannot be a `Cue` variant.
 pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(Loaded, usize)> {
     let record = bank
         .cue_named(name)
@@ -504,17 +460,15 @@ pub(super) fn load_cue_record(
     record: &sblk::Cue,
     name: &str,
 ) -> anyhow::Result<(Loaded, usize)> {
-    // **The tree, not the cue's own run.** On the PSP, PS2 and Pure discs no
-    // wired cue plays a child, so this is `cue_sounds` there and the two are
-    // the same call. Wipeout HD's `.COLLISIONS` binds nothing itself and plays
-    // `c_CShipShip` and `c_CShipWall`, each of which has S/M/L children of its
-    // own - 112 waveforms in all. See `oag_formats::sblk::child`.
+    // The tree, not the cue's own run. On the PSP, PS2 and Pure discs no wired
+    // cue plays a child, so this is `cue_sounds` there. HD's `.COLLISIONS` plays
+    // `c_CShipShip` and `c_CShipWall`, each with S/M/L children (112 waveforms
+    // in all). See `oag_formats::sblk::child`.
     let sounds = bank.cue_tree_sounds(record);
-    // **The opcodes go in the message.** 38 of a circuit's authored emitters
-    // land here (`track-sound-emitters.md`), and which opcode blocked them is
-    // the whole question: `0x1e` is in every `~SetReg*` cue and plausibly emits
-    // nothing, `0x14` is in cues named after sounds. A message that said only
-    // "some opcode" would have left that unmeasurable.
+    // The opcodes go in the message: 38 of a circuit's authored emitters land
+    // here (`track-sound-emitters.md`) and which opcode blocked them is the
+    // question (`0x1e` is in every `~SetReg*` cue and plausibly emits nothing,
+    // `0x14` is in cues named after sounds).
     anyhow::ensure!(
         !sounds.is_empty(),
         "{name} binds no waveform: its {} command(s) run only {:02x?}, opcodes this does not read",
@@ -530,21 +484,17 @@ pub(super) fn load_cue_record(
             skipped += 1;
             continue;
         }
-        // `record`'s own cue, not each waveform's - correct for every title
-        // this project measures the SFX gap on: `cue_tree_sounds` above is
-        // `cue_sounds` under the hood there, so `record` is the only cue
-        // involved. Wipeout HD's `.COLLISIONS` is the one case where a
-        // waveform's *own* binding cue differs from `record` (`c_CShipShip`
-        // and its Small/Medium/Large children), and using `record`'s byte for
-        // those too is a stated approximation - see
-        // `oag_audio::spatial::pan_volume_gain`'s doc comment.
+        // `record`'s own cue, not each waveform's: right wherever
+        // `cue_tree_sounds` is `cue_sounds`. HD's `.COLLISIONS` is the one case
+        // where a waveform's binding cue differs from `record`
+        // (`c_CShipShip` and its children); using `record`'s byte there is a
+        // stated approximation (`oag_audio::spatial::pan_volume_gain`).
         let pan_volume_gain = oag_audio::spatial::pan_volume_gain(record.volume, sound.volume);
         waveforms.push((
             Arc::new(
-                // Each waveform at the rate its own descriptor keys it on with:
-                // `Sound::pitch` is the `sceSasSetPitch` word the original hands
-                // the hardware for an unmodulated play. See
-                // `oag_formats::sblk::pitch`.
+                // Each waveform at the rate its descriptor keys it on with:
+                // `Sound::pitch` is the `sceSasSetPitch` word for an unmodulated
+                // play (`oag_formats::sblk::pitch`).
                 Sound::new(pcm, 1, sound.sample_rate())?.with_pan_volume_gain(pan_volume_gain),
             ),
             sound.is_looping(),
@@ -568,28 +518,23 @@ pub(super) fn decode_waveform(
     let data = bank
         .waveform(sound)
         .ok_or_else(|| anyhow::anyhow!("{name} reaches outside the waveform section"))?;
-    // **Not every waveform is PS-ADPCM, and the descriptor says which.**
-    // On Wipeout HD about a third set `+0x0e`'s `0x80`: SCREAM's second
-    // voice type, 16-bit PCM behind a 16-byte header. See
+    // Not every waveform is PS-ADPCM: on HD about a third set `+0x0e`'s `0x80`,
+    // SCREAM's second voice type, 16-bit PCM behind a 16-byte header. See
     // `oag_formats::sblk::{NOT_ADPCM_FLAG, decode_pcm16}`.
     Ok(if sound.is_adpcm() {
-        // **The span's run-out block is not played.** The encoder appends
-        // one past the block it flagged as the end, and the hardware stops
-        // at the flag; a looping voice that decodes the whole span replays
-        // that block once per loop instead of never. See
-        // `oag_formats::sblk::adpcm_played`.
+        // The span's run-out block is not played: the encoder appends one past
+        // the flagged end block and the hardware stops at the flag, so decoding the
+        // whole span would replay it each loop (`oag_formats::sblk::adpcm_played`).
         sblk::decode_adpcm(sblk::adpcm_played(data))
     } else {
         sblk::decode_pcm16(data)
     })
 }
 
-/// The opcode byte of each command in a cue's own run, in command order.
-///
-/// The opcode is the high byte of the command's first word - byte 3 in memory,
-/// which is what `Scream_StepCommandList` reads. Duplicated from
-/// `oag_formats::sblk::Bank::sounds`, which needs the same byte for a different
-/// purpose and does not expose it.
+/// The opcode byte of each command in a cue's own run, in command order: the high
+/// byte of the command's first word (byte 3 in memory, as
+/// `Scream_StepCommandList` reads it). Duplicated from
+/// `oag_formats::sblk::Bank::sounds`, which does not expose it.
 fn cue_opcodes(bank: &sblk::Bank, cue: &sblk::Cue) -> Vec<u8> {
     cue.range()
         .filter_map(|at| {
