@@ -134,11 +134,14 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 /// second, previously-unrecognised buffer-pointer gap,
 /// `psp2::SKY_BUFFER_POINTER_GAP`).
 ///
-/// **No rotation is applied.** Wipeout HD's `Lighting.Sky rotation` comes off
-/// `.envsettings`, and that file does not parse for this title at all - see
-/// `docs/formats/2048-status.md` - so there is nothing this reading could turn
-/// the dome by even if the mesh authored an asymmetric horizon (it does not
-/// measurably: every sampled circuit's dome is close to a uniform sphere).
+/// **The circuit's own `Lighting.Sky rotation` turns the dome**, in degrees
+/// about the vertical, the way [`hd_sky_model`] turns HD's cube. The file is
+/// 2048's `track.EnvSettings` and carries the key under HD's spelling; the
+/// unit is read off the two titles' shared circuits (Anulpha Pass authors 230
+/// in HD and -130 in 2048, the same angle). The *sign* is HD's choice
+/// (positive about `+Y`) and **chosen, not measured**. `Sky brightness` and
+/// `Sky height offset` are authored too and left unread: their consumer is
+/// unlocated.
 ///
 /// **Zone's sky swap is not wired.** `data/Tex/zoneSky.gxt` exists on the
 /// disc, the same file HD's `Data/Tex/ZoneSky.gtf` names, but nothing here
@@ -186,12 +189,21 @@ pub(super) fn psp2_sky_model(
     // the model's own centre, which `finish_bounds` inside `psp2::build`
     // already measured as the dome's origin.
     let authored_radius = model.radius;
+    let rotation = envsettings_name(track)
+        .and_then(|name| archives.read_name(&name).ok())
+        .and_then(|blob| String::from_utf8(blob).ok())
+        .and_then(|text| EnvSettings::parse(&text).ok())
+        .and_then(|env| env.scalar(oag_tables::envsettings::SKY_ROTATION))
+        .unwrap_or(0.0);
+    let (sin, cos) = rotation.to_radians().sin_cos();
     if authored_radius > 0.0 {
         let scale = PSP2_SKY_TARGET_RADIUS / authored_radius;
         for vertex in &mut model.vertices {
             for a in vertex.position.iter_mut() {
                 *a *= scale;
             }
+            let [x, y, z] = vertex.position;
+            vertex.position = [x * cos + z * sin, y, z * cos - x * sin];
             // A sky is a picture of light, not a surface - the same rule
             // `mesh::sky_cube::build` states for HD's generated cube, and
             // Pulse's own skies (authored `_nolight`) confirm independently.
@@ -204,13 +216,16 @@ pub(super) fn psp2_sky_model(
             for a in draw.bounds.centre.iter_mut() {
                 *a *= scale;
             }
+            let [x, y, z] = draw.bounds.centre;
+            draw.bounds.centre = [x * cos + z * sin, y, z * cos - x * sin];
             draw.bounds.radius *= scale;
         }
     }
     report.push(format!(
         "{name}: the circuit's sky dome, {}, rescaled from its authored radius of \
          {authored_radius:.2} unit(s) to {PSP2_SKY_TARGET_RADIUS:.0} to clear the near \
-         plane at any field of view",
+         plane at any field of view, turned {rotation} degree(s) by `Sky rotation` (sign \
+         chosen, not measured)",
         built.describe(),
     ));
     Some(model)
@@ -401,17 +416,34 @@ fn staged_envsettings(
 /// [`staged_envsettings`]'s own doc for why the remaining case -
 /// `zone_2`/`zone_3`/`zone_4`, which ship no file at all - is left as the
 /// pre-existing unfogged fallback rather than wired to the front end's.
+///
+/// **`psp2` reads Wipeout 2048's own spelling instead** - one
+/// `"Lighting.Fog colour"` key of four numbers, colour then a fourth that is
+/// HD's `Fog Density`'s order of magnitude. **The curve there is inherited,
+/// not measured**: 2048's fragment microcode is USSE and its fog term is
+/// unread, so HD's `exp(-(density * view_depth)^2)` is drawn with the fourth
+/// component as the coefficient, on the strength of the shared `fogColour`
+/// `float4` and the shared lineage alone. The `Fog Region Colour Override`
+/// ladder and `Depth Fog Offset RecipRange` are authored and left unread:
+/// what selects a region is unlocated.
 pub(super) fn envsettings_fog(
     archives: &mut oag_assets::Archives,
     track: &str,
+    psp2: bool,
     report: &mut Vec<String>,
 ) -> Option<mesh_render::Fog> {
-    use oag_tables::envsettings::{FOG_COLOUR, FOG_DENSITY};
+    use oag_tables::envsettings::{FOG_COLOUR, FOG_DENSITY, PSP2_FOG_COLOUR};
     let name = envsettings_name(track)?;
     let blob = archives.read_name(&name).ok()?;
     let text = String::from_utf8(blob).ok()?;
     let env = EnvSettings::parse(&text).ok()?;
-    let (Some(colour), Some(density)) = (env.vec3(FOG_COLOUR), env.scalar(FOG_DENSITY)) else {
+    let authored = if psp2 {
+        env.vec4(PSP2_FOG_COLOUR)
+            .map(|v| ([v[0], v[1], v[2]], v[3]))
+    } else {
+        env.vec3(FOG_COLOUR).zip(env.scalar(FOG_DENSITY))
+    };
+    let Some((colour, density)) = authored else {
         report.push(format!(
             "{name}: no usable fog colour and density; the race draws unfogged"
         ));
@@ -424,9 +456,16 @@ pub(super) fn envsettings_fog(
         return None;
     }
     report.push(format!(
-        "{name}: fog [{:.2}, {:.2}, {:.2}] at density {density}, on the curve read from the \
-         circuit's own fragment microcode: exp(-(density * view_depth)^2)",
-        colour[0], colour[1], colour[2],
+        "{name}: fog [{:.2}, {:.2}, {:.2}] at density {density}, on {}: \
+         exp(-(density * view_depth)^2)",
+        colour[0],
+        colour[1],
+        colour[2],
+        if psp2 {
+            "the curve INHERITED from Wipeout HD's microcode (2048's own is unread)"
+        } else {
+            "the curve read from the circuit's own fragment microcode"
+        },
     ));
     Some(mesh_render::Fog::authored_exp2(colour, density))
 }
@@ -655,7 +694,10 @@ pub(super) fn staging(
     // patched `fogColour` in by it - read out of the microcode itself, see
     // `mesh_render::Fog::curve`.
     let authored_fog = ps3_geometry
-        .then(|| envsettings_fog(archives, track, report))
+        .then(|| {
+            let psp2 = matches!(geometry, GeometryKind::Psp2 | GeometryKind::Ps4);
+            envsettings_fog(archives, track, psp2, report)
+        })
         .flatten();
     // The circuit's `HDR and Bloom` block, which is what turns the HD race
     // onto the linear float scene target and the read FunkLayerBloom chain -

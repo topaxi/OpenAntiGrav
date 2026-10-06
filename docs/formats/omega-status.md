@@ -985,6 +985,11 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   HD's 12-unit cell spacing; Omega's are about 5.6 apart) - **chosen, not
   measured** for this title. A debug build still spends minutes decoding the
   453 textures; culling does not shorten that.
+- **Sky turn and fog are ported from 2048** (2026-10-06): the six-face sky
+  cube is turned by `Sky rotation` and the circuit's `Lighting.Fog colour`
+  draws, the curve inherited from HD ([envsettings.md](envsettings.md)).
+  Omega's altima road still draws flat pink in a start frame (pre-existing,
+  not part of that change).
 - **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
   0.82]` over an ambient of `1.0`) is not checked against PS4's schema. The
   patch's copy carries no HDR/bloom block, so the read bloom chain is off.
