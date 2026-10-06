@@ -209,6 +209,47 @@ impl Bank<'_> {
         })
     }
 
+    /// The spelled names a [hashed](Bank::is_hashed) bank keeps beside its
+    /// hashes, each with the hash its record carries.
+    ///
+    /// The name block's records are 16 bytes from `+0x10` (`{u32 name offset,
+    /// u32 hash, u16 cue, u16 next, u32 index}`, [`Bank::cue_by_hash`] reading
+    /// the same table four bytes in) and the string pool starts at the offset
+    /// the block's `+0x0c` gives, NUL-terminated names at each record's offset.
+    /// Not every record has a name: a record whose offset leaves the pool, or
+    /// whose bytes are not text, is skipped, so this is the names the bank
+    /// spells and not every cue it holds.
+    ///
+    /// `(name, cue, hash)`. Empty on a bank that is not hashed.
+    #[must_use]
+    pub fn hashed_names(&self) -> Vec<(String, u16, u32)> {
+        if !self.is_hashed() || self.flags & super::HAS_NAME_TABLE == 0 {
+            return Vec::new();
+        }
+        let Some(block) = self.block.get(self.name_offset as usize..) else {
+            return Vec::new();
+        };
+        let Some(pool) = block.get(self.order.u32(block, 0x0c) as usize..) else {
+            return Vec::new();
+        };
+        (0..usize::from(self.cue_count))
+            .filter_map(|n| {
+                let entry = block.get(HASHED_FIRST - 4 + n * HASHED_ENTRY_LEN..)?;
+                let entry = entry.get(..HASHED_ENTRY_LEN)?;
+                let text = pool.get(self.order.u32(entry, 0) as usize..)?;
+                let end = text.iter().position(|&b| b == 0)?;
+                let name = std::str::from_utf8(&text[..end]).ok()?;
+                (!name.is_empty()).then(|| {
+                    (
+                        name.to_string(),
+                        self.order.u16(entry, 8),
+                        self.order.u32(entry, 4),
+                    )
+                })
+            })
+            .collect()
+    }
+
     /// The waveforms a cue's commands bind, in command order.
     /// Empty for a cue that [does not play](Cue::plays) and for one whose
     /// commands all bind nothing - 242 of the 1,282 playable cues on the two
