@@ -170,6 +170,7 @@ const SDL_MAPPED: PadCaps = PadCaps {
     sdl_mapped: true,
     face_buttons: 4,
     stick_axes: 2,
+    dpad: false,
 };
 
 #[test]
@@ -188,6 +189,7 @@ fn a_keyboards_system_control_interface_is_never_a_pad() {
         sdl_mapped: false,
         face_buttons: 4,
         stick_axes: 2,
+        dpad: false,
     };
     assert!(!is_gamepad(&keychron(), busy));
     // Even a mapping on it does not make it one.
@@ -197,6 +199,44 @@ fn a_keyboards_system_control_interface_is_never_a_pad() {
         ..PadInfo::default()
     };
     assert!(!is_gamepad(&consumer, busy));
+}
+
+#[test]
+fn a_dpad_only_pad_without_a_mapping_is_a_pad() {
+    // Plenty of controllers have no stick: face buttons and a d-pad are one.
+    let retro = pad("Acme Retro Pad", 0x1234, 0x5678);
+    let caps = PadCaps {
+        sdl_mapped: false,
+        face_buttons: 4,
+        stick_axes: 0,
+        dpad: true,
+    };
+    assert!(is_gamepad(&retro, caps));
+    assert!(is_gamepad(
+        &retro,
+        PadCaps {
+            face_buttons: 2,
+            ..caps
+        }
+    ));
+    // A d-pad with fewer than two face buttons is still not enough.
+    assert!(!is_gamepad(
+        &retro,
+        PadCaps {
+            face_buttons: 1,
+            ..caps
+        }
+    ));
+    // Face buttons alone are not.
+    assert!(!is_gamepad(
+        &retro,
+        PadCaps {
+            dpad: false,
+            ..caps
+        }
+    ));
+    // The name exclusions still win over a d-pad.
+    assert!(!is_gamepad(&keychron(), caps));
 }
 
 #[test]
@@ -230,6 +270,7 @@ fn an_unknown_pad_with_real_axes_is_a_pad_of_no_known_family() {
         sdl_mapped: false,
         face_buttons: 4,
         stick_axes: 2,
+        dpad: false,
     };
     assert!(is_gamepad(&generic, caps));
     // Buttons alone are not enough, nor is one axis.

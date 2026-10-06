@@ -84,8 +84,9 @@ and an injected file reader, so tests need no device and no Steam.
    (a Steam launch with no controller logged `Keychron Keychron K2 Pro System
    Control`, UUID `03000000-3434-0000-2102-000011010000`, "No mapping found",
    and the prompts flipped to Xbox). A device counts only with a known SDL
-   mapping, or at least two real face buttons plus both left-stick axes, and
-   never when its name is a known non-pad interface (`system control`,
+   mapping, or at least two real face buttons plus either both left-stick axes
+   or a d-pad (four d-pad buttons, or a hat / axis pair; plenty of controllers
+   have no stick), and never when its name is a known non-pad interface (`system control`,
    `consumer control`, `keyboard`, `mouse`, `touchpad`, `motion sensors`,
    `power button`). A device that is not a pad is skipped by `Pad::poll_players`
    (so it neither drives a craft nor moves `last used`), by `names` and by

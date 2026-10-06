@@ -720,6 +720,15 @@ fn pad_caps(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadCaps {
             has_axis(gilrs::Axis::LeftStickX),
             has_axis(gilrs::Axis::LeftStickY),
         ]),
+        dpad: [
+            gilrs::Button::DPadUp,
+            gilrs::Button::DPadDown,
+            gilrs::Button::DPadLeft,
+            gilrs::Button::DPadRight,
+        ]
+        .into_iter()
+        .all(has_button)
+            || (has_axis(gilrs::Axis::DPadX) && has_axis(gilrs::Axis::DPadY)),
     }
 }
 
