@@ -4,6 +4,23 @@
 
 use super::*;
 
+/// The medal lines a capture can show: forced ones, and the real watch over a
+/// campaign cell's own targets.
+#[derive(Debug, Clone, Default)]
+pub struct Medals {
+    /// Every `--force-medal TICK:TIER`: a phrase id, raised as a HUD message.
+    pub forced: Vec<(u32, &'static str)>,
+    /// `--campaign-cell`: the cell whose targets the race is judged against,
+    /// at the rung it is judged on. [`crate::medal_watch::tick`] then runs
+    /// every tick exactly as the windowed game's `RaceStage` runs it.
+    pub cell: Option<(
+        oag_tables::race_campaign::Cell,
+        oag_tables::race_campaign::Difficulty,
+    )>,
+    /// The best medal the watch has raised so far, as `RaceStage::earned_medal`.
+    pub earned: std::cell::Cell<Option<oag_tables::race_campaign::Medal>>,
+}
+
 /// One simulation tick of a capture: `tick`'s input, the race step, and the
 /// audio that rides it.
 ///
@@ -44,10 +61,15 @@ pub(super) fn advance_one_tick(
             ship.physics.shield = ship.handling.dimensions.shield * percent / 100.0;
         }
     }
-    for &(at, id) in &options.force_medal {
+    for &(at, id) in &options.medals.forced {
         if at == tick {
             race.raise_message(id, true);
         }
+    }
+    if let Some((cell, difficulty)) = &options.medals.cell {
+        let mut earned = options.medals.earned.get();
+        crate::medal_watch::tick(cell, *difficulty, &mut earned, race);
+        options.medals.earned.set(earned);
     }
     if let Some((at, slot)) = options.force_wreck
         && at == tick

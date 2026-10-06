@@ -308,6 +308,11 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     // names it with 15 waveforms. Nothing raises it on HD, which applies no
     // launch boost.
     //
+    // **`MESSAGE` on 2026-10-06**, the HUD message line's cue
+    // (`Hud_UpdateMessages`, Pulse `0x0881f148`): HD's `weapons.bnk` names it
+    // with 6 waveforms. HD's own message dispatch is unread (the lines run on
+    // Pulse's law there), so this is bank presence only.
+    //
     // **This test is `#[ignore]`d, so `just` stayed green while it was stale.**
     // `disengaging` was added a commit earlier and this list was not updated
     // with it; the failure surfaced only on the next `--run-ignored all`. The
@@ -317,6 +322,7 @@ fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
         loaded,
         vec![
             "SPEEDUPPAD",
+            "MESSAGE",
             "TURBO",
             ".COLLISIONS",
             "ABSORB",

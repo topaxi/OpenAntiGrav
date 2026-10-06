@@ -140,3 +140,74 @@ fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
         assert!(drawn, "{root} draws {phrase:?}: {frame:?}");
     }
 }
+
+/// A real crossing, through the same `oag_game::medal_watch::tick` the windowed
+/// session and the headless capture both call: Pulse's `grid8_3_2` Speed Lap
+/// (`14_Track`, silver at 44 s), flown by the autopilot. The banner appears on
+/// the lap that earns the tier, expires, and the standing line is still drawn
+/// ten seconds on; a watch that stops calling either raises nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut opened =
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
+    let cell =
+        oag_game::campaign::read_grids(&mut opened.archives, oag_pulse::campaign::DEFINITION_ENTRY)
+            .expect("the grids")
+            .into_iter()
+            .flat_map(|grid| grid.cells)
+            .find(|cell| cell.name == "grid8_3_2")
+            .expect("grid8_3_2");
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SpeedLap,
+        track: Some(r"Data\Environments\14_Track\track.vex".to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading 14_Track");
+    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    race.set_autopilot(true);
+    let silver = loaded
+        .hud
+        .context()
+        .expect("Pulse's layout parses")
+        .strings
+        .get_or_id("ER_SMA");
+    let mut earned = None;
+    let mut raised_at = None;
+    for tick in 0..4200u32 {
+        race.tick(&PlayerInputs::none());
+        let was = earned;
+        oag_game::medal_watch::tick(
+            &cell,
+            oag_tables::race_campaign::Difficulty::Medium,
+            &mut earned,
+            &mut race,
+        );
+        if earned != was && raised_at.is_none() {
+            raised_at = Some(tick);
+        }
+    }
+    let raised_at = raised_at.expect("the autopilot's lap earns a medal");
+    assert_eq!(
+        earned,
+        Some(oag_tables::race_campaign::Medal::Silver),
+        "raised at tick {raised_at}"
+    );
+    assert!(
+        4200 - raised_at > 600,
+        "the banner (4 s) is long gone by the last tick"
+    );
+    let saying = drawn(&loaded, &race.readout());
+    assert_eq!(
+        saying.iter().filter(|text| **text == silver).count(),
+        1,
+        "only the standing line is up: {saying:?}"
+    );
+}

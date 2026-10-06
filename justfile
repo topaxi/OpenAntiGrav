@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-names check-captures check-handover check-link-data check-strings check-just-args check-status
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -1023,6 +1023,12 @@ check-determinism:
 # over it grows. race.rs reached 11,294 lines before anything measured it
 check-size:
     python3 scripts/check-file-size.py
+
+# A ratchet on title-identity comparisons (`title.name == oag_hd::TITLE.name`)
+# in generic crates: per-title behaviour is `Title` data, ADR-0058. A file may
+# drop, never rise, and a new file may have none
+check-title-branching:
+    python3 scripts/check-title-branching.py
 
 # The names.tsv checks `just apply-names` already makes, minus the Ghidra bridge
 # it needs to make them. CI has no Ghidra, so without this nothing reads the file

@@ -243,7 +243,8 @@ fn every_cue_states_where_it_is_heard_from() {
     // emitter argument at all. `Autopilot` and `Engaging` are the same
     // no-emitter path's other two callers, both inside `Ship_FireHeldWeapon`'s
     // case for held id 6.
-    const DRY: [Cue; 6] = [
+    const DRY: [Cue; 7] = [
+        Cue::Message,
         Cue::ShieldActive,
         Cue::Autopilot,
         Cue::Engaging,

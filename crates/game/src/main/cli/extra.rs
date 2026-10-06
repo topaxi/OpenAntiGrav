@@ -191,6 +191,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:TIER", requires = "race")]
     pub(crate) force_medal: Vec<String>,
 
+    /// With `--race --screenshot`, judge the race against a campaign cell's own
+    /// medal targets (`grid0_3_2`), so the real medal lines - the four-second
+    /// banner and the standing one - show as a Zone run or Speed Lap crosses a
+    /// tier. Only the targets are taken from the cell; the mode and circuit
+    /// stay whatever `--mode` and `--track` say.
+    #[arg(long, value_name = "CELL", requires = "race")]
+    pub(crate) campaign_cell: Option<String>,
+
     /// Keep a destroyed craft's hull instead of swapping in its
     /// `shipwreck.vex`: the headless way to measure what the wreck adds, by
     /// rendering the same frame with and without it.

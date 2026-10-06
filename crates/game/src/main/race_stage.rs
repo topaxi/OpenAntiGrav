@@ -2,6 +2,7 @@
 
 use log::warn;
 use oag_display::display;
+use oag_game::medal_watch::ticks_to_centiseconds;
 use oag_present::upscale;
 use oag_raceplay as race;
 
@@ -155,7 +156,7 @@ pub(crate) struct RaceStage {
     pub(crate) endrace_unavailable: bool,
     /// The best medal [`Self::tick_messages`] has already announced, so a medal
     /// is raised once however many ticks it stays earned.
-    pub(super) earned_medal: Option<oag_game::records::Medal>,
+    pub(super) earned_medal: Option<oag_tables::race_campaign::Medal>,
 }
 
 impl RaceStage {
@@ -383,7 +384,7 @@ impl RaceStage {
             CampaignMode::SpeedLap => {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
-            CampaignMode::Zone => Some(i64::from(self.race.sim.world.primary_race().zone)),
+            CampaignMode::Zone => oag_game::medal_watch::live_value(&cell.mode, &self.race),
             CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
             CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
@@ -657,14 +658,4 @@ impl RaceStage {
             warn!("could not wait for the race scene's warmup submit: {e}");
         }
     }
-}
-
-/// 60 Hz ticks to centiseconds, the unit a campaign cell's own `Gold`/
-/// `Silver`/`Bronze Target` is authored in for `Time Trial`/`Speed Lap` -
-/// see `RaceStage::campaign_medal`. **Chosen, not measured**: nothing here
-/// traces the original's own tick-to-centisecond rounding rule, only that
-/// ticks run at the fixed 60 Hz [ADR-0007](../../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md)
-/// mandates.
-fn ticks_to_centiseconds(ticks: u64) -> i64 {
-    i64::try_from(ticks.saturating_mul(5) / 3).unwrap_or(i64::MAX)
 }

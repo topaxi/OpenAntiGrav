@@ -33,6 +33,7 @@ mod hit_sparks;
 mod leach_ball_draw;
 mod leach_beam;
 mod load;
+mod message_cue;
 mod mode_override;
 mod models;
 mod pads;
