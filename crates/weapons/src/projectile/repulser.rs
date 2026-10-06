@@ -1,44 +1,39 @@
 //! The Repulser: a blast at the firer, then two shockwaves that walk the track.
 //!
-//! **Nothing here flies, and nothing here is a field on the firing craft.**
-//! `Weapon_FireRepulser` (`0x0886ce8c`) copies four of its `<Stats>` onto the
-//! firer's weapon record, and nothing ever reads them back; the weapon is a pool
-//! entity that lives `blast_time + wave_time` seconds. For `blast_time` it only
-//! shows itself around the firer. Then `Repulser_SpawnWaves` (`0x08876300`)
-//! starts two waves at the firer's own place on the AI track, and
-//! `Repulser_Update` (`0x08875400`) walks them along the track's control points,
-//! **five points forward and two back per update** - immediates at `0x08875518`
-//! and `0x0887553c`, with no `dt` in them. Every other craft a wave's centre
-//! sweeps over is hit once: full `damage`, full `slowdown_time`, and a shove of
-//! the full `blastforce` toward the wave (`Repulser_HitCraft`, `0x0886d254`).
-//! Laid Mines and Bombs a wave sweeps go off. See
-//! `docs/ghidra/functions/psp-pulse-usa/repulser.md` for every address.
+//! Nothing here flies, and nothing is a field on the firing craft.
+//! `Weapon_FireRepulser` (`0x0886ce8c`) copies four `<Stats>` onto the firer's
+//! record and nothing reads them back; the weapon is a pool entity living
+//! `blast_time + wave_time` seconds. For `blast_time` it shows itself around the
+//! firer; then `Repulser_SpawnWaves` (`0x08876300`) starts two waves at the
+//! firer's place on the AI track and `Repulser_Update` (`0x08875400`) walks them
+//! along the control points, **five forward and two back per update** (immediates
+//! at `0x08875518` and `0x0887553c`, no `dt`). Every other craft a wave's centre
+//! sweeps is hit once: full `damage`, full `slowdown_time` and a shove of the full
+//! `blastforce` toward the wave (`Repulser_HitCraft`, `0x0886d254`). Laid Mines
+//! and Bombs a wave sweeps go off. Addresses:
+//! `docs/ghidra/functions/psp-pulse-usa/repulser.md`.
 //!
 //! # What is recovered and what is ours
 //!
 //! **Recovered** (confidence 80-84, decompile plus instruction-level checks, not
-//! runtime-verified): the two phases and the lifetime, the step counts and
-//! directions, the wave's position at the midpoint of the track's edges, the
-//! sweep test ([`sweeps`]), the hit law, the once-per-craft latch, the owner's
-//! exemption, and the Mine/Bomb sweep.
+//! runtime-verified): the two phases and lifetime, step counts and directions, the
+//! wave at the midpoint of the track's edges, the sweep test ([`sweeps`]), the hit
+//! law, the once-per-craft latch, the owner's exemption, the Mine/Bomb sweep.
 //!
 //! **Ours, each chosen rather than measured:**
 //!
-//! - **Points per tick, not per frame.** The original steps once per update
-//!   call. This port runs at a fixed 60 Hz, the rate the original is authored for
-//!   (`docs/psp/frame-pacing.md`), so one update is one tick.
-//! - **The ring, then a branch.** The two waves walk [`oag_race::Course`]'s
-//!   primary chain. At a split the first wave to cross it starts the third,
-//!   which walks the alternate path ([`fork`], read at 88). Not built: the
-//!   init-tick variant (`Repulser_ForkAtJunction`, `0x08876634`, 72) for a firer
-//!   already on a branch.
-//! - **Ring points, not control points.** [`oag_race::Course`] samples
-//!   [`oag_race::Course::STEPS_PER_SEGMENT`] points per control-point interval,
-//!   so a step of five control points is twenty ring points. The firer's own
-//!   ring index starts the waves rather than its control point, so a wave can sit
-//!   up to three quarters of an interval (about 4.5 units) off the original's.
-//! - **The craft's corridor width at its nearest ring point**, where the original
-//!   interpolates a fresh AI-track sample at the craft.
+//! - Points per tick, not per frame: the original steps once per update; this runs
+//!   at the fixed 60 Hz it is authored for (`docs/psp/frame-pacing.md`).
+//! - The ring, then a branch: the waves walk [`oag_race::Course`]'s primary chain;
+//!   at a split the first wave to cross starts the third on the alternate path
+//!   ([`fork`], read at 88). Not built: the init-tick variant
+//!   (`Repulser_ForkAtJunction`, `0x08876634`, 72) for a firer already on a branch.
+//! - Ring points, not control points: [`oag_race::Course`] samples
+//!   [`oag_race::Course::STEPS_PER_SEGMENT`] per interval, so five control points
+//!   is twenty ring points. The firer's ring index starts the waves, so a wave can
+//!   sit up to three quarters of an interval (about 4.5 units) off the original's.
+//! - The craft's corridor width at its nearest ring point, where the original
+//!   interpolates a fresh AI-track sample.
 
 use crate::{Craft, MAX_SHIPS};
 pub use fork::Fork;
@@ -68,7 +63,7 @@ pub const SWEEP_SLACK: f32 = 1.0;
 pub struct Front {
     /// Ring index on [`oag_race::Course`].
     pub index: u32,
-    /// The wave's centre this tick - the midpoint of the track's edges at
+    /// The wave's centre this tick: the midpoint of the track's edges at
     /// [`Self::index`] ([`oag_race::Course::centre`]).
     pub point: Vec3,
     /// [`Self::point`] last tick. The sweep is the segment between the two.
@@ -137,18 +132,15 @@ impl Repulser {
     }
 
     /// One update of `Repulser_Update`: age it, start or walk the waves, and say
-    /// whether it lives on. `false` means retire it **after** this tick's sweep,
-    /// which is the original's order (`RepulserPool_Update` sweeps before it
-    /// tests the result).
+    /// whether it lives on. `false` retires it **after** this tick's sweep, the
+    /// original's order (`RepulserPool_Update` sweeps first).
     ///
-    /// `owner_index` is the firer's ring index now. The waves start from wherever
-    /// the firer is when `blast_time` runs out, not where it fired (`+0x22c` is
-    /// copied from `craft+0xad8` inside `Repulser_SpawnWaves`). With no index the
-    /// start waits a tick - **chosen**, the original always has a cursor.
-    ///
-    /// On the tick the waves start they do not move, so both fronts' `previous`
-    /// equals `point` and [`sweeps`] cannot fire: the init call of
-    /// `Repulser_AdvanceWave` (`t3 = 1`) skips the walk.
+    /// `owner_index` is the firer's ring index now: the waves start from where the
+    /// firer is when `blast_time` runs out (`+0x22c` copied from `craft+0xad8` in
+    /// `Repulser_SpawnWaves`). With none the start waits a tick (**chosen**). On
+    /// the start tick the waves do not move (`previous == point`, so [`sweeps`]
+    /// cannot fire): the init call of `Repulser_AdvanceWave` (`t3 = 1`) skips the
+    /// walk.
     pub fn advance(
         &mut self,
         course: &oag_race::Course,
@@ -164,12 +156,12 @@ impl Repulser {
                 let backward = (BACKWARD_POINTS_PER_TICK * per_point) % count;
                 let steps = [forward, count - backward];
                 // The fork rides inside its parent's `Repulser_AdvanceWave`, after
-                // the parent's own walk: an existing one first takes the parent's
-                // full step, then a new one is spawned at most once.
+                // the parent's walk: an existing one takes the full step, then a new
+                // one spawns at most once.
                 if let Some(fork) = self.fork.as_mut() {
                     fork.advance(course, forward);
                 }
-                // Only the forward wave forks - see [`fork`]'s doc comment.
+                // Only the forward wave forks, see [`fork`].
                 if self.fork.is_none() {
                     self.fork = Fork::crossing(course, fronts[0].index as usize, forward);
                 }
@@ -201,8 +193,8 @@ impl Repulser {
     }
 
     /// [`Self::swept_by`] with the fork wave tried last, for craft:
-    /// `RepulserPool_SweepTargets` tests it only when waves 0 and 1 missed, and
-    /// never against Mines or Bombs.
+    /// `RepulserPool_SweepTargets` tests it only if waves 0 and 1 missed, never
+    /// against Mines or Bombs.
     #[must_use]
     pub fn swept_by_any(&self, point: Vec3, width: f32) -> Option<Front> {
         self.swept_by(point, width).or_else(|| {
@@ -212,14 +204,13 @@ impl Repulser {
         })
     }
 
-    /// `RepulserPool_SweepTargets`'s craft half: every other active craft a
-    /// wave swept this tick, and not yet hit by this Repulser, takes the hit.
+    /// `RepulserPool_SweepTargets`'s craft half: every other active craft a wave
+    /// swept this tick and not yet hit takes the hit.
     ///
-    /// **No shield test here**, as in the original: the shove and the slowdown
-    /// land regardless and [`oag_physics::damage::apply_weapon`] decides the
-    /// damage, exactly as [`super::blast::blast`] does. `hits` gets each hit as
-    /// absorbed or landed; the return is which slots were hit this tick, for the
-    /// `REPULSORHIT` cue.
+    /// No shield test here, as in the original: shove and slowdown land regardless
+    /// and [`oag_physics::damage::apply_weapon`] decides the damage, as
+    /// [`super::blast::blast`] does. `hits` gets each hit as absorbed or landed;
+    /// the return is the slots hit this tick, for the `REPULSORHIT` cue.
     pub fn apply_hits<S: Craft>(
         &mut self,
         ships: &mut [S; MAX_SHIPS],
@@ -246,10 +237,10 @@ impl Repulser {
             let Some(front) = self.swept_by_any(position, width) else {
                 continue;
             };
-            // `vsub.q` craft minus wave at `0x0886d2a0`, then `neg.s` on
-            // `blastForce` at `0x0886d30c`: the shove points from the craft
-            // toward the wave's centre, which is along the wave's travel because
-            // the craft sits between last tick's centre and this tick's.
+            // `vsub.q` craft minus wave (`0x0886d2a0`), then `neg.s` on
+            // `blastForce` (`0x0886d30c`): the shove points from craft toward the
+            // wave's centre, along its travel, as the craft sits between the
+            // centres of last tick and this.
             let direction = normalize_or_zero(position - front.point);
             ship.physics_mut()
                 .body
@@ -270,9 +261,8 @@ impl Repulser {
     }
 }
 
-/// The VFPU normalise this module's functions use: `vcmp.s EQ` against zero and
-/// `vcmovt.s` swap a zero length for `MaxFloat` before the reciprocal, so a zero
-/// vector comes back (effectively) zero instead of NaN.
+/// The VFPU normalise this module uses: `vcmp.s EQ` and `vcmovt.s` swap a zero
+/// length for `MaxFloat` before the reciprocal, so a zero vector stays zero.
 fn normalize_or_zero(v: Vec3) -> Vec3 {
     let length = v.length();
     let length = if length == 0.0 { f32::MAX } else { length };
@@ -280,12 +270,10 @@ fn normalize_or_zero(v: Vec3) -> Vec3 {
 }
 
 /// `Repulser_WaveSweepsPoint` (`0x0886cfc8`): did a wave whose centre moved from
-/// `previous` to `point` this tick pass over `target`?
-///
-/// `target` must lie between the two centres along the direction of travel, to
-/// within [`SWEEP_SLACK`] at either end, and within `width` of the travel axis.
-/// Both along-track terms must also be non-zero, which is what makes a wave that
-/// has not moved (`previous == point`) sweep nothing.
+/// `previous` to `point` pass over `target`? It must lie between the centres along
+/// the travel to within [`SWEEP_SLACK`], and within `width` of the axis. Both
+/// along-track terms must be non-zero, so an unmoved wave (`previous == point`)
+/// sweeps nothing.
 #[must_use]
 pub fn sweeps(point: Vec3, previous: Vec3, target: Vec3, width: f32) -> bool {
     let travel = normalize_or_zero(point - previous);
