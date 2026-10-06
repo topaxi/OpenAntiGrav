@@ -1,7 +1,7 @@
 // AMD FidelityFX Super Resolution 3.1 - the prepare-inputs pass, ported to
 // WGSL. Transliterated from `ffx_fsr3upscaler_prepare_inputs.h` and the
 // callbacks it uses in `ffx_fsr3upscaler_callbacks_hlsl.h`, AMD FidelityFX SDK
-// v1.1.4, MIT - see `common.wgsl`'s header and
+// v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // The first pass of the chain, at render resolution. It reads the three things
@@ -23,6 +23,19 @@
 //   velocity attachment is written by the scene's own draws at render
 //   resolution (ADR-0030), so a low-resolution position indexes it directly
 //   and `ComputeHrPosFromLrPos` is not involved.
+import package::fsr3::inputs::{r_input_motion_vectors, r_input_depth};
+import package::fsr3::common::{
+    FSR3UPSCALER_FP16_MAX,
+    F_RECONSTRUCTED_DEPTH_BILINEAR_WEIGHT_THRESHOLD,
+    constants,
+    get_4k_velocity,
+    get_bilinear_sampling_data,
+    get_view_space_depth_in_meters,
+    is_on_screen,
+    reconstructed_depth_mv_px_threshold,
+    render_size,
+    rgb_to_luma,
+};
 
 // **Bindings 0 and 1 are declared by a prelude, not here.** The scene's
 // velocity and depth attachments are multisampled whenever `[graphics]

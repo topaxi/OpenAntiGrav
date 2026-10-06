@@ -12,7 +12,7 @@
 //! HLSL packs a constant buffer into 16-byte rows with no member straddling a
 //! row boundary, and WGSL's uniform layout rules produce the same offsets for
 //! this particular sequence - every `vec2` lands 8-aligned and the one `vec4`
-//! lands at 48. That agreement is what lets `fsr3/common.wgsl` declare the
+//! lands at 48. That agreement is what lets `fsr3/common.wesl` declare the
 //! struct in upstream's order too, and it is why reordering a field here to
 //! "group related things" would silently move every field after it.
 
@@ -294,7 +294,7 @@ impl Constants {
     }
 
     /// The view-projection-independent check that this block's Rust layout is
-    /// the one `common.wgsl` declares.
+    /// the one `common.wesl` declares.
     ///
     /// Sixteen bytes' worth of padding is the whole reason this is worth
     /// asserting: get it wrong and every pass reads a field one row out, which

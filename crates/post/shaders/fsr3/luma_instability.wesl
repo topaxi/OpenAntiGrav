@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the luma-instability pass, ported to
 // WGSL. Transliterated from `ffx_fsr3upscaler_luma_instability.h`, AMD
-// FidelityFX SDK v1.1.4, MIT - see `common.wgsl`'s header and
+// FidelityFX SDK v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // **Catches a surface that is oscillating rather than settling.** Each texel
@@ -20,6 +20,26 @@
 // oscillate against - and it is then scaled down by velocity, disocclusion,
 // reactivity and shading change. Every one of those is a reason a luma
 // difference is *legitimate* rather than a wobble.
+import package::fsr3::common::{
+    ACCUMULAION,
+    DISOCCLUSION,
+    REACTIVE,
+    SHADING_CHANGE,
+    clamp_uv,
+    delta_pre_exposure,
+    exposure,
+    get_4k_velocity,
+    is_on_screen,
+    is_uv_inside,
+    jitter,
+    linear_clamp,
+    max_render_size,
+    min_divided_by_max,
+    min_divided_by_max_or,
+    previous_frame_jitter,
+    previous_frame_render_size,
+    render_size,
+};
 
 @group(1) @binding(0) var r_dilated_motion_vectors: texture_2d<f32>;
 @group(1) @binding(1) var r_dilated_reactive_masks: texture_2d<f32>;

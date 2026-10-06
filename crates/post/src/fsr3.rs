@@ -225,37 +225,13 @@ impl Pass {
     }
 }
 
-/// The prelude every pass is compiled with. See `common.wgsl`'s own header for
-/// why concatenation rather than an include.
-const COMMON: &str = include_str!("fsr3/common.wgsl");
-
-/// `common.wgsl` followed by one pass's source.
-fn source(pass: &str) -> String {
-    format!("{COMMON}\n{pass}")
+/// One pass's compiled WGSL: `build.rs` resolves its `import`s of
+/// `shaders/fsr3/common.wesl` and writes the result to `$OUT_DIR`.
+macro_rules! pass_wgsl {
+    ($name:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/fsr3_", $name, ".wgsl"))
+    };
 }
-
-/// The scene's velocity and depth attachments, single-sampled.
-///
-/// Prepended to `prepare_inputs.wgsl` rather than written in it, because the
-/// same pass has to be built against a multisampled pair whenever MSAA is on
-/// and the two are different WGSL *types*. See [`INPUTS_MULTISAMPLED`].
-const INPUTS: &str = "
-@group(1) @binding(0) var r_input_motion_vectors: texture_2d<f32>;
-@group(1) @binding(1) var r_input_depth: texture_2d<f32>;
-";
-
-/// The same two, multisampled - `[graphics] anti_aliasing` at either MSAA
-/// level.
-///
-/// **The pass's body is byte-identical between the two builds**, which is the
-/// whole reason this is a prelude rather than a second copy of the file:
-/// `textureLoad(t, p, 0)` is spelled the same either way, the `0` being a mip
-/// level on the single-sampled texture and a *sample index* on this one.
-/// Sample 0 rather than a resolve, for the reason `post::motion_blur` gives.
-const INPUTS_MULTISAMPLED: &str = "
-@group(1) @binding(0) var r_input_motion_vectors: texture_multisampled_2d<f32>;
-@group(1) @binding(1) var r_input_depth: texture_multisampled_2d<f32>;
-";
 
 /// How many threads each of upstream's render-resolution passes covers, in each
 /// axis - `FFX_FSR3UPSCALER_THREAD_GROUP_WIDTH` and `..._HEIGHT`.
@@ -522,7 +498,7 @@ impl Fsr3 {
         let pipeline = |label: &str, wgsl: &str, entry: &str, own: &wgpu::BindGroupLayout| {
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(label),
-                source: wgpu::ShaderSource::Wgsl(source(wgsl).into()),
+                source: wgpu::ShaderSource::Wgsl(wgsl.into()),
             });
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(label),
@@ -541,73 +517,67 @@ impl Fsr3 {
 
         let clear = pipeline(
             "fsr3 clear",
-            include_str!("fsr3/clear.wgsl"),
+            pass_wgsl!("clear"),
             "cs_clear_reconstructed_depth",
             &clear_layout,
         );
-        let prepare_inputs_body = include_str!("fsr3/prepare_inputs.wgsl");
         let prepare_inputs = [
             pipeline(
                 "fsr3 prepare inputs",
-                &format!("{INPUTS}{prepare_inputs_body}"),
+                pass_wgsl!("prepare_inputs"),
                 "cs_prepare_inputs",
                 &prepare_inputs_layout[0],
             ),
             pipeline(
                 "fsr3 prepare inputs (msaa)",
-                &format!("{INPUTS_MULTISAMPLED}{prepare_inputs_body}"),
+                pass_wgsl!("prepare_inputs_msaa"),
                 "cs_prepare_inputs",
                 &prepare_inputs_layout[1],
             ),
         ];
         let luma_pyramid = pipeline(
             "fsr3 luma pyramid",
-            include_str!("fsr3/luma_pyramid.wgsl"),
+            pass_wgsl!("luma_pyramid"),
             "cs_luma_pyramid",
             &luma_pyramid_layout,
         );
         let shading_change_pyramid_mip0 = pipeline(
             "fsr3 shading change pyramid mip0",
-            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            pass_wgsl!("shading_change_pyramid"),
             "cs_shading_change_pyramid_mip0",
             &shading_change_pyramid_layout,
         );
         let shading_change_pyramid_reduce = pipeline(
             "fsr3 shading change pyramid reduce",
-            include_str!("fsr3/shading_change_pyramid.wgsl"),
+            pass_wgsl!("shading_change_pyramid"),
             "cs_shading_change_pyramid_reduce",
             &shading_change_pyramid_layout,
         );
         let shading_change = pipeline(
             "fsr3 shading change",
-            include_str!("fsr3/shading_change.wgsl"),
+            pass_wgsl!("shading_change"),
             "cs_shading_change",
             &shading_change_layout,
         );
         let prepare_reactivity = pipeline(
             "fsr3 prepare reactivity",
-            include_str!("fsr3/prepare_reactivity.wgsl"),
+            pass_wgsl!("prepare_reactivity"),
             "cs_prepare_reactivity",
             &prepare_reactivity_layout,
         );
         let luma_instability = pipeline(
             "fsr3 luma instability",
-            include_str!("fsr3/luma_instability.wgsl"),
+            pass_wgsl!("luma_instability"),
             "cs_luma_instability",
             &luma_instability_layout,
         );
         let accumulate = pipeline(
             "fsr3 accumulate",
-            include_str!("fsr3/accumulate.wgsl"),
+            pass_wgsl!("accumulate"),
             "cs_accumulate",
             &accumulate_layout,
         );
-        let rcas = pipeline(
-            "fsr3 rcas",
-            include_str!("fsr3/rcas.wgsl"),
-            "cs_rcas",
-            &rcas_layout,
-        );
+        let rcas = pipeline("fsr3 rcas", pass_wgsl!("rcas"), "cs_rcas", &rcas_layout);
 
         Ok(Self {
             shared,
