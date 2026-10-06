@@ -112,6 +112,11 @@ pub const TITLE: &Title = &Title {
         shuriken: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,
+        // Pure's BOOT.BIN names `staticglow` (grep, both pressings).
+        ghost_static: Some(oag_title::weapons::GhostStatic {
+            entry: r"Data\Tex\staticglow.mip",
+            origin: oag_title::Origin::Measured,
+        }),
     },
     effects: effects::EFFECTS,
     looks: effects::LOOKS,

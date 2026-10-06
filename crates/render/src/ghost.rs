@@ -69,11 +69,6 @@ pub const RAMP_DIVISOR: f32 = 20.0;
 /// at `0x08abf4c4`/`0x08abf4c8`, never written.
 pub const STATIC_SCALE: [f32; 2] = [4.0, 1.8];
 
-/// The static texture's archive entry, `MeshNode_Ghost_LoadStaticGlow`'s
-/// string at `0x08a88420`. Present in Pulse's `Data.wad` (entry 945 on the
-/// USA pressing).
-pub const STATIC_TEXTURE_ENTRY: &str = r"Data\Tex\staticglow.mip";
-
 /// The static texel alpha a stamp needs to clear: alpha test `GREATER 0x80`.
 pub const STATIC_ALPHA_REF: u8 = 0x80;
 

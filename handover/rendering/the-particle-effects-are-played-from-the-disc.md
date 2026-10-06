@@ -77,8 +77,12 @@ heat haze: rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) is re
 `Blend::Distort`, simulated and **not drawn**, and the loader names each such emitter at
 WARN. Seen: wall sparks, rocket flare (`data/scratch/omega-particles/shots/`), the rocket
 explosion's fireball (`data/scratch/logwarn-2048/shots/omega-rocket.png`). Open: **draw
-the distortion** (what `psys_normal_heathaze_vp/fp` samples and how it offsets is
-unrecovered; no scene-colour grab pass exists in `oag-render`/`oag-post`/`oag-fx`; Omega
+the distortion** - the program's arithmetic is READ (2026-10-06,
+`ps4-omega-eu/heat-haze.md`: signed offset buffer, composite resamples at
+`uv + 0.0100021 * (16/9 * d.x, d.y)`), but it stays undrawn until three CPU-side facts are read: the per-batch `kColourScale`
+(batch float `+0x1c`, pushed by `FUN_0132c250`/`FUN_0132cfb0`/`FUN_01714de0` and kin),
+the distortion target's format/clear/pass-9 blend, and the linear-depth resolve; then
+the work is a distortion input on `oag-post`'s composite, not a scene grab (Omega
 only, no 2048 `.pob` uses class 8); read the flag's writers to make the per-circuit
 directory choice measured; the 2048 leftovers (rocket flare, Zone spark swap).
 Pulse's `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,
