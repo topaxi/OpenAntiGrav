@@ -359,7 +359,7 @@ pub(super) fn load_bodies(
     // bloomring's texture-only program already drew through
     // `slots::EMISSIVE`. See docs/rendering/hd-unlit-programs.md.
     let leach_ball = one(models.leachbeam_ball, "a leachbeam ball", true);
-    let bodies = (
+    (
         one(models.rocket, "a rocket", true),
         one(models.mine, "a laid mine", true),
         one(models.bomb, "a laid bomb", true),
@@ -378,8 +378,7 @@ pub(super) fn load_bodies(
         },
         bomb_blast,
         leach_ball,
-    );
-    bodies
+    )
 }
 
 /// The ghost ship's static texture, `oag_render::ghost::STATIC_TEXTURE_ENTRY`.

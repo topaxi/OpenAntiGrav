@@ -85,6 +85,32 @@ fn an_isolation_render_says_it_is_one() {
     assert!(line.contains("not the picture"), "{line}");
 }
 
+/// A pad pass whose nodes name no chunk reports the world-pass chunks that are
+/// the pad, not "0 of N (0 triangle(s))", which reads as an absent picture.
+#[test]
+fn a_pad_pass_with_no_addressed_node_reports_the_chunks_the_scene_draws() {
+    let report = Report {
+        nodes: 18,
+        routed_chunks: 18,
+        routed_triangles: 5_382,
+        ..Report::default()
+    };
+    let line = report.describe();
+    assert!(line.starts_with("18 node(s) address no chunk"), "{line}");
+    assert!(line.contains("18 chunk(s) on a pad material"), "{line}");
+    assert!(line.contains("(5382 triangle(s))"), "{line}");
+    assert!(!line.contains("(0 triangle(s))"), "{line}");
+    let drawn = Report {
+        drawn: 15,
+        addressed: 15,
+        nodes: 16,
+        triangles: 3_684,
+        routed_chunks: 1,
+        ..Report::default()
+    };
+    assert!(drawn.describe().starts_with("15 of 16 mesh node(s)"));
+}
+
 /// The report says what is missing, in the two ways it can be missing.
 #[test]
 fn the_report_names_both_kinds_of_absence() {
@@ -95,6 +121,8 @@ fn the_report_names_both_kinds_of_absence() {
         drawn: 59,
         no_stride: 11,
         triangles: 4_000,
+        routed_chunks: 0,
+        routed_triangles: 0,
         strays: 2,
         unreferenced: 639,
         see_through: 257,

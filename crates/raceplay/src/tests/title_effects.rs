@@ -60,6 +60,15 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             .into_iter()
             .filter(|t| !OWN.contains(t) && *t != Trigger::WreckExplosion)
         {
+            // HD authors neither magstrip `.pob` (it builds the arc wake) and its
+            // table takes the inherited pair back - `docs/formats/pob.md`, "Which
+            // names HD does not author".
+            if std::ptr::eq(title, oag_hd::TITLE)
+                && matches!(trigger, Trigger::MagstripSparks | Trigger::MagstripZone)
+            {
+                assert!(title.effect_on(trigger).is_none(), "{trigger:?}");
+                continue;
+            }
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));

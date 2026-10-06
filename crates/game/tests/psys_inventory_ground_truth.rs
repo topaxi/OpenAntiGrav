@@ -433,7 +433,6 @@ mod hd {
     use std::path::{Path, PathBuf};
 
     use oag_pob::ParticleSystem;
-    use oag_raceplay::RACE_EFFECTS;
 
     /// Distinct system names across all seven archives.
     ///

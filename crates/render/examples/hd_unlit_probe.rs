@@ -88,8 +88,8 @@ fn main() -> anyhow::Result<()> {
                 let n = range.len() as f32;
                 let mut centre = [0.0f32; 3];
                 for &i in range {
-                    for k in 0..3 {
-                        centre[k] += model.vertices[i as usize].position[k] / n;
+                    for (c, p) in centre.iter_mut().zip(model.vertices[i as usize].position) {
+                        *c += p / n;
                     }
                 }
                 let out: f32 = (0..3).map(|k| (a.position[k] - centre[k]) * g[k]).sum();
