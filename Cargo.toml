@@ -107,7 +107,7 @@ toml = "1"
 thiserror = "2"
 
 # GPU rendering and windowing.
-wgpu = "30"
+wgpu = "30.0.1"
 winit = "0.30"
 pollster = "1"
 
