@@ -577,8 +577,16 @@ every `.rcsmodel` that has materials:
 `oag_mesh::mesh::rcs::psp2::glow::plan` reads `Material::params` and
 `samplers` by name hash, so filling them on PS4 is the whole wiring. A Vineta K
 race reports `28 glow layer(s) and 0 plain scroll(s) off the materials' own
-uniforms (rates chosen, not measured)`. Rates are the 2048 rule, **chosen, not
-measured**: `TimeScaler` where authored, else the authored `time`, else `1.0`.
+uniforms (rates chosen, not measured)`. Rates are the 2048 rule: `TimeScaler`
+where authored (**chosen, not measured**), else `1.0`, the engine clock HD's own
+records play, since 2026-10-06 (`psp2-scroll`; the authored `time` is no longer
+read, see [2048-material-params.md](2048-material-params.md#what-scrolls-and-what-is-acted-on)).
+**Ported 2026-10-06:** the HD-named vertex scrolls (`basic_uv_scroll`
+`USpeed`/`VSpeed`, `cf_uvanim_emssive*`, `emissive_bloom`/`emissive_lights`) are
+admitted by name and authored rate hashes, labelled inherited from HD in the load
+report (Omega's GCN is unread, so no program confirms `time` there); 11 materials
+on Anulpha Pass, up to 15 on Amphiseum, 0 on any `environments2048` circuit
+(`crates/render/tests/psp2_glow_ground_truth.rs`).
 Frames: `data/scratch/omega-uv-scroll/after_vineta_{120,180,240,300}.png`
 against `before_vineta_300.png`. Before, the panels the glow layer lights are
 dull grey; after, they glow. The only pixels that differ from main's build at

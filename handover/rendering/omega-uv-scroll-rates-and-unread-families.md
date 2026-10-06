@@ -6,6 +6,21 @@ read (see `docs/formats/omega-status.md`, "The material uniform and sampler
 table") and 317 glow-layer and 19 plain-scroll materials reach the existing
 2048 glow plan unchanged.
 
+## 2026-10-06, `psp2-scroll`: what moved
+
+The glow layer's rate is now `TimeScaler` where authored (still chosen) else
+`1.0`, HD's engine clock (inherited: HD's identical records play it); the authored
+`time` is no longer read. HD's vertex scroll is ported by name and authored rate
+hashes (`vertex_scroll::inherited_rate`), 2048 and Omega both, labelled inherited
+in the load report. Evidence and per-family reasons:
+`docs/formats/2048-material-params.md`, "Inherited from HD". `basic_uv_scroll`
+`VSpeed` is wired (Next Steps 2 below is done); `scrollingalpha` `V_Offset` is on
+no circuit material. Still open below: a GCN read, the plain scroll's sign,
+`TimeScaler`-alone, flipbook, inline-`time`, and a frame where an inherited
+surface is isolated (the one candidate on Anulpha Pass is confounded by node
+animation; the plain scroll on Altima's "WELCOME" ring is proven by a static
+camera diff, `data/scratch/psp2-scroll/shots/sign_diff.png`).
+
 ## Open
 
 - Scroll rates and the plain scroll's sign are **chosen, not measured**, as on

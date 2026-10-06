@@ -110,7 +110,7 @@ Census over every race and Zone circuit's model, in submeshes:
 | --- | --- | ---: | --- |
 | glow layer | `Emissive_UV_Offset`, `Emissive_UV_Scale`, `TimeScaler` or `time`, `GlowTint`, an emissive and a diffuse sampler | about 790 (`fc09`/`fc10_effects_vscroll_lambertalpha_emissive` 474, `mt_uvanim_*` 179, `uvanim_diffuse_emissive*` 131) | yes |
 | plain V scroll | `speed_multipliaer` on one sampler | 113 (`fc01_effects_vscroll_emissive` 41, `fc06_effects_vscroll_emissive_alpha` 72) | yes |
-| `TimeScaler` alone | `fc02_effects_uscroll_scanlines_emissive` 85, `videoscreen_..._scrolling` 66 | 151 | no |
+| `TimeScaler` alone | `fc02_effects_uscroll_scanlines_emissive` 85, `videoscreen_..._scrolling` 66 | 151 | no (reason below) |
 | flipbook | `frameRate`, `fc07_lambert_alpha_uvanim_5x5colume` | 167 | no |
 | `time` and nothing else | some 60 materials (`mageffect08` 115, `fc08_effects_crowd` 98, `scanlinebillboard` 60, `mr_uvanim_em_alpha` 57, `scroller_glow_v3` 47, ...) | | no: the constants are inline literals in bytecode |
 
@@ -123,13 +123,93 @@ now with their names. So the layer is `oag_mesh::mesh::Emissive` and
 added to the albedo and gated by the diffuse alpha, with the emissive texture
 bound beside the diffuse the way HD binds its second one.
 
-**Chosen, not measured, and labelled so in the load report**: `rate` is
-`TimeScaler` where authored, else the authored `time` value, else `1.0` (HD's
-engine clock); and the plain scroll runs `+v` at `speed_multipliaer` per
-second. No 2048 bytecode was read to settle either, and the **direction of the
-plain scroll is a guess** - Wipeout HD's Talon's Junction authors `-1` for the
-same material family. Where `time` is authored on a 2048 material it is `1.0`,
-`0.0` or `1.1448`: a multiplier, by the values, and not the engine's clock.
+**What the glow layer's rate is, as of 2026-10-06 (`psp2-scroll`):**
+
+- **No `TimeScaler`: the engine clock, `1.0`, inherited from HD.** The
+  `mt_uvanim_diffuse_emissive*` and `and_anim_spec` records are HD's own
+  materials carried into 2048's DLC1: the same `Emissive_UV_Offset` and
+  `Emissive_UV_Scale` values and the same `GlowTint` to three decimals on
+  Anulpha Pass, Vineta K and Chenghou (`crates/render/examples/psp2_scroll_census.rs`,
+  `data/scratch/psp2-scroll/census.txt`). HD's matching fragment program was
+  read at instruction level (`MAD R0.w, R0.zzzz, {b}, R0` with `R0.w = time`:
+  `(v + a) * b + time`, rcsmaterial.md, "A surface scrolls off an engine
+  `time`"), and the engine clock enters at coefficient one. HD's records never
+  author `time`; 2048's author `0.0`, `1.0`, `1.0144`, `1.1448` and, on
+  `nr_twinblend`, `19992.0` on the same shader, which reads as a leftover
+  tool-side snapshot of a clock rather than a rate. **The authored `time` is
+  therefore no longer read as the rate** (it was, until this change: a `time`
+  of `0.0` froze a layer, `1.1448` slowed it). No 2048 instruction was read:
+  **inherited by name and by identical authored values, not measured on 2048.**
+- **`TimeScaler` authored: the rate is `TimeScaler`, chosen, not measured.**
+  The three families that author it (`fc09`/`fc10_effects_vscroll_lambertalpha_emissive`,
+  `fc02_effects_*vscroll*`) are 2048's own, no HD material shares the name, so
+  HD's law has nothing to say. What can be said is structural: the GXP parameter
+  tables put `time` and `TimeScaler` (and `time` and `speed_multipliaer`) in the
+  **same stage** on every such shader (`crates/render/examples/psp2_scroll_stages.rs`,
+  `data/scratch/psp2-scroll/stages.txt`: fragment for `fc09`/`fc10`, vertex for
+  `fc01`, `fc02`, `fc06`), the shape of HD's `uv + time * rate`. At
+  `TimeScaler 1.0` the choice equals HD's coefficient of one.
+- **The plain scroll runs `+v` at `speed_multipliaer` per second: chosen, not
+  measured.** The same-stage evidence above supports the shape (a rate times
+  the clock added to the coordinate) and says nothing about the axis or the
+  sign. The earlier note pointing at Talon's Junction's `-1` was a glow layer's
+  `Emissive_UV_Scale`, not a plain-scroll sign, and is withdrawn.
+- **The unit stays seconds**, because HD's `time` is one tile a second at rate
+  one and the engine clock is shared by the two titles' shaders.
+
+## Inherited from HD: the vertex scroll (2026-10-06, `psp2-scroll`)
+
+HD's vertex programs add `time * rate` to the coordinate with the rate **authored
+on the material** ([rcsmaterial.md](rcsmaterial.md), "HD's vertex programs scroll
+the texture coordinate"). **2048 and Omega author the very same rate hashes on
+the same shader names** (`crates/render/examples/psp2_hd_rate_census.rs`):
+
+| Shader | HD rate hashes | 2048 records (base, DLC1, DLC2) | Omega records |
+| --- | --- | ---: | ---: |
+| `cf_uvanim_emssive*` | `0x87d769dc` x, `0x2481ef75` y | 103 | 70 |
+| `basic_uv_scroll` | `USpeed`, `VSpeed` | 6 | 6 |
+| `emissive_bloom`, `emissive_lights` | `0x68292521` (v) | 60 | 92 |
+| `hologram` | `Speed` (u) | 16 | 22 |
+| `uv_anim_diffuse_alpha` | `0x33d51367` (u) | 0 | 8 |
+
+(Records are `.rcsmodel` material entries, so one shader repeats per circuit.)
+
+On 2048 the shader's vertex program also **declares `time`** (`cf_uvanim_emssive*`
+and `emissive_lights`: `time:V` in the stage census), the same stage as HD. So
+`oag_mesh::mesh::rcs::vertex_scroll::inherited_rate` admits a material on a
+name HD ships, a record that authors the rate hashes (all of a shape's, never a partial set), exactly one texture besides
+its lightmap (HD's own rule), and, **where the programs can be listed**, a vertex
+program that declares `time`. On Omega the programs are GCN and unread, so the
+name and the hashes alone admit it. It reaches the existing
+`AnimTrack::Scroll`, deduplicated with the plain scrolls.
+
+**Reach**, the report's `inherited_scrolls` (`psp2_scroll_reach`):
+Anulpha Pass 18 (2048) and 11 (Omega), Ubermall 10 and 11, Amphiseum 6 and 15,
+Modesto Heights 4 and 7, Tech de Ra 3 and 5, Moa Therma 3 and 7-9, Vineta K 2
+and 6, Sol 2 1 and 1, Chenghou 0 and 2; **0 on every 2048 circuit of its own**,
+which is the guard that nothing switched on beyond the families checked.
+`crates/render/tests/psp2_glow_ground_truth.rs` pins Anulpha Pass on both titles.
+
+**Checked, differs:** 2048's `mr_uvanim_em_*`, `cf_chenghou_sign*`, `nr_twinblend`
+and the like declare `time` and author no HD rate hash, so their constants are
+inline in bytecode: still. HD's values also differ per circuit (Anulpha's
+`cf_uvanim_emssive_glowtint` pair is `1,0` on some copies and `0,0.066` on
+another), so nothing was copied across: each record's own authored rate plays.
+
+**Still, with the reason:**
+
+| Family | Submeshes | Why it stays still |
+| --- | ---: | --- |
+| `TimeScaler` alone (`fc02_effects_uscroll_scanlines_emissive`, `videoscreen_*_scrolling`) | 151 | `TimeScaler` and `time` are vertex-stage; the axis and sign live in the name only (`uscroll`) |
+| flipbook, `fc07_lambert_alpha_uvanim_5x5colume`, `frameRate` | 167 | the 5 by 5 grid and the frame order are in the material **name**, not in any authored field; no HD material ships the family |
+| inline-`time` families | about 60 | the constants are literals in bytecode |
+
+Both flipbook and `TimeScaler`-alone need a decoded instruction stream, which
+`gxp.md` still does not have (97,899 containers decode, no opcode is named).
+
+**Omega: ported.** The glow layer's clock rule and the inherited vertex scroll
+reach Omega through the same plan; Omega's `scrollingalpha` `V_Offset` is on no
+circuit material (weapons and muzzle flash only), as on HD.
 
 `crates/render/tests/psp2_glow_ground_truth.rs` holds what the build does with
 `arena`'s three glow layers (rates `0.05`, `1.0`, `3.0`) and two plain scrolls
@@ -139,7 +219,8 @@ same material family. Where `time` is authored on a 2048 material it is `1.0`,
 
 - **Bytecode.** No fragment or vertex program was decoded: how a Zone colour,
   the light and the emissive scalar combine, where `TimeScaler` enters the
-  coordinate, which sign a plain scroll takes, what `fc01_dummy` outputs.
+  coordinate, which sign a plain scroll takes, what `fc01_dummy` outputs. Only
+  the parameter tables (`gxp.md`) were read, for which stage declares which name.
   [gxp.md](gxp.md) has the container; the instruction set is not read.
 - **The other scroll shapes** in the table above, and the flipbook's 5 by 5
   frame cycle.

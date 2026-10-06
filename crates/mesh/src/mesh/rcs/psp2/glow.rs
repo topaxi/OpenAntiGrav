@@ -34,7 +34,7 @@ use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::material::Material;
 
 use super::{Report, decode_material_texture};
-use crate::mesh::rcs::Textures;
+use crate::mesh::rcs::{Textures, vertex_scroll};
 use crate::mesh::{AnimTrack, Emissive, ModelTexture, slots};
 
 /// One material's glow layer: its index into the model's table, plus one, the
@@ -73,8 +73,8 @@ impl Plan {
     }
 }
 
+const TIME_NAME: &str = "time";
 const SPEED: &str = "speed_multipliaer";
-const TIME: &str = "time";
 const TIME_SCALER: &str = "TimeScaler";
 const OFFSET: &str = "Emissive_UV_Offset";
 const SCALE: &str = "Emissive_UV_Scale";
@@ -124,12 +124,18 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
         report.glow_layers += usize::from(layer.is_some());
         out.layers.push(layer);
 
-        let scroll = scroll_of(material).and_then(|rate| {
-            let track = AnimTrack::Scroll([0.0, rate]);
+        let plain = scroll_of(material).map(|rate| [0.0, rate]);
+        let inherited = plain
+            .is_none()
+            .then(|| inherited_scroll(material, &mut *textures))
+            .flatten();
+        let (plain_set, inherited_set) = (plain.is_some(), inherited.is_some());
+        let scroll = plain.or(inherited).and_then(|rate| {
+            let track = AnimTrack::Scroll(rate);
             let at = out
                 .tracks
                 .iter()
-                .position(|seen| matches!(seen, AnimTrack::Scroll(r) if *r == [0.0, rate]))
+                .position(|seen| matches!(seen, AnimTrack::Scroll(r) if *r == rate))
                 .or_else(|| {
                     (out.tracks.len() + 1 < crate::mesh::ANIM_TRACK_LIMIT).then(|| {
                         out.tracks.push(track);
@@ -138,7 +144,8 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
                 })?;
             u32::try_from(at + 1).ok()
         });
-        report.scrolling_materials += usize::from(scroll.is_some());
+        report.scrolling_materials += usize::from(plain_set && scroll.is_some());
+        report.inherited_scrolls += usize::from(inherited_set && scroll.is_some());
         out.scroll.push(scroll.unwrap_or(0));
     }
     out
@@ -154,9 +161,14 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
         .param(name_hash(TINT))
         .filter(|v| v.len() >= 3)
         .map_or([1.0; 3], |v| [v[0], v[1], v[2]]);
-    let rate = scalar(material, TIME_SCALER)
-        .or_else(|| scalar(material, TIME))
-        .unwrap_or(1.0);
+    // `TimeScaler` where authored (chosen: the shape matches HD's coefficient
+    // of one at `1.0`, no instruction read); else the engine clock itself,
+    // which is what HD's own `uvanim_diffuse_emissive` records, byte-for-byte
+    // the same values as 2048's `mt_uvanim_diffuse_emissive*`, play. An
+    // authored `time` is no longer read as the rate: HD's records never author
+    // it (the engine supplies it) and 2048's carry `0.0`, `1.0`, `1.0144`,
+    // `1.1448` and `19992.0` on the same shader.
+    let rate = scalar(material, TIME_SCALER).unwrap_or(1.0);
     Some((
         Emissive {
             tint,
@@ -167,6 +179,34 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
         emissive.to_string(),
         diffuse.to_string(),
     ))
+}
+
+/// The scroll a 2048 or Omega material inherits from HD's vertex law - see
+/// [`vertex_scroll::inherited_rate`] for what makes it inherited.
+fn inherited_scroll(material: &Material, textures: Textures<'_>) -> Option<[f32; 2]> {
+    let stem = material.name.rsplit(['/', '\\']).next()?;
+    let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
+    let own = material
+        .samplers
+        .iter()
+        .filter(|&&(hash, _)| hash != oag_rcs::rcsmaterial::LIGHTMAP_SAMPLER)
+        .count();
+    // `Some` only where the file holds programs this reader can list.
+    let vertex_time = textures(&material.name).and_then(|blob| {
+        let time = TIME_NAME;
+        let programs: Vec<_> = oag_rcs::gxp::programs(&blob)
+            .into_iter()
+            .filter_map(|(_, p)| p.ok())
+            .collect();
+        (!programs.is_empty()).then(|| {
+            programs
+                .iter()
+                .any(|p| !p.is_fragment() && p.parameter(time).is_some())
+        })
+    });
+    vertex_scroll::inherited_rate(stem, own, vertex_time, |hash| {
+        material.param(hash)?.first().copied()
+    })
 }
 
 /// The V rate of a plain scroll: `speed_multipliaer` on a material that names
