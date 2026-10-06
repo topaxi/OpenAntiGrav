@@ -357,7 +357,7 @@ pub(crate) fn autopilot_pilot(name: Option<&str>) -> Result<Option<oag_ai::Pilot
 /// the one `Cell::evaluate_medal` always used). `None` when the flag is absent.
 pub(crate) fn campaign_cell(
     options: &oag_raceplay::Options,
-    title: &str,
+    title: &oag_title::Title,
     name: Option<&str>,
 ) -> Result<
     Option<(
@@ -368,10 +368,11 @@ pub(crate) fn campaign_cell(
     let Some(name) = name else {
         return Ok(None);
     };
-    let entry = match title {
-        t if t == oag_pulse::TITLE.name => oag_pulse::campaign::DEFINITION_ENTRY,
-        t if t == oag_hd::TITLE.name => oag_hd::campaign::DEFINITION_ENTRY,
-        other => anyhow::bail!("--campaign-cell reads Pulse's and HD's grids; {other} has none"),
+    let Some(entry) = title.campaign.definition_entry else {
+        anyhow::bail!(
+            "--campaign-cell reads Pulse's and HD's grids; {} has none",
+            title.name
+        );
     };
     let mut opened = oag_source::title::open_source(&options.source, Vec::new(), Vec::new())?;
     let grids = oag_game::campaign::read_grids(&mut opened.archives, entry)?;

@@ -538,7 +538,7 @@ pub(crate) fn run_race(
                 (path, header)
             }),
         };
-        let title_name = loaded.title.name;
+        let title = loaded.title;
         oag_game::race_capture::capture(
             loaded,
             &oag_game::race_capture::CaptureOptions {
@@ -555,7 +555,7 @@ pub(crate) fn run_race(
                     forced: crate::args::force_medal(&cli.wreck.force_medal)?,
                     cell: crate::args::campaign_cell(
                         &options,
-                        title_name,
+                        title,
                         cli.wreck.campaign_cell.as_deref(),
                     )?,
                     ..Default::default()

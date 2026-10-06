@@ -112,6 +112,19 @@ pub const TITLE: &Title = &Title {
     },
     effects: effects::EFFECTS,
     looks: effects::LOOKS,
+    // No campaign layout read (`docs/formats/pure-status.md`): the load path
+    // that reaches this falls through to Pulse's reader and refuses.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Pulse,
+        definition_entry: None,
+        circuit_unlocks: false,
+        loyalty_unlocks: false,
+        // Pure authors no circuit or variant `<Unlock>` (`docs/formats/pure-status.md`).
+        unlocks_origin: oag_title::Origin::Measured,
+        selection_strings: false,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+    },
+    pressings: Some(frontend::PRESSINGS),
 };
 
 /// Where Pure keeps its music.
@@ -616,5 +629,31 @@ mod tests {
     fn the_two_titles_are_mutually_exclusive() {
         assert!(TITLE.foreign_title("UCUS-98712").is_some());
         assert!(oag_pulse::TITLE.foreign_title("UCUS-98612").is_some());
+    }
+
+    /// A pressing's row carries the very cut its region names, so the table the
+    /// boot code reads and the lookups it replaced cannot drift. Covers EU, USA,
+    /// no serial and a serial nobody measured (JP, say).
+    #[test]
+    fn the_pressings_table_matches_the_per_region_cut_lookups() {
+        let table = TITLE.pressings.expect("Pure carries its pressings");
+        for serial in [
+            Some("UCES-00001"),
+            Some("UCUS-98612"),
+            None,
+            Some("UCJP-00001"),
+        ] {
+            let row = table.of(serial);
+            assert_eq!(row.movie_region, frontend::localised_movie_region(serial));
+            assert_eq!(row.title_frame, frontend::title_frame_src(serial));
+            assert_eq!(row.intro_movie, names::intro_movie(row.movie_region));
+            assert_eq!(
+                row.fmv_intro_movie,
+                names::fmv_intro_movie(row.movie_region)
+            );
+        }
+        assert_eq!(table.of(Some("UCUS-98612")).movie_region, "US");
+        assert_eq!(table.of(None).movie_region, "EU");
+        assert_eq!(table.of(Some("UCJP-00001")).movie_region, "EU");
     }
 }

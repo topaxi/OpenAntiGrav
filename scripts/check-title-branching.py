@@ -60,15 +60,6 @@ PATTERNS = [
 # Comparisons per file at the 2026-10-06 landing (main b115ec3ef). Lower a row
 # when a file drops; delete it at zero. Never raise one.
 BASELINE: dict[str, int] = {
-    "crates/game/src/boot.rs": 1,
-    "crates/game/src/boot/movies.rs": 2,
-    "crates/game/src/campaign.rs": 3,
-    "crates/game/src/main/args.rs": 2,
-    "crates/game/src/main/session/campaign.rs": 1,
-    "crates/game/src/main/session/remix.rs": 6,
-    "crates/game/src/settings/race.rs": 1,
-    "crates/game/src/unlock.rs": 2,
-    "crates/source/src/title.rs": 1,
     "crates/ui/src/frontend.rs": 1,
 }
 

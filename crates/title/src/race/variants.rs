@@ -34,6 +34,12 @@ pub struct GuestRoster {
     pub dir: &'static str,
     /// The team ids, their variant suffixes and how they join.
     pub variants: &'static TeamVariants,
+    /// The title whose roster this reships, by [`crate::Title::name`]. A race
+    /// remix that wants that title's craft and has no source for it falls back
+    /// to a title carrying this roster.
+    pub reships: &'static str,
+    /// Where the claim came from.
+    pub origin: crate::effects::Origin,
 }
 
 /// A team that carries more than one selectable directory - see

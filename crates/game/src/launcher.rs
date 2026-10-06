@@ -83,6 +83,15 @@ impl Candidate {
         matches!(self.state, State::Playable(_))
     }
 
+    /// The title this row opens as, or `None` when it did not open.
+    #[must_use]
+    pub fn playable(&self) -> Option<&'static Title> {
+        match &self.state {
+            State::Playable(title) => Some(title),
+            State::Unavailable(_) => None,
+        }
+    }
+
     /// The title's name, or the reason it has none.
     #[must_use]
     pub fn title(&self) -> &str {

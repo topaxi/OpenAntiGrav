@@ -149,6 +149,19 @@ pub const TITLE: &Title = &Title {
         elsewhere: oag_title::ShieldPalette::Pulse,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     }),
+    // No campaign layout read (2048's campaign is its own event map): the
+    // load path that reaches this falls through to Pulse's reader and refuses.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Pulse,
+        definition_entry: None,
+        circuit_unlocks: false,
+        loyalty_unlocks: false,
+        // Not wired, not measured absent: 2048's unlock rows are unread here.
+        unlocks_origin: oag_title::Origin::Chosen,
+        selection_strings: false,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+    },
+    pressings: None,
 };
 
 /// 2048's music: the front end's loop and the eleven race tracks.

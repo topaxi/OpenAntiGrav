@@ -75,6 +75,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // carries a `<Class name="VECTOR">`** either. So on the one title whose
     // ladder was supposed to begin at Vector, the per-team shape is Pulse's
     // exactly. See `docs/formats/handling-stats.md`.
+    // Chosen, not measured: the definition of "fresh" is this project's. See
+    // `FRESH_PROFILE_VARIANT`.
+    fresh_variant: Some(oag_title::race::FreshVariant {
+        variant: FRESH_PROFILE_VARIANT,
+        origin: oag_title::Origin::Chosen,
+    }),
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
     }),

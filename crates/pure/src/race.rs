@@ -119,6 +119,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // because nothing downstream can name it. See
     // `oag_title::SpeedClasses::VECTOR`, which is where that is explained and
     // where the filter lives.
+    fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
     }),
