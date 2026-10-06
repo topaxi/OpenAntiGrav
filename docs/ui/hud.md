@@ -594,7 +594,7 @@ pair of the 26 code-only keys; the other 25 are not read.
   **Tried 2026-10-06 and refuted**: an opaque outline fills the digits with
   black halos the original does not show; the gap was the glyph quad clipped
   to its metric box. **Fixed 2026-10-06**: the quad now draws the authored
-  `borderExtendPixels` and the halo closes about half of the measured gap -
+  `borderExtendPixels` and the halo closes about 43 % of the measured gap -
   see [hud-skins.md part D](hud-skins.md#d-what-was-built-2026-10-06-hud-crisp-lane).
   `[graphics] hud_scale` (default `sharp-bilinear`) is the other half, for the
   raster HUDs.

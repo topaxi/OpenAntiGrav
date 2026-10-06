@@ -157,3 +157,30 @@ fn the_other_titles_border_census() {
         census("omega", &mut archives, &languages);
     }
 }
+
+/// The wiring, not the arithmetic: the HUD assets a race load builds carry the
+/// authored borders on the atlases the renderer draws, so dropping
+/// `with_border_extend` from `oag_raceplay`'s `hud_font` fails here.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_load_hands_the_hud_its_authored_borders() {
+    for rel in [
+        "data/images/pulse-psp-eu.chd",
+        "data/images/pure-psp-eu.chd",
+    ] {
+        let Some(path) = present(rel) else {
+            continue;
+        };
+        let loaded = oag_raceplay::load(&oag_raceplay::Options {
+            source: path.display().to_string(),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("{rel}: loading a race: {e:#}"));
+        assert_eq!(loaded.hud.font.border_extend, 5, "{rel}: HUD value face");
+        assert_eq!(
+            loaded.hud.small_font.border_extend, 3,
+            "{rel}: HUD caption face"
+        );
+    }
+}

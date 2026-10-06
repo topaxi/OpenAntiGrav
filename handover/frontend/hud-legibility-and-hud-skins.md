@@ -11,9 +11,10 @@ exactly 4x but not Pulse's typeface at high resolution.
 
 ## Open
 
-- The halo is about half closed against PPSSPP (rings 2-4 still 0.03-0.11
-  shallower, far field lighter), and `best` peaks at 200-218 in the original
-  against our 254; the blend is not derived. What the original does with a
+- The halo is about 43 % closed against PPSSPP's software renderer (rings 2-4
+  still 0.07-0.10 lighter), and `best` peaks at 200-218 in the original
+  against our 254; the blend is not derived. `hud_scale` below 100 % render
+  scale or under FSR acts at the internal resolution (not measured). What the original does with a
   tightly packed face (Pulse PSP's menu faces, 2048's NEOSANS) is not captured;
   our reach cut to half the gap is chosen, not measured.
 - The bright-backdrop frame (boost pad) behind the washed-out bottom-left

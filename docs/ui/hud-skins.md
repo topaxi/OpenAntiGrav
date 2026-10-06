@@ -285,31 +285,39 @@ title present, `just test-data`):
 | HD, Omega: `HUD`, `HUDSmall` | 5, 3 | 5, 3 |
 | 2048: `NEOSANS`, `NEOSANS_BOLD` | 15 | **3**, boxes 6 px apart |
 
-Screens that changed: the race HUD on Pulse (PSP and PS2), Pure, HD and Omega;
-Pulse PS2's menu text; 2048's NEOSANS text (reach 3 of 15). Pulse PSP's menus
-did not change (reach 0). Pure and 2048 menus: no pixel moved
-(`--menu-page main`). Whether the original extends a tightly packed face (the
-PSP menu faces) at all, and by how much, is not captured.
+Screens that changed, **as seen**: the race HUD on Pulse PSP and Pure (viewed),
+and on HD (212 pixels over the whole 1080p frame, imperceptible when viewed);
+Pulse PS2's race and menu text (pixel diffs, not viewed beyond the menu).
+**No change observed**: Pulse PSP menus (reach 0), Pure's menu, 2048's
+`--menu-page main` (0 pixels, so no screen has been seen to show NEOSANS
+change), and an Omega race frame (0 pixels at tick 300, whose HUD text the
+border did not move; Omega's census row says 5 and 3 are authored and drawn).
+Whether the original extends a tightly packed face (the PSP menu faces) at all,
+and by how much, is not captured.
 
-**Halo depth against PPSSPP software, same ship and circuit** (VENOM, Talon's
-Junction, craft on the line, 1x; PPSSPP window halved back to 480x272 with a
-box filter). Metric: mean luminance in rings 1-8 px outside the readout's ink
-(`>= 190`) divided by the mean 9-11 px out, the `CurrentTime` readout, three
-PPSSPP frames (seen three times on one boot, the second and third a few
-seconds later); the script is `data/scratch/hud-crisp/ring.py` (scratch, not committed).
+**Halo depth against PPSSPP's software renderer** (`--graphics=software`, SDL
+build under its own Xvfb, USA pressing; ours the EU pressing, same assets),
+same ship and circuit (VENOM, Talon's Junction, craft on the line, 1x; the
+PPSSPP window halved back to 480x272 with a box filter). Metric: mean
+luminance in rings 1-8 px outside the readout's ink (`>= 190`) divided by the
+mean 9-11 px out, on the leading `0.` of `CurrentTime` (the one part both
+frames show; the other digits differ), three frames from one boot (the timer
+differed, the rings did not); script `data/scratch/hud-crisp/ring.py`
+(scratch, not committed). A first capture on PPSSPP's GL backend (the ini
+asked for software and PPSSPP ignored it) showed a *deeper* halo (rings 2-4
+0.60 / 0.61 / 0.64); it is discarded as not the reference.
 
 | Ring (px out) | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| PPSSPP, frames 1 / 2 / 3 | 0.58 / 0.57 / 0.58 | 0.59 / 0.55 / 0.63 | 0.63 / 0.60 / 0.66 | 0.76 / 0.71 / 0.76 |
-| Ours before | 0.66 | 0.71 | 0.73 | 0.80 |
-| Ours now | 0.60 | 0.66 | 0.69 | 0.77 |
+| PPSSPP software, frames 1 / 2 / 3 | 0.68 / 0.68 / 0.69 | 0.69 / 0.70 / 0.71 | 0.71 / 0.72 / 0.73 | 0.86 / 0.86 / 0.88 |
+| Ours before | 0.84 | 0.87 | 0.87 | 0.93 |
+| Ours now | 0.75 | 0.80 | 0.82 | 0.91 |
 
-The mean gap to the original over rings 2-5 went from 0.09 to 0.045: **about
-half of the missing halo is back**. The rest is a shallower ring 2-4 (0.03 to
-0.11 lighter than the original) and a lighter far field (ring 7-8: 0.94 against
-0.82-0.89). The original's `best` readout peaks at 200-218 where ours is 254
-(a dimmer authored colour or a blend we do not reproduce; the `current`
-readout matches). Open. Confidence 70 that the halo is now drawn as the
+The mean gap to the original over rings 2-5 went from 0.14 to 0.08: **about
+43 % of the missing halo is back**. The rest is a ring 2-4 still 0.07-0.10
+lighter than the original. The original's `best` readout peaks at 200-218 where
+ours is 254 (a dimmer authored colour or a blend we do not reproduce; the
+`current` readout matches). Open. Confidence 70 that the halo is drawn as the
 original draws it to within the blend.
 
 ### The stretch: `[graphics] hud_scale`
@@ -345,6 +353,22 @@ four modes at each size):
 | 3840x2160 | 7.94 | 8 (100.7 %, small readouts 4 of 4.8: 84 %) | same |
 | 1280x800 (Deck) | 2.67 | 2 (**75 %**, small readouts 1 of 1.6: **63 %**) | integer is visibly smaller and the small readouts shrink to 1 px strokes; sharp-bilinear stays full size and crisp |
 
+**This departs from the maintainer's hint**, which guessed integer (nearest)
+as the default: integer is the same picture at 1080p and 2160p and a smaller
+one on the Deck, so the default is the mode that is never worse. One line
+flips it: `hud_scale = "integer"` under `[graphics]` (or change
+`#[default]` on `HudScale`).
+
+The captures are the race load's own frame at `--size`; a `--presented`
+capture at 1920x1080 (render scale 100 %, `reconstruction` off, both the
+defaults) shows the same crisp edges (`shots/pres-cmp.png`, linear left,
+sharp-bilinear right), so the stretch reaches a player's window. **Below 100 %
+render scale, or with `fsr1`/`fsr3` on, the HUD is composited into the smaller
+target that is upscaled afterwards, and `hud_scale` then acts at the internal
+resolution** - not measured here. Whole frames at 1920x1080 and the 4K speed
+and shield bars were read unscaled: the bars are flat colour, and their
+stepped arrow ends are the raster art's own, as on the PSP.
+
 So `sharp-bilinear` is identical to `integer` wherever the factor is near a
 whole number, and the only mode that is both crisp and full size where it is
 not (the Deck, any 1440p or odd window). `nearest` is crisp but its uneven
@@ -363,8 +387,8 @@ substitute source for Pulse's sprites stays open (thread).
 
 - The bright-backdrop frame behind the washed-out readouts was not reproduced;
   a boost-pad frame on both sides is needed to size the bloom term.
-- ~~The size of the halo the original draws~~: measured in part D (about half
-  the gap closed; ring 2-4 still 0.03-0.11 shallower). The exact blend over
+- ~~The size of the halo the original draws~~: measured in part D (about 43 % of
+  the gap closed; ring 2-4 still 0.07-0.10 shallower). The exact blend over
   the extended area, and what the original does with a tightly packed face,
   stay open.
 - The original's sampling rule for text at fractional scale (0.6) is not read;
