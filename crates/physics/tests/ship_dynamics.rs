@@ -1,19 +1,14 @@
 //! Structural invariants of one ship over many ticks.
 //!
-//! Every assertion here is about *structure*: something is finite, something is
-//! bounded, something is symmetric, something is exactly zero, something is
-//! quantised to three values. **Nothing here asserts a speed, a height or a turn
-//! rate as though it were known**, because the force law comes from
-//! `docs/physics/README.md`, which is static analysis that has never been run
-//! under an emulator. A test that pinned a settling height would be pinning this
-//! crate's own arithmetic and calling it a measurement. Behavioural comparison
-//! against the original is M3's job; see
-//! `docs/reverse-engineering/verification-protocol.md`.
+//! Every assertion is about *structure*: something is finite, bounded, symmetric, exactly zero,
+//! or quantised to three values. **Nothing asserts a speed, height or turn rate as though it
+//! were known**: a test pinning a settling height would pin this crate's own arithmetic and call
+//! it a measurement. Behavioural comparison against the original is M3's job
+//! (`docs/reverse-engineering/verification-protocol.md`).
 //!
-//! The parameter sets below are arbitrary round numbers chosen so the arithmetic
-//! is checkable by hand. **They are not values from any ship**, and no handling
-//! data is reproduced anywhere in this repository - see
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//! The parameter sets are arbitrary round numbers chosen so the arithmetic is checkable by hand.
+//! **They are not values from any ship**
+//! (`docs/architecture/adr/0006-no-copyrighted-content.md`).
 
 use std::cell::Cell;
 
@@ -159,15 +154,11 @@ impl Raycaster for CountingRaycaster {
     }
 }
 
-/// The counter-intuitive half of the specified integrator: forces are evaluated
-/// **once per frame at full `dt`**, and the three sub-steps reuse that one
-/// evaluation. Two probes therefore mean two raycasts per force evaluation, not
-/// six.
-///
-/// Asserted against `forces::evaluate` rather than `step`, because `step` also
-/// runs the wall constraint after integrating and that has probes of its own.
-/// Counting `step`'s total would measure both and pin neither; the claim here is
-/// about the force law.
+/// The counter-intuitive half of the integrator: forces are evaluated **once per frame at full
+/// `dt`** and the three sub-steps reuse that evaluation, so two probes mean two raycasts per
+/// force evaluation, not six. Asserted against `forces::evaluate`, not `step`, which also runs
+/// the wall constraint with probes of its own: counting `step` would measure both and pin
+/// neither.
 #[test]
 fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
     let handling = fixture();
@@ -189,17 +180,11 @@ fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
     assert_eq!(raycaster.casts.get(), 20);
 }
 
-/// The whole per-frame query cost is the same every tick.
-///
-/// The companion to the test above, and what it used to assert before the wall
-/// constraint existed: whatever `step` costs in raycasts, it must not grow with
-/// the sub-step count or drift between ticks. Ten ticks cost ten times one tick,
-/// where a force evaluated per sub-step would cost three times that.
-///
-/// The per-tick count is only *constant* because nothing in this world responds
-/// to the wall constraint: a hit on the swept query short-circuits the eight hull
-/// probes, so a fixture with a wall in it would legitimately vary. If this fails
-/// after someone adds one, that is the fixture changing and not `step`.
+/// The whole per-frame query cost is the same every tick: whatever `step` costs in raycasts it
+/// must not grow with the sub-step count or drift between ticks (ten ticks cost ten times one,
+/// where a force per sub-step would cost three times that). It is only *constant* because
+/// nothing in this world responds to the wall constraint (a swept-query hit short-circuits the
+/// eight hull probes), so after adding a wall to the fixture a failure is the fixture changing.
 #[test]
 fn the_query_cost_of_a_tick_does_not_grow_with_the_sub_steps() {
     let handling = fixture();
@@ -217,8 +202,7 @@ fn the_query_cost_of_a_tick_does_not_grow_with_the_sub_steps() {
         );
     };
 
-    // One warm-up tick, so the ship is moving and the swept query is live in
-    // both the measurement and the ten that follow.
+    // One warm-up tick, so the ship is moving and the swept query is live throughout.
     tick(&mut state, &raycaster);
     let before = raycaster.casts.get();
     tick(&mut state, &raycaster);
@@ -275,9 +259,8 @@ fn a_ship_dropped_onto_a_floor_settles_at_a_finite_height() {
     assert!(state.is_grounded());
 }
 
-/// The divergence check. With no input, an explicit Euler integrator on a stiff
-/// spring is exactly where energy injection would show up, and it would show up
-/// as an amplitude that grows every bounce.
+/// The divergence check: with no input, explicit Euler on a stiff spring is where energy
+/// injection would show, as an amplitude growing every bounce.
 #[test]
 fn a_ship_with_no_input_does_not_gain_energy_over_thousands_of_ticks() {
     let handling = fixture();
@@ -308,17 +291,15 @@ fn a_ship_with_no_input_does_not_gain_energy_over_thousands_of_ticks() {
         );
     }
 
-    // A ship released below its hover target rises to it and no further: the probes
-    // are `ride_height` long, so contact - and with it every lifting term - is lost
-    // above that height.
+    // A ship released below its hover target rises to it and no further: the probes are
+    // `ride_height` long, so contact (and every lifting term) is lost above that height.
     assert!(peak_speed < 100.0, "peak speed was {peak_speed}");
     assert!(
         peak_height <= handling.antigrav.ride_height,
         "peak height was {peak_height}"
     );
-    // Spin is bounded but **not** zero, and that is the weathervane torque doing its
-    // job: it turns the nose toward the direction of travel, and a ship settling onto
-    // its air cushion is travelling vertically. Nothing rolls it, though.
+    // Spin is bounded but **not** zero: the weathervane turns the nose toward the direction of
+    // travel and a ship settling onto its cushion travels vertically. Nothing rolls it.
     assert!(peak_spin < 1.0, "peak spin was {peak_spin}");
     assert_eq!(state.body.up().x, 0.0);
 }
@@ -359,17 +340,14 @@ fn groundedness_only_ever_holds_one_of_three_values() {
     }
 }
 
-/// A ship spawned inside the floor is pushed back out by the penetration-escape
-/// constraint and stays out, without a velocity change doing the work.
+/// A ship spawned inside the floor is pushed back out by the penetration-escape constraint and
+/// stays out, without a velocity change doing the work.
 ///
-/// **The spawn height moved with the recovered probe geometry, and the assertion
-/// did not.** The probes hang `1.125` below the centre of mass
-/// (`oag_physics::hover::probe_offsets`), so a body centre `0.1` above the floor
-/// puts both probes a unit *underneath* it, where they find nothing to escape
-/// from - in the original as much as here, since the ray starts at the probe and
-/// points down. What this test is about is the escape constraint, so the ship is
-/// placed where the constraint applies: probes `0.1` into the floor, which is a
-/// centre `0.1 + 1.125` above it.
+/// The spawn height moved with the recovered probe geometry and the assertion did not: the
+/// probes hang `1.125` below the centre of mass (`oag_physics::hover::probe_offsets`), so a
+/// centre `0.1` above the floor puts both a unit *underneath* it with nothing to escape from (as
+/// in the original, whose ray starts at the probe and points down). The ship is placed where the
+/// constraint applies: probes `0.1` into the floor, a centre `0.1 + 1.125` above it.
 #[test]
 fn a_ship_pressed_into_the_floor_never_ends_up_below_it() {
     let handling = fixture();
@@ -465,12 +443,11 @@ fn mirrored_airbrake_input_produces_a_mirrored_trajectory() {
         ..ShipControls::default()
     };
 
-    // Five seconds, which is bounded deliberately: the recovered roll stiffness and
-    // roll damping put this model just outside the explicit-Euler stability limit
-    // (see `a_ship_rolled_off_level_is_pulled_back_toward_level`), so both ships
-    // eventually tumble. They tumble *in mirror image*, and the mirror assertions
-    // below keep holding - but once a coordinate reaches `NaN`, `NaN != NaN` makes
-    // them vacuous rather than true. The horizon stops short of that.
+    // Five seconds, bounded on purpose: the recovered roll stiffness and damping put this model
+    // just outside the explicit-Euler stability limit (see
+    // `a_ship_rolled_off_level_is_pulled_back_toward_level`), so both ships eventually tumble in
+    // mirror image, but once a coordinate reaches `NaN`, `NaN != NaN` makes the mirror assertions
+    // vacuous. The horizon stops short of that.
     for tick in 0..300 {
         step(
             &mut left_heavy,
@@ -512,10 +489,9 @@ fn mirrored_airbrake_input_produces_a_mirrored_trajectory() {
     assert_ne!(left_heavy.body.position.x, 0.0);
 }
 
-/// A mag floor is ordinary floor with a different tag, so a ship must behave
-/// identically over one, bit for bit. Confidence 92 on that being the whole of
-/// the difference; the magnetic hold that a dedicated probe would additionally
-/// trigger is **not implemented**, because its force law was not decoded.
+/// A mag floor is ordinary floor with a different tag, so a ship must behave identically over one,
+/// bit for bit. Confidence 92 on that being the whole of the difference; the dedicated mag
+/// probe's hold is exercised in the ceiling tests below.
 #[test]
 fn a_mag_floor_is_indistinguishable_from_a_floor_to_the_suspension() {
     let handling = fixture();
@@ -573,16 +549,12 @@ fn a_ship_over_a_wall_or_a_reset_collider_is_never_grounded() {
     }
 }
 
-/// Nothing in the model commands roll, so a level ship over a level floor never
-/// acquires any - exactly, not approximately.
-///
-/// **Not "never pitches", which this test used to claim.** The weathervane torque
-/// turns the nose toward the direction of *travel* in three dimensions, so a ship with
-/// any vertical velocity gets a nose-down or nose-up term out of it, and a ship
-/// settling onto its air cushion has vertical velocity. That pitch is a property of the
-/// recovered term, not a bug. Roll is different: `cross(forward, velocity)` has no roll
-/// component while the velocity stays in the ship's own vertical plane, and no control
-/// input writes an angular Z at all.
+/// Nothing in the model commands roll, so a level ship over a level floor never acquires any,
+/// exactly. **Not "never pitches"**: the weathervane turns the nose toward the direction of
+/// *travel* in three dimensions, so a ship settling onto its cushion (vertical velocity) gets a
+/// pitch term out of it, a property of the recovered term. Roll differs: `cross(forward,
+/// velocity)` has no roll component while the velocity stays in the ship's vertical plane, and no
+/// control input writes an angular Z.
 #[test]
 fn a_level_ship_over_a_level_floor_never_rolls() {
     let handling = fixture();
@@ -610,62 +582,44 @@ fn a_level_ship_over_a_level_floor_never_rolls() {
     assert!(state.body.up().y > 0.9);
 }
 
-/// A ship rolled slightly off a flat floor is pulled **toward** level by the
-/// surface-alignment torque.
+/// A ship rolled slightly off a flat floor is pulled **toward** level by the surface-alignment
+/// torque.
 ///
-/// # What is asserted
-///
-/// That the roll shrinks over the first quarter of the alignment oscillation's period.
-/// That is the whole-ship consequence of the torque's direction, and it is the strongest
-/// statement this model supports: with the sign as `docs/physics/README.md` writes it,
-/// the roll grows from the first tick instead. The direction itself is pinned
-/// unconditionally, on the torque rather than through a simulation, by
+/// Asserted: the roll shrinks over the first quarter of the alignment oscillation's period, the
+/// whole-ship consequence of the torque's direction (with the page's literal sign it grows from
+/// the first tick). The direction itself is pinned unconditionally, on the torque, by
 /// `oag_physics::hover`'s
 /// `the_alignment_torque_points_from_the_ships_up_axis_toward_the_surface_normal`.
 ///
-/// # Long-run convergence, which this used to say did not happen
+/// Long-run convergence now holds, by measurement and not by tuning. This test once argued roll
+/// could not converge: with the transcribed gain `400` against `Ship_ApplyAngularDamping`'s
+/// `-2.0`, explicit Euler is outside its stability limit and the oscillation grows. Two
+/// corrections retired that: the bound is not `h <= c / k` on the sub-step but
+/// `c >= (2/3) * k * H` on the frame (acceleration computed once per frame), a 2.22-fold
+/// shortfall, not 11 %; and the gain is not 400 but about **20.2**, measured by rolling the
+/// original `0.25 rad` through PPSSPP's debugger (a damped cosine crossing zero at frame 21,
+/// `omega = 4.49 rad/s`; damping near 1.6). Trace, caveats and the unresolved gain-or-inertia
+/// question: `oag_physics::hover::ALIGNMENT_GAIN` and `docs/physics/README.md`, "Alignment gain:
+/// the measurements behind the numbers".
 ///
-/// It does now, and the change is a measurement rather than a tune. This comment used
-/// to argue that roll could not converge: with the transcribed alignment gain of `400`
-/// against `Ship_ApplyAngularDamping`'s `-2.0`, explicit Euler is outside its stability
-/// limit and a rolled ship's oscillation grows until it tumbles. Two corrections
-/// retired that.
-///
-/// The stability arithmetic itself was wrong in a way that made it look marginal. The
-/// bound is not `h <= c / k` on the sub-step, because the acceleration is computed once
-/// per frame and held across all three sub-steps, so the governing step is the frame.
-/// The real condition is `c >= (2/3) * k * H`, and at `k = 400` the shortfall was
-/// 2.22-fold, not 11 %.
-///
-/// And the gain is not 400. It was measured on the original by rolling the ship
-/// `0.25 rad` through PPSSPP's debugger and tracing the recovery: a clean damped cosine
-/// crossing zero at frame 21, so `omega = 4.49 rad/s` and the stiffness is about
-/// **20.2**. The damping came out near 1.6 against the transcribed 2.0, so that
-/// constant is roughly right and the gain was the outlier. See
-/// `oag_physics::hover::ALIGNMENT_GAIN` for the trace and the caveats - in particular
-/// that whether the factor of twenty is the gain itself or a moment of inertia this
-/// crate's accumulators bypass is **not** resolved.
-///
-/// So this test now asserts what the original does: a monotone, non-oscillatory return
-/// toward level, on the measured timescale rather than the transcribed one.
+/// So this asserts what the original does: a monotone, non-oscillatory return toward level on
+/// the measured timescale.
 #[test]
 fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
     let handling = fixture();
     let world = flat_floor(Surface::Floor);
-    // Resting height, recomputed for the recovered geometry rather than nudged:
-    // the probes hang `1.125` below the centre and the spring rests where it
-    // carries the load, `normal_gravity / (0.8 * (normal_gravity +
-    // track_gravity))` below the `0.75 * ride_height` target - `1.25` on this
-    // fixture. A ship at the old `19.0` has both probes above their own reach
-    // now (the reach is the target, not `ride_height`) and simply falls.
+    // Resting height recomputed for the recovered geometry: the probes hang `1.125` below the
+    // centre and the spring rests where it carries the load, `normal_gravity / (0.8 *
+    // (normal_gravity + track_gravity))` below the `0.75 * ride_height` target, `1.25` here. At
+    // the old `19.0` both probes are above their own reach (the reach is the target) and it falls.
     let mut state = ship_at(15.0 - 1.25 + 1.125, &handling);
     state.body.orientation = oag_core::math::Quat::from_rotation_z(0.02);
 
     let initial_roll = state.body.up().x.abs();
     let mut roll = initial_roll;
 
-    // The measured quarter period is about 21 ticks, so the whole of this window is
-    // inside the first monotone descent and the roll must fall on every one of them.
+    // The measured quarter period is about 21 ticks, so this window is inside the first monotone
+    // descent and the roll must fall on every tick.
     for tick in 0..14 {
         step(
             &mut state,
@@ -684,26 +638,21 @@ fn a_ship_rolled_off_level_is_pulled_back_toward_level() {
         roll = next;
     }
 
-    // The measured cosine reaches 0.5 at `omega * t = pi / 3`, about 14 ticks at
-    // 4.49 rad/s. This fixture sits on its own suspension as well, whose probes add
-    // stiffness the perturbed original did not have, so it lands a little above that;
-    // the bound is set where the *shape* is pinned - a substantial monotone decay over
-    // a quarter period - without pretending the fixture reproduces the trace exactly.
+    // The measured cosine reaches 0.5 at `omega * t = pi / 3`, about 14 ticks at 4.49 rad/s. This
+    // fixture's own suspension adds stiffness the perturbed original lacked, so it lands a little
+    // above; the bound pins the *shape* (a substantial monotone decay over a quarter period)
+    // without pretending to reproduce the trace.
     assert!(
         roll < initial_roll * 0.65,
         "roll only came down from {initial_roll} to {roll} in 14 ticks"
     );
 }
 
-/// The landing window drives `landing_rebound` in place of `rebound` for its
-/// first 0.2 s, and the clock behind it is armed **in the air**, not on
-/// touchdown.
-///
-/// `Ship_UpdateCraft` (`0x08849df0`) runs the airborne clock and
-/// `Ship_HoverTwoPoint` zeroes the landing clock once that airborne clock has
-/// passed `rebound_jump_time` - so by the time a craft touches down the
-/// landing clock is already sitting at zero and simply starts counting. See
-/// `ShipState::time_airborne`.
+/// The landing window drives `landing_rebound` in place of `rebound` for its first 0.2 s, and the
+/// clock behind it is armed **in the air**, not on touchdown: `Ship_UpdateCraft` (`0x08849df0`)
+/// runs the airborne clock and `Ship_HoverTwoPoint` zeroes the landing clock once it passes
+/// `rebound_jump_time`, so on touchdown the landing clock is already at zero and starts counting
+/// (`ShipState::time_airborne`).
 #[test]
 fn the_landing_clock_is_armed_in_the_air_and_runs_from_touchdown() {
     // The fixture's `rebound_jump_time` is zero, so any flight at all arms it.
@@ -757,13 +706,10 @@ fn the_landing_clock_is_armed_in_the_air_and_runs_from_touchdown() {
     assert_eq!(state.time_since_landing, TICK * 2.0);
 }
 
-/// A hop shorter than `rebound_jump_time` never arms the landing response.
-///
-/// **The point of the parameter, and the bug its absence caused.** A craft
-/// flickers in and out of contact constantly on rough ground; resetting the
-/// landing clock on every touchdown edge - which is what this crate did until
-/// `rebound_jump_time` was read - applies `landing_rebound` almost permanently
-/// instead of on the landings a player would call landings.
+/// A hop shorter than `rebound_jump_time` never arms the landing response. Rough ground flickers
+/// in and out of contact constantly; resetting the landing clock on every touchdown edge (this
+/// crate's behaviour until `rebound_jump_time` was read) applies `landing_rebound` almost
+/// permanently instead of on real landings.
 #[test]
 fn a_hop_shorter_than_rebound_jump_time_never_arms_the_landing_response() {
     let mut handling = fixture();
@@ -784,8 +730,7 @@ fn a_hop_shorter_than_rebound_jump_time_never_arms_the_landing_response() {
     assert!(state.is_grounded(), "the fixture should settle in contact");
     let settled = state.time_since_landing;
 
-    // Lift it clear for a quarter of a second - a real hop, and a long way
-    // short of the second the parameter asks for.
+    // Lift it clear for a quarter of a second: a real hop, well short of the parameter's second.
     state.body.position.y = 60.0;
     for _ in 0..15 {
         step(
@@ -809,16 +754,13 @@ fn a_hop_shorter_than_rebound_jump_time_never_arms_the_landing_response() {
     );
 }
 
-/// A settled ship with no sideshift is unchanged by a frame the outer clock
-/// reports as zero.
+/// A settled ship with no sideshift is unchanged by a frame the outer clock reports as zero.
 ///
-/// **Narrower than "a zero-length frame changes nothing", deliberately.** The
-/// integrator is a no-op at `dt = 0`, but force evaluation still runs, and two of
-/// its effects are applied outside the accumulators: the penetration-escape
-/// teleport and the sideshift's velocity change. A penetrating ship or a held
-/// sideshift therefore *does* move on a zero-length frame. Whether the original
-/// gates those on the delta is not recorded, so nothing here gates them either,
-/// and the test says only what it can see.
+/// **Narrower than "a zero-length frame changes nothing", deliberately**: the integrator is a
+/// no-op at `dt = 0` but force evaluation still runs, and two effects land outside the
+/// accumulators (the penetration-escape teleport and the sideshift's velocity change), so a
+/// penetrating ship or a held sideshift does move. Whether the original gates those on the delta
+/// is unrecorded, so nothing here gates them and the test says only what it can see.
 #[test]
 fn a_settled_ship_is_unchanged_by_a_zero_length_frame() {
     let handling = fixture();
@@ -884,18 +826,13 @@ fn an_overlong_frame_is_clamped_rather_than_integrated() {
 
 /// A sideshift is a **force**, it lasts its own timer, and it is grounded-only.
 ///
-/// **This replaces `a_sideshift_is_a_one_shot_change_in_velocity`**, which pinned
-/// the crate's old guess: a velocity change applied once, on the frame the input
-/// arrived, bypassing the accumulators. `Ship_UpdateAirbrakes`' tail calls
-/// `Body_AddForceWorld` while a per-side timer runs, so it is an ordinary world
-/// force for `oag_physics::airbrake::SIDESHIFT_DURATION` and the integrator
-/// divides it by mass like everything else. See
-/// `oag_physics::airbrake::sideshift_force` for the listing and the direction.
-///
-/// What survives from the old test, because it is still true and still worth
-/// pinning: it is not in `Evaluated::airbrake`'s own force (that struct is the
-/// airbrake block, and the sideshift is a separate call in the same function),
-/// and it does not keep pushing for ever.
+/// Replaces `a_sideshift_is_a_one_shot_change_in_velocity`, which pinned the old guess of a
+/// velocity change applied once. `Ship_UpdateAirbrakes`' tail calls `Body_AddForceWorld` while a
+/// per-side timer runs, so it is an ordinary world force for
+/// `oag_physics::airbrake::SIDESHIFT_DURATION`, divided by mass by the integrator (listing and
+/// direction: `oag_physics::airbrake::sideshift_force`). Still pinned: it is not in
+/// `Evaluated::airbrake`'s own force (a separate call in the same function), and it does not push
+/// for ever.
 #[test]
 fn a_sideshift_is_a_grounded_force_that_lasts_its_own_timer() {
     let handling = fixture();
@@ -933,8 +870,8 @@ fn a_sideshift_is_a_grounded_force_that_lasts_its_own_timer() {
     );
     assert!(state.body.linear_velocity.x > after_one);
 
-    // And it stops: the push lasts 0.2 s, so the lateral speed peaks inside that
-    // window and is lower afterwards rather than growing without bound.
+    // And it stops: the push lasts 0.2 s, so the lateral speed peaks inside it and is lower
+    // afterwards rather than growing without bound.
     let mut peak: f32 = 0.0;
     let mut samples = Vec::new();
     for _ in 0..60 {
@@ -956,30 +893,18 @@ fn a_sideshift_is_a_grounded_force_that_lasts_its_own_timer() {
     );
 }
 
-/// Under a ceiling, the probes still find the surface, because they cast along the
-/// **ship's own up axis** rather than along world up, and the spring they produce acts
-/// along that same axis.
+/// Under a ceiling the probes still find the surface, because they cast along the **ship's own up
+/// axis**, not world up, and the spring they produce acts along that axis.
 ///
-/// # This does not assert that the ship is held there, because it is not
-///
-/// The test that used to live here asserted an inverted ship stayed on its ceiling. It
-/// was asserting behaviour the recovered force law does not have, and
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md` is what showed that: the inline gravity
-/// term writes **world `.y` only**, `track_gravity` reaches the force law solely through
-/// the hover spring's *magnitude*, and the hover spring always pushes the ship *away*
-/// from the surface it found. So nothing in what has been recovered pulls a ship toward
-/// a ceiling, and an inverted ship falls off.
-///
-/// Which is consistent rather than alarming: inverted sections in this game are
-/// magstrips, and the magnetic hold that would do the holding is **not implemented**
-/// because its force law was not decoded. This test therefore pins the part that is
-/// recovered - the probe direction and the force axis - and deliberately stops there.
-///
-/// **The hold is implemented now** ([`oag_physics::maglock`]), and this test is
-/// unchanged by it on purpose: the ceiling here is tagged [`Surface::Floor`], the
-/// mag probe accepts only [`Surface::MagFloor`], so the blend stays at zero and an
-/// inverted ship on ordinary geometry still falls off exactly as before. The
-/// companion test below is the same ship under a *mag* ceiling.
+/// **This does not assert the ship is held there.** The old test asserted an inverted ship stayed
+/// on its ceiling, behaviour the recovered force law lacks (`docs/ghidra/functions/psp-pulse-usa/engine.md`):
+/// the inline gravity writes **world `.y` only**, `track_gravity` reaches the force law solely
+/// through the hover spring's *magnitude*, and the spring always pushes the ship *away* from the
+/// surface it found, so nothing pulls a ship toward a ceiling and an inverted ship falls off.
+/// Inverted sections here are magstrips, whose hold is [`oag_physics::maglock`]. This test is
+/// unchanged by it on purpose: the ceiling is tagged [`Surface::Floor`] and the mag probe accepts
+/// only [`Surface::MagFloor`], so the blend stays zero. The companion below is the same ship under
+/// a *mag* ceiling.
 #[test]
 fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
     let handling = fixture();
@@ -1039,25 +964,20 @@ fn a_ship_under_a_ceiling_probes_along_its_own_up_axis() {
     );
 }
 
-/// The other half of the test above: under a **mag** ceiling the ship stays.
-///
-/// The same geometry, the same inverted pose, the same entry point - one tag
-/// changed. This is what the magstrip hold buys and it is asserted through
-/// [`step`] rather than on `maglock` directly, because the thing that could break
-/// it is the wiring: the hold is not a force, so nothing in the accumulators would
+/// The other half of the test above: under a **mag** ceiling the ship stays. Same geometry, pose
+/// and entry point, one tag changed. Asserted through [`step`] and not `maglock` directly, because
+/// the likely break is the wiring: the hold is not a force, so nothing in the accumulators would
 /// miss it if the call disappeared.
 ///
-/// It also pins the property the whole mechanism exists for, and the one a torque
-/// implementation would fail: the ship's attitude is slaved to the surface while
-/// its **angular velocity stays whatever it was**. See
-/// `docs/physics/cornering-ground-truth.md` for the lap that measured that.
+/// It pins the property a torque implementation would fail: the attitude is slaved to the surface
+/// while the **angular velocity stays whatever it was**
+/// (`docs/physics/cornering-ground-truth.md` for the lap that measured it).
 #[test]
 fn a_ship_under_a_mag_ceiling_is_held_there_without_any_angular_velocity() {
-    // A shorter ride height than the shared fixture's, because the mag probe's
-    // reach is a fixed ~10 units (`5 * |up - down|`) while the hover probes' is
-    // `ride_height`. At the fixture's 20 the hold would park the ship four units
-    // beyond its own probe's reach and chatter; the original's real ride heights
-    // are around 5.5, where the two are consistent.
+    // A shorter ride height than the shared fixture's: the mag probe's reach is a fixed ~10
+    // units (`5 * |up - down|`) while the hover probes' is `ride_height`. At 20 the hold would
+    // park the ship four units beyond its own probe's reach and chatter; the original's ride
+    // heights are around 5.5, where the two are consistent.
     let handling = Handling {
         antigrav: Antigrav {
             ride_height: 5.0,
@@ -1103,11 +1023,10 @@ fn a_ship_under_a_mag_ceiling_is_held_there_without_any_angular_velocity() {
     }
 
     assert_eq!(state.mag_lock_blend, 1.0, "the strip never locked");
-    // Not exact, and the residue is the mechanism rather than slack: the hold runs
-    // inside the force evaluation and the integrator then rotates the basis by
-    // whatever angular velocity the frame's torques left behind, so the ship sits a
-    // milliradian off the axis rather than on it. A hold that ran after the
-    // integrator would read exactly `NEG_Y` and would be in the wrong place.
+    // Not exact, and the residue is the mechanism: the hold runs inside force evaluation and the
+    // integrator then rotates the basis by the angular velocity the frame's torques left, so the
+    // ship sits a milliradian off the axis. A hold that ran after the integrator would read
+    // exactly `NEG_Y` and be in the wrong place.
     let up = state.body.up();
     assert!(
         (up - Vec3::NEG_Y).length() < 1e-2,
@@ -1124,18 +1043,13 @@ fn a_ship_under_a_mag_ceiling_is_held_there_without_any_angular_velocity() {
     );
 }
 
-/// A vertical quad in the plane `x = at`, tall and wide enough that a ship
-/// cannot go round it, tagged with whatever surface the caller wants.
+/// A vertical quad in the plane `x = at`, tall and wide enough that a ship cannot go round it,
+/// tagged with whatever surface the caller wants (the two tests below need the *same* geometry
+/// under two tags).
 ///
-/// The surface is a parameter because the two tests below need the *same*
-/// geometry under two different tags: that is the whole of what the hoverable
-/// gate decides.
-///
-/// The winding is load-bearing: hull contacts are single-sided, so the raw
-/// `(b - a) x (c - a)` normal has to face the ship, which approaches from
-/// `x < at` in both tests. Indexed the other way round the quad is a back face
-/// and the hull probes ignore it entirely - which is the original's behaviour
-/// and not what these two are about.
+/// The winding is load-bearing: hull contacts are single-sided, so the raw `(b - a) x (c - a)`
+/// normal has to face the ship, which approaches from `x < at`. The other way round the quad is
+/// a back face the hull probes ignore, as the original's do.
 fn vertical_quad_at(at: f32, surface: Surface) -> TriangleSoup {
     TriangleSoup::new(
         vec![
@@ -1155,17 +1069,10 @@ fn wall_at(at: f32) -> TriangleSoup {
     vertical_quad_at(at, Surface::Wall)
 }
 
-/// The behaviour this whole constraint exists for, through the real entry point.
-///
-/// A ship flown at a wall must end up on the near side of it and turn round. The
-/// unit tests in `oag_physics::wall` pin one call to `resolve`; this pins that
-/// `step` actually invokes it, which is the wiring a caller depends on and the
-/// thing a refactor would silently drop.
-///
-/// No speed or rebound magnitude is asserted, only the sign and the side, for the
-/// reason in this file's header: the response law is an implementation choice
-/// awaiting M3, and pinning its numbers here would pin this crate's own
-/// arithmetic and call it a measurement.
+/// The behaviour this whole constraint exists for, through the real entry point: a ship flown at
+/// a wall ends on the near side and turns round. The `oag_physics::wall` unit tests pin one call
+/// to `resolve`; this pins that `step` invokes it, the wiring a refactor would silently drop. Only
+/// the sign and side are asserted, for the reason in this file's header.
 #[test]
 fn a_ship_flown_at_a_wall_ends_up_on_the_near_side_of_it_and_turns_round() {
     const WALL_X: f32 = 60.0;
@@ -1244,22 +1151,19 @@ fn a_hoverable_surface_inside_the_hull_pushes_it_and_charges_no_shield() {
 
 /// The suspension carries `normal_gravity + track_gravity`, not `normal_gravity`.
 ///
-/// The hover downforce (`oag_physics::hover::DOWNFORCE_SCALE`) presses the craft
-/// onto the surface with `track_gravity * mass * grounded`, and the spring is
-/// calibrated against the *sum* of the two gravities - so the equilibrium
-/// compression is
+/// The hover downforce (`oag_physics::hover::DOWNFORCE_SCALE`) presses the craft onto the surface
+/// with `track_gravity * mass * grounded` and the spring is calibrated against the *sum*, so the
+/// equilibrium compression is
 ///
 /// ```text
 /// (normal_gravity + track_gravity) / (2 * 0.3 * HOVER_K * (normal_gravity + track_gravity)) = 1.25
 /// ```
 ///
-/// **whatever the split between them is**, which is why this fixture can use
-/// round numbers of its own and still pin the recovered behaviour. Carrying
-/// gravity alone - the crate's state before the downforce was read - would rest
-/// this ship at `10 / 32 = 0.3125` instead, four times shallower, and that is
-/// the number this test exists to keep out. The load matters far beyond the
-/// height: the spring's damper is a *multiplier* on the spring magnitude, so the
-/// craft's whole attitude damping scales with what the suspension carries.
+/// **whatever the split**, so this fixture's round numbers still pin the recovered behaviour.
+/// Carrying gravity alone (the crate before the downforce was read) rests the ship at
+/// `10 / 32 = 0.3125`, four times shallower: the number this test keeps out. The load matters
+/// beyond height: the spring's damper multiplies the spring magnitude, so attitude damping scales
+/// with what the suspension carries.
 #[test]
 fn a_settled_ship_rests_1_25_below_its_target_because_of_the_downforce() {
     let handling = Handling {
@@ -1296,20 +1200,15 @@ fn a_settled_ship_rests_1_25_below_its_target_because_of_the_downforce() {
     assert_eq!(state.grounded, 1.0);
 }
 
-/// A pitched craft comes back **without ringing**, which is the property the
-/// downforce restored.
+/// A pitched craft comes back **without ringing**, the property the downforce restored.
 ///
-/// `docs/physics/angular-velocity-column.md` measures the original answering a
-/// held pitch input with extrema of `+0.397 -0.080 +0.017 -0.007` rad/s - each
-/// about a fifth of the one before - while this crate used to produce
-/// `+0.431 -0.353 +0.287 -0.234`, losing only a fifth of its amplitude per cycle.
-/// The difference was never a damping term of its own: the hover damper is a
-/// multiplier on the spring magnitude, so it was 17x too weak while the
-/// suspension carried `normal_gravity` alone.
+/// `docs/physics/angular-velocity-column.md` measures the original answering a held pitch input
+/// with extrema `+0.397 -0.080 +0.017 -0.007` rad/s (each about a fifth of the last), while this
+/// crate used to give `+0.431 -0.353 +0.287 -0.234`. The hover damper multiplies the spring
+/// magnitude, so it was 17x too weak while the suspension carried `normal_gravity` alone.
 ///
-/// This asserts the *shape* - successive pitch-rate extrema each at most a third
-/// of the one before - on a fixture whose numbers are its own. It fails on the
-/// pre-downforce crate, where the ratio is about `0.8`.
+/// Asserts the *shape*, successive pitch-rate extrema each at most a third of the one before, on
+/// a fixture with its own numbers. It fails on the pre-downforce crate (ratio about `0.8`).
 #[test]
 fn a_pitched_craft_stops_ringing_within_two_swings() {
     let handling = Handling {
