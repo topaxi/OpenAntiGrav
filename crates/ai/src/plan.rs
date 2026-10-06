@@ -1,46 +1,30 @@
 //! A speed plan: the fastest speed this craft can carry at each point of the
 //! racing line, found by driving the line in our own physics.
 //!
-//! # Why a plan, and where the numbers come from
+//! The driver's own target (`driver::pace::corner_target`) is a model, and every
+//! gap between it and the physics is a wall the craft finds: a crest read as a
+//! corner, an apex the chord averages away, a braking zone that starts late.
+//! [`SpeedPlan::build`] instead drives the authored line with the race's own
+//! steering controller and `oag_physics::step` and **learns** a ceiling per
+//! sample: where the craft touches a wall or leaves its line, the ceilings over
+//! the stretch that led there are lowered, a backward braking pass re-derives
+//! where braking must start, and the run rewinds to a checkpoint before that
+//! zone. What survives is a profile the craft has been *seen* to drive cleanly.
 //!
-//! The driver's own speed target (`driver::pace::corner_target`) is a model: a
-//! curvature read off the line, turned into a speed through a grip figure and a
-//! yaw ceiling. Every gap between that model and what the physics actually does
-//! is a wall the craft finds - a crest it reads as a corner, an apex its chord
-//! averages away, a braking zone that starts too late because the model knows
-//! nothing of how fast the airbrakes actually stop the craft. The Ace thread's
-//! board is a list of those gaps.
-//!
-//! A plan asks the physics instead. [`SpeedPlan::build`] drives the authored
-//! line with the same steering controller the race uses and the same
-//! `oag_physics::step` the race steps, and **learns** a speed ceiling per line
-//! sample: wherever the craft touches a wall or leaves its line, the ceilings
-//! over the stretch that led there are lowered a little, a backward braking pass
-//! re-derives where braking has to start, and the run is rewound to a
-//! checkpoint before that braking zone and driven again. What survives is a
-//! profile the craft has been *seen* to drive cleanly, braking included.
-//!
-//! Nothing in it is invented: the line, the collision and the handling come
-//! off the disc, and the speeds come out of our own physics. The constants
-//! below are the search's own knobs - how much to lower, how far to look back,
-//! how many tries a corner gets - and every one of them is **chosen, not
-//! measured**.
-//!
-//! **It is not the original's behaviour.** The original's opponents take their
-//! speed from a schedule keyed on the player's position (`docs/gameplay/ai.md`,
-//! "Speed, in Pulse"), which this project refuses to port. This is ours, and it
-//! uses nothing a player's craft does not have: the same physics, the same
-//! handling, no extra thrust.
+//! Nothing is invented: line, collision and handling come off the disc, speeds
+//! from our own physics. The search's own knobs below are all **chosen, not
+//! measured**. **It is not the original's behaviour**, which schedules speed on
+//! the player's position (`docs/gameplay/ai.md`, "Speed, in Pulse") and which
+//! this project refuses to port; the plan uses nothing a player's craft lacks.
 //!
 //! # Determinism
 //!
-//! `f32` only, no `mul_add`, no hashed containers, no clock, no randomness. The
-//! build is a pure function of its inputs, and the same inputs give a
-//! bit-identical plan on every platform the physics itself is bit-identical
-//! on. The cross-platform gate is `crates/ai/tests/determinism.rs`'s
-//! `the_speed_plan_matches_the_committed_reference`, which hashes the plan
-//! learned on `probe::circuit` against a committed constant on all three CI
-//! platforms; `plan/tests.rs` only checks that two builds in one process agree.
+//! `f32` only, no `mul_add`, no hashed containers, no clock, no randomness: a
+//! pure function of its inputs. The cross-platform gate is
+//! `crates/ai/tests/determinism.rs`'s `the_speed_plan_matches_the_committed_reference`
+//! (the plan learned on `probe::circuit` hashed against a committed constant on
+//! all three CI platforms); `plan/tests.rs` only checks two builds in one
+//! process agree.
 
 use oag_physics::{CraftState, Environment, Handling, Raycaster, ShipControls, ShipState};
 
@@ -61,12 +45,12 @@ pub use brake::Decel;
 pub struct Course<'a, R: Raycaster + ?Sized> {
     /// The racing line the plan is indexed by.
     pub line: &'a Line,
-    /// The track sample under each line point, **index-parallel to `line`**,
-    /// or empty for a course with no magstrips to hold.
+    /// The track sample under each line point, **index-parallel to `line`**, or
+    /// empty for a course with no magstrips to hold.
     ///
     /// The caller maps it: on a real circuit the line is a permutation of the
-    /// spline (`ai_order`), and handing this the spline's own order would put
-    /// every craft on the wrong piece of track.
+    /// spline (`ai_order`), and the spline's own order would put every craft on
+    /// the wrong track piece.
     pub samples: &'a [Option<oag_physics::TrackSample>],
     /// What the craft collides with.
     pub raycaster: &'a R,
@@ -81,15 +65,15 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     /// A fresh craft placed on the line at an index, as the race's own rescue
     /// places one. See [`SpeedPlan::learn`] for when the search uses it.
     pub respawn: &'a dyn Fn(usize) -> ShipState,
-    /// Whether the craft touched a reset volume this tick, given its state,
-    /// the environment it was stepped with and where it started the tick.
-    /// The race passes `oag_physics::reset::contact` over its own collision.
+    /// Whether the craft touched a reset volume this tick, given its state, the
+    /// environment and where it started the tick (the race passes
+    /// `oag_physics::reset::contact`).
     pub reset: &'a dyn Fn(&ShipState, &Environment, oag_core::math::Vec3) -> bool,
     /// Seconds without a hover contact after which the race rescues a craft.
     pub max_airborne: f32,
     /// The push direction of the speed pad the craft is inside, given where it
-    /// started the previous tick and where it starts this one - the race's own
-    /// pad test, so the plan is learned with the boosts the race will give.
+    /// started the previous tick and this one: the race's own pad test, so the
+    /// plan is learned with the boosts the race gives.
     pub pad: &'a dyn Fn(
         Option<oag_core::math::Vec3>,
         oag_core::math::Vec3,
@@ -121,8 +105,8 @@ pub struct SpeedPlan {
     /// Distance along the line from each sample to the next.
     spacing: Vec<f32>,
     /// The forward speed the last verification run did at each sample on its
-    /// flying lap, or infinity where it never stood. What a level's
-    /// `Tuning::pace_share` is a share of.
+    /// flying lap, or infinity where it never stood: what `Tuning::pace_share`
+    /// is a share of.
     pace: Vec<f32>,
     /// The braking the backward pass was built with.
     decel: Decel,
@@ -155,16 +139,14 @@ pub struct Report {
     pub verify_lap_ticks: Option<u32>,
 }
 
-/// How much a failure lowers the ceilings behind it, as a fraction of the
-/// speed the craft was doing there. **Chosen, not measured**: small enough that
-/// the plan stays near the limit, large enough that a corner settles in a
-/// handful of tries.
+/// How much a failure lowers the ceilings behind it, as a fraction of the speed
+/// there. **Chosen, not measured**: small enough to stay near the limit, large
+/// enough that a corner settles in a handful of tries.
 const LOWER: f32 = 0.96;
 
-/// Seconds in the air past which a wall contact is a fall rather than a hop:
-/// the craft came down short of where the road continues. **Chosen, not
-/// measured**: `06_Track`'s gap at samples 1196-1200 falls for over a second,
-/// a crest hop lands inside a quarter.
+/// Seconds in the air past which a wall contact is a fall, not a hop.
+/// **Chosen, not measured**: `06_Track`'s gap at samples 1196-1200 falls over a
+/// second, a crest hop lands inside a quarter.
 const FELL_SECONDS: f32 = 0.5;
 
 /// How far past a spot no speed gets through the search puts the craft back
@@ -208,9 +190,9 @@ const STALL_SPEED: f32 = 4.0;
 /// Ticks from the grid before a stall can be called, for the standing start.
 const STALL_GRACE: u32 = 240;
 
-/// A target past this is no target: no class reaches it, pad boost
-/// included, so the backward pass stops there rather than carrying a braking
-/// zone the whole way round the ring. **Chosen, not measured.**
+/// A target past this is no target (no class reaches it, pad boost included),
+/// so the backward pass does not carry a braking zone round the ring.
+/// **Chosen, not measured.**
 const UNLIMITED: f32 = 1_000.0;
 
 /// A hard budget on a build, in physics steps, so a course nothing converges
@@ -285,11 +267,9 @@ impl SpeedPlan {
     }
 
     /// The lowest target over the stretch a craft at `speed` covers in
-    /// `lead_ticks` ticks from `index`.
-    ///
-    /// What a follower should compare its speed against: reading only the
-    /// sample under the craft starts every brake a few ticks late, because
-    /// the airbrakes ramp in rather than snapping on.
+    /// `lead_ticks` ticks from `index`: what a follower compares its speed to,
+    /// since the airbrakes ramp in and reading only the sample under the craft
+    /// starts every brake late.
     #[must_use]
     pub fn target_ahead(&self, index: usize, speed: f32, lead_ticks: f32, dt: f32) -> f32 {
         let n = self.target.len();
@@ -313,11 +293,10 @@ impl SpeedPlan {
 
     /// Rebuilds [`Self::target`] from the ceilings: the backward braking pass.
     ///
-    /// From each sample's target, how fast could the craft have been one sample
-    /// earlier and still brake down to it? `v0^2 = v1^2 + 2 a ds`, with `a`
-    /// the measured deceleration at `v1`. Twice round the ring, so a corner
-    /// just past the start line still brakes the samples before the line. A
-    /// [`Self::holds`] sample keeps its own ceiling and is not braked through.
+    /// How fast could the craft be one sample earlier and still brake to this
+    /// target? `v0^2 = v1^2 + 2 a ds`, `a` the measured deceleration at `v1`.
+    /// Twice round the ring so a corner past the start line brakes the samples
+    /// before it. A [`Self::holds`] sample keeps its own ceiling.
     fn derive_targets(&mut self) {
         let n = self.ceiling.len();
         self.target.clone_from(&self.ceiling);
@@ -340,10 +319,9 @@ impl SpeedPlan {
     }
 }
 
-/// Throttle and symmetric brake for a craft at `speed` that wants `target`.
-///
-/// Full throttle under it; over it, the throttle is off and the airbrakes come
-/// in in proportion to the overspeed. **Ours, chosen, not measured.**
+/// Throttle and symmetric brake for a craft at `speed` that wants `target`:
+/// full throttle under it, over it the airbrakes come in in proportion to the
+/// overspeed. **Ours, chosen, not measured.**
 #[must_use]
 pub fn longitudinal(speed: f32, target: f32) -> (f32, f32) {
     if speed <= target {
@@ -354,10 +332,8 @@ pub fn longitudinal(speed: f32, target: f32) -> (f32, f32) {
 }
 
 /// Folds a symmetric brake and a signed differential into the two airbrakes.
-///
-/// `differential` is `right - left`, the convention `Driver::drive` emits. The
-/// difference between the two sides survives the brake whole, so the yaw the
-/// differential was asked for is still there.
+/// `differential` is `right - left`, `Driver::drive`'s convention; the
+/// difference between the sides survives the brake whole.
 #[must_use]
 pub fn airbrakes(brake: f32, differential: f32) -> (f32, f32) {
     let width = differential.abs().min(1.0);
@@ -493,10 +469,10 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
         } else if run.state.time_airborne > self.max_airborne
             || (self.reset)(&run.state, &env, position_before)
         {
-            // The race's own two rescues: a reset volume, and the original's
-            // four seconds without a hover contact. A plan that only counted
-            // walls drove `01_Track` at PHANTOM clean in isolation and was
-            // rescued four times in the race, in the air off a crest.
+            // The race's own two rescues: a reset volume, and four seconds
+            // without a hover contact. A plan counting only walls drove
+            // `01_Track` at PHANTOM clean in isolation and was rescued four
+            // times in the race, in the air off a crest.
             Some(Failure::Rescued)
         } else if run.tick > STALL_GRACE && run.slow > STALL_TICKS {
             Some(Failure::Stalled)
@@ -526,10 +502,10 @@ fn ring_delta(from: u32, to: u32, n: usize) -> i64 {
 
 impl SpeedPlan {
     /// Drives `course` with `craft` until it has a plan the craft laps cleanly
-    /// on, or until the search runs out of tries.
+    /// on, or the search runs out of tries.
     ///
-    /// `tuning` steers; pass the top level's ([`Tuning::default`]) and handicap
-    /// the plan at the driver, not here, so one plan serves every difficulty.
+    /// `tuning` steers; pass the top level's and handicap the plan at the
+    /// driver, so one plan serves every difficulty.
     #[must_use]
     pub fn build<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
@@ -622,9 +598,9 @@ impl SpeedPlan {
                 failures += 1;
                 continue;
             }
-            // Put back past the spot, as the race's rescue would. On the
-            // standing lap that is the underpowered case `learn` accepts; on
-            // the flying lap it is a failure of the plan.
+            // Put back past the spot, as the race's rescue would: on the
+            // standing lap the underpowered case `learn` accepts, on the flying
+            // lap a failure of the plan.
             report.verify_respawns += 1;
             if run.progress >= n {
                 failures += 1;
@@ -664,21 +640,17 @@ impl SpeedPlan {
     }
 
     /// One learning pass: drive two laps from the grid, lowering ceilings and
-    /// rewinding wherever the craft fails.
-    ///
-    /// Three answers to a failure, by what led to it:
+    /// rewinding wherever the craft fails. By what led to a failure:
     ///
     /// - **Off a jump, after braking for it**: the run-up is marked
-    ///   [`Self::holds`] and its ceilings lifted, because a craft that falls short
-    ///   needs more speed at the lip, not less.
-    /// - **Off a jump, or stopped, at full throttle**: no speed plan fixes a
-    ///   craft that had everything and still could not make it - the standing
-    ///   start's first lap up `05_Track`'s crest is the case. The craft is put
-    ///   back on the line past the spot, as the race's own rescue would, and
-    ///   the spot is recorded.
-    /// - **Anything else**: the ceilings over the stretch that led there are
-    ///   lowered to [`LOWER`] of what the craft did, the braking zones are
-    ///   re-derived, and the run rewinds to before the earliest one that moved.
+    ///   [`Self::holds`] and its ceilings lifted; a craft falling short needs
+    ///   more speed at the lip.
+    /// - **Off a jump, or stopped, at full throttle**: no plan fixes it (the
+    ///   standing start's first lap up `05_Track`'s crest). The craft is put
+    ///   back past the spot as the race's rescue would, and the spot recorded.
+    /// - **Anything else**: ceilings over the stretch are lowered to [`LOWER`]
+    ///   of what the craft did, braking zones re-derived, and the run rewinds
+    ///   to before the earliest one that moved.
     fn learn<R: Raycaster + ?Sized>(
         &mut self,
         course: &Course<'_, R>,
@@ -778,10 +750,9 @@ impl SpeedPlan {
             run = *checkpoints
                 .last()
                 .expect("the grid checkpoint is never popped");
-            // The trace rewinds with it, so the next failure still sees the
-            // run-up that led to it rather than only the ticks since the
-            // checkpoint - which, for a corner whose braking zone starts
-            // before it, are ticks spent already too fast.
+            // The trace rewinds too, so the next failure still sees the run-up
+            // that led to it, not only the ticks spent already too fast since
+            // the checkpoint.
             recent.retain(|trace| trace.tick <= run.tick);
         }
     }
@@ -791,20 +762,16 @@ impl SpeedPlan {
     fn lower(&mut self, recent: &[Trace], tries: u32) -> u32 {
         // Harder the more often this spot has failed: one [`LOWER`] for the
         // first three tries, two for the next three, and so on, so a corner
-        // that needs half the craft's top speed gets there inside
-        // [`MAX_TRIES`] while a near-miss still only gives up four per cent.
-        // A loop of multiplies rather than `powi`, which is an intrinsic with
-        // no portability promise.
+        // needing half the top speed fits inside [`MAX_TRIES`]. A loop of
+        // multiplies, not `powi`: an intrinsic with no portability promise.
         let mut factor = LOWER;
         for _ in 0..tries / 3 {
             factor *= LOWER;
         }
         let mut moved = 0;
-        // The last [`LOOKBACK_TICKS`] ticks **on the ground**, not the last
-        // that many ticks: a craft that left the road over a crest and came
-        // down on a wall spent its whole recent past in the air, where a
-        // ceiling means nothing, and the speed it took off with is what has
-        // to come down.
+        // The last [`LOOKBACK_TICKS`] ticks **on the ground**: a craft that
+        // left the road over a crest and hit a wall spent its recent past in the
+        // air, where a ceiling means nothing; the takeoff speed has to come down.
         for trace in recent
             .iter()
             .rev()
@@ -816,8 +783,7 @@ impl SpeedPlan {
                 continue;
             }
             // Of the lower of what it did and what it was allowed, so a retry
-            // always moves: a craft that overshot its own target there is
-            // telling the search the braking before it was too late.
+            // always moves.
             let lowered = (trace.speed.min(self.ceiling[i]) * factor).max(STALL_SPEED * 4.0);
             if lowered < self.ceiling[i] {
                 self.ceiling[i] = lowered;
@@ -872,11 +838,10 @@ impl Cause {
         let from = recent.len().saturating_sub(LOOKBACK_TICKS);
         let window = &recent[from..];
         if failure == Failure::Wall && airborne < FELL_SECONDS {
-            // A wall touched on the road, or after a short hop, is answered
-            // with less speed: most contacts after a hop over a crest are a
-            // corner taken too fast, not a jump fallen short of. Measured
-            // across the 96 plans: answering every airborne wall with a held
-            // run-up cost ten clean verifications.
+            // A wall on the road or after a short hop is answered with less
+            // speed: most are a corner taken too fast. Holding the run-up for
+            // every airborne wall cost ten clean verifications across the 96
+            // plans.
             return Self::TooFast;
         }
         if window.iter().any(|t| t.airborne) {
@@ -892,9 +857,9 @@ impl Cause {
                 return Self::ShortOfTheLip(first_air);
             }
         }
-        // A craft that stopped with the throttle open all along is beyond a
-        // speed plan. An excursion or a wreck is not: answering full-throttle
-        // excursions with a rescue cost four clean verifications.
+        // Stopped with the throttle open all along is beyond a speed plan; an
+        // excursion or a wreck is not (rescuing full-throttle excursions cost
+        // four clean verifications).
         if failure == Failure::Stalled && window.iter().all(|t| t.full) {
             return Self::Underpowered;
         }
