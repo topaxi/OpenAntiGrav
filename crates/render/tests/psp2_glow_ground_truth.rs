@@ -35,10 +35,14 @@ fn package() -> Option<PathBuf> {
 }
 
 fn build(circuit: &str) -> Option<(Model, psp2::Report)> {
+    build_at(circuit, &format!("environments/{circuit}"))
+}
+
+fn build_at(circuit: &str, directory: &str) -> Option<(Model, psp2::Report)> {
     let package = package()?;
     let mut archive =
         oag_assets::psarc::Archive::open(package.to_str().expect("utf-8")).expect("opens");
-    let base = format!("data/art/published/environments/{circuit}/track");
+    let base = format!("data/art/published/{directory}/track");
     let model = archive
         .read_path(&format!("{base}.rcsmodel"))
         .expect("model");
@@ -126,4 +130,124 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
     assert_eq!(report.glow_layers, 0, "{}", report.describe());
     assert_eq!(report.scrolling_materials, 12, "{}", report.describe());
     assert!(model.emissive.is_empty());
+}
+
+/// Anulpha Pass is an HD circuit ported into 2048's DLC1: its
+/// `mt_uvanim_diffuse_emissive` and `cf_uvanim_emssive*` records carry HD's own
+/// values (`docs/formats/2048-material-params.md`, "Inherited from HD"). Its
+/// glow layers author neither `TimeScaler` nor `time` and play HD's engine
+/// clock, and 18 materials scroll off HD's vertex law by the rate hashes they
+/// author, each confirmed by a readable vertex program (`inherited_unread` is
+/// 0). Remove `inherited_rate`'s call and the count assertion fails. The glow
+/// rate rule itself is pinned by `vineta_ks_authored_time_is_not_its_rate`,
+/// because Anulpha's layers would read `1.0` under the old rule too.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
+    let Some((model, report)) = build_at("anulpha", "DLC1/environments/Anulpha_Pass") else {
+        return;
+    };
+    assert_eq!(report.glow_layers, 35, "{}", report.describe());
+    assert!(
+        model.emissive.iter().all(|e| e.rate == 1.0),
+        "{:?}",
+        model.emissive
+    );
+    assert_eq!(report.inherited_scrolls, 18, "{}", report.describe());
+    assert!(
+        report.describe().contains("inherited from HD"),
+        "{}",
+        report.describe()
+    );
+    let moving = first_vertices(&model).filter(|(_, v)| v.anim != 0).count();
+    assert!(moving > 0, "no draw carries a scroll track");
+    let at_one = TexAnims::sample(&model, 1.0);
+    let slid = first_vertices(&model)
+        .filter(|(_, v)| v.anim != 0)
+        .any(|(_, v)| {
+            let t = at_one.transform[v.anim as usize];
+            t[2] != 0.0 || t[3] != 0.0
+        });
+    assert!(
+        slid,
+        "no scroll track moved the coordinate after one second"
+    );
+}
+
+/// Omega ships the same HD circuits in `Data/environments/<n>_<name>`; its
+/// materials read through the same plan, so Anulpha Pass inherits the same
+/// two things there: the engine clock on its glow layers and HD's vertex law on
+/// the families HD names (`docs/formats/omega-status.md`). Omega's programs are
+/// GCN and unread, so the name and the authored rate hashes alone admit a
+/// scroll there. Counts are the census of
+/// `crates/render/examples/psp2_scroll_reach.rs`.
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omegas_anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4");
+    let entry = "Data/environments/15_anulpha_pass/track.final.rcsmodel";
+    let mut found = None;
+    for (dir, names) in [
+        (
+            "omega-eu",
+            ["data00", "data01", "data02", "data03", "data04"],
+        ),
+        (
+            "omega-eu-patch",
+            ["data05", "data07", "data08", "data09", "data09"],
+        ),
+    ] {
+        for name in names {
+            let path = root.join(dir).join("uroot").join(format!("{name}.psarc"));
+            if let Ok(mut archive) = oag_assets::psarc::Archive::open_file(&path)
+                && archive.read_path(entry).is_ok()
+            {
+                found = Some(archive);
+            }
+        }
+    }
+    let Some(mut archive) = found else {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but Omega's Anulpha Pass is missing"
+        );
+        println!("skipping: Omega not present");
+        return;
+    };
+    let blob = archive.read_path(entry).expect("model");
+    let (model, report) = psp2::build("omega anulpha", &blob, None, &mut |p| {
+        archive.read_path(p).ok()
+    })
+    .expect("builds");
+    assert_eq!(report.glow_layers, 36, "{}", report.describe());
+    assert!(
+        model.emissive.iter().all(|e| e.rate == 1.0),
+        "{:?}",
+        model.emissive
+    );
+    assert_eq!(report.inherited_scrolls, 11, "{}", report.describe());
+    // Omega's programs are GCN: every admission is by name and hashes alone.
+    assert_eq!(report.inherited_unread, 11, "{}", report.describe());
+}
+
+/// 2048's Vineta K authors `time` on its `mt_uvanim_diffuse_emissive2` and
+/// `and_anim_spec` records (`0.0`, `1.0`, `1.0144`, `1.1448`) and no
+/// `TimeScaler`; HD's identical records author no `time`. The rule that read the
+/// authored `time` as the rate gave `{0.0, 1.0, 1.0144, 1.1448}`; HD's engine
+/// clock gives `{1.0}`.
+fn distinct_rates(model: &Model) -> Vec<f32> {
+    let mut rates: Vec<f32> = model.emissive.iter().map(|e| e.rate).collect();
+    rates.sort_by(f32::total_cmp);
+    rates.dedup();
+    rates
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn vineta_ks_authored_time_is_not_its_rate() {
+    let Some((model, report)) = build_at("vineta", "DLC1/environments/Vineta_K") else {
+        return;
+    };
+    assert!(report.glow_layers >= 10, "{}", report.describe());
+    assert_eq!(distinct_rates(&model), vec![1.0], "{:?}", model.emissive);
 }

@@ -191,7 +191,7 @@ Existing crates:
 | `oag-pulse` | `crates/pulse` | What Wipeout Pulse ships: archive and entry names, hashes, and its presentation tables (HUD, front end, loading wave, animated textures, race defaults). |
 | `oag-pure` | `crates/pure` | The same for Wipeout Pure, deliberately thinner - it holds only what `docs/formats/pure-status.md` measured. |
 | `oag-hd` | `crates/hd` | The same for Wipeout HD / Fury, and the one that is shaped differently: seven PSARC archives on a PS3 disc rather than two WADs. Its front end was wired off a **declared** boot chain until 2026-09-05, when three cold boots on RPCS3 made it `Measured` - the distinction the type carries per [ADR-0025](docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md); see `docs/formats/hd-frontend.md`. |
-| `oag-omega` | `crates/omega` | The same for Wipeout: Omega Collection on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory day-one patch whose `data09.psarc` is the only archive carrying a complete front end. Boot chain `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it. Racing is out of scope - see `docs/formats/omega-status.md`. |
+| `oag-omega` | `crates/omega` | The same for Wipeout: Omega Collection on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory day-one patch whose `data09.psarc` is the only archive carrying a complete front end. Boot chain `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it. A race starts on Omega's own data (2026-09-29) but is incomplete: Zone, the boost plume and the speed classes are unmeasured - see `docs/formats/omega-status.md`. |
 | `oag-tools` | `crates/tools` | CLI: `oag-unpack`, `oag-wad`. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
 | `oag-race` | `crates/race` | Race rules: modes, lap timing, track progress. |
@@ -353,7 +353,7 @@ as one of:
 
 The check is quick by design - a census and a reader run, not a second lane. When it
 turns into real work, write it down as open rather than widening the current lane.
-Omega racing being out of scope does not exempt a format or asset finding from the
+Omega racing being incomplete does not exempt a format or asset finding from the
 check.
 
 ### Never invent what the assets already author
