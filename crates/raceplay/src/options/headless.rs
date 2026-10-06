@@ -78,6 +78,7 @@ impl Setup {
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),
+            weapon_spark_anchors: Vec::new(),
             wreck_anchors: Vec::new(),
             magstrip_wake: None,
             magstrip_pob: false,

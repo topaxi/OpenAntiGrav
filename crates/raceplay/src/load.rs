@@ -691,7 +691,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let collision_fx = liveries[0].collision_fx.clone();
     let absorb_burst = super::absorb::absorb_burst_for(craft_title);
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
-
     // One loop, one report line each: an effect is a `RACE_EFFECTS` name and a
     // trigger. Pulse's PSP laws only - see `psys::Effect::without_extents`,
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
@@ -891,6 +890,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
+            weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
             intro_camera: intro::read(&mut archives, &track, pulse_psp, &mut report),
