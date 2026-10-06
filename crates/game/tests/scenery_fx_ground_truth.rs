@@ -55,7 +55,7 @@ fn basilico_s_three_welders_spark_from_the_first_ticks() {
         race.scenery_fx()
             .placed()
             .iter()
-            .all(|p| p.name == race::BLUE_WELDER_EFFECT)
+            .all(|p| p.name == oag_title::engine_effects::BLUE_WELDER_EFFECT)
     );
     // The welder bursts every 20-60 ticks, so a few seconds always holds sparks.
     let (playing, alive) = playing_after(&mut race, 180);

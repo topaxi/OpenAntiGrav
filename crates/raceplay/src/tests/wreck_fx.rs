@@ -5,11 +5,10 @@
 //! pair per node, and that a craft with no wreck locators throws nothing.
 
 use super::*;
-use crate::wreck_fx::{
-    DEATH_SPARKS_EFFECT, EXPLOSION_DROP, EXPLOSION_EFFECT, FXNODE_EXPLO_EFFECT, WreckFx,
-};
+use crate::wreck_fx::{EXPLOSION_DROP, WreckFx};
 use oag_livery::SparkAnchor;
 use oag_physics::CraftState;
+use oag_title::Trigger::{WreckNode, WreckSparks};
 
 fn locators(count: usize) -> Vec<SparkAnchor> {
     (0..count)
@@ -27,11 +26,11 @@ fn race_with_wreck_locators() -> Race {
     let mut anchors = vec![Vec::new(); 4];
     anchors[3] = locators(3);
     race.view.wreck_fx = WreckFx::new(anchors);
-    for name in [FXNODE_EXPLO_EFFECT, DEATH_SPARKS_EFFECT] {
-        let blob = super::respawn::one_emitter_pob(name, 0);
+    for trigger in [WreckNode, WreckSparks] {
+        let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
         let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
-        race.view.effects.insert(name, effect);
+        race.view.handles.insert(trigger, effect);
     }
     race
 }
@@ -84,10 +83,13 @@ fn the_wreck_effects_are_let_go_once_they_stop_emitting() {
 #[test]
 fn the_big_explosion_follows_after_the_delay_below_the_craft() {
     let mut race = race_with_wreck_locators();
-    let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
+    let blob = super::respawn::one_emitter_pob(
+        crate::tests::respawn::trigger_name(Trigger::WreckExplosion),
+        0,
+    );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    race.view.effects.insert(EXPLOSION_EFFECT, effect);
+    race.view.handles.insert(Trigger::WreckExplosion, effect);
     go_out(&mut race, 3);
     let wrecked_at = race.sim.world.ships[3].physics.body.position;
     let up = race.sim.world.ships[3].physics.body.orientation * Vec3::Y;

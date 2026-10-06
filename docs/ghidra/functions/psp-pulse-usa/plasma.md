@@ -495,7 +495,7 @@ with a second `* 0.5` when the craft's `+0x6d` flag is set. **So the bolt sits
 on the nose and its glow grows for the length of the wind-up**, which is
 exactly what a player describes as the Plasma winding up before it fires.
 This engine rides the glow and, as of 2026-09-16, ramps it too - see
-[`PLASMA_FLARE_EFFECT`](../../../../crates/raceplay/src/effect_names.rs)'s
+[`PLASMA_FLARE_EFFECT`](../../../../crates/title/src/engine_effects.rs)'s
 doc comment for which half landed and why.
 
 **`craft+0x6d` is the internal/cockpit camera flag, closed the same day by two

@@ -5,7 +5,7 @@
 //! the destroy camera.
 
 use super::*;
-use crate::wreck_fx::{EXPLOSION_EFFECT, WreckFx};
+use crate::wreck_fx::WreckFx;
 use oag_physics::CraftState;
 
 /// A single race whose player's craft has been shot down and the race is over,
@@ -33,10 +33,13 @@ fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
         race = zone_grid(mode);
     }
     race.view.wreck_fx = WreckFx::new(vec![Vec::new(); 1]);
-    let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
+    let blob = super::respawn::one_emitter_pob(
+        crate::tests::respawn::trigger_name(Trigger::WreckExplosion),
+        0,
+    );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    race.view.effects.insert(EXPLOSION_EFFECT, effect);
+    race.view.handles.insert(Trigger::WreckExplosion, effect);
     race.view.destroy_camera = crate::destroy_camera::DestroyCamera::new(
         vec![oag_render::camera::destroy::Station {
             eye: Vec3::new(400.0, 30.0, 0.0),
@@ -169,10 +172,13 @@ fn an_eliminator_grid() -> Race {
 fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
     let mut race = an_eliminator_grid();
     race.view.wreck_fx = WreckFx::new(vec![Vec::new(); 1]);
-    let blob = super::respawn::one_emitter_pob(EXPLOSION_EFFECT, 0);
+    let blob = super::respawn::one_emitter_pob(
+        crate::tests::respawn::trigger_name(Trigger::WreckExplosion),
+        0,
+    );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    race.view.effects.insert(EXPLOSION_EFFECT, effect);
+    race.view.handles.insert(Trigger::WreckExplosion, effect);
     race.view.destroy_camera = crate::destroy_camera::DestroyCamera::new(
         vec![oag_render::camera::destroy::Station {
             eye: Vec3::new(400.0, 30.0, 0.0),

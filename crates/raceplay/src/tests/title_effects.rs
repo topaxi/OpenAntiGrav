@@ -12,8 +12,22 @@ const ALL: [&Title; 5] = [
     oag_omega::TITLE,
 ];
 
-fn names(title: &Title, trigger: Trigger) -> Option<&'static [&'static str]> {
-    title.effect_on(trigger).map(|spec| spec.effects)
+/// The triggers a title answers for itself; the rest are the engine's.
+const OWN: [Trigger; 6] = [
+    Trigger::HitSpark,
+    Trigger::LeachHitSpark,
+    Trigger::WeaponSpark,
+    Trigger::ShieldAbsorb,
+    Trigger::WreckNode,
+    Trigger::WreckSparks,
+];
+
+#[test]
+fn the_trigger_list_is_in_index_order_and_counts_itself() {
+    assert_eq!(Trigger::COUNT, Trigger::ALL.len());
+    for (i, trigger) in Trigger::ALL.iter().enumerate() {
+        assert_eq!(trigger.index(), i, "{trigger:?}");
+    }
 }
 
 #[test]
@@ -22,47 +36,141 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     // Pulse, Pure, HD, 2048, Omega.
     assert_eq!(has(Trigger::HitSpark), [true, false, false, false, false]);
     assert_eq!(
+        has(Trigger::LeachHitSpark),
+        [true, false, false, false, false]
+    );
+    assert_eq!(
         has(Trigger::WeaponSpark),
         [false, false, true, false, false]
     );
     assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, false, false]);
-    assert_eq!(has(Trigger::Wreck), [true, false, false, false, false]);
+    for wreck in [
+        Trigger::WreckNode,
+        Trigger::WreckSparks,
+        Trigger::WreckExplosion,
+    ] {
+        assert_eq!(has(wreck), [true, false, false, false, false], "{wreck:?}");
+    }
+}
+
+#[test]
+fn every_title_tries_the_engines_own_effects_as_pulses() {
+    for title in ALL {
+        for trigger in Trigger::ALL
+            .into_iter()
+            .filter(|t| !OWN.contains(t) && *t != Trigger::WreckExplosion)
+        {
+            let spec = title
+                .effect_on(trigger)
+                .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));
+            let want = if title.name == oag_pulse::TITLE.name {
+                Origin::Measured
+            } else {
+                Origin::InheritedFrom("Wipeout Pulse")
+            };
+            assert_eq!(spec.origin, want, "{} {trigger:?}", title.name);
+        }
+    }
 }
 
 #[test]
 fn the_tables_name_the_effects_the_loader_plays() {
-    use crate::{absorb, hit_sparks, wreck_fx};
+    use oag_title::engine_effects as n;
+    let name = |title: &Title, trigger| title.effect_on(trigger).map(|spec| spec.effect);
     assert_eq!(
-        names(oag_pulse::TITLE, Trigger::HitSpark),
-        Some(
-            &[
-                hit_sparks::HIT_SPARK_EFFECT,
-                hit_sparks::LEACHBEAM_HIT_SPARK_EFFECT
-            ][..]
-        )
+        name(oag_pulse::TITLE, Trigger::HitSpark),
+        Some(oag_fx::sparks::DAMAGE_EFFECT)
+    );
+    assert_eq!(n::COLLISION_SPARK_EFFECT, oag_fx::sparks::DAMAGE_EFFECT);
+    assert_eq!(
+        n::TRAIL_HITSHIP_EFFECT,
+        oag_fx::exhaust::hd::TRAIL_HITSHIP_EFFECT
     );
     assert_eq!(
-        names(oag_hd::TITLE, Trigger::WeaponSpark),
-        Some(&[crate::effect_names::WEAPON_SPARK_EFFECT][..])
+        n::TRAIL_HITSHIP_RED_EFFECT,
+        oag_fx::exhaust::hd::TRAIL_HITSHIP_RED_EFFECT
+    );
+    assert_eq!(
+        name(oag_pulse::TITLE, Trigger::LeachHitSpark),
+        Some("WO_SHIP_SPARK_DAMAGE_LEACHBEAM")
+    );
+    assert_eq!(
+        name(oag_hd::TITLE, Trigger::WeaponSpark),
+        Some("WO_SHIP_SPARK_DAMAGE_WEAPON")
     );
     for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_hd::TITLE] {
         assert_eq!(
-            names(title, Trigger::ShieldAbsorb),
-            Some(&[absorb::ABSORB_EFFECT][..]),
+            name(title, Trigger::ShieldAbsorb),
+            Some("WO_WEAPON_ABSORB"),
             "{}",
             title.name
         );
     }
     assert_eq!(
-        names(oag_pulse::TITLE, Trigger::Wreck),
-        Some(
-            &[
-                wreck_fx::FXNODE_EXPLO_EFFECT,
-                wreck_fx::DEATH_SPARKS_EFFECT,
-                wreck_fx::EXPLOSION_EFFECT
-            ][..]
-        )
+        [
+            Trigger::WreckNode,
+            Trigger::WreckSparks,
+            Trigger::WreckExplosion
+        ]
+        .map(|t| name(oag_pulse::TITLE, t)),
+        [
+            Some("WO_SHIP_FXNODE_EXPLO"),
+            Some("WO_SHIP_DEATH_SPARKS"),
+            Some("WO_SHIP_EXPLOSION")
+        ]
     );
+}
+
+#[test]
+fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_title() {
+    for title in ALL {
+        let names = title.effects.names();
+        let mut unique = names.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "{} repeats a name", title.name);
+        for name in &names {
+            assert!(
+                crate::RACE_EFFECTS.contains(name),
+                "{name} is not in RACE_EFFECTS"
+            );
+        }
+    }
+    // Pulse's hit spark and the collision spark are one file, loaded once.
+    let pulse = oag_pulse::TITLE.effects.names();
+    assert_eq!(
+        pulse
+            .iter()
+            .filter(|n| **n == oag_fx::sparks::DAMAGE_EFFECT)
+            .count(),
+        1
+    );
+    assert_eq!(crate::RACE_EFFECTS.len(), 39);
+}
+
+#[test]
+fn a_trigger_resolves_to_the_effect_its_titles_table_names() {
+    let mut library = oag_fx::psys::Library::new();
+    let name = oag_hd::TITLE
+        .effect_on(Trigger::WeaponSpark)
+        .map(|spec| spec.effect)
+        .expect("HD throws a weapon spark");
+    let blob = super::respawn::one_emitter_pob(name, 0);
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    library.insert(name, effect);
+    let hd = crate::EffectHandles::resolve(oag_hd::TITLE, &library);
+    assert!(hd.get(Trigger::WeaponSpark).is_some());
+    assert!(
+        Trigger::ALL
+            .iter()
+            .filter(|t| **t != Trigger::WeaponSpark)
+            .all(|t| hd.get(*t).is_none()),
+        "only the loaded one resolves"
+    );
+    // Pulse's table does not name it, so it stays empty there.
+    let pulse = crate::EffectHandles::resolve(oag_pulse::TITLE, &library);
+    assert!(pulse.get(Trigger::WeaponSpark).is_none());
 }
 
 #[test]
@@ -109,12 +217,7 @@ fn a_burst_staggers_its_locators_the_way_the_original_spawns_them() {
 #[test]
 fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured() {
     for title in ALL {
-        for trigger in [
-            Trigger::HitSpark,
-            Trigger::WeaponSpark,
-            Trigger::ShieldAbsorb,
-            Trigger::Wreck,
-        ] {
+        for trigger in OWN {
             if let Some(spec) = title.effect_on(trigger) {
                 assert_eq!(spec.origin, Origin::Measured, "{} {trigger:?}", title.name);
             }

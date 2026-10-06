@@ -141,9 +141,10 @@ pub const TITLE: &Title = &Title {
         magstrip_pob: true,
         ..oag_title::weapons::WeaponModels::EMPTY
     },
-    // No trigger is read on 2048, so none draws (ADR-0058). The shield tint is
-    // Pulse's, by the rule that an unmeasured title runs Pulse's.
-    effects: &oag_title::Effects::NONE,
+    // The four triggers a title answers for itself are unread on 2048, so none
+    // draws (ADR-0058). The engine's own names are tried as Pulse's, by the
+    // rule that an unmeasured title runs Pulse's. The shield tint likewise.
+    effects: &oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse")),
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,

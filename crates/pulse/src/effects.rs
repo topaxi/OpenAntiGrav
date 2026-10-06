@@ -8,7 +8,7 @@
 
 use oag_title::{
     Burst, EffectSpec, Effects, Looks, Origin, Platform, Platforms, Rule, ShieldPalette,
-    ShieldPalettes,
+    ShieldPalettes, Trigger, engine_effects,
 };
 
 /// `Ship_PlayAbsorbFeedback` (`0x08840640`): the effect once per `Ship
@@ -20,38 +20,38 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
     stagger: 0.1,
 };
 
-/// Pulse's tables. Measured; pages cited per entry.
-pub const EFFECTS: &Effects = &Effects {
+/// Pulse's tables: the engine's own names, and the four triggers a title
+/// answers for itself. Measured; pages cited per entry.
+pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
     // `Ship_Damage` (`0x088439ac`) weapon branch; `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     // The names are `WO_SHIP_COLL_SPARK_DAMAGE` and the LeachBeam variant.
-    hit_spark: Some(EffectSpec {
-        effects: &[
-            "WO_SHIP_COLL_SPARK_DAMAGE",
-            "WO_SHIP_SPARK_DAMAGE_LEACHBEAM",
-        ],
-        burst: None,
-        origin: Origin::Measured,
-    }),
-    // HD's mechanism; Pulse throws it from the craft's own hull instead.
-    weapon_spark: None,
+    .with(
+        Trigger::HitSpark,
+        EffectSpec::new(engine_effects::COLLISION_SPARK_EFFECT, Origin::Measured),
+    )
+    .with(
+        Trigger::LeachHitSpark,
+        EffectSpec::new(engine_effects::LEACHBEAM_HIT_SPARK_EFFECT, Origin::Measured),
+    )
     // `docs/ghidra/functions/psp-pulse-usa/shield.md`.
-    shield_absorb: Some(EffectSpec {
-        effects: &["WO_WEAPON_ABSORB"],
-        burst: Some(ABSORB_BURST),
-        origin: Origin::Measured,
-    }),
+    .with(
+        Trigger::ShieldAbsorb,
+        EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
+    )
     // `Ship_SetState` case 5, read live on PPSSPP 2026-10-01;
     // `docs/ghidra/functions/psp-pulse-usa/screen-flash-callers.md`.
-    wreck: Some(EffectSpec {
-        effects: &[
-            "WO_SHIP_FXNODE_EXPLO",
-            "WO_SHIP_DEATH_SPARKS",
-            "WO_SHIP_EXPLOSION",
-        ],
-        burst: None,
-        origin: Origin::Measured,
-    }),
-};
+    .with(
+        Trigger::WreckNode,
+        EffectSpec::new(engine_effects::FXNODE_EXPLO_EFFECT, Origin::Measured),
+    )
+    .with(
+        Trigger::WreckSparks,
+        EffectSpec::new(engine_effects::DEATH_SPARKS_EFFECT, Origin::Measured),
+    )
+    .with(
+        Trigger::WreckExplosion,
+        EffectSpec::new(engine_effects::EXPLOSION_EFFECT, Origin::Measured),
+    );
 
 const PSP: Platforms = Platforms::Only(&[Platform::Psp]);
 
@@ -95,4 +95,6 @@ pub const LOOKS: &Looks = &Looks {
         elsewhere: ShieldPalette::Pulse,
         origin: Origin::Measured,
     },
+    // Pulse shows its picker; this build waits at it too.
+    skips_language_picker: Rule::UNREAD,
 };

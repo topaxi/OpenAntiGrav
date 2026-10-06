@@ -19,16 +19,16 @@ pub(crate) use flash::flash_for;
 use super::*;
 
 impl Race {
-    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on every craft that is holding a
+    /// Keeps [`Trigger::LeachbeamCharging`] on every craft that is holding a
     /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
     /// [`psys::Stage`] every other weapon's are, with its trigger read out of
-    /// the executable (see [`LEACHBEAM_CHARGING_EFFECT`]).
+    /// the executable (see [`Trigger::LeachbeamCharging`]).
     ///
-    /// The beam's other effect, [`LEACHBEAM_ENERGY_EFFECT`], rides the ribbon
+    /// The beam's other effect, [`Trigger::LeachbeamEnergy`], rides the ribbon
     /// rather than a craft, so it is driven from
     /// [`Self::advance_leach_beam_ribbon`].
     pub(crate) fn advance_leach_beam_visual(&mut self) {
-        let effect = self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned();
+        let effect = self.view.handles.get(Trigger::LeachbeamCharging).cloned();
         for slot in 0..MAX_SHIPS {
             // The charge: up exactly while the craft holds a LeachBeam and is
             // in state 1, which is the whole of `FUN_0883f540`'s own gate, run
@@ -66,7 +66,7 @@ impl Race {
     /// nothing.
     ///
     /// Advances [`RaceView::leach_beam_ribbon`] (see [`oag_fx::beam`]) and
-    /// keeps [`LEACHBEAM_ENERGY_EFFECT`] on it: **re-spawned every time the
+    /// keeps [`Trigger::LeachbeamEnergy`] on it: **re-spawned every time the
     /// ribbon's cursor wraps** - the pulse block that also plays
     /// `LEACHENERGY` - one segment short of the target, then walked back
     /// toward the shooter one chain point a tick, which is where
@@ -127,7 +127,7 @@ impl Race {
             ));
         }
 
-        let effect = self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned();
+        let effect = self.view.handles.get(Trigger::LeachbeamEnergy).cloned();
         match (effect, self.view.leach_beam_effect, at) {
             (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {
                 if let Some(playing) = playing {
@@ -161,7 +161,7 @@ impl Race {
         }
         let at =
             oag_fx::beam::hd_ball::position(self.view.leach_ball_elapsed, length, owner, target);
-        if let Some(effect) = self.view.effects.get(LEACHBEAM_ABSORB_EFFECT) {
+        if let Some(effect) = self.view.handles.get(Trigger::LeachbeamAbsorb) {
             self.view.stage.play(effect, at, 1.0);
         }
     }
@@ -274,7 +274,7 @@ impl Race {
         oag_fx::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
-    /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
+    /// Keeps [`Trigger::Quake`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
     /// Needs `self.sim.course` (to place the wave along the ring) and
@@ -344,7 +344,7 @@ impl Race {
         // 2026-09-24).
         let across = right - left;
 
-        let Some(effect) = self.view.effects.get(QUAKE_EFFECT).cloned() else {
+        let Some(effect) = self.view.handles.get(Trigger::Quake).cloned() else {
             return;
         };
         // Where the extent law is on (Pulse on the PSP), severity stays
@@ -394,7 +394,7 @@ impl Race {
     /// doc comment for the flare bug this was the blast-side twin of. Until
     /// 2026-08-12 this method drew three expanding additive puffs and a
     /// separate eight-billboard smoke trail, all invented; until 2026-08-26
-    /// it drew the *Rocket's* `TRACK_BLAST_EFFECT`/`CRAFT_BLAST_EFFECT` for
+    /// it drew the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast` for
     /// every kind of impact, mine and missile included, because [`blast_for`]
     /// took no `kind` at all; until 2026-09-23 a Bomb drew nothing at all.
     ///
@@ -411,10 +411,10 @@ impl Race {
         struck: Option<usize>,
         orientation: Quat,
     ) {
-        let Some((name, at)) = self.blast_for(kind, point, struck) else {
+        let Some((trigger, at)) = self.blast_for(kind, point, struck) else {
             return;
         };
-        // The Plasma's own three-model detonation - `PLASMA_BLAST_EFFECT`
+        // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
         // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
         // halo and two hemispheres are their own `.vex` models with their
         // own render-side pool, on the same terms as the Rocket's, the
@@ -424,7 +424,7 @@ impl Race {
         if kind == oag_tables::weapons::Weapon::Plasma {
             self.spawn_plasma_blast_model(at);
         }
-        // The Bomb's own two-model detonation - `BOMB_SMOKERING_EFFECT`
+        // The Bomb's own two-model detonation - `Trigger::BombSmokering`
         // below is one third of it, the psys smoke ring; the hemisphere and
         // the shockwave are their own `.vex` models, on `bomb_blast`'s own
         // render-side pool, the same shape as the Plasma's own three above.
@@ -439,7 +439,7 @@ impl Race {
         ) {
             flash.start(kind, at);
         }
-        let Some(effect) = self.view.effects.get(name).cloned() else {
+        let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
         // Neutral severity: the field the collision sparks derive from an
@@ -453,37 +453,37 @@ impl Race {
     /// the recovered part can be asserted without a disc to load the effect
     /// from.
     ///
-    /// - **`Rocket`**: [`TRACK_BLAST_EFFECT`] from `Rocket_Update`'s
-    ///   (`0x0885d2a8`) two collision branches, [`CRAFT_BLAST_EFFECT`] from
+    /// - **`Rocket`**: [`Trigger::TrackBlast`] from `Rocket_Update`'s
+    ///   (`0x0885d2a8`) two collision branches, [`Trigger::CraftBlast`] from
     ///   `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
     ///   A craft hit is drawn at the *struck craft's* own position dropped by
-    ///   [`CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
+    ///   [`oag_title::engine_effects::CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
     ///   has since gone inactive falls back to the impact point rather than
     ///   reading a stale pose.
-    /// - **`Missile`**: [`MISSILE_EXPLO_EFFECT`] always, whatever it struck -
+    /// - **`Missile`**: [`Trigger::MissileExplo`] always, whatever it struck -
     ///   see that constant's doc comment for why there is one file and no
     ///   drop offset, unlike the Rocket's.
-    /// - **`Mine`**: [`MINE_EXPLO_EFFECT`] always, whatever it struck, the
+    /// - **`Mine`**: [`Trigger::MineExplo`] always, whatever it struck, the
     ///   same shape as the Missile's - see that constant's doc comment for
     ///   `Mine_SpawnExplosion`.
-    /// - **`Cannon`**: [`CANNON_SPARKS_EFFECT`] when `struck` is `None` - a
+    /// - **`Cannon`**: [`Trigger::CannonSparks`] when `struck` is `None` - a
     ///   wall or track hit - and nothing when it is `Some`. `Cannon_UpdateRound`
     ///   (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
     ///   raycast; the separate craft-proximity test that produces a `Some`
     ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
     ///   sound cue but never spawns a particle effect. See
     ///   `oag_weapons::projectile::cannon`'s module doc for the full read.
-    /// - **`Plasma`**: [`PLASMA_BLAST_EFFECT`] always, whatever it struck, the
+    /// - **`Plasma`**: [`Trigger::PlasmaBlast`] always, whatever it struck, the
     ///   same shape as the Missile's and the Mine's. `Plasmas_Update`
     ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
     ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
     ///   bolt's own position for each - a wall hit and a timed-out bolt reach
     ///   it identically, so there is no split to mirror. Wired 2026-09-09; it
     ///   returned `None` before, when the teardown was unread. **On HD,
-    ///   [`PLASMA_LIGHTNING_EXPAND_EFFECT`] instead** - a different
+    ///   [`Trigger::PlasmaLightningExpand`] instead** - a different
     ///   executable's own file, read 2026-09-17; see that constant's doc
     ///   comment.
-    /// - **`Bomb`**: [`BOMB_SMOKERING_EFFECT`] always, whatever it struck -
+    /// - **`Bomb`**: [`Trigger::BombSmokering`] always, whatever it struck -
     ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
     ///   unconditionally on `play_visual`, which every caller in this
     ///   engine's own fuse/trip paths sets. That is one third of the
@@ -500,28 +500,29 @@ impl Race {
         kind: oag_tables::weapons::Weapon,
         point: Vec3,
         struck: Option<usize>,
-    ) -> Option<(&'static str, Vec3)> {
+    ) -> Option<(Trigger, Vec3)> {
         match kind {
             oag_tables::weapons::Weapon::Rocket => Some(match struck {
                 Some(slot) if self.sim.world.ships[slot].active => (
-                    CRAFT_BLAST_EFFECT,
-                    self.sim.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+                    Trigger::CraftBlast,
+                    self.sim.world.ships[slot].physics.body.position
+                        - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP,
                 ),
                 // A craft that has gone inactive since the hit falls back to
                 // the impact point rather than reading a stale pose - still
                 // its own effect, because what was struck is what chose the
                 // file.
-                Some(_) => (CRAFT_BLAST_EFFECT, point),
-                None => (TRACK_BLAST_EFFECT, point),
+                Some(_) => (Trigger::CraftBlast, point),
+                None => (Trigger::TrackBlast, point),
             }),
-            oag_tables::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
-            oag_tables::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
-            oag_tables::weapons::Weapon::Bomb => Some((BOMB_SMOKERING_EFFECT, point)),
+            oag_tables::weapons::Weapon::Missile => Some((Trigger::MissileExplo, point)),
+            oag_tables::weapons::Weapon::Mine => Some((Trigger::MineExplo, point)),
+            oag_tables::weapons::Weapon::Bomb => Some((Trigger::BombSmokering, point)),
             // `FUN_08870c78`, the blade's teardown: a fuse running out and a
             // craft hit both reach it.
-            oag_tables::weapons::Weapon::Shuriken => Some((SHURIKEN_EXPIRE_EFFECT, point)),
+            oag_tables::weapons::Weapon::Shuriken => Some((Trigger::ShurikenExpire, point)),
             oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
-                Some((CANNON_SPARKS_EFFECT, point))
+                Some((Trigger::CannonSparks, point))
             }
             // HD plays its own file, `WO_PLASMA_LIGHTNING_EXPAND` -
             // `WeaponExplosions_Start`, not `Plasma_SpawnDetonation`'s
@@ -530,9 +531,9 @@ impl Race {
             // `Race::advance_plasma_blast_models`.
             oag_tables::weapons::Weapon::Plasma => Some((
                 if self.view.hd_plasma_blast {
-                    PLASMA_LIGHTNING_EXPAND_EFFECT
+                    Trigger::PlasmaLightningExpand
                 } else {
-                    PLASMA_BLAST_EFFECT
+                    Trigger::PlasmaBlast
                 },
                 point,
             )),
@@ -540,7 +541,7 @@ impl Race {
         }
     }
 
-    /// Plays [`MISSILE_BOUNCE_EFFECT`] at every wall a missile glanced off
+    /// Plays [`Trigger::MissileBounce`] at every wall a missile glanced off
     /// this tick.
     ///
     /// **Not reached from `Impact`.** A bounce is not a detonation -
@@ -577,7 +578,7 @@ impl Race {
             // [`bounce_effect_for`]. A weapon whose file did not load plays
             // nothing and does not fall back to the other's.
             let Some(effect) = bounce_effect_for(projectile.kind)
-                .and_then(|name| self.view.effects.get(name))
+                .and_then(|trigger| self.view.handles.get(trigger))
                 .cloned()
             else {
                 continue;
@@ -586,7 +587,7 @@ impl Race {
         }
     }
 
-    /// Keeps an [`ENGINE_FLARE_EFFECT`] instance on every active craft's
+    /// Keeps an [`Trigger::EngineFlare`] instance on every active craft's
     /// nozzle, where the source authors one.
     ///
     /// **The PS2 port authors an engine flare as a particle effect and the
@@ -605,7 +606,7 @@ impl Race {
     /// transform, the same point the procedural flare uses, so the two are
     /// interchangeable rather than merely similar.
     pub(crate) fn advance_engine_flares(&mut self) {
-        let Some(effect) = self.view.effects.get(ENGINE_FLARE_EFFECT).cloned() else {
+        let Some(effect) = self.view.handles.get(Trigger::EngineFlare).cloned() else {
             return;
         };
         for slot in 0..MAX_SHIPS {
@@ -630,7 +631,7 @@ impl Race {
     }
 
     /// Keeps each live projectile's own flare instance riding it - the
-    /// Rocket's [`ROCKET_FLARE_EFFECT`], the Missile's [`MISSILE_FLARE_EFFECT`]
+    /// Rocket's [`Trigger::RocketFlare`], the Missile's [`Trigger::MissileFlare`]
     /// - and takes it off the ones that are gone.
     ///
     /// **Recovered, one weapon at a time; see [`flare_effect_for`] for the
@@ -700,7 +701,7 @@ impl Race {
             let scale = plasma_flare_scale(projectile.kind, projectile.charge, cockpit);
             advance_one_flare(
                 &mut self.view.stage,
-                &self.view.effects,
+                &self.view.handles,
                 name,
                 primary,
                 scale,
@@ -722,7 +723,7 @@ impl Race {
             // was a Missile last tick.
             advance_one_flare(
                 &mut self.view.stage,
-                &self.view.effects,
+                &self.view.handles,
                 orbiting.and(name),
                 orbiting.unwrap_or(primary),
                 1.0,
@@ -740,7 +741,7 @@ impl Race {
     /// caller is already drawing it as a mesh - [`ROCKET_MODEL_ENTRY`],
     /// [`MINE_MODEL_ENTRY`] or [`BOMB_MODEL_ENTRY`] - in which case this draws
     /// **nothing** for that one: the glow around a modelled rocket is
-    /// [`ROCKET_FLARE_EFFECT`], played off the disc through [`RaceView::stage`],
+    /// [`Trigger::RocketFlare`], played off the disc through [`RaceView::stage`],
     /// and a billboard on top of it would be a second invented one. What is
     /// left here is the case where a kind's own model did not load, or a kind
     /// (the Missile, the Plasma, the Shuriken) has no model at all, and a
@@ -902,7 +903,7 @@ impl Race {
     /// `a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot` for the
     /// one that does not. The same shape of bug, in the model path rather
     /// than the effect path, as the mine that used to ride
-    /// [`ROCKET_FLARE_EFFECT`] from the moment it landed - see
+    /// [`Trigger::RocketFlare`] from the moment it landed - see
     /// [`Race::advance_projectile_flares`]'s doc comment.
     ///
     /// **Neither branch applies a [`MODEL_YAW`]-style correction.** `MODEL_YAW`

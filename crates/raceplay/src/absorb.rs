@@ -38,10 +38,6 @@
 use super::*;
 use oag_title::Burst;
 
-/// The effect every absorb plays - `Data\Psys\WO_WEAPON_ABSORB.POB` on every
-/// title that has one.
-pub const ABSORB_EFFECT: &str = "WO_WEAPON_ABSORB";
-
 /// The burst `title` plays on an absorb, off its [`oag_title::Effects`] table:
 /// `None` for a title whose absorb path is unread (2048, Omega), which then
 /// plays nothing. Keyed on the title the craft comes from - the same footing
@@ -142,7 +138,7 @@ impl Race {
         if self.view.absorb_bursts.is_empty() {
             return;
         }
-        let effect = self.view.effects.get(ABSORB_EFFECT).cloned();
+        let effect = self.view.handles.get(Trigger::ShieldAbsorb).cloned();
         let dt = self.sim.dt;
         let mut bursts = std::mem::take(&mut self.view.absorb_bursts);
         bursts.retain_mut(|burst| {

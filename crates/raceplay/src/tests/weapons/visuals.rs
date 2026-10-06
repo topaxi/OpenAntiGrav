@@ -26,10 +26,10 @@ fn each_projectile_rides_only_its_own_flare() {
 
     for weapon in Weapon::ALL {
         let expected = match weapon {
-            Weapon::Rocket => Some(crate::ROCKET_FLARE_EFFECT),
-            Weapon::Missile => Some(crate::MISSILE_FLARE_EFFECT),
-            Weapon::Plasma => Some(crate::PLASMA_FLARE_EFFECT),
-            Weapon::Shuriken => Some(crate::SHURIKEN_FLARE_EFFECT),
+            Weapon::Rocket => Some(Trigger::RocketFlare),
+            Weapon::Missile => Some(Trigger::MissileFlare),
+            Weapon::Plasma => Some(Trigger::PlasmaFlare),
+            Weapon::Shuriken => Some(Trigger::ShurikenFlare),
             _ => None,
         };
         assert_eq!(
@@ -156,8 +156,8 @@ fn each_bouncing_weapon_plays_its_own_burst() {
 
     for weapon in Weapon::ALL {
         let expected = match weapon {
-            Weapon::Missile => Some(crate::MISSILE_BOUNCE_EFFECT),
-            Weapon::Shuriken => Some(crate::SHURIKEN_BOUNCE_EFFECT),
+            Weapon::Missile => Some(Trigger::MissileBounce),
+            Weapon::Shuriken => Some(Trigger::ShurikenBounce),
             _ => None,
         };
         assert_eq!(

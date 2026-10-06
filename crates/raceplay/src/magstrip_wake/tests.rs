@@ -139,24 +139,22 @@ fn a_hull_with_no_anchor_draws_no_wake_but_still_hums() {
     assert_eq!(seen[0], (1, 0), "the sound does not need the locator");
 }
 
-/// A `.pob` title's grid with `names` loaded as one-emitter stand-ins.
-fn pob_race(names: &[&str]) -> Race {
+/// A `.pob` title's grid with `triggers` loaded as one-emitter stand-ins.
+fn pob_race(triggers: &[Trigger]) -> Race {
     let mut race = race_with_a_grid();
     race.view.magstrip_wake = Some(Wakes::pob([Some(Mat4::IDENTITY); MAX_SHIPS]));
-    for name in names {
+    for &trigger in triggers {
+        let name = crate::tests::respawn::trigger_name(trigger);
         let blob = crate::tests::respawn::one_emitter_pob(name, oag_pob::flags::LOOPING);
         let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
-        race.view.effects.insert(name, effect);
+        race.view.handles.insert(trigger, effect);
     }
     race.sim.world.ships[SLOT].physics.body.position = Vec3::new(30.0, 6.0, 0.0);
     race
 }
 
-const BOTH: [&str; 2] = [
-    crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
-    crate::effect_names::MAGSTRIP_ZONE_EFFECT,
-];
+const BOTH: [Trigger; 2] = [Trigger::MagstripSparks, Trigger::MagstripZone];
 
 #[test]
 fn a_pob_title_plays_the_effect_only_while_over_a_strip_and_draws_no_arc() {
@@ -200,26 +198,10 @@ fn a_pob_title_without_the_effect_plays_nothing() {
 #[test]
 fn zone_picks_the_zone_effect_and_other_modes_the_sparks_one() {
     for (mode, only, plays) in [
-        (
-            oag_race::Mode::Zone,
-            crate::effect_names::MAGSTRIP_ZONE_EFFECT,
-            true,
-        ),
-        (
-            oag_race::Mode::Zone,
-            crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
-            false,
-        ),
-        (
-            oag_race::Mode::SingleRace,
-            crate::effect_names::MAGSTRIP_SPARKS_EFFECT,
-            true,
-        ),
-        (
-            oag_race::Mode::SingleRace,
-            crate::effect_names::MAGSTRIP_ZONE_EFFECT,
-            false,
-        ),
+        (oag_race::Mode::Zone, Trigger::MagstripZone, true),
+        (oag_race::Mode::Zone, Trigger::MagstripSparks, false),
+        (oag_race::Mode::SingleRace, Trigger::MagstripSparks, true),
+        (oag_race::Mode::SingleRace, Trigger::MagstripZone, false),
     ] {
         let mut race = pob_race(&[only]);
         for state in &mut race.sim.world.race {
@@ -229,7 +211,7 @@ fn zone_picks_the_zone_effect_and_other_modes_the_sparks_one() {
         assert_eq!(
             race.magstrip_pob_of(SLOT).is_some(),
             plays,
-            "{mode:?} with only {only} loaded"
+            "{mode:?} with only {only:?} loaded"
         );
     }
 }

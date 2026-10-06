@@ -59,9 +59,9 @@ PATTERNS = [
 
 # Comparisons per file at the 2026-10-06 landing (main b115ec3ef). Lower a row
 # when a file drops; delete it at zero. Never raise one.
-BASELINE: dict[str, int] = {
-    "crates/ui/src/frontend.rs": 1,
-}
+# Empty since 2026-10-06 (the last site, HD's English preselect, became
+# `Looks::skips_language_picker`). Kept as the guard: any new comparison fails.
+BASELINE: dict[str, int] = {}
 
 
 def code_part(line: str) -> str:

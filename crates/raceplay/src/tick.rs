@@ -807,7 +807,7 @@ impl Race {
         self.view.sparks_cooldown = (self.view.sparks_cooldown - self.sim.dt).max(0.0);
         // The trigger rule runs whether or not the disc's own effect
         // loaded - see `Setup::effects`. Only the pool needs it.
-        let effect = self.view.effects.get(sparks::DAMAGE_EFFECT).cloned();
+        let effect = self.view.handles.get(Trigger::CollisionSpark).cloned();
         // Two trigger modes, chosen by the effect's own flag and never by the
         // platform. A `LOOPING` emitter has no countdown, so an owner must let
         // go of it; a burst ends itself and the cooldown is only there to
