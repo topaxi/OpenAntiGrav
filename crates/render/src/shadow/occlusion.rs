@@ -181,7 +181,9 @@ impl Maps {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sun occlusion"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("occlusion.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/occlusion.wgsl")).into(),
+            ),
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("sun occlusion"),

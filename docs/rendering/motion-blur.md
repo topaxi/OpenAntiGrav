@@ -398,7 +398,7 @@ at the ~85 km/h a headless `--race --hold cross` reaches, the whole effect is
 0.6 of 255 and the lattice does not rise above the scene's own content.
 
 The trade the jitter makes is in
-[`motion_blur.wgsl`](../../crates/post/src/motion_blur.wgsl)'s own
+[`motion_blur.wgsl`](../../crates/post/shaders/motion_blur.wesl)'s own
 comment: a smear's boundary becomes stochastic where it was hard. It cannot
 under-reach - the tile the lookup lands on is at most one away, and that
 tile's neighbour-max already covers the pixel's own tile.

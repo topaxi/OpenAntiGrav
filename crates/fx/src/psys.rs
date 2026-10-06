@@ -36,7 +36,7 @@
 //! - **Sprites on the PS2 and HD.** A PSP `.pob`'s own sprite is sampled, and
 //!   2048's `.gxt` ones through [`Effect::parse_with`] - see [`sprite`] and
 //!   [`streak`]. A PS2 `.pob` embeds none and HD's `.gtf` are not loaded, so
-//!   those draw the procedural falloff in `psys.wgsl`.
+//!   those draw the procedural falloff in `psys.wesl`.
 //! - The animated-attribute selectors `1`, `3`, `4` and `6`, which nothing on
 //!   the Pulse discs authors.
 

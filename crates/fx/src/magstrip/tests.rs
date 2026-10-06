@@ -207,7 +207,7 @@ fn the_arc_draw_leaves_vertex_alpha_out_of_the_colour() {
     // No transfer function in the program: the arc adds gamma values as they
     // are, the beam keeps the decode every other additive draw has.
     assert!(!arc.decodes_source && beam.decodes_source);
-    let shader = include_str!("../beam.wgsl");
+    let shader = include_str!(concat!(env!("OUT_DIR"), "/beam.wgsl"));
     assert!(shader.contains("mix(1.0, in.colour.a, vertex_alpha_weight)"));
     assert!(shader.contains("linear_out * decode_source"));
 }

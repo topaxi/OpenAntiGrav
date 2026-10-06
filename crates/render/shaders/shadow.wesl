@@ -12,22 +12,11 @@
 // blend then computes `dst * (1 - a)`, a darkening, in whichever space the
 // target holds.
 
-struct Uniforms {
-    view_projection: mat4x4<f32>,
-    model: mat4x4<f32>,
-};
+import oag_shaders::scene_vertex::{Uniforms, VertexInput};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var silhouette: texture_2d<f32>;
 @group(1) @binding(1) var silhouette_sampler: sampler;
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) colour: vec4<f32>,
-    @location(3) texcoord: vec2<f32>,
-    @location(4) lit: f32,
-};
 
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,

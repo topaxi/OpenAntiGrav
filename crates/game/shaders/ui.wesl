@@ -23,6 +23,8 @@
 // alongside `face_texture`'s `Title`-role screen title in the same frame, so
 // they cannot share its one slot. See `MODE_BUTTONS_ATLAS`.
 
+import oag_shaders::quad::{corner_of, pixels_to_clip};
+
 struct Uniforms {
     // Multiplies clip space to letterbox 480x272 into a window of any shape.
     viewport: vec2<f32>,
@@ -118,22 +120,8 @@ struct VertexOut {
     @location(7) @interpolate(flat) texture_size: vec2<f32>,
 };
 
-fn corner_of(index: u32) -> vec2<f32> {
-    var corners = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(1.0, 1.0),
-    );
-    return corners[index];
-}
-
 fn to_clip(pixels: vec2<f32>) -> vec4<f32> {
-    let normalised = pixels / uniforms.screen;
-    let clip = vec2<f32>(normalised.x * 2.0 - 1.0, 1.0 - normalised.y * 2.0);
-    return vec4<f32>(clip * uniforms.viewport, 0.0, 1.0);
+    return pixels_to_clip(pixels, uniforms.screen, uniforms.viewport);
 }
 
 @vertex

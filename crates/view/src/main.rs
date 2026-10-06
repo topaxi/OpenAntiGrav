@@ -848,7 +848,7 @@ impl ApplicationHandler for App {
     }
 }
 
-/// Uniforms shared with `shader.wgsl`.
+/// Uniforms shared with `shader.wesl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
@@ -905,7 +905,9 @@ impl Renderer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("viewer"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/shader.wgsl")).into(),
+            ),
         });
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

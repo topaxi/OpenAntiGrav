@@ -52,7 +52,9 @@ impl Pipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ghost"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../ghost.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/ghost.wgsl")).into(),
+            ),
         });
         let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ghost uniforms"),

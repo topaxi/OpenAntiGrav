@@ -45,7 +45,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player (`psys`) and the collision-spark adapter, the exhaust, mist, clouds, the Leach beam, the screen flash, the Cannon's quads and the hull overlays. Split out of `oag-render` on 2026-10-05; depends on `oag-mesh` for the vertex type and the format crates, never on `oag-render`, so the effects need no camera, shadow or PVS code (the one shared leaf, `hull_overlay::pulse`, moved with them). Nothing gameplay may depend on it. |
 | `oag-mesh` | `crates/mesh` | The mesh pipeline: `.vex` and `RCSMODEL` models decoded into one portable vertex and index buffer, the pipeline that draws them offscreen or into a surface, the orbit camera it frames them with, and the headless capture. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` and the format crates, never on `oag-render`, `oag-post` or a title package (dependency rule 3). Its `shine_pass` module holds the CPU half of the hull's extra pass, which `oag-livery` and `oag_render::shine` share. |
 | `oag-post` | `crates/post` | Post-processing between a scene and the surface: bloom (PSP, PS2, HD), the Omega tonemap, motion blur, SMAA, FXAA, FSR 1 and FSR 3, with the FSR 3 jitter sequence. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` only. |
-| `oag-shader-check` | `crates/shader-check` | A build-dependency only: links a crate's WESL and validates every final shader with `naga` (see "Shader validation at build time" below). Depends on `naga` and `wesl`, nothing in the workspace. |
+| `oag-shader-check` | `crates/shader-check` | A build-dependency only: links a crate's WESL, validates every final shader with `naga` (see "Shader validation at build time" below) and holds the WESL modules the render crates share under `shaders/` ([ADR-0060](adr/0060-every-render-crate-shader-is-wesl-with-one-shared-module-set.md)). Depends on `naga` and `wesl`, nothing in the workspace. |
 | `oag-gpu` | `crates/gpu` | The little the mesh pipeline and the post chain share and neither may own: the scene and velocity target formats, the `perf-probe` instrumentation and GPU timestamp timing. It is what keeps `oag-mesh` and `oag-post` from depending on each other. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 | `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
@@ -647,16 +647,29 @@ never a normal one) now makes the build the first place a shader is checked.
   WESL module (names unmangled, so overrides, entry points and bindings reach
   `wgpu` as written), validates the text the crate will `include_str!`, then
   writes the artifact. `check_dir("src", &[..])` walks a directory for `*.wgsl`,
-  so a new shader is covered without a list to forget. These crates call it:
-  `oag-mesh`, `oag-post`, `oag-fx`, `oag-render`, `oag-present`, `oag-view` and
-  `oag-game`.
+  so a new shader is covered without a list to forget. These crates call it,
+  and keep every shader but the screen-filter presets as WESL under `shaders/`
+  (`link_each` for one artifact per module): `oag-mesh`, `oag-post`, `oag-fx`,
+  `oag-render`, `oag-present`, `oag-view` and `oag-game`.
+- **Shared modules** live in `crates/shader-check/shaders/` and are imported as
+  the package `oag_shaders` (`import oag_shaders::fullscreen::fullscreen_triangle;`):
+  `fullscreen`, `colour`, `bytes`, `target`, `scene_vertex`, `quad`. `link`
+  mounts that directory with a `wesl` `Router` beside the crate's own
+  `shaders/`, and emits `rerun-if-changed` for it, since `wesl` reports only the
+  crate's own files (an edit to a shared module was checked to rebuild
+  `oag-post`). Items are `public`. Only bodies equal in meaning are shared; the
+  list of what was kept apart, and why, is in ADR-0060.
+- **Stable output.** `link` stable-sorts the declarations before writing,
+  because `wesl` printed them in a different order each build; two builds of an
+  unchanged shader are now `cmp`-equal.
 - **The check is what `wgpu` does**: `naga`'s WGSL front end, every
   `ValidationFlags` on, and no optional capability. The renderer requests none
   (its `required_features` are texture compression and timestamps), so a shader
   that needs one fails the build as it would fail the device. Revisit if a
   shader ever needs `enable f16` or push constants.
 - **Not every `.wgsl` is a module.** `oag-post`'s `screen.wgsl` is a prelude and
-  `assets/shaders/screen/*.wgsl` are preset bodies; neither parses alone. They
+  `assets/shaders/screen/*.wgsl` are preset bodies; neither parses alone (and
+  stay plain WGSL, ADR-0060, because they are concatenated and loaded at runtime). They
   are validated by `Preset::validate` at runtime and by `oag-game`'s screen
   tests, and `oag-post`'s `build.rs` names `screen.wgsl` in its skip list.
   A skipped file is named with its reason there, never silently.

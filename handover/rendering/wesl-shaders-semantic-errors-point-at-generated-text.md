@@ -14,19 +14,14 @@ failure names the module, the declaration and its line - see
   glow, flame and absorb blocks inside it could become functions in their own
   modules. That is a logic-neutral refactor that needs the 18-capture `cmp`
   harness (`capture.sh` in the trial's scratch) run before and after.
-- **`wesl` prints declarations in a different order on each build** (a hash map
-  inside the linker): two builds of the same tree give `mesh.wgsl` files that
-  are line-for-line equal once sorted but not byte-equal. Captures stay
-  byte-identical, so it is cosmetic, but a diff of two `$OUT_DIR` artifacts is
-  noisy and a reproducible build would want it sorted.
-- Other `.wgsl` files with a shared prelude are candidates: `screen.wgsl`'s
-  `PRELUDE` is concatenated in Rust today (`oag-post/src/screen.rs`), so it and
-  the five `assets/shaders/screen/*.wgsl` presets are validated by tests, not by
-  the build. Porting the prelude to a WESL import would bring them in.
-- Comments elsewhere that say `mesh.wgsl` name a file that no longer exists.
+- Closed 2026-10-06 (wesl-port): every other render-crate shader is WESL with a
+  shared module set (ADR-0060), `wesl`'s declaration order is stable, and the
+  screen-filter presets deliberately stay plain WGSL (runtime-concatenated).
+- FSR 3's passes still repeat upstream's per-pass helpers
+  (`load_dilated_motion_vector` x4, `spd_reduce4` x2, ...); folding them into
+  `common.wesl` would need a bit-exactness check against the FSR 3 captures.
 
 ## Next Steps
 
 1. Split `lit_texel` (above), with the capture harness.
-2. Port the screen-filter prelude to a WESL import so the build validates
-   presets too.
+2. Fold FSR 3's repeated per-pass helpers into `common.wesl`, with the captures.

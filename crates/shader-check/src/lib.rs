@@ -84,6 +84,18 @@ pub fn link(shaders_dir: &str, artifact: &str, module: &str, features: &[&str]) 
     compiled.write_artifact(artifact);
 }
 
+/// Links each of `modules`, a module `package::<name>` under `shaders_dir`, to
+/// an artifact called `<name>`: the common case, one shader per file.
+///
+/// # Panics
+///
+/// As [`link`].
+pub fn link_each(shaders_dir: &str, modules: &[&str]) {
+    for name in modules {
+        link(shaders_dir, name, &format!("package::{name}"), &[]);
+    }
+}
+
 /// Puts the declarations in an order that does not change from build to build.
 ///
 /// `wesl` visits the modules a shader imports through a `HashMap`, so the same

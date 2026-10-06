@@ -30,7 +30,7 @@ pub fn stretch_for(
 /// bind group and picks its sampler filter once from `Atlas::is_real`. The HUD
 /// uses two fonts - `HUD` for values and `HUDSmall` for captions - so it needs two
 /// of them and two passes. The alternative, a second atlas binding plus a third
-/// `mode` value in `ui.wgsl`, touches the bind group every existing screen depends
+/// `mode` value in `ui.wesl`, touches the bind group every existing screen depends
 /// on; two renderers touch nothing. See `docs/ui/hud.md`.
 ///
 /// Both are built with `video: None`. A video pipeline that is built and never

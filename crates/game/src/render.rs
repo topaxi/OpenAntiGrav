@@ -328,7 +328,9 @@ impl Renderer {
 
         let ui_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ui"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("ui.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/ui.wgsl")).into(),
+            ),
         });
 
         let ui_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -935,7 +937,7 @@ pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
 
 /// A window position, in the grid a stage's `Draw`s are authored in.
 ///
-/// [`letterbox_in`] and `ui.wgsl`'s `to_clip` run backwards: `viewport` is
+/// [`letterbox_in`] and `ui.wesl`'s `to_clip` run backwards: `viewport` is
 /// the aspect rectangle every stage draws into (`oag_display::display::viewport`,
 /// in physical pixels), and `space` is the grid and display aspect the
 /// stage's list is fitted with. What comes back is what a `Draw` at that

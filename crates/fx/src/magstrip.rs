@@ -57,7 +57,7 @@
 //! gain anywhere: the `INTENSITY = 3.0` this module carried until then was not in
 //! the original's shading. The program has no transfer function either, so the arc
 //! adds its gamma values as they are into the linear target (the HD engine tube's
-//! precedent, `exhaust.wgsl`), where every other additive draw here decodes them
+//! precedent, `exhaust.wesl`), where every other additive draw here decodes them
 //! first. State measured on HD (`MagstripArcs_Draw`, `0x002bd480..0x002bd530`,
 //! conf 80): blend on, `ONE, ONE`, `FUNC_ADD`; depth test on, `LEQUAL`; depth write
 //! off; culling off. See `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`,

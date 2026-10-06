@@ -221,7 +221,7 @@ fn a_translucent_fill_blends_over_whatever_load_kept() {
     );
 }
 
-/// `ui.wgsl`'s `to_clip`, reimplemented independently of `to_grid` so the
+/// `ui.wesl`'s `to_clip`, reimplemented independently of `to_grid` so the
 /// round trip below cannot pass by sharing a mistake with it - the same
 /// arrangement `menu_stage.rs`'s own `overlay_rect` test uses.
 fn to_clip(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32)) -> (f32, f32) {

@@ -305,7 +305,9 @@ impl Pipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("cloud"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("cloud.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/cloud.wgsl")).into(),
+            ),
         });
 
         let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

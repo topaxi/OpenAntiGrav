@@ -1,6 +1,6 @@
 // Draws the ship's engine flare.
 //
-// Separate from mesh.wgsl for one reason that matters: that shader returns
+// Separate from `mesh` (the mesh pipeline) for one reason that matters: that shader returns
 // `alpha = 1.0` unconditionally, because everything it draws is opaque. The
 // flare's whole appearance is its alpha.
 //
@@ -10,16 +10,8 @@
 // rather than trimmed so this pipeline can reuse the layout and the size
 // assertion the mesh path already has.
 
-struct Uniforms {
-    view_projection: mat4x4<f32>,
-    model: mat4x4<f32>,
-};
-
-// 1.0 when the render target holds linear light (Wipeout HD's float scene
-// target), 0.0 on every gamma target. Set from the target format at pipeline
-// build - `mesh_render::is_linear_target` - so the additive blend below runs
-// in the same colour space as everything else drawn into that target.
-override linear_out: f32 = 0.0;
+import oag_shaders::scene_vertex::{Uniforms, VertexInput};
+import oag_shaders::target::{linear_out, gamma_to_target};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var flare: texture_2d<f32>;
@@ -40,14 +32,6 @@ override linear_out: f32 = 0.0;
 // per-vertex scalar the engine writes. Each is read and none is invented here.
 // See `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
 override trail_shape: f32 = 0.0;
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) colour: vec4<f32>,
-    @location(3) texcoord: vec2<f32>,
-    @location(4) lit: f32,
-};
 
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
@@ -159,7 +143,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // most of why it read too faint. The sampler's sRGB-remap state is the
     // one unread bit; if it turns out to be on, this line is where that
     // lands. See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
-    let decoded = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    let decoded = gamma_to_target(rgb, linear_out);
     let out_rgb = mix(decoded, rgb, trail_shape);
     return vec4<f32>(out_rgb, shape * in.colour.a * hd_fade);
 }

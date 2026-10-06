@@ -880,7 +880,7 @@ Three of these land directly on this project's open work.
 [Bloom](../../../rendering/README.md) is an unchecked M6 roadmap item and this
 names its exact pass structure. `psys_lit`/`psys_normal`/`psys_simplegeom` are a
 three-way split of the particle shading that
-[`oag_fx::psys`](../../../../crates/fx/src/psys.wgsl) currently does one
+[`oag_fx::psys`](../../../../crates/fx/shaders/psys.wesl) currently does one
 way. And `liveRsxPanXForm_CubemapConvolve_fp` plus
 `liveRsxPanXForm_CubemapToDualParaboloide_fp` are almost certainly what the
 disc's 28 `.probes` files are produced or consumed by, which is the first thread

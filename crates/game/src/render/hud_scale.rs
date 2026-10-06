@@ -60,7 +60,7 @@ impl HudStretch {
         }
     }
 
-    /// The `hud` uniform `ui.wgsl` reads.
+    /// The `hud` uniform `ui.wesl` reads.
     pub(super) fn uniform(&self) -> [f32; 4] {
         let sharp = f32::from(u8::from(self.mode.is_sharp_bilinear()));
         [self.pixels_per_grid, sharp, 0.0, 0.0]

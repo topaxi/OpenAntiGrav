@@ -97,7 +97,9 @@ impl Pipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("psys"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../psys.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/psys.wgsl")).into(),
+            ),
         });
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

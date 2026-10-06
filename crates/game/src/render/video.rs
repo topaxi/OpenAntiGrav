@@ -84,7 +84,9 @@ impl Video {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("video"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../video.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/video.wgsl")).into(),
+            ),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
