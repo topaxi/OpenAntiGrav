@@ -155,12 +155,18 @@ struct CardGpu {
     drawable: Drawable,
     view_projection: Mat4,
     colour: wgpu::TextureView,
+    #[cfg(test)]
+    target: wgpu::Texture,
 }
 
 /// The cards on the GPU: one target each, drawn once a frame ahead of the
 /// scene pass.
 pub(super) struct Cards {
     cards: Vec<CardGpu>,
+    /// How many of the track's placeholder materials [`Cards::bind_into`]
+    /// pointed at a card.
+    #[cfg(test)]
+    rebound: usize,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
 }
@@ -211,19 +217,20 @@ impl Cards {
             height: SIDE,
             depth_or_array_layers: 1,
         };
+        let texture = |label: &str, format, usage| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage,
+                view_formats: &[],
+            })
+        };
         let target = |label: &str, format, usage| {
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some(label),
-                    size,
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format,
-                    usage,
-                    view_formats: &[],
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default())
+            texture(label, format, usage).create_view(&wgpu::TextureViewDescriptor::default())
         };
         let depth = target(
             "advert depth",
@@ -251,20 +258,26 @@ impl Cards {
                 mesh_render::ShadowMaps::NONE,
                 mesh_render::ShadowReceiver::Never,
             )?;
-            let colour = target(
+            let target = texture(
                 "advert",
                 FORMAT,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
             );
             gpu.push(CardGpu {
                 slot: card.slot,
                 drawable,
                 view_projection: card.view_projection,
-                colour,
+                colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
+                #[cfg(test)]
+                target,
             });
         }
         Ok(Self {
             cards: gpu,
+            #[cfg(test)]
+            rebound: 0,
             depth,
             velocity,
         })
@@ -274,7 +287,7 @@ impl Cards {
     /// that card's target. `placeholders` is
     /// [`oag_render::gantry::placeholder_texture_slots`] of the track model.
     pub(super) fn bind_into(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         track: &mut Drawable,
@@ -283,8 +296,18 @@ impl Cards {
         for &(texture_slot, number) in placeholders {
             if let Some(card) = self.cards.iter().find(|c| c.slot == number) {
                 track.set_albedo(device, queue, texture_slot, &card.colour);
+                #[cfg(test)]
+                {
+                    self.rebound += 1;
+                }
             }
         }
+    }
+
+    /// How many placeholder materials were pointed at a card.
+    #[cfg(test)]
+    pub(super) fn rebound(&self) -> usize {
+        self.rebound
     }
 
     /// Draws every card into its target at `seconds` on the scenery clock.

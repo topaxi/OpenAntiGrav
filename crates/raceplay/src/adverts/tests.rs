@@ -56,3 +56,155 @@ fn an_orthographic_camera_gets_no_card() {
     camera.fov_flags = 1;
     assert!(view_projection(&camera).is_none());
 }
+
+impl Cards {
+    /// Draws every card at `seconds` and reads each target back as RGBA8, in
+    /// card order, with its slot.
+    fn read_back(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        seconds: f32,
+    ) -> Vec<(u32, Vec<u8>)> {
+        let row = SIDE * 4;
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.render(queue, &mut encoder, seconds);
+        let buffers: Vec<wgpu::Buffer> = self
+            .cards
+            .iter()
+            .map(|card| {
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("advert readback"),
+                    size: u64::from(row * SIDE),
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
+                encoder.copy_texture_to_buffer(
+                    card.target.as_image_copy(),
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: &buffer,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(row),
+                            rows_per_image: Some(SIDE),
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: SIDE,
+                        height: SIDE,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                buffer
+            })
+            .collect();
+        queue.submit([encoder.finish()]);
+        buffers
+            .iter()
+            .zip(&self.cards)
+            .map(|(buffer, card)| {
+                buffer
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Read, |r| r.unwrap());
+                device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .expect("poll");
+                let bytes = buffer
+                    .slice(..)
+                    .get_mapped_range()
+                    .expect("mapped")
+                    .to_vec();
+                (card.slot, bytes)
+            })
+            .collect()
+    }
+}
+
+fn distinct_colours(rgba: &[u8]) -> usize {
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
+        .map(|p| [p[0], p[1], p[2]])
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
+/// Loads `source`'s default circuit, draws its cards at two clock readings and
+/// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set.
+fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
+    let image = oag_testdata::image(source)?;
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("advert test", &adapter)),
+    )
+    .ok()?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let cards = Cards::new(&device, &queue, loaded.billboards.adverts, Anisotropy::Off)
+        .expect("building the cards");
+    let mut counts = Vec::new();
+    let times: Vec<f32> = std::env::var("OAG_ADVERT_TIMES")
+        .map(|v| v.split(',').filter_map(|t| t.parse().ok()).collect())
+        .unwrap_or_else(|_| vec![0.0, 2.5]);
+    for &seconds in &times {
+        for (slot, pixels) in cards.read_back(&device, &queue, seconds) {
+            if let Ok(dir) = std::env::var("OAG_ADVERT_DUMP") {
+                let mut shown = pixels.clone();
+                shown
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .for_each(|p| p[3] = 255);
+                let png = oag_texture::png::encode_rgba(SIDE, SIDE, &shown);
+                std::fs::write(format!("{dir}/{tag}-slot{slot}-{seconds}.png"), png)
+                    .expect("writing the dump");
+            }
+            counts.push((slot, distinct_colours(&pixels)));
+        }
+    }
+    Some(counts)
+}
+
+/// A card that drew nothing is one flat colour at every reading; an advert
+/// has at least its board and its lettering. The first slots fade in, so the
+/// best of the readings counts.
+fn assert_every_slot_shows_a_picture(counts: &[(u32, usize)]) {
+    let mut best = std::collections::BTreeMap::new();
+    for &(slot, colours) in counts {
+        let entry = best.entry(slot).or_insert(0);
+        *entry = colours.max(*entry);
+    }
+    for (slot, colours) in best {
+        assert!(
+            colours >= 2,
+            "slot {slot}: {colours} distinct colour(s) at best"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn pulse_psp_cards_draw_something_into_their_targets() {
+    let Some(counts) = drawn_cards("data/images/pulse-psp-usa.chd", "psp") else {
+        return;
+    };
+    println!("{counts:?}");
+    assert!(!counts.is_empty(), "no card was built");
+    assert_every_slot_shows_a_picture(&counts);
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_cards_draw_something_into_their_targets() {
+    let Some(counts) = drawn_cards("data/images/pulse-ps2-eu.chd", "ps2") else {
+        return;
+    };
+    println!("{counts:?}");
+    assert!(!counts.is_empty(), "no card was built");
+    assert_every_slot_shows_a_picture(&counts);
+}
