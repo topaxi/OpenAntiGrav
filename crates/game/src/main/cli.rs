@@ -392,6 +392,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) scheme: Option<ControlScheme>,
 
+    /// Which glyphs the button prompts draw: `auto`, `original`, `playstation`,
+    /// `xbox`, `nintendo` or `keyboard`.
+    ///
+    /// Overrides `[controls] prompt_style` for this run without writing it
+    /// back. `auto` follows the device last used.
+    #[arg(long)]
+    pub(crate) prompt_style: Option<String>,
+
     /// Draw a frame counter over the intro.
     ///
     /// On by default when there is no picture, since a black screen for eight

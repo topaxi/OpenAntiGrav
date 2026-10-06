@@ -83,6 +83,9 @@ pub struct Options {
     pub pressed: u32,
     /// Which control scheme the race this hands off to is driven with.
     pub scheme: oag_gameplay::ControlScheme,
+    /// Which glyphs the button prompts draw. A capture has no device to
+    /// follow, so only a forced family changes anything.
+    pub prompt_style: oag_input::prompt::PromptStyle,
     /// Print exits as well as entries.
     pub trace: bool,
     /// The race `Launch Game` hands off to, if this capture should follow it
@@ -911,6 +914,11 @@ pub fn run(
     // in the one `face_atlas_slot` already picks between. See
     // `crate::render::Renderer::set_buttons_atlas`'s own doc.
     renderer.set_buttons_atlas(&device, &queue, buttons_font);
+    renderer.set_prompt_substitution(crate::prompts::substitution(
+        title.prompts,
+        crate::prompts::forced_family(options.prompt_style),
+        &|button| options.settings.controls.live_bindings().names_for(button),
+    ));
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),

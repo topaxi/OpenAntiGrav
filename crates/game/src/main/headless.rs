@@ -224,6 +224,7 @@ pub(crate) fn run_windowless(
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 scheme,
+                prompt_style: crate::args::resolve_prompt_style(cli, settings),
                 trace: cli.trace,
                 race: Some(race_options),
                 event: cli.event.clone(),

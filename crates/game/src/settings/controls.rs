@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use oag_input::bindings::Bindings;
 use oag_input::pad::TriggerMode;
+use oag_input::prompt::PromptStyle;
 
 /// How the pilot's buttons reach the ship.
 ///
@@ -75,6 +76,30 @@ pub struct Controls {
     /// than driving a ship with it.
     #[serde(default = "default_bindings")]
     pub bindings: BTreeMap<String, String>,
+    /// Which glyphs the on-screen button prompts draw: `auto`, `original`,
+    /// `playstation`, `xbox`, `nintendo` or `keyboard`.
+    ///
+    /// A **token** for the reason `scheme` is one: a bad value is reported and
+    /// `auto` used, never a failed boot. Config only, no menu row: `auto`
+    /// follows the device last used, and the rest are for a player whose pad
+    /// is not what it looks like. See [`oag_input::prompt`] and
+    /// `docs/ui/button-prompts.md`.
+    #[serde(default = "default_prompt_style")]
+    pub prompt_style: String,
+}
+
+fn default_prompt_style() -> String {
+    PromptStyle::default().name().to_string()
+}
+
+impl Controls {
+    /// [`Self::prompt_style`] as a value, `auto` for a token this build does
+    /// not know. Silent; `main::args::resolve_prompt_style` is the one that
+    /// reports it.
+    #[must_use]
+    pub fn prompt_style_value(&self) -> PromptStyle {
+        PromptStyle::from_name(&self.prompt_style).unwrap_or_default()
+    }
 }
 
 /// See [`Controls::bindings`]: the default table, complete, with nothing
@@ -219,6 +244,7 @@ impl Default for Controls {
             triggers: default_triggers(),
             trigger_sensitivity: TriggerSensitivity::default(),
             bindings: default_bindings(),
+            prompt_style: default_prompt_style(),
         }
     }
 }

@@ -224,6 +224,8 @@ pub struct Controls {
     /// Whether the pad contributed anything to the last [`Self::snapshot`]:
     /// a held button or a stick or trigger off centre. See [`Self::pad_spoke`].
     pad_spoke: bool,
+    /// Which device was used last, for the button prompts' glyph family.
+    prompt: prompt::Detector,
 }
 
 impl Controls {
@@ -245,6 +247,7 @@ impl Controls {
             pad: Pad::none(),
             buttons: [Input::new(); oag_gameplay::MAX_PLAYERS],
             pad_spoke: false,
+            prompt: prompt::Detector::new(),
         }
     }
 
@@ -269,7 +272,17 @@ impl Controls {
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
+        if pressed {
+            self.prompt.note_key();
+        }
         self.keyboard.set_key(key, pressed);
+    }
+
+    /// The glyph family a prompt draws in under `style`, or `None` for the
+    /// disc's own glyphs. See [`prompt::Detector::family`].
+    #[must_use]
+    pub fn prompt_family(&self, style: prompt::PromptStyle) -> Option<prompt::PromptFamily> {
+        self.prompt.family(style)
     }
 
     /// Presses `button` for one tick on the keyboard's own latch. See
@@ -351,6 +364,11 @@ impl Controls {
     /// are `InputSnapshot::default`.
     pub fn player_snapshots(&mut self) -> oag_gameplay::PlayerInputs {
         let pads = self.pad.poll_players();
+        if let Some(family) = self.pad.take_activity() {
+            self.prompt.note_pad(family);
+        } else if let Some(family) = self.pad.first_family() {
+            self.prompt.seed_pad(family);
+        }
         self.merge_players(pads)
     }
 

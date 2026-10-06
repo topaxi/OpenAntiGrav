@@ -52,6 +52,24 @@ pub(crate) fn resolve_scheme(cli: &Cli, settings: &settings::Settings) -> Contro
     })
 }
 
+/// What the button prompts draw: `--prompt-style`, then `[controls]
+/// prompt_style`, then `auto`. An unrecognised token is reported and ignored,
+/// as [`resolve_scheme`]'s is.
+pub(crate) fn resolve_prompt_style(
+    cli: &Cli,
+    settings: &settings::Settings,
+) -> oag_input::prompt::PromptStyle {
+    use oag_input::prompt::PromptStyle;
+    let token = cli
+        .prompt_style
+        .as_deref()
+        .unwrap_or(&settings.controls.prompt_style);
+    PromptStyle::from_name(token).unwrap_or_else(|| {
+        warn!("ignoring prompt style {token:?}; using auto");
+        PromptStyle::Auto
+    })
+}
+
 /// What the analog triggers do: `[controls] triggers`, or the default.
 ///
 /// An unrecognised token is **reported and ignored** rather than fatal, exactly
