@@ -202,6 +202,7 @@ Existing crates:
 | `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player, exhaust, mist, clouds, beams, flashes, weapon quads, hull overlays. Above `oag-mesh`, below `oag-render`; render-side, so no gameplay crate depends on it. |
 | `oag-render` | `crates/render` | The wgpu renderer: track ribbon, shadows, PVS, cameras. Owns no window. Reads `oag-pulse`'s tables, which runs against the arrows below and is allowed - rule 1 only forbids the other direction. |
 | `oag-present` | `crates/present` | What happens to a frame between the scene and the glass: the upscale/grade/screen-filter composite, dynamic resolution scaling, and the performance meter. Plain data in; knows no race, menu or settings file. |
+| `oag-shader-check` | `crates/shader-check` | A build-dependency of the shader-owning crates: links WESL and validates every shader with `naga` so a bad one fails `cargo build`. Never a normal dependency. |
 | `oag-livery` | `crates/livery` | A race's ship hulls, skins, shields, plumes and wrecks built from a title's own archive entries, plus the entry-name rules for them. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |

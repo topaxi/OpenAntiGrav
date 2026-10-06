@@ -33,6 +33,9 @@ pollster.workspace = true
 # affordance nobody builds actually has.
 perf-probe = ["oag-gpu/perf-probe", "oag-mesh/perf-probe"]
 
+[build-dependencies]
+oag-shader-check.workspace = true
+
 [lints]
 workspace = true
 

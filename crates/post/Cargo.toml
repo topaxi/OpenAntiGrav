@@ -18,7 +18,7 @@ toml.workspace = true
 pollster.workspace = true
 
 [build-dependencies]
-wesl = "0.6"
+oag-shader-check.workspace = true
 
 [lints]
 workspace = true

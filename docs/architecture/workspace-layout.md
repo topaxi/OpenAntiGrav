@@ -45,6 +45,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-fx` | `crates/fx` | The renderer's visual effects: the `.pob` particle player (`psys`) and the collision-spark adapter, the exhaust, mist, clouds, the Leach beam, the screen flash, the Cannon's quads and the hull overlays. Split out of `oag-render` on 2026-10-05; depends on `oag-mesh` for the vertex type and the format crates, never on `oag-render`, so the effects need no camera, shadow or PVS code (the one shared leaf, `hull_overlay::pulse`, moved with them). Nothing gameplay may depend on it. |
 | `oag-mesh` | `crates/mesh` | The mesh pipeline: `.vex` and `RCSMODEL` models decoded into one portable vertex and index buffer, the pipeline that draws them offscreen or into a surface, the orbit camera it frames them with, and the headless capture. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` and the format crates, never on `oag-render`, `oag-post` or a title package (dependency rule 3). Its `shine_pass` module holds the CPU half of the hull's extra pass, which `oag-livery` and `oag_render::shine` share. |
 | `oag-post` | `crates/post` | Post-processing between a scene and the surface: bloom (PSP, PS2, HD), the Omega tonemap, motion blur, SMAA, FXAA, FSR 1 and FSR 3, with the FSR 3 jitter sequence. Split out of `oag-render` on 2026-10-05; depends on `oag-gpu` only. |
+| `oag-shader-check` | `crates/shader-check` | A build-dependency only: links a crate's WESL and validates every final shader with `naga` (see "Shader validation at build time" below). Depends on `naga` and `wesl`, nothing in the workspace. |
 | `oag-gpu` | `crates/gpu` | The little the mesh pipeline and the post chain share and neither may own: the scene and velocity target formats, the `perf-probe` instrumentation and GPU timestamp timing. It is what keeps `oag-mesh` and `oag-post` from depending on each other. |
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 | `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
@@ -633,3 +634,41 @@ four per-title triggers' effects it does not answer (HD's wreck set and
 LeachBeam spark, 2048's and Omega's weapon spark, absorb, LeachBeam spark and
 wreck set), because nothing fired them there; Pulse's report is unchanged
 bar the HD-only weapon spark it never had.
+
+## Shader validation at build time (2026-10-06)
+
+`naga` otherwise runs only inside `wgpu::Device::create_shader_module`, so an
+undeclared name or a type mismatch used to surface at race start.
+[ADR-0059](adr/0059-render-shaders-are-wesl-compiled-to-wgsl-at-build-time.md)
+moved `oag-mesh` and `oag-post` to WESL; `oag-shader-check` (a build-dependency,
+never a normal one) now makes the build the first place a shader is checked.
+
+- **A crate that owns shaders has a `build.rs` that calls it.** `link` links a
+  WESL module (names unmangled, so overrides, entry points and bindings reach
+  `wgpu` as written), validates the text the crate will `include_str!`, then
+  writes the artifact. `check_dir("src", &[..])` walks a directory for `*.wgsl`,
+  so a new shader is covered without a list to forget. These crates call it:
+  `oag-mesh`, `oag-post`, `oag-fx`, `oag-render`, `oag-present`, `oag-view` and
+  `oag-game`.
+- **The check is what `wgpu` does**: `naga`'s WGSL front end, every
+  `ValidationFlags` on, and no optional capability. The renderer requests none
+  (its `required_features` are texture compression and timestamps), so a shader
+  that needs one fails the build as it would fail the device. Revisit if a
+  shader ever needs `enable f16` or push constants.
+- **Not every `.wgsl` is a module.** `oag-post`'s `screen.wgsl` is a prelude and
+  `assets/shaders/screen/*.wgsl` are preset bodies; neither parses alone. They
+  are validated by `Preset::validate` at runtime and by `oag-game`'s screen
+  tests, and `oag-post`'s `build.rs` names `screen.wgsl` in its skip list.
+  A skipped file is named with its reason there, never silently.
+- **A failure names where it is.** The message is `naga`'s own, then the
+  generated line with three lines of context. For a WESL artifact it adds the
+  declaration the line sits in, the module that declaration came from (via
+  `wesl`'s source map, which stays populated under `ManglerKind::None`), the
+  declaration's line in that module and the first line of it that spells the
+  text `naga` pointed at. The artifact is printed from the syntax tree, so a
+  line inside a declaration does not carry over exactly; the last of those is a
+  search, not a mapping. WESL syntax errors still come from `wesl` itself, with
+  module and line.
+- **Cost**: a clean `cargo build -p oag-mesh -p oag-post` 62 s before and 41 s
+  after on a loaded machine (the difference is noise; `naga` is already in the
+  graph), and a build-script re-run is about 2 s either way.
