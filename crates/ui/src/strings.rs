@@ -19,17 +19,28 @@
 //!
 //! One TOML file per language, named after [`crate::language::Language::name`]
 //! lowercased - `assets/ui/strings/english.toml` - under a single `[strings]`
-//! table of `id = "value"` pairs, the same shape `menu.toml`'s own header
-//! reserves for a `string_id`. The id space is shared with the disc's own
-//! `idstring`s on purpose: a project file names a disc id to override it, or a
-//! new id of its own to give a translatable home to text this project
-//! invented.
+//! table of `ID = { text = "value", human = false }` entries. `human` is
+//! required and means a human wrote or approved the text; a model-written or
+//! machine-translated entry says `false`. The id space is shared with the
+//! disc's own `idstring`s on purpose: a project file names a disc id to
+//! override it, or a new id of its own to give a translatable home to text
+//! this project invented. The inline-table shape keeps the flag on the line it
+//! describes, so a diff of one string is one line and no second table has to
+//! be kept in step.
+//!
+//! # Disc ids, per title
+//!
+//! `assets/ui/strings/disc/<namespace>/<language>.toml` holds this project's
+//! own translations of a *title's* disc text, keyed by that title's idstrings.
+//! A namespace is named by [`oag_title::FrontEnd::disc_strings`] and only a
+//! title that names it reads it: Pure, HD and 2048 reuse id spellings, so one
+//! shared file would turn Pulse's wording on for them. Nothing here may be a
+//! copy of a disc sentence (`docs/overview/legal.md`).
 //!
 //! Embedded with [`include_str!`] rather than read from disk, for the same
 //! reason [`crate::menu::BUILT_IN`] is: the binary works from anywhere. A
-//! language with no file yet - every language but English and French, today -
-//! overlays nothing, which is the honest state of a translation not yet
-//! written rather than something to guess at.
+//! language with no file yet overlays nothing, which is the honest state of a
+//! translation not yet written rather than something to guess at.
 //!
 //! # A translation that has not caught up yet
 //!
@@ -38,9 +49,8 @@
 //! language's file is allowed to lag - a translator has not reached an id
 //! yet - but only by **naming the gap**, under its own `[untranslated]` table
 //! (`ids = ["OAG_...", ...]`), never by omitting the id silently. See
-//! `assets/ui/strings/english.toml`'s own doc comment for the worked example,
-//! and never fill either kind of gap with a machine translation - a marked
-//! placeholder is honest, an invented one is not.
+//! `assets/ui/strings/english.toml`'s own doc comment for the worked example.
+//! A machine translation may fill a gap, but only marked `human = false`.
 
 use std::collections::HashMap;
 
@@ -51,8 +61,49 @@ use crate::language::StringTable;
 #[derive(Debug, Default, Deserialize)]
 struct File {
     #[serde(default)]
-    strings: HashMap<String, String>,
+    strings: HashMap<String, Entry>,
 }
+
+/// One string and who vouches for it.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Entry {
+    text: String,
+    /// Required, no default: a missing flag is a parse error, not a silent
+    /// `false`. `true` only when a human wrote or approved the text.
+    #[allow(
+        dead_code,
+        reason = "read by scripts/check-strings.py, not by the loader"
+    )]
+    human: bool,
+}
+
+impl File {
+    fn texts(self) -> HashMap<String, String> {
+        self.strings
+            .into_iter()
+            .map(|(id, entry)| (id, entry.text))
+            .collect()
+    }
+}
+
+/// A language this build offers on every title, whether or not a disc ships it.
+#[derive(Debug)]
+pub struct ProjectLanguage {
+    /// What it is called, which is also its `assets/ui/strings/` file stem and
+    /// what a saved setting stores. Matched case-insensitively, so Omega's own
+    /// on-disc `portuguesebr` plugin is the same language.
+    pub name: &'static str,
+    /// The language's name in itself, for the picker.
+    pub native_name: &'static str,
+}
+
+/// The languages added after a disc's own. **Chosen, not measured**: Wipeout
+/// Omega is the only disc that ships Brazilian Portuguese.
+pub const PROJECT_LANGUAGES: &[ProjectLanguage] = &[ProjectLanguage {
+    name: "PortugueseBR",
+    native_name: "Português (Brasil)",
+}];
 
 /// The embedded file for `language`, matched case-insensitively against
 /// [`crate::language::Language::name`]. `None` for a language this build
@@ -62,6 +113,20 @@ fn built_in(language: &str) -> Option<&'static str> {
         Some(include_str!("../../../assets/ui/strings/english.toml"))
     } else if language.eq_ignore_ascii_case("French") {
         Some(include_str!("../../../assets/ui/strings/french.toml"))
+    } else if language.eq_ignore_ascii_case("PortugueseBR") {
+        Some(include_str!("../../../assets/ui/strings/portuguesebr.toml"))
+    } else {
+        None
+    }
+}
+
+/// The embedded per-title file of disc-keyed translations, for a `namespace`
+/// a title's front end names and a `language`.
+fn built_in_disc(namespace: &str, language: &str) -> Option<&'static str> {
+    if namespace == "pulse" && language.eq_ignore_ascii_case("PortugueseBR") {
+        Some(include_str!(
+            "../../../assets/ui/strings/disc/pulse/portuguesebr.toml"
+        ))
     } else {
         None
     }
@@ -85,10 +150,38 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
                 language.to_lowercase(),
                 file.strings.len()
             ));
-            table.merge(file.strings);
+            table.merge(file.texts());
         }
         Err(e) => report.push(format!(
             "assets/ui/strings/{}.toml: {e}",
+            language.to_lowercase()
+        )),
+    }
+}
+
+/// Merges the title's own disc-keyed translations into `table`, before the
+/// project's `OAG_` file so that one still wins. Silent for a namespace or
+/// language that has no file.
+pub fn overlay_disc(
+    table: &mut StringTable,
+    namespace: &str,
+    language: &str,
+    report: &mut Vec<String>,
+) {
+    let Some(text) = built_in_disc(namespace, language) else {
+        return;
+    };
+    match toml::from_str::<File>(text) {
+        Ok(file) => {
+            report.push(format!(
+                "assets/ui/strings/disc/{namespace}/{}.toml: {} translation(s)",
+                language.to_lowercase(),
+                file.strings.len()
+            ));
+            table.merge(file.texts());
+        }
+        Err(e) => report.push(format!(
+            "assets/ui/strings/disc/{namespace}/{}.toml: {e}",
             language.to_lowercase()
         )),
     }
@@ -115,130 +208,4 @@ pub fn project_table(language: Option<&str>) -> StringTable {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_language_with_no_file_overlays_nothing() {
-        let mut table = StringTable::from_xml(r#"<StringTable></StringTable>"#);
-        let mut report = Vec::new();
-        overlay(&mut table, "Klingon", &mut report);
-        assert!(table.is_empty());
-        assert!(report.is_empty());
-    }
-
-    /// **This is the test that used to assert the file was empty**, with a
-    /// comment saying it would start failing the moment something looked a
-    /// project string up by id. That happened: the pilot editor's CRUD rows
-    /// and the on-screen keyboard it opens are the first screen in this build
-    /// whose text is looked up rather than written into the widget.
-    ///
-    /// What it pins now is the property that still matters - every id in the
-    /// file is one of ours. The `OAG_` prefix is what keeps a project entry
-    /// from colliding with a disc idstring, and this file shares one id space
-    /// with the disc's own by design. An id landing here without it would
-    /// silently override a real front-end string on somebody's disc.
-    ///
-    /// It deliberately does **not** list the ids: that would be a second
-    /// place to update for every string added, which is exactly the kind of
-    /// bookkeeping nobody does.
-    #[test]
-    fn every_english_entry_is_one_of_ours_and_reads_back() {
-        let mut table = StringTable::default();
-        let mut report = Vec::new();
-        overlay(&mut table, "English", &mut report);
-        // The report is a *count*, not an error list - it used to be empty
-        // only because the file was.
-        assert_eq!(report.len(), 1, "{report:?}");
-        assert!(report[0].contains("english.toml"), "{report:?}");
-        assert!(!table.is_empty(), "the file has entries now");
-        // One of them, spot-checked, so "not empty" cannot pass on a file
-        // that parsed into something unrelated.
-        assert_eq!(table.get("OAG_PILOT_RENAME"), Some("RENAME"));
-
-        let text = built_in("English").expect("English ships a file");
-        let file: File = toml::from_str(text).expect("the shipped file must parse");
-        for id in file.strings.keys() {
-            assert!(
-                id.starts_with("OAG_"),
-                "{id:?} has no OAG_ prefix, so it would override a disc idstring \
-                 of that name rather than adding one of ours"
-            );
-        }
-    }
-
-    #[test]
-    fn a_project_entry_overrides_a_disc_entry_of_the_same_id() {
-        let mut table = StringTable::from_xml(
-            r#"<StringTable><Entry ID="FE_CONFIRM" String="Confirm"></Entry></StringTable>"#,
-        );
-        table.merge(HashMap::from([(
-            "FE_CONFIRM".to_string(),
-            "OK".to_string(),
-        )]));
-        assert_eq!(table.get("FE_CONFIRM"), Some("OK"));
-    }
-
-    #[test]
-    fn a_malformed_file_is_an_error_not_a_panic() {
-        assert!(toml::from_str::<File>("not = [valid").is_err());
-    }
-
-    #[test]
-    fn project_table_defaults_to_english_with_no_language_named() {
-        // Both empty today, so this only proves they take the same path -
-        // see `english_parses_and_is_empty_today` for why that is expected.
-        assert_eq!(
-            project_table(None).len(),
-            project_table(Some("English")).len()
-        );
-    }
-
-    #[test]
-    fn project_table_is_empty_for_a_language_this_build_ships_no_file_for() {
-        assert!(project_table(Some("Klingon")).is_empty());
-    }
-
-    /// **The check that catches a shipped file `built_in()` forgot to embed.**
-    /// `check-strings.py` validates every `assets/ui/strings/*.toml` on disk,
-    /// but nothing there proves the *binary* ever reads one back - a file
-    /// this script covers and `built_in()` does not match by name would pass
-    /// the gate while shipping no translation at all, the same "kept in step
-    /// by hand" gap that script's own module doc already admits to for
-    /// `STRING_CONSUMERS`.
-    #[test]
-    fn every_file_under_assets_ui_strings_is_reachable_through_built_in() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/ui/strings");
-        let mut checked = 0;
-        for entry in std::fs::read_dir(&dir).expect("assets/ui/strings must exist") {
-            let path = entry.expect("a readable dir entry").path();
-            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
-                continue;
-            }
-            let stem = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .expect("a .toml file has a stem");
-            assert!(
-                built_in(stem).is_some(),
-                "{stem}.toml exists under assets/ui/strings/ but built_in() does not embed it"
-            );
-            checked += 1;
-        }
-        assert!(checked >= 2, "expected at least english and french here");
-    }
-
-    /// French translates what the maintainer was confident about and defers
-    /// the rest under `[untranslated]` - see `french.toml`'s own header. A
-    /// deferred id must not appear in the merged table at all, so a caller's
-    /// own English fallback (or the disc's own French entry, on the boot
-    /// path) is what a player actually sees for it.
-    #[test]
-    fn french_translates_a_confident_id_and_defers_an_unconfident_one() {
-        let mut table = StringTable::default();
-        let mut report = Vec::new();
-        overlay(&mut table, "French", &mut report);
-        assert_eq!(table.get("OAG_MENU_RACEBOX"), Some("COURSE"));
-        assert_eq!(table.get("OAG_CONTROLS_SIDESHIFT"), None);
-    }
-}
+mod tests;

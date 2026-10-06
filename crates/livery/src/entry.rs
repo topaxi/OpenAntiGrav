@@ -51,7 +51,7 @@ pub fn ship_entry_name(
         return ships::entry_name_in(paths.dir, team, hull_variant.unwrap_or(ships::HULL));
     }
     ships::entry_name_in(
-        paths.dir,
+        paths.zone.root(paths.dir),
         paths.zone.directory(team),
         paths.zone.hull().unwrap_or(ships::HULL),
     )
@@ -100,7 +100,7 @@ pub fn boost_entry_name(
     }
     let stem = paths.zone.boost().or(paths.boost)?;
     Some(ships::entry_name_in(
-        paths.dir,
+        paths.zone.root(paths.dir),
         paths.zone.directory(team),
         stem,
     ))

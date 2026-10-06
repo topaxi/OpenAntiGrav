@@ -8,17 +8,18 @@
 
 #[test]
 fn omega_and_hd_draw_hd_campaign_screens_and_nothing_else_does() {
-    for (name, expected) in [
-        (oag_hd::TITLE.name, true),
-        (oag_omega::TITLE.name, true),
-        (oag_pulse::TITLE.name, false),
-        (oag_pure::TITLE.name, false),
-        (oag_2048::TITLE.name, false),
+    for (title, expected) in [
+        (oag_hd::TITLE, true),
+        (oag_omega::TITLE, true),
+        (oag_pulse::TITLE, false),
+        (oag_pure::TITLE, false),
+        (oag_2048::TITLE, false),
     ] {
         assert_eq!(
-            oag_game::campaign::draws_hd_campaign(name),
+            oag_game::campaign::draws_hd_campaign(title),
             expected,
-            "{name}"
+            "{}",
+            title.name
         );
     }
 }

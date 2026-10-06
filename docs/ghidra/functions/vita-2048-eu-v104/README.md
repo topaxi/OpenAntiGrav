@@ -81,6 +81,8 @@ full comparison.
 - [zone-audio.md](zone-audio.md) - Zone's sound banks: the bank-path gate is
   read, the announcer's own trigger is still not (all below the 70 naming
   threshold, cited by address only).
+- [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
+  every craft; the pick selects a livery.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's
   environment loader falls back to HD's own title-wide `effectSettings`, and
   the per-stage table it feeds runs every frame regardless.

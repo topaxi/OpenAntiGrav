@@ -39,9 +39,9 @@ binary:
    ids** - translated under its own `[strings]`, or named, explicitly, under
    an `[untranslated] ids = [...]` table. A missing entry is a hard failure;
    a marked one is not. See `assets/ui/strings/english.toml`'s own doc
-   comment for why the second is honest and the first is not, and never
-   machine-translate to clear a row here - that is worse than the gap it
-   would hide. `assets/ui/strings/french.toml` is the first language file to
+   comment for why the second is honest and the first is not. A machine
+   translation may fill a row, marked `human = false`; the per-file count of
+   those is reported below, never failed on. `assets/ui/strings/french.toml` is the first language file to
    exercise this rule for real: a real translation for the ids the
    maintainer could translate with confidence, and the rest named under its
    own `[untranslated]`.
@@ -120,11 +120,36 @@ def load_menu() -> dict:
         return tomllib.load(handle)
 
 
-def load_strings(path: Path) -> tuple[dict[str, str], list[str]]:
-    """A language file's `[strings]` table and its `[untranslated].ids`."""
+def load_strings(
+    path: Path, problems: list[str]
+) -> tuple[dict[str, str], list[str], int]:
+    """A language file's `[strings]` texts, its `[untranslated].ids` and how
+    many entries say `human = false`.
+
+    Every entry must be `ID = { text = "...", human = <bool> }` - the shape
+    `crates/ui/src/strings.rs` parses with `deny_unknown_fields` and no default,
+    so a bare string or a missing flag is named here instead of dropping the
+    whole language at runtime. The `human = false` count is a report, never a
+    failure: a model-written translation is allowed, as long as it says so.
+    """
     with path.open("rb") as handle:
         data = tomllib.load(handle)
-    return data.get("strings", {}), data.get("untranslated", {}).get("ids", [])
+    texts: dict[str, str] = {}
+    machine = 0
+    for id_, entry in data.get("strings", {}).items():
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"text", "human"}
+            or not isinstance(entry["text"], str)
+            or not isinstance(entry["human"], bool)
+        ):
+            problems.append(
+                f"{path.name}: {id_!r} is not `{{ text = \"...\", human = <bool> }}`"
+            )
+            continue
+        texts[id_] = entry["text"]
+        machine += not entry["human"]
+    return texts, data.get("untranslated", {}).get("ids", []), machine
 
 
 def ids_from_consumers() -> set[str]:
@@ -215,7 +240,14 @@ def main() -> int:
     all_ids = menu_ids | ids_from_consumers()
 
     base_path = STRINGS_DIR / f"{BASE_LANGUAGE}.toml"
-    base_strings, base_untranslated = load_strings(base_path)
+    shape_problems: list[str] = []
+    human_report: list[str] = []
+    base_strings, base_untranslated, base_machine = load_strings(
+        base_path, shape_problems
+    )
+    human_report.append(
+        f"{base_path.name}: {base_machine} of {len(base_strings)} human = false"
+    )
     if base_untranslated:
         # The base language is the one place a gap cannot be marked instead
         # of filled - see `english.toml`'s own doc comment.
@@ -232,7 +264,10 @@ def main() -> int:
     for path in sorted(STRINGS_DIR.glob("*.toml")):
         if path.stem == BASE_LANGUAGE:
             continue
-        strings, untranslated = load_strings(path)
+        strings, untranslated, machine = load_strings(path, shape_problems)
+        human_report.append(
+            f"{path.name}: {machine} of {len(strings)} human = false"
+        )
         untranslated_set = set(untranslated)
         both = untranslated_set & {id_ for id_ in strings if strings.get(id_)}
         for id_ in sorted(both):
@@ -255,6 +290,26 @@ def main() -> int:
                 "nothing this script can vouch for"
             )
 
+    # A title's disc-keyed translations: same entry shape, ids are the disc's
+    # own, so they must never carry our `OAG_` prefix (that space is the
+    # project file's) and are not required to cover anything.
+    for path in sorted((STRINGS_DIR / "disc").glob("*/*.toml")):
+        strings, _, machine = load_strings(path, shape_problems)
+        rel = path.relative_to(STRINGS_DIR)
+        human_report.append(f"{rel}: {machine} of {len(strings)} human = false")
+        for id_ in sorted(strings):
+            if id_.startswith("OAG_"):
+                shape_problems.append(
+                    f"{rel}: {id_!r} is one of ours; it belongs in the "
+                    "project file, not a title's disc-keyed one"
+                )
+
+    report(
+        "string file entries of the wrong shape:",
+        shape_problems,
+        "Every entry is `ID = { text = \"...\", human = false }`; see "
+        "assets/ui/strings/english.toml's header.",
+    )
     report(
         "menu row(s) with no string_id and not in BASELINE_LABELS:",
         uncovered_labels,
@@ -318,7 +373,7 @@ def main() -> int:
         other_language_problems,
         "Every id the base language carries needs either a real translation "
         "or an explicit [untranslated] marker in this file - never a silent "
-        "gap, and never a machine translation either.",
+        "gap. A machine translation is allowed, marked human = false.",
     )
 
     failed = any(
@@ -334,6 +389,7 @@ def main() -> int:
             vanished_subtitles,
             missing_in_base,
             other_language_problems,
+            shape_problems,
         ]
     )
     if failed:
@@ -345,6 +401,8 @@ def main() -> int:
         f"{len(seen_subtitles)} subtitle(s) ({len(BASELINE_SUBTITLES)} baselined), "
         f"{len(all_ids)} string id(s) all resolve in {BASE_LANGUAGE}.toml"
     )
+    for line in human_report:
+        print(f"  human flag: {line}")
     return 0
 
 

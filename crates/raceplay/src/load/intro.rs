@@ -82,7 +82,12 @@ pub(super) fn read_panel(
     let plugins = title
         .front_end
         .map_or::<&[&str], _>(&[], |f| f.language_plugins);
-    let languages = oag_ui::language::load::load_languages(archives, plugins, report);
+    let languages = oag_ui::language::load::load_languages(
+        archives,
+        plugins,
+        title.front_end.and_then(|f| f.disc_strings),
+        report,
+    );
     let chosen = oag_ui::language::load::chosen_language(&languages, preferred_language);
     let strings =
         oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);

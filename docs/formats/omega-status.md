@@ -1064,6 +1064,21 @@ Reproducers: `crates/vex/examples/omega_track_probe.rs`, `omega_col_probe.rs`;
 `crates/game/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
 `OAG_REQUIRE_GAME_DATA`) on a short-read extraction.
 
+## Zone flies one shared hull, `hdships\Zone` (2026-10-06, `zone-craft`)
+
+The maintainer's report ("Zone does not pick the appropriate craft") was a
+placeholder: `zone_craft` was `PlayerShip`, a "not a finding" value. Omega's
+ship-model loader (`Ship_LoadModelSet`, `0x01301ba0`, confidence 75) names
+`Data\Art\Published\HDShips\Zone\Ship.vex` for game mode 6 without reading the
+craft, now `oag_title::ZoneCraft::OwnShipAt`. A Zone race on `tech_de_ra` with
+`ag_systems` loads and draws it (`data/scratch/zone-craft/omega-zone-hd.png`).
+Livery key differs from 2048's (`zoneship_team` against `zoneship_zone`);
+the per-team `Zoneship_<Team>/Team.gnf` swap is not wired. **Open, not Zone's:**
+a 2048-era craft (`feisar2048\3`) cannot start any race on Omega - its
+`handlingstats.xml` is looked up under `hdships\`. 2048: **ported**, see
+[2048-status.md](2048-status.md). Evidence:
+[zone-craft.md](../ghidra/functions/ps4-omega-eu/zone-craft.md).
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's

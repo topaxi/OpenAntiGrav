@@ -73,6 +73,19 @@ pub const TITLE: &Title = &Title {
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,
     looks: effects::LOOKS,
+    // Measured: `docs/ui/campaign-screens.md` (the grid and cell screens),
+    // `docs/formats/race-campaign.md`'s `<Unlock Grid>` rows and
+    // `docs/formats/race-setup.md`'s `Loyalty` unlock.
+    campaign: &oag_title::Campaign {
+        dialect: oag_title::CampaignDialect::Pulse,
+        definition_entry: Some(campaign::DEFINITION_ENTRY),
+        circuit_unlocks: true,
+        loyalty_unlocks: true,
+        unlocks_origin: oag_title::Origin::Measured,
+        selection_strings: false,
+        origin: oag_title::Origin::Measured,
+    },
+    pressings: None,
 };
 
 /// Where Pulse keeps its music.
@@ -101,6 +114,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
+    disc_strings: Some("pulse"),
     language_manifests: LANGUAGE_MANIFESTS,
     menu: Some(frontend::MENU_SKIN),
     // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,

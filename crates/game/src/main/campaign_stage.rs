@@ -177,6 +177,8 @@ pub(crate) struct CampaignStage {
     /// pick between Pulse's draw/pointer functions and
     /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
     title: String,
+    /// [`oag_title::Campaign::dialect`] of the title, the draw list's choice.
+    dialect: oag_title::CampaignDialect,
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
     /// `oag_ui_screens::campaign::draw::track_line`'s own doc), so this is
     /// `CircuitNames::default()` on every other title and costs nothing to
@@ -213,12 +215,13 @@ impl CampaignStage {
         ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
         strings: oag_ui::language::StringTable,
         sprites: oag_hud::sprite::Sheet,
-        title: String,
+        title_ref: &'static oag_title::Title,
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
         flyers: Option<oag_game::flyer::Flyers>,
         cell_cursor: CellCursor,
     ) -> Self {
+        let title = title_ref.name.to_string();
         let grid_range = 0..grids.len();
         // `Campaign Selection` is HD's own screen ahead of `Grid
         // Selection` - only opened on it when both halves of the pair
@@ -254,6 +257,7 @@ impl CampaignStage {
             screen,
             notice: None,
             title,
+            dialect: title_ref.campaign.dialect,
             circuit_names,
             records,
             cell_cursor,
@@ -363,7 +367,7 @@ impl CampaignStage {
     /// draw/pointer functions on. See [`Self::title`]'s own doc.
     #[must_use]
     pub(crate) fn is_hd(&self) -> bool {
-        oag_game::campaign::draws_hd_campaign(&self.title)
+        self.dialect.draws_hd_screens()
     }
 
     /// Whether `Campaign Selection` was read at all - see

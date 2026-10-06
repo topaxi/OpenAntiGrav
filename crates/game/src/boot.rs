@@ -452,7 +452,12 @@ pub fn load_shell(
     // named by a language plugin's `<Font>` slots - see [`load_font`], which
     // used to reach for a constant here and so did not need them.
     let offered_plugins = front_end.offered_languages(archives.layout.serial.as_deref());
-    let languages = load_languages(&mut archives, offered_plugins, &mut report);
+    let languages = load_languages(
+        &mut archives,
+        offered_plugins,
+        front_end.disc_strings,
+        &mut report,
+    );
     let offered = languages.clone();
     steps.lap("languages");
     // Resolved once and threaded through every font/table read below rather
@@ -478,10 +483,8 @@ pub fn load_shell(
     // own doc comment for why the fallback is EU rather than a guess when the
     // serial cannot be read at all.
     let mut fallback_images = profile.fallback_images.to_vec();
-    if title.name == "Wipeout Pure" {
-        fallback_images.push(oag_pure::frontend::title_frame_src(
-            archives.layout.serial.as_deref(),
-        ));
+    if let Some(pressings) = title.pressings {
+        fallback_images.push(pressings.of(archives.layout.serial.as_deref()).title_frame);
     }
     let movie_region = resolve_movie_region(title, archives.layout.serial.as_deref());
     let mut screens = load_screens(

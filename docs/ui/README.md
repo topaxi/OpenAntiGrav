@@ -13,6 +13,9 @@
 > three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
 > [endrace-screens.md](endrace-screens.md).
 
+The languages this build adds on top of the disc's own, and the `human`
+flag on every string, are in [project-languages.md](project-languages.md).
+
 ## The HUD is authored data
 
 Worth stating here because this page previously implied otherwise. Pulse's

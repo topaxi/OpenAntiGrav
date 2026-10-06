@@ -46,32 +46,42 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
 /// The region `oag_ui::screen::Movie::entry_name` resolves a `localised`
-/// widget with - `oag_ui::screen::DEFAULT_REGION` off every title but Pure,
-/// `oag_pure::frontend::localised_movie_region` of the serial on Pure. See
+/// widget with - `oag_ui::screen::DEFAULT_REGION` off every title with no
+/// [`oag_title::Title::pressings`], that table's row for the serial on one
+/// that has them (Pure). See
 /// `docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`.
 pub(super) fn resolve_movie_region(title: &oag_title::Title, serial: Option<&str>) -> &'static str {
-    if title.name == "Wipeout Pure" {
-        oag_pure::frontend::localised_movie_region(serial)
-    } else {
-        oag_ui::screen::DEFAULT_REGION
-    }
+    title
+        .pressings
+        .map_or(oag_ui::screen::DEFAULT_REGION, |pressings| {
+            pressings.of(serial).movie_region
+        })
 }
 
-/// Substitutes Pure's own pressing-correct cut for its two declared boot
-/// movies, leaving every other title's untouched. See
-/// [`resolve_movie_region`]'s own doc for why one table cannot hold this.
+/// Substitutes a title's pressing-correct cut for its two declared boot
+/// movies (Pure's), leaving a title with no
+/// [`oag_title::Title::pressings`] untouched. See [`resolve_movie_region`]'s
+/// own doc for why one table cannot hold this.
+///
+/// Keyed on the region [`resolve_movie_region`] resolved, so a region no row
+/// carries takes the unlisted (EU) row, as `oag_pure::names::intro_movie` did.
 pub(super) fn resolve_pure_movie_region(
     title: &oag_title::Title,
     movie_region: &str,
     first: Option<&'static str>,
     second: Option<&'static str>,
 ) -> (Option<&'static str>, Option<&'static str>) {
-    if title.name != "Wipeout Pure" {
+    let Some(pressings) = title.pressings else {
         return (first, second);
-    }
+    };
+    let pressing = pressings
+        .listed
+        .iter()
+        .find(|row| row.movie_region == movie_region)
+        .unwrap_or(&pressings.unlisted);
     (
-        first.map(|_| oag_pure::names::intro_movie(movie_region)),
-        second.map(|_| oag_pure::names::fmv_intro_movie(movie_region)),
+        first.map(|_| pressing.intro_movie),
+        second.map(|_| pressing.fmv_intro_movie),
     )
 }
 

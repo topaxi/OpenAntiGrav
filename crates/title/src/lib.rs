@@ -36,6 +36,7 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
+pub mod campaign;
 pub mod effects;
 pub mod endrace;
 pub mod exhaust;
@@ -44,12 +45,14 @@ pub mod hud;
 pub mod language;
 pub mod loading;
 pub mod menu;
+pub mod pressing;
 pub mod race;
 pub mod speed;
 pub mod touch;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
+pub use campaign::{Campaign, CampaignDialect};
 pub use effects::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
     Trigger,
@@ -60,6 +63,7 @@ pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use menu::{HelpText, ListBlocks, MenuBlocks, MenuList, MenuSkin, MenuStrip, StripBlocks};
 pub use oag_disc::Platform;
+pub use pressing::{Pressing, Pressings};
 pub use race::{
     CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses,
     TeamVariant, TeamVariants, VariantJoin, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer,
@@ -196,6 +200,13 @@ pub struct Title {
     /// What this title draws or does in a race beyond its effect triggers, as
     /// per-platform rules with their origin. See [`effects::Looks`].
     pub looks: &'static effects::Looks,
+    /// Which campaign reader and draw list this title's front end uses, and
+    /// what of the campaign it authors. See [`campaign::Campaign`].
+    pub campaign: &'static campaign::Campaign,
+    /// What this title's executable resolves per pressing (the title screen's
+    /// wordmark, a localised boot movie), or `None` when it resolves nothing
+    /// per pressing. See [`pressing::Pressings`].
+    pub pressings: Option<&'static pressing::Pressings>,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
     /// **Ours, not the disc's, on every title.** Nothing in this lineage was
@@ -360,6 +371,12 @@ pub struct FrontEnd {
     /// in hand and for a release not listed here, so it is the *superset* a
     /// disc may carry, not an offered list. See [`Self::offered_languages`].
     pub language_manifests: &'static [language::LanguageManifest],
+    /// The namespace under `assets/ui/strings/disc/` holding this project's own
+    /// translations of this title's disc text, keyed by this title's idstrings.
+    /// `None` for a title nobody has translated yet: Pure, HD, 2048 and Omega
+    /// reuse id spellings, so a namespace is never shared between titles and a
+    /// project language there reads the disc's English until one is written.
+    pub disc_strings: Option<&'static str>,
     /// How this title lays menus out, for a title that authors the
     /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
     /// describes. See that type.

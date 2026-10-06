@@ -106,7 +106,7 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let mut report = Vec::new();
     let languages =
-        oag_ui::language::load::load_languages(&mut opened.archives, plugins, &mut report);
+        oag_ui::language::load::load_languages(&mut opened.archives, plugins, None, &mut report);
     // `oag_ui::language::load::load_strings` is the real path every other caller
     // (the live session, `capture::menu_page`) resolves `TKR_NO*` through -
     // not a hand-rolled read, which would leave this test checking its own

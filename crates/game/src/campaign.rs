@@ -172,30 +172,26 @@ pub fn static_footer_overlay(
     overlay
 }
 
-/// Whether `title_name` draws HD's campaign screens - HD itself, and Omega,
-/// whose front end is HD's `PI001` plugin carried forward
-/// (`docs/formats/omega-frontend.md`).
+/// Whether `title` draws HD's campaign screens - HD itself, and Omega, whose
+/// front end is HD's `PI001` plugin carried forward
+/// (`docs/formats/omega-frontend.md`): [`oag_title::CampaignDialect::draws_hd_screens`]
+/// of the title's own [`oag_title::Campaign`].
 ///
 /// Every dispatch that picks `oag_ui_screens::campaign::hd`'s draw list over Pulse's
 /// asks this. Omega used to fall through to Pulse's, which has no arm for
 /// HD's widget names (`Event`, `RC Laps`, `NextPoints`, `EPoints Title`), so
 /// their raw ids and the `%d` template drew on screen.
 #[must_use]
-pub fn draws_hd_campaign(title_name: &str) -> bool {
-    title_name == oag_hd::TITLE.name || title_name == oag_omega::TITLE.name
+pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
+    title.campaign.dialect.draws_hd_screens()
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` and
 /// `Data\Plugins\grids\Definition.xml`, or Wipeout HD/Fury's own copies of
 /// the same two roles ([`oag_hd::campaign::SCREEN_ENTRY`]/
-/// `DEFINITION_ENTRY`) - picked by `title.name` against
-/// [`oag_hd::TITLE`]'s own `name`, the same identity check
-/// `crate::main::session::remix` already uses to tell HD's own craft
-/// roster apart from the other two titles', for the reason that module's
-/// own doc gives: a title package declares its `Title` as a `const`, so
-/// `std::ptr::eq` against a promoted temporary is not reliable, but the
-/// `name` string is.
+/// `DEFINITION_ENTRY`) - picked by the title's own
+/// [`oag_title::Campaign::dialect`].
 ///
 /// Every grid file that will not parse is skipped and logged - the same
 /// per-row tolerance `oag_tables::race_campaign_ground_truth` itself expects
@@ -235,11 +231,14 @@ pub fn load(
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
 ) -> Result<Campaign> {
-    if title.name == oag_hd::TITLE.name {
-        return load_hd(archives, strings, faces, grid, base, fallback_globals);
-    }
-    if title.name == oag_omega::TITLE.name {
-        return load_omega(archives, strings, faces, grid, base, fallback_globals);
+    match title.campaign.dialect {
+        oag_title::CampaignDialect::Hd => {
+            return load_hd(archives, strings, faces, grid, base, fallback_globals);
+        }
+        oag_title::CampaignDialect::Omega => {
+            return load_omega(archives, strings, faces, grid, base, fallback_globals);
+        }
+        oag_title::CampaignDialect::Pulse => {}
     }
 
     let blob = archives

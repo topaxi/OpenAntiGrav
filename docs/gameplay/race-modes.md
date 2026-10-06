@@ -270,6 +270,14 @@ answers here. Confidence 90 on both, the same bar the rest of `oag_2048::race`
 holds itself to for an unread executable - see `oag_title::ZoneCraft::PlayerShip`
 and `oag_title::ZoneCircuit::SameCircuit`.
 
+**Correction, 2026-10-06 (craft only): the hull is shared, not the player's.**
+The v1.04 executable's ship-model loader names `Data\art\published\hdships\Zone\Ship.vex`
+for game mode 6 without reading the craft, and Omega's loader does the same
+(`ZoneCraft::OwnShipAt`, confidence 75, one source tree read twice; evidence in
+[vita-2048-eu-v104/zone-craft.md](../ghidra/functions/vita-2048-eu-v104/zone-craft.md)
+and [ps4-omega-eu/zone-craft.md](../ghidra/functions/ps4-omega-eu/zone-craft.md)).
+What the player picks is a livery on that hull. The circuit half above stands.
+
 ### Every title ships one Zone handling block; Pulse's executable never reads it
 
 **The shipped answer on Pulse is the player's own team and class**, read 2026-10-02 from the executable

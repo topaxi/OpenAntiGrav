@@ -136,6 +136,14 @@ pub struct Language {
     /// differ resolves its own without this build knowing either list: Pure
     /// names `Title`, `Stats` and `scroll` where Pulse names `menu`.
     pub fonts: Vec<(String, String)>,
+    /// The per-title namespace of this project's disc-keyed translations that
+    /// applies to this language, read by [`crate::strings::overlay_disc`].
+    ///
+    /// `Some` only on a language this build adds on top of the disc's own
+    /// ([`crate::strings::PROJECT_LANGUAGES`]): its `plugin`, `entries` and
+    /// `fonts` are the disc's English ones, so the table underneath it is the
+    /// disc's English text, and this names what overlays it.
+    pub disc_strings: Option<&'static str>,
 }
 
 impl Language {
@@ -176,6 +184,7 @@ impl Language {
             native_name: native_name.unwrap_or_else(|| name.clone()),
             name,
             entries,
+            disc_strings: None,
         })
     }
 }

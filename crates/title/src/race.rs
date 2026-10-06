@@ -92,11 +92,13 @@ pub struct ShipPaths {
 }
 
 mod announcer;
+mod fresh;
 mod sound;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
+pub use fresh::FreshVariant;
 pub use sound::{Crossfade, SoundBanks};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
@@ -275,6 +277,9 @@ pub struct RaceDefaults {
     /// is handled. An empty ladder would say something different and stronger
     /// - "this title authors no classes" - which nothing has established.
     pub speed_classes: Option<SpeedClasses>,
+    /// The model Ship Select opens on while the player has not picked one, or
+    /// `None` when the stored variant (empty) stands. See [`FreshVariant`].
+    pub fresh_variant: Option<FreshVariant>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by
@@ -520,16 +525,15 @@ impl RaceDefaults {
 /// | Pulse | `Data\Ships\<Team>\Zone.vex` - the player's team, a different file | `pulse-psp-usa.chd` |
 /// | Pure | `Data\Ships\Zone_01\Ship.vex` - a ship directory of its own | `pure-psp-eu.chd` |
 /// | HD / Fury | `/data/ships/zone/ship.vex` - a ship directory of its own | `hdfury-ps3-eu-dec.iso` |
-/// | 2048 | the player's team, unchanged - no Zone-specific model at all | played, see [`Self::PlayerShip`] |
+/// | 2048 v1.04 / Omega | `Data\art\published\hdships\Zone\Ship.vex`, one hull for every craft | decompiled, see [`Self::OwnShipAt`] |
 ///
 /// Pulse's is the one with a recovered *selector* behind it rather than a name
 /// probe: `Ship_LoadModel` (`0x08843258`) `case 6` builds `%s\Zone.vex` under
 /// the established Zone expression, confidence 84 - see
 /// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`. The other two are name
 /// resolution against shipped archives at 94, and neither title's executable has
-/// been read. 2048's is the odd one out procedurally as well as in shape: no
-/// name was probed at all, because there is no name to probe - see
-/// [`Self::PlayerShip`].
+/// been read. 2048 v1.04 and Omega are decompiled: one loader case names the
+/// shared hull, see [`Self::OwnShipAt`].
 ///
 /// # Every title ships a `ZoneMode` handling file; Pulse's executable never reads it
 ///
@@ -574,7 +578,9 @@ pub enum ZoneCraft {
     /// [`Self::ModelsInTeam`] carries two.
     OwnShip(&'static str),
     /// Zone flies the player's own ship, exactly as any other mode would.
-    /// 2048.
+    /// No title today: 2048 was read this way on 2026-08-28 and was wrong, see
+    /// [`Self::OwnShipAt`]. Kept as the value a title with an unread Zone
+    /// loader names, since it names no path.
     ///
     /// The third shape, and not a variant of either of the other two: not
     /// [`Self::ModelsInTeam`], because no model file changes at all, and not
@@ -593,6 +599,29 @@ pub enum ZoneCraft {
     /// behavioural observation of the shipped game, not yet corroborated
     /// against a decompiled selector.
     PlayerShip,
+    /// Zone has one hull of its own that lives **outside the ship tree the
+    /// player's team is in**: the directory is `root\ship`, whatever team
+    /// the player picked and whichever roster that team belongs to.
+    /// Wipeout 2048 v1.04 and the Omega Collection.
+    ///
+    /// Distinct from [`Self::OwnShip`], which composes under the same
+    /// directory as the player's own team and so cannot reach a tree the
+    /// player's roster does not sit in: 2048's native craft live under
+    /// `Ships\<team>2048\<n>`, the Zone hull under `hdships\Zone`.
+    ///
+    /// **Source: decompiled, one source tree read in two builds**, so one
+    /// call site rather than two independent ones. Both executables'
+    /// ship-model loader switches on the game mode and, for mode 6, formats
+    /// `Data\art\published\hdships\Zone` and `...\Zone\Ship.vex` without
+    /// looking at the craft - see
+    /// `docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`. The player's
+    /// pick selects a livery on that hull, not a hull.
+    OwnShipAt {
+        /// The tree the Zone hull's directory sits in.
+        root: &'static str,
+        /// The Zone hull's directory name inside `root`.
+        ship: &'static str,
+    },
 }
 
 impl ZoneCraft {
@@ -605,7 +634,17 @@ impl ZoneCraft {
     pub fn directory(self, player: &str) -> &str {
         match self {
             Self::ModelsInTeam { .. } | Self::PlayerShip => player,
-            Self::OwnShip(ship) => ship,
+            Self::OwnShip(ship) | Self::OwnShipAt { ship, .. } => ship,
+        }
+    }
+
+    /// The tree [`Self::directory`] sits in: `default` (the player's own
+    /// ship tree) except for [`Self::OwnShipAt`], which names its own.
+    #[must_use]
+    pub fn root(self, default: &str) -> &str {
+        match self {
+            Self::OwnShipAt { root, .. } => root,
+            _ => default,
         }
     }
 
@@ -619,7 +658,7 @@ impl ZoneCraft {
     pub fn hull(self) -> Option<&'static str> {
         match self {
             Self::ModelsInTeam { hull, .. } => Some(hull),
-            Self::OwnShip(_) | Self::PlayerShip => None,
+            Self::OwnShip(_) | Self::OwnShipAt { .. } | Self::PlayerShip => None,
         }
     }
 
@@ -631,7 +670,7 @@ impl ZoneCraft {
     pub fn boost(self) -> Option<&'static str> {
         match self {
             Self::ModelsInTeam { boost, .. } => Some(boost),
-            Self::OwnShip(_) | Self::PlayerShip => None,
+            Self::OwnShip(_) | Self::OwnShipAt { .. } | Self::PlayerShip => None,
         }
     }
 }

@@ -361,3 +361,18 @@ only (not `weapons.bnk` or `shipHD.bnk`); the DLC packs replace only the Detonat
 **Omega check** (same test file, `omega_census`): Omega ships 69
 `engineflare.rcsmodel` (68 decode with geometry through the same reader) and 9
 ribbon templates. Checked, applies, not wired: Omega racing is out of scope.
+
+## Zone flies one shared hull, `hdships\Zone` (2026-10-06, `zone-craft`)
+
+Corrects the 2026-08-28 reading that Zone flies the player's own native craft.
+v1.04's ship-model loader (`Ship_LoadModelSet`, `0x811b6dae`, confidence 75)
+names `Data\art\published\hdships\Zone\Ship.vex` for game mode 6 without reading
+the craft; the player's pick selects a livery on it (`zoneship_zone` material
+key). `oag_title::ZoneCraft::OwnShipAt` carries it, and a Zone race loads that
+hull for a native craft (`feisar2048\3`) and a guest one (`Assegai`) - checked by
+`zone_craft_ground_truth` and a headless screenshot of each. Not wired: the
+per-team `Zoneship_<Team>` livery swap, so the hull draws in its default skin.
+The 18 per-craft `ship_zone.vex` files are unreferenced as far as found (no
+`ship_zone` string). Omega: **ported**, see
+[omega-status.md](omega-status.md). Evidence:
+[zone-craft.md](../ghidra/functions/vita-2048-eu-v104/zone-craft.md).

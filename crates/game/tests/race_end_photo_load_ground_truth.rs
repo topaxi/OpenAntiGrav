@@ -23,7 +23,7 @@ fn pulses_race_end_photo_loads_with_both_lines_resolved() {
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let mut report = Vec::new();
     let languages =
-        oag_ui::language::load::load_languages(&mut opened.archives, plugins, &mut report);
+        oag_ui::language::load::load_languages(&mut opened.archives, plugins, None, &mut report);
     let strings = oag_ui::language::load::load_strings(
         &mut opened.archives,
         &languages,

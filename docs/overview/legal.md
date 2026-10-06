@@ -37,6 +37,11 @@ hand-maintained copies once did.
 - SHA-256 hashes of source images, for reproducibility.
 - Disc serials, volume identifiers, timestamps and file listings.
 - Reverse-engineering notes: addresses, function signatures, inferred behaviour.
+- **Our own translations of UI text, keyed by disc string ids. Verbatim
+  copies of disc text are not allowed.** The ids and the terminology (a word the disc
+  uses for a weapon or a mode) may be matched, the sentences are ours.
+  `assets/ui/strings/disc/` is the one place this applies; see
+  [project languages](../ui/project-languages.md).
 - Small hand-authored test fixtures that we wrote ourselves, such as a synthetic
   ISO 9660 directory record.
 

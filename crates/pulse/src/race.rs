@@ -71,6 +71,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `name` against a four-entry table and leaves the previous index in
     // place), so four is what this title really has. See
     // `docs/formats/handling-stats.md`.
+    fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
     }),
