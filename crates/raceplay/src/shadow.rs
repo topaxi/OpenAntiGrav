@@ -135,16 +135,26 @@ impl Race {
     }
 }
 
-/// The entry a team's authored shadow silhouette sits at, in the shared
-/// `Data\Ships\<team>\` spelling every title's roster uses.
+/// The entry a craft's authored shadow silhouette sits at: `textures\
+/// ambient_shadow` beside the hull model `ship_entry` names, in the platform's
+/// own texture spelling.
 ///
 /// **Measured, not guessed**: all nine of Wipeout HD's single-channel `B8`
 /// textures are `/data/ships/<team>/textures/ambient_shadow.gtf`, listed one
-/// by one in `crates/formats/tests/gtf_ground_truth.rs`. Written with
-/// backslashes because that is the spelling a WAD name hash needs, and the
-/// PSARC reader folds them - see `oag_assets::psarc::normalise`.
-fn silhouette_entry(dir: &str, team: &str) -> String {
-    format!(r"{dir}\{team}\textures\ambient_shadow.gtf")
+/// by one in `crates/texture/tests/gtf_ground_truth.rs`; 2048 ships one as
+/// `hdships/Zone/Textures/Ambient_Shadow.gxt` and Omega one as
+/// `hdships/zone/Textures/Ambient_Shadow.gnf`, both beside the Zone hull
+/// alone (`docs/rendering/shadows.md`). Taken from the hull's own directory
+/// rather than composed from the roster's `ship_dir` and a team id, so a race
+/// whose hull lives elsewhere - 2048 and Omega's Zone craft sits under
+/// `hdships` while their native roster sits under `Ships` - finds the image
+/// beside the model it belongs to. Written with backslashes because that is
+/// the spelling a WAD name hash needs, and the PSARC reader folds them - see
+/// `oag_assets::psarc::normalise`.
+fn silhouette_entry(archives: &oag_assets::Archives, ship_entry: &str) -> String {
+    let dir = ship_entry.rsplit_once('\\').map_or("", |(dir, _)| dir);
+    let gtf = format!(r"{dir}\textures\ambient_shadow.gtf");
+    super::assets::platform_sibling(archives, &gtf).unwrap_or(gtf)
 }
 
 /// One `blob` silhouette per grid slot, in `teams`' own order.
@@ -155,34 +165,39 @@ fn silhouette_entry(dir: &str, team: &str) -> String {
 /// circle we drew" is exactly the kind that disappears silently otherwise.
 ///
 /// **Tried on every title rather than gated on one.** The entry name is
-/// Wipeout HD's measured path in the shared `Data\Ships` spelling, so a title
-/// that ships one is found by looking and a title that does not misses
-/// cleanly. Nothing about the attempt claims another title *should* have one:
-/// `blob` `0x3e0` and `textureBlob` `0x3df` are authored zero times on the
-/// Pulse disc, which is why the fallback exists at all.
+/// beside each slot's own hull, so a title that ships one is found by looking
+/// and a title that does not misses cleanly. Nothing about the attempt claims
+/// another title *should* have one: `blob` `0x3e0` and `textureBlob` `0x3df`
+/// are authored zero times on the Pulse disc, which is why the fallback
+/// exists at all. In a Zone race on 2048 and Omega every slot's hull is the
+/// Zone craft's ([`oag_title::ZoneCraft::OwnShipAt`]), so every slot gets its
+/// silhouette; outside Zone none of their native craft has one.
 pub fn silhouettes(
     archives: &mut oag_assets::Archives,
     teams: &[String],
-    dir: &str,
+    race: &oag_title::RaceDefaults,
+    mode: oag_race::Mode,
     report: &mut Vec<String>,
 ) -> Vec<shadow::Silhouette> {
     let mut out = Vec::with_capacity(teams.len());
     let mut fallbacks = 0;
     for (slot, team) in teams.iter().enumerate() {
-        let name = silhouette_entry(dir, team);
-        match archives
-            .read_name(&name)
-            .ok()
-            .and_then(|blob| decode_silhouette(&blob))
-        {
-            Some(image) => {
+        let hull = oag_livery::entry::ship_entry_name(race.ships_for(team), team, mode, None);
+        let name = silhouette_entry(archives, &hull);
+        match super::assets::decode_texture(archives, &name) {
+            Ok(image) => {
                 report.push(format!(
                     "slot {slot}: {name}, {}x{} - the disc's own shadow silhouette",
                     image.width, image.height
                 ));
-                out.push(image);
+                out.push(shadow::Silhouette {
+                    width: image.width,
+                    height: image.height,
+                    rgba: image.rgba,
+                    generated: false,
+                });
             }
-            None => {
+            Err(_) => {
                 // Reported per slot, not once: a set where seven teams decode
                 // and one does not is a decode bug, and a summary line would
                 // hide it.
@@ -215,25 +230,6 @@ pub fn silhouettes(
 /// detail to lose, and this is the size at which a shadow filling a good part
 /// of the screen still has no visible steps.
 const FALLOFF_SIZE: u32 = 64;
-
-/// One `.gtf` as pixels the shadow pipeline can bind.
-///
-/// The single-channel `B8` path in particular: `to_rgba` applies the
-/// descriptor's own `remap`, which broadcasts the stored byte across rgb and
-/// forces alpha opaque, so the coverage arrives in the red channel exactly as
-/// `shadow.wgsl` reads it. See `docs/formats/gtf.md`.
-fn decode_silhouette(blob: &[u8]) -> Option<shadow::Silhouette> {
-    let gtf = oag_texture::gtf::Gtf::parse(blob).ok()?;
-    let texture = gtf.only()?;
-    let rgba = texture.to_rgba(blob).ok()?;
-    let (width, height) = texture.level_size(0);
-    Some(shadow::Silhouette {
-        width,
-        height,
-        rgba: rgba.into_iter().flatten().collect(),
-        generated: false,
-    })
-}
 
 /// One craft's authored shadow hull per grid slot, where its model carries one.
 ///
@@ -328,7 +324,7 @@ pub fn assets(
     mode: oag_race::Mode,
     report: &mut Vec<String>,
 ) -> (Vec<shadow::Silhouette>, Vec<Option<Occluder>>) {
-    let silhouettes = silhouettes(archives, teams, race.ship_dir, report);
+    let silhouettes = silhouettes(archives, teams, race, mode, report);
     let hulls = hulls(archives, teams, race, mode, report);
     (silhouettes, hulls)
 }
