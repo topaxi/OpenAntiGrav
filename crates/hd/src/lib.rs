@@ -171,6 +171,7 @@ pub const TITLE: &Title = &Title {
         far: 5500.0,
         // `Billboard_CreateFromColour_q`'s pool order is not read on HD.
         colour_pool: false,
+        flip_v: false,
         zone_shares_one_texture: true,
         origin: oag_title::Origin::Measured,
     }),

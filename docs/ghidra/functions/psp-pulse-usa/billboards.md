@@ -756,3 +756,29 @@ nothing was changed. Wipeout HD has its own `Billboard_CreateFromColour_q`
   not seen on the original.
 - The advert's animation clock is still the scenery clock, **chosen, not
   measured**. The PS2 states below suggest it is not the race clock, see there.
+
+
+## 2026-10-06 (billboards-3 lane): the original samples the advert with `TEXSCALE` V = -1
+
+The `start.ppdmp` frame of Talon's Junction (547 prims) put through a state-tracking
+census (`data/scratch/billboards-3/gestate.py`): the `TEXSCALE` pair in force at each
+textured prim is `(1, 1)` on 450 of them, an authored animation transform on the rest
+(positive scales and offsets), and **`(1, -1)` with `TEXOFFSET (0, 0)` on exactly the
+prims that read the 128 x 128 target** (`tex = 0x154000`: slot 7's strip, slot 8's cells
+and the clear sprite). The target holds the picture top row first (viewport y scale
+-64, like the main pass's -136) and the track's UVs run V up (slot 7: `v` 1.5 at the low
+vertex, 2.0 at the high one), so the engine flips V on those draws and on no others.
+**Confidence 80** for the law (one dump, three prims, no counter-example in 547).
+
+This project drew the cards with the authored V (the loaded track's `anim` and `xform`
+are 0 on every placeholder vertex), a vertical mirror of the original on every served
+slot: slot 2's `A` showed upside down, as the previous lane saw on slots 1 and 2.
+`oag_title::adverts::Adverts::flip_v` (true on Pulse) now negates V on the served
+placeholder vertices (`oag_render::gantry::flip_served_placeholder_v`), once per vertex.
+Pinned by `adverts::tests::pulse_psp_samples_its_cards_with_v_negated`.
+
+**Not confirmed against an original frame.** Slot 7 cannot settle it: the panel at the
+start line that matched the original is an ordinary animated display, and the card quad
+in front of it is blank blue at every tick tried, so the flipped and unflipped frames
+are pixel-identical there. PS2 inherits the flip under the project's PSP-over-PS2 rule;
+its GS dump was not read for a texture matrix.

@@ -272,3 +272,131 @@ fn hd_cards_draw_something_into_their_targets() {
     assert!(!counts.is_empty(), "no card was built");
     assert_every_slot_shows_a_picture(&counts);
 }
+
+/// The served placeholder vertices of `source`'s default circuit, as `(slot, v)`.
+fn served_v(source: &str) -> Option<Vec<(u32, f32)>> {
+    let image = oag_testdata::image(source)?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let model = &loaded.track_model;
+    let slots = oag_render::gantry::placeholder_texture_slots(model);
+    let served: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
+    let mut out = Vec::new();
+    for draw in [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let Some(texture) = draw.texture else {
+            continue;
+        };
+        let Some(&(_, slot)) = slots.iter().find(|&&(s, _)| s == texture) else {
+            continue;
+        };
+        if !served.contains(&slot) {
+            continue;
+        }
+        for i in draw.range.clone() {
+            out.push((
+                slot,
+                model.vertices[model.indices[i as usize] as usize].texcoord[1],
+            ));
+        }
+    }
+    Some(out)
+}
+
+/// Pulse's draws that sample a card carry V negated, as the original's do
+/// (`TEXSCALE (1, -1)` in the PPSSPP dump). The authored V of Talon's Junction's
+/// slot 2 and slot 7 quads is 0 to 0.5 and 1.5 to 2.0, never negative, so a
+/// positive V here means the flip was dropped.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn pulse_psp_samples_its_cards_with_v_negated() {
+    let Some(v) = served_v("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let slot7: Vec<f32> = v.iter().filter(|(s, _)| *s == 7).map(|&(_, v)| v).collect();
+    assert!(!slot7.is_empty(), "no served slot 7 vertices");
+    assert!(slot7.iter().all(|&v| v <= 0.0), "slot 7 kept a positive V");
+    assert!(
+        slot7.iter().any(|&v| v <= -1.0),
+        "slot 7's V is not the authored 1.5 to 2.0 negated"
+    );
+    assert!(
+        v.iter().filter(|(s, _)| *s == 2).all(|&(_, v)| v <= 0.0),
+        "slot 2 kept a positive V"
+    );
+}
+
+/// HD's quads author V running down, so its served draws keep the authored V:
+/// slot 2's run from about 0.1 to 0.9.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_keeps_the_authored_v_on_its_cards() {
+    let Some(v) = served_v("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let slot2: Vec<f32> = v.iter().filter(|(s, _)| *s == 2).map(|&(_, v)| v).collect();
+    assert!(!slot2.is_empty(), "no served slot 2 vertices");
+    assert!(
+        slot2.iter().all(|&v| (0.0..=1.0).contains(&v)),
+        "HD slot 2 V moved"
+    );
+}
+
+/// HD's cards on Talon's Junction: slots 2, 3, 5 and 7 have a quad on this circuit and
+/// each is drawn into the 512 x 256 target the engine builds, not Pulse's 128 x 128.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_builds_a_512_by_256_card_for_each_slot_with_a_quad() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let slots: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
+    assert_eq!(slots, [2, 3, 5, 7], "the slots with a quad and a model");
+    assert!(
+        loaded
+            .billboards
+            .adverts
+            .iter()
+            .all(|c| c.size == (512, 256)),
+        "an HD card is not 512 x 256"
+    );
+}
+
+/// Pulse's cards stay 128 x 128 next to HD's.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn pulse_psp_cards_stay_128_square() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    assert!(!loaded.billboards.adverts.is_empty());
+    assert!(
+        loaded
+            .billboards
+            .adverts
+            .iter()
+            .all(|c| c.size == (128, 128))
+    );
+}

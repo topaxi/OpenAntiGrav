@@ -28,7 +28,7 @@ pub(super) fn build(
     ps3_geometry: Option<&[u8]>,
     geometry_name: Option<&str>,
     vex_geometry: bool,
-    adverts_spec: Option<&oag_title::adverts::Adverts>,
+    (adverts_spec, adverts_off): (Option<&oag_title::adverts::Adverts>, &str),
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
 ) -> (
@@ -59,6 +59,7 @@ pub(super) fn build(
     // did not load" (`place` says so itself) from "nothing asked for one", which
     // otherwise reports nothing at all - see the block after this one.
     let mut named_slot_8 = false;
+    let mut unserved_why: Vec<(u32, String)> = Vec::new();
     if (has_ps3_geometry || vex_geometry)
         && let Some(name) = track
             .rfind(['/', '\\'])
@@ -88,6 +89,22 @@ pub(super) fn build(
         // model is PS3-shaped too and nothing of its pass is measured.
         if let Some(spec) = adverts_spec {
             adverts = crate::adverts::load(archives, &manifest, track_model, spec, report);
+        }
+        // Why each slot that got no advert got none, for the line that counts the
+        // draws left undrawn below.
+        for billboard in manifest.billboards.iter().filter(|b| b.num != 8) {
+            if adverts.iter().any(|card| card.slot == billboard.num) {
+                continue;
+            }
+            let why = match (adverts_spec, billboard.location()) {
+                (None, _) => adverts_off.to_string(),
+                (Some(spec), None) if !spec.colour_pool => {
+                    "its colour fill's pool order is not measured on this title".to_string()
+                }
+                (Some(_), None) => "no catalogue entry answers its colour".to_string(),
+                (Some(_), Some(_)) => "its advert did not load".to_string(),
+            };
+            unserved_why.push((billboard.num, why));
         }
         // The manifest's own spelling of the model, not a constant here:
         // every Pulse circuit names the same file, and a source that names
@@ -136,10 +153,35 @@ pub(super) fn build(
             ));
         }
     }
+    let placeholders = oag_render::gantry::placeholder_texture_slots(track_model);
     let served: Vec<u32> = adverts.iter().map(|card| card.slot).collect();
+    if adverts_spec.is_some_and(|spec| spec.flip_v) {
+        let moved = oag_render::gantry::flip_served_placeholder_v(track_model, &served);
+        if moved > 0 {
+            report.push(format!(
+                "{moved} billboard vertice(s) sample their advert with V negated, as the original's \
+                 draws do (TEXSCALE V = -1)"
+            ));
+        }
+    }
     let stripped = oag_render::gantry::strip_unserved_slot_placeholders(track_model, &served);
     if stripped > 0 {
-        report.push(format!("{stripped} billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub"));
+        // Named by slot with the reason, so the line says what is missing rather than
+        // only that something is.
+        let mut named: Vec<String> = unserved_why
+            .iter()
+            .filter(|(num, _)| placeholders.iter().any(|&(_, n)| n == *num))
+            .map(|(num, why)| format!("slot {num}: {why}"))
+            .collect();
+        if named.is_empty() {
+            named.push(format!(
+                "{adverts_off}, or the circuit's manifest names no advert for them"
+            ));
+        }
+        report.push(format!(
+            "{stripped} billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub ({})",
+            named.join("; ")
+        ));
     }
     let visibility = if vex_geometry {
         TrackVisibility::build(track_model, track_blob, ai)

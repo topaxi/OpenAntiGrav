@@ -177,12 +177,13 @@ pub fn strip_slot_placeholders(model: &mut Model) -> usize {
 /// Negates the V coordinate of every vertex a draw bound to one of `served`'s
 /// placeholders uses, once per vertex, and says how many vertices moved.
 ///
-/// **The original samples an advert's target with `TEXSCALE` V = -1.** The
-/// target holds the picture top row first (its viewport's y scale is
-/// negative, like the main pass) and a track's UVs run V up, so the engine
-/// flips V on exactly the draws that sample a target: a live PPSSPP dump of
-/// Talon's Junction shows `TEXSCALE (1, -1)` and `TEXOFFSET (0, 0)` on both
-/// prims that read the 128 x 128 buffer.
+/// **Pulse's original samples an advert's target with `TEXSCALE` V = -1.** The
+/// target holds the picture top row first (its viewport's y scale is negative,
+/// like the main pass) and a track's UVs run V up, so the engine flips V on
+/// exactly the draws that sample a target: a live PPSSPP dump of Talon's
+/// Junction shows `TEXSCALE (1, -1)` and `TEXOFFSET (0, 0)` on the prims that
+/// read the 128 x 128 buffer and a positive scale on every other textured prim.
+/// `oag_title::adverts::Adverts::flip_v` says which titles do it.
 pub fn flip_served_placeholder_v(model: &mut Model, served: &[u32]) -> usize {
     let slots: Vec<usize> = model
         .textures

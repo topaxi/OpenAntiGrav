@@ -65,3 +65,14 @@ that the PSP track has, so one fewer draw: six against seven).
   the scenery clock. The original's cards do not appear to run off the race
   clock. Measure it with several quads in view.
 - **A frame gate** (point 3 above).
+
+
+## 2026-10-06 (billboards-3 lane): the V flip is inherited from the PSP, not measured here
+
+`Adverts::flip_v` (see [the PSP page](../psp-pulse-usa/billboards.md)'s 2026-10-06
+billboards-3 section) applies to the PS2 render too, because both load the same title
+data and the PSP is the reference. No PS2 GS register was read for it. The teleport
+recipe above trips the craft's respawn flash when the destination is off the track
+(`o-t-8.png`: speed 180, the energy bar red, the whole frame white), which is what the
+earlier "all white" screenshots at a quad were, so a front view of a hoarding on this
+side needs a position the physics keeps.

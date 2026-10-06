@@ -27,6 +27,17 @@ pub struct Adverts {
     /// (`oag_tables::billboard_pool`). `false` is a title whose pool order is not
     /// measured: those slots stay undrawn and the load report names them.
     pub colour_pool: bool,
+    /// Whether the track draws that show a target sample it with their V
+    /// coordinate negated.
+    ///
+    /// Pulse does: a live PPSSPP dump of Talon's Junction puts `TEXSCALE (1, -1)`
+    /// and `TEXOFFSET (0, 0)` on the prims that read the 128 x 128 target and
+    /// `(1, 1)` or an authored animation scale on every other textured prim
+    /// (547 prims). The target holds the picture top row first and the track's
+    /// UVs run V up, so the engine flips it on exactly those draws. HD authors
+    /// its billboard quads with V running down (read off the track's vertices), so
+    /// it needs none.
+    pub flip_v: bool,
     /// Whether a Zone race swaps the per-slot adverts for one shared texture.
     ///
     /// Wipeout HD's `Billboard_LoadModelAndBind` takes a second branch while the

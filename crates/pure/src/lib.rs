@@ -133,6 +133,11 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: Some(frontend::PRESSINGS),
+    // None, checked: Pure ships `trackstartup.xml` (five colour slots on
+    // `01_Vineta_K`) and its own `PI004` catalogue, but the catalogue's adverts are
+    // `3DVexWindow`, `2DVexWindow` and `MusicLicensed` models that carry no `Camera`
+    // node (four of four read), so Pulse's camera-into-a-target pass has nothing to
+    // draw them with. A different mechanism, not read.
     adverts: None,
 };
 

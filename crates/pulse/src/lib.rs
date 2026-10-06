@@ -97,6 +97,7 @@ pub const TITLE: &Title = &Title {
         near: 1.2,
         far: 2017.7,
         colour_pool: true,
+        flip_v: true,
         zone_shares_one_texture: false,
         origin: oag_title::Origin::Measured,
     }),
