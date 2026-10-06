@@ -316,15 +316,42 @@ a scalar (a luminance, say) would be this project inventing a blend the disc
 never specifies, so it is left absent - the same as a missing key - rather
 than approximated.
 
-`Fog.*` and `HDR and Bloom.*` are not read for this title at all:
-`environment::staging` gates both behind the same `ps3_geometry` flag it
-always has, and 2048's own fog block is structurally unrelated to HD's (a
-`Lighting.Fog colour`/`Fog Region Colour Override %d` per-region ladder with
-no `Fog.*`-prefixed keys at all - see the registrar's own key list on
-[lighting-schema.md](../ghidra/functions/vita-2048-eu-v104/lighting-schema.md)),
-so reading it against HD's `FOG_COLOUR`/`FOG_DENSITY` constants would be
-exactly the same title-key-mismatch this section exists to document a second
-time. Modelling 2048's own fog and bloom schema is unstarted.
+## Wipeout 2048 fog: the authored colour and density, with HD's curve inherited
+
+2026-10-06, `2048-sky-fog`. 2048 authors one `"Lighting.Fog colour"` key of
+**four** numbers (colour, then a fourth: 0.0001 to 0.0021 on every circuit
+that has one) where HD authors `Fog.Fog Color` and `Fog.Fog Density`. Evidence
+the fourth is the same quantity as HD's density: the shader interface of both
+titles names one `float4` `fogColour` ([gxp.md](gxp.md)), HD's microcode takes
+its coefficient from that vector's `w`, and the shared circuits agree in order
+of magnitude (Anulpha Pass 0.0004 in both). They are not equal everywhere
+(Sol 2: 0.002 in HD, 0.001 in 2048; Talons: 0.001 vs 0.0009), so it is a
+retuned value, not a copy.
+
+`environment::envsettings_fog` reads it on the `psp2` branch and hands the
+renderer the same `exp(-(density * view_depth)^2)` curve HD uses. **That curve
+is inherited, not measured**: 2048's fragment programs are USSE and the fog
+term in them is unread (gxp.md's `cf_alpha4glow` note is at confidence 45), so
+this is the "unmeasured titles inherit Pulse's rule" fallback, labelled
+`INHERITED` in the loader report. No confidence score. At these densities the
+haze is faint (altima, w = 0.0002: 0.04% at 100 units, 0.4% at 300), which
+matches HD's own finding that its fog is near imperceptible.
+
+Authored and **left unread**: the `Fog Region Colour Override 0..11` and
+`Fog Region Transition Distance 0..11` ladder and `Fog Default Transition
+Distance` (what selects a region is unlocated), `Fog Alternate Color`,
+`Fog sun colour`/`direction`, `Depth Fog Offset RecipRange` (0, 0.01 on every
+circuit), and everything `HDR and Bloom`-shaped (`BloomFactor`, `BloomGate`,
+`Exposure*`). Pinned per base circuit by
+[psp2_sky_fog_ground_truth.rs](../../crates/game/tests/psp2_sky_fog_ground_truth.rs).
+
+**Omega: ported.** Omega's `track.envsettings` carries the same
+`Lighting.Fog colour` bytes (altima: `[0.13, 0.11, 0.16]` at 0.0002, identical)
+and the same `GeometryKind::Ps4` branch reads it, so the fog is drawn there
+too, inherited the same way. Omega's sky is a six-face cube
+(`skycube_altima_1..6.gnf`, 12 triangles) rather than 2048's panorama dome, and
+its `Sky rotation` is its own value (altima 156.814 against 2048's 145); the
+dome turn applies to it through the same function.
 
 ## Wipeout: Omega Collection: the Nova triple and the `Tonemap` block
 

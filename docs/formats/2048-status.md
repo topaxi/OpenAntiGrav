@@ -82,9 +82,10 @@ the start line and runs the simulation. What it does **not** do, and why:
   the submeshes the file's own index names. Both lit off the file's own
   authored normals. 18 of the circuit's draws name a `.gxt` that does not
   resolve or will not decode and get no texture rather than a neighbour's. The
-  screenshot is `data/shots/2048_altima_textured.png`. What is still absent
-  from it is unrelated: `.envsettings` does not parse for this title, so the
-  race lights off a stand-in rig, unfogged and without bloom. (`track.pvs` was
+  screenshot is `data/shots/2048_altima_textured.png`. What was still absent
+  then is partly closed: `.envsettings` parses (light since 2026-09, the sky
+  turn and fog since 2026-10-06, see [2048-sky.md](2048-sky.md) and
+  [envsettings.md](envsettings.md)); bloom and exposure remain unread. (`track.pvs` was
   listed here as not being HD's layout, so every chunk drew. It is that
   layout's little-endian dialect and culls since 2026-09-30, see
   [hd-pvs.md](hd-pvs.md); Altima at tick 300 goes from 616 draws and 145,779

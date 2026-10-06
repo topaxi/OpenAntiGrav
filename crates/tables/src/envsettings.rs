@@ -190,6 +190,15 @@ pub const FOG_COLOUR: &str = "Fog.Fog Color";
 /// coefficient unscaled is not read.
 pub const FOG_DENSITY: &str = "Fog.Fog Density";
 
+/// Wipeout 2048's `"Lighting.Fog colour"`. **Four numbers**: a colour and a
+/// fourth, 0.0001 to 0.0021 on every circuit that authors it, which is the
+/// same order as HD's [`FOG_DENSITY`] (Anulpha Pass 0.0004 on both titles).
+/// The shader interface names one `float4` `fogColour` in both titles; HD's
+/// fourth component is the coefficient of its curve. Whether 2048's is the
+/// same quantity is read as an inheritance, not measured - see the module
+/// docs.
+pub const PSP2_FOG_COLOUR: &str = "Lighting.Fog colour";
+
 /// `"HDR and Bloom.Bloom adaption rate"`. One number: the per-frame lerp
 /// rate of the adapted average luminance -
 /// `adapted += rate * (luma(mean) - adapted)`, read out of `FUN_003b4690`.
@@ -339,6 +348,15 @@ impl EnvSettings {
     pub fn vec3(&self, key: &str) -> Option<[f32; 3]> {
         match self.entries.get(key)?.numbers.as_slice() {
             [x, y, z] => Some([*x, *y, *z]),
+            _ => None,
+        }
+    }
+
+    /// Four numbers, for a key that carries exactly four.
+    #[must_use]
+    pub fn vec4(&self, key: &str) -> Option<[f32; 4]> {
+        match self.entries.get(key)?.numbers.as_slice() {
+            [x, y, z, w] => Some([*x, *y, *z, *w]),
             _ => None,
         }
     }
