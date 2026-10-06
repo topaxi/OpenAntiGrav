@@ -2199,7 +2199,6 @@ dependencies = [
  "bytemuck",
  "clap",
  "dirs",
- "env_logger",
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
@@ -2220,6 +2219,7 @@ dependencies = [
  "oag-hud",
  "oag-input",
  "oag-livery",
+ "oag-log",
  "oag-mesh",
  "oag-music",
  "oag-omega",
@@ -2339,6 +2339,16 @@ dependencies = [
  "oag-texture",
  "oag-title",
  "oag-vex",
+]
+
+[[package]]
+name = "oag-log"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "env_filter",
+ "env_logger",
+ "log",
 ]
 
 [[package]]

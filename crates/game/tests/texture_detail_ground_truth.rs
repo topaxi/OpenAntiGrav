@@ -45,7 +45,8 @@ fn capture(image: &Path, scratch: &Path, detail: Option<&str>) -> Vec<u8> {
         .arg("--screenshot")
         .arg(&out)
         // A settings file of the player's must not decide the preset.
-        .env("XDG_CONFIG_HOME", scratch.join("config"));
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("XDG_STATE_HOME", scratch.join("state"));
     if let Some(detail) = detail {
         command.args(["--texture-detail", detail]);
     }

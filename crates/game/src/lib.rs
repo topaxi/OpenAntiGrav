@@ -48,6 +48,7 @@ pub use oag_gameplay::input;
 pub use oag_input::keys;
 pub mod launcher;
 pub mod loading;
+pub mod logfile;
 pub mod medal_watch;
 pub mod movie;
 pub mod prefetch;
