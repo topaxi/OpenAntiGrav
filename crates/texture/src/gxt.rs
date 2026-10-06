@@ -217,7 +217,7 @@ pub enum Format {
     /// `0x87`, BC3: 16 bytes per 4x4 block, an interpolated alpha ramp.
     Ubc3,
     /// `0x83`, PVRTC-II at 4 bits per texel: 8 bytes per 4x4 **word**, not a
-    /// block codec - see [`crate::pvrtc`].
+    /// block codec - see `crate::pvrtc`.
     Pvrtii4bpp,
     /// `0x0c`, `SceGxmTextureSwizzle4Mode::ARGB`: four raw bytes a texel - see
     /// [`argb8888`].
