@@ -780,8 +780,18 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     // The LeachBeam ribbon's own texture - see `assets::leach_beam_texture`.
-    let leach_beam_texture =
-        assets::leach_beam_texture(craft_of(&mut craft, &mut archives), &mut report);
+    // A title with its own LeachBeam model (HD) draws no Pulse ribbon: its beam
+    // is two SPU-extruded strips built from `leachbeam_triangle`, which this
+    // engine has not read, so it is not asked for Pulse's texture.
+    let leach_beam_texture = if wm.leachbeam_ball.is_some() {
+        report.push(
+            "the LeachBeam's own strips (HD's `leachbeam_triangle` ribbon) are not built - the beam draws no ribbon body"
+                .to_string(),
+        );
+        None
+    } else {
+        assets::leach_beam_texture(craft_of(&mut craft, &mut archives), &mut report)
+    };
 
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
