@@ -1,8 +1,7 @@
 //! Pulse's weather anchors, pinned against the disc and a live capture.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. Run with `just test-data`; set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn a missing image into a failure.
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! Fort Gale White read live on PPSSPP 1.20.4 (software renderer,
 //! 2026-10-02): `Weather_Update`'s covered mask `DAT_08b3bfd0`/`d4` was

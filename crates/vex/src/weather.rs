@@ -1,16 +1,14 @@
 //! The weather anchors a circuit authors: `weatherPos` (`0x3da`) nodes.
 //!
-//! **A `weatherPos` does not name an effect. It places the rain or snow
-//! while the camera is in a covered section.** `WeatherPos_Init`
-//! (`0x0892c528`, the class's `+0x7c` slot) walks up from the node to the
-//! nearest ancestor that parents a `section` node, takes that section's
-//! index, collects the section node and stores the `weatherPos` at the
-//! section's `+0x64`, together with its world matrix at `+0x60`.
-//! `Vex_LoadModel` then sets one bit in a 64-bit mask per section whose
-//! `+0x64` is filled, and `Weather_Update` reads that mask as "covered": the
-//! weather's own instance rides the camera in an open section, and sits
-//! at the section's anchor in the world in a covered one. See
-//! `docs/ghidra/functions/psp-pulse-usa/weather.md`.
+//! **A `weatherPos` does not name an effect: it places the rain or snow while
+//! the camera is in a covered section.** `WeatherPos_Init` (`0x0892c528`, the
+//! class's `+0x7c` slot) walks up to the nearest ancestor that parents a
+//! `section`, takes its index, collects the section node and stores the
+//! `weatherPos` at the section's `+0x64` with its world matrix at `+0x60`.
+//! `Vex_LoadModel` sets one bit in a 64-bit mask per section whose `+0x64` is
+//! filled, and `Weather_Update` reads that mask as "covered": the weather's own
+//! instance rides the camera in an open section and sits at the section's anchor
+//! in a covered one. See `docs/ghidra/functions/psp-pulse-usa/weather.md`.
 //!
 //! Several nodes may resolve to one section; the original keeps the last it
 //! initialised, in node order, and so does [`anchors`].
@@ -33,10 +31,9 @@ pub struct Anchor {
 
 /// Every covered section's anchor, in section order.
 ///
-/// Version-6 files only: the class ids are that version's, and another
-/// version returns nothing rather than a guess. A `weatherPos` with no
-/// ancestor that parents a `section` is left out, as the original's walk
-/// reaches the root and returns.
+/// Version-6 files only: another version returns nothing, not a guess. A
+/// `weatherPos` with no ancestor parenting a `section` is left out, as the
+/// original's walk reaches the root and returns.
 #[must_use]
 pub fn anchors(data: &[u8], nodes: &[Node]) -> Vec<Anchor> {
     let Ok(classes) = vex::classes_of(data) else {

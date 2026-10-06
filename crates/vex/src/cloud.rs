@@ -1,85 +1,65 @@
 //! `cloudCube` `0x3d8` and `cloudGroup` `0x3d9`: the sky's cloud puffs.
 //!
-//! Before this module, `docs/formats/skycube.md`'s Open section recorded both
-//! as undecoded, and speculated `cloudCube` might have no registration site at
-//! all - the same absence `exhaust.md` found for `engine_fire`/`exitglow`/`gate`.
-//! That guess is refuted: both classes are registered
-//! (`CloudCube_RegisterClass` `0x08932138`, `CloudGroup_RegisterClass`
-//! `0x0893471c`), and `CloudGroup_Init` (`0x08933048`) is a real, substantial
-//! function, not a compiler stub. See
-//! `docs/ghidra/functions/psp-pulse-usa/clouds.md` for the full evidence and
-//! confidence per claim; this module implements what that page describes.
+//! Both classes are registered (`CloudCube_RegisterClass` `0x08932138`,
+//! `CloudGroup_RegisterClass` `0x0893471c`), and `CloudGroup_Init` (`0x08933048`)
+//! is a substantial function, not a stub. See
+//! `docs/ghidra/functions/psp-pulse-usa/clouds.md` for the evidence and
+//! confidence per claim; this module implements that page.
 //!
 //! # Census
 //!
 //! **Exactly one Pulse circuit authors any cloud node on either PSP pressing**:
-//! `05_Track`, both layouts (forward and reversed share the finding). Swept
-//! against every `.vex` entry in `Data.wad`, `FEData.wad`, `BEData.wad` and
-//! `FE.wad` on `pulse-psp-usa.chd` and `pulse-psp-eu.chd` - see
-//! `crates/vex/tests/cloud_ground_truth.rs`. 5 `cloudCube` leaves and 3
-//! `cloudGroup` nodes per layout, matching the count `docs/formats/skycube.md`
-//! already quoted from the census that motivated this module.
+//! `05_Track`, both layouts. Swept against every `.vex` entry in `Data.wad`,
+//! `FEData.wad`, `BEData.wad` and `FE.wad` on `pulse-psp-usa.chd` and
+//! `pulse-psp-eu.chd` (`crates/vex/tests/cloud_ground_truth.rs`): 5 `cloudCube`
+//! leaves and 3 `cloudGroup` nodes per layout.
 //!
 //! Pure's class-ID table is renumbered (`docs/formats/vex.md`), so a `0x3d8`
-//! search there would look for the wrong class entirely; Pure is **not**
-//! checked here; see the doc page.
+//! search there looks for the wrong class; Pure is **not** checked here.
 //!
 //! # `cloudCube`'s payload: 16 bytes, byte-identical on every shipped instance
 //!
 //! ```text
-//! +0x00  u32  kind, 2 on all 10 shipped instances - meaning not established,
-//!             since it never varies
-//! +0x04  f32  scale, 1.0 on all 10 shipped instances - likewise
+//! +0x00  u32  kind, 2 on all 10 shipped instances - meaning not established
+//! +0x04  f32  scale, 1.0 on all 10 - likewise
 //! +0x08  u32  zero on all 10
 //! +0x0c  u32  zero on all 10
 //! ```
 //!
-//! A `cloudCube` carries none of its own placement or visual parameters - see
+//! A `cloudCube` carries no placement or visual parameters of its own; see
 //! [Where the real parameters live](#where-the-real-parameters-live).
 //!
 //! # `cloudGroup`'s payload: a `Transform`-shaped 4x4, exactly like `fogCube`'s
 //!
 //! 0 bytes (identity) or 64 bytes, row-major, translation in row 3 with `w =
-//! 1.0` - the same convention [`vex::transform`] already reads for
-//! [`vex::CLASS_TRANSFORM`] and for `fogCube`'s leading matrix
-//! (`docs/formats/skycube.md`). Confirmed arithmetically on `05_Track`'s outer
-//! `cloudGroup`: rows 0-2 are unit-length up to floating-point noise
-//! (`0.9997`..`1.0002`) and row 3 is a real world position, `(-308, 138,
-//! 1379)`.
+//! 1.0`: the convention [`vex::transform`] reads for [`vex::CLASS_TRANSFORM`] and
+//! `fogCube`'s leading matrix (`docs/formats/skycube.md`). On `05_Track`'s outer
+//! `cloudGroup` rows 0-2 are unit-length to floating-point noise
+//! (`0.9997`..`1.0002`) and row 3 is a world position `(-308, 138, 1379)`.
 //!
-//! A `cloudGroup` can itself be a child of another `cloudGroup` - `05_Track`
-//! nests one inside another - so placing a `cloudCube` means composing every
-//! `Transform` **and** `cloudGroup` matrix on its ancestor chain, not just the
-//! nearest `Transform`. [`vex::class_world_transforms`] cannot do this alone:
-//! it composes one class against [`vex::world_transforms`]'s stock chain, which
-//! treats every other class - `cloudGroup` included - as the identity, so a
-//! `cloudGroup` nested inside another would silently drop the outer one's
-//! placement. [`cloud_world_transforms`] is the same short loop
-//! `vex::world_transforms_at` runs, generalised to treat `cloudGroup` as a
-//! second matrix-contributing class alongside `Transform`.
+//! A `cloudGroup` can be a child of another (`05_Track` nests one), so placing a
+//! `cloudCube` composes every `Transform` **and** `cloudGroup` matrix on its
+//! ancestor chain. [`vex::class_world_transforms`] cannot: it treats every other
+//! class as the identity and would drop the outer group's placement.
+//! [`cloud_world_transforms`] is the `vex::world_transforms_at` loop with
+//! `cloudGroup` as a second matrix-contributing class.
 //!
 //! # Where the real parameters live: the node header's named-attribute list
 //!
 //! `CloudGroup_Init` reads six colour channels, two alphas, a sprite radius and
-//! its variance, a blend midpoint, an overlap and a random seed - **from the
-//! node's own [`vex::node_attributes`] list, by name, not from its 4x4
-//! payload.** `cloudCube` carries no attribute list of its own; every
-//! attribute is read off the owning `cloudGroup`. This is the same
-//! `header+0x06`/`+0x0e` named-`f32`-list mechanism `AnimTransform_Bind`
-//! already uses for `LoopEnd`/`AnimEnd`/`FixedFrames` - confirmed here by a
-//! second, independent consumer (`CloudGroup_Init`) reading the same list
-//! shape for entirely different names, and by every name below appearing
-//! verbatim in the binary at `0x08a88aa4`.
+//! variance, a blend midpoint, an overlap and a random seed **from the node's own
+//! [`vex::node_attributes`] list, by name, not from its 4x4 payload.**
+//! `cloudCube` carries no attribute list; every attribute is read off the owning
+//! `cloudGroup`. This is the `header+0x06`/`+0x0e` named-`f32`-list mechanism
+//! `AnimTransform_Bind` uses for `LoopEnd`/`AnimEnd`/`FixedFrames`, confirmed by
+//! a second consumer and by every name below appearing verbatim in the binary at
+//! `0x08a88aa4`.
 //!
-//! **One divergence from that mechanism's own doc comment, recorded rather
-//! than resolved**: [`vex::node_attributes`]'s doc says the lookup is case
-//! **sensitive** in the original (`AnimTransform_Bind`'s `strcmp`).
-//! `CloudGroup_Init` looks its names up with `strcasecmp` instead - a
-//! case-*insensitive* compare. It makes no difference to any shipped file,
-//! because every cloud attribute name on `05_Track` already matches
-//! [`vex::node_attributes`]'s case exactly, so this module reuses that
-//! function unchanged rather than adding a second, case-folding walker for a
-//! difference no shipped byte exercises.
+//! **One divergence, recorded rather than resolved**: [`vex::node_attributes`]
+//! documents the lookup as case **sensitive** (`AnimTransform_Bind`'s `strcmp`);
+//! `CloudGroup_Init` uses `strcasecmp`. It changes nothing on any shipped file
+//! (every cloud attribute name on `05_Track` already matches case exactly), so
+//! this module reuses that function rather than add a case-folding walker.
 //!
 //! [`CloudAttributes::from_node`] reads, in the order `CloudGroup_Init` does:
 //!
@@ -94,35 +74,29 @@
 //! | `LoColourR/G/B`, `LoAlpha` | [`lo_colour`](CloudAttributes::lo_colour), [`lo_alpha`](CloudAttributes::lo_alpha) | warm shadow, alpha `1.0` |
 //! | `Midpoint` | [`midpoint`](CloudAttributes::midpoint) | `0.5` |
 //!
-//! A name absent from the list reads as `0.0`, matching `CloudGroup_Init`'s own
-//! "attribute not found -> 0" fallback for every one of these except `Seed`
-//! (which the constructor re-rolls when it reads `0`, a runtime step this
-//! module does not reproduce - see the doc page's Open section).
+//! A name absent from the list reads as `0.0`, as `CloudGroup_Init`'s fallback
+//! does for all but `Seed` (re-rolled by the constructor when `0`, a runtime step
+//! not reproduced; see the doc page's Open section).
 //!
-//! Two of `05_Track`'s three `cloudGroup` nodes carry a **flat neutral**
-//! palette (`1.0, 1.0, 1.0` / `0.8, 0.8, 0.8` / `0.6, 0.6, 0.6`) rather than the
-//! warm one above; both are shipped and this module reads whichever a given
-//! node authors rather than assuming the warm set.
+//! Two of `05_Track`'s three `cloudGroup` nodes carry a **flat neutral** palette
+//! (`1.0, 1.0, 1.0` / `0.8, 0.8, 0.8` / `0.6, 0.6, 0.6`) rather than the warm
+//! one; a node's own set is read, never assumed.
 //!
 //! # What the executable builds from it
 //!
-//! `cloudGroup`'s own method table (`0x08ad2a24`) overrides `draw` at `+0x44`
-//! (`0x0893280c`); `cloudCube`'s (`0x08ad299c`) does not - that slot is still
-//! the inherited `Transform` default. So **`cloudGroup` is what draws**. A
-//! cube is a box the group scatters sprite records through: its world
-//! matrix's row lengths are its size and its volume sets the record count.
-//! [`cloud_groups`] is the loader for that: every group with the cubes it
+//! `cloudGroup`'s method table (`0x08ad2a24`) overrides `draw` at `+0x44`
+//! (`0x0893280c`); `cloudCube`'s (`0x08ad299c`) keeps the inherited `Transform`
+//! default. So **`cloudGroup` is what draws**: a cube is a box the group scatters
+//! sprite records through (its world matrix's row lengths are its size, its
+//! volume the record count). [`cloud_groups`] loads every group with the cubes it
 //! collects (its whole subtree, so a nested group's cubes belong to the outer
-//! group too), each with its matrix, `kind`, `scale` and its nearest group's
-//! size attributes. The build itself is `oag_fx::cloud::field`; the
-//! reading and the live check are on the doc page.
+//! group too), each with matrix, `kind`, `scale` and its nearest group's size
+//! attributes. The build is `oag_fx::cloud::field`; the live check is on the doc
+//! page.
 //!
 use crate::vex::{self, IDENTITY, Node, byte_order, multiply, node_attributes, transform};
 
 /// Class ID of a `cloudCube` node.
-///
-/// Kept local to this module rather than added to `vex.rs`'s `CLASS_*` list,
-/// which another pass is editing concurrently.
 pub const CLASS_CLOUD_CUBE: u32 = 0x3d8;
 
 /// Class ID of a `cloudGroup` node.
@@ -136,12 +110,11 @@ pub const CLOUD_CUBE_PAYLOAD_LEN: usize = 0x10;
 pub struct CloudCube {
     /// `+0x00`, constant `2` on every shipped instance; meaning not established.
     pub kind: u32,
-    /// `+0x04`, constant `1.0` on every shipped instance; meaning not
-    /// established beyond "a scale of some kind".
+    /// `+0x04`, constant `1.0` on every shipped instance; meaning not established
+    /// beyond "a scale of some kind".
     pub scale: f32,
     /// World-space position: the translation row of the composed
-    /// `Transform`/`cloudGroup` chain above this node. A `cloudCube` payload
-    /// carries no matrix of its own.
+    /// `Transform`/`cloudGroup` chain above this node (the payload has no matrix).
     pub world_position: [f32; 3],
 }
 
@@ -157,15 +130,14 @@ pub fn cloud_cube(payload: &[u8], order: oag_formats::ByteOrder) -> Option<(u32,
 /// The colour-and-size parameters `CloudGroup_Init` (`0x08933048`) reads off a
 /// `cloudGroup` node's named-attribute list.
 ///
-/// Every field defaults to `0.0` when its name is absent, matching the
-/// original's own fallback - see the module doc's table.
+/// Every field defaults to `0.0` when its name is absent, as the original does
+/// (see the module doc's table).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CloudAttributes {
     /// `Overlap`.
     pub overlap: f32,
-    /// `Seed`. `0.0` when unset, which is what every shipped instance is; the
-    /// original re-rolls a random seed at construction time in that case
-    /// rather than using `0` itself. `oag_fx::cloud` uses a chosen seed in that case - see its doc.
+    /// `Seed`. `0.0` when unset (every shipped instance); the original re-rolls a
+    /// random seed at construction then, and `oag_fx::cloud` uses a chosen seed.
     pub seed: f32,
     /// `SpriteRadius`.
     pub sprite_radius: f32,
@@ -214,13 +186,11 @@ impl CloudAttributes {
 /// World matrix of every node, treating **both** [`vex::CLASS_TRANSFORM`] and
 /// [`CLASS_CLOUD_GROUP`] as matrix-contributing classes.
 ///
-/// [`vex::world_transforms`] cannot be reused directly for this: it treats
-/// every class but `Transform`/`Anim Transform` as the identity, so a
-/// `cloudGroup` nested inside another `cloudGroup` (which `05_Track` authors)
-/// would compose with the outer one's own placement dropped. This is the same
-/// loop `vex::world_transforms_at` runs, with one more class recognised - see
-/// that function's doc for why every *other* class still resolves to the
-/// identity rather than a guess.
+/// [`vex::world_transforms`] cannot be reused: it treats every class but
+/// `Transform`/`Anim Transform` as the identity, so a nested `cloudGroup`
+/// (`05_Track` authors one) would drop the outer one's placement. This is the
+/// `vex::world_transforms_at` loop with one more class recognised; see that
+/// function for why every *other* class still resolves to the identity.
 #[must_use]
 pub fn cloud_world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
     let order = byte_order(data);
@@ -245,10 +215,9 @@ pub fn cloud_world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
 /// Every `cloudCube` in `nodes`, placed and coloured.
 ///
 /// A leaf's colour and size come from the nearest `cloudGroup` on its ancestor
-/// chain, itself included were it ever a `cloudGroup` (it never is - the class
-/// is a leaf in every shipped file). A `cloudCube` with no `cloudGroup`
-/// ancestor at all is skipped: it is not a shape any shipped file authors, and
-/// drawing it with no parameters would be inventing them.
+/// chain (itself included, though the class is a leaf in every shipped file). A
+/// `cloudCube` with no `cloudGroup` ancestor is skipped: no shipped file authors
+/// one, and drawing it with no parameters would invent them.
 #[must_use]
 pub fn clouds(data: &[u8], nodes: &[Node]) -> Vec<(CloudCube, CloudAttributes)> {
     let order = byte_order(data);
@@ -293,13 +262,13 @@ pub struct GroupCube {
     pub kind: u32,
     /// The payload's `+0x04` float, multiplied by `10` into every half-size.
     pub scale: f32,
-    /// The cube's composed world matrix, row-major, translation in row 3. The
-    /// cube carries no matrix of its own, so this is its parent chain's.
+    /// The cube's composed world matrix, row-major, translation in row 3 (the
+    /// cube has no matrix of its own; this is its parent chain's).
     pub world: [f32; 16],
-    /// `SpriteRadius` and `SpriteRadiusVar` of the cube's **nearest**
-    /// `cloudGroup` ancestor (the cube's `+0x74`), which may not be the group
-    /// building it: a nested group's cubes are collected by every group above
-    /// them too, and the half-size reads the nearest one's attributes.
+    /// `SpriteRadius` and `SpriteRadiusVar` of the cube's **nearest** `cloudGroup`
+    /// ancestor (the cube's `+0x74`), which may not be the group building it: a
+    /// nested group's cubes are collected by every group above too, and the
+    /// half-size reads the nearest one's attributes.
     pub sprite_radius: f32,
     /// See [`GroupCube::sprite_radius`].
     pub sprite_radius_var: f32,
@@ -319,15 +288,13 @@ pub struct CloudGroup {
 /// Every `cloudGroup` in `nodes`, in file order, each with the cubes it builds
 /// from.
 ///
-/// `CloudGroup_Init` collects cubes with `FUN_08a72d1c`, a preorder walk of
-/// the group's **whole** subtree (the node, its first child `+0x10`, then each
-/// sibling `+0xc`) that keeps every node of `cloudCube`'s class, up to
-/// [`MAX_CUBES_PER_GROUP`]. A nested group's cubes are therefore built by the
-/// outer group as well: live on `05_Track` both the outer group and the group
-/// inside it held the same one cube, each building its own 46 records from its
-/// own seed and colouring them from its own ramp. A group that collects no
-/// cube is destroyed by the original and is skipped here. Evidence and
-/// confidence are on `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
+/// `CloudGroup_Init` collects cubes with `FUN_08a72d1c`, a preorder walk of the
+/// group's **whole** subtree (node, first child `+0x10`, then siblings `+0xc`)
+/// keeping every `cloudCube`, up to [`MAX_CUBES_PER_GROUP`]. So a nested group's
+/// cubes are built by the outer group too: live on `05_Track` both groups held
+/// the same cube, each building its own 46 records from its own seed and ramp. A
+/// group collecting no cube is destroyed by the original and skipped here.
+/// Evidence on `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
 #[must_use]
 pub fn cloud_groups(data: &[u8], nodes: &[Node]) -> Vec<CloudGroup> {
     let order = byte_order(data);
@@ -337,8 +304,8 @@ pub fn cloud_groups(data: &[u8], nodes: &[Node]) -> Vec<CloudGroup> {
         if group.class_id != CLASS_CLOUD_GROUP {
             continue;
         }
-        // `vex::nodes` is a preorder list, so the subtree is every later node
-        // with `index` on its ancestor chain, already in the walk's order.
+        // `vex::nodes` is preorder: the subtree is every later node with `index`
+        // on its ancestor chain, already in walk order.
         let cubes: Vec<GroupCube> = nodes
             .iter()
             .enumerate()

@@ -1,12 +1,8 @@
 //! A flagged (`+0x06` bit 0) Pulse PSP texture is swizzled in the file, and
 //! the shield shell's decode reads it that way.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs a Pulse disc image under
-//! `data/images/`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What was measured, 2026-10-01 (PPSSPP v1.20.4, `UCUS98612`)
 //!

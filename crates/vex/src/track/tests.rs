@@ -1,11 +1,6 @@
 //! What the `WO Track` spline reader in [`super`] is asserted to do: the
-//! control points it decodes, the graph it links them into, and the payloads
-//! it refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `track.rs`: the tests are 365 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! control points it decodes, the graph it links them into, and the payloads it
+//! refuses.
 
 use super::*;
 use oag_formats::ByteOrder;
@@ -114,9 +109,8 @@ fn parses_a_two_path_ring() {
     assert_eq!(track.junctions[0].next, [Some(1), None]);
 }
 
-/// The check that resolved the layout: a correct parse accounts for every
-/// byte. This is the synthetic version of the same test the ground-truth
-/// suite runs against all 40 shipped tracks.
+/// A correct parse accounts for every byte (the synthetic version of the
+/// ground-truth suite's check against all 40 shipped tracks).
 #[test]
 fn the_decoded_structure_accounts_for_every_byte() {
     for counts in [vec![1], vec![3, 2], vec![4, 4, 9]] {
@@ -144,17 +138,14 @@ fn the_reserved_block_exists_only_from_version_0x101() {
     assert_eq!(new.encoded_len(), old.encoded_len() + RESERVED_LEN);
 }
 
-/// Reading the paths at `+0x20` on a `0x105` file is the mistake the module
-/// docs warn about, so pin that it cannot pass silently: either an index
-/// lands outside its array, or the structure stops accounting for every
-/// byte. On a real track it is the second one, which is why
-/// [`AiTrack::encoded_len`] exists.
+/// Reading the paths at `+0x20` on a `0x105` file must not pass silently:
+/// either an index lands outside its array or the structure stops accounting for
+/// every byte (on a real track the second, hence [`AiTrack::encoded_len`]).
 #[test]
 fn skipping_the_reserved_block_is_detectable() {
     let payload = build(0x105, &[3, 2]);
     let mut shifted = payload.clone();
-    // Claiming 0x100 moves every array back by the reserved block without
-    // touching a byte, which is exactly the misreading.
+    // Claiming 0x100 moves every array back by the reserved block: the misreading.
     shifted[4..8].copy_from_slice(&0x100u32.to_le_bytes());
     match parse(&shifted) {
         Err(_) => {}
@@ -268,9 +259,8 @@ fn the_basis_is_a_partition_of_unity() {
     }
 }
 
-/// A B-spline is C2 continuous, so the end of one segment is the start of
-/// the next. If the basis or the control-point window were wrong, this is
-/// where it would show.
+/// A B-spline is C2 continuous, so a segment's end is the next one's start; a
+/// wrong basis or control-point window shows here.
 #[test]
 fn segments_join_up() {
     let track = parse(&build(0x105, &[6])).expect("parse");
@@ -296,9 +286,8 @@ fn segments_join_up() {
 fn sampling_a_straight_path_lands_on_the_line() {
     let track = parse(&build(0x105, &[5])).expect("parse");
     let path = &track.paths[0];
-    // Control points sit at x = 0, 5, 10, 15, 20. With a uniform basis the
-    // curve at t=0 in segment 2 is the average of its neighbours, weighted
-    // 1/6, 4/6, 1/6, which for equal spacing is the control point itself.
+    // Control points at x = 0, 5, 10, 15, 20: with equal spacing, t=0 in segment
+    // 2 is the 1/6, 4/6, 1/6 average of its neighbours, the control point itself.
     let s = path.sample(2, 0.0).expect("sample");
     assert!((s.pos[0] - 10.0).abs() < 1e-4, "got {}", s.pos[0]);
     assert!((s.pos[1]).abs() < 1e-6);
@@ -346,9 +335,8 @@ fn slot(rows: [[f32; 3]; 4]) -> Vec<u8> {
 
 #[test]
 fn a_start_position_reads_its_rows_as_left_up_forward() {
-    // The identity every shipped slot satisfies exactly: cross(left, up) is
-    // forward. A frame facing `+x` with `-z` to its left is the one
-    // `16_Track` ships.
+    // Every shipped slot satisfies cross(left, up) = forward (`16_Track` faces
+    // `+x` with `-z` to its left).
     let position = start_position_le(&slot([
         [0.0, 0.0, -1.0],
         [0.0, 1.0, 0.0],
@@ -363,9 +351,8 @@ fn a_start_position_reads_its_rows_as_left_up_forward() {
     assert_eq!(position.left, [0.0, 0.0, -1.0]);
 }
 
-/// The bind forces up rather than reading it, so an authored frame that is
-/// tilted comes back level - and the forward axis comes back perpendicular
-/// to the up it was given, not to the one it was written with.
+/// The bind forces up rather than reading it, so a tilted authored frame comes
+/// back level, forward perpendicular to the up it was given.
 #[test]
 fn the_bind_levels_a_tilted_slot() {
     let tilt = 0.25f32;
@@ -411,11 +398,9 @@ fn a_short_start_position_payload_is_refused() {
 
 /// The same spline, written both ways round, parses to the same thing.
 ///
-/// A `WO Track` payload declares its byte order in its own magic - `dtOW` on
-/// the PSP and PS2, `WOtd` on the PS3 - so [`parse`] needs no argument and no
-/// caller had to change to read a Wipeout HD circuit. The four bytes are the
-/// discriminator, and this pins that they are, because
-/// `docs/formats/hd-status.md` reads as though they are not.
+/// The payload declares its byte order in its own magic (`dtOW` PSP/PS2, `WOtd`
+/// PS3), so [`parse`] needs no argument; pinned because
+/// `docs/formats/hd-status.md` reads as though it does not.
 #[test]
 fn a_big_endian_payload_parses_to_the_same_spline_as_its_little_endian_twin() {
     let le = build(0x105, &[3, 4]);
@@ -454,11 +439,9 @@ fn a_payload_whose_magic_is_neither_spelling_is_still_refused() {
     assert!(matches!(parse(&payload), Err(Error::BadMagic { .. })));
 }
 
-/// Wipeout 2048's version `0x107` shortens the control point to 96 bytes and
-/// moves `section_id`/`flags` with it; everything up to `racing_line` stays put.
-///
-/// The offsets themselves are measured, not invented: see
-/// `docs/formats/track.md`.
+/// 2048's version `0x107` shortens the control point to 96 bytes and moves
+/// `section_id`/`flags`; everything up to `racing_line` stays put. Offsets are
+/// measured: see `docs/formats/track.md`.
 #[test]
 fn version_0x107_shortens_the_control_point() {
     assert_eq!(point_len(0x106), POINT_LEN);
@@ -473,7 +456,7 @@ fn version_0x107_shortens_the_control_point() {
 }
 
 /// The same authored values decode identically either side of the version
-/// boundary - which is the whole claim the short record makes.
+/// boundary.
 #[test]
 fn the_short_record_decodes_the_same_values_as_the_long_one() {
     let long = parse(&build(0x106, &[4, 3])).expect("0x106 parses");
@@ -486,8 +469,8 @@ fn the_short_record_decodes_the_same_values_as_the_long_one() {
     assert!(short.encoded_len() < long.encoded_len());
 }
 
-/// A 0x107 payload read at the old 112-byte stride runs off the end - the
-/// failure that blocked a 2048 track from loading at all.
+/// A 0x107 payload read at the old 112-byte stride runs off the end (what once
+/// blocked a 2048 track from loading).
 #[test]
 fn the_old_stride_does_not_fit_a_0x107_payload() {
     let payload = build(SHORT_POINT_VERSION, &[4, 3]);
@@ -502,8 +485,8 @@ fn a_run_of_full_light_blends_to_just_under_full_the_way_the_original_truncates(
     let mut point = track.paths[0].points[0];
     point.light_scale = [255, 127, 0, 255];
     let four = [&point; 4];
-    // At t = 0 the weights are 1/6, 2/3, 1/6, 0: trunc(x255) gives 42, 170,
-    // 42, 0, and each product is shifted right by eight before the sum.
+    // At t = 0 the weights are 1/6, 2/3, 1/6, 0: trunc(x255) is 42, 170, 42, 0,
+    // each product shifted right by eight before the sum.
     assert_eq!(blend_light_scale(&basis(0.0), &four), [251, 124, 0, 251]);
 }
 

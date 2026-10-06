@@ -1,88 +1,63 @@
 //! Validates the [`pvs`](oag_vex::pvs) decoder against every `section` node
 //! on the Pulse PSP and PS2 discs.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
-//!
-//! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What this is for
 //!
 //! `docs/formats/track.md` records the `section` layout at confidence 90 for the
-//! mask and 85 for the bounding box, reasoning from the PSP load path and from
-//! the 64-section cap being hit exactly on `01_Track`. That is an argument about
-//! one binary and one file. These tests turn it into an argument about every
-//! track file on two discs.
+//! mask and 85 for the bounding box, reasoning from the PSP load path and the
+//! 64-section cap hit exactly on `01_Track`: an argument about one binary and one
+//! file. These tests make it one about every track file on two discs.
 //!
 //! # The mask offset, established by measurement rather than assumed
 //!
-//! The obvious check - *every set bit names a section this file declares* -
-//! **is false on shipped data, and finding that out is the point.** Around one
-//! bit in fifty names a section the file does not have, on both platforms.
-//! Sections are authored per track and 35 of the 40 PSP tracks declare fewer
-//! than 64 of them, so a mask that outlived a deleted section is ordinary
-//! authoring slop. The original never notices: it only ever tests bits for
-//! sections it is iterating, and a bit for a section that does not exist is
-//! never asked about.
+//! The obvious check, *every set bit names a section this file declares*, **is
+//! false on shipped data, and finding that out is the point**: around one bit in
+//! fifty names a section the file lacks, on both platforms (35 of 40 PSP tracks
+//! declare fewer than 64 sections, so a mask outliving a deleted section is
+//! authoring slop; the original only tests bits for sections it iterates).
 //!
-//! So [`stray_fraction`] measures that rate instead of forbidding it, and
-//! [`the_documented_offset_beats_its_neighbours`] turns it into the
-//! discriminating test: reading the low mask word at the documented `+0x08`
-//! must produce **fewer** stray bits than reading it four bytes either side. It
-//! does, decisively and on both platforms - 2.2 % against 7.7 % and 13.3 % on
-//! PSP, 4.0 % against 8.7 % and 22.9 % on PS2. A wrong offset reads either the
-//! never-initialised pad at `+0x02..0x08` or the bounding box's first float,
-//! and both scatter bits across ids the file has no sections for. That is the
-//! evidence for the field position, and it is self-contained: no threshold to
-//! tune, just three readings ranked against each other.
+//! So [`stray_fraction`] measures the rate and
+//! [`the_documented_offset_beats_its_neighbours`] discriminates: reading the low
+//! mask word at the documented `+0x08` must give **fewer** stray bits than four
+//! bytes either side. It does, on both platforms: 2.2 % against 7.7 % and 13.3 %
+//! on PSP, 4.0 % against 8.7 % and 22.9 % on PS2 (a wrong offset reads the
+//! never-initialised pad at `+0x02..0x08` or the bounding box's first float).
+//! Self-contained: three readings ranked, no threshold to tune.
 //!
 //! The other checks a misreading cannot pass:
 //!
-//! - **Spline control points name sections in the same id namespace.** An
-//!   independent route through `WO Track` rather than through the `section`
-//!   nodes. Exact on PSP - all 34,261 control points name a section their own
-//!   file declares - and *nearly* exact on PS2, where a handful do not, the
-//!   same authoring slop as the stray mask bits. Asserted exactly where it
-//!   holds exactly, and bounded where it does not.
-//! - **The payload closes.** Fixed block, bounding box, then a name padded to
-//!   the 16-byte node alignment, with every byte after the terminator zero.
-//!   The same closure argument that settled `WO Track` and the collision soup.
+//! - **Spline control points name sections in the same id namespace**, an
+//!   independent route through `WO Track`. Exact on PSP (all 34,261 points name a
+//!   declared section), nearly exact on PS2 (a handful do not, the same slop);
+//!   asserted exactly where exact, bounded where not.
+//! - **The payload closes**: fixed block, bounding box, a name padded to the
+//!   16-byte node alignment, every byte after the terminator zero.
 //! - **No index reaches the 64 cap.**
 //!
 //! # Four things this found that the docs page did not have
 //!
-//! - **The payload does not end at the bounding box.** It carries a
-//!   NUL-terminated name after it, padded to the node alignment, so a shipped
-//!   `section` is 0x40, 0x50 or 0x60 bytes and never the 0x30 the struct
-//!   accounts for. Nothing reads it at runtime and [`TrackPvs`] does not keep
-//!   it, but a parser that assumes 0x30 is the whole payload is wrong about
-//!   every section on every disc.
+//! - **The payload does not end at the bounding box**: a NUL-terminated name
+//!   follows, padded to alignment, so a shipped `section` is 0x40, 0x50 or 0x60
+//!   bytes, never the 0x30 the struct accounts for. Nothing reads it at runtime
+//!   and [`TrackPvs`] drops it, but a parser assuming 0x30 is wrong on every disc.
 //! - **The fourth float of each bbox corner is `w`, not zero padding**, and the
-//!   two platforms disagree about it: PSP writes `0.0` on every corner, PS2
-//!   writes `1.0` on nearly all of them. Either way it is not a coordinate -
-//!   which is the property that matters, since a parser reading corners three
-//!   floats wide would pick it up as the next axis.
-//! - **`has_bounds` is set on every section on both discs.** The flag-clear
-//!   branch is real in the loader but unexercised by shipped data, so
-//!   [`TrackPvs::bounds_of`] returning `None` is a path no track takes.
-//! - **One id is authored three times over**, on 2 of the 40 PSP tracks and 2
-//!   of the 59 PS2 ones, with byte-identical masks each time. Harmless, but a
-//!   parser that treats a repeated index as corrupt refuses four shipped
-//!   tracks. [`TrackPvs`] unions them.
-//! - **Pure does not share Pulse's class-ID numbering**, so
-//!   [`vex::CLASS_SECTION`] finds nothing on the Pure disc. See
-//!   [`pure_does_not_share_pulses_class_numbering`], which pins that as an
-//!   observation so nobody later reads the empty result as a parser bug.
+//!   platforms disagree (PSP `0.0` on every corner, PS2 `1.0` on nearly all).
+//!   Either way not a coordinate, which a parser reading corners three floats
+//!   wide would pick up as the next axis.
+//! - **`has_bounds` is set on every section on both discs**; the flag-clear
+//!   branch is real in the loader but unexercised, so [`TrackPvs::bounds_of`]
+//!   returning `None` is a path no track takes.
+//! - **One id is authored three times over** on 2 of 40 PSP and 2 of 59 PS2
+//!   tracks with byte-identical masks; a parser treating a repeated index as
+//!   corrupt refuses four shipped tracks. [`TrackPvs`] unions them.
+//! - **Pure does not share Pulse's class-ID numbering**, so [`vex::CLASS_SECTION`]
+//!   finds nothing there ([`pure_does_not_share_pulses_class_numbering`] pins it).
 //!
-//! Mask symmetry is only *measured*. A potentially-visible set has no
-//! obligation to be symmetric and the original never assumes it is, so the
-//! figure is printed rather than asserted.
+//! Mask symmetry is only *measured*: a potentially-visible set need not be
+//! symmetric, so the figure is printed, not asserted.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -99,8 +74,8 @@ const FIXED_LEN: usize = 0x10;
 /// Bounding box: two corners of four floats each.
 const BOUNDS_LEN: usize = 0x20;
 
-/// Node payloads are padded to this, which is what makes the name block's
-/// length vary rather than the name itself carrying one.
+/// Node payloads are padded to this, so the name block's length varies, not the
+/// name itself.
 const ALIGN: usize = 0x10;
 
 /// Where the low mask word is documented to sit.
@@ -108,8 +83,7 @@ const MASK_LO: usize = 0x08;
 
 /// `section` nodes across the 40 PSP Pulse track files.
 ///
-/// Pinned so that a change in the tree walk or the class id shows up as a count
-/// that moved, rather than as a survey that quietly covers less.
+/// Pinned so a change in the tree walk or class id shows as a moved count.
 const PSP_PULSE_SECTIONS: usize = 2272;
 
 /// `section` nodes across the 59 PS2 Pulse track files.
@@ -126,11 +100,9 @@ struct VexFile {
     tree: Vec<vex::Node>,
 }
 
-/// Finds an archive by its full path, not by suffix.
-///
-/// A suffix match is a trap here: `ends_with("Data.wad")` also matches
-/// `BEData.wad` and `FEData.wad`, and the first of those in disc order holds no
-/// tracks at all - which reads exactly like "this disc has no sections."
+/// Finds an archive by its full path, not by suffix: `ends_with("Data.wad")` also
+/// matches `BEData.wad` and `FEData.wad`, the first of which in disc order holds
+/// no tracks (reading as "this disc has no sections").
 fn archive_path(disc: &mut DiscImage, name: &str, label: &str) -> String {
     disc.entries()
         .expect("entries")
@@ -199,8 +171,8 @@ fn sections_of(file: &VexFile) -> Vec<&vex::Node> {
 /// Bits that name a section the file does not declare, over bits set, reading
 /// the low mask word at `offset`.
 ///
-/// See the module docs: this is the measurement that establishes the field
-/// position, by being smallest at the documented offset.
+/// See the module docs: the measurement establishing the field position by being
+/// smallest at the documented offset.
 fn stray_fraction(files: &[VexFile], offset: usize) -> f64 {
     let mut set = 0u64;
     let mut stray = 0u64;
@@ -309,8 +281,8 @@ fn survey(files: &[VexFile], label: &str) -> Survey {
             *into.payload_lens.entry(node.data_size).or_default() += 1;
             let payload = node.payload();
 
-            // The fixed block and the box are there, and what follows them is
-            // a whole number of alignment units.
+            // The fixed block and box are there; what follows is a whole number of
+            // alignment units.
             assert!(
                 bytes[payload.start + 1] != 0,
                 "{where_}: has_bounds is clear, which no shipped section does - \
@@ -328,9 +300,8 @@ fn survey(files: &[VexFile], label: &str) -> Survey {
                  number of {ALIGN}-byte alignment units"
             );
 
-            // The tail is one NUL-terminated name and then nothing but zeroes.
-            // A misplaced field boundary lands non-zero bytes past the
-            // terminator.
+            // The tail is one NUL-terminated name then zeroes; a misplaced field
+            // boundary lands non-zero bytes past the terminator.
             let name = &bytes[payload.start + FIXED_LEN + BOUNDS_LEN..payload.end];
             let end = name
                 .iter()
@@ -347,9 +318,8 @@ fn survey(files: &[VexFile], label: &str) -> Survey {
                 "{where_}: the name block has non-zero bytes after its terminator"
             );
 
-            // The fourth float of each corner. Not asserted equal to any one
-            // value, because the two platforms disagree; asserted not to be a
-            // coordinate, which is the claim the layout rests on.
+            // The fourth float of each corner: not asserted equal to one value (the
+            // platforms disagree) but not a coordinate, which the layout rests on.
             for at in [payload.start + 0x1c, payload.start + 0x2c] {
                 let w = f32::from_bits(u32::from_le_bytes(
                     bytes[at..at + 4].try_into().expect("four bytes"),
@@ -407,13 +377,10 @@ fn survey(files: &[VexFile], label: &str) -> Survey {
             }
         }
 
-        // The spline and the section nodes share one id namespace, and the
-        // adjacency the renderer pads with stays inside it.
-        //
-        // By the id this file's own version word implies rather than the
-        // version-6 constant, which is what `track::find_node` does for the
-        // single-node case; this walk wants every one of them, so it asks for
-        // the id itself.
+        // The spline and section nodes share one id namespace, and the adjacency the
+        // renderer pads with stays inside it. By the id this file's own version word
+        // implies (as `track::find_node` does); this walk wants every node, so it
+        // asks for the id itself.
         let wo_track = vex::classes_of(bytes)
             .expect("a version with a class table")
             .wo_track
@@ -475,8 +442,8 @@ fn psp_pulse_sections_parse_and_close() {
         survey.sparse_files > 0,
         "no file has sparse ids, yet 09_Track reversed is documented as having them"
     );
-    // PSP writes a zero in each corner's fourth slot and PS2 writes a one. If
-    // either ever mixes, the field is not what this page says it is.
+    // PSP writes zero in each corner's fourth slot and PS2 one; if either mixes,
+    // the field is not what the page says.
     assert_eq!(
         survey.corner_w.keys().collect::<Vec<_>>(),
         vec!["0"],
@@ -497,10 +464,9 @@ fn ps2_pulse_sections_parse_and_close() {
         survey.repeated_ids, 4,
         "two PS2 tracks each author one id three times over"
     );
-    // Unlike PSP, a few PS2 control points name a section their file does not
-    // have. Bounded rather than forbidden, and harmless at runtime: an
-    // undeclared id looks up as ALL_VISIBLE, so the craft draws everything
-    // rather than nothing. This is the fallback earning its keep on real data.
+    // Unlike PSP, a few PS2 control points name an undeclared section. Bounded, and
+    // harmless: an undeclared id looks up as ALL_VISIBLE (the fallback earning its
+    // keep on real data).
     let rate = survey.points_undeclared as f64 / survey.points_checked as f64;
     assert!(
         rate < 0.01,
@@ -513,10 +479,9 @@ fn ps2_pulse_sections_parse_and_close() {
 
 /// The evidence for the mask's field position, on both platforms.
 ///
-/// See the module docs. Reading the low word at the documented `+0x08` must
-/// scatter fewer bits into undeclared sections than reading it four bytes
-/// either side, where the never-initialised pad and the bounding box's first
-/// float respectively live.
+/// See the module docs. The low word at the documented `+0x08` must scatter fewer
+/// bits into undeclared sections than four bytes either side (the pad and the
+/// bounding box's first float).
 #[test]
 #[ignore = "needs data/images; run with `just test-data`"]
 fn the_documented_offset_beats_its_neighbours() {
@@ -555,12 +520,11 @@ fn the_documented_offset_beats_its_neighbours() {
 /// Pure is the earlier game on the same engine, and its `.vex` class IDs are
 /// **not** Pulse's.
 ///
-/// Its track files are full of classes in the `0x36f..0x393` range where Pulse
-/// uses `0x3b9..0x3e9`, so [`vex::CLASS_SECTION`] matches nothing on that disc.
-/// Pinned as an observation rather than left to be rediscovered as a parser
-/// bug: an empty result here means the constant does not apply to Pure, not
-/// that Pure has no visibility partition. Recovering Pure's own numbering is a
-/// separate piece of work.
+/// Its track files use classes in `0x36f..0x393` where Pulse uses `0x3b9..0x3e9`,
+/// so [`vex::CLASS_SECTION`] matches nothing on that disc. Pinned as an
+/// observation: an empty result means the constant does not apply to Pure, not
+/// that Pure has no visibility partition (recovering its numbering is separate
+/// work).
 #[test]
 #[ignore = "needs data/images; run with `just test-data`"]
 fn pure_does_not_share_pulses_class_numbering() {

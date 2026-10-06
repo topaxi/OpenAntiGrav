@@ -2,25 +2,20 @@
 //! `section` and the five collision classes. See
 //! `crates/formats/src/coverage.rs` for what a claim and a gap mean.
 //!
-//! **`WO Track` is expected to close with no gap at all** -
-//! [`track::AiTrack::encoded_len`]'s own doc already claims "equal to the
-//! payload length on every shipped track" - so [`wo_track_coverage`] exists
-//! to make that claim checkable from outside the parser rather than to find
-//! anything new in it.
+//! **`WO Track` is expected to close with no gap at all**:
+//! [`track::AiTrack::encoded_len`] claims equality with the payload length, and
+//! [`wo_track_coverage`] makes that checkable from outside the parser.
 //!
-//! **`section` is the opposite case, and only `pad[6]` is a real gap here.**
-//! `docs/formats/track.md`'s own struct comment names two fields nothing
-//! reads - `pad[6]` and the trailing name string. [`section_coverage`]
-//! leaves `pad[6]` unclaimed on purpose, but the name-and-its-padding tail
-//! is claimed whole rather than only up to the NUL: the payload is already
-//! the node's own aligned length, so "the rest of it" is a real span to
-//! claim, not a width to guess. `pad[6]` is what the sweep in
-//! `crates/vex/tests/payload_coverage_ground_truth.rs` reports as the gap.
+//! **`section` is the opposite case: only `pad[6]` is a real gap.**
+//! `docs/formats/track.md` names two fields nothing reads, `pad[6]` and the
+//! trailing name string. [`section_coverage`] leaves `pad[6]` unclaimed (what
+//! `crates/vex/tests/payload_coverage_ground_truth.rs` reports) but claims the
+//! name and its padding whole: the payload is the node's aligned length, so "the
+//! rest" is a real span, not a width to guess.
 //!
-//! **Collision is closed by construction.** [`collision::from_vex`] already
-//! refuses a node whose chunk walk does not land on the payload's own
-//! alignment boundary, so every node it returns claims completely; see
-//! [`collision_coverage`].
+//! **Collision is closed by construction**: [`collision::from_vex`] refuses a node
+//! whose chunk walk misses the payload's alignment boundary, so every node it
+//! returns claims completely; see [`collision_coverage`].
 
 use oag_formats::ByteOrder;
 use oag_formats::coverage::Coverage;
@@ -67,11 +62,9 @@ const SECTION_BOUNDS_LEN: usize = 0x20;
 
 /// Coverage of one `section` payload.
 ///
-/// Deliberately leaves one gap a real disc always has: `pad[6]` at `+0x02`,
-/// never read and never initialised. Everything from the name onward is
-/// claimed as one span reaching the payload's own end, padding included -
-/// a claim about reach rather than an assumption about content, since the
-/// payload is already the node's own aligned length.
+/// Deliberately leaves one gap a real disc always has: `pad[6]` at `+0x02`, never
+/// read or initialised. Everything from the name onward is claimed as one span to
+/// the payload's end, padding included: a claim about reach, not content.
 #[must_use]
 pub fn section_coverage(payload: &[u8]) -> Coverage {
     let mut seen = Coverage::new(payload.len());
@@ -90,14 +83,11 @@ pub fn section_coverage(payload: &[u8]) -> Coverage {
         at += SECTION_BOUNDS_LEN;
     }
 
-    // The name is NUL-terminated and then padded to the node's own 16-byte
-    // alignment - `docs/formats/track.md`'s own struct comment says so - so
-    // the claim runs to the payload's end rather than stopping at the NUL.
-    // That is a claim about *reach*, not about content: this project has
-    // already found one field that turned out to be exporter residue rather
-    // than padding (`ship_alt.dat`'s header, see `docs/formats/wad.md`), and
-    // whether this tail is genuinely zero on every section is a question for
-    // the corpus sweep to answer, not for this function to assume.
+    // The name is NUL-terminated then padded to the node's 16-byte alignment
+    // (`docs/formats/track.md`), so the claim runs to the payload's end. That is
+    // reach, not content: one field here already turned out to be exporter
+    // residue rather than padding (`ship_alt.dat`'s header, `docs/formats/wad.md`),
+    // and whether this tail is zero on every section is for the corpus sweep.
     seen.claim(
         at,
         payload.len() - at,
@@ -108,10 +98,9 @@ pub fn section_coverage(payload: &[u8]) -> Coverage {
 
 /// Coverage of one collision node's payload.
 ///
-/// [`collision::from_vex`] already refuses a node whose chunk walk does not
-/// reach the payload's own 16-byte alignment boundary, so this always claims
-/// completely for a node the decoder accepted at all - the point is to make
-/// that closure checkable from the coverage sweep, not to find a gap in it.
+/// [`collision::from_vex`] refuses a node whose chunk walk misses the payload's
+/// 16-byte alignment boundary, so this claims completely for any accepted node;
+/// the point is making that closure checkable from the sweep, not finding a gap.
 #[must_use]
 pub fn collision_coverage(payload: &[u8], order: ByteOrder) -> Coverage {
     let mut seen = Coverage::new(payload.len());

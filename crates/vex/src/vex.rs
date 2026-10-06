@@ -21,36 +21,28 @@
 //! the next node begins at offset + header_size + data_size
 //! ```
 //!
-//! # `child_count` is 16 bits, and the arithmetic says so
+//! # `child_count` is 16 bits
 //!
-//! Reading it as a `u32` works on most nodes and fails on a few dozen, because
-//! `+0x0e` is usually zero. On `01_Track` 54 of 2,071 nodes have something there,
-//! and for those a `u32` read gives a child count of 1,572,865, which corrupts
-//! every depth after it.
-//!
-//! The check that settles it: in a pre-order tree with immediate child counts,
-//! the counts sum to one less than the node count. As a `u16` that holds exactly
-//! on every file tried, ship models and tracks alike. As a `u32` the sum comes
-//! out at 111 million for 2,071 nodes.
+//! `+0x0e` is usually zero, so a `u32` read works on most nodes and corrupts
+//! every depth after the 54 of `01_Track`'s 2,071 nodes that have something
+//! there (child count 1,572,865). In a pre-order tree the immediate child
+//! counts sum to one less than the node count: true as a `u16` on every file
+//! tried, 111 million as a `u32`.
 //!
 //! See `docs/formats/vex.md` for the class-ID table and the evidence.
 //!
 //! # Geometry is pre-batched GE draw calls
 //!
-//! Meshes are not portable vertex and index buffers. They are batches of PSP
-//! Graphics Engine draw calls, **never indexed**, with vertices stored inline
-//! after each batch header. This module decodes them into ordinary vertex
-//! arrays.
-//!
-//! Positions are **always** three `s16`, scaled by a per-batch `f32`:
+//! Meshes are batches of PSP Graphics Engine draw calls, **never indexed**,
+//! with vertices inline after each batch header. Positions are three `s16`
+//! scaled by a per-batch `f32`:
 //!
 //! ```text
 //! position = s16 / 32768.0 * scale
 //! ```
 //!
-//! Missing that scale is the classic failure here: every model comes out a
-//! uniform wrong size, which looks like a units problem rather than a decoding
-//! bug.
+//! Missing the scale makes every model a uniform wrong size, which looks like
+//! a units problem.
 
 use std::fmt;
 
@@ -76,14 +68,10 @@ pub use matrix::{
     transform_point, world_transforms, world_transforms_at,
 };
 
-/// Class ID of a `Mesh` node.
-///
-/// Version 6 only; [`classes::for_version`] is what a decoder should ask.
+/// Class ID of a `Mesh` node (version 6 only; ask [`classes::for_version`]).
 pub const CLASS_MESH: u32 = 0x125;
 
-/// Class ID of a `Texture` node.
-///
-/// Version 6 only; [`classes::for_version`] is what a decoder should ask.
+/// Class ID of a `Texture` node (version 6 only; ask [`classes::for_version`]).
 pub const CLASS_TEXTURE: u32 = 0x3c1;
 
 /// The collision and absorb class IDs, defined in [`classes`] beside the tables
@@ -98,60 +86,47 @@ pub use classes::{
 pub const CLASS_WO_TRACK: u32 = 0x3bb;
 
 /// Class ID of a `Start Position` node, decoded by
-/// [`track::start_position`](crate::track::start_position).
-///
-/// Exactly one per track file, on all 40 of the PSP disc's.
+/// [`track::start_position`](crate::track::start_position). Exactly one per
+/// track file, on all 40 of the PSP disc's.
 pub const CLASS_START_POSITION: u32 = 0x3bc;
 
 /// Class ID of a `section` node: the authored visibility partition, decoded by
 /// [`pvs::TrackPvs`](crate::pvs::TrackPvs).
 ///
-/// **Not the lap structure**, despite sitting beside `Start Position` and the
-/// pads in the class table. A `section` carries a potentially-visible-set
-/// bitmask and a bounding box and nothing else; the track path is
-/// [`CLASS_WO_TRACK`].
+/// **Not the lap structure**: a `section` carries a PVS bitmask and a bounding
+/// box only; the track path is [`CLASS_WO_TRACK`].
 pub const CLASS_SECTION: u32 = 0x3c9;
 
-/// Class ID of a `Transform` node.
-///
-/// 715 of `01_Track`'s 2,071 nodes. Its payload is a 4x4 matrix, or nothing at
-/// all when the transform is the identity.
+/// Class ID of a `Transform` node: a 4x4 matrix payload, or nothing for the
+/// identity. 715 of `01_Track`'s 2,071 nodes.
 pub const CLASS_TRANSFORM: u32 = 0x6e;
 
-/// Class ID of an `Anim Transform` node: a scene-graph transform whose
-/// translation, rotation and scale are each a keyframe track.
+/// Class ID of an `Anim Transform` node: a transform whose translation,
+/// rotation and scale are each a keyframe track.
 ///
-/// 393 nodes over Pulse's twelve circuits, with 474 meshes below them. Read
-/// through the class's own registration site (`0x0890009c`, the call passing
-/// `0x3c0` to `Vex_RegisterClass`) rather than off the class-name table alone -
-/// see [`anim_transform`](crate::vex::anim_transform) and
+/// 393 nodes over Pulse's twelve circuits, 474 meshes below them. Read through
+/// the class's registration site (`0x0890009c`, passing `0x3c0` to
+/// `Vex_RegisterClass`); see [`anim_transform`](crate::vex::anim_transform) and
 /// `docs/ghidra/functions/psp-pulse-usa/anim-transform.md`.
 pub const CLASS_ANIM_TRANSFORM: u32 = 0x3c0;
 
 /// Class ID of a `LodGroup` node: an authored level of detail.
 ///
-/// Its payload's `child_count` (`u32` at `+0x50`) and, when that is `2`, a
-/// switch-distance `f32` right after are real authoring-time data - but the
-/// original PSP binary never reads either. See `docs/formats/vex.md`,
-/// "`LodGroup`: authored, but never switched at runtime".
+/// Its `child_count` (`u32` at `+0x50`) and, when `2`, a switch-distance `f32`
+/// after it are authoring data the PSP binary never reads; see
+/// `docs/formats/vex.md`, "`LodGroup`: authored, but never switched at runtime".
 pub const CLASS_LOD_GROUP: u32 = 0x2ee;
 
-/// Class ID of an `Engine Flare` node: the ship's exhaust.
-///
-/// Its runtime handler is read at instruction level in
-/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`: an additive camera-facing quad
-/// at the nozzle, plus the `~ENGINE` sound and the `<Team>boost.vex` model.
+/// Class ID of an `Engine Flare` node: the ship's exhaust. Its handler is in
+/// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`: an additive camera-facing
+/// quad at the nozzle, plus the `~ENGINE` sound and the `<Team>boost.vex` model.
 pub const CLASS_ENGINE_FLARE: u32 = 0x3bf;
 
-/// Class ID of a `ParticleSystem` node.
-///
-/// The `.pob` it names parses through the `oag-pob` crate, emitter tree and all.
+/// Class ID of a `ParticleSystem` node; the `.pob` it names parses in `oag-pob`.
 pub const CLASS_PARTICLE_SYSTEM: u32 = 0x3c4;
 
-/// Class ID of a `Trail` node: a position-history ribbon.
-///
-/// Distinct from [`CLASS_ENGINE_FLARE`], which carries no history at all. The
-/// ribbon's ring buffer and draw are in `exhaust.md`.
+/// Class ID of a `Trail` node: a position-history ribbon, unlike
+/// [`CLASS_ENGINE_FLARE`]. Ring buffer and draw are in `exhaust.md`.
 pub const CLASS_TRAIL: u32 = 0x3c8;
 
 /// Class ID of an `exitglow` node.
@@ -172,91 +147,71 @@ pub const CLASS_AIRBRAKE: u32 = 0x3c5;
 /// Class ID of a `Skycube` node: the track's sky.
 ///
 /// **Its payload is a [`CLASS_MESH`] payload**, so [`mesh_materials`] and
-/// [`mesh_batches`] decode it unchanged - same header words, same bounding-box
-/// pair at `+0x10`/`+0x20`, same stride-`0x14` material array at `+0x30`. That
-/// is measured rather than assumed: see
-/// `crates/formats/tests/skycube_ground_truth.rs`, which checks it against all
-/// 40 sky nodes on the PSP disc.
+/// [`mesh_batches`] decode it unchanged (same header words, bounding-box pair at
+/// `+0x10`/`+0x20`, stride-`0x14` material array at `+0x30`), checked against
+/// all 40 sky nodes by `crates/vex/tests/skycube_ground_truth.rs`.
 ///
-/// Every track file authors exactly one, parented to the world node, with its
-/// geometry inline. Materials run 1, 5 or 6 - six being a full cube, five the
-/// same cube without the face nobody sees, and one the Zone variants.
-/// `Data\Defaults\Skycube.vex` also exists on the disc but is a **version-4**
-/// file in a version-6 archive, so no shipped track can reference it; treat it
-/// as a legacy fallback, not as the thing to load.
+/// Every track authors exactly one, parented to the world node, geometry
+/// inline. Materials run 1, 5 or 6: six a full cube, five the cube without the
+/// unseen face, one the Zone variants. `Data\Defaults\Skycube.vex` is a
+/// **version-4** file in a version-6 archive, so no track can reference it.
 pub const CLASS_SKYCUBE: u32 = 0x3c6;
 
 /// Class ID of a `fogCube` node: a track's fog volume and parameters.
 ///
-/// 128 bytes on every track that has one - a 64-byte row-major 4x4 in the same
-/// convention [`CLASS_TRANSFORM`] uses, then two `{rgb, 0, near, far}` sets of
-/// six floats, then eight bytes not yet read. 36 of the 40 track files author
-/// one, so a loader must handle its absence.
+/// 128 bytes: a 64-byte row-major 4x4 as [`CLASS_TRANSFORM`] uses, two
+/// `{rgb, 0, near, far}` sets of six floats, then eight bytes not yet read. 36
+/// of the 40 track files author one, so a loader must handle its absence.
 pub const CLASS_FOGCUBE: u32 = 0x3d3;
 
 /// Class ID of an `AmbientLight` node: a flat colour added everywhere.
 ///
-/// A 16-byte payload, `{r, g, b, intensity}` as four `f32`, decoded by
-/// [`lighting::ambient_lights`](crate::lighting::ambient_lights). Placement
-/// comes from the node's own transform chain, the same way a pad's does -
-/// the payload itself carries no matrix. See `docs/formats/lighting.md`.
+/// A 16-byte `{r, g, b, intensity}` payload of four `f32`, decoded by
+/// [`lighting::ambient_lights`](crate::lighting::ambient_lights). Placement is
+/// the node's transform chain, as for a pad. See `docs/formats/lighting.md`.
 pub const CLASS_AMBIENT_LIGHT: u32 = 0x12c;
 
 /// Class ID of a `DirectionalLight` node: a parallel light with no position.
-///
-/// Same 16-byte `{r, g, b, intensity}` payload shape as [`CLASS_AMBIENT_LIGHT`],
-/// decoded by
+/// Same payload shape as [`CLASS_AMBIENT_LIGHT`], decoded by
 /// [`lighting::directional_lights`](crate::lighting::directional_lights).
 pub const CLASS_DIRECTIONAL_LIGHT: u32 = 0x131;
 
 /// Class ID of a `PointLight` node: a light that falls off with distance.
 ///
-/// A 32-byte payload: `{r, g, b, range}` as four `f32`, then four `u32`
-/// observed as `{1, 0, 0, 0}` on every shipped sample and otherwise undecoded.
-/// Decoded by [`lighting::point_lights`](crate::lighting::point_lights).
+/// 32 bytes: `{r, g, b, range}` as four `f32`, then four `u32` observed as
+/// `{1, 0, 0, 0}` on every sample, otherwise undecoded. Decoded by
+/// [`lighting::point_lights`](crate::lighting::point_lights).
 pub const CLASS_POINT_LIGHT: u32 = 0x132;
 
-/// Class ID of a `Dynamic Point Light` node: presumably a moving light source
-/// (ships included), per the class name.
+/// Class ID of a `Dynamic Point Light` node: presumably a moving light, per the
+/// class name.
 ///
-/// **No parser here.** Authored zero times on any of the 40 PSP track files in
-/// an earlier track-only census; the full-disc sweep in
-/// `crates/formats/tests/lighting_ground_truth.rs` rechecks that across all of
-/// `Data.wad` rather than assuming it holds off-track too.
+/// **No parser here.** Zero authored on the 40 PSP track files; the full-disc
+/// sweep in `crates/vex/tests/lighting_ground_truth.rs` rechecks `Data.wad`.
 pub const CLASS_DYNAMIC_POINT_LIGHT: u32 = 0x3c2;
 
 /// Class ID of a `Speedup Pad` node: a boost pad on the track surface.
 ///
-/// **Its payload is a [`CLASS_MESH`] payload**, for the same reason
-/// [`CLASS_SKYCUBE`]'s is: the pad's bind handler (`0x089264f4`) calls the
-/// `Mesh` bind (`0x0890e998`) first and only then reads its own fields. So a pad
-/// carries its own geometry, and the bounding-box pair at `+0x10`/`+0x20` is
-/// both the mesh's bounds and the pad's trigger volume. Confidence 85; see
-/// [`pads`](crate::pads) and `docs/formats/pads.md`.
+/// **Its payload is a [`CLASS_MESH`] payload**: the bind handler (`0x089264f4`)
+/// calls the `Mesh` bind (`0x0890e998`) first, then reads its own fields. The
+/// bounding-box pair at `+0x10`/`+0x20` is both the mesh bounds and the trigger
+/// volume. Confidence 85; see [`pads`](crate::pads) and `docs/formats/pads.md`.
 ///
 /// `01_Track` authors nine, each an instance of one shared payload under a
-/// different [`CLASS_TRANSFORM`] parent, so a pad's placement is entirely in its
-/// transform chain and its volume is entirely in local space.
+/// different [`CLASS_TRANSFORM`] parent, so placement is in the transform chain
+/// and the volume is in local space.
 pub const CLASS_SPEEDUP_PAD: u32 = 0x3bd;
 
-/// Class ID of a `Weapon Pad` node: a pickup pad on the track surface.
-///
-/// Shares [`CLASS_SPEEDUP_PAD`]'s base vtable, so the payload is decoded the
-/// same way. Nothing consumes one yet - there is no pickup system - but the
-/// geometry decodes and is asserted against the disc alongside the speedup pads.
+/// Class ID of a `Weapon Pad` node: a pickup pad. Shares [`CLASS_SPEEDUP_PAD`]'s
+/// base vtable, so the payload decodes the same way; nothing consumes one yet.
 pub const CLASS_WEAPON_PAD: u32 = 0x3be;
 
-/// The `.vex` class-ID to name table, read whole out of a shipped executable.
-///
-/// 866 records; see [`class_names`] for where it comes from, what its two
-/// blocks are, and why the generic Maya classes are in it.
+/// The `.vex` class-ID to name table, read whole out of a shipped executable
+/// (866 records; see [`class_names`]).
 use class_names::CLASS_NAMES;
 
 /// The shipped name for a class ID, or `None` if the ID is not in
-/// [`CLASS_NAMES`].
-///
-/// `None` means "not in the part of the table that was read", not "invalid" -
-/// see [`CLASS_NAMES`] on the missing extent.
+/// [`CLASS_NAMES`] (not in the part of the table that was read, not "invalid").
 #[must_use]
 pub fn class_name(class_id: u32) -> Option<&'static str> {
     CLASS_NAMES
@@ -266,18 +221,12 @@ pub fn class_name(class_id: u32) -> Option<&'static str> {
 }
 
 /// Every node of one class, in tree order.
-///
-/// Exists because callers were all hand-rolling
-/// `nodes(data).iter().filter(|n| n.class_id == ...)`, and a class filter is the
-/// first thing anything reading a `.vex` wants.
 pub fn nodes_by_class(nodes: &[Node], class_id: u32) -> impl Iterator<Item = &Node> {
     nodes.iter().filter(move |n| n.class_id == class_id)
 }
 
-/// Divisor for `s16` positions and the `f32` scale.
-///
-/// The game's own offline direction uses 32767; 32768 matches the hardware
-/// exactly and the 0.003% difference is irrelevant.
+/// Divisor for `s16` positions and the `f32` scale. The game's offline tool uses
+/// 32767; 32768 matches the hardware and the 0.003% difference is irrelevant.
 const POSITION_DIVISOR: f32 = 32768.0;
 
 /// Something wrong with a `.vex` file.
@@ -290,9 +239,8 @@ pub enum Error {
     },
     /// A format version this project has no class table for.
     ///
-    /// Deliberately an error rather than a fall back to version 6: the
-    /// numberings share no id, so reading an unknown generation with the wrong
-    /// table finds nothing and looks exactly like an empty file.
+    /// An error rather than a fall back to version 6: the numberings share no
+    /// id, so the wrong table finds nothing and looks like an empty file.
     UnknownVersion {
         /// The version word the file declares.
         version: u32,
@@ -306,11 +254,8 @@ pub enum Error {
         /// Size of the file.
         len: usize,
     },
-    /// A vertex type this build does not handle.
-    ///
-    /// The reachable set is small and fully enumerated; anything else means
-    /// either an unexplored asset class or a decoding error, and both are worth
-    /// hearing about loudly.
+    /// A vertex type this build does not handle: an unexplored asset class or a
+    /// decoding error, either worth hearing about loudly.
     UnsupportedVertexType {
         /// The value found.
         vertex_type: u16,
@@ -324,10 +269,9 @@ pub enum Error {
     },
     /// A PS2 batch's packet framing did not add up.
     ///
-    /// Separate from [`Self::Vif`] because these are the checks that decide
-    /// whether the packet was read as the right *kind* of thing at all: the
-    /// three lengths that have to close, and the attribute set having to agree
-    /// with the vertex type.
+    /// Separate from [`Self::Vif`]: these checks decide whether the packet was
+    /// read as the right *kind* of thing (three lengths that must close, the
+    /// attribute set agreeing with the vertex type).
     Packet {
         /// Which check failed.
         what: &'static str,
@@ -379,12 +323,9 @@ pub struct VertexLayout {
     pub colour: Option<(usize, ColourFormat)>,
 }
 
-/// How a vertex colour is packed.
-///
-/// The GU's four colour formats. Pulse's ship models use only
-/// [`Abgr8888`](ColourFormat::Abgr8888); its **tracks** use
-/// [`Abgr4444`](ColourFormat::Abgr4444), which is why a track model refused to
-/// decode until this existed.
+/// How a vertex colour is packed: the GU's four colour formats. Ship models use
+/// only [`Abgr8888`](ColourFormat::Abgr8888); **tracks** use
+/// [`Abgr4444`](ColourFormat::Abgr4444).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColourFormat {
     /// 16-bit `BGR5650`, no alpha.
@@ -409,10 +350,8 @@ impl ColourFormat {
 
     /// Expands to RGBA8888.
     ///
-    /// The 16-bit formats are widened by **bit replication**, not by shifting:
-    /// 5 bits of `0x1f` has to become `0xff`, and `0x1f << 3` gives `0xf8`. Get
-    /// that wrong and every bright surface comes out slightly dark, which is
-    /// hard to see and easy to leave in.
+    /// The 16-bit formats widen by **bit replication**, not shifting: 5 bits of
+    /// `0x1f` must become `0xff`, and `0x1f << 3` gives `0xf8` (dark surfaces).
     #[must_use]
     pub fn to_rgba(self, raw: u32) -> [u8; 4] {
         let expand = |value: u32, bits: u32| -> u8 {
@@ -464,16 +403,14 @@ impl VertexLayout {
     /// Derives the layout from a GU vertex type.
     ///
     /// Mirrors the game's own stride calculator rather than the general PSP
-    /// rule. For every reachable combination the two agree, but reproducing the
-    /// game's version means a disagreement would show up as an error here
-    /// rather than as silently shifted vertices.
+    /// rule; the two agree on every reachable combination, but a disagreement
+    /// here then shows as an error rather than silently shifted vertices.
     pub fn from_vertex_type(vertex_type: u16) -> Result<Self> {
-        // Position is always three s16: the stride calculation hard-codes a
-        // `+ 6`, so bits 7-8 are always 2.
+        // Position is always three s16: the game hard-codes `+ 6`.
         if vertex_type & 0x0180 != 0x0100 {
             return Err(Error::UnsupportedVertexType { vertex_type });
         }
-        // Weights, indices, morphs and the transform-2D bit are never handled.
+        // Weights, indices, morphs and transform-2D are never handled.
         if vertex_type & 0xFE00 != 0 {
             return Err(Error::UnsupportedVertexType { vertex_type });
         }
@@ -494,14 +431,12 @@ impl VertexLayout {
                 align = 4;
                 Some((at, TexcoordFormat::F32))
             }
-            // u16 texcoords fall through the game's own branch without
-            // advancing the offset, which is either a pruned case or a latent
-            // bug. Either way, refuse rather than guess.
+            // u16 texcoords fall through the game's branch without advancing the
+            // offset (pruned case or latent bug): refuse rather than guess.
             _ => return Err(Error::UnsupportedVertexType { vertex_type }),
         };
 
-        // Bits 2-4 are the GU colour format. 1 to 3 are not defined by the
-        // hardware, so they are refused rather than guessed at.
+        // GU colour format; 1 to 3 are undefined by the hardware.
         let colour = match (vertex_type >> 2) & 7 {
             0 => None,
             4 => Some(ColourFormat::Bgr5650),
@@ -574,32 +509,23 @@ pub struct Batch {
     pub vertices: Vec<Vertex>,
     /// The vertex count the batch header declares, at `+0x04`.
     ///
-    /// **Not always `vertices.len()`.** On PSP the two agree except where a batch
-    /// uses its alternate block, which is counted at `+0x06` instead. On PS2 this
-    /// is the count of the draw the batch *describes*, while `vertices` holds
-    /// what its VIF packet unpacks: a strip split across chunks unpacks two extra
-    /// per boundary to continue itself. Kept because the relationship between the
-    /// two is an invariant worth being able to check from outside; see
-    /// [`vif_vertices`].
+    /// **Not always `vertices.len()`.** On PSP they agree except where a batch
+    /// uses its alternate block, counted at `+0x06`. On PS2 it is the count of
+    /// the draw the batch *describes*, while `vertices` holds what its VIF
+    /// packet unpacks: a strip split across chunks unpacks two extra per
+    /// boundary. See [`vif_vertices`].
     pub declared_vertex_count: u16,
-    /// The batch's own bounding box in model units.
+    /// The batch's bounding box in model units.
     ///
-    /// Every decoded vertex must fall inside it, which is the standing check on
-    /// the vertex layout and the scale factor: get either wrong and the positions
-    /// leave the box at once.
-    ///
-    /// On PSP it is stored as `s16` at `+0x18` and `+0x20`, in vertex space, and
-    /// is scaled here the same way positions are. On PS2 it is `f32` at `+0x20`
-    /// and `+0x30`, already in the space the positions are in.
+    /// Every decoded vertex must fall inside it: the standing check on layout
+    /// and scale. PSP: `s16` at `+0x18` and `+0x20` in vertex space, scaled like
+    /// positions. PS2: `f32` at `+0x20` and `+0x30`, already in position space.
     pub bounds: ([f32; 3], [f32; 3]),
-    /// Byte 3 of the on-disk batch header, read the same way on PSP and PS2
-    /// (both share this header layout). Bit `0x40` selects the
-    /// extended/alternate header block already accounted for by
-    /// [`declared_vertex_count`]'s own doc comment; bit `0x10` is decoded by
-    /// [`is_additive_blend`](Self::is_additive_blend), confirmed against the
-    /// PSP draw path only. The remaining bits are otherwise undecoded here.
-    ///
-    /// [`declared_vertex_count`]: Self::declared_vertex_count
+    /// Byte 3 of the on-disk batch header, the same on PSP and PS2. Bit `0x40`
+    /// selects the alternate block (see
+    /// [`declared_vertex_count`](Self::declared_vertex_count)); bit `0x10` is
+    /// decoded by [`is_additive_blend`](Self::is_additive_blend), confirmed on
+    /// the PSP draw path only. The rest are undecoded.
     pub header_flags: u8,
 }
 
@@ -613,14 +539,9 @@ impl Batch {
     /// Expands the batch into triangles, as index triples into
     /// [`vertices`](Self::vertices).
     ///
-    /// Most batches are strips, so a renderer that only understands triangle
-    /// lists needs this. Strips alternate winding every triangle, and getting
-    /// that wrong makes every other face point inwards, which with back-face
-    /// culling on produces a model full of holes.
-    ///
-    /// Returns an empty list for primitive types other than triangles and
-    /// strips; points, lines and sprites are not geometry a mesh viewer can
-    /// use, and none appear in the models examined.
+    /// Strips alternate winding every triangle; getting that wrong points every
+    /// other face inwards. Empty for primitive types other than triangles and
+    /// strips; none other appear in the models examined.
     #[must_use]
     pub fn triangles(&self) -> Vec<[u32; 3]> {
         let count = self.vertices.len();
@@ -634,7 +555,7 @@ impl Batch {
             PRIM_TRIANGLE_STRIP => (0..count.saturating_sub(2))
                 .map(|i| {
                     let i = i as u32;
-                    // Flip winding on odd triangles so all faces agree.
+                    // Odd triangles flip winding.
                     if i.is_multiple_of(2) {
                         [i, i + 1, i + 2]
                     } else {
@@ -660,25 +581,18 @@ pub struct Node {
     pub data_size: usize,
     /// Number of immediate children.
     pub child_count: usize,
-    /// Length in bytes of the header's named-attribute list, and `0` where the
-    /// node carries none.
-    ///
-    /// **Settled 2026-08-18**; this field's doc used to say its meaning was not
-    /// established, with the observation that its values "are small and round
-    /// (24, 36, 48, 56, 68, 368) and look like byte counts". They are byte
-    /// counts, of the list [`node_attributes`] walks - `AnimTransform_Bind`
-    /// (`0x088fe5a4`) tests exactly this short before walking it. The name is
-    /// kept as `unk_0x0e` for now because renaming a public field is a change
-    /// for its own commit.
+    /// Byte length of the header's named-attribute list ([`node_attributes`]
+    /// walks it), `0` where the node carries none. `AnimTransform_Bind`
+    /// (`0x088fe5a4`) tests exactly this short before walking it. The name stays
+    /// `unk_0x0e` until a rename gets its own commit.
     pub unk_0x0e: u16,
     /// Node name from the header, when it carries one.
     pub name: Option<String>,
     /// Depth in the tree, zero for the root.
     pub depth: usize,
-    /// Index of this node's parent in the vector [`nodes`] returned.
-    ///
-    /// `None` for the root. Composing a mesh's world matrix means walking this
-    /// chain and multiplying the [`Transform`](CLASS_TRANSFORM) matrices on it.
+    /// Index of this node's parent in the vector [`nodes`] returned, `None` for
+    /// the root. A mesh's world matrix multiplies the [`Transform`](CLASS_TRANSFORM)
+    /// matrices up this chain.
     pub parent: Option<usize>,
 }
 
@@ -693,16 +607,14 @@ impl Node {
 
 /// Little-endian reads, for the parts of this module that are PSP and PS2 only.
 ///
-/// The file header and the node walk go through [`byte_order`] instead, because
-/// a PS3 `.vex` has those and this project reads them. What it does **not** have
-/// is geometry: a PS3 `Mesh` node is a bounding-box pair and a reference into a
-/// `.rcsmodel`, so every batch, vertex and embedded-texture decoder below runs
-/// on little-endian files by construction.
+/// The file header and node walk go through [`byte_order`] instead, because a
+/// PS3 `.vex` has those. It has no geometry: a PS3 `Mesh` node is a bounding-box
+/// pair and a reference into a `.rcsmodel`, so every batch, vertex and
+/// embedded-texture decoder below runs on little-endian files.
 ///
-/// **That is a claim about these decoders, not about the format.** This comment
-/// used to end "no big-endian file reaches them", and [`anim_transform`] was
-/// written little-endian on the strength of it. It reads no geometry - HD keeps
-/// the class and authors 5,518 nodes - so every one decoded to nothing.
+/// **That is a claim about these decoders, not the format**: [`anim_transform`]
+/// was once written little-endian on that strength, and HD's 5,518 nodes of the
+/// class all decoded to nothing.
 mod le {
     use oag_formats::ByteOrder;
 
@@ -721,13 +633,10 @@ mod le {
 
 use le::{f32_at, u16_at, u32_at};
 
-/// Which way round a file's words are, from its own magic.
-///
-/// `VEXX` on the PSP and PS2, `XXEV` on the PS3 - the same four bytes, written
-/// by the same exporter on a big-endian host. So the file says which it is, and
-/// nothing here has to ask what console it came from. A file with neither
-/// spelling reads as [`ByteOrder::Little`]; [`has_magic`] is the check for "is
-/// this a `.vex`" and this is not it.
+/// Which way round a file's words are, from its own magic: `VEXX` on the PSP and
+/// PS2, `XXEV` on the PS3 (the same exporter on a big-endian host). A file with
+/// neither reads as [`ByteOrder::Little`]; [`has_magic`] is the "is this a
+/// `.vex`" check.
 #[must_use]
 pub fn byte_order(data: &[u8]) -> ByteOrder {
     match data.get(12..16) {
@@ -746,15 +655,13 @@ pub fn version(data: &[u8]) -> Result<u32> {
 
 /// The class table for a file, read from its own version word.
 ///
-/// This is what a decoder should call. Asking [`classes::for_version`] with a
-/// version obtained some other way reintroduces the one mistake the table
-/// exists to prevent: pairing a table with a file it does not describe.
+/// What a decoder should call: [`classes::for_version`] with a version obtained
+/// elsewhere risks pairing a table with a file it does not describe.
 ///
 /// # Errors
 ///
-/// [`Error::TooShort`] for a file with no header, and
-/// [`Error::UnknownVersion`] for a format generation this project has never
-/// seen - which is deliberately not silently read as version 6.
+/// [`Error::TooShort`] for a file with no header, [`Error::UnknownVersion`] for
+/// a generation this project has never seen (never silently read as version 6).
 pub fn classes_of(data: &[u8]) -> Result<classes::Classes> {
     let version = version(data)?;
     classes::for_version(version).ok_or(Error::UnknownVersion { version })
@@ -762,9 +669,8 @@ pub fn classes_of(data: &[u8]) -> Result<classes::Classes> {
 
 /// Whether the file carries the `VEXX` magic, in either spelling.
 ///
-/// The magic sits at `+0x0c`, not at the start, so a naive signature check
-/// misses it. `XXEV` counts: it is the same magic on a big-endian host, and a
-/// caller that needs to know which asks [`byte_order`].
+/// The magic sits at `+0x0c`, so a naive signature check misses it. `XXEV` is
+/// the same magic on a big-endian host; [`byte_order`] says which.
 #[must_use]
 pub fn has_magic(data: &[u8]) -> bool {
     matches!(data.get(12..16), Some(m) if m == MAGIC || m == MAGIC_BE)
@@ -788,7 +694,6 @@ pub fn texture_len(data: &[u8]) -> Result<usize> {
 
 /// Reads a NUL-terminated name out of a node header.
 fn name_at(data: &[u8], at: usize, header_size: usize) -> Option<String> {
-    // Names live after the fixed fields; a minimal header has none.
     if header_size < 0x20 {
         return None;
     }
@@ -814,8 +719,8 @@ fn cstr_at(payload: &[u8], at: usize) -> Option<String> {
 
 /// Walks the node tree, depth-first.
 ///
-/// Stops at the first structurally impossible node rather than erroring, since
-/// the tree is followed by embedded texture data with no explicit terminator.
+/// Stops at the first structurally impossible node rather than erroring: the
+/// tree is followed by embedded texture data with no terminator.
 pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
     if data.len() < FILE_HEADER_LEN {
         return Err(Error::TooShort { got: data.len() });
@@ -823,21 +728,17 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 
     let order = byte_order(data);
     let mut out: Vec<Node> = Vec::new();
-    // Children follow their parent, so a stack of remaining counts tracks depth,
-    // and a parallel stack of their indices gives each node its parent.
+    // Remaining child counts track depth; a parallel stack of indices gives parents.
     let mut remaining: Vec<usize> = Vec::new();
     let mut remaining_parent: Vec<usize> = Vec::new();
     let mut at = FILE_HEADER_LEN;
 
-    // The tree is followed by embedded textures, so stop at its declared end
-    // rather than trying to detect where node data stops looking like nodes.
+    // Stop at the declared end of the tree rather than detecting where nodes stop.
     let end = (FILE_HEADER_LEN + tree_len(data)?).min(data.len());
 
     while at + 16 <= end {
-        // Retire finished subtrees *before* reading the depth, not after. A
-        // parent whose children are all consumed is no longer an ancestor, and
-        // deferring the pop reports the first node after a completed subtree at
-        // the depth of that subtree rather than its own.
+        // Retire finished subtrees before reading the depth: a completed parent is
+        // no longer an ancestor of the next node.
         while remaining.last() == Some(&0) {
             remaining.pop();
             remaining_parent.pop();
@@ -856,8 +757,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
             parent: remaining_parent.last().copied(),
         };
 
-        // A header smaller than the fields already read, or a node running past
-        // the tree, means the structure is not what we think it is.
+        // A header smaller than the fields read, or a node past the tree end.
         if node.header_size < 16 || node.payload().end > end {
             break;
         }
@@ -874,7 +774,7 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
             remaining_parent.push(out.len() - 1);
         }
 
-        // Guard against a zero-length node, which would loop forever.
+        // A zero-length node would loop forever.
         if next <= at {
             break;
         }
@@ -910,12 +810,11 @@ pub use textures::{
 /// One keyframe track of a mesh's texture-transform block: key times paired
 /// with `(u, v)` values.
 ///
-/// Times are `u16`s in 60 Hz frames (the block's `+0x0c` is `1/60` on every
-/// block read); values are `s16` pairs in 1/256 units, so `256` is `1.0`.
-/// Recovered from `TexAnim_EvalKeyframes` (`0x08927034`) - see
-/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values
-/// gap is closed", and `docs/formats/vex.md`, "The texture-transform keyframe
-/// block".
+/// Times are `u16` 60 Hz frames (the block's `+0x0c` is `1/60` on every block
+/// read); values are `s16` pairs in 1/256 units. From `TexAnim_EvalKeyframes`
+/// (`0x08927034`); see
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The values gap
+/// is closed", and `docs/formats/vex.md`, "The texture-transform keyframe block".
 #[derive(Debug, Clone, PartialEq)]
 pub struct TexTransformTrack {
     /// Key times, 60 Hz frames, ascending.
@@ -925,10 +824,8 @@ pub struct TexTransformTrack {
 }
 
 impl TexTransformTrack {
-    /// Evaluates the track at `t` frames, the way the engine's evaluator does:
-    /// clamp to the first key below `times[0]`, to the last key past the end,
-    /// linear interpolation between keys otherwise. Returns `(u, v)` in
-    /// texture units (the 1/256 scaling applied).
+    /// Evaluates the track at `t` frames as the engine does: clamp outside the
+    /// keys, lerp between. Returns `(u, v)` in texture units.
     #[must_use]
     pub fn sample(&self, t: f32) -> (f32, f32) {
         self.sample_with(t, false)
@@ -936,20 +833,16 @@ impl TexTransformTrack {
 
     /// [`sample`](Self::sample), with the block's step flag applied.
     ///
-    /// `TexAnim_EvalKeyframes` takes the flag as an argument and, when it is
-    /// set, snaps to a key instead of interpolating between two. It is not a
-    /// detail: the flicker sequences on `16_Track` are authored as key *pairs*
-    /// one frame apart (`(3, 4)`, `(7, 8)`, ...), and lerping across the gaps
-    /// between pairs turns a hard flicker into a slow slide.
+    /// `TexAnim_EvalKeyframes` snaps to a key instead of interpolating when the
+    /// flag is set. It matters: `16_Track`'s flicker sequences are authored as
+    /// key *pairs* one frame apart (`(3, 4)`, `(7, 8)`), and lerping across the
+    /// gaps turns a hard flicker into a slow slide.
     ///
-    /// **Which key it snaps to is a choice, not a read.** The decompilation
-    /// says "snaps to the key" without settling the direction, and this holds
-    /// the **preceding** one. That is what those key pairs argue for - hold a
-    /// value, then jump to the next - and holding the *following* key instead
-    /// would shift every stepped surface one segment early rather than change
-    /// what it looks like. Confidence 60 on the direction alone, per
-    /// `docs/reverse-engineering/confidence-rubric.md`; everything else here
-    /// is read at instruction level.
+    /// **Which key it snaps to is a choice, not a read**: the decompilation does
+    /// not settle the direction and this holds the **preceding** key, as those
+    /// pairs argue. Confidence 60 on the direction alone, per
+    /// `docs/reverse-engineering/confidence-rubric.md`; the rest is read at
+    /// instruction level.
     #[must_use]
     pub fn sample_with(&self, t: f32, step: bool) -> (f32, f32) {
         let Some((&first, &last)) = self.times.first().zip(self.times.last()) else {
@@ -977,8 +870,8 @@ impl TexTransformTrack {
         (u0 + (u1 - u0) * frac, v0 + (v1 - v0) * frac)
     }
 
-    /// The last key time, in frames - the span the engine's per-model clock
-    /// loops over for a looping animation like the boost plume's.
+    /// The last key time in frames: the span a looping animation like the boost
+    /// plume's loops over.
     #[must_use]
     pub fn period(&self) -> f32 {
         self.times.last().copied().map_or(0.0, f32::from)
@@ -994,36 +887,31 @@ pub struct TexTransform {
     /// The `TEXSCALE` track. A single key `(256, 256)` is the common
     /// "constant 1.0" case.
     pub scale: TexTransformTrack,
-    /// Seconds per key-time unit, from the block's `+0x0c`. `1/60` on every
-    /// block read so far, which is what makes key times 60 Hz frames.
+    /// Seconds per key-time unit, from the block's `+0x0c`; `1/60` on every
+    /// block read.
     pub seconds_per_key: f32,
     /// The authored loop period in seconds, from the block's `+0x2c`.
     ///
-    /// **Not the last key time**, and reading it as such is wrong by a factor
-    /// of four on `16_Track`'s flicker sequences: their tracks end at frame
-    /// 12, 18 or 24 while all three author a 50-frame loop. That difference is
-    /// the whole point of the field - sibling meshes carry the same steps at
-    /// different key times and share one period, which is how the original
-    /// interleaves their phase.
+    /// **Not the last key time**: `16_Track`'s flicker tracks end at frame 12,
+    /// 18 or 24 while all three author a 50-frame loop. Sibling meshes carry the
+    /// same steps at different key times and share one period, which is how the
+    /// original interleaves their phase.
     pub loop_seconds: f32,
-    /// Bit 0 of the *word* at `+0x2c`, whose float value is
-    /// [`loop_seconds`](Self::loop_seconds). Set means snap to the preceding
-    /// key rather than interpolate - see
-    /// [`TexTransformTrack::sample_with`].
+    /// Bit 0 of the *word* at `+0x2c` (whose float is
+    /// [`loop_seconds`](Self::loop_seconds)). Set means snap to the preceding key;
+    /// see [`TexTransformTrack::sample_with`].
     pub step: bool,
 }
 
 impl TexTransform {
-    /// Evaluates both tracks at `seconds`, the way `TexAnim_UpdateTransform`
-    /// (`0x08927204`) does: wrap the time by
-    /// [`loop_seconds`](Self::loop_seconds), divide by
-    /// [`seconds_per_key`](Self::seconds_per_key) to reach key-time units, and
-    /// sample. Returns `(scale, offset)`, both in texture units.
+    /// Evaluates both tracks at `seconds` as `TexAnim_UpdateTransform`
+    /// (`0x08927204`) does: wrap by [`loop_seconds`](Self::loop_seconds), divide
+    /// by [`seconds_per_key`](Self::seconds_per_key), sample. Returns
+    /// `(scale, offset)` in texture units.
     ///
-    /// An empty track evaluates to the engine's own not-found default -
-    /// `(1.0, 1.0)` for the scale, `(0.0, 0.0)` for the offset - rather than to
-    /// zero, so a block that authors only one of the two leaves the other
-    /// alone.
+    /// An empty track evaluates to the engine's not-found default (scale
+    /// `(1.0, 1.0)`, offset `(0.0, 0.0)`), so a block authoring only one of the
+    /// two leaves the other alone.
     #[must_use]
     pub fn sample(&self, seconds: f32) -> ([f32; 2], [f32; 2]) {
         let period = if self.loop_seconds > 0.0 {
@@ -1053,13 +941,9 @@ impl TexTransform {
     }
 }
 
-/// The texture-transform keyframe block of one mesh payload, if it carries
-/// any keys.
-///
-/// This is the block of **material 0**. A mesh authors one `0x40`-byte block
-/// per material; [`mesh_tex_transforms`] returns all of them. Kept as its own
-/// entry point because most animated meshes have exactly one material, and
-/// every caller that predates the per-material reading wants this one.
+/// The texture-transform keyframe block of **material 0** of one mesh payload,
+/// if it carries any keys. A mesh authors one `0x40`-byte block per material
+/// ([`mesh_tex_transforms`] returns all); most animated meshes have one.
 #[must_use]
 pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
     mesh_tex_transform_at(payload, 0)
@@ -1067,11 +951,9 @@ pub fn mesh_tex_transform(payload: &[u8]) -> Option<TexTransform> {
 
 /// Every material's texture-transform block, in material order.
 ///
-/// The blocks sit immediately after the material array, at
-/// `+0x30 + material_count * 0x14`, `0x40` bytes each - the same array the
-/// runtime reaches as `mesh+0x60 + material_index * 0x40`, relocated in place.
-/// An entry is `None` when that material authors no track at all, which is the
-/// identity transform per the engine's own default.
+/// The blocks follow the material array at `+0x30 + material_count * 0x14`,
+/// `0x40` bytes each (the runtime's `mesh+0x60 + material_index * 0x40`,
+/// relocated). `None` means no track: the identity transform.
 #[must_use]
 pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
     if payload.len() < 0x30 {
@@ -1083,22 +965,17 @@ pub fn mesh_tex_transforms(payload: &[u8]) -> Vec<Option<TexTransform>> {
         .collect()
 }
 
-/// One material's block. See [`mesh_tex_transforms`] for the layout, and
-/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md` for the field
-/// map.
+/// One material's block; layout in [`mesh_tex_transforms`], field map in
+/// `docs/ghidra/functions/psp-pulse-usa/texture-animation.md`.
 ///
-/// Returns `None` when the material does not carry the `& 0x10` flag, when the
-/// block (or any key data it points at) runs past the payload, or when both
-/// tracks are empty.
+/// `None` when the material lacks the `& 0x10` flag, the block or its key data
+/// runs past the payload, or both tracks are empty.
 ///
-/// **The flag test is the engine's own gate**, not belt-and-braces:
-/// `Mesh_UpdateTextureTransforms` (`0x0890e160`) walks the materials and
-/// evaluates only those carrying it. It matters because a `.vex` payload that
-/// is not a mesh at all still parses this far - a `Skycube` payload *is* a
-/// Mesh payload - and arbitrary bytes read as a plausible block often enough
-/// to matter. Both predicates agree on everything measured; see
-/// `crates/render/tests/authored_uv_ground_truth.rs`, which asserts that
-/// rather than assuming it.
+/// **The flag test is the engine's own gate**: `Mesh_UpdateTextureTransforms`
+/// (`0x0890e160`) evaluates only materials carrying it. It matters because
+/// non-mesh payloads (a `Skycube` is a Mesh payload) parse this far, and
+/// arbitrary bytes often read as a plausible block. Both predicates agree on
+/// everything measured, per `crates/render/tests/authored_uv_ground_truth.rs`.
 fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTransform> {
     if payload.len() < 0x30 {
         return None;
@@ -1107,7 +984,7 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
     if material_index >= material_count {
         return None;
     }
-    // The engine's gate: `& 0x10` on the material's first `u16`.
+    // The engine's gate.
     let material = 0x30 + material_index * 0x14;
     if material + 2 > payload.len() || u16_at(payload, material) & 0x10 == 0 {
         return None;
@@ -1122,11 +999,10 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
     if offset_count == 0 && scale_count == 0 {
         return None;
     }
-    // The `times`/`values` fields are relative to the **start of the block
-    // array**, not to the block that holds them. Indistinguishable on a
-    // single-material mesh, and wrong on `16_Track`'s two-material hologram
-    // panels: material 1's fields resolve to real key data off the array base
-    // and to noise off its own block.
+    // `times`/`values` are relative to the **start of the block array**, not
+    // their own block: indistinguishable on a single-material mesh, wrong on
+    // `16_Track`'s two-material hologram panels (material 1 resolves to real keys
+    // off the array base and noise off its own block).
     let track = |count: usize, times_rel: usize, values_rel: usize| {
         let times_at = base + u32_at(payload, block + times_rel) as usize;
         let values_at = base + u32_at(payload, block + values_rel) as usize;
@@ -1145,8 +1021,6 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
                 .collect(),
         })
     };
-    // The `times`/`values` fields are relative to the block, so a per-material
-    // block's key data is reached from that block's own base, not the first's.
     let loop_word = u32_at(payload, block + 0x2c);
     Some(TexTransform {
         offset: track(offset_count, 0x04, 0x10)?,
@@ -1157,18 +1031,15 @@ fn mesh_tex_transform_at(payload: &[u8], material_index: usize) -> Option<TexTra
     })
 }
 
-/// Decodes the batches of one mesh payload.
-///
-/// `payload` is the mesh node's data. `batch_list` selects list A (`0`) or list
-/// B (`1`); a batch belongs to a list while the corresponding `pass_mask` bit
-/// is set.
+/// Decodes the batches of one mesh payload (the node's data). `batch_list`
+/// selects list A (`0`) or B (`1`); a batch belongs to a list while the matching
+/// `pass_mask` bit is set.
 pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
     if payload.len() < 0x30 {
         return Err(Error::TooShort { got: payload.len() });
     }
 
-    // The loader relocates these into pointers; in the file they are offsets
-    // from the start of the mesh payload.
+    // File offsets from the payload start (the loader relocates them to pointers).
     let list_offset = u32_at(payload, if batch_list == 0 { 4 } else { 8 }) as usize;
     let terminator = if batch_list == 0 { 1u16 } else { 2 };
 
@@ -1192,9 +1063,8 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
         let alternate_offset = usize::from(u16_at(payload, at + 0x0e));
         let scale = f32_at(payload, at + 0x10);
 
-        // A PS2 batch's payload is a VIF packet rather than an interleaved
-        // vertex array, and carries its bounding box as floats in the space the
-        // positions are already in. See `is_vif_batch`.
+        // A PS2 batch's payload is a VIF packet, with float bounds already in
+        // position space. See `is_vif_batch`.
         let (vertices, bounds) = if is_vif_batch(vertex_type) {
             if at + 0x3c > payload.len() {
                 return Err(Error::OutOfBounds {
@@ -1267,8 +1137,7 @@ pub fn mesh_batches(payload: &[u8], batch_list: u8) -> Result<Vec<Batch>> {
             header_flags: flags,
         });
 
-        // `payload_size` covers the vertex data only, so a batch is its header
-        // plus that.
+        // `payload_size` covers the vertex data only.
         let step = header_size + payload_size;
         if step == 0 {
             break;
@@ -1321,20 +1190,15 @@ fn decode_vertex(data: &[u8], at: usize, layout: &VertexLayout, scale: f32) -> V
 /// Bits 7-8 of a vertex type, which say how a position is stored.
 pub const POSITION_BITS: u16 = 0x0180;
 
-/// Bits 7-8 set to `3`: positions are 32-bit floats.
-///
-/// Unreachable on PSP, where the game's own stride calculator hard-codes a `+ 6`
-/// for three `s16`, and universal on PS2, where the VU works in floats.
+/// Bits 7-8 set to `3`: positions are 32-bit floats. Unreachable on PSP (the
+/// stride calculator hard-codes `+ 6` for three `s16`), universal on PS2.
 pub const POSITION_F32: u16 = 0x0180;
 
 /// Whether a batch's vertices are a PS2 VIF packet rather than a PSP vertex
 /// array.
 ///
-/// The discriminator is the position width, and it is not a heuristic: every PS2
-/// batch observed declares 32-bit float positions and no PSP batch can, because
-/// the PSP loader's stride calculator adds a hard-coded 6 bytes for three `s16`.
-/// The reading is then confirmed structurally by the packet itself - see
-/// [`vif_vertices`] for the three framing checks it has to pass.
+/// Not a heuristic: every PS2 batch observed declares float positions and no PSP
+/// batch can. The packet's own framing confirms it; see [`vif_vertices`].
 #[must_use]
 pub fn is_vif_batch(vertex_type: u16) -> bool {
     vertex_type & POSITION_BITS == POSITION_F32
@@ -1343,8 +1207,7 @@ pub fn is_vif_batch(vertex_type: u16) -> bool {
 /// Bytes of framing before a PS2 batch's DMA packet.
 const VIF_REGION_HEADER: usize = 16;
 
-/// Bytes of DMA tag at the head of the packet, which is one quadword: 8 bytes of
-/// tag and two VIF command words in the upper half.
+/// Bytes of DMA tag at the head of the packet: one quadword.
 const VIF_TAG_LEN: usize = 16;
 
 /// VU1 address of the position array, in quadwords.
@@ -1361,17 +1224,15 @@ const VU_NORMAL: u16 = 7;
 
 /// The colour value the GS treats as full intensity.
 ///
-/// PS2 vertex colours are 0 to 128, not 0 to 255: 128 is 1.0 through the
-/// texture-modulate path. Every colour byte in the two models measured is 0 to
-/// 127, so nothing here saturates in practice, and reading them as 0-255 would
-/// make every model exactly half as bright - which reads as a lighting problem
-/// rather than a decoding one. See `docs/formats/vex.md`.
+/// PS2 vertex colours are 0 to 128, not 0 to 255. Every byte in the two models
+/// measured is 0 to 127; reading them as 0-255 halves the brightness and looks
+/// like a lighting problem. See `docs/formats/vex.md`.
 const PS2_COLOUR_ONE: u16 = 128;
 
 /// Decodes the vertices of one PS2 batch, whose payload is a VIF packet.
 ///
 /// `at` is the batch header's offset in the mesh payload and `payload_size` its
-/// declared vertex-data length, both as [`mesh_batches`] reads them.
+/// declared vertex-data length, as [`mesh_batches`] reads them.
 ///
 /// # What the packet looks like
 ///
@@ -1384,31 +1245,26 @@ const PS2_COLOUR_ONE: u16 = 128;
 /// +0x20  VIF command stream
 /// ```
 ///
-/// The stream is a run of chunks, each ending in `MSCNT`, and each holding one
-/// `UNPACK` per attribute at a fixed VU address: position at 4, colour at 5,
-/// texture coordinates at 6, normals at 7. A chunk is one draw, so a strip
-/// longer than VU1 memory allows is split across several - by **repeating two
-/// vertices**, which is why the decoded vertex count exceeds the batch header's
-/// by two per extra chunk.
+/// The stream is a run of chunks, each ending in `MSCNT`, each holding one
+/// `UNPACK` per attribute at a fixed VU address: position 4, colour 5, texture
+/// coordinates 6, normals 7. A chunk is one draw, so a strip longer than VU1
+/// memory is split by **repeating two vertices**, which is why the decoded count
+/// exceeds the batch header's by two per extra chunk.
 ///
 /// # Why the chunks are concatenated
 ///
-/// Returning one vertex list, rather than the chunks separately, is only correct
-/// because of a second property: **every chunk but the last has an even vertex
-/// count**, on all 89,302 strip batches of the PS2 disc. A strip's winding
-/// alternates per triangle, so the first triangle of the next chunk starts at an
-/// even global index and hardware order and concatenated order agree; the two
-/// repeated vertices become zero-area triangles at the seam. An odd non-final
-/// chunk would wind every triangle after it backwards - inside-out geometry
-/// wherever the batch is culled - so it is refused here rather than drawn, and
-/// the day one turns up is the day this needs per-chunk triangle generation.
+/// Correct only because **every chunk but the last has an even vertex count**,
+/// on all 89,302 strip batches of the PS2 disc: winding alternates per triangle,
+/// so the next chunk starts at an even global index, and the two repeated
+/// vertices become zero-area triangles at the seam. An odd non-final chunk would
+/// wind everything after it backwards, so it is refused; the day one turns up,
+/// this needs per-chunk triangle generation.
 ///
 /// # Errors
 ///
-/// [`Error::Vif`] if the command stream does not walk, and [`Error::Packet`] if
-/// the framing does not close, an attribute array is missing or has the wrong
-/// shape, the normal array disagrees with the vertex type, or a split strip's
-/// chunk has an odd vertex count.
+/// [`Error::Vif`] if the command stream does not walk; [`Error::Packet`] if the
+/// framing does not close, an attribute array is missing or misshapen, the
+/// normal array disagrees with the vertex type, or a split strip's chunk is odd.
 pub fn vif_vertices(
     payload: &[u8],
     at: usize,
@@ -1423,9 +1279,8 @@ pub fn vif_vertices(
         return Err(packet("region header runs past the payload"));
     }
     let size = u32_at(payload, base) as usize;
-    // Three independent framing checks, and all three are exact: the region
-    // header's length plus its own 16 bytes is the batch's declared payload, the
-    // DMA tag's quadword count spans the packet, and the vertex type is repeated.
+    // Three exact framing checks: region length + 16 is the declared payload, the
+    // DMA tag's quadword count spans the packet, the vertex type repeats.
     if size + VIF_REGION_HEADER != payload_size {
         return Err(packet("packet length disagrees with the batch header"));
     }
@@ -1437,8 +1292,8 @@ pub fn vif_vertices(
         return Err(packet("DMA tag quadword count disagrees with the packet"));
     }
 
-    // The command stream starts at the tag quadword's upper half, which holds
-    // the first two VIF commands, and runs to the end of the packet.
+    // The stream starts at the tag quadword's upper half (the first two VIF
+    // commands) and runs to the end of the packet.
     let start = base + VIF_REGION_HEADER + 8;
     let end = base + VIF_REGION_HEADER + size;
     if end > payload.len() {
@@ -1453,7 +1308,7 @@ pub fn vif_vertices(
 
     let mut out = Vec::new();
     let mut chunk: [Option<crate::vif::Unpack>; 4] = [None, None, None, None];
-    // Lengths of the chunks emitted so far, for the parity check below.
+    // Chunk lengths so far, for the parity check.
     let mut lengths: Vec<usize> = Vec::new();
     let slot = |address: u16| match address {
         VU_POSITION => Some(0usize),
@@ -1470,8 +1325,7 @@ pub fn vif_vertices(
                     chunk[index] = Some(unpack);
                 }
             }
-            // A microprogram call is one draw, so it is the boundary the
-            // attribute arrays gathered so far belong to.
+            // A microprogram call is one draw: the boundary of the gathered arrays.
             crate::vif::Code::Mscnt | crate::vif::Code::Mscal(_)
                 if chunk.iter().any(Option::is_some) =>
             {
@@ -1516,12 +1370,10 @@ fn emit_vif_chunk(
         return Err(packet("position array is not three or four floats"));
     }
     // **Only the normal bit carries over from the vertex type.** Across all 1,038
-    // `.vex` files on the PS2 disc, a normal array is present exactly when bits
-    // 5-6 say `s8 normal` and absent otherwise, so a disagreement there means the
-    // packet was misread and is an error. Colour and texture coordinates are a
-    // different matter: **every** PS2 chunk carries both, including the 4,378
-    // batches whose type declares no colour at all, and the coordinates are
-    // always two floats whatever the type's texture-coordinate bits say. See
+    // PS2 `.vex` files a normal array is present exactly when bits 5-6 say `s8
+    // normal`, so a disagreement means a misread packet. Colour and texcoords
+    // differ: **every** chunk carries both (including 4,378 batches whose type
+    // declares no colour), the coordinates always two floats. See
     // `docs/formats/vex.md`.
     if chunk[3].is_some() != want_normal {
         return Err(packet("normal array disagrees with the vertex type"));
@@ -1611,17 +1463,11 @@ mod tests;
 
 /// Which bytes of a `.vex` the node walk reaches.
 ///
-/// **A different question from `oag_rcs::rcsmodel::coverage`'s, and a narrower
-/// one.** That one asks whether a *field* went unread, because that is how a
-/// quarter of Wipeout HD's chunks lost their surfaces. This asks whether a
-/// *region* goes unvisited: the node tree is walked whole, so a run of bytes no
-/// node covers is a section the walk never reaches at all.
-///
-/// It deliberately does not descend into a payload. Most `.vex` node classes
-/// are undecoded on purpose - the format table in `docs/formats/vex.md` says
-/// which - so claiming a payload whole is the honest statement of what the walk
-/// reaches, and per-class coverage would report a deliberate decision as a
-/// defect on every file.
+/// **Narrower than `oag_rcs::rcsmodel::coverage`**, which asks whether a *field*
+/// went unread. This asks whether a *region* goes unvisited. It does not
+/// descend into a payload: most node classes are undecoded on purpose (see
+/// `docs/formats/vex.md`), and per-class coverage would report that decision as
+/// a defect on every file.
 #[must_use]
 pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
     let mut seen = oag_formats::coverage::Coverage::new(data.len());
@@ -1634,12 +1480,9 @@ pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
         let payload = node.payload();
         seen.claim(payload.start, payload.len(), "a node payload");
     }
-    // **The file header declares this, so it is reached even though the node
-    // walk stops before it.** Leaving it out was this instrument's own first
-    // false alarm: 3.0 MB across 666 files reported as unreachable, which is
-    // the embedded texture block that `texture_len` names at `+0x08` and
-    // `crate::texture` decodes. A gap is a lead, and the first thing to check
-    // about one is whether the format's own header already accounts for it.
+    // The header declares the texture block, so it is reached even though the walk
+    // stops before it. Omitting it was this instrument's first false alarm (3.0 MB
+    // over 666 files); check whether the format's own header accounts for a gap.
     if let (Ok(tree), Ok(textures)) = (tree_len(data), texture_len(data)) {
         seen.claim(
             FILE_HEADER_LEN + tree,

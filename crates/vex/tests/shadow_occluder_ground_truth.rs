@@ -2,77 +2,66 @@
 //! that a `Dynamic Shadow Occluder` `0x3c3` payload **closes** at
 //! `0x50 + 32n + 16m`.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! ```sh
 //! just test-data
 //! ```
 //!
-//! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
-//!
 //! # What this is for
 //!
 //! `docs/rendering/shadows.md` plans four shadow techniques behind one setting,
-//! and the choice between them turns entirely on what each disc actually
-//! authors. Every number that page states is asserted here, so a survey that
-//! quietly covers less shows up as a count that moved rather than as a design
-//! built on a stale measurement.
+//! chosen by what each disc authors. Every number that page states is asserted
+//! here, so a survey that covers less shows up as a count that moved.
 //!
 //! # Why closure, and not "the decoder returned something"
 //!
 //! **`vex::mesh_batches(payload, 0).is_ok()` is `true` on all 129 of these
-//! payloads and means nothing.** The first pass at this class read that as
-//! "the payload is mesh-shaped" and was wrong: the `Mesh` closure test - the
-//! material count at `+0x02` placing the material array's end exactly at
-//! `+0x04`'s geometry offset - **fails on 129 of 129**, because on this class
-//! `+0x02` is not a material count and `+0x04` is a stale PSP main-RAM
-//! pointer. `skycube_ground_truth.rs` warns about precisely this in its own
-//! header and it still caught someone.
+//! payloads and means nothing.** The `Mesh` closure test (the material count at
+//! `+0x02` placing the material array's end at `+0x04`'s geometry offset)
+//! **fails on 129 of 129**: here `+0x02` is not a material count and `+0x04` is
+//! a stale PSP main-RAM pointer (`skycube_ground_truth.rs` warns of this and it
+//! still caught someone). The layout claim rests on its own closure:
 //!
 //! So the layout claim here rests on its own closure instead:
 //!
 //! > `n` at `+0x00` and `m` at `+0x02` satisfy
 //! > `0x50 + 32n + 16m == payload.len()`.
 //!
-//! That is checked over twelve distinct `(n, m)` pairs and payload lengths from
-//! 272 to 4432 bytes. A wrong stride does not fit twelve independent pairs.
+//! Checked over twelve distinct `(n, m)` pairs and payload lengths from 272 to
+//! 4432 bytes; a wrong stride does not fit twelve independent pairs.
 //!
 //! # What the sweep found
 //!
 //! - **`shadow` `0x3cb`, `blob` `0x3e0` and `textureBlob` `0x3df` are authored
-//!   zero times**, so three of the four classes the roadmap lists under shadow
-//!   are inert - the same kind of converged negative `PointLight` already is.
+//!   zero times**: three of the four roadmap shadow classes are inert.
 //! - **`Dynamic Shadow Occluder` `0x3c3` is the real mechanism**: 129 nodes.
 //! - **Two populations.** 119 sit at their own origin and are named
 //!   (`shadowShape`, `shadow_lodShape`, `shadow_agsShape`, `shadow_mineShape`);
-//!   10 sit at track coordinates and are unnamed. A craft's shadow hull and a
-//!   track-side occluder are not the same feature.
-//! - **Wipeout Pure authors none of them at all**, which is why its shadow tier
-//!   is honest absence rather than a substitute.
+//!   10 sit at track coordinates, unnamed: a craft's shadow hull and a track-side
+//!   occluder are different features.
+//! - **Wipeout Pure authors none**, so its shadow tier is honest absence.
 //!
 //! # The records are a convex hull: `n` planes and `m` vertices
 //!
 //! - A **32-byte face record** opens with a unit plane normal (3 x `f32`,
-//!   129/129), then a `u32` at `+0x0c` giving how many vertices that face has
-//!   (3 or more, never more than the hull owns), then indices.
-//! - A **16-byte vertex record** is `(w, x, y, z)` with **`w` first** and
-//!   `w == 1.0` on every record on both discs - a homogeneous point.
-//! - **`m` counts slots, not vertices.** 150 slots across the Pulse disc sit
-//!   at the origin, spare.
+//!   129/129), a `u32` at `+0x0c` for the face's vertex count (3 or more, never
+//!   more than the hull owns), then indices.
+//! - A **16-byte vertex record** is `(w, x, y, z)`, **`w` first** and `1.0` on
+//!   every record on both discs (a homogeneous point).
+//! - **`m` counts slots, not vertices**: 150 slots across the Pulse disc sit at
+//!   the origin, spare.
 //!
-//! `pulse_mine` is the clearest case and decodes to a tetrahedron: four unit
-//! normals - one straight down, three up-and-outward at 120 degrees - over
-//! four vertices whose extent is *exactly* the declared bounding box. Its
-//! sibling `pulse_bomb` is a pentagonal frustum, five vertices at
-//! `y = 2.6341` over five at `y = 2.1059`, with two spare slots.
+//! `pulse_mine` decodes to a tetrahedron (one normal straight down, three
+//! up-and-outward at 120 degrees, over four vertices whose extent is *exactly*
+//! the declared box); `pulse_bomb` is a pentagonal frustum, five vertices at
+//! `y = 2.6341` over five at `y = 2.1059`, two spare slots.
 //!
-//! **The box is authored, not derived**, so containment is what is asserted
-//! disc-wide rather than equality: `BEData.wad#20` is a flat hull with all
-//! eight vertices at `y = -0.06195458` that declares its `y` maximum as the
-//! denormal `0x00800000`. See `docs/rendering/shadows.md`.
+//! **The box is authored, not derived**, so containment is asserted disc-wide:
+//! `BEData.wad#20` is a flat hull with all eight vertices at `y = -0.06195458`
+//! declaring its `y` maximum as the denormal `0x00800000`. See
+//! `docs/rendering/shadows.md`.
 
 use std::path::{Path, PathBuf};
 
@@ -80,13 +69,11 @@ use oag_disc::DiscImage;
 use oag_formats::wad::{self, Compression, Directory};
 use oag_vex::vex;
 
-/// Class id of `Dynamic Shadow Occluder`, from the class-ID table at
-/// `0x08ab2370`.
+/// Class id of `Dynamic Shadow Occluder`, from the class-ID table at `0x08ab2370`.
 const CLASS_OCCLUDER: u32 = 0x3c3;
 
-/// The three effect classes that sound like they hold a shadow and hold
-/// nothing: `shadow`, `textureBlob`, `blob`. Asserted absent rather than
-/// assumed absent, so authoring one on a disc this project has not seen yet
+/// The three effect classes that sound like a shadow and hold nothing (`shadow`,
+/// `textureBlob`, `blob`): asserted absent so authoring one on an unseen disc
 /// fails loudly.
 const INERT_CLASSES: [(u32, &str); 3] =
     [(0x3cb, "shadow"), (0x3df, "textureBlob"), (0x3e0, "blob")];
@@ -113,66 +100,29 @@ const PSP_OCCLUDERS_NAMED: usize = 119;
 /// origin - a craft's or a pickup's own hull, rather than a track-side one.
 const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 
-/// How many repeat their bounding box as two padded `vec4`s at `+0x30`,
-/// within this test's `1e-6` tolerance.
+/// How many repeat their bounding box as two padded `vec4`s at `+0x30`, within
+/// this test's `1e-6` tolerance.
 ///
-/// **The tolerance hides a mixed population inside this number.** The
-/// denormal authoring sentinel `0x00800000` is `1.1754944e-38`, so a node
-/// whose packed `max.y` is the sentinel and whose padded `max.y` is a hard
-/// `0.0` differs by ~`1e-38` - well inside `1e-6` - and counts as a
-/// "match" here even though it is one of the hard-zero substitutions
-/// described below, not an identical copy. How many of the 97 are that
-/// case rather than a true copy is computable but not computed.
+/// **The tolerance hides a mixed population**: the denormal sentinel
+/// `0x00800000` is `1.1754944e-38`, so a node whose packed `max.y` is the
+/// sentinel and whose padded `max.y` is a hard `0.0` differs by ~`1e-38` and
+/// counts as a "match" though it is a hard-zero substitution, not a copy. How
+/// many of the 97 is computable but not computed.
 ///
-/// **Read by hand, 2026-09-03, and an earlier pass at this same comment
-/// overclaimed a clean rule from too small a sample - corrected the same
-/// day.** Not asserted here; the split would make this test depend on
-/// `vertex_extent`'s own correctness circularly. Two real, quantified
-/// patterns, neither exceptionless:
-///
-/// - **14 nodes have a positive header `min.y`. 12 of them get `+0x30`'s
-///   `min.y` floored to exactly `0.0`** (extending the box down to the
-///   ground plane even though the hull's own geometry sits entirely above
-///   it - useful for a shadow volume, useless for a geometry cache). The
-///   **2 exceptions keep their real, positive `min.y`**: both
-///   `shadow_lodShape`, both `Data.wad#809`/`#812`, both the *smallest*
-///   positive `min.y` in the set (`0.7280522`) - a sibling `shadowShape` at
-///   the same value in the same files *does* get floored. No discriminator
-///   found for the exception.
-/// - **Where the packed header's `max.y` is the denormal authoring sentinel
-///   `0x00800000`** (the same one `BEData.wad#20`'s flat hull declares): 70
-///   nodes carry it, 16 of which have a true vertex-derived `max.y` that is
-///   itself exactly `0.0` (where the two possible behaviours are
-///   indistinguishable and excluded below). **Of the other 54: `+0x40`'s
-///   `max.y` carries the true vertex-derived value on 16, and is a hard
-///   `0.0` on the other 38.** Tried and ruled out as a discriminator: node
-///   name/type (both behaviours occur on both `shadowShape` and
-///   `shadow_lodShape`, including the same numeric `max.y` value split
-///   both ways across different files), the specific numeric value (14 of
-///   17 repeated values agree on kept-vs-hard-zero, 3 don't), and file
-///   identity - there is no per-entry build/version field in the WAD
-///   directory to begin with, and the 3 exceptions above sit in adjacent
-///   file entries anyway. Checked 2026-09-04 with
-///   `examples/shadow_padding_probe.rs`; see
-///   `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
-///   readout, including that the unnamed/world-space population diverges
-///   on `x`/`z` rather than `y`.
-///
-/// So the padded box is doing *something* shadow-relevant rather than
-/// nothing - most divergence pulls the box toward the ground plane rather
-/// than away from it - but it is not the clean deterministic rule an
-/// earlier pass at this comment claimed. See
-/// `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the full
-/// readout and the correction; `Shadow_RenderOccluderVolume` reads this
-/// exact field, not the packed one at `+0x0c`/`+0x18`, for its support-point
-/// step.
+/// The padded box is doing something shadow-relevant (most divergence pulls it
+/// toward the ground plane) but follows no clean exceptionless rule, and an
+/// earlier overclaim was corrected (2026-09-03/04, `examples/shadow_padding_probe.rs`):
+/// 12 of 14 nodes with a positive header `min.y` get `+0x30`'s floored to `0.0`;
+/// of 54 with the sentinel `max.y`, `+0x40`'s keeps the true value on 16 and is a
+/// hard `0.0` on 38. Not asserted here (circular on `vertex_extent`). See
+/// `docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md` for the readout and
+/// the correction; `Shadow_RenderOccluderVolume` reads this field, not the packed
+/// one at `+0x0c`/`+0x18`, for its support-point step.
 const PSP_OCCLUDERS_WITH_PADDED_BBOX: usize = 97;
 
-/// Every distinct node name across the named population, sorted.
-///
-/// `shadow_agsShape` names a team (AG Systems) and `shadow_mineShape` a weapon,
-/// which is the evidence that the named population is per-object rather than
-/// per-track.
+/// Every distinct node name across the named population, sorted. `shadow_agsShape`
+/// names a team and `shadow_mineShape` a weapon: the named population is
+/// per-object, not per-track.
 const PSP_OCCLUDER_NAMES: [&str; 6] = [
     "shadow1Shape",
     "shadowShape",
@@ -182,10 +132,9 @@ const PSP_OCCLUDER_NAMES: [&str; 6] = [
     "shadowlodShape",
 ];
 
-/// A bounding-box centre further than this from the node's own origin makes it
-/// world-space. The two populations are not near the boundary - the local ones
-/// sit within a couple of units and the world ones hundreds out - so the exact
-/// value is not load-bearing.
+/// A bounding-box centre further than this from the node's origin makes it
+/// world-space. The populations are far apart (local within a couple of units,
+/// world hundreds out), so the value is not load-bearing.
 const WORLD_SPACE_CENTRE: f32 = 50.0;
 
 /// The `.vex` version Pulse ships throughout.
@@ -193,23 +142,20 @@ const PULSE_VERSIONS: [u32; 1] = [6];
 
 /// The two Pure ships: version 4, with 15 version-3 files among them.
 ///
-/// **Both are searched for Pulse's own class ids, and that is sound.** The
-/// exporter's 22 class names are one contiguous run in `BOOT.BIN` that is
-/// identical string for string and index for index on both titles, with the
-/// ids running consecutively along that order - see
-/// [`pure-status.md`](../../../docs/formats/pure-status.md). Pure's version-3
-/// files share version 4's class-ID space, which that page also establishes.
+/// **Both are searched for Pulse's own class ids, soundly**: the exporter's 22
+/// class names are one contiguous run in `BOOT.BIN`, identical on both titles,
+/// ids consecutive along it ([`pure-status.md`](../../../docs/formats/pure-status.md));
+/// Pure's version-3 files share version 4's class-ID space.
 const PURE_VERSIONS: [u32; 2] = [3, 4];
 
 /// Version-6 `.vex` files on the Pulse PSP disc.
 ///
-/// Asserted in every test that sweeps it, so a walk that quietly covers less
-/// fails on the count rather than on a shadow census that reads zero.
+/// Asserted in every sweep, so a walk that covers less fails on the count rather
+/// than on a census that reads zero.
 const PULSE_VEX_FILES: usize = 382;
 
-/// Vertex slots across the Pulse disc that sit at the origin and are not part
-/// of any hull - `m` is an allocation, not a vertex count. Pinned so a decode
-/// that explains what the spare slots are for shows up here.
+/// Vertex slots across the Pulse disc at the origin, in no hull (`m` is an
+/// allocation, not a vertex count); pinned so a decode explaining them shows up.
 const PSP_PADDING_VERTICES: usize = 150;
 
 /// Version-3-and-4 `.vex` files on the Pure PSP disc, for the same reason.
@@ -241,17 +187,14 @@ struct VexFile {
 /// Every `.vex` file of an accepted version in every `.wad` on the disc,
 /// decompressed and walked.
 ///
-/// **Every archive, not just `Data.wad`.** The named occluders live in both
-/// `Data.wad` and `BEData.wad`, and a sweep of one of them silently halves the
-/// population - which reads exactly like "the front end has no shadows."
+/// **Every archive, not just `Data.wad`**: the named occluders live in both it
+/// and `BEData.wad`, and one alone silently halves the population (reading as
+/// "the front end has no shadows").
 ///
-/// **The version filter is a parameter because the two discs disagree.** Pulse
-/// is version 6 throughout; Pure is version 4 with 15 version-3 files, per
-/// [`pure-status.md`]. Hard-coding 6 here walks **zero** Pure files and reports
-/// zero occluders, which is indistinguishable from Pure authoring none - the
-/// exact false negative the file-count assertion in each test exists to catch.
-///
-/// [`pure-status.md`]: ../../../docs/formats/pure-status.md
+/// **The version filter is a parameter**: Pulse is version 6, Pure version 4 with
+/// 15 version-3 files ([`pure-status.md`]). Hard-coding 6 walks **zero** Pure
+/// files, indistinguishable from Pure authoring none, the false negative the
+/// file-count assertion catches.
 fn vex_files(disc: &mut DiscImage, versions: &[u32]) -> Vec<VexFile> {
     let archives: Vec<_> = disc
         .entries()
@@ -316,14 +259,11 @@ fn vex_files(disc: &mut DiscImage, versions: &[u32]) -> Vec<VexFile> {
 
 /// The vertex array's own component-wise extent, and its declared face count.
 ///
-/// A vertex record is `(w, x, y, z)` with **`w` first**: `+0x00` is `1.0` on
-/// every record on both discs, and the position follows at `+0x04`. That is
-/// the ordering the closure below proves, not one assumed from the shape.
-/// **`m` counts slots, not vertices.** A hull may end in records that are
-/// exactly `(1, 0, 0, 0)` - Pulse's bomb declares twelve and uses ten, the
-/// two spare ones sitting at the origin - so those are skipped here. They have
-/// to be: including them drags the extent to zero on every axis the hull does
-/// not straddle, which is exactly how this check first failed.
+/// A vertex record is `(w, x, y, z)` with **`w` first** (`1.0` on every record,
+/// position at `+0x04`), as the closure below proves. **`m` counts slots, not
+/// vertices**: a hull may end in `(1, 0, 0, 0)` records (Pulse's bomb declares
+/// twelve and uses ten), skipped here because they drag the extent to zero on
+/// every axis the hull does not straddle (how this check first failed).
 fn vertex_extent(payload: &[u8], n: usize, m: usize) -> ([f32; 3], [f32; 3], usize) {
     let base = HEADER_LEN + n * RECORD_A_STRIDE;
     let mut min = [f32::INFINITY; 3];
@@ -388,8 +328,8 @@ fn an_occluder_payload_closes_at_a_header_and_two_record_arrays() {
                 payload.len()
             );
 
-            // The closure. `n` and `m` are the only two counts in the header,
-            // and together they account for the payload exactly.
+            // The closure: `n` and `m` are the only counts in the header and
+            // together account for the payload exactly.
             let n = usize::from(u16_at(payload, 0));
             let m = usize::from(u16_at(payload, 2));
             assert_eq!(
@@ -399,9 +339,8 @@ fn an_occluder_payload_closes_at_a_header_and_two_record_arrays() {
                 payload.len()
             );
 
-            // Two constants, the same on every occluder on the disc. What they
-            // select is unread; they are pinned so that a disc which differs
-            // says so rather than being decoded on this one's assumptions.
+            // Two constants, the same on every occluder; what they select is unread,
+            // pinned so a differing disc says so.
             assert_eq!(u32_at(payload, 0x24), 5, "{label}: +0x24");
             assert_eq!(f32_at(payload, 0x28), 1.0, "{label}: +0x28");
 
@@ -416,16 +355,11 @@ fn an_occluder_payload_closes_at_a_header_and_two_record_arrays() {
                 );
             }
 
-            // **Every vertex lies inside the declared box**, which is the
-            // disc-wide form of the relationship. The stronger form - that the
-            // box *is* the vertices' extent - holds on the hulls checked by
-            // hand but not on every node here, and the exception is
-            // instructive rather than fatal: a flat hull such as
-            // `BEData.wad#20` has all eight vertices at `y = -0.06195458` and
-            // declares its `y` maximum as the denormal `0x00800000`, so the
-            // box is *authored* rather than derived. Asserting containment
-            // still confirms the stride, the array offset and the position's
-            // placement inside the record all at once.
+            // **Every vertex lies inside the declared box**, the disc-wide form (the
+            // stronger "box *is* the extent" holds on hand-checked hulls, not every
+            // node: `BEData.wad#20` is flat and declares `y` max as the denormal
+            // `0x00800000`, so the box is *authored*). Containment still confirms
+            // the stride, array offset and position placement at once.
             let (vmin, vmax, used) = vertex_extent(payload, n, m);
             assert!(used >= 3, "{label}: only {used} non-origin vertices of {m}");
             padded += m - used;
@@ -447,9 +381,8 @@ fn an_occluder_payload_closes_at_a_header_and_two_record_arrays() {
                 assert_eq!(f32_at(payload, at), 1.0, "{label}: vertex {i} w");
             }
 
-            // A face's vertex count sits at `+0x0c` of its record, as a `u32`
-            // and not a float. Three or more, and never more than the hull has
-            // vertices to offer.
+            // A face's vertex count is a `u32` at `+0x0c`: three or more, never more
+            // than the hull has vertices.
             for i in 0..n {
                 let count = u32_at(payload, HEADER_LEN + i * RECORD_A_STRIDE + 0x0c) as usize;
                 assert!(
@@ -582,11 +515,9 @@ fn wipeout_pure_authors_no_shadow_class_at_all() {
     }
 }
 
-/// The three PSARC packages an EU 2048 install carries, base first.
-///
-/// Under `data/extracted/` rather than `data/images/`: 2048 arrives as an
-/// encrypted `.pkg` and these are the decrypted result, four tool-steps in -
-/// see `data/README.md`, "Vita PKGs decrypt in four steps".
+/// The three PSARC packages an EU 2048 install carries, base first (under
+/// `data/extracted/`: 2048 arrives as an encrypted `.pkg`, decrypted in four
+/// steps, see `data/README.md`).
 const VITA_PACKAGES: [&str; 3] = [
     "vita/PCSF00007/base/PSP2/data.psarc",
     "vita/PCSF00007/dlc1/PSP2/dlc1.psarc",
@@ -612,8 +543,8 @@ fn package(name: &str) -> Option<PathBuf> {
 
 /// `.vex` files across 2048's three EU packages.
 ///
-/// Pinned for the reason [`PULSE_VEX_FILES`] is: the interesting answer below
-/// is a **zero**, and a walk that covers nothing produces the same zero.
+/// Pinned as [`PULSE_VEX_FILES`] is: the answer below is a **zero**, and a walk
+/// covering nothing gives the same zero.
 const VITA_VEX_FILES: usize = 1158;
 
 /// `Dynamic Shadow Occluder` nodes 2048 authors.
@@ -621,10 +552,10 @@ const VITA_OCCLUDERS: usize = 6;
 
 /// The six, by archive path and node name, with the `(n, m)` each declares.
 ///
-/// **Three weapons, shipped twice** - once under `data/Weapons/` and once
-/// under `data/Weapons2048/` - and their `(n, m, len)` triples are the same
-/// ones Pulse's own `BEData.wad` carries for the same three weapons. The
-/// format did not change between a 2007 PSP title and a 2012 Vita one.
+/// **Three weapons, shipped twice** (under `data/Weapons/` and
+/// `data/Weapons2048/`), their `(n, m, len)` triples the same as Pulse's
+/// `BEData.wad` carries for them: the format did not change between a 2007 PSP
+/// title and a 2012 Vita one.
 const VITA_OCCLUDER_ROWS: [(&str, &str, usize, usize, usize); 6] = [
     ("data/Weapons/pulse_bomb.vex", "shadowShape", 11, 12, 624),
     ("data/Weapons/pulse_mine.vex", "shadow_mineShape", 4, 4, 272),
@@ -652,21 +583,18 @@ const VITA_OCCLUDER_ROWS: [(&str, &str, usize, usize, usize); 6] = [
     ),
 ];
 
-/// 2048 authors the occluder for **three weapons and no craft**, and the
-/// payload closes by Pulse's own formula.
+/// 2048 authors the occluder for **three weapons and no craft**, and the payload
+/// closes by Pulse's own formula.
 ///
-/// Its `.vex` is version 6 little-endian carrying HD's own class ids
-/// ([`2048-status.md`](../../../docs/formats/2048-status.md)), so the ids
-/// searched for here are the same ones Pulse uses and the search is meaningful
-/// rather than vacuous - the trap that made Pure's first sweep a false
-/// negative.
+/// Its `.vex` is version 6 little-endian with HD's class ids
+/// ([`2048-status.md`](../../../docs/formats/2048-status.md)), so the ids searched
+/// are Pulse's and the search is meaningful, not vacuous (the trap of Pure's first
+/// sweep).
 ///
-/// **The expected answer here was zero and the disc said six.** That matters
-/// twice over: it makes the `0x50 + 32n + 16m` closure a two-title,
-/// two-platform result rather than a Pulse quirk, and it says 2048's *ship*
-/// shadows are not this class - the craft author none. What draws those is
-/// 2048's own `track_proximity_shadow` pair and its precomputed ship
-/// environment shadows; see `docs/rendering/shadows.md`.
+/// **The expected answer was zero and the disc said six.** The
+/// `0x50 + 32n + 16m` closure is a two-title, two-platform result, and 2048's
+/// *ship* shadows are not this class: they are its `track_proximity_shadow` pair
+/// and precomputed ship environment shadows (`docs/rendering/shadows.md`).
 #[test]
 #[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
 fn wipeout_2048_carries_three_weapon_occluders_that_close_the_same_way() {
@@ -712,9 +640,8 @@ fn wipeout_2048_carries_three_weapon_occluders_that_close_the_same_way() {
                 let m = usize::from(u16_at(payload, 2));
                 let label = format!("{entry} {:?}", node.name);
 
-                // Pulse's own closure, on a different console and a different
-                // endianness. This is the assertion that makes the layout a
-                // lineage fact rather than a one-title reading.
+                // Pulse's own closure on another console and endianness: the
+                // assertion making the layout a lineage fact, not a one-title reading.
                 assert_eq!(
                     HEADER_LEN + RECORD_A_STRIDE * n + RECORD_B_STRIDE * m,
                     payload.len(),

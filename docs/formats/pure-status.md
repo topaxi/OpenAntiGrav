@@ -316,7 +316,7 @@ it covers 0.2 % of Pure's geometry, so nothing depends on it.
 > it are *not* font atlases - they are ship liveries, glass, engine and
 > environment maps across EGX, Feisar, Goteki, Piranha, Triakis and Zone, plus
 > the mine, bomb and shuriken effects. See
-> `crates/texture/tests/texture_swizzle_flag_ground_truth.rs`, which measures
+> `crates/vex/tests/texture_swizzle_flag_ground_truth.rs`, which measures
 > and pins the distribution.
 >
 > **Settled 2026-10-01: bit 0 means "already swizzled" on Pulse too, and

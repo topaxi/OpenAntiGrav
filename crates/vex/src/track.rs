@@ -1,9 +1,9 @@
-//! `WO Track`: the AI track spline graph, the thing a lap is actually made of.
+//! `WO Track`: the AI track spline graph a lap is made of.
 //!
 //! One node in a track's [`.vex`](crate::vex) file carries the whole driveable
-//! path as a **graph of uniform cubic B-splines**. Each control point carries a
-//! position, a full orientation frame, the track's half-width either side, an
-//! explicit racing line and an AI corridor around it.
+//! path as a **graph of uniform cubic B-splines**: each control point has a
+//! position, an orientation frame, the half-width either side, an explicit
+//! racing line and an AI corridor.
 //!
 //! ```text
 //! payload, at the WO Track node's data:
@@ -39,48 +39,40 @@
 //!
 //! # Wipeout 2048 shortened the control point
 //!
-//! Version `0x107` - 2048's, one above the `0x106` Wipeout HD writes - drops
-//! the record from 112 bytes to 96. Everything up to and including
-//! `racing_line` stays exactly where it was; only `section_id` and `flags`
-//! move, from `+0x60`/`+0x61` into the eight bytes `+0x58..+0x60` that HD
-//! leaves zero, at `+0x5c`/`+0x5d`. `+0x5a` and `+0x5b` are `0xff` and `0x00`
-//! on every point of every 2048 track measured and are not placed;
-//! `+0x58`/`+0x59` vary and are not placed either.
+//! Version `0x107` (2048's, one above HD's `0x106`) drops the record from 112
+//! bytes to 96. Everything through `racing_line` stays put; `section_id` and
+//! `flags` move from `+0x60`/`+0x61` into the eight bytes `+0x58..+0x60` HD
+//! leaves zero, at `+0x5c`/`+0x5d`. `+0x5a`/`+0x5b` are `0xff` and `0x00` on
+//! every 2048 point measured, `+0x58`/`+0x59` vary; neither is placed.
 //!
-//! That is measured rather than reasoned: 2048's DLC re-ships twelve Wipeout HD
-//! circuits with byte-identical path and control-point counts, so control point
-//! `k` of path `i` is the same point in both files and HD's decoded record is
-//! ground truth for 2048's. See `docs/formats/track.md` for the numbers.
+//! Measured: 2048's DLC re-ships twelve HD circuits with byte-identical path and
+//! control-point counts, so HD's decoded record is ground truth for 2048's. See
+//! `docs/formats/track.md`.
 //!
 //! # The reserved block is the whole trick
 //!
-//! Both array pointers are **zero on disc**: they are runtime pointers, patched
-//! in as the loader walks a cursor through the payload. So the arrays are
-//! positioned by a rule rather than read, and the rule has one non-obvious step.
-//! For version `0x101` and up the loader claims **a second 0x20-byte block**
-//! before the paths and hands its address to the track object, which pushes
-//! everything after it along by 32 bytes.
+//! Both array pointers are **zero on disc**: runtime pointers, patched as the
+//! loader walks a cursor, so the arrays are positioned by a rule. For version
+//! `0x101` and up the loader claims **a second 0x20-byte block** before the
+//! paths, pushing everything after it along by 32 bytes.
 //!
-//! Reading the paths at `+0x20` instead of `+0x40` lands one field early, which
-//! puts plausible-looking world coordinates in the orientation frame and reads a
-//! `section_id` of 185 on a track that has 64 sections. It looks like a subtly
-//! wrong struct rather than a wrong offset, which is what makes it expensive.
+//! Reading the paths at `+0x20` instead of `+0x40` lands one field early: world
+//! coordinates in the orientation frame, a `section_id` of 185 on a 64-section
+//! track. It looks like a wrong struct, not a wrong offset.
 //!
 //! # Why the details matter
 //!
 //! **Positions on disc sit on the track surface.** The load pass does
-//! `pos -= 3 * down`, lifting each control point by [`HOVER_LIFT`]. Ships fly
-//! along the lifted line; the surface line is what the exporter wrote. Both are
-//! available here: [`SplinePoint::pos`] is the disc value and
-//! [`SplinePoint::lifted_pos`] applies the lift.
+//! `pos -= 3 * down`, lifting each point by [`HOVER_LIFT`]; ships fly the lifted
+//! line. [`SplinePoint::pos`] is the disc value, [`SplinePoint::lifted_pos`]
+//! applies the lift.
 //!
-//! **The frame's second vector points down, not up.** On level ground it is
-//! exactly `(0, -1, 0)`, and `+y` is world up. Calling it "up" and then lifting
-//! along it moves the racing line *into* the track.
+//! **The frame's second vector points down, not up**: `(0, -1, 0)` on level
+//! ground, `+y` being world up. Lifting along it as "up" moves the racing line
+//! *into* the track.
 //!
 //! **Junction slots are 2 in, 2 out.** Slots 0 and 1 are predecessors, 2 and 3
-//! successors, and `0x7fffffff` is null. A shortcut is an alternate successor,
-//! not a separate structure.
+//! successors, `0x7fffffff` null. A shortcut is an alternate successor.
 //!
 //! See `docs/formats/track.md` for the evidence and the confidence scores.
 
@@ -182,9 +174,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// One control point of a spline path.
 ///
-/// The four vectors are an orthonormal frame. `tangent` runs along the path,
-/// `lateral` across it, and `down` is the surface normal negated: see the module
-/// docs before assuming it points up.
+/// The four vectors are an orthonormal frame; `down` is the surface normal
+/// negated (see the module docs).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SplinePoint {
     /// Control point, on the track surface. See [`Self::lifted_pos`].
@@ -196,8 +187,8 @@ pub struct SplinePoint {
     /// Unit vector across the path.
     pub lateral: [f32; 3],
     /// The authored normalised arc position round the circuit, `0.0..1.0`, at
-    /// `+0x40` - the lap counter's parameter, and what a Quake road span's
-    /// `t` window is measured in (`crate::quake`). See `docs/formats/track.md`.
+    /// `+0x40`: the lap counter's parameter and what a Quake road span's `t`
+    /// window is measured in (`crate::quake`). See `docs/formats/track.md`.
     pub progress: f32,
     /// Track half-width to the left of the centre line.
     pub half_width_left: f32,
@@ -209,23 +200,20 @@ pub struct SplinePoint {
     pub ai_bound_right: f32,
     /// The authored racing line, as a lateral offset from the centre.
     pub racing_line: f32,
-    /// Which [`section`](crate::vex) this point belongs to, for visibility.
-    ///
-    /// `0xff` on a track that authors no `section` node at all, which several
-    /// of Wipeout 2048's circuits do.
+    /// Which [`section`](crate::vex) this point belongs to, for visibility;
+    /// `0xff` on a track with no `section` node (several 2048 circuits).
     pub section_id: u8,
     /// Flags, OR-accumulated across the four control points of a segment.
     pub flags: u8,
     /// The hull light scales a craft over this point is drawn with: ambient,
     /// directional, and the two point-light classes, `0..=255`, at `+0x62`.
     ///
-    /// Blended along the spline into `craft+0xb52..+0xb55` (`FUN_0887c7e8`,
-    /// `FUN_0887c11c`), copied to the hull model's `+0x44..+0x47` every frame
-    /// (`FUN_0883e444`), and multiplied into that model's GE light colours by
-    /// `SceneLight_BuildLightingList`. `0xff` on every point of a track older
-    /// than version `0x103`, as the original forces, and on the short points
-    /// of version [`SHORT_POINT_VERSION`] onwards, whose layout moves these
-    /// bytes and has not been read. See `docs/formats/track.md`.
+    /// Blended into `craft+0xb52..+0xb55` (`FUN_0887c7e8`, `FUN_0887c11c`),
+    /// copied to the hull model's `+0x44..+0x47` each frame (`FUN_0883e444`) and
+    /// multiplied into its GE light colours by `SceneLight_BuildLightingList`.
+    /// `0xff` on every point of a track older than `0x103`, as the original
+    /// forces, and on the short points of [`SHORT_POINT_VERSION`] onwards, whose
+    /// layout moves these bytes unread. See `docs/formats/track.md`.
     pub light_scale: [u8; 4],
 }
 
@@ -276,10 +264,8 @@ pub struct Sample {
 pub struct Path {
     /// Control points, in order.
     pub points: Vec<SplinePoint>,
-    /// The longest gap between consecutive control points in this path.
-    ///
-    /// Verified as exactly that on all 86 paths of the 40 PSP track files,
-    /// which is why it is named rather than left as an unknown word.
+    /// The longest gap between consecutive control points in this path, exact on
+    /// all 86 paths of the 40 PSP track files (hence named, not an unknown word).
     pub max_spacing: f32,
     /// Junction this path leaves from, if any.
     pub entry: Option<usize>,
@@ -287,10 +273,8 @@ pub struct Path {
     pub exit: Option<usize>,
 }
 
-/// A 2-in, 2-out merge and split between paths.
-///
-/// A plain ring track is the degenerate case: one predecessor, one successor,
-/// both alternates null.
+/// A 2-in, 2-out merge and split between paths; a plain ring is one predecessor,
+/// one successor, both alternates null.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Junction {
     /// Paths arriving here: primary, then alternate.
@@ -311,11 +295,8 @@ pub struct AiTrack {
 }
 
 impl AiTrack {
-    /// Bytes the decoded structure accounts for.
-    ///
-    /// Equal to the payload length on every shipped track, which is the
-    /// arithmetic self-check that settled the layout. A parser that is one
-    /// structure out cannot make this come out even.
+    /// Bytes the decoded structure accounts for: equal to the payload length on
+    /// every shipped track, the self-check that settled the layout.
     #[must_use]
     pub fn encoded_len(&self) -> usize {
         let points: usize = self.paths.iter().map(|p| p.points.len()).sum();
@@ -337,12 +318,9 @@ impl Path {
     /// Evaluates the curve inside `segment`, at `t` in `0..=1`.
     ///
     /// A **uniform cubic B-spline** over control points `segment - 1 ..=
-    /// segment + 2`, clamped at the ends of the path. The basis blends the
-    /// scalars as well as the vectors, so width and racing line curve too.
-    ///
-    /// Note that a B-spline does not pass through its control points, so
-    /// `sample(i, 0.0)` is not `points[i]`. That is the original's behaviour,
-    /// not a rounding artefact.
+    /// segment + 2`, clamped at the path ends, blending scalars as well as
+    /// vectors. It does not pass through its control points, so `sample(i, 0.0)`
+    /// is not `points[i]`: the original's behaviour.
     ///
     /// Returns `None` for an empty path or a segment past the end.
     #[must_use]
@@ -391,13 +369,12 @@ impl Path {
     }
 }
 
-/// [`SplinePoint::light_scale`] blended over a segment's four control points,
-/// in the original's own integer arithmetic.
+/// [`SplinePoint::light_scale`] blended over a segment's four control points in
+/// the original's integer arithmetic.
 ///
 /// `FUN_0887c11c` adds `(byte * trunc(weight * 255)) >> 8` per point into a
-/// `u8`, so the sum truncates twice and wraps rather than saturating, and a
-/// run of `0xff` points reads back a little under `0xff`. The four weights
-/// are [`basis`]'s.
+/// `u8`: the sum truncates twice and wraps rather than saturating, so a run of
+/// `0xff` points reads back a little under `0xff`. Weights are [`basis`]'s.
 #[must_use]
 pub fn blend_light_scale(weights: &[f32; 4], points: &[&SplinePoint; 4]) -> [u8; 4] {
     let mut out = [0u8; 4];
@@ -412,8 +389,8 @@ pub fn blend_light_scale(weights: &[f32; 4], points: &[&SplinePoint; 4]) -> [u8;
 
 /// The uniform cubic B-spline basis, weights for four control points.
 ///
-/// `[(1-t)^3, 3t^3 - 6t^2 + 4, -3t^3 + 3t^2 + 3t + 1, t^3] / 6`. The constants
-/// appear as VFPU immediates in the original's evaluator.
+/// `[(1-t)^3, 3t^3 - 6t^2 + 4, -3t^3 + 3t^2 + 3t + 1, t^3] / 6`, the constants
+/// of the original's VFPU evaluator.
 #[must_use]
 pub fn basis(t: f32) -> [f32; 4] {
     let t2 = t * t;
@@ -432,18 +409,15 @@ pub const START_POSITION_LEN: usize = 64;
 
 /// Where a track says a ship begins, after the bind's own fix-up.
 ///
-/// The payload is an authored 4x4 transform whose rows are the same
-/// **left-up-forward** basis the running craft carries, and which the bind
-/// handler (`0x08926ae8`) does not use as authored: it forces the up row to
-/// world `(0, 1, 0)` and re-orthonormalises around it. [`start_position`]
-/// reproduces that, so this is the frame the *game* starts from rather than the
-/// frame the exporter wrote.
+/// The payload is an authored 4x4 transform whose rows are the **left-up-forward**
+/// basis the craft carries; the bind handler (`0x08926ae8`) forces the up row to
+/// world `(0, 1, 0)` and re-orthonormalises. [`start_position`] reproduces that,
+/// so this is the frame the *game* starts from.
 ///
-/// **One per track, and it is not the centreline.** All 40 PSP track files carry
-/// exactly one `Start Position` node, and on every one of them it sits between
-/// 3.3 and 20.5 units off the spline's own centreline - so it is a grid *slot*,
-/// not a start-line marker, and the other seven slots are laid out by code that
-/// has not been recovered. See `docs/formats/track.md`.
+/// **One per track, not on the centreline**: all 40 PSP track files carry exactly
+/// one, 3.3 to 20.5 units off the spline's centreline, so it is a grid *slot*,
+/// and the other seven slots come from unrecovered code. See
+/// `docs/formats/track.md`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StartPosition {
     /// World-space position of the slot.
@@ -458,27 +432,21 @@ pub struct StartPosition {
 
 /// Decodes a `Start Position` node payload, applying the bind's fix-up.
 ///
-/// `None` when the payload is not 64 bytes, or when the authored forward axis is
-/// vertical and so has nothing left of it once the up component is removed -
-/// degenerate rather than merely unusual, and no shipped track has one.
+/// `None` when the payload is not 64 bytes, or the authored forward axis is
+/// vertical (degenerate; no shipped track has one).
 ///
 /// # What is reproduced, and what was assumed
 ///
-/// The forced up row is read: `docs/formats/track.md` has it from the bind
-/// handler, corroborated by the frame conventions everywhere else on that page.
-/// **Which of the remaining two rows the original preserves was not read**, and
-/// this keeps *forward*, on the grounds that where a ship points is the part of
-/// a grid slot that is authored deliberately.
+/// The forced up row is read (`docs/formats/track.md`, from the bind handler).
+/// **Which of the other two rows the original preserves was not read**; this
+/// keeps *forward*, since where a ship points is the deliberately authored part
+/// of a slot. The data bounds the choice: the authored up row is already world
+/// up on 31 of 40 track files and off it by at most **1.600 degrees** on the
+/// other nine, so any right-handed re-orthonormalisation lands within that
+/// angle of another. The fix-up is still not a no-op, hence applied.
 ///
-/// How much that choice can matter is bounded by the data rather than argued:
-/// the authored up row is *already* world up on 31 of the 40 shipped track
-/// files, and off it by at most **1.600 degrees** on the other nine, so any
-/// re-orthonormalisation that forces up and keeps the frame right-handed lands
-/// within that angle of any other. The fix-up is nonetheless not a no-op, which
-/// is why it is applied rather than skipped.
-/// `order` is the containing `.vex`'s, from [`vex::byte_order`]. A `Start
-/// Position` payload is a bare 4x4 matrix with no magic, so unlike the spline
-/// itself it cannot say which way round it is.
+/// `order` is the containing `.vex`'s ([`vex::byte_order`]): the payload is a
+/// bare 4x4 matrix with no magic.
 #[must_use]
 pub fn start_position(payload: &[u8], order: ByteOrder) -> Option<StartPosition> {
     if payload.len() < START_POSITION_LEN {
@@ -494,8 +462,7 @@ pub fn start_position(payload: &[u8], order: ByteOrder) -> Option<StartPosition>
 
     let up = [0.0, 1.0, 0.0];
     let authored = row(2);
-    // Gram-Schmidt against an axis that is exactly `+y`, so the projection is
-    // just the y component.
+    // Gram-Schmidt against exactly `+y`: the projection is the y component.
     let forward = normalize([authored[0], 0.0, authored[2]])?;
     let left = cross(up, forward);
 
@@ -527,30 +494,16 @@ fn normalize(v: [f32; 3]) -> Option<[f32; 3]> {
 /// The `WO Track` node in an already-walked scene tree, found by the class id
 /// the file's own version word implies.
 ///
-/// Eleven call sites used to spell `n.class_id == vex::CLASS_WO_TRACK` by hand,
-/// which is the version-6 id and finds nothing in a version-4 file. The payload
-/// parser here has never needed that fix - [`MIN_VERSION`] is `0x100`, so
-/// Pure's `0x103` payloads were always inside what it accepts. Only *finding*
-/// the node was version-locked.
-///
-/// **Five were converted on 2026-08-09**, and one of them was not a test:
-/// `oag_trace`'s own `ai_of` looked the node up by the version-6 constant, so
-/// `oag-trace track --source` against a Pure disc reported "has no WO Track
-/// node" for a track that has one. That is fixed and checked on
-/// `pure-psp-eu.chd`, which is the Pure pressing `oag_pulse`'s deny-list does
-/// not refuse - `pure-psp-usa.chd` is rejected at open by serial, so the bug was
-/// never reachable there. A sixth site, `pvs_ground_truth`'s section walk, went
-/// to [`vex::classes_of`] instead, because it wants every matching node rather
-/// than the first. Three spellings survive on purpose -
+/// Spelling `class_id == vex::CLASS_WO_TRACK` is the version-6 id and finds
+/// nothing in a version-4 file; the payload parser itself accepts Pure's `0x103`
+/// ([`MIN_VERSION`] is `0x100`). Three test spellings survive on purpose:
 /// `pvs_ground_truth::pure_does_not_share_pulses_class_numbering` counts nodes
-/// matching *Pulse's* id on Pure's disc, which is the whole claim it makes, and
-/// `track_ground_truth` restates `0x3bb` from `docs/formats/track.md` at two
-/// sites so the test checks the documented id rather than the crate's.
+/// matching *Pulse's* id on Pure's disc, and `track_ground_truth` restates
+/// `0x3bb` from `docs/formats/track.md` at two sites.
 ///
-/// `None` for a file whose version has no class table, or whose table has no
-/// `WO Track` id recovered, as well as for a `.vex` that simply authors none.
-/// Those are not distinguishable here, and a caller that needs to tell them
-/// apart should ask [`vex::classes_of`] itself.
+/// `None` for a version with no class table, a table with no `WO Track` id
+/// recovered, or a `.vex` that authors none (indistinguishable here; ask
+/// [`vex::classes_of`] to tell them apart).
 #[must_use]
 pub fn find_node<'a>(file: &[u8], nodes: &'a [vex::Node]) -> Option<&'a vex::Node> {
     let wo_track = vex::classes_of(file).ok()?.wo_track?;
@@ -576,16 +529,11 @@ pub fn point_len(version: u32) -> usize {
 /// Which way round a payload's words are, from its own magic, or `None` when
 /// the magic is neither.
 ///
-/// The four bytes spell `dtOW` on the PSP and PS2 and `WOtd` on the PS3 - the
-/// same [`MAGIC`] word, written on hosts of opposite endianness. So a `WO Track`
-/// payload says which it is even though it sits inside a `.vex` that already
-/// said, and this parser needs no argument and no caller change to read a
-/// Wipeout HD circuit.
-///
-/// That is worth stating because it was nearly got wrong:
-/// `docs/formats/hd-status.md` records the magic as "`WOtd`" on both, which
-/// reads as "the magic is not a discriminator". Measured on the shipped files,
-/// `16_Track` opens `64 74 4f 57` and `talons_junction` opens `57 4f 74 64`.
+/// The four bytes spell `dtOW` on the PSP and PS2 and `WOtd` on the PS3: the same
+/// [`MAGIC`] on hosts of opposite endianness, so this parser reads a Wipeout HD
+/// circuit with no argument. `docs/formats/hd-status.md` once recorded `WOtd` on
+/// both; measured, `16_Track` opens `64 74 4f 57` and `talons_junction`
+/// `57 4f 74 64`.
 #[must_use]
 pub fn byte_order(payload: &[u8]) -> Option<ByteOrder> {
     if payload.len() < 4 {
@@ -642,9 +590,8 @@ pub fn parse(payload: &[u8]) -> Result<AiTrack> {
         payload.len(),
     )?;
 
-    // Read the counts and check every point block fits before allocating
-    // anything: the counts are u32 from an untrusted file, and reserving on
-    // trust is how a 2 GiB allocation happens.
+    // Check every point block fits before allocating: counts are untrusted u32s
+    // (reserving on trust is how a 2 GiB allocation happens).
     let mut counts = Vec::with_capacity(path_count.min(payload.len() / PATH_LEN));
     let mut at = points_at;
     for i in 0..path_count {
