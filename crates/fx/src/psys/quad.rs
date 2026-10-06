@@ -4,6 +4,8 @@ use oag_core::math::Vec3;
 
 use oag_mesh::mesh::GpuVertex;
 
+use super::{EmitterSpec, Particle, sprite};
+
 /// Six vertices - two triangles - for one camera-facing quad.
 pub(super) fn quad(
     centre: Vec3,
@@ -29,4 +31,31 @@ pub(super) fn quad(
     let tl = corner(-1.0, 1.0, 0.0, 0.0);
     let tr = corner(1.0, 1.0, 1.0, 0.0);
     [bl, br, tl, br, tr, tl]
+}
+
+/// One particle's camera-facing quad, rolled if its emitter rolls and mapped
+/// onto its sprite's cell of the sheet if it has one - what a billboard
+/// emitter draws, shared by every blend class.
+///
+/// `cap = 0.5` collapses the shader's cap/cross profile to the plain radial
+/// falloff a round sprite wants.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn billboard(
+    spec: &EmitterSpec,
+    particle: &Particle,
+    age: f32,
+    half: f32,
+    right: Vec3,
+    up: Vec3,
+    rgb: [f32; 3],
+    alpha: f32,
+) -> [GpuVertex; 6] {
+    let mut corners = match &spec.rotation {
+        Some(rotation) => rotation.quad(particle, age, half, right, up, rgb, alpha),
+        None => quad(particle.position, right * half, up * half, 0.5, rgb, alpha),
+    };
+    if let Some(rect) = spec.sheet_rect {
+        sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
+    }
+    corners
 }

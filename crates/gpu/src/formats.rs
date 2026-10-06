@@ -13,6 +13,15 @@
 /// fallback should an adapter ever fail that pin.
 pub const VELOCITY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
+/// The offset target blend class 8 draws into and the Omega composite reads.
+///
+/// **Chosen, not measured.** The executable's target is `R8G8_SNORM` (Gnm word
+/// `0x22c103`, `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`, confidence
+/// 75) and WebGPU cannot render to `rg8snorm`, so the offsets are summed in
+/// half floats and the reader clamps what it reads to the `[-1, 1]` an SNORM
+/// write would have left.
+pub const DISTORTION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
+
 /// The scene target's format: linear, and wide enough for the bloom gate to
 /// see luminance above 1.0. Drawing into it is what tells every mesh pipeline
 /// to output linear light - see `oag_mesh::mesh_render::is_linear_target`.

@@ -1094,7 +1094,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and
   `particles` elsewhere (chosen, not measured - `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`).
-  The blend-class-8 distortion emitter (`shockdistort`) is read and not drawn (its program's arithmetic is read, `ghidra/functions/ps4-omega-eu/heat-haze.md`; the strength scalar and target format are not)
+  The blend-class-8 distortion emitter (`shockdistort`) is **drawn** (2026-10-06, `heat-haze-3`): an offset target the Omega tone-map composite resamples the scene by, strength the emitter's own `+0xc84` float (`ghidra/functions/ps4-omega-eu/heat-haze.md`, `pob.md`); the heat-haze set has no trigger yet
   (2026-10-06, `pob.md`): the explosions play their other emitters, and the effects
   Omega never authors are left out of its table. The two HUD-atlas WARN lines are gone (2026-10-06, `omega-hud`: the atlases
   are `.gnf` and now resolve). Still silent: the

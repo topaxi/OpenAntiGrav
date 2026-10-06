@@ -1116,28 +1116,35 @@ effects to each); the same stems as 2048's directories, different bytes again.
 - **95 of 97 and 110 of 112 parse** (2026-10-06; 80 and 96 before blend class 8 was read). The two refused in each
   directory are `WO_NITRO_SHIP_DEATH` (blend class 4) and `WO_BARRIER_COLLISION`
   (render mode 3), both also refused on 2048.
-- **Blend class 8 is read as `oag_fx::psys::Blend::Distort`: simulated, not drawn.** It
+- **Blend class 8 is read as `oag_fx::psys::Blend::Distort` and drawn** (2026-10-06,
+  `heat-haze-3`; simulated and not drawn until then). It
   is on 31 emitters of 20 Omega effects (all census runs 2026-10-06 over `data05.psarc`),
   every shock-distortion and heat-haze one: `shockdistort`, `distort`, `Heathaze` and the
   `WO_RB_HEAT*` set, always render mode 2. In the five explosions a player sees
   (`WO_ROCKET_EXPLO`, `_TRACK`, `WO_MISSILE_EXPLO`, `WO_BOMB_SMOKERING`,
   `WO_PLASMA_LIGHTNING_EXPAND`) it is exactly one emitter, `shockdistort`, and the
-  fireball, smoke, spikes and sparks beside it are class 2 or 3 and now play (they were
-  refused with it before). What `psys_normal_heathaze_vp/fp` does is **read** (2026-10-06,
-  `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`, conf 80): not a scene grab. The
-  particle writes a signed offset `colourScale * alpha * 2/|w|^0.75 * tex.a * (tex.rgb - 0.5)`
-  into a separate buffer (depth-gated against linear view depth), and the final
-  composite resamples Frame, LowRes and Bloom at `uv + 0.0100021 * (16/9 * d.x, d.y)`.
-  It stays **undrawn**, and the page now says what is read and what is not
-  (2026-10-06, `heat-haze-2`). Read: `kColourScale` is the emitter record's own
-  word at **`+0xc84`** (conf 85; `10.0` on the base eboot's explosions, `2.0` on the
-  patch's, `0.8` to `5.0` on the heat-haze set), the program slot is exactly blend
-  class 8, the target is `R8G8_SNORM` (75) with a pure additive blend (80), and the
-  depth the fragment tests is an `R16F` 960 by 540 target (75). Unread: the target's
-  clear value, which pass attaches it, and what writes the depth. The emitter ticks,
-  spawns its children and draws nothing, and the loader names it at WARN. Nothing is
-  drawn in its place. `Emitter` does not parse `+0xc84` yet: a drawn pass would add it
-  as a field, never as a constant.
+  fireball, smoke, spikes and sparks beside it are class 2 or 3. What
+  `psys_normal_heathaze_vp/fp` does is **read** (`docs/ghidra/functions/ps4-omega-eu/heat-haze.md`,
+  conf 80): not a scene grab. The particle writes a signed offset
+  `colourScale * alpha * 2/|w|^0.75 * tex.a * (tex.rg - 0.5)` into a separate target, drawn
+  additively and cleared to `(0, 0, 0, 0)` each frame, gated by the scene's depth, and the
+  final composite resamples the scene at `uv + 0.0100021 * (16/9 * d.x, d.y)`.
+  `kColourScale` is the emitter record's own word at **`+0xc84`** (conf 85;
+  [`Emitter::distort_strength`](../../crates/pob/src/lib.rs), parsed for class 8 only: `10.0` on
+  the base eboot's explosions, `2.0` on the patch's, `1.0` on `WO_MISSILE_EXPLO`, `0.8` to
+  `5.0` on the heat-haze set), and the palette colour is not used at all. The sprite's
+  `rg - 0.5` is the displacement, so an emitter whose sprite did not read draws nothing and
+  the loader names it at WARN (`Effect::undrawn_emitters`); no procedural stand-in. Built in
+  `oag_fx::psys::distort` (the quads), `oag_fx::psys::Pipeline::encode_distort` (the offset
+  pass) and `oag_post::omega_tonemap` (the composite). **Chosen, not measured:** the offset
+  target is half floats where the executable's is `R8G8_SNORM` (WebGPU cannot render to
+  `rg8snorm`; the composite clamps its read to `[-1, 1]`), and the depth gate is the
+  hardware depth test against the scene's own depth, planar like `w`, where the executable
+  tests an `R16F` its scene shaders fill (what they store there is unread). Omega only
+  composites through its tone-map chain, so a circuit without a `Tonemap` block draws none.
+  The heat-haze set (`WO_RB_HEAT*`, `WO_ENV_*`) has no recovered trigger and plays nowhere
+  today. Pinned by `psys/distort/tests.rs`, `psys_omega_ground_truth.rs` (the strengths) and
+  `omega_tonemap/tests.rs` (the composite moves a sample).
   **2048 cross-check: checked, differs.** No 2048 `.pob` (`data.psarc`, both patch
   archives, both DLC packs) carries class 8; its explosions have no `shockdistort`.
   Pulse PSP, PS2 and HD carry none either (HD's only unnamed class is 4).

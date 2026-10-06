@@ -675,6 +675,15 @@ pub struct Emitter {
     /// on an emitter record only; a template's is [`Emitter::stretch`], and
     /// holds `1.0` here.
     pub aspect: f32,
+    /// `+0xc84`, blend class 8 only: the heat-haze program's `kColourScale`,
+    /// the strength every one of the emitter's particles displaces the frame
+    /// by. A file field of the emitter record (the executable copies the
+    /// qword at emitter `+0xc84` into each batch it pushes), read by
+    /// `crates/fx/examples/emitter_words.rs` on all 31 class 8 emitters of
+    /// the base and patch archives. `0.0` for every other class, where the
+    /// word is not this field, and for a record too short to hold it. See
+    /// `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`.
+    pub distort_strength: f32,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -835,6 +844,7 @@ fn emitter_placeholder() -> Emitter {
         rotation_speed: channel(),
         stretch: None,
         aspect: 1.0,
+        distort_strength: 0.0,
         frame_rate: channel(),
         emission_scale: channel(),
         playback_rate: 0.0,
@@ -916,6 +926,11 @@ fn parse_emitter(
         rotation_speed: parse_channel(record, order, 0x698)?,
         stretch: None,
         aspect: float(0x4c8),
+        distort_strength: if word(0xc0) == 8 && record.len() >= 0xc88 {
+            float(0xc84)
+        } else {
+            0.0
+        },
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),

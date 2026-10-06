@@ -271,3 +271,39 @@ fails. Confidence **80**.
 
 Cross-title: HD and 2048 unchanged (no `psys_normal_heathaze`, no `DistortionTexture`; see
 the first section).
+
+### What was built from it (`heat-haze-3`)
+
+Everything the drawn effect needs is read at or above 70 (strength 85, target
+format 75, blend 80, clear 80, pass and attachment 80, vertex and fragment
+arithmetic 80, depth units 75), so blend class 8 is drawn on Omega. The pass is
+title-agnostic; only the composite that consumes it is Omega's.
+
+| Piece | Where | Law it carries |
+| --- | --- | --- |
+| Strength | `oag_pob::Emitter::distort_strength` (`+0xc84`, class 8 only) | `kColourScale`, the file's own float; read, never a constant. |
+| Quads | `oag_fx::psys::distort` | Vertex colour `(k, k, k, alpha)`, **palette unused**; an emitter with no sprite on the sheet draws nothing (the program displaces by the sprite). |
+| Pass | `oag_fx::psys::Pipeline::encode_distort`, `distort.wesl` | One colour attachment, no depth of its own, cleared `(0,0,0,0)`, additive `(One, Add, One)`, `out = colour.rg * (colour.a * 2/|w|^0.75 * sprite.a) * (sprite.rg - 0.5)`. |
+| Gate | the depth test | `depth_compare: LessEqual` against the scene's own depth attachment, read-only: the executable's `depth >= w`. |
+| Composite | `oag_post::omega_tonemap`, `omega_tonemap.wesl` | The scene is sampled at `uv + 0.0100021 * (16/9 * d.x, d.y)`; a frame with no class 8 particle alive samples a zero texture and is byte-identical to before. |
+
+**Chosen, not measured, and said at the code:** the target is `Rg16Float`
+(`oag_gpu::formats::DISTORTION_FORMAT`), because WebGPU cannot render to
+`rg8snorm`, with the composite clamping its read to the `[-1, 1]` an SNORM write
+leaves; the depth gate uses the scene's 32-bit depth buffer rather than the
+executable's `R16F`, planar like `w`, where the scene shaders' own `R16F` value
+(planar or radial) is unread; the horizontal factor is the executable's
+constant 16/9, not the window's aspect; the tone curve is per pixel, so resampling the scene before it equals resampling the curved frame (the original's composite also resamples a LowRes layer and the bloom, which this renderer's Omega chain does not draw); the
+luminance ladder reads the undistorted scene.
+
+Judged (`data/scratch/heat-haze-3/shots/`, Omega Tech De Ra, rocket fired at
+the wall ahead, 1440x816, `on<tick>.png` and `off<tick>.png` side by side in
+`sheetA.png` and `sheetB.png`, ticks 500, 530, 560, 602, 650, 700): the frames
+with the distortion bend the walls and the hull near the blast by up to about
+25 pixels, over the whole blast's life, and are otherwise the same picture; no
+artefact, no black, MSAA 4x draws the same (`msaa500.png`). No frame of the
+original exists to compare against (no PS4 emulator).
+
+- **Cross-title: not ported, checked.** No other title's `.pob` carries class 8,
+  and 2048's own composite is a different program; the pass is the same shape
+  Omega's heat-haze set will need.

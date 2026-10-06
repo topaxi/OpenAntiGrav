@@ -2180,6 +2180,7 @@ dependencies = [
  "oag-assets",
  "oag-core",
  "oag-formats",
+ "oag-gpu",
  "oag-mesh",
  "oag-pob",
  "oag-pulse",
