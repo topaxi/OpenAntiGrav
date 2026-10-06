@@ -133,28 +133,63 @@ fn pulse_ps2_draws_talons_junctions_adverts() {
     assert_talons_junction_draws_its_adverts(&report);
 }
 
-/// A circuit whose slots are colours still reports what it draws nothing for:
-/// `Billboard_CreateFromColour`'s pool is unread, so a colour slot's placeholder
-/// stays suppressed and says so.
+/// A colour slot draws the advert the engine's pool hands it. De Konstruct
+/// authors blue, blue and yellow portraits on slots 1, 2 and 4 and grey on 3,
+/// which has no quad but still takes its entry out of the pool. The expected
+/// models are `oag_tables::billboard_pool`'s shuffle and draw order, which a
+/// live PPSSPP read of the pool matched entry for entry (2026-10-06).
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn a_colour_slot_is_still_reported_as_drawn_nothing() {
+fn colour_slots_draw_the_adverts_the_engines_pool_hands_them() {
     let Some(report) = report(
         "data/images/pulse-psp-usa.chd",
         Some(r"Data\Environments\05_Track\track.vex"),
     ) else {
         return;
     };
-    assert!(
-        report.contains("billboard slot 1 names a colour"),
-        "{report}"
-    );
-    assert!(
-        report.contains("placeholder draw(s) suppressed: drawn nothing"),
-        "{report}"
-    );
+    for (slot, model) in [
+        (1, "ASSEGAI_PORTRAIT_01.vex"),
+        (2, "AURICOM_PORTRAIT_01.vex"),
+        (4, "Egx_PORTRAIT_01.vex"),
+    ] {
+        assert!(
+            report.contains(&format!("billboard slot {slot}: the colour"))
+                && report.contains(&format!("{model} drawn through its own camera")),
+            "slot {slot} should draw {model}: {report}"
+        );
+    }
     assert!(
         report.contains("billboard slot 5: ") && report.contains("drawn through its own camera"),
         "{report}"
     );
+    assert!(
+        !report.contains("placeholder draw(s) suppressed"),
+        "a placeholder is still suppressed: {report}"
+    );
+}
+
+/// The simulated pool equals the one read out of a running PSP: the 35 entries'
+/// order after `FUN_08900e90`'s shuffle and Talon's Junction's one grey draw.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_simulated_pool_order_is_the_captured_one() {
+    let Some(image) = image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
+    let catalogue = oag_tables::billboard_pool::parse(
+        &archives
+            .read_name(r"Data\Plugins\PI004\Definition.xml")
+            .expect("the catalogue"),
+    );
+    assert_eq!(catalogue.len(), 35);
+    let mut pool = oag_tables::billboard_pool::Pool::new(catalogue);
+    let before: Vec<String> = pool.entries().iter().map(|e| e.name.clone()).collect();
+    assert_eq!(&before[..3], ["Landscape22", "Landscape23", "Portrait2"]);
+    assert_eq!(before[33], "Landscape20");
+    let drawn = pool.draw("portrait", "grey").map(|e| e.name.clone());
+    assert_eq!(drawn.as_deref(), Some("Portrait14"));
+    let after: Vec<&str> = pool.entries().iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(after[34], "Portrait14");
+    assert_eq!(after[12], "Landscape21");
 }
