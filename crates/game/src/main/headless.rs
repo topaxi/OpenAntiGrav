@@ -226,6 +226,7 @@ pub(crate) fn run_windowless(
                 scheme,
                 trace: cli.trace,
                 race: Some(race_options),
+                event: cli.event.clone(),
                 log_every: cli.log_every,
                 size: parse_size(&cli.size)?,
                 screen: cli.screen.clone(),

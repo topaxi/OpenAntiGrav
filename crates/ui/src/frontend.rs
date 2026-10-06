@@ -120,7 +120,7 @@ pub(crate) use faces::{font_line_height, lighten};
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
-pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState};
+pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState, cursor_ring};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///

@@ -17,8 +17,7 @@ use oag_raceplay::{self as race, catalogue, pilots};
 use oag_ui::menu;
 
 use crate::gpu::Gpu;
-use crate::race_stage::RaceStage;
-use crate::stage::Stage;
+use crate::{race_stage::RaceStage, stage::Stage};
 
 #[path = "session/apply.rs"]
 mod apply;
@@ -696,6 +695,7 @@ pub(crate) struct Shell {
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
     pub(crate) menu_font: Option<oag_ui::font::Atlas>,
+    pub(crate) face_scales: Vec<(String, f32)>,
     /// The face the screen title is drawn in, when this title names a role
     /// for it. `None` draws it in whichever face the frame is already bound
     /// to - see `boot::Shell::title_font` and
@@ -835,6 +835,7 @@ impl Shell {
             menu_skin: boot_shell.menu_skin,
             space: boot_shell.space,
             menu_font: boot_shell.menu_font.clone(),
+            face_scales: boot_shell.face_scales.clone(),
             title_font: boot_shell.title_font.clone(),
             buttons_font: boot_shell.buttons_font.clone(),
             sprites: boot_shell.sprites.clone(),

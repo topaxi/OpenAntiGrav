@@ -629,19 +629,7 @@ impl Frontend {
 
     /// The pad cursor: a ring outside `rect`. Chosen - see the module docs.
     pub(super) fn draw_cursor_ring(&self, rect: [f32; 4], cursor: [f32; 4], out: &mut Vec<Draw>) {
-        let [x, y, w, h] = rect;
-        let r = CURSOR_RING;
-        for ring in [
-            [x - r, y - r, w + 2.0 * r, r],
-            [x - r, y + h, w + 2.0 * r, r],
-            [x - r, y, r, h],
-            [x + w, y, r, h],
-        ] {
-            out.push(Draw::Fill {
-                rect: ring,
-                color: cursor,
-            });
-        }
+        out.extend(cursor_ring(rect, cursor));
     }
 
     /// A skin colour by its global name, or white: the names this reads
@@ -654,6 +642,22 @@ impl Frontend {
             .and_then(|value| parse_argb(value))
             .map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba)
     }
+}
+
+/// The pad cursor's ring around `rect`, four bars [`CURSOR_RING`] thick.
+/// Shared with the screens that reuse this front end's tile idiom
+/// (`oag_ui_screens::endrace::touch`). Chosen, not measured.
+#[must_use]
+pub fn cursor_ring(rect: [f32; 4], color: [f32; 4]) -> [Draw; 4] {
+    let [x, y, w, h] = rect;
+    let r = CURSOR_RING;
+    [
+        [x - r, y - r, w + 2.0 * r, r],
+        [x - r, y + h, w + 2.0 * r, r],
+        [x - r, y, r, h],
+        [x + w, y, r, h],
+    ]
+    .map(|rect| Draw::Fill { rect, color })
 }
 
 /// A button's own square.

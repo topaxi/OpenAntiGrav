@@ -299,7 +299,7 @@ impl Session {
             // spent and the camera stays as the spectator director has it.
             let in_photo = matches!(&self.stage, Stage::Race(stage)
                 if stage.endrace.as_ref().is_some_and(
-                    crate::race_stage::endrace::EndRaceRuntime::is_photo));
+                    crate::race_stage::endrace_touch::EndRace::is_photo));
             if matches!(self.stage, Stage::Race(_))
                 && self.controls.buttons().is_pressed(Button::Select)
             {
@@ -614,7 +614,7 @@ impl Session {
                     let space = stage
                         .endrace
                         .as_ref()
-                        .map(crate::race_stage::endrace::EndRaceRuntime::space);
+                        .map(crate::race_stage::endrace_touch::EndRace::space);
                     if let Some(space) = space {
                         let grid = pointer::in_grid(pointer, space, rect);
                         self.tick_endrace(&grid);

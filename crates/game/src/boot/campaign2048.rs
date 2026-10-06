@@ -197,7 +197,7 @@ const CARD_TRACKS: [&str; 10] = [
 /// `BEAT_VALUE` falls through to `FE_SCORE_POINTS` (`SCORE %d POINTS`) -
 /// Elimination (ordinal `1`) among them. The class of an event is its
 /// typedef, not its [`EventKind`], which merges the two race typedefs.
-fn objective_text(
+pub(crate) fn objective_text(
     strings: &StringTable,
     typedef_id: i64,
     objective_type: i64,
