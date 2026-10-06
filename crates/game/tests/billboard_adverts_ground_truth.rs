@@ -76,7 +76,7 @@ fn every_advert_a_manifest_names_has_one_camera_with_a_one_key_curve() {
             .unwrap_or_else(|| panic!("{name}: no one-key perspective curve"));
         fovs.insert((format!("{fov:.2}"), format!("{:.1}", camera.aspect())));
         assert!(
-            oag_raceplay::adverts::view_projection(camera).is_some(),
+            oag_raceplay::adverts::view_projection(camera, 1.2, 2017.7).is_some(),
             "{name}: its camera gives no projection"
         );
     }

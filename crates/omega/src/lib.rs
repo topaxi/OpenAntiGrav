@@ -143,6 +143,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,
+    adverts: None,
 };
 
 /// The effects Omega plays: the engine's own names, tried as Pulse's, minus

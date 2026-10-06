@@ -240,3 +240,13 @@ fn pulse_ps2_points_every_served_placeholder_at_its_card() {
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
 }
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
+fn hd_points_every_served_placeholder_at_its_card() {
+    let Some((wanted, rebound)) = adverts_rebound("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    assert!(wanted > 0, "the circuit authors no placeholder with a card");
+    assert_eq!(rebound, wanted, "placeholders rebound to a card");
+}

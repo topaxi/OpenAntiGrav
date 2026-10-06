@@ -170,6 +170,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: None,
+    adverts: None,
 };
 
 /// The effects Wipeout 2048 plays: the engine's own names, tried as Pulse's, minus
