@@ -17,10 +17,14 @@ raises "<Tier> medal awarded" through them the first time a tier is reached
 - **The negative is static.** No live frame of a campaign Zone or Speed Lap
   crossing a medal threshold: a fresh profile has those cells locked. Unlock one
   (write the cell record) and watch `hud+0xe0` and the slot busy bytes.
-- **The `MESSAGE` cue** the original plays as a line appears, and the
-  `gold_med`/`silver_med`/`bronze_med` jingles. `MessageBoard::just_shown` is
-  the hook; the cue is not routed to a mixer. The jingles are unplayed even on
-  the end-of-race screen.
+- ~~The `MESSAGE` cue~~ **wired 2026-10-06** (`Cue::Message`, raised off
+  `just_shown`; WAV-diff checked). Still open: the `gold_med`/`silver_med`/
+  `bronze_med` jingles have no recovered trigger and are unplayed even on the
+  end-of-race screen.
+- ~~A persistent earned-medal readout~~ **done 2026-10-06**: `Info4` holds the
+  best medal for the rest of the race (`oag_game::medal_watch`, one function
+  for the window and the headless capture; `--campaign-cell` reproduces it).
+  Open: a live PPSSPP frame to confirm or kill the "no mid-race medal" reading.
 - **The eight events with no trigger**: `IG_HUD_PLAP`, `NEWLAP_REC`, `FIN_LAP`,
   `CONT_ELIM`, `PERF_ZONE`, `PERF_BOOST`, `NEW_ZONE_RECORD`, `NEW_SCORE_RECORD`,
   and the `0x200` queue at `DAT_08b32d40`. The flag word writers
@@ -32,15 +36,18 @@ raises "<Tier> medal awarded" through them the first time a tier is reached
   and its executable's routine. Whether Pure launches a campaign cell at all was
   not checked.
 - **HD** composes the same slots in every race layout and draws the phrase from
-  its own table; the HD campaign trigger (`campaign_cell` is title-blind) was not
-  exercised end to end. Its line is hard to read on a bright backdrop.
-- **2048** (`RaceMedal` was never seen in any state reached, `2048-hud.md`) and
-  Omega (racing out of scope): checked, applies, not wired.
+  its own table; the trigger now runs end to end on HD Zone (`grid0_4_2`, bronze
+  at zone 14, headless). Its text style is authored white with a faint border
+  and no backing, so a bright backdrop washes it - HD's own, left alone. HD's
+  own message colour (the banner is Pulse's green) is unread.
+- **2048** earns `Pass`/`Elite` not gold/silver/bronze, has no `Info1`-`Info4`
+  and never showed `RaceMedal`: checked, applies, not wired (needs its own phrase
+  and widget). Omega (racing out of scope): not checkable.
 - **Elimination** (kills against gold) would raise through the same hook.
 
 ## Next Steps
 
 1. Find the writers of `*(hud+0x3c)+0xe0` (xrefs on `+0xe0` stores in
    `PlayerStatus_Update` and the lap code) and wire `PLAP`/`NEWLAP_REC`/`FIN_LAP`.
-2. Route `just_shown` to the `MESSAGE` cue.
+2. ~~Route `just_shown` to the `MESSAGE` cue.~~ Done.
 3. Read Pure's HUD message routine and turn `message_slots` on there.

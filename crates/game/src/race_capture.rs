@@ -14,7 +14,7 @@ use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
-mod tick;
+pub mod tick;
 use tick::advance_one_tick;
 
 /// What a headless capture should do before it draws.
@@ -63,8 +63,8 @@ pub struct CaptureOptions {
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,
-    /// `--force-medal TICK:TIER`: a medal phrase id, raised as a HUD message.
-    pub force_medal: Vec<(u32, &'static str)>,
+    /// `--force-medal` and `--campaign-cell`: the HUD's medal lines. See [`tick::Medals`].
+    pub medals: tick::Medals,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a

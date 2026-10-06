@@ -63,6 +63,7 @@ pub fn slot_of(name: &str) -> Option<usize> {
 pub(super) fn colour(readout: &super::Readout, name: &str) -> Option<[f32; 4]> {
     readout.messages[slot_of(name)?]
         .as_ref()
+        .filter(|line| !line.authored)
         .map(|line| line.color)
 }
 
@@ -89,6 +90,10 @@ pub struct MessageLine {
     pub text: String,
     /// Its colour, alpha included. The border takes the same alpha.
     pub color: [f32; 4],
+    /// Drawn in the widget's own authored colour and outline instead of
+    /// [`Self::color`] - the standing line, which says its tier in words and
+    /// needs no colour of its own.
+    pub authored: bool,
 }
 
 /// What the HUD shows of the board this frame: one entry per slot.
@@ -108,6 +113,20 @@ pub struct MessageBoard {
     slots: [Option<Slot>; SLOTS],
     gate: f32,
     shown: bool,
+    standing: Option<Standing>,
+}
+
+/// A line that stays for the rest of the race, in the last slot.
+///
+/// **Chosen, not measured.** The original's slots all expire; this one holds the
+/// best medal a campaign race has earned so far (`RaceStage` raises it), so the
+/// player can still tell later which medal is safe once its four-second banner
+/// is gone. It takes the last of the four widgets the layouts already author
+/// (`Info4`), so it lands where no other widget of any layout is - and a
+/// transient message that has reached that slot hides it until it expires.
+#[derive(Debug, Clone, PartialEq)]
+struct Standing {
+    text: String,
 }
 
 impl Default for MessageBoard {
@@ -117,6 +136,7 @@ impl Default for MessageBoard {
             // Below zero: the first message shows at once.
             gate: -1.0,
             shown: false,
+            standing: None,
         }
     }
 }
@@ -125,13 +145,27 @@ impl MessageBoard {
     /// Raises a message: the first free slot takes it, and a board with all
     /// four busy drops it, as `FUN_0881b52c` does.
     pub fn push(&mut self, id: impl Into<String>, good: bool) {
-        if let Some(slot) = self.slots.iter_mut().find(|slot| slot.is_none()) {
+        // A standing line keeps the last slot for itself while nothing else
+        // needs it, so a transient message queues in the first three.
+        let usable = if self.standing.is_some() {
+            SLOTS - 1
+        } else {
+            SLOTS
+        };
+        if let Some(slot) = self.slots[..usable].iter_mut().find(|slot| slot.is_none()) {
             *slot = Some(Slot {
                 text: id.into(),
                 good,
                 left: None,
             });
         }
+    }
+
+    /// Sets the line that stays up for the rest of the race, replacing any
+    /// earlier one: `id` is a language-table id. It draws in the layout's own
+    /// colour for the widget, not the green of a banner.
+    pub fn set_standing(&mut self, id: impl Into<String>) {
+        self.standing = Some(Standing { text: id.into() });
     }
 
     /// Whether a message started showing on the last [`Self::advance`] - the
@@ -182,6 +216,19 @@ impl MessageBoard {
             *line = Some(MessageLine {
                 text: held.text.clone(),
                 color,
+                authored: false,
+            });
+        }
+        // Not while the same words are already up as a banner: the line would
+        // read twice, one above the other.
+        let repeated = |text: &str| out.iter().flatten().any(|line| line.text == text);
+        if let Some(standing) = self.standing.as_ref().filter(|s| !repeated(&s.text))
+            && let last @ None = &mut out[SLOTS - 1]
+        {
+            *last = Some(MessageLine {
+                text: standing.text.clone(),
+                color: [1.0; 4],
+                authored: true,
             });
         }
         out

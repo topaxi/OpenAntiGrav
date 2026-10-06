@@ -234,6 +234,10 @@ fn every_cue_has_something_that_raises_it() {
         if tick == 212 {
             race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
         }
+        // A HUD message line, raised once: `Cue::Message` sounds as it shows.
+        if tick == 5 {
+            race.raise_message("ER_GMA", true);
+        }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
         let body = &mut race.sim.world.ships[0].physics.body;

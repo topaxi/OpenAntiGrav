@@ -537,6 +537,7 @@ pub(crate) fn run_race(
                 (path, header)
             }),
         };
+        let title_name = loaded.title.name;
         oag_game::race_capture::capture(
             loaded,
             &oag_game::race_capture::CaptureOptions {
@@ -549,7 +550,15 @@ pub(crate) fn run_race(
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_wreck(cli.wreck.force_wreck.as_deref())?,
                 force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
-                force_medal: crate::args::force_medal(&cli.wreck.force_medal)?,
+                medals: oag_game::race_capture::tick::Medals {
+                    forced: crate::args::force_medal(&cli.wreck.force_medal)?,
+                    cell: crate::args::campaign_cell(
+                        &options,
+                        title_name,
+                        cli.wreck.campaign_cell.as_deref(),
+                    )?,
+                    ..Default::default()
+                },
                 path,
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),

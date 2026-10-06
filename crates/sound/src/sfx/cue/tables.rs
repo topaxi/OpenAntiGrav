@@ -16,8 +16,9 @@ impl Cue {
     pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 43] = [
         Self::SpeedupPad,
+        Self::Message,
         Self::Turbo,
         Self::Collision,
         Self::Absorb,
@@ -65,7 +66,9 @@ impl Cue {
     #[must_use]
     pub fn bank(self) -> BankName {
         match self {
-            Self::SpeedupPad | Self::Blowup | Self::LockOn | Self::Autopilot => BankName::Hud,
+            Self::SpeedupPad | Self::Message | Self::Blowup | Self::LockOn | Self::Autopilot => {
+                BankName::Hud
+            }
             Self::Collision | Self::Engine | Self::Magstrip | Self::MagstripStop => BankName::Ship,
             Self::Absorb
             | Self::Shield
@@ -158,6 +161,7 @@ impl Cue {
     pub fn name(self) -> &'static str {
         match self {
             Self::SpeedupPad => "SPEEDUPPAD",
+            Self::Message => "MESSAGE",
             Self::Turbo => "TURBO",
             Self::Collision => ".COLLISIONS",
             Self::Absorb => "ABSORB",
@@ -353,7 +357,7 @@ impl Cue {
             Self::Ready | Self::Go | Self::ContElim => Placement::Unplaced,
             // Read, not assumed: case 4 hands it to the path that takes no
             // emitter and a volume of `0x400`.
-            Self::Blowup => Placement::Unplaced,
+            Self::Blowup | Self::Message => Placement::Unplaced,
             // Both halves of `Ship_FireHeldWeapon`'s case 6 go through
             // `FUN_0883e9b0` too - the same dry, no-emitter path `Blowup` and
             // `Disengaging` take - see each variant's own doc comment.
