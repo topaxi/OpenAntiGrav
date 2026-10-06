@@ -37,9 +37,7 @@ pub use tuning::Tuning;
 pub struct Context<'a> {
     /// The line to follow, and the corridor around it.
     pub line: &'a Line,
-    /// The constants the whole field shares.
     pub tuning: &'a Tuning,
-    /// The character this craft is drawn from.
     pub pilot: &'a Pilot,
     /// What this craft can see of the rest of the grid.
     pub field: &'a Field,
@@ -480,7 +478,6 @@ impl Driver {
         self.place = now;
     }
 
-    /// How provoked this driver is, `0.0..=1.0`.
     fn provoked(&self) -> f32 {
         f32::from(self.provocation) / f32::from(PROVOCATION_MAX)
     }
@@ -725,7 +722,6 @@ struct Steer {
 }
 
 impl Steer {
-    /// No command and nothing left to correct.
     const STRAIGHT: Self = Self {
         command: 0.0,
         rate_error: 0.0,

@@ -63,12 +63,10 @@ impl Frame {
 pub struct Aim {
     /// Index of the sample the point sits on or just after.
     pub index: usize,
-    /// The point itself, on the line.
     pub point: Vec3,
     /// How far along the line it actually is: the *travelled* distance, which
     /// differs from the one asked for once the line curves.
     pub travelled: f32,
-    /// The corridor there, when the line carries one.
     pub corridor: Option<Frame>,
 }
 

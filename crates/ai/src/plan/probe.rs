@@ -16,7 +16,6 @@ use super::{Course, Craft, Driver, Failure, Run, SpeedPlan, Tuning, forward_spee
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Row {
     pub tick: u32,
-    /// The line sample the driver located itself on.
     pub index: u32,
     pub speed: f32,
     /// Signed distance from the line point across it, positive to the right.
@@ -29,9 +28,7 @@ pub struct Row {
     pub right: f32,
     pub steer: f32,
     pub position: Vec3,
-    /// World-Y velocity.
     pub climb: f32,
-    /// World-Y component of the craft's nose direction.
     pub pitch: f32,
     pub contact: bool,
     pub airborne: bool,

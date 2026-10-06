@@ -27,7 +27,6 @@ use oag_core::Rng;
 /// One axis's range, and the single draw that resolves it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
-    /// The low end, inclusive.
     pub low: f32,
     /// The high end. Approached and not reached - `Rng::next_f32` is half-open.
     pub high: f32,
@@ -51,7 +50,6 @@ impl Span {
         }
     }
 
-    /// One draw, scaled into the range.
     pub fn draw(&self, rng: &mut Rng) -> f32 {
         self.low + (self.high - self.low) * rng.next_f32()
     }
@@ -107,7 +105,6 @@ pub struct Pilot {
     /// How far off the line this pilot sits, as a fraction of the room on that
     /// side. Draw 1.
     pub line_bias: Span,
-    /// Which side that is. Draw 2.
     pub lean: Lean,
     /// How much of the corridor is spent drifting about the bias. Draw 3.
     pub wander: Span,

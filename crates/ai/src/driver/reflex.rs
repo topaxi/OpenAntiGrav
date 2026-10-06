@@ -32,11 +32,8 @@ use crate::field::{Field, Rival};
 /// [`Reflex`] would claim to have already noticed the player in every channel.
 const NOBODY: u8 = u8::MAX;
 
-/// The nearest craft in front.
 const AHEAD: usize = 0;
-/// The nearest craft behind.
 const BEHIND: usize = 1;
-/// One close enough alongside to touch.
 const ALONGSIDE: usize = 2;
 
 /// What a driver has noticed, and what it is still noticing: one entry per
@@ -51,7 +48,6 @@ pub struct Reflex {
     /// taking the channel mid-wait starts its own clock instead of inheriting
     /// the first one's remainder.
     pub pending: [u8; 3],
-    /// Ticks left before [`Self::pending`] is acted on.
     pub wait: [u16; 3],
 }
 
@@ -127,7 +123,6 @@ impl Reflex {
         }
     }
 
-    /// One channel of [`Self::filter`].
     fn noticed(&self, channel: usize, rival: Option<Rival>) -> Option<Rival> {
         rival.filter(|rival| self.seen[channel] == rival.slot)
     }

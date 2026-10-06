@@ -235,9 +235,7 @@ impl WeaponAi {
 /// A craft as the predicted-path test sees it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mover {
-    /// World position.
     pub position: Vec3,
-    /// World velocity, units a second.
     pub velocity: Vec3,
 }
 

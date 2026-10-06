@@ -224,18 +224,15 @@ impl Difficulty {
     /// skill to place.
     ///
     /// `1.0` is [`Self::Novice`], `2.0` [`Self::Skilled`], `3.0` [`Self::Elite`],
-    /// the campaign's Easy/Medium/Hard (Wipeout HD's debug text equates them:
+    /// the campaign's Easy/Medium/Hard (HD's debug text equates them:
     /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡ ELITE`,
-    /// corroborated by `docs/ui/campaign-screens.md`'s RPCS3 capture). A value
-    /// between two integers blends the neighbouring levels' axes linearly, so a
-    /// cell's authored position on the disc's `SkillScaleValue` curve
-    /// (`oag_tables::track_stats::resolve_skill_scale`) is not discarded; see
-    /// `docs/gameplay/ai.md`'s campaign section.
+    /// `docs/ui/campaign-screens.md`). Between two integers the neighbouring
+    /// levels' axes blend linearly, so a cell's authored position on the disc's
+    /// `SkillScaleValue` curve (`oag_tables::track_stats::resolve_skill_scale`)
+    /// survives; see `docs/gameplay/ai.md`'s campaign section.
     ///
-    /// **`Ace` is unreachable here**, on purpose: the campaign names no fourth
-    /// setting, and `Ace` stays reachable only by name (`--autopilot-skill ace`,
-    /// the RACE page's Ace choice).
-    ///
+    /// **`Ace` is unreachable here**: the campaign names no fourth setting, so
+    /// `Ace` is reachable only by name (`--autopilot-skill ace`, the RACE page).
     /// Clamped to `1.0..=3.0`: an authored curve can run slightly outside, and
     /// there is no fifth level to extrapolate into.
     #[must_use]
@@ -269,9 +266,9 @@ impl Difficulty {
         }
     }
 
-    /// This level's version of a pilot. Only the axes deciding how a driver
-    /// treats *other craft* are scaled; its own line (bias, wander, inside) is
-    /// left alone so a shy pilot at novice is still recognisably itself.
+    /// This level's version of a pilot: only the axes deciding how a driver
+    /// treats *other craft* scale; its own line stays, so a shy novice is still
+    /// itself.
     #[must_use]
     pub fn temper(self, pilot: &Pilot) -> Pilot {
         let scale = self.aggression();

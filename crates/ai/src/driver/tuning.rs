@@ -18,7 +18,6 @@
 /// evidence is in `docs/gameplay/ai.md`, "Tuning sweep tables".
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {
-    /// Lookahead distance at a standstill.
     pub look_min: f32,
     /// Extra lookahead per unit of forward speed, roughly "seconds ahead".
     ///
@@ -41,7 +40,6 @@ pub struct Tuning {
     pub look_speed: f32,
     /// Lookahead ceiling. Past this a craft stops seeing the corner it is in.
     pub look_max: f32,
-    /// Gain from turn-rate error onto the steering input.
     pub rate_gain: f32,
     /// Ceiling on the turn rate the geometry may ask for, in radians per second.
     ///
@@ -134,7 +132,6 @@ pub struct Tuning {
     /// Differential airbrake per radian per second of turn-rate error past
     /// [`Tuning::trail_deadband`]. Raised `1.2` to `3.0` on 2026-09-11 with it.
     pub trail_gain: f32,
-    /// Ceiling on the differential.
     pub trail_max: f32,
     /// How saturated the steering command must be, as a fraction of full lock,
     /// before the differential engages.

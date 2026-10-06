@@ -90,9 +90,7 @@ pub struct Pad {
 /// The rivals a driver may react to, and its own place.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Field {
-    /// The nearest craft in front, within awareness range.
     pub ahead: Option<Rival>,
-    /// The nearest craft behind.
     pub behind: Option<Rival>,
     /// A craft close enough alongside to touch, neither ahead nor behind while
     /// it is there.

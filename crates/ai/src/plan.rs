@@ -43,7 +43,6 @@ pub use brake::Decel;
 /// reads to the physics.
 #[allow(missing_debug_implementations)]
 pub struct Course<'a, R: Raycaster + ?Sized> {
-    /// The racing line the plan is indexed by.
     pub line: &'a Line,
     /// The track sample under each line point, **index-parallel to `line`**, or
     /// empty for a course with no magstrips to hold.
@@ -52,7 +51,6 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
     /// spline (`ai_order`), and the spline's own order would put every craft on
     /// the wrong track piece.
     pub samples: &'a [Option<oag_physics::TrackSample>],
-    /// What the craft collides with.
     pub raycaster: &'a R,
     /// Everything else the force law reads: class gravity, damage rules. The
     /// track samples in it are overwritten per tick.
@@ -83,11 +81,8 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
 /// The craft the plan is for, and where it starts.
 #[derive(Debug, Clone, Copy)]
 pub struct Craft {
-    /// Its handling, off the disc.
     pub handling: Handling,
-    /// Its state on the grid.
     pub start: ShipState,
-    /// The line index the grid pose stands on.
     pub start_index: u32,
 }
 
@@ -118,9 +113,7 @@ pub struct Report {
     /// Physics steps the whole build took, calibration and every rewind
     /// included. Multiply by the per-step cost for a build time.
     pub steps: u64,
-    /// Learning passes driven.
     pub passes: u32,
-    /// Ceilings lowered, summed over every pass.
     pub lowerings: u32,
     /// Line samples where the search gave up: the craft still failed there
     /// after [`MAX_TRIES`] lowerings. Each is a corner the plan cannot promise.
@@ -130,7 +123,6 @@ pub struct Report {
     pub respawns: u32,
     /// Failure ticks on the final, non-learning verification lap pair.
     pub verify_failures: u32,
-    /// Wall-contact ticks on that verification run.
     pub verify_contacts: u32,
     /// Times the verification run was put back on the line, either lap.
     pub verify_respawns: u32,
