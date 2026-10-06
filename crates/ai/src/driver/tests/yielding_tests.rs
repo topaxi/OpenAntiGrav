@@ -1,10 +1,6 @@
 //! Yielding and blocking: what a driver does about the craft behind it.
 //!
-//! One theme of `driver.rs`'s tests. They were an inline `#[cfg(test)]`
-//! module of 1,185 lines, which is over both caps in
-//! `scripts/check-file-size.py` at once - 200 inline, 1,000 in a file - so
-//! they are split by subject, and the fixtures they share stay in
-//! [`super`].
+//! One theme of `driver.rs`'s tests, split by subject; fixtures stay in [`super`].
 
 use super::*;
 

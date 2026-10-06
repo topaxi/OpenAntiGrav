@@ -1,17 +1,11 @@
 //! The ram, and the `Copy + Eq` property that keeps a [`Driver`] in the world
 //! snapshot.
 //!
-//! One theme of `driver.rs`'s tests. They were an inline `#[cfg(test)]`
-//! module of 1,185 lines, which is over both caps in
-//! `scripts/check-file-size.py` at once - 200 inline, 1,000 in a file - so
-//! they are split by subject, and the fixtures they share stay in
-//! [`super`].
+//! One theme of `driver.rs`'s tests, split by subject; fixtures stay in [`super`].
 //!
-//! **These build their own corridor rather than taking `super`'s.** A shift
-//! reaches further than the eight units either side that
-//! `straight_with_corridor` allows - see [`RAM_CLEARANCE`] for the measurement.
-//! On that fixture every one of these tests would pass by never firing at all,
-//! which is the shape of a suite that has stopped asking anything.
+//! **These build their own corridor, not `super`'s**: a shift reaches further
+//! than the eight units either side `straight_with_corridor` allows (see
+//! [`RAM_CLEARANCE`]), and on that fixture every test would pass by never firing.
 
 use super::*;
 
@@ -92,14 +86,12 @@ fn a_ram_never_goes_toward_a_corridor_edge_it_has_no_room_for() {
     );
 }
 
-/// **The room that decides is the craft's own, not the line's.**
-///
-/// The corridor here is twenty units wide either side, so a gate that asks how
-/// far the *line* may go this way sees twenty and fires. What the craft has is
-/// two, because it is already eighteen units out - which is where drift, a
-/// corner or the last shove it took routinely puts it. Measured on `16_Track`
-/// before this: a shove fired with 3.13 units of corridor to its left while the
-/// craft was already 11.67 units past that edge. See [`RAM_CLEARANCE`].
+/// **The room that decides is the craft's own, not the line's.** The corridor is
+/// twenty units either side, so a gate asking how far the *line* may go sees
+/// twenty and fires; the craft, already eighteen out (as drift, a corner or its
+/// last shove routinely leave it), has two. Measured on `16_Track`: a shove fired
+/// with 3.13 units of corridor to its left while the craft was 11.67 past that
+/// edge. See [`RAM_CLEARANCE`].
 #[test]
 fn a_ram_measures_its_room_from_the_craft_and_not_from_the_line() {
     let line = wide();
@@ -118,12 +110,9 @@ fn a_ram_measures_its_room_from_the_craft_and_not_from_the_line() {
     );
 }
 
-/// **An opponent shoves the player and never another opponent.**
-///
-/// Reported from play: a clump of AI shoving each other spirals, because the
-/// shove provokes and provocation raises the appetite for the next one. See
-/// `super::super::ram`'s `PLAYER_SLOT` for the loop and for the two dampers
-/// that were rejected in favour of this.
+/// **An opponent shoves the player and never another opponent.** Reported from
+/// play: a clump of AI shoving each other spirals (see `super::super::ram`'s
+/// `PLAYER_SLOT` for the loop and the two rejected dampers).
 #[test]
 fn a_ram_goes_at_the_player_and_never_at_another_opponent() {
     let line = wide();
