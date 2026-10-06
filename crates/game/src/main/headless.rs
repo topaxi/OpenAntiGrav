@@ -224,7 +224,6 @@ pub(crate) fn run_windowless(
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
                 scheme,
-                prompt_style: crate::args::resolve_prompt_style(cli, settings),
                 trace: cli.trace,
                 race: Some(race_options),
                 event: cli.event.clone(),
@@ -248,6 +247,12 @@ pub(crate) fn run_windowless(
                         camera_view: cli.camera_view.unwrap_or(settings.graphics.camera_view),
                         pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
                         ..settings.graphics.clone()
+                    },
+                    controls: settings::Controls {
+                        prompt_style: crate::args::resolve_prompt_style(cli, settings)
+                            .name()
+                            .to_string(),
+                        ..settings.controls.clone()
                     },
                     ..settings.clone()
                 },
@@ -644,6 +649,7 @@ pub(crate) fn run_race(
         give,
         no_intro: cli.intro.no_intro,
         prompt_style: cli
+            .menu_args
             .prompt_style
             .as_deref()
             .and_then(oag_input::prompt::PromptStyle::from_name),

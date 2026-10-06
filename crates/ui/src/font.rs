@@ -542,17 +542,6 @@ const GLYPHS: &[(char, [&str; 7])] = &[
     ),
 ];
 
-/// Transparent pixels left between glyphs [`Atlas::push_glyph`] adds.
-const PEN_GUTTER: u32 = 2;
-
-/// Where [`Atlas::push_glyph`] puts the next glyph.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Pen {
-    x: u32,
-    y: u32,
-    row: u32,
-}
-
 /// Where a glyph sits in the atlas, and how much room it takes.
 ///
 /// The size and advance travel with the cell because a real font's glyphs are
@@ -608,7 +597,7 @@ pub struct Atlas {
     /// A `BTreeMap` rather than a hash map so the iteration order is stable;
     /// nothing here feeds the simulation, but determinism by default is cheaper
     /// than remembering where the exception was.
-    glyphs: BTreeMap<char, Cell>,
+    pub(crate) glyphs: BTreeMap<char, Cell>,
     /// Grid units per atlas texel: what a [`Cell`]'s pixel size means in the
     /// grid the layout is authored in. `1.0` everywhere except a source whose
     /// faces are drawn at a higher resolution than its grid - see
@@ -748,62 +737,6 @@ impl Atlas {
         self.line_height *= scale;
         self.texel_scale *= scale;
         self
-    }
-
-    /// Where [`Self::push_glyph`] starts: below everything already here.
-    pub(crate) fn pen(&self) -> Pen {
-        Pen {
-            x: 0,
-            y: self.height + PEN_GUTTER,
-            row: 0,
-        }
-    }
-
-    /// Appends a glyph of `alpha` (`width` x `height`, row-major) under `ch`.
-    ///
-    /// For glyphs this build adds beside the disc's own - see
-    /// [`crate::prompt`]. Packed left to right in rows with a transparent
-    /// gutter, so linear filtering cannot pull a neighbour in; the atlas grows
-    /// downward, which leaves every existing cell where it was.
-    pub(crate) fn push_glyph(
-        &mut self,
-        pen: &mut Pen,
-        ch: char,
-        (width, height): (u32, u32),
-        advance: f32,
-        alpha: &[u8],
-    ) {
-        if pen.x + width > self.width {
-            pen.y += pen.row + PEN_GUTTER;
-            pen.x = 0;
-            pen.row = 0;
-        }
-        let needed = pen.y + height + PEN_GUTTER;
-        if needed > self.height {
-            self.height = needed;
-            self.coverage.resize((self.width * self.height) as usize, 0);
-            self.luma.resize((self.width * self.height) as usize, 0);
-        }
-        for row in 0..height {
-            for column in 0..width {
-                let at = ((pen.y + row) * self.width + pen.x + column) as usize;
-                self.coverage[at] = alpha[(row * width + column) as usize];
-                self.luma[at] = 255;
-            }
-        }
-        self.glyphs.insert(
-            ch,
-            Cell {
-                x: pen.x,
-                y: pen.y,
-                width,
-                height,
-                advance,
-                extend: 0,
-            },
-        );
-        pen.x += width + PEN_GUTTER;
-        pen.row = pen.row.max(height);
     }
 
     /// Whether these glyphs came off the disc rather than out of this file.

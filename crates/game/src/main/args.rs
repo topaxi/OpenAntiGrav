@@ -61,6 +61,7 @@ pub(crate) fn resolve_prompt_style(
 ) -> oag_input::prompt::PromptStyle {
     use oag_input::prompt::PromptStyle;
     let token = cli
+        .menu_args
         .prompt_style
         .as_deref()
         .unwrap_or(&settings.controls.prompt_style);

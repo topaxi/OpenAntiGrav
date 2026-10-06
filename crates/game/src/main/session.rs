@@ -47,8 +47,6 @@ pub(crate) use load_probe::LoadProbe;
 pub(crate) mod menus;
 #[path = "session/picker.rs"]
 mod picker;
-#[path = "session/prompts.rs"]
-mod prompts;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
 // unaliased above, and a sibling module of the same name would shadow it,
 // the same reason `remix_menu` below is not called `remix`.
@@ -382,10 +380,9 @@ pub(crate) struct Session {
     pub(crate) zone_hold: oag_mesh::mesh_render::zone::Hold,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
-    /// On the session rather than on a stage because it outlives them: a race
-    /// taking the window over does not want a fresh target, and the size it
-    /// should be is a property of the window and the settings rather than of
-    /// what happens to be on screen.
+    /// On the session rather than a stage because it outlives them: a race
+    /// taking the window over does not want a fresh target, and its size is a
+    /// property of the window and the settings, not of what is on screen.
     pub(crate) framebuffer: upscale::Framebuffer,
     /// How many races this run has launched, which is what varies the loading
     /// screen's feature draw.
@@ -398,11 +395,7 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
-    /// `--prompt-style`, which wins over `[controls] prompt_style` for this
-    /// run. See `session::prompts`.
-    pub(crate) prompt_style_override: Option<oag_input::prompt::PromptStyle>,
-    /// The family last logged, so a change is one line and a steady state none.
-    pub(crate) prompt_family_logged: Option<Option<oag_input::prompt::PromptFamily>>,
+    pub(crate) prompt: oag_game::prompts::PromptState,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a
     /// saved edit shows without a restart. See `oag_game::screen`.

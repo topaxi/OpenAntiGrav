@@ -103,6 +103,31 @@ pub fn substitution(
     out
 }
 
+/// Sets `renderer`'s substitution for a capture: no device to follow, so only
+/// a family `settings` forces changes anything.
+pub fn install(
+    renderer: &mut crate::render::Renderer,
+    title: &oag_title::Title,
+    settings: &crate::settings::Settings,
+) {
+    let bindings = settings.controls.live_bindings();
+    renderer.set_prompt_substitution(substitution(
+        title.prompts,
+        forced_family(settings.controls.prompt_style_value()),
+        &|button| bindings.names_for(button),
+    ));
+}
+
+/// The button prompts' run state: the `--prompt-style` override, which wins
+/// over `[controls] prompt_style`, and the family last logged.
+#[derive(Debug, Default)]
+pub struct PromptState {
+    /// `--prompt-style`.
+    pub style_override: Option<PromptStyle>,
+    /// The family last logged, so a change is one line and a steady state none.
+    pub family_logged: Option<Option<PromptFamily>>,
+}
+
 /// The family a run with no device to watch draws: only a family forced by
 /// `style` counts; `auto` has seen no input, so it is the disc's own.
 #[must_use]

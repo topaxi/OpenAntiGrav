@@ -547,6 +547,7 @@ fn main() -> Result<()> {
         give,
         no_intro: cli.intro.no_intro,
         prompt_style: cli
+            .menu_args
             .prompt_style
             .as_deref()
             .and_then(oag_input::prompt::PromptStyle::from_name),
