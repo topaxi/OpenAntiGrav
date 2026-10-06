@@ -1,7 +1,5 @@
-//! What one frame of force evaluation in [`super`] is asserted to do.
-//!
-//! Split out of `forces.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What one frame of force evaluation in [`super`] is asserted to do. Split out of `forces.rs`
+//! under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::collide::{CollisionWorld, Surface, TriangleSoup};
@@ -53,14 +51,11 @@ fn ship_at(height: f32) -> ShipState {
     }
 }
 
-/// The recovered tensor, pinned as the three numbers the binary computes.
-///
-/// Not a test of this crate's own arithmetic: the diagonal `(15.6, 21.6, 15.6)`
-/// is what `scripts/trace-angular-fit.py` independently measured off two real
-/// captures as `~(15, 21..22, 14..16)`, so these three values are the point of
-/// contact between an instruction read and a hardware measurement. If someone
-/// edits [`INERTIA_BOX_X`] or [`INERTIA_MASS`] this is what says the tensor no
-/// longer matches what the original's own recordings show.
+/// The recovered tensor, pinned as the three numbers the binary computes. Not a test of this
+/// crate's arithmetic: `(15.6, 21.6, 15.6)` is what `scripts/trace-angular-fit.py` independently
+/// measured off two real captures as `~(15, 21..22, 14..16)`, the point of contact between an
+/// instruction read and a hardware measurement. Editing [`INERTIA_BOX_X`] or [`INERTIA_MASS`]
+/// trips this when the tensor no longer matches the original's recordings.
 #[test]
 fn the_recovered_inertia_tensor_is_a_solid_box() {
     let xx =
@@ -274,15 +269,12 @@ fn lateral_grip_is_suppressed_while_the_slowdown_timer_runs() {
     assert_eq!(held.lateral_grip, Vec3::ZERO);
 }
 
-/// The slowdown timer decays inside the force evaluation, and **lands negative
-/// rather than at zero** on the tick it expires.
-///
-/// The original is `if (t > 0.0f) t -= dt;` with no clamp, so the field freezes
-/// one `dt` below zero and stays there. That residue is not cosmetic:
-/// `crate::slowdown::add` adds into this field before clamping, so the next hit
-/// a craft takes is worth exactly that much less. `airbrake::advance_sideshift`
-/// clamps its own equivalents *because* nothing reads them arithmetically -
-/// see the comment beside the decrement in [`super::evaluate`].
+/// The slowdown timer decays inside the force evaluation and **lands negative, not at zero**, on
+/// the tick it expires: the original is `if (t > 0.0f) t -= dt;` with no clamp, so the field
+/// freezes one `dt` below zero. The residue matters: `crate::slowdown::add` adds into this field
+/// before clamping, so the next hit is worth that much less. (`airbrake::advance_sideshift`
+/// clamps its equivalents because nothing reads them arithmetically; see the comment beside the
+/// decrement in [`super::evaluate`].)
 #[test]
 fn the_slowdown_timer_decays_past_zero_and_freezes_there() {
     let handling = test_handling();
@@ -483,13 +475,10 @@ fn the_hover_target_follows_ride_height() {
     );
 }
 
-/// The end-to-end version of the steering sign fix: holding right must swing
-/// the nose toward the ship's own right axis over real ticks of `evaluate` and
-/// `integrate`, not away from it. A unit-level assertion on
-/// `engine::steering`'s return value alone would not catch a sign error
-/// introduced anywhere downstream in how the accumulators are drained onto the
-/// body, which is exactly the layer `docs/ghidra/functions/psp-pulse-usa/engine.md`
-/// left as an open question until it was traced for this fix.
+/// The end-to-end steering sign fix: holding right must swing the nose toward the ship's own right
+/// axis over real ticks of `evaluate` and `integrate`. A unit assertion on `engine::steering`'s
+/// return value would miss a sign error downstream in how the accumulators are drained onto the
+/// body, the layer `docs/ghidra/functions/psp-pulse-usa/engine.md` left open until traced for this fix.
 #[test]
 fn holding_right_turns_the_ship_toward_its_own_right_axis() {
     let handling = Handling {
@@ -529,23 +518,18 @@ fn holding_right_turns_the_ship_toward_its_own_right_axis() {
     );
 }
 
-/// The airbrake twin of the test above, and the one that would have caught
-/// Task #34's bug the day the steering sign was fixed.
+/// The airbrake twin of the test above, which would have caught Task #34's bug the day the
+/// steering sign was fixed.
 ///
-/// **`steer_x` is deliberately zero.** The only committed scenario that
-/// exercises the airbrake yaw term,
-/// `verification/scenarios/airbrake-asymmetric.inputs`, holds the brake and
-/// the steering on the same side, and the steering drive is several times the
-/// larger, so an inverted airbrake yaw still curves the run the right way and
-/// shows up only as a wrong rate. Holding one brake alone is what separates
-/// them: nothing else in the term list can yaw a ship flying level in a
-/// straight line, so the sign of the result is this term's sign.
+/// **`steer_x` is deliberately zero.** The only committed scenario for the airbrake yaw term,
+/// `verification/scenarios/airbrake-asymmetric.inputs`, holds brake and steering on the same side
+/// and steering is several times larger, so an inverted airbrake yaw still curves the run the
+/// right way and shows only as a wrong rate. One brake alone separates them: nothing else can yaw
+/// a ship flying level in a straight line, so the result's sign is this term's.
 ///
-/// The direction asserted is the original's, not a preference:
-/// `angularLocal.y += fs * Airbrake.turn * (R - L) * 1e-3` about an accumulator
-/// whose positive sense is nose-right (the `w_game = -w_physics` convention),
-/// so `L > R` turns the nose left - toward the braked side, which is also what
-/// the game plays like.
+/// The direction is the original's: `angularLocal.y += fs * Airbrake.turn * (R - L) * 1e-3` on an
+/// accumulator whose positive sense is nose-right (`w_game = -w_physics`), so `L > R` turns the
+/// nose left, toward the braked side, as the game plays.
 #[test]
 fn braking_the_left_airbrake_alone_turns_the_ship_toward_its_own_left() {
     let handling = Handling {
