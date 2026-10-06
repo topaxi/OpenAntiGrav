@@ -1,6 +1,9 @@
-//! The names of the `Data\Psys` effects a race plays - the engine's own, as
-//! Pulse's executable names them - each with the reading that says when the
-//! original plays it.
+//! The names of the `Data\Psys` effects a race plays - the engine's own - each
+//! with the reading that says when the original plays it. **Mostly Pulse's, not
+//! all of it:** eight names here are HD's, 2048's or the PS2's and no Pulse PSP
+//! disc authors them (`WO_PLASMA_LIGHTNING_*`, `WO_TRAIL_HITSHIP*`,
+//! `WO_LEACHBEAM_ABSORB`, `WO_MAGSTRIP_*`, and `WO_SHIP_ENGINEFLARE` on the PSP).
+//! Pulse's own table leaves them out - `docs/formats/pulse-absent-effects.md`.
 //!
 //! These are *names of things on the disc* and nothing here is code. The
 //! table that gives each a [`Trigger`](crate::Trigger) is

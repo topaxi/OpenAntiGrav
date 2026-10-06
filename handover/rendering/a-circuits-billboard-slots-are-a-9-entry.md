@@ -64,6 +64,8 @@ A `strings` sweep of all three WADs and of `BOOT.BIN` finds no `321Go_Zone` or a
 variant, `BOOT.BIN` names no gantry model at all, and `26_Track` (Zone) authors no
 manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 
+2026-10-06, log-warning lane: the load report's `N billboard-slot placeholder draw(s) suppressed` WARN (PSP 8, PS2 7 on `16_Track`, HD 32) is this thread's open item and stays a WARN, on purpose. New and measured: Pulse's advert models carry **no advert artwork** - `GOTEKI_LANDSCAPE_01.vex` and `AURICOM_LANDSCAPE_01.vex` reference only `white_nonalpha`, `justwhite` and `fadeup001(_nomip)` under `Pulse_Adverts\_textures`. So the HD-shaped reading "bind the advert's picture onto the placeholder quad" has no picture to bind on Pulse; what a slot shows is tint plus a fade animation, and the tint is the unread colour pool of `Billboard_CreateFromColour_q`. Binding blocks on that pool and on the transform writer, both below. See `docs/formats/pulse-absent-effects.md`.
+
 ## Open
 
 - The mode-descriptor pointer replacing `Num==7`'s mesh was not traced all the way to one of the four `321Go_*.vex` race-gate shapes.
