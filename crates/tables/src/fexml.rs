@@ -1,10 +1,10 @@
 //! Front-end screen definitions: XML with per-file name shortening.
 //!
-//! The front end is data-driven. Screens, widgets, 3D model previews and menu
-//! transitions are all XML, and the same format appears on PSP and PS2.
+//! The front end is data-driven: screens, widgets, 3D model previews and menu
+//! transitions are XML, on PSP and PS2 alike.
 //!
 //! To save space, element and attribute names are replaced by one- or two-letter
-//! codes, with a `<code>` element at the top of each file giving the mapping:
+//! codes mapped by a `<code>` element at the top of each file:
 //!
 //! ```xml
 //! <code as="Values" bs="Screen" cs="Mode3D" ds="name" es="Model" ls="Src"></code>
@@ -19,21 +19,17 @@
 //! the above expands to `<Screen name="MPLobby Info"><Mode3D><Model name="Ship">
 //! <Values Src="..."/>`.
 //!
-//! **The dictionary is per file.** `a` means `Values` in one screen and `Class`
-//! in another, so a global table would silently corrupt most files. Across the
-//! 64 blobs in `FEData.wad`, all 18 short codes carry more than one meaning.
-//!
-//! This is a size optimisation, not encryption.
+//! **The dictionary is per file.** `a` means `Values` in one screen and `Class` in
+//! another; across the 64 blobs in `FEData.wad` all 18 short codes carry more
+//! than one meaning, so a global table would corrupt most files. A size
+//! optimisation, not encryption.
 //!
 //! # Two layers
 //!
-//! [`expand`] undoes the shortening and hands back text. [`parse`] turns that
-//! text into a [`Node`] tree. Both are here because every consumer needs both:
-//! the front end reads screens out of it, and
-//! [`handling`](crate::handling) reads `handlingstats.xml`, which is the same
-//! format with a different schema. A second hand-rolled tree walker in each
-//! consumer is how a `Values` child or a `>` inside an attribute value comes to
-//! be handled correctly in one place and not the other.
+//! [`expand`] undoes the shortening to text; [`parse`] builds a [`Node`] tree.
+//! Every consumer needs both (the front end, and [`handling`](crate::handling)),
+//! and a second hand-rolled walker per consumer is how a `Values` child or a `>`
+//! inside an attribute value gets handled in one place and not the other.
 
 use std::collections::HashMap;
 
@@ -57,7 +53,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Whether `data` looks like a shortened front-end XML blob.
@@ -74,8 +69,7 @@ pub fn dictionary(xml: &str) -> Result<HashMap<String, String>> {
 
     let mut map = HashMap::new();
     for (key, value) in attributes(body) {
-        // Keys are the short name with a trailing `s`. Anything else is not
-        // part of the mapping and is skipped rather than guessed at.
+        // Keys are the short name plus a trailing `s`; anything else is skipped.
         if let Some(short) = key.strip_suffix('s') {
             map.insert(short.to_string(), value);
         }
@@ -87,22 +81,18 @@ pub fn dictionary(xml: &str) -> Result<HashMap<String, String>> {
     Ok(map)
 }
 
-/// A blob's XML text, expanded when it is shortened and decoded when it is not.
+/// A blob's XML text, expanded when shortened and decoded when not.
 ///
-/// **Shortening is per file, not per platform**, and the PS2 uses it much less:
-/// its `Skin.xml` is shortened, its five `Data\XML\*_HUD.xml` layouts are plain
-/// `<?xml`. A caller that reaches straight for [`expand`] therefore fails on a
-/// perfectly good file with "no `<code>` dictionary element", which is what the
-/// PS2 in-race HUD did - the layout never loaded and the whole HUD went with
-/// it. Deciding from the blob rather than from the source is what stops that:
-/// [`is_fexml`] is a two-way test on the first bytes, so neither form can be
-/// mistaken for the other.
+/// **Shortening is per file, not per platform**: PS2's `Skin.xml` is shortened,
+/// its five `Data\XML\*_HUD.xml` layouts are plain `<?xml`. Calling [`expand`]
+/// directly fails on a plain file ("no `<code>` dictionary element"), which once
+/// kept the whole PS2 in-race HUD from loading. [`is_fexml`] decides from the
+/// first bytes.
 ///
 /// # Errors
 ///
-/// [`Error::NotText`] when the blob is not UTF-8, and everything [`expand`] can
-/// raise when it *is* shortened. A plain file with no dictionary is not an
-/// error here, which is the whole difference from [`expand`].
+/// [`Error::NotText`] for non-UTF-8, and anything [`expand`] raises on a
+/// shortened blob. A plain file without a dictionary is not an error here.
 pub fn text(data: &[u8]) -> Result<String> {
     if is_fexml(data) {
         expand(data)
@@ -115,13 +105,9 @@ pub fn text(data: &[u8]) -> Result<String> {
 
 /// Expands a blob's short names using its own dictionary.
 ///
-/// The `<code>` element itself is dropped: it is metadata, not content.
-///
-/// Names absent from the dictionary are left as they are, so a partially
-/// shortened file still round-trips rather than losing data.
-///
-/// Refuses a blob that carries no dictionary. Callers reading a file that may
-/// be either form want [`text`] instead.
+/// The `<code>` element is dropped as metadata. Names absent from the dictionary
+/// stay as they are, so a partly shortened file round-trips. Refuses a blob with
+/// no dictionary; for either form use [`text`].
 pub fn expand(data: &[u8]) -> Result<String> {
     let xml = std::str::from_utf8(data).map_err(|_| Error::NotText)?;
     let map = dictionary(xml)?;
@@ -141,8 +127,7 @@ pub fn expand(data: &[u8]) -> Result<String> {
         rest = &rest[open..];
 
         let Some(close) = tag_end(rest) else {
-            // Unterminated tag: emit the remainder verbatim rather than
-            // dropping it, so nothing is silently lost.
+            // Unterminated tag: emit the rest verbatim so nothing is lost.
             out.push_str(rest);
             return Ok(out);
         };
@@ -155,65 +140,37 @@ pub fn expand(data: &[u8]) -> Result<String> {
     Ok(out)
 }
 
-/// Index of the `>` that closes the tag at the front of `rest` - real or
-/// implied.
+/// Index of the `>` that closes the tag at the front of `rest`, real or implied.
 ///
-/// A quoted attribute value may contain `>`. The front end's own XML is full of
-/// values like `x="FEGlobals->MenuXOffset"`, and stopping at the first `>`
-/// truncates the tag, dropping every attribute after it and emitting the
-/// remainder as text.
+/// A quoted value may contain `>` (`x="FEGlobals->MenuXOffset"`); stopping at the
+/// first `>` truncates the tag.
 ///
-/// Comments and processing instructions end at **their own** terminator rather
-/// than at the first unquoted `>`, and that is not pedantry. The PS2 ship files
-/// open with a malformed declaration, `<?xml version="1.0" encoding=utf-81"?>`:
-/// the unquoted `encoding` leaves an odd number of `"` in the tag, which inverts
-/// quote tracking for the whole rest of the file and swallows the entire document
-/// into one unterminated tag. Ending the declaration where XML says it ends costs
-/// two lines and makes eight shipped files readable.
+/// Comments and processing instructions end at **their own** terminator. The PS2
+/// ship files open with a malformed `<?xml version="1.0" encoding=utf-81"?>`
+/// whose unquoted `encoding` leaves an odd number of `"`, inverting quote
+/// tracking and swallowing the document into one tag; this makes eight shipped
+/// files readable.
 ///
-/// **An unquoted `<` also ends a tag, one character short of it.** Wipeout
-/// HD/Fury's own `grid_04.xml` (`DATA02`/`DATA04`/`DATA06`, all three
-/// identical) authors `<Values RequiredPoints="22" ... RotY="-0.5"</Values>`,
-/// a `<Values>` start tag missing its own `>` before the real `</Values>`
-/// closes it. Left untreated, the scan for an unquoted `>` runs straight
-/// past the missing one and stops at `</Values>`'s own, so the whole run
-/// (`Values`'s attributes, `</Values`, with no `>` in between) reads as one
-/// opening `<Values ...>` tag that never gets a matching close: every
-/// sibling that should follow - `<Unlock>` and all ten of `grid4`'s own
-/// `<PI_Cell>` - becomes a *child of the dangling `Values` node* instead of
-/// a child of `PI_Grid`, so `PI_Grid.children_named("PI_Cell")` finds none
-/// at all. Measured directly: `crates/game/src/campaign.rs`'s own grid
-/// reader logged `grid4 cells=0` where the raw blob (read through
-/// `oag_assets::Archives`, not a file dump) plainly names ten. RPCS3's own
-/// campaign-select frame reads `HD 0/87` - the sum of all eight HD grids'
-/// own cell counts, `grid4`'s ten included - so the original's own parser
-/// tolerates exactly this shape and this build's did not.
+/// **An unquoted `<` also ends a tag, one character short of it.** HD/Fury's
+/// `grid_04.xml` (`DATA02`/`DATA04`/`DATA06`, identical) authors `<Values
+/// RequiredPoints="22" ... RotY="-0.5"</Values>`, a start tag missing its `>`.
+/// Untreated, `Values` never closes and every following sibling (`<Unlock>`,
+/// all ten `<PI_Cell>`) becomes its child, so `PI_Grid.children_named("PI_Cell")`
+/// finds none: `crates/game/src/campaign.rs` logged `grid4 cells=0` where the
+/// raw blob names ten, while RPCS3's campaign-select frame reads `HD 0/87`, the
+/// sum of all eight HD grids including `grid4`'s ten. The original's parser
+/// tolerates it. The same shape recurs in `stats_definition.xml` and
+/// `endrace_definition.xml` (`<Values ... RotY="-0.5"</Values>` trophy/rank
+/// blocks, all three HD archives); `rg --no-ignore -n '="[^"]*"</[A-Za-z]'` over
+/// `data/scratch/drive-2026-09-25/hd-xml` found no other shape and no false
+/// positive.
 ///
-/// The same shape (`attr="value"` immediately followed by `</Tag>`, no `>`
-/// between) recurs in `stats_definition.xml`'s and `endrace_definition.xml`'s
-/// own `<Values ... RotY="-0.5"</Values>` trophy/rank-model blocks (all
-/// three HD archives that carry either file) - not a one-off typo in one
-/// grid, a shape the same authoring tool produced more than once. A repo-wide
-/// check (`rg --no-ignore -n '="[^"]*"</[A-Za-z]'` over
-/// `data/scratch/drive-2026-09-25/hd-xml`) found no other shape and no false
-/// positive: every hit is this exact pattern, always right before
-/// `</Values>`.
-///
-/// Treated as ending the tag **one character short of the `<`**, not naming
-/// the `<` itself as the close: every caller's own `close + 1` already
-/// resumes scanning at the next tag, and the missing final quote this
-/// leaves in `inner` costs nothing - [`attributes`]'s own value scan already
-/// treats end-of-input as an unterminated value's own closing quote, so the
-/// truncated attribute value still reads out whole (`"-0.5"`, not
-/// `"-0.5`-minus-a-character`). Guarded at `index > 1`, not `index > 0`:
-/// `index` is `rest`'s own offset of this `<`, and the caller always slices
-/// `rest[1..close]` for the tag's inner content, which panics (start past
-/// end) if `close` - `index - 1` here - comes back `0`. `index > 0` alone
-/// still allows `index == 1` (a second character that is itself an unquoted
-/// `<`, e.g. a stray `<<` in truly malformed input, not anything the disc
-/// ships), which would return `close = 0` and panic there; `index > 1`
-/// excludes that one case along with `index == 0` (the tag's own opening
-/// `<`, which must never end itself at length zero).
+/// The tag ends at `index - 1`, one short of the `<`: callers' `close + 1`
+/// resumes at the next tag, and [`attributes`] treats end-of-input as the
+/// unterminated value's closing quote, so `"-0.5"` still reads whole. Guarded
+/// at `index > 1`, not `> 0`: callers slice `rest[1..close]`, which panics for
+/// `close == 0`, so a second-character `<` (a stray `<<`, not on any disc) and
+/// the tag's own opening `<` must not end it.
 fn tag_end(rest: &str) -> Option<usize> {
     if let Some(body) = rest.strip_prefix("<!--") {
         return body.find("-->").map(|at| at + "<!--".len() + 2);
@@ -277,9 +234,8 @@ fn expand_tag(tag: &str, map: &HashMap<String, String>) -> String {
 
 /// A parsed XML element.
 ///
-/// Text content is discarded: no schema in this format carries any. Attributes
-/// keep document order, because some of them are positional lists and a
-/// `HashMap` would reorder them differently on every run.
+/// Text content is discarded (no schema here carries any). Attributes keep
+/// document order, since some are positional lists.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Node {
     /// Element name, as it appears after [`expand`] has run.
@@ -291,11 +247,8 @@ pub struct Node {
 }
 
 impl Node {
-    /// An attribute by name, case-insensitively.
-    ///
-    /// The XML is inconsistent about case (`font="menu"` and `font="Menu"` both
-    /// appear, as do `color` and `Color`), so matching exactly would silently
-    /// drop attributes.
+    /// An attribute by name, case-insensitively: the XML mixes `font="menu"` with
+    /// `font="Menu"` and `color` with `Color`.
     #[must_use]
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs
@@ -306,10 +259,9 @@ impl Node {
 
     /// An attribute of this element or of its `Values` child.
     ///
-    /// `Values` is an **attribute carrier for its parent**, a convention of the
-    /// format rather than of any one schema: `<Movie><Values src="..."/></Movie>`
-    /// and `<Movie src="..."/>` mean the same thing, and both spellings occur.
-    /// The element's own attribute wins, so a carrier cannot shadow it.
+    /// `Values` is an **attribute carrier for its parent**, a format convention:
+    /// `<Movie><Values src="..."/></Movie>` and `<Movie src="..."/>` both occur.
+    /// The element's own attribute wins.
     #[must_use]
     pub fn value(&self, name: &str) -> Option<&str> {
         self.attr(name).or_else(|| {
@@ -336,18 +288,13 @@ impl Node {
     }
 }
 
-/// Parses expanded front-end XML into a synthetic root node.
+/// Parses expanded front-end XML into a synthetic `"#document"` root (the files
+/// have several top-level elements).
 ///
-/// The files have several top-level elements, so the root is `"#document"`
-/// rather than any element from the file.
-///
-/// This is deliberately forgiving. The goal is to read whatever the shipped
-/// files contain, not to validate them: an unterminated document still yields
-/// everything it opened, and a stray close tag is ignored rather than unwinding
-/// past the root. A schema on top of this decides what counts as broken - see
-/// [`handling::parse`](crate::handling::parse), which turns a missing element or
-/// attribute into a typed error precisely because silently defaulting one to
-/// zero would look like a tuning problem rather than a bug.
+/// Deliberately forgiving: an unterminated document yields everything it opened
+/// and a stray close tag is ignored. The schema on top decides what is broken;
+/// see [`handling::parse`](crate::handling::parse), which errors on a missing
+/// attribute because a silent zero would look like a tuning problem.
 #[must_use]
 pub fn parse(xml: &str) -> Node {
     let mut stack = vec![Node {
@@ -417,10 +364,9 @@ pub fn parse(xml: &str) -> Node {
 
 /// Extracts `name="value"` pairs from a tag body.
 ///
-/// Whitespace is tested with the **ASCII** predicate on purpose. `char`'s
-/// version also matches `U+0085` and `U+00A0`, whose bytes inside a `&str` are
-/// only ever UTF-8 continuation bytes, so a name containing one would be sliced
-/// mid-character and panic.
+/// Whitespace uses the **ASCII** predicate: `char`'s also matches `U+0085` and
+/// `U+00A0`, whose bytes inside a `&str` are only UTF-8 continuation bytes, so a
+/// name containing one would be sliced mid-character and panic.
 fn attributes(body: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let bytes = body.as_bytes();
@@ -457,13 +403,10 @@ fn attributes(body: &str) -> Vec<(String, String)> {
 
 /// Collects asset paths referenced by a blob.
 ///
-/// The front-end XML is the richest source of real asset names in the game,
-/// because most names are built at runtime and never appear in the executable.
-/// Feeding these to `oag_formats::wad::hash_name` resolves archive entries that
-/// binary strings alone cannot.
-///
-/// Values are recognised as paths by containing a separator and an extension,
-/// which is deliberately loose: a false positive costs one wasted hash.
+/// Front-end XML is the richest source of real asset names, since most are built
+/// at runtime; feeding them to `oag_formats::wad::hash_name` resolves entries
+/// binary strings cannot. A value counts as a path if it has a separator and an
+/// extension, loosely: a false positive costs one wasted hash.
 #[must_use]
 pub fn asset_paths(expanded: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -474,8 +417,7 @@ pub fn asset_paths(expanded: &str) -> Vec<String> {
         let Some(close) = tag_end(rest) else { break };
 
         // Skip the element name: the attribute scanner stops at the first
-        // token that is not `name="value"`, so starting on the element name
-        // finds nothing at all.
+        // non-`name="value"` token.
         let inner = rest[1..close].trim_start_matches('/');
         let name_end = inner
             .find(|c: char| c.is_whitespace())
