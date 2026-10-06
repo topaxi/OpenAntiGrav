@@ -1,24 +1,20 @@
 //! What the named pilots and the draws they produce in [`super`] are asserted to do.
 //!
-//! Split out of `pilot.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! Split out of `pilot.rs` for the 200-line inline test cap
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::Personality;
 
-/// **The test that makes the whole refactor safe**, and the one that had to
-/// be captured before `driver.rs` was touched.
+/// **Makes the pilot refactor safe**, captured before `driver.rs` was touched.
 ///
-/// These are `f32::to_bits` of what `Personality::from_seed` returned at
-/// `fd35d8f`, before pilots existed - committed as literals precisely
-/// because comparing against `from_seed` would be circular now that it
-/// delegates to [`Pilot::BALANCED`]. If this fails, either a span in
-/// `BALANCED` moved or an axis was inserted into the draw order ahead of
-/// the frozen seven. Neither is a thing to fix by regenerating the table.
-///
-/// Order per row: `line_bias`, `wander`, `wander_rate`, `look`,
-/// `commitment`, `patience`. Seeds 1, 7 and `0xC0FFEE` drew a negative
-/// bias, so the coin flip at draw two is exercised both ways.
+/// `f32::to_bits` of what `Personality::from_seed` returned at `fd35d8f`,
+/// before pilots existed, as literals: comparing against `from_seed` would be
+/// circular now it delegates to [`Pilot::BALANCED`]. If this fails, a span in
+/// `BALANCED` moved or an axis was inserted ahead of the frozen seven; never
+/// fix it by regenerating. Order per row: `line_bias`, `wander`, `wander_rate`,
+/// `look`, `commitment`, `patience`. Seeds 1, 7 and `0xC0FFEE` drew a negative
+/// bias, so the coin at draw two runs both ways.
 #[test]
 fn the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed() {
     const SHIPPED: [(u32, [u32; 6]); 8] = [
@@ -199,19 +195,17 @@ fn no_pilot_asks_for_more_grip_than_the_hull_has() {
     }
 }
 
-/// **Driven off [`Pilot::spans`] rather than a hand-written list**, so it
-/// cannot go stale when draw fourteen is appended. Writing the axes out by
-/// hand is how `trail`, `width` and `inside` went uncovered when they
-/// landed, and then `courtesy`, `defence` and `caution` after them.
+/// **Driven off [`Pilot::spans`], not a hand-written list**, so it cannot go
+/// stale when draw fourteen is appended (hand-written lists left `trail`,
+/// `width`, `inside`, then `courtesy`, `defence`, `caution` uncovered).
 #[test]
 fn every_built_in_pilot_stays_inside_the_ranges_it_declares() {
     for (name, pilot) in Pilot::BUILT_IN {
         for seed in 1..400u32 {
             let drawn = Personality::from_pilot(&pilot, &mut Rng::new(u64::from(seed)));
-            // In the same order `spans` returns, which is draw order with
-            // `lean` (not a range) left out. `line_bias` is compared by
-            // magnitude because the lean carries its sign, and
-            // `wander_rate` is the reciprocal of the span it was drawn from.
+            // `spans` order: draw order minus `lean` (not a range). `line_bias`
+            // compares by magnitude (the lean carries the sign); `wander_rate` is
+            // the reciprocal of its drawn span.
             let values = [
                 drawn.line_bias.abs(),
                 drawn.wander,
@@ -349,24 +343,18 @@ fn the_pilot_a_slot_draws_does_not_track_its_personality_seed() {
     );
 }
 
-/// **The append-order guard for the three roll axes**, and the reason it
-/// covers all four built-ins rather than just `BALANCED`.
+/// **The append-order guard for the three roll axes**, over all four built-ins
+/// rather than `BALANCED` alone.
 ///
 /// `the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`
-/// above pins draws one to seven of one pilot. Nothing pinned draws eight to
-/// sixteen of any pilot, which is exactly the stretch an axis inserted in the
-/// middle would move - and an axis inserted in the middle is the documented
-/// failure of this module. So these are `f32::to_bits` of every one of the
-/// fifteen pre-existing axes, for each of the four built-ins, captured off the
-/// tree at `bc53a3f0` before `roll_chance`, `roll_floor` and `roll_airtime`
-/// were appended.
-///
-/// If this fails, the three new draws did not land at the end. Regenerating
-/// the table is never the fix.
-///
-/// Order per row: `line_bias`, `wander`, `wander_rate`, `look`, `commitment`,
-/// `patience`, `trail`, `width`, `inside`, `courtesy`, `defence`, `caution`,
-/// `ram`, `provocation_ticks`, `trigger`.
+/// pins draws one to seven of one pilot; nothing pinned draws eight to sixteen,
+/// the stretch an axis inserted in the middle would move. These are
+/// `f32::to_bits` of the fifteen pre-existing axes of each built-in, captured at
+/// `bc53a3f0` before `roll_chance`, `roll_floor` and `roll_airtime` were
+/// appended. If this fails the three draws did not land at the end; never
+/// regenerate. Order per row: `line_bias`, `wander`, `wander_rate`, `look`,
+/// `commitment`, `patience`, `trail`, `width`, `inside`, `courtesy`, `defence`,
+/// `caution`, `ram`, `provocation_ticks`, `trigger`.
 #[test]
 fn every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended() {
     const BEFORE: [(&str, u32, [u32; 15]); 12] = [
@@ -679,12 +667,10 @@ fn every_built_in_pilot_draws_its_roll_axes_inside_their_spans() {
     }
 }
 
-/// The four have to differ in how readily they roll, or the axis is one
-/// number wearing four names.
-///
-/// Written as a walk over an ordered list rather than as a page of pairwise
-/// `assert!`s, because every one of those compares two `const`s and clippy
-/// folds them: `assertions_on_constants` fires and the test does not build.
+/// The four must differ in how readily they roll, or the axis is one number
+/// wearing four names. A walk over an ordered list, not pairwise `assert!`s:
+/// each compares two `const`s, clippy folds them and `assertions_on_constants`
+/// fires.
 #[test]
 fn the_four_built_ins_have_four_different_roll_characters() {
     // Most willing first. The floor and the minimum airborne time both run the
