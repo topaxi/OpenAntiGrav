@@ -243,29 +243,11 @@ pub fn build_scene(
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let nodes = vex::nodes(data).context("walking the node tree")?;
     let classes = vex::classes_of(data).ok();
-    let mesh_class = classes
+    classes
         .and_then(|c| c.mesh)
         .context("no mesh class id for this .vex version")?;
     let order = vex::byte_order(data);
-    let mut placed = referenced(data, &nodes, mesh_class, &model);
-    // **Both pad classes' chunks are excluded here too, not only the ordinary
-    // `Mesh` ones `referenced` names.** They would otherwise fall through to
-    // the unreferenced-chunk loop below exactly the way `referenced`'s own doc
-    // comment describes for an ordinary node - a `Weapon Pad`/`Speedup Pad`
-    // node's chunk hash never matches `mesh_class`, so `referenced` never even
-    // looks at it. [`pads::build_pads`]/[`pads::build_weapon_pads`] draw these
-    // same chunks through their own node-ordered pass instead, and this is
-    // what stops a pad drawing twice once a caller uses both - see that
-    // pair's own doc comment for why a separate pass exists at all.
-    for class in [
-        classes.and_then(|c| c.speedup_pad),
-        classes.and_then(|c| c.weapon_pad),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        placed.extend(pads::pad_chunk_hashes(data, &nodes, order, class));
-    }
+    let placed = pads::placed_hashes(data, &nodes, classes, order, &model);
 
     pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
 

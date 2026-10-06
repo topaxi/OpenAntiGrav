@@ -814,3 +814,23 @@ Pictures (`data/scratch/hd-pad-emissive/`, 1920x1080 `oag-game --race --mode sin
 
 ### Wired, 2026-10-05, the four original circuits' speed pads
 `build_scene` now calls `pad_ne` for the pad materials (`weapon_pads`, `speedup_material`) that its unreferenced-chunk pass uses, so the 18, 16, 17 and 15 speed-pad chunks of `talons_junction`, `amphiseum`, `modesto_heights` and `tech_de_ra` bind their `_ne` mask and glow cyan (7,488, 6,656, 7,072 and 6,240 scene vertices, one colour each). Routing is by material, not node, because the nodes' hash names no chunk; **which node owns which chunk is still unknown** (not needed: a speed pad has no cooldown state). The filter matters: an unfiltered call also binds `ds_rail`, `ds_sf` and `ds_sfline_trench` (`diffuse_normal_specular_emmissive`, a different program) and put 5,296 red and 26,536 mixed glow vertices on `12_sol_2` and `01_vineta_k`. The 12 other circuits bind zero in the scene. Guard: `tests/hd_original_speed_pad_ground_truth.rs`. Pictures: `data/scratch/hd-speed-pads/<circuit>_{before,after}.png`. No RPCS3 reference frame was taken. Pulse is untouched: the change is under `mesh/rcs`, the PS3 builder, and no PSP path calls it.
+
+## The load report said the speed pads were undrawn; they were not - 2026-10-06
+
+On Talon's Junction (and the three other original circuits, 18, 16, 17 and 15
+nodes) every `Speedup Pad` node names a hash no chunk of the `.rcsmodel`
+carries, so `mesh::rcs::build_pads` - which draws a chunk through its node -
+drew nothing, and the loader printed `speedup pads: 0 of 18 mesh node(s)
+drawn from the .rcsmodel (0 triangle(s)); 18 addressed no chunk`, a warning
+for a picture that was on screen. The chunks are the 18 on a pad material that
+no node names, which `build_scene`'s world-space pass draws
+(`bind_scene_pad_masks` binds their `_ne` mask by material). Seen in the
+frame (`OAG_SKIP_MATERIAL=weapon_pads` removes the blue chevrons at tick 900,
+`--hold cross`), and the report now counts them: 18 chunks, 5,382 triangles,
+`Report::routed_chunks`/`routed_triangles`, pinned by
+`crates/render/tests/hd_weapon_pad_split_ground_truth.rs`. What is *not* drawn
+for them is the per-node ready/cooling state, which HD never recolours anyway
+(above). Which chunk belongs to which trigger volume is unmeasured, so
+nothing matches them by position. **Omega: not checkable** - its race
+assets follow 2048 and its race is incomplete (`omega-status.md`), so there is
+no HD-shaped circuit to read the same report on.

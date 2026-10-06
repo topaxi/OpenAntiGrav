@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
         let (model, _) = mesh::rcs::scene_from(&args[0], &args[1], &data)?
             .ok_or_else(|| anyhow::anyhow!("not a PS3 model"))?;
         for draw in model.transparent_draws.iter().chain(&model.draws) {
-            let (mut ccw, mut tris) = (0, 0);
+            let (mut ccw, mut tris, mut wound_out, mut normal_out) = (0, 0, 0usize, 0usize);
             for t in model.indices[draw.range.start as usize..draw.range.end as usize]
                 .as_chunks::<3>()
                 .0
@@ -82,9 +82,26 @@ fn main() -> anyhow::Result<()> {
                 if g[0] * a.normal[0] + g[1] * a.normal[1] + g[2] * a.normal[2] > 0.0 {
                     ccw += 1;
                 }
+                // Against the draw's own centroid: which way the winding and
+                // the vertex normal each face on a closed shell.
+                let range = &model.indices[draw.range.start as usize..draw.range.end as usize];
+                let n = range.len() as f32;
+                let mut centre = [0.0f32; 3];
+                for &i in range {
+                    for (c, p) in centre.iter_mut().zip(model.vertices[i as usize].position) {
+                        *c += p / n;
+                    }
+                }
+                let out: f32 = (0..3).map(|k| (a.position[k] - centre[k]) * g[k]).sum();
+                let nout: f32 = (0..3)
+                    .map(|k| (a.position[k] - centre[k]) * a.normal[k])
+                    .sum();
+                wound_out += usize::from(out > 0.0);
+                normal_out += usize::from(nout > 0.0);
             }
             println!(
-                "draw node {:?} culled {}: {ccw} of {tris} counter-clockwise about the normal",
+                "draw node {:?} culled {}: {ccw} of {tris} counter-clockwise about the normal, \
+                 {wound_out} wound outward, {normal_out} with an outward vertex normal",
                 draw.node, draw.culled
             );
         }

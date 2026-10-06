@@ -132,3 +132,102 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
         }
     }
 }
+
+/// Talon's Junction's 18 `Speedup Pad` nodes each name a hash no chunk of its
+/// `.rcsmodel` carries, so `build_pads`' node pass draws nothing - and the
+/// pads are on screen all the same, as 18 chunks on a pad material that
+/// `build_scene`'s world-space pass draws. The report has to say that rather
+/// than "0 of 18 ... (0 triangle(s))", which read as an absent picture.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:{ARCHIVE}", image.display());
+    let vex_data = mesh::read_blob(&spec, TRACK).expect("reading the .vex");
+    let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
+    let model_blob = mesh::read_blob(&spec, &model_name).expect("reading the .rcsmodel");
+    let rcs_model = oag_rcs::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+
+    let nodes = vex::nodes(&vex_data).expect("walking the node tree");
+    let classes = vex::classes_of(&vex_data).expect("class table");
+    let speedup = classes
+        .speedup_pad
+        .expect("speedup_pad id recovered for v6");
+    let order = vex::byte_order(&vex_data);
+    let hashes: Vec<u32> = nodes
+        .iter()
+        .filter(|n| n.class_id == speedup)
+        .map(|n| order.u32(&vex_data[n.payload()], 0x30))
+        .collect();
+    assert_eq!(hashes.len(), 18, "talons_junction authors 18 speedup pads");
+    assert!(
+        hashes.iter().all(|h| rcs_model.mesh(*h).is_none()),
+        "a speedup node now resolves: the world-pass reading below needs revisiting"
+    );
+
+    let (pads, report) = mesh::rcs::build_pads(TRACK, &vex_data, &model_blob, &mut |path| {
+        mesh::read_blob(&spec, path).ok()
+    })
+    .expect("build_pads decodes talons_junction");
+    println!("{}", report.describe());
+    assert!(pads.indices.is_empty(), "the node pass draws no pad");
+    assert_eq!(report.routed_chunks, 18, "one world-pass chunk per pad");
+    assert!(report.routed_triangles > 0);
+    let line = report.describe();
+    assert!(!line.contains("(0 triangle(s))"), "{line}");
+    assert!(line.contains("18 chunk(s) on a pad material"), "{line}");
+
+    // **The report must be about what is drawn.** Every chunk on a pad
+    // material that no pad node names has a draw call in the circuit's own
+    // model, and the count of them is the report's.
+    let (track_model, _) = mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
+        mesh::read_blob(&spec, path).ok()
+    })
+    .expect("build_scene decodes talons_junction");
+    let drawn: std::collections::BTreeSet<u32> = [
+        &track_model.draws,
+        &track_model.alpha_tested_draws,
+        &track_model.transparent_draws,
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|draw| draw.chunk)
+    .collect();
+    let pad_chunks: Vec<u32> = rcs_model
+        .meshes
+        .iter()
+        .enumerate()
+        .filter(|(_, chunk)| {
+            chunk.surfaces().any(|s| {
+                rcs_model
+                    .materials
+                    .get(s.material as usize)
+                    .is_some_and(|m| m.name.ends_with("weapon_pads.rcsmaterial"))
+            })
+        })
+        .filter(|(_, chunk)| {
+            ![classes.weapon_pad.expect("weapon_pad id recovered for v6")]
+                .iter()
+                .any(|&class| {
+                    nodes
+                        .iter()
+                        .filter(|n| n.class_id == class)
+                        .any(|n| order.u32(&vex_data[n.payload()], 0x30) == chunk.hash)
+                })
+        })
+        .map(|(index, _)| u32::try_from(index).expect("a chunk index fits in u32"))
+        .collect();
+    assert_eq!(
+        pad_chunks.len(),
+        18,
+        "the chunks on a pad material no node names"
+    );
+    for chunk in &pad_chunks {
+        assert!(
+            drawn.contains(chunk),
+            "chunk {chunk} is counted but not drawn"
+        );
+    }
+}

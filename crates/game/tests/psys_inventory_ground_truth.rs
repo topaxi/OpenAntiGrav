@@ -495,7 +495,6 @@ mod hd {
     use std::path::{Path, PathBuf};
 
     use oag_pob::ParticleSystem;
-    use oag_raceplay::RACE_EFFECTS;
 
     /// Distinct system names across all seven archives.
     ///
@@ -557,23 +556,31 @@ mod hd {
     fn every_wired_effect_is_on_the_disc() {
         let Some(image) = image() else { return };
         let found = scan(&image);
-        for name in RACE_EFFECTS {
-            // Pulse's weather and 2048's magstrip pair are not on HD's disc;
-            // `RACE_EFFECTS` is a superset.
-            if matches!(
-                name,
-                "WO_RAIN" | "WO_RAIN_LENS" | "WO_SNOW" | "WO_MAGSTRIP_SPARKS" | "WO_MAGSTRIP_ZONE"
-            ) {
-                continue;
-            }
+        // **HD's own table, with no exemptions.** It used to inherit Pulse's
+        // `WO_RAIN`, `WO_RAIN_LENS`, `WO_SNOW` and 2048's magstrip pair, none
+        // of which any of the seven archives carries, and this loop skipped
+        // them by name; `oag_hd::effects::EFFECTS` no longer asks for them.
+        for name in oag_hd::effects::EFFECTS.names() {
             assert!(
                 found.contains_key(name),
                 "{name}: wired but not on this disc"
             );
         }
+        for name in [
+            "WO_RAIN",
+            "WO_RAIN_LENS",
+            "WO_SNOW",
+            "WO_MAGSTRIP_SPARKS",
+            "WO_MAGSTRIP_ZONE",
+        ] {
+            assert!(
+                !found.contains_key(name),
+                "{name} is on HD's disc now: its table should name it"
+            );
+        }
         println!(
             "hd: all {} wired names present across {} distinct particle system(s)",
-            RACE_EFFECTS.len(),
+            oag_hd::effects::EFFECTS.names().len(),
             found.len()
         );
     }
