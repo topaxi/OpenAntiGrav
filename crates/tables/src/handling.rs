@@ -284,9 +284,9 @@ impl Misc {
 /// (`0x0883a970`), where these are read. Confidence **84**.
 ///
 /// The speeds land in `g_autospeed_base` (`0x08b36be0`) and `g_autospeed_step`
-/// (`0x08b36be4`), which `Ship_UpdateEngine`'s four-corner branch reads as `base
-/// + step * (float)(uint32)zone`. `recharge` goes to `0x08b34360` and is added
-/// to the shield when a zone is completed without contact.
+/// (`0x08b36be4`); `Ship_UpdateEngine`'s four-corner branch reads `base + step *
+/// (float)(uint32)zone`. `recharge` goes to `0x08b34360` and is added to the
+/// shield when a zone is completed without contact.
 ///
 /// **Global despite living in a per-team file.** All eight teams carry a copy
 /// and nothing makes them agree; a disagreement is a fact worth surfacing, not
