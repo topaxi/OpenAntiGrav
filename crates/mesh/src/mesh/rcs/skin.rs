@@ -232,7 +232,7 @@ impl Default for Pick {
 /// before anything can bind them usefully.
 ///
 /// **A lightmapped material keeps entry 1 regardless.** The lightmap is the
-/// one role of that binding this project has identified, `mesh.wgsl` reads it
+/// one role of that binding this project has identified, `mesh.wesl` reads it
 /// as the prelit term and the sun mask, and `Material::lightmap`'s four-signal
 /// path reading is what finds it - so an alpha trace never displaces it.
 pub(super) fn picks(
@@ -251,7 +251,7 @@ pub(super) fn picks(
             let default = Pick::default();
             // **The lightmap wins the second binding, wherever it sits.** It
             // is the one role of that binding this project has identified,
-            // `mesh.wgsl` reads it as the prelit term and the sun mask, and
+            // `mesh.wesl` reads it as the prelit term and the sun mask, and
             // the file names it outright - see `Material::lightmap_entry`.
             // Binding it only when it happened to be entry 1 left a third of
             // Talon's Junction's baked lighting unread and its track walls
@@ -351,7 +351,7 @@ pub(super) fn picks(
 /// outright which unit it samples for the picture and which unit and channel it
 /// writes to the output alpha.
 /// `oag_rcs::rcsmaterial::fragment::Program::output_texels` traces it, and
-/// this turns the answer into the four bits `mesh.wgsl` decodes.
+/// this turns the answer into the four bits `mesh.wesl` decodes.
 ///
 /// **Only a positive reading is acted on.** A lane the taint could not follow
 /// answers [`rcsmaterial::fragment::Texel::Untraced`] - a constant, an
@@ -551,7 +551,7 @@ pub(super) fn roles(
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
             // **Never the lightmap.** When the second slot is the circuit's
-            // baked atlas, its alpha is the sun-occlusion mask - `mesh.wgsl`
+            // baked atlas, its alpha is the sun-occlusion mask - `mesh.wesl`
             // reads it as exactly that, `mask = baked.a * in.sun_mask` - and
             // its RGB is a light term, not a picture. Pointing coverage or
             // albedo at it paints a shadow map as a stencil. Measured on the

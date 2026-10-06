@@ -19,7 +19,7 @@
 //!
 //! `time` is the engine's seconds clock (`renderer.md`, "the engine's own
 //! parameter table"), added with no multiplier, so the wave repeats once a
-//! second on both axes. `mesh.wgsl` reads `d` through [`slots::MAG_WAVE`]; the
+//! second on both axes. `mesh.wesl` reads `d` through [`slots::MAG_WAVE`]; the
 //! emissive picture rides in the third binding and the wave in the fourth,
 //! `k`, `Colour` and the rate (1, read) in the material's glow-table entry.
 //! The material's `ADD_SECOND` is cleared: its second texture is not a glow.

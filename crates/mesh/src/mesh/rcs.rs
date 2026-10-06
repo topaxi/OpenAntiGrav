@@ -559,7 +559,7 @@ fn emit(
             normal,
             // HD's `f[TC1]`: the per-vertex light the fragment program
             // **adds** to the lightmap term before multiplying the albedo, so
-            // `mesh.wgsl` folds it into the authored sum, not into a tint.
+            // `mesh.wesl` folds it into the authored sum, not into a tint.
             // Alpha stays the texture's own multiplier - `colour.a` is not
             // where the fourth byte goes, see `sun_mask` below.
             // **Zero for a chunk with no colour set is read**: the blocks
@@ -587,7 +587,7 @@ fn emit(
                 })
                 .unwrap_or([0.0, 0.0]),
             // **Unlit under the tint diagnostic**, so the flat colour reaches
-            // the frame as itself: `lit` 0.0 takes `mesh.wgsl`'s stand-in
+            // the frame as itself: `lit` 0.0 takes `mesh.wesl`'s stand-in
             // path, whose light and tint are both 1.0 for an HD model, and
             // the palette entry can be matched exactly rather than by hue
             // through a coloured light rig.
@@ -604,7 +604,7 @@ fn emit(
             // `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sun is
             // real and it is masked". `1.0` (unmasked) for a chunk with no
             // colour set, which is what a lightmapped chunk uses instead -
-            // `mesh.wgsl` multiplies this by the lightmap's own alpha, so
+            // `mesh.wesl` multiplies this by the lightmap's own alpha, so
             // `1.0` here leaves that gate untouched.
             sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
             specular_exponent: surface.specular_exponent,

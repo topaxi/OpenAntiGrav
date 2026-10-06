@@ -1,4 +1,4 @@
-//! [`GpuVertex`]: one vertex in the layout `mesh.wgsl` declares.
+//! [`GpuVertex`]: one vertex in the layout `mesh.wesl` declares.
 //!
 //! Split out of `mesh.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
@@ -48,7 +48,7 @@ pub struct GpuVertex {
     /// circuit, and they have nothing to do with where the diffuse tiles. On
     /// Wipeout HD it is the `lightmapUV` attribute the chunk's vertex
     /// declaration names outright; every other title leaves it at zero and
-    /// binds a white lightmap, so the multiply in `mesh.wgsl` is the identity.
+    /// binds a white lightmap, so the multiply in `mesh.wesl` is the identity.
     ///
     /// **Field order here is attribute order, and that is load-bearing.**
     /// `wgpu::vertex_attr_array!` lays offsets out in the order the locations
@@ -81,7 +81,7 @@ pub struct GpuVertex {
     ///
     /// **Not `colour.a`.** That channel is already spoken for twice over - the
     /// PSP/PS2 boost plume's baked alpha falloff, and the bloom pass's glow
-    /// mask in `mesh.wgsl`'s fragment output - and HD's mask means neither.
+    /// mask in `mesh.wesl`'s fragment output - and HD's mask means neither.
     /// `oag_rcs::rcsmodel::Mesh::vertex_light`'s fourth component for a
     /// chunk that carries a colour set, `1.0` (unmasked) for one that does
     /// not and for every non-HD title, which never reads this field at all.
@@ -102,7 +102,7 @@ pub struct GpuVertex {
     /// uniform and a second bind group, and a chunk's vertices are emitted
     /// together anyway - the same argument [`Self::anim`] makes.
     pub slots: u32,
-    /// The exponent `mesh.wgsl`'s specular term raises `N.H` to.
+    /// The exponent `mesh.wesl`'s specular term raises `N.H` to.
     ///
     /// **Resolved per material where it can be, off the material's own
     /// fragment microcode** -
@@ -133,7 +133,7 @@ pub const DEFAULT_SPECULAR_EXPONENT: f32 = 32.0;
 
 /// How [`GpuVertex::slots`] packs a material's texture roles.
 ///
-/// Bit-for-bit the same layout `mesh.wgsl`'s `fs_main` decodes; the two are
+/// Bit-for-bit the same layout `mesh.wesl`'s `fs_main` decodes; the two are
 /// changed together.
 pub mod slots {
     /// The second texture is the circuit's baked lighting atlas, so the prelit
@@ -169,7 +169,7 @@ pub mod slots {
     /// could not follow keeps the ambient, which is the direction that leaves
     /// a surface lit rather than black.
     ///
-    /// **Read, and deliberately not acted on yet.** `mesh.wgsl` still adds
+    /// **Read, and deliberately not acted on yet.** `mesh.wesl` still adds
     /// the ambient to everything, because gating on this bit alone was tried
     /// and is a regression: the materials without an ambient are three
     /// families, not one. Most declare `prelitBias`, `prelitScaleSpecular` and
@@ -243,7 +243,7 @@ pub mod slots {
     /// it is bit 0 of the chunk's own render-block flags
     /// (`oag_rcs::rcsmodel::Mesh::is_track`), authored in the `.rcsmodel`
     /// on 4,365 of the disc's 41,861 chunks, and `mesh::rcs::surface` ORs
-    /// it in per chunk over the material's roles. `mesh.wgsl`'s `zone_set`
+    /// it in per chunk over the material's roles. `shaders/zone.wesl`'s `zone_set`
     /// decodes it; see `mesh_render::Zone` for the two publications.
     pub const ZONE_TRACK: u32 = 1 << 9;
 
@@ -252,7 +252,7 @@ pub mod slots {
     /// classifier, matched once at load. Where this is set, `albedo` is the
     /// facing ramp (sampled at `dot(V, N)`, not the diffuse UV) and
     /// `lightmap`/`aux` is the grid, exactly as `mesh::rcs::skin::picks`
-    /// bound them - see `mesh.wgsl`'s own read of this bit for the combine
+    /// bound them - see `mesh.wesl`'s own read of this bit for the combine
     /// `docs/formats/rcsmaterial.md` traces.
     pub const FACING_RAMP_SHEEN: u32 = 1 << 10;
 

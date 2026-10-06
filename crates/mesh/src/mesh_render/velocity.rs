@@ -14,7 +14,7 @@
 /// single-target pipelines that existed before the velocity buffer.
 ///
 /// Under `Write`, the depth-writing pipelines (opaque and alpha-test) output
-/// their surface's real screen-space motion - `mesh.wgsl`'s `velocity_of` -
+/// their surface's real screen-space motion - `shaders/velocity.wesl`'s `velocity_of` -
 /// and the blended pipelines carry the second target **with an empty write
 /// mask**: they write no depth, so the velocity at their pixels belongs to
 /// the surface behind them, and masking the write is what keeps velocity and

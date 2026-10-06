@@ -287,7 +287,7 @@ pub const PYRAMID_MIPS: u32 = 6;
 /// an exposure, a smoothed log luma and a scene average luma, written by the
 /// luma pyramid's 1x1 level. Nothing in this port can read it: `Exposure()`
 /// only comes from it when `FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE` is set and
-/// this renderer has no exposure at all (see `common.wgsl`'s `exposure`), and
+/// this renderer has no exposure at all (see `common.wesl`'s `exposure`), and
 /// `SceneAverageLuma()` is **dead in v1.1.4** - declared in
 /// `ffx_fsr3upscaler_common.h` and called from no pass header. Allocating it
 /// would be allocating a target with neither a reader nor a writer.

@@ -56,7 +56,7 @@ pub const GL_GREATER: u32 = 0x0204;
 /// where it is not a cutout this module will draw.
 ///
 /// **`None` for a comparison other than [`GL_GREATER`]**, which is the one
-/// thing the shader hardcodes: `mesh.wgsl` discards below the reference and has
+/// thing the shader hardcodes: `mesh.wesl` discards below the reference and has
 /// no comparison-function switch, so a `GL_LESS` cutout drawn through it would
 /// be inverted. Nothing on the disc reaches that, and a material that did would
 /// draw opaque and be counted in [`Report::cutout_unread`] rather than drawn
@@ -68,7 +68,7 @@ pub fn of(material: &rcsmodel::Material) -> Option<f32> {
 }
 
 /// The reference this whole model's cutout materials author, for the pipeline
-/// override `mesh.wgsl` reads.
+/// override `mesh.wesl` reads.
 ///
 /// **One per model, because the comparison is a pipeline constant** - see
 /// `crate::mesh::Model::alpha_test_ref`. Every mode-2 material on the disc

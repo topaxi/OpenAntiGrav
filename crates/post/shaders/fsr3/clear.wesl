@@ -21,6 +21,10 @@
 // into part of a larger allocation clears exactly the part it will use - and
 // the index below is `prepare_inputs`'s own, which is what makes "the part it
 // will use" the same set of words in both.
+import package::fsr3::common::{
+    is_on_screen,
+    render_size,
+};
 
 @group(1) @binding(0) var<storage, read_write> rw_reconstructed_previous_nearest_depth: array<u32>;
 

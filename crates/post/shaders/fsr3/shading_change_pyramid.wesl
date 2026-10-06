@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the shading-change pyramid, ported to
 // WGSL. Transliterated from `ffx_fsr3upscaler_shading_change_pyramid.h`, AMD
-// FidelityFX SDK v1.1.4, MIT - see `common.wgsl`'s header and
+// FidelityFX SDK v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // Asks, per render-resolution texel, "did this surface's *shading* change, or
@@ -27,6 +27,24 @@
 // channel that is 1.0 at every source texel and therefore 1.0 at every level,
 // and `StorePyramid` writes only `.xy` - so it is never stored and never read.
 // Dropping it is dropping a constant, not a signal.
+import package::fsr3::common::{
+    FSR3UPSCALER_EPSILON,
+    FSR3UPSCALER_FP16_MAX,
+    FSR3UPSCALER_FP16_MIN,
+    FSR3UPSCALER_FP32_MIN,
+    F_SHADING_CHANGE_SAMPLE_POW,
+    clamp_load,
+    delta_pre_exposure,
+    exposure,
+    is_on_screen,
+    is_uv_inside,
+    jitter,
+    min_divided_by_max,
+    previous_frame_jitter,
+    previous_frame_render_size,
+    render_size,
+    shading_change_render_size,
+};
 
 @group(1) @binding(0) var r_current_luma: texture_2d<f32>;
 @group(1) @binding(1) var r_previous_luma: texture_2d<f32>;

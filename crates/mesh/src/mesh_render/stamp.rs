@@ -25,7 +25,7 @@ pub(super) struct Shared<'a> {
 }
 
 /// The stamp pipelines: one pair for the alpha-over batches and one for the
-/// additive ones, which also run the GE's colour test - see `mesh.wgsl`'s
+/// additive ones, which also run the GE's colour test - see `mesh.wesl`'s
 /// `stamp_colour_test`. Each is `[0]` two-sided and `[1]` back-face culled like
 /// every other blended pipeline, so a draw's `culled` bit picks the same face
 /// rule for its mask as for its colour.

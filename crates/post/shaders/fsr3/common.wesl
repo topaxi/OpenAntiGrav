@@ -14,10 +14,10 @@
 // for line. Where upstream uses a macro (`FfxFloat32x3`, `ffxSaturate`) this
 // uses the plain WGSL type or built-in; that is the only systematic change.
 //
-// **This file is prepended to every pass** - WGSL has no `#include`, so
-// `post::fsr3::shader::source` concatenates it. Group 0 is therefore identical
-// in every pass and holds only what every pass needs; a pass's own resources
-// are group 1.
+// **Every pass imports from this module** (`import package::fsr3::common::{..}`),
+// and `build.rs` compiles each pass to one WGSL file with only what it reaches.
+// Group 0 is identical in every pass and holds only what every pass needs; a
+// pass's own resources are group 1.
 //
 // **Upstream works on linear light; this works on gamma**, the same space
 // `fsr1.wgsl` does. ADR-0020 makes gamma this renderer's authoritative colour

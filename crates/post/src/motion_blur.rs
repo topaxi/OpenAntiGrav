@@ -3,7 +3,7 @@
 //!
 //! This replaced the camera-reprojection gather that shipped first as the
 //! stepping stone ([ADR-0028](../../../../docs/architecture/adr/0028-camera-motion-blur-first.md)):
-//! the velocity buffer *measures* every draw's screen motion - `mesh.wgsl`'s
+//! the velocity buffer *measures* every draw's screen motion - `mesh.wesl`'s
 //! `velocity_of`, against the previous tick's premultiplied matrices - where
 //! reprojection computed the camera's motion and was wrong about everything
 //! that moves, craft first. The focus-mask workaround of ADR-0029 went with
