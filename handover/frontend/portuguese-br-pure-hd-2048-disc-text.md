@@ -16,7 +16,10 @@ lane: it ships `portuguesebr` itself.
   `CircuitNames`, which picks its own copy of the table - check a translated circuit
   name still resolves there.
 - **2048**: 2,965 entries. 2048 ships a European `Portuguese` plugin; the project
-  language stands on 2048's English instead.
+  language stands on 2048's English instead. The `2048` namespace
+  (`disc_strings: Some("2048")`) already exists, taken by the German gap file
+  (`assets/ui/strings/disc/2048/german.toml`); a project language is overlaid there,
+  the disc's own German only filled.
 - Match terms to Omega's `portuguesebr` table (it is on disc, already loaded by
   `load_languages`); write sentences ourselves. Never commit the English beside them.
 - Nobody has reviewed any of it: every entry is `human = false`.
@@ -31,3 +34,12 @@ lane: it ships `portuguesebr` itself.
    `portuguese_br_ground_truth.rs`'s Pulse one.
 2. Then HD, then 2048.
 3. A native speaker pass flips `human` to `true` per entry.
+
+## Open: German reader artifact
+
+The disc help texts that span paragraphs (Pulse PSP 25 ids, HD 4, Omega 51) read as a
+key that *is* the text (it starts `\n`) with an empty value, in English and German
+alike. It looks like `string_entries` splitting a multi-paragraph entry, so the
+continuation becomes its own empty-valued key. Measured 2026-10-06 while finding
+German gaps; not a German gap and left alone. Worth a reader check if those help
+pages ever draw empty.

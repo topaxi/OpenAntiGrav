@@ -373,9 +373,11 @@ pub struct FrontEnd {
     pub language_manifests: &'static [language::LanguageManifest],
     /// The namespace under `assets/ui/strings/disc/` holding this project's own
     /// translations of this title's disc text, keyed by this title's idstrings.
-    /// `None` for a title nobody has translated yet: Pure, HD, 2048 and Omega
-    /// reuse id spellings, so a namespace is never shared between titles and a
+    /// `None` for a title nobody has translated yet: Pure, HD and Omega reuse
+    /// id spellings, so a namespace is never shared between titles and a
     /// project language there reads the disc's English until one is written.
+    /// A disc's own language only has its *gaps* filled from it (an id the
+    /// disc's table lacks or leaves empty); a project language is overlaid.
     pub disc_strings: Option<&'static str>,
     /// How this title lays menus out, for a title that authors the
     /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
