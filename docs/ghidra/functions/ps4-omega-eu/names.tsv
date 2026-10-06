@@ -103,3 +103,7 @@
 0x01710730	function	Particle_RegisterShaders	70	heat-haze.md
 0x01711310	function	Particle_DrawBatchesForPass	65	heat-haze.md
 0x016d3bf0	function	ParticleRenderer_Construct	65	heat-haze.md
+0x016d7ec0	function	Particle_RegisterEmitterStates	75	heat-haze.md
+0x01711af0	function	Particle_AcquireRenderState	80	heat-haze.md
+0x01710ec0	function	Particle_BuildBlendVariants	75	heat-haze.md
+0x01714000	function	Particle_PushQuadBatch	70	heat-haze.md

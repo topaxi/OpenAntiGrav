@@ -1128,9 +1128,16 @@ effects to each); the same stems as 2048's directories, different bytes again.
   particle writes a signed offset `colourScale * alpha * 2/|w|^0.75 * tex.a * (tex.rgb - 0.5)`
   into a separate buffer (depth-gated against linear view depth), and the final
   composite resamples Frame, LowRes and Bloom at `uv + 0.0100021 * (16/9 * d.x, d.y)`.
-  It stays **undrawn** because the per-batch `kColourScale` and the buffer's format
-  and blend are unread (the page lists the addresses); the emitter ticks, spawns its
-  children and draws nothing, and the loader names it at WARN. Nothing is drawn in its place.
+  It stays **undrawn**, and the page now says what is read and what is not
+  (2026-10-06, `heat-haze-2`). Read: `kColourScale` is the emitter record's own
+  word at **`+0xc84`** (conf 85; `10.0` on the base eboot's explosions, `2.0` on the
+  patch's, `0.8` to `5.0` on the heat-haze set), the program slot is exactly blend
+  class 8, the target is `R8G8_SNORM` (75) with a pure additive blend (80), and the
+  depth the fragment tests is an `R16F` 960 by 540 target (75). Unread: the target's
+  clear value, which pass attaches it, and what writes the depth. The emitter ticks,
+  spawns its children and draws nothing, and the loader names it at WARN. Nothing is
+  drawn in its place. `Emitter` does not parse `+0xc84` yet: a drawn pass would add it
+  as a field, never as a constant.
   **2048 cross-check: checked, differs.** No 2048 `.pob` (`data.psarc`, both patch
   archives, both DLC packs) carries class 8; its explosions have no `shockdistort`.
   Pulse PSP, PS2 and HD carry none either (HD's only unnamed class is 4).
