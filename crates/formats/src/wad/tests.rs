@@ -1,10 +1,6 @@
-//! What the WAD reader in [`super`] is asserted to do: the entry table it
-//! decodes, lookup by name and by hash, and the archives it refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `wad.rs`: the tests are 301 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! What the WAD reader in [`super`] is asserted to do: the entry table, lookup
+//! by name and hash, and the archives it refuses. Its own file because the
+//! tests exceed the 200-line inline limit (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -26,8 +22,7 @@ fn build_with_compression(entries: &[(u32, u32, u32)]) -> Vec<u8> {
     for &(hash, size, size_uncompressed) in entries {
         dir.extend(hash.to_le_bytes());
         dir.extend(offset.to_le_bytes());
-        // Field order matters: uncompressed first, then the stored size
-        // that the offset chain advances by.
+        // Uncompressed size first, then the stored size the offset chain advances by.
         dir.extend(size_uncompressed.to_le_bytes());
         dir.extend(size.to_le_bytes());
         blobs.push((offset, size));
@@ -94,8 +89,8 @@ fn rejects_an_unknown_version() {
 
 #[test]
 fn rejects_a_corrupt_entry_count_before_allocating() {
-    // 0xFFFFFFFF entries would be a 64 GiB directory. The archive length
-    // check has to happen before the Vec::with_capacity.
+    // 0xFFFFFFFF entries would be a 64 GiB directory; the archive length check
+    // has to come before the Vec::with_capacity.
     let mut data = build(&[(1, 10)]);
     data[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
 
@@ -113,8 +108,8 @@ fn rejects_an_entry_pointing_past_the_end() {
     assert!(matches!(err, Error::EntryOutOfBounds { .. }));
 }
 
-/// Bounds are checked against the stored size. An entry that decompresses
-/// to more than the archive holds is normal, not corrupt.
+/// Bounds are checked against the stored size: an entry decompressing to more
+/// than the archive holds is normal.
 #[test]
 fn a_large_uncompressed_size_is_not_out_of_bounds() {
     let data = build_with_compression(&[(1, 64, 10_000_000)]);
@@ -164,9 +159,8 @@ fn detects_compressed_entries() {
     assert_eq!(dir.uncompressed_len(), 414);
 }
 
-/// The two size fields are easy to transpose, because on every PSP archive
-/// they are equal and the order cannot be observed. The offset chain is
-/// what distinguishes them, so this pins the ordering down.
+/// The two size fields are easy to transpose, since on every PSP archive they
+/// are equal. The offset chain distinguishes them; this pins the order.
 #[test]
 fn the_offset_chain_advances_by_the_stored_size_not_the_uncompressed_one() {
     let data = build_with_compression(&[(1, 100, 100_000), (2, 200, 200_000)]);
@@ -219,8 +213,8 @@ fn a_too_short_blob_has_no_tag() {
     assert_eq!(Blob::peek(b"ab"), None);
 }
 
-/// Values taken from real archive entries whose names were recovered from
-/// strings in the game binary. These are the ground truth for the hash.
+/// Values from real archive entries whose names were recovered from strings in
+/// the game binary: the ground truth for the hash.
 #[test]
 fn hashes_match_real_archive_entries() {
     for (name, expected) in [
@@ -248,15 +242,15 @@ fn normalisation_makes_separators_and_case_irrelevant() {
 
 #[test]
 fn the_empty_name_hashes_to_all_ones() {
-    // Falls out of init 0 and a final complement, and is the clearest
-    // single check that the initial value is 0 rather than 0xFFFFFFFF.
+    // Falls out of init 0 and a final complement: the clearest check that the
+    // initial value is 0 rather than 0xFFFFFFFF.
     assert_eq!(hash_name(""), 0xffff_ffff);
 }
 
 #[test]
 fn is_not_zlib_crc32() {
-    // zlib's crc32 initialises to 0xFFFFFFFF. If someone "simplifies" this
-    // to a stock CRC-32 call, every lookup silently misses.
+    // zlib's crc32 initialises to 0xFFFFFFFF; a "simplification" to a stock
+    // CRC-32 would silently miss every lookup.
     assert_ne!(
         hash_name("a"),
         0xe8b7_be43,
@@ -266,9 +260,8 @@ fn is_not_zlib_crc32() {
 
 #[test]
 fn high_bytes_are_not_case_folded() {
-    // The game's fold comes from newlib's _ctype_, which marks only ASCII
-    // A-Z as uppercase. A naive to_ascii_lowercase would agree, but a
-    // locale-aware fold would not.
+    // The game's fold (newlib's _ctype_) uppercases only ASCII A-Z; a
+    // locale-aware fold would differ.
     assert_ne!(hash_name_bytes(&[0xC0]), hash_name_bytes(&[0xE0]));
 }
 
@@ -286,9 +279,9 @@ fn reads_the_zlib_flag_and_masks_it_out() {
     );
 }
 
-/// `Wad_Read` tests the sizes *before* it looks at bit 31, so an entry whose
-/// sizes agree is read verbatim no matter what the flag says. Classifying
-/// that as zlib would hand a stored blob to inflate.
+/// `Wad_Read` tests the sizes *before* bit 31, so an entry with agreeing sizes
+/// is read verbatim whatever the flag says; zlib would hand a stored blob to
+/// inflate.
 #[test]
 fn equal_sizes_mean_stored_even_with_the_zlib_flag_set() {
     let mut data = build_with_compression(&[(1, 128, 128)]);

@@ -1,17 +1,15 @@
 //! Wipeout HD's `.xfx` crossfade tables: `data/sound/xfship_<team>.xfx`.
 //!
-//! A table is a handful of **input channels** and a handful of **layers**. The
-//! game writes one number per channel per tick; each layer reads one channel,
-//! looks the smoothed number up in two 512-entry curves, and drives one named
-//! sound's gain and pitch with the pair. The curves are authored, so a team's
-//! engine note is data, not code. See `docs/formats/hd-xfx.md` for the evidence
-//! behind every field below and the confidence each carries.
+//! A table is a handful of **input channels** and **layers**. The game writes
+//! one number per channel per tick; each layer reads one channel, looks the
+//! smoothed number up in two 512-entry curves, and drives one named sound's
+//! gain and pitch. The curves are authored, so a team's engine note is data.
+//! See `docs/formats/hd-xfx.md` for the evidence and confidence per field.
 //!
-//! The reader mirrors the game's own loader (`XFadeSystem_AddCrossFader`,
-//! `0x00312660` on the EU build), which checks the magic, a version and a target
-//! platform, then turns four offsets into pointers. The game calls a channel a
-//! *controller* and a layer an *element*; this reader says channel and layer.
-//! Everything here is big-endian: the format only ships on PS3.
+//! The reader mirrors the game's loader (`XFadeSystem_AddCrossFader`,
+//! `0x00312660` on the EU build): magic, version, target platform, then four
+//! offsets turned into pointers. The game says *controller* and *element*;
+//! this reader says channel and layer. Big-endian: the format ships on PS3.
 //!
 //! The layout, all offsets from the start of the file:
 //!
@@ -32,92 +30,69 @@
 use crate::byte_order::ByteOrder;
 use crate::coverage::Coverage;
 
-/// The first four bytes: `XFDX`.
 pub const MAGIC: [u8; 4] = *b"XFDX";
 
 /// The second word of a PS3 file, big-endian: target platform `2`, then file
-/// version `0x060000`.
-///
-/// The game's loader tests `word & 0x00ffffff == 0x060000` (failing it prints
-/// "Incorrect Crossfader file version") and `word >> 24 == 2` (failing it
-/// prints "Incorrect target platform") separately.
+/// version `0x060000`. The game's loader tests `word & 0x00ffffff == 0x060000`
+/// ("Incorrect Crossfader file version") and `word >> 24 == 2` ("Incorrect
+/// target platform") separately.
 pub const VERSION_WORD: u32 = 0x0206_0000;
 
 /// The second word of a Vita file, **little-endian**: target platform `0`, the
-/// same file version `0x060000`. Read in the file's own order the word is
-/// `0x00060000`; the bytes on disc are `00 00 06 00`.
-///
-/// Wipeout 2048's 23 tables are the only files that carry it, and the whole
-/// file is little-endian: the one thing that differs from HD's layout besides
-/// this word is a fifth channel.
+/// same file version `0x060000` (bytes on disc `00 00 06 00`). Only Wipeout
+/// 2048's 23 tables carry it; the whole file is little-endian and differs from
+/// HD's layout otherwise only by a fifth channel.
 pub const VERSION_WORD_VITA: u32 = 0x0006_0000;
 
 /// Bytes in the fixed header.
 pub const HEADER_LEN: usize = 0x1c;
 
-/// Bytes in one channel record.
 pub const CHANNEL_LEN: usize = 0x60;
 
-/// Bytes in one trigger record.
 pub const TRIGGER_LEN: usize = 0x40;
 
-/// Bytes in one layer record: a `0x30` head and two curves.
 pub const LAYER_LEN: usize = 0x830;
 
-/// Entries in each of a layer's two curves.
-///
-/// A channel's smoothed value is clamped to `0..=511` before it indexes one.
+/// Entries in each of a layer's two curves. A channel's smoothed value is
+/// clamped to `0..=511` before it indexes one.
 pub const CURVE_LEN: usize = 512;
 
-/// The longest a layer name can be, including no terminator.
-///
-/// The head holds the kind byte at `+0`, then the name from `+1`, and `+0x10`
-/// onward is the next field, so the name field has 15 bytes.
+/// The longest a layer name can be: the head holds the kind byte at `+0`, the
+/// name from `+1`, and `+0x10` is the next field, so 15 bytes.
 const NAME_LEN: usize = 15;
 
 /// Something wrong with a `.xfx` table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes supplied.
         got: usize,
     },
     /// The first four bytes were not `XFDX`.
     NotXfdx,
     /// The version word was not [`VERSION_WORD`].
     UnsupportedVersion {
-        /// The word found.
         word: u32,
     },
     /// The relocation flag was set, so the offsets are already pointers.
     AlreadyRelocated,
     /// The channel array did not sit at `0x1c`.
     ChannelsMisplaced {
-        /// The offset found.
         at: u32,
     },
     /// A record, array or curve runs past the end of the file.
     Truncated {
-        /// What was being read.
         what: &'static str,
     },
-    /// A layer's type byte (`+0x17`) was not the curve-pair type `0`.
-    ///
-    /// The loader also knows type `1`, a piecewise-linear pair read through
-    /// `+0x28` and `+0x2c`, and no file on the disc uses it, so it is refused
-    /// rather than guessed at.
+    /// A layer's type byte (`+0x17`) was not the curve-pair type `0`. The
+    /// loader's type `1` (a piecewise-linear pair via `+0x28`/`+0x2c`) is on no
+    /// disc file, so it is refused rather than guessed at.
     UnsupportedLayerType {
-        /// Index of the layer.
         layer: usize,
-        /// The type byte found.
         kind: u8,
     },
     /// A layer named a channel the table does not have.
     ChannelOutOfRange {
-        /// Index of the layer.
         layer: usize,
-        /// The channel byte found.
         channel: u8,
     },
 }
@@ -153,10 +128,9 @@ pub struct Xfx<'a> {
 }
 
 /// One input channel: how a raw number is smoothed on its way to the curves.
-///
-/// The smoothing is `XFadeSystem_UpdateChannels` (`0x00313d10`): the stored
-/// target is chased at a rate chosen by which of four bands the current value
-/// sits in, and a rate of zero means no smoothing in that band.
+/// The smoothing is `XFadeSystem_UpdateChannels` (`0x00313d10`): the target is
+/// chased at a rate set by which of four bands the value sits in; zero means
+/// no smoothing in that band.
 #[derive(Debug, Clone, Copy)]
 pub struct Channel<'a> {
     order: ByteOrder,
@@ -175,12 +149,11 @@ pub struct Layer<'a> {
 
 impl<'a> Xfx<'a> {
     /// Parse a table.
-    ///
     /// # Errors
     ///
-    /// [`Error`] when the header fails the checks the game's loader makes, when
-    /// a record runs off the end of `data`, when a layer is of an unread type,
-    /// or when a layer names a channel the table lacks.
+    /// [`Error`] when the header fails the loader's checks, a record runs off
+    /// the end of `data`, a layer is of an unread type, or a layer names a
+    /// channel the table lacks.
     pub fn parse(data: &'a [u8]) -> Result<Self, Error> {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
@@ -292,9 +265,7 @@ impl<'a> Xfx<'a> {
     }
 
     /// Bytes the header, channels, triggers, layers and pointer table add up to.
-    ///
-    /// On every file on the disc this equals the file's length exactly, so the
-    /// format has no padding and no tail this reader skips.
+    /// On every disc file this equals the file's length: no padding or tail.
     #[must_use]
     pub fn accounted_bytes(&self) -> usize {
         HEADER_LEN
@@ -315,11 +286,9 @@ impl<'a> Xfx<'a> {
     }
 
     /// The ranges of the file this reader reaches, each claimed under its name.
-    ///
-    /// [`Self::accounted_bytes`] adds the sizes of the pieces; this places them.
-    /// A table whose pieces overlap or leave a hole fails one of the two: the
-    /// sizes would still sum to the file length, but the placed ranges would
-    /// not tile it, so a test asserts both.
+    /// [`Self::accounted_bytes`] adds the sizes; this places them. Overlapping
+    /// or hole-leaving pieces would still sum to the file length but not tile
+    /// it, so a test asserts both.
     #[must_use]
     pub fn coverage(&self) -> Coverage {
         let base = self.data.as_ptr() as usize;
@@ -341,10 +310,8 @@ impl<'a> Xfx<'a> {
 
 impl<'a> Channel<'a> {
     /// The four band edges, in whole input counts.
-    ///
-    /// The smoothing picks band 0 while the current value is below the first
-    /// edge, band 1 below the second, band 2 below the third, band 3 otherwise
-    /// (`0x00313d10`).
+    /// Band 0 while the value is below the first edge, band 1 below the second,
+    /// band 2 below the third, band 3 otherwise (`0x00313d10`).
     #[must_use]
     pub fn band_edges(&self) -> [u16; 4] {
         std::array::from_fn(|i| self.order.u16(self.raw, i * 2))
@@ -378,10 +345,9 @@ impl<'a> Channel<'a> {
     }
 
     /// The raw `0x60`-byte record, for fields this reader does not name.
-    ///
-    /// The jitter fields at `+0x28..+0x50` are among them: the game's smoother
-    /// reads them to wobble a channel, and every file on the disc has them zero
-    /// on every channel but the ones the test pins.
+    /// The raw `0x60`-byte record, for unnamed fields. The jitter fields at
+    /// `+0x28..+0x50` (the smoother wobbles a channel with them) are zero on
+    /// every disc channel except the ones the test pins.
     #[must_use]
     pub fn raw(&self) -> &'a [u8] {
         self.raw
@@ -427,21 +393,17 @@ impl<'a> Layer<'a> {
         self.order.u32(self.raw, 0x18)
     }
 
-    /// The cue index at `+0x18` (a `u16`), which names the sound when the name
-    /// field is empty.
-    ///
-    /// `Crossfader` start (`FUN_8125d4b6` on the Vita build) plays by name when
-    /// the name's first byte is set and by this index when it is not, so the
-    /// `*2048.xfx` files, whose names are all empty, address their bank by
-    /// index alone. On HD's and the older Vita files the high half of
-    /// [`Self::flags`] is zero here.
+    /// The cue index at `+0x18` (a `u16`), naming the sound when the name is
+    /// empty: `Crossfader` start (`FUN_8125d4b6` on the Vita build) plays by
+    /// name if the first byte is set, else by this index, so the `*2048.xfx`
+    /// files (all names empty) address their bank by index alone. On HD's and
+    /// the older Vita files the high half of [`Self::flags`] is zero here.
     #[must_use]
     pub fn cue_index(&self) -> u16 {
         self.order.u16(self.raw, 0x18)
     }
 
     /// The element a kind-2 layer modulates (`+0x12`, a signed byte).
-    ///
     /// A kind-2 layer plays no sound: the update writes its gain and pitch into
     /// the slots of the layer it links to.
     #[must_use]
@@ -477,9 +439,8 @@ impl<'a> Layer<'a> {
         self.raw
     }
 
-    /// Where the gain and pitch curves sit, as offsets from the start of this
-    /// layer's record. `(0x30, 0x430)` on every file on the disc, so the curves
-    /// are the record's own tail and not shared storage.
+    /// Where the gain and pitch curves sit, as offsets from this layer's record:
+    /// `(0x30, 0x430)` on every disc file, the record's own tail.
     #[must_use]
     pub fn curve_offsets(&self) -> (usize, usize) {
         let base = self.raw.as_ptr() as usize;

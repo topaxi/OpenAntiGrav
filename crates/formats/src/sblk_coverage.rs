@@ -1,26 +1,18 @@
 //! Byte coverage of one `.bnk` sound bank.
 //!
-//! **A separate file from `sblk.rs`, deliberately.** This crate's sample-rate
-//! and SAS-pitch questions belong to another thread; nothing here touches
-//! `ASSUMED_SAMPLE_RATE`, opcode decoding, or `crates/sound/src` - only
-//! byte ranges, using [`Bank`]'s already-public fields and offsets. See
-//! `docs/formats/psp-audio.md` for what each section is.
+//! A separate file from `sblk.rs`, deliberately: nothing here touches
+//! `ASSUMED_SAMPLE_RATE`, opcode decoding or `crates/sound/src`, only byte
+//! ranges via [`Bank`]'s public fields. See `docs/formats/psp-audio.md`.
 //!
 //! # What is claimed and why the name table needs its own walk
 //!
-//! The container header, the section table, the `SBlk` block header, the cue
-//! table and the command table are all either a [`Bank`] field already or a
-//! fixed-size span the header states the length of - straightforward to
-//! re-derive the same way `oag_rcs::rcsmodel::coverage` does. The waveform
-//! descriptor table is claimed one 24-byte record at a time, only for the
-//! records [`Bank::sounds`] actually resolves - a command whose descriptor
-//! offset does not resolve is not claimed, matching what the decoder itself
-//! skips. The name table is the one region with no closed-form length: its
-//! bucket array size falls out of two header words (see
-//! `Bank::sound_names`'s own comment), but the entries it points at are
-//! reached by walking bucket chains, so this module re-walks them - not to
-//! recover a value `Bank` does not expose, but to find where each entry
-//! actually sits so it can be claimed.
+//! The container header, section table, `SBlk` header, cue table and command
+//! table are a [`Bank`] field or a fixed-size span (as `oag_rcs::rcsmodel::coverage`
+//! does). Waveform descriptors are claimed per 24-byte record, only for those
+//! [`Bank::sounds`] resolves. The name table has no closed-form length: the
+//! bucket array size follows from two header words (see `Bank::sound_names`),
+//! but entries are reached by walking bucket chains, so this re-walks them to
+//! find where each entry sits.
 
 use crate::coverage::Coverage;
 use crate::sblk::{
@@ -74,9 +66,8 @@ pub fn coverage(data: &[u8]) -> Coverage {
 }
 
 /// Claims the name table's fixed head, its bucket array, and every entry a
-/// bucket chain actually reaches - the same walk [`Bank::sound_names`] does,
-/// repeated here because that method returns decoded `{name, cue}` pairs and
-/// not the byte offsets they came from.
+/// bucket chain reaches: [`Bank::sound_names`]'s walk, repeated for the byte
+/// offsets it does not return.
 fn claim_name_table(seen: &mut Coverage, bank: &Bank, block_at: usize) {
     if bank.flags & HAS_NAME_TABLE == 0 {
         return;

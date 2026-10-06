@@ -8,24 +8,22 @@
 //! ```
 //!
 //! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
+//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure: a skipped
+//! ground-truth test is green and proves nothing.
 //!
 //! # What these are for
 //!
-//! `PS2MUSIC.WAD` declares nothing about its contents - no codec, no rate, no
-//! channel count - so the checks have to be arithmetic and statistical:
+//! `PS2MUSIC.WAD` declares no codec, rate or channel count, so the checks are
+//! arithmetic and statistical:
 //!
-//! - The entry chain **closes to the byte** on the archive's actual length,
-//!   with no padding anywhere. That is what says the second word is the size and
-//!   the third the offset rather than the other way round.
-//! - Entry sizes are divisible by 4 and mostly **not** by 8, which is a 4-byte
-//!   sample frame and not a larger alignment.
+//! - The entry chain **closes to the byte** on the archive's length with no
+//!   padding: the second word is the size and the third the offset.
+//! - Entry sizes are divisible by 4 and mostly **not** by 8: a 4-byte sample
+//!   frame, nothing larger.
 //! - Lag-1 against lag-2 neighbour distance says the frames are **interleaved
-//!   stereo**: lag 2 is the same channel one sample on, lag 1 is the other
-//!   channel at the same instant, so lag 2 has to be the smaller one. It is on
-//!   every track, and it is *not* if the probe is misaligned by one sample,
-//!   which is how the alignment was caught in the first place.
+//!   stereo**: lag 2 is the same channel one sample on, so it has to be the
+//!   smaller. True on every track, and not if the probe is misaligned by one
+//!   sample, which is how the alignment was caught.
 
 use std::path::PathBuf;
 
@@ -159,9 +157,8 @@ fn the_ps2_music_archive_chains_exactly_and_holds_interleaved_stereo() {
         "the entry chain does not close on the archive length"
     );
 
-    // A 4-byte frame and nothing coarser. If everything were divisible by 8 the
-    // sizes would be equally consistent with a larger block, and this would not
-    // be evidence for 16-bit stereo at all.
+    // A 4-byte frame and nothing coarser: if everything were divisible by 8 the
+    // sizes would equally fit a larger block and prove nothing about 16-bit stereo.
     let by_eight = dir.entries.iter().filter(|e| e.size % 8 == 0).count();
     println!("divisible by 8: {by_eight} of {}", dir.entries.len());
     assert!(
@@ -174,9 +171,8 @@ fn the_ps2_music_archive_chains_exactly_and_holds_interleaved_stereo() {
     );
 
     for (index, entry) in dir.entries.iter().enumerate() {
-        // Frame-aligned, deliberately. Probing at an offset that is not a
-        // multiple of 4 reads the stream one byte out and it looks like white
-        // noise, which is a real failure this test would otherwise reproduce.
+        // Frame-aligned, deliberately: an offset not a multiple of 4 reads the
+        // stream a byte out and looks like white noise.
         let probe = u64::from(entry.offset) + (u64::from(entry.size) / 3 / 4) * 4;
         let len = PROBE_BYTES.min(u64::from(entry.size) / 3);
         let raw = disc
@@ -220,10 +216,8 @@ fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
         .expect("PRERACE.WAD present")
         .clone();
 
-    // The point of the test: the *music* reader parses this file unchanged.
-    // `oag-wad` rejects it as "unknown WAD version 32" because the first word
-    // is an entry count, not a version - the same false negative it gives
-    // PS2MUSIC.WAD.
+    // The *music* reader parses this file unchanged; `oag-wad` rejects it as
+    // "unknown WAD version 32" because the first word is an entry count.
     let header = disc
         .read_entry_range(&archive, 0, ps2_music::HEADER_LEN as u64)
         .expect("header");
@@ -245,12 +239,10 @@ fn the_ps2_prerace_archive_chains_exactly_and_holds_dual_mono() {
         "an entry size is not a whole number of frames"
     );
 
-    // What separates this archive from the music one. Both are 16-bit stereo
-    // frames, but here the two channels carry identical bytes - a mono
-    // recording written into a stereo stream. Asserting it keeps the two
-    // archives from being conflated, and it is why the music test's
-    // `correlation > 0.3` would be a meaningless check here: it is 1.0 by
-    // construction.
+    // Both archives are 16-bit stereo frames, but here the channels carry
+    // identical bytes (mono written into a stereo stream). Asserting it keeps
+    // the two apart, and makes the music test's `correlation > 0.3` meaningless
+    // here: it is 1.0 by construction.
     let mut identical = 0usize;
     for (index, entry) in dir.entries.iter().enumerate() {
         let probe = u64::from(entry.offset) + (u64::from(entry.size) / 3 / 4) * 4;
@@ -296,20 +288,17 @@ fn trailing_silent_frames(bytes: &[u8]) -> Option<usize> {
 
 /// The sample rate, from the PS2 side alone.
 ///
-/// Nothing in the container declares a rate, and durations cannot settle it:
-/// the 32 clips span about six seconds, so nearest-neighbour matching against
-/// the PSP durations is noise - it agrees with the pairing the correlation
-/// actually establishes on 9 of 32. What does settle it is that the authoring
-/// tool padded every clip with **exactly one second** of digital silence at
-/// each end. The shortest run at either end, over all 32 clips, is 44,100
-/// frames to the frame, and no clip exceeds it by more than 80. At 48,000 Hz
-/// that pad would be 0.919 s, which is not a number anyone chooses.
+/// Nothing declares a rate, and durations cannot settle it: the 32 clips span
+/// about six seconds, so nearest-neighbour matching against the PSP durations
+/// agrees with the correlation's pairing on 9 of 32. What settles it is that
+/// the authoring tool padded every clip with **exactly one second** of digital
+/// silence at each end: the shortest run at either end over all 32 clips is
+/// 44,100 frames to the frame, none exceeding it by more than 80. At 48,000 Hz
+/// the pad would be 0.919 s, which nobody chooses.
 ///
-/// The other leg - that these are the same recordings the PSP disc carries -
-/// cannot be tested here, because re-running the cross-correlation needs an
-/// ATRAC3plus decoder this workspace does not have. See
-/// `docs/formats/ps2-voice.md` for the correlation figures and how to
-/// reproduce them.
+/// The other leg (same recordings as the PSP disc) needs an ATRAC3plus decoder
+/// this workspace lacks; see `docs/formats/ps2-voice.md` for the correlation
+/// figures and how to reproduce them.
 #[test]
 #[ignore = "needs a PS2 disc image under data/images"]
 fn the_prerace_clips_are_padded_to_one_second_at_44100() {
@@ -357,9 +346,9 @@ fn the_prerace_clips_are_padded_to_one_second_at_44100() {
         tails.push(trail);
     }
 
-    // Bounds first, so a single odd clip names itself rather than being hidden
-    // in the minimum below. The slack is the speech starting or ending on a
-    // zero crossing: 11 frames at the head and 80 at the tail, measured.
+    // Bounds first, so one odd clip names itself rather than hiding in the
+    // minimum. The slack is speech starting or ending on a zero crossing: 11
+    // frames at the head and 80 at the tail, measured.
     for (index, &lead) in leads.iter().enumerate() {
         assert!(
             (VOICE_RATE..VOICE_RATE + 256).contains(&lead),
@@ -373,9 +362,9 @@ fn the_prerace_clips_are_padded_to_one_second_at_44100() {
         );
     }
 
-    // The exact part. A pad that merely *covers* one second would leave the
-    // minimum above 44,100; landing on it to the frame at both ends is what
-    // says the tool was asked for one second at 44,100 Hz.
+    // A pad that merely *covers* one second would leave the minimum above
+    // 44,100; landing on it at both ends says the tool was asked for one second
+    // at 44,100 Hz.
     assert_eq!(
         leads.iter().copied().min(),
         Some(VOICE_RATE),
@@ -397,11 +386,8 @@ struct RiffFormat {
     block_align: u16,
 }
 
-/// Reads `fmt ` out of a RIFF/WAVE header.
-///
-/// Hand-rolled rather than pulled from a crate because this is the only place
-/// in `oag-formats` that needs it, and the check has to run against bytes taken
-/// straight off the disc.
+/// Reads `fmt ` out of a RIFF/WAVE header. Hand-rolled: the only place in
+/// `oag-formats` that needs it, on bytes straight off the disc.
 fn riff_format(blob: &[u8]) -> Option<RiffFormat> {
     fn word(blob: &[u8], at: usize) -> u32 {
         u32::from_le_bytes([blob[at], blob[at + 1], blob[at + 2], blob[at + 3]])
@@ -432,14 +418,12 @@ fn riff_format(blob: &[u8]) -> Option<RiffFormat> {
     None
 }
 
-/// The PSP half of the pre-race set: 32 mono 44,100 Hz ATRAC3plus streams.
-///
-/// This is the other endpoint of the cross-correlation in
-/// `docs/formats/ps2-voice.md`. It matters because the "32 against 32" count
-/// is only evidence if the PSP population really is 32 - and nothing but the
-/// RIFF headers says where it starts and stops. `Data.wad` also holds a
-/// *second* ATRAC3plus population at half the bitrate, and a naive size filter
-/// would have merged the two or clipped this one.
+/// The PSP half of the pre-race set: 32 mono 44,100 Hz ATRAC3plus streams, the
+/// other endpoint of the cross-correlation in `docs/formats/ps2-voice.md`. "32
+/// against 32" is only evidence if the PSP population really is 32, and only
+/// the RIFF headers say where it stops: `Data.wad` also holds a *second*
+/// ATRAC3plus population at half the bitrate that a naive size filter would
+/// merge or clip.
 /// Surveys one PSP disc's `Data.wad` and returns the pre-race run's name hashes.
 fn psp_prerace_hashes(image_name: &str, expected_first: usize) -> Option<Vec<u32>> {
     let path = image(image_name)?;
@@ -461,11 +445,9 @@ fn psp_prerace_hashes(image_name: &str, expected_first: usize) -> Option<Vec<u32
         .expect("directory");
     let dir = wad::Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
 
-    // Every stream in the archive declares `WAVE_FORMAT_EXTENSIBLE` with the
-    // ATRAC3plus subformat GUID and 44,100 Hz. Three populations sit behind
-    // that, and it takes both the channel count *and* the bitrate to separate
-    // them - bitrate alone pulls in 28 stereo streams scattered through the
-    // archive.
+    // Every stream declares `WAVE_FORMAT_EXTENSIBLE` with the ATRAC3plus GUID at
+    // 44,100 Hz; three populations sit behind that, separated by channel count
+    // *and* bitrate (bitrate alone pulls in 28 scattered stereo streams).
     let mut voice = Vec::new();
     let mut half_rate = 0usize;
     let mut stereo = 0usize;
@@ -502,8 +484,7 @@ fn psp_prerace_hashes(image_name: &str, expected_first: usize) -> Option<Vec<u32
         "{image_name}: the pre-race set should be exactly 32 streams, matching PRERACE.WAD"
     );
 
-    // Contiguous, so the count is a population and not a scatter that happens
-    // to total 32.
+    // Contiguous, so the count is a population, not a scatter that totals 32.
     let first = voice[0].0;
     assert!(
         voice.iter().enumerate().all(|(n, &(i, _))| i == first + n),
@@ -520,9 +501,8 @@ fn psp_prerace_hashes(image_name: &str, expected_first: usize) -> Option<Vec<u32
 #[test]
 #[ignore = "needs a PSP disc image under data/images"]
 fn the_psp_prerace_streams_are_32_mono_atrac3plus_at_44100() {
-    // The EU and USA builds hold different numbers of entries, so the run sits
-    // one index apart; the *hashes* do not move, which is what says the two
-    // builds ship the same 32 lines rather than 32 lines each.
+    // EU and USA hold different entry counts, so the run sits one index apart;
+    // the *hashes* do not move: the builds ship the same 32 lines.
     let eu = psp_prerace_hashes("pulse-psp-eu.chd", 867);
     let usa = psp_prerace_hashes("pulse-psp-usa.chd", 868);
 
@@ -598,13 +578,11 @@ fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey)
 
         if !bank.name.is_empty() {
             into.named += 1;
-            // The field is a hand-chosen label, not the path stem: the
-            // executable gives `frontend.bnk` the label `FRNTEND` and
-            // `generaltrack.bnk` the label `gentrak`, neither of which is a
-            // prefix of its stem. So only the labels that happen to equal
-            // their stem can hash back, and on this corpus those are exactly
-            // the ones of 6 characters or fewer - a filter that holds by
-            // coincidence rather than by rule. See docs/formats/psp-audio.md.
+            // The field is a hand-chosen label, not the path stem: the executable
+            // gives `frontend.bnk` the label `FRNTEND` and `generaltrack.bnk`
+            // `gentrak`. Only labels equal to their stem hash back, which on this
+            // corpus is exactly those of 6 characters or fewer: a coincidence,
+            // not a rule. See docs/formats/psp-audio.md.
             if bank.name.len() <= 6 {
                 into.name_candidates += 1;
                 let path = format!(r"Data\Sound\{}.bnk", bank.name);
@@ -612,8 +590,8 @@ fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey)
             }
         }
 
-        // Decoding has to produce exactly the documented sample count, which is
-        // what says the block size and the samples-per-block are both right.
+        // Decoding must give exactly the documented sample count: the block size
+        // and samples-per-block are both right.
         let pcm = sblk::decode_adpcm(bank.waveforms);
         assert_eq!(
             pcm.len(),
@@ -621,11 +599,10 @@ fn survey_banks(disc: &mut DiscImage, archive_path: &str, into: &mut BankSurvey)
             "{archive_path} entry {index}: wrong sample count"
         );
 
-        // In-spec header bytes say the *framing* is PS-ADPCM; they say nothing
-        // about the filters or the shift direction being right. Roughness does:
-        // a wrong decode of a 4-bit differential codec is white noise, whose
-        // mean step is about 1.4 times its RMS, and real audio is far below
-        // that. Both are computed on the same samples.
+        // In-spec header bytes say the *framing* is PS-ADPCM, not that the
+        // filters or shift direction are right. Roughness does: a wrong decode
+        // of a 4-bit differential codec is white noise (mean step about 1.4
+        // times RMS), real audio far below. Both on the same samples.
         if pcm.len() > 1024 {
             let steps: f64 = pcm
                 .windows(2)
@@ -674,12 +651,11 @@ fn every_psp_sound_bank_frames_exactly_and_holds_ps_adpcm() {
         "only {} banks found, expected at least {MIN_BANKS}",
         survey.banks
     );
-    // `Bank::parse` already refuses anything whose framing does not close, so
-    // reaching here at all is the framing result. These are about the payload.
-    //
-    // A byte drawn at random is in spec 5/16 of the time for the predictor and
-    // shift together, and its flag is one of eight values 1/32 of the time. At
-    // half a million blocks, anything near 100% is only explicable as PS-ADPCM.
+    // `Bank::parse` refuses anything whose framing does not close, so reaching
+    // here is the framing result; these are about the payload. A random byte is
+    // in spec 5/16 of the time for predictor and shift together and has one of
+    // eight flag values 1/32 of the time, so at half a million blocks anything
+    // near 100% can only be PS-ADPCM.
     assert!(
         survey.in_spec * 1000 >= survey.blocks * 999,
         "{} of {} blocks have an in-spec predictor and shift",
@@ -693,9 +669,8 @@ fn every_psp_sound_bank_frames_exactly_and_holds_ps_adpcm() {
         survey.blocks
     );
     // Every bank whose name survived the 7-character field resolves to its own
-    // archive entry, which is what says the name field is a name.
-    // Decoded audio, not noise. The bound is deliberately loose: percussion
-    // and engine loops are genuinely rough, and the point is the gap to 1.41.
+    // archive entry: the name field is a name. The roughness bound is loose
+    // (percussion and engine loops are rough); the point is the gap to 1.41.
     assert!(
         worst < 1.0,
         "a bank decoded with a mean step of {worst:.3} times its RMS, which is noise"
@@ -711,12 +686,10 @@ fn every_psp_sound_bank_frames_exactly_and_holds_ps_adpcm() {
 const FRONTEND_HASH: u32 = 0x75a9_1641;
 
 /// The seven waveform spans `frontend.bnk`'s ten key-on commands resolve to.
-///
-/// This bank is the one the format page found from the data side, by searching
-/// for a set of `(offset, length)` pairs that tile the waveform section. It is
-/// asserted literally here because it is the case the rule was checked against
-/// before the rule was known, so it is the one place a regression in the
-/// arithmetic would be caught by a number rather than by a property.
+/// The format page found this bank from the data side, searching for
+/// `(offset, length)` pairs that tile the waveform section. Asserted literally
+/// as the case the rule was checked against before it was known, so a
+/// regression is caught by a number, not a property.
 const FRONTEND_SPANS: [(u32, u32); 7] = [
     (0, 272),
     (272, 912),
@@ -727,14 +700,12 @@ const FRONTEND_SPANS: [(u32, u32); 7] = [
     (14160, 8864),
 ];
 
-/// Cue names that appear verbatim as `Sound_Play` arguments in the executable.
-///
-/// `"SPEEDUPPAD"` is from `docs/ghidra/functions/psp-pulse-usa/pads.md`,
-/// `"~ENGINE"` from `exhaust.md` and `"ABSORB"` from `contact-response.md`.
-/// None was known from the bank side, so finding each one in a decoded name
-/// table is an independent confirmation that the table is being read correctly.
-/// A wrong stride or a wrong base cannot produce a string the disassembler
-/// found on its own.
+/// Cue names that appear verbatim as `Sound_Play` arguments in the executable:
+/// `"SPEEDUPPAD"` (`docs/ghidra/functions/psp-pulse-usa/pads.md`), `"~ENGINE"`
+/// (`exhaust.md`), `"ABSORB"` (`contact-response.md`). None was known from the
+/// bank side, so finding each in a decoded name table independently confirms
+/// the table is read correctly: a wrong stride or base cannot produce a string
+/// the disassembler found on its own.
 const CUE_STRINGS: [&str; 3] = ["SPEEDUPPAD", "~ENGINE", "ABSORB"];
 
 #[derive(Default)]
@@ -812,9 +783,8 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
         if sound.length == 0 || end > section {
             into.outside += 1;
         }
-        // A wrong base breaks this; a bank with holes in it does not. So it is
-        // the check that separates "the rule is wrong" from "this bank is
-        // simply not covered end to end".
+        // A wrong base breaks this; a bank with holes does not. It separates
+        // "the rule is wrong" from "this bank is not covered end to end".
         if !sound.offset.is_multiple_of(sblk::ADPCM_BLOCK_LEN as u32)
             || !sound.length.is_multiple_of(sblk::ADPCM_BLOCK_LEN as u32)
         {
@@ -822,9 +792,8 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
         }
     }
 
-    // Deduplicated, because a bank reusing one waveform under two commands is
-    // expected - `frontend.bnk` does it three times - and identical spans are
-    // not an overlap.
+    // Deduplicated: a bank reusing one waveform under two commands is expected
+    // (`frontend.bnk` three times) and identical spans are not an overlap.
     let mut spans: Vec<(u32, u32)> = sounds.iter().map(|s| (s.offset, s.length)).collect();
     spans.sort_unstable();
     spans.dedup();
@@ -862,9 +831,8 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
     if names.len() == usize::from(bank.cue_count) {
         into.name_count_agrees += 1;
     }
-    // Stronger than the count: the names have to index every cue exactly once.
-    // Equal counts with every index in range would still allow two names on one
-    // cue and another cue unnamed.
+    // Stronger than the count: equal counts with every index in range would
+    // still allow two names on one cue and another cue unnamed.
     let mut indices: Vec<u16> = names.iter().map(|entry| entry.cue).collect();
     indices.sort_unstable();
     if indices == (0..bank.cue_count).collect::<Vec<u16>>() {
@@ -899,16 +867,14 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
         into.frontend_matches += 1;
     }
 
-    // The sharpest check available, and one the command table knows nothing
-    // about. PS-ADPCM carries its own terminator in each block's flag byte -
-    // 1 end, 3 loop end, 5 start and end, 7 end and mute - so if these spans
-    // are really where the encoder stopped, every span has one at its tail and
-    // none in its body. A span boundary off by a single block would put a
-    // terminator in the middle of its neighbour.
+    // The sharpest check, which the command table knows nothing about:
+    // PS-ADPCM carries its own terminator in each block's flag byte (1 end, 3
+    // loop end, 5 start and end, 7 end and mute), so if these spans are where
+    // the encoder stopped, each has one at its tail and none in its body. A
+    // boundary off by one block puts one mid-neighbour.
     for &(offset, length) in &spans {
-        // Indexed through `get` because the span bounds are what is under test:
-        // an out-of-range one is already counted above, and a panic here would
-        // replace that count with an index message.
+        // Through `get` because the span bounds are under test: an out-of-range
+        // one is counted above, and a panic would replace that count.
         let Some(span) = bank
             .waveforms
             .get(offset as usize..)
@@ -926,19 +892,18 @@ fn survey_bank_sounds(bank: &Bank<'_>, name_hash: u32, into: &mut SoundSurvey) {
             .map(|(index, _)| blocks - 1 - index)
             .max();
         match last {
-            // The terminator sits on the final block or the one before it. The
-            // penultimate case is the common one: the encoder flags the last
-            // block it wrote and appends a block of run-out after it.
+            // On the final block or the one before it; the penultimate case is
+            // common: the encoder flags the last block it wrote, then appends
+            // run-out.
             Some(0 | 1) => into.terminated += 1,
             Some(_) => into.terminated_early += 1,
             None => into.unterminated += 1,
         }
     }
 
-    // The point of extracting a span is that it decodes on its own. Each one
-    // gets the roughness check the whole-section decode already gets: a span
-    // taken at a wrong offset is out of phase with the block grid and decodes
-    // to noise.
+    // Each span decodes on its own, with the roughness check the whole-section
+    // decode gets: a wrong offset is out of phase with the block grid and
+    // decodes to noise.
     for &(offset, length) in &spans {
         let Some(span) = bank
             .waveforms
@@ -1036,20 +1001,18 @@ fn survey_sounds_in(disc: &mut DiscImage, archive_path: &str, into: &mut SoundSu
 /// The per-sound rule, run against every bank on the disc.
 ///
 /// `Scream_OpKeyOn` resolves `parameter_block + (command_word & 0xffffff)` to a
-/// 24-byte descriptor and reads a waveform offset and length out of its last
-/// two words. That is a claim about the data, so it can be checked without a
-/// runtime, and the checks that discriminate are the ones a wrong base cannot
+/// 24-byte descriptor and reads a waveform offset and length from its last two
+/// words. That is checkable without a runtime, by checks a wrong base cannot
 /// pass by luck:
 ///
 /// - every span is a whole number of PS-ADPCM blocks at both ends;
-/// - the distinct spans number exactly the header's `waveform_count`, a figure
-///   the rule never reads;
+/// - the distinct spans number exactly the header's `waveform_count`, which the
+///   rule never reads;
 /// - they tile the waveform section with no gap and no partial overlap.
 ///
-/// The name table gets the same treatment: its entry count has to equal
-/// `cue_count`, every recovered index has to be a valid cue, and the strings
-/// the executable passes to `Sound_Play` at named call sites have to turn up in
-/// it.
+/// The name table likewise: its entry count equals `cue_count`, every index is
+/// a valid cue, and the strings the executable passes to `Sound_Play` turn up
+/// in it.
 #[test]
 #[ignore = "needs a PSP disc image under data/images"]
 fn every_psp_sound_bank_splits_into_waveforms_that_tile_it() {
@@ -1108,9 +1071,8 @@ fn every_psp_sound_bank_splits_into_waveforms_that_tile_it() {
         "span roughness    mean {mean:.3}, worst {worst:.3} over {} spans (white noise is ~1.41)",
         survey.roughness.len()
     );
-    // Deduplicated on the length, because the track banks share an ambience
-    // library: the same handful of source waveforms turn up in four circuits
-    // apiece, so the raw count overstates how many distinct sounds are rough.
+    // Deduplicated on length: the track banks share an ambience library, so the
+    // raw count overstates how many distinct sounds are rough.
     let mut noisy_lengths: Vec<&str> = survey
         .noisy
         .iter()
@@ -1185,11 +1147,10 @@ fn every_psp_sound_bank_splits_into_waveforms_that_tile_it() {
         survey.cue_strings_found
     );
 
-    // The codec's own framing agrees with the command table's arithmetic. This
-    // is the check that cannot be passed by a rule that merely partitions the
-    // section plausibly: a terminator is one flag byte in eight, so putting one
-    // in the tail of every span by luck is not something an off-by-a-block
-    // reading does.
+    // The codec's framing agrees with the command table's arithmetic, which a
+    // rule that merely partitions the section plausibly cannot pass: a
+    // terminator is one flag byte in eight, so a tail terminator on every span
+    // is not luck from an off-by-a-block reading.
     assert_eq!(
         survey.terminated_early, 0,
         "a span carries a PS-ADPCM terminator in its body, so its end is in the wrong place"
@@ -1199,12 +1160,10 @@ fn every_psp_sound_bank_splits_into_waveforms_that_tile_it() {
         "a span has no PS-ADPCM terminator, so it does not end where the encoder stopped"
     );
 
-    // Every span decodes to audio on its own, not just the section as a whole.
-    // The bound is on the mean rather than the worst: a handful of spans are
-    // genuinely as flat as noise, because that is what they are - wind,
-    // ambience, and explosions, identified by the name table above them. The
-    // whole-section test's 0.408 worst is those spans averaged with the rest of
-    // their bank, so per-span figures are expected to be higher, not lower.
+    // Every span decodes to audio on its own. The bound is on the mean, not the
+    // worst: a few spans are as flat as noise because they are wind, ambience
+    // and explosions (named by the table above). The whole-section 0.408 worst
+    // averages them with their bank, so per-span figures run higher.
     assert!(
         mean < 0.5,
         "the mean span decoded with a mean step of {mean:.3} times its RMS, which is noise"

@@ -1,8 +1,8 @@
 //! A synthetic archive, built to the layout `docs/formats/psarc.md` records.
 //!
-//! The real corpus is checked in `crates/formats/tests/psarc_ground_truth.rs`,
-//! which needs a disc image. These tests exist so the block walk, the
-//! block-width probe and the digest can fail on a machine that has none.
+//! The real corpus is `crates/formats/tests/psarc_ground_truth.rs`, which needs
+//! a disc image. These tests let the block walk, width probe and digest fail on
+//! a machine that has none.
 
 use super::{
     Directory, ENTRY_LEN, Entry, Error, HEADER_LEN, Header, MAGIC, parse_manifest, path_digest,
@@ -151,23 +151,17 @@ fn a_stored_block_is_a_full_block_of_raw_bytes() {
 
 /// A stored block whose first byte happens to be `0x78` is **still raw**.
 ///
-/// The bug this pins, in full, because it is invisible by inspection: a short
-/// block may be either a deflate stream or a payload that did not shrink, and
-/// `0x78` is what tells them apart. A **full-size** block is raw by definition -
-/// a stored length of zero is the table saying so - and asking the same
-/// question of it is asking a question with no meaning, because `0x78` is an
-/// ordinary byte in the middle of arbitrary content.
-///
-/// It bit on real content and not on a fixture:
-/// `Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry 16 on
-/// `hdfury-ps3-eu-dec.iso`, its block 574 is a raw MP3 block beginning `78`,
-/// and the entry was unreadable - one track of fifteen, silently missing from
-/// the soundtrack listing rather than reported. `scripts/psarc.py` never had
-/// the bug: it emits a full block and moves on without testing anything.
+/// A short block may be a deflate stream or a payload that did not shrink, and
+/// `0x78` tells them apart; a **full-size** block is raw by definition (stored
+/// length zero), and `0x78` is an ordinary byte in arbitrary content. It bit on
+/// real content: `Data\Music\Exceeder\music_stereo.mp3` is `DATA01.PSARC` entry
+/// 16 on `hdfury-ps3-eu-dec.iso`, its block 574 a raw MP3 block beginning `78`,
+/// one track of fifteen silently missing from the soundtrack listing.
+/// `scripts/psarc.py` never had the bug: it emits a full block without testing.
 #[test]
 fn a_full_stored_block_beginning_with_the_zlib_marker_is_not_inflated() {
-    // Every byte of the body is `0x78`, so *every* block of it opens on the
-    // marker - the fixture is the pathological case rather than a lucky one.
+    // Every body byte is `0x78`, so every block opens on the marker: the
+    // pathological case, not a lucky one.
     let body = vec![super::ZLIB_CMF; 96];
     let archive = build(32, 2, &[planned("/raw.bin", body.clone(), true)]);
 
@@ -203,13 +197,12 @@ fn every_entry_carries_md5_of_its_uppercased_path() {
     );
 }
 
-/// The width is probed, and the probe is only ever *sound* one way round.
+/// The width is probed, and the probe is only *sound* one way round.
 ///
-/// A table of an odd number of bytes cannot be pairs, so a 3-byte width is
-/// recovered. An even one can always be read as pairs, so a 4-byte width is
-/// genuinely undecidable from the table alone - narrowest wins, and this test
-/// pins that rather than pretending otherwise. Nothing on the one disc this
-/// project holds exercises either branch: all seven archives are 2.
+/// An odd table length cannot be pairs, so a 3-byte width is recovered. An even
+/// one can always be read as pairs, so a 4-byte width is undecidable and the
+/// narrowest wins; this pins that. No disc here exercises either branch: all
+/// seven archives are 2.
 #[test]
 fn the_block_width_probe_recovers_an_odd_table_and_prefers_the_narrowest_otherwise() {
     // Five blocks at three bytes each is fifteen: not divisible by two.
@@ -274,15 +267,12 @@ fn an_entry_naming_a_block_past_the_table_is_refused() {
     );
 }
 
-/// A single implausible `first_block` (real digest, real size, but a block
-/// index no candidate width could ever cover) does not take the whole
-/// directory down with it.
+/// A single implausible `first_block` (real digest and size, a block index no
+/// width could cover) does not take the whole directory down.
 ///
-/// Pins the `omega-ps4-eu` fix directly: `read_block_table` excludes an
-/// entry like this from its own `highest`-block computation, and
-/// `Directory::parse` no longer validates every entry's block range up
-/// front, so the corrupt row surfaces as a read error on its own path
-/// instead of refusing the other entries.
+/// Pins the `omega-ps4-eu` fix: `read_block_table` excludes such an entry from
+/// its `highest` computation and `Directory::parse` no longer validates every
+/// block range, so the bad row fails only its own path.
 #[test]
 fn an_implausible_first_block_fails_its_own_entry_not_the_whole_directory() {
     let mut archive = build(
@@ -294,8 +284,8 @@ fn an_implausible_first_block_fails_its_own_entry_not_the_whole_directory() {
         ],
     );
 
-    // Entry 1 ("/a.bin") is HEADER_LEN + 1 * ENTRY_LEN bytes in; its
-    // first_block field is the four bytes at +0x10 within that row.
+    // Entry 1 ("/a.bin") is HEADER_LEN + 1 * ENTRY_LEN in; its first_block is
+    // the four bytes at +0x10 of that row.
     let entry_1_first_block = HEADER_LEN + ENTRY_LEN + 0x10;
     archive[entry_1_first_block..entry_1_first_block + 4].copy_from_slice(&u32::MAX.to_be_bytes());
 
@@ -362,13 +352,10 @@ fn a_digest_shared_by_two_entries_matches_the_first_one_in_entry_order() {
     );
 }
 
-/// The regression this guards, even without a version field to mutate any
-/// more: `parse_manifest` takes no `Header` at all now, precisely because a
-/// version-based dispatch here once regressed every Vita-backed path lookup
-/// on `main` - `omega-ps4-eu`'s archives declare version 1.4 and are
-/// NUL-delimited, but Vita `2048`'s `data.psarc` also declares 1.4 and is
-/// newline-delimited throughout, zero `\x00` bytes anywhere. This case, real
-/// CRLF and no NUL byte at all, is exactly Vita's shape.
+/// `parse_manifest` takes no `Header`, because a version-based dispatch once
+/// regressed every Vita-backed path lookup: `omega-ps4-eu`'s 1.4 archives are
+/// NUL-delimited but Vita `2048`'s 1.4 `data.psarc` is newline-delimited with
+/// no `\x00`. Real CRLF and no NUL is Vita's shape.
 #[test]
 fn the_manifest_tolerates_crlf_and_blank_lines() {
     assert_eq!(
@@ -388,9 +375,8 @@ fn a_manifest_with_no_newline_at_all_is_read_as_nul_delimited() {
 
 #[test]
 fn a_zero_digest_placeholder_row_and_an_orphaned_manifest_path_are_both_dropped() {
-    // entry 1 is a live file, entry 2 is a fully-zeroed placeholder row (no
-    // path of its own), and the manifest lists a path this archive has no
-    // entry for at all - the shape `omega-ps4-eu`'s archives are full of.
+    // Entry 1 is live, entry 2 a zeroed placeholder row, and the manifest lists
+    // a path with no entry: the shape `omega-ps4-eu`'s archives are full of.
     let live_path = "Data/art/ship.gnf";
     let entries = vec![
         Entry {
@@ -429,9 +415,8 @@ fn a_zero_digest_placeholder_row_and_an_orphaned_manifest_path_are_both_dropped(
 }
 
 /// The well-behaved case is a corollary of digest matching, not a separate
-/// code path: every entry's digest already matches its corresponding
-/// manifest line's, so matching by digest reproduces the exact positional
-/// order this project's PS3 and Vita archives actually hold.
+/// path: every digest matches its manifest line's, so matching by digest
+/// reproduces the positional order PS3 and Vita archives hold.
 #[test]
 fn a_positionally_ordered_manifest_still_resolves_in_order_through_digest_matching() {
     let paths = ["/data/one.txt", "/data/two.bin", "/data/three.xml"];

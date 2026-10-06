@@ -73,9 +73,8 @@ fn a_race_cell_carries_track_class_and_skill() {
     assert_eq!(race.skill_for_difficulty(Difficulty::Hard), Some(2.5));
 }
 
-/// A `Tournament` cell names no `track` at all - its legs come from
-/// `<TournamentTrack>` - and its `skillEasy`/`skillHard` are absent, which the
-/// original's own parser is documented to default from `skill`.
+/// A `Tournament` cell names no `track` (its legs are `<TournamentTrack>`) and
+/// no `skillEasy`/`skillHard`, which the original's parser defaults from `skill`.
 #[test]
 fn a_tournament_cell_has_no_track_and_defaults_its_skill_spread() {
     let grid = parse(FIXTURE).expect("parses");
@@ -99,7 +98,7 @@ fn a_tournament_cell_has_no_track_and_defaults_its_skill_spread() {
     );
 }
 
-/// `Elimination` authors no `laps` attribute whatsoever - not `"0"`, absent.
+/// `Elimination` authors no `laps` attribute: absent, not `"0"`.
 #[test]
 fn elimination_has_no_laps_attribute() {
     let grid = parse(FIXTURE).expect("parses");
@@ -109,8 +108,8 @@ fn elimination_has_no_laps_attribute() {
     assert_eq!((elim.gold, elim.silver, elim.bronze), (10, 7, 5));
 }
 
-/// `Zone`'s `class="Zone"` is real text and is not one of the four speed
-/// classes - `speed_class()` reads it as `None` rather than erroring.
+/// `Zone`'s `class="Zone"` is real text, not a speed class: `speed_class()`
+/// reads `None` rather than erroring.
 #[test]
 fn zone_class_is_not_a_speed_class() {
     let grid = parse(FIXTURE).expect("parses");
@@ -123,14 +122,11 @@ fn zone_class_is_not_a_speed_class() {
     assert_eq!(zone.skill_for_difficulty(Difficulty::Easy), None);
 }
 
-/// **Changed 2026-09-14**: an unrecognised `mode=` used to be a hard parse
-/// error (`Error::UnknownMode`). Wipeout HD's own `"NitroBattle"` and
-/// `"Detonator"` forced the same "keep it raw" treatment [`Cell::class`]
-/// already gets for `Zone`'s `"Zone"` - see the module docs' HD section and
-/// [`Mode::Other`]. No shipped Pulse cell ever authors an unrecognised mode
-/// (see `race_campaign_ground_truth.rs`'s own census), so this is a change
-/// to the parser's behaviour on data that has never been observed, not a
-/// change to what any real Pulse cell reads as.
+/// **Changed 2026-09-14**: an unrecognised `mode=` used to be a hard parse error
+/// (`Error::UnknownMode`). HD's `"NitroBattle"` and `"Detonator"` forced the
+/// same keep-it-raw treatment [`Cell::class`] gives `"Zone"`; see [`Mode::Other`]
+/// and the module docs' HD section. No shipped Pulse cell authors one
+/// (`race_campaign_ground_truth.rs`'s census), so no real Pulse read changes.
 #[test]
 fn an_unknown_mode_is_kept_raw_rather_than_erroring() {
     let bad = FIXTURE.replace(r#"mode="Race""#, r#"mode="Nonsense""#);
@@ -181,11 +177,9 @@ fn definition_xml_lists_its_load_xml_entries() {
     );
 }
 
-// `Cell_EvaluateMedal` tests. The fixture's `Race` cell targets 1/2/3, its
-// `Elimination` cell targets 10/7/5, its `Zone` cell targets 20/17/15 - see
-// `FIXTURE` above. Every exact-tie boundary below (`value == target`) is
-// covered directly, since `evaluate_medal`'s `<=`/`>=` settle a tie without
-// needing a "chosen, not measured" label.
+// `Cell_EvaluateMedal` tests. Fixture targets: `Race` 1/2/3, `Elimination`
+// 10/7/5, `Zone` 20/17/15 (see `FIXTURE`). Every exact-tie boundary
+// (`value == target`) is covered.
 
 #[test]
 fn a_race_position_hits_each_tier_at_its_exact_target() {
@@ -218,10 +212,8 @@ fn a_zone_count_hits_each_tier_at_its_exact_target() {
 }
 
 /// The guard: an `Elimination` value between the silver and bronze targets
-/// only scores bronze because the comparison is flipped (`value >=
-/// target`). Dropping the flip would compare `6 <= 10` instead and wrongly
-/// award gold - this is the case that would pass a test written from the
-/// same wrong "less is better" assumption everywhere else in this file.
+/// scores bronze only because the comparison is flipped (`value >= target`);
+/// without it `6 <= 10` would wrongly award gold.
 #[test]
 fn elimination_direction_is_flipped_not_the_default_less_is_better() {
     let grid = parse(FIXTURE).expect("parses");
@@ -229,9 +221,8 @@ fn elimination_direction_is_flipped_not_the_default_less_is_better() {
     assert_eq!(elim.evaluate_medal(6), Some(Medal::Bronze));
 }
 
-/// The same guard for `Zone`: 16 zones clears only the bronze floor
-/// (`16 >= 15`, but `16 < 17`). Un-flipped, `16 <= 20` would wrongly read as
-/// gold.
+/// The same guard for `Zone`: 16 zones clears only bronze (`16 >= 15`, `16 <
+/// 17`); un-flipped, `16 <= 20` would read as gold.
 #[test]
 fn zone_direction_is_flipped_not_the_default_less_is_better() {
     let grid = parse(FIXTURE).expect("parses");
@@ -239,10 +230,8 @@ fn zone_direction_is_flipped_not_the_default_less_is_better() {
     assert_eq!(zone.evaluate_medal(16), Some(Medal::Bronze));
 }
 
-/// The mirror guard, for a mode the flip must **not** apply to: a `Race`
-/// finishing position of 3 is bronze under the ordinary `<=` direction
-/// (`3 <= 3`). If the flip were wrongly extended to `Race`, `3 >= 1` would
-/// misread it as gold instead.
+/// The mirror guard: a `Race` position of 3 is bronze under `<=` (`3 <= 3`);
+/// the flip wrongly extended to `Race` would read `3 >= 1` as gold.
 #[test]
 fn race_direction_is_not_flipped() {
     let grid = parse(FIXTURE).expect("parses");
@@ -261,9 +250,8 @@ fn zero_and_the_unset_sentinel_are_no_result_regardless_of_mode() {
     assert_eq!(elim.evaluate_medal(0xFFFF_FFFF), None);
 }
 
-/// `<= 0`, not only `== 0`: this reimplementation's own deliberately wider
-/// guard - see [`Cell::evaluate_medal`]'s own doc for why a negative value
-/// is treated the same as "unset" rather than reaching the comparison loop.
+/// `<= 0`, not only `== 0`: the deliberately wider guard (see
+/// [`Cell::evaluate_medal`]) treating a negative as "unset".
 #[test]
 fn a_negative_value_is_also_no_result() {
     let grid = parse(FIXTURE).expect("parses");
@@ -284,10 +272,9 @@ fn gold_is_the_smallest_ord_value() {
     assert!(Medal::Silver < Medal::Bronze);
 }
 
-/// A second, small grid - `gridW`, matching `FIXTURE`'s own `<Unlock
-/// Grid="GridW"/>` row - so [`grid_points_met`] below has two real `Grid`s
-/// to pick between by name rather than a single-grid fixture that could
-/// pass by only ever finding `grids[0]`.
+/// A second small grid (`gridW`, matching `FIXTURE`'s `<Unlock Grid="GridW"/>`)
+/// so [`grid_points_met`] must pick between two grids by name, not pass by
+/// finding `grids[0]`.
 const SMALL_GRID_FIXTURE: &str = r#"
 <PI_Grid name="gridW">
   <Values RequiredPoints="5" Locked="false"></Values>
@@ -319,9 +306,8 @@ fn points_earned_sums_medal_points_by_cell_name() {
     assert_eq!(grid.points_earned(&both_silver), 4);
 }
 
-/// `Unlock_GridPointsMet`'s own case-insensitive name match - `"GridW"`, the
-/// mixed case an `<Unlock Grid="...">` row authors, against `gridW`'s own
-/// lowercase `name` - and its threshold, against `SMALL_GRID_FIXTURE`'s
+/// `Unlock_GridPointsMet`'s case-insensitive name match (`"GridW"` against
+/// `gridW`) and its threshold, against `SMALL_GRID_FIXTURE`'s
 /// `RequiredPoints="5"` (max `6`, two Venom `Race` cells).
 #[test]
 fn grid_points_met_matches_the_named_grid_case_insensitively() {
@@ -351,11 +337,9 @@ fn grid_points_met_fails_below_the_threshold() {
     assert!(!grid_points_met(&grids, "gridW", &one_gold));
 }
 
-/// A standalone fixture rather than an addition to `FIXTURE` above, since
-/// every other test there indexes `grid.cells` positionally and a fifth cell
-/// would shift them all. Mirrors `DATA00.PSARC`'s own shape for an
-/// `Elimination` cell: per-difficulty `Easy`/`Medium`/`Hard` targets (dummy
-/// `1`/`2`/`3` on every rung, per `grid8_3_2`'s own measured values) plus a
+/// A standalone fixture, since other tests index `grid.cells` positionally.
+/// Mirrors `DATA00.PSARC`'s `Elimination` cell: per-difficulty targets (dummy
+/// `1`/`2`/`3` on every rung, per `grid8_3_2`) plus a
 /// `NitroElimNovice`/`Skilled`/`Elite` triple.
 const NITRO_FIXTURE: &str = r#"
 <PI_Grid name="grid8">
@@ -379,10 +363,9 @@ const NITRO_FIXTURE: &str = r#"
 </PI_Grid>
 "#;
 
-/// [`Cell::nitro_elimination_target_for_difficulty`] reads the triple by
-/// rung, `0` novice through `2` elite - the measured shape, see the method's
-/// own doc comment for what is and is not established about how the
-/// executable turns this one number into a medal.
+/// [`Cell::nitro_elimination_target_for_difficulty`] reads the triple by rung,
+/// `0` novice through `2` elite; see the method for what is not established
+/// about turning it into a medal.
 #[test]
 fn nitro_elimination_target_reads_by_rung() {
     let grid = parse(NITRO_FIXTURE).expect("parses");
@@ -402,8 +385,7 @@ fn nitro_elimination_target_reads_by_rung() {
     );
 }
 
-/// A cell with no `<NitroElimNovice>` at all - every cell in `FIXTURE` above
-/// - reads `None`, not a panic or a default.
+/// A cell with no `<NitroElimNovice>` (every `FIXTURE` cell) reads `None`.
 #[test]
 fn nitro_elimination_target_is_none_without_the_triple() {
     let grid = parse(FIXTURE).expect("parses");

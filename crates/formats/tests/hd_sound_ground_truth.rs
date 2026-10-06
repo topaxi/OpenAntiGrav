@@ -1,24 +1,16 @@
 //! Wipeout HD's `.bnk` banks, which are Pulse's container byte-swapped whole.
 //!
-//! **`#[ignore]`d and never run in CI.** They need game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, never run in CI**: needs game content (`just test-data`);
+//! see `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! # Why this was refused once, and what changed
 //!
-//! `HANDOVER.md` recorded HD's banks as measured-but-deliberately-unimplemented:
-//! the framing was known to differ in two places and *"relaxing it would be a
-//! one-line change - which is exactly why it was not made"*. The reasoning was
-//! that a framing-only fix would hand back a `Bank` whose `sounds()`,
-//! `sound_names()` and `decode_adpcm()` were all unverified.
-//!
-//! This file is that verification, and every one of the three now has a number
-//! against it. The framing relaxation is two conditions, both of which turn out
-//! to be **alignment** rather than slack - and the tail check, the one that says
-//! the blob was read to its end, stays exact.
+//! `HANDOVER.md` recorded HD's banks as measured but deliberately
+//! unimplemented: framing differs in two places and a framing-only fix would
+//! return a `Bank` whose `sounds()`, `sound_names()` and `decode_adpcm()` were
+//! unverified. This file is that verification. The relaxation is two conditions,
+//! both **alignment** rather than slack; the tail check, which says the blob was
+//! read to its end, stays exact.
 //!
 //! # The one thing that is genuinely different
 //!
@@ -89,9 +81,8 @@ fn every_hd_bank_parses_as_the_same_container_byte_swapped() {
         parsed += 1;
         assert_eq!(bank.order, ByteOrder::Big, "{path} is not big-endian");
 
-        // The blob is byte-swapped whole, so reading it the other way round has
-        // to fail. Without this the big-endian result could be a coincidence of
-        // a reader that is simply permissive.
+        // The blob is byte-swapped whole, so the other order has to fail, or the
+        // big-endian result could be a merely permissive reader.
         little_endian_parses += usize::from(Bank::parse_as(blob, ByteOrder::Little).is_ok());
 
         let s0 = (
@@ -143,9 +134,8 @@ fn every_hd_bank_parses_as_the_same_container_byte_swapped() {
     println!("names          {names}, equal to cue count on {names_equal_cues} of {parsed}");
 
     assert_eq!(parsed, HD_BANK_ENTRIES, "HD's bank-entry count changed");
-    // The framing relaxation is alignment and nothing else: every bank starts
-    // its descriptor section at exactly 32, and the pad before the waveform
-    // section is under one 16-byte block.
+    // The relaxation is alignment only: every bank starts its descriptor section
+    // at exactly 32 and the pad before the waveform section is under one block.
     assert_eq!(
         first_section.keys().copied().collect::<Vec<_>>(),
         vec![32],
@@ -177,9 +167,9 @@ fn the_not_adpcm_flag_predicts_hd_s_payload() {
         return;
     };
 
-    // Per waveform span: the descriptor's own flag against the share of that
-    // span's bytes that are in PS-ADPCM spec. The two are written by different
-    // parts of whatever built these banks and neither refers to the other.
+    // Per span: the descriptor's own flag against the share of its bytes in
+    // PS-ADPCM spec. Different parts of the bank tool write the two and neither
+    // refers to the other.
     let mut adpcm: Vec<f64> = Vec::new();
     let mut other: Vec<f64> = Vec::new();
     for (_, _, blob) in every_bank(&iso) {
@@ -222,8 +212,8 @@ fn the_not_adpcm_flag_predicts_hd_s_payload() {
 
     assert!(adpcm.len() > 2_000, "only {} ADPCM spans", adpcm.len());
     assert!(other.len() > 500, "only {} non-ADPCM spans", other.len());
-    // This is the whole finding: a flag the byte census knows nothing about
-    // splits the corpus cleanly in two.
+    // The whole finding: a flag the byte census knows nothing about splits the
+    // corpus cleanly in two.
     assert!(
         mean(&adpcm) > 0.99,
         "spans marked ADPCM are only {:.2}% in spec",
@@ -236,13 +226,11 @@ fn the_not_adpcm_flag_predicts_hd_s_payload() {
     );
 }
 
-/// `oag_formats::sblk::decode_pcm16` is the identification of the second
-/// codec, not just a guess: every one of HD's not-PS-ADPCM spans decodes to
-/// audio far smoother than white noise, not to noise itself.
-///
-/// See `docs/formats/psp-audio.md`'s "A third of HD's waveforms are not
-/// PS-ADPCM, and are 16-bit PCM" for the fuller evidence, including a labelled
-/// span's spectrogram this test does not reproduce.
+/// `oag_formats::sblk::decode_pcm16` identifies the second codec: every one of
+/// HD's not-PS-ADPCM spans decodes to audio far smoother than white noise. See
+/// `docs/formats/psp-audio.md`'s "A third of HD's waveforms are not PS-ADPCM,
+/// and are 16-bit PCM", including a labelled span's spectrogram not reproduced
+/// here.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn decode_pcm16_produces_audio_not_noise() {
@@ -250,10 +238,9 @@ fn decode_pcm16_produces_audio_not_noise() {
         return;
     };
 
-    // White noise's mean absolute step over RMS is about 1.41 for
-    // uncorrelated 16-bit samples; real audio sits far below it. A per-span
-    // ratio rather than one pooled ratio, so one very loud span cannot hide
-    // many quiet, noisy ones behind it.
+    // White noise's mean absolute step over RMS is about 1.41 for uncorrelated
+    // 16-bit samples; real audio is far below. Per span, so one loud span cannot
+    // hide many quiet noisy ones.
     let mut roughness: Vec<f64> = Vec::new();
     for (_, _, blob) in every_bank(&iso) {
         let bank = Bank::parse(&blob).expect("parse");
@@ -298,10 +285,9 @@ fn decode_pcm16_produces_audio_not_noise() {
         mean < 0.5,
         "mean roughness {mean:.3} is not far below white noise's ~1.41"
     );
-    // One measured span (of 1,167) reaches 1.476, just past the ~1.41 white
-    // noise figure - a short or quiet outlier, not evidence the codec guess is
-    // wrong given how far below it the other 1,166 sit. 2.0 catches a
-    // regression to real noise without pinning that one span exactly.
+    // One of 1,167 spans reaches 1.476, just past the ~1.41 noise figure: a
+    // short or quiet outlier, not evidence against the codec given the other
+    // 1,166. 2.0 catches a regression to real noise without pinning it.
     assert!(
         worst < 2.0,
         "worst-case roughness {worst:.3} looks like noise"

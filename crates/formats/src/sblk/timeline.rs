@@ -1,12 +1,11 @@
 //! A cue as a timeline: which waveform starts when, and at what pan angle.
 //!
 //! [`Bank::cue_sounds`](super::Bank::cue_sounds) and
-//! [`Bank::cue_tree_sounds`](super::Bank::cue_tree_sounds) answer "which
-//! waveforms does this cue reach", as a flat set. That is the right shape for
-//! `.COLLISIONS`' fifteen takes of one event and the wrong one for a cue whose
-//! grains are a **sequence**: Pulse's `zone_5` reaches three different words
-//! (`ZONE`, the number, `CLEAR`), and playing one of the three at random is
-//! what a player hears as "clear" or "zone" alone.
+//! [`Bank::cue_tree_sounds`](super::Bank::cue_tree_sounds) give a flat set of
+//! waveforms. That suits `.COLLISIONS`' fifteen takes of one event, not a cue
+//! whose grains are a **sequence**: Pulse's `zone_5` reaches three words
+//! (`ZONE`, the number, `CLEAR`), and playing one at random is what a player
+//! hears as "clear" or "zone" alone.
 //!
 //! # What the command list does
 //!
@@ -16,60 +15,50 @@
 //!
 //! - A command is `{ u8 opcode, u24 operand, u32 delay }`. The **second word is
 //!   the delay before the command's own execution**, counted from the previous
-//!   command's execution (from the cue's start for the first). After running a
-//!   command the stepper loads `handler + 0x48` with the *next* command's
-//!   second word; the per-tick stepper decrements it once per master tick and
-//!   runs commands while it is below one. A delay of zero runs in the same
-//!   tick.
+//!   command's (from the cue's start for the first). After a command the
+//!   stepper loads `handler + 0x48` with the *next* command's second word; the
+//!   per-tick stepper decrements it per master tick and runs commands while it
+//!   is below one, so a delay of zero runs in the same tick.
 //! - `0x01`/`0x09` key a waveform on. The descriptor's `+0x04` is the voice's
 //!   pan angle in degrees ([`Grain::angle`]).
-//! - `0x05` starts a **child cue in parallel**: the child's own list runs from
-//!   its own tick zero, and the parent's next delay counts from this command,
-//!   not from the child's end. Both handlers return zero, so no extra wait is
-//!   added to the next delay.
+//! - `0x05` starts a **child cue in parallel**: the child runs from its own
+//!   tick zero and the parent's next delay counts from this command. Both
+//!   handlers return zero, so no extra wait is added.
 //! - `0x19` is an **alternate group**: operand byte 0 is the alternate count
 //!   `N`, byte 1 the stride `S` (commands per alternate). The handler adds
-//!   `pick * S` to the program counter, arms the stepper's repeat mechanism for
-//!   `S` commands, and then skips `(N - pick - 1) * S`. So one alternate block
-//!   runs and **whatever follows the group runs after it** - the group is a
-//!   choice in the middle of a timeline, not the whole cue. The pick is a
-//!   caller's draw ([`Bank::cue_timeline_with`]); [`Timeline::groups`] lists
-//!   the groups met so the caller can enumerate or draw.
-//! - `0x2b` **ends the list**: the handler sets the program counter to the
-//!   last command, so the stepper's own increment runs off the end. Commands
-//!   after it are not reached by the list.
-//! - `0x1b` is a **random pitch bend** and returns zero, so it changes no
-//!   timing. It applies to every key-on that follows it (and to children
-//!   started later), through each descriptor's own bend range
+//!   `pick * S` to the program counter, arms the repeat mechanism for `S`
+//!   commands, then skips `(N - pick - 1) * S`. One block runs and **whatever
+//!   follows the group runs after it**: a choice in the middle of a timeline.
+//!   The pick is the caller's draw ([`Bank::cue_timeline_with`]);
+//!   [`Timeline::groups`] lists the groups met.
+//! - `0x2b` **ends the list**: the handler sets the program counter to the last
+//!   command, so the stepper's increment runs off the end.
+//! - `0x1b` is a **random pitch bend** and returns zero. It applies to every
+//!   later key-on (and later children) through each descriptor's bend range
 //!   ([`Sound::bend_down`](super::Sound::bend_down)); the draw is the caller's.
 //!   Recorded in [`Timeline::bends`] and [`Grain::bend`].
 //! - `0x14` is a no-op and `0x1e`/`0x1f`/`0x20`/`0x21` write a register byte;
 //!   all return zero. With no guard (`0x22`) or parameter sentinel to read a
-//!   register they change nothing this walk reports, and a cue that *does*
-//!   read one is incomplete anyway. Recorded in [`Timeline::passed`].
-//! - `0x24` is a **goto** and `0x23` its **marker**, walked only when the
-//!   caller asks ([`WalkModel::goto_markers`]). The goto scans its own cue's
-//!   commands from the first for a marker (`0x23`) whose operand byte 1 equals
-//!   its own, sets the program counter to that marker and runs on from there;
-//!   the marker itself is a no-op that returns zero. No marker is an error that
-//!   ends the cue, and the handler refuses a ninth goto within one tick. Read on
-//!   both binaries (`Scream_DoGrainGoto` on HD, `Scream_OpGoto` on Pulse's).
-//! - Every other opcode is not walked and is reported in
-//!   [`Timeline::unread`] rather than skipped silently: `0x1a` adds a random
-//!   wait, `0x08` replaces the voice's own playback state, `0x04` starts an
-//!   LFO, and a timeline that met any of them is not the whole truth about
-//!   the cue.
+//!   register they change nothing reported here. Recorded in
+//!   [`Timeline::passed`].
+//! - `0x24` is a **goto** and `0x23` its **marker**, walked only when asked
+//!   ([`WalkModel::goto_markers`]). The goto scans its cue's commands from the
+//!   first for a marker whose operand byte 1 equals its own and runs on from
+//!   there; the marker is a no-op returning zero. No marker is an error that
+//!   ends the cue, and a ninth goto within one tick is refused. Read on both
+//!   binaries (`Scream_DoGrainGoto` on HD, `Scream_OpGoto` on Pulse's).
+//! - Every other opcode is reported in [`Timeline::unread`], not skipped
+//!   silently: `0x1a` adds a random wait, `0x08` replaces the voice's playback
+//!   state, `0x04` starts an LFO. A timeline that met any is not the whole cue.
 //!
 //! # The tick
 //!
 //! One master tick is [`TICKS_PER_SECOND`] on the PSP build: `Audio_OutputThread`
-//! runs the master tick three times per two 256-frame mixer grains at 44,100
-//! Hz, and a live count against the PSP's own cycle counter agreed (257.7,
-//! 259.7 and 258.3 ticks per emulated second over three 6 s windows).
-//! **The tick belongs to a build, not to a byte order**: Wipeout HD's PS3 build
-//! runs 240 Hz, and PS2 and the Vita are not measured. This module does not
-//! decide which build a bank came from - the caller does, from the title's own
-//! data (`oag_title::SequenceTick`).
+//! runs it three times per two 256-frame mixer grains at 44,100 Hz, and a live
+//! count agreed (257.7, 259.7 and 258.3 ticks per emulated second over three
+//! 6 s windows). **The tick belongs to a build, not a byte order**: HD's PS3
+//! build runs 240 Hz, PS2 and Vita are not measured. The caller decides the
+//! build from the title's data (`oag_title::SequenceTick`).
 
 use super::child::{CHILD_INDEX_AT, CHILD_RECORD_LEN, MAX_CHILD_DEPTH};
 use super::{Bank, COMMAND_LEN, Cue, KEY_ON_OPCODES, Sound};
@@ -106,7 +95,7 @@ const MAX_STEPS: usize = 4096;
 /// Which opcodes beyond the always-modelled set a walk follows.
 ///
 /// The default is the walk every caller had before HD's tick was measured, so a
-/// title opts in rather than having its cue census move under it.
+/// title opts in rather than having its cue census move.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WalkModel {
     /// Follow `0x24` to its `0x23` marker within the cue, instead of reporting
@@ -117,16 +106,14 @@ pub struct WalkModel {
 /// One waveform started at one moment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Grain {
-    /// Master ticks after the cue was started.
     pub tick: u32,
     /// The waveform, as [`Bank::sounds`](super::Bank::sounds) yields it.
     pub sound: Sound,
-    /// The volume the playing handler carries: the cue's own `+0x00` for the
-    /// root, the child record's volume for a child.
+    /// The volume the handler carries: the cue's `+0x00` for the root, the child
+    /// record's for a child.
     pub cue_volume: i8,
-    /// The handler's volume scale, `1.0` for the root and, for a child, the
-    /// parent's scale times the parent's `cue_volume / 127`
-    /// (`Scream_OpPlayChild`'s `(+0x3a * +0xc) / 0x7f`).
+    /// The handler's volume scale: `1.0` for the root, else the parent's scale
+    /// times `cue_volume / 127` (`Scream_OpPlayChild`'s `(+0x3a * +0xc) / 0x7f`).
     pub scale: f32,
     /// Pan angle in degrees: the descriptor's `+0x04` plus the child records'
     /// angle words on the way down.
@@ -165,10 +152,9 @@ pub struct Timeline {
 }
 
 impl Timeline {
-    /// Whether every command this walk met was one it models and every child
-    /// resolved - the only case where the timeline is the whole cue.
-    ///
-    /// A cue with [`Self::groups`] is complete *for the alternates picked*.
+    /// Whether every command met was modelled and every child resolved: the
+    /// only case where the timeline is the whole cue. A cue with
+    /// [`Self::groups`] is complete *for the alternates picked*.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.unread.is_empty() && self.unresolved == 0
@@ -196,12 +182,10 @@ pub(super) struct Frame {
 }
 
 impl Bank<'_> {
-    /// The timeline a cue plays, following the children it starts, with the
-    /// first alternate taken in every group.
-    ///
-    /// See the module docs for what is modelled. Depth is bounded by
-    /// [`MAX_CHILD_DEPTH`] and a cue already on the walk's own path is not
-    /// entered again, so a hostile bank terminates.
+    /// The timeline a cue plays, following its children, taking the first
+    /// alternate in every group. Depth is bounded by [`MAX_CHILD_DEPTH`] and a
+    /// cue already on the walk's path is not re-entered, so a hostile bank
+    /// terminates.
     #[must_use]
     pub fn cue_timeline(&self, cue: &Cue) -> Timeline {
         self.cue_timeline_with(cue, &[])
@@ -241,10 +225,8 @@ impl Bank<'_> {
     }
 
     /// Every timeline the cue can play: one per combination of alternates.
-    ///
     /// `None` when the combinations pass [`MAX_COMBINATIONS`], or when the
-    /// groups met depend on the picks made (a group inside an alternate), which
-    /// this does not enumerate.
+    /// groups met depend on the picks (a group inside an alternate).
     #[must_use]
     pub fn cue_timelines(&self, cue: &Cue) -> Option<Vec<Timeline>> {
         self.cue_timelines_modelled(cue, WalkModel::default())
@@ -446,7 +428,7 @@ impl Bank<'_> {
         let child_angle = self.order.u32(record, CHILD_ANGLE_AT) as i32;
         if child_angle < 0 {
             // The negative range is `Scream_OpPlayChild`'s parameter-register
-            // sentinels, which this walk does not model.
+            // sentinels, not modelled.
             walk.out.unread.push(PLAY_CHILD);
             return;
         }

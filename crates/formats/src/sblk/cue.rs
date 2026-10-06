@@ -1,9 +1,8 @@
 //! The last link: from a cue to the waveforms it plays.
 //!
 //! [`Bank::sounds`](super::Bank::sounds) walks the *whole* command table, which
-//! answers "what waveforms does this bank hold" but not "what does
-//! `SPEEDUPPAD` sound like". A cue owns a **contiguous run** of that table, and
-//! this module is the arithmetic that finds the run.
+//! does not say what `SPEEDUPPAD` sounds like. A cue owns a **contiguous run**
+//! of that table; this module finds it.
 //!
 //! # The rule
 //!
@@ -13,43 +12,35 @@
 //! ```
 //!
 //! `Scream_StepCommandList` (`0x0898efd8`) reads the cue's `+0x08` as a
-//! *pointer* and steps it by 8 bytes per command, and ends the list when the
-//! program counter passes `*(i8 *)(cue + 4) - 1`. SCREAM fixes the field up
-//! from a file offset to a pointer at load time, so on disc it is a **byte
-//! offset into the command table, biased by nothing** - which is why the
-//! division by [`COMMAND_LEN`](super::COMMAND_LEN) is the whole of it.
+//! *pointer*, steps it 8 bytes per command, and ends the list when the program
+//! counter passes `*(i8 *)(cue + 4) - 1`. SCREAM fixes the field up from a file
+//! offset at load, so on disc it is a **byte offset into the command table,
+//! biased by nothing**: dividing by [`COMMAND_LEN`](super::COMMAND_LEN) is the
+//! whole of it.
 //!
-//! That base was picked by enumeration rather than by reading the fixup: seven
-//! candidate readings were run against every bank on both discs and this is the
-//! only one that lands every cue inside the command table. See
-//! `docs/formats/psp-audio.md`.
+//! That base was picked by enumeration: of seven candidate readings run
+//! against every bank on both discs, only this one lands every cue inside the
+//! command table. See `docs/formats/psp-audio.md`.
 //!
 //! # Why the runs tiling is the evidence
 //!
-//! The cues of a bank partition its command table **exactly** - no gap, no
-//! overlap, ending on the last command - on all 83 banks across the PSP and PS2
-//! discs. Nothing in the format states that, and a wrong base or a wrong stride
-//! cannot produce it.
+//! The cues of a bank partition its command table **exactly** (no gap, no
+//! overlap, ending on the last command) on all 83 banks across the PSP and PS2
+//! discs. Nothing states that, and a wrong base or stride cannot produce it.
 //!
-//! The five exceptions on the two discs are cues whose count is zero, whose
-//! `+0x08` reads `0xfffffff8`. Those are the cues `Scream_StartSound`
-//! (`0x0898f864`) refuses to play at all - its `cue + 0x04` must be non-zero -
-//! so they are excluded by the runtime's own gate rather than by a relaxation
-//! invented here. See [`Cue::plays`].
+//! The five exceptions have a count of zero and `+0x08` reading `0xfffffff8`.
+//! `Scream_StartSound` (`0x0898f864`) refuses them (its `cue + 0x04` must be
+//! non-zero), so the runtime's own gate excludes them. See [`Cue::plays`].
 //!
 //! # What this still returns the whole set for
 //!
 //! **Which** of a cue's waveforms plays. 623 of the 1,282 playable cues bind
-//! exactly one and are unambiguous; `.COLLISIONS` binds fifteen. The opcode
-//! that chooses between them (`0x19`) is decoded and corroborated on both HD
-//! and PSP - see `docs/ghidra/functions/psp-pulse-usa/sound.md`'s
-//! `Scream_OpAlternate` - and it is a random draw, per play, that never
-//! repeats the immediately previous pick. `oag_sound::sfx::Banks::pick`
-//! implements that choice; [`Bank::cue_sounds`] still returns the whole set
-//! in command order, because the decoded opcode is a *runtime* draw, not
-//! something a static WAD parse can resolve to one waveform - the choice
-//! stays the caller's to make, on every play, not this format layer's to
-//! make once.
+//! one; `.COLLISIONS` binds fifteen. The choosing opcode (`0x19`) is decoded
+//! and corroborated on HD and PSP (`docs/ghidra/functions/psp-pulse-usa/sound.md`'s
+//! `Scream_OpAlternate`): a random draw per play that never repeats the
+//! previous pick. `oag_sound::sfx::Banks::pick` implements it;
+//! [`Bank::cue_sounds`] returns the whole set in command order because the
+//! draw is a *runtime* choice the caller makes on every play.
 
 use super::{Bank, COMMAND_LEN, CUE_LEN, Sound};
 
@@ -59,17 +50,15 @@ const HASHED_VERSION: u32 = 5;
 /// Where a hashed name table's first record sits in the name block.
 const HASHED_FIRST: usize = 0x14;
 
-/// Bytes in one hashed name record.
 const HASHED_ENTRY_LEN: usize = 16;
 
 /// The hash a Vita bank's name table is keyed by: FNV-1, **seeded with zero**.
 ///
 /// `h = h * 0x01000193 ^ byte` per byte, from `h = 0`, not FNV's offset basis.
-/// `FUN_81352b9c` on the v1.04 executable hashes the name this way and hands the
-/// result to its table search. The 32 names of the engine tables and the
-/// weapons bank checked against `shipHD.bnk`, `Ship_NGP_Zone.bnk` and
-/// `Weapons_NGP.bnk` all land on a record whose cue is the one the
-/// `xfship_*.xfx` layers play.
+/// `FUN_81352b9c` on the v1.04 executable hashes names this way. The 32 names
+/// of the engine tables and weapons bank, checked against `shipHD.bnk`,
+/// `Ship_NGP_Zone.bnk` and `Weapons_NGP.bnk`, all land on a record whose cue is
+/// the one the `xfship_*.xfx` layers play.
 #[must_use]
 pub fn name_hash(name: &str) -> u32 {
     name.bytes()
@@ -102,30 +91,24 @@ pub struct Cue {
     pub raw: u32,
     /// The cue's own authored volume, `+0x00`, one signed byte.
     ///
-    /// `Scream_StartSound` (`0x0898f864`) reads this as the fallback for the
-    /// voice's `+0xc` field - the term `Scream_PanVolumePair`
-    /// (`0x08995a9c`) squares - whenever its caller passes `-1` for "no
-    /// override", which is what every traced call site does (confirmed live,
-    /// PPSSPP breakpoint on `Scream_StartSound`'s entry, 20/20 hits reading
-    /// exactly `-1`; a second breakpoint at the voice struct's own `+0xc`
-    /// read back an exact match against this byte on every hit taken). See
+    /// `Scream_StartSound` (`0x0898f864`) reads it as the fallback for the
+    /// voice's `+0xc` field (the term `Scream_PanVolumePair` (`0x08995a9c`)
+    /// squares) when the caller passes `-1`, as every traced call site does
+    /// (PPSSPP breakpoint on `Scream_StartSound`: 20/20 hits read `-1`; the
+    /// voice's `+0xc` matched this byte on every hit). See
     /// `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`'s
-    /// "`Scream_PanVolumePair`'s four terms" section.
+    /// "`Scream_PanVolumePair`'s four terms".
     ///
-    /// **The `-1..=-5` sentinel codes documented there are not decoded here.**
-    /// Every one of the 582 cues across all 36 banks on the PSP USA disc reads
-    /// `20..=127`, so the gap is real but unexercised by this corpus - a bank
-    /// that used a sentinel would read this field wrong rather than erroring.
+    /// **The `-1..=-5` sentinel codes documented there are not decoded.** All
+    /// 582 cues on the 36 PSP USA banks read `20..=127`, so a bank using a
+    /// sentinel would read this field wrong rather than erroring.
     pub volume: i8,
 }
 
 impl Cue {
-    /// Whether `Scream_StartSound` would play this cue at all.
-    ///
-    /// Its first check after the bounds test is that `cue + 0x04` is non-zero,
-    /// and `Scream_StepCommandList` ends the list at `count - 1`, so a
-    /// zero-count cue runs no commands. Five cues on the two discs are like
-    /// this and every one of them stores `0xfffffff8` at `+0x08`.
+    /// Whether `Scream_StartSound` would play this cue at all: `cue + 0x04` must
+    /// be non-zero, and `Scream_StepCommandList` ends the list at `count - 1`.
+    /// Five cues on the two discs have a zero count and `0xfffffff8` at `+0x08`.
     #[must_use]
     pub fn plays(&self) -> bool {
         self.commands > 0
@@ -140,11 +123,9 @@ impl Cue {
 
 impl Bank<'_> {
     /// The cue at `index`, or `None` past [`Bank::cue_count`](Bank).
-    ///
-    /// The run is **not** bounds-checked against the command table here: a cue
-    /// that overruns is a real thing to be able to see, and
-    /// [`Bank::cue_sounds`] filters rather than trusting it. Every cue on both
-    /// discs is in range.
+    /// The run is **not** bounds-checked against the command table here, so a
+    /// cue that overruns can be seen; [`Bank::cue_sounds`] filters. Every cue on
+    /// both discs is in range.
     #[must_use]
     pub fn cue(&self, index: u16) -> Option<Cue> {
         let at = usize::from(index) * CUE_LEN;
@@ -152,9 +133,8 @@ impl Bank<'_> {
         let raw = self.order.u32(record, 0x08);
         Some(Cue {
             index,
-            // A byte offset into the command table, biased by nothing. The
-            // count gates whether it means anything: an empty cue's
-            // `0xfffffff8` divides to a nonsense index that nothing reads.
+            // The count gates whether the offset means anything: an empty
+            // cue's `0xfffffff8` divides to an index nothing reads.
             first_command: raw as usize / COMMAND_LEN,
             commands: usize::from(record[0x04]),
             flags: self.order.u16(record, 0x06),
@@ -170,19 +150,16 @@ impl Bank<'_> {
     }
 
     /// The cue a name resolves to, exactly as `Scream_FindSoundInBank` would.
+    /// The comparison is the runtime's 16-byte `memcmp`, so the name is matched
+    /// whole and **`"COLLISIONS"` does not find `".COLLISIONS"`**. The leading
+    /// dot marks a child sound in SCREAM's error strings; stripping it would
+    /// resolve a name the original rejects.
     ///
-    /// The comparison is the runtime's: a 16-byte `memcmp`, so the name is
-    /// matched whole and **`"COLLISIONS"` does not find `".COLLISIONS"`**. The
-    /// leading dot marks a child sound in SCREAM's own error strings; nothing
-    /// here strips it, because doing so would resolve a name the original
-    /// would have rejected.
-    ///
-    /// A Vita bank ([`Bank::is_hashed`]) keys its table by [`name_hash`]
-    /// instead and keeps no 16-byte names at all, so this finds nothing there
-    /// on purpose: [`Bank::cue_named_or_hashed`] is the lookup for the one
-    /// caller whose hashed binding is measured. Resolving every 2048 cue by
-    /// hash played cues whose triggers were never checked (a perfect-lap
-    /// announcement mid-lap, and noise), reported from play on 2026-10-05.
+    /// A Vita bank ([`Bank::is_hashed`]) keys its table by [`name_hash`] and has
+    /// no 16-byte names, so this finds nothing there on purpose:
+    /// [`Bank::cue_named_or_hashed`] serves the one caller whose hashed binding
+    /// is measured. Resolving every 2048 cue by hash played cues with unchecked
+    /// triggers (a perfect-lap announcement mid-lap, and noise; 2026-10-05).
     #[must_use]
     pub fn cue_named(&self, name: &str) -> Option<Cue> {
         self.sound_names()
@@ -194,7 +171,7 @@ impl Bank<'_> {
     /// [`Bank::cue_named`], and on a [hashed](Bank::is_hashed) bank the cue
     /// whose name hashes to `name` by [`name_hash`].
     ///
-    /// Only the crossfade engine uses this, where the hashed names are checked
+    /// Only the crossfade engine uses this; its hashed names are checked
     /// against the cues the `xfship_*.xfx` layers play.
     #[must_use]
     pub fn cue_named_or_hashed(&self, name: &str) -> Option<Cue> {
@@ -205,23 +182,19 @@ impl Bank<'_> {
     }
 
     /// Whether the name table is keyed by [`name_hash`] rather than by name.
-    ///
-    /// True when the descriptor block's own version word (`+0x04`) is `5`, which
-    /// is every Wipeout 2048 bank (`Ship_NGP`, `Ship_NGP_Zone`, `shipHD`,
-    /// `Weapons_NGP`, all four measured) and no bank on a PSP, PS2 or PS3 disc,
-    /// where it is `3`.
+    /// True when the descriptor block's version word (`+0x04`) is `5`: every
+    /// Wipeout 2048 bank (`Ship_NGP`, `Ship_NGP_Zone`, `shipHD`, `Weapons_NGP`,
+    /// all measured) and no PSP, PS2 or PS3 bank, where it is `3`.
     #[must_use]
     pub fn is_hashed(&self) -> bool {
         self.order.u32(self.block, 4) == HASHED_VERSION
     }
 
     /// The cue whose name hashes to `hash`, on a [hashed](Bank::is_hashed) bank.
-    ///
     /// The table is [`Bank::cue_count`] records of [`HASHED_ENTRY_LEN`] bytes
     /// from `+0x14` of the name block: `{u32 hash, u16 cue, u16 next, u32, u32}`.
-    /// The scan is linear and ignores `next`, the hash-collision chain: an
-    /// exact 32-bit match is the lookup, and the chain only matters to a
-    /// runtime that probes a bucket.
+    /// The scan is linear and ignores the collision chain `next`: an exact
+    /// 32-bit match is the lookup.
     #[must_use]
     pub fn cue_by_hash(&self, hash: u32) -> Option<u16> {
         if !self.is_hashed() || self.flags & super::HAS_NAME_TABLE == 0 {
@@ -237,16 +210,13 @@ impl Bank<'_> {
     }
 
     /// The waveforms a cue's commands bind, in command order.
-    ///
     /// Empty for a cue that [does not play](Cue::plays) and for one whose
-    /// commands are all opcodes that bind nothing - 242 of the 1,282 playable
-    /// cues on the two discs, which run some part of the 41 unread opcodes
-    /// instead. Some of those bind a waveform one level down, by playing
-    /// another cue; [`Bank::cue_tree_sounds`] is the walk that follows them.
+    /// commands all bind nothing - 242 of the 1,282 playable cues on the two
+    /// discs, which run some of the 41 unread opcodes. Some bind a waveform one
+    /// level down by playing another cue; see [`Bank::cue_tree_sounds`].
     ///
-    /// **All of them, not the one that would sound.** See the module docs: the
-    /// selection opcode is not decoded, so returning a set is the honest shape
-    /// and picking from it is the caller's decision to document.
+    /// **All of them, not the one that would sound**: the selection opcode is a
+    /// runtime draw, see the module docs.
     #[must_use]
     pub fn cue_sounds(&self, cue: &Cue) -> Vec<Sound> {
         if !cue.plays() {
