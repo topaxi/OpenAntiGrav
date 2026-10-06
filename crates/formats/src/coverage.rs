@@ -4,24 +4,21 @@
 //!
 //! **A hand-written parser cannot fail on a field it does not know about.**
 //! `rcsmodel` read the surface record embedded in a chunk header and returned;
-//! the count at `+0x10` and the offset table at `+0x18` naming the *other*
-//! surface records were never read, so a quarter of the disc's chunks silently
-//! lost their remaining geometry - 25,972 submeshes and 7.1 million triangles,
-//! 40% of Wipeout HD's render geometry, drawn by nothing and reported by
-//! nothing. Every diagnostic this project had measured what it *drew* against
-//! what it *decided to draw*, which cannot surface an absence.
+//! the count at `+0x10` and offset table at `+0x18` naming the *other* surface
+//! records were never read, so a quarter of the disc's chunks silently lost
+//! their remaining geometry: 25,972 submeshes and 7.1 million triangles, 40% of
+//! Wipeout HD's render geometry. Diagnostics that compared what was *drawn*
+//! against what was *decided to draw* cannot surface an absence.
 //!
-//! A coverage sweep can. Claim every range a parser reads, then ask what is
-//! left: an unclaimed table in the middle of a file is a field nobody read,
-//! and that is exactly the shape the bug had.
+//! A coverage sweep can: claim every range a parser reads and ask what is left.
+//! An unclaimed table mid-file is a field nobody read.
 //!
 //! # What it is not
 //!
 //! **Not a correctness check, and a gap is not automatically a bug.** Real
-//! files carry padding, alignment slack, string pools read lazily, and
-//! sections this project has deliberately decided not to decode. The output is
-//! a list to *look at*, and the way to use it is a ratchet: record what is
-//! unclaimed today and fail when it grows. See
+//! files carry padding, alignment slack, lazily read string pools and sections
+//! deliberately not decoded. The output is a list to *look at*, used as a
+//! ratchet: record what is unclaimed today and fail when it grows. See
 //! `crates/formats/tests/coverage_ground_truth.rs`.
 //!
 //! # Use
@@ -45,10 +42,9 @@ pub struct Gap {
     /// How many bytes.
     pub len: usize,
     /// What the parser read immediately before it, or `"start of file"`.
-    ///
-    /// The two names are what make a gap actionable: "384 bytes between the
-    /// chunk header and its submesh descriptors" is a lead, "384 bytes at
-    /// 0x11e5e0" is a number.
+    /// What the parser read immediately before it, or `"start of file"`. The two
+    /// names make a gap actionable: "384 bytes between the chunk header and its
+    /// submesh descriptors" is a lead, "384 bytes at 0x11e5e0" a number.
     pub after: &'static str,
     /// What it read immediately after, or `"end of file"`.
     pub before: &'static str,
@@ -77,8 +73,8 @@ impl Coverage {
 
     /// Records that the parser reads `len` bytes at `at`, as `what`.
     ///
-    /// A zero-length claim is dropped: it covers nothing, and keeping it would
-    /// let an empty table name a gap it does not bound.
+    /// A zero-length claim is dropped: kept, an empty table could name a gap it
+    /// does not bound.
     pub fn claim(&mut self, at: usize, len: usize, what: &'static str) {
         if len == 0 || at >= self.len {
             return;
@@ -115,8 +111,8 @@ impl Coverage {
 
     /// Every unclaimed run of at least `min` bytes, in file order.
     ///
-    /// `min` is how much slack to forgive. Structure padding is a handful of
-    /// bytes between records; a field nobody read is a table.
+    /// `min` is the slack to forgive: padding is a few bytes between records, a
+    /// field nobody read is a table.
     #[must_use]
     pub fn gaps(&self, min: usize) -> Vec<Gap> {
         let mut claims = self.claims.clone();

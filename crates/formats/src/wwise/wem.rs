@@ -1,50 +1,46 @@
 //! `.wem`: the RIFF/WAVE a Wwise bank's sources are stored as.
 //!
-//! A `.wem` is one file whether it sits in a bank's `DATA` chunk or loose as
-//! `<media id>.wem`, and on the Omega Collection **every one of the 1,448 loose
-//! files (`data00` 714, `data08` 734) and the embedded media of every bank is a
-//! RIFF/WAVE with the chunks `fmt `, `JUNK`, `data` in that order**. `JUNK` is
-//! Wwise's alignment padding and is zeros.
+//! A `.wem` is one file whether in a bank's `DATA` chunk or loose as
+//! `<media id>.wem`, and on the Omega Collection **all 1,448 loose files
+//! (`data00` 714, `data08` 734) and every bank's embedded media are RIFF/WAVE
+//! with the chunks `fmt `, `JUNK`, `data` in that order**. `JUNK` is Wwise's
+//! alignment padding, zeros.
 //!
 //! # The codec is ATRAC9
 //!
 //! `fmt ` is 36 bytes, `WAVEFORMATEX` plus 18 bytes of extra data, and its
-//! `wFormatTag` is **`0xFFFC`** on every ATRAC9 file - Wwise's own tag, not a
-//! registered one: all 1,448 loose files and 1,956 (`data00`) or 2,080
-//! (`data08`) embedded ones. The other two embedded files are PCM, tag `0xFFFE`.
-//! Four independent things agree that it is Sony's ATRAC9 and not something
-//! Wwise-specific:
+//! `wFormatTag` is **`0xFFFC`** on every ATRAC9 file (Wwise's own tag): all
+//! 1,448 loose files and 1,956 (`data00`) or 2,080 (`data08`) embedded ones.
+//! The other two embedded files are PCM, tag `0xFFFE`. Four independent things
+//! agree it is Sony's ATRAC9:
 //!
-//! 1. **The extra data contains a valid ATRAC9 configuration word.** Bytes
-//!    6-9 of it are four bytes that open `0xFE` - ATRAC9's sync byte - then a
-//!    4-bit sample-rate index, a 3-bit channel-config index, a validation bit,
-//!    an 11-bit `frame bytes - 1` and a 2-bit superframe index. On **every**
-//!    ATRAC9 `.wem` in both archives: sync `0xFE`; validation bit 0; superframe
-//!    index 0 (one frame per block); rate index 7 with `fmt ` at 48 kHz or 4
-//!    with `fmt ` at 24 kHz; **frame bytes equals `nBlockAlign`**; and the
-//!    channel-config index tracks the channel count - 0 mono, 2 stereo, 5 four
-//!    channels, 3 six, 4 eight, which is LibAtrac9's own table. Five fields
-//!    that must agree with `fmt ` and with each other, on 4,000-odd files.
-//! 2. **The frame arithmetic is ATRAC9's.** The extra data's first word is the
+//! 1. **The extra data holds a valid ATRAC9 configuration word.** Bytes 6-9 open
+//!    `0xFE` (ATRAC9's sync byte), then a 4-bit sample-rate index, a 3-bit
+//!    channel-config index, a validation bit, an 11-bit `frame bytes - 1` and a
+//!    2-bit superframe index. On **every** ATRAC9 `.wem` in both archives: sync
+//!    `0xFE`; validation bit 0; superframe index 0; rate index 7 with `fmt ` at
+//!    48 kHz or 4 at 24 kHz; **frame bytes equals `nBlockAlign`**; channel-config
+//!    index tracking the channel count (0 mono, 2 stereo, 5 four, 3 six, 4
+//!    eight, LibAtrac9's own table). Five fields that must agree with `fmt ` and
+//!    each other, on 4,000-odd files.
+//! 2. **The frame arithmetic is ATRAC9's.** The extra data's first word is
 //!    samples per frame (256 at 48 kHz, 128 at 24 kHz) and its last the encoder
-//!    delay, one frame's worth; `frames * frame_samples - delay - samples` is
-//!    between 0 and one frame on every file.
-//! 3. **Independent ATRAC9 decoders accept the data.** FFmpeg's decodes all 400
-//!    loose `data00` files sampled (371 stereo, 24 four-channel, 5
-//!    eight-channel) with `-xerror` and no message, where random bytes in the
-//!    same container stop at "Invalid scalefactor coding mode!". The pure-Rust
-//!    port of LibAtrac9 (`atrac9dec`) decodes every mono and stereo file, and
-//!    agrees with FFmpeg to within one least-significant bit on 59 of 59 mono
-//!    and stereo files sampled - **up to polarity**: one is the negation of the
-//!    other. **It refuses every four-, six- and eight-channel file** (58 of
-//!    them in each archive), so items 1 and 2 are what identifies those, and
-//!    FFmpeg's decode of the four- and eight-channel ones.
+//!    delay, one frame; `frames * frame_samples - delay - samples` is between 0
+//!    and one frame on every file.
+//! 3. **Independent decoders accept the data.** FFmpeg decodes all 400 loose
+//!    `data00` files sampled (371 stereo, 24 four-channel, 5 eight-channel) with
+//!    `-xerror`, where random bytes in the same container stop at "Invalid
+//!    scalefactor coding mode!". The pure-Rust LibAtrac9 port (`atrac9dec`)
+//!    decodes every mono and stereo file and agrees with FFmpeg to one
+//!    least-significant bit on 59 of 59 sampled, **up to polarity** (one is the
+//!    negation of the other). **It refuses every four-, six- and eight-channel
+//!    file** (58 of them per archive), so items 1 and 2 and FFmpeg's decode
+//!    identify those.
 //! 4. **The bank says so.** Every sound and music-track source whose plugin is
-//!    codec number 12 has media tagged `0xFFFC`, and every one whose plugin is
-//!    number 1 has media tagged `0xFFFE`, with no exception (7,785 and 10 in
-//!    `data00`, 8,503 and 10 in `data08`). That number 12 *means* ATRAC9 is
-//!    recalled from Wwise's codec numbering, not read off the disc; items 1-3 do
-//!    not depend on it.
+//!    codec number 12 has media tagged `0xFFFC`, and number 1 `0xFFFE`, with no
+//!    exception (7,785 and 10 in `data00`, 8,503 and 10 in `data08`). That 12
+//!    *means* ATRAC9 is recalled from Wwise's numbering, not read off the disc;
+//!    items 1-3 do not depend on it.
 //!
 //! # The extra data
 //!
@@ -56,17 +52,16 @@
 //! +0x0e  u32  delay                     one frame's worth of samples: skip them
 //! ```
 //!
-//! The channel config is Wwise's `AkChannelConfig`: the low byte is the
-//! channel count, bits 8-11 the config type (1, standard) and the rest the
-//! speaker mask - `0x4` mono, `0x3` stereo, `0x603` four channels (front and
-//! side), `0x60f` six (5.1 with side surrounds), `0x63f` eight (7.1).
+//! The channel config is Wwise's `AkChannelConfig`: low byte the channel count,
+//! bits 8-11 the config type (1, standard), the rest the speaker mask: `0x4`
+//! mono, `0x3` stereo, `0x603` four (front and side), `0x60f` six (5.1 with
+//! side surrounds), `0x63f` eight (7.1).
 //!
 //! # Not the RIFF size
 //!
-//! The RIFF size field is **not** the file's length minus eight: it is short by
-//! 28 bytes on a stereo file, 92 on four channels and 236 on eight. A reader
-//! that trusts it clips the last chunk, so this one walks the chunks and never
-//! consults it.
+//! The RIFF size is **not** the file's length minus eight: short by 28 bytes on
+//! stereo, 92 on four channels, 236 on eight. This reader walks the chunks and
+//! never consults it.
 
 use std::ops::Range;
 

@@ -1,30 +1,27 @@
 //! Which end of a word comes first, for the formats two consoles share.
 //!
-//! Every Wipeout asset format this project reads is authored by the same Maya
-//! exporter, and the PS3 build of it writes the *same layouts* with the bytes
-//! the other way round - see `docs/formats/hd-status.md`. So a parser needs one
-//! extra piece of information and no other change.
+//! Every Wipeout asset format here is authored by the same Maya exporter, and
+//! the PS3 build writes the *same layouts* with the bytes reversed (see
+//! `docs/formats/hd-status.md`), so a parser needs one extra piece of
+//! information and no other change.
 //!
 //! # It is read from the data, never from the console
 //!
-//! `oag_assets::source::Layout` states the rule and names the single existing
-//! exception to it. A `.vex` obeys it for free: the magic at `+0x0c` is `VEXX`
-//! on the PSP and PS2 and `XXEV` on the PS3, so `oag_vex::vex::byte_order`
-//! sniffs it.
-//! A payload *inside* that file cannot - a `WO Track` payload's magic reads
-//! `WOtd` in both games - so those parsers take the order their container
-//! sniffed, which is still data and not a platform branch.
+//! `oag_assets::source::Layout` states the rule and names its one exception. A
+//! `.vex` obeys it for free: the magic at `+0x0c` is `VEXX` on PSP and PS2 and
+//! `XXEV` on PS3, which `oag_vex::vex::byte_order` sniffs. A payload *inside*
+//! that file cannot (a `WO Track` magic reads `WOtd` in both games), so those
+//! parsers take the order their container sniffed: still data, not a platform
+//! branch.
 //!
 //! # The trap this type exists to prevent
 //!
-//! Swapping each field in place is not the same as reading the file
-//! big-endian, and the difference is silent. `oag_vex::pvs` reads a 64-bit
-//! visibility mask as two `u32`s, which is identical to one `u64` on a
-//! little-endian file and **wrong** on a big-endian one: the halves come out
-//! the other way round. Measured, that reading is 100 % dangling on 15 of
-//! Wipeout HD's 24 circuits and raises no error at all. [`ByteOrder::u64`]
-//! is here so the eight bytes are read as one quantity and the question never
-//! comes up.
+//! Swapping each field in place is not reading the file big-endian, and the
+//! difference is silent. `oag_vex::pvs` reads a 64-bit visibility mask as two
+//! `u32`s, identical to one `u64` on a little-endian file and **wrong** on a
+//! big-endian one (halves reversed). Measured, that is 100 % dangling on 15 of
+//! Wipeout HD's 24 circuits with no error. [`ByteOrder::u64`] reads the eight
+//! bytes as one quantity so the question never arises.
 
 /// Which end of a multi-byte field comes first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,8 +38,8 @@ impl ByteOrder {
     ///
     /// # Panics
     ///
-    /// If `data` is shorter than `at + 2`. Every caller here has already
-    /// bounds-checked the record it is reading within.
+    /// If `data` is shorter than `at + 2`. Callers have already bounds-checked
+    /// the record.
     #[must_use]
     pub fn u16(self, data: &[u8], at: usize) -> u16 {
         let bytes = [data[at], data[at + 1]];
@@ -68,8 +65,8 @@ impl ByteOrder {
 
     /// A 64-bit field at `at`, read as **one** quantity.
     ///
-    /// Not two [`ByteOrder::u32`]s: see the module docs for the 22 %-versus-56 %
-    /// measurement that distinction is worth.
+    /// Not two [`ByteOrder::u32`]s; see the module docs for the 22 %-versus-56 %
+    /// measurement.
     ///
     /// # Panics
     ///

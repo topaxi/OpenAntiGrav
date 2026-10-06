@@ -1,26 +1,22 @@
 //! Wipeout Pure's PSN DLC decryption.
 //!
 //! Unlike Pulse's `PACKn.edat` ([`crate::wad`] under a misleading extension,
-//! not actually encrypted), Pure's `pi.wad` genuinely is ciphertext: an
-//! 8-round XTEA stream cipher, keyed per pack, wrapping an ordinary
-//! [`wad`](crate::wad) payload plus a 256-byte per-region trailer this
-//! project does not read. See
+//! not encrypted), Pure's `pi.wad` is ciphertext: an 8-round XTEA stream
+//! cipher, keyed per pack, wrapping an ordinary [`wad`](crate::wad) payload plus
+//! a 256-byte per-region trailer this project does not read. See
 //! `docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table`
-//! for the full writeup, evidence and confidence score.
+//! for the evidence and confidence score.
 //!
 //! # No keys are shipped in this crate
 //!
-//! The algorithm here is public and hand-rolled from a published,
-//! independently-verified source, same as every other decoder in this crate.
-//! The **keys** are a different matter: this project has not established
-//! whether redistributing them is permitted, so - like the Vita zRIF table
-//! and every disc image - they are user-supplied data under `data/keys/`,
-//! gitignored, never committed. [`parse_keys`] reads that file's format;
-//! nothing in this module or its tests embeds a real key. See
+//! The algorithm is public, hand-rolled from a published, independently verified
+//! source. The **keys** are not shipped: redistribution is not established as
+//! permitted, so, like the Vita zRIF table and every disc image, they are
+//! user-supplied under `data/keys/`, gitignored. [`parse_keys`] reads that
+//! file's format; nothing here or in its tests embeds a real key. See
 //! `data/keys/README.md`.
 
-/// Bytes of the per-region trailer at the end of a `pi.wad`, after the
-/// encrypted payload. Never read by this project - see the module docs.
+/// Bytes of the per-region trailer after the encrypted payload. Never read.
 pub const SIGNATURE_LEN: usize = 256;
 
 const DELTA: u32 = 0x9e37_79b9;
@@ -28,9 +24,8 @@ const SEED: u32 = 0x1234_5678;
 
 /// 8-round XTEA on one 64-bit block.
 ///
-/// Not the usual 32/64-round TEA family; the upstream tool this was recovered
-/// from uses exactly 8, and a shipped `pi.wad` only decrypts to a valid WAD
-/// header under that round count.
+/// Not the usual 32/64-round TEA family: the upstream tool uses 8, and a
+/// shipped `pi.wad` only decrypts to a valid WAD header under that count.
 fn xtea8(mut v0: u32, mut v1: u32, key: [u32; 4]) -> (u32, u32) {
     let mut sum: u32 = 0;
     for _ in 0..8 {
@@ -46,14 +41,11 @@ fn xtea8(mut v0: u32, mut v1: u32, key: [u32; 4]) -> (u32, u32) {
 /// XORs a keystream over `buf` in place, one 8-byte block at a time.
 ///
 /// Block `i`'s keystream is `xtea8(0x12345678, i, key)`, so this is symmetric
-/// (the same call encrypts and decrypts) and can start at any 8-byte-aligned
-/// offset - callers here always start at 0, which is all a shipped pack needs.
+/// (one call encrypts and decrypts) and can start at any 8-byte-aligned offset;
+/// callers start at 0, which a shipped pack needs.
 ///
-/// Public because the symmetry is real, not an implementation detail: a
-/// fixture that needs a "ciphertext" (a test, or a future region-conversion
-/// tool in the shape of the upstream one this was recovered from) builds one
-/// by calling this on plaintext, the same operation [`decrypt_pack`] uses to
-/// undo it.
+/// Public because a fixture needing "ciphertext" builds one by calling this on
+/// plaintext, the operation [`decrypt_pack`] uses to undo it.
 #[must_use]
 pub fn crypt_with_key(buf: &[u8], key: [u32; 4]) -> Vec<u8> {
     let mut buf = buf.to_vec();
@@ -74,18 +66,16 @@ fn crypt_with_key_in_place(buf: &mut [u8], key: [u32; 4]) {
 /// One row of the external key table: a PSN content id and its 128-bit key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DlcKey {
-    /// The content id this key belongs to, e.g. `UCES00001DGAMMAPAK`. Read
-    /// straight out of that pack's own `PARAM.sfo`, but **not** reliable as a
-    /// lookup key against a pack's containing folder name - see
-    /// [`decrypt_pack`].
+    /// The content id this key belongs to, e.g. `UCES00001DGAMMAPAK`, read from
+    /// that pack's `PARAM.sfo` but **not** reliable as a lookup against the
+    /// containing folder name; see [`decrypt_pack`].
     pub name: String,
     pub key: [u32; 4],
 }
 
-/// Parses `data/keys/pure-dlc-keys.txt`'s format: one `NAME 0xHH ... (x16)`
-/// row per line, `#` comments and blank lines ignored. A malformed row is
-/// dropped rather than failing the whole file - the same tolerance
-/// [`crate::wad`] gives an unparseable directory entry.
+/// Parses `data/keys/pure-dlc-keys.txt`: one `NAME 0xHH ... (x16)` row per line,
+/// `#` comments and blank lines ignored. A malformed row is dropped, as
+/// [`crate::wad`] drops an unparseable directory entry.
 #[must_use]
 pub fn parse_keys(text: &str) -> Vec<DlcKey> {
     text.lines().filter_map(parse_key_line).collect()
@@ -115,16 +105,14 @@ fn parse_key_line(line: &str) -> Option<DlcKey> {
 /// Decrypts a Pure `pi.wad`, or `None` if `data` is too short or no key in
 /// `keys` fits.
 ///
-/// Tries every key against the first 8 bytes and keeps whichever produces a
-/// `version == 1` WAD header, the same detection the upstream tool uses -
-/// **deliberately not** a lookup by the pack's containing folder or file
-/// name, because neither is reliable: the Gamma pack's own zip unpacks to a
-/// folder called `UCES00001DGAMMAPACK`, one letter off from the
-/// `GAMMAPAK` content id its `PARAM.sfo` and this key table both use.
+/// Tries every key against the first 8 bytes and keeps whichever gives a
+/// `version == 1` WAD header, as the upstream tool does - **deliberately not**
+/// a lookup by folder or file name: the Gamma pack's zip unpacks to
+/// `UCES00001DGAMMAPACK`, one letter off the `GAMMAPAK` content id its
+/// `PARAM.sfo` and this key table use.
 ///
-/// Returns the decrypted **payload only** - everything but the trailing
-/// [`SIGNATURE_LEN`]-byte per-region trailer, which nothing here reads - and
-/// the key that worked, so a caller can log which pack it found.
+/// Returns the decrypted **payload only** (without the [`SIGNATURE_LEN`]-byte
+/// trailer) and the key that worked, so a caller can log which pack it found.
 #[must_use]
 pub fn decrypt_pack<'k>(data: &[u8], keys: &'k [DlcKey]) -> Option<(Vec<u8>, &'k DlcKey)> {
     let payload_len = data.len().checked_sub(SIGNATURE_LEN)?;
@@ -145,9 +133,8 @@ pub fn decrypt_pack<'k>(data: &[u8], keys: &'k [DlcKey]) -> Option<(Vec<u8>, &'k
 mod tests {
     use super::{DlcKey, SIGNATURE_LEN, crypt_with_key, decrypt_pack, parse_keys};
 
-    /// A key that appears nowhere in any real key table - hand-picked, not
-    /// shipped bytes, per
-    /// [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
+    /// A key that appears in no real key table: hand-picked, not shipped bytes,
+    /// per [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
     const TEST_KEY: [u32; 4] = [0x1122_3344, 0x5566_7788, 0x99aa_bbcc, 0xddee_ff00];
 
     fn wrap_as_pack(wad: Vec<u8>, key: [u32; 4]) -> Vec<u8> {
@@ -204,8 +191,7 @@ UCES00001DGAMMAPAK 0x10 0x70 0x53 0xaf 0xaa 0xd9 0x76 0x88 0x72 0x3e 0x13 0xcb 0
         let keys = parse_keys(text);
         assert_eq!(keys.len(), 1);
         assert_eq!(keys[0].name, "UCES00001DGAMMAPAK");
-        // Little-endian per 4-byte group, matching the algorithm's own key
-        // indexing - not otherwise observable from this file alone.
+        // Little-endian per 4-byte group, matching the algorithm's own key indexing.
         assert_eq!(keys[0].key[0], 0xaf53_7010);
     }
 

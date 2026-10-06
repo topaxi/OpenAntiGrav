@@ -1,15 +1,11 @@
 //! Cues that play other cues: the grains behind `.COLLISIONS`.
 //!
-//! [`Bank::cue_sounds`](super::Bank::cue_sounds) answers "what waveforms does
-//! this cue's own run of the command table bind", and for most cues that is the
-//! whole story. For some it is empty, and the reason is not that the cue is
-//! broken: it binds no waveform *directly* because its grains play **other
-//! cues**, which bind the waveforms.
+//! [`Bank::cue_sounds`](super::Bank::cue_sounds) is the whole story for most
+//! cues. For some it is empty because the cue's grains play **other cues**,
+//! which bind the waveforms.
 //!
-//! Wipeout HD's `.COLLISIONS` is the case that forced this. Four grains, no
-//! key-on, and this project recorded it for a day as "all four commands are
-//! among the 43 unread opcodes" - which was true and was also a dead end
-//! wearing the shape of a finding.
+//! Wipeout HD's `.COLLISIONS` forced this: four grains, no key-on, which looked
+//! like "all four among the 43 unread opcodes" until the child record was read.
 //!
 //! # The record
 //!
@@ -25,52 +21,46 @@
 //! +0x10  char[16]  the child's name, empty when +0x0c is an index
 //! ```
 //!
-//! **The two forms are exclusive**, and SCREAM names both of them in its own
-//! error strings. Wipeout HD's `EBOOT.elf` carries
-//! `"SCREAM: Didn't find child sound named -> %s\n"` at `0x007cfaa0` and
-//! `"SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d\n"` at
-//! `0x007cfad0`: one message per form, and the second is a message about
-//! exactly the malformed data the corpus turns out to contain.
+//! **The two forms are exclusive**, and SCREAM names both in its error strings.
+//! HD's `EBOOT.elf` carries `"SCREAM: Didn't find child sound named -> %s\n"`
+//! at `0x007cfaa0` and `"SCREAM: snd_SFX_GRAIN_TYPE_BRANCH invalid sound index
+//! %d\n"` at `0x007cfad0`: one per form, the second about exactly the malformed
+//! data the corpus contains.
 //!
 //! # The evidence
 //!
 //! Across all 230 bank entries on the five PSP/PS2 discs and Wipeout HD, of
 //! 1,461 child grains:
 //!
-//! - **1,153** carry an in-range cue index with an empty name field. Every PSP
-//!   and PS2 grain is of this form; not one of them is named.
-//! - **300** carry `0xffffffff` and a name the same bank's own name table
-//!   holds. Every one of these is on Wipeout HD.
-//! - **1** carries a name that is *not* in its own bank: `env0_det.bnk` asks
-//!   for `".COLLISIONS"`, which lives in `shiphd.bnk`. A name is resolved
-//!   against whatever is loaded, so this is a cross-bank reference rather than
-//!   a miss - and it is why [`Bank::resolve_child`] returns `None` for it
+//! - **1,153** carry an in-range cue index and an empty name. Every PSP and PS2
+//!   grain is of this form.
+//! - **300** carry `0xffffffff` and a name the same bank's name table holds.
+//!   All on Wipeout HD.
+//! - **1** names a cue not in its own bank: `env0_det.bnk` asks for
+//!   `".COLLISIONS"`, which lives in `shiphd.bnk`. A name resolves against
+//!   whatever is loaded, so [`Bank::resolve_child`] returns `None` for it
 //!   rather than treating it as damage.
 //! - **7** are neither: six grains in `speech_results.bnk` set `0xffffffff`
-//!   with no name at all, and one in `weapons_det.bnk` holds index 65 in a
-//!   55-cue bank. That last one is precisely what
-//!   `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` exists to print.
+//!   with no name, and one in `weapons_det.bnk` holds index 65 in a 55-cue bank,
+//!   which is what `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` prints.
 //!
-//! A wrong record length or a wrong field offset does not produce 1,153
-//! in-range indices and 300 exact name-table hits; it produces noise.
+//! A wrong record length or field offset would give noise, not 1,153 in-range
+//! indices and 300 exact name-table hits.
 //!
 //! # What this still does not decide
 //!
-//! **Which child plays.** A parent's grains are guarded by opcode `0x22`,
-//! whose operand is not decoded, so [`Bank::cue_tree_sounds`] returns every
-//! reachable leaf's waveforms rather than the one the original would have
-//! chosen. That is the same shape - and the same honest gap - as the choice
-//! among a single cue's alternates, which is also undecoded. See the module
-//! docs of [`super::cue`].
+//! **Which child plays.** A parent's grains are guarded by opcode `0x22`, whose
+//! operand is not decoded, so [`Bank::cue_tree_sounds`] returns every reachable
+//! leaf's waveforms, the same honest gap as the choice among a single cue's
+//! alternates. See [`super::cue`].
 
 use super::{Bank, COMMAND_LEN, Cue, Sound};
 
 /// The two opcodes that play another cue.
 ///
-/// Whether they differ from each other is **not** known. The record they point
-/// at is the same 32 bytes either way and both resolve at the same rate, so any
-/// difference has to come from the handler, which this project has not located.
-/// `0x08` is the one Wipeout HD's `.COLLISIONS` uses.
+/// Whether they differ is **not** known: the record is the same 32 bytes either
+/// way and both resolve at the same rate, so any difference is in the handler,
+/// not located. `0x08` is the one HD's `.COLLISIONS` uses.
 pub const CHILD_OPCODES: [u8; 2] = [0x05, 0x08];
 
 /// Bytes per child record in the parameter block.
@@ -86,11 +76,8 @@ pub const CHILD_NAME_AT: usize = 0x10;
 pub const CHILD_BY_NAME: u32 = u32::MAX;
 
 /// How deep [`Bank::cue_tree_sounds`] will follow children.
-///
-/// Wipeout HD's deepest chain is two - `.COLLISIONS` to `c_CShipWall` to
-/// `c_CShipWallM` - so this is slack rather than a limit anything reaches. It
-/// exists because a bank is data off a disc and nothing in the format prevents
-/// a chain from being longer than any bank shipped is.
+/// HD's deepest chain is two (`.COLLISIONS` to `c_CShipWall` to `c_CShipWallM`),
+/// so this is slack for a bank, being disc data, with a longer chain.
 pub const MAX_CHILD_DEPTH: usize = 8;
 
 /// One grain that plays another cue.
@@ -120,22 +107,18 @@ impl Child {
     }
 
     /// Whether the record resolves to a child at all.
-    ///
     /// False for the seven malformed grains the module docs count: an
-    /// unresolved index with no name to fall back on, or an index past the end
-    /// of the bank.
+    /// unresolved index with no name, or an index past the end of the bank.
     #[must_use]
     pub fn is_resolvable(&self) -> bool {
         self.cue.is_some() || !self.name.is_empty()
     }
 
     /// Whether the record carries an index *and* a name.
-    ///
-    /// **False for all 1,461 child grains on all six discs**, which is the
-    /// assertion that says `+0x0c` and `+0x10` are the two fields they are
-    /// taken to be rather than one field being read twice. Kept as a predicate
-    /// so the ground-truth test states the property rather than restating how
-    /// [`Bank::cue_children`] happens to build the struct.
+    /// **False for all 1,461 child grains on all six discs**, the assertion that
+    /// `+0x0c` and `+0x10` are two fields rather than one read twice. A
+    /// predicate so the ground-truth test states the property instead of
+    /// restating how [`Bank::cue_children`] builds the struct.
     #[must_use]
     pub fn is_both(&self) -> bool {
         self.cue.is_some() && !self.name.is_empty()
@@ -144,10 +127,8 @@ impl Child {
 
 impl Bank<'_> {
     /// Every child a cue's own grains play, in command order.
-    ///
-    /// Empty for a cue that plays no child, which is most of them. A record
-    /// that leaves the descriptor section is skipped rather than reported, the
-    /// same way [`Bank::sounds`] skips a key-on whose descriptor does not fit.
+    /// Empty for most cues. A record that leaves the descriptor section is
+    /// skipped, as [`Bank::sounds`] skips a key-on whose descriptor does not fit.
     #[must_use]
     pub fn cue_children(&self, cue: &Cue) -> Vec<Child> {
         if !cue.plays() {
@@ -175,14 +156,11 @@ impl Bank<'_> {
                 continue;
             };
 
-            // **The two fields are read independently.** Deriving the name
-            // from "the index did not resolve" would make the exclusivity in
-            // the module docs a property of this function rather than of the
-            // data, and the ground-truth test that asserts it would be unable
-            // to fail. It would also fold two different faults together: an
-            // index past the cue table would arrive looking like a named
-            // child, which is exactly what `weapons_det.bnk`'s index 65 is
-            // not.
+            // The two fields are read independently. Deriving the name from
+            // "the index did not resolve" would make the exclusivity a property
+            // of this function, so the test asserting it could not fail, and
+            // would fold an index past the cue table into a named child, which
+            // is what `weapons_det.bnk`'s index 65 is not.
             let raw = self.order.u32(bytes, CHILD_INDEX_AT);
             let cue = (raw != CHILD_BY_NAME)
                 .then(|| u16::try_from(raw).ok())
@@ -209,12 +187,9 @@ impl Bank<'_> {
     }
 
     /// The cue a child record points at, resolved the way the runtime would.
-    ///
-    /// `None` when the record is malformed, and also when it names a cue this
-    /// bank does not hold - a name is resolved against every loaded bank, and
-    /// one grain on the Wipeout HD disc does reach across. Reading a
-    /// cross-bank name as damage would be wrong; so would silently resolving it
-    /// here, because this type only has the one bank.
+    /// `None` when the record is malformed, and when it names a cue this bank
+    /// does not hold: a name resolves against every loaded bank and one HD grain
+    /// reaches across. That is not damage, and this type has only the one bank.
     #[must_use]
     pub fn resolve_child(&self, child: &Child) -> Option<Cue> {
         match child.cue {
@@ -225,24 +200,17 @@ impl Bank<'_> {
     }
 
     /// Every waveform a cue binds, following the cues it plays.
+    /// Identical to [`Bank::cue_sounds`] for a cue that plays no child. **Not
+    /// vacuous on the PSP or PS2**: `weapons.bnk`'s `CANNONEXPLSHIP` (cue 36)
+    /// owns one command, opcode `0x05`, whose child record indexes cue 37
+    /// (`CANNONEXPLWALL`), so a Cannon round's craft-hit ending plays the same
+    /// nine waveforms as its wall-hit ending, by the disc's construction; see
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`
+    /// (2026-09-23 note).
     ///
-    /// Identical to [`Bank::cue_sounds`] for a cue that plays no child, which
-    /// is what makes it safe to use everywhere. **Not vacuous on the PSP or
-    /// PS2**, though it was for every cue `oag_sound::sfx` wired before
-    /// 2026-09-23: `weapons.bnk`'s `CANNONEXPLSHIP` (cue 36) owns exactly one
-    /// command, opcode `0x05`, whose child record indexes cue 37 -
-    /// `CANNONEXPLWALL` - directly. So a Cannon round's craft-hit ending
-    /// plays the same nine waveforms its wall-hit ending does, by the disc's
-    /// own construction rather than by a coincidence in this port's reading;
-    /// see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
-    /// own 2026-09-23 note. The module doc's "every PSP/PS2 grain is
-    /// index-form, unnamed" count already included this one - what changed
-    /// is only that a *wired* cue now reaches it.
-    ///
-    /// **Every reachable leaf, not the one that would sound.** The grain that
-    /// chooses between a parent's children is `0x22`, which is not decoded -
-    /// see the module docs. A cue is visited once however many parents reach
-    /// it, so a diamond yields its waveforms once and a cycle terminates.
+    /// **Every reachable leaf, not the one that would sound**: the choosing
+    /// grain `0x22` is not decoded. A cue is visited once however many parents
+    /// reach it, so a diamond yields its waveforms once and a cycle terminates.
     #[must_use]
     pub fn cue_tree_sounds(&self, cue: &Cue) -> Vec<Sound> {
         let mut seen = vec![cue.index];

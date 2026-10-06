@@ -1,15 +1,14 @@
 //! Audiokinetic Wwise sound banks: `BKHD`, `DIDX`/`DATA` and `HIRC`.
 //!
 //! **Not the PSP's `.bnk`.** [`sblk`](crate::sblk) is Studio Liverpool's own
-//! bank, and its reader answers a Wwise file with "version 1145588546, expected
-//! 3": that number is the ASCII `BKHD` read as a `u32`. Wipeout: Omega
-//! Collection (PS4) is built on Wwise, and its `Data/audio/sound/*.bnk` are
-//! Audiokinetic's format, **bank generator version 118** on every one of the
-//! 107 banks in its base and patch archives (`data00` 53, `data05` 1,
-//! `data08` 53). The ten `.bnk` files in `data02` (all under
-//! `environments/`, six little-endian and four in HD's byte-swapped layout) are **not**
-//! Wwise: they open with the `SBlk` container's `version 3, 2 sections`, and
-//! [`Bank::parse`] refuses them with [`Error::NoHeader`].
+//! bank; its reader answers a Wwise file with "version 1145588546, expected 3"
+//! (the ASCII `BKHD` as a `u32`). Omega Collection (PS4) is built on Wwise:
+//! its `Data/audio/sound/*.bnk` are **bank generator version 118** on all 107
+//! banks in its base and patch archives (`data00` 53, `data05` 1, `data08`
+//! 53). The ten `.bnk` files in `data02` (all under `environments/`, six
+//! little-endian and four byte-swapped) are **not** Wwise: they open with the
+//! `SBlk` container's `version 3, 2 sections`, and [`Bank::parse`] refuses
+//! them with [`Error::NoHeader`].
 //!
 //! # The container
 //!
@@ -27,10 +26,9 @@
 //! HIRC  the object hierarchy   37 of 53 base banks
 //! ```
 //!
-//! The 16 base banks with a `BKHD` and nothing else (`weapons`, `shipHD`,
-//! every `speech_*` but two) are 32 bytes long: the names exist and the
-//! content is elsewhere. What "elsewhere" is has not been established; see
-//! [`Library`], which counts the references that lead nowhere.
+//! The 16 base banks with a `BKHD` and nothing else (`weapons`, `shipHD`, every
+//! `speech_*` but two) are 32 bytes: the names exist, the content is elsewhere,
+//! not established; see [`Library`], which counts the references leading nowhere.
 //!
 //! ## `BKHD`
 //!
@@ -44,48 +42,44 @@
 //! +0x14  ...  zero padding to the chunk's size (0 to 232 bytes)
 //! ```
 //!
-//! The padding is zero in all 107 banks - which is the check that the fields
-//! above are the whole of what a header carries in this version.
+//! The padding is zero in all 107 banks, so the fields above are the whole
+//! header in this version.
 //!
 //! ## `DIDX` and `DATA`
 //!
-//! `DIDX` is `{ u32 media id, u32 offset, u32 size }` records, twelve bytes
-//! each; `offset` is into the `DATA` chunk's body. Every record's range lies
-//! inside `DATA` (checked over all banks), and what it holds is a complete
-//! RIFF/WAVE `.wem` starting at its first byte. A `.wem` is the same file
-//! whether it is embedded here or ships loose as `<media id>.wem`: the bank
-//! chooses per sound, see [`hirc::StreamType`].
+//! `DIDX` is 12-byte `{ u32 media id, u32 offset, u32 size }` records; `offset`
+//! is into the `DATA` body. Every range lies inside `DATA` (all banks), holding
+//! a complete RIFF/WAVE `.wem` from its first byte. A `.wem` is the same file
+//! embedded or loose as `<media id>.wem`; the bank chooses per sound, see
+//! [`hirc::StreamType`].
 //!
 //! ## `HIRC`
 //!
 //! `u32 count`, then `count` objects `{ u8 type, u32 size, u32 id, body }`
-//! where `size` counts the `id` and the body. They tile the chunk exactly and
-//! the count is the header's (75 of 75 banks that have one: 37 in `data00`, 1 in
-//! `data05`, 37 in `data08`). Types seen: 1 settings, 2
-//! sound, 3 action, 4 event, 5 random/sequence container, 6 switch container,
-//! 7 actor-mixer, 8 bus, 9 layer container, 10 music segment, 11 music track,
-//! 12 music switch, 13 music random/sequence, 14 attenuation, 18-22 effects
-//! and modulators. [`Bank::objects`] indexes every one of them;
-//! [`hirc`] reads the ones the sound path needs.
+//! where `size` counts the `id` and the body. They tile the chunk and the count
+//! is the header's (75 of 75 banks that have one: 37 in `data00`, 1 in `data05`,
+//! 37 in `data08`). Types seen: 1 settings, 2 sound, 3 action, 4 event, 5
+//! random/sequence container, 6 switch container, 7 actor-mixer, 8 bus, 9
+//! layer container, 10 music segment, 11 music track, 12 music switch, 13
+//! music random/sequence, 14 attenuation, 18-22 effects and modulators.
+//! [`Bank::objects`] indexes every one; [`hirc`] reads the ones the sound path
+//! needs.
 //!
 //! An **event** is a list of action ids, an **action** names a target object
 //! (`Play` is `0x0403`), a **sound** names a media id and a codec, and a
-//! container or actor-mixer is a node with a parent. So an event resolves to
-//! media by following `event -> action -> target -> descendants`, which is
-//! [`Library::resolve_event`]. Nothing here is a *name*: an id is a hash, and
-//! the banks carry no event names.
+//! container or actor-mixer is a node with a parent. An event resolves to media
+//! by `event -> action -> target -> descendants`, [`Library::resolve_event`].
+//! Nothing here is a *name*: ids are hashes and the banks carry no event names.
 //!
 //! # What is and is not read
 //!
 //! Read and checked against every bank: the chunk walk, `BKHD`, `DIDX`/`DATA`,
 //! the `HIRC` framing, events, `Play` actions, sounds, music tracks' source
 //! lists and the **parent id** at the head of each node's base parameters.
-//! **Not read:** the rest of the base parameters (positioning, auxiliary
-//! sends, RTPCs - the parent id is the only thing this crate needs from
-//! them for sounds) and a sound container's own playlist. **Music is read**
-//! in [`music`]: segments, switches, random/sequence containers and a track's
-//! clips, field by field, refusing by name what was not measured. `STID` (bank names) is absent from every
-//! bank here. Evidence and counts: `docs/formats/wwise.md`.
+//! **Not read:** the rest of the base parameters (positioning, auxiliary sends,
+//! RTPCs) and a sound container's playlist. **Music is read** in [`music`],
+//! field by field, refusing by name what was not measured. `STID` (bank names)
+//! is absent from every bank here. Evidence and counts: `docs/formats/wwise.md`.
 
 use std::ops::Range;
 
@@ -99,14 +93,13 @@ pub mod wem;
 pub use hirc::{Kind, Object};
 pub use library::{EventPlan, Library, MediaRef, SegmentChain, SongChain, TrackChain, WalkError};
 
-/// The bank generator version every bank here carries, and the only one the
-/// layouts in this module were measured against.
+/// The bank generator version every bank here carries, the only one the layouts
+/// were measured against.
 pub const BANK_VERSION: u32 = 118;
 
 /// Wwise's name hash: FNV-1 (32-bit) over the lower-cased name. It is the id of
-/// an event, a state group, a state or a switch, and the banks carry only the
-/// result; checked against every name `Music.txt` lists (events, state groups
-/// and states).
+/// an event, state group, state or switch; the banks carry only the result.
+/// Checked against every name `Music.txt` lists.
 #[must_use]
 pub fn name_hash(name: &str) -> u32 {
     name.bytes().fold(2_166_136_261u32, |hash, byte| {
@@ -219,9 +212,8 @@ impl<'a> Bank<'a> {
     /// [`Error`] when the chunks do not tile the file, the first is not a
     /// `BKHD` of a supported version, or a `DIDX` or `HIRC` chunk is malformed.
     pub fn parse(data: &'a [u8]) -> Result<Self, Error> {
-        // Checked before the walk: a file of another container (the
-        // Studio Liverpool `SBlk` banks in `data02` are the case) would
-        // otherwise be walked as chunks and fail somewhere arbitrary.
+        // Checked before the walk: another container (the `SBlk` banks in
+        // `data02`) would otherwise fail somewhere arbitrary as chunks.
         if data.get(..4) != Some(b"BKHD") {
             return Err(Error::NoHeader);
         }
