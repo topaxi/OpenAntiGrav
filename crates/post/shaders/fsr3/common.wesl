@@ -20,7 +20,7 @@
 // pass's own resources are group 1.
 //
 // **Upstream works on linear light; this works on gamma**, the same space
-// `fsr1.wgsl` does. ADR-0020 makes gamma this renderer's authoritative colour
+// `fsr1.wesl` does. ADR-0020 makes gamma this renderer's authoritative colour
 // space and nothing linearises, so there is none to hand it. See `post::fsr3`
 // for the whole argument and what it costs.
 

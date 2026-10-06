@@ -1,6 +1,6 @@
 // FXAA: a lightweight, contrast-adaptive edge blur.
 //
-// Unlike `fsr1.wgsl` and `smaa.wgsl`, which are line-for-line transliterations
+// Unlike `fsr1.wesl` and `smaa.wesl`, which are line-for-line transliterations
 // of a specific MIT-licensed upstream, this is written from the published
 // description of the FXAA technique - luma-based edge detection, then a
 // directional blend across the detected edge - rather than copied from any
@@ -10,8 +10,11 @@
 // `post::fxaa` for what that trades away.
 //
 // **Works in perceptual space** - sRGB-encoded values, the same convention
-// `fsr1.wgsl` and `smaa.wgsl` use. See `post`'s module docs for the table of
+// `fsr1.wesl` and `smaa.wesl` use. See `post`'s module docs for the table of
 // who wants what.
+
+import oag_shaders::colour::luma_rec709;
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
 struct Constants {
     inv_size: vec2<f32>,
@@ -32,27 +35,9 @@ struct Constants {
 @group(0) @binding(1) var scene_sampler: sampler;
 @group(0) @binding(2) var<uniform> constants: Constants;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// The same fullscreen triangle `fsr1.wgsl` and the blit use: no vertex
-// buffer, and no seam down a quad's diagonal.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
-}
-
-// Rec. 709 luma weights - the same ones `smaa.wgsl`'s luma edge detection
-// uses, and the correct ones for sRGB primaries (Rec. 601's are the older
-// analogue-TV standard).
-fn luma(c: vec3<f32>) -> f32 {
-    return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+    return fullscreen_triangle(index);
 }
 
 // A tap `texel_offset` texels from `uv`, kept inside the drawn rectangle.
@@ -73,11 +58,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let east = sample_at(in.uv, vec2<f32>(1.0, 0.0));
     let west = sample_at(in.uv, vec2<f32>(-1.0, 0.0));
 
-    let luma_m = luma(center.rgb);
-    let luma_n = luma(north.rgb);
-    let luma_s = luma(south.rgb);
-    let luma_e = luma(east.rgb);
-    let luma_w = luma(west.rgb);
+    let luma_m = luma_rec709(center.rgb);
+    let luma_n = luma_rec709(north.rgb);
+    let luma_s = luma_rec709(south.rgb);
+    let luma_e = luma_rec709(east.rgb);
+    let luma_w = luma_rec709(west.rgb);
 
     let luma_min = min(luma_m, min(min(luma_n, luma_s), min(luma_e, luma_w)));
     let luma_max = max(luma_m, max(max(luma_n, luma_s), max(luma_e, luma_w)));

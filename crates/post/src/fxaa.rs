@@ -1,5 +1,5 @@
 //! Fast Approximate Anti-Aliasing: one fullscreen pass, luma edge detection
-//! then a directional blend. See [`fxaa.wgsl`](./fxaa.wgsl) for the shader
+//! then a directional blend. See [`fxaa.wesl`](../shaders/fxaa.wesl) for the shader
 //! and [`crate`] for the colour-space convention it draws in.
 //!
 //! # Why this and not a transliteration
@@ -7,7 +7,7 @@
 //! [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
 //! established transliterating a specific MIT-licensed upstream, attributed
 //! and reproduced under `licences/`, as this project's route for a shader it
-//! did not write - `fsr1.wgsl` and `smaa.wgsl` both are one. FXAA has no
+//! did not write - `fsr1.wesl` and `smaa.wesl` both are one. FXAA has no
 //! single canonical upstream with licensing this project can clear the same
 //! way: the widely distributed "FXAA 3.11" carries NVIDIA's own terms, and a
 //! transliteration of it would need those cleared and reproduced exactly like
@@ -119,7 +119,9 @@ impl Fxaa {
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("fxaa"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("fxaa.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/fxaa.wgsl")).into(),
+            ),
         });
 
         let layout = super::fullscreen_layout(device, "fxaa");

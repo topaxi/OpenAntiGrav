@@ -30,9 +30,12 @@
 //   restriction, so the helpers below read `edges_tex`, `area_tex` and so on
 //   directly rather than carrying them as arguments.
 //
-// **Works in perceptual space** - the edge detection pass is `smaa.wgsl`'s
-// own reason to want sRGB-encoded values, the same as `fsr1.wgsl` and
-// `fxaa.wgsl`. See `post`'s module docs.
+// **Works in perceptual space** - the edge detection pass is `smaa.wesl`'s
+// own reason to want sRGB-encoded values, the same as `fsr1.wesl` and
+// `fxaa.wesl`. See `post`'s module docs.
+
+import oag_shaders::colour::luma_rec709;
+import oag_shaders::fullscreen::{fullscreen_clip, fullscreen_uv};
 
 const THRESHOLD: f32 = 0.1;
 const MAX_SEARCH_STEPS: i32 = 8;
@@ -43,20 +46,6 @@ const AREATEX_PIXEL_SIZE: vec2<f32> = vec2<f32>(1.0 / 160.0, 1.0 / 560.0);
 const AREATEX_SUBTEX_SIZE: f32 = 1.0 / 7.0;
 const SEARCHTEX_SIZE: vec2<f32> = vec2<f32>(66.0, 33.0);
 const SEARCHTEX_PACKED_SIZE: vec2<f32> = vec2<f32>(64.0, 16.0);
-
-fn luma(c: vec3<f32>) -> f32 {
-    return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
-}
-
-// The same fullscreen triangle `fsr1.wgsl` and `fxaa.wgsl` use.
-fn fullscreen_triangle(index: u32) -> vec4<f32> {
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    return vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-}
-
-fn uv_of(index: u32) -> vec2<f32> {
-    return vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-}
 
 // Which sub-rectangle of the (allocation-sized) targets was actually drawn.
 //
@@ -87,7 +76,7 @@ struct Constants {
 
 fn edge_sample_luma(uv: vec2<f32>) -> f32 {
     let at = min(uv, constants.uv_max);
-    return luma(textureSample(edge_color_tex, edge_point_sampler, at).rgb);
+    return luma_rec709(textureSample(edge_color_tex, edge_point_sampler, at).rgb);
 }
 
 struct EdgeVsOut {
@@ -98,8 +87,8 @@ struct EdgeVsOut {
 @vertex
 fn edge_vs_main(@builtin(vertex_index) index: u32) -> EdgeVsOut {
     var out: EdgeVsOut;
-    out.uv = uv_of(index);
-    out.position = fullscreen_triangle(index);
+    out.uv = fullscreen_uv(index);
+    out.position = fullscreen_clip(index);
     return out;
 }
 
@@ -164,8 +153,8 @@ struct BlendVsOut {
 @vertex
 fn blend_vs_main(@builtin(vertex_index) index: u32) -> BlendVsOut {
     var out: BlendVsOut;
-    out.uv = uv_of(index);
-    out.position = fullscreen_triangle(index);
+    out.uv = fullscreen_uv(index);
+    out.position = fullscreen_clip(index);
     return out;
 }
 
@@ -337,9 +326,9 @@ struct NeighborhoodVsOut {
 @vertex
 fn neighborhood_vs_main(@builtin(vertex_index) index: u32) -> NeighborhoodVsOut {
     var out: NeighborhoodVsOut;
-    let uv = uv_of(index);
+    let uv = fullscreen_uv(index);
     out.uv = uv;
-    out.position = fullscreen_triangle(index);
+    out.position = fullscreen_clip(index);
     return out;
 }
 

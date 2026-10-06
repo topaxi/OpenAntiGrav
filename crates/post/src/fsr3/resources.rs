@@ -41,7 +41,7 @@
 //! `wgpu::Features::TEXTURE_ATOMIC` while buffer atomics are core. It is a
 //! storage buffer of `atomic<u32>` indexed `y * width + x`, cleared per frame
 //! by a compute dispatch - `clear_buffer` writes zero, and zero is the one
-//! value `atomicMin` must not start from. See `clear.wgsl`.
+//! value `atomicMin` must not start from. See `clear.wesl`.
 
 use wgpu::TextureFormat;
 
@@ -390,11 +390,11 @@ impl Targets {
             reconstructed_previous_nearest_depth: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("fsr3 reconstructed previous nearest depth"),
                 // One `u32` per render texel. `STORAGE` alone, because the
-                // only thing that ever writes this is a shader: `clear.wgsl`
+                // only thing that ever writes this is a shader: `clear.wesl`
                 // fills it and `prepare_inputs` scatters into it, so there is
                 // no host-side write and nothing needs `COPY_DST`. **Not
                 // `clear_buffer`**, which writes zero and only zero - see
-                // `clear.wgsl` for why zero is the one value that cannot be
+                // `clear.wesl` for why zero is the one value that cannot be
                 // used here.
                 size: u64::from(render.0) * u64::from(render.1) * 4,
                 usage: wgpu::BufferUsages::STORAGE,

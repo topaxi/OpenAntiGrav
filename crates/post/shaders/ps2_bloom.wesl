@@ -3,6 +3,9 @@
 // vertex colour of those dumps; the arithmetic is the GS's own 8-bit integer
 // blend, which is why each product is truncated to a whole byte.
 
+import oag_shaders::bytes::bytes;
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
+
 struct Constants {
     // The scene's drawn sub-rectangle as a UV scale and a clamp half a texel
     // inside its edge (`post::sub_rectangle`); only `fs_down` reads them.
@@ -18,27 +21,14 @@ struct Constants {
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> constants: Constants;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
+    return fullscreen_triangle(index);
 }
 
 // The seven tap weights, over 128: the vertex colour of each strip of the two
 // blur passes (`16, 32, 32, 64, 32, 32, 16`), under `MODULATE`.
 const WEIGHTS = array<u32, 7>(16u, 32u, 32u, 64u, 32u, 32u, 16u);
-
-fn bytes(texel: vec3<f32>) -> vec3<u32> {
-    return vec3<u32>(floor(texel * 255.0 + 0.5));
-}
 
 // Pass 1: `ALPHA 0x88`, `Cs * As >> 7`, with `TFX` decal so the source colour
 // is the frame's texel and the source alpha is the frame's alpha channel. The
@@ -49,7 +39,7 @@ fn fs_down(in: VertexOutput) -> @location(0) vec4<f32> {
     let at = min(in.uv * constants.uv_scale, constants.uv_max);
     let texel = textureSample(source_tex, source_sampler, at);
     let alpha = u32(floor(min(texel.a, 1.0) * 128.0 + 0.5));
-    return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha >> vec3<u32>(7u)) / 255.0, 1.0);
+    return vec4<f32>(vec3<f32>((bytes(texel.rgb) * alpha) >> vec3<u32>(7u)) / 255.0, 1.0);
 }
 
 // Passes 2 and 3: seven additive draws offset -3..+3 texels along `direction`,
@@ -68,7 +58,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
             continue;
         }
         let v = bytes(textureLoad(source_tex, at, 0).rgb);
-        sum = min(sum + (v * WEIGHTS[i] >> vec3<u32>(7u)), vec3<u32>(255u));
+        sum = min(sum + ((v * WEIGHTS[i]) >> vec3<u32>(7u)), vec3<u32>(255u));
     }
     return vec4<f32>(vec3<f32>(sum) / 255.0, 1.0);
 }

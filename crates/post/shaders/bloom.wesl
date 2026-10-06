@@ -9,6 +9,9 @@
 // own alpha channel, which only surfaces that opt in ever write - see
 // `crate::exhaust` for the first writer this project reproduces.
 
+import oag_shaders::bytes::bytes;
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
+
 struct Constants {
     // One texel of the texture being sampled.
     texel: vec2<f32>,
@@ -37,20 +40,9 @@ struct Constants {
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> constants: Constants;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// The same fullscreen triangle the other passes here use: no vertex buffer,
-// and no seam down a quad's diagonal.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
+    return fullscreen_triangle(index);
 }
 
 // `g_bloom_blur_weights` (`DAT_08ab2348`), the eleven bytes verbatim. The
@@ -61,11 +53,6 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 // original's and is a large part of why its glow is as strong as it is;
 // dividing it out here would be inventing a different effect.
 const WEIGHTS = array<u32, 11>(20u, 30u, 40u, 50u, 64u, 64u, 64u, 50u, 40u, 30u, 20u);
-
-// A sampled texel as the 8-bit integers the GE holds it in.
-fn bytes(texel: vec3<f32>) -> vec3<u32> {
-    return vec3<u32>(floor(texel * 255.0 + 0.5));
-}
 
 // **Every product below is truncated to a whole byte, as the original's is.**
 // The GE multiplies and adds in 8-bit integers and each of the blur's eleven

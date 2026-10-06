@@ -23,7 +23,7 @@
 //!
 //! The GE adds in 8-bit integers and the blur is eleven separate additive
 //! draws, so each tap's `floor(v * w / 255)` is a whole byte before it joins
-//! the sum. `bloom.wgsl` does the same. It is not cosmetic: the opaque mask
+//! the sum. `bloom.wesl` does the same. It is not cosmetic: the opaque mask
 //! stamp of `4` leaves the bright pass at most 4, the horizontal pass at most 3
 //! (three taps of weight 64 keep 1 each), and the vertical pass truncates that
 //! to nothing, so the original's bloom carries no background term at all. A
@@ -107,7 +107,7 @@ pub const BLUR_RADIUS: i32 = 5;
 /// composite's `GU_FIX` source factor carries on every channel.
 pub const COMPOSITE_STRENGTH: u8 = 0xaf;
 
-/// The uniform block `bloom.wgsl` reads. `repr(C)` and 16-byte aligned: the
+/// The uniform block `bloom.wesl` reads. `repr(C)` and 16-byte aligned: the
 /// two `vec2`s pack into one row, the strength starts another, and the drawn
 /// sub-rectangle fills a third.
 #[repr(C)]
@@ -192,7 +192,9 @@ impl Bloom {
         let format = format.remove_srgb_suffix();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("bloom"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("bloom.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/bloom.wgsl")).into(),
+            ),
         });
 
         let layout = super::fullscreen_layout(device, "bloom");

@@ -8,6 +8,15 @@
 /// `(artifact, module path, features switched on)`. One module may be built
 /// more than once, as `prepare_inputs` is for MSAA.
 const ARTIFACTS: &[(&str, &str, &[&str])] = &[
+    ("fxaa", "package::fxaa", &[]),
+    ("fill_depth", "package::fill_depth", &[]),
+    ("smaa", "package::smaa", &[]),
+    ("fsr1", "package::fsr1", &[]),
+    ("motion_blur", "package::motion_blur", &[]),
+    ("omega_tonemap", "package::omega_tonemap", &[]),
+    ("hd_bloom", "package::hd_bloom", &[]),
+    ("ps2_bloom", "package::ps2_bloom", &[]),
+    ("bloom", "package::bloom", &[]),
     ("fsr3_clear", "package::fsr3::clear", &[]),
     ("fsr3_prepare_inputs", "package::fsr3::prepare_inputs", &[]),
     (

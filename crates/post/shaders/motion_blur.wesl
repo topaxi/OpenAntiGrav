@@ -4,7 +4,7 @@
 // Written from the published description of McGuire, Hennessy, Bukowski and
 // Osman, *A Reconstruction Filter for Plausible Motion Blur* (I3D 2012),
 // rather than transliterated from any implementation - the rule ADR-0012
-// sets and the way `fxaa.wgsl` was already done. The chain is the paper's:
+// sets and the way `fxaa.wesl` was already done. The chain is the paper's:
 // a tile pass reducing the velocity buffer to each tile's dominant motion
 // (run separably, one axis at a time - see `fs_tile_max_x`), a neighbour pass
 // spreading that dominance one tile outward, and a gather whose taps are
@@ -13,7 +13,7 @@
 // the background bleeding across the object's silhouette. Both halves of
 // "both" are load-bearing: see `fs_reconstruct`'s cylinder term.
 //
-// The velocity buffer itself is written by the scene - `mesh.wgsl`'s
+// The velocity buffer itself is written by the scene - `mesh`'s
 // `velocity_of`, real per-draw motion - so unlike the camera-reprojection
 // pass this file replaced, a craft holding station beside the camera is
 // measured as still rather than computed as moving. See
@@ -21,6 +21,8 @@
 //
 // **Works in perceptual space**, the same convention every pass in `post`
 // draws in (ADR-0020): the gather averages stored encoded values.
+
+import oag_shaders::fullscreen::fullscreen_clip;
 
 struct Constants {
     // The viewport rectangle inside the target, in uv of the whole target:
@@ -74,12 +76,10 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 }
 
-// The same fullscreen triangle `fxaa.wgsl` and the blit use.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     var out: VertexOutput;
-    let corner = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.position = vec4<f32>(corner * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
+    out.position = fullscreen_clip(index);
     return out;
 }
 

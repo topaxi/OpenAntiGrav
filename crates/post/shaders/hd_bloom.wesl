@@ -5,6 +5,8 @@
 // .envsettings "HDR and Bloom" block; the inline constants are the
 // executable's verbatim.
 
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
+
 struct Constants {
     // One blur step: the authored tap spacing already divided by the buffer
     // size - the executable's own arithmetic, whose hard-coded divisors
@@ -59,19 +61,9 @@ fn drawn(uv: vec2<f32>) -> vec2<f32> {
     return min(uv * constants.uv_scale, constants.uv_max);
 }
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// The same fullscreen triangle every post pass in this crate uses.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
+    return fullscreen_triangle(index);
 }
 
 // FunkLayerBloomGate_fp (0x92d580): the bright pass, over the quarter-res
