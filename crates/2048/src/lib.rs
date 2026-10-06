@@ -146,7 +146,7 @@ pub const TITLE: &Title = &Title {
     // The four triggers a title answers for itself are unread on 2048, so none
     // draws (ADR-0058). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's. The shield tint likewise.
-    effects: &oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse")),
+    effects: &EFFECTS,
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,
@@ -165,6 +165,27 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: None,
+};
+
+/// The effects Wipeout 2048 plays: the engine's own names, tried as Pulse's, minus
+/// the ones **Wipeout 2048 never authors**.
+///
+/// `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`,
+/// `WO_BLUE_WELDER`, `WO_RAIN`, `WO_RAIN_LENS` and `WO_SNOW` are in no archive
+/// of this title (every `.pob` of `data.psarc`, both `data1`/`data2` patch archives and both DLC packs, both regions listed, 2026-10-06) and no string of
+/// its executable names them (`grep -a` over the v1.04 and base `eboot.elf`: 0 hits each, against 2
+/// for `WO_ROCKET_FLARE`). They are Pulse's, so each loads as a report line
+/// and nothing else; leaving them out is the title's own effect set, not a
+/// hidden absence. See `docs/formats/pob.md`, "Effects Pulse names that
+/// Wipeout 2048 never authors".
+const EFFECTS: oag_title::Effects = {
+    use oag_title::Trigger;
+    let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        .without(Trigger::PlasmaBlast)
+        .without(Trigger::EngineFlare)
+        .without(Trigger::LeachbeamEnergy);
+    effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
+    effects
 };
 
 /// 2048's music: the front end's loop and the eleven race tracks.

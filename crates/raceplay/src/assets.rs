@@ -57,7 +57,13 @@ pub(super) fn leach_beam_texture(
     archives: &mut oag_assets::Archives,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
-    match exhaust_texture(archives, LEACHBEAM_TEXTURE) {
+    let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
+    let found = match &own {
+        Some(entry) => decode_texture(archives, entry)
+            .map(|texture| (texture, format!("{entry}: the LeachBeam ribbon's own texture"))),
+        None => exhaust_texture(archives, LEACHBEAM_TEXTURE),
+    };
+    match found {
         Ok((texture, note)) => {
             report.push(note);
             Some(texture)
@@ -373,11 +379,48 @@ pub(crate) fn decode_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> std::result::Result<FlareTexture, String> {
-    if name.to_ascii_lowercase().ends_with(".gxt") {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".gxt") {
         decode_gxt(archives, name)
+    } else if lower.ends_with(".gnf") {
+        decode_gnf(archives, name)
     } else {
         decode_gtf(archives, name)
     }
+}
+
+/// Pulse's `.mip` entry `name` as this source ships the same texture: the
+/// same directory and stem with the platform's own extension, `.gxt` on the
+/// Vita and `.gnf` on the PS4. `None` on a platform whose textures keep the
+/// name as authored. 2048 and Omega ship `Cannon_bolt`, `cannon_muzzle_flash`
+/// and `pulse_leechbeam1_ADD` under `Data\Weapons\Textures` this way, and
+/// both executables name `Cannon_bolt` and `Cannon_muzzle`.
+pub(crate) fn platform_sibling(archives: &oag_assets::Archives, name: &str) -> Option<String> {
+    let ext = match archives.layout.platform {
+        oag_assets::Platform::Vita => "gxt",
+        oag_assets::Platform::Ps4 => "gnf",
+        _ => return None,
+    };
+    let stem = name.strip_suffix(".mip")?;
+    Some(format!("{stem}.{ext}"))
+}
+
+/// One PS4 `.gnf` out of the archive set, base level - [`decode_gxt`]'s
+/// Omega counterpart.
+pub(crate) fn decode_gnf(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> std::result::Result<FlareTexture, String> {
+    let blob = archives
+        .read_name(name)
+        .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
+    let sprite = psys::sprite::Sprite::from_gnf(&blob)
+        .ok_or_else(|| format!("{name}: {} bytes, does not decode", blob.len()))?;
+    Ok(FlareTexture {
+        width: u32::from(sprite.width),
+        height: u32::from(sprite.height),
+        rgba: sprite.rgba.to_vec(),
+    })
 }
 
 /// One Vita `.gxt` out of the archive set, as pixels the exhaust pipeline can
