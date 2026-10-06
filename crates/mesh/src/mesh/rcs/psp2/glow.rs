@@ -129,6 +129,8 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
             .is_none()
             .then(|| inherited_scroll(material, &mut *textures))
             .flatten();
+        report.inherited_unread += usize::from(inherited.is_some_and(|(_, read)| !read));
+        let inherited = inherited.map(|(rate, _)| rate);
         let (plain_set, inherited_set) = (plain.is_some(), inherited.is_some());
         let scroll = plain.or(inherited).and_then(|rate| {
             let track = AnimTrack::Scroll(rate);
@@ -183,7 +185,7 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
 
 /// The scroll a 2048 or Omega material inherits from HD's vertex law - see
 /// [`vertex_scroll::inherited_rate`] for what makes it inherited.
-fn inherited_scroll(material: &Material, textures: Textures<'_>) -> Option<[f32; 2]> {
+fn inherited_scroll(material: &Material, textures: Textures<'_>) -> Option<([f32; 2], bool)> {
     let stem = material.name.rsplit(['/', '\\']).next()?;
     let stem = stem.strip_suffix(".rcsmaterial").unwrap_or(stem);
     let own = material
@@ -204,9 +206,10 @@ fn inherited_scroll(material: &Material, textures: Textures<'_>) -> Option<[f32;
                 .any(|p| !p.is_fragment() && p.parameter(time).is_some())
         })
     });
-    vertex_scroll::inherited_rate(stem, own, vertex_time, |hash| {
+    let rate = vertex_scroll::inherited_rate(stem, own, vertex_time, |hash| {
         material.param(hash)?.first().copied()
-    })
+    })?;
+    Some((rate, vertex_time.is_some()))
 }
 
 /// The V rate of a plain scroll: `speed_multipliaer` on a material that names

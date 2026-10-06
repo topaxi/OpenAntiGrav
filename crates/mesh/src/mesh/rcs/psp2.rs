@@ -125,6 +125,9 @@ pub struct Report {
     /// authored rate hashes, no 2048 or Omega instruction read** - see
     /// `vertex_scroll::inherited_rate`.
     pub inherited_scrolls: usize,
+    /// Of those, the ones admitted without a readable shader program to
+    /// confirm the vertex stage declares `time` (every Omega one: GCN).
+    pub inherited_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`) not drawn - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,

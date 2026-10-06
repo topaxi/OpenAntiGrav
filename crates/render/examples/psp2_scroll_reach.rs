@@ -34,8 +34,11 @@ fn main() -> anyhow::Result<()> {
                 continue;
             };
             println!(
-                "{track}: glow {} plain {} inherited {}",
-                report.glow_layers, report.scrolling_materials, report.inherited_scrolls
+                "{track}: glow {} plain {} inherited {} unread {}",
+                report.glow_layers,
+                report.scrolling_materials,
+                report.inherited_scrolls,
+                report.inherited_unread
             );
             if std::env::var_os("OAG_SCROLL_DRAWS").is_some() {
                 for d in model.draws.iter().filter(|d| !d.range.is_empty()) {

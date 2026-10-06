@@ -135,10 +135,12 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
 /// Anulpha Pass is an HD circuit ported into 2048's DLC1: its
 /// `mt_uvanim_diffuse_emissive` and `cf_uvanim_emssive*` records carry HD's own
 /// values (`docs/formats/2048-material-params.md`, "Inherited from HD"). Its
-/// glow layers play HD's engine clock (rate `1.0`, no `TimeScaler` authored) and
-/// 18 materials scroll off HD's vertex law by the rate hashes they author.
-/// Remove `inherited_rate`'s call and the second assertion fails; restore the
-/// authored `time` as the rate and the first can fail on a `0.0` or `19992.0`.
+/// glow layers author neither `TimeScaler` nor `time` and play HD's engine
+/// clock, and 18 materials scroll off HD's vertex law by the rate hashes they
+/// author, each confirmed by a readable vertex program (`inherited_unread` is
+/// 0). Remove `inherited_rate`'s call and the count assertion fails. The glow
+/// rate rule itself is pinned by `vineta_ks_authored_time_is_not_its_rate`,
+/// because Anulpha's layers would read `1.0` under the old rule too.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
 fn anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
@@ -224,4 +226,28 @@ fn omegas_anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
         model.emissive
     );
     assert_eq!(report.inherited_scrolls, 11, "{}", report.describe());
+    // Omega's programs are GCN: every admission is by name and hashes alone.
+    assert_eq!(report.inherited_unread, 11, "{}", report.describe());
+}
+
+/// 2048's Vineta K authors `time` on its `mt_uvanim_diffuse_emissive2` and
+/// `and_anim_spec` records (`0.0`, `1.0`, `1.0144`, `1.1448`) and no
+/// `TimeScaler`; HD's identical records author no `time`. The rule that read the
+/// authored `time` as the rate gave `{0.0, 1.0, 1.0144, 1.1448}`; HD's engine
+/// clock gives `{1.0}`.
+fn distinct_rates(model: &Model) -> Vec<f32> {
+    let mut rates: Vec<f32> = model.emissive.iter().map(|e| e.rate).collect();
+    rates.sort_by(f32::total_cmp);
+    rates.dedup();
+    rates
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn vineta_ks_authored_time_is_not_its_rate() {
+    let Some((model, report)) = build_at("vineta", "DLC1/environments/Vineta_K") else {
+        return;
+    };
+    assert!(report.glow_layers >= 10, "{}", report.describe());
+    assert_eq!(distinct_rates(&model), vec![1.0], "{:?}", model.emissive);
 }
