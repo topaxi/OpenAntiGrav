@@ -433,7 +433,6 @@ impl Driver {
         // Positive yaw about the craft's up turns it left (right-hand rule,
         // forward on -Z); using "turning right" keeps signs equal to the
         // steering input's. Craft up, never world up: wrong once the track rolls.
-        // track rolls.
         let actual = -body.angular_velocity.dot(body.up());
 
         let rate_error = wanted - actual;

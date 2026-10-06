@@ -1,28 +1,22 @@
 //! Named characters a driver can be drawn from.
 //!
-//! # A pilot is ranges, a personality is one draw from them
-//!
-//! [`Personality`](crate::Personality) is what a single craft got; a [`Pilot`]
-//! is the *distribution*, so four aggressive craft are four different
-//! aggressive drivers.
+//! A [`Pilot`] is a *distribution*, a [`Personality`](crate::Personality) one
+//! draw from it: four aggressive craft are four different aggressive drivers.
 //!
 //! # The draw order is frozen
 //!
 //! **Draws one to seven are what shipped before pilots existed, in that order,
-//! for ever. A new axis appends after them; it never goes between.**
+//! for ever. A new axis appends after them; it never goes between**, or it
+//! silently re-rolls every later axis for every pilot.
 //!
 //! - [`Pilot::BALANCED`] reproduces the pre-pilot personality bit for bit, for
-//!   every seed, so pilots moved no behaviour and no world hash:
-//!   `the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`
+//!   every seed (no behaviour or world-hash change):
+//!   `the_balanced_pilot_reproduces_the_personality_that_shipped_before_pilots_existed`,
 //!   against literals captured before the change.
-//! - Every pilot consumes the *same* draws in the same order, so an axis
-//!   inserted in the middle would silently re-roll every later axis for every
-//!   pilot.
-//!
-//! The roll axes ([`Pilot::roll_chance`], [`Pilot::roll_floor`],
-//! [`Pilot::roll_airtime`]) are draws 17-19, appended 2026-09-06;
-//! `every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended`
-//! guards that no earlier axis moved.
+//! - The roll axes ([`Pilot::roll_chance`], [`Pilot::roll_floor`],
+//!   [`Pilot::roll_airtime`]) are draws 17-19, appended 2026-09-06;
+//!   `every_built_in_pilot_still_draws_what_it_drew_before_the_roll_axes_were_appended`
+//!   guards that no earlier axis moved.
 //!
 //! A pilot holding an axis fixed uses [`Span::fixed`], and one wanting a side
 //! uses [`Lean`]; both still draw and discard, since skipping the draw would
@@ -124,10 +118,8 @@ pub struct Pilot {
     /// Multiplier on the lookahead. Draw 5.
     pub look: Span,
     /// Multiplier on `Tuning::lateral_accel`, so on corner speed. Draw 6.
-    ///
-    /// **The axis that must not be generous**: over what the hull can hold is a
-    /// driver in the wall. `no_pilot_asks_for_more_grip_than_the_hull_has` is
-    /// the ceiling.
+    /// **Must not be generous**: over what the hull can hold is a driver in the
+    /// wall (`no_pilot_asks_for_more_grip_than_the_hull_has` is the ceiling).
     pub commitment: Span,
     /// Multiplier on `Tuning::brake_lookahead`. Below one is a late braker.
     /// Draw 7.
@@ -148,46 +140,34 @@ pub struct Pilot {
     pub courtesy: Span,
     /// How readily this pilot moves **to cover** a craft behind it. Draw 12.
     pub defence: Span,
-    /// How early this pilot lifts off for a craft close ahead. Draw 13.
-    ///
-    /// **The axis that stops the other two causing pile-ups**: courtesy and
-    /// defence move craft toward each other and nothing else reacts to a
-    /// closing gap.
+    /// How early this pilot lifts off for a craft close ahead. Draw 13. **Stops
+    /// the other two causing pile-ups**: courtesy and defence move craft toward
+    /// each other and nothing else reacts to a closing gap.
     pub caution: Span,
     /// How readily this pilot throws the craft sideways at a rival level with
     /// it. Draw 14.
     pub ram: Span,
-    /// How long being overtaken stings, in ticks. Draw 15.
-    ///
-    /// A duration, not a decay rate: `Driver` must stay `Eq` to live in the
-    /// world snapshot, so it carries an integer countdown.
+    /// How long being overtaken stings, in ticks. Draw 15. A duration, not a
+    /// decay rate: `Driver` must stay `Eq`, so it carries an integer countdown.
     pub provocation_ticks: Span,
-    /// How readily this pilot puts a weapon in the air once it has a target.
-    /// Draw 16. Rolled each tick against [`Personality::trigger`], so it sets
-    /// the *expected delay* after a target enters the cone, not a probability of
-    /// firing (`Driver::wants_to_fire`).
+    /// How readily this pilot fires once it has a target. Draw 16. Rolled each
+    /// tick against [`Personality::trigger`], so it sets the *expected delay*
+    /// after a target enters the cone (`Driver::wants_to_fire`).
     pub trigger: Span,
     /// How readily this pilot commits to a barrel roll, **per airborne
-    /// window**. Draw 17.
-    ///
-    /// A true probability, unlike [`Self::trigger`]: one decision per flight, on
-    /// the first tick past [`Self::roll_airtime`] (`Driver::wants_to_roll`).
-    ///
-    /// **Invented, a deliberate deviation**: the original's opponents never
-    /// barrel-roll.
+    /// window**. Draw 17. A true probability, unlike [`Self::trigger`]: one
+    /// decision per flight, past [`Self::roll_airtime`] (`Driver::wants_to_roll`).
+    /// **Invented, a deliberate deviation**: the original's opponents never roll.
     pub roll_chance: Span,
-    /// The fraction of its shield pool this pilot keeps back rather than
-    /// spending on a barrel roll. Draw 18.
-    ///
-    /// The "energy budget" of the maintainer's directive (an `Ace` rolls "as
-    /// long as there's energy budget"), carried on
-    /// `ShipControls::roll_shield_floor` and enforced in `oag_physics`; a
-    /// human's pad leaves it `0.0` and gets the recovered behaviour.
+    /// The fraction of its shield pool this pilot keeps back from a roll. Draw
+    /// 18. The maintainer's "energy budget" ("an `Ace` rolls as long as there's
+    /// energy budget"), carried on `ShipControls::roll_shield_floor` and enforced
+    /// in `oag_physics`; a human's pad leaves it `0.0`.
     pub roll_floor: Span,
-    /// How long a flight has to have lasted, **in seconds**, before this pilot
-    /// thinks a roll worth it. Draw 19. Seconds because it is compared against
-    /// `ShipState::time_airborne`; a roll that does not complete before
-    /// touchdown is wasted shield, so this keeps a pilot from paying for a hop.
+    /// How long a flight has to have lasted, **in seconds**, before a roll is
+    /// worth it. Draw 19. Compared against `ShipState::time_airborne`; a roll
+    /// not completing before touchdown wastes shield, so this keeps a pilot from
+    /// paying for a hop.
     pub roll_airtime: Span,
 }
 

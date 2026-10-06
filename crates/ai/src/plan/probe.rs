@@ -15,11 +15,9 @@ use super::{Course, Craft, Driver, Failure, Run, SpeedPlan, Tuning, forward_spee
 /// One tick of a [`drive`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Row {
-    /// Ticks since the grid.
     pub tick: u32,
     /// The line sample the driver located itself on.
     pub index: u32,
-    /// Forward speed after the step.
     pub speed: f32,
     /// Signed distance from the line point across it, positive to the right.
     pub offset: f32,
@@ -29,17 +27,13 @@ pub struct Row {
     pub left: f32,
     /// The corridor's right bound there (zero or positive), or NaN with none.
     pub right: f32,
-    /// The steering the driver asked for, `-1..=1`.
     pub steer: f32,
-    /// Where the craft is.
     pub position: Vec3,
     /// World-Y velocity.
     pub climb: f32,
     /// World-Y component of the craft's nose direction.
     pub pitch: f32,
-    /// Whether the craft touched a wall this tick.
     pub contact: bool,
-    /// Whether it was off the ground.
     pub airborne: bool,
     /// What the tick counted as, the plan's own rules.
     pub failure: Option<Failure>,

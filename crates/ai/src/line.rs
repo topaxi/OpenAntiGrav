@@ -108,11 +108,9 @@ impl Line {
         }
     }
 
-    /// Wraps a list of points and the corridor around them.
-    ///
-    /// A corridor of the wrong length is **dropped**, not truncated: a short one
-    /// would silently give the back of the track no room and read as a driver
-    /// bug.
+    /// Wraps a list of points and the corridor around them. A corridor of the
+    /// wrong length is **dropped**, not truncated: a short one would silently
+    /// give the back of the track no room.
     #[must_use]
     pub fn with_corridor(points: Vec<Vec3>, corridor: Vec<Frame>) -> Self {
         let corridor = if corridor.len() == points.len() {
@@ -132,17 +130,15 @@ impl Line {
     ///
     /// # Chosen, not measured (maintainer decision, 2026-09-29)
     ///
-    /// [`Self::curvature`] reads a chord touching one of these as straight: a
-    /// craft over a gap is airborne and steers nothing. At `01_Track`'s lip
-    /// (samples 31-42, about 60 degrees down onto a lower floor) the pitch read
-    /// as a 0.075 rad/unit bend and our Ace braked from 127 u/s to about 20. The
-    /// original's field, logged live in PPSSPP, crossed it 21 times of 21 at
-    /// 69-111 u/s. The original's AI is not copied: opponents obey the player's
-    /// physics and drive smarter. Narrowed to gaps because discounting *every*
-    /// pitch change killed three more `ai_clean_lap_gate` rows. See
-    /// `docs/gameplay/leaving-the-track.md`.
-    ///
-    /// A mask of the wrong length is dropped, like [`Self::with_corridor`]'s.
+    /// [`Self::curvature`] reads a chord touching one as straight: a craft over a
+    /// gap is airborne and steers nothing. At `01_Track`'s lip (samples 31-42)
+    /// the pitch read as a 0.075 rad/unit bend and our Ace braked from 127 u/s to
+    /// about 20; the original's field crossed it 21 times of 21 at 69-111 u/s.
+    /// The original's AI is not copied: opponents obey the player's physics and
+    /// drive smarter. Narrowed to gaps because discounting *every* pitch change
+    /// killed three more `ai_clean_lap_gate` rows
+    /// (`docs/gameplay/leaving-the-track.md`). A mask of the wrong length is
+    /// dropped, like [`Self::with_corridor`]'s.
     #[must_use]
     pub fn with_unsupported(mut self, unsupported: Vec<bool>) -> Self {
         self.unsupported = if unsupported.len() == self.points.len() {
@@ -408,23 +404,22 @@ impl Line {
     /// How sharply the line bends `span` ahead of `index`, in radians per unit.
     ///
     /// Three points (here, `span` ahead, `span` past that) give a turned angle
-    /// over a travelled distance. Measured *ahead* because a corner has to be
-    /// seen before it is entered. Zero on a straight, a degenerate line, or
-    /// fewer than three points.
+    /// over a travelled distance, measured *ahead* because a corner has to be
+    /// seen before it is entered. Zero on a straight, a degenerate line, or fewer
+    /// than three points.
     ///
     /// # A valley is not a corner
     ///
     /// **The bend is the turn a craft steers plus the crest it may leave the
-    /// ground over**, not any pitch change (see [`bend_angle`]). A concave line
-    /// presses the craft into the road and asks nothing of its yaw, so braking
-    /// for it only costs speed. `05_Track` runs a 70 units/s crest lip after
-    /// such a bend, and a craft that braked 7 units/s at the foot arrived at 69
-    /// and clipped it, where 71 and up cleared it.
+    /// ground over**, not any pitch change ([`bend_angle`]): a concave line
+    /// presses the craft into the road, and braking for it only costs speed.
+    /// `05_Track`'s 70 units/s crest lip follows such a bend, and a craft that
+    /// braked 7 units/s at the foot arrived at 69 and clipped it (71 cleared).
     ///
     /// **Chosen, not measured**, board in `docs/gameplay/ai.md` ("A valley is
-    /// not a corner"). It revisits `64da876e`, which discounted *every* pitch
-    /// change and was narrowed to gaps in `2c1a3d4f` because it took crests
-    /// faster everywhere; keeping the convex half is what that lacked.
+    /// not a corner"). It revisits `64da876e` (discounted *every* pitch change,
+    /// narrowed to gaps in `2c1a3d4f` because it took crests faster everywhere);
+    /// keeping the convex half is what that lacked.
     #[must_use]
     pub fn curvature(&self, index: usize, span: f32) -> f32 {
         if self.points.len() < 3 {

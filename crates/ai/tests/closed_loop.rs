@@ -2,37 +2,28 @@
 //!
 //! # Why this exists
 //!
-//! The controller's unit tests cannot see the failure this file was written for,
-//! a *loop* property: the first version of this AI tracked the line on any single
-//! tick and drove wall to wall in a race.
-//!
-//! **The plant is a double integrator with a lag in front of it.**
-//! `oag_physics::engine::steering` feeds `Accumulators::local_angular`, a
-//! **torque**, so steering commands yaw *acceleration*; `controls::ramp_steering`
-//! lags the input itself. A controller proportional to line error overshoots and
-//! keeps doing it: a limit cycle, not a tuning error, and no gain fixes it.
+//! Unit tests cannot see the failure this file was written for, a *loop*
+//! property: the first version of this AI tracked the line on any single tick
+//! and drove wall to wall in a race. **The plant is a double integrator with a
+//! lag**: `oag_physics::engine::steering` feeds `Accumulators::local_angular`, a
+//! **torque**, so steering commands yaw *acceleration*, and
+//! `controls::ramp_steering` lags the input. A controller proportional to line
+//! error overshoots for ever: a limit cycle no gain fixes.
 //!
 //! # The numbers that justified the rewrite
 //!
-//! **Written first and watched failing.** Against the proportional-on-error
-//! controller it replaced, on the oval below over 1,800 ticks:
-//!
-//! | | peak error from the line |
-//! | --- | --- |
-//! | proportional on error | **84.1** |
-//! | yaw-rate tracking | **7.3** |
-//!
-//! **Amplitude is what is asserted; counting line crossings was tried and
-//! discarded**: both controllers cross about as often (19 against 16), since a
-//! tight tracker still crosses at every corner entry and exit.
+//! **Written first and watched failing.** Peak error from the line on the oval
+//! below over 1,800 ticks: proportional on error **84.1**, yaw-rate tracking
+//! **7.3**. **Amplitude is what is asserted; counting line crossings was tried
+//! and discarded** (19 against 16: a tight tracker crosses at every corner
+//! entry and exit).
 //!
 //! # What this is not
 //!
-//! **It is not the game**: a flat infinite plane, invented handling (see
-//! [`handling`]). Whether the field gets round `16_Track` is
-//! `race_ground_truth::the_ai_drives_the_field_along_the_track`, which needs a
-//! disc. This says the controller is stable against a plant of the right
-//! *shape*.
+//! **Not the game**: a flat infinite plane, invented handling ([`handling`]).
+//! Whether the field gets round `16_Track` is
+//! `race_ground_truth::the_ai_drives_the_field_along_the_track` (needs a disc).
+//! This says the controller is stable against a plant of the right *shape*.
 
 use oag_ai::{Driver, Field, Frame, Line, Pilot, Rival, Span, Tuning};
 use oag_core::math::{Quat, Vec3};
@@ -125,14 +116,12 @@ fn handling() -> Handling {
 
 /// The tuning this file's invented craft is driven with.
 ///
-/// **`Tuning::default()`'s `lateral_accel` is measured against the real hulls
-/// and does not describe this one**: the disc's craft carry `grip_ground` 10
-/// and `accelcap` 17 in loader units, [`handling`] invents 40 and 60 (187
-/// against 300 top speed), so at the shipped 180 this fixture slides 81 units
-/// off its line. The invented hull gets an invented matching tuning, so every
-/// number here measures **controller stability, not the speed target** (real
-/// data: `race_ground_truth::the_ai_drives_the_field_along_the_track`).
-/// `the_default_tuning_is_not_this_ones` pins the split.
+/// **`Tuning::default()`'s `lateral_accel` is measured against the real hulls**
+/// ([`handling`] invents `grip_ground` 40 and `accelcap` 60 against the disc's
+/// 10 and 17, so 187 against 300 top speed); at the shipped 180 this fixture
+/// slides 81 units off its line. So every number here measures **controller
+/// stability, not the speed target**. `the_default_tuning_is_not_this_ones`
+/// pins the split.
 fn tuning() -> Tuning {
     Tuning {
         lateral_accel: 55.0,
@@ -142,14 +131,11 @@ fn tuning() -> Tuning {
 
 /// The same craft, with airbrakes that do something.
 ///
-/// **A second fixture, and the split is load-bearing.** [`handling`] leaves
-/// `airbrake` and `brakes` at `Handling::ZERO`, so airbrake commands go nowhere
-/// and braking is `thrust = 0`. The bounds in
+/// **A second fixture, load-bearing**: [`handling`] leaves `airbrake` and
+/// `brakes` at `Handling::ZERO`, so braking is `thrust = 0`, and the bounds in
 /// [`a_craft_settles_onto_the_line_instead_of_weaving`] were calibrated against
-/// that craft, so giving it airbrakes would silently re-baseline the regression.
-/// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`]
-/// pins it. **None of these is the game's** (ADR-0006): round figures giving
-/// airbrakes that slow, yaw and cost grip on the order of the other forces.
+/// it (see [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`]).
+/// **None of these is the game's** (ADR-0006).
 fn handling_with_airbrakes() -> Handling {
     Handling {
         airbrake: params::Airbrake {
@@ -1037,11 +1023,9 @@ fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
 
 /// The companion to
 /// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`]:
-/// stops the next reader collapsing two different things into one.
-/// `Tuning::default()`'s `lateral_accel` was swept against the **real** hulls
-/// and is roughly three times what this invented craft holds; driving it with
-/// that puts the craft 81 units off its line, which would read as weaving when
-/// it is the speed target asking for grip the hull lacks.
+/// `Tuning::default()`'s `lateral_accel` is about three times what this
+/// invented craft holds, and would read as weaving when it is the speed target
+/// asking for grip the hull lacks.
 #[test]
 fn the_default_tuning_is_not_this_ones() {
     assert_ne!(

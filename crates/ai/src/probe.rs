@@ -1,29 +1,22 @@
 //! A fixed scenario the determinism gate runs the drivers over.
 //!
-//! The third probe, after [`oag_core::probe`] and `oag_physics::probe`.
-//! Neither reaches this crate: the physics probe drives *scripted* input, and
-//! `oag_gameplay`'s scenario fields no opponent. Until this file existed
+//! The third probe, after [`oag_core::probe`] and `oag_physics::probe`, which
+//! cannot reach this crate (scripted input; no opponent). Until this existed
 //! **every arithmetic decision an opponent makes was outside the cross-platform
 //! gate**, which is how [`Line::curvature`](crate::Line::curvature) called the
-//! platform's own `acos` for months. It uses `oag_core::math::acos` now.
+//! platform's own `acos` for months.
 //!
-//! # What it exercises that the other two cannot
+//! It exercises what the others cannot: [`Line::curvature`](crate::Line::curvature)
+//! over a **spread** of angles ([`RunResult::curvature`], [`circuit`]); the
+//! personality draws; the social axes (four craft, a [`Field`] each per tick);
+//! and the mistake and provocation counters, integer state that agrees or does
+//! not.
 //!
-//! - [`Line::curvature`](crate::Line::curvature) over a **spread** of angles
-//!   (see [`RunResult::curvature`] and [`circuit`]): corners of one radius pass
-//!   under any monotone error in the angle.
-//! - The personality draws, seven-plus spans in a frozen order.
-//! - The social axes: four craft, a [`Field`] per craft per tick.
-//! - The mistake and provocation counters: integer state that cannot drift
-//!   gradually, it agrees or it does not.
-//!
-//! # No disc image
-//!
-//! `data/` is gitignored, so a disc-backed scenario would never run on Windows
-//! or macOS, where portability bugs show. The circuit is built here, and **the
-//! hulls and circuit are invented** per
-//! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
-//! Whether the field gets round a *real* track is
+//! No disc image: `data/` is gitignored, so a disc-backed scenario would never
+//! run on Windows or macOS, where portability bugs show. **The hulls and circuit
+//! are invented** per
+//! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md);
+//! the real-track check is
 //! `race_ground_truth::the_ai_drives_the_field_along_the_track`.
 
 use crate::{Context, Driver, Field, Frame, Line, Pilot, Rival, Tuning};
@@ -56,9 +49,8 @@ pub enum Scenario {
     /// abreast and a little apart so the field interacts from the first tick.
     Field,
     /// The same circuit driven by one craft with a `Driver::default()`: the
-    /// plain line-follower, which isolates the aim point, curvature and speed
-    /// target from everything the pilots add, so a divergence says which half
-    /// moved.
+    /// plain follower, isolating aim, curvature and speed target from what the
+    /// pilots add, so a divergence says which half moved.
     Solo,
 }
 
@@ -87,14 +79,9 @@ pub struct RunResult {
     /// stopped advancing, would hash consistently while testing nothing.
     pub curvature: (f32, f32),
     /// How far the *least* travelled craft went, in world units: the other half
-    /// of "this scenario still tests something". Four craft spun off at tick 30
-    /// hash reproducibly and say nothing about a driver; a controller that cannot
-    /// hold this circuit, or a grid beside the line, are what an invented
-    /// fixture invites.
-    ///
-    /// **Path length, not line index**: a driver's index is a windowed
-    /// nearest-point search that jitters by a point or two per tick, which
-    /// summing its deltas measures instead of progress.
+    /// of "this scenario still tests something" (craft spun off at tick 30 hash
+    /// reproducibly and say nothing). **Path length, not line index**, which
+    /// jitters by a point or two per tick and would measure that instead.
     pub travelled: f32,
 }
 
@@ -141,12 +128,9 @@ impl Raycaster for Plane {
 }
 
 /// A craft that can drive, with invented numbers, **and airbrakes that work**.
-///
-/// `closed_loop.rs`'s default fixture ends `..Handling::ZERO`, leaving every
-/// airbrake and brake term at zero; its bounds were calibrated that way. A
-/// determinism gate that leaves a control path at zero hashes a path nobody
-/// drives, so this one commands, ramps and spends all of them. **None of these
-/// is the game's**, per ADR-0006.
+/// `closed_loop.rs`'s fixture leaves every airbrake term at zero, which a
+/// determinism gate must not (it would hash a path nobody drives). **None of
+/// these is the game's**, ADR-0006.
 fn handling() -> Handling {
     Handling {
         engine: params::Engine {
