@@ -47,6 +47,7 @@ use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 use oag_mesh::mesh::GpuVertex;
 
 mod emitter_state;
+mod error;
 pub mod field;
 pub mod frames;
 mod library;
@@ -58,6 +59,7 @@ pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
 use emitter_state::EmitterState;
+pub use error::Error;
 use frames::FrameAdvance;
 pub use library::Library;
 use spawn::Spawn;
@@ -163,6 +165,12 @@ pub enum Blend {
     /// here as alpha-over, which is the closer of the two available
     /// pipelines. No corpus emitter uses it.
     AlphaOver,
+    /// Class 8: the shock-distortion and heat-haze emitters Omega authors,
+    /// which its `psys_normal_heathaze` shader draws by sampling the scene
+    /// behind the sprite. **Simulated and not drawn**: what that shader reads
+    /// and writes is unrecovered, and a guessed blend would be an invention.
+    /// [`Effect::undrawn_emitters`] names these so the loader can say so.
+    Distort,
 }
 
 /// What byte value an emitter's colour table and alpha channel treat as
@@ -360,73 +368,6 @@ pub struct Effect {
     skipped_templates: usize,
 }
 
-/// Something in a `.pob` this module cannot play.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// The blob would not parse at all.
-    Format(pob::Error),
-    /// An emitter's render-mode index is past the executable's eight-entry
-    /// blend table, so it has no draw handler. Refused rather than guessed:
-    /// a wrong guess here draws nothing, which looks exactly like the
-    /// effect never being triggered.
-    UnknownDrawClass {
-        /// The emitter's name.
-        emitter: String,
-        /// The index found.
-        render_mode: u32,
-    },
-    /// An emitter's blend class is not one the GE state selector switches
-    /// on.
-    UnknownBlendClass {
-        /// The emitter's name.
-        emitter: String,
-        /// The class found.
-        blend_class: u32,
-    },
-    /// A channel block's mode has no traced consumer.
-    UnknownChannelMode {
-        /// The emitter's name.
-        emitter: String,
-        /// The raw mode word.
-        mode: u32,
-    },
-    /// More emitters than [`MAX_EMITTER_STATES`] can ever run.
-    TooManyEmitters {
-        /// How many the file holds.
-        count: usize,
-    },
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Format(error) => write!(f, "{error}"),
-            Self::UnknownDrawClass {
-                emitter,
-                render_mode,
-            } => write!(f, "{emitter}: render mode {render_mode} has no draw class"),
-            Self::UnknownBlendClass {
-                emitter,
-                blend_class,
-            } => write!(f, "{emitter}: blend class {blend_class} is not dispatched"),
-            Self::UnknownChannelMode { emitter, mode } => {
-                write!(f, "{emitter}: channel mode {mode} has no consumer")
-            }
-            Self::TooManyEmitters { count } => {
-                write!(f, "{count} emitters, more than {MAX_EMITTER_STATES}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<pob::Error> for Error {
-    fn from(error: pob::Error) -> Self {
-        Self::Format(error)
-    }
-}
-
 impl Effect {
     /// Parses `data`, a whole `.pob` blob, into a playable effect.
     ///
@@ -494,6 +435,15 @@ impl Effect {
         Ok(effect)
     }
 
+    /// The names of the emitters that play but draw nothing, because their
+    /// blend class is [`Blend::Distort`].
+    pub fn undrawn_emitters(&self) -> impl Iterator<Item = &str> {
+        self.emitters
+            .iter()
+            .filter(|spec| spec.blend == Blend::Distort)
+            .map(|spec| spec.name.as_str())
+    }
+
     /// The emitters [`System::ignite`] starts.
     #[must_use]
     pub fn roots(&self) -> &[usize] {
@@ -537,6 +487,7 @@ impl EmitterSpec {
         let blend = match record.blend_class {
             2 => Blend::Additive,
             1 | 3 => Blend::AlphaOver,
+            8 => Blend::Distort,
             other => {
                 return Err(Error::UnknownBlendClass {
                     emitter: emitter(),
@@ -1175,6 +1126,7 @@ impl System {
             let out: &mut Vec<GpuVertex> = match spec.blend {
                 Blend::Additive => additive,
                 Blend::AlphaOver => alpha_over,
+                Blend::Distort => continue,
             };
             let rgb = [colour[0], colour[1], colour[2]];
             if let Render::Streak { .. } = spec.render {

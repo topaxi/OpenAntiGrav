@@ -1044,8 +1044,12 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   `Data\particles` and `Data\particles2048` (not `Data\Psys`), with `.gnf`
   sprites; a race reads `particles2048` on an `environments2048` circuit and
   `particles` elsewhere (chosen, not measured - `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`).
-  21 of the wired effects load on Tech De Ra; the blend-class-8 distortion and
-  heat-haze effects are refused by name and draw nothing. Still silent: the
+  The blend-class-8 distortion emitter (`shockdistort`) is read and not drawn
+  (2026-10-06, `pob.md`): the explosions play their other emitters, and the effects
+  Omega never authors are left out of its table. Still logged at WARN on a race: the two
+  HUD atlases (`HUD_Components.gtf`, `hdHUD.mip`) are HD's names asked of an Omega
+  archive that has no such entry, because Omega's HUD is unread (`crates/omega/src/hud.rs`:
+  fragment XML under `Data\xml\` with no per-mode composition), and the blob shadow. Still silent: the
   blob shadow is this project's generated falloff, not the disc's.
 - **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
   `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race

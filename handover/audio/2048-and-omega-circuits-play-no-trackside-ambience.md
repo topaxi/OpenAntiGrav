@@ -49,3 +49,10 @@ format (SBlk v5 against Wwise) and agree on the directory.
 2. The `env_altima.bnk` framing failure: an hour to a day, depending on whether
    it is a new section or a size field.
 3. Omega via `oag_formats::wwise`: its own lane, a day or more.
+
+## Log state, 2026-10-06 (logwarn-2048)
+
+The 2048 default log still carries `crowd~crowd` plus six `env_alt~...` lines at WARN and
+Omega carries the `crowd`/`env_tec`/`techder` ones: they are this thread's open items 1-4
+and are the honest absence, not noise. Nothing was demoted. Item 1 alone moves no cue
+(the 2048 banks need item 2's hashed lookup first), so the order above stands.
