@@ -529,8 +529,8 @@ fn write_one_kind(
 }
 
 impl super::Scene {
-    /// Writes `scene` - the circuit's fog, light rig and eye, the Zone half
-    /// off - onto every weapon drawable a PS3 program shades.
+    /// Writes `scene` - the circuit's fog, light rig and eye, with the Zone half
+    /// switched off here - onto every weapon drawable a PS3 program shades.
     ///
     /// **A drawable nothing writes holds `Scene::off`**: fog off, the stand-in
     /// light and `Fog::camera = (0, 0, 0)`. Every HD weapon program reads
@@ -550,6 +550,10 @@ impl super::Scene {
     /// and mag floor. No frame of them was kept (a detonation needs a rival to
     /// run onto the bomb), so nothing says writing them is right.
     pub(super) fn write_weapon_scenes(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        let scene = &mesh_render::Scene {
+            zone: mesh_render::Zone::default(),
+            ..*scene
+        };
         let pools = [
             self.plasma_blast.ball.iter(),
             self.plasma_blast.halo.iter(),

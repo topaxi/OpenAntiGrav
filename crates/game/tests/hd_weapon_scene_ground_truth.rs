@@ -22,8 +22,6 @@
 //! from the unwritten one. The thresholds sit between the two measured values,
 //! which are in each test's comment (written, then the write dropped).
 
-use std::path::Path;
-
 const SIZE: (usize, usize) = (960, 544);
 
 /// Every pixel of a PNG this project's own writer made, as `[r, g, b]`.

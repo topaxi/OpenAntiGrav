@@ -10,8 +10,8 @@
 //!
 //! # What only a frame can say here
 //!
-//! The ball's `RIM_GLOW` program paints `a = (0.9 (1 - rim^5))^5` with `rim = 1
-//! - N.V`, brightest face-on (`docs/rendering/hd-unlit-programs.md`). The eye
+//! The ball's `RIM_GLOW` program paints `a = (0.9 (1 - rim^5))^5` where `rim` is
+//! one minus `N.V`, brightest face-on (`docs/rendering/hd-unlit-programs.md`). The eye
 //! in `N.V` is read out of the drawable's own scene block, and a drawable
 //! nothing wrote holds `Scene::off`, whose camera is the world's origin: the
 //! ball was then shaded from the direction to the origin, a ragged half-lit

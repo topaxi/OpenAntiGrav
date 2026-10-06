@@ -1,10 +1,8 @@
 //! Runs the boot sequence headless and writes one frame to a PNG.
 //!
-//! Three reasons this exists rather than being a debug convenience: it works over
-//! SSH and in CI, it is how the boot sequence and the menu can be shown to
-//! somebody without a display, and it goes through **the same** renderer the
-//! window does, so what it captures is what the window draws. A separate capture
-//! path would prove nothing.
+//! It works over SSH and in CI, shows the boot sequence and the menu without a
+//! display, and goes through **the same** renderer the window does, so what it
+//! captures is what the window draws. A separate capture path would prove nothing.
 
 use anyhow::{Context, Result};
 use log::debug;
