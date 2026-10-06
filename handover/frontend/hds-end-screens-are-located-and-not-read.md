@@ -1,4 +1,4 @@
-# HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium's entry still open
+# HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium multiplayer-only
 
 2026-09-18: located, not read. **2026-09-21: `EndRace Results`/`EndRace Menu`
 read widget by widget and drawn.** Full write-up in
@@ -53,15 +53,17 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   is not reproduced; what byte `0x009384e1` and `g_GameState+0xe4` are.
 - ~~`EndRace Podium` is inventoried, not modelled.~~ **2026-10-06
   (`hd-endrace-podium`): read and drawn** off `DATA05`'s copy
-  (`load_hd_podium`) by `--menu-page endrace-podium`; the slot setter
-  (`0x00220108`, 78) and its one caller (`0x00220820`, 76) are in
-  `ps3-hdfury-eu/endrace-podium.md`. **Still open under it**: the code that
-  *enters* the screen (no `goto=` names it; found no code site) - until
-  then the live flow stays Results -> Menu; what game-state `0xe0 == 0x11`
-  is; the ship portraits and badge panels; its title string
-  (`FE_ENDRACE_PODIUM`) is only in `DATA05`/`06`'s English table, not the
-  served `DATA02`'s. Omega: checked, applies, not wired (Results, Menu,
-  Podium, no Rewards in all three copies).
+  (`load_hd_podium`) by `--menu-page endrace-podium`, plinths included. The
+  slot setter (`0x00220108`, 78) and caller (`0x00220820`, 76) are in
+  `ps3-hdfury-eu/endrace-podium.md`, and **its entry is found**:
+  `FUN_000459d8` in the `MPRaceManager` family goes to it at `0x00045e4c`
+  (74), so it is multiplayer-only and the live single-player flow correctly
+  stays Results -> Menu. **Still open under it**: what starts the `+0x34ec`
+  deadline, the `DAT_008a5644`/`DAT_008b0458` bytes, the ship portraits
+  (`pod_img`) and badge panels, its title string (`FE_ENDRACE_PODIUM`, only in
+  `DATA05`/`06`'s table), and what `+0x50` of a race record is (the same
+  unidentified field as `Grid1.r`). Omega: checked, applies, not wired
+  (Results, Menu, Podium, no Rewards in all three copies).
 - **Which copy the runtime actually loads is still unresolved** - the same
   open question [hd-frontend.md](../../docs/formats/hd-frontend.md) records
   for `skin.xml`'s six copies. This build serves `DATA02`'s, by

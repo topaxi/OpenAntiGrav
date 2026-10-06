@@ -452,8 +452,9 @@ highlighted); `EndRace Menu` - the applicable `race_again`/`return_to_grid`/
 `return_to_menu`/`view_again` options, each at its own authored `<Block>`
 position. `EndRace Podium` draws too (2026-10-06, `--menu-page endrace-podium`
 only): the winner in the middle column, second left, third right, at the
-positions the slot setter computes - see the formats page. The original's
-entry into it is unread, so the live flow stays Results -> Menu.
+positions the slot setter computes, plinths included - see the formats page.
+The original enters it from its multiplayer race managers only, so the live
+single-player flow stays Results -> Menu.
 Full "what does and does not draw, and why" is
 [`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs)'s own module doc.
 

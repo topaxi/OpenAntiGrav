@@ -2,34 +2,43 @@
 //! off the screen's own authored widgets plus the three positions its
 //! constructor computes.
 //!
-//! **Reached by `--menu-page endrace-podium` only.** Nothing in any archive's
-//! XML names this screen (no `goto=` in all seven), and the executable's one
-//! caller of its slot setter (`0x00220820`, which fills the three slots off
-//! the race manager's records) is entered from a path this project has not
-//! traced - see `docs/ghidra/functions/ps3-hdfury-eu/endrace-podium.md`. The
-//! live flow stays Results -> Menu until that gate is read.
+//! **Reached by `--menu-page endrace-podium` only, and rightly.** Nothing in
+//! any archive's XML names this screen, but the code does: the multiplayer
+//! race managers' end-of-race sequencer (`0x000459d8`, a member of the
+//! `MPRaceManager` family - `ps3-hdfury-eu/race-manager.md`) enters it at
+//! `0x00045e4c` once its end deadline has passed, holds it 16 seconds and
+//! leaves for `Kill Game Transition`; mid-series it goes to `Load Next Race`
+//! instead. This project has no multiplayer, so the live single-player flow
+//! stays Results -> Menu. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/endrace-podium.md`.
 //!
-//! What is measured (the slot setter `0x00220108`, read 2026-10-06):
+//! What is measured (the slot setter `0x00220108`, read 2026-10-06; every
+//! `0x2f..` TOC slot resolved with `scripts/ps3-toc.py`):
 //!
 //! - A slot's column is `slot * 0x168` (360) apart on the 1920 grid, and the
 //!   place picks the slot: first place is slot 2, second slot 1, third slot 3
-//!   (the middle column is the winner). Slot 2 lands on the authored
-//!   `pod_head.2` `x="795"`, which is what pins the 360 step.
-//! - The name sits at `x = 70 + 360 * slot`, `y = 532 - 80 * (4 - place)`.
+//!   (the middle column is the winner).
+//! - The name (`pod_text`) sits at `x = 70 + 360 slot`,
+//!   `y = 532 - 80 (4 - place)`; the heading (`pod_head`) at
+//!   `x = 120 + 360 slot`, `y = 485 - 80 (4 - place)`, with the idstring
+//!   `IG_HUD_1ST`/`2ND`/`3RD` by place.
+//! - The plinth (`pod_dots`, `dot.gtf`) at `x = 60 + 360 slot`,
+//!   `y = 565 - 80 (4 - place)`, 352 wide and `80 (4 - place)` tall, so every
+//!   plinth ends on `y = 565` and the winner's is tallest; its sampled
+//!   rectangle takes the same two numbers.
+//! - The local player's name and plinth are `HD_Blue`, anyone else's
+//!   `0xff646464`.
 //!
-//! What is **chosen, not measured**: the heading's `y` (`name y - 62`, which
-//! puts first place's heading on its authored `y="230"`), the heading text
-//! (`IG_HUD_1ST`/`2ND`/`3RD`, all present in HD's English table; the three
-//! authored `pod_head` idstrings are all `IG_HUD_1ST` and the code is what
-//! overwrites them, its string pointers unread), and the local player's
-//! ink (`HD_Blue`, see [`PLAYER_INK`]), and the screen's own title: its
-//! `FE_ENDRACE_PODIUM` is in `DATA05`/`DATA06`'s English table and not in
-//! `DATA02`'s, the one this build's string table is read from, so the title
-//! draws nothing (an honest absence) until the table is read per copy.
+//! **Chosen, not measured**: the local player's `HD_Blue` value
+//! ([`PLAYER_INK`]: `DATA06`'s, the code reads the archive's own, which this
+//! layout does not resolve), and the screen's title - `FE_ENDRACE_PODIUM` is
+//! in `DATA05`/`DATA06`'s English table and not in `DATA02`'s, the one this
+//! build's string table is read from, so the title draws nothing (an honest
+//! absence) until the table is read per copy.
 //!
-//! Never drawn: the ship portraits (`pod_img.N`, a `miniBW.tga` the code
-//! picks per team), the dots plinth images, and the eight `b_b.N` badge
-//! panels (an online achievement system with no state here).
+//! Never drawn: the ship portraits (`pod_img.N`, a texture the code picks per
+//! record) and the eight `b_b.N` badge panels (a per-player badge list with no
+//! state here).
 //!
 //! No pointer targets: the screen authors no `NavigationController` and no
 //! redirect, so there is nothing to select or confirm.
@@ -45,7 +54,10 @@ use crate::endrace::draw::{fill_draw, image_draw, text_draw};
 /// One racer on the podium.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PodiumSlot {
-    /// The pilot's display name.
+    /// The pilot's display name. The original prints the race record's string
+    /// at `+0x50`, the same field `EndRace Results`' `Grid1.r` shows and this
+    /// project has not identified, so what a live race would put here is
+    /// open.
     pub name: String,
     /// Whether this is the local player - drawn in a different ink.
     pub player: bool,
@@ -59,10 +71,16 @@ pub struct HdPodium {
 }
 
 const COLUMN_STEP: f32 = 360.0;
-const NAME_X: f32 = 70.0;
-const NAME_Y_FIRST: f32 = 532.0 - 80.0 * 3.0;
 const PLACE_STEP: f32 = 80.0;
-const HEAD_ABOVE_NAME: f32 = 62.0;
+const NAME_X: f32 = 70.0;
+const NAME_Y_BOTTOM: f32 = 532.0;
+const HEAD_X: f32 = 120.0;
+const HEAD_Y_BOTTOM: f32 = 485.0;
+const PLINTH_X: f32 = 60.0;
+const PLINTH_BOTTOM: f32 = 565.0;
+const PLINTH_WIDTH: f32 = 352.0;
+/// The ink `pod_dots` and `pod_text` carry for anyone but the local player.
+const OTHER_INK: u32 = 0xff64_6464;
 /// `HD_Blue` as `DATA06` spells it (`0xff8ac0ca`, the literal `Block_Construct`
 /// also compiles in). The code colours the local player's name with the
 /// archive's own `FEGlobals->HD_Blue`, which differs per archive (a red on
@@ -139,35 +157,50 @@ pub fn hd_podium_draw_list(
             out.push(text_draw(text, string, layout));
         }
     }
-    let heading = screen
-        .texts
+    let find = |name: &str| {
+        screen
+            .texts
+            .iter()
+            .find(|text| text.name.as_deref() == Some(name))
+    };
+    let (heading, name_text) = (find("pod_head.1"), find("pod_text.1"));
+    let plinth = screen
+        .images
         .iter()
-        .find(|text| text.name.as_deref() == Some("pod_head.1"));
-    let name_text = screen
-        .texts
-        .iter()
-        .find(|text| text.name.as_deref() == Some("pod_text.1"));
+        .find(|image| image.name.as_deref() == Some("pod_dots.1"));
     for (index, entry) in model.places.iter().enumerate() {
         let Some(entry) = entry else { continue };
         let place = index + 1;
-        let slot = slot_of(place);
-        let name_y = NAME_Y_FIRST + PLACE_STEP * (place - 1) as f32;
-        if let Some(heading) = heading {
-            let mut head = text_draw(heading, strings.get_or_id(place_idstring(place)), layout);
+        let slot = slot_of(place) as f32;
+        let rise = PLACE_STEP * (4 - place) as f32;
+        let ink = if entry.player { PLAYER_INK } else { OTHER_INK };
+        if let Some(authored) = plinth {
+            if let Some(placed) = sprites(&authored.src) {
+                let mut drawn = authored.clone();
+                drawn.x = PLINTH_X + COLUMN_STEP * slot;
+                drawn.y = PLINTH_BOTTOM - rise;
+                drawn.width = Some(PLINTH_WIDTH);
+                drawn.height = Some(rise);
+                drawn.texture_width = Some(PLINTH_WIDTH);
+                drawn.texture_height = Some(rise);
+                drawn.color = ink;
+                out.push(image_draw(&drawn, placed));
+            }
+        }
+        if let Some(authored) = heading {
+            let mut head = text_draw(authored, strings.get_or_id(place_idstring(place)), layout);
             if let Draw::Text { x, y, .. } = &mut head {
-                *x = heading.x + COLUMN_STEP * (slot as f32 - 2.0);
-                *y = name_y - HEAD_ABOVE_NAME;
+                *x = HEAD_X + COLUMN_STEP * slot;
+                *y = HEAD_Y_BOTTOM - rise;
             }
             out.push(head);
         }
         if let Some(authored) = name_text {
             let mut name = text_draw(authored, &entry.name, layout);
             if let Draw::Text { x, y, color, .. } = &mut name {
-                *x = NAME_X + COLUMN_STEP * slot as f32;
-                *y = name_y;
-                if entry.player {
-                    *color = argb_to_rgba(PLAYER_INK);
-                }
+                *x = NAME_X + COLUMN_STEP * slot;
+                *y = NAME_Y_BOTTOM - rise;
+                *color = argb_to_rgba(ink);
             }
             out.push(name);
         }

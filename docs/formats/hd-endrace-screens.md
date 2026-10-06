@@ -285,35 +285,38 @@ line) and pad `Gridi.8`/`Gridi.9` with different placeholder teams
 at runtime" reading above, and none of it changes what a real race's own
 values would be.
 
-## `EndRace Podium`: read and drawn, entry untraced
+## `EndRace Podium`: read and drawn, multiplayer only
 
 `DATA05` and `DATA06` only (`DATA02`, the copy this build serves for the
 others, has none, so `oag_game::endrace::load_hd_podium` walks every copy of
 the screen file with `Archives::read_every_name` and takes the first that
 authors it - `DATA05` - for this one screen). `pod_head.{1,2,3}` all author
-`IG_HUD_1ST`, but that is a placeholder the code overwrites: the slot setter
-reads in [endrace-podium.md](../ghidra/functions/ps3-hdfury-eu/endrace-podium.md)
-(78) puts the winner in the middle column (`x = 70 + 360 slot`, slot 2),
-second left, third right, each 80 lower than the last, with the player's own
-name in `HD_Blue`. The eight `b_b.N` panels are a per-player badge list
-(`"BADGE NAME TEST"`/`"NAME OF PLAYER X"` are placeholders) with no state in
-this project.
+`IG_HUD_1ST`, but that is a placeholder the code overwrites; the slot setter
+([endrace-podium.md](../ghidra/functions/ps3-hdfury-eu/endrace-podium.md), 78)
+puts the winner in the middle column, second left and third right, each name,
+heading and `dot.gtf` plinth at a computed position (plinths 352 wide, `80 (4 -
+place)` tall, all ending on `y = 565`), the local player in `HD_Blue`. The
+eight `b_b.N` panels are a per-player badge list (`"BADGE NAME TEST"`/`"NAME OF
+PLAYER X"` are placeholders) with no state in this project.
 
-This corrects the earlier note that the screen has "no honest single-player
-mapping": the code fills it from the race's own first three records in
-every mode it was read for, with no online test. What is unread is the entry.
-**No `goto=` in any archive names it, and the code site that enters it was
-not found**, so the live flow stays Results -> Menu.
+**Entered by the multiplayer race managers** (74): `FUN_000459d8`, a member of
+the `MPRaceManager` family, goes to it at `0x00045e4c` once its end deadline has
+passed (and the series is not mid-way), holds it 16 s and leaves for `Kill Game
+Transition`. No `goto=` in any archive names it, which is why the XML alone
+never showed an entry. This project has no multiplayer, so the live flow stays
+Results -> Menu and the screen is drawn by `--menu-page endrace-podium` only.
+The earlier note that the screen has "no honest single-player mapping" stands in
+the sense that matters: the slot fill is generic (first three records) but the
+only entry found is multiplayer.
 
-Drawn by `--menu-page endrace-podium` only (synthetic names, labelled in the
-code), off the authored backdrop, title arrow, rules and the three
-heading/name pairs at the measured positions. Not drawn: the ship portraits
-(`pod_img`, a texture the code picks per team), the plinth images, the badge
-panels, and the title - its `FE_ENDRACE_PODIUM` is in `DATA05`/`DATA06`'s
+Drawn (synthetic names, labelled in the code): the authored backdrop, title
+arrow and rules, and per place a heading (`1ST`/`2ND`/`3RD`), name and plinth.
+Not drawn: the ship portraits (`pod_img`, a texture the code picks per record),
+the badge panels, and the title - `FE_ENDRACE_PODIUM` is in `DATA05`/`DATA06`'s
 English table and not in `DATA02`'s, which is the table this build reads.
-**Chosen, not measured**: the heading `y` (`name y - 62`, which lands first
-place on its authored `y="230"`), the heading idstrings and the player's ink.
-No pointer targets: the screen authors nothing to select.
+**Chosen, not measured**: only `HD_Blue`'s value (`DATA06`'s; the code reads
+the archive's own) and the absent title. No pointer targets: the screen
+authors nothing to select.
 
 Verified in `crates/game/tests/hd_endrace_ground_truth.rs`
 (`hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it`).

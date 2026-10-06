@@ -384,11 +384,12 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
 }
 
 /// `EndRace Podium` off the real disc: the loader finds it in `DATA05` (the
-/// copy `holder_of` does not serve, `DATA02`'s, has none) without disturbing
-/// the other three screens, and the draw puts first place in the middle
-/// column at the slot setter's own `x`, second to its left and third to its
-/// right, each lower than the last, with the authored placeholders
-/// (`BADGE NAME TEST`, `NAME OF PLAYER X`) never drawn.
+/// copy `holder_of` does not serve, `DATA02`'s, has none) and brings its
+/// `dot.gtf` plinth texture, without disturbing the other three screens. The
+/// draw then puts first place in the middle column at the slot setter's own
+/// positions (`0x00220108`), second to its left and third to its right, each
+/// plinth ending on the same `y = 565` with the winner's tallest, and never
+/// draws the authored placeholders (`BADGE NAME TEST`, `NAME OF PLAYER X`).
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
@@ -439,7 +440,7 @@ fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
             &strings,
             None,
             false,
-            &|_| None,
+            &|src| screens.sprites.get(src),
         )
     };
     let at = |layers: &oag_ui::menu::Layers, wanted: &str| -> (f32, f32) {
@@ -463,12 +464,29 @@ fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
     let (second_x, second_y) = at(&layers, "BRAVO");
     let (third_x, third_y) = at(&layers, "CHARLIE");
     assert!((first_x - 790.0).abs() < 0.5, "winner is the middle column");
+    assert!((first_y - 292.0).abs() < 0.5, "first place's name y");
     assert!(second_x < first_x && first_x < third_x, "2nd, 1st, 3rd");
     assert!(first_y < second_y && second_y < third_y, "each place lower");
-    for heading in ["1ST", "2ND", "3RD"] {
-        at(&layers, heading);
+    let (head_x, head_y) = at(&layers, "1ST");
+    assert!((head_x - 840.0).abs() < 0.5 && (head_y - 245.0).abs() < 0.5);
+    at(&layers, "2ND");
+    at(&layers, "3RD");
+    let plinths: Vec<[f32; 4]> = layers
+        .body
+        .iter()
+        .filter_map(|d| match d {
+            Draw::TiledSprite { rect, .. } | Draw::Sprite { rect, .. } if rect[2] == 352.0 => {
+                Some(*rect)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(plinths.len(), 3, "one plinth per place: {plinths:?}");
+    for rect in &plinths {
+        assert!((rect[1] + rect[3] - 565.0).abs() < 0.5, "common baseline");
     }
-    assert!((at(&layers, "1ST").1 - 230.0).abs() < 0.5, "authored y");
+    let tallest = plinths.iter().map(|r| r[3]).fold(0.0, f32::max);
+    assert!((tallest - 240.0).abs() < 0.5, "the winner's plinth is 240");
     for placeholder in ["BADGE NAME TEST", "NAME OF PLAYER X"] {
         assert!(
             !layers
