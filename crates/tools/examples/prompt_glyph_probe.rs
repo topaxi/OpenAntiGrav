@@ -24,7 +24,7 @@ fn main() {
     let cell = 40usize;
     let (w, h) = (cell * zoom * chars.len(), cell * zoom);
     let mut rgba = vec![0u8; w * h * 4];
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         px[3] = 255;
     }
     for (i, ch) in chars.iter().enumerate() {

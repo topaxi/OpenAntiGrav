@@ -113,7 +113,14 @@ fn a_stand_in_draws_as_the_substitute_glyph_once_one_is_set() {
     };
     let swapped = render_text(Substitution::none().with(TABLE, 0, art_index("xbox-a")))
         .expect("the same adapter");
-    let ink = |pixels: &[u8]| pixels.chunks_exact(4).filter(|p| p[0] > 64).count();
+    let ink = |pixels: &[u8]| {
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[0] > 64)
+            .count()
+    };
     assert!(ink(&disc) > 0, "the disc's own glyph draws");
     assert!(ink(&swapped) > 0, "the substitute draws");
     assert_ne!(disc, swapped, "the substitution reached the pixels");
