@@ -25,7 +25,10 @@ use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh;
 use oag_vex::vex;
 
-const TEAMS: [&str; 12] = [
+/// The twelve teams and Zone's own shared hull (`oag_hd::race::ZONE_SHIP`),
+/// which is what a Zone race flies whoever the player picked.
+const TEAMS: [&str; 13] = [
+    "zone",
     "ag_systems",
     "assegai",
     "auricom",

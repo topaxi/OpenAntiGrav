@@ -307,6 +307,14 @@ impl Scene {
         // original, so there is nothing about them for that switch to test.
         for drawable in &self.ships {
             drawable.write_anims(queue, seconds);
+            // A hull whose hinges are `Anim Transform` nodes (HD's, 2048's
+            // `Airbrake_L`/`Airbrake_R`) bakes the flap's vertices in the
+            // hinge's own space and carries its slot. The table starts as
+            // all-identity, so without this the flap draws at the model's
+            // origin - the middle of the hull - instead of on its hinge,
+            // stowed or deflected. A no-op on a hull with none (every PSP
+            // and PS2 one).
+            drawable.write_node_anims(queue, seconds);
         }
         // `self.boost` is deliberately left out of both lists, at `Fog::off`
         // from `mesh_render::build`. Whether the original fogs the plume is
