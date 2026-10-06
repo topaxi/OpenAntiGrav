@@ -42,7 +42,12 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         );
     }
     for trigger in [Trigger::MagstripSparks, Trigger::MagstripZone] {
-        assert_eq!(has(trigger), [true, true, true, true, false], "{trigger:?}");
+        // Pulse reads neither (`PULSE_ABSENT`); only Omega drops them here.
+        assert_eq!(
+            has(trigger),
+            [false, true, true, true, false],
+            "{trigger:?}"
+        );
     }
     for title in [oag_2048::TITLE, oag_omega::TITLE] {
         let names = title.effects.names();
