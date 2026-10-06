@@ -161,6 +161,8 @@ pub struct PlasmaBlastModels {
     /// The bolt's own head - see this struct's own doc comment for why it
     /// is here.
     pub ball: Option<Model>,
+    /// The Shuriken's blade, which rides here for the same reason.
+    pub shuriken: Option<Model>,
 }
 
 /// The drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
@@ -173,6 +175,8 @@ pub(crate) struct PlasmaBlastDrawables {
     /// The bolt's own head, one per projectile slot - not one of the
     /// blast's three, see [`PlasmaBlastModels`]'s own doc comment.
     pub(crate) ball: Vec<Drawable>,
+    /// The Shuriken's blade, one per projectile slot.
+    pub(crate) shuriken: Vec<Drawable>,
 }
 
 impl PlasmaBlastDrawables {
@@ -197,6 +201,7 @@ impl PlasmaBlastDrawables {
             } else {
                 None
             })?,
+            shuriken: build_one(models.shuriken)?,
         })
     }
 }

@@ -192,6 +192,15 @@ impl super::Scene {
             None,
         );
         write_one_kind(
+            &self.plasma_blast.shuriken,
+            &race.shuriken_model_matrices(),
+            &prev.shurikens,
+            queue,
+            view_projection,
+            prev_vp,
+            Some(seconds),
+        );
+        write_one_kind(
             &self.mines,
             &mine_matrices,
             &prev.mines,
@@ -229,6 +238,18 @@ impl super::Scene {
 }
 
 impl super::Scene {
+    /// Draws the `live` Shuriken blades [`Self::write_weapon_models`] wrote.
+    pub(super) fn draw_shurikens(
+        &self,
+        live: usize,
+        pass: &mut wgpu::RenderPass<'_>,
+        stats: &mut SceneStats,
+    ) {
+        for drawable in self.plasma_blast.shuriken.iter().take(live) {
+            stats.add(drawable.draw(pass, None, None, None, None));
+        }
+    }
+
     /// Writes this tick's transform and anim-time scrub onto every live
     /// Plasma blast's three drawables, and hands back which slots are live
     /// so the caller knows which to draw.

@@ -672,14 +672,24 @@ impl Race {
     pub(crate) fn advance_projectile_flares(&mut self) {
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
-            let (primary, orbiting) = if projectile.kind
-                == Some(oag_tables::weapons::Weapon::Missile)
-            {
-                let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
-                let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
-                (a, Some(b))
+            let (primary, orbiting) = match projectile.kind {
+                Some(oag_tables::weapons::Weapon::Missile) => {
+                    let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+                    let (a, b) =
+                        missile_flare_anchors(projectile.position, projectile.velocity, age);
+                    (a, Some(b))
+                }
+                // The blade's trail rides the same point as its head, on its
+                // own quarter-turned frame - see `Trigger::ShurikenTrail`.
+                Some(oag_tables::weapons::Weapon::Shuriken) => {
+                    (projectile.position, Some(projectile.position))
+                }
+                _ => (projectile.position, None),
+            };
+            let second = if projectile.kind == Some(oag_tables::weapons::Weapon::Shuriken) {
+                Some(Trigger::ShurikenTrail)
             } else {
-                (projectile.position, None)
+                name
             };
             // Only the primary anchor ever carries a non-neutral scale - see
             // `plasma_flare_scale`. The Missile's orbiting anchor rides at
@@ -717,18 +727,36 @@ impl Race {
                 let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
                 self.view.stage.orient(instance, up);
             }
-            // The Missile's second, orbiting anchor - see `missile_flare_anchors`.
-            // `orbiting` is `None` for every other kind, so this rides nothing
-            // and only ever tears down a leftover instance from a slot that
-            // was a Missile last tick.
+            // The blade's head frame is its basis unrotated, so the emitter's
+            // `+Y` is the surface normal it rides; its trail frame is turned
+            // `-pi/2` about row 0, which puts `+Y` along the velocity, the
+            // Rocket's measured case. `Shuriken_Update` `0x08877bdc`.
+            if let (Some(oag_tables::weapons::Weapon::Shuriken), Some(instance)) =
+                (projectile.kind, self.view.projectile_flare[slot])
+            {
+                self.view.stage.orient(
+                    instance,
+                    projectile.surface.try_normalize().unwrap_or(Vec3::Y),
+                );
+            }
+            // The second anchor: the Missile's orbiting one (see
+            // `missile_flare_anchors`) or the Shuriken's trail. `orbiting` is
+            // `None` for every other kind, so this rides nothing and only ever
+            // tears down a leftover instance from a slot that held one.
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.handles,
-                orbiting.and(name),
+                orbiting.and(second),
                 orbiting.unwrap_or(primary),
                 1.0,
                 &mut self.view.projectile_flare_orbit[slot],
             );
+            if let (Some(oag_tables::weapons::Weapon::Shuriken), Some(instance)) =
+                (projectile.kind, self.view.projectile_flare_orbit[slot])
+            {
+                let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
+                self.view.stage.orient(instance, up);
+            }
         }
     }
 
@@ -804,34 +832,12 @@ impl Race {
     /// One entry per live rocket, in slot order, so the caller can zip it
     /// against its drawables.
     ///
-    /// # No rendered frame has yet contained a rocket
+    /// # Checking a frame with a rocket in it
     ///
-    /// Worth stating rather than leaving to be discovered. What *is* checked:
-    /// the model loads off a real disc and its long axis is the one aimed down
-    /// the velocity here
-    /// (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), the
-    /// bases below are orthonormal and velocity-aligned including the
-    /// straight-up degenerate case, and the draw is wired exactly as the ships'
-    /// and plumes' are. What is **not**: a captured frame with a rocket in it.
-    ///
-    /// The headless capture path cannot produce one. `--race` gives a craft that
-    /// holds the throttle and does not steer, so over 2400 ticks it never
-    /// reaches a `Weapon Pad`, never gets a pickup, and the telemetry line never
-    /// reports one held. A first attempt at this misread three pieces of
-    /// **track scenery** as a fanned volley - they render identically in
-    /// `time_trial`, where no rocket can exist, which is the check that settles
-    /// it and the one to repeat before believing any future frame:
-    ///
-    /// ```sh
-    /// cargo run -p oag-game -- --race --mode single_race --hold cross \
-    ///     --press square --ticks 900 --screenshot /tmp/on.png
-    /// cargo run -p oag-game -- --race --mode time_trial  --hold cross \
-    ///     --press square --ticks 900 --screenshot /tmp/off.png
-    /// magick compare -metric AE /tmp/on.png /tmp/off.png null:
-    /// ```
-    ///
-    /// Closing it wants a craft that can drive to a pad - the AI, or an input
-    /// script replayed through `oag-trace run --script`.
+    /// `--race` gives a craft that holds the throttle and never reaches a
+    /// pad, so a rocket needs the AI or a replayed input script
+    /// (`oag-trace run --script`). Track scenery can read as a volley: compare
+    /// against `--mode time_trial`, where no rocket can exist.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Rocket)
@@ -862,6 +868,15 @@ impl Race {
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
+    }
+
+    /// Where each live Shuriken blade is: the Rocket's basis, which
+    /// `Shuriken_Update` (`0x08877bdc`) builds the same way - `n x f`, `n`,
+    /// `f`, position - and hands the model node unrotated. It writes no spin
+    /// of its own, so any tumble is the model's own node animation.
+    #[must_use]
+    pub fn shuriken_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Shuriken)
     }
 
     /// Where each live Plasma bolt's own head is, for the model draw.

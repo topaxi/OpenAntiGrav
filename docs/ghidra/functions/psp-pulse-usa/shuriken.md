@@ -330,3 +330,36 @@ confirmation of that run. `blast_time` (`0x08a78b98`) and `wave_time`
 **This corrects the 2026-09-23 note above**, which put both cues on the firing
 craft's emitter on the strength of "no bolt-owned `SoundEmitter_Init` exists".
 One does; both ride the blade, radius 300.0, measured.
+
+## 2026-10-06: the model and the trail are drawn (weapon-visuals lane)
+
+Re-read `Shuriken_Update` (`0x08877bdc`) and `Shuriken_Init` (`0x08877280`) at
+instruction level, confidence 88:
+
+- **The basis is the Rocket's.** Row 0 `n x f` (`vcrsp.t` at `0x08877fa8`),
+  row 1 `n` (`+0x100`, the carried surface normal), row 2 `f` (velocity
+  normalised, re-orthogonalised against `n`), row 3 position, built at
+  `blade+0xf0` and handed to the model's scene node (`0x08945284`, `a0 =
+  blade+0x160`) **unrotated**. No spin is written anywhere in the update, so a
+  tumble can only be the model's own node animation. `Race::shuriken_model_matrices`
+  is `projectile_model_matrices(Shuriken)`, the Rocket's velocity branch.
+- **Two frames, both passed to `Psys_Spawn_q` with flag 1 (a pointer, read
+  live).** `WO_SHURIKEN_HEAD` rides `blade+0x60`, a copy of the basis, unrotated:
+  the emitter's `+Y` is the surface normal. `WO_SHURIKEN_TRAIL` rides
+  `blade+0xb0`, a copy turned `-pi/2` about its own row 0 (`0xbfc90fdb`, `Math_RotateByAxisAngle`
+  at `0x08a6b6b4`, the call `Shuriken_Init` and `Shuriken_Update` both make): the
+  Rocket's flare frame, so `+Y` is the velocity. Both are spawned in `Shuriken_Init`
+  and ride the whole flight.
+- **Wired:** `Trigger::ShurikenTrail` rides the second (orbit) flare slot; the head
+  is oriented to `Projectile::surface`, the trail to the velocity. Disc test:
+  `shuriken_ground_truth::a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose`.
+- **Not read:** whether `pulse_shuriken.vex` carries a node animation and which clock
+  drives it. The drawable is written with the scene clock like the Mine's, **chosen,
+  not measured**; if the model authors none this is a no-op.
+- **Seen:** `data/scratch/weapon-visuals/strip_crop2.png` (frames 342-352 of a
+  solo Eliminator throw): a flat bladed disc under the head and trail rings.
+
+Cross-title: **not checkable here** - no HD, Pure or 2048/Omega blade model name
+was recovered, so `WeaponModels::shuriken` is `None` on all four (HD's render
+paths belong to logwarn-hd). The head/trail effects are shared by name only on
+titles whose effect library carries them.

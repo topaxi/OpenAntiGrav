@@ -657,6 +657,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
+            oag_tables::weapons::Weapon::Shuriken => !self.plasma_blast.shuriken.is_empty(),
             _ => false,
         }));
         self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
@@ -835,6 +836,7 @@ impl Scene {
         for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
+        self.draw_shurikens(race.shuriken_model_matrices().len(), &mut pass, &mut stats);
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
         self.draw_bomb_blasts(&blasts_active, &mut pass, &mut stats);
         self.draw_leach_ball(leach_ball_active, &mut pass, &mut stats);

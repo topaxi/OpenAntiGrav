@@ -33,6 +33,7 @@ pub(super) fn stamp_models(loaded: &mut Loaded, by_texel: bool) {
         &mut loaded.mine_model,
         &mut loaded.bomb_model,
         &mut loaded.cannon_model,
+        &mut loaded.plasma_blast_models.shuriken,
     ]
     .into_iter()
     .flatten()
