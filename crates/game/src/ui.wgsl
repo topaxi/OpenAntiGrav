@@ -47,6 +47,9 @@ struct Uniforms {
     // held before this existed: WGSL still rounds `Uniforms` to 64 bytes
     // either way, so this is a real field rather than appended bytes.
     buttons_atlas: vec2<f32>,
+    // The HUD stretch: x is output pixels per grid unit, y is 1 when the HUD
+    // is drawn sharp-bilinear and 0 for everything else.
+    hud: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -109,6 +112,10 @@ struct VertexOut {
     // Where this corner is in tiles: `corner * tile`, so `fract` of it walks
     // the tile again every whole unit.
     @location(5) tiles: vec2<f32>,
+    // Output pixels per texel on each axis, and the size of the texture this
+    // quad samples, for the sharp-bilinear blend.
+    @location(6) @interpolate(flat) texel_pixels: vec2<f32>,
+    @location(7) @interpolate(flat) texture_size: vec2<f32>,
 };
 
 fn corner_of(index: u32) -> vec2<f32> {
@@ -188,6 +195,8 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     size = select(size, uniforms.face_atlas, is_face);
     size = select(size, uniforms.buttons_atlas, is_buttons);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
+    out.texture_size = size;
+    out.texel_pixels = instance.rect.zw * uniforms.hud.x / max(instance.uv.zw, vec2<f32>(1.0));
     let tiled = instance.tile.x > 0.0;
     out.tile_rect = select(vec4<f32>(0.0), instance.uv / vec4<f32>(size, size), tiled);
     out.tiles = corner * instance.tile;
@@ -198,13 +207,28 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     return out;
 }
 
+// Nearest across most of a texel and a linear blend over its last output
+// pixel: `scale` is how many pixels one texel covers, so the blend band is
+// `1 / scale` of a texel wide. A texel shown under one pixel is left linear.
+fn sharp_uv(uv: vec2<f32>, size: vec2<f32>, scale: vec2<f32>) -> vec2<f32> {
+    let s = max(scale, vec2<f32>(1.0));
+    let texel = uv * size;
+    let base = floor(texel);
+    let centred = texel - base - 0.5;
+    let band = 0.5 - 0.5 / s;
+    let blended = (centred - clamp(centred, -band, band)) * s + 0.5;
+    return (base + blended) / size;
+}
+
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // All three are sampled unconditionally and two are discarded.
     // `textureSample` needs uniform control flow for its implicit derivatives,
     // and the mode flag is per-instance, so branching around the sample is
     // not allowed here.
-    let glyph = textureSample(atlas_texture, atlas_sampler, in.uv);
+    let sharp = uniforms.hud.y > 0.5 && in.tile_rect.z <= 0.0;
+    let uv = select(in.uv, sharp_uv(in.uv, in.texture_size, in.texel_pixels), sharp);
+    let glyph = textureSample(atlas_texture, atlas_sampler, uv);
     // `r` is the body/outline mask, `g` the silhouette's coverage.
     let mask = glyph.r;
     let coverage = glyph.g;
@@ -213,12 +237,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // stays unconditional, and the sheet has one mip level, so the seam in
     // the wrapped coordinate's derivative costs nothing.
     let wrapped = in.tile_rect.xy + fract(in.tiles) * in.tile_rect.zw;
-    let sprite_uv = select(in.uv, wrapped, in.tile_rect.z > 0.0);
+    let sprite_uv = select(uv, wrapped, in.tile_rect.z > 0.0);
     let sprite = textureSample(sprite_texture, sprite_sampler, sprite_uv);
-    let face = textureSample(face_texture, face_sampler, in.uv);
+    let face = textureSample(face_texture, face_sampler, uv);
     let face_mask = face.r;
     let face_coverage = face.g;
-    let buttons = textureSample(buttons_texture, buttons_sampler, in.uv);
+    let buttons = textureSample(buttons_texture, buttons_sampler, uv);
     let buttons_mask = buttons.r;
     let buttons_coverage = buttons.g;
 

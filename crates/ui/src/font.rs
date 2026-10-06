@@ -564,6 +564,10 @@ pub struct Cell {
     /// into the box and a quad drawn at the line's top edge lands correctly.
     /// There is no separate bearing to apply.
     pub advance: f32,
+    /// How many atlas pixels past this box the quad may draw: the face's
+    /// authored `borderExtendPixels`, cut to half the gap to the nearest other
+    /// box (see [`Atlas::with_border_extend`]). `0` until that is called.
+    pub extend: u32,
 }
 
 /// The glyph atlas: a coverage byte and a body/outline byte per pixel.
@@ -599,6 +603,11 @@ pub struct Atlas {
     /// faces are drawn at a higher resolution than its grid - see
     /// [`Self::with_texel_scale`].
     pub texel_scale: f32,
+    /// `borderExtendPixels`: atlas pixels outside a glyph's metric box that
+    /// hold its baked halo. A quad draws the box grown by this on every side
+    /// (see [`Self::glyph_quad`]); the pen advance is untouched. `0` for the
+    /// built-in set and for a face whose language definition authors none.
+    pub border_extend: u32,
     /// Whether this came off the disc.
     real: bool,
 }
@@ -643,6 +652,7 @@ impl Atlas {
             line_height: CELL as f32,
             glyphs: BTreeMap::new(),
             texel_scale: 1.0,
+            border_extend: 0,
             real: false,
         }
     }
@@ -691,6 +701,7 @@ impl Atlas {
                     width: u32::from(glyph.width),
                     height: u32::from(glyph.height),
                     advance: f32::from(glyph.advance),
+                    extend: 0,
                 },
             );
         }
@@ -708,6 +719,7 @@ impl Atlas {
             line_height: font.line_height as f32,
             glyphs,
             texel_scale: 1.0,
+            border_extend: 0,
             real: true,
         }
     }
@@ -775,6 +787,7 @@ impl Atlas {
             width: GLYPH_WIDTH,
             height: GLYPH_HEIGHT,
             advance: (GLYPH_WIDTH + 1) as f32,
+            extend: 0,
         })
     }
 }
@@ -827,8 +840,11 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
         width: 2,
         height: 2,
         advance: 0.0,
+        extend: 0,
     }
 }
+
+mod border;
 
 #[cfg(test)]
 mod tests {

@@ -205,3 +205,66 @@ fn the_fallback_is_still_the_fallback() {
     let cell = atlas.cell('A').expect("A");
     assert_eq!((cell.width, cell.height), (GLYPH_WIDTH, GLYPH_HEIGHT));
 }
+
+#[test]
+fn a_border_grows_the_quad_on_every_side_and_leaves_the_advance_alone() {
+    let blob = synthetic_font(&[(b'A' as u16, 6, 9, 8, 4)]);
+    let font = fnt::Font::parse(&blob).expect("parse");
+    let plain = Atlas::from_font(&font);
+    let bordered = Atlas::from_font(&font).with_border_extend(3);
+    let cell = bordered.cell('A').expect("A");
+
+    let plain_cell = plain.cell('A').expect("A");
+    let (rect, uv) = plain.glyph_quad(&plain_cell, 10.0, 20.0, 2.0);
+    assert_eq!(rect, [10.0, 20.0, 12.0, 18.0], "no border: the metric box");
+    assert_eq!(uv, [8.0, 4.0, 6.0, 9.0]);
+
+    let (rect, uv) = bordered.glyph_quad(&cell, 10.0, 20.0, 2.0);
+    assert_eq!(
+        uv,
+        [5.0, 1.0, 12.0, 15.0],
+        "3 texels past the box all round"
+    );
+    assert_eq!(rect, [4.0, 14.0, 24.0, 30.0], "3 texels at scale 2 past it");
+    assert_eq!(
+        measure(&bordered, "AA"),
+        measure(&plain, "AA"),
+        "pen unmoved"
+    );
+}
+
+#[test]
+fn an_extended_quad_never_samples_past_the_glyph_rows_or_the_atlas() {
+    let blob = synthetic_font(&[(b'A' as u16, 6, 9, 0, 7)]);
+    let font = fnt::Font::parse(&blob).expect("parse");
+    let atlas = Atlas::from_font(&font).with_border_extend(5);
+    let cell = atlas.cell('A').expect("A");
+    let (rect, uv) = atlas.glyph_quad(&cell, 0.0, 0.0, 1.0);
+    let glyph_rows = u32::from(font.height) as f32;
+    assert_eq!(uv[0], 0.0, "left edge stops at the atlas edge");
+    assert!(
+        uv[1] + uv[3] <= glyph_rows,
+        "bottom stops above the solid patch"
+    );
+    assert_eq!(
+        rect[2], uv[2],
+        "texel size on screen is unchanged by the clamp"
+    );
+    assert_eq!(rect[3], uv[3]);
+}
+
+#[test]
+fn a_glyph_never_extends_further_than_half_the_gap_to_a_neighbour() {
+    // 'A' at x 0..6 and 'i' at x 8..10: two pixels of gap, so both halos may
+    // take one pixel each and never meet, whatever the border authored.
+    let blob = synthetic_font(&[(b'A' as u16, 6, 9, 0, 0), (b'i' as u16, 2, 9, 8, 0)]);
+    let font = fnt::Font::parse(&blob).expect("parse");
+    let atlas = Atlas::from_font(&font).with_border_extend(5);
+    let a = atlas.cell('A').expect("A");
+    let (_, uv) = atlas.glyph_quad(&a, 0.0, 0.0, 1.0);
+    assert_eq!(a.extend, 1, "half the gap");
+    assert_eq!(uv[0] + uv[2], 7.0, "the quad stops short of 'i'");
+    assert_eq!(atlas.cell('i').expect("i").extend, 1);
+    let free = Atlas::from_font(&font);
+    assert_eq!(free.cell('A').expect("A").extend, 0, "no border authored");
+}

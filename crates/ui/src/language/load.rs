@@ -201,3 +201,20 @@ pub fn role_font(
         .or_else(|| languages.iter().find_map(|language| language.font(role)))
         .map(str::to_string)
 }
+
+/// The `borderExtendPixels` a role authors on this source, resolved the same
+/// way [`role_font`] resolves its file: the chosen language's slot first, then
+/// the first plugin that authors one. `0` when none does.
+#[must_use]
+pub fn role_border(languages: &[Language], preferred: Option<&Language>, role: &str) -> u32 {
+    preferred
+        .map(|language| language.border_extend(role))
+        .filter(|px| *px > 0)
+        .or_else(|| {
+            languages
+                .iter()
+                .map(|language| language.border_extend(role))
+                .find(|px| *px > 0)
+        })
+        .unwrap_or(0)
+}

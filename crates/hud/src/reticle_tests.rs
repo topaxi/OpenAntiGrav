@@ -183,6 +183,7 @@ const HD_SIGHTS: &str = r#"
 static HD_ART: oag_title::HudArt = oag_title::HudArt {
     texture_extension: None,
     always_on: &[],
+    raster: false,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &["MissileSightBG", "MissileSightOuter"],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
@@ -247,6 +248,7 @@ const HD_LEACH_SIGHTS: &str = r#"
 static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     texture_extension: None,
     always_on: &[],
+    raster: false,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &["MissileSightBG", "MissileSightOuter"],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
@@ -959,6 +961,7 @@ fn an_unread_sight_dialect_draws_nothing() {
     static UNREAD: oag_title::HudArt = oag_title::HudArt {
         texture_extension: None,
         always_on: &[],
+        raster: false,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
