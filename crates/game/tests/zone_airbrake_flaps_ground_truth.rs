@@ -85,7 +85,13 @@ fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
     let (mut left, mut right, mut centre) = (0, 0, 0);
     let half = SIZE.0 / 2;
     let band = SIZE.0 * 3 / 100;
-    for (i, (a, b)) in brake.chunks_exact(4).zip(rest.chunks_exact(4)).enumerate() {
+    for (i, (a, b)) in brake
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(rest.as_chunks::<4>().0)
+        .enumerate()
+    {
         let moved = a.iter().zip(b).any(|(x, y)| x.abs_diff(*y) > 12);
         if !moved {
             continue;
