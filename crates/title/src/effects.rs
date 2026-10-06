@@ -253,6 +253,11 @@ pub struct EffectSpec {
     pub burst: Option<Burst>,
     /// Where this entry came from.
     pub origin: Origin,
+    /// The platforms whose archives author this effect. [`Platforms::Any`]
+    /// unless an entry says otherwise; the loader asks only for what the
+    /// platform it is reading can hold, so an absence known to be by design
+    /// is not reported as a missing file.
+    pub on: Platforms,
 }
 
 impl EffectSpec {
@@ -263,7 +268,14 @@ impl EffectSpec {
             effect,
             burst: None,
             origin,
+            on: Platforms::Any,
         }
+    }
+
+    /// This entry limited to the platforms that author the effect.
+    #[must_use]
+    pub const fn with_platforms(self, on: Platforms) -> Self {
+        Self { on, ..self }
     }
 
     /// This entry staggered over the hull's locators by `burst`.
@@ -325,9 +337,22 @@ impl Effects {
     /// report's, so it reads the same way twice.
     #[must_use]
     pub fn names(&self) -> Vec<&'static str> {
+        self.names_where(|_| true)
+    }
+
+    /// [`Self::names`] without the entries `platform`'s archives do not
+    /// author. [`Self::scenery`] names are kept: a circuit's own data decides
+    /// those.
+    #[must_use]
+    pub fn names_on(&self, platform: Platform) -> Vec<&'static str> {
+        self.names_where(|spec| spec.on.applies(platform))
+    }
+
+    fn names_where(&self, keep: impl Fn(&EffectSpec) -> bool) -> Vec<&'static str> {
         let mut names: Vec<&'static str> = Vec::new();
         let triggered = Trigger::ALL.iter().filter_map(|&t| self.on(t));
         for name in triggered
+            .filter(|spec| keep(spec))
             .map(|spec| spec.effect)
             .chain(self.scenery.iter().copied())
         {
@@ -507,10 +532,18 @@ impl Rule {
     /// Whether the rule applies to a disc of `platform`.
     #[must_use]
     pub fn applies(&self, platform: Platform) -> bool {
-        match self.on {
-            Platforms::Never => false,
-            Platforms::Any => true,
-            Platforms::Only(list) => list.contains(&platform),
+        self.on.applies(platform)
+    }
+}
+
+impl Platforms {
+    /// Whether a disc of `platform` is one of them.
+    #[must_use]
+    pub fn applies(self, platform: Platform) -> bool {
+        match self {
+            Self::Never => false,
+            Self::Any => true,
+            Self::Only(list) => list.contains(&platform),
         }
     }
 }
