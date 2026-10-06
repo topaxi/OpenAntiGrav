@@ -1,11 +1,5 @@
-//! What the collision-chunk reader in [`super`] is asserted to do: the
-//! triangle soup it builds, the transforms it applies, and the chunks it
-//! refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `collision.rs`: the tests are 538 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! What the collision-chunk reader in [`super`] is asserted to do: the triangle
+//! soup it builds and the chunks it refuses.
 
 use super::*;
 use crate::vex::classes::V6;
@@ -120,16 +114,14 @@ fn a_well_formed_object_decodes_to_its_triangle_soup() {
     );
 }
 
-/// The check that settled the layout: a correct parse accounts for every
-/// byte. This is the synthetic version of the assertion
-/// `collision_ground_truth.rs` makes against 319 real nodes.
+/// A correct parse accounts for every byte (the synthetic version of
+/// `collision_ground_truth.rs`'s assertion against 319 real nodes).
 #[test]
 fn the_decoded_structure_accounts_for_every_byte() {
     let cases: Vec<Vec<Vec<Vec<u8>>>> = vec![
         vec![quad()],
         vec![quad(), quad()],
-        // No scalars, and no triangles either: both chunks are optional as
-        // far as the walk is concerned, though no shipped object omits one.
+        // Both the scalar and triangle chunks are optional to the walk.
         vec![vec![vertex_chunk(&QUAD_VERTICES)]],
         vec![vec![
             vertex_chunk(&QUAD_VERTICES),
@@ -152,9 +144,8 @@ fn the_decoded_structure_accounts_for_every_byte() {
     }
 }
 
-/// A node payload is padded to 16 bytes with zeros, so the walk stops short
-/// of its declared length on most nodes. `padded_len` is the check that has
-/// to hold, and it is enforced by `from_vex`.
+/// A node payload is padded to 16 bytes with zeros, so the walk stops short of
+/// its declared length; `padded_len` is the check, enforced by `from_vex`.
 #[test]
 fn the_payload_closes_after_its_alignment_padding() {
     let payload = build(HEADER_WORD, &[quad()]);
@@ -178,9 +169,8 @@ fn the_payload_closes_after_its_alignment_padding() {
     assert_eq!(geometry.padded_len() % PAYLOAD_ALIGN, 0);
 }
 
-/// Chunks are located by type, not by position. Shipped objects store 1, 3,
-/// 2 - the scalars before the indices - but nothing in the format says they
-/// must, and reading by position would silently transpose an array.
+/// Chunks are located by type, not position: nothing in the format says shipped
+/// order (1, 3, 2) must hold, and positional reads would transpose an array.
 #[test]
 fn chunks_may_appear_in_any_order() {
     let ordered = build(
@@ -195,17 +185,14 @@ fn chunks_may_appear_in_any_order() {
     assert_eq!(mesh.vertices, QUAD_VERTICES);
     assert_eq!(mesh.triangles, QUAD_TRIANGLES);
     assert_eq!(mesh.vertex_scalars, QUAD_SCALARS);
-    // The order found is retained, because it is what a ground-truth run
-    // reports.
+    // The order found is retained: a ground-truth run reports it.
     assert_eq!(
         mesh.chunks.iter().map(|c| c.kind).collect::<Vec<_>>(),
         [CHUNK_TRIANGLES, CHUNK_VERTICES, CHUNK_VERTEX_SCALARS]
     );
 }
 
-/// Every prefix of a valid payload has to fail, not panic. The walk is
-/// exact, so cutting any bytes off the end leaves a structure that cannot
-/// fit.
+/// Every prefix of a valid payload must fail, not panic.
 #[test]
 fn a_truncated_payload_is_refused_rather_than_read_past() {
     let payload = build(HEADER_WORD, &[quad(), quad()]);
@@ -250,15 +237,12 @@ fn an_absent_scalar_chunk_yields_neutral_scalars() {
     let mesh = &parse_chunks_le(&payload).expect("parse").meshes[0];
     assert!(!mesh.has_vertex_scalars());
     assert_eq!(mesh.vertex_scalars, vec![DEFAULT_VERTEX_SCALAR; 4]);
-    // Which is what the original's averaging function returns when the array
-    // is missing, rather than zero.
+    // The original's averaging function returns this for a missing array.
     assert_eq!(mesh.avg_vertex_scalar(0), Some(DEFAULT_VERTEX_SCALAR));
 }
 
-/// Chunk 3 being per-vertex was a prediction, and it held on every shipped
-/// object. A per-*triangle*-sized chunk is still refused rather than silently
-/// accepted, and the error carries both counts so the rival reading is
-/// visible if some asset ever produces one.
+/// Chunk 3 being per-vertex was a prediction that held on every shipped object.
+/// A per-*triangle*-sized chunk is still refused, with both counts in the error.
 #[test]
 fn a_scalar_chunk_that_is_not_one_per_vertex_is_refused() {
     let payload = build(
@@ -293,9 +277,8 @@ fn averaging_a_triangles_scalars_is_the_mean_of_its_corners() {
     assert_eq!(mesh.avg_vertex_scalar(2), None);
 }
 
-/// A fourth chunk type is fatal. It declares its own stride, so it could be
-/// stepped over, but its contents would be unknown and quietly dropping data
-/// is worse than stopping.
+/// A fourth chunk type is fatal: its contents would be unknown, and quietly
+/// dropping data is worse than stopping.
 #[test]
 fn an_unknown_chunk_type_is_fatal_rather_than_skipped() {
     let payload = build(
@@ -313,9 +296,8 @@ fn an_unknown_chunk_type_is_fatal_rather_than_skipped() {
     assert_eq!(chunk_stride(4), None);
 }
 
-/// The chunk header's own stride field is the walk's alignment check: every
-/// shipped chunk fills it in, so one that disagrees with its type means the
-/// cursor is not where the parser thinks it is.
+/// The chunk header's stride field is the walk's alignment check: a mismatch
+/// means the cursor is not where the parser thinks.
 #[test]
 fn a_chunk_whose_declared_stride_contradicts_its_type_is_refused() {
     let payload = build(
@@ -424,9 +406,8 @@ fn every_surface_kind_round_trips_through_its_class_id() {
     assert_eq!(SurfaceKind::Cage.surface_type(), None);
 }
 
-/// The `-1.0` in the file is a sentinel, not a coefficient. Averaging it
-/// against a wall's `0.05` gives `-0.475`, and a negative friction would add
-/// tangential velocity on every contact instead of removing it.
+/// The `-1.0` in the file is a sentinel: averaged against a wall's `0.05` it
+/// gives `-0.475` and would add tangential velocity on every contact.
 #[test]
 fn a_floor_is_frictionless_whatever_it_touches() {
     assert_eq!(SurfaceKind::Floor.friction(), None);
@@ -466,8 +447,7 @@ fn build_vex(nodes: &[(u32, Vec<u8>)]) -> Vec<u8> {
     out
 }
 
-/// A node payload as the file stores it: the walk's bytes, then zero padding
-/// out to 16.
+/// A node payload as the file stores it: the walk's bytes, zero-padded to 16.
 fn padded(payload: &[u8]) -> Vec<u8> {
     let mut out = payload.to_vec();
     out.resize(payload.len().next_multiple_of(PAYLOAD_ALIGN), 0);
@@ -491,8 +471,7 @@ fn collision_nodes_are_found_in_a_vex_tree() {
         [SurfaceKind::Floor, SurfaceKind::Wall, SurfaceKind::Cage],
         "a Cage node is reported, not skipped"
     );
-    // Node indices are into the whole tree, so a caller can look up a world
-    // transform with the same index.
+    // Node indices are into the whole tree, for world-transform lookup.
     assert_eq!(
         found.iter().map(|n| n.node_index).collect::<Vec<_>>(),
         [1, 3, 4]
@@ -503,9 +482,8 @@ fn collision_nodes_are_found_in_a_vex_tree() {
     }
 }
 
-/// An object dropped from the middle of a node is exactly what a wrong
-/// structure size looks like, and the payload then fails to close. This is
-/// the check that `from_vex` enforces and the ground-truth test runs over
+/// A dropped object looks like a wrong structure size and the payload then
+/// fails to close; `from_vex` enforces it and the ground-truth test runs it over
 /// real nodes.
 #[test]
 fn a_node_whose_walk_does_not_close_is_refused() {
@@ -542,9 +520,8 @@ fn a_vex_walk_failure_is_propagated_rather_than_swallowed() {
     ));
 }
 
-/// A collision node whose payload is not a collision payload must fail
-/// loudly, because the class IDs are the one part of this that a wrong
-/// reading would not otherwise show.
+/// A node whose payload is not a collision payload must fail loudly: the class
+/// IDs are the one part a wrong reading would not otherwise show.
 #[test]
 fn a_node_payload_that_is_not_collision_data_is_refused() {
     let file = build_vex(&[(vex::CLASS_FLOOR_COLLISION, vec![0xff; 0x20])]);
@@ -553,14 +530,9 @@ fn a_node_payload_that_is_not_collision_data_is_refused() {
 
 /// The same object, written both ways round, decodes to the same geometry.
 ///
-/// A collision payload is the one shape in this file that **cannot** say which
-/// way round it is: its first word is `0xffffffff`, which is a palindrome, and
-/// its chunk kinds are 1, 2 and 3, which are not. So the order comes from the
-/// containing `.vex`, whose magic does say - `from_vex` is where that happens.
-///
-/// Written with a builder of its own rather than by parameterising the twenty
-/// fixtures above: the structure is four words and three chunk bodies, and one
-/// object is all this claim needs.
+/// The payload cannot say which way round it is (`0xffffffff` is a palindrome,
+/// chunk kinds 1, 2, 3 are not), so the order comes from the containing `.vex`
+/// magic in `from_vex`. One hand-built object is all this claim needs.
 #[test]
 fn a_big_endian_object_decodes_to_the_same_geometry_as_its_little_endian_twin() {
     let mut be: Vec<u8> = Vec::new();
@@ -605,9 +577,8 @@ fn a_big_endian_object_decodes_to_the_same_geometry_as_its_little_endian_twin() 
     assert_eq!(from_be, from_le);
     assert_eq!(from_be.meshes[0].vertices, QUAD_VERTICES.to_vec());
 
-    // And the negative half: the wrong order does not quietly decode. The
-    // stride word is what catches it, which is why the parser checks a field
-    // the game's own loader ignores.
+    // The wrong order does not quietly decode: the stride word catches it, which
+    // is why the parser checks a field the game's loader ignores.
     assert!(
         parse_chunks(&be, ByteOrder::Little).is_err(),
         "a big-endian payload read little-endian must not produce geometry"
