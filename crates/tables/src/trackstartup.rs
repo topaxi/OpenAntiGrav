@@ -104,50 +104,33 @@
 //! real mechanism that needs none (the quad never moves, only the texture its
 //! draw resolves to).
 //!
-//! # Live on Pulse: construction places nothing, something else overrides the texture
+//! # Live on Pulse: construction places nothing
 //!
-//! 2026-08-28, a live PPSSPP session
+//! A 2026-08-28 live PPSSPP session
 //! ([`docs/ghidra/functions/psp-pulse-usa/billboards.md`](../../../docs/ghidra/functions/psp-pulse-usa/billboards.md))
-//! walked Pulse's loader past a `$gp`-relative addressing trap that hid it from
-//! static sweeps. `World_LoadTrack` hands each `<Billboard>` to
-//! `TrackStartup_Parse`, which reads the same six attributes as this module and
-//! dispatches on `num` to one of two constructors: HD's `array[Num]`,
-//! no-name-lookup shape on a second title, with `Color`/`Colour` merged. Both
-//! feed a shared builder that, for a `.vex` slot, writes a 4x4 transform into
-//! the new object.
-//!
-//! **That transform is NOT the identity - corrected 2026-09-06, confidence 92.**
-//! It is an identity rotation with translation `(x, -10.0, z, w)`, the same on
-//! every call regardless of `num`, so still no per-circuit placement. The older
-//! "literal identity, same sixteen floats" reading was wrong for one float:
-//! `decompile_function` showed a VFPU `lv.q` as four scalar assignments and hid a
-//! same-block `swc1` overwriting one lane. See that page and
-//! `docs/ghidra/workflow.md`.
+//! walked `World_LoadTrack` -> `TrackStartup_Parse`: the same six attributes as
+//! this module, dispatched on `num` to one of two constructors (HD's
+//! `array[Num]`, no-name-lookup shape; `Color`/`Colour` merged). For a `.vex`
+//! slot the shared builder writes a 4x4 transform that is **not the identity
+//! (corrected 2026-09-06, confidence 92)**: identity rotation, translation
+//! `(x, -10.0, z, w)`, the same for every `num`, so no per-circuit placement. The
+//! decompiler showed a VFPU `lv.q` as four scalars and hid a same-block `swc1`
+//! overwriting one lane (`docs/ghidra/workflow.md`).
 //!
 //! **"Nothing overrides the disc's `billboard8.tga` icon" was wrong**, caught by
-//! the project owner who plays the original: the start-line gantry never shows
-//! a stretched digit, and a live screenshot shows a "GO" board while this
-//! project's renderer painted the literal icon. After construction, `num`'s
-//! three derived resource-tag IDs are lookup keys into a shared registry all
-//! eight slots register into; the two objects slot 8 resolves to are read
-//! constantly during a countdown, one with a per-frame animation-time
-//! accumulator and four candidate display-state pointers. The final texture bind
-//! was not caught, so this is strong circumstantial evidence, not proof.
+//! the project owner: the original's start line shows a "GO" board, never a
+//! digit. Slot 8's registry objects are read constantly during a countdown. A
+//! RAM scan in a live race found `321Go_StartFinish.vex`'s scene graph resident
+//! (`world`/`camera1`/`start_lights`/`start_light_background`), the asset slot 8
+//! names on every circuit; the numbered `billboard8.tga` quad is track-mesh
+//! debris it covers. **Unresolved, and the priority**: what moves that shared
+//! asset to each circuit's gantry (no transform writer found). "Instantiated" is
+//! settled; "drawn where the player sees it" is inference from node names. See
+//! `docs/rendering/start-gantry.md`.
 //!
-//! **A third pass found what plays there: a separate instantiated mesh.** A RAM
-//! scan in a live race found `321Go_StartFinish.vex`'s scene graph resident and
-//! parsed (`world`/`camera1`/`start_lights`/`start_light_background`), the asset
-//! slot 8 names on every circuit. The numbered `billboard8.tga` quad is
-//! track-mesh debris the real gantry covers. **Unresolved, and the priority**:
-//! the transform above and an asset shared by all 16 circuits mean something
-//! must move it to each circuit's gantry, and no writer for that has been
-//! found. "Instantiated" is settled; "drawn where the player sees it" is
-//! inference from node names.
-//!
-//! **One live lead remains.** The colour path (`Billboard_CreateFromColour_q`)
-//! walks a per-track pool, matching by type and colour and consuming the match
-//! (confirmed *reached* in a real circuit load); the entry layout was not read
-//! and may be another registry-and-resolve instance.
+//! **One live lead remains.** `Billboard_CreateFromColour_q` walks a per-track
+//! pool, matching type and colour and consuming the match (reached in a real
+//! load); its entry layout is unread.
 
 use crate::fexml;
 
