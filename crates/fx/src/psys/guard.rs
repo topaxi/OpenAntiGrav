@@ -36,6 +36,16 @@ pub struct GuardBand {
     pub forward: Vec3,
 }
 
+/// Whether a template quad's `corners` are dropped, under `guard` if there is one.
+#[must_use]
+pub fn drops(
+    guard: Option<&GuardBand>,
+    template: bool,
+    corners: &[oag_mesh::mesh::GpuVertex],
+) -> bool {
+    template && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
+}
+
 impl GuardBand {
     /// Whether the GE would drop a primitive with these corners.
     #[must_use]

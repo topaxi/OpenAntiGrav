@@ -1065,23 +1065,17 @@ impl System {
         self.particles.iter().any(|p| p.alive()) || self.emitters.iter().any(|state| state.active)
     }
 
-    /// How many times [`System::ignite`] has fired, ever.
-    ///
-    /// For a caller's trigger-discipline tests: particle counts cannot tell
-    /// "one burst trickling" from "a burst per tick" once a burst spans tens
-    /// of ticks.
+    /// How many times [`System::ignite`] has fired, ever - for trigger-discipline
+    /// tests, which particle counts cannot serve once a burst spans tens of ticks.
     #[must_use]
     pub fn ignitions(&self) -> u32 {
         self.ignitions
     }
 
-    /// This frame's geometry, split by blend class: `(additive,
-    /// alpha_over)` - the two GE configurations the original's state
-    /// selector switches between.
-    ///
-    /// `right` and `up` come from the camera. Billboards face the viewer;
-    /// streaks span their two stored points with a camera-perpendicular
-    /// width, following the streak-quad builder at `0x08916820`.
+    /// This frame's geometry, split by blend class: `(additive, alpha_over)`,
+    /// the two GE configurations the original's state selector switches
+    /// between. `right` and `up` come from the camera; streaks follow the
+    /// streak-quad builder at `0x08916820`.
     #[must_use]
     pub fn vertices(
         &self,
@@ -1095,12 +1089,10 @@ impl System {
         (additive, alpha_over)
     }
 
-    /// [`Self::vertices`], appended to two lists the caller owns.
-    ///
-    /// The form the renderer uses. A busy frame plays several effects at once
-    /// and each returned its own growing pair, which the stage then appended
-    /// into a third: measured with rockets in the air, gathering the particles
-    /// allocated 1.99 MB in one frame.
+    /// [`Self::vertices`], appended to two lists the caller owns - the
+    /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
+    /// with rockets in the air). `guard` is the GE's screen-range cull, or
+    /// `None` for a source it was not measured on.
     pub fn extend_vertices(
         &self,
         additive: &mut Vec<GpuVertex>,
@@ -1152,9 +1144,7 @@ impl System {
             if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
             }
-            if spec.template
-                && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
-            {
+            if guard::drops(guard, spec.template, &corners) {
                 continue;
             }
             out.extend_from_slice(&corners);
@@ -1340,16 +1330,6 @@ impl Stage {
         if let Some(instance) = self.get_mut(playing) {
             instance.up = up;
         }
-    }
-
-    /// The `+Y` [`Self::orient`] last gave an attached instance, or world up
-    /// when none did. `None` on a stale handle.
-    #[must_use]
-    pub fn up_of(&self, playing: Playing) -> Option<Vec3> {
-        self.instances
-            .get(usize::from(playing.index))
-            .filter(|i| i.generation == playing.generation && i.attached)
-            .map(|i| i.up)
     }
 
     /// Changes an attached instance's own severity - see [`System::rescale`].
