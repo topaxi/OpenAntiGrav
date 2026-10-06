@@ -74,14 +74,20 @@ fn craft_title_choices(titles: &[oag_game::launcher::Candidate]) -> Vec<menu::Ch
         .iter()
         .map(|candidate| menu::Choice::plain(candidate.title()))
         .collect();
-    for reshipped in titles
+    for guest in titles
         .iter()
         .filter_map(|c| c.playable()?.race.guest_roster)
-        .map(|guest| guest.reships)
     {
-        let offered = choices.iter().any(|choice| choice.value == reshipped);
-        if !offered {
-            choices.push(menu::Choice::plain(reshipped));
+        let mounted = titles
+            .iter()
+            .any(|candidate| candidate.title() == guest.reships);
+        let entry = match (mounted, guest.alongside_label) {
+            (true, Some(label)) => label,
+            (true, None) => continue,
+            (false, _) => guest.reships,
+        };
+        if !choices.iter().any(|choice| choice.value == entry) {
+            choices.push(menu::Choice::plain(entry));
         }
     }
     choices
@@ -106,9 +112,16 @@ fn resolve_craft_backing<'a>(
     titles: &'a [oag_game::launcher::Candidate],
     craft_title: &str,
 ) -> Option<&'a oag_game::launcher::Candidate> {
+    let alongside = |candidate: &&oag_game::launcher::Candidate| {
+        candidate
+            .playable()
+            .and_then(|title| title.race.guest_roster)
+            .is_some_and(|guest| guest.alongside_label == Some(craft_title))
+    };
     titles
         .iter()
-        .find(|candidate| candidate.title() == craft_title)
+        .find(alongside)
+        .or_else(|| titles.iter().find(|c| c.title() == craft_title))
         .or_else(|| {
             titles.iter().find(|candidate| {
                 candidate
@@ -302,7 +315,7 @@ impl Session {
                 catalogue
                     .teams
                     .retain(|choice| !Self::is_guest_team(guest, &choice.value));
-            } else if requested == guest.reships {
+            } else if requested == guest.reships || guest.alongside_label == Some(requested) {
                 catalogue
                     .teams
                     .retain(|choice| Self::is_guest_team(guest, &choice.value));
