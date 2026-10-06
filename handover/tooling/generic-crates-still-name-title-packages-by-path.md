@@ -25,8 +25,12 @@ modules; those need no Cargo edge and are not counted.
   are per-title data a `Title` field can carry, the way `FrontEnd` does.
 - `oag-hud` still has the title crates as dev-dependencies for its tests. They stay until
   a test fixture can be built off `oag_title::Title` data alone.
-- Omega's race shows no HUD in a `--race` capture (checked 2026-10-06, before and after
-  this lane alike), so the Omega leg of a HUD comparison is a draw with nothing in it.
+- The ratchet cannot see test code on purpose (about 60 references in `oag-hud`'s tests
+  alone), so a Cargo edge can only be forbidden for normal dependencies: `check-deps`
+  needs a dev-dependency exemption, or the test fixtures move to `oag_title::Title` data.
+- Omega's `--race` shows no HUD, a known gap (`docs/formats/omega-status.md`: the HUD
+  textures are not in the archives); seen again in this lane's before/after captures,
+  so the Omega leg of a HUD comparison proves nothing about the HUD.
 
 ## Next Steps
 
