@@ -1,14 +1,11 @@
 //! The PS4's texture container (`.gnf`) - header and descriptor only.
 //!
-//! **Confidence: 80.** A public Sony format (the name is a genuine SDK
-//! acronym, "Gnm Format") with no first-party spec this project holds, so
-//! the layout below is triangulated from two independent open-source
-//! implementations rather than read off an SDK header - the AMD GCN "T#"
-//! image descriptor it embeds is drawn from a public AMD document. Not
-//! confirmed against a running PS4, hence 80 rather than the 90s a
-//! byte-identical Sony spec would earn: [`docs/formats/psarc.md`](../../../docs/formats/psarc.md)'s
-//! own PSARC page draws the same "publicly documented, not recovered here"
-//! distinction for exactly this reason.
+//! **Confidence: 80.** A public Sony format ("Gnm Format") with no first-party
+//! spec held here, so the layout below is triangulated from two open-source
+//! implementations; the AMD GCN "T#" image descriptor it embeds is from a public
+//! AMD document. Not confirmed against a running PS4, hence 80 rather than the
+//! 90s a byte-identical Sony spec would earn (the same distinction as
+//! [`docs/formats/psarc.md`](../../../docs/formats/psarc.md)).
 //!
 //! ```text
 //! header, 8 bytes:
@@ -38,82 +35,61 @@
 //! run per texture, `stream_size - (+0x08 + contents_size)` bytes total.
 //! ```
 //!
-//! Little-endian throughout - the one PS4 container this project reads that
-//! is not big-endian, since nothing upstream of it (PS3/Vita/PSP/PS2) is a
-//! little-endian target. See `docs/formats/README.md`'s Omega Collection
-//! rows.
+//! Little-endian throughout. See `docs/formats/README.md`'s Omega Collection rows.
 //!
 //! # Where this layout comes from
 //!
-//! Three independently-maintained, non-affiliated open-source projects agree
-//! on it, checked directly against this project's own extracted `.gnf`
-//! files rather than trusted on citation alone (see [`tests`]):
+//! Three independent open-source projects agree on it, checked against this
+//! project's own extracted `.gnf` files (see [`tests`]):
 //!
 //! 1. [GFD-Studio](https://github.com/tge-was-taken/GFD-Studio)'s
-//!    `GFDLibrary.Textures.GNF.GNFTexture` - a from-scratch reader/writer
-//!    used by Fallout 4/Skyrim SE PS4 mods and `image2gnf` - gives the exact
-//!    byte offsets and bitfield widths quoted above, verified here against
-//!    `Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf`
-//!    (a real, non-zero `omega-ps4-eu` entry - `docs/formats/psarc.md`'s
-//!    "Block data location" section): its `word1` decodes to
-//!    `SurfaceFormat::BC7`/`ChannelType::Srgb` and its `word2` decodes to
-//!    128x64, both plausible for a livery decal, and its `word3` decodes to
-//!    a standard RGBA channel order (4,5,6,7) and tile mode index 13 -
-//!    `TileMode::Thin_1DThin` (GFD-Studio's own `TileMode.cs` enum,
-//!    fetched and re-checked directly: index 13 is `Thin_1DThin`,
-//!    micro-tiled only; index **14** is `Thin_2DThin`, macro-tiled - an
-//!    earlier pass here had this off by one), which is why this module
-//!    stops at identification (see "What this does not do", below).
+//!    `GFDLibrary.Textures.GNF.GNFTexture` gives the byte offsets and bitfield
+//!    widths above, verified against
+//!    `Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf` (a
+//!    real `omega-ps4-eu` entry, `docs/formats/psarc.md`'s "Block data location"
+//!    section): `word1` decodes to `SurfaceFormat::BC7`/`ChannelType::Srgb`,
+//!    `word2` to 128x64, `word3` to a standard RGBA channel order (4,5,6,7) and
+//!    tile mode 13, `TileMode::Thin_1DThin` (GFD-Studio's `TileMode.cs`:
+//!    13 is `Thin_1DThin`, micro-tiled only; **14** is `Thin_2DThin`,
+//!    macro-tiled).
 //! 2. The [PlayStation GNF Image page](https://rewiki.miraheze.org/wiki/PlayStation_GNF_Image)
-//!    on the reverse-engineering wiki gives the same header/contents split
-//!    independently, naming the same three fixed values (version 2,
-//!    alignment 8) this project's own sample also carries.
-//! 3. [shadPS4](https://github.com/shadps4-emu/shadPS4)'s
-//!    `AmdGpu::Image` (`src/video_core/amdgpu/resource.h`) is the same
-//!    32-byte, 8-dword descriptor one layer down - the raw GCN "T#" texture
-//!    resource descriptor AMD's own public "Sea Islands Series Instruction
-//!    Set Architecture" reference manual documents (Table 8.13) - and its
-//!    `DataFormat`/`NumberFormat` enums have the identical numeric values as
-//!    GFD-Studio's `SurfaceFormat`/`ChannelType` (`BC7 = 0x29` on both,
-//!    `Srgb = 9` on both), which is what makes two unrelated projects'
-//!    readings the same fact rather than two guesses that happen to agree on
-//!    a name.
+//!    gives the same header/contents split and the same fixed values (version
+//!    2, alignment 8).
+//! 3. [shadPS4](https://github.com/shadps4-emu/shadPS4)'s `AmdGpu::Image`
+//!    (`src/video_core/amdgpu/resource.h`) is the same 32-byte, 8-dword
+//!    descriptor one layer down, the raw GCN "T#" resource AMD's public "Sea
+//!    Islands Series Instruction Set Architecture" manual documents (Table
+//!    8.13). Its `DataFormat`/`NumberFormat` enums share GFD-Studio's numeric
+//!    values (`BC7 = 0x29`, `Srgb = 9` on both), so the two readings are one
+//!    fact, not two guesses.
 //!
 //! # What this does not do
 //!
 //! **[`Texture::decode`] untiles a linear surface unconditionally, and a
-//! micro-tiled (`Thin_1DThin`) BC7 surface only when its base level carries
-//! no corrupt block.** AMD's `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's
-//! MIT `addrlib`, `egbaddrlib.cpp`) is a simple row-major-tiles formula with
-//! no banks, pipes or row-size unknowns - unlike the macro-tiled formula the
-//! earlier, disproven pass reached for. Checked against real oracle-paired
-//! textures (`crates/texture/src/gnf/micro_tile_tests.rs`, `#[ignore]`d): a
-//! single-micro-tile 32x32 image decodes **exactly** (MAD 0.00), and on
-//! larger multi-tile images the first several on-disk tiles decode
-//! near-perfectly before a region that used to read as an unexplained
-//! periodic corruption. **That region is now explained**: a byte-level scan
-//! of the same ship-livery oracle pair
-//! (`crates/texture/examples/gnf_tile_row_byte_check.rs`) finds it dense
-//! with BC7 blocks whose byte 0 carries no valid mode bit - a pattern a real
-//! encoder never produces, and the same PSARC-level missing/garbage-content
-//! population `docs/formats/psarc.md`'s "Block data location" section
-//! already documents family-wide, landing on this specific ship texture's
-//! own copy rather than on a wrong tile order. See `docs/formats/gnf.md`'s
-//! "Tiling" section for the full evidence trail.
+//! micro-tiled (`Thin_1DThin`) BC7 surface only when its base level carries no
+//! corrupt block.** AMD's `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT
+//! `addrlib`, `egbaddrlib.cpp`) is a row-major-tiles formula with no banks,
+//! pipes or row-size unknowns. Checked against oracle-paired textures
+//! (`crates/texture/src/gnf/micro_tile_tests.rs`, `#[ignore]`d): a
+//! single-micro-tile 32x32 image decodes **exactly** (MAD 0.00), and on larger
+//! images the first several tiles decode near-perfectly before a region that
+//! looked like periodic corruption. **That region is explained**: a byte-level
+//! scan of the same ship-livery oracle pair
+//! (`crates/texture/examples/gnf_tile_row_byte_check.rs`) finds it dense with
+//! BC7 blocks whose byte 0 carries no valid mode bit, which no real encoder
+//! produces. It is the PSARC-level missing/garbage-content population
+//! `docs/formats/psarc.md`'s "Block data location" documents family-wide, not a
+//! wrong tile order. See `docs/formats/gnf.md`'s "Tiling" section.
 //!
-//! So [`Texture::decode`] ships the row-major micro-tile formula for real
-//! use, guarded rather than open-ended: it scans the base level's own block
-//! grid for that same invalid-mode signature first, and refuses the whole
-//! surface with [`Error::CorruptBlocks`] the moment it finds one, rather
-//! than decoding around missing bytes into a picture with silent garbage
-//! patches. A census of the front end's own sprite sheet
-//! (`crates/texture/examples/gnf_frontend_census.rs`) finds a wide spread -
-//! many single-mip images clean at 0%, others (mostly multi-mip ones, where
-//! a per-level tile-alignment pad is expected past the base level this
-//! module never reads) well into double digits - so this guard is doing
-//! real, title-wide work, not gating on one bad file. `SurfaceFormat::Bc1`/
-//! `Bc3` still decode only through the linear path; no real `.gnf` this
-//! project has sampled ships either format under `TileMode(13)`.
+//! So [`Texture::decode`] scans the base level's block grid for that invalid-mode
+//! signature first and refuses the whole surface with [`Error::CorruptBlocks`],
+//! rather than a picture with silent garbage patches. A census of the front
+//! end's sprite sheet (`crates/texture/examples/gnf_frontend_census.rs`) finds
+//! many single-mip images clean at 0% and others (mostly multi-mip, where a
+//! per-level tile-alignment pad is expected past the base level) well into
+//! double digits, so the guard does title-wide work. `SurfaceFormat::Bc1`/`Bc3`
+//! decode only through the linear path; no sampled `.gnf` ships either under
+//! `TileMode(13)`.
 
 use std::fmt;
 
@@ -142,9 +118,8 @@ pub enum Error {
         /// The four bytes found.
         found: [u8; 4],
     },
-    /// A tiled surface [`Texture::decode`] has no address formula for at
-    /// all - every [`TileMode`] except a linear one and `Thin_1DThin`
-    /// (0x0d). See this module's own "What this does not do".
+    /// A tiled surface with no address formula: every [`TileMode`] but linear and
+    /// `Thin_1DThin` (0x0d).
     Tiled {
         /// The declared [`TileMode`] index.
         tile_mode: u8,
@@ -161,20 +136,17 @@ pub enum Error {
         /// Bytes supplied.
         got: usize,
     },
-    /// The base level's own micro-tile grid has at least one BC7 block
-    /// whose byte 0 carries no valid mode bit - the same PSARC-level
-    /// missing/garbage-content population `docs/formats/psarc.md`'s "Block
-    /// data location" section documents family-wide, not a wrong tile
-    /// order. [`Texture::decode`] refuses the whole surface rather than
-    /// decoding around it - see this module's own "What this does not do".
+    /// The base level has a BC7 block whose byte 0 carries no valid mode bit: the
+    /// missing/garbage-content population of `docs/formats/psarc.md`'s "Block
+    /// data location", not a wrong tile order. [`Texture::decode`] refuses the
+    /// whole surface.
     CorruptBlocks {
         /// Blocks in the base level's own grid with no valid mode bit.
         count: usize,
     },
-    /// The bytes after the header are not exactly one surface's mip chain in
-    /// the tile-padded layout [`Texture::block_levels`] reads - a cubemap, an
-    /// array or a volume, or a file with trailing bytes. Refused rather than
-    /// read as its first surface, which would be a wrong picture.
+    /// The bytes after the header are not exactly one surface's tile-padded mip
+    /// chain as [`Texture::block_levels`] reads it (a cubemap, array, volume or
+    /// trailing bytes). Refused, since the first surface alone would be wrong.
     ChainLayout {
         /// Bytes one 2D chain occupies.
         expected: usize,
@@ -215,12 +187,9 @@ impl std::error::Error for Error {}
 /// Shorthand for this module's results.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// The GCN surface format a texture's pixels are stored in - AMD's public
-/// "Sea Islands Series Instruction Set Architecture" reference manual, Table
-/// 8.13, `DataFormat`. Only the values seen or plausible on a PS4 game disc
-/// are named; an unrecognised value is kept as [`SurfaceFormat::Other`]
-/// rather than refused, since this module's job is identification, not
-/// validation.
+/// The GCN surface format: AMD's "Sea Islands Series Instruction Set
+/// Architecture" manual, Table 8.13, `DataFormat`. Only values seen or plausible
+/// on a PS4 disc are named; the rest are [`SurfaceFormat::Other`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SurfaceFormat {
@@ -259,10 +228,8 @@ impl SurfaceFormat {
         }
     }
 
-    /// Whether this is one of the three BC formats [`crate::bcn`] can
-    /// decode - the necessary condition for pixel decoding, not sufficient:
-    /// the surface also has to be untiled, which [`Texture::is_linear`]
-    /// checks separately.
+    /// Whether this is one of the three BC formats [`crate::bcn`] can decode;
+    /// necessary, not sufficient (see [`Texture::is_linear`]).
     #[must_use]
     pub fn is_bcn(self) -> bool {
         matches!(self, Self::Bc1 | Self::Bc3 | Self::Bc7)
@@ -292,25 +259,20 @@ impl ChannelType {
     }
 }
 
-/// How a texture's pixels are ordered in GPU memory - GFD-Studio's
-/// `TileMode`, itself an index into a fixed 32-entry table the PS4 SDK
-/// defines (pipe config, micro/macro tile mode, bank swizzle per entry).
-/// This module keeps the raw index and only distinguishes the two entries
-/// that mean "not tiled at all", because untiling every other entry needs
-/// that whole table - see this module's own "What this does not do".
+/// How pixels are ordered in GPU memory: GFD-Studio's `TileMode`, an index into
+/// the PS4 SDK's fixed 32-entry table (pipe config, micro/macro tile mode, bank
+/// swizzle). This keeps the raw index and distinguishes only the two untiled
+/// entries, since the rest need the whole table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TileMode(pub u8);
 
 impl TileMode {
-    /// `Display_LinearAligned` - a surface stored row-major, CPU-readable
-    /// with no GPU-side untiling step.
+    /// `Display_LinearAligned`: row-major, CPU-readable.
     const LINEAR_ALIGNED: u8 = 0x08;
-    /// `Display_LinearGeneral` - the same, at the SDK's own "hugely
-    /// inefficient, do not use" mode.
+    /// `Display_LinearGeneral`: the same, the SDK's "do not use" mode.
     const LINEAR_GENERAL: u8 = 0x1f;
-    /// `Thin_1DThin` - micro-tiled only, no banks/pipes. Every real `.gnf`
-    /// this project has sampled declares this one; see `decode`'s own doc
-    /// comment and `docs/formats/gnf.md`'s "Tiling" section.
+    /// `Thin_1DThin`: micro-tiled only, no banks/pipes. Every sampled `.gnf`
+    /// declares it; see `docs/formats/gnf.md`'s "Tiling" section.
     pub(crate) const THIN_1D_THIN: u8 = 0x0d;
 
     /// Whether this mode is one of the two linear (untiled) ones.
@@ -322,17 +284,15 @@ impl TileMode {
 
 /// The header and one texture descriptor.
 ///
-/// Only single-texture files are read - every real `.gnf` this project has
-/// sampled declares `texture_count == 1`, the same restriction GFD-Studio's
-/// own reader carries.
+/// Only single-texture files are read: every sampled `.gnf` declares
+/// `texture_count == 1`, as GFD-Studio's reader assumes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Texture {
     /// Always 2 on every file seen.
     pub version: u8,
     /// Always 8 on every file seen.
     pub alignment: u8,
-    /// Total file length, as declared - not trusted for slicing; see
-    /// [`Texture::parse`].
+    /// Total file length as declared; not trusted for slicing, see [`Texture::parse`].
     pub stream_size: u32,
     /// The GCN surface (pixel) format.
     pub surface_format: SurfaceFormat,
@@ -344,8 +304,7 @@ pub struct Texture {
     pub height: u32,
     /// Depth (1 for a 2D texture).
     pub depth: u32,
-    /// Bytes of one tiled row at the base mip level, if tiled; meaningless
-    /// on a linear surface's own terms but still decoded for completeness.
+    /// Bytes of one tiled row at the base mip level; meaningless on a linear surface.
     pub pitch: u32,
     /// First mip level this descriptor covers.
     pub base_mip_level: u8,
@@ -364,9 +323,8 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// Reads the header, contents and first texture descriptor out of a
-    /// whole `.gnf` file (or at least its first `+0x100`-ish bytes - the
-    /// pixel data itself is not read here, only located).
+    /// Reads the header, contents and first descriptor out of a `.gnf` (or its
+    /// first `+0x100`-ish bytes); pixel data is located, not read.
     ///
     /// # Errors
     ///
@@ -423,10 +381,9 @@ impl Texture {
         })
     }
 
-    /// Whether this texture's own [`TileMode`] is one of the two linear
-    /// ones - the necessary-and-sufficient condition (together with
-    /// [`SurfaceFormat::is_bcn`]) for this module's pixel bytes to already
-    /// be in the row-major order [`crate::bcn`] expects.
+    /// Whether the [`TileMode`] is one of the two linear ones; with
+    /// [`SurfaceFormat::is_bcn`], the condition for pixel bytes to already be in
+    /// the row-major order [`crate::bcn`] expects.
     #[must_use]
     pub fn is_linear(&self) -> bool {
         self.tile_mode.is_linear()
@@ -434,17 +391,14 @@ impl Texture {
 
     /// Decodes this texture's base level to straight RGBA8.
     ///
-    /// `blob` must be the bytes [`Texture::parse`] was given, since
-    /// [`Texture::data_offset`] indexes into it.
+    /// `blob` must be the bytes [`Texture::parse`] was given.
     ///
     /// # Errors
     ///
-    /// [`Error::Tiled`] for every real `.gnf` this project has sampled
-    /// (see this module's own "What this does not do") - only a linear
-    /// [`TileMode`] reaches the decoder at all. [`Error::UnsupportedFormat`]
-    /// for a [`SurfaceFormat`] with no block decoder here, and
-    /// [`Error::DataOutOfBounds`] for a blob shorter than the level it
-    /// declares.
+    /// [`Error::Tiled`] for any tile mode other than linear or `Thin_1DThin`,
+    /// [`Error::UnsupportedFormat`] for a [`SurfaceFormat`] with no block decoder,
+    /// [`Error::DataOutOfBounds`] for a blob shorter than the level, and
+    /// [`Error::CorruptBlocks`] as in "What this does not do".
     pub fn decode(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         decode::decode(self, blob)
     }
@@ -454,11 +408,9 @@ impl Texture {
     /// The BC7 blocks of every mip level, untiled into row-major order and
     /// still compressed - what a GPU with block compression takes as it is.
     ///
-    /// One entry per level, base first, each `ceil(w/4) * ceil(h/4)` blocks of
-    /// 16 bytes. **Unlike [`Self::decode`] this refuses a corrupt block in
-    /// any level, not only the base**: a decoded picture can draw from its
-    /// base alone, but a chain with a hole in it would sample garbage at
-    /// distance.
+    /// One entry per level, base first, each `ceil(w/4) * ceil(h/4)` blocks of 16
+    /// bytes. **Unlike [`Self::decode`] this refuses a corrupt block in any
+    /// level**: a chain with a hole would sample garbage at distance.
     ///
     /// # Errors
     ///
