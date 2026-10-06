@@ -1,5 +1,5 @@
 //! How many of Amphiseum's resolved material slots the `NO_AMBIENT` role bit
-//! covers, and how many of those are also `EMISSIVE` - the split `mesh.wesl`'s
+//! covers, and how many of those are also `EMISSIVE` - the split `mesh.wgsl`'s
 //! ambient/prelit-curve fix (2026-09-17) keys on.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -19,7 +19,7 @@
 //! microcode sweep" found none of Amphiseum's four ceiling materials'
 //! resolved programs ever reference `constantAmbientColour`, and
 //! `mesh::rcs::skin::roles` already reads that as `slots::NO_AMBIENT` on the
-//! affected slots. `mesh.wesl` now drops `scene.light.ambient` and replaces
+//! affected slots. `mesh.wgsl` now drops `scene.light.ambient` and replaces
 //! the raw vertex-colour term with the curved one on every `NO_AMBIENT`
 //! slot that is not also `slots::EMISSIVE` (the sign/glow family, which the
 //! fix must not touch - see the shader's own comment on `vertex_light_term`).
@@ -90,7 +90,7 @@ fn amphiseums_no_ambient_slots_split_from_emissive_the_way_the_shader_assumes() 
     assert_eq!(
         no_ambient_and_emissive, 68,
         "the NO_AMBIENT-and-EMISSIVE slot count moved - these are excluded \
-         from the ambient fix's vertex-colour curve (mesh.wesl's \
+         from the ambient fix's vertex-colour curve (mesh.wgsl's \
          vertex_light_term), and a change here means that exclusion now \
          covers a different set of materials"
     );

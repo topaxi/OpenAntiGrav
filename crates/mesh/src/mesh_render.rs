@@ -78,7 +78,7 @@ pub struct Built {
     /// [`Prepass`].
     pub prepass: Option<Prepass>,
     /// Cutout pass: depth write on, no blending, `discard` below
-    /// `mesh.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
+    /// `shaders/alpha_test.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
     /// `blend_pipeline`.
     ///

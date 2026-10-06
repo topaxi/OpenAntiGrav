@@ -123,7 +123,7 @@ pub fn depth_compare(
 pub struct CutoutPipelines<'a> {
     /// [`super::Built::alpha_test_pipeline`] - the model-level reference, which
     /// is Wipeout HD's per-material value where it authors one and
-    /// `mesh.wesl`'s `ALPHA_TEST_THRESHOLD` otherwise.
+    /// `shaders/alpha_test.wesl`'s `ALPHA_TEST_THRESHOLD` otherwise.
     pub default: &'a wgpu::RenderPipeline,
     /// [`super::Built::cutout_pipelines`], one per reference a `.vex` batch
     /// asked for.

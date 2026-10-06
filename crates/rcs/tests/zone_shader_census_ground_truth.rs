@@ -48,7 +48,7 @@ const ALL_ARCHIVES: &[&str] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Shape {
     /// `surface = zoneTex * zoneEffect + zoneBase * rim^10 + zoneBaseAlt * rim^5`.
-    /// The circuit shape, and what `mesh.wesl` draws.
+    /// The circuit shape, and what `mesh.wgsl` draws.
     Base,
     /// `surface = albedo + zoneCol * (1 - blackMask)`, with the rim term a
     /// `zoneAnisoPalette` lookup. The Zone-arena shape.

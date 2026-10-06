@@ -2,7 +2,7 @@
 //! wave moves with `scene.time`, on a fixture needing no game content.
 //!
 //! `hd_mag_wave_ground_truth.rs` checks the real circuit builds the bindings;
-//! this one checks `mesh.wesl` reads them: the emissive picture dodged by a
+//! this one checks `mesh.wgsl` reads them: the emissive picture dodged by a
 //! wave sampled at `uv * k + time`, `d = e / (1 - lerp(e, wave, e.a) * Colour)`
 //! (`mesh::rcs::mag_wave`). The wave texture is four texels across, three black
 //! and one white, so the clock sweeps the white texel across the sampled point

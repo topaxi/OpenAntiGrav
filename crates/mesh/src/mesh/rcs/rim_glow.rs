@@ -18,7 +18,7 @@
 //! Neither declares an ambient, a sun or a lightmap, and neither reads the
 //! vertex colour. `globalAlphaScaler` is the identity `(0, 1)` the engine
 //! initialises and never changes for these draws, and `fogColour` is the
-//! fog `mesh.wesl`'s `fogged` already applies - so every number the shader
+//! fog `shaders/fog.wesl`'s `fogged` already applies - so every number the shader
 //! needs beyond the texture and the clock is a literal in the program itself,
 //! which is what [`classify`] checks before it sets a bit.
 //!

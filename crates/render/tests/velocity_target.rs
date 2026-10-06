@@ -89,7 +89,7 @@ fn triangle_model() -> Model {
     }
 }
 
-/// The uniform block `mesh.wesl` reads, laid out by hand: identity camera
+/// The uniform block `mesh.wgsl` reads, laid out by hand: identity camera
 /// and model, and a `prev_mvp` that claims every point sat `+0.5` NDC to the
 /// right and `+0.5` NDC up one tick ago.
 fn uniforms() -> Vec<u8> {

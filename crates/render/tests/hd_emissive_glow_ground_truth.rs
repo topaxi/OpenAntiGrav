@@ -14,7 +14,7 @@
 //! # What this measures
 //!
 //! HD's emissive family **adds** its second texture to the albedo where
-//! `mesh.wesl` *selects* between the two, so before 2026-08-31 every one of
+//! `mesh.wgsl` *selects* between the two, so before 2026-08-31 every one of
 //! those surfaces drew its diffuse and its glow was simply absent. The
 //! mechanism is on `docs/formats/rcsmaterial.md`, "A surface scrolls off an
 //! engine `time`"; three claims here:

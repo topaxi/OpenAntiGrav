@@ -17,7 +17,7 @@ pub(super) struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
     /// Which layer of the per-craft sun-occlusion array this model samples,
-    /// plus one - `0.0` for none. See `mesh.wesl`'s `sun_occlusion` and
+    /// plus one - `0.0` for none. See `shaders/shadow.wesl`'s `sun_occlusion` and
     /// [`crate::shadow::occlusion`]. Was a global texture-animation phase
     /// before [`TexAnims`] replaced it and padding after; reused so the
     /// layout `mesh.wesl`, four other pipelines and the asset viewer mirror
@@ -532,13 +532,13 @@ pub use light::Light;
 ///    so it is absent by scope as much as for want of a source.
 /// 2. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
 ///    lookup is rewritten every frame from a value whose source is unread,
-///    so `mesh.wesl`'s `zone_glow` samples a lookup this project fills from
+///    so `shaders/zone.wesl`'s `zone_glow` samples a lookup this project fills from
 ///    its own mixer instead. Its additive sibling, `5.0 * saturate(1 - 0.1 *
 ///    (distance - zoneColourTint.w))`, now has both its inputs and is still
 ///    left out: as read it adds `5.0` to *every* fragment inside the sphere,
 ///    not just at its edge, and the live frame at radius `799` shows no such
 ///    flood - so the reading of that term is what is in doubt, and it stays
-///    out until it is re-read. See `mesh.wesl`'s `zone_glow`.
+///    out until it is re-read. See `shaders/zone.wesl`'s `zone_glow`.
 // **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
 // alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
 // starts at a 16-aligned offset there. Rust's own alignment for it is 4, and
@@ -804,7 +804,7 @@ impl Scene {
 
 const _: () = assert!(
     std::mem::size_of::<Zone>() == 224,
-    "mesh.wesl's Zone is two vec4s and four three-vec4 sets"
+    "shaders/types.wesl's Zone is two vec4s and four three-vec4 sets"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),
@@ -816,7 +816,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     std::mem::size_of::<ShadowMap>() == 80,
-    "mesh.wesl's ShadowMap is a mat4x4 and one padded vec4"
+    "shaders/types.wesl's ShadowMap is a mat4x4 and one padded vec4"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),

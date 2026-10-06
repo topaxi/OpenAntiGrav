@@ -671,7 +671,7 @@ pub(super) fn staging(
     let ps3_geometry = geometry != GeometryKind::None;
     // **The circuit's own light rig, where it authors one.** Wipeout HD does:
     // `track.envsettings` sits beside `track.vex` and states a sun direction, a
-    // sun colour and a constant ambient. `mesh.wesl`'s two-light rig is a
+    // sun colour and a constant ambient. `mesh.wgsl`'s two-light rig is a
     // stand-in for exactly this and says so, and `CLAUDE.md`'s rule about not
     // inventing what the assets already author is why it is read here rather
     // than approximated. Wipeout 2048 ships the same shape under its own

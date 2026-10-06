@@ -1,7 +1,7 @@
 //! A lit surface under a **non-uniformly scaled moving node** is shaded the way
 //! the baked path shades it.
 //!
-//! `mesh.wesl` moves a node's vertices through the node-table matrix, and used
+//! `mesh.wgsl` moves a node's vertices through the node-table matrix, and used
 //! to turn the normal through the same matrix: right for a rotation or a
 //! uniform scale, wrong under a per-axis one, where a normal must go through
 //! the inverse transpose. Wipeout 2048 has 51 such lit meshes across its

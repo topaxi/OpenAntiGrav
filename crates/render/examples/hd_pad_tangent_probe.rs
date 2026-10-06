@@ -3,7 +3,7 @@
 //!
 //! The pads' fragment programs build `N = nx*TC3 + ny*TC0 + nz*TC2` out of the
 //! `_ne` normal map (`hd_pad_ne_tint_probe.rs`), so the vertex program hands
-//! the pixel a tangent frame. `mesh.wesl` has none. Two ways to give it one:
+//! the pixel a tangent frame. `mesh.wgsl` has none. Two ways to give it one:
 //! decode the authored tangent (`rcsmodel`'s stride-22 `+10` field, a unit
 //! vector perpendicular to the normal, `rcsmodel_vertex_ground_truth.rs`
 //! claim 7) or derive it per pixel from the texture coordinates. This

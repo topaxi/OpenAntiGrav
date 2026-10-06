@@ -47,7 +47,7 @@ pub enum GlowMask {
     ///
     /// The structure is [`Self::Stamped`]'s - opaque and cutout pipelines write
     /// it, blended ones leave it to a second stamp draw - and only the value
-    /// differs, which `mesh.wesl`'s `glow_texel` override switches.
+    /// differs, which `shaders/glow.wesl`'s `glow_texel` override switches.
     StampedByTexel,
 }
 

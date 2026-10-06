@@ -76,7 +76,7 @@ impl SpuLight {
     };
 }
 
-/// The per-frame list, as `mesh.wesl`'s `SpuLights` lays it out: a count in
+/// The per-frame list, as `shaders/types.wesl`'s `SpuLights` lays it out: a count in
 /// the first lane of a padded word, then the fixed array.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -117,7 +117,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     std::mem::size_of::<SpuLights>() == 16 + 32 * MAX_SPU_LIGHTS,
-    "mesh.wesl's SpuLights is one padded count and the array"
+    "shaders/types.wesl's SpuLights is one padded count and the array"
 );
 
 #[cfg(test)]

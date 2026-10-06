@@ -11,7 +11,7 @@
 //! while drawing nothing.
 //!
 //! It also pins the **colour space**, which is the failure this test exists
-//! for. `mesh.wesl` decodes its samples with `pow(texel, 2.2)` and shades in
+//! for. `mesh.wgsl` decodes its samples with `pow(texel, 2.2)` and shades in
 //! linear light; `zoneTex` is a texture and wants that decode, `zoneEffect` is
 //! a shader parameter and does not. Summing before the decode instead of after
 //! computes `pow(zoneTex * zoneEffect, 2.2)` and distorts every stage colour -
@@ -184,7 +184,7 @@ fn scene_zone(set: ZoneSet) -> Zone {
     }
 }
 
-/// What `mesh.wesl` must produce for one channel: the zone sample decoded,
+/// What `mesh.wgsl` must produce for one channel: the zone sample decoded,
 /// scaled by the parameter, then encoded back.
 fn expected(effect: f32) -> u8 {
     let sample = f32::from(ZONE_TEXEL) / 255.0;
@@ -396,7 +396,7 @@ fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
 /// all zero (no surface colour), the albedo is irrelevant (the Zone term
 /// replaces it), and `scene.light.enabled = 0.0` selects the gamma/stand-in
 /// path unconditionally, so the pixel is `zone_glow` alone - see
-/// `mesh.wesl`'s own function for the formula this measures.
+/// `mesh.wgsl`'s own function for the formula this measures.
 #[test]
 fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
     let instance = wgpu::Instance::default();
@@ -425,7 +425,7 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
 
     let mut scene = Scene::off();
     // Off, so `shaded.rgb` unconditionally takes the gamma/stand-in path -
-    // see `mesh.wesl`'s `mix(plain_rgb, authored_rgb, scene.light.enabled *
+    // see `mesh.wgsl`'s `mix(plain_rgb, authored_rgb, scene.light.enabled *
     // in.lit)`.
     scene.light.enabled = 0.0;
     scene.zone = scene_zone(ZoneSet {

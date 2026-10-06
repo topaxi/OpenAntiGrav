@@ -280,7 +280,7 @@ fn shading(model: &mut Model, geometry: &[u8], report: &mut Vec<String>) {
 /// [`GpuVertex::sun_mask`] instead, which is the right reading for the circuit
 /// materials it was measured on (`renderer.md`, "The sun is real and it is
 /// masked") and the wrong one here - it gates a sun term this program does not
-/// have, and leaves `mesh.wesl`'s `texel.a * in.colour.a` multiplying by a
+/// have, and leaves `mesh.wgsl`'s `texel.a * in.colour.a` multiplying by a
 /// constant 1.0. Left there the flame draws at the texture's own alpha
 /// everywhere and has no shape at all.
 ///
@@ -295,7 +295,7 @@ pub(super) fn alpha_ramp(model: &mut Model) {
         vertex.colour[3] = vertex.sun_mask;
         // Unmasked, which is `sun_mask`'s own default for a chunk with no
         // colour set - the value it would carry if the sun term were the only
-        // reader. See `mesh.wesl`.
+        // reader. See `mesh.wgsl`.
         vertex.sun_mask = 1.0;
     }
 }

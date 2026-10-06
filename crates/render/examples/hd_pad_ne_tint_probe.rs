@@ -18,7 +18,7 @@
 //! settle which alpha channel (the diffuse's, covering 93% of the plate, or
 //! `_ne`'s own, covering the ~7% light-bar mask) actually gates the pad's
 //! final accumulate, rather than assuming the renderer's already-implemented
-//! generic `emissive` shape (`mesh.wesl`, `glow = second.rgb * tint.rgb *
+//! generic `emissive` shape (`mesh.wgsl`, `glow = second.rgb * tint.rgb *
 //! first.a`) is what the pad's own microcode executes.
 
 use oag_rcs::{rcsmaterial, rcsmodel};

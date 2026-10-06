@@ -203,7 +203,7 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
 /// Assegai sample an earlier pass measured by hand (63 vertices at
 /// `[1,1,1,1]`, 58 at `[1.0, 0.384, 0.0196, 0.0]`). Guards against a
 /// future re-export of the asset changing this shape and silently
-/// re-breaking the falloff `mesh.wesl`'s `lit_texel` alpha fix depends on.
+/// re-breaking the falloff `mesh.wgsl`'s `lit_texel` alpha fix depends on.
 ///
 /// Exact float equality is safe here: `GpuVertex::colour` is decoded as
 /// `byte as f32 / 255.0` (`oag_mesh::mesh`'s batch builder), which is

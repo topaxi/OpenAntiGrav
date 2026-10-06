@@ -5,7 +5,7 @@ use oag_assets::Container;
 use oag_vex::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
-/// `mesh.wesl`'s `TexAnims` array.
+/// `shaders/types.wesl`'s `TexAnims` array.
 ///
 /// Slot 0 is the identity, so a model gets `ANIM_TRACK_LIMIT - 1` real tracks.
 ///
@@ -179,7 +179,7 @@ pub struct Model {
     ///
     /// `None` for every PSP and PS2 model, whose alpha-tested batches carry no
     /// reference of their own that this project has recovered - the shader's
-    /// own default stands there, and `mesh.wesl`'s `ALPHA_TEST_THRESHOLD`
+    /// own default stands there, and `shaders/alpha_test.wesl`'s `ALPHA_TEST_THRESHOLD`
     /// carries the evidence for it.
     pub alpha_test_ref: Option<f32>,
     /// Centre of the bounding box, so the camera can frame the model.

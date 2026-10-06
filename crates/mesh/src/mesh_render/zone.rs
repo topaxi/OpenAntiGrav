@@ -22,7 +22,7 @@ use crate::mesh::ModelTexture;
 
 /// Texels in [`Resources::vis_texture`]. Matches the original's own
 /// `zoneTexVis` - a 256-entry lookup keyed on a texel's alpha - not a choice
-/// this project made; see `mesh.wesl`'s `zone_glow` and
+/// this project made; see `shaders/zone.wesl`'s `zone_glow` and
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`.
 pub const VIS_WIDTH: u32 = 256;
 
@@ -293,7 +293,7 @@ pub(super) fn resources(
     );
     let vis_view = vis_texture.create_view(&wgpu::TextureViewDescriptor::default());
     // Clamp, not repeat: the shader indexes this by a texel alpha in
-    // `0.0..=1.0` (see `mesh.wesl`'s `zone_glow`), which never leaves that
+    // `0.0..=1.0` (see `shaders/zone.wesl`'s `zone_glow`), which never leaves that
     // range, and nearest-filtered for the same reason the stage texture's own
     // clone is - a band lookup wants a discrete answer, not a blend between
     // two neighbours.

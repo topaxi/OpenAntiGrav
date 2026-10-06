@@ -158,7 +158,7 @@ fn talons_junction_speedup_pad_chunks_are_an_unbaked_content_donor() {
 /// reverted on 2026-09-03: to make a flat invented tint *visible* on HD, both
 /// pad models were taken off the authored branch (`vertex_colour_is_light`
 /// forced `false`, every vertex's `lit` forced `0.0`), which is what routes
-/// `mesh.wesl` to its stand-in shading where vertex colour multiplies. A pad
+/// `mesh.wgsl` to its stand-in shading where vertex colour multiplies. A pad
 /// lit by its own baked light rig then read as a flat plate in a colour the
 /// disc does not author anywhere.
 ///
@@ -194,7 +194,7 @@ fn hd_pads_keep_their_authored_light_and_are_never_recoloured() {
         );
         assert!(
             model.vertices.iter().all(|v| v.lit == 1.0),
-            "{label} pads were forced onto mesh.wesl's stand-in shading branch"
+            "{label} pads were forced onto mesh.wgsl's stand-in shading branch"
         );
         assert!(
             model

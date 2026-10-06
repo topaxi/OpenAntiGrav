@@ -34,7 +34,7 @@ fn the_fit_contains_what_it_was_sized_for() {
 }
 
 /// Depth runs `0..1` across the box, which is what the receiver's own `ndc.z`
-/// test in `mesh.wesl` assumes.
+/// test in `mesh.wgsl` assumes.
 #[test]
 fn the_depth_range_is_the_one_the_receiver_tests_against() {
     let matrix = fit().matrix();

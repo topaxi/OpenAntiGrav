@@ -203,7 +203,7 @@ pub struct Constants {
 }
 
 /// This renderer's velocity attachment holds the **current-minus-previous** UV
-/// delta (`mesh.wesl`'s `velocity_of`), and FSR 3.1 reprojects with
+/// delta (`shaders/velocity.wesl`'s `velocity_of`), and FSR 3.1 reprojects with
 /// `uv + motionVector` - so the vector it wants points the other way.
 ///
 /// Upstream's `motionVectorScale` exists to convert whatever units an engine

@@ -243,7 +243,7 @@ pub mod slots {
     /// it is bit 0 of the chunk's own render-block flags
     /// (`oag_rcs::rcsmodel::Mesh::is_track`), authored in the `.rcsmodel`
     /// on 4,365 of the disc's 41,861 chunks, and `mesh::rcs::surface` ORs
-    /// it in per chunk over the material's roles. `mesh.wesl`'s `zone_set`
+    /// it in per chunk over the material's roles. `shaders/zone.wesl`'s `zone_set`
     /// decodes it; see `mesh_render::Zone` for the two publications.
     pub const ZONE_TRACK: u32 = 1 << 9;
 
