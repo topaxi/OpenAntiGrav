@@ -790,7 +790,7 @@ impl Race {
         };
         self.view
             .sparks
-            .extend_vertices(additive, alpha_over, effect, right, up);
+            .extend_vertices(additive, alpha_over, effect, right, up, None);
     }
 
     /// Everything the [`psys::Stage`] is playing this frame, split by blend
@@ -806,14 +806,25 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
+        let camera = self.camera_frame();
+        // The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
+        let guard = self
+            .view
+            .screen_flash
+            .is_some()
+            .then_some(psys::guard::GuardBand {
+                eye: camera.position,
+                right: camera.right,
+                up: camera.up,
+                forward: -camera.back,
+            });
         self.view
             .stage
-            .extend_vertices(additive, alpha_over, right, up);
+            .extend_vertices(additive, alpha_over, right, up, guard.as_ref());
         self.view
             .scenery_fx
             .stage()
-            .extend_vertices(additive, alpha_over, right, up);
-        let camera = self.camera_frame();
+            .extend_vertices(additive, alpha_over, right, up, None);
         self.view
             .scenery_fx
             .weather()

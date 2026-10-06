@@ -396,11 +396,7 @@ still open, most player-visible first:
   selector-5 record, still not played by `oag_fx::psys`
   ([pob.md](../../docs/formats/pob.md)). Frames:
   `data/scratch/pulse-repulser-2/shots/psp-seq.png` against `oag-seq.png`.
-- **Open: the wave-start whiteout is confirmed as ours.** The original's
-  wave-start frame is a blue tint with the waves streaming off; ours is a full
-  white frame (`oag-still-047.png` against `psp-live2-049.png`). Not diagnosed:
-  try the flash kind 2 colour/alpha first, then the two `WO_REPULSER` spawning
-  at the firer.
+- ~~**Open: the wave-start whiteout is confirmed as ours.**~~ Closed 2026-10-06: the `shazzam` quad is dropped by the GE's guard band, see particle-system.md.
 - ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
   in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
   (05, 07, 14, 23 carry one), off the forward wave. Not built: the init-tick

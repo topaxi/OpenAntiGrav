@@ -1747,3 +1747,27 @@ the quad fits in `+-2048`: if the PSP draws a band there, the guard-band cull is
 **Next address.** The class-7 pool draw, `FUN_08918160`, is to class 7 what this is
 to class 6, and ours plays the template routine's capped bar for it. It reads
 `DAT_08ab0628` too, so it probably has the same `+0x60` end. Unread.
+
+### 2026-10-06: the guard band is the law (weapon-visuals lane)
+
+Two `.ppdmp` frames of a standing Repulser (Talon's Junction, Time Trial), **replayed**
+by PPSSPP's software renderer (`PPSSPPSDL --windowed frame.ppdmp`, which draws exactly the
+submitted commands and nothing else):
+
+| Frame | `shazzam` depth | Corners at (view x, px) | Replay |
+| --- | ---: | --- | --- |
+| first wave update | `-11.8` | `-109.7..130.3` = `-2189..2600` px | blue tint, **no band** |
+| three updates later | `-71.2` | `-103.3..136.7` = `-341..452` px | a white band across the road |
+
+(px = `x * 240 * 0.981 / depth`, the frame's projection and the viewport scale; the PSP
+window screenshots at fire+49/50/51 agree: blue tint, then a white band on one side.) So a
+primitive with a vertex beyond `+-2048` px of the centre is **dropped**. This promotes the
+hypothesis above from 65 to **80**: two frames, the boundary not located, and the reference
+is PPSSPP's rasteriser, not a PSP. Played by `oag_fx::psys::guard::GuardBand` on template
+quads on Pulse's PSP source only (the predicate the screen flash uses); the law is
+presumably every primitive's, but only these were measured. Our frame at the wave start is
+now the blue tint (`data/scratch/weapon-visuals/strip_ours_rep_after.png` against
+`strip_psp_orig.png`). The second wave's `shazzam` absent from later submissions stays
+unexplained. The class-6 root's white blob was already replaced by the bars (2026-10-04);
+no `crates/pob` change was needed, both were decoded. Cross-title: **not checkable** - HD
+and 2048 build this effect on their own formats and no frame was read.

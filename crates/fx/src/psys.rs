@@ -50,6 +50,7 @@ mod emitter_state;
 mod error;
 pub mod field;
 pub mod frames;
+pub mod guard;
 mod library;
 mod path;
 pub mod playback;
@@ -1090,7 +1091,7 @@ impl System {
     ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up);
+        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up, None);
         (additive, alpha_over)
     }
 
@@ -1107,6 +1108,7 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
+        guard: Option<&guard::GuardBand>,
     ) {
         for particle in &self.particles {
             if !particle.alive() {
@@ -1149,6 +1151,11 @@ impl System {
             };
             if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
+            }
+            if spec.template
+                && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
+            {
+                continue;
             }
             out.extend_from_slice(&corners);
         }
@@ -1398,7 +1405,7 @@ impl Stage {
     pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, right, up);
+        self.extend_vertices(&mut additive, &mut alpha_over, right, up, None);
         (additive, alpha_over)
     }
 
@@ -1410,6 +1417,7 @@ impl Stage {
         alpha_over: &mut Vec<GpuVertex>,
         right: Vec3,
         up: Vec3,
+        guard: Option<&guard::GuardBand>,
     ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
@@ -1417,7 +1425,7 @@ impl Stage {
             };
             instance
                 .system
-                .extend_vertices(additive, alpha_over, effect, right, up);
+                .extend_vertices(additive, alpha_over, effect, right, up, guard);
         }
     }
 

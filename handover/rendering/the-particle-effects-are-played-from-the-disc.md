@@ -125,16 +125,7 @@ names that 2048 and Omega never authors") and no longer load there.
   pointer). Frames: `data/scratch/pulse-psys-ring/shots/final-cmp.png`. See
   [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
   "The emitter's clock and the burst laws". Still open from it:
-  - **The wave-start whiteout is now only the `shazzam` template** (2026-10-04,
-    pulse-psys-shape8). Shape 8 (a half ring), the class-6 pool bar and the wave's
-    width co-factor are read, measured live and played, so the root's white blob at 52
-    became the original's thin bands (`data/scratch/pulse-psys-shape8/shots/ours-seq1.png`
-    against `psp-seq1.png`). The `shazzam` still whites out ours for one frame. GE dumps
-    show the original **does** submit it there, but with corners about 8000 px off the
-    screen centre, outside the GE's 4096-wide space; a guard-band cull is the
-    hypothesis (65), not implemented. On later dumps one wave's `shazzam` is not
-    submitted at all, unexplained. See particle-system.md, "Shape 8, the class-6 bar
-    and the wave's width".
+  - ~~**The wave-start whiteout is now only the `shazzam` template**~~ Closed 2026-10-06 (weapon-visuals): PPSSPP replays of two GE dumps show the out-of-range quad is dropped and an in-range one draws a band; played as `oag_fx::psys::guard`. Still open: the boundary itself, and the other wave's `shazzam` absent from later submissions.
   - **Every class-6 emitter changed draw** (23 on the PSP disc): it is a bar `2 size`
     wide, capped by `aspect * size`, not the wedge. Before/after frames of the Missile,
     Shuriken, LeachBeam and Fort Gale rain (`data/scratch/pulse-psys-shape8/shots/ba-*.png`)
