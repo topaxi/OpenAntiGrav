@@ -1,35 +1,34 @@
 //! HD's authored mix: a row of group volumes per game state, and the law that
 //! turns a slider and a group into a gain.
 //!
-//! Everything HD plays reaches the speakers through `Data\sound\GlobalAudioConfig.xml`'s
+//! Everything HD plays goes through `Data\sound\GlobalAudioConfig.xml`'s
 //! `ParameterMaps`: one `GroupVolumes` row (`music`, `user1` to `user12`) per
-//! game state and per channel layout, parsed at boot by `FUN_0030d0b0` into the
+//! game state and channel layout, parsed at boot by `FUN_0030d0b0` into the
 //! sound system at `0x00b6cc90 + 0x6a0 + 0xb8 * state`. The live group array
-//! (`+0x308`, thirteen floats) chases the active state's row. Measured on
-//! RPCS3, `docs/formats/hd-xfx.md` "The authored mix":
+//! (`+0x308`, thirteen floats) chases the active state's row. Measured on RPCS3,
+//! `docs/formats/hd-xfx.md` "The authored mix":
 //!
-//! - the **music** chain is `slider * group`, linear in both (halving the group
-//!   or the slider halves the dump's RMS: 0.48x and 0.52x);
+//! - the **music** chain is `slider * group`, linear in both (halving either
+//!   halves the dump's RMS: 0.48x and 0.52x);
 //! - the **SFX** chain is `(slider * group)^2` per voice, folded into the
-//!   hardware gain itself (the player's engine voices read `K = 0.295, 0.074,
-//!   0.018` at groups `0.68, 0.34, 0.17` with the slider at `0.8`);
+//!   hardware gain (the player's engine voices read `K = 0.295, 0.074, 0.018` at
+//!   groups `0.68, 0.34, 0.17` with the slider at `0.8`);
 //! - both sliders default to `80 %` (`default="80%"` in the options screen's
-//!   own XML), and the profile the original ran on read `0.8` for both.
+//!   XML), and the profile the original ran on read `0.8` for both.
 //!
-//! The port plays the **Stereo** row. The layout byte read on RPCS3 was `2`,
-//! which is the code's stereo branch; a surround layout reads the other row,
-//! which differs only in `user4` (`0.9` against `0.95`) in the rows measured.
+//! The port plays the **Stereo** row: the layout byte read on RPCS3 was `2`, the
+//! code's stereo branch; a surround layout reads another row, differing only in
+//! `user4` (`0.9` against `0.95`) in the rows measured.
 //!
 //! # What is chosen, not measured
 //!
-//! - [`SMOOTHING`]: the live array chases its target exponentially; one
-//!   reading (a group falling from `1.1` to `0.001` in about 1.5 s) fits
-//!   `0.025` per 256-sample frame, and the transition speeds the XML carries
-//!   are not applied beyond that.
+//! - [`SMOOTHING`]: the live array chases its target exponentially; one reading
+//!   (a group falling from `1.1` to `0.001` in about 1.5 s) fits `0.025` per
+//!   256-sample frame, and the XML's transition speeds are not applied beyond it.
 //! - Which group a cue belongs to, other than the engine (`user7`, read off the
-//!   player's voices) and the circuit's emitters (`user8`, the only audible
-//!   group with the others zero): the authored `USER1..12` comment in the
-//!   `DATA00` copy of the file is the only source, and it is not traced.
+//!   player's voices) and the circuit's emitters (`user8`, the only audible group
+//!   with the others zero): the `USER1..12` comment in the `DATA00` copy of the
+//!   file is the only source, and it is not traced.
 
 use oag_audio::{Bus, GROUPS, Mixer};
 
@@ -40,14 +39,13 @@ use super::library::Library;
 pub const SLIDER_DEFAULT: f32 = 0.8;
 
 /// This port's own unity against HD's: a sound's `pan_volume_gain` is
-/// `2 * a^2 * t^2` (the PSP stage, `oag_audio::spatial::pan_volume_gain`), and
-/// HD's hardware gain is `K * a^2 * t^2` with `K = (slider * group)^2`, so the
-/// port's bus has to divide the two out.
+/// `2 * a^2 * t^2` (`oag_audio::spatial::pan_volume_gain`) and HD's hardware
+/// gain is `K * a^2 * t^2` with `K = (slider * group)^2`, so the bus divides
+/// the two out.
 pub const PSP_UNITY: f32 = 2.0;
 
 /// The fraction of the way a live group moves to its target per 256-sample
-/// frame. **Chosen, not measured**: one reading fits it, see the module
-/// documentation.
+/// frame. Chosen, not measured: see the module documentation.
 pub const SMOOTHING: f32 = 0.025;
 
 /// Frames of 256 samples in one 60 Hz tick at 48 kHz (`800 / 256`).
@@ -57,21 +55,13 @@ const FRAMES_PER_TICK: f32 = 3.125;
 /// lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
-    /// The front end.
     FrontEnd,
-    /// The fly-over before the countdown.
     PreRace,
-    /// The grid, until the start.
     Countdown,
-    /// Racing.
     RaceNormal,
-    /// Racing with the energy critical.
     CriticalEnergy,
-    /// The player's craft is destroyed.
     PlayerDead,
-    /// After the finish.
     PostRace,
-    /// The results table.
     DisplayResults,
 }
 
@@ -116,11 +106,9 @@ pub struct Maps {
 
 impl Maps {
     /// Reads the stereo `GroupVolumes` of every state out of the file's text.
-    ///
-    /// Scans for the tags rather than parsing XML: the file is one authored
-    /// document and the only values read are attributes of one element. A
-    /// state with no readable row is left `None` and the caller keeps the last
-    /// one it had.
+    /// Scans for tags rather than parsing XML (one authored document, attributes
+    /// of one element). A state with no readable row stays `None` and the caller
+    /// keeps its last.
     #[must_use]
     pub fn parse(xml: &str) -> Self {
         let mut maps = Self::default();
@@ -130,11 +118,9 @@ impl Maps {
         maps
     }
 
-    /// Reads and parses `Data\sound\GlobalAudioConfig.xml` out of `archives`.
-    ///
-    /// `None` when the title has no such entry (Pulse, Pure) or it holds no
-    /// row at all, which is how a title with no authored mix stays on its own
-    /// three buses.
+    /// Reads and parses `Data\sound\GlobalAudioConfig.xml` out of `archives`;
+    /// `None` when the title has no such entry (Pulse, Pure) or it holds no row,
+    /// which keeps a title with no authored mix on its three buses.
     #[must_use]
     pub fn load(archives: &mut oag_assets::source::Archives) -> Option<Self> {
         let blob = archives
@@ -267,16 +253,16 @@ impl Live {
     }
 
     /// Puts every bus on the live array: music linear, each group squared.
+    /// Puts every bus on the live array: music linear, each group squared.
     ///
-    /// `music_slider` and `sfx_slider` are the HD sliders in `0..=1`; the
-    /// port's own percentage settings are scaled by [`SLIDER_DEFAULT`] by the
-    /// caller, so the port's default of `100 %` is the original's default.
+    /// `music_slider` and `sfx_slider` are the HD sliders in `0..=1`; the caller
+    /// scales the port's percentages by [`SLIDER_DEFAULT`], so the port's default
+    /// of `100 %` is the original's.
     ///
-    /// The effects bus carries every cue with no group of its own and the
-    /// speech bus the announcer: both play at group `1.0`, which is **chosen,
-    /// not measured**. The ordinary voices read in the first boot's scan had
-    /// `K = 0.6377`, which is `(0.8 * 1.0)^2`, but which cue sits in which
-    /// group is not traced.
+    /// The effects bus (every cue with no group) and speech bus (the announcer)
+    /// play at group `1.0`: chosen, not measured. The ordinary voices in the
+    /// first boot's scan had `K = 0.6377 = (0.8 * 1.0)^2`, but which cue sits in
+    /// which group is not traced.
     pub fn apply(&self, mixer: &mut Mixer, music_slider: f32, sfx_slider: f32, speech: f32) {
         mixer.set_bus_gain(Bus::Music, music_gain(music_slider, self.group(0)));
         mixer.set_bus_gain(Bus::Sfx, sfx_gain(sfx_slider, 1.0));

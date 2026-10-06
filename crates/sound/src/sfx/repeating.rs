@@ -3,10 +3,10 @@
 //! `~BLOWUP` re-keys a waveform every 43 master ticks while the explosion holds
 //! the handler, and `~ROCKLOCK` beeps at the tempo a cue parameter picks; both
 //! stop only when the game releases the handle, so neither is a finite
-//! [`Timeline`](super::layers::Timeline). [`Playing`] drives the list's own
+//! [`Timeline`](super::layers::Timeline). [`Playing`] drives the list's
 //! [`Runner`](oag_formats::sblk::runner::Runner) from the simulation tick and
-//! starts each key-on it emits, with the sub-tick delay that keeps the beeps at
-//! their authored spacing rather than on a 60 Hz grid.
+//! starts each key-on with the sub-tick delay that keeps beeps at their authored
+//! spacing, not a 60 Hz grid.
 
 use oag_audio::{Bus, Mixer, VoiceId};
 use oag_core::Rng;
@@ -100,23 +100,20 @@ impl Playing {
     }
 }
 
-/// The race's open repeating handles: the explosion and the lock-on tone.
-///
-/// Each drive method returns whether a program played the cue, so a title
-/// whose tick is not measured (no program is built) keeps the one-shot path
-/// its caller already had.
+/// The race's open repeating handles: the explosion and the lock-on tone. Each
+/// drive method returns whether a program played the cue, so a title with no
+/// measured tick keeps its caller's one-shot path.
 #[derive(Default)]
 pub struct Held {
     blowup: Option<Playing>,
     lock: Option<Playing>,
 }
 
-/// One simulation tick, in seconds.
 const TICK_SECONDS: f64 = 1.0 / super::super::TICK_HZ as f64;
 
 impl Held {
-    /// `~BLOWUP`: opened when the player's craft starts exploding, re-keying
-    /// its list until the explosion ends. See [`Cue::Blowup`].
+    /// `~BLOWUP`: opened when the player's craft starts exploding, re-keying its
+    /// list until it ends. See [`Cue::Blowup`].
     pub fn drive_blowup(
         &mut self,
         exploding: bool,
@@ -145,10 +142,9 @@ impl Held {
         true
     }
 
-    /// `~ROCKLOCK`: one voice opened the first frame the reticle has anything,
-    /// its parameter `0` while seeking and `1` once locked, stopped when the
-    /// target goes away - `HudSight_UpdateTone`'s own shape. See
-    /// [`Cue::LockOn`].
+    /// `~ROCKLOCK`: one voice from the first frame the reticle has anything,
+    /// parameter `0` seeking and `1` locked, stopped when the target goes
+    /// (`HudSight_UpdateTone`'s shape). See [`Cue::LockOn`].
     pub fn drive_sight(
         &mut self,
         state: oag_race::sight::State,

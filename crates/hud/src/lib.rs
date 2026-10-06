@@ -77,15 +77,6 @@ use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::{argb_to_rgba, parse_argb};
 
-/// The atlas and the five layout entries: `oag_pulse::hud`.
-///
-/// Which files Pulse ships is a title fact and moved there under [ADR-0022];
-/// everything that reads them - the widget model, the `<Item>` offset handling,
-/// the draw list - is this module and is title-blind.
-///
-/// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
-pub use oag_pulse::hud::layouts;
-
 /// A parsed HUD layout: pure geometry, straight off the disc.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Layout {

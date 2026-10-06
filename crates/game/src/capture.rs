@@ -911,6 +911,7 @@ pub fn run(
     // in the one `face_atlas_slot` already picks between. See
     // `crate::render::Renderer::set_buttons_atlas`'s own doc.
     renderer.set_buttons_atlas(&device, &queue, buttons_font);
+    crate::prompts::install(&mut renderer, title, &options.settings);
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),

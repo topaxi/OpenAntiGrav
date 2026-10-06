@@ -1,11 +1,7 @@
-//! One tick of a race, as the sound effects see it.
-//!
-//! [`Audio::race_tick`](crate::Audio::race_tick) used to take the game's own
-//! `Race` and read what it needed off it. That made the sound crate depend on
-//! the composition root, so the host now builds this plain-data snapshot once a
-//! tick - after `Race::tick`, with the cue queues already drained - and hands
-//! it over. Everything in here is a value or a borrow of decoded sound data;
-//! nothing in it can step the simulation.
+//! One tick of a race, as the sound effects see it: a plain-data snapshot the
+//! host builds after `Race::tick` (cue queues already drained), so the sound
+//! crate does not depend on the composition root. Values or borrows of decoded
+//! sound data only; nothing here can step the simulation.
 
 use oag_core::math::Vec3;
 use oag_weapons::projectile::leach_beam::Beam;

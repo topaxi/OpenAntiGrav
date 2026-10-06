@@ -101,6 +101,14 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "PAGE")]
     pub(crate) menu_page: Option<String>,
 
+    /// Which glyphs the button prompts draw: `auto`, `original`, `playstation`,
+    /// `xbox`, `nintendo` or `keyboard`.
+    ///
+    /// Overrides `[controls] prompt_style` for this run without writing it
+    /// back. `auto` follows the device last used.
+    #[arg(long)]
+    pub(crate) prompt_style: Option<String>,
+
     /// With `--menu-page`, draw that page part-way through arriving.
     ///
     /// `0` is the instant a page change starts and `1` is the end of it. A

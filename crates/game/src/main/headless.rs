@@ -248,6 +248,12 @@ pub(crate) fn run_windowless(
                         pvs_culling: cli.pvs.unwrap_or(settings.graphics.pvs_culling),
                         ..settings.graphics.clone()
                     },
+                    controls: settings::Controls {
+                        prompt_style: crate::args::resolve_prompt_style(cli, settings)
+                            .name()
+                            .to_string(),
+                        ..settings.controls.clone()
+                    },
                     ..settings.clone()
                 },
                 music_discs: music_discs.clone(),
@@ -642,6 +648,11 @@ pub(crate) fn run_race(
         measure_race_load: None,
         give,
         no_intro: cli.intro.no_intro,
+        prompt_style: cli
+            .menu_args
+            .prompt_style
+            .as_deref()
+            .and_then(oag_input::prompt::PromptStyle::from_name),
         autopilot: cli.autopilot,
         autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
         autopilot_skill: cli.autopilot_skill,

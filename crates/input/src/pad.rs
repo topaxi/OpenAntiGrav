@@ -472,6 +472,10 @@ pub struct Pad {
     triggers: TriggerConfig,
     /// Which slot each attached pad drives. See [`Assignment`].
     assignment: Assignment,
+    /// What Steam said about the controllers behind its virtual ones.
+    launch: crate::prompt::Launch,
+    /// The family of the pad last pressed since [`Self::take_activity`].
+    active: Option<crate::prompt::PromptFamily>,
 }
 
 impl std::fmt::Debug for Pad {
@@ -498,6 +502,8 @@ impl Pad {
                 gilrs: Some(gilrs),
                 triggers,
                 assignment: Assignment::default(),
+                launch: crate::prompt::Launch::from_process(),
+                active: None,
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -505,6 +511,8 @@ impl Pad {
                     gilrs: None,
                     triggers,
                     assignment: Assignment::default(),
+                    launch: crate::prompt::Launch::default(),
+                    active: None,
                 }
             }
         }
@@ -522,6 +530,8 @@ impl Pad {
             gilrs: None,
             triggers: TriggerConfig::default(),
             assignment: Assignment::default(),
+            launch: crate::prompt::Launch::default(),
+            active: None,
         }
     }
 
@@ -564,6 +574,22 @@ impl Pad {
             .collect()
     }
 
+    /// The prompt family of the first attached pad, `None` with none.
+    #[must_use]
+    pub fn first_family(&self) -> Option<crate::prompt::PromptFamily> {
+        let gilrs = self.gilrs.as_ref()?;
+        gilrs
+            .gamepads()
+            .next()
+            .map(|(_, pad)| self.launch.family_of(&pad_info(&pad)))
+    }
+
+    /// The family of the pad pressed or pushed since the last call, and
+    /// clears it. Feeds [`crate::prompt::Detector::note_pad`].
+    pub fn take_activity(&mut self) -> Option<crate::prompt::PromptFamily> {
+        self.active.take()
+    }
+
     /// Which slot each attached pad drives.
     #[must_use]
     pub fn assignment(&self) -> &Assignment {
@@ -596,12 +622,18 @@ impl Pad {
                 let Some(reading) = readings.get_mut(slot) else {
                     continue;
                 };
+                let before = reading.buttons;
                 for bound_button in BOUND_BUTTONS {
                     if pad.is_pressed(bound_button)
                         && let Some(button) = map_button(bound_button)
                     {
                         reading.buttons |= button.bit();
                     }
+                }
+                let pushed = pad.value(gilrs::Axis::LeftStickX).abs() > ACTIVITY_STICK
+                    || pad.value(gilrs::Axis::LeftStickY).abs() > ACTIVITY_STICK;
+                if pushed || reading.buttons != before {
+                    self.active = Some(self.launch.family_of(&pad_info(&pad)));
                 }
                 reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));
                 reading.stick_y = larger(reading.stick_y, pad.value(gilrs::Axis::LeftStickY));
@@ -622,6 +654,18 @@ impl Pad {
     /// racing.
     pub fn poll(&mut self) -> PadState {
         self.poll_players()[Assignment::DEFAULT_SLOT]
+    }
+}
+
+/// How far a stick must be pushed before it counts as the player using the
+/// pad rather than drift, for the prompt family's last-used tracking.
+const ACTIVITY_STICK: f32 = 0.5;
+
+fn pad_info(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadInfo {
+    crate::prompt::PadInfo {
+        name: pad.name().to_string(),
+        vendor_id: pad.vendor_id(),
+        product_id: pad.product_id(),
     }
 }
 

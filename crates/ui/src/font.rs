@@ -597,7 +597,7 @@ pub struct Atlas {
     /// A `BTreeMap` rather than a hash map so the iteration order is stable;
     /// nothing here feeds the simulation, but determinism by default is cheaper
     /// than remembering where the exception was.
-    glyphs: BTreeMap<char, Cell>,
+    pub(crate) glyphs: BTreeMap<char, Cell>,
     /// Grid units per atlas texel: what a [`Cell`]'s pixel size means in the
     /// grid the layout is authored in. `1.0` everywhere except a source whose
     /// faces are drawn at a higher resolution than its grid - see
@@ -779,6 +779,10 @@ impl Atlas {
                 .copied();
         }
 
+        // A glyph pushed onto the built-in set - see `Self::push_glyph`.
+        if let Some(cell) = self.glyphs.get(&ch) {
+            return Some(*cell);
+        }
         let find = |c: char| GLYPHS.iter().position(|(g, _)| *g == c);
         let index = find(folded).or_else(|| find(base_letter(folded)))?;
         Some(Cell {

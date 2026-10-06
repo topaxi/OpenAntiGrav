@@ -1,9 +1,8 @@
 //! The magstrip hum's held voices, one list per grid slot.
 //!
-//! [`Cue::Magstrip`] starts a craft's voices and [`Cue::MagstripStop`] ends
-//! them; between the two they follow the craft, as the original's group is
-//! anchored to the ship's own transform. Neither reaches the one-shot path -
-//! see [`Cue::held`].
+//! [`Cue::Magstrip`] starts a craft's voices and [`Cue::MagstripStop`] ends them;
+//! between, they follow the craft, as the original's group is anchored to the
+//! ship's transform. Neither reaches the one-shot path ([`Cue::held`]).
 
 use oag_audio::{Mixer, VoiceId};
 use oag_core::Rng;
@@ -17,9 +16,8 @@ pub(super) struct Voices {
     held: [Vec<VoiceId>; oag_gameplay::MAX_SHIPS],
 }
 
-/// How loud and where `slot` is heard from. A craft out of range, or with no
-/// pose, is silent rather than refused: the hum is held, and the craft may come
-/// back into range while it plays.
+/// How loud and where `slot` is heard from. A craft out of range or with no pose
+/// is silent, not refused: the hum is held and the craft may return to range.
 fn heard(slot: usize, listener: &oag_audio::Listener, craft: &[Option<(Vec3, f32)>]) -> VoicePlace {
     let placed = place(CueEvent::new(Cue::Magstrip, slot), listener, craft);
     VoicePlace {
@@ -33,12 +31,12 @@ const DRAWS: usize = 64;
 
 /// One draw of `~magstrip01` that loops, or failing that the first draw.
 ///
-/// **Chosen, not measured.** The cue is a tree of 35 waveforms the reader
-/// flattens into uniform alternates (the load report says so), seven or so of
-/// which loop. The original starts the cue by name and stops the group on the
-/// falling edge, so what it holds is a loop; this port cannot yet tell which
-/// leaf the tree resolves to, and a one-shot would end a second into a visit it
-/// is meant to last the length of. So it keeps drawing until one loops.
+/// Chosen, not measured. The cue is a tree of 35 waveforms the reader flattens
+/// into uniform alternates (the load report says so), about seven looping. The
+/// original starts it by name and stops the group on the falling edge, so what it
+/// holds is a loop; this port cannot yet tell which leaf the tree resolves to,
+/// and a one-shot would end a second into a visit it should last, so it draws
+/// until one loops.
 fn held_draw(banks: &Banks, rng: &mut Rng) -> Option<Vec<layers::CueVoice>> {
     let first = banks.voices(Cue::Magstrip, rng)?;
     if first.iter().all(|voice| voice.looping) {

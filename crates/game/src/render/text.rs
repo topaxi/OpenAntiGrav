@@ -36,6 +36,12 @@ pub(super) enum GlyphSlot {
 }
 
 impl Renderer {
+    /// Sets which substitute glyph the title's button stand-ins draw as; an
+    /// empty [`oag_ui::prompt::Substitution`] draws the disc's own.
+    pub fn set_prompt_substitution(&mut self, substitution: oag_ui::prompt::Substitution) {
+        self.prompt_substitution = substitution;
+    }
+
     /// The atlas [`Self::push_text`] and [`Self::push_wrapped_text`] read
     /// glyphs from for `slot`. `None` only for [`GlyphSlot::Buttons`] with
     /// [`Self::buttons_atlas`] still unloaded - every other slot always
@@ -80,6 +86,10 @@ impl Renderer {
         let Some(atlas) = self.atlas_for(slot) else {
             return;
         };
+        let swapped = self
+            .prompt_substitution
+            .apply(text, slot == GlyphSlot::Buttons);
+        let text = swapped.as_ref();
         // `MODE_FACE_ATLAS` only when there is a real face atlas to sample -
         // never for the placeholder [`face::upload_face`] built with no role
         // loaded, which `Self::atlas_for` has already fallen back past.

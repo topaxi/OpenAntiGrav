@@ -1,8 +1,5 @@
 //! The engine note: the one cue this port holds a handle to for a whole race.
-//!
-//! Split out of [`super`] because it is a law with state rather than a cue
-//! lookup, and because there are now eight of them - one per grid slot, each
-//! with its own random note and its own emitter.
+//! A law with state, one per grid slot, each with its own random note and emitter.
 
 use log::warn;
 use oag_audio::{Mixer, Play, VoiceId};
@@ -26,49 +23,42 @@ use super::{Banks, Cue};
 /// volume = i * 0.6 + 0.4
 /// ```
 ///
-/// # The unit of `pitch` is 1/128 of a semitone - 1536 to the octave
+/// # The unit of `pitch` is 1/128 of a semitone, 1536 to the octave
 ///
-/// Until 2026-09-16 this was read as cents (1200 to the octave) at confidence
-/// 60, with "a hardware capture would settle it in a second" written beside
-/// it. The capture is done and it settled it the other way. The number is
-/// written to a SCREAM sound instance's `+0x04`, which `Scream_StartSound`
-/// carries into the handler as the **pitch offset** and
-/// `Scream_ComputeVoiceNote` (`0x089950a0`) adds to `note * 128 + fine` -
-/// the same 1/128th-of-a-semitone unit the fine-tune table is indexed in
-/// (`floor(32768 * 2^(i/1536))`, read off the binary) and the same `1536.0`
-/// `SoundInstance_UpdateSpatial`'s Doppler term multiplies an octave ratio
-/// by. Live, at a standstill, `~ENGINE`'s voice reached `sceSasSetPitch`
-/// with an offset of `-1148` on its 22,050 Hz descriptor and a pitch word of
-/// `0x4c3`: 13,124 Hz, a ratio of 0.595, which is `2^(-1148/1536)` and not
-/// `2^(-1148/1200)` (0.515). Confidence **92** - a decompiled path, a table
-/// closed form and a bit-exact live hit agreeing; see
+/// Read as cents (1200 to the octave) at confidence 60 until 2026-09-16; the
+/// hardware capture settled it the other way. The value goes to a SCREAM sound
+/// instance's `+0x04`, which `Scream_StartSound` carries as the pitch offset and
+/// `Scream_ComputeVoiceNote` (`0x089950a0`) adds to `note * 128 + fine`: the
+/// unit the fine-tune table is indexed in (`floor(32768 * 2^(i/1536))`, read off
+/// the binary) and the `1536.0` `SoundInstance_UpdateSpatial`'s Doppler term
+/// multiplies an octave ratio by. Live, at a standstill, `~ENGINE` reached
+/// `sceSasSetPitch` with offset `-1148` on its 22,050 Hz descriptor and pitch
+/// word `0x4c3`: 13,124 Hz, ratio 0.595 = `2^(-1148/1536)`, not
+/// `2^(-1148/1200)` (0.515). Confidence **92** (decompiled path, table closed
+/// form and bit-exact live hit); see
 /// `docs/ghidra/functions/psp-pulse-usa/sound.md`'s pitch section and
 /// `oag_formats::sblk::pitch`.
 ///
-/// So the engine sits at `2^(-1143/1536)` = 0.60 at rest, unity at 228.6
-/// km/h and about 1.18 at 300.
+/// The engine sits at `2^(-1143/1536)` = 0.60 at rest, unity at 228.6 km/h and
+/// about 1.18 at 300.
 #[derive(Debug)]
 pub struct Engine {
     /// The per-craft random offset, in the same unit as `lag`.
     base: f32,
-    /// The lagged pitch the running engine chases its target with.
     lag: f32,
     /// What is actually written to the voice.
-    ///
-    /// Separate from [`Self::lag`] because the original's two branches move
-    /// different variables: running, `pitch = lag`; stopped, `pitch` itself
-    /// winds down by [`ENGINE_SPINDOWN`] a tick while `lag` is left where it
-    /// was. Folding them would make the engine spin *back up* from wherever the
-    /// chase had got to the moment it restarted.
+    /// What is written to the voice. Separate from [`Self::lag`] because the
+    /// original's branches move different variables: running, `pitch = lag`;
+    /// stopped, `pitch` winds down by [`ENGINE_SPINDOWN`] a tick and `lag` stays,
+    /// else the engine would spin back up from wherever the chase had got to.
     pitch: f32,
     /// The distance this engine was heard at last tick, for the doppler term.
     doppler: oag_audio::Doppler,
     /// The intensity the volume is derived from, and which the visual shares.
     intensity: f32,
-    /// The held voice, while one is playing.
     voice: Option<VoiceId>,
-    /// Whether the law has been stepped at least once, so the first tick snaps
-    /// rather than sweeping in - the original's rising-edge branch.
+    /// Whether the law has stepped once, so the first tick snaps (the original's
+    /// rising-edge branch).
     started: bool,
     /// Set once the spin-down has released the voice, so it is never re-opened.
     stopped: bool,
@@ -109,13 +99,12 @@ const ENGINE_GAIN_SPAN: f32 = 0.6;
 /// What everyone but the player is scaled by.
 ///
 /// `Exhaust_UpdateEngineSound` writes `(i * 0.6 + 0.4) * 0.85` instead of
-/// `i * 0.6 + 0.4` when `craft+0x368` is set - see
-/// [`exhaust.md`](../../../../docs/ghidra/functions/psp-pulse-usa/exhaust.md).
-/// **It rides the same hypothesis [`Placement::CraftUnlessPlayer`] does**, that
-/// `+0x368` separates the local player from everyone else, which
-/// `docs/.../pads.md` records at confidence 45. Applying it to slots 1-7 is
-/// therefore a bet, and it is written here rather than folded silently into
-/// [`ENGINE_GAIN_SPAN`] so that it is one line to undo.
+/// `i * 0.6 + 0.4` when `craft+0x368` is set
+/// ([`exhaust.md`](../../../../docs/ghidra/functions/psp-pulse-usa/exhaust.md)).
+/// It rides the hypothesis [`Placement::CraftUnlessPlayer`] does (`+0x368`
+/// separates the local player, confidence 45 in `docs/.../pads.md`), so applying
+/// it to slots 1-7 is a bet, kept apart from [`ENGINE_GAIN_SPAN`] to be one line
+/// to undo.
 const OPPONENT_ENGINE_SCALE: f32 = 0.85;
 
 impl Engine {
@@ -138,15 +127,13 @@ impl Engine {
 
     /// Advances the law one tick and writes the result to the voice.
     ///
-    /// `on` is the original's `engine_on`: this port maps it to "the race is
-    /// still running", which is the only engine-state edge the simulation has.
-    /// The original's is a craft flag, so a destroyed or respawning craft would
-    /// also fall silent there and does not here - recorded rather than guessed
-    /// at, because no page has read that flag.
+    /// `on` is the original's `engine_on`, mapped to "the race is still
+    /// running", the only engine-state edge the simulation has. The original's is
+    /// a craft flag, so a destroyed or respawning craft also falls silent there
+    /// and not here; no page has read that flag.
     ///
-    /// Starts the voice on the first tick the cue is available, and never
-    /// restarts it: `~ENGINE` is a held loop for the life of the craft, which
-    /// is what the `~` means.
+    /// Starts the voice on the first tick the cue is available and never
+    /// restarts it: `~ENGINE` is a held loop for the craft's life.
     #[allow(clippy::too_many_arguments)]
     pub fn tick(
         &mut self,
@@ -166,67 +153,57 @@ impl Engine {
             if self.started {
                 self.lag += (target - self.lag) * ENGINE_LAG_RATE;
             } else {
-                // The original's rising edge: snap, no sweep-in. Without this
-                // the note slides up over the first seconds of every race,
-                // which is audible and is not what the original does.
+                // The original's rising edge: snap, no sweep-in (else the note
+                // slides up over the first seconds of every race).
                 self.lag = target;
                 self.started = true;
             }
             self.pitch = self.lag;
             self.intensity = (self.intensity + dt * ENGINE_RISE).clamp(0.0, 1.0);
         } else {
-            // A spin-down rather than a cut: the note falls toward the craft's
-            // own base note and the volume follows it down twice as fast.
+            // A spin-down, not a cut: the note falls toward the craft's base and
+            // the volume follows twice as fast.
             if self.base <= self.pitch {
                 self.pitch -= ENGINE_SPINDOWN;
             }
             self.intensity = (self.intensity - dt * ENGINE_FALL).clamp(0.0, 1.0);
         }
 
-        // **The wound-down engine is released rather than left humming.** The
-        // recovered volume law floors at [`ENGINE_GAIN_FLOOR`], so intensity
-        // reaching zero is as quiet as the law ever gets - 40 %, which under a
-        // results table is a drone rather than a fade. The original does not
-        // have this problem because `ExhaustFlare_Destroy` (`0x08904540`) takes
-        // the voice with it when the craft's flare is torn down; *when* that
-        // happens is not recovered, so this port releases the voice at the
-        // bottom of the law instead and says so rather than inventing a fade.
+        // The wound-down engine is released rather than left humming: the
+        // recovered volume law floors at [`ENGINE_GAIN_FLOOR`], 40 %, a drone
+        // under a results table. The original has `ExhaustFlare_Destroy`
+        // (`0x08904540`) take the voice when the flare is torn down; when that
+        // happens is not recovered, so this releases at the bottom of the law
+        // rather than inventing a fade.
         if !on && self.intensity <= 0.0 {
             self.stop(mixer);
             return;
         }
 
         let pitch = (self.pitch / PITCH_UNITS_PER_OCTAVE).exp2();
-        // Three terms, multiplied the way the original multiplies them:
-        // `Exhaust_UpdateEngineSound` writes `i * 0.6 + 0.4` (`x 0.85` for
-        // everyone but the player) **into the sound instance's own volume
-        // field**, which is exactly `SoundEmitter_ComputeVolumeAndAngle`'s
-        // `request_volume` - the term the emitter's attenuation multiplies
-        // *before* `curve()`, per `positional-audio.md`'s
-        // `volume = curve(atten * request_volume)`. So the law has to reach
-        // [`oag_audio::Emitter::place`] as its `volume` argument, not
-        // multiply the already-curved gain afterwards: `curve` is a power
-        // curve, and `curve(atten) * law != curve(atten * law)`.
+        // Three terms, multiplied as the original does: `Exhaust_UpdateEngineSound`
+        // writes `i * 0.6 + 0.4` (`x 0.85` for all but the player) into the
+        // instance's own volume field, `SoundEmitter_ComputeVolumeAndAngle`'s
+        // `request_volume`, which the attenuation multiplies *before* `curve()`
+        // (`positional-audio.md`: `volume = curve(atten * request_volume)`). So the
+        // law goes to [`oag_audio::Emitter::place`] as its `volume` argument:
+        // `curve` is a power curve and `curve(atten) * law != curve(atten * law)`.
         //
-        // **`None` here is out of range, not un-placed**, and it goes to
-        // silence rather than to unity: `SoundInstance_UpdateSpatial` writes
-        // volume `0` to a live instance past its radius. The *other* half of
-        // the original's gate - `Sound_Play` refusing to open a voice on an
-        // out-of-range emitter at all - is applied to the one-shots in
-        // [`Audio::race_tick`] and deliberately not here, because a held voice
-        // opened once at the grid would then never exist for a craft that
-        // happened to start more than 50 units from the camera, and nothing
-        // read says the original re-opens it.
+        // `None` is out of range, not un-placed, and goes to silence, not unity:
+        // `SoundInstance_UpdateSpatial` writes volume `0` to a live instance past
+        // its radius. The other half of the gate (`Sound_Play` refusing to open on
+        // an out-of-range emitter) is applied to one-shots in [`Audio::race_tick`]
+        // and not here: a held voice opened once at the grid would never exist for
+        // a craft starting over 50 units from the camera, and nothing read says
+        // the original re-opens it.
         let law = self.intensity * ENGINE_GAIN_SPAN + ENGINE_GAIN_FLOOR;
         let volume = law * if quieter { OPPONENT_ENGINE_SCALE } else { 1.0 };
         let placed = oag_audio::Emitter::engine(position).place(listener, volume);
         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
-        // The doppler term rides on top of the note: `SoundInstance_UpdateSpatial`
-        // adds `-(dd/dt) * 0.0005 * 1536` pitch units to the instance's base,
-        // which in ratios is a multiply. The player's own engine gets it too -
-        // the ear is the chase camera, which lags the hull - and that is the
-        // original's arrangement, not an oversight here. See
-        // `oag_audio::Doppler`.
+        // The doppler term rides on the note: `SoundInstance_UpdateSpatial` adds
+        // `-(dd/dt) * 0.0005 * 1536` pitch units, a multiply in ratios. The
+        // player's own engine gets it too (the ear is the lagging chase camera),
+        // as in the original. See `oag_audio::Doppler`.
         let doppler = match placed {
             Some(p) => self.doppler.ratio(p.distance, dt, doppler_enabled),
             None => {
@@ -242,18 +219,16 @@ impl Engine {
                 mixer.set_gain(id, gain);
                 mixer.set_pan(id, pan);
             }
-            // Never re-opened once the spin-down closed it: a finished race
-            // that kept calling this would otherwise restart the engine on the
-            // tick after it went quiet, for ever.
+            // Never re-opened once the spin-down closed it: a finished race would
+            // restart the engine the tick after it went quiet.
             _ if self.stopped => {}
             _ => {
                 let Some((sound, looping)) = banks.pick(Cue::Engine, rng) else {
                     return;
                 };
                 if !looping {
-                    // The bank says this is not a loop, so holding it would be
-                    // a voice that stops and never comes back. Latched, or the
-                    // complaint is sixty lines a second for the whole race.
+                    // Not a loop per the bank, so holding it would be a voice that
+                    // stops for good. Latched, or the complaint is sixty lines a second.
                     if !self.warned {
                         self.warned = true;
                         warn!("sfx: ~ENGINE is not marked looping in this bank; not held");
@@ -270,7 +245,7 @@ impl Engine {
         }
     }
 
-    /// Releases the voice, which is what leaving a race does.
+    /// Releases the voice, on leaving a race.
     pub fn stop(&mut self, mixer: &mut Mixer) {
         self.stopped = true;
         if let Some(id) = self.voice.take() {

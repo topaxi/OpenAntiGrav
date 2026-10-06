@@ -1,38 +1,24 @@
-//! [`MusicFetchWorker`]: locating and decoding one soundtrack track on a
-//! thread of its own, so no caller waits on it - originally the race
-//! hand-off, now the race-boundary prefetch and the `MUSIC SOURCE` row too.
-//!
-//! Split out of `audio.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change beyond what
-//! landed with it in the same change (see [`MusicFetchWorker`]'s own doc).
+//! [`MusicFetchWorker`]: locating and decoding one soundtrack track on its own
+//! thread so no caller waits on it: the race hand-off, the race-boundary
+//! prefetch and the `MUSIC SOURCE` row. Split out of `lib.rs` under the
+//! 1,000-line rule.
 
 use super::*;
 
-/// Which track of `platform`'s soundtrack `index` means, `index` being an
-/// entry in the **booted** disc's own order.
+/// Which track of `platform`'s soundtrack `index` means, `index` being an entry
+/// in the **booted** disc's own order.
 ///
-/// On the booted release that is simply its own entry `index`. On the other
-/// one it is whichever track is the same length, which is what makes the two
-/// selections the same recording rather than two unrelated pieces of music.
+/// On the booted release that is its own entry `index`; on the other it is the
+/// track of the same length, so both selections are the same recording.
 ///
-/// **The index is not stable across boots**, and it is worth being plain
-/// about that: an index means "entry N of whichever disc booted", and the two
-/// archives are not in the same order. Entry 0 happens to name the same
-/// recording on both - the PS2's first track is also the first of the PSP's
-/// sixteen in `Data.wad` order - but that is coincidence, and at index 1 the
-/// two boots start on different music. `MUSIC_TRACK` gets away with never
-/// noticing because it is a constant; `Audio::race_index` is not, and this
-/// is exactly why it is kept and read in the booted disc's own order rather
-/// than in whichever platform happens to be playing at the time - a future
-/// circuit-to-track map has to be built the same way.
+/// The index is not stable across boots: the two archives are in different
+/// orders. Entry 0 names the same recording on both (coincidence), at index 1
+/// the two boots start on different music. `MUSIC_TRACK` is a constant so never
+/// notices; `Audio::race_index` is read in the booted disc's order for exactly
+/// this reason, and a future circuit-to-track map must be built the same way.
 ///
-/// A free function rather than an `Audio` method, though every caller so far
-/// has one in hand: nothing here reads `self`, and that is what lets
-/// [`fetch_track`] call it from a thread that does not own `Audio` at
-/// all.
-///
-/// `pub(super)`: `Audio::fetch`/`Audio::fetch_indexed` call this too, and both
-/// predate the split that moved it here alongside [`MusicFetchWorker`].
+/// Free, not an `Audio` method, so [`fetch_track`] can call it from a thread
+/// that does not own `Audio`. `pub(super)` for `Audio::fetch`/`fetch_indexed`.
 pub(super) fn locate(
     discs: &MusicDiscs,
     platform: Platform,
@@ -58,45 +44,35 @@ pub(super) fn locate(
     Ok(soundtrack.nearest(wanted.seconds))
 }
 
-/// One soundtrack track, being located and decoded on a thread of its own -
-/// the same shape [`crate::race::LoadWorker`] and [`crate::boot::MediaWorker`]
-/// already have, and for the same reason: fetching it synchronously blocked
-/// whatever thread asked for however long a cold decode took - measured at
-/// 2.83s for a full PS2 track. First built for the race hand-off, where that
-/// was the gap between the loading screen's fade and the first race frame;
-/// [`Audio::maybe_prefetch_next_race_track`] reuses it for a track boundary,
-/// and [`Audio::set_music_source`] for the `MUSIC SOURCE` row - a switch
-/// mid-menu or mid-race is exactly the same "decode one indexed track"
-/// question, just asked from a different caller.
+/// One soundtrack track being located and decoded on its own thread, the shape
+/// of `oag_raceplay::worker::LoadWorker` and `oag_game::boot::MediaWorker`: a
+/// synchronous fetch blocked the caller for a cold decode (2.83 s for a full
+/// PS2 track), the gap between the loading screen's fade and the first race
+/// frame. Also reused by [`Audio::maybe_prefetch_next_race_track`] and
+/// [`Audio::set_music_source`].
 ///
-/// Holds no [`Audio`] and hands none back: [`fetch_track`] produces a plain
-/// [`Loaded`], and the mixer only enters once a caller applies it on the
-/// thread that owns it (`Audio::finish_race_music`, `Audio::advance_race_track`,
-/// or `Audio::tick`'s poll of a pending `MUSIC SOURCE` switch). That is what
-/// makes the split cheap rather than a rewrite - the same argument
-/// [`crate::race::worker`] makes for [`crate::race::LoadWorker`].
+/// Holds no [`Audio`]: [`fetch_track`] produces a plain [`Loaded`], and the
+/// mixer is only entered when a caller applies it on its own thread
+/// (`Audio::finish_race_music`, `Audio::advance_race_track`, `Audio::tick`'s
+/// poll), as `oag_raceplay::worker` argues for `LoadWorker`.
 #[derive(Debug)]
 pub struct MusicFetchWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
     handle: Option<std::thread::JoinHandle<(Result<Option<Loaded>>, usize)>>,
-    /// The booted disc's soundtrack length, read on the same thread as the
-    /// fetch and available once [`Self::join`] has returned - see
-    /// [`Audio::race_soundtrack_len`].
+    /// The booted disc's soundtrack length, read on the fetch's thread and
+    /// available after [`Self::join`] ([`Audio::race_soundtrack_len`]).
     soundtrack_len: Option<usize>,
 }
 
 impl MusicFetchWorker {
     /// Starts the fetch in the background.
     ///
-    /// `index` addresses the booted disc's own soundtrack order, the same
-    /// way every caller of [`fetch_track`] does - [`Audio::MUSIC_TRACK`] for
-    /// the menu, [`Audio::reserve_race_music_index`]'s return value or
-    /// [`Audio::race_index`] for a race.
+    /// `index` addresses the booted disc's soundtrack order, as for every
+    /// [`fetch_track`] caller.
     ///
-    /// `label` names the thread - `"race-music"`, `"race-source"` or
-    /// `"menu-source"` today - so a debugger or `top` says which caller is
-    /// waiting on it rather than a single name covering all of them; kept
-    /// under 15 bytes, since Linux truncates a pthread name past that.
+    /// `label` names the thread (`"race-music"`, `"race-source"`,
+    /// `"menu-source"`) so a debugger says which caller waits; under 15 bytes,
+    /// since Linux truncates a pthread name past that.
     #[must_use]
     pub fn spawn(
         discs: MusicDiscs,
@@ -118,12 +94,9 @@ impl MusicFetchWorker {
         }
     }
 
-    /// Whether the fetch has returned.
-    ///
-    /// `true` for a worker whose thread failed to spawn at all, the same
-    /// convention [`crate::race::LoadWorker::is_finished`] uses and for the
-    /// same reason: a caller polling this cannot wait forever on a thread
-    /// that never started - the error surfaces from [`Self::join`] instead.
+    /// Whether the fetch has returned; `true` if the thread failed to spawn (as
+    /// `oag_raceplay::worker::LoadWorker::is_finished`), so a poller never waits on a
+    /// thread that never started and the error surfaces from [`Self::join`].
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.handle
@@ -131,11 +104,9 @@ impl MusicFetchWorker {
             .is_none_or(std::thread::JoinHandle::is_finished)
     }
 
-    /// Takes the result, waiting if it is not in yet.
-    ///
-    /// **Never actually waits in the frame loop**, which only calls this once
-    /// [`Self::is_finished`] is true. `None` on the second call, and on a
-    /// worker whose thread would not spawn.
+    /// Takes the result, waiting if it is not in yet (the frame loop only calls
+    /// it once [`Self::is_finished`]). `None` on a second call or a thread that
+    /// would not spawn.
     pub fn join(&mut self) -> Option<Result<Option<Loaded>>> {
         let handle = self.handle.take()?;
         Some(match handle.join() {
@@ -143,8 +114,8 @@ impl MusicFetchWorker {
                 self.soundtrack_len = Some(len);
                 result
             }
-            // A panic on the fetch thread is reported as a failed fetch rather
-            // than resumed here, which would take the window down with it.
+            // A fetch-thread panic is a failed fetch, not resumed (it would take
+            // the window down).
             Err(_) => Err(anyhow::anyhow!("the music fetch panicked")),
         })
     }
@@ -156,14 +127,11 @@ impl MusicFetchWorker {
     }
 }
 
-/// The locate-and-decode half of [`Audio::fetch`]/[`Audio::fetch_indexed`],
-/// without either one's "already read" cache check - a [`MusicFetchWorker`]
-/// is spawned before its caller knows the answer is not already cached (a
-/// race launch has no [`Audio::race_cache`] yet to check; a `MUSIC SOURCE`
-/// switch checks [`Audio::held`]/[`Audio::race_cache`] itself before ever
-/// spawning one, and applies the cached `Sound` on the spot instead - see
-/// [`Audio::set_music_source`]). Free-standing so it can run on a thread
-/// that does not own `Audio`'s mixer - see [`MusicFetchWorker::spawn`].
+/// The locate-and-decode half of [`Audio::fetch`]/[`Audio::fetch_indexed`]
+/// without their "already read" cache check: a worker is spawned before the
+/// caller knows the answer is uncached (a `MUSIC SOURCE` switch checks
+/// [`Audio::held`]/[`Audio::race_cache`] first, see [`Audio::set_music_source`]).
+/// Free so it runs on a thread without `Audio`'s mixer.
 fn fetch_track(
     discs: &MusicDiscs,
     choice: MusicSource,
@@ -193,19 +161,14 @@ fn fetch_track(
     }))
 }
 
-/// What [`Audio::source_switch`]'s worker is fetching, and what to check
-/// before applying it once it lands - a switch can take several ticks, and
-/// whatever it was answering may not be the live question any more by then.
+/// What [`Audio::source_switch`]'s worker is fetching, and what to check before
+/// applying it: a switch spans several ticks and may be stale when it lands.
 #[derive(Debug)]
 pub(super) struct PendingSwitch {
-    /// The release this fetch is moving onto - checked against a fresh
-    /// request before this lands, so nudging the row back before the fetch
-    /// finishes drops it rather than applies it after the fact. `pub(super)`
-    /// so `Audio`'s own `Debug` impl in `audio.rs`, the parent module, can
-    /// report it.
+    /// The release this fetch moves onto, checked against a fresh request so
+    /// nudging the row back drops it. `pub(super)` for `Audio`'s `Debug` impl.
     pub(super) wanted: Platform,
-    /// Which voice this is for, and enough about it to tell whether that is
-    /// still true once the fetch lands.
+    /// Which voice this is for, and enough to tell whether that still holds.
     target: SwitchTarget,
     worker: MusicFetchWorker,
 }
@@ -213,19 +176,14 @@ pub(super) struct PendingSwitch {
 /// Which voice a [`PendingSwitch`] targets.
 #[derive(Debug)]
 enum SwitchTarget {
-    /// The menu voice - live only while [`Audio::race_voice`] is `None`. A
-    /// race starting while this is in flight empties [`Audio::music`], which
-    /// [`Audio::tick`]'s apply checks for rather than assumes away.
+    /// The menu voice, live only while [`Audio::race_voice`] is `None`; a race
+    /// starting meanwhile empties [`Audio::music`], which [`Audio::tick`] checks.
     Menu,
-    /// The race voice, fetching soundtrack index `index` of the booted
-    /// disc's own order - live only while [`Audio::race_index`] still names
-    /// it. A track boundary while this is in flight moves the index on, and
-    /// applying a result for the track that just ended would be exactly the
-    /// wrong recording - the same staleness [`Audio::advance_race_track`]
-    /// already checks for [`Audio::race_prefetch`]. `discs`/`choice` are
-    /// carried alongside so a landed switch can update
-    /// [`Audio::race_context`] the same way the old synchronous version did,
-    /// without asking the caller that spawned this a second time.
+    /// The race voice, fetching soundtrack index `index` of the booted order,
+    /// live only while [`Audio::race_index`] still names it: applying a result
+    /// for a track that just ended would be the wrong recording (the staleness
+    /// [`Audio::advance_race_track`] checks for [`Audio::race_prefetch`]).
+    /// `discs`/`choice` let a landed switch update [`Audio::race_context`].
     Race {
         index: usize,
         discs: MusicDiscs,
@@ -233,32 +191,19 @@ enum SwitchTarget {
     },
 }
 
-/// The race-playlist half of `impl Audio`, kept beside [`MusicFetchWorker`]
-/// rather than in `audio.rs` itself: every method here either produces or
-/// consumes a [`MusicFetchWorker`]'s result, so the two belong to the same
-/// question - "how does the race's music get fetched" - even though nothing
-/// stops an inherent `impl` block living in a different file from the type it
-/// is on. The `MUSIC SOURCE` row's async switch (below, from
-/// [`Audio::set_music_source`]) belongs here for the same reason: it is the
-/// exact same "decode one indexed track off a [`MusicFetchWorker`]" question,
-/// just asked mid-menu or mid-race instead of at a race's own hand-off.
+/// The race-playlist half of `impl Audio`, beside [`MusicFetchWorker`]: every
+/// method here produces or consumes a worker's result, including the
+/// `MUSIC SOURCE` row's async switch ([`Audio::set_music_source`]).
 impl Audio {
-    /// The race-launch counterpart of [`Self::start_race_music`]: applies a
-    /// track that a [`MusicFetchWorker`], spawned earlier, has already located
-    /// and decoded - so nothing here reads off the disc, and this never
-    /// blocks the caller the way [`Self::start_race_music`] can on a cold
-    /// cache.
+    /// The race-launch counterpart of [`Self::start_race_music`]: applies a track
+    /// a [`MusicFetchWorker`] spawned earlier has located and decoded, so it
+    /// never reads the disc or blocks. Fixes the gap between the loading
+    /// screen's fade and the first race frame: a synchronous cold PS2 decode
+    /// measured 2.83 s on the frame thread.
     ///
-    /// This is the fix for the gap that otherwise opens up between the
-    /// loading screen's fade and the first race frame: decoding a full track
-    /// synchronously, at the hand-off, measured at 2.83 seconds for a cold PS2
-    /// track - all of it spent before this method ever existed, on the frame
-    /// thread, with the fade already faded out.
-    ///
-    /// `index` was reserved by [`Self::reserve_race_music_index`] before
-    /// `worker` was spawned - see `Session::launch_race` - so this reads
-    /// [`Self::race_index`] back rather than taking it as a parameter: the
-    /// two are guaranteed to agree without asking `discs` a second time.
+    /// `index` was reserved by [`Self::reserve_race_music_index`] before the
+    /// worker spawned (`Session::launch_race`), so [`Self::race_index`] is read
+    /// back instead of taken as a parameter.
     pub fn finish_race_music(
         &mut self,
         mut worker: MusicFetchWorker,
@@ -269,10 +214,8 @@ impl Audio {
         if let Some(id) = self.music.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
-        // Defensive rather than load-bearing, the same as the identical guard
-        // in `start_race_music`: nothing calls this while a race voice is
-        // already sounding, but a wrong assumption here would otherwise leak
-        // a voice rather than fail loudly.
+        // Defensive, as in `start_race_music`: nothing calls this with a race
+        // voice sounding, but a wrong assumption would leak a voice.
         if let Some(id) = self.race_voice.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
@@ -281,9 +224,8 @@ impl Audio {
              the worker this method takes",
         );
         let seek = (self.race_position > 0.0).then_some(self.race_position);
-        // Never actually waits: this is only called once the loading screen's
-        // own `race_ready` has seen `worker.is_finished()` true - see
-        // `LoadingStage::race_ready`.
+        // Never waits: only called once the loading screen's `race_ready` saw
+        // `worker.is_finished()` (`LoadingStage::race_ready`).
         let fetched = worker.join().unwrap_or_else(|| {
             Err(anyhow::anyhow!(
                 "the race music fetch thread would not start"
@@ -297,16 +239,11 @@ impl Audio {
         }
     }
 
-    /// Reserves which track index the next race's music means, without
-    /// fetching it.
+    /// Reserves which track index the next race's music means, without fetching.
     ///
-    /// The split that lets a caller spawn a [`MusicFetchWorker`] for that index
-    /// before the mixer - or the disc - is touched at all:
-    /// [`Self::start_race_music`] used to do this reservation and the fetch in
-    /// the same breath, which was fine when both were synchronous and cheap
-    /// enough to not notice; spawning a worker for the fetch half needs the
-    /// index settled first, so `Session::launch_race` can hand it to
-    /// [`MusicFetchWorker::spawn`] before the loading screen even goes up.
+    /// Lets `Session::launch_race` spawn a [`MusicFetchWorker`] for that index
+    /// before the loading screen goes up; [`Self::start_race_music`] used to
+    /// reserve and fetch together.
     pub fn reserve_race_music_index(&mut self, discs: &MusicDiscs) -> usize {
         if self.race_index.is_none() {
             self.race_index = Some(Self::initial_race_index(&self.music_from, discs));
@@ -317,13 +254,9 @@ impl Audio {
     /// Loads and plays one race-playlist track, reporting what happened.
     ///
     /// Shared by [`Self::start_race_music`] and the advance-on-finish check in
-    /// [`Self::tick`], which is the only other place `race_index` moves.
-    /// `seek` is `Some` for a resume and `None` for a fresh start (index 0 of
-    /// the track, which is also where a freshly-advanced track begins).
-    ///
-    /// `pub(super)`: `Audio::start_race_music` calls this too, and stayed in
-    /// `audio.rs` rather than moving here - it is the general entry point,
-    /// not a race-music-fetch specific one.
+    /// [`Self::tick`]. `seek` is `Some` for a resume, `None` for a fresh start.
+    /// `pub(super)`: `Audio::start_race_music` is the general entry point and
+    /// stayed in `lib.rs`.
     pub(super) fn play_race_track(
         &mut self,
         discs: &MusicDiscs,
@@ -337,10 +270,8 @@ impl Audio {
     }
 
     /// The "start a voice on what was fetched" half of [`Self::play_race_track`],
-    /// split out so [`Self::finish_race_music`] can share it over a track
-    /// [`MusicFetchWorker`] fetched instead of [`Self::fetch_indexed`]. Neither
-    /// caller does anything to the disc from here on - this only ever touches
-    /// the mixer and this struct's own race-playlist state.
+    /// shared with [`Self::finish_race_music`]. Touches only the mixer and the
+    /// race-playlist state.
     fn apply_fetched_race_track(
         &mut self,
         index: usize,
@@ -377,19 +308,13 @@ impl Audio {
     /// The modulus the race playlist wraps at: [`Self::booted_soundtrack_len`],
     /// read once and kept.
     ///
-    /// **Not read on the tick thread when it can be helped.** Reading it opens
-    /// the disc image and parses its soundtrack table - 38 ms on the first race
-    /// tick in a release build on a desktop, the one frame over budget left
-    /// once the race scene's build moved off the frame thread (see
-    /// `docs/architecture/race-load-transition.md`). The race load's own
-    /// [`MusicFetchWorker`] reads it alongside the track it fetches, and
-    /// [`Self::finish_race_music`] keeps that answer in
-    /// [`Self::race_context`]; the synchronous
-    /// read is only the fallback for a run that never had one.
-    ///
-    /// A `0` - no soundtrack, or a read that failed - is never kept, so a
-    /// transient failure is retried the next time exactly as it was before
-    /// this cache existed.
+    /// Not read on the tick thread when it can be helped: it opens the disc image
+    /// and parses the soundtrack table, 38 ms on the first race tick (release,
+    /// desktop), the one frame over budget once the scene build left the frame
+    /// thread (`docs/architecture/race-load-transition.md`). The race load's
+    /// [`MusicFetchWorker`] reads it, [`Self::finish_race_music`] keeps it in
+    /// [`Self::race_context`], and the synchronous read is the fallback. A `0`
+    /// is never kept, so a transient failure is retried.
     fn race_soundtrack_len(&mut self) -> usize {
         let Some((discs, _, _, known)) = self.race_context.as_mut() else {
             return 0;
@@ -402,23 +327,16 @@ impl Audio {
         len
     }
 
-    /// Starts fetching the race playlist's next track as soon as the current
-    /// one is playing, rather than waiting until it is close to ending - see
-    /// [`Audio::race_prefetch`] for why this exists and what it replaces.
+    /// Starts fetching the race playlist's next track as soon as the current one
+    /// is playing (see [`Audio::race_prefetch`]).
     ///
-    /// **Immediately, not "a few seconds before the end".** A remaining-time
-    /// threshold was tried first and rejected: it answers "will the natural
-    /// end of this track hitch" but not "will *skipping* it hitch", and
-    /// skipping is not remotely rare enough to leave unanswered - a `MUSIC
-    /// SOURCE`-style row, or any future skip control, can end a track at any
-    /// point in it, and the fetch has to already exist for that to be free.
-    /// The cost is holding one extra track's PCM (tens of MiB) alongside
-    /// [`Self::race_cache`]'s own single slot for most of a track's length
-    /// instead of its last few seconds - proportionate, next to what a pause
-    /// resume already costs by the same measure.
+    /// Immediately, not "a few seconds before the end": a remaining-time
+    /// threshold covers the natural end but not a skip (a `MUSIC SOURCE`-style
+    /// row or future skip control can end a track anywhere). The cost is one
+    /// extra track's PCM (tens of MiB) alongside [`Self::race_cache`]'s slot.
     ///
-    /// A no-op on every tick but the one right after a track starts: outside
-    /// a race, or once [`Self::race_prefetch`] is already `Some`.
+    /// A no-op except on the tick after a track starts: outside a race, or once
+    /// [`Self::race_prefetch`] is `Some`.
     pub(super) fn maybe_prefetch_next_race_track(&mut self) {
         if self.race_prefetch.is_some() || self.race_voice.is_none() {
             return;
@@ -436,21 +354,14 @@ impl Audio {
         ));
     }
 
-    /// Moves the race playlist on to the next track once the current one has
-    /// finished naturally - race tracks play [`Play::once`], never looping,
-    /// which is what makes "no longer playing" mean "reached its end" rather
-    /// than "was stopped".
+    /// Moves the race playlist on once the current track has finished: tracks
+    /// play [`Play::once`], so "no longer playing" means "reached its end".
     ///
-    /// **Joins [`Self::race_prefetch`] rather than fetching from nothing**,
-    /// which is what this used to do - a disc read and, on the PSP, a possible
-    /// `ffmpeg` decode, 0.4-2.8 s by this module's own measurements, paid
-    /// inside the fixed-timestep loop on every track boundary. A prefetch
-    /// [`Self::maybe_prefetch_next_race_track`] started early almost always
-    /// means [`MusicFetchWorker::join`] returns immediately here instead;
-    /// falls back to the old synchronous fetch only when there is no
-    /// prefetch to trust - none started in time, or one started for a track
-    /// this is no longer the same question as (a source change since - the
-    /// index check below is what catches that).
+    /// Joins [`Self::race_prefetch`] rather than fetching from nothing, which
+    /// paid a disc read and possibly an `ffmpeg` decode (0.4-2.8 s measured)
+    /// inside the fixed-timestep loop at every boundary. Falls back to the
+    /// synchronous fetch only with no trustworthy prefetch (none in time, or for
+    /// a track since changed by a source change; the index check catches that).
     pub(super) fn advance_race_track(&mut self) {
         let Some((discs, choice, cache_dir, _)) = self.race_context.clone() else {
             return;
@@ -458,13 +369,9 @@ impl Audio {
         let Some(index) = self.race_index else {
             return;
         };
-        // Stopped explicitly rather than assumed already silent: `Audio::tick`'s
-        // own call only ever reaches here once the voice has already ended on
-        // its own, but nothing about this method's name or signature says a
-        // caller may not reach it with one still sounding - a skip control
-        // would - and `mixer.stop` on an id whose voice already finished is a
-        // no-op (voice ids carry a generation), so this costs nothing on the
-        // path that exists today.
+        // Stopped explicitly: `Audio::tick` only gets here after the voice ended,
+        // but a skip control would not, and `mixer.stop` on a finished id is a
+        // no-op (ids carry a generation).
         if let Some(id) = self.race_voice.take() {
             self.output.with_mixer(|mixer| mixer.stop(id));
         }
@@ -474,11 +381,9 @@ impl Audio {
         if let Some((prefetch_index, mut worker)) = self.race_prefetch.take()
             && prefetch_index == next
         {
-            // Never actually waits in the ordinary case - see this method's
-            // own doc - but can, if the boundary arrived before the fetch
-            // did; still strictly no worse than the synchronous path below,
-            // since that decode is exactly what this worker is already most
-            // of the way through.
+            // Rarely waits (see the doc), but can if the boundary beat the fetch;
+            // no worse than the synchronous path, which this worker is mostly
+            // through.
             let fetched = worker.join().unwrap_or_else(|| {
                 Err(anyhow::anyhow!(
                     "the race music prefetch thread would not start"
@@ -501,18 +406,13 @@ impl Audio {
             return;
         };
         let (Some(_), Some(from)) = (self.music, self.music_from) else {
-            // Either nothing is playing, or what is playing is not one of the
-            // sixteen. Neither is this row's business - see above.
+            // Nothing playing, or not one of the sixteen: not this row's business.
             return;
         };
 
-        // A pending fetch for anything other than `wanted` no longer
-        // describes what this row is asking for - dropped up front rather
-        // than left to land later and apply a platform nobody is asking for
-        // any more. This runs even when `wanted` turns out to already be
-        // playing below: a press that lands back on the current release
-        // while a switch away from it is still in flight means "stay here",
-        // not "let the switch finish anyway".
+        // A pending fetch for anything but `wanted` is dropped up front rather
+        // than landing later. Runs even when `wanted` is already playing: a press
+        // back onto the current release during a switch away means "stay here".
         let already_fetching_this = self.source_switch.as_ref().is_some_and(|pending| {
             pending.wanted == wanted && matches!(pending.target, SwitchTarget::Menu)
         });
@@ -525,8 +425,7 @@ impl Audio {
         }
 
         if let Some((_, sound)) = self.held.iter().find(|(held, _)| *held == wanted) {
-            // Already read this session - no I/O, so there is nothing to
-            // move off this thread. Applied on the spot, the same as before.
+            // Already read this session: no I/O, applied on the spot.
             let sound = Arc::clone(sound);
             self.apply_menu_source_result(
                 wanted,
@@ -552,10 +451,9 @@ impl Audio {
         });
     }
 
-    /// [`Audio::set_music_source`]'s race case: the same seek-preserving
-    /// swap, against [`Audio::race_voice`]/[`Audio::race_index`] instead of
-    /// the menu's fields, and landing in the bounded [`Audio::race_cache`],
-    /// not [`Audio::held`].
+    /// [`Audio::set_music_source`]'s race case: the same seek-preserving swap
+    /// against [`Audio::race_voice`]/[`Audio::race_index`], landing in the
+    /// bounded [`Audio::race_cache`], not [`Audio::held`].
     pub(super) fn set_race_music_source(
         &mut self,
         discs: &MusicDiscs,
@@ -570,9 +468,7 @@ impl Audio {
             return;
         };
 
-        // Same up-front drop as `Self::set_menu_music_source`: a pending
-        // fetch for a different release, or a different track of this one,
-        // no longer describes what this row is asking for.
+        // Same up-front drop as `Self::set_menu_music_source`.
         let already_fetching_this = self.source_switch.as_ref().is_some_and(|pending| {
             pending.wanted == wanted
                 && matches!(pending.target, SwitchTarget::Race { index: i, .. } if i == index)
@@ -604,11 +500,10 @@ impl Audio {
             return;
         }
 
-        // Dropped rather than kept: it was fetching the release this row is
-        // leaving, and a track fetched from the wrong release is exactly the
-        // kind of wrong `Self::advance_race_track` cannot detect by index
-        // alone. `Self::maybe_prefetch_next_race_track` starts a correct one
-        // once the switch below actually lands.
+        // Dropped: it was fetching the release this row is leaving, and a track
+        // from the wrong release is wrong in a way `Self::advance_race_track`
+        // cannot detect by index. `Self::maybe_prefetch_next_race_track` starts
+        // a correct one once the switch lands.
         self.race_prefetch = None;
 
         self.source_switch = Some(PendingSwitch {
@@ -628,18 +523,16 @@ impl Audio {
         });
     }
 
-    /// Applies a fetched menu-source switch, from
-    /// [`Self::set_menu_music_source`]'s cache-hit fast path or a landed
-    /// [`PendingSwitch`] worker polled by [`Self::poll_source_switch`].
-    /// Either way the playhead is read **here**, at the moment of the swap,
-    /// not when the fetch was first asked for - a worker can take several
-    /// ticks to land, and the old voice keeps playing every one of them.
+    /// Applies a fetched menu-source switch, from the cache-hit fast path of
+    /// [`Self::set_menu_music_source`] or a landed [`PendingSwitch`] polled by
+    /// [`Self::poll_source_switch`]. The playhead is read here, at the swap, not
+    /// when the fetch was asked for: the old voice plays on for every tick the
+    /// worker takes.
     fn apply_menu_source_result(&mut self, wanted: Platform, fetched: Result<Option<Loaded>>) {
         match fetched {
             Ok(Some(loaded)) => {
-                // Banked for next time whether or not there is a menu voice
-                // left to apply to below - the decode is not wasted just
-                // because a race started while it was in flight.
+                // Banked whether or not a menu voice is left to apply to: a race
+                // starting mid-fetch does not waste the decode.
                 if let Some(platform) = loaded.from
                     && !self.held.iter().any(|(held, _)| *held == platform)
                 {
@@ -670,14 +563,11 @@ impl Audio {
 
     /// [`Self::apply_menu_source_result`]'s race counterpart.
     ///
-    /// `index` is checked against [`Audio::race_index`] before anything
-    /// else: the playlist can move on to a new track - naturally, or a
-    /// second switch - while this was in flight, and applying a result for
-    /// the track that just ended would put the wrong recording under the
-    /// current one. `discs`/`choice` land in [`Audio::race_context`] on
-    /// success, the same bookkeeping the old synchronous version did, so a
-    /// later advance-on-finish in [`Audio::tick`] fetches the next track
-    /// from the release this switch actually moved to.
+    /// `index` is checked against [`Audio::race_index`] first: the playlist can
+    /// move on mid-flight, and a result for the track that just ended would put
+    /// the wrong recording under the current one. `discs`/`choice` land in
+    /// [`Audio::race_context`] on success so the next advance fetches from the
+    /// release this switch moved to.
     fn apply_race_source_result(
         &mut self,
         wanted: Platform,
@@ -709,11 +599,8 @@ impl Audio {
                     *cached_discs = discs;
                     *cached_choice = choice;
                 }
-                // A prefetch still in flight was started for the release
-                // this switch just left - see `Self::set_race_music_source`,
-                // which already dropped the one that existed when this was
-                // spawned; this catches one `Self::maybe_prefetch_next_race_track`
-                // started for the old release in the meantime.
+                // A prefetch started for the release this switch just left (after
+                // `Self::set_race_music_source` dropped the earlier one).
                 self.race_prefetch = None;
                 debug!("audio: race music {}, from {at:.1} s", loaded.what);
             }
@@ -724,12 +611,9 @@ impl Audio {
         }
     }
 
-    /// Polls [`Audio::source_switch`], applying it once its worker lands.
-    ///
-    /// Called from [`Audio::tick`], the same way [`Self::advance_race_track`]
-    /// and [`Self::maybe_prefetch_next_race_track`] are - this module's rule
-    /// that everything here moves on the tick count, never a frame or a wall
-    /// clock. A no-op on every tick but the one a fetch actually finishes on.
+    /// Polls [`Audio::source_switch`], applying it once its worker lands. Called
+    /// from [`Audio::tick`] like [`Self::advance_race_track`]: everything here
+    /// moves on the tick count. A no-op except on the tick a fetch finishes.
     pub(super) fn poll_source_switch(&mut self) {
         let Some(pending) = &self.source_switch else {
             return;

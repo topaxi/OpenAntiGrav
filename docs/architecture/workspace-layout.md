@@ -607,6 +607,31 @@ behind it, and the migration order, are
 [ADR-0058](adr/0058-per-title-behaviour-is-title-data-with-provenance.md): the
 workspace's dependency arrows do not change.
 
+## Title-reach ratchet (2026-10-06)
+
+`check-title-branching` guards a generic crate *deciding by title*; the same coupling
+also shows up as a generic crate *naming a title package by path* -
+`oag_pulse::hud::ART`, `oag_hd::campaign::SCREEN_ENTRY` - which keeps the Cargo
+edge to that title alive and makes the crate unbuildable without it.
+`scripts/check-title-reach.py` (`just check-title-reach`, in the `just` gate) is a
+ratchet over a per-file `BASELINE` of `oag_(pulse|pure|hd|omega|2048)::` references in
+non-comment, non-test code of every crate that is not a title package. Same rules as its
+sibling: a file may drop, never rise, a new file may have none, a lowered file prints a
+hint. 190 references in 51 files at landing (`--by-crate` prints the per-crate sums).
+
+The **end state** is that generic crates depend on `oag-title` only and take a
+`&'static Title` (or a value off it, each per-title choice carrying its `Origin`),
+and the title packages are reached from the composition root alone: the registry in
+`crates/source/src/title.rs` and `oag-game`'s entry (`main.rs`, `bin/`), which the script
+names as its allowed reach points. Once a crate reaches zero its title dependencies
+can leave `Cargo.toml` (`check-unused-deps` then holds them out) and
+`check-dependency-rules.py` can forbid the edge.
+
+`oag-hud` was first: its one non-test reference was `pub use oag_pulse::hud::layouts`
+(only a game ground-truth test read it, so the test now names `oag_pulse` itself); its
+`oag-pulse` and `oag-hd` dependencies moved to `[dev-dependencies]`, used by its tests
+only. Rendered output is unchanged (byte-identical captures, six titles by three modes).
+
 ## Effect handles (2026-10-06)
 
 A race plays the disc's own `Data\Psys` effects by [`oag_title::Trigger`], not by

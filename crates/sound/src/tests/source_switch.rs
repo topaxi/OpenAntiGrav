@@ -1,18 +1,13 @@
-//! The `MUSIC SOURCE` row's async switch: it must never block the caller,
-//! and a stale fetch must not outlive the request that superseded it.
-//!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`, the same seam [`super::volumes`] was split
-//! on.
+//! The `MUSIC SOURCE` row's async switch: it must never block the caller, and a
+//! stale fetch must not outlive the request that superseded it. Split out of
+//! [`super`] under the 1,000-line rule, as [`super::volumes`].
 
 use super::*;
 
-/// Ticks `audio` until [`Audio::source_switch`] resolves, real wall-clock
-/// sleeps between ticks so the worker's actual OS thread gets scheduled -
-/// the tick count alone does not pace it, unlike everything else this
-/// module's own docs say ticks pace. Panics past five real seconds, which
-/// every case below resolves in well under: the fixture paths do not exist,
-/// so the worker fails on the first `open`.
+/// Ticks `audio` until [`Audio::source_switch`] resolves, with real sleeps so the
+/// worker's OS thread gets scheduled (tick count does not pace it). Panics past
+/// five real seconds; every case resolves far sooner as the fixture paths do not
+/// exist and the worker fails on the first `open`.
 fn wait_for_source_switch(audio: &mut Audio) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while audio.source_switch.is_some() {
@@ -25,18 +20,14 @@ fn wait_for_source_switch(audio: &mut Audio) {
     }
 }
 
-/// **The freeze this fixes**, proven rather than assumed. Before
-/// this, a source read for the first time this session decoded
-/// synchronously on whatever thread called [`Audio::set_music_source`],
-/// which is reachable from a settings row a player can press mid-race.
+/// The freeze this fixes, proven: a source read for the first time used to
+/// decode synchronously on the thread calling [`Audio::set_music_source`],
+/// reachable from a row pressed mid-race.
 ///
-/// A source that will *fail* to decode - a fake path, the same fixture
-/// convention this file already uses elsewhere - is what proves the call
-/// returned before the fetch was even attempted: a synchronous version
-/// would have opened `"psp.chd"`, failed, and reported the failure before
-/// this method ever returned. This one returns first, with the old voice
-/// and `music_from` both untouched, and only fails later, off
-/// [`Audio::tick`].
+/// A fake path that fails to decode proves the call returned before the fetch was
+/// attempted: a synchronous version would have opened `"psp.chd"`, failed and
+/// reported before returning. This one returns first with the old voice and
+/// `music_from` untouched, and fails later off [`Audio::tick`].
 #[test]
 fn a_menu_source_switch_does_not_block_the_caller() {
     let discs = MusicDiscs {
@@ -132,14 +123,10 @@ fn a_race_source_switch_does_not_block_the_caller() {
     );
 }
 
-/// A press that lands back on the release already playing, while a switch
-/// *away* from it is still in flight, means "stay here" - the in-flight
-/// fetch is dropped rather than left to land later and move the voice a
-/// second press already said not to.
-///
-/// This is new race-shaped territory the old synchronous row could not
-/// reach at all: every press used to block until it finished, so a second
-/// press physically could not land before the first one's fetch did.
+/// A press back onto the release already playing, while a switch away is in
+/// flight, means "stay here": the fetch is dropped rather than landing later.
+/// Race-shaped territory the old synchronous row could not reach, since every
+/// press blocked until its fetch finished.
 #[test]
 fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
     let discs = MusicDiscs {
