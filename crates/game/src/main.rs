@@ -546,6 +546,10 @@ fn main() -> Result<()> {
         measure_race_load: cli.measure.measure_race_load,
         give,
         no_intro: cli.intro.no_intro,
+        prompt_style: cli
+            .prompt_style
+            .as_deref()
+            .and_then(oag_input::prompt::PromptStyle::from_name),
         autopilot,
         autopilot_pilot,
         autopilot_skill,

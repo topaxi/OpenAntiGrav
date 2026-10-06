@@ -47,6 +47,8 @@ pub(crate) use load_probe::LoadProbe;
 pub(crate) mod menus;
 #[path = "session/picker.rs"]
 mod picker;
+#[path = "session/prompts.rs"]
+mod prompts;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
 // unaliased above, and a sibling module of the same name would shadow it,
 // the same reason `remix_menu` below is not called `remix`.
@@ -396,6 +398,9 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// `--prompt-style`, which wins over `[controls] prompt_style` for this
+    /// run. See `session::prompts`.
+    pub(crate) prompt_style_override: Option<oag_input::prompt::PromptStyle>,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a
     /// saved edit shows without a restart. See `oag_game::screen`.

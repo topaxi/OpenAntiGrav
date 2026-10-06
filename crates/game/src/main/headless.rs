@@ -643,6 +643,10 @@ pub(crate) fn run_race(
         measure_race_load: None,
         give,
         no_intro: cli.intro.no_intro,
+        prompt_style: cli
+            .prompt_style
+            .as_deref()
+            .and_then(oag_input::prompt::PromptStyle::from_name),
         autopilot: cli.autopilot,
         autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
         autopilot_skill: cli.autopilot_skill,
