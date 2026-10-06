@@ -1,14 +1,12 @@
-//! What [`super::TrackEmitters`] is asserted to do with no disc anywhere.
-//!
-//! The disc-backed half is `crates/game/tests/track_audio_ground_truth.rs`.
+//! What [`super::TrackEmitters`] is asserted to do with no disc anywhere (the
+//! disc-backed half is `crates/game/tests/track_audio_ground_truth.rs`).
 
 use super::*;
 use oag_vex::sound_emitters::RadiusCurve;
 
-/// An emitter at `position` with a constant radius, no cone and no audio.
-///
-/// `sound: None` throughout: what these assert is placement, and a `Loaded`
-/// needs a real bank behind it. The resolved half is the disc-backed test.
+/// An emitter at `position` with a constant radius, no cone and no audio:
+/// `sound: None` throughout, since these assert placement and a `Loaded` needs a
+/// real bank (the resolved half is the disc-backed test).
 fn omni(position: [f32; 3], radius: f32) -> Authored {
     Authored {
         emitter: node(position, radius),
@@ -17,10 +15,8 @@ fn omni(position: [f32; 3], radius: f32) -> Authored {
 }
 
 /// A directional emitter, facing `+Z`, with the given half-angle in degrees.
-///
 /// `placed_emitter` reads the axis off row `1` of the world matrix
-/// (`to_world[4..7]`) - `node`'s own identity matrix puts `+Y` there, so this
-/// overwrites it to `+Z` rather than relying on the default.
+/// (`to_world[4..7]`), where `node`'s identity puts `+Y`, so this overwrites it.
 fn cone(position: [f32; 3], radius: f32, half_angle_degrees: f32) -> Authored {
     let mut emitter = node(position, radius);
     emitter.to_world[4] = 0.0;
@@ -120,10 +116,9 @@ fn the_near_field_is_flat_and_the_far_field_falls_off() {
 
 #[test]
 fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
-    // `cone`'s axis is row 1 of its world matrix, `+Z` - and, per
-    // `oag_audio::spatial`'s own law, a listener at the cone's `-Z` is the
-    // on-axis side (the law reads `-axis` as the audible direction, the same
-    // way the original's own `e[0x10]`/`-row1` dot product does).
+    // `cone`'s axis is row 1 of its world matrix, `+Z`; per `oag_audio::spatial`
+    // a listener at the cone's `-Z` is the on-axis side (as the original's
+    // `e[0x10]`/`-row1` dot product).
     let listener = oag_audio::Listener {
         position: [0.0, 0.0, -10.0],
         right: [1.0, 0.0, 0.0],
@@ -133,8 +128,8 @@ fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
         directional: vec![cone([0.0, 0.0, 0.0], 100.0, 20.0)],
         report: Vec::new(),
     };
-    // Index 0 is the omni node (out of its own 5-unit radius at distance 10)
-    // and index 1 is the cone, placed because the listener sits on its axis.
+    // Index 0 is the omni node (out of its 5-unit radius at distance 10), index 1
+    // the cone, placed because the listener is on its axis.
     let placed: Vec<_> = emitters.placed(&listener).collect();
     assert_eq!(
         placed.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
@@ -145,11 +140,10 @@ fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
 
 #[test]
 fn a_cone_outside_its_half_angle_is_silent_rather_than_dim() {
-    // The listener is on `+X`, 90 degrees off the cone's `+Z` axis - well past
-    // a 20-degree half-angle. Still inside the radius, so this is `place`
-    // returning a zero-gain `Placed`, not a refusal: the original's own
-    // `d > radius` gate is the only thing that returns "not in range" at all,
-    // exactly as `oag_audio::spatial`'s own header documents.
+    // The listener is on `+X`, 90 degrees off the cone's `+Z` axis, past a
+    // 20-degree half-angle but inside the radius: `place` returns a zero-gain
+    // `Placed`, not a refusal (only the `d > radius` gate says "not in range",
+    // per `oag_audio::spatial`).
     let listener = oag_audio::Listener {
         position: [10.0, 0.0, 0.0],
         right: [0.0, 0.0, 1.0],
@@ -172,15 +166,14 @@ fn cue(frames: usize, looping: bool) -> Loaded {
     }
 }
 
-/// A one-shot alternate is played once and **not** restarted while in range.
+/// A one-shot alternate is played once and not restarted while in range.
 ///
-/// The bug this exists for is silent to every other check here: a cue re-opened
-/// every tick still counts as one voice, still renders samples and still stops
-/// when the emitter goes out of range. It just sounds like the first few
-/// milliseconds of a sample sixty times a second. Not hypothetical -
-/// `platinu~BIRDS` binds sixteen waveforms and only some of them loop, and five
-/// cues across the Pulse disc are mixed like that, so the uniform draw in
-/// [`super::pick`] does reach a non-looping one.
+/// The bug is silent to every other check: a cue re-opened every tick still
+/// counts as one voice, renders samples and stops out of range, but sounds like
+/// a sample's first milliseconds sixty times a second. Not hypothetical:
+/// `platinu~BIRDS` binds sixteen waveforms of which only some loop, and five
+/// cues on the Pulse disc are mixed so, so the draw in [`super::pick`] reaches a
+/// non-looping one.
 #[test]
 fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
     let mut emitters = TrackEmitters {

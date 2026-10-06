@@ -1,16 +1,13 @@
-//! The engine law, checked with no hardware and no disc.
-//!
-//! The cue layer's own tests are beside it in `sfx/tests.rs`; these are here
-//! because the law they exercise moved out with [`Engine`].
+//! The engine law, checked with no hardware and no disc. The cue layer's tests
+//! are in `sfx/tests.rs`; the law moved out with [`Engine`].
 
 use super::*;
 use crate::sfx::Loaded;
 use oag_audio::Sound;
 use std::sync::Arc;
 
-/// A listener at the origin, and a craft position that changes nothing: the
-/// craft is on top of the listener, so the law under test is the only thing
-/// moving the gain (`atten` is `1.0` within the near-field ball either way).
+/// A listener at the origin and a craft position that changes nothing: the craft
+/// is on top of the listener, so the law under test alone moves the gain.
 const LISTENER: oag_audio::Listener = oag_audio::Listener {
     position: [0.0; 3],
     right: [1.0, 0.0, 0.0],
@@ -52,8 +49,7 @@ fn the_engine_note_is_spread_per_craft() {
             "{note} is outside the recovered spread"
         );
     }
-    // Eight craft drawing the same note would be one craft eight times over,
-    // which is the thing the spread exists to prevent.
+    // Eight craft on one note would be one craft eight times over.
     assert!(notes.windows(2).any(|w| w[0] != w[1]));
 }
 
@@ -77,8 +73,8 @@ fn the_engine_snaps_on_its_first_tick_and_lags_after() {
         true,
         1.0 / 60.0,
     );
-    // The rising edge is a snap: without it the note sweeps up from wherever
-    // `lag` started over the first second of every race.
+    // The rising edge snaps: else the note sweeps up from `lag`'s start over the
+    // first second of every race.
     assert!((engine.lag - (base + 100.0 * ENGINE_PITCH_PER_KMH)).abs() < 1e-3);
 
     let before = engine.lag;
@@ -131,9 +127,9 @@ fn the_engine_holds_one_voice_across_ticks() {
 #[test]
 fn a_non_looping_engine_bank_is_refused_rather_than_retriggered() {
     let mut mixer = Mixer::new(44_100);
-    // A bank whose `~ENGINE` descriptors do not set the loop flag. Playing it
-    // as a one-shot would restart it every time it ended, sixty times a second
-    // once it is shorter than a tick.
+    // A bank whose `~ENGINE` descriptors do not set the loop flag: playing it as a
+    // one-shot would restart it every time it ended, sixty times a second once
+    // shorter than a tick.
     let banks = banks(&[(Cue::Engine, 1, false)]);
     let mut rng = Rng::new(5);
     let mut engine = Engine::new(&mut rng);
@@ -201,11 +197,9 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
     let running = engine.pitch;
     assert!(running > engine.base);
 
-    // Twice as fast down as up, so a race that has just ended is quiet in
-    // about two seconds rather than four. Stepped past that here: the fall is
-    // 1/120 a tick against an intensity of exactly 1.0, so landing on zero at
-    // tick 120 would be an assertion about float accumulation rather than
-    // about the law.
+    // Twice as fast down as up, so a finished race is quiet in about two seconds.
+    // Stepped past that: the fall is 1/120 a tick against intensity 1.0, so
+    // landing on zero at tick 120 would assert float accumulation, not the law.
     for _ in 0..180 {
         engine.tick(
             &mut mixer,
@@ -222,21 +216,19 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
     }
     assert!(engine.intensity <= 0.0);
     assert!(engine.pitch < running);
-    // The spin-down stops at the craft's own base note rather than running
-    // away downward for the rest of the session.
+    // The spin-down stops at the craft's base note, not downward for the session.
     assert!(
         engine.pitch >= engine.base - ENGINE_SPINDOWN,
         "wound down past the base note"
     );
     // The chase state is untouched, so a restart resumes from where the engine
-    // was rather than from the floor.
+    // was, not the floor.
     assert!(engine.lag > engine.base);
 }
 
-/// The bug this guards is the one the composition root actually had: the
-/// finished-race arm of the frame loop steps nothing, so if the held voice were
-/// not advanced *and* released it would loop at racing pitch under the results
-/// table until the player backed out to the menus.
+/// The composition root's bug: the finished-race arm steps nothing, so a held
+/// voice not advanced and released would loop at racing pitch under the results
+/// table until the player backed out.
 #[test]
 fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
     let mut mixer = Mixer::new(44_100);
@@ -259,8 +251,8 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
     }
     assert_eq!(mixer.active_voices(), 1);
 
-    // The recovered volume law floors at 0.4, so "intensity zero" is still a
-    // 40 % drone. The voice is released instead - see `Engine::tick`.
+    // The recovered law floors at 0.4, so intensity zero is still a 40 % drone;
+    // the voice is released instead (`Engine::tick`).
     for _ in 0..300 {
         engine.tick(
             &mut mixer,
@@ -277,8 +269,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
     }
     assert_eq!(mixer.active_voices(), 0, "the engine kept sounding");
 
-    // And it stays released: the finished arm goes on calling this every tick
-    // for as long as the results table is up.
+    // It stays released: the finished arm keeps calling this every tick.
     for _ in 0..300 {
         engine.tick(
             &mut mixer,
@@ -297,8 +288,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
 }
 
 /// `SoundInstance_UpdateSpatial`'s doppler term: an engine closing on the ear
-/// plays sharp of its own note, one receding plays flat, and a frame the
-/// listener cut on holds the note alone.
+/// plays sharp, one receding plays flat, a cut frame holds the note alone.
 #[test]
 fn a_closing_engine_is_sharp_and_a_receding_one_flat_and_a_cut_is_neither() {
     let mut mixer = Mixer::new(44_100);
