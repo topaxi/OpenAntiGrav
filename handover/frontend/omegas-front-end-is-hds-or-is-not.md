@@ -29,6 +29,16 @@ content against `hd-frontend.md`.
 
 ## Open
 
+- **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
+  is in a state HD/Fury's was in earlier.** In the maintainer's words: "The
+  Omega frontend renders in a state the HD/Fury frontend was in the past,
+  it's not yet accurate and the menu items do not render correctly and they
+  do not animate yet." So the menu items misdraw and nothing animates.
+  `docs/overview/status.md`'s Omega front-end cells are `partial` at best
+  and say so. What would settle it: a side-by-side of each Omega page against
+  the HD page it was cut from, naming the widgets that misdraw, plus the
+  animation channels HD's front end plays that Omega's do not.
+
 - **Load order between the patch's own four archives is not settled, but
   both files this bullet used to call unreadable now read clean everywhere,
   and one of them narrows the question to two candidates instead of three.**
