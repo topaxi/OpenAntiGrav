@@ -2,44 +2,38 @@
 //! law.
 //!
 //! `WeaponAi_Update` (`0x08851550`) and `WeaponAi_DecideFireOrAbsorb`
-//! (`0x088518b4`) decide this in Wipeout Pulse, and this module is their fire
-//! half. Every constant and branch below is read off `BOOT.BIN`; see
-//! `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md` for the addresses and the
-//! confidence of each step. What is **chosen** rather than read is said so where
-//! it happens, with no score.
+//! (`0x088518b4`) decide this in Wipeout Pulse; this module is their fire half.
+//! Every constant and branch is read off `BOOT.BIN`, see
+//! `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md` for addresses and
+//! confidence. What is **chosen** is said so where it happens, with no score.
 //!
-//! # The law, in one paragraph
+//! # The law
 //!
-//! A craft holding a forward weapon rolls once a tick. The chance is a rate out
-//! of a five-entry table, picked by an index built from how close the nearest
-//! craft ahead and behind are, times the weapon's authored `useAgainstPlayer`
-//! or `useAgainstAI` (`Data\XML\WeaponAIstats.xml`), times five in an
-//! Eliminator. Nothing fires before the weapon has been held 0.8 s. An **aimed**
-//! weapon (everything that leaves the nose as a shot or a beam) then also needs
-//! a craft in its predicted path - [`target_in_path`] - and when the roll comes
-//! up with nothing there it arms a three-second window in which a target that
-//! appears gets a second, flat chance to be fired at. The Quake is not aimed: it
-//! fires on the roll alone.
+//! A craft holding a forward weapon rolls once a tick. The chance is a rate from
+//! a five-entry table, indexed by how close the nearest craft ahead and behind
+//! are, times the weapon's authored `useAgainstPlayer` or `useAgainstAI`
+//! (`Data\XML\WeaponAIstats.xml`), times five in an Eliminator. Nothing fires
+//! before 0.8 s held. An **aimed** weapon (anything leaving the nose as a shot
+//! or beam) also needs a craft in its predicted path ([`target_in_path`]); a roll
+//! with nothing there arms a three-second window in which a target that appears
+//! gets a second, flat chance. The Quake is not aimed: the roll alone.
 //!
-//! # What this module does not cover
+//! # Not covered
 //!
-//! - **Absorbing.** The other half of the same decision. This build's opponents
-//!   absorb on their own rule (`oag_game`'s `Race::spend_opponent_pickup`), and
-//!   the original's absorb in an Eliminator was swept and did not move the time
-//!   to five kills.
-//! - **The Cannon.** The original's fire byte for an opponent reaches a bit that
-//!   nothing dispatches, and its Cannon fires off an uninitialised byte instead
-//!   (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`). There is
-//!   no law to port; `Driver::holds_fire` stays this project's own.
-//! - **Mines, Bomb, Turbo, Shield.** Each has its own setup function in the
-//!   original and its own rule here.
+//! - **Absorbing**, the other half of the decision: opponents absorb on
+//!   `oag_game`'s `Race::spend_opponent_pickup`, and the original's absorb in an
+//!   Eliminator was swept and did not move the time to five kills.
+//! - **The Cannon**: the original's opponent fire byte reaches a bit nothing
+//!   dispatches and the Cannon fires off an uninitialised byte
+//!   (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`), so
+//!   there is no law; `Driver::holds_fire` stays ours.
+//! - **Mines, Bomb, Turbo, Shield**: each has its own setup and rule here.
 //!
 //! # Ticks, not seconds
 //!
-//! [`WeaponAi`] lives on the craft, in the world snapshot, beside
-//! [`crate::Driver`], so it is integers and stays `Eq` the way that type does:
-//! the original's two `f32` clocks (`+0x2c` held, `+0x54` wait) become tick
-//! counts at this simulation's fixed 60 Hz.
+//! [`WeaponAi`] sits on the craft in the world snapshot beside
+//! [`crate::Driver`], so it is integers and stays `Eq`: the original's two `f32`
+//! clocks (`+0x2c` held, `+0x54` wait) become tick counts at 60 Hz.
 
 use oag_core::math::Vec3;
 
@@ -54,9 +48,8 @@ pub const RATE: [f32; 5] = [0.0, 0.0005, 0.002, 0.008, 0.05];
 pub const RATE_ELIMINATOR: [f32; 5] = [0.001, 0.002, 0.01, 0.02, 0.1];
 
 /// How long a weapon is held before the fire roll may succeed: `+0x2c > 0.8`.
-///
-/// `+0x2c` gains the frame's `dt` on every decision, so at 60 Hz it is held
-/// seconds and `0.8` is 48 ticks; the comparison is strict, so the 49th.
+/// `+0x2c` gains `dt` per decision, so at 60 Hz that is 48 ticks, strictly: the
+/// 49th.
 pub const HOLD_TICKS: u32 = 48;
 
 /// The window an aimed weapon arms when its roll finds nothing in the path:
@@ -127,12 +120,11 @@ pub struct Situation {
 impl Situation {
     /// The fire index (`+0x38`) a forward weapon's setup builds, clamped.
     ///
-    /// `0x088508d4`: three for a craft inside [`CLOSE`] ahead, less one for a
-    /// craft inside [`CLOSE`] behind. Its other term adds two when nothing is
-    /// close ahead and `+0x44` is non-zero, and nothing in the image writes
-    /// `+0x44`: **taken as zero, chosen, not measured** - the field is
-    /// uninitialised heap in the original (see the module's evidence page).
-    /// The Eliminator raises a zero to one (`0x08851a8c`).
+    /// `0x088508d4`: three for a craft inside [`CLOSE`] ahead, less one for one
+    /// inside [`CLOSE`] behind. Its other term adds two when nothing is close
+    /// ahead and `+0x44` is non-zero; nothing in the image writes `+0x44`
+    /// (uninitialised heap), so **taken as zero, chosen, not measured**. The
+    /// Eliminator raises a zero to one (`0x08851a8c`).
     #[must_use]
     pub fn fire_index(&self) -> usize {
         let mut index: i32 = 0;
@@ -186,10 +178,9 @@ impl Situation {
 }
 
 impl WeaponAi {
-    /// Advances both clocks one tick; call it every tick, holding or not.
-    ///
-    /// The wait counts down first, as `+0x54` does at the top of
-    /// `WeaponAi_Update`, and an empty slot resets the held count.
+    /// Advances both clocks one tick; call it every tick, holding or not. The
+    /// wait counts down first, as `+0x54` does at the top of `WeaponAi_Update`;
+    /// an empty slot resets the held count.
     pub fn tick(&mut self, holding: bool) {
         self.wait_ticks = self.wait_ticks.saturating_sub(1);
         self.held_ticks = if holding {
@@ -232,9 +223,8 @@ const EARLY_STREAM: u32 = 6;
 const FIRE_STREAM: u32 = 7;
 
 impl WeaponAi {
-    /// [`Self::decide`] with both draws taken from `driver`'s own noise, this
-    /// tick - never from the world's generator, for the reason
-    /// `crate::noise::roll` gives.
+    /// [`Self::decide`] with both draws from `driver`'s own noise this tick,
+    /// never the world's generator (see `crate::noise::roll`).
     pub fn decide_for(&mut self, driver: &crate::Driver, situation: &Situation) -> bool {
         let early = crate::noise::roll(driver.seed, driver.phase, EARLY_STREAM);
         let roll = crate::noise::roll(driver.seed, driver.phase, FIRE_STREAM);
@@ -255,16 +245,14 @@ pub struct Mover {
 /// any of `others` to be worth firing: `WeaponAi_FindTargetInPath`
 /// (`0x08850edc`).
 ///
-/// Everything is first laid into the shooter's own plane (normal `up`), keeping
-/// each vector's length. Then for each craft the closest approach between the
-/// shot and that craft, each on a straight line: it counts when it lies within
-/// [`PATH_HORIZON`] seconds ahead and the miss there is under
-/// [`PATH_SLOPE`] times the shot's travel plus [`PATH_FLOOR`].
+/// Everything is first laid into the shooter's plane (normal `up`), keeping each
+/// vector's length. A craft counts when the closest approach between the shot
+/// and it, each on a straight line, lies within [`PATH_HORIZON`] seconds and the
+/// miss is under [`PATH_SLOPE`] times the shot's travel plus [`PATH_FLOOR`].
 ///
-/// `speed` is the weapon's authored per-class figure **as authored**, in the
-/// unit the tables author it in; the original does not divide it by 3.6 here,
-/// where its launchers do. Nothing about walls: a craft round a corner is a
-/// target if the straight line passes it.
+/// `speed` is the weapon's authored per-class figure **as authored**: the
+/// original does not divide it by 3.6 here, where its launchers do. No walls: a
+/// craft round a corner is a target if the straight line passes it.
 #[must_use]
 pub fn target_in_path(
     position: Vec3,
