@@ -39,6 +39,7 @@ pub mod boot;
 pub mod campaign;
 pub mod effects;
 pub mod endrace;
+pub mod engine_effects;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;

@@ -110,10 +110,11 @@ pub const TITLE: &Title = &Title {
     },
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
     // Omega's executable carries HD's weapon-spark and absorb strings, but its
-    // wiring is unread, so no trigger draws anything (ADR-0058: `None` is the
-    // visible absence). The shield tint is Pulse's, by the rule that an
-    // unmeasured title runs Pulse's.
-    effects: &oag_title::Effects::NONE,
+    // wiring is unread, so those triggers draw nothing (ADR-0058: `None` is the
+    // visible absence). The engine's own names are tried as Pulse's, by the
+    // rule that an unmeasured title runs Pulse's, and the loader reports each
+    // its disc lacks. The shield tint likewise.
+    effects: &oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse")),
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,

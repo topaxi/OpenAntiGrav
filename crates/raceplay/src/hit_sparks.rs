@@ -61,12 +61,6 @@
 use super::*;
 use oag_livery::SparkAnchor;
 
-/// The effect a landed weapon hit throws - the damaging wall contact's own.
-pub const HIT_SPARK_EFFECT: &str = oag_fx::sparks::DAMAGE_EFFECT;
-
-/// What a landed LeachBeam drain throws instead (`craft+0x138 == 7`).
-pub const LEACHBEAM_HIT_SPARK_EFFECT: &str = "WO_SHIP_SPARK_DAMAGE_LEACHBEAM";
-
 /// The severity every hit spark plays at: `ShipCollisionFx_Trigger`'s
 /// `intensity * 2.0 + 0.4` at the hardcoded intensity `1.0`.
 pub const HIT_SPARK_SEVERITY: f32 = oag_fx::sparks::SEVERITY_SLOPE + oag_fx::sparks::SEVERITY_FLOOR;
@@ -122,7 +116,7 @@ pub(super) fn weapon_anchors(
         .collect()
 }
 
-/// Whether `title`'s Cannon throws [`WEAPON_SPARK_EFFECT`] on the craft it
+/// Whether `title`'s Cannon throws [`Trigger::WeaponSpark`] on the craft it
 /// hits: its [`oag_title::Trigger::WeaponSpark`] entry. Wipeout HD / Fury's
 /// `Cannon_ApplyCraftHit` was read; Omega carries the same strings in its
 /// executable but its wiring is unread, so it has no entry.
@@ -239,7 +233,7 @@ impl Race {
     /// `Ship_DispatchCollisionFx(craft, contact, 1)`, which picks the
     /// `Ship Collision Fx` locator nearest the contact (squared distance, ten
     /// at most) and has `ShipCollisionFx_Trigger` kind 1 spawn
-    /// [`WEAPON_SPARK_EFFECT`] there as a one-shot.
+    /// [`Trigger::WeaponSpark`] there as a one-shot.
     ///
     /// **Chosen, not measured:** the burst's severity is `1.0` and it takes
     /// the locator's own up axis. The original rolls the spawn matrix by two
@@ -255,7 +249,7 @@ impl Race {
         if anchors.is_empty() || !ship.active {
             return;
         }
-        let Some(effect) = self.view.effects.get(WEAPON_SPARK_EFFECT).cloned() else {
+        let Some(effect) = self.view.handles.get(Trigger::WeaponSpark).cloned() else {
             return;
         };
         let Some(at) = nearest_locator(anchors, model_matrix_of(ship), contact) else {
@@ -271,12 +265,12 @@ impl Race {
         if nodes == 0 {
             return;
         }
-        let name = if leach {
-            LEACHBEAM_HIT_SPARK_EFFECT
+        let trigger = if leach {
+            Trigger::LeachHitSpark
         } else {
-            HIT_SPARK_EFFECT
+            Trigger::HitSpark
         };
-        let Some(effect) = self.view.effects.get(name).cloned() else {
+        let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
         let rng = &mut self.view.hit_sparks.rng;

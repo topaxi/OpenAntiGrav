@@ -692,8 +692,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let collision_fx = liveries[0].collision_fx.clone();
     let absorb_burst = super::absorb::absorb_burst_for(craft_title);
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
-    // One loop, one report line each: an effect is a `RACE_EFFECTS` name and a
-    // trigger. Pulse's PSP laws only - see `psys::Effect::without_extents`,
+    // One loop, one report line each: an effect is a name in the craft title's
+    // `Effects` table, resolved to its trigger once below. Pulse's PSP laws only - see `psys::Effect::without_extents`,
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
@@ -703,7 +703,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !extents {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
-    for name in RACE_EFFECTS {
+    for name in craft_title.effects.names() {
         match particle_effect(&mut archives, title.race.effect_dir_for(&track), name) {
             Ok((mut effect, note)) => {
                 if !extents {
@@ -716,6 +716,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    let handles = super::EffectHandles::resolve(craft_title, &effects);
 
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
@@ -910,6 +911,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             collision_fx,
             scenery_fx: Default::default(),
             effects,
+            handles,
             sounds,
             track_emitters,
             announcer,

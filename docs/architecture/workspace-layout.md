@@ -597,7 +597,39 @@ HUD). No ADR changes; none of the cuts alters a recorded decision.
 gate beside `check-size`) is a ratchet over a per-file `BASELINE` of
 title-identity comparisons - `title.name == oag_hd::TITLE.name` and its kin - in
 every crate that is not a title package. 37 sites in 20 files at landing, none
-migrated. A file may drop, never rise; a new file may have none. The decision
+migrated. A file may drop, never rise; a new file may have none. **Complete
+2026-10-06: the last site (HD's English preselect, now
+`Looks::skips_language_picker`) migrated and `BASELINE` is empty.** The script
+stays in the gate as the guard: any new comparison in a generic crate fails it.
+The decision
 behind it, and the migration order, are
 [ADR-0058](adr/0058-per-title-behaviour-is-title-data-with-provenance.md): the
 workspace's dependency arrows do not change.
+
+## Effect handles (2026-10-06)
+
+A race plays the disc's own `Data\Psys` effects by [`oag_title::Trigger`], not by
+string. `oag_title::Effects` is an array indexed by `Trigger` (one effect per
+trigger, so a wreck's three effects are three triggers), built with the
+`const fn` `Effects::with` from `Effects::engine(origin)`: the engine's own
+names, which Pulse measured and every other title tries by inheritance
+(`Origin::InheritedFrom("Wipeout Pulse")`), plus the triggers a title answers
+for itself (weapon-hit sparks, the weapon spark, the absorb burst, the wreck).
+The names, and the RE evidence that sat on `oag-raceplay`'s `effect_names.rs`
+constants, live in `oag_title::engine_effects`.
+
+The loader loads `craft_title.effects.names()` (each once, in `Trigger::ALL`
+order, then the scenery names a circuit's own data may name) and resolves them
+once into `oag_raceplay::EffectHandles`, `[Option<Arc<Effect>>; Trigger::COUNT]`.
+A firing site indexes it, so a misspelt effect is a compile error and the
+per-frame sites (engine flare, LeachBeam energy) no longer scan a string
+list. `RACE_EFFECTS` is now derived from the titles' tables, with the same
+39 names. `Trigger::ALL`/`COUNT` is a plain enum plus a length test: a macro
+waits for a second enum with the same shape.
+
+What changed on screen: nothing (72 plus 66 headless frames, six sources,
+byte-identical). What changed in the load report: a title no longer loads the
+four per-title triggers' effects it does not answer (HD's wreck set and
+LeachBeam spark, 2048's and Omega's weapon spark, absorb, LeachBeam spark and
+wreck set), because nothing fired them there; Pulse's report is unchanged
+bar the HD-only weapon spark it never had.

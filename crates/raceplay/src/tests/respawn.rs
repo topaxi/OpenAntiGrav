@@ -385,6 +385,16 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
     }
 }
 
+/// The effect name a title's table gives `trigger`, for a hand-laid effect to be
+/// named by.
+pub(crate) fn trigger_name(trigger: oag_title::Trigger) -> &'static str {
+    [oag_pulse::TITLE, oag_hd::TITLE, oag_2048::TITLE]
+        .iter()
+        .find_map(|title| title.effect_on(trigger))
+        .map(|spec| spec.effect)
+        .expect("a title answers every trigger a test names")
+}
+
 /// A `.pob` with one root emitter, whose flags word the caller chooses.
 ///
 /// Hand-laid bytes, no game content: the container's header, an empty slot
@@ -432,7 +442,7 @@ fn race_with_spark_effect(blob: &[u8]) -> Race {
     );
     let effect = oag_fx::psys::Effect::parse(blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup.effects.insert(oag_fx::sparks::DAMAGE_EFFECT, effect);
+    setup.handles.insert(Trigger::CollisionSpark, effect);
     Race::start(setup)
 }
 

@@ -156,7 +156,6 @@ pub mod countdown;
 mod craft_flash;
 mod destroy_camera;
 mod drawable;
-mod effect_names;
 mod effects;
 mod eliminator;
 pub mod engine_light;
@@ -164,6 +163,7 @@ mod field;
 pub mod finish_camera;
 mod finished_thrust;
 pub mod gantry;
+mod handles;
 mod hash;
 mod held_buttons;
 mod hit_sparks;
@@ -208,15 +208,20 @@ pub(crate) use weapons::{CannonAssets, CannonDraw};
 mod worker;
 pub mod zone_grade;
 
-pub use absorb::{ABSORB_EFFECT, absorb_burst_for};
+pub use absorb::absorb_burst_for;
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
-pub use effect_names::*;
 pub use field::{FireLaw, PadSeeking};
+pub use handles::EffectHandles;
 pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{load, load_event};
+pub(crate) use oag_title::Trigger;
+pub use oag_title::engine_effects::{
+    BLUE_WELDER_EFFECT, CRAFT_BLAST_DROP, MODESTO_STEAM_EFFECT, RAIN_EFFECT, RAIN_LENS_EFFECT,
+    SNOW_EFFECT, TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT,
+};
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;

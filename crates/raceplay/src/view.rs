@@ -259,6 +259,8 @@ pub struct RaceView {
     pub(super) sparks: psys::System,
     /// Every `.pob` this race loaded - see [`Setup::effects`].
     pub(super) effects: psys::Library,
+    /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
+    pub(super) handles: EffectHandles,
     /// The multi-instance pool everything *except* the hull-mounted sparks
     /// plays in: the rockets' flares and their detonations today, and
     /// whatever gets a recovered trigger next.
@@ -270,7 +272,7 @@ pub struct RaceView {
     /// The circuit's own placed effects, in a pool of their own - see
     /// `race::scenery_fx`.
     pub(super) scenery_fx: super::scenery_fx::SceneryFx,
-    /// The [`ENGINE_FLARE_EFFECT`] instance riding each craft's nozzle, on a
+    /// The [`Trigger::EngineFlare`] instance riding each craft's nozzle, on a
     /// source that authors one. All `None` on a PSP-sourced race.
     pub(super) engine_flare: [Option<psys::Playing>; MAX_SHIPS],
     /// The flare instance riding each live projectile's **primary** anchor,
@@ -286,7 +288,7 @@ pub struct RaceView {
     /// alone.
     pub(super) projectile_flare_orbit:
         [Option<psys::Playing>; oag_weapons::projectile::MAX_PROJECTILES],
-    /// The [`weapons::visuals::QUAKE_EFFECT`] instance riding the travelling
+    /// The [`Trigger::Quake`] instance riding the travelling
     /// wave, or `None` when no Quake is in flight. One slot, not an array,
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
@@ -309,14 +311,14 @@ pub struct RaceView {
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,
-    /// The [`weapons::visuals::LEACHBEAM_ENERGY_EFFECT`] instance riding the
+    /// The [`Trigger::LeachbeamEnergy`] instance riding the
     /// craft a beam is fastened to, or `None` when no link is connected.
     ///
     /// One slot for the same reason [`Self::quake_effect`] is one: the
     /// original allows a single beam in the whole race, so
     /// [`oag_gameplay::World::leach_beam`] is one `Option` and this follows it.
     pub(super) leach_beam_effect: Option<psys::Playing>,
-    /// Per craft slot, the [`weapons::visuals::LEACHBEAM_CHARGING_EFFECT`]
+    /// Per craft slot, the [`Trigger::LeachbeamCharging`]
     /// instance riding that craft while it is *holding* a LeachBeam, or `None`.
     ///
     /// **Not the fired weapon - the carried one.** `FUN_0883f540` spawns this

@@ -168,12 +168,13 @@ fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
 #[test]
 fn an_opponent_holding_a_leach_beam_charges_and_the_player_who_is_not_does_not() {
     let mut race = race_with_a_grid();
-    let blob = super::respawn::one_emitter_pob(crate::effect_names::LEACHBEAM_CHARGING_EFFECT, 0);
+    let blob = super::respawn::one_emitter_pob(
+        crate::tests::respawn::trigger_name(Trigger::LeachbeamCharging),
+        0,
+    );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    race.view
-        .effects
-        .insert(crate::effect_names::LEACHBEAM_CHARGING_EFFECT, effect);
+    race.view.handles.insert(Trigger::LeachbeamCharging, effect);
 
     race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     race.tick(&PlayerInputs::none());

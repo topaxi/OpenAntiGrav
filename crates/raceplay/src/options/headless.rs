@@ -116,6 +116,7 @@ impl Setup {
             collision_fx: Vec::new(),
             scenery_fx: Default::default(),
             effects: psys::Library::default(),
+            handles: Default::default(),
             sounds: oag_sound::sfx::Banks::default(),
             track_emitters: oag_sound::sfx::TrackEmitters::default(),
             announcer: oag_sound::sfx::Announcer::default(),

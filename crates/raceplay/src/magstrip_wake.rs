@@ -173,12 +173,12 @@ impl Race {
         let live = over && self.ship_active(slot);
         match (handles[slot], live) {
             (None, true) => {
-                let name = if self.sim.world.mode() == Mode::Zone {
-                    super::effect_names::MAGSTRIP_ZONE_EFFECT
+                let trigger = if self.sim.world.mode() == Mode::Zone {
+                    Trigger::MagstripZone
                 } else {
-                    super::effect_names::MAGSTRIP_SPARKS_EFFECT
+                    Trigger::MagstripSparks
                 };
-                let Some(effect) = self.view.effects.get(name).cloned() else {
+                let Some(effect) = self.view.handles.get(trigger).cloned() else {
                     return;
                 };
                 let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();

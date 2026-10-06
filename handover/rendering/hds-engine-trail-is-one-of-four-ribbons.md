@@ -122,7 +122,7 @@
   for a PS2-sourced race and its reasoning is source-specific: the PS2 disc
   authors that one name and the PSP doesn't, so a PSP-sourced race falls back
   to `oag_fx::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
-  own doc comment in `crates/raceplay/src/effect_names.rs`). HD authors
+  own doc comment in `crates/title/src/engine_effects.rs`). HD authors
   three engine-flare names, not one: `WO_SHIP_ENGINEFLARE` plus these two
   unwired ones, and none of the three shows up in HD's own string table
   (checked 2026-09-08, `strings -a` + `search_strings`, all zero) - which

@@ -8,7 +8,10 @@
 //! `[dev-dependencies]`, so the one Pulse rule Pure takes, the shield tint, is
 //! restated here and labelled as inherited.
 
-use oag_title::{Burst, EffectSpec, Effects, Looks, Origin, ShieldPalette, ShieldPalettes};
+use oag_title::{
+    Burst, EffectSpec, Effects, Looks, Origin, ShieldPalette, ShieldPalettes, Trigger,
+    engine_effects,
+};
 
 /// Pure's `FUN_08925e20`: the same loop over the same `Ship Collision Fx` class
 /// as Pulse's, eight nodes instead of ten, read off its own disassembly -
@@ -19,15 +22,13 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
 };
 
 /// Pure's tables. Hit sparks and the wreck are unread (`Ship_Damage` is not),
-/// and Pure's Cannon throws no weapon spark of its own that has been read.
-pub const EFFECTS: &Effects = &Effects {
-    shield_absorb: Some(EffectSpec {
-        effects: &["WO_WEAPON_ABSORB"],
-        burst: Some(ABSORB_BURST),
-        origin: Origin::Measured,
-    }),
-    ..Effects::NONE
-};
+/// and Pure's Cannon throws no weapon spark of its own that has been read. The
+/// engine's own names are Pulse's, taken by inheritance: Pure's loader tries
+/// each and a disc without it costs one report line.
+pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pulse")).with(
+    Trigger::ShieldAbsorb,
+    EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
+);
 
 /// Pure's race looks: none read. The shield tint is Pulse's, as it has always
 /// been for a title with no palette of its own - the project's rule that an

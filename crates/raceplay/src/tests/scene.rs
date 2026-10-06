@@ -473,7 +473,7 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
 
     assert_eq!(
         race.blast_for(Weapon::Rocket, impact, None),
-        Some((TRACK_BLAST_EFFECT, impact)),
+        Some((Trigger::TrackBlast, impact)),
         "no craft struck means the track effect, where the rocket struck"
     );
 
@@ -483,13 +483,13 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     race.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
         race.blast_for(Weapon::Rocket, impact, Some(struck)),
-        Some((CRAFT_BLAST_EFFECT, craft - Vec3::Y * CRAFT_BLAST_DROP)),
+        Some((Trigger::CraftBlast, craft - Vec3::Y * CRAFT_BLAST_DROP)),
         "a hull blast is its own effect, drawn under the craft"
     );
 
     // Two separately authored files, which is the whole point of the
     // split - one file at two sizes would be this engine's invention.
-    assert_ne!(TRACK_BLAST_EFFECT, CRAFT_BLAST_EFFECT);
+    assert_ne!(Trigger::TrackBlast, Trigger::CraftBlast);
 }
 
 /// A Missile, a Mine and a Bomb each play their own single explosion file,
@@ -500,7 +500,7 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
 /// **Regression test for the blast-side twin of the flare bug.** Before
 /// 2026-08-26, `blast_for` took no `kind` at all, so *every* impact - mine
 /// and missile included - played the Rocket's own
-/// `TRACK_BLAST_EFFECT`/`CRAFT_BLAST_EFFECT`. Reusing another weapon's file
+/// `Trigger::TrackBlast`/`Trigger::CraftBlast`. Reusing another weapon's file
 /// is worse than drawing nothing: it is a wrong, confident-looking answer.
 #[test]
 fn each_weapon_plays_only_its_own_recovered_explosion() {
@@ -511,29 +511,29 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
 
     assert_eq!(
         race.blast_for(Weapon::Missile, point, None),
-        Some((MISSILE_EXPLO_EFFECT, point)),
+        Some((Trigger::MissileExplo, point)),
         "the Missile's own explosion, at the impact point, whatever it hit"
     );
     assert_eq!(
         race.blast_for(Weapon::Mine, point, None),
-        Some((MINE_EXPLO_EFFECT, point)),
+        Some((Trigger::MineExplo, point)),
         "the Mine's own explosion (Mine_SpawnExplosion), at the impact point"
     );
     assert_eq!(
         race.blast_for(Weapon::Plasma, point, None),
-        Some((PLASMA_BLAST_EFFECT, point)),
+        Some((Trigger::PlasmaBlast, point)),
         "the Plasma's own detonation (Plasma_SpawnDetonation), at the impact \
          point, whatever it hit"
     );
     assert_eq!(
         race.blast_for(Weapon::Plasma, point, Some(2)),
-        Some((PLASMA_BLAST_EFFECT, point)),
+        Some((Trigger::PlasmaBlast, point)),
         "one file for every ending - the teardown pass does not branch on \
          what was struck, unlike the Rocket's"
     );
     assert_eq!(
         race.blast_for(Weapon::Bomb, point, None),
-        Some((BOMB_SMOKERING_EFFECT, point)),
+        Some((Trigger::BombSmokering, point)),
         "the Bomb's own smoke ring (BombBlast_Construct), at the impact \
          point - one third of the detonation; the other two are the \
          hemisphere and shockwave `.vex` models `ignite_blast` spawns \
@@ -541,14 +541,14 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
     );
     assert_eq!(
         race.blast_for(Weapon::Shuriken, point, None),
-        Some((SHURIKEN_EXPIRE_EFFECT, point)),
+        Some((Trigger::ShurikenExpire, point)),
         "the blade's teardown (FUN_08870c78) plays WO_SHURIKEN_EXPIRE at the \
          blade, on a fuse running out and on a craft hit alike"
     );
     // The Plasma's detonation is its own authored file, not the bolt's
     // riding flare replayed at the impact - the same distinction the Rocket's
     // two-file split above exists for.
-    assert_ne!(PLASMA_BLAST_EFFECT, PLASMA_FLARE_EFFECT);
+    assert_ne!(Trigger::PlasmaBlast, Trigger::PlasmaFlare);
 }
 
 /// A Cannon round throws a spark on a wall it hits, and nothing on a craft.
@@ -557,7 +557,7 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
 /// (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
 /// raycast; the separate craft-proximity test that produces `struck: Some`
 /// (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a sound cue but never
-/// spawns a particle. Playing [`CANNON_SPARKS_EFFECT`] on a craft hit too
+/// spawns a particle. Playing [`Trigger::CannonSparks`] on a craft hit too
 /// would be exactly the kind of plausible-looking invention `CLAUDE.md`
 /// forbids - see `oag_weapons::projectile::cannon`'s module doc for the
 /// full read.
@@ -577,7 +577,7 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 
     assert_eq!(
         race.blast_for(Weapon::Cannon, point, None),
-        Some((CANNON_SPARKS_EFFECT, point)),
+        Some((Trigger::CannonSparks, point)),
         "no craft struck means the wall/track spark, at the impact point"
     );
     assert_eq!(

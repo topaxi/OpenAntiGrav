@@ -977,12 +977,14 @@ impl Frontend {
     /// to in both matched and unmatched conditions before the screen was even
     /// entered.
     ///
-    /// A no-op, returning `false`, on every title but HD, and on an HD source
+    /// A no-op, returning `false`, on every title whose
+    /// [`oag_title::Looks::skips_language_picker`] is not read (all but HD),
+    /// and on an HD source
     /// that does not offer `"English"` (unmeasured elsewhere - not invented
     /// here, the same refusal [`Self::preselect_language`] already makes for
     /// a name this source does not carry).
     pub fn skip_never_shown_picker(&mut self, title: &oag_title::Title) -> bool {
-        title.name == oag_hd::TITLE.name && self.preselect_language("English")
+        title.looks.skips_language_picker.applies_everywhere() && self.preselect_language("English")
     }
 }
 
