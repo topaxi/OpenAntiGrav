@@ -381,6 +381,12 @@ the thing to do first; **2,510 of 2,582 records author the identity**, and
 surfaces carry a real sub-tile offset. The numbers are on
 [`rcsmaterial.md`](../formats/rcsmaterial.md).
 
+**Wired 2026-10-06, the vertex half.** A second family scrolls in the vertex
+program, `uv + time * rate` with the rate authored on the material: 76
+materials on 12 circuits play it as `AnimTrack::Scroll`, and the rest of what
+HD animates through a shader (the further families, named) still draws still. Law, census and the list: [`rcsmaterial.md`](../formats/rcsmaterial.md),
+"HD's vertex programs scroll the texture coordinate".
+
 ## Upload audit: which race models author texture tracks, and who uploaded them (2026-10-05)
 
 A model animates its texture only if its draw site calls `Drawable::write_anims`
