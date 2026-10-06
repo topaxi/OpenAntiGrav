@@ -277,6 +277,15 @@ impl Scene {
             ..scene
         };
         self.write_ship_scenes(queue, &ship_scene);
+        // The weapons: the circuit's own scene with the Zone half off, as the
+        // craft's - see `write_weapon_scenes`.
+        self.write_weapon_scenes(
+            queue,
+            &mesh_render::Scene {
+                zone: mesh_render::Zone::default(),
+                ..scene
+            },
+        );
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),

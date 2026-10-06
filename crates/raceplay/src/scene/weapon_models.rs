@@ -527,3 +527,46 @@ fn write_one_kind(
         }
     }
 }
+
+impl super::Scene {
+    /// Writes `scene` - the circuit's fog, light rig and eye, the Zone half
+    /// off - onto every weapon drawable a PS3 program shades.
+    ///
+    /// **A drawable nothing writes holds `Scene::off`**: fog off, the stand-in
+    /// light and `Fog::camera = (0, 0, 0)`. Every HD weapon program reads
+    /// those globals the way a hull's does, so the unwritten drawables were
+    /// shaded from an eye at the world's origin and a light that was never the
+    /// circuit's: the Plasma bolt's head and the LeachBall's rim, the Plasma
+    /// explosion's shells (`rim`-driven too), the Mine's halo spikes, the
+    /// Rocket's body (flat black without the rig) all drew wrong. The Zone half
+    /// is off because the disc's 39 weapon materials carry no Zone variant, as
+    /// the craft's twelve do not (see the call site).
+    ///
+    /// **Gated on [`Drawable::is_ps3_shaded`], not on a title**: a Pulse
+    /// weapon's materials are the GE's fixed pipeline, its stand-in light was
+    /// never measured against a scene block, and that is another lane's.
+    ///
+    /// **Not written, and open**: the Bomb's blast pair and its Repulser field
+    /// and mag floor. No frame of them was kept (a detonation needs a rival to
+    /// run onto the bomb), so nothing says writing them is right.
+    pub(super) fn write_weapon_scenes(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        let pools = [
+            self.plasma_blast.ball.iter(),
+            self.plasma_blast.halo.iter(),
+            self.plasma_blast.hemisphere1.iter(),
+            self.plasma_blast.hemisphere2.iter(),
+            self.rockets.iter(),
+            self.mines.iter(),
+            self.bombs.iter(),
+            self.cannon_rounds.iter(),
+        ];
+        for drawable in pools
+            .into_iter()
+            .flatten()
+            .chain(self.leach_ball.as_ref())
+            .filter(|drawable| drawable.is_ps3_shaded())
+        {
+            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
+        }
+    }
+}
