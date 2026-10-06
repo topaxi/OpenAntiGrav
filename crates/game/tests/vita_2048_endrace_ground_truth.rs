@@ -162,6 +162,29 @@ fn the_pages_read_and_every_texture_they_name_is_in_the_sheet() {
     );
 }
 
+/// The package holds two copies of the file (the base's 22,076 bytes and the
+/// patch's 22,098); the one this build serves is the base's, the only one its
+/// source mounts for 2048's front end. They differ by one attribute on a screen
+/// this build never draws, so which is read changes no widget - this pins which
+/// it is, so the day the patch is mounted the choice is made on purpose.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_base_copy_of_the_file_is_the_one_served() {
+    let Some(source) = source() else { return };
+    let (_shell, mut archives, title) = boot::load_shell(&options(&source)).expect("the shell");
+    let entry = title
+        .front_end
+        .and_then(|front_end| front_end.endrace_entry)
+        .expect("2048 names its EndRace definition");
+    let sizes: Vec<usize> = archives
+        .read_every_name(entry)
+        .into_iter()
+        .map(|(_, blob)| blob.len())
+        .collect();
+    assert_eq!(sizes, [22_076], "only the base copy is mounted");
+    assert_eq!(archives.read_name(entry).expect("served").len(), 22_076);
+}
+
 /// A real race, flown to its end, says what it came to in the disc's own words.
 /// **Dropping the wiring fails this**: with no `endrace_style` or no loader the
 /// pages are empty, and with no `Facts::from_race` there is no verdict.

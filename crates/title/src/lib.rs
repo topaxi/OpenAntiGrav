@@ -54,7 +54,7 @@ pub use effects::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
     Trigger,
 };
-pub use endrace::{EndRaceDialect, EndRaceStyle, StyleProvenance};
+pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;

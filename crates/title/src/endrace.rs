@@ -18,6 +18,8 @@
 //! been read, not that it ships none.
 
 /// How a title's end-of-race definition file is written. See the module docs.
+use crate::effects::Origin;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EndRaceDialect {
     /// The PSP titles' own `EndRace Results`/`Rewards`/`Menu`.
@@ -28,22 +30,13 @@ pub enum EndRaceDialect {
     Touch,
 }
 
-/// Where a title's [`EndRaceDialect`] came from, per ADR-0058.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StyleProvenance {
-    /// Read off this title's own definition file and executable.
-    Measured,
-    /// The file is the same dialect as this title's and was checked to be.
-    InheritedFrom(&'static str),
-}
-
 /// A title's end-of-race dialect with its provenance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EndRaceStyle {
     /// The reader this title's file needs.
     pub dialect: EndRaceDialect,
-    /// Where that came from.
-    pub provenance: StyleProvenance,
+    /// Where that came from: [`Origin`], ADR-0058's per-entry provenance.
+    pub provenance: Origin,
 }
 
 impl EndRaceStyle {
@@ -52,7 +45,7 @@ impl EndRaceStyle {
     pub const fn measured(dialect: EndRaceDialect) -> Self {
         Self {
             dialect,
-            provenance: StyleProvenance::Measured,
+            provenance: Origin::Measured,
         }
     }
 }

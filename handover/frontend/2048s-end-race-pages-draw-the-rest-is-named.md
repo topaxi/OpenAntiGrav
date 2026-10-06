@@ -9,6 +9,11 @@ account and
 is the evidence. `oag_title::FrontEnd::endrace_style` is the new per-title axis
 (`Pulse`, `Field`, `Touch`); `oag_game::endrace` dispatches on it.
 
+**Not compared against an original frame**: no reference capture of 2048's post-race
+exists and no Vita emulator was run; layout, colours and chain are the XML and the
+decompile. The live frames were taken in a window larger than the Xvfb screen, so
+the tile strip is clipped there; the `--menu-page` stills show it whole.
+
 ## Open
 
 - **`Results`' table.** `<RaceResults>` is filled by native code

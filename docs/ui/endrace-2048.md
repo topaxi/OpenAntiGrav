@@ -28,8 +28,10 @@ Implemented in [`oag_ui_screens::endrace::touch`](../../crates/ui-screens/src/en
 
 **Copy lineage:** the base `data.psarc` copy is 22,076 bytes; `patch-v104/data1.psarc`
 carries a 22,098-byte one that differs by a single attribute
-(`name="continueButton"` on the tips screen's tick). The base copy is read here;
-the difference touches no widget this build draws. `Legacy` has a third copy in
+(`name="continueButton"` on the tips screen's tick). The base copy is the one
+served - this build mounts only the base `data.psarc` for 2048's front end, pinned
+by `the_base_copy_of_the_file_is_the_one_served` - and the difference touches no
+widget this build draws, so mounting the patch later changes nothing here. `Legacy` has a third copy in
 `data2.psarc` (14,267 bytes against the base's 12,382 and `data1`'s 12,593).
 
 `oag_2048::TITLE.front_end.endrace_entry` names the file and `endrace_style` its
@@ -99,6 +101,10 @@ seen (**chosen**).
 
 ## Verification
 
+**No reference capture of 2048's post-race exists** (`data/reference/2048-frontend/`
+has none) and no Vita emulator was run for this lane: the colours, layout and chain
+come from the XML and the decompile, not from a comparison against an original frame.
+
 - Disc-backed: [`vita_2048_endrace_ground_truth.rs`](../../crates/game/tests/vita_2048_endrace_ground_truth.rs)
   (`just test-data`) reads the real file, checks every texture decodes into the
   sheet, races `2048 - Event 1` under the autopilot and words the real result,
@@ -110,7 +116,9 @@ seen (**chosen**).
   can be looked at without racing to it.
 - Live: one windowed run in a private Xvfb with software Vulkan, walked
   `GameModeChoice` -> the event card -> launch, finished under `--autopilot`, and
-  put the pages over the frozen race; Exit left for the menus.
+  put the pages over the frozen race; Exit left for the menus. The window
+  (1440x816) was larger than the Xvfb screen (1280x720), so the tile strip is
+  clipped in those frames; the `--menu-page` stills show it whole.
 
 ## Omega
 
