@@ -871,20 +871,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             course,
             start_position,
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
-            // The craft's source, not the track's: the shell is loaded from the
-            // craft's archives (`livery::shield::shell`), so a Race Remix with a
-            // PSP craft on a PS2 circuit must still tint.
-            shield_palette: match craft_title.looks.shield_palette.on(craft_of(
-                &mut craft,
-                &mut archives,
-            )
-            .layout
-            .platform)
-            {
-                oag_title::ShieldPalette::Hd => oag_render::shield::HD_PALETTE,
-                oag_title::ShieldPalette::Ps2Pulse => oag_render::shield::PS2_PULSE_PALETTE,
-                oag_title::ShieldPalette::Pulse => oag_render::shield::PULSE_PALETTE,
-            },
+            shield_palette: roster::shield_palette(
+                craft_title,
+                craft_of(&mut craft, &mut archives).layout.platform,
+            ),
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
             grid_frame_from_sample: extents,

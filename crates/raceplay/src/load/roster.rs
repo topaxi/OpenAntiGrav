@@ -158,6 +158,21 @@ pub(super) struct Grid {
     pub liveries: Vec<oag_livery::Livery>,
 }
 
+/// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
+/// takes. The craft's source, not the track's: the shell is loaded from the
+/// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
+/// on a PS2 circuit must still tint.
+pub(super) fn shield_palette(
+    craft_title: &oag_title::Title,
+    platform: oag_assets::Platform,
+) -> oag_render::shield::Palette {
+    match craft_title.looks.shield_palette.on(platform) {
+        oag_title::ShieldPalette::Hd => oag_render::shield::HD_PALETTE,
+        oag_title::ShieldPalette::Ps2Pulse => oag_render::shield::PS2_PULSE_PALETTE,
+        oag_title::ShieldPalette::Pulse => oag_render::shield::PULSE_PALETTE,
+    }
+}
+
 /// Fills the grid: slot teams out of `available`, then a [`oag_livery`] per
 /// slot off `archives`.
 ///
