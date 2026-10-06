@@ -193,13 +193,16 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
 /// known files needed help to get there - over the circuit files of one
 /// direction.
 ///
-/// # Forward and reversed are one test each, asserting what one loop did
+/// # Direction by slice: eight tests, asserting what one loop did
 ///
 /// The per-craft claim is per circuit, so any partition of [`HD_CIRCUITS`]
 /// asserts the same 28 things. The list claim is `assert_eq!` against
-/// [`HD_STALE_SLOTS`] *in file order*, and both constants are grouped
-/// forward-then-reversed, so filtering each by direction keeps that order and
-/// keeps the assertion exact rather than merely equivalent.
+/// [`HD_STALE_SLOTS`] *in file order*: each test keeps the circuits of its
+/// direction whose index within that direction is `slice` modulo [`SLICES`],
+/// and filters [`HD_STALE_SLOTS`] to exactly those circuits, which keeps that
+/// order and keeps the assertion exact rather than merely equivalent. The
+/// slices cover every circuit once, so the union of the eight lists is the
+/// whole of [`HD_STALE_SLOTS`].
 ///
 /// Direction is also the axis the finding itself is about: eight of the nine
 /// stale slots are `track_reversed`, which is the pattern the correction was
@@ -209,15 +212,25 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
 /// The reason to split is wall clock. `cargo nextest` parallelises across
 /// tests, one process each, so all 28 circuit files ran on a single core:
 /// **147 s** on 2026-09-09, in a suite whose whole wall clock was 587 s. The
-/// two halves run side by side at the same total CPU.
-fn hd_craft_spawn_facing_their_circuit(file_kind: &str) {
+/// two halves run side by side at the same total CPU, and each half is now four
+/// slices (**161 s** and **147 s** under load on 2026-10-06).
+const SLICES: usize = 4;
+
+fn hd_craft_spawn_facing_their_circuit(file_kind: &str, slice: usize) {
     let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
 
     let mut stale = Vec::new();
     let mut seen = 0usize;
-    for (circuit, file) in HD_CIRCUITS.iter().filter(|(_, f)| *f == file_kind) {
+    let mine: Vec<(&str, &str)> = HD_CIRCUITS
+        .iter()
+        .filter(|(_, f)| *f == file_kind)
+        .skip(slice)
+        .step_by(SLICES)
+        .copied()
+        .collect();
+    for (circuit, file) in &mine {
         seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
         let (craft, authored) = agreement(&image, &track);
@@ -241,29 +254,69 @@ fn hd_craft_spawn_facing_their_circuit(file_kind: &str) {
 
     let expected: Vec<(&str, &str)> = HD_STALE_SLOTS
         .iter()
-        .filter(|(_, f)| *f == file_kind)
+        .filter(|pair| mine.contains(pair))
         .copied()
         .collect();
     assert_eq!(
         stale, expected,
-        "the disc's own stale {file_kind} slots, in file order"
+        "the disc's own stale {file_kind} slice {slice} slots, in file order"
     );
 }
 
-/// The sixteen forward circuit files - see
-/// [`hd_craft_spawn_facing_their_circuit`].
+/// Slice 0 of the forward circuit files - see [`hd_craft_spawn_facing_their_circuit`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_forward_hd_craft_spawns_facing_the_way_its_circuit_runs() {
-    hd_craft_spawn_facing_their_circuit("track");
+fn every_forward_hd_craft_slice_0_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track", 0);
 }
 
-/// The twelve reversed ones, which carry eight of the nine stale slots - see
-/// [`hd_craft_spawn_facing_their_circuit`].
+/// Slice 1 of the forward circuit files - see [`hd_craft_spawn_facing_their_circuit`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_reversed_hd_craft_spawns_facing_the_way_its_circuit_runs() {
-    hd_craft_spawn_facing_their_circuit("track_reversed");
+fn every_forward_hd_craft_slice_1_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track", 1);
+}
+
+/// Slice 2 of the forward circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_forward_hd_craft_slice_2_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track", 2);
+}
+
+/// Slice 3 of the forward circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_forward_hd_craft_slice_3_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track", 3);
+}
+
+/// Slice 0 of the reversed circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_reversed_hd_craft_slice_0_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track_reversed", 0);
+}
+
+/// Slice 1 of the reversed circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_reversed_hd_craft_slice_1_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track_reversed", 1);
+}
+
+/// Slice 2 of the reversed circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_reversed_hd_craft_slice_2_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track_reversed", 2);
+}
+
+/// Slice 3 of the reversed circuit files - see [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_reversed_hd_craft_slice_3_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track_reversed", 3);
 }
 
 /// One non-HD source in hand, swept the same way as the HD pair above.

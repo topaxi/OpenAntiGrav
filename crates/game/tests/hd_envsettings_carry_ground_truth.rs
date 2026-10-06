@@ -84,21 +84,29 @@ const BUILT_BEFORE_THE_CARRY: &[&str] = &[
     "/data/environments/zone_1/track.vex",
 ];
 
-/// **The reproduction and the fix, in one test.** Runs every environment
-/// through the real loader and asserts today's answer - `16/16` - while
-/// printing the built/skipped split so the report can quote it; the
+/// **The reproduction and the fix.** Runs every environment through the real
+/// loader and asserts today's answer - `16/16` - while printing the
+/// built/skipped split so the report can quote it; the
 /// `BUILT_BEFORE_THE_CARRY` constant is what makes clear, in a diff, that this
 /// used to read `5/16`.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_environment_on_the_disc_builds_its_bloom_chain() {
+///
+/// # Four slices, one test each
+///
+/// The claim is per environment, so any partition of [`ENVIRONMENTS`] asserts
+/// the same things as the one loop did. Environment `i` belongs to slice
+/// `i % SLICES`, which covers all sixteen. The 5-of-16 drift guard is not
+/// per environment, so it is a test of its own. The reason to split is wall
+/// clock: the loop was 144 s on one core under load.
+const SLICES: usize = 4;
+
+fn a_slice_of_environments_builds_its_bloom_chain(slice: usize) {
     let Some(image) = image() else {
         return;
     };
 
     let mut built = Vec::new();
     let mut skipped = Vec::new();
-    for track in ENVIRONMENTS {
+    for track in ENVIRONMENTS.iter().skip(slice).step_by(SLICES) {
         let loaded = race::load(&race::Options {
             source: image.display().to_string(),
             class: "VENOM".to_string(),
@@ -120,9 +128,8 @@ fn every_environment_on_the_disc_builds_its_bloom_chain() {
         }
     }
     println!(
-        "{}/{} environments built the bloom chain\nbuilt: {built:#?}\nskipped: {skipped:#?}",
+        "{} environments built the bloom chain\nbuilt: {built:#?}\nskipped: {skipped:#?}",
         built.len(),
-        ENVIRONMENTS.len()
     );
 
     assert_eq!(
@@ -131,7 +138,35 @@ fn every_environment_on_the_disc_builds_its_bloom_chain() {
         "expected every environment to build its bloom chain now that the front end's own \
          values carry forward - see the module doc"
     );
+}
 
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn environments_slice_0_build_their_bloom_chain() {
+    a_slice_of_environments_builds_its_bloom_chain(0);
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn environments_slice_1_build_their_bloom_chain() {
+    a_slice_of_environments_builds_its_bloom_chain(1);
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn environments_slice_2_build_their_bloom_chain() {
+    a_slice_of_environments_builds_its_bloom_chain(2);
+}
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn environments_slice_3_build_their_bloom_chain() {
+    a_slice_of_environments_builds_its_bloom_chain(3);
+}
+
+/// The two lists this file reasons over still say 5 of 16. Needs no disc.
+#[test]
+fn the_before_and_after_lists_still_read_five_of_sixteen() {
     let before: BTreeSet<_> = BUILT_BEFORE_THE_CARRY.iter().collect();
     let after: BTreeSet<_> = ENVIRONMENTS.iter().collect();
     assert!(
