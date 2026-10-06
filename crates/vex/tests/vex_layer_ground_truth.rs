@@ -1,11 +1,7 @@
 //! Which **render layer** each `Mesh` node lands in, checked against the disc.
 //!
-//! **`#[ignore]`d and never run in CI.** Needs game content, which this project
-//! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What a layer is
 //!

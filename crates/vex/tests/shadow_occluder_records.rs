@@ -1,14 +1,7 @@
 //! The occluder's two record arrays, against every hull on the disc.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! # or only these:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all records
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! Its own file rather than more tests in `shadow_occluder_ground_truth.rs`,
 //! which is at the 1,000-line rule in `scripts/check-file-size.py`. The seam is

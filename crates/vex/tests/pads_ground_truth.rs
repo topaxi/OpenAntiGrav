@@ -1,11 +1,7 @@
 //! Validates the [`pads`](oag_vex::pads) decoder against real tracks.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! The test skips with a printed message when the disc image is absent. Set
 //! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a

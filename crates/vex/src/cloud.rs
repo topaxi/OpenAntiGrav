@@ -96,8 +96,7 @@
 //!
 use crate::vex::{self, IDENTITY, Node, byte_order, multiply, node_attributes, transform};
 
-/// Class ID of a `cloudCube` node (local here rather than in `vex.rs`'s
-/// `CLASS_*` list, which another pass is editing).
+/// Class ID of a `cloudCube` node.
 pub const CLASS_CLOUD_CUBE: u32 = 0x3d8;
 
 /// Class ID of a `cloudGroup` node.

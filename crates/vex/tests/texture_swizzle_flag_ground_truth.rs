@@ -1,11 +1,8 @@
 //! Measures the byte at `Texture` node payload `+0x06` across every `.vex` file
 //! Pulse ships, on both of its pressings, and pins what bit 0 of it does.
 //!
-//! **`#[ignore]`d and never run in CI**: it needs game content (see
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`). Run with `just
-//! test-data`; the tests skip with a message when the disc image is absent, and
-//! `OAG_REQUIRE_GAME_DATA=1` turns absence into a failure (a skipped
-//! ground-truth test is green and proves nothing).
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! **Settled 2026-10-01**: bit 0 is the pre-swizzle flag on Pulse too, and
 //! `vex::textures` acts on it on every version (see
@@ -16,11 +13,11 @@
 //!
 //! `docs/formats/pure-status.md` records (confidence 88) that the `Texture`
 //! payload's flags byte at `+0x06` has bit 0 = "texels already in the GE's
-//! 16-byte by 8-row block order", "set only on font atlases" on Pulse. Acting on
-//! it is free for Pulse only if the bit is clear on **every** Pulse `Texture`
-//! node; otherwise a decoder returns different texels for a Pulse asset and a
-//! circuit screenshot need not cover the model that changed. Hence: measure, then
-//! pin.
+//! 16-byte by 8-row block order". It first said "set only on font atlases" on
+//! Pulse (since corrected there, by this sweep). Acting on it is free for Pulse
+//! only if the bit is clear on **every** Pulse `Texture` node; otherwise a decoder
+//! returns different texels for a Pulse asset and a circuit screenshot need not
+//! cover the model that changed. Hence: measure, then pin.
 //!
 //! # What the sweep found: bit 0 **is** set on Pulse
 //!
@@ -29,10 +26,10 @@
 //! texture of the EGX, Feisar, Goteki, Piranha, Triakis and Zone ships, the mine,
 //! bomb and shuriken effects, and the Zone shipwreck set.
 //!
-//! **Only the byte is measured, never its meaning**, so this disagrees with
-//! `pure-status.md` without ruling on it. Pulse's Feisar model has eight `Texture`
-//! nodes reading **`0xe5`** where `pure-status.md` records `0xe4`: one bit apart,
-//! the bit the claim turns on (a measured discrepancy, not a correction).
+//! **Only the byte is measured, never its meaning.** Pulse's Feisar model has
+//! eight `Texture` nodes reading **`0xe5`**, where `pure-status.md` still records
+//! Pulse's eight as `0xe4`: one bit apart, the bit the claim turns on (a measured
+//! discrepancy, not a correction).
 //!
 //! Independent of that: acting on bit 0 decodes 88 Pulse PSP textures differently,
 //! a Pulse behaviour change on either reading, and a version gate cannot avoid it

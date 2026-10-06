@@ -2,11 +2,8 @@
 //! that a `Dynamic Shadow Occluder` `0x3c3` payload **closes** at
 //! `0x50 + 32n + 16m`.
 //!
-//! **`#[ignore]`d and never run in CI**: it needs game content (see
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`). Run with `just
-//! test-data`; the tests skip with a message when the disc image is absent, and
-//! `OAG_REQUIRE_GAME_DATA=1` turns absence into a failure (a skipped
-//! ground-truth test is green and proves nothing).
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! ```sh
 //! just test-data

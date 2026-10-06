@@ -51,8 +51,8 @@ impl Batch {
     ///
     /// Only the blend equation and colour test differ; the depth-write disable,
     /// alpha test and stencil setup sit outside the nest, common to all three.
-    /// See `mesh-draw.md`, "Three `pass_mask` bits decoded, inside the `0x0700`
-    /// transparent class".
+    /// See `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "Three `pass_mask`
+    /// bits decoded, inside the `0x0700` transparent class".
     #[must_use]
     pub fn blend_class(&self) -> Option<BlendClass> {
         if self.pass_mask & 0x0100 != 0 {

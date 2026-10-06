@@ -3,12 +3,8 @@
 //! [`oag_vex::mesh_coverage`]) and `WO Track`/`section`/collision (via
 //! [`oag_vex::track_coverage`]).
 //!
-//! **`#[ignore]`d and never run in CI.** Needs game content this project does
-//! not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # Why one level past the node walk
 //!
