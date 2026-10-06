@@ -590,3 +590,14 @@ oag-texture -> oag-formats`):
 `oag-mesh` and `oag-post` may not reach a title data package. `oag-render` is
 not covered yet: it still reads `oag-pulse`'s presentation tables (`loading`,
 HUD). No ADR changes; none of the cuts alters a recorded decision.
+
+## Title-identity ratchet (2026-10-06)
+
+`scripts/check-title-branching.py` (`just check-title-branching`, in the `just`
+gate beside `check-size`) is a ratchet over a per-file `BASELINE` of
+title-identity comparisons - `title.name == oag_hd::TITLE.name` and its kin - in
+every crate that is not a title package. 37 sites in 20 files at landing, none
+migrated. A file may drop, never rise; a new file may have none. The decision
+behind it, and the migration order, are
+[ADR-0058](adr/0058-per-title-behaviour-is-title-data-with-provenance.md): the
+workspace's dependency arrows do not change.
