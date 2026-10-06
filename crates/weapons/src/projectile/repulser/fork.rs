@@ -1,29 +1,26 @@
 //! The third wave: `Repulser_AdvanceWave`'s fork at a split junction.
 //!
-//! Read in `docs/ghidra/functions/psp-pulse-usa/repulser.md`, "The fork wave,
-//! read" (confidence 88). When the forward wave's step crosses a junction with
-//! an alternate successor, and this Repulser has not forked before (`+0x25c`),
-//! a third wave starts at the
-//! junction and walks the alternate path for the steps left at the crossing
-//! (mode 3). From the next update on, it takes the parent's full step count.
-//! At the far end of the branch it rejoins the ring and walks on. On the spawn
-//! update its previous point is its current one (`+0x140 = +0x110`), so it
-//! sweeps nothing across the jump. Craft only: `RepulserPool_SweepTargets`
-//! tests Mines and Bombs against waves 0 and 1.
+//! Read in `docs/ghidra/functions/psp-pulse-usa/repulser.md`, "The fork wave, read"
+//! (confidence 88). When the forward wave's step crosses a junction with an
+//! alternate successor and this Repulser has not forked (`+0x25c`), a third wave
+//! starts at the junction and walks the alternate path for the steps left at the
+//! crossing (mode 3), then takes the parent's full step count, rejoining the ring
+//! at the branch's far end. On the spawn update its previous point equals its
+//! current one (`+0x140 = +0x110`), so it sweeps nothing across the jump. Craft
+//! only: `RepulserPool_SweepTargets` tests Mines and Bombs against waves 0 and 1.
 //!
 //! **Not built: a fork off the backward wave.** `AiTrack_StepBackward`
-//! (`0x0887e2f0`) reads the same `path+0x10` junction the forward stepper does
-//! (`0x0887e334`), not an entry junction, so what a backward wave meets at a
-//! path's start is not established. Nothing is invented for it.
+//! (`0x0887e2f0`) reads the same `path+0x10` junction as the forward stepper
+//! (`0x0887e334`), so what a backward wave meets at a path's start is not
+//! established.
 //!
-//! **Not built: the init-tick variant** (`Repulser_ForkAtJunction`,
-//! `0x08876634`, 72), which starts the third wave when the firer already sits
-//! on a branch beside its sibling. Chosen, not measured: a Repulser fired from
-//! a branch forks only when a wave crosses a split.
+//! **Not built: the init-tick variant** (`Repulser_ForkAtJunction`, `0x08876634`,
+//! 72), for a firer already on a branch. Chosen, not measured: it forks only when a
+//! wave crosses a split.
 //!
-//! **Ours, chosen rather than measured:** ring samples, not control points, as
-//! for the two primary waves ([`super`]'s own list); the crossing is tested on
-//! ring indices, so a step that lands exactly on the split's first sample counts.
+//! **Ours, chosen rather than measured:** ring samples, not control points (as in
+//! [`super`]), and the crossing tested on ring indices, so a step landing exactly
+//! on the split's first sample counts.
 
 use super::{Front, normalize_or_zero};
 use oag_core::math::Vec3;

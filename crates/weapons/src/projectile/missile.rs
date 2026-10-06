@@ -1,45 +1,30 @@
 //! The Missile: what it locks onto, how it steers, and how fast it goes.
 //!
-//! Its *flight* is [`super::Projectiles::advance`]'s, shared with the Rocket -
-//! that model was written weapon-agnostic on purpose and the Missile is the first
-//! thing to inherit it. What is here is the three parts that are the Missile's
-//! own: the lock, the guidance term, and the speed ramp.
+//! Its flight is [`super::Projectiles::advance`]'s, shared with the Rocket. Here:
+//! the lock, the guidance term and the speed ramp.
 //!
 //! # What is recovered and what is ours
 //!
-//! Stated at the top, the way [`crate::pickup`] and [`super`] state it. **This
-//! module is unusual for this crate in being almost entirely recovered**, so the
-//! short list is the other way round from normal.
-//!
-//! **Recovered**, all against `/pulse/BOOT-psp-pulse-usa.BIN`, image base `0x08804000`,
-//! evidence and per-claim confidences on
+//! Almost entirely recovered, against `/pulse/BOOT-psp-pulse-usa.BIN` (image base
+//! `0x08804000`); evidence and per-claim confidences on
 //! `docs/ghidra/functions/psp-pulse-usa/missile.md`:
 //!
-//! - The `<Stats>` block and its two lock distances, at instruction level
-//!   (`WeaponStats_ParseMissile`, `0x0880c31c`, confidence 90).
-//! - **That a press puts exactly one in the air.** `Weapon_FireMissile`
-//!   (`0x088685cc`, fire-request bit `0x40`) makes a single spawn call - no fan,
-//!   no burst - unlike the Rocket's three (confidence 90).
-//! - The whole of [`lock`], from `Ship_AcquireLock` (`0x08844784`, confidence 88).
-//! - The whole of [`steer`], from `Missile_Update` (`0x0885a918`, confidence 95).
-//! - The whole of [`speed_kmh`], from `Missile_SpeedNow` (`0x0885a038`,
-//!   confidence 90).
+//! - The `<Stats>` block and lock distances (`WeaponStats_ParseMissile`,
+//!   `0x0880c31c`, confidence 90).
+//! - A press puts exactly one in the air: `Weapon_FireMissile` (`0x088685cc`, bit
+//!   `0x40`), no fan (confidence 90).
+//! - [`lock`], from `Ship_AcquireLock` (`0x08844784`, confidence 88).
+//! - [`steer`], from `Missile_Update` (`0x0885a918`, confidence 95).
+//! - [`speed_kmh`], from `Missile_SpeedNow` (`0x0885a038`, confidence 90).
 //! - The launch speed law in [`launch`], from `Missile_Init` (`0x0885a160`).
-//! - **That a press with no lock still fires**, from `Ship_FireHeldWeapon`
-//!   (`0x08844ae8`, confidence 90) - see [`lock`].
+//! - A press with no lock still fires, from `Ship_FireHeldWeapon` (`0x08844ae8`,
+//!   confidence 90); see [`lock`].
 //! - [`SELF_DETONATE_SECONDS`], from `Projectiles_Update_q` (`0x08869588`,
-//!   confidence 90) - which is what makes an unlocked missile end.
+//!   confidence 90).
 //!
-//! **Ours**, and it is a short list:
-//!
-//! - **The launch offset.** [`launch`] pushes the spawn point out to the nose by
-//!   the hull's own extent, exactly as [`super::launch`] does and for the same
-//!   reason; the original spawns at the craft's pose.
-//! - **Dropping one condition of the lock**, deliberately and with the reason
-//!   under [`lock`].
-//! - **A slot index where the original has a pointer.** The original hands the
-//!   missile a raw pointer to the target object; a slot index is what survives
-//!   being in a `Copy` world snapshot.
+//! **Ours:** the launch offset to the nose by the hull's extent (the original
+//! spawns at the craft's pose, see [`super::launch`]); dropping one lock
+//! condition (see [`lock`]); a slot index where the original has a pointer.
 
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -49,54 +34,39 @@ use oag_tables::weapons::MissileStats;
 
 /// How far the unit heading may swing in one second, as a chord length.
 ///
-/// **Recovered, confidence 95.** `Missile_Update` computes the error between the
-/// unit direction to the target and the unit velocity, then clamps the correction
-/// to `dt * 4.0` - `local_6b0 = param_1 * 4.0`, the only steering constant in the
-/// function.
+/// **Recovered, confidence 95.** `Missile_Update` clamps the error between the
+/// unit direction to the target and the unit velocity to `dt * 4.0`, the only
+/// steering constant in the function.
 ///
-/// **It is a chord on the unit sphere, not an angle.** Nothing in the original's
-/// guidance path calls `vsin_s`, `vcos_s` or `vcst_s(5)`; the whole law is vector
-/// arithmetic. That is convenient here for a reason the original never cared
-/// about: `docs/architecture/determinism.md` forbids platform transcendentals in
-/// simulation code, and this needs none.
-///
-/// A chord of `4.0` per second is a little over a right angle per second at
-/// small angles, and it saturates rather than growing without bound - the largest
-/// possible error chord is `2.0`, a heading reversal, which this covers in half a
-/// second.
+/// A chord on the unit sphere, not an angle: the original's guidance calls no
+/// `vsin_s`/`vcos_s`/`vcst_s(5)`, so this needs no platform transcendental
+/// (`docs/architecture/determinism.md`). The largest error chord is `2.0`, a
+/// reversal, covered in half a second.
 pub const TURN_CHORD_PER_SECOND: f32 = 4.0;
 
 /// How far a missile looks toward the surface for something to ride.
 ///
-/// **Recovered, confidence 92**, and it is **double the Rocket's**
-/// [`super::SURFACE_PROBE_LENGTH`]: `Missile_Update` scales the stored normal by
-/// `0x41400000` = `12.0` where `Rocket_Update` uses `6.0`. Kept as its own
-/// constant rather than shared, because the two really are different numbers and
-/// a shared one would have to be wrong for one of them.
+/// **Recovered, confidence 92**, double the Rocket's
+/// [`super::SURFACE_PROBE_LENGTH`]: `Missile_Update` scales the normal by
+/// `0x41400000` = `12.0`, `Rocket_Update` by `6.0`.
 pub const SURFACE_PROBE_LENGTH: f32 = 12.0;
 
-/// How many walls a missile may glance off before it gives up and detonates.
+/// How many walls a missile may glance off before it detonates.
 ///
-/// **Recovered, confidence 92.** `Missile_Update` keeps a counter at `self+0x6c`,
-/// increments it on every wall hit and tests `< 5`; past that it takes the
-/// detonating branch instead.
-///
-/// **This is the sharpest behavioural difference from the Rocket**, which
-/// detonates on its first wall. A missile skitters down a corridor.
+/// **Recovered, confidence 92.** `Missile_Update` counts wall hits at `self+0x6c`
+/// and tests `< 5`. The Rocket detonates on its first wall.
 pub const MAX_BOUNCES: u8 = 5;
 
 /// How far off a wall a bouncing missile is pushed, so it does not re-hit it.
 ///
-/// **Recovered, confidence 92** - `0x3dcccccd` = `0.1`, applied along the hit
-/// normal from the hit point.
+/// **Recovered, confidence 92**: `0x3dcccccd` = `0.1` along the hit normal.
 pub const BOUNCE_PUSH_OFF: f32 = 0.1;
 
 /// How long a missile flies before it detonates where it is, in seconds.
 ///
-/// **Recovered, confidence 90**, and it is the rule that makes a missile with no
-/// target a weapon rather than litter. The missile pool's own per-frame update,
-/// `Projectiles_Update_q` (`0x08869588`), runs a second pass over every live
-/// slot and takes the destroy branch on `3.0 < self->age`:
+/// **Recovered, confidence 90**; it is what makes a targetless missile a weapon
+/// rather than litter. `Projectiles_Update_q` (`0x08869588`) takes the destroy
+/// branch on `3.0 < self->age`:
 ///
 /// ```text
 /// if (3.0 < missile->age && (missile->flags & 1)) {
@@ -105,120 +75,79 @@ pub const BOUNCE_PUSH_OFF: f32 = 0.1;
 /// }
 /// ```
 ///
-/// **`self+0x50` is the same age [`speed_kmh`] ramps on** - `Missile_SpeedNow`
-/// (`0x0885a038`) reads that field and nothing else for its `age < 1.0` blend,
-/// and `Missile_Update` is what accumulates it by `dt`. One field, two consumers,
-/// so the ramp's age and the timeout's age cannot drift apart.
-///
-/// **Bit `4` is "destroy me", and the teardown that acts on it is shared** with
-/// the wall and craft paths, which reach it through `flags |= 0x14` and
-/// `|= 0x24`. So this is a detonation rather than a reap - see
-/// [`super::Impact::blast`] for the one thing it does *not* do.
-///
-/// The `flags & 1` half of the test is **locally-simulated**, not alive: the
-/// network spawn path (`FUN_088687c0`) initialises the same word to `2` instead,
-/// so a remote craft's missile is destroyed by its owner's message rather than by
-/// this timer. With no networking here the condition is trivially satisfied and
-/// is not ported.
+/// `self+0x50` is the same age [`speed_kmh`] ramps on. Bit `4` is "destroy me",
+/// shared with the wall and craft paths, so this is a detonation rather than a
+/// reap; see [`super::Impact::blast`] for what it does not do. The `flags & 1`
+/// half means locally-simulated (the network spawn `FUN_088687c0` sets `2`); with
+/// no networking here it is not ported.
 pub const SELF_DETONATE_SECONDS: f32 = 3.0;
 
 /// How long the missile takes to reach its class speed, in seconds.
 ///
-/// **Recovered, confidence 95**, and it is a **code literal** rather than the
-/// authored `slowdown_time`: `Missile_SpeedNow` tests `age < 1.0` and blends.
-/// The Missile's `<Stats>` happens to author `slowdown_time="1.0"` as well, which
-/// is a coincidence worth naming so nobody wires the two together - they are
-/// different quantities that both read 1.0 on the shipped disc.
+/// **Recovered, confidence 95**, a code literal and not the authored
+/// `slowdown_time` (`Missile_SpeedNow` tests `age < 1.0`). The shipped
+/// `slowdown_time="1.0"` is a coincidence; do not wire the two together.
 ///
-/// **Shared with the Plasma, and recovered twice over.** `Plasma_SpeedForClass`
-/// (`0x0885c5a4`) independently tests `age < 1.0` and blends with the identical
-/// operand order - `launch * (1 - age) + class * age` - read weeks after this
-/// function and from a different part of the executable
-/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the launch ramp"
-/// section). Two functions agreeing on both the second and the shape is the
-/// same bar this project used to fold the Rocket's, the Missile's and the
-/// Shuriken's `12.0` surface probe into one constant, so [`speed_kmh`] is
-/// spent for the Plasma too rather than the Plasma growing its own copy - see
-/// `oag_weapons::projectile::flight`'s `pinned_kmh`. The Plasma does **not**
-/// share [`LAUNCH_SPEED_FLOOR_KMH`]: `Plasma_Launch`'s listing has no `vmax_s`
-/// clamping a minimum, so a standing-start bolt leaves at `launchspeed` alone.
+/// **Shared with the Plasma, recovered twice.** `Plasma_SpeedForClass`
+/// (`0x0885c5a4`) tests `age < 1.0` with the same operand order
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the launch ramp"), so
+/// [`speed_kmh`] serves both (see `oag_weapons::projectile::flight`'s
+/// `pinned_kmh`). The Plasma does **not** share [`LAUNCH_SPEED_FLOOR_KMH`]:
+/// `Plasma_Launch` has no `vmax_s`, so a standing-start bolt leaves at
+/// `launchspeed` alone.
 pub const SPEED_RAMP_SECONDS: f32 = 1.0;
 
 /// The slowest a missile may leave the rail, in km/h.
 ///
-/// **Recovered, confidence 88** - `Missile_Init` takes `vmax_s(speed,
-/// 0x41666666)` = `14.4` before building the launch velocity. It matters only for
-/// a craft that is barely moving, which on a standing grid is every craft.
+/// **Recovered, confidence 88**: `Missile_Init` takes `vmax_s(speed, 0x41666666)`
+/// = `14.4`. It matters on a standing grid.
 pub const LAUNCH_SPEED_FLOOR_KMH: f32 = 14.4;
 
 /// How square-on a target must be to be lockable, as a cosine.
 ///
-/// **Recovered, confidence 88** - `Ship_AcquireLock` tests `0.9 < dot(normalize(to
-/// target), forward)`, a code literal. About 26 degrees off the nose.
-///
-/// A cosine and never an angle, for the reason `oag_ai`'s `WEAPON_CONE` gives:
-/// comparing cosines needs no `acos`, and `acos` is a transcendental the
-/// determinism rules keep out of simulation code.
+/// **Recovered, confidence 88**: `Ship_AcquireLock` tests
+/// `0.9 < dot(normalize(to target), forward)`, about 26 degrees. A cosine, as in
+/// `oag_ai`'s `WEAPON_CONE`, to avoid `acos`.
 pub const LOCK_CONE_COS: f32 = 0.9;
 
-/// How far round the houses a target may be, as along-track gap over straight-line
-/// range.
+/// How far round the houses a target may be, as along-track gap over range.
 ///
-/// **Recovered, confidence 80** - `Ship_AcquireLock`'s last test is
-/// `fabs(gap) / range < 1.4`, where `gap` comes from a helper
-/// (`FUN_0883dbf4`) that subtracts the two craft's along-track distances
-/// (`entity+0x91c` each) and wraps the difference around the lap.
-///
-/// **What it is for**, and this is the reading rather than the reading of the
-/// arithmetic: it rejects a craft that is close in space but far away along the
-/// road. On a hairpin the car coming the other way is thirty units from the nose
-/// and three hundred units of tarmac away, and locking it would send a missile
-/// into the barrier. Confidence 80 on the *purpose*; the arithmetic itself is
-/// plain.
+/// **Recovered, confidence 80**: `Ship_AcquireLock`'s last test is
+/// `fabs(gap) / range < 1.4`, `gap` from `FUN_0883dbf4`, which subtracts the two
+/// craft's along-track distances (`entity+0x91c`) and wraps around the lap. The
+/// purpose (rejecting a craft near in space but far along the road, as on a
+/// hairpin) is the reading, confidence 80; the arithmetic is plain.
 pub const LOCK_GAP_RATIO: f32 = 1.4;
 
 /// km/h to world units per second, as the original's own bit pattern.
 ///
-/// `Missile_Update` scales by the literal `0x3e8e38e4`, and that **is** the
-/// correctly-rounded `f32` for `1.0 / 3.6` - checked, because a first reading of
-/// the disassembly claimed it was not and that claim is the sort that survives
-/// review by sounding precise. Written as the bit pattern anyway, so the constant
-/// in this file is the constant in the executable rather than something a
-/// compiler happened to agree on.
-///
-/// **What is genuinely two things is the operation, not the value.** This path
-/// multiplies by the reciprocal; the surface-contact path *divides* by `3.6`
-/// ([`speed_units_on_surface`]). `x * (1/3.6)` and `x / 3.6` are not the same
-/// function in `f32`, so both are reproduced where they occur.
+/// `Missile_Update` scales by `0x3e8e38e4`, which is the correctly rounded `f32`
+/// for `1.0 / 3.6` (checked; a first disassembly reading claimed it was not).
+/// The operation differs, not the value: this path multiplies, the
+/// surface-contact path divides by `3.6` ([`speed_units_on_surface`]), and
+/// `x * (1/3.6)` and `x / 3.6` differ in `f32`.
 pub const KMH_TO_UNITS_PER_SECOND: f32 = f32::from_bits(0x3e8e_38e4);
 
-/// The divisor the original's surface-contact path uses, as a divide.
-///
-/// See [`KMH_TO_UNITS_PER_SECOND`] for why this is a separate constant spent a
-/// separate way.
+/// The divisor the original's surface-contact path uses, as a divide. See
+/// [`KMH_TO_UNITS_PER_SECOND`].
 pub const KMH_PER_UNIT_PER_SECOND: f32 = 3.6;
 
 /// How fast a missile is travelling right now, in km/h.
 ///
 /// **Recovered whole** from `Missile_SpeedNow` (`0x0885a038`), confidence 90: a
-/// linear blend from the speed it left the rail at to its class speed, over
-/// [`SPEED_RAMP_SECONDS`], and the class speed flat thereafter.
+/// linear blend from the launch speed to the class speed over
+/// [`SPEED_RAMP_SECONDS`], flat thereafter.
 ///
 /// ```text
 /// age < 1.0  ->  launch * (1 - age) + class * age
 /// age >= 1.0 ->  class
 /// ```
 ///
-/// **The speed is pinned, never integrated.** Both of the original's velocity
-/// writes normalise the direction and rescale to this, which has a consequence
-/// worth stating because it looks like a bug otherwise: the `dt * 50.0` fall term
-/// on the no-surface branch contributes only a *direction* change, never a
-/// magnitude one. A missile that flies off the edge of the track curves downward
-/// without speeding up.
+/// The speed is pinned, never integrated: both velocity writes normalise and
+/// rescale to this, so the `dt * 50.0` fall term changes direction only.
 #[must_use]
 pub fn speed_kmh(launch_kmh: f32, class_kmh: f32, age: f32) -> f32 {
     if age < SPEED_RAMP_SECONDS {
-        // The original's own order: `launch * (1 - age) + class * age`.
         launch_kmh * (1.0 - age) + class_kmh * age
     } else {
         class_kmh
@@ -231,8 +160,7 @@ pub fn speed_units_guided(speed_kmh: f32) -> f32 {
     speed_kmh * KMH_TO_UNITS_PER_SECOND
 }
 
-/// The same speed in world units per second, as the surface-contact path spends
-/// it - **a divide, not the multiply above**. See [`KMH_TO_UNITS_PER_SECOND`].
+/// The same, as the surface-contact path spends it: a divide, not a multiply.
 #[must_use]
 pub fn speed_units_on_surface(speed_kmh: f32) -> f32 {
     speed_kmh / KMH_PER_UNIT_PER_SECOND
@@ -252,36 +180,22 @@ pub fn speed_units_on_surface(speed_kmh: f32) -> f32 {
 /// out  = dir * speed
 /// ```
 ///
-/// # Three things that look like bugs and are not
+/// Three things that look like bugs and are not:
 ///
-/// 1. **`dir` is not renormalised before the speed scale, so a turning missile
-///    flies slower than [`speed_kmh`] says.** The correction always points partly
-///    *against* the current heading - `normalize(d - v)` has a dot product of
-///    `-sin(θ/2)` with `v` for a turn of `θ` - so `|dir|` is at most one and
-///    reaches about `0.954` for a right-angle turn and `0.933` for a reversal. It
-///    returns to exactly one as the missile lines up. The original does not
-///    renormalise and neither does this; "fixing" it would speed up every turning
-///    missile by up to 7 %.
+/// 1. `dir` is not renormalised, so a turning missile flies slower than
+///    [`speed_kmh`] says. `normalize(d - v)` has dot `-sin(θ/2)` with `v`, so
+///    `|dir|` reaches about `0.954` for a right angle and `0.933` for a reversal,
+///    returning to one as it lines up. Renormalising would speed turns up to 7 %;
+///    `a_turning_missile_flies_slower_than_its_pinned_speed` is the arithmetic.
+/// 2. The clamp is on a chord: a missile nearly on target takes the whole error
+///    in one tick (the `else` arm), one pointing away turns at a constant rate.
+/// 3. `position` must be the position at the **start** of the tick: the original
+///    runs this after the move is committed and writes only velocity, so the
+///    correction lands a tick later. See [`super::Projectiles::advance`], which
+///    passes `from`.
 ///
-///    Worth stating because the intuition runs the other way - a correction
-///    added to a unit vector *sounds* like it should overshoot - and a first
-///    reading of the disassembly recorded exactly that. It is wrong, and
-///    `a_turning_missile_flies_slower_than_its_pinned_speed` is the arithmetic
-///    that says so.
-/// 2. **The clamp is on a chord, not an angle**, so a missile already pointing
-///    nearly at its target takes the whole error in one tick (the `else` arm) and
-///    a missile pointing away turns at a constant rate. That is what the
-///    `|step|^2 <= |err|^2` test decides.
-/// 3. **`position` must be the missile's position at the *start* of the tick.**
-///    The original runs this block after the move is already committed and writes
-///    only the velocity, so the correction takes effect on the tick *after* the
-///    one that measured it. Feeding it the post-move position would tighten the
-///    loop by one tick and is not what the original does. See
-///    [`super::Projectiles::advance`], which calls this with `from`.
-///
-/// Returns `velocity` unchanged when either vector is degenerate - the original
-/// guards both with explicit component-wise tests against zero before
-/// normalising.
+/// Returns `velocity` unchanged when either vector is degenerate, as the original
+/// guards.
 #[must_use]
 pub fn steer(velocity: Vec3, position: Vec3, target: Vec3, dt: f32, speed: f32) -> Vec3 {
     let to_target = target - position;
@@ -294,8 +208,7 @@ pub fn steer(velocity: Vec3, position: Vec3, target: Vec3, dt: f32, speed: f32) 
     let error = desired - heading;
     let error_squared = error.length_squared();
     if error_squared <= 0.0 {
-        // Already pointing exactly at it. The original's normalise guard takes
-        // the same branch, leaving the step at the whole (zero) error.
+        // Already on target; the original's normalise guard does the same.
         return heading * speed;
     }
 
@@ -306,43 +219,34 @@ pub fn steer(velocity: Vec3, position: Vec3, target: Vec3, dt: f32, speed: f32) 
         error
     };
 
-    // Not normalised - see the doc comment.
+    // Not normalised, see the doc comment.
     (heading + movement) * speed
 }
 
 /// Which craft a missile fired from `origin` along `forward` locks onto.
 ///
 /// **Recovered** from `Ship_AcquireLock` (`0x08844784`), confidence 88. The
-/// original runs this for the firing craft and stores the result on the *entity*,
-/// then the fire handler passes the target through; running it at the moment of
-/// firing is the same thing for a weapon that acquires and launches in one press.
+/// original stores the result on the entity; running it at the moment of firing
+/// is equivalent for a weapon that acquires and launches in one press.
 ///
-/// # The four conditions, in the original's own order
+/// # The four conditions, in the original's order
 ///
-/// 1. **Not the firer, and racing.** The loop skips `other == self` outright, so a
-///    missile cannot lock the craft that fired it. That is recovered rather than a
-///    guard added here, and it matters: the blast does not exclude its owner, so a
-///    self-lock is a craft firing at its own back.
-/// 2. **Longitudinal distance inside the authored window.** `along = dot(target -
-///    origin, forward)`, tested against [`MissileStats::lock_min_dist`] and
-///    [`MissileStats::lock_max_dist`]. **Not straight-line range** - a craft
-///    directly alongside sits near zero on this axis however close it is, and is
-///    excluded by the near bound rather than by an angle.
-/// 3. **Inside the cone**, by [`LOCK_CONE_COS`].
-/// 4. **Not round the houses**, by [`LOCK_GAP_RATIO`] - the along-track gap over
-///    the straight-line range. Skipped entirely when `circuit_length` is `None`,
-///    which is the honest thing for a caller with no closed course to measure a
-///    lap against; a synthetic straight has no "round the houses" to speak of.
+/// 1. **Not the firer, and racing.** `other == self` is skipped outright. The
+///    blast does not exclude its owner, so a self-lock would hit the firer's back.
+/// 2. **Longitudinal distance inside the authored window**:
+///    `along = dot(target - origin, forward)` against
+///    [`MissileStats::lock_min_dist`] and [`MissileStats::lock_max_dist`]. Not
+///    straight-line range: a craft alongside sits near zero on this axis.
+/// 3. **Inside the cone**, [`LOCK_CONE_COS`].
+/// 4. **Not round the houses**, [`LOCK_GAP_RATIO`]. Skipped when `circuit_length`
+///    is `None` (a synthetic straight has no lap).
 ///
-/// The winner is the **nearest by longitudinal distance**, not by range and not by
-/// bearing.
+/// The winner is the nearest by longitudinal distance.
 ///
 /// # `None` is not a refusal to fire
 ///
-/// **Recovered, confidence 90**, and it used to be read the other way here.
-/// `Ship_FireHeldWeapon` (`0x08844ae8`) branches on the lock and fires either
-/// way - with a lock it passes the target's address, and with none it passes a
-/// null and a target index of `-1`:
+/// **Recovered, confidence 90.** `Ship_FireHeldWeapon` (`0x08844ae8`) fires either
+/// way, passing a null and target index `-1` when unlocked:
 ///
 /// ```c
 /// if ((self->target == -1) || ((self->lock_flags & 1) == 0)) {
@@ -352,28 +256,19 @@ pub fn steer(velocity: Vec3, position: Vec3, target: Vec3, dt: f32, speed: f32) 
 /// }
 /// ```
 ///
-/// `Weapon_FireMissile` (`0x088685cc`) then tests the target not at all: it
-/// clears the held slot, and spawns whatever `craft+0x160` holds. A null reaches
-/// `Missile_Init`, and `Missile_Update` skips its whole guidance block on
-/// `self+0xe0 == 0`, so the missile flies ballistically - riding the floor,
-/// glancing off walls - until [`SELF_DETONATE_SECONDS`] ends it.
+/// `Weapon_FireMissile` (`0x088685cc`) tests the target not at all, and
+/// `Missile_Update` skips guidance on `self+0xe0 == 0`, so the missile flies
+/// ballistically until [`SELF_DETONATE_SECONDS`]. A caller launches on `None`, as
+/// `oag_game`'s `Race::fire_missile` does.
 ///
-/// So a caller wanting the original's behaviour launches on `None` rather than
-/// declining. `oag_game`'s `Race::fire_missile` does.
+/// # The condition not ported
 ///
-/// # The condition deliberately not ported
-///
-/// The original also skips any craft whose `weapon_record+0x12c` is above zero.
-/// That field is a **count of hits landed on it but not yet resolved** - the same
-/// function that increments it also adds the weapon's `damage` and `slowdown_time`
-/// into two accumulators beside it - so the rule is "do not lock somebody who is
-/// already taking a hit this frame".
-///
-/// This engine has no such state: [`super::step`] applies a blast the moment it
-/// lands, so the count would be zero on every tick it could be read. Porting it
-/// would mean inventing the deferred-damage queue it counts. Recorded here rather
-/// than silently dropped, and it is the one place this function departs from the
-/// original.
+/// The original also skips any craft whose `weapon_record+0x12c` is above zero, a
+/// count of hits landed on it but not yet resolved (the same function adds
+/// `damage` and `slowdown_time` into two accumulators beside it): "do not lock
+/// somebody already taking a hit this frame". [`super::step`] applies a blast the
+/// moment it lands, so the count would always be zero; porting it would mean
+/// inventing a deferred-damage queue. The one departure from the original here.
 #[must_use]
 pub fn lock<S: Craft>(
     ships: &[S],
@@ -394,24 +289,15 @@ pub fn lock<S: Craft>(
     )
 }
 
-/// The same acquisition, against a window given directly rather than off the
-/// Missile's block.
+/// The same acquisition, against a window given directly.
 ///
-/// **`Ship_AcquireLock` (`0x08844784`) is one function serving two weapons**,
-/// and this is that shape written out. The original switches on the held weapon
-/// id to pick which pair of offsets the window comes from -
-/// `stats+0x50`/`+0x54` for the Missile, `stats+0x114`/`+0x118` for the
-/// LeachBeam - and everything after that switch is shared: the same `0.9` cone,
-/// the same along-track screen, the same nearest-by-longitudinal-distance
-/// tie-break, the same "not the firer, and racing" skip.
-///
-/// So the two weapons differ by **two numbers and nothing else**, which is why
-/// this takes the numbers instead of a second stats type. [`lock`] is the
-/// Missile's spelling of it and is what every existing caller uses.
-///
-/// The LeachBeam's window is authored shorter at the far end than the Missile's
-/// on both shipped tables - see `oag_tables::weapons::LeachBeamStats`, which is
-/// where that finding lives.
+/// `Ship_AcquireLock` (`0x08844784`) serves two weapons: it switches on the held
+/// weapon id to pick the window (`stats+0x50`/`+0x54` for the Missile,
+/// `+0x114`/`+0x118` for the LeachBeam), and everything after is shared (cone,
+/// along-track screen, nearest tie-break, firer skip). So this takes the two
+/// numbers rather than a second stats type; [`lock`] is the Missile's spelling.
+/// The LeachBeam's window is shorter at the far end on both shipped tables, see
+/// `oag_tables::weapons::LeachBeamStats`.
 #[must_use]
 pub fn lock_window<S: Craft>(
     ships: &[S],
@@ -433,9 +319,7 @@ pub fn lock_window<S: Craft>(
         if along <= lock_min_dist || along >= lock_max_dist {
             continue;
         }
-        // Nearest by longitudinal distance. Tested before the two remaining
-        // conditions because the original tests it there, and a candidate that
-        // loses on distance never pays for the normalise below.
+        // Nearest first, as the original tests it; a loser skips the normalise.
         if best.is_some_and(|(nearest, _)| along >= nearest) {
             continue;
         }
@@ -459,11 +343,8 @@ pub fn lock_window<S: Craft>(
     best.map(|(_, slot)| slot)
 }
 
-/// A signed along-track difference folded into `-length/2 ..= length/2`.
-///
-/// The original's helper takes the raw subtraction and the circuit length and
-/// does the same; a craft one metre ahead of the line and one metre behind it are
-/// two metres apart, not a lap.
+/// A signed along-track difference folded into `-length/2 ..= length/2`, as the
+/// original's helper does.
 fn wrapped_gap(difference: f32, length: f32) -> f32 {
     if length <= 0.0 || !length.is_finite() {
         return difference;
@@ -481,11 +362,8 @@ fn wrapped_gap(difference: f32, length: f32) -> f32 {
 
 /// Where a craft launches a missile from, how fast, and the speed to ramp from.
 ///
-/// Returns the spawn point, the launch velocity, and the launch speed in km/h -
-/// the third because [`speed_kmh`] ramps *from* it and it is per-shot rather than
-/// per-weapon.
-///
-/// # The speed law, and what it settles about `launchSpeed`
+/// Returns the spawn point, the launch velocity, and the launch speed in km/h
+/// (per-shot, [`speed_kmh`] ramps from it).
 ///
 /// **Recovered, confidence 88.** `Missile_Init` (`0x0885a160`) computes
 ///
@@ -493,36 +371,22 @@ fn wrapped_gap(difference: f32, length: f32) -> f32 {
 /// speed_kmh = |craft velocity| * 3.6 + launchSpeed
 /// ```
 ///
-/// then builds the velocity as `direction * max(speed_kmh, 14.4) / 3.6`.
+/// then `direction * max(speed_kmh, 14.4) / 3.6`. This answers what
+/// [`super::launch`] records as open for the Rocket: for the Missile
+/// `launchSpeed` is an additive muzzle velocity over the launcher's own speed,
+/// and the class speed is where the ramp ends. **Not propagated to the Rocket**:
+/// `Rocket_Init` is a different function nobody re-read.
 ///
-/// **This answers a question [`super::launch`] records as open.** That function's
-/// doc says of the Rocket that "the original's flight speed is the class's alone
-/// ... what `launchSpeed` *is* for has not been found". For the Missile it is
-/// found: it is an additive muzzle velocity **over the launcher's own speed**, and
-/// the class speed is where the ramp ends rather than where it starts.
-///
-/// **It is deliberately not propagated to the Rocket.** The Rocket has its own
-/// `Rocket_Init` and nothing has re-read it, so the Rocket keeps the sum it has
-/// always had and keeps its note saying so. Two weapons parsed by two functions
-/// may genuinely differ.
-///
-/// # The launch direction
-///
-/// The craft's forward, and the offset out to the nose is **ours** - the original
-/// spawns at the craft's pose and lets the first tick sort it out. Same choice
-/// [`super::launch`] makes, same reason: a projectile that starts inside the hull
-/// that fired it is a projectile the sweep has to special-case.
+/// The direction is the craft's forward; the offset to the nose is **ours**, as
+/// in [`super::launch`], so a projectile does not start inside its firer's hull.
 #[must_use]
 pub fn launch(
     state: &ShipState,
     dimensions: &Dimensions,
     stats: &MissileStats,
-    // **Deliberately unused, and kept in the signature.** A rocket's launch speed
-    // is its class speed plus `launchSpeed`; a missile's is its *launcher's*
-    // speed plus `launchSpeed`, and the class speed is where the ramp ends rather
-    // than where it starts (`speed_kmh`). Dropping the parameter would make the
-    // two launchers look gratuitously different and invite somebody to "fix" this
-    // one back to the rocket's rule.
+    // Deliberately unused, kept in the signature: a rocket's launch speed is the
+    // class speed plus `launchSpeed`, a missile's the launcher's speed plus it.
+    // Dropping the parameter would invite "fixing" this to the rocket's rule.
     _class: &str,
 ) -> (Vec3, Vec3, f32) {
     let forward = state.body.forward();
@@ -532,14 +396,10 @@ pub fn launch(
     let launch_kmh =
         state.body.linear_velocity.length() * KMH_PER_UNIT_PER_SECOND + stats.launch_speed;
 
-    // **The floor applies to the launch velocity and not to the ramp's base**,
-    // which is the original's arrangement rather than a simplification of it:
-    // `Missile_Init` stores the unfloored sum at `self+0x48` - which is what
-    // `speed_kmh` blends from ever after - and applies `vmax_s(_, 14.4)` only to
-    // the value it turns into the initial velocity. The two differ only for a
-    // launch under 14.4 km/h, which the shipped `launchSpeed="200"` makes
-    // unreachable; reproduced anyway, because a table that authored a small one
-    // would otherwise diverge silently.
+    // The floor applies to the launch velocity, not the ramp's base:
+    // `Missile_Init` stores the unfloored sum at `self+0x48` and applies
+    // `vmax_s(_, 14.4)` only to the initial velocity. They differ only under
+    // 14.4 km/h, unreachable with the shipped `launchSpeed="200"`.
     let speed = speed_units_guided(launch_kmh.max(LAUNCH_SPEED_FLOOR_KMH));
     (nose, forward * speed, launch_kmh)
 }

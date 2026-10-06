@@ -7,12 +7,10 @@
 //! `oag-physics`: `f32` only, no `mul_add`, no clock, randomness through the
 //! seeded `oag_core::Rng`.
 //!
-//! **This crate sits below `oag-gameplay`.** `World` and `Ship` embed
+//! **This crate sits below `oag-gameplay`**: `World` and `Ship` embed
 //! [`projectile::Projectiles`], [`pickup::Held`] and [`disruption::Disruption`],
-//! so the dependency has to run that way; the weapons code in turn reaches a craft
-//! only through the [`Craft`] trait, which `oag_gameplay::Ship` implements. Every
-//! function is generic over it rather than over `dyn`, so the arithmetic is the
-//! same instructions it was when it named `Ship` directly.
+//! and weapons code reaches a craft only through the generic [`Craft`] trait
+//! (not `dyn`), which `oag_gameplay::Ship` implements.
 
 pub mod craft;
 pub mod disruption;

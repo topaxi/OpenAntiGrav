@@ -1,14 +1,8 @@
 //! What a hit is worth: which weapon's numbers to spend, and on whom.
 //!
-//! Split out of `projectile.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change. Both items
-//! are re-exported from [`super`], so `projectile::blast` and
-//! `projectile::blast_stats` still resolve and no call site moved.
-//!
-//! The seam is real: everything here runs **after** a projectile has stopped and
-//! reads a weapon table, where everything left in the parent runs while one is
-//! still moving and reads only geometry. They are two different questions about
-//! the same tick.
+//! Split from `projectile.rs` under the 1,000-line rule; re-exported from
+//! [`super`]. This runs after a projectile has stopped and reads a weapon table;
+//! the parent runs while one moves and reads only geometry.
 
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -17,13 +11,8 @@ use oag_tables::weapons::{Weapon, WeaponStats};
 use super::cannon;
 
 /// What one weapon's blast is worth, read off the table the player's disc
-/// authors.
-///
-/// A struct rather than the tuple this was until 2026-09-06, for two reasons
-/// that arrived together: `slowdown_time` made it a fourth field, and passing
-/// four loose `f32`s on into [`blast`] would have put that function at eight
-/// arguments and past `clippy::too_many_arguments`. Naming them also removes
-/// the one way a tuple of same-typed numbers goes wrong.
+/// authors. A struct so [`blast`] stays under `clippy::too_many_arguments` and
+/// same-typed numbers cannot be swapped.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BlastStats {
     /// `<Stats blastradius>`: how far the blast reaches.
@@ -32,24 +21,18 @@ pub struct BlastStats {
     pub damage: f32,
     /// `<Stats blastforce>`: the impulse at the centre, falling off linearly.
     pub force: f32,
-    /// `<Stats slowdown_time>`: the seconds of slowdown it credits to a
-    /// victim's pending slot.
-    ///
-    /// **Not a blast term the way the other three are.** It is spent on the
-    /// victim's timer rather than on its body, it is credited whether or not a
-    /// shield is up (the gate is at the drain), and the whole law is in
-    /// `oag_physics::slowdown`. Decoded on all six blocks and authored on all
-    /// four shipped PSP tables - see `oag_tables::weapons`.
+    /// `<Stats slowdown_time>`: seconds of slowdown credited to a victim's
+    /// pending slot. Not a blast term like the others: it is spent on the
+    /// victim's timer, credited whether or not a shield is up (the gate is at the
+    /// drain), and the law is in `oag_physics::slowdown`. Authored on all four
+    /// shipped PSP tables; see `oag_tables::weapons`.
     pub slowdown_time: f32,
 }
 
-/// One weapon's [`BlastStats`], or `None`.
-///
-/// `None` for a table that did not load, for a weapon it does not author, and for
-/// a weapon whose block this crate does not decode - all three are the same
-/// answer to the caller, which is "spend no blast". A weapon that reaches an
-/// impact with no authored numbers is a bug upstream in
-/// [`crate::pickup::IMPLEMENTED`], not something to paper over with a default.
+/// One weapon's [`BlastStats`], or `None` for a table that did not load, a weapon
+/// it does not author, or one this crate does not decode: all mean "spend no
+/// blast". An impact with no authored numbers is a bug upstream in
+/// [`crate::pickup::IMPLEMENTED`], not something to default over.
 pub fn blast_stats(
     weapons: Option<&oag_tables::weapons::WeaponStats>,
     kind: Weapon,
@@ -74,11 +57,9 @@ pub fn blast_stats(
             force: s.blastforce,
             slowdown_time: s.slowdown_time,
         }),
-        // **`blastdamage` and `blastForce`, not the ricochet pair.** The
-        // Shuriken is the only weapon authoring a second damage and a second
-        // force, and nothing read says when those are spent - see
-        // `oag_tables::weapons::ShurikenStats`, which leaves both undecoded
-        // rather than picking one.
+        // `blastdamage` and `blastForce`, not the ricochet pair: the Shuriken
+        // authors a second damage and force and nothing read says when those are
+        // spent; see `oag_tables::weapons::ShurikenStats`.
         Weapon::Shuriken => weapons.shuriken().map(|s| BlastStats {
             radius: s.blastradius,
             damage: s.blastdamage,
@@ -91,11 +72,9 @@ pub fn blast_stats(
             force: s.blastforce,
             slowdown_time: s.slowdown_time,
         }),
-        // **`blastradius`, not `damageradius`.** The Bomb is the only weapon
-        // that authors a second radius and the only blast path read at
+        // `blastradius`, not `damageradius`: the only blast path read at
         // instruction level spends `blastradius` for both halves; see
-        // `oag_tables::weapons::BombStats`, which is explicit about the one
-        // authored attribute this engine leaves unspent.
+        // `oag_tables::weapons::BombStats`.
         Weapon::Bomb => weapons.bomb().map(|s| BlastStats {
             radius: s.blastradius,
             damage: s.damage,
@@ -108,29 +87,18 @@ pub fn blast_stats(
 
 /// Spends one blast against every craft inside its radius.
 ///
-/// Full [`BlastStats::damage`] and a [`BlastStats::force`] impulse directed away
-/// from `point` and **scaled linearly by distance**, with the firing craft
-/// included - the split [`Impact`] records and defends. Damage goes through
-/// [`oag_physics::damage::apply_weapon`], so the state gate, the weapons-off
-/// halving and the clamp are the recovered ones.
+/// Full [`BlastStats::damage`] and a [`BlastStats::force`] impulse away from
+/// `point`, scaled linearly by distance, firing craft included (the split
+/// [`Impact`] records). Damage goes through
+/// [`oag_physics::damage::apply_weapon`], so the state gate, weapons-off halving
+/// and clamp are the recovered ones. Each craft reached is also credited
+/// [`BlastStats::slowdown_time`] on `oag_gameplay::world::Ship::pending_slowdown`
+/// (see [`crate::slowdown`]). Returns how many craft it reached.
 ///
-/// Every craft it reaches is also credited [`BlastStats::slowdown_time`] on
-/// `oag_gameplay::world::Ship::pending_slowdown`, which is what makes a craft hit by
-/// a rocket lose its engine - see [`crate::slowdown`].
-///
-/// Returns how many craft it reached, which is what a caller asserting "the
-/// blast did something" wants and what a test asserting "and nothing outside the
-/// radius" needs the other half of.
-///
-/// # `hits`
-///
-/// One [`super::WeaponHit`] per ship slot, **set and never cleared**: whether a
-/// fired Shield swallowed this blast, and whether it landed. See that type for
-/// what each drives.
-///
-/// An out-parameter rather than a second return value, because the caller that
-/// wants it is two layers up and the intermediate ([`step`]) already returns the
-/// thing every other caller asks for.
+/// `hits` has one [`super::WeaponHit`] per ship slot, set and never cleared:
+/// whether a fired Shield swallowed this blast, and whether it landed. An
+/// out-parameter because the caller is two layers up and [`step`] already returns
+/// the other thing callers want.
 pub fn blast<S: Craft>(
     ships: &mut [S],
     point: Vec3,
@@ -151,19 +119,13 @@ pub fn blast<S: Craft>(
         }
         reached += 1;
 
-        // **The slowdown credit, and it is not gated on the shield here.** Every
-        // one of the original's nine writers of `entity+0x130` simply adds to
-        // it; the shield gate lives at the *drain*, in `crate::slowdown`, and it
-        // discards the pending figure rather than banking it. Splitting the two
-        // that way is what makes a hit landed one tick before a shield expires
-        // simply lost, which is the recovered behaviour. See
-        // `oag_physics::slowdown` for the whole law.
-        //
-        // Full `slowdown_time` everywhere inside the radius, with no falloff -
-        // the same shape as the damage below and unlike the impulse. Nothing
-        // read suggests otherwise: the writers add the block's figure straight
-        // in, three instructions from the `Ship_Damage` call that spends
-        // `damage`.
+        // The slowdown credit is not gated on the shield here: all nine of the
+        // original's writers of `entity+0x130` simply add; the shield gate is at
+        // the drain (`crate::slowdown`), which discards the pending figure, so a
+        // hit one tick before a shield expires is lost (recovered). Full
+        // `slowdown_time` inside the radius with no falloff, unlike the impulse:
+        // the writers add it three instructions from the `Ship_Damage` call. See
+        // `oag_physics::slowdown`.
         *ship.pending_slowdown_mut() += stats.slowdown_time;
 
         let dimensions = ship.dimensions();
@@ -171,24 +133,17 @@ pub fn blast<S: Craft>(
             oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, stats.damage, rules);
         super::hit::record(hits, slot, &report);
 
-        // A craft exactly on the blast centre has no direction to be pushed in.
-        // World up rather than a zero push or a normalised NaN: something has to
-        // happen, and up is the one direction that does not depend on an
-        // arbitrary axis of the craft or of the track.
+        // A craft on the blast centre has no direction: push up, which depends on
+        // no axis of the craft or track.
         let direction = if distance > 1e-4 {
             offset.normalize()
         } else {
             Vec3::Y
         };
-        // **The falloff is recovered and the damage above deliberately has
-        // none.** `1.0 - d / blastradius`, exactly as `Weapon_PostBlastImpulse_q`
-        // (`0x0886794c`) computes it, so a craft on the rim is nudged and one at
-        // the centre is thrown. The original does **not** clamp this - a hit
-        // outside the radius drives the term negative there and nothing in that
-        // function stops it - which cannot happen here because the range test
-        // above has already skipped anything further out. A `radius` of zero
-        // would divide by zero, so it is guarded: a weapon with no radius
-        // reaches nobody anyway, since the test above admits only `d <= 0`.
+        // Falloff `1.0 - d / blastradius`, as `Weapon_PostBlastImpulse_q`
+        // (`0x0886794c`) computes it; the damage above has none. The original does
+        // not clamp it, but the range test already skips anything further out. A
+        // zero `radius` is guarded: it admits only `d <= 0`.
         let falloff = if radius > 0.0 {
             1.0 - distance / radius
         } else {
@@ -203,16 +158,14 @@ pub fn blast<S: Craft>(
 
 /// Spends a tripped mine on the one craft that tripped it.
 ///
-/// **Recovered.** `Mine_SweepCraftTrigger` (`0x08867b50`) finds the first craft
-/// inside `trigger_radius`, raises the mine's destroy bit, and - only if that
-/// craft is also inside `blastradius` (`stats->0xec`) - calls
+/// **Recovered.** `Mine_SweepCraftTrigger` (`0x08867b50`) raises the mine's
+/// destroy bit for the first craft inside `trigger_radius` and, only if that
+/// craft is also inside `blastradius` (`stats->0xec`), calls
 /// `Weapon_PostBlastImpulse(pool, mine, craft)` (`0x0886794c`,
-/// `contact-response.md`), which credits **that craft** with `damage`
-/// (`+0xe8`) and `slowdown_time` (`+0xfc`) and posts a `(1 - d/blastradius) *
-/// blastforce` impulse into its `+0x110`. Nothing sweeps the other craft, and
-/// `MinePool_Update`'s teardown only spawns the explosion. So a craft that
-/// trips a mine from between the two radii sets it off and takes nothing,
-/// and a bystander inside `blastradius` takes nothing either.
+/// `contact-response.md`): `damage` (`+0xe8`), `slowdown_time` (`+0xfc`) and a
+/// `(1 - d/blastradius) * blastforce` impulse into `+0x110`, for that craft
+/// alone. Teardown only spawns the explosion. So a craft tripping from between
+/// the two radii takes nothing, and a bystander inside `blastradius` neither.
 pub(super) fn blast_mine_trip<S: Craft>(
     ships: &mut [S],
     point: Vec3,
@@ -250,40 +203,25 @@ pub(super) fn blast_mine_trip<S: Craft>(
         .apply_impulse(direction * (falloff * stats.force));
 }
 
-/// Spends a Plasma bolt's direct craft hit: full [`BlastStats::damage`] and
-/// [`BlastStats::slowdown_time`] to `struck` alone, plus a
-/// [`BlastStats::force`] impulse - falling off exactly as [`blast`]'s does -
-/// to every other **active** craft within [`BlastStats::radius`], excluding
-/// only `owner`.
+/// Spends a Plasma or Rocket direct craft hit: full [`BlastStats::damage`] and
+/// [`BlastStats::slowdown_time`] to `struck` alone, plus a [`BlastStats::force`]
+/// impulse, falling off as [`blast`]'s does, to every other active craft within
+/// [`BlastStats::radius`] except `owner`.
 ///
-/// **Recovered, not this module's own rule for once.** `Plasma_HitCraft`
-/// (`0x0886ad60`, confidence 88) credits `struck` unconditionally - there is
-/// no distance test in the original at all, because the struck craft is
-/// already known - and `Plasma_ApplyBlastForce` (`0x0886ae08`, confidence 88)
-/// then sweeps every craft but the bolt's own firer for the impulse alone,
-/// with no second damage or slowdown credit. See
-/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
-/// third ending" section.
+/// **Recovered.** `Plasma_HitCraft` (`0x0886ad60`, confidence 88) credits `struck`
+/// unconditionally (no distance test), and `Plasma_ApplyBlastForce`
+/// (`0x0886ae08`, confidence 88) sweeps every craft but the firer for the
+/// impulse alone. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`, "a craft
+/// hit is the third ending". The Rocket's pair is the same shape (read
+/// 2026-09-16): `Rocket_HitCraft` (`0x0886ebdc`, `damage` `+0x04`, `slowdown_time`
+/// `+0x2c`) and `Rocket_ApplyBlastForce` (`0x0886ee88`, into `entity+0x110`).
+/// Neither weapon's wall path touches a craft.
 ///
-/// **`struck` is not excluded from the impulse sweep, and that is the
-/// original's own choice, not an oversight ported over.** `struck` sits at or
-/// near the blast point, so it takes a falloff term close to the full
-/// `force` in addition to the direct credit above - `Plasma_ApplyBlastForce`
-/// excludes only `owner`. `owner` is excluded even if it happens to sit
-/// inside `radius`, which cannot happen for `struck` (a bolt cannot hit the
-/// hull of the craft that fired it - see [`super::Projectiles::advance`]'s
-/// own hull exclusion) but could for a bystander craft near the firer.
-///
-/// **The Rocket's pair is the same shape, read 2026-09-16.** `Rocket_HitCraft`
-/// (`0x0886ebdc`) credits `damage` (`+0x04`) and `slowdown_time` (`+0x2c`)
-/// to the struck craft alone, then `Rocket_ApplyBlastForce` (`0x0886ee88`)
-/// sweeps every craft but the firer for a `(1 - d/blastradius) * blastforce`
-/// impulse into `entity+0x110` - `+0x1c`/`+0x20` of the same record. Nothing
-/// on either weapon's wall path touches a craft at all.
-///
-/// Called from [`apply_impacts`] for a Plasma or Rocket impact with
-/// `struck: Some(_)`; every other weapon still goes through [`blast`]
-/// unchanged.
+/// `struck` is not excluded from the impulse sweep, the original's choice: it
+/// takes a near-full falloff on top of the direct credit, and only `owner` is
+/// excluded (a bolt cannot hit its own firer's hull, see
+/// [`super::Projectiles::advance`], but a bystander near the firer can be inside
+/// `radius`). Called from [`apply_impacts`] for these two with `struck: Some(_)`.
 pub(super) fn blast_direct_hit<S: Craft>(
     ships: &mut [S],
     point: Vec3,
@@ -327,11 +265,8 @@ pub(super) fn blast_direct_hit<S: Craft>(
     }
 }
 
-/// What [`super::step`] does with every impact one tick produced.
-///
-/// Split out of `step` itself under the parent module's own 1,000-line
-/// ceiling - a move, with no behaviour change. The Cannon takes its own arm
-/// because it has no radius to sweep at all; see [`cannon::apply_impact`].
+/// What [`super::step`] does with every impact one tick produced. The Cannon
+/// takes its own arm because it has no radius to sweep; see [`cannon::apply_impact`].
 pub(super) fn apply_impacts<S: Craft>(
     ships: &mut [S],
     weapons: Option<&WeaponStats>,
@@ -340,7 +275,7 @@ pub(super) fn apply_impacts<S: Craft>(
     hits: &mut [super::WeaponHit],
 ) {
     for impact in impacts.iter().flatten() {
-        // A detonation that only shows an explosion - see [`super::Impact::blast`].
+        // A detonation that only shows an explosion: [`super::Impact::blast`].
         if !impact.blast {
             continue;
         }
@@ -348,12 +283,9 @@ pub(super) fn apply_impacts<S: Craft>(
             cannon::apply_impact(ships, weapons, impact, rules, hits);
             continue;
         }
-        // **A Disruptor has no blast to look up**, and `blast_stats` below
-        // would answer `None` for it anyway; it is named here so a Disruptor
-        // hit is a routed case rather than a fall-through. The effect lands
-        // on the struck craft alone, gated the way `Disruptor_ApplyEffect`
-        // gates it - see `crate::disruption::land`. Nothing else in range is
-        // touched, no damage is done and no slowdown is owed.
+        // A Disruptor has no blast: its effect lands on the struck craft alone,
+        // gated as `Disruptor_ApplyEffect` gates it (`crate::disruption::land`),
+        // with no damage or slowdown.
         if impact.kind == Weapon::Disruptor {
             if let (Some(struck), Some(kind), Some(stats)) = (
                 impact.struck,
@@ -368,21 +300,14 @@ pub(super) fn apply_impacts<S: Craft>(
         let Some(stats) = blast_stats(weapons, impact.kind) else {
             continue;
         };
-        // **A Plasma or Rocket direct hit spends its blast differently.**
-        // `struck` is set only when the impact was a hull hit rather than a
-        // wall - see [`super::flight`]'s two arms and
-        // [`blast_direct_hit`]'s own doc comment for the recovered shape,
-        // which `Rocket_HitCraft`/`Rocket_ApplyBlastForce` (`0x0886ebdc`/
-        // `0x0886ee88`, read 2026-09-16) share with the Plasma's pair
-        // field for field. Every other weapon's craft hit still goes through
-        // the uniform full-radius [`blast`] below, unexamined.
-        // **A tripped mine spends itself on the craft that tripped it and
-        // nobody else.** `Mine_SweepCraftTrigger` (`0x08867b50`, read
-        // 2026-09-16) raises the destroy bit for the first craft inside
-        // `trigger_radius` and calls `Weapon_PostBlastImpulse` for *that*
-        // craft alone, and only when it is also inside `blastradius`; no
-        // sweep of the rest follows, and the pool's teardown adds nothing.
-        // See [`blast_mine_trip`].
+        // A tripped mine spends itself on the tripper alone:
+        // `Mine_SweepCraftTrigger` (`0x08867b50`, read 2026-09-16) calls
+        // `Weapon_PostBlastImpulse` for that craft only, and only inside
+        // `blastradius`. See [`blast_mine_trip`].
+        //
+        // A Plasma or Rocket direct hit (`struck` set) spends its blast
+        // differently, see [`blast_direct_hit`]. Others use the full-radius
+        // [`blast`].
         if impact.kind == Weapon::Mine
             && let Some(struck) = impact.struck
         {

@@ -1,170 +1,95 @@
 //! What a `Weapon Pad` hands out, and what a craft does with it.
 //!
-//! The pad's *trigger* is recovered and lives in the composition root beside the
-//! speed pad's, because it needs the track's volumes. What is here is the two
-//! halves that are gameplay rather than geometry: **which** weapon a crossing
-//! grants, and the inventory that holds it.
+//! The pad's trigger is recovered and lives in the composition root beside the
+//! speed pad's (it needs the track's volumes). Here: which weapon a crossing
+//! grants, and the inventory that holds it. `docs/gameplay/pickups.md` carries
+//! the split below with its evidence.
 //!
 //! # What is recovered and what is ours
 //!
-//! Stated at the top because this module is unusually mixed, and
-//! `docs/gameplay/pickups.md` carries the same split with its evidence.
+//! **Recovered.** `<Pickupodds class="...">` weights every weapon per speed
+//! class and separately for `ai`, `human`, `front` and `back` (confidence 92,
+//! `docs/formats/weapon-stats.md`). `WeaponPickup_Grant` (`0x08861d20`, called by
+//! `Weapons_DispatchFire` on the pad-crossing flag after a `WEAPONPICKUP` cue):
 //!
-//! **Recovered.** The odds themselves - `<Pickupodds class="...">` weights every
-//! weapon per speed class and separately for `ai`, `human`, `front` and `back`
-//! of the grid, at confidence 92 (`docs/formats/weapon-stats.md`). That table
-//! *is* the pickup design, and this module spends it rather than inventing a
-//! distribution.
+//! - A crossing grants anything at all, confidence 85.
+//! - The draw: `rand() % total` then a cumulative walk, `ai` spent flat, `human`
+//!   blended with `front`/`back` by race position, and no same weapon twice
+//!   running. Confidence 92; see [`draw`] and [`Driver`].
+//! - One inventory slot, confidence 88: `craft+0x1bc` holds a weapon id, `-1`
+//!   empty, which is [`Held`].
 //!
-//! **Also recovered as of 2026-08-17**, and these three rows used to say "ours"
-//! on the grounds that no grant existed to read. `WeaponPickup_Grant`
-//! (`0x08861d20`) does exist - `Weapons_DispatchFire` calls it on the
-//! pad-crossing flag, right after a `WEAPONPICKUP` cue:
+//! **Ours.**
 //!
-//! - **That a crossing grants anything at all**, confidence 85.
-//! - **The draw**: `rand() % total` then a cumulative walk over `<Pickupodds>`,
-//!   with the `ai` column spent flat and the `human` column blended with
-//!   `front`/`back` by race position, and a refusal to hand out the same weapon
-//!   twice running. Confidence 92; see [`draw`] and [`Driver`].
-//! - **The inventory being one slot**, confidence 88 - `craft+0x1bc` holds a
-//!   weapon id and `-1` means empty, which is exactly [`Held`].
-//!
-//! **Ours, and there is no way for it not to be.**
-//!
-//! - **The sequence of draws.** The original's PRNG is an open question on the
-//!   roadmap (`docs/overview/roadmap.md`), so which weapon comes out *when*
-//!   cannot match even with a byte-exact algorithm. Only the *distribution* can
-//!   be checked, which is what [`tests`] does.
-//! - **The bounded retry** behind the no-repeat rule; the original's loop is
-//!   unbounded. See [`REDRAW_ATTEMPTS`].
-//! - **What an unplaced craft draws.** The original always has a place; this
-//!   spends the `human` column alone. See [`Driver::descent`].
+//! - The sequence of draws. The original's PRNG is open
+//!   (`docs/overview/roadmap.md`), so only the distribution can be checked, as
+//!   [`tests`] does.
+//! - The bounded retry behind the no-repeat rule. See [`REDRAW_ATTEMPTS`].
+//! - What an unplaced craft draws (the `human` column alone). See
+//!   [`Driver::descent`].
+//! - What Shield and Rocket do. The durations, speeds, radii and damage are the
+//!   disc's; Shield's `time` joins to no recovered code path. See
+//!   [`oag_physics::ShipState::shield_pickup_timer`], [`crate::projectile`] and
+//!   `docs/gameplay/pickups.md`.
+//! - Aiming: nothing picks a target, so a hit depends on where the craft points.
 //!
 //! # Only what has an effect is handed out
 //!
-//! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
-//! Autopilot, Mine, Bomb, Plasma, Shuriken, the Cannon and the Quake as of
-//! 2026-09-07, the LeachBeam as of 2026-09-08, and Pure's Disruptor as of
-//! 2026-09-15 - which a Pulse or HD pad can never draw, because those tables
-//! weight no such row and [`Driver::weight`] answers `0.0` for a weapon a
-//! table does not author.
+//! [`IMPLEMENTED`] is the pool a pad draws from. Every weapon a shipped table
+//! weights is drawable. Pure's Disruptor is in it, but a Pulse or HD pad never
+//! draws it: [`Driver::weight`] answers `0.0` for a weapon a table does not
+//! author. The shipped tables give the Repulser zero odds outside Eliminator.
+//! The distribution a player sees is the authored one conditioned on the
+//! implemented set; adding a weapon to [`IMPLEMENTED`] is the whole change.
 //!
-//! **The Repulser joined last, on 2026-10-04**, so every weapon a shipped table
-//! weights is now drawable. The shipped tables give it zero odds outside
-//! Eliminator. See `crate::projectile::repulser`.
+//! What let each weapon in was usually a reading, not a mechanic:
 //!
-//! **The Cannon left the list the same day**, and it is the odd one out among
-//! everything built here so far: it does not fire through
-//! `Weapon_RequestFire`'s bit system at all. It is driven by the fire button
-//! being **held** rather than by the press edge every other weapon consumes -
-//! `Cannon_UpdateReload` (`0x0883f424`) advances a per-craft reload countdown,
-//! built from the weapon's own authored `rate`, on each frame the button is
-//! down, and arms the spawn bit whenever the countdown crosses zero. So
-//! holding fire gives auto-repeat and tapping gives a few frames of countdown
-//! per tap, which is exactly how the maintainer describes the original.
-//!
-//! **A first reading of the same function, on 2026-09-07, had it self-firing
-//! with no press at all**, from taking `*(*(entity+0x94)+0x78) + 0x16` for a
-//! *track weapon-pad* flag. It is the craft's control record - the block the
-//! binary itself registers under the string `player_input` - and `+0x16` is
-//! the held state of `OPT_CTRL_FIRE`. The correction is recorded rather than
-//! quietly overwritten because the wrong version shipped and a player found
-//! it. `Race::advance_cannons` is the port of the countdown; see
-//! [`crate::projectile::cannon`] for the round itself and
-//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
-//! whole reading, including the address correction it made to the
-//! `0x088537ac` candidate this doc used to cite.
-//!
-//! **The Plasma left that list on 2026-09-02**, and it is the cheapest weapon
-//! since the Bomb for the mirror-image reason: the Bomb reused the Mine's whole
-//! module and the Plasma reuses the Rocket's whole flight model.
-//! `Plasma_Update` (`0x0885c6cc`) is `Rocket_Update`'s floor follower - the same
-//! 12-unit probe along the carried surface normal, the same speed-preserving
-//! redirect, the same fall, the same detonate on a wall - and
-//! `Weapon_FirePlasma` (`0x0886a868`) spawns exactly one where the Rocket
-//! spawns three. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
-//!
-//! **The Shuriken followed it the same day, and the reason it could is worth
-//! recording because the first estimate said otherwise.** Judged from its
-//! constructor and its bounce alone it looked like a session's work - a
-//! reflection unlike the Missile's, two damage numbers, a fuse, a coin flip.
-//! Then `Shuriken_Update` (`0x08877bdc`) turned out to be the *same floor
-//! follower* the Rocket and the Plasma already share, differing only in that a
-//! wall bounces a blade instead of ending it. **The trajectory is the expensive
-//! part of a weapon here, and the trajectory has to be read rather than
-//! inferred from the shape of a constructor.** See
-//! `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
-//!
-//! **The Mine left that list on 2026-08-26**, and it is the third in a row that
-//! a *reading* let through rather than a mechanic - and the first where the
-//! reading was of somebody else's mistake. Two pages had this weapon's fire
-//! handler down as the Cannon's and the Bomb's handler down as the Mine's,
-//! because `Weapon_RequestFire`'s jump table holds its entries for those two
-//! weapons out of address order. `Mine_Init` (`0x08859ac8`) plays `MINELAUNCH`
-//! and loads `Data\\Weapons\\Pulse_Mine.vex`, which settles it without any
-//! ordering argument at all. See
-//! `docs/ghidra/functions/psp-pulse-usa/mine.md` and
-//! [`crate::projectile::mine`], which carries this weapon's own split.
-//!
-//! **The Bomb followed it the same day**, and it is the cheapest weapon this
-//! project has added: one bigger charge out of the same rear anchor, sharing
-//! every line of [`crate::projectile::mine`] except a count. Its `<Stats>` are
-//! the Mine's six one size up on both shipped tables, `Weapon_FireBomb`
-//! (`0x08863a20`) spawns once where `Weapon_DropMines` reloads and spawns
-//! again, and a maintainer who plays Pulse describes it as "a single big mine"
-//! - three independent things saying the same shape.
-//!
-//! **It is also the first weapon whose firing is not instantaneous.** A drop is
-//! [`crate::projectile::mine::CLUSTER`] mines laid one every
-//! [`crate::projectile::mine::DROP_INTERVAL`], and the craft goes on holding the
-//! pickup until the last one is out - which is the original's own arrangement
-//! and is why [`Held`] carries the two counters rather than the fire path
-//! spending the slot outright.
-//!
-//! **The Autopilot left that list on 2026-08-24**, and like the Missile before
-//! it what let it was a reading rather than a mechanic: `Autopilot_Fire`
-//! (`0x088613bc`) and `Autopilot_Update` (`0x08861404`) give the duration's
-//! source, the running bit, the countdown, the one-second `disengaging` warning
-//! and the fact that **pressing fire cancels it**. See
-//! `docs/ghidra/functions/psp-pulse-usa/autopilot.md`. What is still ours is the
-//! *takeover itself* - the original hands the craft to the driver
-//! `Ai_Construct` names `"autopilot input"`, and which code makes that swap was
-//! not found - so this engine reuses `oag_ai::Driver` the way
-//! `Race::set_autopilot` already did.
-//!
-//! **The Missile left that list on 2026-08-17**, and what let it was not a
-//! mechanic but a reading: its lock is recovered whole from `Ship_AcquireLock`
-//! (`0x08844784`) and its guidance from `Missile_Update` (`0x0885a918`). See
-//! [`crate::projectile::missile`], which carries the split for that half.
-//!
-//! **What Shield and Rocket do is ours**, more so than the Turbo's effect was:
-//! the Turbo at least has a recovered magnitude in `<Engine turbo>`, while
-//! Shield's `time` joins to no recovered code path at all and no
-//! projectile-flight call site has been found anywhere. The durations, speeds,
-//! radii and damage are the disc's; what they drive is this project's reading.
-//! See [`oag_physics::ShipState::shield_pickup_timer`], [`crate::projectile`]
-//! and `docs/gameplay/pickups.md`, which carries the split.
-//!
-//! **A rocket has targets now**: `oag_race::Mode::has_opponents` is `true` for
-//! [`oag_race::Mode::SingleRace`], so a single race fields seven driven craft
-//! as well as the track. What is still missing is *aiming* - nothing picks a
-//! target, so a hit is a matter of where the craft was pointed.
-//!
-//! **This is a departure and it is deliberate**: the authored table weights
-//! thirteen weapons and this draws from a subset, so the distribution a player
-//! sees is the authored one *conditioned on* the implemented set. It narrows to
-//! nothing as weapons land - adding one to [`IMPLEMENTED`] is the whole change -
-//! and it is preferred to handing out a mine that cannot be dropped.
+//! - **Cannon.** Not driven by `Weapon_RequestFire`'s bit system but by the fire
+//!   button being **held**: `Cannon_UpdateReload` (`0x0883f424`) advances a
+//!   per-craft countdown built from the authored `rate` on each frame the button
+//!   is down and arms the spawn bit at zero. A first reading took
+//!   `*(*(entity+0x94)+0x78) + 0x16` for a track weapon-pad flag and had it
+//!   self-firing; it is the craft's control record (`player_input`) and `+0x16`
+//!   is the held state of `OPT_CTRL_FIRE`. `Race::advance_cannons` ports the
+//!   countdown; see [`crate::projectile::cannon`] and
+//!   `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+//! - **Plasma.** `Plasma_Update` (`0x0885c6cc`) is `Rocket_Update`'s floor
+//!   follower (12-unit probe, speed-preserving redirect, fall, detonate on a
+//!   wall); `Weapon_FirePlasma` (`0x0886a868`) spawns one where the Rocket spawns
+//!   three. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+//! - **Shuriken.** `Shuriken_Update` (`0x08877bdc`) is the same floor follower,
+//!   except a wall bounces the blade. The trajectory is the expensive part of a
+//!   weapon and has to be read, not inferred from a constructor. See
+//!   `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
+//! - **Mine.** Two pages had the Mine's fire handler down as the Cannon's and
+//!   the Bomb's as the Mine's, because `Weapon_RequestFire`'s jump table holds
+//!   those entries out of address order. `Mine_Init` (`0x08859ac8`) plays
+//!   `MINELAUNCH` and loads `Data\\Weapons\\Pulse_Mine.vex`, which settles it. See
+//!   `docs/ghidra/functions/psp-pulse-usa/mine.md` and
+//!   [`crate::projectile::mine`].
+//! - **Bomb.** One bigger charge out of the Mine's rear anchor; its `<Stats>`
+//!   are the Mine's six one size up, and `Weapon_FireBomb` (`0x08863a20`) spawns
+//!   once where `Weapon_DropMines` reloads. A drop is
+//!   [`crate::projectile::mine::CLUSTER`] mines one every
+//!   [`crate::projectile::mine::DROP_INTERVAL`], and the craft keeps the pickup
+//!   until the last is out, which is why [`Held`] carries two counters.
+//! - **Autopilot.** `Autopilot_Fire` (`0x088613bc`) and `Autopilot_Update`
+//!   (`0x08861404`) give the duration, running bit, countdown, the one-second
+//!   `disengaging` warning, and that pressing fire cancels it
+//!   (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`). Ours: the takeover
+//!   itself (the original hands the craft to the driver `Ai_Construct` names
+//!   `"autopilot input"`; the swap was not found), so this reuses
+//!   `oag_ai::Driver` as `Race::set_autopilot` did.
+//! - **Missile.** Lock from `Ship_AcquireLock` (`0x08844784`), guidance from
+//!   `Missile_Update` (`0x0885a918`); see [`crate::projectile::missile`].
 
 use oag_core::Rng;
 use oag_tables::weapons::{PickupTable, Weapon, WeaponStats};
 
 /// The weapons a pad in this engine can hand out.
 ///
-/// See the module docs: the shipped table weights thirteen and this is the
-/// subset with an effect. A slice rather than a fixed-size array precisely
-/// because it is expected to grow, which is the opposite of
-/// [`oag_race::Mode::ALL`]'s reason for being one.
+/// The shipped table weights thirteen; this is the subset with an effect. A
+/// slice because it grows, unlike [`oag_race::Mode::ALL`].
 pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Turbo,
     Weapon::Shield,
@@ -184,12 +109,9 @@ pub const IMPLEMENTED: &[Weapon] = &[
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.
 ///
-/// **All four authored columns are reachable now**, which they were not before
-/// 2026-08-17: `ai` is spent flat, and `human` is blended with `front` and `back`
-/// by where the craft is in the race. That is the original's own arrangement -
-/// `WeaponPickup_Grant` (`0x08861d20`) has exactly these two paths - and it reads
-/// the opposite way round from the obvious guess, so it is worth stating twice:
-/// **the column pair that rubber-bands is the *player's*, not the AI's.**
+/// `ai` is spent flat; `human` is blended with `front` and `back` by race place,
+/// as `WeaponPickup_Grant` (`0x08861d20`) does. The pair that rubber-bands is
+/// the player's, not the AI's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Driver {
     /// The player, whose odds bend with their place in the race.
@@ -204,9 +126,8 @@ pub enum Driver {
 }
 
 impl Default for Driver {
-    /// The player, unplaced. Matches what this enum defaulted to before it
-    /// carried a place, so a caller that never set one keeps the `human` column
-    /// alone rather than silently acquiring a blend against place zero.
+    /// The player, unplaced. A caller that never set a place keeps the `human`
+    /// column alone rather than blending against place zero.
     fn default() -> Self {
         Self::HUMAN_UNPLACED
     }
@@ -218,14 +139,10 @@ impl Driver {
 
     /// How far down the field this driver is, `0.0` at the front.
     ///
-    /// `None` when there is no meaningful place to blend against, in which case
-    /// [`Self::weight`] spends the `human` column alone. **That case is ours** -
-    /// the original always has a placed craft - and it is the conservative
-    /// reading rather than picking an end of the blend arbitrarily.
-    ///
-    /// The divisor is the **whole field**, not `field - 1`, which is the
-    /// original's own arithmetic and has a visible consequence: the craft in last
-    /// place gets `(field - 1) / field` of the way to `back`, never all of it.
+    /// `None` when there is no place to blend against, in which case
+    /// [`Self::weight`] spends `human` alone (**ours**; the original always has a
+    /// placed craft). The divisor is the whole field, not `field - 1`, as in the
+    /// original: last place gets `(field - 1) / field` of the way to `back`.
     #[must_use]
     fn descent(place: u8, field: u8) -> Option<f32> {
         if place == 0 || field == 0 {
@@ -234,19 +151,12 @@ impl Driver {
         Some(f32::from(place - 1) / f32::from(field))
     }
 
-    /// This driver's weight for one weapon, from one class's table.
+    /// This driver's weight for one weapon, from one class's table. Zero for a
+    /// weapon the class authors no odds for.
     ///
-    /// Zero for a weapon the class authors no odds for, which is not an error:
-    /// a table need not weight every weapon.
-    ///
-    /// # The blend, and what it does with the shipped numbers
-    ///
-    /// `human + back * t + front * (1 - t)`, recovered whole. `t` is `0` for the
-    /// leader, so **the leader gets `front` added and the tail gets `back`** -
-    /// and the shipped Venom table gives Shield `front="2" back="0"` and Turbo
-    /// `back="2" front="0"`, so a player in front draws more Shields and a player
-    /// at the back more Turbos. The design is catch-up, and it is aimed at the
-    /// player rather than at the field.
+    /// The blend is `human + back * t + front * (1 - t)`, recovered whole, `t` being
+    /// `0` for the leader. The shipped Venom table gives Shield `front="2" back="0"`
+    /// and Turbo `back="2" front="0"`: catch-up aimed at the player.
     #[must_use]
     fn weight(self, table: &PickupTable, weapon: Weapon) -> f32 {
         let Some(odds) = table.get(weapon) else {
@@ -264,75 +174,47 @@ impl Driver {
 
 /// What a craft is carrying.
 ///
-/// One slot. The original's inventory is a flag word with room for more, and
-/// whether it can hold two at once is unread - `SubWeapon` exists as a HUD
-/// widget, which suggests it can, and no code has been read that fills it. One
-/// slot is the conservative reading and the one the HUD can draw.
+/// One slot, the conservative reading: the original's inventory is a flag word
+/// and whether it holds two is unread (`SubWeapon` exists as a HUD widget).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Held {
     /// The weapon in the slot, or `None`.
     pub weapon: Option<Weapon>,
     /// The last weapon this craft was handed, whether or not it still has it.
     ///
-    /// **Recovered as a concept.** The original keeps two copies of the held
-    /// weapon id: `craft+0x1bc`, which every fire handler clears to `-1`, and
-    /// `craft+0x1c0`, which it does not. The grant reads the second to refuse
-    /// handing out the same weapon twice running - see [`draw`].
-    ///
-    /// Set by [`Self::grant`] and never cleared, so a craft that fires and
-    /// crosses another pad still remembers. It is world state and is hashed.
+    /// The original keeps `craft+0x1bc`, which every fire handler clears to `-1`,
+    /// and `craft+0x1c0`, which it does not; the grant reads the second to refuse
+    /// repeats (see [`draw`]). Set by [`Self::grant`], never cleared, and hashed.
     pub last: Option<Weapon>,
     /// How many mines are still to be laid from the drop in progress.
     ///
-    /// **Recovered**, at confidence 90: the original keeps the same counter on
-    /// the craft at `+0x1ac`, `Weapon_DropMines` (`0x088675cc`) decrements it
-    /// once per spawn, and the craft goes on holding the weapon until it
-    /// reaches zero. The value it starts at is recovered too, since
-    /// 2026-09-15 - see [`crate::projectile::mine::CLUSTER`] - with one
-    /// difference in *when*: the original arms it at pickup-grant time
-    /// (`WeaponPickup_ArmMine`), this engine at press time. Nothing observable
-    /// hangs on that, because nothing reads the counter between the two.
-    ///
-    /// Zero for every craft that is not mid-drop, which is every craft almost
-    /// all of the time.
+    /// **Recovered**, confidence 90: `craft+0x1ac`, decremented once per spawn by
+    /// `Weapon_DropMines` (`0x088675cc`); the craft holds the weapon until zero. The
+    /// start value is [`crate::projectile::mine::CLUSTER`]. The original arms it at
+    /// grant time (`WeaponPickup_ArmMine`), this engine at press time; nothing reads
+    /// it between. Zero when not mid-drop.
     pub dropping: u8,
-    /// Seconds until the next mine of a drop in progress leaves.
-    ///
-    /// The original's `craft+0x1b0`, reloaded with a literal `0.1` after every
-    /// spawn. Meaningless when [`Self::dropping`] is zero, and held at zero
-    /// there rather than left stale so that two worlds with no drop in flight
-    /// hash the same.
+    /// Seconds until the next mine of a drop leaves: the original's `craft+0x1b0`,
+    /// reloaded with a literal `0.1` after every spawn. Held at zero when
+    /// [`Self::dropping`] is zero so two worlds with no drop hash the same.
     pub drop_reload: f32,
-    /// Rounds still to leave the barrel from the Cannon's own reload
-    /// countdown, or `0` for a craft not holding one.
+    /// Rounds still to leave the barrel, or `0` for a craft not holding a Cannon.
     ///
-    /// **Recovered as a mechanism**, at confidence 85: the original's
-    /// `craft+0x154` starts at `<Weapon type="Cannon"><Stats rounds>` and
-    /// counts down one per round; `Cannon_UpdateReload` clears the held
-    /// slot in the same branch that sees it reach zero. See
+    /// **Recovered as a mechanism**, confidence 85: `craft+0x154` starts at
+    /// `<Weapon type="Cannon"><Stats rounds>` and counts down per round;
+    /// `Cannon_UpdateReload` clears the held slot as it reaches zero. See
     /// [`Self::advance_cannon_reload`] and
     /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
     ///
-    /// **Self-arming rather than armed at grant time - chosen, not
-    /// measured.** A pad crossing, `--give` and a test setting
-    /// [`Self::weapon`] directly are three different ways this project fills
-    /// the slot, and only one of them (the pad) is a call site this module
-    /// controls. Reading `0` as "not yet armed" the first time
-    /// [`Self::advance_cannon_reload`] runs after a grant, rather than
-    /// requiring every grant site to call a separate initialiser, is what
-    /// makes all three arm it the same way. Safe because a *genuine* empty
-    /// magazine clears [`Self::weapon`] in the same call that reaches zero -
-    /// see below - so this can never observe `weapon == Some(Cannon)` with a
-    /// counter that is honestly spent.
+    /// **Self-arming rather than armed at grant time: chosen, not measured.** A pad
+    /// crossing, `--give` and a test setting [`Self::weapon`] are three ways the slot
+    /// fills, so reading `0` as "not yet armed" on the first
+    /// [`Self::advance_cannon_reload`] arms all three alike. Safe because a spent
+    /// magazine clears [`Self::weapon`] in the same call.
     pub cannon_rounds: u8,
-    /// Seconds until the Cannon's own next round leaves.
-    ///
-    /// The original's `craft+0x158`, decremented every tick and reloaded
-    /// with `<Weapon type="Cannon"><Stats rate>` on the tick it goes
-    /// negative. Meaningless when [`Self::cannon_rounds`] is zero, and held
-    /// at zero there for [`Self::drop_reload`]'s own reason: so two worlds
-    /// with no Cannon in hand hash the same regardless of how each got
-    /// there.
+    /// Seconds until the Cannon's next round: the original's `craft+0x158`,
+    /// decremented every tick and reloaded with `<Stats rate>` when negative. Held at
+    /// zero when [`Self::cannon_rounds`] is, so two worlds hash the same.
     pub cannon_reload: f32,
 }
 
@@ -358,38 +240,19 @@ impl Held {
 
     /// Starts a drop of `count` mines, the first of them on this very tick.
     ///
-    /// **The first leaves immediately rather than after one interval - recovered
-    /// 2026-09-15, confidence 92.** `WeaponPickup_ArmMine` (`0x0886759c`)
-    /// zeroes `craft+0x1b0` when the pickup is granted, and the live trail on
-    /// the original shows the pool's live count going `0` to `1` on the very
-    /// frame `Weapon_DropMines` first runs. See
-    /// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 section.
+    /// The first leaves immediately, recovered, confidence 92:
+    /// `WeaponPickup_ArmMine` (`0x0886759c`) zeroes `craft+0x1b0` at grant, and the
+    /// original's live trail shows the pool count going `0` to `1` on the frame
+    /// `Weapon_DropMines` first runs (`docs/ghidra/functions/psp-pulse-usa/mine.md`,
+    /// 2026-09-15 section).
     ///
-    /// **A no-op while a cluster is already coming out - recovered the same day,
-    /// confidence 88.** The only writer of the round counter outside the
-    /// handler's own decrement is that arm function, and it is reachable only
-    /// from `WeaponPickup_Grant` - so a second press while bit `0x2` is already
-    /// set reaches nothing that could restart the cluster. The paragraph below
-    /// is the reasoning that stood while the writer was unfound and is kept
-    /// for the bug it describes. A mashed fire button used
-    /// to call this on every press with no guard, which reset
-    /// [`Self::drop_reload`] to zero on a craft already mid-drop; the next
-    /// [`Self::advance_drop`] then fired immediately rather than waiting out
-    /// the remainder of the current interval, and [`Self::dropping`] never
-    /// reached zero, so [`Self::weapon`] never cleared either - one extra mine
-    /// per press-edge, indefinitely, three times the authored ceiling of one
-    /// every [`crate::projectile::mine::DROP_INTERVAL`].
-    ///
-    /// The evidence that stood before the arm was found, suggestive rather
-    /// than dispositive on its own: the fire-request path
-    /// (`Weapon_RequestFire`'s bit-8 case, `docs/ghidra/functions/psp-pulse-usa/mine.md`)
-    /// `ori`s its bit into `craft+0x1b8` and nothing more, so a re-press while
-    /// that bit is already `1` is a no-op there, and the same page's
-    /// `search_instructions` sweep of every `sw` to `craft+0x1ac` (the round
-    /// counter) found exactly one store in the whole binary, the handler's own
-    /// decrement. That sweep missed the arming store; a runtime write watch on
-    /// the original caught it, and its PC is on the grant path, which is what
-    /// closes the question.
+    /// A no-op while a cluster is coming out, recovered, confidence 88: the only
+    /// writer of the round counter besides the handler's decrement is that arm
+    /// function, reachable only from `WeaponPickup_Grant`. Without the guard a
+    /// mashed fire button reset [`Self::drop_reload`] on every press, so
+    /// [`Self::dropping`] never reached zero and one extra mine left per press.
+    /// A `search_instructions` sweep of `sw` to `craft+0x1ac` missed the arming
+    /// store; a runtime write watch caught it on the grant path.
     pub const fn begin_drop(&mut self, count: u8) {
         if self.is_dropping() {
             return;
@@ -400,9 +263,8 @@ impl Held {
 
     /// Counts one tick off the drop and says whether a mine leaves now.
     ///
-    /// Clears the held slot when the last one is out, which is the recovered
-    /// coupling: `Weapon_DropMines` writes `-1` into `craft+0x1bc` and drops its
-    /// own fire bit in the same branch that sees the counter reach zero.
+    /// Clears the held slot when the last is out, as `Weapon_DropMines` writes
+    /// `-1` into `craft+0x1bc` in the branch that sees the counter reach zero.
     pub fn advance_drop(&mut self, dt: f32, interval: f32) -> bool {
         if self.dropping == 0 {
             return false;
@@ -426,42 +288,26 @@ impl Held {
         self.weapon.is_none()
     }
 
-    /// Counts one tick off the Cannon's own reload timer and says whether a
-    /// round leaves now, and the rounds left in the magazine after it does.
+    /// Counts one tick off the Cannon's reload timer; says whether a round leaves
+    /// now and the magazine left after it.
     ///
-    /// `full` is `<Weapon type="Cannon"><Stats rounds>`, passed on every call
-    /// rather than cached at grant time - see [`Self::cannon_rounds`]'s own
-    /// doc comment for why a self-arming counter is what lets a pad
-    /// crossing, `--give` and a test all fill this the same way. `rate` is
-    /// the same block's `<Stats rate>`, read the literal way
-    /// `oag_tables::weapons::CannonStats::rate` argues for.
+    /// `full` is `<Stats rounds>`, passed every call rather than cached (see
+    /// [`Self::cannon_rounds`]); `rate` is `<Stats rate>`, read as
+    /// `oag_tables::weapons::CannonStats::rate` argues. The count is after this
+    /// round, the order `Weapon_FireCannon` reads it in, before the dispatch
+    /// loop reads `craft->shots & 1` to pick a muzzle (see
+    /// `oag_weapons::projectile::cannon::launch`).
     ///
-    /// The returned count is the magazine **after** this round is spent,
-    /// because that is the order `Weapon_FireCannon` reads it in:
-    /// `Cannon_UpdateReload` decrements the counter and arms the fire bit in
-    /// the same branch, and only then does the dispatch loop read
-    /// `craft->shots & 1` to pick a muzzle - see
-    /// `oag_weapons::projectile::cannon::launch`, which is what that bit
-    /// feeds.
+    /// **The first round leaves immediately: chosen, not measured**, for
+    /// [`Self::begin_drop`]'s reason.
     ///
-    /// **The first round leaves immediately rather than after one `rate`-
-    /// second wait - chosen, not measured, and deliberately given no
-    /// confidence score.** [`Self::begin_drop`]'s doc comment makes the same
-    /// choice for the same reason and it applies unchanged here: a
-    /// picked-up weapon should visibly do something on the tick it arrives
-    /// rather than sit silent for a full reload first.
-    ///
-    /// **Only called on ticks where the fire button is held.** The gate is the
-    /// caller's - `Race::advance_cannons` - and not this method's, because
+    /// The caller (`Race::advance_cannons`) calls only while fire is held:
     /// `Cannon_UpdateReload` returns before touching `craft+0x158` when the
-    /// button is up: the countdown *pauses* rather than resets, so releasing
-    /// and re-pressing resumes where it stopped. That is what makes tapping a
-    /// slower route to the same shot rather than a way to never fire.
+    /// button is up, so the countdown pauses rather than resets.
     pub fn advance_cannon_reload(&mut self, dt: f32, rate: f32, full: u8) -> Option<u8> {
         if full == 0 {
-            // Degenerate authored data - a Cannon with no rounds at all.
-            // Nothing to arm and nothing to fire; clear the slot rather than
-            // spin forever re-arming a zero-round magazine every call.
+            // Degenerate authored data: a zero-round Cannon. Clear rather than
+            // re-arm every call.
             self.weapon = None;
             self.cannon_rounds = 0;
             self.cannon_reload = 0.0;
@@ -485,41 +331,24 @@ impl Held {
         Some(remaining)
     }
 
-    /// Fills the slot and remembers what went in it.
-    ///
-    /// The pairing is the point: [`draw`] needs the previous grant and would
-    /// silently stop refusing repeats if a caller set `weapon` directly. Tests
-    /// that only want a craft to be carrying something still assign the field.
+    /// Fills the slot and remembers what went in it. [`draw`] needs the previous
+    /// grant, so a caller must not set `weapon` directly to be remembered.
     pub const fn grant(&mut self, weapon: Weapon) {
         self.weapon = Some(weapon);
         self.last = Some(weapon);
     }
 
-    /// Takes what is held, leaving the slot empty.
+    /// Takes what is held, leaving the slot empty. [`Self::last`] survives, so
+    /// the no-repeat rule outlasts firing.
     ///
-    /// [`Self::last`] survives, which is what makes the no-repeat rule outlast
-    /// firing.
-    ///
-    /// **Also ends a drop in progress, and that part is chosen, not
-    /// measured.** Absorbing (`CIRCLE`) a Mine or a Bomb while its cluster is
-    /// still coming out used to clear only [`Self::weapon`], leaving
-    /// [`Self::dropping`] and [`Self::drop_reload`] stuck at whatever they were.
-    /// `Race::lay_mines` sees `is_dropping()` still true and `weapon` gone, so
-    /// it does nothing every tick after, forever. The counter then survives
-    /// into the *next* pickup this craft is granted: a later Mine grant reads
-    /// as still-dropping from the old cluster, so [`Self::begin_drop`]'s own
-    /// mid-cluster guard silently swallows the new press too. Nothing pins what
-    /// the original does when `CIRCLE` is pressed mid-drop - this project picks
-    /// "ends the drop", the reading that cannot leave the slot in a state no
-    /// future press can escape.
+    /// **Also ends a drop in progress: chosen, not measured.** Absorbing
+    /// (`CIRCLE`) a Mine mid-cluster would leave [`Self::dropping`] stuck, so
+    /// `Race::lay_mines` does nothing forever and a later grant is swallowed by
+    /// [`Self::begin_drop`]'s guard. Nothing pins what the original does.
     pub const fn take(&mut self) -> Option<Weapon> {
         self.dropping = 0;
         self.drop_reload = 0.0;
-        // Same reasoning for the Cannon's own two fields: absorbing one
-        // mid-burst must not leave a live round count behind for the *next*
-        // weapon this craft is granted to inherit, and two worlds that gave
-        // up a Cannon at different points in its magazine must hash the
-        // same once both hold nothing.
+        // Same for the Cannon, so worlds that gave one up mid-magazine hash alike.
         self.cannon_rounds = 0;
         self.cannon_reload = 0.0;
         self.weapon.take()
@@ -528,43 +357,27 @@ impl Held {
 
 /// Draws one weapon from a class's authored odds, restricted to [`IMPLEMENTED`].
 ///
-/// `None` when the table weights none of the implemented weapons above zero,
-/// which is a real state rather than a failure: a class that authored no Turbo
-/// odds would hand out nothing until a second weapon lands.
-///
-/// The walk is over [`IMPLEMENTED`]'s order rather than the table's document
-/// order, so the sequence depends only on this crate and the seed - a table that
-/// reordered its `<Weapon>` elements would otherwise change every draw.
+/// `None` when the table weights none of them above zero. The walk is over
+/// [`IMPLEMENTED`]'s order, not the table's, so the sequence depends only on
+/// this crate and the seed.
 ///
 /// # It will not hand out `last` twice running
 ///
-/// **Recovered.** `WeaponPickup_Grant` (`0x08861d20`) compares every draw against
-/// the craft's previous grant and, on a match, rolls again rather than handing it
-/// over. Pass [`Held::last`].
+/// **Recovered.** `WeaponPickup_Grant` (`0x08861d20`) re-rolls a draw equal to
+/// the craft's previous grant. Pass [`Held::last`].
 ///
-/// **The retry is bounded here and is not in the original**, which loops until it
-/// draws something different. Unbounded is not fine here: a table, or an
-/// `allowed` subset, weighting only one weapon would spin for ever, and a
-/// simulation that can hang on a
-/// table is worse than one that occasionally repeats a pickup. After
-/// [`REDRAW_ATTEMPTS`] the repeat is accepted.
+/// **The retry is bounded here and not in the original**, which loops until it
+/// draws something different; a table weighting one weapon would spin forever.
+/// After [`REDRAW_ATTEMPTS`] the repeat is accepted. A weapon with share `p` of
+/// the live weight repeats with probability `p^REDRAW_ATTEMPTS`: on the shipped
+/// Venom weights, Turbo at 14 of 48, about one grant in twenty thousand.
+/// `an_overwhelming_weight_terminates_and_may_repeat` pins the worst case.
 ///
-/// So the rule is **best-effort, and how good the effort is depends on the
-/// odds**: a weapon holding a share `p` of the live weight repeats with
-/// probability `p^REDRAW_ATTEMPTS`. On the shipped Venom weights the worst case
-/// is Turbo at 14 of 48, or about one repeat in twenty thousand grants. A table
-/// that gave one weapon nearly all the weight would repeat often, and
-/// `an_overwhelming_weight_terminates_and_may_repeat` pins that rather than
-/// pretending otherwise.
-/// `allowed` restricts the draw to a subset of [`IMPLEMENTED`]: `None` draws
-/// from all of [`IMPLEMENTED`] exactly as before this parameter existed, and
-/// `Some(&[])` (as opposed to omitting a weapon from a non-empty slice) hands
-/// out nothing at all rather than falling back to unrestricted - the same
-/// "authored absence is honest, not an invitation to guess" rule
-/// `docs/formats/2048-campaign.md`'s weapon-set gate follows. See
-/// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`, this
-/// project's own reader of Wipeout 2048's `WeaponSetDefinition`, for the one
-/// caller that passes `Some`.
+/// `allowed` restricts the draw to a subset of [`IMPLEMENTED`]: `None` draws from
+/// all, and `Some(&[])` hands out nothing rather than falling back to
+/// unrestricted (authored absence is honest; `docs/formats/2048-campaign.md`'s
+/// weapon-set gate). The one `Some` caller reads
+/// `oag_tables::mjolnir::campaign::WeaponSet::allowed_weapons`.
 #[must_use]
 pub fn draw(
     rng: &mut Rng,
@@ -579,24 +392,18 @@ pub fn draw(
             return Some(drawn);
         }
     }
-    // Every attempt came back the same weapon. Hand it over rather than hand over
-    // nothing: a pad that silently grants nothing reads as a broken pad.
+    // Hand over the repeat rather than nothing: a silent pad reads as broken.
     draw_once(rng, table, driver, allowed)
 }
 
 /// How many times [`draw`] re-rolls to avoid repeating the last pickup.
 ///
-/// **Ours.** See [`draw`] on why the original's unbounded loop is not reproduced,
-/// and on what the bound costs. Eight is enough that the shipped odds repeat
-/// about once in twenty thousand grants, and small enough that the worst case
-/// spends nine generator draws rather than hanging.
+/// **Ours.** Eight repeats about once in twenty thousand grants on the shipped
+/// odds and spends at most nine draws.
 pub const REDRAW_ATTEMPTS: usize = 8;
 
-/// A weapon's weight for this draw: `driver`/`table`'s own, or `0.0` when
-/// `allowed` is `Some` and does not list it. `None` never filters, so every
-/// existing caller (`allowed: None`) draws exactly as before this parameter
-/// existed - the walk below still only ever sees zero or a real weight, the
-/// same as when a table simply authored no odds for a weapon.
+/// A weapon's weight for this draw: the driver/table's own, or `0.0` when `allowed`
+/// is `Some` and does not list it.
 #[must_use]
 fn gated_weight(
     driver: Driver,
@@ -637,9 +444,8 @@ fn draw_once(
             return Some(weapon);
         }
     }
-    // Only reachable when `next_f32` returns something that rounds the walk past
-    // the end - it is half-open on `1.0`, so this is float slack rather than a
-    // logic hole. The last weighted weapon is the right answer either way.
+    // Float slack only (`next_f32` is half-open on `1.0`); the last weighted
+    // weapon is the right answer.
     IMPLEMENTED
         .iter()
         .rev()
@@ -649,24 +455,15 @@ fn draw_once(
 
 /// The class's own table out of a whole weapon file.
 ///
-/// # The two files spell a speed class differently, and this is where that lands
-///
 /// `HandlingStats.xml` authors `<GlobalClass name="VENOM">` and
-/// `WeaponStats_Race.xml` authors `<Pickupodds class="Venom">` - measured on the
-/// shipped USA disc, all four classes, both files. So a caller holding a
-/// [`SpeedClass`] cannot reach the pickup table through
-/// [`WeaponStats::pickups_for`] and [`SpeedClass::as_str`] together, because the
-/// latter is the *handling* file's spelling.
+/// `WeaponStats_Race.xml` `<Pickupodds class="Venom">` (measured on the USA disc),
+/// so [`SpeedClass::as_str`] cannot reach the table through
+/// [`WeaponStats::pickups_for`]. Matched case-insensitively here, as the
+/// difference is between two documents, not two concepts.
 ///
-/// Matched case-insensitively here rather than by adding a second spelling to
-/// [`SpeedClass`]: the difference is between two documents, not between two
-/// concepts, and the parser deliberately keeps `PickupTable::class` a `String`.
+/// The rung arrives as a name, so a non-Pulse ladder works: Pure authors a
+/// `Vector` class beside its four; Pulse has none, so that lookup is `None`.
 ///
-/// **The rung arrives as a name**, which is what lets this answer for a ladder
-/// that is not Pulse's. Wipeout Pure authors a `<Pickupodds class="Vector">`
-/// beside its four, and this reaches it with no change beyond the parameter
-/// type; Pulse authors four and no `Vector`, so a `Vector` lookup there is
-/// `None` - the same honest absence any unauthored rung gets.
 ///
 /// [`SpeedClass`]: oag_tables::handling::SpeedClass
 /// [`SpeedClass::as_str`]: oag_tables::handling::SpeedClass::as_str

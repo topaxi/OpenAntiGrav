@@ -1,9 +1,6 @@
-//! What the pickup draw and the inventory in [`super`] are asserted to do.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of `pickup.rs`:
-//! the tests went past the 200 lines an inline test module may hold when the
-//! recovered draw arrived. See `scripts/check-file-size.py`, which is the rule
-//! as a gate.
+//! What the pickup draw and the inventory in [`super`] are asserted to do. Its own
+//! file: the tests passed the 200 lines an inline test module may hold
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 use oag_tables::weapons::PickupOdds;
@@ -28,14 +25,9 @@ fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
     }
 }
 
-/// The stand-in for "weighted, and not drawable".
-///
-/// **Every weapon is implemented since the Repulser landed (2026-10-04)**, so
-/// the premise "some weighted weapon cannot be handed out" is no longer true of
-/// [`IMPLEMENTED`] at all - the end this constant's earlier comment predicted.
-/// The restriction these tests guard is reached through `allowed` instead: the
-/// Repulser stays weighted and is left out of the subset passed, which is the
-/// same walk-over-a-subset the `IMPLEMENTED` filter runs.
+/// The stand-in for "weighted, and not drawable". Every weapon is implemented
+/// since the Repulser (2026-10-04), so the restriction is reached through
+/// `allowed`: the Repulser stays weighted and is left out of the subset passed.
 const EXCLUDED: Weapon = Weapon::Repulser;
 
 /// What every test here passes as `allowed`: everything but [`EXCLUDED`].
@@ -49,8 +41,8 @@ fn drawable() -> Vec<Weapon> {
 
 #[test]
 fn a_class_that_weights_nothing_implemented_hands_out_nothing() {
-    // A Repulser is weighted and a Repulser cannot be handed out, so this
-    // is the real shape of the restriction rather than an empty table.
+    // A weighted Repulser that cannot be handed out: the real shape of the
+    // restriction.
     let repulsers_only = table(&[(EXCLUDED, 1.0, 1.0)]);
     let mut rng = Rng::new(1);
     let allowed = drawable();
@@ -78,9 +70,8 @@ fn a_zero_weight_is_never_drawn() {
     }
 }
 
-/// The draw reads the *driver's own* column. With Turbo weighted for an AI
-/// and not for a human, the two answers have to differ - a reader that took
-/// whichever column came first would pass every other test here.
+/// The draw reads the driver's own column: with Turbo weighted for an AI and not a
+/// human, the answers differ (a reader taking the first column would pass the rest).
 #[test]
 fn the_two_drivers_read_their_own_columns() {
     let ai_only = table(&[(Weapon::Turbo, 0.0, 1.0)]);
@@ -95,17 +86,12 @@ fn the_two_drivers_read_their_own_columns() {
     );
 }
 
-/// **The only thing about the draw that can be checked against the
-/// original's data**, and it is a distribution rather than a sequence - see
-/// the module docs.
-///
-/// Two implemented weapons weighted 3:1 against each other, plus an
-/// unimplemented one weighted far above both. The second half is the part
-/// that catches a real mistake: a walk that summed the *table's* total
-/// rather than the implemented subset's would spend most of its rolls past
-/// the end of the live weights and fall through to the trailing `find`,
-/// which returns the last implemented weapon every time. That reads as
-/// "mostly Shield" rather than as an error.
+/// The only thing about the draw checkable against the original's data: a
+/// distribution, not a sequence (see the module docs). Two implemented weapons
+/// weighted 3:1 plus an unimplemented one weighted far above both. The second half
+/// catches a walk summing the table's total instead of the implemented subset's:
+/// most rolls would fall through to the trailing `find` and return the last
+/// implemented weapon, reading as "mostly Shield" rather than an error.
 #[test]
 fn the_walk_visits_a_weight_in_proportion_to_it() {
     let weighted = table(&[
@@ -130,20 +116,17 @@ fn the_walk_visits_a_weight_in_proportion_to_it() {
         }
     }
     assert_eq!(turbos + shields, 10_000, "every draw must land somewhere");
-    // 3:1 over 10,000 draws puts Turbo at 7,500 with a standard deviation of
-    // about 43. A 500-wide window is roughly 11 sigma - wide enough that no
-    // seed makes this flaky, narrow enough to reject an even split.
+    // 3:1 over 10,000 draws puts Turbo at 7,500, sd about 43; a 500-wide window is
+    // about 11 sigma: no seed flakes, an even split is rejected.
     assert!(
         (7_000..=8_000).contains(&turbos),
         "3:1 odds drew {turbos} turbos and {shields} shields"
     );
 }
 
-/// `allowed` restricts the draw without changing the odds of what stays in -
-/// the 2048 campaign's own weapon-set gate, wired through `race::pads`. Both
-/// halves of [`draw`]'s own doc comment on the parameter: a non-empty list
-/// filters, and an empty `Some` hands out nothing rather than falling back to
-/// unrestricted.
+/// `allowed` restricts the draw without changing the odds of what stays in (the
+/// 2048 campaign's weapon-set gate, wired through `race::pads`): a non-empty list
+/// filters, an empty `Some` hands out nothing rather than falling back.
 #[test]
 fn allowed_restricts_the_draw_without_changing_the_ratio_of_what_stays_in() {
     let weighted = table(&[
@@ -166,18 +149,16 @@ fn allowed_restricts_the_draw_without_changing_the_ratio_of_what_stays_in() {
         );
     }
 
-    // `Some(&[])`, as opposed to `None`, hands out nothing at all - the
-    // honest reading of a weapon set that authors no recognised bit, rather
-    // than a silent fall-through to the unrestricted table.
+    // `Some(&[])` hands out nothing: a weapon set with no recognised bit, not a
+    // silent fall-through to the unrestricted table.
     assert_eq!(
         draw(&mut rng, &weighted, Driver::HUMAN_UNPLACED, None, Some(&[])),
         None
     );
 }
 
-/// The property the determinism gate needs from this: same seed, same
-/// sequence. It is the one guarantee that survives the original's PRNG being
-/// unrecovered.
+/// Same seed, same sequence: the guarantee the determinism gate needs, and the one
+/// that survives the original's PRNG being unrecovered.
 #[test]
 fn the_same_seed_draws_the_same_sequence() {
     let weighted = table(&[(Weapon::Turbo, 1.0, 1.0)]);
@@ -211,16 +192,12 @@ fn blended(odds: &[(Weapon, f32, f32, f32, f32)]) -> PickupTable {
     }
 }
 
-/// **The leader gets `front` and the tail gets `back`**, which is the
-/// recovered blend and the reason the shipped table authors those columns.
-///
-/// Built as the shipped Venom table builds it - one weapon carrying `front`
-/// and the other `back`, with equal `human` - so the only thing that can
-/// separate the two answers is the place.
+/// The leader gets `front` and the tail gets `back`, the recovered blend. Built as
+/// the shipped Venom table builds it (one weapon with `front`, the other `back`,
+/// equal `human`), so only the place separates the answers.
 #[test]
 fn the_players_odds_bend_with_their_place() {
-    // Shield is the leader's weapon, Turbo the tail's, exactly as the disc
-    // weights them.
+    // Shield is the leader's weapon, Turbo the tail's, as the disc weights them.
     let odds = blended(&[
         (Weapon::Shield, 1.0, 1.0, 8.0, 0.0),
         (Weapon::Turbo, 1.0, 1.0, 0.0, 8.0),
@@ -240,16 +217,14 @@ fn the_players_odds_bend_with_their_place() {
         "the leader drew {leader} shields and the tail {tail} - the blend is \
          not reading the place, or is reading it backwards"
     );
-    // And it is a big difference rather than noise: `front` is eight times
-    // the flat weight.
+    // A big difference, not noise: `front` is eight times the flat weight.
     assert!(
         leader > tail + 500,
         "leader {leader} against tail {tail} is within noise of no blend"
     );
 }
 
-/// The AI's column is spent **flat**. The rubber-banding is aimed at the
-/// player, and an opponent's odds must not move with its place.
+/// The AI's column is spent flat: rubber-banding is aimed at the player.
 #[test]
 fn an_opponents_odds_do_not_bend() {
     let odds = blended(&[
@@ -267,8 +242,7 @@ fn an_opponents_odds_do_not_bend() {
     assert_eq!(front, back, "the AI column is not a function of place");
 }
 
-/// An unplaced craft spends the `human` column alone rather than blending
-/// against place zero.
+/// An unplaced craft spends `human` alone rather than blending against place zero.
 #[test]
 fn an_unplaced_player_gets_no_blend() {
     let odds = blended(&[(Weapon::Shield, 1.0, 1.0, 8.0, 0.0)]);
@@ -281,22 +255,19 @@ fn an_unplaced_player_gets_no_blend() {
     assert_eq!(Driver::descent(4, 0), None);
 }
 
-/// The divisor is the whole field, so the last-placed craft never reaches
-/// the far end of the blend. The original's own arithmetic.
+/// The divisor is the whole field, so last place never reaches the far end of the
+/// blend (the original's arithmetic).
 #[test]
 fn the_blend_never_quite_reaches_the_back_column() {
     assert_eq!(Driver::descent(1, 8), Some(0.0));
     assert_eq!(Driver::descent(8, 8), Some(7.0 / 8.0));
 }
 
-/// **The same weapon is not handed out twice running.** Recovered from the
-/// grant, which compares against the previous grant and re-rolls.
-///
-/// Weighted evenly across all four implemented weapons, which is close to
-/// what the shipped Venom table gives them (14/14/11/9) and is the range
-/// [`REDRAW_ATTEMPTS`] is sized for. An unguarded draw would repeat on about
-/// a quarter of these 500 draws, so zero repeats is a strong signal rather
-/// than a fixture that could not fail.
+/// The same weapon is not handed out twice running (recovered: the grant compares
+/// against the previous grant and re-rolls). Weighted evenly over four implemented
+/// weapons, close to the shipped Venom table (14/14/11/9) and the range
+/// [`REDRAW_ATTEMPTS`] is sized for; an unguarded draw repeats on about a quarter
+/// of 500 draws, so zero repeats is a strong signal.
 #[test]
 fn a_pad_does_not_hand_out_the_same_weapon_twice_running() {
     let odds = table(&[
@@ -314,13 +285,10 @@ fn a_pad_does_not_hand_out_the_same_weapon_twice_running() {
     }
 }
 
-/// **The rule is best-effort, and this is where it gives out.** The retry is
-/// bounded, so a weapon that dominates its table hard enough will eventually
-/// be handed out twice running rather than the draw spinning for ever.
-///
-/// Pinned as a *behaviour* rather than left as a footnote: it is the one
-/// place this deviates from the original, which loops unbounded, and a table
-/// with a single live weapon is exactly the case that would hang.
+/// The rule is best-effort and this is where it gives out: the retry is bounded,
+/// so a weapon dominating its table is eventually handed out twice running rather
+/// than the draw spinning. Pinned as behaviour: it is the one deviation from the
+/// original's unbounded loop, and a single-weapon table would hang.
 #[test]
 fn an_overwhelming_weight_terminates_and_may_repeat() {
     let odds = table(&[(Weapon::Turbo, 1.0, 1.0)]);
@@ -338,9 +306,8 @@ fn an_overwhelming_weight_terminates_and_may_repeat() {
     );
 }
 
-/// The memory outlasts firing, which is what makes the rule bite at all: a
-/// craft that fires and crosses another pad still must not be handed the
-/// same thing.
+/// The memory outlasts firing: a craft that fires and crosses another pad must not
+/// be handed the same thing.
 #[test]
 fn what_was_granted_is_remembered_after_it_is_fired() {
     let mut held = Held::empty();
@@ -360,11 +327,9 @@ fn a_held_slot_gives_up_what_it_holds_exactly_once() {
     assert_eq!(held.take(), None);
 }
 
-/// **A re-press mid-cluster does nothing**, which is what stops a mashed fire
-/// button from laying mines faster than [`crate::projectile::mine::CLUSTER`]
-/// charges per [`crate::projectile::mine::DROP_INTERVAL`] - see
-/// [`Held::begin_drop`]'s own doc comment for the mechanism this closes and
-/// for why the guard is chosen rather than measured.
+/// A re-press mid-cluster does nothing, so a mashed fire button cannot lay mines
+/// faster than [`crate::projectile::mine::CLUSTER`] per
+/// [`crate::projectile::mine::DROP_INTERVAL`]; see [`Held::begin_drop`].
 #[test]
 fn a_re_press_mid_cluster_does_not_restart_the_drop() {
     let mut held = Held::empty();
@@ -372,9 +337,8 @@ fn a_re_press_mid_cluster_does_not_restart_the_drop() {
     held.begin_drop(5);
     assert_eq!(held.dropping, 5);
 
-    // Advance one charge out, the way `Race::lay_mines` would over a handful
-    // of ticks, so a re-arm would be visible as the counter jumping back up
-    // rather than merely failing to move.
+    // One charge out, as `Race::lay_mines` would over some ticks, so a re-arm shows
+    // as the counter jumping back up.
     held.dropping = 3;
     held.drop_reload = 0.05;
 
@@ -399,9 +363,8 @@ fn begin_drop_still_arms_a_cluster_from_empty() {
     assert_eq!(held.drop_reload, 0.0);
 }
 
-/// **Taking a pickup mid-drop ends the drop too**, not just the visible
-/// weapon - see [`Held::take`]'s own doc comment for why a stale counter left
-/// behind would silently swallow a later grant's first press.
+/// Taking a pickup mid-drop ends the drop too, or a stale counter would swallow a
+/// later grant's first press; see [`Held::take`].
 #[test]
 fn taking_a_pickup_mid_drop_clears_the_drop_state_too() {
     let mut held = Held::empty();
@@ -415,29 +378,19 @@ fn taking_a_pickup_mid_drop_clears_the_drop_state_too() {
     assert_eq!(held.drop_reload, 0.0);
     assert!(!held.is_dropping());
 
-    // And the slot is immediately usable for a fresh cluster - the guard
-    // above must not see the old drop as still in progress.
+    // The slot is immediately usable for a fresh cluster.
     held.grant(Weapon::Mine);
     held.begin_drop(5);
     assert_eq!(held.dropping, 5);
 }
 
-/// **Every rear weapon can be both laid and tripped.**
-///
-/// `mine::Drop::for_weapon` says how many charges a press lays and
-/// `mine::TriggerRadii::get` says how close a craft has to come to set one off,
-/// and the two are the same list of weapons written twice. Neither fails loudly
-/// when they disagree: a weapon missing from the first lays nothing at all, and
-/// one missing from the second is laid and can then never be tripped - it just
-/// sits there until its fuse runs out, which reads as a tuning problem rather
-/// than as a wiring one.
-///
-/// `every_implemented_weapon_has_a_fire_arm_on_both_paths` cannot catch it,
-/// because the fire arm *does* exist in both cases.
-///
-/// The table authors every weapon in [`IMPLEMENTED`], so a weapon that answers
-/// one call and not the other is a missing `match` arm rather than a missing
-/// `<Weapon>` element.
+/// Every rear weapon can be both laid and tripped. `mine::Drop::for_weapon` and
+/// `mine::TriggerRadii::get` are the same list twice and neither fails loudly: a
+/// weapon missing from the first lays nothing, one missing from the second can
+/// never be tripped (it reads as tuning, not wiring).
+/// `every_implemented_weapon_has_a_fire_arm_on_both_paths` cannot catch it, the
+/// fire arm existing either way. The table authors every weapon in
+/// [`IMPLEMENTED`], so a split answer is a missing `match` arm.
 #[test]
 fn every_rear_weapon_can_be_laid_and_tripped() {
     use crate::projectile::mine::{Drop, TriggerRadii};
