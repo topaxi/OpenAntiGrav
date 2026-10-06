@@ -42,7 +42,7 @@
 //!
 //! Both sample the emitter's own sprite and atlas cell the way a billboard
 //! does ([`super::sprite`]). Class 7's eight vertices are drawn here as one
-//! quad whose along-coordinate `psys.wgsl` folds back into the same
+//! quad whose along-coordinate `psys.wesl` folds back into the same
 //! piecewise `v`, which is exact because `v` is linear in that coordinate on
 //! each of the three spans, and keeps a streak to the six vertices
 //! [`super::MAX_VERTICES`] budgets for.
@@ -88,7 +88,7 @@ impl Effect {
 /// Which strip a two-point particle is built as.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StreakDraw {
-    /// One rectangle with the procedural profile in `psys.wgsl`, whatever
+    /// One rectangle with the procedural profile in `psys.wesl`, whatever
     /// the class - every source but Pulse on the PSP.
     Procedural,
     /// Class 6 on a template, the wedge.
@@ -129,7 +129,7 @@ impl StreakDraw {
     }
 }
 
-/// `psys.wgsl`'s `normal.x` for a class-7 bar: sample the sheet, and fold
+/// `psys.wesl`'s `normal.x` for a class-7 bar: sample the sheet, and fold
 /// the along-coordinate into the capped `v`.
 const CAPPED: f32 = 2.0;
 

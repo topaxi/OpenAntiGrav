@@ -20,7 +20,7 @@
 //! PSP only: [`oag_pob::texture`] reads the sprite a `.pob` embeds
 //! right after an emitter's record. A PS2 `.pob` embeds none, and Wipeout
 //! HD ships its sprites as separate `.gtf` files this module does not load
-//! yet; both keep the procedural profile in `psys.wgsl`, unchanged.
+//! yet; both keep the procedural profile in `psys.wesl`, unchanged.
 //!
 //! # The atlas
 //!
@@ -226,7 +226,7 @@ impl super::EmitterSpec {
 /// marks it as sampled.
 ///
 /// The mark rides the vertex's `normal.x`, which a particle never used -
-/// they are emissive and never lit - so `psys.wgsl` can tell a sprite from
+/// they are emissive and never lit - so `psys.wesl` can tell a sprite from
 /// the procedural profile in one pipeline: `1.0` samples the sheet, `0.0`
 /// (what `psys::quad` writes) keeps the falloff.
 pub fn map_to_cell(corners: &mut [oag_mesh::mesh::GpuVertex], cell: [f32; 4]) {

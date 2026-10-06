@@ -9,6 +9,8 @@
 // wrong choice shows up as washed-out or crushed colour rather than as a
 // scrambled picture.
 
+import oag_shaders::quad::{corner_of, pixels_to_clip};
+
 struct Uniforms {
     viewport: vec2<f32>,
     screen: vec2<f32>,
@@ -33,20 +35,10 @@ struct VertexOut {
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOut {
-    var corners = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(1.0, 1.0),
-    );
-    let corner = corners[index];
-    let pixels = uniforms.video_rect.xy + corner * uniforms.video_rect.zw;
-    let normalised = pixels / uniforms.screen;
-    let clip = vec2<f32>(normalised.x * 2.0 - 1.0, 1.0 - normalised.y * 2.0);
+    let corner = corner_of(index);
+    let clip = pixels_to_clip(uniforms.video_rect.xy + corner * uniforms.video_rect.zw, uniforms.screen, uniforms.viewport);
     var out: VertexOut;
-    out.position = vec4<f32>(clip * uniforms.viewport, 0.0, 1.0);
+    out.position = clip;
     out.uv = corner;
     return out;
 }

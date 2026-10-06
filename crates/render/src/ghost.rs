@@ -151,7 +151,7 @@ pub struct Frame {
     pub offsets: [f32; 2],
 }
 
-/// The uniforms `ghost.wgsl` reads.
+/// The uniforms `ghost.wesl` reads.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
@@ -243,10 +243,10 @@ impl Pipeline {
     }
 }
 
-/// The vertex layout `ghost.wgsl` reads: [`GpuVertex`], of which it uses the
+/// The vertex layout `ghost.wesl` reads: [`GpuVertex`], of which it uses the
 /// position and the texture coordinate.
 pub(crate) const STRIDE: u64 = std::mem::size_of::<GpuVertex>() as u64;
 
-// `ghost.wgsl`'s `Uniforms` is three matrices and two `vec4`s; a field added
+// `ghost.wesl`'s `Uniforms` is three matrices and two `vec4`s; a field added
 // on one side only fails here rather than as a garbled picture.
 const _: () = assert!(std::mem::size_of::<Uniforms>() == 3 * 64 + 32);

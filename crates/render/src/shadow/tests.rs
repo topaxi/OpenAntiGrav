@@ -138,7 +138,7 @@ fn the_quads_alpha_is_the_fade_and_its_colour_is_black() {
 #[test]
 fn the_generated_falloff_is_coverage_in_red_with_opaque_alpha() {
     // The convention HD's own `ambient_shadow.gtf` decodes to, so
-    // `shadow.wgsl` reads one channel whichever path supplied the pixels.
+    // `shadow.wesl` reads one channel whichever path supplied the pixels.
     let image = Silhouette::falloff(16);
     assert_eq!(image.rgba.len(), 16 * 16 * 4);
     for texel in image.rgba.as_chunks::<4>().0 {

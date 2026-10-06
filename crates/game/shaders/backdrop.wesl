@@ -8,6 +8,8 @@
 // Every constant comes in through `Points`/`Post`, filled from
 // `oag_ui::backdrop::Frame`; nothing is authored here.
 
+import oag_shaders::quad::{ClipUv, covering_triangle};
+
 struct Points {
     world_view: mat4x4<f32>,
     proj: mat4x4<f32>,
@@ -125,26 +127,16 @@ struct Post {
 // half targets' linear views are; the full-size particles never are.
 @group(0) @binding(4) var trail_sampler: sampler;
 
-struct PostOut {
-    @builtin(position) clip: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
 @vertex
-fn vs_post(@builtin(vertex_index) index: u32) -> PostOut {
-    let x = f32(i32(index & 1u) * 4 - 1);
-    let y = f32(i32(index >> 1u) * 4 - 1);
-    var out: PostOut;
-    out.clip = vec4<f32>(x, y, 0.0, 1.0);
-    out.uv = vec2<f32>(x * 0.5 + 0.5, 0.5 - y * 0.5);
-    return out;
+fn vs_post(@builtin(vertex_index) index: u32) -> ClipUv {
+    return covering_triangle(index);
 }
 
 // Blend: the fresh particles, capped, over the decayed trail. The program
 // scales the fresh sample by `srcScale` before the cap; which of `Render`'s
 // binds fills it is unread, so it is dropped here as one.
 @fragment
-fn fs_blend(in: PostOut) -> @location(0) vec4<f32> {
+fn fs_blend(in: ClipUv) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv).rgb;
     let previous = textureSample(trail, trail_sampler, in.uv).rgb;
     return vec4<f32>(min(fresh, post.source_max.rgb) + previous * post.feedback.rgb, 1.0);
@@ -153,7 +145,7 @@ fn fs_blend(in: PostOut) -> @location(0) vec4<f32> {
 // Wave: the accumulation dimmed and pulled down, so a trail dies out rather
 // than settling.
 @fragment
-fn fs_wave(in: PostOut) -> @location(0) vec4<f32> {
+fn fs_wave(in: ClipUv) -> @location(0) vec4<f32> {
     let h = textureSample(source, post_sampler, in.uv).rgb * post.wave_scale.rgb;
     let bias = post.wave_bias.x;
     return vec4<f32>(h + saturate(h * post.wave_bias.y) * bias + bias, 1.0);
@@ -162,7 +154,7 @@ fn fs_wave(in: PostOut) -> @location(0) vec4<f32> {
 // Fury: fresh particles plus their trail, stretched so a full byte reads as
 // one, added over the page through the constant blend colour - the tint.
 @fragment
-fn fs_composite(in: PostOut) -> @location(0) vec4<f32> {
+fn fs_composite(in: ClipUv) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv).rgb;
     let trailed = textureSample(trail, trail_sampler, in.uv).rgb;
     return vec4<f32>((fresh + trailed) * (257.0 / 256.0) - 1.0 / 257.0, 1.0);

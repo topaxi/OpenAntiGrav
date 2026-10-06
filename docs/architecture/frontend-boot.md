@@ -829,7 +829,7 @@ Data.wad entry -> pmf::demux -> H.264 elementary stream -> ffmpeg -> lossless AV
 | AV1 encode | `ffmpeg`'s `libaom-av1`, lossless | Once per movie. Lossless, so the picture is bit-for-bit what the H.264 decoder produced |
 | Container | [`oag-video::ivf`](../../crates/video/src/ivf.rs) | 32-byte header, 12 bytes per frame. Cheaper to parse by hand than to pull in an MP4 demuxer |
 | AV1 decode | [`oag-video::av1`](../../crates/video/src/av1.rs), in process | `re_rav1d` is pure Rust, so no C toolchain enters the build |
-| Colour conversion | [`video.wgsl`](../../crates/game/src/video.wgsl) | Free on the GPU, and keeps the decoded frame at 1.5 bytes per pixel |
+| Colour conversion | [`video.wgsl`](../../crates/game/shaders/video.wesl) | Free on the GPU, and keeps the decoded frame at 1.5 bytes per pixel |
 
 The cache lives in `data/cache/movies/`, already gitignored, keyed on the entry's
 name hash and size so a different disc image cannot collide:

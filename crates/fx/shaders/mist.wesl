@@ -6,10 +6,7 @@
 // vertex colour, so a layer contributes the texel times its alpha, which the
 // pipeline's `(SRC_ALPHA, ONE)` blend then adds.
 
-// 1.0 on Wipeout HD's linear float target, 0.0 on every gamma target - see
-// `mesh_render::is_linear_target`. The mist is Pulse's alone, but the pipeline
-// is built against whatever the race draws into.
-override linear_out: f32 = 0.0;
+import oag_shaders::target::{linear_out, gamma_to_target};
 
 @group(0) @binding(0) var mist_texture: texture_2d<f32>;
 @group(0) @binding(1) var mist_sampler: sampler;
@@ -38,6 +35,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel = textureSample(mist_texture, mist_sampler, in.texcoord);
-    let decoded = mix(texel.rgb, pow(texel.rgb, vec3<f32>(2.2)), linear_out);
+    let decoded = gamma_to_target(texel.rgb, linear_out);
     return vec4<f32>(decoded, texel.a * in.alpha);
 }

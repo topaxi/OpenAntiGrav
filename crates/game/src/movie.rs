@@ -142,7 +142,7 @@ pub struct Movie {
 /// can report what it actually decoded instead of being forced to
 /// deinterleave before it can report anything. Nothing here converts one into
 /// the other: that is each implementation's own job, which is what keeps
-/// `video.wgsl` at one format.
+/// `video.wesl` at one format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PixelFormat {
     /// Planar 4:2:0: Y, then U, then V, each tightly packed.

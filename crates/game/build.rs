@@ -1,5 +1,6 @@
-//! Embeds the build's short commit hash as `env!("OAG_GIT_HASH")`, and validates
-//! every `.wgsl` under `src/` with `naga` so a bad shader fails the build.
+//! Embeds the build's short commit hash as `env!("OAG_GIT_HASH")`, and compiles the
+//! WESL under `shaders/` to plain WGSL, validated with `naga`, so a bad shader
+//! fails the build.
 //!
 //! The launcher screen prints it at the bottom (`crate::launcher::draw_list`)
 //! so a player reporting "the Deck build doesn't find my disc" and a
@@ -17,9 +18,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    // The screen-filter presets under `assets/` are bodies compiled after
-    // `oag-post`'s prelude, so they are not modules alone; `src/` is the
-    // renderer's own shaders.
+    // The renderer's own shaders are WESL under `shaders/`. The screen-filter
+    // presets under `assets/` are bodies compiled after `oag-post`'s prelude,
+    // so they are not modules alone and stay plain WGSL.
+    oag_shader_check::link_each("shaders", &["backdrop", "scene", "ui", "video"]);
     oag_shader_check::check_dir("src", &[]);
     let hash = git_hash().unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=OAG_GIT_HASH={hash}");

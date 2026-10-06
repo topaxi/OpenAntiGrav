@@ -68,7 +68,7 @@
 //! scene nor in the ladder). The gate's `(0.3, 0.59, 0.11) * 3` weights put its
 //! knee at luma ~1/3, which is what an LDR bright pass looks like. Our target
 //! stays [`SCENE_FORMAT`] because 8 bits of *linear* light bands in the darks,
-//! and `hd_bloom.wgsl`'s `surface()` applies the hardware's clamp at the three
+//! and `hd_bloom.wesl`'s `surface()` applies the hardware's clamp at the three
 //! points the chain samples the scene instead - see its own comment for the
 //! measurement.
 
@@ -207,7 +207,7 @@ impl Target {
     }
 }
 
-/// The uniform block `hd_bloom.wgsl` reads, one per pass.
+/// The uniform block `hd_bloom.wesl` reads, one per pass.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
@@ -339,7 +339,9 @@ impl Chain {
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("hd bloom"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("hd_bloom.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/hd_bloom.wgsl")).into(),
+            ),
         });
         // The fullscreen triple at 0..2, then the two extra source textures
         // this pass alone reads - so it composes the entries rather than

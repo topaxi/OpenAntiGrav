@@ -40,7 +40,7 @@ fn load_rcas_input(px_pos: vec2<i32>) -> vec4<f32> {
     let limit = vec2<i32>(textureDimensions(r_rcas_input, 0)) - vec2<i32>(1);
     // Upstream leaves edge addressing to the resource's own clamp;
     // `textureLoad` has no address mode, so the clamp is explicit here - the
-    // same note `fsr1.wgsl` carries.
+    // same note `fsr1.wesl` carries.
     return textureLoad(r_rcas_input, clamp(px_pos, vec2<i32>(0), limit), 0);
 }
 

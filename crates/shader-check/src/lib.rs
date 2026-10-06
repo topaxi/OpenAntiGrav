@@ -24,7 +24,19 @@ use std::path::{Path, PathBuf};
 
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use wesl::sourcemap::{BasicSourceMap, SourceMap};
-use wesl::{CompileOptions, Compiler, ManglerKind, resolver::StandardResolver};
+use wesl::syntax::{GlobalDeclaration, GlobalDeclarationNode, ModulePath, PathOrigin};
+use wesl::{
+    CompileOptions, CompileResult, Compiler, ManglerKind,
+    resolver::{FileResolver, Router, StandardResolver},
+};
+
+/// The package name a shader imports the shared modules under:
+/// `import oag_shaders::fullscreen::fullscreen_triangle;`.
+const SHARED: &str = "oag_shaders";
+
+/// Where the shared modules live: this crate's own `shaders/`, found from its
+/// manifest so every crate that calls [`link`] reads the same files.
+const SHARED_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shaders");
 
 /// Lines of the text shown either side of the failing one.
 const CONTEXT: usize = 3;
@@ -47,12 +59,22 @@ pub fn link(shaders_dir: &str, artifact: &str, module: &str, features: &[&str]) 
     for feature in features {
         options.features.set(*feature, true);
     }
-    let compiler = Compiler::new_with_resolver(options, StandardResolver::new(shaders_dir));
-    let compiled = compiler
+    let mut router = Router::new();
+    router.mount_resolver(
+        ModulePath::new(PathOrigin::Package(SHARED.to_string()), Vec::new()),
+        FileResolver::new(SHARED_DIR),
+    );
+    // `wesl` reports only the files under `shaders_dir` to cargo, so a shared
+    // module an edit lands in would otherwise leave the artifact stale.
+    println!("cargo::rerun-if-changed={SHARED_DIR}");
+    router.mount_fallback_resolver(StandardResolver::new(shaders_dir));
+    let compiler = Compiler::new_with_resolver(options, router);
+    let mut compiled = compiler
         .compile_module(&module.parse().expect("a module path"))
         .inspect_err(|error| eprintln!("{error}"))
         .unwrap_or_else(|_| panic!("{module} did not compile"));
     compiled.emit_rerun_if_changed();
+    stabilise_order(&mut compiled, module);
     let source = compiled.to_string();
     let generated = format!("{artifact}.wgsl (generated from {module})");
     if let Err(problem) = validate(&source, &generated) {
@@ -60,6 +82,53 @@ pub fn link(shaders_dir: &str, artifact: &str, module: &str, features: &[&str]) 
         panic!("{}", explain(&generated, &source, &problem, sources));
     }
     compiled.write_artifact(artifact);
+}
+
+/// Links each of `modules`, a module `package::<name>` under `shaders_dir`, to
+/// an artifact called `<name>`: the common case, one shader per file.
+///
+/// # Panics
+///
+/// As [`link`].
+pub fn link_each(shaders_dir: &str, modules: &[&str]) {
+    for name in modules {
+        link(shaders_dir, name, &format!("package::{name}"), &[]);
+    }
+}
+
+/// Puts the declarations in an order that does not change from build to build.
+///
+/// `wesl` visits the modules a shader imports through a `HashMap`, so the same
+/// source printed its declarations in a different order on every build (the
+/// text differed; sorted, it was equal). WGSL's module scope is order
+/// independent, so this reorders and nothing else: the root module's
+/// declarations first, then each imported module's by path, each keeping the
+/// order its own source gave it (the sort is stable). A build that does not
+/// change a shader now writes the same bytes, which is what lets two builds be
+/// compared with `cmp`.
+fn stabilise_order(compiled: &mut CompileResult, root: &str) {
+    let Some(sources) = compiled.sourcemap.as_ref() else {
+        return;
+    };
+    let origin = |declaration: &GlobalDeclarationNode| -> (bool, String) {
+        let name = match &**declaration {
+            GlobalDeclaration::Declaration(d) => d.ident.name().to_string(),
+            GlobalDeclaration::TypeAlias(t) => t.ident.name().to_string(),
+            GlobalDeclaration::Struct(s) => s.ident.name().to_string(),
+            GlobalDeclaration::Function(f) => f.ident.name().to_string(),
+            _ => return (true, String::new()),
+        };
+        let path = sources
+            .item(&name)
+            .map_or_else(String::new, |entry| entry.path.to_string());
+        (path != root, path)
+    };
+    let mut keyed: Vec<_> = std::mem::take(&mut compiled.syntax.global_declarations)
+        .into_iter()
+        .map(|d| (origin(&d), d))
+        .collect();
+    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    compiled.syntax.global_declarations = keyed.into_iter().map(|(_, d)| d).collect();
 }
 
 /// Validates every `*.wgsl` under `dir` (recursively) except `skip`, a list of

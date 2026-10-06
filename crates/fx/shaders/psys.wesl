@@ -1,6 +1,6 @@
 // Draws `.pob` particles - collision sparks and every other authored effect.
 //
-// Structurally a smaller copy of exhaust.wgsl - see that file's own header
+// Structurally a smaller copy of exhaust.wesl - see that file's own header
 // for why the model matrix in the shared uniform block is unused (the
 // vertices already arrive in world space).
 //
@@ -28,27 +28,12 @@
 //   share of the half-length; `0.5` collapses the profile to the plain
 //   radial falloff a round billboard wants.
 
-struct Uniforms {
-    view_projection: mat4x4<f32>,
-    model: mat4x4<f32>,
-};
-
-// 1.0 when the render target holds linear light (Wipeout HD's float scene
-// target), 0.0 on every gamma target - set from the target format at
-// pipeline build, see `mesh_render::is_linear_target`.
-override linear_out: f32 = 0.0;
+import oag_shaders::scene_vertex::{Uniforms, VertexInput};
+import oag_shaders::target::{linear_out, gamma_to_target};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var sheet: texture_2d<f32>;
 @group(0) @binding(2) var sheet_sampler: sampler;
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) colour: vec4<f32>,
-    @location(3) texcoord: vec2<f32>,
-    @location(4) lit: f32,
-};
 
 struct VertexOutput {
     @builtin(position) clip: vec4<f32>,
@@ -133,6 +118,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // On the linear float target the palette's gamma-authored colour is
     // decoded so the blend and the encode after it round-trip; on a gamma
     // target this is the identity. See `mesh_render::is_linear_target`.
-    let out_rgb = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
+    let out_rgb = gamma_to_target(rgb, linear_out);
     return vec4<f32>(out_rgb, picked.a);
 }

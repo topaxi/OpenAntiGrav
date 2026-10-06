@@ -332,7 +332,9 @@ impl MotionBlur {
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("motion blur"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("motion_blur.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/motion_blur.wgsl")).into(),
+            ),
         });
 
         // Group 0, shared by every pass past prepare: the colour source, its

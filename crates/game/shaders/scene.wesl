@@ -6,6 +6,8 @@
 // is the engine's global blur pass in intent only: its kernel is unread, so the
 // weights here are chosen, not measured.
 
+import oag_shaders::quad::{ClipUv, covering_triangle};
+
 struct Params {
     // Edge: (dx, dy, -dx/2, -dy/2), the tap spacing in uv. Blur: (0, 0, sigma,
     // taps each side), both in taps.
@@ -19,19 +21,9 @@ struct Params {
 @group(0) @binding(1) var source: texture_2d<f32>;
 @group(0) @binding(2) var source_sampler: sampler;
 
-struct Out {
-    @builtin(position) clip: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
 @vertex
-fn vs_quad(@builtin(vertex_index) index: u32) -> Out {
-    let x = f32(i32(index & 1u) * 4 - 1);
-    let y = f32(i32(index >> 1u) * 4 - 1);
-    var out: Out;
-    out.clip = vec4<f32>(x, y, 0.0, 1.0);
-    out.uv = vec2<f32>(x * 0.5 + 0.5, 0.5 - y * 0.5);
-    return out;
+fn vs_quad(@builtin(vertex_index) index: u32) -> ClipUv {
+    return covering_triangle(index);
 }
 
 fn tap(uv: vec2<f32>) -> vec3<f32> {
@@ -43,7 +35,7 @@ fn tap(uv: vec2<f32>) -> vec3<f32> {
 // white alone; the grey is one minus the edge darkening minus the fill
 // darkening on what is not an edge.
 @fragment
-fn fs_edge(in: Out) -> @location(0) vec4<f32> {
+fn fs_edge(in: ClipUv) -> @location(0) vec4<f32> {
     let base = in.uv + params.taps.zw;
     let t0 = tap(base);
     let t1 = tap(base + vec2<f32>(params.taps.x, 0.0));
@@ -59,7 +51,7 @@ fn fs_edge(in: Out) -> @location(0) vec4<f32> {
 // One axis of a gaussian: `levels.xy` is the step between taps in uv, `taps.z`
 // the sigma in taps and `taps.w` how many taps each side.
 @fragment
-fn fs_blur(in: Out) -> @location(0) vec4<f32> {
+fn fs_blur(in: ClipUv) -> @location(0) vec4<f32> {
     var sum = tap(in.uv);
     var weight = 1.0;
     let reach = i32(params.taps.w);
@@ -76,6 +68,6 @@ fn fs_blur(in: Out) -> @location(0) vec4<f32> {
 // The page gets the result as it is: opaque, where the original's final copy
 // (`FEBackgroundAnimCopy_fp`) is a plain texture read.
 @fragment
-fn fs_copy(in: Out) -> @location(0) vec4<f32> {
+fn fs_copy(in: ClipUv) -> @location(0) vec4<f32> {
     return vec4<f32>(tap(in.uv), 1.0);
 }

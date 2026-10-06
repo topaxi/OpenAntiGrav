@@ -70,6 +70,7 @@ out to be wrong.
 | [0057](0057-the-workspace-after-the-2026-10-05-splits.md) | The workspace after the 2026-10-05 splits | Accepted; extends ADR-0051, supersedes ADR-0050's `.pob` placement |
 | [0058](0058-per-title-behaviour-is-title-data-with-provenance.md) | Per-title behaviour is `Title` data with provenance, never a title comparison | Accepted; narrows [ADR-0022](0022-title-packages.md) item 4, extends [ADR-0025](0025-a-boot-chain-carries-its-provenance.md) |
 | [0059](0059-render-shaders-are-wesl-compiled-to-wgsl-at-build-time.md) | Render shaders may be WESL, compiled to plain WGSL at build time | Accepted after a trial in `oag-mesh` and `oag-post` |
+| [0060](0060-every-render-crate-shader-is-wesl-with-one-shared-module-set.md) | Every render-crate shader is WESL, with one shared module set | Accepted; supersedes ADR-0059 convention 5 |
 
 ## Format
 

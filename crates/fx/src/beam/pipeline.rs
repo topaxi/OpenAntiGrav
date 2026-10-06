@@ -16,7 +16,7 @@ use oag_mesh::mesh::GpuVertex;
 use super::MAX_VERTICES;
 
 /// `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)` with the source
-/// alpha already folded into the colour by `beam.wgsl`, and the glow mask
+/// alpha already folded into the colour by `beam.wesl`, and the glow mask
 /// written the way `Gu_StencilOp(KEEP, KEEP, REPLACE)` writes it: the
 /// fragment's alpha replaces what is there. See [`super::GLOW_MASK`].
 pub const BLEND: wgpu::BlendState = wgpu::BlendState {
@@ -162,7 +162,9 @@ impl Pipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(style.label),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../beam.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/beam.wgsl")).into(),
+            ),
         });
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

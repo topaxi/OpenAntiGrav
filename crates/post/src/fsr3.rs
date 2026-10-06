@@ -159,7 +159,7 @@ pub enum Pass {
     /// The luma pyramid, upstream's first SPD dispatch - which here reduces to
     /// a single 2x2 average producing `farthest_depth_mip1`, because its other
     /// two products are SPD's own plumbing and an auto-exposure this renderer
-    /// has no use for. `luma_pyramid.wgsl` argues both.
+    /// has no use for. `luma_pyramid.wesl` argues both.
     LumaPyramid,
     /// The shading-change pyramid, upstream's second SPD dispatch.
     ShadingChangePyramid,

@@ -58,7 +58,7 @@ pub const COMPOSITE_FIX: u8 = 0x40;
 /// The composite quad's vertex colour, which `MODULATE` multiplies the texel by.
 pub const COMPOSITE_COLOUR: u8 = 127;
 
-/// The uniform block `ps2_bloom.wgsl` reads: 32 bytes, three rows of `vec2`.
+/// The uniform block `ps2_bloom.wesl` reads: 32 bytes, three rows of `vec2`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
@@ -97,7 +97,9 @@ impl Ps2Bloom {
         let format = format.remove_srgb_suffix();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ps2 bloom"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("ps2_bloom.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/ps2_bloom.wgsl")).into(),
+            ),
         });
         let layout = super::fullscreen_layout(device, "ps2 bloom");
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -464,7 +466,7 @@ mod tests {
     /// cannot reach; this is what fails when the two drift apart.
     #[test]
     fn the_shaders_weights_are_the_constants() {
-        let wgsl = include_str!("ps2_bloom.wgsl");
+        let wgsl = include_str!(concat!(env!("OUT_DIR"), "/ps2_bloom.wgsl"));
         let spelled = BLUR_WEIGHTS
             .iter()
             .map(|w| format!("{w}u"))
@@ -472,7 +474,7 @@ mod tests {
             .join(", ");
         assert!(
             wgsl.contains(&format!("array<u32, 7>({spelled})")),
-            "ps2_bloom.wgsl's WEIGHTS is not {BLUR_WEIGHTS:?}"
+            "ps2_bloom.wesl's WEIGHTS is not {BLUR_WEIGHTS:?}"
         );
         assert_eq!(BLUR_WEIGHTS.len(), 7);
         assert_eq!((BLOOM_WIDTH, BLOOM_HEIGHT), (320, 224));

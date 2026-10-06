@@ -16,6 +16,8 @@
 // not on linear light. See `post::fsr1` for who is responsible for arranging
 // that.
 
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
+
 struct Constants {
     // FsrEasuCon's four output vectors, already unpacked to floats on the CPU
     // rather than bit-packed into uint4s: upstream packs them only so that the
@@ -35,20 +37,9 @@ struct Constants {
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> constants: Constants;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// The same three-vertex fullscreen triangle the blit uses, for the same reason:
-// no vertex buffer, and no seam down a quad's diagonal.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
+    return fullscreen_triangle(index);
 }
 
 // ffx_a.h's approximate reciprocals and reciprocal square root. These are

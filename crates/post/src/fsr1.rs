@@ -4,7 +4,7 @@
 //! presentation rectangle with an edge-adaptive twelve-tap kernel; the second,
 //! RCAS, sharpens the result back up without the ringing an unconditional
 //! sharpen would add. Both are transliterated from AMD's MIT-licensed
-//! `ffx_fsr1.h` - see [`fsr1.wgsl`](./fsr1.wgsl) and
+//! `ffx_fsr1.h` - see [`fsr1.wesl`](../shaders/fsr1.wesl) and
 //! `licences/AMD-FidelityFX-MIT.txt`.
 //!
 //! # Why this and not the temporal upscaler
@@ -185,7 +185,9 @@ impl Fsr1 {
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("fsr1"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("fsr1.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/fsr1.wgsl")).into(),
+            ),
         });
 
         let layout = super::fullscreen_layout(device, "fsr1");

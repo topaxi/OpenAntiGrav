@@ -1,13 +1,4 @@
-// Whole-pipeline shading switches: linear output, Omega's nova prelit curve, colour-is-light.
-
-// 1.0 when the render target holds linear light - Wipeout HD's float scene
-// target, where the bloom gate reads pre-exposure luminance and the encode
-// happens in `post::hd_bloom`'s own pass. 0.0 for every gamma target, where
-// this shader encodes (or never decodes) exactly as it always has. Set from
-// the target format at pipeline build - see `mesh_render::is_linear_target` -
-// so no uniform needs a new field and the sky's zeroed scene buffer cannot
-// miss it.
-override linear_out: f32 = 0.0;
+// Whole-pipeline shading switches: Omega's nova prelit curve, colour-is-light.
 
 // 0.0 on a pipeline whose scene can never light by Omega's nova prelit curve,
 // so `lit_texel` folds `scene.light.nova` away and the driver deletes the

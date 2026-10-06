@@ -179,7 +179,7 @@ pub fn quad(placement: &Placement) -> [GpuVertex; 6] {
         normal: normal.to_array(),
         // Black, with the fade in the alpha: the shader returns black and the
         // alpha-over blend turns it into `dst * (1 - a)`. Only the alpha is
-        // read - see `shadow.wgsl`.
+        // read - see `shadow.wesl`.
         colour: [0.0, 0.0, 0.0, placement.strength],
         texcoord: [u, v],
         // Not lit by the mesh rig: a shadow is not a surface.
@@ -516,7 +516,7 @@ impl Silhouette {
                 let d = (dx * dx + dy * dy).sqrt().min(1.0);
                 let coverage = ((1.0 - d) * (1.0 - d) * 255.0) as u8;
                 // Broadcast across rgb with opaque alpha, which is what HD's
-                // own remap produces - so `shadow.wgsl` reads one channel for
+                // own remap produces - so `shadow.wesl` reads one channel for
                 // both paths rather than branching on where the pixels came
                 // from.
                 rgba.extend_from_slice(&[coverage, coverage, coverage, 0xff]);
@@ -633,7 +633,9 @@ impl Pipeline {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shadow"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shadow.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/shadow.wgsl")).into(),
+            ),
         });
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

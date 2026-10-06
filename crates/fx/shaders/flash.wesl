@@ -2,10 +2,7 @@
 // additively by the pipeline - `ScreenFlash_Draw`'s untextured quad.
 // See `flash.rs`.
 
-// 1.0 on Wipeout HD's linear float target, 0.0 on every gamma target - see
-// `mesh_render::is_linear_target`. The flash is Pulse's alone, but the
-// pipeline is built against whatever the race draws into.
-override linear_out: f32 = 0.0;
+import oag_shaders::target::{linear_out, gamma_to_target};
 
 @group(0) @binding(0) var<uniform> colour: vec4<f32>;
 
@@ -19,6 +16,6 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-    let rgb = mix(colour.rgb, pow(colour.rgb, vec3<f32>(2.2)), linear_out);
+    let rgb = gamma_to_target(colour.rgb, linear_out);
     return vec4<f32>(rgb, colour.a);
 }

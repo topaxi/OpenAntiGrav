@@ -231,7 +231,9 @@ impl Framebuffer {
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("upscale"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("upscale.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/upscale.wgsl")).into(),
+            ),
         });
 
         let layout = fullscreen_layout(device, "upscale");

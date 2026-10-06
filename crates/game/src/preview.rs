@@ -395,7 +395,7 @@ impl std::fmt::Debug for Preview {
 }
 
 /// Where a grid-space rectangle lands on the target, in pixels: the same
-/// letterboxing `ui.wgsl`'s `to_clip` applies to every UI quad, inverted, so
+/// letterboxing `ui.wesl`'s `to_clip` applies to every UI quad, inverted, so
 /// the preview sits exactly where the surrounding widgets say it does at any
 /// window shape.
 #[must_use]

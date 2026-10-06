@@ -64,7 +64,7 @@ pub(super) const MODE_SPRITE: f32 = 1.0;
 /// A third mode rather than a second pipeline, which keeps the draw list's own
 /// back-to-front order intact: the pass never splits. The pipeline blends
 /// *premultiplied* alpha, so an additive quad is one emitting an alpha of zero
-/// (see `ui.wgsl`'s `fs_main` and `Draw::BlendedSprite`). Both this and
+/// (see `ui.wesl`'s `fs_main` and `Draw::BlendedSprite`). Both this and
 /// [`MODE_SPRITE`] index the sheet, so `mode > 0.5` still means "a sheet quad".
 pub(super) const MODE_SPRITE_ADDITIVE: f32 = 2.0;
 /// A solid quad whose colour runs from `color` at its left edge to `border`
@@ -109,7 +109,7 @@ impl Renderer {
     }
 
     /// [`Self::push_solid`] with a second colour: `left` at the quad's left
-    /// edge, `right` at its right, and `ui.wgsl` interpolating between.
+    /// edge, `right` at its right, and `ui.wesl` interpolating between.
     pub(super) fn push_gradient(&mut self, rect: [f32; 4], left: [f32; 4], right: [f32; 4]) {
         let solid = self.atlas.solid;
         self.quads.push(Quad {
@@ -136,23 +136,23 @@ pub(super) struct Uniforms {
     /// the slot a padding pair held, so the struct is still 32 bytes.
     pub(super) sprites: [f32; 2],
     /// Where the movie sits in screen space: `[x, y, width, height]`. Only
-    /// `video.wgsl` reads this; `ui.wgsl` still declares the field so the two
+    /// `video.wesl` reads this; `ui.wesl` still declares the field so the two
     /// shaders agree on the buffer's layout.
     pub(super) video_rect: [f32; 4],
     /// The face atlas's size, for normalising `Draw::FacedText`'s pixel-space
-    /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
+    /// UVs - `ui.wesl` alone reads this; `video.wesl` does not declare the
     /// field at all, the same way it already stops short of `sprites`.
     pub(super) face_atlas: [f32; 2],
     /// The buttons atlas's own size, the same idiom one field up -
-    /// `ui.wgsl` alone reads this too. Occupies the 8 bytes a `_padding`
+    /// `ui.wesl` alone reads this too. Occupies the 8 bytes a `_padding`
     /// field held before `Draw::FacedText { role: "Buttons" }` existed:
     /// WGSL still rounds `Uniforms` to 64 bytes either way (`vec4`
     /// alignment), so this has to be *this* field and not one appended
-    /// after it - appending would leave `ui.wgsl`'s own `buttons_atlas`
+    /// after it - appending would leave `ui.wesl`'s own `buttons_atlas`
     /// reading whatever the real padding held instead.
     pub(super) buttons_atlas: [f32; 2],
     /// `[pixels per grid unit, sharp-bilinear flag, 0, 0]`: the HUD stretch
-    /// `ui.wgsl` reads to blend only the last pixel of each texel. Zero flag
+    /// `ui.wesl` reads to blend only the last pixel of each texel. Zero flag
     /// for everything but a raster HUD asked for `sharp-bilinear`.
     pub(super) hud: [f32; 4],
 }

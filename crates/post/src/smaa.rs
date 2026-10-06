@@ -1,12 +1,12 @@
 //! Subpixel Morphological Anti-Aliasing: luma edge detection, blending
 //! weight calculation against a precomputed area/search lookup, then a
 //! neighbourhood blend. Three fullscreen passes, chained together the way
-//! [`smaa.wgsl`](./smaa.wgsl)'s own module docs diagram.
+//! [`smaa.wesl`](../shaders/smaa.wesl)'s own module docs diagram.
 //!
 //! Ported from `iryoku/smaa` (MIT) the same way `fsr1` is ported from AMD's
 //! FidelityFX - see [ADR-0012](../../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md)
 //! for why this project transliterates rather than links or vendors a native
-//! SDK. This is specifically upstream's **MEDIUM** preset: see `smaa.wgsl`'s
+//! SDK. This is specifically upstream's **MEDIUM** preset: see `smaa.wesl`'s
 //! module docs for exactly what that fixes and what it leaves out.
 //!
 //! # The lookup textures
@@ -165,7 +165,9 @@ impl Smaa {
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("smaa"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("smaa.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/smaa.wgsl")).into(),
+            ),
         });
 
         let point_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -178,7 +180,7 @@ impl Smaa {
         });
         // Upstream's `LinearSampler`: `MIN_MAG_LINEAR_MIP_POINT`, clamped.
         // The blend-weight pass deliberately reads the binary edges texture
-        // through this - see `smaa.wgsl`'s `@PSEUDO_GATHER4` note - so this
+        // through this - see `smaa.wesl`'s `@PSEUDO_GATHER4` note - so this
         // is not an approximation of upstream's sampler, it is the sampler.
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("smaa linear"),
@@ -555,7 +557,7 @@ fn clear_pass<'a>(
     }));
     // The clear covers the whole attachment - `LoadOp::Clear` is not
     // viewport-restricted - and the draw covers the drawn rectangle. That is
-    // deliberate and is what the `search_*` loops in `smaa.wgsl` lean on: the
+    // deliberate and is what the `search_*` loops in `smaa.wesl` lean on: the
     // edges outside the viewport are zero, so a search terminates there
     // exactly as it does at the frame border.
     pass.0.set_viewport(

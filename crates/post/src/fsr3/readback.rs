@@ -385,7 +385,9 @@ fn fill_depth(
 ) {
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("fsr3 test depth fill"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("fill_depth.wgsl").into()),
+        source: wgpu::ShaderSource::Wgsl(
+            include_str!(concat!(env!("OUT_DIR"), "/fill_depth.wgsl")).into(),
+        ),
     });
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("fsr3 test depth fill"),

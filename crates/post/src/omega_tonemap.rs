@@ -57,7 +57,7 @@ pub const LADDER_SIZE: u32 = 256;
 /// The luma ladder's format.
 pub const LADDER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
-/// The uniform block `omega_tonemap.wgsl` reads.
+/// The uniform block `omega_tonemap.wesl` reads.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniform {
@@ -184,7 +184,9 @@ impl Chain {
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("omega tonemap"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("omega_tonemap.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/omega_tonemap.wgsl")).into(),
+            ),
         });
         let both = wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE;
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

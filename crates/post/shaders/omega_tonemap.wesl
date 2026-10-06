@@ -7,6 +7,8 @@
 // per-channel cubic the MSAA resolve applies (blob 0x0196aa70). `law.rs` is
 // the same arithmetic in Rust; its tests hold this file to it.
 
+import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
+
 struct Params {
     luminance_a: f32,
     luminance_b: f32,
@@ -43,19 +45,9 @@ struct State {
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> params: Params;
 
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// The same fullscreen triangle every post pass in this crate uses.
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    out.uv = uv;
-    out.position = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
+    return fullscreen_triangle(index);
 }
 
 // A coordinate inside the drawn rectangle of the scene - see

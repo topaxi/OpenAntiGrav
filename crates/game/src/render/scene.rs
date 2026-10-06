@@ -41,7 +41,7 @@ const AUTHORED_LINES: f32 = 1080.0;
 /// loop the GPU would pay for every pixel.
 const MAX_REACH: f32 = 24.0;
 
-/// One pass's constants, `scene.wgsl`'s `Params`.
+/// One pass's constants, `scene.wesl`'s `Params`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Params {
@@ -107,7 +107,9 @@ impl SceneBackdrop {
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("scene backdrop"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("scene.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/scene.wgsl")).into(),
+            ),
         });
         let pipeline = |label: &str, entry: &str, format| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

@@ -1,5 +1,5 @@
 //! The Fury menu backdrop's GPU side: the clouds as instance buffers, the
-//! procedural sprite, and the four passes `backdrop.wgsl` carries.
+//! procedural sprite, and the four passes `backdrop.wesl` carries.
 //!
 //! `oag_ui::backdrop::Fury` decides what a frame looks like and hands over a
 //! [`Frame`]; this draws it. Per frame, before the page's own render pass:
@@ -32,7 +32,7 @@ use oag_ui::backdrop::{self, Frame};
 
 use super::resources::{sampler_entry, texture_entry, uniform_entry};
 
-/// The point pass's constants, `backdrop.wgsl`'s `Points`.
+/// The point pass's constants, `backdrop.wesl`'s `Points`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct PointUniforms {
@@ -47,7 +47,7 @@ struct PointUniforms {
     depth_fade: [f32; 4],
 }
 
-/// The post passes' constants, `backdrop.wgsl`'s `Post`.
+/// The post passes' constants, `backdrop.wesl`'s `Post`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct PostUniforms {
@@ -238,7 +238,9 @@ impl FuryBackdrop {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("fury backdrop"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("backdrop.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/backdrop.wgsl")).into(),
+            ),
         });
         let point_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

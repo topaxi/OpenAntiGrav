@@ -23,7 +23,7 @@
 //!
 //! **Ours**: that every layer is slot 0's 512 texels ([`SIZE`] - the slot
 //! assignment is not read), the slope-scaled rasteriser bias and the small constant
-//! floor beside it in `mesh.wgsl`, and the four-tap comparison - the RSX's
+//! floor beside it in `mesh`'s shader, and the four-tap comparison - the RSX's
 //! own depth-texture compare is one hardware tap whose filtering is unread.
 //!
 //! # Shape
@@ -117,7 +117,9 @@ impl Maps {
         // matrix, and nothing else is read. Its fragment stage is not bound.
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("self shadow caster"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("caster.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!(concat!(env!("OUT_DIR"), "/caster.wgsl")).into(),
+            ),
         });
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("self shadow caster"),

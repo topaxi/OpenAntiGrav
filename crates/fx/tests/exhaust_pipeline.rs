@@ -9,7 +9,7 @@
 //!
 //! The maths is covered by unit tests in `oag_fx::exhaust`, which need no
 //! GPU. What is **only** checkable here is the part those cannot reach: that
-//! `exhaust.wgsl` compiles, that the vertex layout matches `GpuVertex`, and that
+//! `exhaust.wesl` compiles, that the vertex layout matches `GpuVertex`, and that
 //! the pipeline's depth and blend state are accepted alongside the mesh
 //! pipeline's depth format. Every one of those is a validation error at device
 //! level rather than a compile error, so without this they are only caught by
