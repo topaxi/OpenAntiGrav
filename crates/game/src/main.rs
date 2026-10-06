@@ -154,12 +154,46 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 /// player watching a terminal, not shipped to a collector, and a timestamp and
 /// a module path on each would be wider than most of the messages.
 fn init_logging() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("warn,oag=info,calloop=error"),
-    )
-    .format_timestamp(None)
-    .format_target(false)
-    .init();
+    oag_log::install("warn,oag=info,calloop=error", oag_log::tool::FILE_FILTER);
+    oag_log::install_panic_hook();
+}
+
+/// Opens the log file once the command line and the settings file are known,
+/// the two things its path depends on. Lines logged since `init_logging` are
+/// held and written first.
+///
+/// **A file is written in addition to the terminal, never instead**, and the
+/// terminal is exactly what `init_logging` always made it. The file has its own,
+/// more verbose filter, a timestamp and the module path on every line, and is
+/// appended to across runs with entries older than a week pruned at startup: see
+/// `oag_log`. `--log-file ''` or `[log] file = ""` writes none. An unwritable
+/// location is a `warn` on the terminal, not a failed launch.
+fn attach_log_file(cli: &Cli, settings: &settings::Settings) {
+    let default = oag_log::path::default_path(
+        oag_log::path::Os::here(),
+        &oag_log::path::Env::from_process(),
+        "oag-game",
+    );
+    let Some(file) = oag_log::path::resolve(
+        cli.log.file.as_deref(),
+        settings.log.file.as_deref(),
+        default,
+    ) else {
+        oag_log::detach();
+        return;
+    };
+    let source = cli
+        .source
+        .clone()
+        .or_else(|| std::env::var("OAG_IMAGE").ok())
+        .or_else(|| settings.source.image.clone());
+    let header =
+        oag_game::logfile::header(source.as_deref(), &|key| std::env::var(key).ok(), &|path| {
+            path.exists()
+        });
+    if let Err(why) = oag_log::attach(&file, settings.log.filter.as_deref(), &header) {
+        warn!("not writing a log file at {}: {why}", file.display());
+    }
 }
 
 /// The counting allocator behind `oag-render`'s off-by-default `perf-probe`
@@ -174,6 +208,12 @@ static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
 
 fn main() -> Result<()> {
     init_logging();
+    let result = run();
+    oag_log::flush();
+    result
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
 
     // Ahead of settings and the disc search, deliberately: rasterising the
@@ -203,6 +243,7 @@ fn main() -> Result<()> {
     // anything else: a bad value in the file should fail immediately, not eight
     // seconds of intro later.
     let mut settings = settings::load()?;
+    attach_log_file(&cli, &settings);
     let anisotropy = cli.anisotropy.unwrap_or(settings.graphics.anisotropy);
     // A CLI render-profile flag overrides *every* title's entry for this run
     // only - never persisted, the same footing `anisotropy` above is already

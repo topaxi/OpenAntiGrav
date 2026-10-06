@@ -278,6 +278,10 @@ fn menu_page(source: &std::path::Path, anim_seconds: &str, name: &str) -> (usize
             "XDG_CONFIG_HOME",
             std::env::temp_dir().join("oag-omega-backdrop-config"),
         )
+        .env(
+            "XDG_STATE_HOME",
+            std::env::temp_dir().join("oag-omega-backdrop-state"),
+        )
         .status()
         .expect("running oag-game");
     assert!(

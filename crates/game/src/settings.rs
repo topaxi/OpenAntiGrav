@@ -124,6 +124,8 @@ pub struct Settings {
     pub controls: Controls,
     #[serde(default)]
     pub ai: Ai,
+    #[serde(default)]
+    pub log: Log,
     /// The language picked last time, by the XML's own English name
     /// (`English`, `French`).
     ///
@@ -134,6 +136,26 @@ pub struct Settings {
     /// English only. `--pick-language` shows the picker regardless.
     #[serde(default)]
     pub language: Option<String>,
+}
+
+/// Where the game's log file goes and how much goes into it. Settings file
+/// only: no menu row, and `--log-file` overrides `file` for one run.
+///
+/// Both keys are **absent until a player writes them**, and the rewrite
+/// [`load`] does leaves them absent: writing the resolved default path back
+/// would freeze it, and a later `$XDG_STATE_HOME` would stop applying.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Log {
+    /// Absent: `$XDG_STATE_HOME/oag/logs/oag-game.log` (see `oag_log::path`).
+    /// A path: that file. **Set but empty: no log file at all**, the one
+    /// switch for turning it off. Always appended to; entries older than seven
+    /// days are pruned at startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    /// The file's own filter, in `RUST_LOG` syntax. Absent:
+    /// [`oag_log::tool::FILE_FILTER`]. The terminal is untouched by it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
 }
 
 /// What the opponents are like.

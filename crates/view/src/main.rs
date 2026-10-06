@@ -49,6 +49,9 @@ use winit::window::{Window, WindowId};
     version
 )]
 struct Cli {
+    #[command(flatten)]
+    log: oag_log::tool::LogArgs,
+
     /// `<image>:<path-on-disc>`, for example
     /// `data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad`.
     archive: String,
@@ -419,8 +422,8 @@ fn load_texture_set(spec: &str, entry: &str) -> Result<mesh::Ps2TextureSet> {
 }
 
 fn main() -> Result<()> {
-    logging::init();
     let cli = Cli::parse();
+    logging::start(&cli.log);
 
     if let Some(name) = &cli.nodes {
         let only = match &cli.class {

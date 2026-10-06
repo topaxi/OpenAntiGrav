@@ -702,3 +702,28 @@ fn the_hud_scale_defaults_to_sharp_bilinear_and_reads_every_spelling() {
     }
     assert!(toml::from_str::<Settings>("[graphics]\nhud_scale = \"crisp\"").is_err());
 }
+
+/// `file = ""` is the disable switch, so a load -> save -> load must not
+/// normalise it away; an absent key must stay absent, or the resolved default
+/// would be frozen into the file.
+#[test]
+fn the_log_section_survives_a_rewrite_as_written() {
+    for (text, file, filter) in [
+        ("", None, None),
+        ("[log]\nfile = \"\"\n", Some(""), None),
+        (
+            "[log]\nfile = \"/x/y.log\"\nfilter = \"warn\"\n",
+            Some("/x/y.log"),
+            Some("warn"),
+        ),
+    ] {
+        let once = read(text);
+        assert_eq!(once.log.file.as_deref(), file, "{text}");
+        assert_eq!(once.log.filter.as_deref(), filter, "{text}");
+        let written = toml::to_string_pretty(&once).expect("serialise");
+        let twice = read(&written);
+        assert_eq!(twice.log.file, once.log.file, "{written}");
+        assert_eq!(twice.log.filter, once.log.filter, "{written}");
+        assert_eq!(written.contains("file ="), file.is_some(), "{written}");
+    }
+}
