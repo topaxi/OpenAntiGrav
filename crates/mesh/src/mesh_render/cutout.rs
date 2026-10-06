@@ -12,7 +12,7 @@
 //! model the way Wipeout HD's per-material one does.
 //!
 //! It is a *pipeline* constant rather than vertex or uniform data because
-//! `mesh.wgsl` declares `alpha_test_ref` as an `override`, so this file does
+//! `mesh.wesl` declares `alpha_test_ref` as an `override`, so this file does
 //! what [`super::TransparentPipelines`] already does for `DrawCall::blend`:
 //! build one pipeline per distinct value the model actually names, and pick
 //! between them per draw. Two on a Pulse circuit, and up to three where a
@@ -123,7 +123,7 @@ pub fn depth_compare(
 pub struct CutoutPipelines<'a> {
     /// [`super::Built::alpha_test_pipeline`] - the model-level reference, which
     /// is Wipeout HD's per-material value where it authors one and
-    /// `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` otherwise.
+    /// `mesh.wesl`'s `ALPHA_TEST_THRESHOLD` otherwise.
     pub default: &'a wgpu::RenderPipeline,
     /// [`super::Built::cutout_pipelines`], one per reference a `.vex` batch
     /// asked for.

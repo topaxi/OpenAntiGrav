@@ -2,7 +2,7 @@
 //!
 //! # Why it matters
 //!
-//! **The renderer's light rig is a stand-in** (`crates/mesh/src/mesh.wgsl`: two
+//! **The renderer's light rig is a stand-in** (`crates/mesh/src/mesh.wesl`: two
 //! invented lights, for legibility). On HD the look is authored, in plain text,
 //! one file per circuit: sun direction and colour, constant ambient, fog colour
 //! and density, tonemapper parameters. `CLAUDE.md`'s rule about not inventing

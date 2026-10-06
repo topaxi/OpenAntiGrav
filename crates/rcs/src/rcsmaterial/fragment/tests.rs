@@ -741,7 +741,7 @@ fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
 /// **`exp(N.H)` is not `pow(N.H, e)`, even fed by a saturated dot and
 /// reaching the output too** - a disc-wide sweep found materials computing
 /// `exp(x) = exp2(log2(e) * log2(x))` off exactly this shape, and the
-/// constant's exact identity is the tell: `mesh.wgsl`'s own fog curve names
+/// constant's exact identity is the tell: `mesh.wesl`'s own fog curve names
 /// `log2(e)` for the identical reason.
 #[test]
 fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {

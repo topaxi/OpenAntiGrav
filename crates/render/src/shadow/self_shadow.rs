@@ -23,7 +23,7 @@
 //!
 //! **Ours**: that every layer is slot 0's 512 texels ([`SIZE`] - the slot
 //! assignment is not read), the slope-scaled rasteriser bias and the small constant
-//! floor beside it in `mesh.wgsl`, and the four-tap comparison - the RSX's
+//! floor beside it in `mesh.wesl`, and the four-tap comparison - the RSX's
 //! own depth-texture compare is one hardware tap whose filtering is unread.
 //!
 //! # Shape

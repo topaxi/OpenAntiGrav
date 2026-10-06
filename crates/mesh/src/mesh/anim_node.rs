@@ -7,7 +7,7 @@
 use super::*;
 
 /// How many `Anim Transform` nodes one model may carry, matching
-/// `mesh.wgsl`'s `NodeAnims` array.
+/// `mesh.wesl`'s `NodeAnims` array.
 ///
 /// Slot 0 is the identity, so a model gets `NODE_ANIM_LIMIT - 1` real nodes.
 ///

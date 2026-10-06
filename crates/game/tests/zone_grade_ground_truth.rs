@@ -429,7 +429,7 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
         sub_venom.track.effect,
         [4.584_567, 6.537_755, 6.917_541, 20.0],
         "the stage's own Track.Texture Colour, and the disc's own glow drive \
-         scalar now that mesh.wgsl's zone_glow draws it"
+         scalar now that mesh.wesl's zone_glow draws it"
     );
     // `"1 Sub Venom.Scene.Texture Colour"=0.721569 0.909804 0.964706`,
     // `"1 Sub Venom.Scene.EQ brightness"=20.000000` - the showing stage's

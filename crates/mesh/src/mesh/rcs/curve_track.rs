@@ -64,7 +64,7 @@ impl std::fmt::Debug for UvCurveTrack {
 
 impl UvCurveTrack {
     /// This frame's `(scale, offset)`, `xy` of each - the two components
-    /// `mesh.wgsl`'s `TexAnims` actually reads.
+    /// `mesh.wesl`'s `TexAnims` actually reads.
     #[must_use]
     pub fn sample(&self, seconds: f32) -> ([f32; 2], [f32; 2]) {
         let mut offset = self.offset;

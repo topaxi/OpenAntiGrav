@@ -429,7 +429,7 @@ impl Program {
     /// This is the specular term's exponent on every lit material read so
     /// far: `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have
     /// no Lambert diffuse either" reads the ship's own `pow(N.H, 40)` this
-    /// way (`@0x40 LG2 / @0x43 MUL by 40 / @0x46 EX2`), and `mesh.wgsl`
+    /// way (`@0x40 LG2 / @0x43 MUL by 40 / @0x46 EX2`), and `mesh.wesl`
     /// hard-codes the same idiom's exponent at a shared `32` - which the same
     /// page's disc sweep shows is only the commonest of six values (`5`,
     /// `10`, `32`, `26.156`, `40`, `300`).
@@ -447,7 +447,7 @@ impl Program {
     ///   specular and sun-diffuse read in `renderer.md` shares, which a
     ///   texture-fed power curve does not.
     /// - The exponent literal is rejected when it is `log2(e)` (within
-    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, the idiom `mesh.wgsl`'s
+    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, the idiom `mesh.wesl`'s
     ///   own fog curve names this constant for. A saturated dot raised
     ///   through `exp()` rather than `pow()` - a Fresnel falloff, say -
     ///   shares both other gates without being this idiom.
@@ -554,7 +554,7 @@ impl Program {
                 // **A third false-positive class, found on a disc-wide sweep
                 // and not a guess: `LG2` / `MUL log2(e)` / `EX2` is not this
                 // idiom at all.** `EX2(log2(e) * LG2(x)) = exp(x)`, and
-                // `mesh.wgsl`'s own fog curve names exactly this constant for
+                // `mesh.wesl`'s own fog curve names exactly this constant for
                 // exactly this reason ("a MUL by log2(e) into EX2_SAT"). A
                 // saturated dot product raised through `exp()` instead of
                 // `pow()` is a Fresnel-style falloff sharing the specular
@@ -876,7 +876,7 @@ impl Program {
     ///
     /// This is the one question that separates Wipeout HD's emissive family
     /// from every other two-texture material, and the renderer needs it
-    /// because `mesh.wgsl` *selects* between its two textures where these
+    /// because `mesh.wesl` *selects* between its two textures where these
     /// *add* one to the other: `MAD H0.xyz, H0.wwww, H1, H0` is albedo plus
     /// diffuse-alpha times the tinted emissive sample. Without it those
     /// surfaces draw their diffuse alone and their glow is simply absent.

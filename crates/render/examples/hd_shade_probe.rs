@@ -1,4 +1,4 @@
-//! Scratch probe: every input `mesh.wgsl` shades a surface with, for the draw
+//! Scratch probe: every input `mesh.wesl` shades a surface with, for the draw
 //! calls of one texture, so a surface that renders black can be told from the
 //! term that makes it black.
 //!

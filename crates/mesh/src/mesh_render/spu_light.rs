@@ -21,12 +21,12 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "`EdgeGeom`'s light
 //! path is read" (confidence 80) and "The `SVC1` combine is read" (88). The
 //! RGBE round trip is exact to `256/255` (+0.4 %), which [`RGBE_ROUND_TRIP`]
-//! carries and `mesh.wgsl` applies.
+//! carries and `mesh.wesl` applies.
 //!
 //! # What this renderer does with it
 //!
 //! [`SpuLights`] is the same list, in the same record layout - `(x, y, z, w,
-//! r, g, b, D)` - bound as part of the `Scene` uniform so `mesh.wgsl`'s vertex
+//! r, g, b, D)` - bound as part of the `Scene` uniform so `mesh.wesl`'s vertex
 //! stage can run the sum per vertex, as the SPU does. **Chosen, not measured**:
 //! there is no per-chunk sphere cull on this side. The original's
 //! `LightCulling` job is a performance gate - a light outside a chunk's
@@ -76,7 +76,7 @@ impl SpuLight {
     };
 }
 
-/// The per-frame list, as `mesh.wgsl`'s `SpuLights` lays it out: a count in
+/// The per-frame list, as `mesh.wesl`'s `SpuLights` lays it out: a count in
 /// the first lane of a padded word, then the fixed array.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -117,7 +117,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     std::mem::size_of::<SpuLights>() == 16 + 32 * MAX_SPU_LIGHTS,
-    "mesh.wgsl's SpuLights is one padded count and the array"
+    "mesh.wesl's SpuLights is one padded count and the array"
 );
 
 #[cfg(test)]

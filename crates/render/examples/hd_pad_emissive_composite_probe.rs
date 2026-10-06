@@ -1,7 +1,7 @@
 //! Scratch probe behind [`pads.md`](../../../docs/rendering/pads.md)'s "What
 //! binds the `_ne` file": an **offline** picture of what the disc's own
 //! measured emissive defaults would look like, composited outside the
-//! renderer entirely - no change to `Pick`, `skin()` or `mesh.wgsl`. Do not
+//! renderer entirely - no change to `Pick`, `skin()` or `mesh.wesl`. Do not
 //! wire this into the renderer; see `pads.md` for why (one `aux` texture
 //! slot per material, and the lightmap already owns it).
 //!
@@ -14,7 +14,7 @@
 //! `[1.0, 1.0, 1.0]` white - the tint used below is that fallback, **not a
 //! disc-authored value**. What is genuinely **not** measured: which of unit
 //! 1's channels the accumulate instruction actually reads (sampled RGB,
-//! RGB×alpha, or alpha alone), and **which alpha gates it** - `mesh.wgsl`'s
+//! RGB×alpha, or alpha alone), and **which alpha gates it** - `mesh.wesl`'s
 //! own generic version of this shape gates by the *diffuse's* alpha
 //! (`first.a`), which `_cs`'s own alpha (measured, `hd_pad_ne_colour_probe`)
 //! covers over 93% of the texture, not the ~7% `_ne`'s own alpha covers.

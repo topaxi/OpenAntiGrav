@@ -115,7 +115,7 @@ fn main() -> anyhow::Result<()> {
     for path in [
         "/data/environments/12_sol_2/hd_textures/dds/ds_weaponup_ne.gtf",
         "/data/environments/12_sol_2/hd_textures/dds/ds_speedup_ne.gtf",
-        // Also the diffuse files' own alpha: `mesh.wgsl`'s documented
+        // Also the diffuse files' own alpha: `mesh.wesl`'s documented
         // ADD_SECOND shape gates the glow by `first.a` (unit 0, the
         // diffuse), not by unit 1's own alpha - see the tint probe and
         // pads.md for why this matters.

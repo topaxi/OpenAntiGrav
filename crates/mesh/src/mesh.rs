@@ -5,7 +5,7 @@ use oag_assets::Container;
 use oag_vex::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
-/// `mesh.wgsl`'s `TexAnims` array.
+/// `mesh.wesl`'s `TexAnims` array.
 ///
 /// Slot 0 is the identity, so a model gets `ANIM_TRACK_LIMIT - 1` real tracks.
 ///
@@ -90,7 +90,7 @@ pub struct Model {
     /// Each material slot's specular exponent, positionally beside
     /// [`Self::textures`] exactly as [`Self::material_slots`] is - the
     /// per-material `pow(N.H, e)` value read off the same resolved fragment
-    /// program, in place of `mesh.wgsl`'s shared fallback.
+    /// program, in place of `mesh.wesl`'s shared fallback.
     ///
     /// Empty for every title but Wipeout HD, the only one with a shader
     /// table to read this from. See `mesh::rcs::skin::roles` and
@@ -100,7 +100,7 @@ pub struct Model {
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
     ///
-    /// **Read, not yet acted on.** `mesh.wgsl` still shades every surface one
+    /// **Read, not yet acted on.** `mesh.wesl` still shades every surface one
     /// way; this is what a per-material path would key on, and what
     /// `mesh/rcs.rs`'s report counts so a reading that reaches most of a
     /// circuit can be told from one that does not. Empty on every title but
@@ -136,7 +136,7 @@ pub struct Model {
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
     /// the interpolated colour to the lightmap term before multiplying the
     /// albedo - so multiplying by it, as every other title's assets intend,
-    /// darkens instead of tinting. `mesh.wgsl` reads it as a pipeline override.
+    /// darkens instead of tinting. `mesh.wesl` reads it as a pipeline override.
     ///
     /// **A property of the model, not of the render target.** Keying it off the
     /// target's colour space was tried and was wrong both ways: HD's capture
@@ -174,12 +174,12 @@ pub struct Model {
     /// `alpha_func`/`alpha_ref` pair the RSX programs into
     /// `NV4097_SET_ALPHA_FUNC`/`SET_ALPHA_REF`, and every one of the disc's is
     /// `GL_GREATER`/`0.5` - see `mesh::rcs::cutout`, which reads it and
-    /// reports anything else. `mesh.wgsl` takes it as the `alpha_test_ref`
+    /// reports anything else. `mesh.wesl` takes it as the `alpha_test_ref`
     /// pipeline override, the same way [`Self::flame`]'s numbers reach it.
     ///
     /// `None` for every PSP and PS2 model, whose alpha-tested batches carry no
     /// reference of their own that this project has recovered - the shader's
-    /// own default stands there, and `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD`
+    /// own default stands there, and `mesh.wesl`'s `ALPHA_TEST_THRESHOLD`
     /// carries the evidence for it.
     pub alpha_test_ref: Option<f32>,
     /// Centre of the bounding box, so the camera can frame the model.

@@ -1,4 +1,4 @@
-//! Scratch probe: compute `mesh.wgsl`'s whole light equation on the CPU, for
+//! Scratch probe: compute `mesh.wesl`'s whole light equation on the CPU, for
 //! the draw calls of one texture, **weighted by world-space triangle area**.
 //!
 //! `hd_shade_probe.rs` reports the shading inputs a vertex carries. This

@@ -2355,6 +2355,7 @@ dependencies = [
  "oag-vex",
  "pollster",
  "serde",
+ "wesl",
  "wgpu",
 ]
 

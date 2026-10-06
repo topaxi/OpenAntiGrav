@@ -1,7 +1,7 @@
 //! The `Anim Transform` node matrix reaches the GPU and moves geometry.
 //!
 //! Runs on a real device, needs no game content, and runs in CI. This is the
-//! half a data-level test cannot cover: that `mesh.wgsl` reads the table from
+//! half a data-level test cannot cover: that `mesh.wesl` reads the table from
 //! binding 1 of group 3 and applies it, and that the vertex layout carries
 //! `GpuVertex::xform` on **every** pipeline rather than only the opaque one.
 //!
@@ -218,7 +218,7 @@ fn a_transparent_draw_moves_too() {
 /// The sibling check to the two above, and the one that was previously
 /// established by *reading* `mesh_render::build` rather than by rendering.
 /// `TexAnims::sample` moving is asserted by `authored_uv_ground_truth.rs`; that
-/// the sampled table then reaches `mesh.wgsl` and moves a texture coordinate is
+/// the sampled table then reaches `mesh.wesl` and moves a texture coordinate is
 /// this test's job. A layout or binding fault here freezes every banner and
 /// arrow on the disc while both data-level tests stay green - which is exactly
 /// the shape of "the banners do not marquee".

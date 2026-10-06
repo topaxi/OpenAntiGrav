@@ -521,7 +521,7 @@ fn animation_trigger_is_absent_from_every_vex_checked() {
 }
 
 /// Nothing lit hangs under a non-uniformly scaled `Anim Transform`, which is
-/// what lets `mesh.wgsl` skip the inverse transpose on the node matrix.
+/// what lets `mesh.wesl` skip the inverse transpose on the node matrix.
 ///
 /// The scale keys really are per-axis - 129 of the 920 are - so the shader's
 /// simplification is not "the data is uniform", it is "the geometry that would
@@ -587,6 +587,6 @@ fn no_lit_mesh_hangs_under_a_non_uniform_scale() {
     assert_eq!(
         lit, 0,
         "a lit mesh under a non-uniform scale needs the inverse transpose \
-         mesh.wgsl deliberately skips"
+         mesh.wesl deliberately skips"
     );
 }

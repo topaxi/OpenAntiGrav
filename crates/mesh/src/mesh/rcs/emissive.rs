@@ -2,7 +2,7 @@
 //!
 //! The one shape that separates HD's emissive family from every other
 //! two-texture material: `MAD H0.xyz, H0.wwww, H1, H0` - the albedo plus the
-//! diffuse alpha times a tinted, scrolling sample from unit 1. `mesh.wgsl`
+//! diffuse alpha times a tinted, scrolling sample from unit 1. `mesh.wesl`
 //! *selects* between its two textures everywhere else, so without this the
 //! glow is simply absent rather than wrong.
 //!
@@ -144,7 +144,7 @@ const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f87
 /// disc whose added texture decodes to a normal map.
 ///
 /// What refusing does *not* do is draw the normal map in its own role: that
-/// still wants the tangent frame `mesh.wgsl` has no input for, and the pads'
+/// still wants the tangent frame `mesh.wesl` has no input for, and the pads'
 /// own `_ne`-alpha-gated term is a separate open question on
 /// `docs/rendering/pads.md`. Nothing added is an honest absence; a normal
 /// map added as a glow was not.
@@ -337,7 +337,7 @@ pub(super) fn emissive(
     table
 }
 
-/// How many distinct glow layers one model may carry, matching `mesh.wgsl`'s
+/// How many distinct glow layers one model may carry, matching `mesh.wesl`'s
 /// `Emissives` array.
 ///
 /// Slot 0 is "no glow", so a model gets `EMISSIVE_LIMIT - 1` real entries.

@@ -11,7 +11,7 @@ use super::rcs;
 /// sampled at a point in the model's animation clock, from whichever title's
 /// own texture animation mechanism authored it.
 ///
-/// Two titles, two mechanisms, one shared shader table: `mesh.wgsl`'s
+/// Two titles, two mechanisms, one shared shader table: `mesh.wesl`'s
 /// `TexAnims` already applies `uv * scale + offset` per vertex without caring
 /// which - see [`crate::mesh::GpuVertex::anim`]. Pulse/Pure walk a material's
 /// own `TEXOFFSET`/`TEXSCALE` keyframe block; Wipeout HD samples a material's

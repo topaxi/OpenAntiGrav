@@ -16,7 +16,7 @@
 //!
 //! A third argument writes the frame as a PNG as well, for looking at.
 //!
-//! **This replaces a `threshold_probe.rs` that no longer exists.** `mesh.wgsl`
+//! **This replaces a `threshold_probe.rs` that no longer exists.** `mesh.wesl`
 //! cited it for the alpha-threshold measurement, but it was deleted after that
 //! change landed and the citation outlived it - which is the failure this file
 //! exists to stop repeating.

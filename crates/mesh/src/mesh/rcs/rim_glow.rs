@@ -18,7 +18,7 @@
 //! Neither declares an ambient, a sun or a lightmap, and neither reads the
 //! vertex colour. `globalAlphaScaler` is the identity `(0, 1)` the engine
 //! initialises and never changes for these draws, and `fogColour` is the
-//! fog `mesh.wgsl`'s `fogged` already applies - so every number the shader
+//! fog `mesh.wesl`'s `fogged` already applies - so every number the shader
 //! needs beyond the texture and the clock is a literal in the program itself,
 //! which is what [`classify`] checks before it sets a bit.
 //!
@@ -36,7 +36,7 @@
 //! A mnemonic sequence, the file's own (unpatched) literals in order, the
 //! declared parameter set and a single sampler - all four must match. The
 //! literals are the load-bearing part: they are exactly the numbers
-//! `mesh.wgsl` hard-codes for each bit, so a program that computed the same
+//! `mesh.wesl` hard-codes for each bit, so a program that computed the same
 //! shape with a different constant is refused rather than drawn with this
 //! file's. A mnemonic sequence alone would not be enough; the DATA02 copy of
 //! the LeachBall's material moves its `0.9` into a model parameter and is
@@ -150,7 +150,7 @@ const PLASMA_HEAD: Shape = Shape {
 /// The [`slots`] bit a material's resolved program earns, or `0`.
 ///
 /// `authored_alpha` is the material's own value for [`RIM_EDGE_ALPHA`], which
-/// the Plasma head's program moves straight to its output alpha. `mesh.wgsl`
+/// the Plasma head's program moves straight to its output alpha. `mesh.wesl`
 /// carries no per-material alpha for this path, so the bit is only set where
 /// that value is exactly `1.0` - every material on the disc that matches the
 /// shape, measured by `crates/render/examples/hd_unlit_census.rs` - and a

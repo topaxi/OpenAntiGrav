@@ -5,7 +5,7 @@
 //!
 //! `mesh_render::build` decides from the model's textures alone
 //! ([`Texels::Chain`]) whether to push the `texlod_slope` and `texlod_bias`
-//! pipeline constants, and `mesh.wgsl` has to read them by those names and
+//! pipeline constants, and `mesh.wesl` has to read them by those names and
 //! take `textureSampleLevel` rather than `textureSample`. Any of those dropped
 //! leaves the sampler on screen-space derivatives, which for a quad with one
 //! constant texture coordinate is level 0 at every depth - so this draws one

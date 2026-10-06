@@ -292,7 +292,7 @@ fn the_depth_pass_records_the_caster_and_clears_the_rest() {
     assert_eq!(at(middle, 4), 1.0, "the top border");
 }
 
-/// The receiver's lookup in `mesh.wgsl` - `uv = (ndc.x * 0.5 + 0.5, 0.5 -
+/// The receiver's lookup in `mesh.wesl` - `uv = (ndc.x * 0.5 + 0.5, 0.5 -
 /// ndc.y * 0.5)` - reads the texel the caster pass actually wrote, in both
 /// maps.
 ///
@@ -360,7 +360,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
     map.render_depth(&queue, &mut encoder, &fit, &[caster]);
     queue.submit([encoder.finish()]);
 
-    // The same arithmetic as `shadow_coverage` in `mesh.wgsl`, for the
+    // The same arithmetic as `shadow_coverage` in `mesh.wesl`, for the
     // caster's own centre, against each map's own matrix and size.
     let lookup = |matrix: Mat4, size: u32| {
         let clip = matrix * model.transform_point3(Vec3::ZERO).extend(1.0);
@@ -407,7 +407,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
         "the mirrored row is at the far plane"
     );
     // The receiver's own comparison for a surface that cast this very depth:
-    // `mesh.wgsl` lights a pixel when `ndc.z - depth_bias <= nearest`, and a
+    // `mesh.wesl` lights a pixel when `ndc.z - depth_bias <= nearest`, and a
     // caster has to come out lit against its own texel or the whole `mapped`
     // tier is acne. The rasterizer's slope-scaled bias in `Map::new` is what
     // pushes the written depth past `z`; this checks that it pushed it the

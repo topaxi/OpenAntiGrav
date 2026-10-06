@@ -12,7 +12,7 @@
 //! The channel is not assumed to be entry 0's `a`: `mesh::slots` carries which
 //! of the two bound textures the coverage comes from and which of its four
 //! channels, read off each material's own fragment microcode, and this reads
-//! the same bits `mesh.wgsl` does.
+//! the same bits `mesh.wesl` does.
 
 use oag_mesh::mesh::{self, ModelTexture, slots};
 use oag_rcs::rcsmodel::{Material, Transparency};

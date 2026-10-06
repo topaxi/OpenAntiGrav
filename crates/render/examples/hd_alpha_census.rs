@@ -3,7 +3,7 @@
 //!
 //! A blended draw whose texel alpha comes out at zero is drawn and invisible,
 //! which on a frame reads exactly like geometry that was never built. This
-//! reproduces `mesh.wgsl`'s own coverage choice - which of the two bound
+//! reproduces `mesh.wesl`'s own coverage choice - which of the two bound
 //! textures the alpha is read from (`slots::ALPHA_FROM_SECOND`) and which of
 //! its four channels (`slots::alpha_channel`) - so the answer is the shader's
 //! and not a guess at it.

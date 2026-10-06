@@ -64,7 +64,7 @@ impl TextureDetail {
         }
     }
 
-    /// [`Self::scale`] as `mesh.wgsl` applies it: added to the level the slope
+    /// [`Self::scale`] as `mesh.wesl` applies it: added to the level the slope
     /// law computes, `-log2(scale)`. A doubled distance is one level less at
     /// every depth, and `-64` is far past any chain, so it clamps to level 0.
     /// Zero for [`Self::Original`], which is what a zeroed scene buffer holds,
@@ -108,7 +108,7 @@ impl From<TextureDetail> for String {
     }
 }
 
-/// The pipeline constants `mesh.wgsl` reads to select a level by the GE's slope
+/// The pipeline constants `mesh.wesl` reads to select a level by the GE's slope
 /// rule: `texlod_slope` and `texlod_bias`, plus `aniso_max` (the sampler's
 /// clamp, so the explicit level keeps an anisotropic footprint), for a model
 /// that carries the disc's own mip chains ([`Texels::Chain`], which is a PSP `.vex` model), and nothing

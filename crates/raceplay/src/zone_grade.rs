@@ -362,7 +362,7 @@ impl ZoneGrade {
     /// other 859 sample [`Self::stage_scene_art`], the "general" set: fifteen
     /// byte-identical flat whites whose alpha is 255 everywhere, so a scene
     /// chunk's surface is its `Scene.Texture Colour` flat plus the rim terms.
-    /// `mesh.wgsl`'s `zone_sample` picks per fragment; see
+    /// `mesh.wesl`'s `zone_sample` picks per fragment; see
     /// [`Self::zone_uniform`] and [`oag_mesh::mesh_render::Zone`].
     ///
     /// `None` for a stage past the set, or one whose entry did not decode -
@@ -723,7 +723,7 @@ impl ZoneGrade {
     /// goes through is bit 0 of its own render-block flags in the
     /// `.rcsmodel` - `oag_rcs::rcsmodel::Mesh::is_track`, set on 124 of
     /// Talon's Junction's 983 chunks. [`mesh_render::Zone::track`] and
-    /// [`mesh_render::Zone::scene`] carry one group each and `mesh.wgsl`
+    /// [`mesh_render::Zone::scene`] carry one group each and `mesh.wesl`
     /// selects per fragment. It matters: `Scene.Texture Colour` is authored
     /// black on stage `Start` and its `Track` sibling is `9.0` there, which
     /// is a dark environment around a lit road - the original's own opening

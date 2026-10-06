@@ -6,10 +6,10 @@
 //! `Model::alpha_test_ref` is a plain `Option<f32>` and every step between it
 //! and a discarded fragment is a place it can be dropped silently:
 //! `mesh_render::build` has to push it as a pipeline constant, the constant's
-//! name has to match `mesh.wgsl`'s `override`, and the entry point has to
+//! name has to match `mesh.wesl`'s `override`, and the entry point has to
 //! compare against the override rather than against the constant it defaults
 //! to. Each of those failures leaves Wipeout HD's mode-2 surfaces testing at
-//! `mesh.wgsl`'s own default of `0` - which keeps every texel above fully
+//! `mesh.wesl`'s own default of `0` - which keeps every texel above fully
 //! transparent and so looks like a working cutout while reproducing nothing
 //! the disc asked for.
 //!

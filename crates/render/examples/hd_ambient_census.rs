@@ -1,7 +1,7 @@
 //! Scratch probe: which drawn materials actually declare
 //! `constantAmbientColour`, against the renderer applying it to all of them.
 //!
-//! `mesh.wgsl` adds `scene.light.ambient` to every surface. A material's
+//! `mesh.wesl` adds `scene.light.ambient` to every surface. A material's
 //! resolved fragment block declares the parameters it is fed, and
 //! `rcsmaterial::Declared::takes_constant_ambient` reads that list - so the
 //! difference between the two is measurable rather than arguable.

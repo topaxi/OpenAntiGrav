@@ -79,7 +79,7 @@ fn project(matrix: Mat4, world: Vec3) -> (Vec3, usize) {
     )
 }
 
-/// `mesh.wgsl`'s `SELF_SHADOW_BIAS`, restated: the compare is
+/// `mesh.wesl`'s `SELF_SHADOW_BIAS`, restated: the compare is
 /// `ndc.z - bias <= depth`.
 const BIAS: f32 = 0.001;
 

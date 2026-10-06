@@ -3,7 +3,7 @@
 //! own `f[TC0]` input the reconstructed fragment/vertex-program equation in
 //! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s `lane-hd-ceiling`
 //! section reads before its `pow(_, prelitBias) * prelitScaleSpecular`
-//! curve, and which `mesh.wgsl` currently adds raw with no curve at all.
+//! curve, and which `mesh.wesl` currently adds raw with no curve at all.
 //!
 //! Per material slot named on the command line: the population's raw mean
 //! (which a `pow(_, 3.5)` curve makes a poor summary of the *rendered*
@@ -190,7 +190,7 @@ fn main() -> anyhow::Result<()> {
         // The same top decile through Amphiseum's own authored curve -
         // applied to the raw normalised byte, with **no** sRGB decode: the
         // vertex program's own `LG2 -> MUL -> EX2 -> MUL` chain reads
-        // `v[3]` directly, unlike `mesh.wgsl`'s lightmap path, which decodes
+        // `v[3]` directly, unlike `mesh.wesl`'s lightmap path, which decodes
         // `baked.rgb` through `pow(_, 2.2)` first. Applying that decode here
         // would be inventing a step the vertex microcode does not have.
         let curved: Vec<[f32; 3]> = by_luma[..top.max(1).min(by_luma.len())]

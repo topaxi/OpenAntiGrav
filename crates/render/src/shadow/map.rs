@@ -130,9 +130,9 @@ impl Fit {
         };
         let view = camera::look_at(eye, self.centre, up);
         // `0.0..1.0` depth, which is wgpu's clip convention and what the
-        // receiver's own `ndc.z` test in `mesh.wgsl` assumes.
+        // receiver's own `ndc.z` test in `mesh.wesl` assumes.
         // The same `directx` clip convention `camera::perspective` uses, which
-        // is wgpu's: depth runs 0 to 1, and `mesh.wgsl`'s own `ndc.z` test
+        // is wgpu's: depth runs 0 to 1, and `mesh.wesl`'s own `ndc.z` test
         // assumes it.
         let projection = camera::orthographic(-radius, radius, -radius, radius, 0.0, reach * 2.0);
         projection * view

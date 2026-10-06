@@ -449,7 +449,7 @@ impl Scene {
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
     ) -> Result<Self> {
         // **Opened here, not by the caller.** Every drawable below shares this
-        // `device`, so `mesh_render::build` parses `mesh.wgsl` once and reuses
+        // `device`, so `mesh_render::build` parses `mesh.wesl` once and reuses
         // a pipeline whenever two drawables ask for the descriptor-identical
         // one. A caller that opened it itself is a caller that can forget: the
         // `--screenshot` path did, and compiled 9,859 pipelines for 53
@@ -469,7 +469,7 @@ impl Scene {
         let (omega, format) =
             hd_chain::build_omega(device, format, caller_format, size, omega_tonemap);
         // **The Zone stage's own texture, bound once per model.** The showing
-        // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
+        // stage's `zoneModeTrack<n>.gtf`, which `mesh.wesl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
         // pure black - see `mesh_render::Zone`. `None` outside a Zone race, or
         // on a title with no located set, and then the shader's own

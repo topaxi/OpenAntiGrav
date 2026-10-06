@@ -1,4 +1,4 @@
-//! The three per-model uniform tables `mesh.wgsl` reads from bind group 3.
+//! The three per-model uniform tables `mesh.wesl` reads from bind group 3.
 //!
 //! Split out of [`super`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change. They share
@@ -9,7 +9,7 @@
 
 use crate::mesh::Model;
 
-/// The texture-transform table `mesh.wgsl` reads from bind group 3: one
+/// The texture-transform table `mesh.wesl` reads from bind group 3: one
 /// `(scale, offset)` pair per entry of [`Model::anim_tracks`], already sampled
 /// for this frame.
 ///
@@ -68,7 +68,7 @@ impl TexAnims {
 /// Size, in bytes, of the [`TexAnims`] uniform buffer.
 pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
 
-/// The node-transform table `mesh.wgsl` reads from bind group 4: one world
+/// The node-transform table `mesh.wesl` reads from bind group 4: one world
 /// matrix per entry of [`Model::anim_nodes`], sampled for this frame.
 ///
 /// Slot 0 is the identity, which is what [`GpuVertex::xform`] `== 0` selects,
@@ -81,7 +81,7 @@ pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct NodeAnims {
     /// One column-major world matrix per node. The layout
-    /// `oag_vex::vex` already uses - see `mesh.wgsl`'s own note.
+    /// `oag_vex::vex` already uses - see `mesh.wesl`'s own note.
     pub transform: [[f32; 16]; crate::mesh::NODE_ANIM_LIMIT],
 }
 
@@ -114,7 +114,7 @@ impl NodeAnims {
 /// Size, in bytes, of the [`NodeAnims`] uniform buffer.
 pub const NODE_ANIMS_SIZE: u64 = std::mem::size_of::<NodeAnims>() as u64;
 
-/// The additive glow table `mesh.wgsl` reads from bind group 3: one entry per
+/// The additive glow table `mesh.wesl` reads from bind group 3: one entry per
 /// [`Model::emissive`], indexed by [`crate::mesh::slots::material_index`].
 ///
 /// **Written once at build, not per frame.** Every number in it is an authored

@@ -102,13 +102,13 @@ pub struct DrawCall {
     /// draw call rather than per model for the reason [`Self::blend`] is: a
     /// single mesh mixes them, and a circuit is one `Model`.
     ///
-    /// **The `0` is why `mesh.wgsl` discards at `<=` and not `<`.** The GE's
+    /// **The `0` is why `mesh.wesl` discards at `<=` and not `<`.** The GE's
     /// test is `GU_GREATER`, so a reference of `0` keeps every texel above
     /// fully transparent and discards the rest; under `<` it discards nothing
     /// at all, and Pure's `Speedup Pad` draws as a solid square.
     ///
     /// `None` keeps the pipeline-level reference, which is `Model::alpha_test_ref`
-    /// where a Wipeout HD material authored one and `mesh.wgsl`'s own
+    /// where a Wipeout HD material authored one and `mesh.wesl`'s own
     /// `ALPHA_TEST_THRESHOLD` otherwise. So the two families compose without
     /// either overriding the other: HD authors per material and lands on the
     /// pipeline, PSP/PS2 author per batch and land here.

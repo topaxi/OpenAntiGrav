@@ -767,7 +767,7 @@ impl Drawable {
     }
 }
 
-/// Uniforms shared with `oag-render`'s `mesh.wgsl`.
+/// Uniforms shared with `oag-render`'s `mesh.wesl`.
 ///
 /// Declared here rather than reused because `oag_mesh::mesh_render` only exposes
 /// a writer that computes an *orbit* camera from the model's bounding sphere, which
@@ -789,7 +789,7 @@ pub(crate) struct Uniforms {
     _pad1: f32,
     _pad2: f32,
     /// The previous tick's `view_projection * model`, premultiplied - one
-    /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog
+    /// matrix rather than a second pair, per `mesh.wesl`'s own mirror: fog
     /// and lighting need world position, velocity needs only clip position.
     prev_mvp: [[f32; 4]; 4],
 }

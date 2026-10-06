@@ -101,7 +101,7 @@
 //! `vertex_attr_array!` slot, threading through `MaterialSetup`), and none of
 //! `mesh.rs`/`mesh/rcs/skin.rs`/`mesh_render.rs` had the line budget left
 //! under `scripts/check-file-size.py`'s 1,000-line cap to add it in the same
-//! change as the routing fix. `mesh.wgsl`'s combine omits it - `ramp` stands
+//! change as the routing fix. `mesh.wesl`'s combine omits it - `ramp` stands
 //! in for `ramp + c` - which is a stated, named omission of a real value, not
 //! an invention of one. Next action: add the field the same way
 //! `specular_exponent` did, patch-checked the same way (`Program::patches`

@@ -1,5 +1,5 @@
 //! Draws one light-cone surface through the mesh pipeline on a fixture needing
-//! no game content, and pins what `mesh.wgsl` does with the combine
+//! no game content, and pins what `mesh.wesl` does with the combine
 //! `mesh::rcs::light_cone` reads off `dc_lightcone.rcsmaterial`:
 //!
 //! - the colour is `noise * K`, **saturated** before it blends (Talon's

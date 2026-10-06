@@ -17,10 +17,10 @@ pub(super) struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
     /// Which layer of the per-craft sun-occlusion array this model samples,
-    /// plus one - `0.0` for none. See `mesh.wgsl`'s `sun_occlusion` and
+    /// plus one - `0.0` for none. See `mesh.wesl`'s `sun_occlusion` and
     /// [`crate::shadow::occlusion`]. Was a global texture-animation phase
     /// before [`TexAnims`] replaced it and padding after; reused so the
-    /// layout `mesh.wgsl`, four other pipelines and the asset viewer mirror
+    /// layout `mesh.wesl`, four other pipelines and the asset viewer mirror
     /// stays the same size.
     sun_occlusion_layer: f32,
     /// The model's own animation clock in seconds - what an HD material's
@@ -32,7 +32,7 @@ pub(super) struct Uniforms {
     _pad2: f32,
     /// The previous simulation tick's `view_projection * model`,
     /// premultiplied: what the velocity target measures screen motion
-    /// against. See `mesh.wgsl`'s own mirror for why this is one matrix
+    /// against. See `mesh.wesl`'s own mirror for why this is one matrix
     /// rather than a second `view_projection`/`model` pair - fog and
     /// lighting need world position, velocity needs only clip position, and
     /// a split pair here would add 64 bytes to every draw for nothing.
@@ -244,7 +244,7 @@ mod tests {
     }
 }
 
-/// The fog block `mesh.wgsl` reads from bind group 2.
+/// The fog block `mesh.wesl` reads from bind group 2.
 ///
 /// Deliberately **not** part of [`Uniforms`]. That struct is mirrored by every
 /// pipeline in this crate and by the asset viewer, so growing it means moving
@@ -269,7 +269,7 @@ pub struct Fog {
     pub enabled: f32,
     /// Wipeout HD's fog coefficient, for [`Fog::curve`] `1.0`; unused at `0.0`.
     pub density: f32,
-    /// Which curve `mesh.wgsl` applies. `0.0` is the GE's linear ramp between
+    /// Which curve `mesh.wesl` applies. `0.0` is the GE's linear ramp between
     /// [`Fog::near`] and [`Fog::far`], re-sampled from a `fogCube` volume each
     /// frame - Pulse's fog. `1.0` is Wipeout HD's, **read out of its own
     /// fragment microcode** rather than guessed: every fogged variant of a
@@ -430,7 +430,7 @@ pub use light::Light;
 /// `Scene.*` colours, the other binds `zoneModeTrack*` beside the `Track.*`
 /// ones. So "which texture set" and "which colour group" are one choice, not
 /// two. Both pairs travel here - [`Self::track`] and [`Self::scene`] - and
-/// `mesh.wgsl` picks between them per fragment on `slots::ZONE_TRACK`, which
+/// `mesh.wesl` picks between them per fragment on `slots::ZONE_TRACK`, which
 /// `mesh::rcs` sets from the chunk's own render-block flags:
 /// `oag_rcs::rcsmodel::Mesh::is_track`, bit 0 of the halfword at `+0x06` of
 /// the record the chunk header's `+0x08` names. That is what `FUN_003ff860`
@@ -463,7 +463,7 @@ pub use light::Light;
 ///
 /// The sky cube, the pads and the collision wireframe do still reach this
 /// path, and there the recolour is a blanket one - same shape as the shared
-/// specular exponent and the blanket sun term `mesh.wgsl` already carries.
+/// specular exponent and the blanket sun term `mesh.wesl` already carries.
 ///
 /// **The sum happens in each shading path's own colour space.** `zoneTex` is a
 /// texture and takes the same `pow(x, 2.2)` decode every other sample here
@@ -514,7 +514,7 @@ pub use light::Light;
 /// Scene sets, and so does this renderer now -
 /// [`super::zone::StageArt::track_outer`]/[`super::zone::StageArt::scene_outer`],
 /// bound alongside [`super::zone::StageArt::track`]/[`super::zone::StageArt::scene`]
-/// at `mesh.wgsl`'s bindings 11/12 and selected per fragment on the same
+/// at `mesh.wesl`'s bindings 11/12 and selected per fragment on the same
 /// `zone_inside` test as [`Self::track_outer`]/[`Self::scene_outer`]'s own
 /// colours. The stage-change edge that swaps the showing stage also rebuilds
 /// just those four texture views (`super::zone::rebind`, called from
@@ -532,13 +532,13 @@ pub use light::Light;
 ///    so it is absent by scope as much as for want of a source.
 /// 2. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
 ///    lookup is rewritten every frame from a value whose source is unread,
-///    so `mesh.wgsl`'s `zone_glow` samples a lookup this project fills from
+///    so `mesh.wesl`'s `zone_glow` samples a lookup this project fills from
 ///    its own mixer instead. Its additive sibling, `5.0 * saturate(1 - 0.1 *
 ///    (distance - zoneColourTint.w))`, now has both its inputs and is still
 ///    left out: as read it adds `5.0` to *every* fragment inside the sphere,
 ///    not just at its edge, and the live frame at radius `799` shows no such
 ///    flood - so the reading of that term is what is in doubt, and it stays
-///    out until it is re-read. See `mesh.wgsl`'s `zone_glow`.
+///    out until it is re-read. See `mesh.wesl`'s `zone_glow`.
 // **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
 // alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
 // starts at a 16-aligned offset there. Rust's own alignment for it is 4, and
@@ -733,7 +733,7 @@ pub enum ShadowReceiver {
 }
 
 impl ShadowReceiver {
-    /// The pipeline constant `mesh.wgsl` compares against.
+    /// The pipeline constant `mesh.wesl` compares against.
     #[must_use]
     pub fn constant(self) -> f64 {
         match self {
@@ -804,7 +804,7 @@ impl Scene {
 
 const _: () = assert!(
     std::mem::size_of::<Zone>() == 224,
-    "mesh.wgsl's Zone is two vec4s and four three-vec4 sets"
+    "mesh.wesl's Zone is two vec4s and four three-vec4 sets"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),
@@ -816,7 +816,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     std::mem::size_of::<ShadowMap>() == 80,
-    "mesh.wgsl's ShadowMap is a mat4x4 and one padded vec4"
+    "mesh.wesl's ShadowMap is a mat4x4 and one padded vec4"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),
@@ -835,7 +835,7 @@ const _: () = assert!(
 ///
 /// **[`Scene`]'s size, which is [`Fog`] *and* [`Light`]** - 96 bytes, not the
 /// 32 the name `FOG_SIZE` promised until finding R3 of the 2026-08-18 review.
-/// The layout itself was right the whole time and matches `mesh.wgsl` field for
+/// The layout itself was right the whole time and matches `mesh.wesl` field for
 /// field; what was wrong was that anyone adding to `Scene` read a constant
 /// claiming to measure one of its two halves.
 pub const SCENE_SIZE: u64 = std::mem::size_of::<Scene>() as u64;

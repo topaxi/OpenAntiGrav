@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
     // The old behaviour, reproduced exactly: every cutout back on the flat
     // `1/255` this project compared against before the per-batch reference was
     // recovered. Named rather than left `None`, because `None` takes
-    // `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD`, which is `0` now that the discard
+    // `mesh.wesl`'s `ALPHA_TEST_THRESHOLD`, which is `0` now that the discard
     // is `<=` - the two are the same picture on 8-bit alpha but not on the
     // sampler's filtered edges, and this probe measures edges.
     let mut flat = recovered.clone();

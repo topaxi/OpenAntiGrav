@@ -1,5 +1,5 @@
 //! Draws one glow-bearing surface through the mesh pipeline on **both** of
-//! `mesh.wgsl`'s paths and asserts the pixel each leaves.
+//! `mesh.wesl`'s paths and asserts the pixel each leaves.
 //!
 //! # Why this test exists
 //!
@@ -123,7 +123,7 @@ fn model(lit: f32) -> Model {
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),
         textures: vec![Some(texture("black albedo", [0, 0, 0, 255]))],
-        // The second slot, which `mesh.wgsl` samples as `glow_sample`. It is
+        // The second slot, which `mesh.wesl` samples as `glow_sample`. It is
         // the same binding the baked atlas uses, which is exactly why
         // `rcs::emissive` refuses a layer to any material whose second slot
         // *is* that atlas - adding a light term and a sun mask to an albedo

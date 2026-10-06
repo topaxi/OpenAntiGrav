@@ -14,7 +14,7 @@
 //! 2026-08-13, and `mesh::build_pads` is title-agnostic through that table -
 //! so `Data\Environments\01_Vineta_K\track.vex` decoded 14 `Speedup Pad`
 //! nodes, 952 triangles, correctly. **Every one of them still rendered as
-//! zero visible pixels**, because `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD` was an
+//! zero visible pixels**, because `mesh.wesl`'s `ALPHA_TEST_THRESHOLD` was an
 //! invented `0.5` and Pure's `speedup_GLOW_KEY.tga` tops out at alpha
 //! `58/255` (`0: background, 57..58: glow interior`, measured directly off
 //! the decoded texture). A cutout batch discards below the threshold, so
@@ -28,7 +28,7 @@
 //! # And the guard that a lit-pixel count alone does not give
 //!
 //! The count above is one-sided, and the second failure this file now pins
-//! walked straight past it: `mesh.wgsl` discarded at `shaded.a <
+//! walked straight past it: `mesh.wesl` discarded at `shaded.a <
 //! alpha_test_ref`, which is `GEQUAL` and not the `GU_GREATER` the GE
 //! programs. That is invisible while the only reference is Wipeout HD's
 //! `0.5`, and fatal at the `0` Pure's pad asks for - `a < 0.0` is true of no
@@ -128,7 +128,7 @@ fn a_pure_speedup_pad_draws_visible_pixels() {
         lit > 100,
         "{name}: only {lit} lit pixel(s) of 1,048,576 (a real pad draws ~310 here) - the \
          pad geometry decoded but drew (almost) nothing, which is exactly the \
-         `ALPHA_TEST_THRESHOLD` regression this test exists to catch. See mesh.wgsl's \
+         `ALPHA_TEST_THRESHOLD` regression this test exists to catch. See mesh.wesl's \
          `ALPHA_TEST_THRESHOLD` doc comment."
     );
 
@@ -149,7 +149,7 @@ fn a_pure_speedup_pad_draws_visible_pixels() {
          with the alpha test forced off, so the test is discarding (almost) nothing. At \
          the reference this pad's own file asks for - `0` - that is what a discard \
          written `shaded.a < alpha_test_ref` does instead of the GE's `GU_GREATER`, and \
-         the pad renders as a square plate. See mesh.wgsl's `alpha_test_ref`."
+         the pad renders as a square plate. See mesh.wesl's `alpha_test_ref`."
     );
 }
 

@@ -125,7 +125,7 @@ pub fn capture_pixels_from(
     //
     // This was `Rgba8UnormSrgb`, and the reasoning that put it there is
     // superseded rather than wrong: given a texture upload that *linearised*,
-    // `mesh.wgsl` multiplied linear light by the light rig and only an
+    // `mesh.wesl` multiplied linear light by the light rig and only an
     // encode-on-write target matched the window. That premise is gone - the
     // upload below is raw now - so the multiply happens in gamma space, the
     // window no longer encodes either, and an encoding target here would be the

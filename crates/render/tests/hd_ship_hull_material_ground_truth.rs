@@ -15,7 +15,7 @@
 //!
 //! Before 2026-09-13, 78 of 178 drawn ship materials disc-wide (every
 //! `/data/ships/*/ship.vex`) never resolved a shader variant, and every hull
-//! drew part of itself through `mesh.wgsl`'s unresolved fallback. Measured
+//! drew part of itself through `mesh.wesl`'s unresolved fallback. Measured
 //! and diagnosed in `crates/render/examples/hd_ship_class_census.rs`: the
 //! cause was `Features::chunk_word` treating a ship's `VertexColour1`
 //! attribute as HD's baked-light colour set, asking every one of those

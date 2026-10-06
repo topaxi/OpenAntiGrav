@@ -186,7 +186,7 @@ impl Scene {
         let fog = oag_vex::fog::sample(&self.fog_volumes, eye.to_array())
             .map_or(eye_fog, |p| mesh_render::Fog::new(&p, eye.to_array()));
         // The circuit's own light rig where it authors one - Wipeout HD does,
-        // in `track.envsettings` - and `mesh.wgsl`'s stand-in where it does
+        // in `track.envsettings` - and `mesh.wesl`'s stand-in where it does
         // not, which is every title whose rig has not been recovered.
         // **Before the scene uniform is composed, not just before the scene
         // pass.** `shadow_uniform` reports a strength only once the map has
@@ -324,7 +324,7 @@ impl Scene {
         // tables are written below instead, off its own reveal timer rather
         // than the race clock these lists ride.
         // **The flame surfaces need the clock, and nothing else from `scene`.**
-        // Both a craft's flare and its boost plume draw through `mesh.wgsl`'s
+        // Both a craft's flare and its boost plume draw through `mesh.wesl`'s
         // `flame_shading` path, which replaces the lit result outright and
         // applies no fog - so binding `Scene::off()` plus the clock leaves
         // their appearance exactly where `mesh_render::build` put it while

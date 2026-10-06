@@ -8,7 +8,7 @@
 //!     -E 'binary(hd_zone_wave_census_ground_truth)'
 //! ```
 //!
-//! `mesh.wgsl` switches `slots::MAG_WAVE` and `slots::MAG_LOOP` off when
+//! `mesh.wesl` switches `slots::MAG_WAVE` and `slots::MAG_LOOP` off when
 //! `scene.zone.enabled` is set, on the strength of this census: across all four
 //! PS3 archives, every fragment variant of a material that has the wave and
 //! also declares a Zone input (`zoneColourTint`) declares no wave sampler
