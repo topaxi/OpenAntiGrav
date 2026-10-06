@@ -10,6 +10,8 @@ use crate::gpu::GpuContext;
 
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
+#[path = "race_stage/endrace_touch.rs"]
+pub(crate) mod endrace_touch;
 #[path = "race_stage/ghost.rs"]
 pub(crate) mod ghost;
 #[path = "race_stage/hd_loyalty.rs"]
@@ -133,7 +135,7 @@ pub(crate) struct RaceStage {
     /// this existed. Built once, by `Session::frame`'s finish-transition
     /// arm - see `crate::main::session::endrace`. [`Self::endrace_unavailable`]
     /// is what makes that "forever" true rather than "retried every frame".
-    pub(crate) endrace: Option<endrace::EndRaceRuntime>,
+    pub(crate) endrace: Option<endrace_touch::EndRace>,
     /// Set once [`Session::build_endrace`] has tried to build
     /// [`Self::endrace`] and failed, so it is never tried again for this
     /// race.

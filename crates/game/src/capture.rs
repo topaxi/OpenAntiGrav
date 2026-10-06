@@ -19,6 +19,7 @@ use oag_ui::frontend::Draw;
 mod campaign_page;
 mod card;
 mod endrace_page;
+mod endrace_touch_page;
 mod loading;
 mod menu_page;
 mod offscreen;
@@ -90,6 +91,8 @@ pub struct Options {
     /// `None` captures the front end and nothing else, which is what a run that
     /// never reaches `Launch Game` does anyway.
     pub race: Option<race::Options>,
+    /// `--event`: the 2048 campaign event a `--menu-page endrace-summary` races for its result.
+    pub event: Option<String>,
     /// With that handoff, print a telemetry line every this many ticks.
     pub log_every: u32,
     /// `--give`: keep the player's pickup slot topped up. See
@@ -219,6 +222,7 @@ pub fn run(
         menu_font,
         title_font,
         buttons_font,
+        face_scales,
         ..
     } = loaded;
 
@@ -723,14 +727,8 @@ pub fn run(
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
-                // The three EndRace screens - the same "opened over the
-                // menus, off the disc's own source" shape `campaign_kind`'s
-                // own arm above is, not a page of our own tree. See
-                // `oag_game::endrace` and `crate::main::session::endrace`
-                // for the live flow this is a still of. The archive-opening
-                // and faces/skin/globals setup `campaign_kind`'s own arm
-                // keeps inline lives in `endrace_page::capture` instead -
-                // see that function's own doc for why.
+                // The EndRace screens, opened off the disc's own source - see
+                // `endrace_page::capture`.
                 let (list, trophy) = endrace_page::capture(
                     kind,
                     options.race.as_ref(),
@@ -744,6 +742,7 @@ pub fn run(
                     &menu_frame,
                     &mut sprites,
                     title,
+                    (&face_scales, options.event.as_deref()),
                 )?;
                 preview_request = trophy;
                 (backdrop, video_format, list, space)

@@ -53,9 +53,13 @@ pub fn load(
         .context("the EndRace definition has no shell, first page or colour globals")?;
 
     let mut srcs: Vec<&str> = Vec::new();
-    for layout in [Some(&layouts.shell), Some(&layouts.summary), layouts.objectives.as_ref()]
-        .into_iter()
-        .flatten()
+    for layout in [
+        Some(&layouts.shell),
+        Some(&layouts.summary),
+        layouts.objectives.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
     {
         let screen = &layout.screen;
         let icons = screen.touch_buttons.iter().filter_map(|b| b.src.as_deref());
@@ -102,6 +106,84 @@ pub struct Facts {
     pub objectives: Option<EventObjectives>,
     /// The bar the race cleared, by `oag_2048::campaign::evaluate_tier`.
     pub tier: Option<Tier>,
+}
+
+impl Facts {
+    /// A race's own facts: what it came to in its own mode, graded against the
+    /// event's `objectives` by `oag_2048::campaign::evaluate_tier` - the same
+    /// law `RaceStage::campaign_2048_medal` grades the stored medal by, fed
+    /// the same outcome.
+    ///
+    /// **What a mode "comes to" is chosen, not measured**: a place for a race,
+    /// the total time for a time trial, the best lap for a speed lap, the zone
+    /// reached, the kills scored.
+    #[must_use]
+    pub fn from_race(race: &oag_raceplay::Race, objectives: Option<EventObjectives>) -> Self {
+        // The race's own mode, not the menu's: an event launched off the map
+        // carries its own, and `race_options.mode` still says what the RACE
+        // page held.
+        let mode = race.sim.world.mode();
+        let standing = race.player_standing();
+        let finished = race.finished();
+        let total = oag_game_ticks(oag_race::race_clock_ticks(
+            standing.finish_tick.unwrap_or(race.sim.world.tick),
+        ));
+        let zone = race.sim.world.primary_race().zone;
+        let place = race.player_place();
+        let shown = match mode {
+            oag_race::Mode::TimeTrial => Standing::Time(total),
+            oag_race::Mode::SpeedLap => standing
+                .best_lap_ticks
+                .map_or(Standing::Place(place), |ticks| {
+                    Standing::Time(oag_game_ticks(u64::from(ticks)))
+                }),
+            oag_race::Mode::Zone => Standing::Zone(zone),
+            oag_race::Mode::Eliminator => Standing::Kills(standing.kills),
+            _ => Standing::Place(place),
+        };
+        let outcome = oag_2048::campaign::EventOutcome {
+            finished,
+            place,
+            finish_centiseconds: finished.then_some(total),
+            zone,
+            kills: standing.kills,
+        };
+        Self {
+            mode,
+            standing: shown,
+            objectives,
+            tier: objectives.and_then(|o| oag_2048::campaign::evaluate_tier(&o, &outcome)),
+        }
+    }
+}
+
+fn oag_game_ticks(ticks: u64) -> i64 {
+    crate::medal_watch::ticks_to_centiseconds(ticks)
+}
+
+/// Races a 2048 campaign event to its end under the autopilot and returns what
+/// it came to - the real result a `--menu-page endrace-summary --event` still
+/// and the disc-backed ground truth are fed from.
+///
+/// # Errors
+///
+/// The event does not load, or the race is still running after `cap` ticks.
+pub fn finished_event(options: &oag_raceplay::Options, name: &str, cap: u64) -> Result<Facts> {
+    let loaded = oag_raceplay::load_event(options, name)?;
+    let objectives = loaded
+        .campaign_2048_event
+        .as_ref()
+        .and_then(|progress| progress.objectives);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    while !race.finished() && race.sim.world.tick < cap {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    anyhow::ensure!(
+        race.finished(),
+        "{name} was still running after {cap} ticks"
+    );
+    Ok(Facts::from_race(&race, objectives))
 }
 
 /// The page title's string id: Measured, `FUN_810cf5fe`.
@@ -179,25 +261,32 @@ pub fn summary(facts: &Facts, strings: &StringTable) -> Summary {
             rule.target.unwrap_or(0),
         )
     };
-    let objective = facts.objectives.as_ref().and_then(|o| line(&o.pass));
-    let rows = facts
-        .objectives
-        .as_ref()
-        .map(|o| {
-            [
-                (line(&o.pass), Tone::Pass, facts.tier.is_some()),
-                (line(&o.elite), Tone::Elite, facts.tier == Some(Tier::Elite)),
-            ]
-            .into_iter()
-            .filter_map(|(text, tone, met)| {
-                Some(ObjectiveRow {
-                    text: text?,
-                    state: if met { tone } else { Tone::Fail },
-                })
+    // **The chain the pages show.** `FUN_810cf5fe` points its objective list at
+    // the event's elite chain once the elite bar is met and at the pass chain
+    // otherwise, words the first objective of that chain on both pages, and
+    // `FUN_810d0c46` ticks its row: `Pass`/`ElitePass` when met (by which
+    // chain it is), `Fail` when not. Measured.
+    let chain = facts.objectives.as_ref().map(|o| {
+        if facts.tier == Some(Tier::Elite) {
+            (&o.elite, Tone::Elite)
+        } else {
+            (&o.pass, Tone::Pass)
+        }
+    });
+    let objective = chain.and_then(|(rule, _)| line(rule));
+    let rows = chain
+        .and_then(|(rule, met)| {
+            Some(ObjectiveRow {
+                text: line(rule)?,
+                state: if facts.tier.is_some() {
+                    met
+                } else {
+                    Tone::Fail
+                },
             })
-            .collect()
         })
-        .unwrap_or_default();
+        .into_iter()
+        .collect();
     let (message, medal_label) = match tone {
         Tone::Pass => (word("ER_CONGRAT"), word("FE_PASS")),
         Tone::Elite => (word("ER_CONGRAT"), word("FE_ELITE_PASS")),

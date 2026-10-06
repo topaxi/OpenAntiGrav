@@ -77,6 +77,8 @@ pub struct Boot {
     pub circuit_names: oag_ui::language::CircuitNames,
     /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    /// See [`Shell::face_scales`].
+    pub face_scales: Vec<(String, f32)>,
     pub title_font: Option<oag_ui::font::Atlas>,
     /// The PlayStation button-glyph face, when this source's language
     /// plugins name one - see [`fonts::load_buttons_font`] and
@@ -1219,7 +1221,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     frontend.set_menu_skin(menu_skin);
     // Only where they were measured - see `load_shell`'s own gate.
     if !face_scales.is_empty() {
-        frontend.set_face_scales(face_scales, font.line_height);
+        frontend.set_face_scales(face_scales.clone(), font.line_height);
     }
     if profile.picker_from_loaded_faces {
         frontend.set_picker_line_height(font.line_height);
@@ -1344,6 +1346,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         race_setup,
         circuit_names,
         menu_font,
+        face_scales,
         title_font,
         buttons_font,
         languages: offered,

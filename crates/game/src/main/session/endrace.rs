@@ -11,10 +11,14 @@ use crate::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
     loyalty_award, menu_options, to_campaign_medal, tournament_results, zone_results,
 };
+use crate::race_stage::endrace_touch::EndRace;
 use crate::race_stage::hd_loyalty::{HdRace, hd_award};
 use crate::stage::Stage;
 
 use super::Session;
+
+#[path = "endrace_touch.rs"]
+mod touch;
 
 impl Session {
     /// Attempts to build the EndRace flow for the race that just finished in
@@ -46,6 +50,10 @@ impl Session {
         // Past the guards that make this run once per finished race, so the
         // line is the race ending, not a per-frame retry.
         log::info!("race finished");
+        if oag_game::endrace::dialect(shell.title) == Some(oag_title::EndRaceDialect::Touch) {
+            self.build_endrace_touch();
+            return;
+        }
 
         let mode = race_options.mode;
         let source = race_options.source.clone();
@@ -300,7 +308,7 @@ impl Session {
         ) {
             Ok(runtime) => {
                 if let Stage::Race(stage) = &mut self.stage {
-                    stage.endrace = Some(runtime);
+                    stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
                 }
             }
             Err(error) => {
@@ -313,7 +321,7 @@ impl Session {
     /// Records that this race's EndRace flow could not be built, so that
     /// [`Self::build_endrace`] stops at its own guard from the next frame
     /// on. See `RaceStage::endrace_unavailable`.
-    fn mark_endrace_unavailable(&mut self) {
+    pub(super) fn mark_endrace_unavailable(&mut self) {
         if let Stage::Race(stage) = &mut self.stage {
             stage.endrace_unavailable = true;
         }
@@ -329,6 +337,12 @@ impl Session {
                 return;
             };
             let Some(endrace) = stage.endrace.as_mut() else {
+                return;
+            };
+            let EndRace::Disc(endrace) = endrace else {
+                // 2048's pages answer a pointer and pad of their own - see
+                // `Session::tick_endrace_touch`.
+                self.tick_endrace_touch(pointer);
                 return;
             };
             endrace.tick_flow();
@@ -398,7 +412,7 @@ impl Session {
         match option {
             MenuOption::ViewResultsAgain => {
                 if let Stage::Race(stage) = &mut self.stage
-                    && let Some(endrace) = stage.endrace.as_mut()
+                    && let Some(EndRace::Disc(endrace)) = stage.endrace.as_mut()
                 {
                     endrace.view_results_again();
                 }
@@ -480,7 +494,7 @@ impl Session {
     /// window back to the menus, the same way `Session::escape` does for a
     /// live race - see that function's own doc on why a *finished* race is
     /// discarded rather than parked.
-    fn leave_finished_race(&mut self) {
+    pub(super) fn leave_finished_race(&mut self) {
         // Whether the tournament just finished its last leg or is being
         // abandoned early, there is nothing to carry past this point - see
         // `Session::tournament`'s own doc for why this engine parks no

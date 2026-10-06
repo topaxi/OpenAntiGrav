@@ -125,8 +125,14 @@ fn fill_of(list: &[Draw], at: [f32; 4]) -> Option<[f32; 4]> {
 #[test]
 fn a_boxs_own_offset_places_it() {
     let list = draws(&model(Tone::Pass));
-    assert!(fill_of(&list, [180.0, 77.0, 600.0, 64.0]).is_some(), "MessageBox");
-    assert!(fill_of(&list, [180.0, 191.0, 400.0, 122.0]).is_some(), "ResultBox");
+    assert!(
+        fill_of(&list, [180.0, 77.0, 600.0, 64.0]).is_some(),
+        "MessageBox"
+    );
+    assert!(
+        fill_of(&list, [180.0, 191.0, 400.0, 122.0]).is_some(),
+        "ResultBox"
+    );
 }
 
 /// The verdict paints both coloured bars, and the colours are the disc's.
@@ -140,8 +146,16 @@ fn a_verdict_paints_the_message_and_total_bars() {
     ] {
         let list = draws(&model(tone));
         let want = argb_to_rgba(want);
-        assert_eq!(fill_of(&list, [180.0, 77.0, 600.0, 64.0]), Some(want), "{tone:?}");
-        assert_eq!(fill_of(&list, [180.0, 363.0, 600.0, 64.0]), Some(want), "{tone:?}");
+        assert_eq!(
+            fill_of(&list, [180.0, 77.0, 600.0, 64.0]),
+            Some(want),
+            "{tone:?}"
+        );
+        assert_eq!(
+            fill_of(&list, [180.0, 363.0, 600.0, 64.0]),
+            Some(want),
+            "{tone:?}"
+        );
     }
 }
 
@@ -194,8 +208,18 @@ fn the_exit_tile_swaps_to_the_tick_on_a_pass() {
             .map(|(_, _, src)| src.map(str::to_string))
             .collect::<Vec<_>>()
     };
-    assert!(srcs(Tone::Pass)[1].as_deref().unwrap().ends_with("Icon_Tick.gtf"));
-    assert!(srcs(Tone::Fail)[1].as_deref().unwrap().ends_with("Icon_Exit.gtf"));
+    assert!(
+        srcs(Tone::Pass)[1]
+            .as_deref()
+            .unwrap()
+            .ends_with("Icon_Tick.gtf")
+    );
+    assert!(
+        srcs(Tone::Fail)[1]
+            .as_deref()
+            .unwrap()
+            .ends_with("Icon_Exit.gtf")
+    );
 }
 
 #[test]
@@ -215,10 +239,20 @@ fn a_click_on_a_tile_or_the_panel_is_a_hit_and_off_them_is_none() {
         pointer_hit(&layouts, &model, &click(700.0, 450.0)),
         Some(Hit::Tile(Button::Exit))
     );
-    assert_eq!(pointer_hit(&layouts, &model, &click(400.0, 200.0)), Some(Hit::Panel));
+    assert_eq!(
+        pointer_hit(&layouts, &model, &click(400.0, 200.0)),
+        Some(Hit::Panel)
+    );
     assert_eq!(pointer_hit(&layouts, &model, &click(10.0, 10.0)), None);
     assert_eq!(
-        pointer_hit(&layouts, &model, &Pointer { at: Some((500.0, 450.0)), ..Pointer::default() }),
+        pointer_hit(
+            &layouts,
+            &model,
+            &Pointer {
+                at: Some((500.0, 450.0)),
+                ..Pointer::default()
+            }
+        ),
         None,
         "a hover is not a tap"
     );

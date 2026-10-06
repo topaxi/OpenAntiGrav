@@ -36,9 +36,8 @@
 //! # What is chosen, not measured (no confidence score)
 //!
 //! The wording of the result line (`RaceResultText`), because the string the
-//! original puts there lives in a game-mode field not traced; the objective
-//! rows' tick versus cross (`MP_PASS_TICK`, `MP_ELITE_PASS_TICK`,
-//! `MP_FAIL_CROSS`); the pad buttons and the pointer's whole-panel tap.
+//! original puts there lives in a game-mode field not traced; the pad buttons
+//! and the pointer's whole-panel tap.
 
 use oag_ui::frontend::{Align, Draw, Placed, cursor_ring};
 use oag_ui::language::StringTable;
@@ -114,7 +113,9 @@ pub enum Tone {
 pub struct ObjectiveRow {
     /// The objective, worded.
     pub text: String,
-    /// Which of the row's three icons draws. **Chosen, not measured.**
+    /// Which of the row's three icons draws: `Pass` or `Elite` for a met
+    /// objective of that chain, `Fail` for a missed one. Measured,
+    /// `FUN_810d0c46`.
     pub state: Tone,
 }
 
