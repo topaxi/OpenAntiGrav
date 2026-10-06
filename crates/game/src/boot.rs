@@ -651,6 +651,7 @@ pub fn load_shell(
             .chain(track_box.as_ref().map(|track_box| &track_box.screens))
             .collect::<Vec<_>>(),
         &block_textures,
+        front_end.bottom_up_gnf,
         &mut report,
     );
     steps.lap("sprites");

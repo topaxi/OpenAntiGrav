@@ -488,6 +488,19 @@ pub struct FrontEnd {
     /// was a guess made before the XML was actually read: on the disc it is
     /// one bar image, not three.
     pub menu_frame: Option<&'static str>,
+    /// File stems (lower case, no extension) of the `.gnf` images stored with
+    /// their rows in HD's `.gtf` order, bottom-up, so the sprite sheet must
+    /// reverse them as it does a `.gtf`'s. Empty for every title but Omega.
+    ///
+    /// A `.gnf` carries no row-order flag, so which ones is a census: Omega's
+    /// packager re-authored the images its screens name top-down (135 of the 143 asymmetric ones
+    /// that match an HD file by name and size match its rows reversed), but
+    /// eight are HD's bytes exactly, rows in HD's file order. The names are
+    /// measured against HD's own `.gtf` of the same stem
+    /// (`docs/formats/omega-status.md`, "The menu blocks"); an image on this
+    /// list that no HD file matches would be a guess, which is why it is a
+    /// census and not a rule.
+    pub bottom_up_gnf: &'static [&'static str],
     /// The definition file that authors the race box's own selection
     /// screens - `Track Creation`/`Track Selection` and `Team Selection` -
     /// or `None` for a title whose race box has not been read.

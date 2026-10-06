@@ -13,13 +13,13 @@
 //!   project's toolchain (`oag_trace`'s own list is PCSX2/PPSSPP/RPCS3), so
 //!   nothing has watched an Omega boot the way HD's three RPCS3 runs did
 //!   before [`oag_hd::frontend::BOOT`] upgraded. See [ADR-0025].
-//! - **[`MENU_BLOCKS`]-equivalent numbers do not exist here at all.** HD's
-//!   own `MenuBlocks` table is read out of `EBOOT.elf` at named addresses -
-//!   nothing authored in any XML - and nobody has disassembled Omega's PS4
-//!   executable. Pointing `MENU_SKIN.blocks` at `oag_hd::frontend::MENU_BLOCKS`
-//!   would assert an unmeasured equivalence between two different binaries,
-//!   so it stays `None`: the menu loses its block background/cursor/arrow
-//!   art rather than drawing HD's numbers under Omega's name.
+//! - **[`MENU_BLOCKS`] is HD's, inherited and not measured on Omega.** The
+//!   numbers are read out of HD's `EBOOT.elf`, nothing is authored in any XML,
+//!   and nobody has disassembled Omega's PS4 executable. It is carried over
+//!   because the one thing that can be checked agrees (Omega's `file2.gnf`
+//!   decodes to HD's `file2.gtf` exactly) and because without it the menu is
+//!   bare labels on a flat box, which the maintainer reported on 2026-10-06
+//!   as not rendering correctly. Labelled where it is declared.
 //! - **No race box.** `racebox_definition.xml` exists in `data09.psarc`, but
 //!   its dialect has not been checked against either the Pulse/Pure
 //!   `Selection_Definition.xml` shape `oag_ui_screens::picker::Layout::read` parses
@@ -96,7 +96,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         // Omega's own `skin.xml` unchanged.
         selected_fill: Some("HD_Blue"),
     }),
-    blocks: None,
+    blocks: Some(MENU_BLOCKS),
     // `additional_definition.xml`'s own `<Item OffsetX="160" OffsetY="170">`
     // (three `type="Settings"` screens) - read directly, matches HD's x/y to
     // the digit. `pitch`/`text_scale` not independently re-measured this
@@ -167,6 +167,20 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     touch: None,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
+    // The eight `.gnf` that are HD's `.gtf` bytes in HD's own row order,
+    // measured against HD's file of the same stem: the nine-patch and its two
+    // marks, the rule texture `skin.xml` stretches into the frame's two lines,
+    // and four corner and square tiles. See `docs/formats/omega-status.md`.
+    bottom_up_gnf: &[
+        "file",
+        "file2",
+        "cursor",
+        "corner",
+        "corner2",
+        "square",
+        "line",
+        "unlocked_corner",
+    ],
     // See this module's own "What is not here" section.
     race_box: None,
     // `Team_Selection_Definition.xml` is in `data09.psarc` at HD's own path,
@@ -321,3 +335,59 @@ pub const LANGUAGE_PLUGINS: &[&str] = &[
     r"Languages\traditionalchinese",
     r"Languages\turkish",
 ];
+
+/// The box behind every entry of the menu, carried over from `oag_hd::frontend::MENU_BLOCKS`.
+///
+/// **Inherited, not measured on Omega.** Every number is HD's executable's
+/// (`Block_Item.cpp`, `HorizMenu_Item.cpp`, `List_Item.cpp`); nobody has read
+/// Omega's `eboot.bin`. What supports carrying them: the nine-patch Omega
+/// ships (`file2.gnf`) is HD's `file2.gtf` byte for byte once decoded, and the
+/// three textures are named the way HD's loader names them. What does not
+/// carry is the row order, see `oag_title::FrontEnd::bottom_up_gnf`.
+pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
+    frame_texture: r"Data\FE\Images\file2.gtf",
+    cursor_texture: r"Data\FE\Images\cursor.gtf",
+    arrow_texture: r"Data\FE\Images\HD_options_arrow.gtf",
+    strip: oag_title::StripBlocks {
+        // `HorizMenu_Construct`, `0x001b47c8`: `+0xe0 = 298.0`, the field
+        // `HorizMenu_ParseXml` fills from `ItemWidth`.
+        item_width: 298.0,
+        // `HorizMenu_LayoutBlocks`, `0x001b4158`: `0x008ad5a0`.
+        focus_extra: 70.0,
+        // The same function: `0x008ad59c`, the block pitch's `+10` and the
+        // label's inset.
+        gap: 10.0,
+        // `HorizMenu_AddEntryBlock`, `0x001b2b98`: `0x008ad4f0`.
+        height: 64.0,
+        // `HorizMenu_LayoutBlocks`: `0x008ad59c` and `0x008ad5a4`.
+        underline_offset: (10.0, 35.0),
+        // The same function: the `Image` child's `+0xac`/`+0xb0`.
+        underline_size: (32.0, 16.0),
+        // The same function's 17-frame counter: white for `0..7`, invisible
+        // for `8..16`. Confidence 70 - see the page for the captures that
+        // argue with it.
+        underline_on_ticks: 8,
+        underline_off_ticks: 9,
+    },
+    list: oag_title::ListBlocks {
+        // `List_Construct`, `0x001bf7f8`: `+0x12c`, `+0x13c`, `+0x140`.
+        label_width: 520.0,
+        value_width: 280.0,
+        value_focus_width: 340.0,
+        // `List_CreateWidgets`, `0x001bdb48`: `0x008ad8d0`.
+        gap: 10.0,
+        // `Block_Construct`'s own default, `0x0018b818`, which `List` keeps.
+        height: 40.0,
+        // `List_CreateWidgets`: `0x008ad8cc` and `0x008ad8c8`.
+        marker_offset: (8.0, 4.0),
+        // `List_Construct`: `+0xe8..+0xf4` (32), `+0xf8` (-18), `+0xfc` (-30).
+        arrow_size: 32.0,
+        arrow_left_offset: -18.0,
+        arrow_right_offset: -30.0,
+        // `List_Update`, `0x001c03e0`, and measured at alpha `0.247` in
+        // `hd-settings-screenshot-2/01.png`.
+        arrow_inert: 0x3FFF_FFFF,
+    },
+    // `0x008ad594`, `0x008afc94` and `0x008ad9c0`: one sixth, in all three.
+    ease: 1.0 / 6.0,
+};
