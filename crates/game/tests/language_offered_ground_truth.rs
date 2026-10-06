@@ -54,6 +54,10 @@ fn check(image: &str, serial: &str, expected: &[(&str, &str)]) {
         .iter()
         .map(|l| (l.plugin.as_str(), l.name.as_str()))
         .collect();
+    // The disc's own languages in the disc's order, then the project language
+    // after them, standing on the disc's English plugin (2026-10-06).
+    let mut expected = expected.to_vec();
+    expected.push((expected[0].0, "PortugueseBR"));
     assert_eq!(got, expected, "{image}: {report:?}");
     assert_eq!(
         oag_ui::language::load::chosen_language(&languages, None).map(|l| l.name.as_str()),

@@ -44,9 +44,13 @@
 # and passes the second, because the gap is now visible, countable, and the
 # same shape as `check-file-size.py`'s own `BASELINE`. Deleting an id from
 # `[untranslated]` the moment it is translated is the same discipline that
-# script's `graduated` list asks for. **Never machine-translate to clear a
-# row here** - an invented translation is worse than an honest gap, because a
-# reviewer who does not speak the language cannot tell the two apart.
+# script's `graduated` list asks for. **A machine translation may clear a
+# row** (maintainer's decision, 2026-10-06), but it says so: every entry is
+# `ID = { text = "...", human = false }`, and `human` is `true` only when a
+# human wrote or approved the text. `check-strings.py` reports the
+# `human = false` count per file and does not fail on it. This file's own
+# entries are `human = false` where their introducing commit carries a Claude
+# `Co-Authored-By` trailer, which is every one of them today.
 
 [strings]
 

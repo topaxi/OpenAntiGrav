@@ -10,6 +10,14 @@
 # `[untranslated]` - never both, and never omitted. `just check-strings`
 # (`scripts/check-strings.py`) enforces both halves of that.
 #
+# **Machine translation is allowed, and marked.** Every entry is
+# `ID = { text = "...", human = false }`; `human` is `true` only when a human
+# wrote or approved the text, and none of this file's have been (each was added
+# in a commit with a Claude `Co-Authored-By` trailer). The deferrals below were
+# a 2026-09 choice to prefer an honest gap over an unreviewed guess; the
+# 2026-10-06 rule lets a model fill them, flagged, and they stay open only
+# because nobody has done it yet.
+#
 # # What is translated and what is deferred, and why
 #
 # Every id here was translated with real confidence: menu nouns and short

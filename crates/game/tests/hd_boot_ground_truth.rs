@@ -233,7 +233,13 @@ fn every_declared_language_plugin_resolves() {
     // name comes out right rather than merely coming out.
     let languages =
         oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
-    assert_eq!(languages.len(), 16, "every declared plugin parses");
+    // Sixteen plugins, then the project's own `PortugueseBR` appended after them
+    // (`oag_ui::strings::PROJECT_LANGUAGES`): a deliberate 2026-10-06 change.
+    assert_eq!(languages.len(), 16 + 1, "every declared plugin parses");
+    assert_eq!(
+        languages.last().map(|l| l.name.as_str()),
+        Some("PortugueseBR")
+    );
     assert!(
         languages
             .iter()
@@ -492,7 +498,8 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
-    assert_eq!(shell.languages.len(), 16);
+    // Sixteen on the disc and the project's own `PortugueseBR` after them.
+    assert_eq!(shell.languages.len(), 16 + 1);
     let native = |name: &str| {
         shell
             .languages

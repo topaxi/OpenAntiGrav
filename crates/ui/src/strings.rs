@@ -88,6 +88,7 @@ impl File {
 }
 
 /// A language this build offers on every title, whether or not a disc ships it.
+#[derive(Debug)]
 pub struct ProjectLanguage {
     /// What it is called, which is also its `assets/ui/strings/` file stem and
     /// what a saved setting stores. Matched case-insensitively, so Omega's own
