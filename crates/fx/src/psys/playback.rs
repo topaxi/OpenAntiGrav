@@ -255,6 +255,16 @@ impl Stage {
             instance.system.set_rides_frame(rides);
         }
     }
+
+    /// The `+Y` [`Self::orient`] last gave an attached instance, or world up
+    /// when none did. `None` on a stale handle.
+    #[must_use]
+    pub fn up_of(&self, playing: Playing) -> Option<Vec3> {
+        self.instances
+            .get(usize::from(playing.index))
+            .filter(|i| i.generation == playing.generation && i.attached)
+            .map(|i| i.up)
+    }
 }
 
 #[cfg(test)]

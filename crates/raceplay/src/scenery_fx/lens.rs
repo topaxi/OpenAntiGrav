@@ -227,6 +227,6 @@ impl Lens {
         };
         self.pool
             .in_world(&Anchor::Lens(camera), effect.view_depth)
-            .extend_vertices(additive, alpha_over, effect, right, up);
+            .extend_vertices(additive, alpha_over, effect, right, up, None);
     }
 }

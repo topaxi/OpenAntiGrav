@@ -129,6 +129,9 @@ pub struct WeaponModels {
     /// read this session - see `oag_raceplay::load::weapon_models`'s own
     /// doc comment for where that stopped.
     pub leachbeam_ball: Option<&'static str>,
+    /// The Shuriken's own blade, drawn on the same basis the Rocket's dart
+    /// is. `None` on a title whose blade model is not recovered.
+    pub shuriken: Option<&'static str>,
     /// How the Cannon's two hand-built quads and its [`Self::cannon`] model
     /// are drawn, where a title's own executable says so.
     ///
@@ -138,6 +141,25 @@ pub struct WeaponModels {
     /// title without its own reading keeps drawing on those terms, as it did
     /// before this field existed.
     pub cannon_look: Option<CannonLook>,
+    /// The texture the ghost ship's third pass stamps over the player's view,
+    /// or `None` for a title that binds none.
+    ///
+    /// **`None` is a measurement on HD only**: `MeshNode_Ghost_LoadStaticGlow`
+    /// (`0x08910ef8`) names `Data\Tex\staticglow.mip` in Pulse's `BOOT.BIN`,
+    /// and a string search of HD's `EBOOT.elf` finds no `staticglow` at all, so
+    /// HD never loads one. See `docs/ghidra/functions/psp-pulse-usa/ghost.md`.
+    pub ghost_static: Option<GhostStatic>,
+}
+
+/// The ghost static texture a title binds - see [`WeaponModels::ghost_static`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GhostStatic {
+    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps
+    /// the extension for a Vita or PS4 source.
+    pub entry: &'static str,
+    /// Where the entry came from: `Measured` where the title's own executable
+    /// names it, `InheritedFrom` where it ships the file and runs Pulse's law.
+    pub origin: crate::Origin,
 }
 
 /// The two textures and the one sound cue `MagstripWake` is built from.
@@ -175,7 +197,9 @@ impl WeaponModels {
         magstrip_wake: None,
         magstrip_pob: false,
         leachbeam_ball: None,
+        shuriken: None,
         cannon_look: None,
+        ghost_static: None,
     };
 }
 

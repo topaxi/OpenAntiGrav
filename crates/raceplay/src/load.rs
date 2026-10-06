@@ -978,7 +978,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         trail_blend,
         trail_shape,
         cannon_quad_textures: weapon_models::cannon_quads(&mut archives, wm, &mut report),
-        ghost_static: weapon_models::load_ghost_static(&mut archives, &mut report),
+        ghost_static: weapon_models::load_ghost_static(&mut archives, wm, &mut report),
         shadows,
         shadow_hulls,
         // Overwritten by `load_event` on the one path that has an event

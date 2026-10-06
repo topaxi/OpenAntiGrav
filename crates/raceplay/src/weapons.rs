@@ -154,11 +154,17 @@ impl Race {
                         return;
                     };
                     self.sim.world.ships[slot].physics.turbo_timer = simple.time;
-                    // The same visual a speed pad arms, on the same argument:
-                    // the plume is what a boost looks like, and there is one
-                    // boost. Not recovered for this path - no capture of a fired
-                    // Turbo exists - so it is the plume being reused rather than
-                    // a reading of what the original shows.
+                    // **Recovered, 2026-10-06.** `Turbo_Fire` (`0x088614c4`) ends
+                    // in `FUN_0890514c`, which stores `0.8f` to the exhaust
+                    // flare's `+0xb8` and plays `TURBO` - the speed pad's own
+                    // `ExhaustFlare_OnSpeedupPad` (`0x08904f10`) body with another
+                    // cue, and the one a perfect start calls. So the fired Turbo
+                    // draws the pad's boost plume by the original's own path,
+                    // not by a reuse of ours. See `perfect-start.md`.
+                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                        oag_sound::sfx::Cue::Turbo,
+                        slot,
+                    ));
                     self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
                 }
                 oag_tables::weapons::Weapon::Shield => {

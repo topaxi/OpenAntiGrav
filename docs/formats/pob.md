@@ -1123,10 +1123,14 @@ effects to each); the same stems as 2048's directories, different bytes again.
   (`WO_ROCKET_EXPLO`, `_TRACK`, `WO_MISSILE_EXPLO`, `WO_BOMB_SMOKERING`,
   `WO_PLASMA_LIGHTNING_EXPAND`) it is exactly one emitter, `shockdistort`, and the
   fireball, smoke, spikes and sparks beside it are class 2 or 3 and now play (they were
-  refused with it before). What `psys_normal_heathaze_vp/fp` reads and writes (a scene
-  grab refracted by the sprite) is **unrecovered**, and no scene-colour grab exists in
-  `oag-render`/`oag-post`/`oag-fx`, so the emitter ticks, spawns its children and draws
-  nothing; the loader report names it at WARN. Nothing is drawn in its place.
+  refused with it before). What `psys_normal_heathaze_vp/fp` does is **read** (2026-10-06,
+  `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`, conf 80): not a scene grab. The
+  particle writes a signed offset `colourScale * alpha * 2/|w|^0.75 * tex.a * (tex.rgb - 0.5)`
+  into a separate buffer (depth-gated against linear view depth), and the final
+  composite resamples Frame, LowRes and Bloom at `uv + 0.0100021 * (16/9 * d.x, d.y)`.
+  It stays **undrawn** because the per-batch `kColourScale` and the buffer's format
+  and blend are unread (the page lists the addresses); the emitter ticks, spawns its
+  children and draws nothing, and the loader names it at WARN. Nothing is drawn in its place.
   **2048 cross-check: checked, differs.** No 2048 `.pob` (`data.psarc`, both patch
   archives, both DLC packs) carries class 8; its explosions have no `shockdistort`.
   Pulse PSP, PS2 and HD carry none either (HD's only unnamed class is 4).

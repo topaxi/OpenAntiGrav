@@ -141,6 +141,11 @@ pub const TITLE: &Title = &Title {
     // `docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`.
     weapon_models: &oag_title::weapons::WeaponModels {
         magstrip_pob: true,
+        // Ships it as `.gxt`; the eboot does not name it, so Pulse's law.
+        ghost_static: Some(oag_title::weapons::GhostStatic {
+            entry: r"Data\Tex\staticglow.mip",
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        }),
         ..oag_title::weapons::WeaponModels::EMPTY
     },
     // The four triggers a title answers for itself are unread on 2048, so none

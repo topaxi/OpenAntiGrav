@@ -153,14 +153,20 @@ pub const PLASMA_LIGHTNING_COLLAPSE_EFFECT: &str = "WO_PLASMA_LIGHTNING_COLLAPSE
 /// the fourcc `SHUH` at the entity's `+0x60` anchor, name string
 /// `0x08a7cda8`, read directly out of `.rodata`.
 ///
-/// **The blade's second effect is not wired.** `WO_SHURIKEN_TRAIL` (`SHUT`,
-/// `0x08a7cd94`) is attached at a *second* anchor whose basis the constructor
-/// rotates by `-pi/2` about the blade, and following it needs the per-tick
-/// orientation `Shuriken_Update` rebuilds - which this engine does not track,
-/// because a `Projectile` carries a position and a velocity and no roll. It is
-/// listed as untriggered rather than approximated with the head's own file.
-/// See `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
+/// Its frame is the blade's basis as `Shuriken_Update` rebuilds it every
+/// tick, ridden by pointer, so the emitter's `+Y` is the blade's surface
+/// normal. The blade's second effect is [`SHURIKEN_TRAIL_EFFECT`].
 pub const SHURIKEN_FLARE_EFFECT: &str = "WO_SHURIKEN_HEAD";
+
+/// The effect the original attaches to every blade at launch, beside the head.
+///
+/// **Recovered, confidence 88.** `Shuriken_Init` (`0x08877280`) spawns it with
+/// the fourcc `SHUT`, name string `0x08a7cd94`, before the head, on the
+/// `+0xb0` frame, flag 1 (a pointer, so it reads the frame live). Each
+/// `Shuriken_Update` copies the blade's basis there and turns the copy `-pi/2`
+/// about its own row 0 - the Rocket's flare frame exactly - so the emitter's
+/// `+Y` is the velocity. See `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
+pub const SHURIKEN_TRAIL_EFFECT: &str = "WO_SHURIKEN_TRAIL";
 
 /// What a blade plays on every wall it glances off.
 ///

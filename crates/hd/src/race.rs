@@ -559,7 +559,10 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     }),
     magstrip_pob: false,
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+    shuriken: None,
     cannon_look: Some(CANNON_LOOK),
+    // No `staticglow` string in HD's EBOOT: it never binds a ghost static.
+    ghost_static: None,
 };
 
 /// How HD draws a Cannon round, off `CannonBullet`'s own constructor, update

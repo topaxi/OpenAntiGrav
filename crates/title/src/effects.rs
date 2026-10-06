@@ -88,6 +88,8 @@ pub enum Trigger {
     PlasmaLightningCollapse,
     /// A Shuriken in flight.
     ShurikenFlare,
+    /// A Shuriken's trail, riding beside its head.
+    ShurikenTrail,
     /// A Shuriken glancing off a wall.
     ShurikenBounce,
     /// A Shuriken running out.
@@ -145,7 +147,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 35] = [
+    pub const ALL: [Self; 36] = [
         Self::CollisionSpark,
         Self::HitSpark,
         Self::RocketFlare,
@@ -155,6 +157,7 @@ impl Trigger {
         Self::PlasmaLightningExpand,
         Self::PlasmaLightningCollapse,
         Self::ShurikenFlare,
+        Self::ShurikenTrail,
         Self::ShurikenBounce,
         Self::ShurikenExpire,
         Self::TrackBlast,
@@ -417,6 +420,10 @@ impl Effects {
         .with(
             T::ShurikenFlare,
             EffectSpec::new(n::SHURIKEN_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::ShurikenTrail,
+            EffectSpec::new(n::SHURIKEN_TRAIL_EFFECT, origin),
         )
         .with(
             T::ShurikenBounce,

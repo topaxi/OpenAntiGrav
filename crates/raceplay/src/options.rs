@@ -900,7 +900,7 @@ pub struct Loaded {
     /// says so; every entry resolves on a real disc, so a `None` here is a
     /// decode failure or a missing archive set, not an unauthored asset.
     pub cannon_quad_textures: crate::CannonAssets,
-    /// The ghost ship's static, `oag_render::ghost::STATIC_TEXTURE_ENTRY`,
+    /// The ghost ship's static, `WeaponModels::ghost_static`,
     /// when it decodes. `None` draws the ghost without its third pass, and
     /// the load report says why.
     pub ghost_static: Option<FlareTexture>,

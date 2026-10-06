@@ -11,7 +11,6 @@
 # names rather than the project's Subsystem_VerbNoun scheme.
 #
 # address	kind	name	confidence	evidence
-
 0x08940d0c	function	Wad_HashName	97	wad-subsystem.md
 0x08940cb0	function	Wad_BuildCrcTable	95	wad-subsystem.md
 0x08afbffc	data	g_wad_crc_table	95	wad-subsystem.md
@@ -38,7 +37,6 @@
 0x08956940	function	zlib_uncompress	90	wad-subsystem.md
 0x089545dc	function	zlib_inflateInit_	90	wad-subsystem.md
 0x08b66450	data	g_decompress_staging_buffer	88	wad-subsystem.md
-
 0x08807244	function	Game_MainLoop	95	main-loop.md
 0x088071d8	function	Game_Bootstrap	90	main-loop.md
 0x08804978	function	Game_UpdateFrame	92	main-loop.md
@@ -60,7 +58,6 @@
 0x08abf5d8	data	g_force_fixed_30_hide_hud	88	main-loop.md
 0x08abf5d9	data	g_force_fixed_60	88	main-loop.md
 0x08abf5cc	data	g_force_fixed_30	88	main-loop.md
-
 0x0894ebd0	function	Input_ReadAnalog	88	input.md
 0x0894eec4	function	Input_BuildState	90	input.md
 0x0894f1cc	function	Input_IsPressed	92	input.md
@@ -70,7 +67,6 @@
 0x0894f2a0	function	Input_ParseButtonName	88	input.md
 0x08b059f0	data	g_pad_buffer	90	input.md
 0x08b31780	data	g_input	85	input.md
-
 0x08934d44	function	Collision_RegisterNodeClasses	90	collision.md
 0x08934a48	function	CollisionNode_ParseChunks	88	collision.md
 0x08818bdc	function	Collision_SegmentTriangle	90	collision.md
@@ -87,7 +83,6 @@
 0x0884ae90	function	Ship_HoverFourCorner	80	collision.md
 0x0884a658	function	Ship_HoverTwoPoint	80	collision.md
 0x0884ba0c	function	Ship_UpdateMagLock	88	engine.md
-
 0x08914858	function	MoviePlayer_Create	90	frontend-video.md
 0x089138bc	function	MoviePlayer_Open	88	frontend-video.md
 0x08913fa0	function	MoviePlayer_ParseHeader	88	frontend-video.md
@@ -100,7 +95,6 @@
 0x08914c78	function	MoviePlayer_ReadThreadMain	85	frontend-video.md
 0x08914fd8	function	MoviePlayer_SoundThreadMain	82	frontend-video.md
 0x088ba284	function	Movie_ParseAttributes	95	frontend-video.md
-
 0x08912b80	function	Vex_LoadModel	90	../../../formats/vex.md
 0x08911670	function	Vex_RelocateNodeTree	85	../../../formats/vex.md
 0x08908b68	function	Vex_FindClassDescriptor	82	../../../formats/vex.md
@@ -115,10 +109,8 @@
 0x08810ab4	function	Gu_TexScale	88	texture-animation.md
 0x08883794	function	World_LoadTrack	85	../../../formats/vex.md
 0x08843258	function	Ship_LoadModel	87	../../../formats/vex.md
-
 0x0887ce78	function	AiTrack_LocatePosition	90	../../../formats/track.md
 0x0887e464	function	AiTrack_UpdateCursor	90	../../../formats/track.md
-
 0x0883945c	function	HandlingXml_ParseEngine	90	engine.md
 0x0883962c	function	HandlingXml_ParseBrakes	90	engine.md
 0x088398e0	function	HandlingXml_ParseTurning	90	engine.md
@@ -528,11 +520,9 @@
 0x088361f0	function	AiStats_ParseSkillScale	88	ai-stats.md
 0x08836548	function	AiStats_ParseController	88	ai-stats.md
 0x0884ef30	function	Body_ResolveContactPair	95	contact-response.md
-
 0x0880c058	function	WeaponStats_ParseRocket	88	weapon-fire.md
 0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
 0x0886e104	function	Weapon_FireRocket	88	weapon-fire.md
-
 0x0885cc24	function	Rocket_Ctor	85	rocket-visuals.md
 0x0885cdb8	function	Rocket_Init	85	rocket-visuals.md
 0x0885d1b0	function	Rocket_SpeedForClass	84	rocket-visuals.md
@@ -553,7 +543,6 @@
 0x08861d20	function	WeaponPickup_Grant	80	missile.md
 0x0886e0f8	function	WeaponPickup_ArmRocket	80	missile.md
 0x0880e93c	function	WeaponStats_ParsePickupOdds	92	missile.md
-
 0x0880d124	function	WeaponStats_ParseMine	92	mine.md
 0x0880cef0	function	WeaponStats_ParseBomb	90	mine.md
 0x0880c774	function	WeaponStats_ParseCannon	90	mine.md
@@ -563,7 +552,6 @@
 0x08863a20	function	Weapon_FireBomb	88	mine.md
 0x08871ddc	function	Weapon_AnnounceIncoming	88	mine.md
 0x08867f1c	function	Mine_SpawnExplosion	90	mine.md
-
 0x08869588	function	MissilePool_Update	88	missile.md
 0x08868d50	function	Missile_SpawnExplosion	85	missile.md
 0x08868ea4	function	Missile_ApplyBlastForce	88	missile.md
@@ -904,7 +892,6 @@
 0x08850cc8	function	WeaponAi_ScoreShield	85	weapon-ai.md
 0x08850ac4	function	WeaponAi_ScoreBomb	85	weapon-ai.md
 0x08850b7c	function	WeaponAi_ScoreMine	85	weapon-ai.md
-
 0x0898bf14	function	Sas_QueuePitch	92	sound.md
 0x08994fec	function	Scream_VoicePitch	90	sound.md
 0x089952c4	function	Scream_NoteToPitch	90	sound.md
@@ -1300,7 +1287,6 @@
 # 2026-10-04 pulse-mist lane: the mist overlay's camera motion, read live (weather.md)
 0x0897ed98	function	acosf	90	weather.md
 0x08ab10a8	data	g_camera_roll	88	weather.md
-
 0x088f57d4	function	ParticleSystem_ResetCoFactors	92	particle-system.md
 0x088f41c0	function	ParticleSystem_ConstructInstance	85	particle-system.md
 0x088f4498	function	ParticleSystem_SetMatrix	92	particle-system.md
@@ -1330,3 +1316,4 @@
 0x08900e90	function	BillboardManager_BuildPool	88	billboards.md
 0x08900db4	function	BillboardManager_Construct	78	billboards.md
 0x08900fa0	function	BillboardManager_FreePool	80	billboards.md
+0x0890514c	function	ExhaustFlare_OnTurbo	85	perfect-start.md

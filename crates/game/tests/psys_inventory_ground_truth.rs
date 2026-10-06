@@ -80,15 +80,8 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_SHURIKEN_HEAD` or `WO_SHURIKEN_BOUNCE`** - both are wired,
     // off `Shuriken_Init` (`0x08877280`) and `Shuriken_Bounce` (`0x088778ac`).
     // The Shuriken landed 2026-09-02; its other two files are below.
-    (
-        "WO_SHURIKEN_TRAIL",
-        "the Shuriken flies and rides its `_HEAD`, but this is attached at a \
-         *second* anchor whose basis `Shuriken_Init` rotates by -pi/2 about the \
-         blade and `Shuriken_Update` rebuilds every tick. A `Projectile` here \
-         carries a position and a velocity and no roll, so there is nowhere to \
-         hang it. Playing the head's file at a second point instead would be \
-         invention wearing a real asset.",
-    ),
+    // **Not `WO_SHURIKEN_TRAIL`** either, as of 2026-10-06: wired on `Shuriken_Init`'s
+    // second, quarter-turned frame (`Trigger::ShurikenTrail`).
     // **Not `WO_SHURIKEN_EXPIRE`** - wired 2026-09-30 off `ShurikenPool_Update`
     // (`0x0886ff38`): the teardown `FUN_08870c78` spawns it at the blade on
     // both endings, a fuse running out and a craft hit. See
@@ -190,6 +183,7 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
     "WO_SHURIKEN_EXPIRE",
+    "WO_SHURIKEN_TRAIL",
     // The Repulser's blast and its two waves - see `oag_raceplay::REPULSER_EFFECT`.
     "WO_REPULSER",
     "WO_REPULSER_BLAST",

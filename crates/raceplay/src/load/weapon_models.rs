@@ -311,6 +311,7 @@ pub(super) fn load_bodies(
             hemisphere2: one(Some(hd.sphere), "a plasma blast sphere", true),
             hemisphere1: one(Some(hd.halo), "a plasma blast halo", true),
             ball: None, // overwritten below
+            shuriken: None,
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
         blast_models::PlasmaBlastModels {
@@ -318,6 +319,7 @@ pub(super) fn load_bodies(
             hemisphere2: one(Some(pulse.hemisphere2), "a plasma blast hemisphere", false),
             hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere", false),
             ball: None, // overwritten below
+            shuriken: None,
         }
     } else {
         blast_models::PlasmaBlastModels::default()
@@ -373,6 +375,7 @@ pub(super) fn load_bodies(
         ),
         blast_models::PlasmaBlastModels {
             ball,
+            shuriken: one(models.shuriken, "a shuriken blade", true),
             ..plasma_blast
         },
         bomb_blast,
@@ -380,18 +383,20 @@ pub(super) fn load_bodies(
     )
 }
 
-/// The ghost ship's static texture, `oag_render::ghost::STATIC_TEXTURE_ENTRY`.
+/// The ghost ship's static texture, `WeaponModels::ghost_static`.
 ///
-/// Read on every title: Pulse's `Data.wad` carries it (entry 945 on the USA
-/// pressing, see `docs/ghidra/functions/psp-pulse-usa/ghost.md`), and a source
-/// without it is reported and drawn without the ghost's third pass.
+/// `None` on a title that binds none (HD): nothing is requested, so nothing is
+/// reported absent. Pulse's `Data.wad` carries it (entry 945 on the USA
+/// pressing, see `docs/ghidra/functions/psp-pulse-usa/ghost.md`); a source
+/// whose named entry is missing is reported and drawn without the third pass.
 pub(super) fn load_ghost_static(
     archives: &mut oag_assets::Archives,
+    wm: &oag_title::weapons::WeaponModels,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
     load_flare_texture(
         archives,
-        oag_render::ghost::STATIC_TEXTURE_ENTRY,
+        wm.ghost_static?.entry,
         "the ghost ship's static",
         report,
     )

@@ -110,7 +110,14 @@ pub const TITLE: &Title = &Title {
         // fire law on it: **inherited from Pulse, unmeasured on Omega**.
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
-    weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
+    weapon_models: &oag_title::weapons::WeaponModels {
+        // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.
+        ghost_static: Some(oag_title::weapons::GhostStatic {
+            entry: r"Data\Tex\staticglow.mip",
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        }),
+        ..oag_title::weapons::WeaponModels::EMPTY
+    },
     // Omega's executable carries HD's weapon-spark and absorb strings, but its
     // wiring is unread, so those triggers draw nothing (ADR-0058: `None` is the
     // visible absence). The engine's own names are tried as Pulse's, by the
