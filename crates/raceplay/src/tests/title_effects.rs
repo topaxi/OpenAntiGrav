@@ -22,6 +22,37 @@ const OWN: [Trigger; 6] = [
     Trigger::WreckSparks,
 ];
 
+/// The engine triggers whose effect neither 2048 nor Omega authors
+/// (`docs/formats/pob.md`, "Effects Pulse names that 2048 and Omega never
+/// authors"); Omega drops the two magstrip ones besides.
+const UNAUTHORED: [Trigger; 3] = [
+    Trigger::PlasmaBlast,
+    Trigger::EngineFlare,
+    Trigger::LeachbeamEnergy,
+];
+
+#[test]
+fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
+    let has = |trigger| ALL.map(|t| t.effect_on(trigger).is_some());
+    for trigger in UNAUTHORED {
+        assert_eq!(
+            has(trigger),
+            [true, true, true, false, false],
+            "{trigger:?}"
+        );
+    }
+    for trigger in [Trigger::MagstripSparks, Trigger::MagstripZone] {
+        assert_eq!(has(trigger), [true, true, true, true, false], "{trigger:?}");
+    }
+    for title in [oag_2048::TITLE, oag_omega::TITLE] {
+        let names = title.effects.names();
+        for gone in ["WO_BLUE_WELDER", "WO_RAIN", "WO_RAIN_LENS", "WO_SNOW"] {
+            assert!(!names.contains(&gone), "{} still loads {gone}", title.name);
+        }
+        assert!(names.contains(&"WO_MODESTO_STEAM_A"), "{}", title.name);
+    }
+}
+
 #[test]
 fn the_trigger_list_is_in_index_order_and_counts_itself() {
     assert_eq!(Trigger::COUNT, Trigger::ALL.len());
@@ -56,10 +87,14 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
 #[test]
 fn every_title_tries_the_engines_own_effects_as_pulses() {
     for title in ALL {
-        for trigger in Trigger::ALL
-            .into_iter()
-            .filter(|t| !OWN.contains(t) && *t != Trigger::WreckExplosion)
-        {
+        // `ALL`'s order: 2048 is index 3 and Omega index 4.
+        let at = ALL.iter().position(|t| std::ptr::eq(*t, title)).unwrap();
+        for trigger in Trigger::ALL.into_iter().filter(|t| {
+            !OWN.contains(t)
+                && *t != Trigger::WreckExplosion
+                && !(at >= 3 && UNAUTHORED.contains(t))
+                && !(at == 4 && matches!(t, Trigger::MagstripSparks | Trigger::MagstripZone))
+        }) {
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));

@@ -59,8 +59,12 @@ pub(super) fn leach_beam_texture(
 ) -> Option<FlareTexture> {
     let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
     let found = match &own {
-        Some(entry) => decode_texture(archives, entry)
-            .map(|texture| (texture, format!("{entry}: the LeachBeam ribbon's own texture"))),
+        Some(entry) => decode_texture(archives, entry).map(|texture| {
+            (
+                texture,
+                format!("{entry}: the LeachBeam ribbon's own texture"),
+            )
+        }),
         None => exhaust_texture(archives, LEACHBEAM_TEXTURE),
     };
     match found {
