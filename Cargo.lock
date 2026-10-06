@@ -2185,6 +2185,7 @@ dependencies = [
  "oag-pob",
  "oag-pulse",
  "oag-shader-check",
+ "oag-tables",
  "oag-testdata",
  "oag-texture",
  "oag-vex",

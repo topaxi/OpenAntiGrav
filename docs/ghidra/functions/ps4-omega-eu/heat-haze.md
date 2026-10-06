@@ -296,6 +296,31 @@ executable's `R16F`, planar like `w`, where the scene shaders' own `R16F` value
 constant 16/9, not the window's aspect; the tone curve is per pixel, so resampling the scene before it equals resampling the curved frame (the original's composite also resamples a LowRes layer and the bloom, which this renderer's Omega chain does not draw); the
 luminance ladder reads the undistorted scene.
 
+**Checked before drawing: the displacement sprite is read raw, and 128 means zero.**
+`shockdistort`'s sprite is `Data/particles/Tex/heat_distort_sphereout2_N.gnf` (base
+`data00.psarc` only; 512 by 512), GNF channel type **Unorm**, not sRGB, so the
+original's sampler returns the bytes as they are; its alpha-weighted median is
+**r 128, g 129** and its corner texel `(15, 17, 1, 1)`, i.e. `rg - 0.5` averages to zero
+as a ring should. `crates/fx/examples/distort_sprite.rs` prints it; the same holds for
+the heat-haze sprites it finds. The sheet's raw `Rgba8Unorm` read is therefore right.
+
+**Census: every Omega circuit gets the composite.** `crates/fx/examples/omega_tonemap_census.rs`
+over both package sets (`omega-eu`, `omega-eu-patch`; `environments` and `environments2048`):
+**80 circuit `.envsettings` files, all 80 author a complete `Tonemap` block, 0 do not.** The
+distortion's only consumer, the tone-map chain, exists for all of them, so no race drops the
+effect silently.
+
+**Pinned on a real device** (`crates/fx/tests/distort_pass.rs`, reading the target back):
+one quad against a known sprite texel gives `strength * alpha * 2/|w|^0.75 * sprite.a *
+(sprite.rg - 0.5)` within half-float tolerance, nothing outside the quad (the zero clear),
+the sum of two overlapping quads, and zero where the scene's depth is nearer; each term was
+checked by breaking it in the shader and watching the test fail.
+
+Two further things are chosen, not measured: the composite's **linear filter** on the offset
+texture (the original's sampler is unread), and the offset target's **size**, the scene's
+where the executable's shares the `R16F`'s `(param_6, param_7)` of `FUN_01621650`, which
+`FUN_016134d0` creates at 960 by 540 (likely half resolution at 1080p).
+
 Judged (`data/scratch/heat-haze-3/shots/`, Omega Tech De Ra, rocket fired at
 the wall ahead, 1440x816, `on<tick>.png` and `off<tick>.png` side by side in
 `sheetA.png` and `sheetB.png`, ticks 500, 530, 560, 602, 650, 700): the frames

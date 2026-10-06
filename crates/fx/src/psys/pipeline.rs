@@ -389,6 +389,13 @@ impl Pipeline {
             .encode(device, encoder, &self.bind_group, depth, size, viewport)
     }
 
+    /// The texture behind [`Self::encode_distort`]'s view, for a readback. It
+    /// holds the last frame that drew anything; `None` before the first.
+    #[must_use]
+    pub fn offset_texture(&self) -> Option<&wgpu::Texture> {
+        self.distort.texture()
+    }
+
     /// This frame's screen flash, [`crate::flash::ScreenFlash::colour`].
     pub fn upload_flash(&mut self, queue: &wgpu::Queue, colour: Option<[f32; 4]>) {
         self.flash.upload(queue, colour);

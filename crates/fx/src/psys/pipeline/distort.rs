@@ -33,6 +33,7 @@ struct Target {
     size: (u32, u32),
     /// The multisampled attachment, when the scene's depth is multisampled.
     msaa: Option<wgpu::TextureView>,
+    resolved_texture: wgpu::Texture,
     resolved: wgpu::TextureView,
 }
 
@@ -148,23 +149,28 @@ impl Distort {
         let size = (size.0.max(1), size.1.max(1));
         if self.target.as_ref().is_none_or(|t| t.size != size) {
             let texture = |label: &str, sample_count: u32, usage: wgpu::TextureUsages| {
-                device
-                    .create_texture(&wgpu::TextureDescriptor {
-                        label: Some(label),
-                        size: wgpu::Extent3d {
-                            width: size.0,
-                            height: size.1,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count,
-                        dimension: wgpu::TextureDimension::D2,
-                        format: FORMAT,
-                        usage,
-                        view_formats: &[],
-                    })
-                    .create_view(&wgpu::TextureViewDescriptor::default())
+                device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width: size.0,
+                        height: size.1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: FORMAT,
+                    usage,
+                    view_formats: &[],
+                })
             };
+            let resolved_texture = texture(
+                "psys distort",
+                1,
+                wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
+            );
             self.target = Some(Target {
                 size,
                 msaa: (self.sample_count > 1).then(|| {
@@ -173,15 +179,18 @@ impl Distort {
                         self.sample_count,
                         wgpu::TextureUsages::RENDER_ATTACHMENT,
                     )
+                    .create_view(&wgpu::TextureViewDescriptor::default())
                 }),
-                resolved: texture(
-                    "psys distort",
-                    1,
-                    wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-                ),
+                resolved: resolved_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                resolved_texture,
             });
         }
         self.target.as_ref().expect("built above")
+    }
+
+    /// The texture behind the last frame's [`Self::encode`] view, for a readback.
+    pub(super) fn texture(&self) -> Option<&wgpu::Texture> {
+        self.target.as_ref().map(|t| &t.resolved_texture)
     }
 
     /// Draws this frame's offsets, or `None` when there are none.
