@@ -1,20 +1,13 @@
 //! What the audio policy in [`super`] is asserted to do: the music-source
 //! setting, pairing the two discs' soundtracks by length, seeking rather than
-//! restarting when the source changes, the menu-to-race handover, and the
-//! headless dump's clock.
+//! restarting on a source change, and the headless dump's clock.
 //!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `audio.rs`: the tests are past the 200 lines an inline test module may
-//! hold. See `scripts/check-file-size.py`, which is the rule as a gate.
-//!
-//! The volume and bus half lives in [`volumes`], split out when the four AUDIO
-//! rows of [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md)
-//! took this file past 1,000 lines - the other rule the same script keeps.
-//! [`source_switch`] is the same split, for the `MUSIC SOURCE` row's async
-//! fetch. [`race_switch`] is the race-voice/menu-voice handover, split out
-//! 2026-09-25 when `MusicDiscs` gaining a fourth release
-//! (`vita_2048_music_ground_truth.rs`) pushed one line onto every fixture
-//! literal in this file and took it back over the same ceiling.
+//! A file of its own because the tests exceed the 200 lines an inline module
+//! may hold (`scripts/check-file-size.py`). Split further under the 1,000-line
+//! rule: [`volumes`] (the four AUDIO rows of
+//! [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md)),
+//! [`source_switch`] (the `MUSIC SOURCE` row's async fetch) and [`race_switch`]
+//! (the race-voice/menu-voice handover).
 
 use super::*;
 
@@ -34,10 +27,9 @@ fn a_music_source_round_trips_through_its_own_text() {
     assert_eq!(MusicSource::Auto.platform(), None, "auto names no release");
 }
 
-/// The row is offered only when both discs are reachable, and `pick` is
-/// what a value the machine cannot honour falls through: a settings file
-/// saying `ps2`, carried onto a machine that has only the PSP disc, has to
-/// play the PSP's music rather than nothing.
+/// The row is offered only when both discs are reachable, and `pick` is what an
+/// unhonourable value falls through: `ps2` on a PSP-only machine plays the
+/// PSP's music, not nothing.
 #[test]
 fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let psp_only = MusicDiscs {
@@ -82,13 +74,11 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
         Some(("psp.chd", Platform::Psp))
     );
 
-    // A source that is neither release - an extracted directory of
-    // something else - has nothing to fall back to and says so.
+    // Neither release (an extracted directory of something else): no fallback.
     assert_eq!(MusicDiscs::default().pick(MusicSource::Auto), None);
 }
 
-/// Track lengths as a listing, addressed by position - a test fixture, not
-/// how a disc addresses one.
+/// Track lengths as a listing by position: a fixture, not how a disc addresses one.
 fn lengths(seconds: &[f64]) -> Vec<Track> {
     seconds
         .iter()
@@ -100,10 +90,9 @@ fn lengths(seconds: &[f64]) -> Vec<Track> {
         .collect()
 }
 
-/// The pairing rule, on the real numbers. These sixteen lengths are the
-/// EU PS2 archive's, in its own order, and the PSP lengths are its sixteen
-/// large stereo `Data.wad` entries in *theirs* - which is a different order,
-/// and the whole reason a length is what pairs them.
+/// The pairing rule on the real numbers: these sixteen lengths are the EU PS2
+/// archive's, in its order, and the PSP lengths its sixteen large stereo
+/// `Data.wad` entries in theirs, a different order, hence pairing by length.
 #[test]
 fn the_two_discs_soundtracks_pair_one_for_one_by_length() {
     let ps2 = [
@@ -141,24 +130,21 @@ fn the_two_discs_soundtracks_pair_one_for_one_by_length() {
         "every PSP track must be claimed exactly once"
     );
 
-    // And the pairing is not the identity, which is the thing that would
-    // make indexing one archive by the other's order silently wrong: PS2
-    // track 1 is the PSP's fourth in `Data.wad` order.
+    // The pairing is not the identity (PS2 track 1 is the PSP's fourth in
+    // `Data.wad` order), so indexing one archive by the other's order is wrong.
     assert_eq!(listing.nearest(ps2[1]).expect("a partner").at, 3);
     assert_eq!(listing.nearest(ps2[12]).expect("a partner").at, 1);
 }
 
-/// A *different game's* soundtrack must not be taken for the counterpart,
-/// and this is the case that made the check necessary rather than
-/// hypothetical: `pure-psp-eu.chd` carries the serial `UCES-00001`, which
-/// `oag_assets::Layout::resolve` gives no verdict on by design, and
-/// was reported as the PSP counterpart until a soundtrack had to pair.
+/// A different game's soundtrack must not be taken for the counterpart:
+/// `pure-psp-eu.chd` carries the serial `UCES-00001`, which
+/// `oag_assets::Layout::resolve` gives no verdict on by design, and was reported
+/// as the PSP counterpart until a soundtrack had to pair.
 ///
-/// Both listings are read values - Pulse's sixteen from the USA UMD, Pure's
-/// nineteen from `pure-psp-eu.chd`, each the `fact` count over 44,100. Note
-/// how close the two populations come: Pure's shortest is 205.2 s and
-/// Pulse's longest 204.3 s, which is *inside* [`PAIR_TOLERANCE`]. One track
-/// matching is not the test; sixteen distinct partners is.
+/// Both listings are read values (Pulse's sixteen from the USA UMD, Pure's
+/// nineteen from `pure-psp-eu.chd`, `fact` count over 44,100). Pure's shortest
+/// is 205.2 s and Pulse's longest 204.3 s, inside [`PAIR_TOLERANCE`]: one track
+/// matching is not the test, sixteen distinct partners is.
 #[test]
 fn another_games_soundtrack_does_not_pair() {
     let pulse = Soundtrack {
@@ -177,15 +163,14 @@ fn another_games_soundtrack_does_not_pair() {
     assert!(!pure.pairs_with(&pulse), "nineteen tracks is not sixteen");
     assert!(!pulse.pairs_with(&pure));
 
-    // The near miss the count check catches first, isolated: Pure's
-    // shortest against Pulse's longest, 0.87 s apart.
+    // The near miss the count check catches first: Pure's shortest against
+    // Pulse's longest, 0.87 s apart.
     assert!(
         (205.217f64 - 204.336).abs() < PAIR_TOLERANCE,
         "the two populations really do overlap within the tolerance"
     );
 
-    // The PS2 side of the real pair, which does have to pass. Same
-    // recordings, so every partner is within 11.4 ms.
+    // The PS2 side of the real pair must pass: every partner within 11.4 ms.
     let ps2 = Soundtrack {
         tracks: lengths(&[
             187.592, 195.789, 188.739, 193.550, 189.731, 187.814, 182.009, 177.226, 183.913,
@@ -198,9 +183,8 @@ fn another_games_soundtrack_does_not_pair() {
         "and it must not depend on the order"
     );
 
-    // Sixteen tracks that are each within a second of a Pulse track but
-    // all of the *same* one: a listing that would pass a per-track match
-    // and must fail a bijection.
+    // Sixteen tracks each within a second of the *same* Pulse track: passes a
+    // per-track match, must fail a bijection.
     let all_alike = Soundtrack {
         tracks: lengths(&[187.6; 16]),
     };
@@ -212,9 +196,8 @@ fn another_games_soundtrack_does_not_pair() {
     );
 }
 
-/// Nothing within a second is no answer at all, rather than the least bad
-/// one. Playing the wrong three minutes of music is worse than playing
-/// none, and it is what a misidentified population would produce.
+/// Nothing within a second is no answer, not the least bad one: the wrong three
+/// minutes is worse than none.
 #[test]
 fn a_length_nothing_matches_pairs_with_nothing() {
     let listing = Soundtrack {
@@ -237,24 +220,18 @@ fn a_length_nothing_matches_pairs_with_nothing() {
     );
 }
 
-/// **Seek, do not restart** - the row's headline constraint, measured
-/// rather than asserted, and through the real pieces: a real mixer, a real
-/// pair of [`Sound`]s at the two releases' actual rates, pulled by
-/// [`Audio::tick`] at the fixed 60 Hz, swapped by the same
-/// [`Audio::set_music_source`] a keypress calls.
+/// Seek, do not restart: the row's headline constraint, measured through the
+/// real pieces (a real mixer, two [`Sound`]s at the releases' actual rates,
+/// pulled by [`Audio::tick`] at 60 Hz, swapped by [`Audio::set_music_source`]).
 ///
-/// The two rates are the point. 48,000 frames into the PS2's track is one
-/// second and into the PSP's is 1.088, so a swap that carried *frames*
-/// across would land 8.8% out - two seconds adrift three minutes in, which
-/// is most of a bar. Carrying seconds lands where it started.
-///
-/// No disc is read: both sounds are put straight into [`Audio::held`],
-/// which is exactly what a second visit to a release finds there.
+/// The rates are the point: 48,000 frames is one second on PS2 and 1.088 on PSP,
+/// so carrying frames would land 8.8% out, two seconds adrift three minutes in.
+/// No disc is read: both sounds go straight into [`Audio::held`], as a second
+/// visit finds them.
 #[test]
 fn changing_the_music_source_seeks_rather_than_restarting() {
-    // Booted from the PS2 release, because that is the one whose front-end
-    // music is a soundtrack track and so the one the row can move. See
-    // `MusicSource`, and the test below for the PSP boot.
+    // Booted from PS2, whose front-end music is a soundtrack track the row can
+    // move (see `MusicSource` and the PSP-boot test below).
     let discs = MusicDiscs {
         library: &NoLibrary,
         psp: Some("psp.chd".into()),
@@ -264,9 +241,8 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         ps4: None,
         booted: Some(Platform::Ps2),
     };
-    // Three minutes of silence at each release's own rate. What is measured
-    // is where the playhead is, and the mixer advances it whatever the
-    // samples are.
+    // Three minutes of silence at each release's rate: only the playhead is
+    // measured, and the mixer advances it whatever the samples are.
     let psp = Arc::new(Sound::new(vec![0i16; 180 * 44_100 * 2], 2, 44_100).expect("a sound"));
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
 
@@ -321,9 +297,8 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         "the playhead moved from {before} s to {after} s; a swap must seek, not restart"
     );
 
-    // And back, from wherever it has got to by then - the return trip is
-    // the one that would expose a frame count carried across, because the
-    // rate ratio inverts.
+    // And back: the return trip would expose a frame count carried across, as
+    // the rate ratio inverts.
     for _ in 0..(60 * 5) {
         audio.tick();
     }
@@ -335,8 +310,8 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         "coming back: {before} s became {after} s"
     );
 
-    // Choosing what is already playing does nothing at all, so nudging the
-    // row past a value it is already on cannot restart the track.
+    // Choosing what is already playing does nothing, so nudging past a value
+    // cannot restart the track.
     let before = audio.playhead().expect("music is playing");
     let voice = audio.music;
     audio.set_music_source(&discs, MusicSource::Auto, Path::new("unused"));
@@ -344,17 +319,15 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     assert_eq!(audio.playhead(), Some(before));
 }
 
-/// **Asked every tick, acted on once.** The menu music's cue is the intro
-/// reel ending, and neither tick loop tracks that as an edge - both simply
-/// ask "is the sequence still in a movie state" every tick and call
-/// [`Audio::start_music`] when it is not. So the second ask, and the
-/// hundredth, have to be free and have to leave the playing track alone.
+/// Asked every tick, acted on once. The menu music's cue is the intro reel
+/// ending and neither tick loop tracks that as an edge: both ask "still in a
+/// movie state" each tick and call [`Audio::start_music`] when not, so the
+/// second ask and the hundredth must leave the playing track alone.
 ///
-/// The failure this pins down is not a duplicate voice but a *restart*: a
-/// guard that only compared voice ids would still re-read the disc, and a
-/// music loop that jumps back to zero once a second is the audible form of
-/// the bug. Twenty seconds are put on the playhead first so a restart could
-/// not hide.
+/// The failure pinned is a *restart*, not a duplicate voice: a guard comparing
+/// only voice ids would still re-read the disc, and a loop jumping to zero once
+/// a second is the audible bug. Twenty seconds go on the playhead first so a
+/// restart cannot hide.
 #[test]
 fn asking_for_the_music_again_never_restarts_it() {
     let discs = MusicDiscs {
@@ -408,10 +381,9 @@ fn asking_for_the_music_again_never_restarts_it() {
     );
 }
 
-/// The same guard, for the case that would actually cost something: a
-/// source whose music will not load leaves no voice behind, so "is a voice
-/// playing" is not a usable test for "has this already been tried". Without
-/// [`Audio::music_attempted`] a tick loop would re-open a disc, re-run
+/// The same guard where it would cost something: a source whose music will not
+/// load leaves no voice, so "is a voice playing" cannot mean "already tried".
+/// Without [`Audio::music_attempted`] a tick loop would re-open a disc, re-run
 /// `ffmpeg` and re-print the failure sixty times a second.
 #[test]
 fn a_source_with_no_music_is_not_retried_every_tick() {
@@ -448,9 +420,8 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     assert!(audio.music.is_none(), "there was nothing to play");
     assert!(audio.music_attempted, "and it has now been tried");
 
-    // A second ask, this time with a release whose track is already in hand
-    // and so certain to load. It is declined anyway: the first ask is the
-    // only one, whatever it decided.
+    // A second ask with a release whose track is already in hand and certain to
+    // load is declined anyway: the first ask is the only one.
     let discs = MusicDiscs {
         library: &NoLibrary,
         psp: None,
@@ -468,16 +439,12 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     assert!(audio.music.is_none(), "the second ask does nothing at all");
 }
 
-/// **The scope of the row, and the reason it has one.** The PSP front
-/// end's own music is not one of the sixteen and has no counterpart on the
-/// PS2 disc, so no value of MUSIC SOURCE may touch it - not even to the
-/// release it already is. Left ungoverned it would be swapped for an
-/// unrelated three-minute soundtrack track *and seeked into*, landing
-/// twenty seconds inside a different piece of music.
-///
-/// A voice with no [`Audio::music_from`] is exactly that case, and the
-/// assertion here is that all three values leave it alone: the same voice,
-/// at the same playhead, on the same 28-second loop.
+/// The scope of the row: the PSP front end's music is not one of the sixteen and
+/// has no PS2 counterpart, so no value of MUSIC SOURCE may touch it, even to the
+/// release it already is (it would be swapped for an unrelated soundtrack track
+/// and seeked into). A voice with no [`Audio::music_from`] is that case: all
+/// three values leave the same voice at the same playhead on the same 28-second
+/// loop.
 #[test]
 fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let discs = MusicDiscs {
@@ -489,8 +456,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         ps4: None,
         booted: Some(Platform::Psp),
     };
-    // The PSP front end's own music: 28 seconds, not three minutes, and
-    // never stamped with a release.
+    // The PSP front end's music: 28 seconds, never stamped with a release.
     let front_end = Arc::new(Sound::new(vec![0i16; 28 * 44_100 * 2], 2, 44_100).expect("a sound"));
     let ps2 = Arc::new(Sound::new(vec![0i16; 180 * 48_000 * 2], 2, 48_000).expect("a sound"));
 
@@ -503,8 +469,8 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         music: None,
         music_attempted: false,
         music_from: None,
-        // The PS2 track is *there to be chosen* and still must not be, so
-        // this cannot pass by the swap merely failing to find anything.
+        // The PS2 track is there to be chosen and must not be, so this cannot
+        // pass by the swap finding nothing.
         held: vec![(Platform::Ps2, Arc::clone(&ps2))],
         movie: None,
         race_voice: None,
@@ -549,10 +515,9 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     }
 }
 
-/// The dump's length has to be a function of the tick count and nothing
-/// else, because that is the whole claim `--dump-audio` makes: the same
-/// control sequence renders the same file. A wall clock anywhere in the
-/// path would show up here as a count that moves between runs.
+/// The dump's length must be a function of the tick count alone, the claim
+/// `--dump-audio` makes: a wall clock in the path would show as a count that
+/// moves between runs.
 #[test]
 fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
     let mut audio = Audio {
@@ -586,27 +551,22 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
     assert_eq!(frames, 120 * (DUMP_SAMPLE_RATE as usize / 60));
 }
 
-/// **The A/V sync measurement**, and the only one that can be made without
-/// something to listen with: over a full 40-second reel, does the frame the
-/// picture is on stay within one frame of where the sound has got to?
+/// The A/V sync measurement, the only one possible without listening: over a
+/// full 40-second reel, does the frame the picture is on stay within one frame
+/// of where the sound has got to?
 ///
-/// Run through the real pieces rather than a model of them - a real
-/// [`Sound`] in a real mixer, pulled by [`Audio::tick`] at the fixed 60 Hz,
-/// with the playhead read exactly where both tick loops read it and handed
-/// to [`oag_ui::frontend::Player::follow`]. Drift is what audio clocking exists
-/// to prevent and it is cumulative, so measuring it over one tick would
-/// measure nothing; 2,402 ticks is the whole intro.
-///
-/// The bound is **one frame**, which is 33 ms of picture against 44,100
-/// samples a second of sound. The error is a floor, so the frame is at
-/// worst the one before the sound's own, never the one after.
+/// Run through the real pieces (a real [`Sound`] in a real mixer pulled by
+/// [`Audio::tick`] at 60 Hz, the playhead read where both tick loops read it and
+/// given to [`oag_ui::frontend::Player::follow`]). Drift is cumulative, so 2,402
+/// ticks, the whole intro. The bound is one frame (33 ms of picture against
+/// 44,100 samples a second); the error is a floor, so the frame is at worst the
+/// one before the sound's, never after.
 #[test]
 fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
     let seconds = 40.17;
     let rate = 44_100;
     let frames = (seconds * f64::from(rate)) as usize;
-    // Silence is fine: what is measured is where the playhead is, and the
-    // mixer advances it whatever the samples are.
+    // Silence is fine: only the playhead is measured.
     let sound = Sound::new(vec![0i16; frames * 2], 2, rate).expect("a sound");
 
     let mut audio = Audio {
@@ -659,10 +619,9 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
     assert!(worst > 0.0, "the reel should actually have played");
 }
 
-/// The clock rule's own failure mode, and the reason the predicate is not
-/// just "is a voice playing": a run with **neither** a device nor a dump
-/// never advances the mixer, so a movie paced against it would stop on
-/// frame one and the boot sequence would never reach its end.
+/// The clock rule's failure mode: a run with neither a device nor a dump never
+/// advances the mixer, so a movie paced against it would stop on frame one and
+/// the boot sequence never end; "is a voice playing" is not enough.
 #[test]
 fn a_mixer_that_is_never_advanced_offers_no_clock() {
     let mut audio = Audio {
@@ -695,8 +654,8 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
     );
 }
 
-/// A movie with no sound is tick-clocked, which is `Backdrop.PMF` - the
-/// movie that plays most, and the one this must not get wrong.
+/// A movie with no sound is tick-clocked, as `Backdrop.PMF`, the movie that
+/// plays most.
 #[test]
 fn a_movie_with_no_voice_has_no_playhead() {
     let mut audio = Audio {
@@ -732,8 +691,8 @@ fn a_movie_with_no_voice_has_no_playhead() {
     assert_eq!(audio.movie_playhead(), None, "and none once it is stopped");
 }
 
-/// With no dump asked for, nothing is accumulated at all - a windowed run
-/// must not grow a buffer nobody ever reads.
+/// With no dump asked for nothing is accumulated: a windowed run must not grow
+/// a buffer nobody reads.
 #[test]
 fn a_run_with_no_dump_accumulates_nothing() {
     let mut audio = Audio {
@@ -762,10 +721,8 @@ fn a_run_with_no_dump_accumulates_nothing() {
     assert!(audio.dump.is_none());
 }
 
-/// `next_race_index` in isolation, since the playlist's real length can
-/// only come from a disc [`Audio::booted_soundtrack_len`] cannot fabricate
-/// in a unit test - this is the arithmetic side of "advances and wraps",
-/// pinned without one.
+/// `next_race_index` in isolation: the playlist's real length needs a disc
+/// [`Audio::booted_soundtrack_len`] cannot fabricate in a unit test.
 #[test]
 fn the_race_index_wraps_at_the_soundtracks_length() {
     assert_eq!(next_race_index(0, 16), 1);
@@ -776,19 +733,16 @@ fn the_race_index_wraps_at_the_soundtracks_length() {
         "an unreadable soundtrack leaves the index where it was"
     );
 }
-/// Silence at `seconds` long, for tests that only care where the playhead
-/// gets to, not what it sounds like.
+/// Silence at `seconds` long, for tests that only care where the playhead gets to.
 fn silence(seconds: f64, channels: u16, rate: u32) -> Arc<Sound> {
     let frames = (seconds * f64::from(rate)) as usize;
     Arc::new(Sound::new(vec![0i16; frames * channels as usize], channels, rate).expect("a sound"))
 }
 
-/// A PSP-boot-shaped fixture: the menu plays its own 28-second loop, which
-/// is not one of the sixteen soundtrack tracks (`music_from: None`), and a
-/// race track is already decoded and cached - so [`Audio::start_race_music`]
-/// never has to touch a disc, the same technique
-/// [`changing_the_music_source_seeks_rather_than_restarting`] uses for the
-/// menu path.
+/// A PSP-boot-shaped fixture: the menu plays its own 28-second loop
+/// (`music_from: None`) and a race track is already decoded and cached, so
+/// [`Audio::start_race_music`] never touches a disc (the technique of
+/// [`changing_the_music_source_seeks_rather_than_restarting`]).
 fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
     let menu_sound = silence(28.0, 2, 44_100);
     let race_sound = silence(180.0, 2, 44_100);
