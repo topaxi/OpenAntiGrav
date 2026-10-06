@@ -52,7 +52,7 @@ use oag_assets::source::Archives;
 use oag_formats::sblk;
 use oag_vex::sound_emitters::{self, SoundEmitter};
 
-use super::{Loaded, load_named_cue};
+use super::{Loaded, banks::load_track_cue};
 
 /// One authored emitter, with the audio its cue names where it resolves.
 #[derive(Debug, Clone)]
@@ -145,8 +145,8 @@ impl TrackEmitters {
     ///    `<LoadSoundBank Filename="...">` and sits beside it:
     ///    `Data\Environments\01_Track\BASILICO_ENV.bnk`, 253,664 bytes, label
     ///    `basilic`.
-    /// 2. The shared bank is `oag_title::SoundBanks::track_general`, the one
-    ///    entry no cue names and the executable does.
+    /// 2. The shared banks are `oag_title::SoundBanks::track`'s list, the entries
+    ///    no cue names and the executable does.
     ///
     /// A cue is decoded once per distinct pair, not per node (`~ELEVATOR`
     /// authored four times is one `Loaded` shared four ways).
@@ -161,29 +161,31 @@ impl TrackEmitters {
 
         // Read whole, parsed after: `sblk::Bank` borrows the blob.
         let mut blobs: Vec<(&str, String, Vec<u8>)> = Vec::new();
-        match banks.track_general {
-            Some(entry) => match archives.read_name(entry) {
-                Ok(bytes) => blobs.push(("shared", entry.to_string(), bytes)),
-                Err(e) => parsed
-                    .report
-                    .push(format!("track audio: {entry} not read: {e}")),
-            },
-            None => parsed.report.push(
+        if banks.track.shared.is_empty() {
+            parsed.report.push(
                 "track audio: this title names no shared track bank, so only a circuit's own \
                  bank can resolve"
                     .to_string(),
-            ),
+            );
         }
-        match circuit_bank_entry(archives, track) {
+        for entry in banks.track.shared {
+            match archives.read_name(entry) {
+                Ok(bytes) => blobs.push(("shared", (*entry).to_string(), bytes)),
+                Err(e) => parsed.report.push(format!(
+                    "track audio: {entry} not read: {e}; every emitter naming its label plays nothing"
+                )),
+            }
+        }
+        match circuit_bank_entry(archives, banks.track.circuit_directory, track) {
             Some(entry) => match archives.read_name(&entry) {
                 Ok(bytes) => blobs.push(("circuit", entry, bytes)),
-                Err(e) => parsed
-                    .report
-                    .push(format!("track audio: {entry} not read: {e}")),
+                Err(e) => parsed.report.push(format!(
+                    "track audio: {entry} not read: {e}; every emitter naming its label plays nothing"
+                )),
             },
             None => parsed.report.push(format!(
                 "track audio: no trackstartup.xml beside {track} names a sound bank, so only the \
-                 shared bank can resolve"
+                 shared bank(s) can resolve"
             )),
         }
 
@@ -193,16 +195,23 @@ impl TrackEmitters {
         for (why, entry, bytes) in &blobs {
             match sblk::Bank::parse(bytes) {
                 Ok(bank) => {
-                    parsed.report.push(format!(
-                        "track audio: {why} {entry} is bank {:?}, {} cue(s)",
-                        bank.name,
+                    // A hashed bank keeps no 16-byte names, so its count is the
+                    // cue table's.
+                    let cues = if bank.is_hashed() {
+                        usize::from(bank.cue_count)
+                    } else {
                         bank.sound_names().len()
+                    };
+                    parsed.report.push(format!(
+                        "track audio: {why} {entry} is bank {:?}, {cues} cue(s)",
+                        bank.name,
                     ));
                     by_label.insert(bank.name.clone(), bank);
                 }
-                Err(e) => parsed
-                    .report
-                    .push(format!("track audio: {entry} is not a sound bank: {e}")),
+                Err(e) => parsed.report.push(format!(
+                    "track audio: {entry} is not a sound bank: {e}; every emitter naming its \
+                     label plays nothing"
+                )),
             }
         }
 
@@ -226,7 +235,7 @@ impl TrackEmitters {
                             ),
                         ));
                     };
-                    load_named_cue(bank, &node.emitter.cue)
+                    load_track_cue(bank, &node.emitter.cue)
                         .map(|(loaded, _)| loaded)
                         .map_err(|e| {
                             (
@@ -318,15 +327,25 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
 /// The archive entry holding the circuit's own sound bank, if it names one.
 ///
 /// `trackstartup.xml` sits beside the `.vex` and its `<LoadSoundBank
-/// Filename="...">` names a file in that directory, not under `Data\Sound\`
-/// where the executable's literal-named banks live. Measured:
+/// Filename="...">` names a file. On Pulse, Pure and HD that file is in the
+/// track's directory, not under `Data\Sound\` where the executable's
+/// literal-named banks live; `directory` is [`None`] for them. 2048 passes
+/// [`oag_title::TrackBanks::circuit_directory`] and the file is read there.
+/// Pulse, measured:
 /// `Data\Sound\BASILICO_ENV.bnk` hashes to nothing on `pulse-psp-usa`, while
 /// `Data\Environments\01_Track\BASILICO_ENV.bnk` is a 253,664-byte `SBlk`
 /// labelled `basilic`, which `01_Track`'s fifty non-`gentrak` emitters spell.
-fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
+fn circuit_bank_entry(
+    archives: &mut Archives,
+    directory: Option<&str>,
+    track: &str,
+) -> Option<String> {
     let at = track.rfind(['/', '\\'])?;
-    let (directory, separator) = (&track[..at], &track[at..=at]);
     let file = circuit_manifest(archives, track)?.sound_bank?;
+    if let Some(directory) = directory {
+        return Some(format!("{directory}\\{file}"));
+    }
+    let (directory, separator) = (&track[..at], &track[at..=at]);
     Some(format!("{directory}{separator}{file}"))
 }
 

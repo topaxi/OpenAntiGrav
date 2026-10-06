@@ -186,8 +186,13 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
-    // Not searched for this lane.
-    track_general: None,
+    // Wwise banks (`BKHD`), which `oag_formats::sblk` does not read, so no
+    // directory or shared list changes what resolves; unswept.
+    track: oag_title::TrackBanks {
+        shared: &[],
+        circuit_directory: None,
+        origin: oag_title::Origin::Chosen,
+    },
     crossfade: None,
 };
 

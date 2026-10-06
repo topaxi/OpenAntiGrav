@@ -45,10 +45,11 @@ pub struct SoundBanks {
     pub weapons: &'static str,
     /// Where `shieldactive` is: the announcer, not an effect.
     pub speech: &'static str,
-    /// The bank every circuit's authored emitters share, or [`None`].
+    /// Where a circuit's authored emitters find their banks: the shared ones
+    /// and the directory the circuit's own bank sits in.
     ///
-    /// The odd one out in this struct, because it is the only entry no *cue*
-    /// names. A circuit's `.vex` authors its own emitters and each of them
+    /// The odd one out in this struct, because the shared entries are the
+    /// only ones no *cue* names. See [`TrackBanks`]. A circuit's `.vex` authors its own emitters and each of them
     /// spells the bank it wants by that bank's own seven-character label - and
     /// on Pulse, 568 of the 1,164 `sound` nodes spell `gentrak`, which is
     /// `generaltrack.bnk`'s label rather than any part of its path
@@ -57,15 +58,37 @@ pub struct SoundBanks {
     /// circuit's own `trackstartup.xml` and so needs no field here; this one is
     /// named by nothing on the disc, only by the executable.
     ///
-    /// [`None`] where a title has no bank at the analogous path - Wipeout HD
-    /// and 2048 - which is also where no circuit has been swept for the three
-    /// `.vex` audio classes. See `oag_sound::sfx::TrackEmitters` in
-    /// `oag-game`.
-    pub track_general: Option<&'static str>,
+    /// See `oag_sound::sfx::TrackEmitters` in `oag-game`.
+    pub track: TrackBanks,
     /// Where this title's crossfaded engine tables address their sounds, or
     /// [`None`] to read them from [`Self::ship`] / [`Self::ship_zone`] under
     /// the plain `xfship_<team>.xfx` names, which is what HD does.
     pub crossfade: Option<Crossfade>,
+}
+
+/// Which banks a circuit's authored `sound` nodes can resolve against.
+///
+/// A node spells its bank by the bank's own label, so the loader opens every
+/// bank listed here plus the circuit's own and matches on the label each
+/// reports (`oag_sound::sfx::TrackEmitters::load`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrackBanks {
+    /// Banks every circuit's nodes may name besides its own, as archive
+    /// entries, in the order they are opened. Empty where the title has none.
+    ///
+    /// Pulse and Pure: `generaltrack.bnk`. 2048: `crowd_NGP.bnk` (label
+    /// `crowd`) and `generaltrack.bnk` (`gentrak`).
+    pub shared: &'static [&'static str],
+    /// The archive directory a circuit's own bank is read from, or [`None`]
+    /// where it sits beside the track, named by the `trackstartup.xml`
+    /// `<LoadSoundBank>` filename (Pulse, Pure and HD).
+    ///
+    /// 2048 keeps every circuit's bank in `Data\audio\sound\` instead:
+    /// `env_altima.bnk` reads there and `Data\art\published\environments\altima\env_altima.bnk`
+    /// does not exist.
+    pub circuit_directory: Option<&'static str>,
+    /// Where this came from: ADR-0058's per-entry provenance.
+    pub origin: crate::Origin,
 }
 
 /// A title whose engine tables address a bank other than its `ship` bank, and

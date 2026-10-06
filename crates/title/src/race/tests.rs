@@ -325,7 +325,11 @@ const SOUNDS: SoundBanks = SoundBanks {
     ship_zone: "ship.bnk",
     weapons: "weapons.bnk",
     speech: "speech.bnk",
-    track_general: Some("generaltrack.bnk"),
+    track: TrackBanks {
+        shared: &["generaltrack.bnk"],
+        circuit_directory: None,
+        origin: crate::Origin::Chosen,
+    },
     crossfade: None,
 };
 
