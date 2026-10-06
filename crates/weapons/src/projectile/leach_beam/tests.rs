@@ -1,8 +1,5 @@
-//! What the LeachBeam's link, lifetime and transfer in [`super`] are asserted
-//! to do.
-//!
-//! Split out under the 200-line cap on inline `#[cfg(test)]` modules; see
-//! `scripts/check-file-size.py`.
+//! What the LeachBeam's link, lifetime and transfer in [`super`] are asserted to
+//! do. Split under the 200-line cap on inline test modules.
 
 use super::*;
 use crate::test_craft::Ship;
@@ -79,10 +76,8 @@ fn a_beam_fired_with_no_lock_drains_nobody_and_expires_on_its_own_clock() {
     }
 
     assert_eq!(ships[1].physics.shield, before);
-    // The age, not the tick count: `age` accumulates `dt` rather than being
-    // recomputed from a counter, so 45 additions of `1.0 / 60.0` land a hair
-    // under `0.75` and the beam retires on the 46th. Asserting the count would
-    // pin that drift rather than the rule.
+    // The age, not the tick count: `age` accumulates `dt`, so 45 additions of
+    // `1.0 / 60.0` land a hair under `0.75` and the beam retires on the 46th.
     assert!(
         beam.age >= UNLOCKED_FIZZLE_SECONDS && beam.age < UNLOCKED_FIZZLE_SECONDS + DT,
         "fizzled at {} rather than {UNLOCKED_FIZZLE_SECONDS}",
@@ -190,9 +185,8 @@ fn a_held_link_lets_go_on_its_authored_active_time() {
         "let go at {} rather than active_time",
         beam.age
     );
-    // Every tick before the one that let go drained, and no tick after it did -
-    // the same "assert the rule, not the accumulation drift" the fizzle test
-    // above explains.
+    // Every tick before the one that let go drained, none after (the rule, not the
+    // accumulation drift, as above).
     assert!(
         (178..=180).contains(&drained_ticks),
         "drained on {drained_ticks} ticks of a three-second beam"
@@ -235,8 +229,7 @@ fn every_draining_tick_arms_the_victims_thrust_scale_and_not_the_shooters() {
     let mut beam = Beam::locked(0, 1, &stats());
 
     for _ in 0..3 {
-        // The composition root consumes it between ticks; model that so the
-        // assertion is "re-armed", not "still armed".
+        // The composition root consumes it between ticks; model that.
         ships[1].pending_thrust_scale = 1.0;
         let report = beam.advance(&mut ships, 2, rules(), DT);
         assert!(report.drained);
