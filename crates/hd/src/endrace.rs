@@ -21,14 +21,18 @@ pub const SCREEN_ENTRY: &str = crate::frontend::names::ENDRACE_DEFINITION;
 /// safe-zone-oversized fill for a 1920-wide screen, not a 480-wide one.
 pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
 
-/// Every texture this pass draws beyond the screen's own fills - just the
+/// Every texture the HD end screens draw beyond their own fills - the
 /// title-bar arrow glyph beside `ResultsTitle`/`FE_MENU`, already spelled
 /// `.gtf` on the widget itself (`src="Data\FE\Images\Title_Arrow_HD.gtf"`),
-/// unlike [`crate::campaign::HEX_TEXTURES`]'s own `.mip`-to-`.gtf` respell.
+/// unlike [`crate::campaign::HEX_TEXTURES`]'s own `.mip`-to-`.gtf` respell -
+/// and `EndRace Podium`'s plinth fill, `dot.gtf`.
 /// Every other image either widget names - the ship-badge column, the
 /// target/medal/record-notify art - is left unresolved on purpose; see
 /// `oag_ui_screens::endrace::hd`'s own module doc for why.
-pub const EXTRA_TEXTURES: [&str; 1] = [r"Data\FE\Images\Title_Arrow_HD.gtf"];
+pub const EXTRA_TEXTURES: [&str; 2] = [
+    r"Data\FE\Images\Title_Arrow_HD.gtf",
+    r"Data\FE\Images\dot.gtf",
+];
 
 #[cfg(test)]
 mod tests {

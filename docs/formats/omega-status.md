@@ -383,7 +383,7 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   the first entry of the catalogue, which is where `settle` falls when the stored
   id is not offered (the catalogue lists `AG_Systems`; `DEFAULTS.team` spells it
   `ag_systems`). **Chosen, not measured.**
-- **The EndRace screens are skipped, not wired.** `EndRace_Definition.xml` is at
+- **The EndRace screens are skipped, not wired.** (Census 2026-10-06: the three copies of `EndRace_Definition.xml` author Results, Menu and Podium and no Rewards - `hd-endrace-screens.md`.) `EndRace_Definition.xml` is at
   HD's path too, and dispatching Omega through HD's loader draws `EndRace
   Results`, but `--menu-page endrace-menu` then draws no option blocks where
   HD's draws three, so the way back (`RETURN TO GRID`) is unreachable. Without

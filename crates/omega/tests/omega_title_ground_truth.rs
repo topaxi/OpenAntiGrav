@@ -117,3 +117,43 @@ fn omega_refuses_hd_and_2048_sources() {
         assert!(oag_omega::open(&vita.display().to_string()).is_err());
     }
 }
+
+/// The EndRace screens Omega's copies of `EndRace_Definition.xml` author,
+/// read off every archive that holds one - the census behind
+/// `docs/formats/omega-status.md`'s "checked" line for HD's `Rewards`/
+/// `Podium` findings. Omega's front end is HD's, so the question is whether
+/// the screens HD authors (and HD's code builds only some of) are the same
+/// ones here.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_endrace_definition_authors_the_screens_hd_does() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let copies = archives.read_every_name(r"Data\Plugins\Frontend\Gui\EndRace_Definition.xml");
+    assert!(!copies.is_empty(), "Omega ships an EndRace_Definition.xml");
+    let screens = |xml: &str, name: &str| xml.contains(&format!("name=\"{name}\""));
+    let mut seen = Vec::new();
+    for (label, blob) in &copies {
+        let xml = String::from_utf8_lossy(blob);
+        seen.push(format!(
+            "{label}: results={} menu={} rewards={} podium={}",
+            screens(&xml, "EndRace Results"),
+            screens(&xml, "EndRace Menu"),
+            screens(&xml, "EndRace Rewards"),
+            screens(&xml, "EndRace Podium"),
+        ));
+    }
+    eprintln!("{}", seen.join("\n"));
+    for (label, blob) in &copies {
+        let xml = String::from_utf8_lossy(blob);
+        assert!(
+            screens(&xml, "EndRace Results") && screens(&xml, "EndRace Menu"),
+            "{label}"
+        );
+        assert!(screens(&xml, "EndRace Podium"), "{label} has a Podium");
+        assert!(
+            !screens(&xml, "EndRace Rewards"),
+            "{label}: no Rewards, like HD's DATA06"
+        );
+    }
+}
