@@ -1,7 +1,5 @@
-//! What the passive drag, damping and gravity terms in [`super`] are asserted to do.
-//!
-//! Split out of `passive.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the passive drag, damping and gravity terms in [`super`] are asserted to do. Split out of
+//! `passive.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::params::{Physical, Pitch};
@@ -23,9 +21,8 @@ fn drag_grows_with_the_square_of_speed() {
     );
 }
 
-/// The airborne coefficient is the **smaller** one. Pinned because the
-/// intuitive ordering is the opposite and this is exactly the kind of thing a
-/// reimplementation tidies up by accident.
+/// The airborne coefficient is the **smaller** one. Pinned because the intuitive ordering is the
+/// opposite and a reimplementation tidies it by accident.
 #[test]
 fn airborne_drag_is_weaker_than_grounded_drag() {
     let velocity = Vec3::new(0.0, 0.0, -40.0);
@@ -79,9 +76,8 @@ fn the_weathervane_turns_the_nose_toward_the_direction_of_travel() {
     let velocity = Vec3::new(10.0, 0.0, -40.0);
     let torque = weathervane(forward, velocity, true);
 
-    // A right-handed rotation about -Y turns -Z toward +X, so the yaw component
-    // must be negative for the nose to swing right, and this crate's forward is
-    // -Z. With the sign as the page writes it, this comes out positive and the
+    // A right-handed rotation about -Y turns -Z toward +X, so the yaw component must be negative for
+    // the nose to swing right (forward is -Z). With the page's sign this comes out positive and the
     // nose swings away from travel; see `WEATHERVANE_GROUND`.
     assert!(torque.y < 0.0, "torque was {torque:?}");
 }
@@ -190,9 +186,8 @@ fn gravity_acts_on_world_down_only() {
     assert_eq!(force, Vec3::new(0.0, -20.0, 0.0));
 }
 
-/// `track_gravity` is in the hover spring's calibration and **not** in the
-/// gravity term, which is a correction to what was previously inferred from the
-/// field names alone.
+/// `track_gravity` is in the hover spring's calibration and **not** in the gravity term (a
+/// correction to what was inferred from the field names alone).
 #[test]
 fn track_gravity_is_not_part_of_the_gravity_force() {
     let mut handling = Handling::ZERO;

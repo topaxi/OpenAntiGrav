@@ -1,7 +1,7 @@
 //! `Body_StepWorld`'s pass 1: the pre-integration clip along the velocity.
 //!
-//! Read out of `Body_StepWorld` (`0x0884f70c`), the first per-body loop, before
-//! any force is evaluated or anything is integrated:
+//! From `Body_StepWorld` (`0x0884f70c`), the first per-body loop, before any force or
+//! integration:
 //!
 //! ```text
 //! v      = body+0x140                              ; this frame's velocity
@@ -21,26 +21,21 @@
 //!         body+0x30 = start - normalise(probe) * 0.9 * |end - hit.point|
 //! ```
 //!
-//! `Collision_RaycastWorld`'s last two arguments are `1` (Reset colliders are
-//! **not** skipped) and `2` (box colliders skipped, meshes only), so the clip
-//! runs against every surface of the track - `Wall`, `Floor`, `MagFloor` and
-//! `Reset` alike. There is no velocity change: `Body_SetPosition` (`0x0884d840`)
-//! and nothing else. The `0.9` is `0x3f666666`.
+//! `Collision_RaycastWorld`'s last two arguments are `1` (Reset colliders **not** skipped) and
+//! `2` (box colliders skipped, meshes only), so the clip runs against every track surface
+//! (`Wall`, `Floor`, `MagFloor`, `Reset`). There is no velocity change, only
+//! `Body_SetPosition` (`0x0884d840`); the `0.9` is `0x3f666666`.
 //!
-//! The segment reaches from the centre to the box's own face along the
-//! velocity, plus this frame's travel, so the clip fires whenever the leading
-//! face would reach a surface this frame, and moves the body back by
-//! nine-tenths of the overshoot. It is what lifts a craft whose centre is above
-//! a floor but whose hull is through it: moving down, the segment from the
-//! centre to the box's underside crosses the floor, and the body is put back by
-//! `0.9 * (reach - clearance)`. Measured in the original on `03_Track` at spline
-//! index 200, placed 3.6 units into the floor: the first frame whose velocity
-//! points down lifts it `0.757`, and `0.9 * (1.3125 + 0.024 - 0.50) = 0.752`.
+//! The segment reaches from the centre to the box's own face along the velocity plus this
+//! frame's travel, so the clip fires whenever the leading face would reach a surface, and
+//! moves the body back by nine-tenths of the overshoot. It lifts a craft whose centre is above
+//! a floor but whose hull is through it: measured on `03_Track` at spline index 200, placed
+//! 3.6 units into the floor, the first frame with downward velocity lifts it `0.757` and
+//! `0.9 * (1.3125 + 0.024 - 0.50) = 0.752`.
 //!
-//! Confidence **85** on the reading: every constant and the argument order are
-//! read off the decompile and cross-checked against `Collision_RaycastWorld`'s
-//! own flag handling; the multiplicative clip is reproduced literally although
-//! it over-shrinks a probe that exceeds two half-extents at once.
+//! Confidence **85**: constants and argument order read off the decompile and cross-checked
+//! against `Collision_RaycastWorld`'s flag handling. The multiplicative clip is reproduced
+//! literally though it over-shrinks a probe exceeding two half-extents at once.
 
 use oag_core::math::Vec3;
 
@@ -79,8 +74,7 @@ pub fn pre_integration_clip<R: Raycaster + ?Sized>(
         return Clip::default();
     }
     let speed = velocity.length();
-    // Bound bools so a `NaN` lands in the early return rather than being
-    // compared into silence.
+    // Bound bools so a `NaN` lands in the early return.
     let moving = speed > 0.0;
     if !moving {
         return Clip::default();

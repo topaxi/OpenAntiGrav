@@ -1,7 +1,5 @@
-//! What the four control states and their ramps in [`super`] are asserted to do.
-//!
-//! Split out of `controls.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the four control states and their ramps in [`super`] are asserted to do. Split out of
+//! `controls.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::params::{Airbrake, Brakes, Turning};
@@ -158,11 +156,9 @@ fn the_airbrake_states_saturate_at_the_control_range() {
     assert_eq!(state.airbrake_right, CONTROL_RANGE * 0.5);
 }
 
-/// The weapon slowdown timer is **not** one of the ramps this function owns.
-///
-/// It was, while the field was believed to be a leap timer. Its decay is the
-/// original's `0x08849a24`, at the end of the craft update rather than the
-/// start, and it lives in `crate::forces::evaluate` now.
+/// The weapon slowdown timer is **not** one of the ramps this function owns (it was, while the field
+/// was believed to be a leap timer). Its decay is the original's `0x08849a24`, at the end of the
+/// craft update, and lives in `crate::forces::evaluate`.
 #[test]
 fn the_slowdown_timer_is_not_touched_here() {
     let handling = test_handling();

@@ -1,7 +1,5 @@
-//! What the engine, brake, steering and pitch laws in [`super`] are asserted to do.
-//!
-//! Split out of `engine.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the engine, brake, steering and pitch laws in [`super`] are asserted to do. Split out of
+//! `engine.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::params::{Brakes, Engine, Pitch, Turning};
@@ -224,13 +222,11 @@ fn the_brake_fades_out_at_low_speed_and_is_exactly_zero_at_rest() {
     assert!(brakes(&crawling, &handling).length() < brakes(&fast, &handling).length());
 }
 
-/// Holding right (`steer > 0`) must turn the ship right, which in this crate's
-/// convention needs a **negative** `local_angular.y` contribution - see the
-/// weathervane direction test in `crate::passive` for the same identity
-/// applied to a different term, and the measured law in
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md` this pins against. A test that
-/// only checked `right == -left` would pass whether or not the whole thing
-/// were inverted, which is exactly the bug this pins.
+/// Holding right (`steer > 0`) must turn the ship right, which in this crate's convention needs a
+/// **negative** `local_angular.y` contribution (the weathervane direction test in `crate::passive`
+/// applies the same identity to another term; the measured law is in
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`). A test checking only `right == -left` would
+/// pass with the whole thing inverted, the bug this pins.
 #[test]
 fn steering_right_yaws_negative_and_is_symmetric_with_left() {
     let handling = test_handling();
@@ -293,13 +289,10 @@ fn reversed_controls_blend_through_dead_rather_than_snapping() {
     assert_eq!(steering(&state, &handling), -normal);
 }
 
-/// The gains, on the control scale the axis was measured to be on.
-///
-/// The expected value carries [`crate::controls::CONTROL_RANGE`] and a
-/// The expected value carries [`crate::controls::CONTROL_RANGE`], which is a
-/// measurement rather than bookkeeping: the original's pitch axis reads
-/// `+/-100`, not `-1..=1`. See [`pitch`]. This test previously asserted the
-/// bare gain and passed while the term was 100x weak.
+/// The gains, on the control scale the axis was measured to be on. The expected value carries
+/// [`crate::controls::CONTROL_RANGE`], a measurement not bookkeeping: the original's pitch axis
+/// reads `+/-100`, not `-1..=1` ([`pitch`]). This once asserted the bare gain and passed while
+/// the term was 100x weak.
 #[test]
 fn the_pitch_axis_uses_a_different_gain_on_the_ground_than_in_the_air() {
     let handling = test_handling();
@@ -319,15 +312,11 @@ fn the_pitch_axis_uses_a_different_gain_on_the_ground_than_in_the_air() {
     );
 }
 
-/// A nose-up request must produce a positive body-local pitch torque.
-///
-/// `oag_physics`' body frame is right-handed on `(x right, y up, z back)` and
-/// forward is `-Z`, so `omega = +k * x` swings the nose toward `+up`. The
-/// original's own chain agrees through a different convention: `down` on the
-/// d-pad writes `+100` to the pitch axis, that lands in the game-side
-/// accumulator, and the game's basis advance (`e' = e x omega`) tips its
-/// forward row up. Both routes say the sign of this term is the sign of "nose
-/// up", which is what the assertion below is.
+/// A nose-up request must produce a positive body-local pitch torque. `oag_physics`' body frame is
+/// right-handed on `(x right, y up, z back)` with forward `-Z`, so `omega = +k * x` swings the
+/// nose toward `+up`. The original agrees through another convention: d-pad `down` writes `+100`
+/// to the pitch axis, into the game-side accumulator, and the basis advance (`e' = e x omega`)
+/// tips its forward row up. Both say this term's sign is the sign of "nose up".
 #[test]
 fn a_nose_up_request_pitches_the_nose_up() {
     let handling = test_handling();

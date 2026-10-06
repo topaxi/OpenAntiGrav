@@ -1,41 +1,31 @@
-//! Ship dynamics: the rigid body, the controls that drive it, and the state the
-//! force law carries between frames.
+//! Ship dynamics: the rigid body, the controls that drive it, and the state the force
+//! law carries between frames.
 //!
-//! The model is specified in `docs/physics/README.md`. The types below are the
-//! contract; the force law and the integrator are implemented on top of them, in
-//! [`crate::hover`], [`crate::airbrake`], [`crate::forces`] and
+//! The model is specified in `docs/physics/README.md`; the force law and integrator sit
+//! on these types in [`crate::hover`], [`crate::airbrake`], [`crate::forces`] and
 //! [`crate::integrate`].
 //!
-//! [`Body::mass`] and [`crate::params::Physical::mass`] are the same quantity held
-//! in two places: the force law reads the parameter set and the integrator reads
-//! the body. Keeping them equal is the integration layer's job, and nothing here
-//! copies one over the other, so a mismatch stays visible rather than silently
-//! producing a ship whose suspension and inertia disagree.
+//! [`Body::mass`] and [`crate::params::Physical::mass`] are the same quantity held twice
+//! (the force law reads the parameter set, the integrator the body). Keeping them equal
+//! is the integration layer's job; nothing here copies one over the other, so a mismatch
+//! stays visible.
 
 use oag_core::math::{Quat, Vec3};
 
-/// The largest delta the original will integrate, in seconds.
-///
-/// `dt = clamp(measured_dt, 0, 0.06666)`, so a frame longer than about 15 Hz is
-/// simulated as though it were 15 Hz. At the project's fixed 60 Hz this clamp
-/// never fires, and it is reproduced anyway because a variable-delta comparison
-/// against a trace from the original will need it.
+/// The largest delta the original will integrate, in seconds: `clamp(measured_dt, 0,
+/// 0.06666)`. Never fires at the project's fixed 60 Hz; kept for variable-delta
+/// comparison against a trace.
 pub const MAX_DT: f32 = 0.066_66;
 
-/// How many explicit Euler sub-steps one frame is integrated in.
-///
-/// The count is fixed at three and the sub-step *size* is `dt/3`, so it varies
-/// with the frame. There is no 1/60 anywhere in the original's craft path
-/// despite fourteen other systems using one; see
-/// `docs/architecture/adr/0007-fixed-timestep-vs-original.md`.
+/// How many explicit Euler sub-steps one frame is integrated in. The count is fixed and
+/// the sub-step size is `dt/3`; the original's craft path has no 1/60
+/// (`docs/architecture/adr/0007-fixed-timestep-vs-original.md`).
 pub const SUBSTEPS: u32 = 3;
 
 /// A rigid body with a diagonal inertia tensor.
 ///
-/// Forces and torques accumulate in world space over a frame and are consumed by
-/// the integrator, which is how the original works: every force is applied at a
-/// point via an `AddForceAtPoint`-shaped call and the accumulators are what the
-/// sub-steps read.
+/// Forces and torques accumulate in world space over a frame and the integrator's
+/// sub-steps read them, as in the original's `AddForceAtPoint`-shaped calls.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Body {
     /// Centre of mass in world space.
@@ -53,49 +43,30 @@ pub struct Body {
     /// Mass, from `<Physical mass/>`.
     pub mass: f32,
     /// Diagonal of the inertia tensor, on the body's own axes.
+    /// Diagonal of the inertia tensor, on the body's own axes.
     ///
-    /// [`crate::forces::ship_inertia`], `(15.6, 21.6, 15.6)` on
-    /// `(right, up, forward)`, and that is also what [`Body::default`] carries.
+    /// [`crate::forces::ship_inertia`], `(15.6, 21.6, 15.6)` on `(right, up, forward)`,
+    /// which is also [`Body::default`]'s value.
     ///
-    /// **This crate applies it in body axes and the original applies the same
-    /// three numbers in world axes** - measured 2026-09-10, exactly, on three
-    /// captures (`scripts/trace-inertia-frame-fit.py` and
-    /// `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`). `15.6` on right
-    /// *and* forward makes the tensor yaw-invariant, so the two agree on a level
-    /// craft and diverge only under pitch and roll. Deliberately not changed
-    /// here: it would move the simulation, and whether it improves it is
-    /// unmeasured. The **contact denominators are a separate question and are
-    /// already right** - [`crate::pair`] and [`crate::wall`] apply this diagonal
-    /// to a world-space `r x n` because that is what the original does.
+    /// **This crate applies it in body axes; the original applies the same three numbers
+    /// in world axes** (measured exactly on three captures,
+    /// `scripts/trace-inertia-frame-fit.py`, `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`).
+    /// `15.6` on right and forward makes the tensor yaw-invariant, so they agree on a
+    /// level craft and diverge only under pitch and roll. Not changed: it would move the
+    /// simulation, and whether it improves it is unmeasured. The contact denominators
+    /// are already right: [`crate::pair`] and [`crate::wall`] apply this diagonal to a
+    /// world-space `r x n`, as the original does.
     ///
-    /// **The default is the ship's tensor rather than [`Vec3::ONE`] on purpose,
-    /// and the purpose is a footgun.** Every craft in the game shares this tensor,
-    /// because it is a code literal at a single call site rather than something
-    /// authored per ship, so there is no per-craft value for a spawn path to
-    /// compute - and a body written as
-    /// `Body { position, mass, ..Body::default() }` is overwhelmingly a craft.
-    /// Leaving the default at `1` would make that expression silently produce a
-    /// ship with `15.6x` the pitch authority and an unstable surface-alignment
-    /// oscillator, with nothing in the source to look at. A test that genuinely
-    /// wants a unit inertia says so.
+    /// **The default is the ship's tensor, not [`Vec3::ONE`], on purpose.** Every craft
+    /// shares it (a code literal at one call site), so
+    /// `Body { position, mass, ..Body::default() }` is nearly always a craft, and a unit
+    /// default would silently give `15.6x` the pitch authority and an unstable alignment
+    /// oscillator. A test that wants unit inertia says so.
     ///
-    /// # It reaches every angular path, which it did not used to
-    ///
-    /// An earlier revision of this comment explained why setting this field was a
-    /// **no-op that looked like an implementation**: `forces::drain` multiplied
-    /// the angular accumulators by it and [`crate::integrate`] divided by it
-    /// again, so it cancelled exactly on every accumulator term and reached only
-    /// the hover probes' `add_force_at_point`. That was a consequence of the
-    /// crate treating the accumulators as angular *acceleration*, which the
-    /// original does not - it accumulates **torque** and damps angular
-    /// **momentum**.
-    ///
-    /// The crate is on the momentum model now, so the round trip is gone and this
-    /// field divides every angular term: the drives, the weathervane, the surface
-    /// alignment and the probes' lever arms. What it must *not* be applied to is
-    /// the angular damping, which reads `I * omega` and therefore leaves the
-    /// angular acceleration inertia-free by construction - see
-    /// [`crate::passive::angular_damping`].
+    /// It divides every angular term (drives, weathervane, alignment, probe lever arms)
+    /// because accumulators hold **torque** and angular **momentum** is damped, as in the
+    /// original. It must *not* be applied to angular damping, which reads `I * omega`;
+    /// see [`crate::passive::angular_damping`].
     pub inertia: Vec3,
 }
 
@@ -138,34 +109,21 @@ impl Body {
 
     /// Velocity of a world-space point rigidly attached to the body.
     ///
-    /// # This textbook form *is* what both of the original's contact resolvers use
+    /// This textbook form *is* what both of the original's contact resolvers use.
+    /// `Body_ResolveContact` (`0x0884e968`) and `Body_ResolveContactPair` (`0x0884ef30`)
+    /// rotate `body+0x150` through the basis rows (`vtfm4.q`, `0x0884ea58`/`0x0884f038`)
+    /// and cross with the lever arm on the left (`vcrsp.t`, `0x0884ea9c`/`0x0884f078`).
+    /// `body+0x150` holds the rotation rate **negated and in body coordinates**, so the
+    /// expression is `v + cross(r, -omega) == v + omega x r`. Measured:
+    /// `scripts/omega-column-reading-fit.py` over four captures, `NegatedLocal` wins by
+    /// two orders of magnitude (2 % residual against 200 % for a world-space reading);
+    /// it is also the `w_game = -w_physics` contract of [`crate::integrate`].
     ///
-    /// Not obviously: `Body_ResolveContact` (`0x0884e968`) and
-    /// `Body_ResolveContactPair` (`0x0884ef30`) both build the point velocity by
-    /// rotating `body+0x150` through the basis rows at `body+0x00..0x30`
-    /// (`vtfm4.q C000,E100,C200`, at `0x0884ea58` and `0x0884f038`) and then
-    /// crossing with the lever arm on the **left** (`vcrsp.t`, `0x0884ea9c` and
-    /// `0x0884f078`) - `v + cross(r, R^T omega)`, which reads as a non-textbook
-    /// idiom and is not one.
-    ///
-    /// `body+0x150` holds the rotation rate **negated and in body coordinates**,
-    /// so `R^T` is the body-local to world unrotation and
-    /// `R^T(body+0x150) == -omega`, which makes the whole expression
-    /// `v + cross(r, -omega) == v + omega x r` - this function. The reading is
-    /// measured, not assumed: `scripts/omega-column-reading-fit.py` fits the
-    /// recorded column against the rotation the recorded basis actually performs
-    /// over four captures and `NegatedLocal` wins by two orders of magnitude
-    /// (a 2 % residual against 200 % for a world-space reading). It is also the
-    /// `w_game = -w_physics` contract [`crate::integrate`] states as a
-    /// whole-crate rule, and `crates/trace`'s `Frame::angular_rate` records the
-    /// same fit per axis.
-    ///
-    /// **So do not "correct" a resolver to `cross(r, R^T omega)` against our own
-    /// `angular_velocity`** - that inserts a sign flip on the dominant mode,
-    /// worth a median 8-11 units/s of `vn` on a recorded lap, and it costs
-    /// `07_Track` its clean lap in `race_ground_truth`. `wall::tests` pins the
-    /// case with a yawing craft; every other wall test starts at `omega == 0`,
-    /// where no convention is exercised.
+    /// **Do not "correct" a resolver to `cross(r, R^T omega)`** against our own
+    /// `angular_velocity`: that flips the sign of the dominant mode (a median 8-11 units/s
+    /// of `vn` on a recorded lap) and costs `07_Track` its clean lap in
+    /// `race_ground_truth`. `wall::tests` pins it with a yawing craft; the other wall
+    /// tests start at `omega == 0`, where no convention is exercised.
     #[must_use]
     pub fn velocity_at(&self, point: Vec3) -> Vec3 {
         self.linear_velocity + self.angular_velocity.cross(point - self.position)
@@ -189,20 +147,13 @@ impl Body {
 
     /// Applies a world-space impulse through the centre of mass, immediately.
     ///
-    /// **Not an accumulator, and that is the whole reason it exists.**
-    /// [`crate::step`] calls [`Self::clear_accumulators`] at its top, so a force
-    /// added by a caller *outside* the step - which is where a weapon blast is
-    /// applied, because only `oag-gameplay` knows what a weapon is - would be
-    /// dropped before anything integrated it. An impulse writes the velocity
-    /// instead, so it survives.
+    /// Not an accumulator on purpose: [`crate::step`] calls [`Self::clear_accumulators`]
+    /// at its top, so a force added outside the step (a weapon blast, applied by
+    /// `oag-gameplay`) would be dropped. An impulse writes the velocity, so it survives.
     ///
-    /// `dv = J / m`, with a zero or negative mass ignored rather than dividing:
-    /// a `Handling::ZERO` fixture has no mass, and an infinity in a velocity
-    /// takes the whole simulation with it.
-    ///
-    /// **Ours.** The original applies `<Rocket blastforce>` through something
-    /// unread; that it is an impulse rather than a force held over some duration
-    /// is this project's reading. See `oag_weapons::projectile`.
+    /// `dv = J / m`; a zero or negative mass is ignored (a `Handling::ZERO` fixture has
+    /// none, and an infinity takes the simulation with it). **Ours:** that `<Rocket
+    /// blastforce>` is an impulse is this project's reading; see `oag_weapons::projectile`.
     pub fn apply_impulse(&mut self, impulse: Vec3) {
         if self.mass > 0.0 {
             self.linear_velocity += impulse / self.mass;
@@ -218,10 +169,9 @@ impl Body {
 
 /// One frame of pilot intent, already mapped out of whatever produced it.
 ///
-/// Analog axes are `-1.0..=1.0` and triggers `0.0..=1.0`. The simulation never
-/// sees a key, a pad or a PSP button mask: `oag-gameplay` owns the input
-/// snapshot and hands this down, which is rule 1 of
-/// `docs/architecture/workspace-layout.md`.
+/// Analog axes are `-1.0..=1.0`, triggers `0.0..=1.0`. The simulation never sees a key or
+/// pad: `oag-gameplay` owns the input snapshot (rule 1 of
+/// `docs/architecture/workspace-layout.md`).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ShipControls {
     /// Steering, positive to the right.
@@ -236,86 +186,57 @@ pub struct ShipControls {
     pub airbrake_right: f32,
     /// A sideshift was requested this frame, and to which side.
     ///
-    /// An edge and not a level. This is the *direct* request: a caller that has
-    /// already decided a shift should fire sets it, and
-    /// [`crate::airbrake::advance_sideshift`] arms the timer. The two gesture
-    /// machines below fire the same timers without going through it, so a
-    /// caller that maps real buttons leaves this at [`Sideshift::None`] and a
-    /// test or a probe that wants a shift on a given tick sets it.
+    /// An edge. The *direct* request: [`crate::airbrake::advance_sideshift`] arms the
+    /// timer. The two gesture machines below fire the same timers without it, so a caller
+    /// mapping real buttons leaves this [`Sideshift::None`].
     pub sideshift: Sideshift,
-    /// The novice scheme's sideshift button (`OPT_CTRL_SS`, action 7) is
-    /// **held**.
+    /// The novice scheme's sideshift button (`OPT_CTRL_SS`, action 7) is **held**.
     ///
-    /// While it is, the steering axis returning inside
-    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`] arms a flick and crossing
-    /// back out of it fires one. See
-    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    /// While held, the steering axis returning inside
+    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`] arms a flick and crossing back out
+    /// fires one. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub shift_modifier: bool,
-    /// The veteran scheme's left airbrake (`OPT_CTRL_LAB`, action 5) was
-    /// **pressed** this tick - an edge, not a level.
+    /// The veteran scheme's left airbrake (`OPT_CTRL_LAB`, action 5) was **pressed** this
+    /// tick (an edge).
     ///
-    /// Two presses inside [`crate::airbrake::SIDESHIFT_TAP_WINDOW`] are a left
-    /// sideshift. The original reads this off the pressed mask at
-    /// `*(craft+0x78) + 0x20`, which is why a held airbrake does not repeat.
+    /// Two presses inside [`crate::airbrake::SIDESHIFT_TAP_WINDOW`] are a left sideshift.
+    /// The original reads the pressed mask at `*(craft+0x78) + 0x20`, so a held airbrake
+    /// does not repeat.
     pub shift_tap_left: bool,
     /// The veteran scheme's right airbrake (`OPT_CTRL_RAB`, action 6) was
     /// pressed this tick.
     pub shift_tap_right: bool,
-    /// The `LEFT` d-pad was **pressed** this tick - an edge, not a level.
+    /// The `LEFT` d-pad was **pressed** this tick (an edge).
     ///
-    /// One of the barrel roll's two tap sources, and the only one that is a
-    /// button: the original writes `1` into its tap history "when the `LEFT`
-    /// d-pad bit is pressed *or* the steering axis crosses below `-90`", and
-    /// the axis leg is read off [`Self::steer_x`] inside
-    /// [`crate::barrel_roll::advance_gesture`] rather than here, because
-    /// detecting a *crossing* needs the previous tick's axis and that is
-    /// per-craft state. See
-    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
-    ///
-    /// Not scheme-dependent, unlike the sideshift's fields: the tap history is
-    /// fed by the d-pad in both schemes, which spend `L` and `R` and never the
-    /// d-pad.
+    /// One of the barrel roll's two tap sources, and the only button one: the original
+    /// writes `1` into its tap history when `LEFT` is pressed *or* the steering axis
+    /// crosses below `-90`. The axis leg is read off [`Self::steer_x`] in
+    /// [`crate::barrel_roll::advance_gesture`], since a crossing needs the previous
+    /// tick's axis (per-craft state). Scheme-independent: both schemes feed the history
+    /// from the d-pad. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub roll_tap_left: bool,
-    /// The `RIGHT` d-pad was pressed this tick, the `2` half of
-    /// [`Self::roll_tap_left`]'s encoding.
+    /// The `RIGHT` d-pad was pressed this tick, the `2` of [`Self::roll_tap_left`].
     pub roll_tap_right: bool,
-    /// A barrel roll was decided on this tick, and which way it goes.
+    /// A barrel roll was decided on this tick, and which way.
     ///
-    /// **The *direct* request, exactly as [`Self::sideshift`] is**: a caller
-    /// that has already decided a roll should happen sets it, and
-    /// [`crate::barrel_roll::advance_gesture`] arms it - through the same
-    /// [`crate::barrel_roll::arm`] the gesture reaches, so it is gated on
-    /// being airborne and on `cost < shield` identically. A caller that maps
-    /// real buttons leaves this `None` and arms through the three-tap gesture
-    /// instead.
+    /// The *direct* request, like [`Self::sideshift`]: [`crate::barrel_roll::advance_gesture`]
+    /// arms it through [`crate::barrel_roll::arm`], so it is gated on being airborne and
+    /// `cost < shield` identically. A caller mapping real buttons leaves it `None` and
+    /// arms through the three-tap gesture.
     ///
-    /// `oag_ai::Driver` is the one thing that sets it, and **that is a
-    /// deliberate deviation**: the original reads the gesture out of the human
-    /// player's pad block and nothing else, so its opponents never roll. A
-    /// field of its own rather than synthesised taps on [`Self::steer_x`], so
-    /// the invented intent stays distinguishable from the recovered input path
-    /// it would otherwise be laundered through. See `docs/gameplay/ai.md`.
+    /// `oag_ai::Driver` sets it, **a deliberate deviation**: the original reads the
+    /// gesture from the human pad block only, so its opponents never roll. A field of its
+    /// own rather than synthesised taps on [`Self::steer_x`], so the invented intent stays
+    /// distinguishable from the recovered input path. See `docs/gameplay/ai.md`.
     pub roll_request: Option<crate::barrel_roll::TapDirection>,
-    /// The fraction of the shield pool this craft keeps back rather than
-    /// spending it on a barrel roll, `0.0..=1.0`.
+    /// The fraction of the shield pool this craft keeps back rather than spending it on a
+    /// barrel roll, `0.0..=1.0`.
     ///
-    /// **The only field on this struct the original has no counterpart for**,
-    /// and it is an invented AI-quality rule rather than a recovered
-    /// behaviour: an opponent that spends its last energy on a manoeuvre and is
-    /// then destroyed by one wall is a worse opponent. It sits *on top of*
-    /// [`crate::barrel_roll::arm`]'s own `cost < shield`, which is recovered at
-    /// confidence 90 and is not weakened by it.
-    ///
-    /// **Zero is the recovered behaviour exactly**, which is what a real pad
-    /// leaves it at and what [`Default`] gives, so the human player and every
-    /// test that does not mention it keep the original's rule and nothing
-    /// else. `oag_ai` sets it from `Pilot::roll_floor`, which is where the
-    /// `0.20` this replaced now lives - it was a bare constant in
-    /// `crate::barrel_roll` until 2026-09-06.
-    ///
-    /// It is a **hard** floor: a roll that would leave the pool below it is
-    /// refused, rather than one started from above it and allowed to end
-    /// beneath.
+    /// **The only field here with no counterpart in the original**: an invented AI-quality
+    /// rule, on top of [`crate::barrel_roll::arm`]'s recovered `cost < shield` (confidence
+    /// 90, not weakened). **Zero is the recovered behaviour exactly**, which a real pad
+    /// and [`Default`] leave it at. `oag_ai` sets it from `Pilot::roll_floor`. It is a
+    /// **hard** floor: a roll that would end below it is refused.
     pub roll_shield_floor: f32,
 }
 
@@ -339,472 +260,325 @@ pub enum Sideshift {
 pub struct ShipState {
     /// The rigid body.
     pub body: Body,
-    /// Left airbrake, ramped toward its input at `gain` up and `falloff` down.
-    ///
-    /// On the original's internal `0..=100` scale, not `0..=1`; see
-    /// [`crate::controls::CONTROL_RANGE`].
+    /// Left airbrake, ramped toward its input at `gain` up and `falloff` down, on the
+    /// original's `0..=100` scale (see [`crate::controls::CONTROL_RANGE`]).
     pub airbrake_left: f32,
     /// Right airbrake, same ramp and same scale.
     pub airbrake_right: f32,
     /// The throttle state, on the `0..=100` scale.
     ///
-    /// **Not ramped.** `<Engine gain/>` and `<Engine falloff/>` compute a ramp in
-    /// the original and it is overwritten by the raw input before anything reads
-    /// it; see [`crate::params::Engine::falloff`]. This field holds the raw input,
-    /// which is exactly what the original stores at `craft+0x2b8`.
+    /// **Not ramped.** The original's `<Engine gain/>` and `<Engine falloff/>` ramp is
+    /// overwritten by the raw input before anything reads it
+    /// ([`crate::params::Engine::falloff`]); this holds the raw input, as `craft+0x2b8`.
     pub thrust: f32,
     /// The brake state, `0..=100`, ramped at `<Brakes gain/>` and `<Brakes falloff/>`.
     ///
-    /// There is no brake axis: it rises while **both** airbrake inputs are positive
-    /// and falls otherwise. Its ramp is live, unlike the engine's.
+    /// There is no brake axis: it rises while **both** airbrake inputs are positive.
     pub brake: f32,
     /// The steering state, `-100..=100`, ramped toward the analog X axis.
     pub steer: f32,
     /// The steering lean's rate-limited follower, the original's `craft+0x848`.
     ///
-    /// Chases `raw_stick * 0.01` (so `-1..=1`) at no more than `0.6 * 5.4` per second
-    /// when the stick is pushing it further out and `0.3 * 5.4` when it is returning.
-    /// See [`crate::controls::update_camera_lean`]. **Not hashed**: a pure function of
-    /// the control history, read only by the cockpit camera, so hashing it would move
-    /// every committed reference for a value no force reads.
+    /// Chases `raw_stick * 0.01` at no more than `0.6 * 5.4` per second when pushing
+    /// outward and `0.3 * 5.4` when returning ([`crate::controls::update_camera_lean`]).
+    /// **Not hashed**: only the cockpit camera reads it, and hashing it would move every
+    /// committed reference for a value no force reads.
     pub camera_lean_follower: f32,
-    /// The steering lean the cockpit camera rolls by, the original's `craft+0x844`:
-    /// [`Self::camera_lean_follower`] through a `4/s` first-order filter. `-1..=1`,
-    /// positive for a positive stick. Not hashed, for the reason above.
+    /// The steering lean the cockpit camera rolls by, `craft+0x844`:
+    /// [`Self::camera_lean_follower`] through a `4/s` first-order filter, `-1..=1`. Not
+    /// hashed, for the reason above.
     pub camera_lean: f32,
-    /// How far steering is inverted, `0..=1` and beyond.
-    ///
-    /// A **blend**, not a flag: at 0 steering is normal, at 0.5 it is dead, past 1
-    /// it is fully inverted. Nothing in this crate drives it; a reverse-controls
-    /// pickup would. Treating it as a boolean would snap where the original ramps.
+    /// How far steering is inverted: a **blend**, not a flag (0 normal, 0.5 dead, past 1
+    /// fully inverted). Nothing in this crate drives it; a reverse-controls pickup would.
     pub reverse_controls: f32,
     /// Seconds left on the collision stun at `craft+0x290`.
     ///
-    /// While it runs, **the engine produces no thrust at all** and lateral grip is
-    /// suppressed: a struck ship coasts and slides. `Ship_UpdateEngine` returns from
-    /// its prologue without writing to either accumulator, and
-    /// `Ship_ApplyLateralGrip` returns after decrementing this. See
+    /// While it runs **the engine produces no thrust** and lateral grip is suppressed:
+    /// `Ship_UpdateEngine` returns from its prologue without writing either accumulator,
+    /// and `Ship_ApplyLateralGrip` returns after decrementing this. See
     /// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The engine has an early return
-    /// that produces no thrust at all"; confidence 88 on the gate, 85 on reading the
-    /// field as a collision stun.
+    /// that produces no thrust at all"; confidence 88 on the gate, 85 on reading the field
+    /// as a collision stun.
     ///
     /// Armed by [`crate::wall::apply_pending_impulse`] with
-    /// [`crate::wall::STUN_PER_CONTACT`], the original's `craft+0x290 += 0.5` in
-    /// `Ship_ApplyCollisionImpulse`. It is **added, not assigned**, so successive
-    /// impacts accumulate rather than refreshing to a fixed value.
+    /// [`crate::wall::STUN_PER_CONTACT`] (`craft+0x290 += 0.5` in
+    /// `Ship_ApplyCollisionImpulse`), **added, not assigned**, so impacts accumulate.
+    /// Nothing posts a pending impulse yet (a track contact does not; see
+    /// [`crate::wall::STUN_PER_CONTACT`]), so it is armed correctly and never fires.
     ///
-    /// **This crate does not yet produce anything for
-    /// [`Self::pending_impulse`] to hold** - a track contact does not, and is not
-    /// supposed to; see [`crate::wall::STUN_PER_CONTACT`]'s own doc for the two
-    /// bugs an earlier, wrong arming site cost before that was found. So this
-    /// timer is armed correctly whenever something posts a pending impulse, and
-    /// nothing does yet.
-    ///
-    /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step rather
-    /// than with the control ramps, because that is where the original decrements it
-    /// and it is what makes the engine see the *pre*-decrement value in the same
-    /// frame.
+    /// Decremented in [`crate::forces::evaluate`] at the lateral-grip step, as the original
+    /// does, so the engine sees the *pre*-decrement value in the same frame.
     pub stun_timer: f32,
     /// Whether last frame's [`crate::wall::resolve`] pushed the hull out of a wall.
     ///
-    /// **Vestigial.** This existed to make an earlier, wrong arming site
-    /// edge-triggered - `wall::resolve` used to arm [`Self::stun_timer`] directly
-    /// on the first frame of every inward contact, and this field was how it knew
-    /// "first frame" from "still touching". That arming site is gone (see
-    /// [`crate::wall::STUN_PER_CONTACT`]'s own doc for why), so nothing reads this
-    /// field for anything any more - `wall::resolve` still writes it every tick,
-    /// faithfully, to nowhere. Left in rather than removed because a hull contact
-    /// is still a fact a future consumer (a hit-reaction animation, an audio cue)
-    /// is likely to want the edge of; removing it now would be guessing that
-    /// nothing will.
+    /// **Vestigial:** it once edge-triggered an earlier, wrong arming site of
+    /// [`Self::stun_timer`] (see [`crate::wall::STUN_PER_CONTACT`]). `wall::resolve` still
+    /// writes it every tick and nothing reads it. Kept because a hit-reaction animation
+    /// or audio cue is likely to want the edge.
     pub wall_contact_prev: bool,
     /// The pending collision-impulse vector at `entity->0x4c + 0x110`.
     ///
-    /// `Ship_ApplyCollisionImpulse` (`0x0883f274`) reads this every tick,
-    /// projects it onto the ship's own forward axis, applies the result, arms
-    /// [`Self::stun_timer`], and zeroes this **unconditionally** on every path -
-    /// gated only by whether it started nonzero and by
-    /// [`Self::shield_pickup_timer`]. [`crate::wall::apply_pending_impulse`] is
-    /// the port; see its own doc and
-    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` for the full
-    /// instruction-level read.
+    /// `Ship_ApplyCollisionImpulse` (`0x0883f274`) reads it every tick, projects it onto
+    /// the ship's forward axis, applies the result, arms [`Self::stun_timer`], and zeroes
+    /// it **unconditionally** on every path (gated only by being nonzero and by
+    /// [`Self::shield_pickup_timer`]). [`crate::wall::apply_pending_impulse`] is the port;
+    /// see `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
-    /// **Nothing in this crate calls a producer yet, so this field is still
-    /// always zero in practice.** Two producers are found in the original -
-    /// `Weapon_PostBlastImpulse_q` (a weapon blast) and an unnamed second
-    /// writer reached from what reads like a rival-contact path.
-    /// `Weapon_PostBlastImpulse_q` has a Rust port,
-    /// [`crate::wall::post_blast_impulse`] - correct and tested against
-    /// directly-supplied source position, radius and power - but nothing in
-    /// this crate calls it: the original's own caller is found but unread, and
-    /// this crate has no weapon trigger or stats table to drive it from. The
-    /// second writer has no port at all. So `apply_pending_impulse` still runs
-    /// every tick against a field nothing in this crate ever sets, a correct
-    /// no-op until a producer is wired to something, the same shape as
-    /// [`Self::pad_direction`] before a probe script crosses a pad.
+    /// **Nothing in this crate calls a producer yet, so it is always zero in practice.**
+    /// The original has two: `Weapon_PostBlastImpulse_q` (ported as
+    /// [`crate::wall::post_blast_impulse`], tested against supplied inputs, but its
+    /// original caller is found and unread and there is no weapon trigger to drive it)
+    /// and an unnamed second writer from what reads like a rival-contact path (no port).
+    /// So `apply_pending_impulse` is a correct no-op until a producer is wired.
     pub pending_impulse: Vec3,
     /// Seconds left on the **weapon slowdown timer** at `craft+0x2e0`.
     ///
-    /// While it runs the victim gets no engine thrust and a zeroed throttle
-    /// state ([`crate::engine::engine`]), no lateral grip
-    /// ([`crate::forces::evaluate`]), and a hover target lowered by
-    /// `min(timer, 4.0)` ([`crate::hover::target_height`]). It is the reason a
+    /// While it runs the victim gets no engine thrust and a zeroed throttle state
+    /// ([`crate::engine::engine`]), no lateral grip ([`crate::forces::evaluate`]) and a
+    /// hover target lowered by `min(timer, 4.0)` ([`crate::hover::target_height`]): a
     /// craft hit by a rocket coasts, slides and sinks.
     ///
-    /// **What arms it was unknown until 2026-09-06** and this field's doc said
-    /// so - "a leap, a respawn and a race start are all plausible". It is now
-    /// recovered end to end: a weapon impact credits the victim's pending slot
-    /// (`entity+0x130`) with the weapon's `slowdown_time`, and once a tick the
-    /// craft update drains that slot into this timer through `Ship_AddSlowdown`
-    /// (`0x08848690`), clamping the sum to `<Global slowdown_limit>`. See
-    /// [`crate::slowdown`] for the whole law and
-    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "The slowdown mechanic,
-    /// recovered end to end"; confidence 85-92 per claim, all static.
+    /// A weapon impact credits the victim's pending slot (`entity+0x130`) with the
+    /// weapon's `slowdown_time`, and each tick the craft update drains it into this timer
+    /// through `Ship_AddSlowdown` (`0x08848690`), clamped to `<Global slowdown_limit>`.
+    /// See [`crate::slowdown`] and `engine.md`, "The slowdown mechanic, recovered end to
+    /// end"; confidence 85-92 per claim, all static. Armed here by
+    /// [`crate::slowdown::add`]; the pending slot lives in `oag-gameplay`, which can see
+    /// the weapon table.
     ///
-    /// Armed here by [`crate::slowdown::add`]; the pending slot itself lives in
-    /// `oag-gameplay`, because it is credited from a weapon table this crate
-    /// cannot see.
-    ///
-    /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero** -
-    /// see [`crate::slowdown`] for why this timer differs from the sideshift
-    /// ones in that.
+    /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero**; see
+    /// [`crate::slowdown`] for why that differs from the sideshift timers.
     pub slowdown_timer: f32,
-    /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}` - the count of
-    /// probes in contact, over two.
+    /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}`: probes in contact over two.
     pub grounded: f32,
     /// Last frame's [`Self::grounded`], which **every control term reads**.
     ///
-    /// Not only the hover spring's load factor. Hover is step 8 of 15 in the
-    /// original's craft update and it clears the contact flag on entry, so the
-    /// engine, the brakes, quadratic drag, gravity and pitch all see the *previous*
-    /// frame's groundedness, while lateral grip and the weathervane torque - which
-    /// run after hover - see this frame's. Confidence 84; see
-    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`. The obvious reimplementation,
-    /// resolving contacts and then applying forces, gets a different answer on
-    /// every takeoff and landing frame in five terms at once.
+    /// Hover is step 8 of 15 in the original's craft update and clears the contact flag
+    /// on entry, so the engine, brakes, quadratic drag, gravity and pitch see the
+    /// *previous* frame's groundedness, while lateral grip and the weathervane (which run
+    /// after hover) see this frame's. Confidence 84; see `engine.md`. Resolving contacts
+    /// and then applying forces gets a different answer on every takeoff and landing
+    /// frame in five terms at once.
     pub grounded_prev: f32,
     /// Seconds left on each sideshift, left then right.
     ///
-    /// The original keeps one timer per side (`entity+0x8a4` and `entity+0x8a8`),
-    /// sets the fired one to [`crate::airbrake::SIDESHIFT_DURATION`], counts both
-    /// down by `dt`, and drives one craft flag from each - so both can run at once
-    /// and the two forces then cancel. Recovered from
-    /// `Ship_UpdateSideshiftInput_q` (`0x08846a54`); see
-    /// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    /// One timer per side (`entity+0x8a4`, `entity+0x8a8`); the fired one is set to
+    /// [`crate::airbrake::SIDESHIFT_DURATION`], both count down by `dt` and each drives a
+    /// craft flag, so both can run at once and the forces cancel. From
+    /// `Ship_UpdateSideshiftInput_q` (`0x08846a54`); see `engine.md`.
     pub sideshift_timers: [f32; 2],
-    /// Seconds left on each side's double-tap window, left then right.
+    /// Seconds left on each side's double-tap window, left then right
+    /// (`entity+0x89c`, `entity+0x8a0`).
     ///
-    /// The original's `entity+0x89c` and `entity+0x8a0`. The first press of an
-    /// airbrake opens its side's window at
-    /// [`crate::airbrake::SIDESHIFT_TAP_WINDOW`]; a second press while the
-    /// window is still open fires the shift instead of reopening it. Veteran
-    /// scheme only. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    /// The first airbrake press opens its side's window at
+    /// [`crate::airbrake::SIDESHIFT_TAP_WINDOW`]; a second press inside it fires the
+    /// shift. Veteran scheme only; see `input-bindings.md`.
     pub shift_tap_windows: [f32; 2],
     /// Whether a novice-scheme flick is armed (`entity+0x860 & 0x400`).
     ///
-    /// Set while the sideshift button is held and the steering axis is inside
-    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`], cleared when a flick
-    /// fires. Without it a held-over axis would fire a shift every tick.
+    /// Set while the sideshift button is held and the axis is inside
+    /// [`crate::airbrake::SIDESHIFT_FLICK_THRESHOLD`], cleared when a flick fires;
+    /// without it a held-over axis would fire every tick.
     pub shift_armed: bool,
     /// Seconds before another sideshift may be triggered (`entity+0x8ac`).
     ///
-    /// Refreshed to [`crate::airbrake::SIDESHIFT_LOCKOUT`] on every tick either
-    /// sideshift timer is running, and gates *both* gesture machines - so it is
-    /// a second between the end of one shift and the earliest start of the
-    /// next, not a second between starts. It does not gate
-    /// [`ShipControls::sideshift`], which is a direct request rather than a
-    /// gesture.
+    /// Refreshed to [`crate::airbrake::SIDESHIFT_LOCKOUT`] every tick either shift timer
+    /// runs, so it is a gap between the end of one shift and the start of the next. Gates
+    /// both gesture machines, not the direct [`ShipControls::sideshift`].
     pub shift_lockout: f32,
-    /// The barrel roll's three-entry tap-history gesture buffer, oldest first
+    /// The barrel roll's three-entry tap-history buffer, oldest first
     /// (`entity+0x88c`/`+0x890`/`+0x894`).
     ///
-    /// `0` is an empty slot, `1` a `LEFT` tap and `2` a `RIGHT`. A completed
-    /// three-tap alternation - `[2, 1, 2]` or `[1, 2, 1]` - arms the roll and
-    /// clears this back to `[0, 0, 0]`, so a fourth tap starts a fresh gesture
-    /// rather than immediately re-arming off the sliding window. See
-    /// [`crate::barrel_roll`] and
-    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    /// `0` is empty, `1` a `LEFT` tap, `2` a `RIGHT`. A completed alternation (`[2, 1, 2]`
+    /// or `[1, 2, 1]`) arms the roll and clears this, so a fourth tap starts afresh. See
+    /// [`crate::barrel_roll`] and `input-bindings.md`.
     pub roll_taps: [u8; 3],
-    /// Seconds since the last tap recorded into [`Self::roll_taps`]
-    /// (`entity+0x884`).
+    /// Seconds since the last tap recorded into [`Self::roll_taps`] (`entity+0x884`).
     ///
-    /// Accumulates `dt` every tick and is zeroed on every tap. A tap recorded
-    /// at `0.6` s or later does not shift the two older entries down - see
-    /// [`crate::barrel_roll::INTER_TAP_TIMEOUT`].
+    /// Zeroed on every tap. A tap at `0.6` s or later does not shift the older entries;
+    /// see [`crate::barrel_roll::INTER_TAP_TIMEOUT`].
     pub roll_tap_timer: f32,
-    /// The barrel roll's signed phase, `-1.0..=1.0` (`entity+0x87c`).
-    ///
-    /// Ramps toward [`Self::roll_target`] at `<Special roll_speed>` and does not
-    /// reverse on its own - see [`crate::barrel_roll::advance_phase`].
+    /// The barrel roll's signed phase, `-1.0..=1.0` (`entity+0x87c`). Ramps toward
+    /// [`Self::roll_target`] at `<Special roll_speed>` and does not reverse on its own
+    /// ([`crate::barrel_roll::advance_phase`]).
     pub roll_phase: f32,
-    /// Where [`Self::roll_phase`] is currently ramping toward: `1.0` after a
-    /// `[2, 1, 2]` arm, `-1.0` after `[1, 2, 1]`, or `0.0` once the roll has
-    /// released short of completion. See [`crate::barrel_roll::release`].
+    /// Where [`Self::roll_phase`] is ramping: `1.0` after a `[2, 1, 2]` arm, `-1.0` after
+    /// `[1, 2, 1]`, `0.0` once released short of completion ([`crate::barrel_roll::release`]).
     pub roll_target: f32,
-    /// Whether a roll is armed and not yet spent: the original's
-    /// `entity+0x860 & 0x100`/`& 0x80` pair, set by [`crate::barrel_roll::arm`]
-    /// and cleared by the landing in [`crate::barrel_roll::release`]. The
-    /// payout is gated on it, so one roll pays out once however many landings
-    /// follow. Hashed only while set, so a ship that never rolls keeps its
-    /// committed hash.
+    /// Whether a roll is armed and not yet spent (`entity+0x860 & 0x100`/`& 0x80`): set by
+    /// [`crate::barrel_roll::arm`], cleared by the landing in
+    /// [`crate::barrel_roll::release`], so one roll pays out once. Hashed only while set,
+    /// so a ship that never rolls keeps its committed hash.
     pub roll_armed: bool,
-    /// Seconds left on the barrel roll's landing payout, ours - the original's
-    /// `craft+0x1c0 & 0x400`, held for `<Special roll_turbotime>` after a
-    /// completed roll touches down. While it runs, [`crate::airbrake::lateral_grip`]
-    /// is scaled 1.5x, the hover spring's rebound coefficient is forced to
-    /// `1.0`, and the engine grants the same uncapped turbo add
-    /// [`Self::turbo_timer`] grants for a Turbo pickup. See
-    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
+    /// Seconds left on the barrel roll's landing payout, ours: the original's
+    /// `craft+0x1c0 & 0x400`, held for `<Special roll_turbotime>` after a completed roll
+    /// lands. While it runs, [`crate::airbrake::lateral_grip`] is scaled 1.5x, the hover
+    /// rebound coefficient is forced to `1.0`, and the engine grants the same uncapped
+    /// turbo add as [`Self::turbo_timer`]. See `input-bindings.md`.
     pub roll_payout_timer: f32,
-    /// Which side of [`crate::barrel_roll::AXIS_TAP_THRESHOLD`] the steering
-    /// axis sat on at the end of last tick, or `None` for neither.
+    /// Which side of [`crate::barrel_roll::AXIS_TAP_THRESHOLD`] the steering axis sat on
+    /// at the end of last tick, or `None` for neither.
     ///
-    /// **This crate's own resolution, not a traced field.** The original feeds
-    /// its tap history from "the steering axis crossing below `-90`" / "above
-    /// `+90`", and a crossing is an edge: it needs last tick's side of the
-    /// threshold to be distinguishable from this tick's. Where the original
-    /// keeps that was not traced, so it is kept here, with the rest of the
-    /// gesture's per-craft state, rather than in the input layer - the same
-    /// division [`Self::shift_armed`] already makes for the novice flick.
-    ///
-    /// A tap fires whenever this changes *into* a side, so a thumb rolled
-    /// straight from `LEFT` to `RIGHT` with no neutral tick between them is one
-    /// tap and not none. See [`crate::barrel_roll::advance_gesture`].
+    /// **This crate's own resolution, not a traced field.** A crossing is an edge and
+    /// needs last tick's side; where the original keeps that was not traced, so it lives
+    /// with the gesture's per-craft state (as [`Self::shift_armed`] does). A tap fires
+    /// whenever this changes *into* a side, so `LEFT` straight to `RIGHT` is one tap. See
+    /// [`crate::barrel_roll::advance_gesture`].
     pub roll_axis_zone: Option<crate::barrel_roll::TapDirection>,
-    /// The craft is in the original's **grid state**, `craft+0x2a4 == 0`: placed
-    /// on the start line and held until the green light.
+    /// The craft is in the original's **grid state**, `craft+0x2a4 == 0`: placed on the
+    /// start line and held until the green light.
     ///
-    /// `Race_PlaceGrid` puts every craft in state `0` and `Race_StartRacing`
-    /// moves every craft to state `1` (`Craft_SetState`, `0x08848590`). Of the
-    /// terms in `Ship_UpdateCraft`'s force law, `Ship_HoverTwoPoint`'s epilogue is
-    /// the one this field gates: the bank-to-yaw coupling is skipped in state `0`
-    /// (`if (craft+0x2a4 != 0)` at `0x0884ad2c`-`0x0884ad40`), which is why a
-    /// craft on a banked grid holds its heading dead still through the whole
-    /// countdown and starts to yaw at GO. Measured on PPSSPP 2026-10-01, see
-    /// `docs/physics/grid-state.md`.
+    /// `Race_PlaceGrid` puts every craft in state `0` and `Race_StartRacing` moves it to
+    /// `1` (`Craft_SetState`, `0x08848590`). This gates `Ship_HoverTwoPoint`'s
+    /// bank-to-yaw coupling (`if (craft+0x2a4 != 0)`, `0x0884ad2c`-`0x0884ad40`), which is
+    /// why a craft on a banked grid holds its heading through the countdown and yaws at
+    /// GO. Measured on PPSSPP 2026-10-01; see `docs/physics/grid-state.md`.
     ///
-    /// Written by the race, which owns the countdown clock; physics only reads
-    /// it. `false` for every craft that was never on a grid, so a bare physics
-    /// test and a respawn mid-race see the racing law.
+    /// Written by the race, which owns the countdown; physics only reads it. `false` for
+    /// a craft never on a grid, so a bare test and a mid-race respawn see the racing law.
     ///
-    /// **Measured on Pulse PSP only** (Time Trial and a Single Race grid, two
-    /// circuits). The race applies it to every title by extension - the other
-    /// engines share the craft update - which is **chosen, not measured**.
+    /// **Measured on Pulse PSP only** (Time Trial and a Single Race grid, two circuits).
+    /// Applying it to every title is **chosen, not measured**.
     ///
-    /// **Not the only thing state `0` changes**, and the rest is not ported
-    /// here: the damping on the roll axis is `-5` rather than `-2`, the
-    /// `rebound` base is `1.0` rather than the hull's, and the control record's
-    /// airbrakes are forced to full. See `docs/physics/grid-state.md`.
+    /// State `0` changes more, not ported here: roll damping is `-5` not `-2`, the
+    /// `rebound` base is `1.0`, and the control record's airbrakes are forced full. See
+    /// `grid-state.md`.
     pub on_grid: bool,
     /// The craft has left the grid state, `craft+0x2a4 == 1`: `false` through the
-    /// countdown, **in every mode, Zone included**, and `true` for a craft that
-    /// was never on a grid.
+    /// countdown **in every mode, Zone included**, `true` for a craft never on a grid.
     ///
-    /// The same fact as `!`[`Self::on_grid`], in every mode. The launch boost's
-    /// clock starts here ([`crate::launch`]); Zone's auto-speed goes through the
-    /// same multiplier. Written by the race from the countdown clock, not hashed,
-    /// for [`Self::on_grid`]'s reason.
+    /// The same fact as `!`[`Self::on_grid`]. The launch boost's clock starts here
+    /// ([`crate::launch`]); Zone's auto-speed uses the same multiplier. Written by the
+    /// race, not hashed, for [`Self::on_grid`]'s reason.
     pub released: bool,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
-    /// `Ship_UpdateHover` (`0x0884870c`) picks it every frame on
-    /// `g_game_mode == 6 && g_debug_mode_override == 0`, which is Zone. Today it
-    /// changes one number, the bank-to-yaw gain (`50.0` against `30.0`, see
-    /// [`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]); the four-corner probe layout
-    /// and its downforce law are not ported. `false` for every non-Zone craft.
-    /// Written by the race each tick, not hashed, for [`Self::on_grid`]'s reason.
+    /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
+    /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). Today it changes only the
+    /// bank-to-yaw gain (`50.0` against `30.0`,
+    /// [`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]); the four-corner probe layout and
+    /// downforce law are not ported. Written by the race, not hashed.
     pub four_corner: bool,
-    /// The launch boost: `craft+0x294` and what decides it. See
-    /// [`crate::launch`].
-    ///
-    /// Idle for every craft whose race never supplies the disc's
-    /// `<StartBoost>` (`Environment::start_boost`), and hashed only once it is
-    /// not.
+    /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
+    /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
+    /// once it is not.
     pub launch: crate::launch::LaunchState,
-    /// Seconds since the ship last touched down, in seconds.
-    ///
-    /// Below 0.2 the suspension uses `landing_rebound` in place of `rebound`.
-    ///
-    /// **Armed in the air, not on touchdown** - see [`Self::time_airborne`].
+    /// Seconds since the ship last touched down. Below 0.2 the suspension uses
+    /// `landing_rebound` in place of `rebound`. **Armed in the air, not on touchdown**;
+    /// see [`Self::time_airborne`].
     pub time_since_landing: f32,
     /// Seconds the ship has been off the ground, `craft+0x284`.
     ///
-    /// `Ship_UpdateCraft` (`0x08849df0`) keeps this and its mirror
-    /// `craft+0x288` as a pair: whichever of grounded and airborne is true this
-    /// tick accumulates `dt` while the other is zeroed. The disassembly is
-    /// unambiguous, so confidence **95**; only `+0x288`, the grounded twin,
-    /// goes unmodelled, because nothing else reads it.
+    /// `Ship_UpdateCraft` (`0x08849df0`) keeps this and its mirror `craft+0x288` as a
+    /// pair: the true one accumulates `dt` while the other is zeroed. Confidence **95**;
+    /// the grounded twin `+0x288` goes unmodelled because nothing else reads it.
     ///
-    /// It exists for one job. `Ship_HoverTwoPoint` zeroes
-    /// [`Self::time_since_landing`] **while the craft is still in the air**,
-    /// and only once this has passed `Antigrav::rebound_jump_time`. So a hop
-    /// shorter than that never arms the landing response and the craft touches
-    /// back down on the ordinary `rebound`; only a real flight earns the
-    /// `landing_rebound` bounce. See `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+    /// `Ship_HoverTwoPoint` zeroes [`Self::time_since_landing`] **while still airborne**,
+    /// once this passes `Antigrav::rebound_jump_time`. A shorter hop never arms the
+    /// landing response; only a real flight earns the `landing_rebound` bounce. See
+    /// `engine.md`.
     pub time_airborne: f32,
-    /// The 0-to-1 magstrip blend. At 1.0 the ordinary suspension is fully
-    /// cancelled and the magnetic hold has taken over.
-    ///
-    /// Driven by [`crate::maglock::ramp`], `0.2` a frame in either direction.
+    /// The 0-to-1 magstrip blend. At 1.0 the ordinary suspension is fully cancelled and the
+    /// magnetic hold has taken over. Driven by [`crate::maglock::ramp`], `0.2` a frame.
     pub mag_lock_blend: f32,
     /// Seconds left on the speed-pad boost, `craft+0x298`.
     ///
-    /// **Re-armed, not triggered.** `Ship_ApplySpeedupPad` (`0x08848f9c`) assigns
-    /// the class's `<SpeedupPads time>` on *every* tick the craft is inside a pad
-    /// volume, then decrements by `dt` further down the same function. So the
-    /// boost runs for `time` seconds counted from the last tick inside the pad,
-    /// not from the tick it was entered, and a ship crossing a pad slowly is
-    /// boosted for longer. [`crate::forces::Environment::pad_hit`] being `Some`
-    /// every such tick is what reproduces that.
+    /// **Re-armed, not triggered.** `Ship_ApplySpeedupPad` (`0x08848f9c`) assigns the
+    /// class's `<SpeedupPads time>` on *every* tick inside a pad volume and decrements
+    /// further down the same function, so the boost runs for `time` from the last tick
+    /// inside the pad, and a slow crossing boosts longer
+    /// ([`crate::forces::Environment::pad_hit`] is `Some` every such tick).
     ///
-    /// Counted down in [`crate::forces::evaluate`] **before** the force is read
-    /// off it, which is the original's ordering and is worth a sentence because
-    /// the two orderings differ by one `dt` of ramp at the peak - about 6 % - and
-    /// `docs/physics/cornering-ground-truth.md` measured the pad crossings
-    /// precisely enough to tell them apart.
+    /// Counted down in [`crate::forces::evaluate`] **before** the force is read off it,
+    /// the original's order. The two orders differ by one `dt` of ramp at the peak (about
+    /// 6 %), which `docs/physics/cornering-ground-truth.md` measured precisely enough to
+    /// tell apart.
     pub pad_timer: f32,
     /// The world-space direction the speed-pad boost pushes, `craft+0x1b0`.
     ///
-    /// Refreshed from the pad on every tick inside it, and then held while
-    /// [`Self::pad_timer`] runs down - so leaving a pad does not change where the
-    /// remaining boost pushes, even as the ship turns. Unit length when it comes
-    /// from a pad; zero on a ship that has never touched one.
+    /// Refreshed on every tick inside a pad, then held while [`Self::pad_timer`] runs
+    /// down, so the boost direction does not follow the ship. Unit length from a pad,
+    /// zero on a ship that never touched one.
     pub pad_direction: Vec3,
     /// The **last** mag-floor hit the probe found, `craft+0x250` and `+0x260`.
     ///
-    /// Carried between frames rather than recomputed, because the original does:
-    /// those two fields are a raycast's out-parameter, only a hit overwrites them,
-    /// and [`mag_lock_blend`](Self::mag_lock_blend) takes five frames to decay
-    /// after the strip ends - so the hold's last five frames read a stale contact
-    /// in the original too. `None` is a ship that has never touched a magstrip.
+    /// Carried between frames because the original does: those fields are a raycast
+    /// out-parameter only a hit overwrites, and [`mag_lock_blend`](Self::mag_lock_blend)
+    /// takes five frames to decay after the strip ends, so the hold's last five frames read
+    /// a stale contact in the original too. `None` is a ship that never touched a strip.
     pub mag_contact: Option<crate::maglock::MagContact>,
     /// The energy pool, the original's `entity+0x88`.
     ///
-    /// **The ship entity, one hop out at `craft+0x1c4`** - *not* the craft the
-    /// trace harness breaks on, whose `+0x88` is an orientation-matrix element.
-    /// This comment named the wrong object for one commit and a capture taken
-    /// there read a direction cosine, which looks exactly like a quantity going
-    /// about its business. Settled live 2026-08-10 by the reciprocal pointer
-    /// identity: the entity's `+0x94` points back at the craft.
+    /// On the ship entity, one hop out at `craft+0x1c4`, **not** the craft the trace
+    /// harness breaks on (whose `+0x88` is an orientation-matrix element). Settled live
+    /// 2026-08-10 by the reciprocal pointer identity: the entity's `+0x94` points back at
+    /// the craft. Recovered in `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     ///
-    /// Recovered in `docs/ghidra/functions/psp-pulse-usa/shield.md`. Bounded
-    /// above by [`crate::Dimensions::shield`] and floored at zero here, which is
-    /// the one place this crate knowingly departs from the original:
-    /// `Ship_SetShield` clamps above and **not** below, because `Ship_Damage`
-    /// tests the signed result against zero to transition the craft into its
-    /// destroyed state. There is no destroyed state in this engine yet, so a pool
-    /// allowed to run negative would be a number nothing could act on and the HUD
-    /// would have to special-case. When the destroyed transition lands, this floor
-    /// is what moves.
+    /// Bounded above by [`crate::Dimensions::shield`] and floored at zero, **the one place
+    /// this crate knowingly departs from the original**: `Ship_SetShield` clamps above
+    /// only, because `Ship_Damage` tests the signed result to enter the destroyed state.
+    /// This engine has no destroyed state yet, so a negative pool would be a number
+    /// nothing could act on. When that transition lands, this floor is what moves.
     ///
-    /// **In this crate, and hashed by the determinism gate, because the original
-    /// keeps it on the craft.** It is gameplay-facing rather than dynamical -
-    /// nothing in the force law reads it - but it is written from the contact
-    /// response, and a pool that lived outside [`ShipState`] would be a
-    /// simulation field the gate could not see. See
-    /// [`crate::damage::apply_contact`].
+    /// In this crate and hashed, because the original keeps it on the craft: it is
+    /// written from the contact response ([`crate::damage::apply_contact`]), and a pool
+    /// outside [`ShipState`] would be a simulation field the determinism gate cannot see.
     pub shield: f32,
-    /// Where the craft is in the destroyed sequence, the original's `entity+0x8c`.
-    ///
-    /// Only the three states the energy pool reaches; see
-    /// [`crate::damage::CraftState`].
+    /// Where the craft is in the destroyed sequence, the original's `entity+0x8c`; only
+    /// the three states the energy pool reaches ([`crate::damage::CraftState`]).
     pub craft_state: crate::damage::CraftState,
-    /// Seconds left on the current craft state, the original's `entity+0x874`.
-    ///
-    /// Only [`crate::damage::CraftState::Destroyed`] runs it down. Zero
-    /// otherwise, which keeps it out of the way of the determinism hash on every
-    /// tick of a race nobody dies in.
+    /// Seconds left on the current craft state, `entity+0x874`. Only
+    /// [`crate::damage::CraftState::Destroyed`] runs it down; zero otherwise, which keeps
+    /// it out of the hash on a race nobody dies in.
     pub state_timer: f32,
     /// Seconds left on a fired Turbo pickup.
     ///
-    /// While it is positive the engine **adds `Engine.turbo` to thrust**, after
-    /// the acceleration cap and before the fixed doubling - so the add is
-    /// uncapped, which is what makes a turbo a turbo. See
-    /// [`crate::engine::engine`].
+    /// While positive the engine **adds `Engine.turbo` to thrust**, after the
+    /// acceleration cap and before the fixed doubling, so the add is uncapped
+    /// ([`crate::engine::engine`]).
     ///
-    /// # What the original gates that add on, and why this is a timer instead
+    /// `Ship_UpdateEngine` (`0x0884c5c8`) gates the add on
+    /// `((flags & 0x200) || (flags & 0x400)) && craft+0x2a4 == 1` (decompiler, 2026-08-11).
+    /// `0x400` is held for `<Special roll_turbotime>` after a completed barrel roll lands
+    /// (confidence 90; see [`Self::roll_payout_timer`], kept separate because `0x400` also
+    /// drives a lateral-grip multiplier and a hover override that a Turbo pickup must not
+    /// get). `0x200` is therefore the Turbo pickup, **but its writer has not been found**,
+    /// so that half is inference, confidence 75. See `input-bindings.md`.
     ///
-    /// `Ship_UpdateEngine` (`0x0884c5c8`) runs the add under
-    /// `((flags & 0x200) || (flags & 0x400)) && craft+0x2a4 == 1`, read from the
-    /// decompiler 2026-08-11. **Two bits, either of which turns the same term
-    /// on**, which is the shape of one effect with two sources - and the second
-    /// source is now identified rather than inferred: `0x400` is held for
-    /// `<Special roll_turbotime>` seconds after a completed barrel roll lands,
-    /// confidence 90. See [`Self::roll_payout_timer`], which is this crate's
-    /// own timer for that source - kept separate from this field rather than
-    /// merged into it, because `0x400` also drives two effects `0x200` does
-    /// not (a lateral-grip multiplier and a hover override), and merging the
-    /// two timers would apply those to an ordinary Turbo pickup too. That
-    /// leaves `0x200` as the other way to be turboing, which is what a Turbo
-    /// pickup is for. **The writer of `0x200` has not been found**, so this
-    /// half is still an inference from the pair rather than a traced path -
-    /// confidence 75. See `docs/ghidra/functions/psp-pulse-usa/
-    /// input-bindings.md`.
+    /// **The timer itself is ours**: the original holds a bit, neither `craft+0x1c0`'s
+    /// writer nor the pickup word was read. The **duration** is the disc's
+    /// `<Weapon type="Turbo"><Stats time>` and the **magnitude** its `<Engine turbo>`.
+    /// **The `craft+0x2a4 == 1` gate is not reproduced** (nothing decodes that enum), so
+    /// a craft here can turbo where the original might not. **The boost lift is not
+    /// implemented**: the branch adds `g_boost_lift * T` along body up while thrust is
+    /// held, and that global was never read (`docs/gameplay/pickups.md`).
     ///
-    /// **The timer itself is ours.** The original holds a bit and this holds
-    /// seconds, because neither `craft+0x1c0`'s writer nor the pickup word
-    /// behind it has been read. The **duration** is the disc's own
-    /// `<Weapon type="Turbo"><Stats time>` and the **magnitude** is its own
-    /// `<Engine turbo>`, so both numbers are real even though the field holding
-    /// them is not the original's shape.
-    ///
-    /// **The `craft+0x2a4 == 1` gate is not reproduced**: nothing decodes that
-    /// enum. Treating it as satisfied means a craft here can turbo in a state
-    /// where the original might not.
-    ///
-    /// **The boost lift is not implemented.** The same branch adds
-    /// `g_boost_lift * T` along body up while the thrust button is held, and
-    /// that global was never read. See `docs/gameplay/pickups.md`.
-    ///
-    /// **In this crate rather than in `oag-gameplay`, and hashed**, for the same
-    /// reason [`Self::shield`] is: it is written by gameplay and read by the
-    /// force law, and a simulation field the determinism gate cannot see is a
-    /// replay divergence nobody notices. The *inventory* - which pickup is held,
-    /// if any - is not here, because it is an `oag_tables::weapons::Weapon` and
-    /// this crate deliberately depends on nothing but `oag-core`.
+    /// In this crate and hashed, like [`Self::shield`]: written by gameplay, read by the
+    /// force law. The *inventory* is not here, because it is an
+    /// `oag_tables::weapons::Weapon` and this crate depends on nothing but `oag-core`.
     pub turbo_timer: f32,
     /// Seconds left on a fired Shield pickup.
     ///
-    /// While it is positive the craft takes no damage:
-    /// [`crate::damage::apply_contact`] returns early the same way it does for a
-    /// craft that is already blowing up.
+    /// While positive the craft takes no damage: [`crate::damage::apply_contact`] returns
+    /// early as it does for a craft already blowing up.
     ///
-    /// # Recovered as of 2026-08-19, and this comment used to say the opposite
+    /// Recovered 2026-08-19. `Shield_Fire` (`0x08861568`, fire bit `0x20`) loads the
+    /// weapon-stats block's `+0x8c`, where `WeaponStats_ParseShield` (`0x0880ca2c`) writes
+    /// `time`, into `craft+0x188` and raises running bit `0x10`; `Shield_Update`
+    /// (`0x08861630`) counts it down. The bit is read by the weapon-damage drain, the
+    /// contact loop's damage reaction and `Ship_ApplyCollisionImpulse`. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`. It read as unfindable
+    /// because Ghidra resolves no cross-reference to any string or constant in this
+    /// image: "no reader found" was a property of the search.
     ///
-    /// It said "ours all the way down", on the grounds that `<Weapon
-    /// type="Shield"><Stats time>` joined to no recovered code path. It joins to
-    /// three. `Shield_Fire` (`0x08861568`), the handler for fire bit `0x20`,
-    /// loads the weapon-stats block's `+0x8c` - which is exactly where
-    /// `WeaponStats_ParseShield` (`0x0880ca2c`) writes `time` - into
-    /// `craft+0x188` and raises running bit `0x10`; `Shield_Update`
-    /// (`0x08861630`) counts it down and lowers the bit. That bit is then read
-    /// by the weapon-damage drain, by the contact loop's damage reaction and by
-    /// `Ship_ApplyCollisionImpulse`. See
-    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+    /// Refusing damage is right: both of the original's drains *discard* the amount on the
+    /// shielded branch and arm the hit flash ([`crate::damage::Shield::absorbed`]).
+    /// **Still ours:** nothing decrements `Self::shield` by the `absorb` half of
+    /// `<Stats>`, and the original's absorb path is a separate button.
+    /// [`crate::damage::Shield::depleted`] cannot fire while this runs, so a mode that
+    /// ends on `depleted` can be held open by a pickup.
     ///
-    /// **The reason it read as unfindable is worth keeping**: Ghidra resolves no
-    /// cross-reference to any string or constant in this image, so "no reader
-    /// found" was a property of the search, not of the binary.
-    ///
-    /// **Damage refused rather than reduced turns out to be right**, and for a
-    /// better reason than the one originally given ("unambiguous to test"). Both
-    /// of the original's damage drains *discard* the amount on the shielded
-    /// branch rather than scaling or deferring it, and both then arm the
-    /// shield's own hit flash - which is what
-    /// [`crate::damage::Shield::absorbed`] carries out of the tick.
-    ///
-    /// **What is still ours**: nothing yet decrements `Self::shield` by the
-    /// `absorb` half of `<Stats>`, and the original's own absorb path is a
-    /// separate button rather than part of the shield.
-    ///
-    /// **A consequence worth stating.** [`crate::damage::Shield::depleted`] is
-    /// the edge Zone's unbuilt end condition is waiting for, and it cannot fire
-    /// while this timer runs. That is intended - a shielded craft is not being
-    /// destroyed - but it means a mode that ends on `depleted` can be held open
-    /// by a pickup.
-    ///
-    /// **Not named `shield_timer`**, because [`Self::shield`] is the energy pool
-    /// and [`crate::damage::Shield`] is the per-tick contact outcome. A third
-    /// bare `shield` here would read as one of those two.
+    /// Not named `shield_timer`: [`Self::shield`] is the energy pool and
+    /// [`crate::damage::Shield`] the per-tick contact outcome.
     pub shield_pickup_timer: f32,
 }
 
@@ -831,21 +605,16 @@ impl Default for ShipState {
             shift_armed: false,
             shift_lockout: 0.0,
             roll_taps: [0, 0, 0],
-            // At or past the timeout, so a cold-started ship's first tap never
-            // cascades a stale, all-zero history - see
-            // `crate::barrel_roll::INTER_TAP_TIMEOUT`.
+            // At or past the timeout, so a cold-started ship's first tap never cascades a
+            // stale all-zero history (`crate::barrel_roll::INTER_TAP_TIMEOUT`).
             roll_tap_timer: crate::barrel_roll::INTER_TAP_TIMEOUT,
             roll_phase: 0.0,
             roll_target: 0.0,
             roll_armed: false,
             roll_payout_timer: 0.0,
             roll_axis_zone: None,
-            // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0` -
-            // recovered, replacing an invented `1.0` that was chosen for the
-            // same reason the original's value serves: a freshly spawned ship
-            // must not begin inside the 0.2 s landing window. Both are outside
-            // it, so this is faithfulness rather than a behaviour change. See
-            // `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+            // `Ship_InitCraft` (`0x08849354`) sets `craft+0x2b4` to `10.0`, outside the 0.2 s
+            // landing window as a fresh ship must be. See `engine.md`.
             time_since_landing: 10.0,
             on_grid: false,
             four_corner: false,
@@ -856,10 +625,8 @@ impl Default for ShipState {
             pad_timer: 0.0,
             pad_direction: Vec3::ZERO,
             mag_contact: None,
-            // Zero, not a pool: a default ship has no `Dimensions` to take a
-            // maximum from, and inventing one here would make every test that
-            // builds a `ShipState::default()` silently start a race full.
-            // `crate::damage::reset` is what fills it.
+            // Zero, not a pool: a default ship has no `Dimensions` to take a maximum from.
+            // `crate::damage::reset` fills it.
             shield: 0.0,
             craft_state: crate::damage::CraftState::Racing,
             state_timer: 0.0,
@@ -870,22 +637,16 @@ impl Default for ShipState {
 }
 
 impl ShipState {
-    /// Whether any hover probe is in contact.
-    ///
-    /// A convenience over comparing [`Self::grounded`] to zero, which is exact:
-    /// the field only ever holds `0.0`, `0.5` or `1.0`, all of which are
-    /// representable.
+    /// Whether any hover probe is in contact. Exact, since `grounded` only holds `0.0`,
+    /// `0.5` or `1.0`.
     #[must_use]
     pub fn is_grounded(&self) -> bool {
         self.grounded > 0.0
     }
 
-    /// Quantises a probe contact count to `{0.0, 0.5, 1.0}`.
-    ///
-    /// Contact count over two, which is the whole of the original's
-    /// groundedness. Stated as a function because the two-probe assumption is
-    /// baked into the divisor and a four-corner variant exists in the original
-    /// whose selection rule is not known.
+    /// Quantises a probe contact count to `{0.0, 0.5, 1.0}`: the count over two, the whole
+    /// of the original's groundedness. The two-probe assumption is baked into the divisor;
+    /// the original's four-corner variant has an unknown selection rule.
     #[must_use]
     pub fn quantise_grounded(contacts: u32) -> f32 {
         (contacts.min(2) as f32) / 2.0
@@ -923,23 +684,17 @@ mod tests {
 
     /// The torque is `r x F`, and **that sign is load-bearing across the whole crate**.
     ///
-    /// The original computes this cross product the other way round, as `F x r`, in
-    /// both binaries. That is not a bug in either: the engine integrates its basis as
-    /// `e' = e x w` rather than the textbook `e' = w x e`, so its angular velocity is
-    /// the negation of the textbook one and `F x r` there means `r x F` here.
-    /// [`crate::integrate`] uses the textbook form, so every torque expression taken
-    /// from the disassembly is negated exactly once on the way in - here, in
+    /// The original computes `F x r` in both binaries: it integrates its basis as
+    /// `e' = e x w` rather than `e' = w x e`, so its angular velocity is the textbook one
+    /// negated. [`crate::integrate`] uses the textbook form, so every torque expression
+    /// from the disassembly is negated exactly once on the way in: here, in
     /// [`crate::hover::ALIGNMENT_GAIN`] (`+400` against a read `-400`) and in
-    /// [`crate::passive::WEATHERVANE_GROUND`] (`+0.1` against a read `-0.1`).
+    /// [`crate::passive::WEATHERVANE_GROUND`] (`+0.1` against `-0.1`).
     ///
-    /// **Flipping any one of those three without the others is unconditional
-    /// divergence**, not a subtle drift, which is why this is asserted on the direction
-    /// and not merely on being non-zero: `a_force_off_axis_makes_torque` above passes
-    /// either way round, so it cannot catch a "correction" back to the literal reading.
-    ///
-    /// Angular damping is deliberately **not** in that list: `tau = -c * w` is a
-    /// negative multiple of `w` in either convention, so it is already right and must
-    /// not be flipped with the others.
+    /// **Flipping any one of those three without the others diverges unconditionally.**
+    /// This asserts the direction, not mere non-zero: `a_force_off_axis_makes_torque`
+    /// passes either way round. Angular damping is **not** in that list: `tau = -c * w`
+    /// is right in either convention.
     #[test]
     fn a_force_at_a_point_makes_torque_the_textbook_way_round() {
         let mut body = Body::default();
@@ -955,8 +710,8 @@ mod tests {
         );
     }
 
-    /// The frame axis points **down** in `.vex` data and this one does not, so
-    /// the difference is pinned rather than left to be rediscovered.
+    /// The frame axis points **down** in `.vex` data and this one does not, so the
+    /// difference is pinned rather than left to be rediscovered.
     #[test]
     fn body_axes_are_a_right_handed_set() {
         let body = Body::default();

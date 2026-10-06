@@ -1,10 +1,5 @@
-//! What the airbrake, lateral-grip and sideshift laws in [`super`] are asserted
-//! to do.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of `airbrake.rs`:
-//! the tests are 650 lines and the laws are 490, so the module that had to be
-//! read to change one force was three-quarters something else. See
-//! `scripts/check-file-size.py`, which is the rule as a gate.
+//! What the airbrake, lateral-grip and sideshift laws in [`super`] are asserted to do. Its own
+//! file because the tests are 650 lines against the laws' 490 (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::params::{Airbrake, Antigrav};
@@ -46,18 +41,13 @@ fn moving_ship() -> ShipState {
     }
 }
 
-/// Braking one side must turn the nose **toward** that side, and in this
-/// crate's frame that is a **positive** `local_angular.y` for the left
-/// brake. It is the same convention [`crate::engine::steering`] satisfies by
-/// negating its own literal law, and the same identity `crate::forces`'s
-/// `holding_right_turns_the_ship_toward_its_own_right_axis` checks end to
-/// end for steering.
-///
-/// A test that only asserted `left == -right` would pass with the whole term
-/// inverted, which is exactly the bug this pins: from `5ad69f3` until Task
-/// #34 the airbrake yaw ran the other way, because the steering fix was
-/// applied in `engine::steering` alone and this module shares the
-/// convention.
+/// Braking one side must turn the nose **toward** that side: a **positive** `local_angular.y` for
+/// the left brake in this crate's frame, the convention [`crate::engine::steering`] satisfies by
+/// negating its literal law (and `crate::forces`'s
+/// `holding_right_turns_the_ship_toward_its_own_right_axis` checks for steering). A test asserting
+/// only `left == -right` would pass with the term inverted, the bug this pins: from `5ad69f3`
+/// until Task #34 the airbrake yaw ran the other way, as the steering fix was applied in
+/// `engine::steering` alone.
 #[test]
 fn braking_the_left_side_yaws_the_nose_left_and_pushes_the_body_right() {
     let handling = test_handling();
@@ -84,10 +74,9 @@ fn braking_the_left_side_yaws_the_nose_left_and_pushes_the_body_right() {
         right_brake.local_angular.y
     );
 
-    // The original writes the lateral term along `craft+0x170`, which is the
-    // ship's left, so braking left pushes the body to the right: the craft
-    // rotates into the corner while its mass runs wide. `+X` is right here,
-    // and the ship is aimed along `-Z`, so `.x` isolates it.
+    // The original writes the lateral term along `craft+0x170`, the ship's left, so braking left
+    // pushes the body right (the craft rotates into the corner while its mass runs wide). `+X` is
+    // right and the ship is aimed along `-Z`, so `.x` isolates it.
     assert!(
         left_brake.world_force.x > 0.0,
         "the left brake pushed {} laterally, expected +X (right)",
@@ -191,12 +180,9 @@ fn the_slide_term_needs_both_an_imbalance_and_steering() {
     assert_ne!(turning.world_force.z, 0.0);
 }
 
-/// The `drag` term's exact magnitude, in the binary's own association order.
-///
-/// Asserted against a recomputed product rather than a decimal literal on
-/// purpose: both `0.01f32` and `0.001f32` are inexact, so the chain does not
-/// land on the round number the algebra suggests, and a literal would either
-/// fail or force a tolerance that stops pinning anything.
+/// The `drag` term's exact magnitude, in the binary's own association order. Asserted against a
+/// recomputed product, not a decimal literal: `0.01f32` and `0.001f32` are inexact, so a literal
+/// would fail or force a tolerance that pins nothing.
 #[test]
 fn the_airbrake_drag_term_has_the_magnitude_the_instruction_stream_forms() {
     let handling = test_handling();
@@ -211,11 +197,10 @@ fn the_airbrake_drag_term_has_the_magnitude_the_instruction_stream_forms() {
 
     let forces = evaluate(&state, &input, &handling, 40.0);
 
-    // `slide` first, then `(forward * speed) * slide * 0.001` - the two
-    // `vscl.q`s and the two literals, in order. A full `steer_x` of `1.0` is
-    // the snapshot's `100.0`: `Ship_UpdateSteering` compares that same field
-    // straight against the `+/-100` ramped state, so dropping the scale runs
-    // this term 100x weak, which it did until 2026-09-30.
+    // `slide` first, then `(forward * speed) * slide * 0.001` (the two `vscl.q`s and two literals,
+    // in order). A full `steer_x` of `1.0` is the snapshot's `100.0`: `Ship_UpdateSteering`
+    // compares that field with the `+/-100` ramped state, so dropping the scale runs this term
+    // 100x weak, as it did until 2026-09-30.
     let slide = 100.0f32 * handling.airbrake.drag * 100.0 * 0.01;
     let expected = -(40.0f32 * slide * 0.001);
 
@@ -414,12 +399,9 @@ fn groundedness_selects_between_the_two_grip_coefficients() {
     assert!(half < air && half > ground);
 }
 
-/// A sideshift pushes toward the side it was fired at, for as long as its
-/// timer runs, and only while the craft is on the ground.
-///
-/// The direction is the recovered one rather than the guessed one - see
-/// [`sideshift_force`] - and it is asserted both ways round so an
-/// unconditional push cannot pass.
+/// A sideshift pushes toward the side it was fired at, for as long as its timer runs, and only
+/// while grounded. The direction is the recovered one ([`sideshift_force`]), asserted both ways
+/// round so an unconditional push cannot pass.
 #[test]
 fn a_sideshift_pushes_toward_the_side_it_was_fired_at_while_grounded() {
     let handling = test_handling();
@@ -519,11 +501,9 @@ fn tap(state: &mut ShipState, left: bool, gap: u32) {
     }
 }
 
-/// The flick has to arm before it can fire, and it fires toward the flick.
-///
-/// The arming step is the whole reason the latch exists: a pilot already
-/// holding the stick over when they press the button must not get a
-/// sideshift for free, and must not get one every tick after that either.
+/// The flick has to arm before it can fire, and fires toward the flick. The latch is the point: a
+/// pilot already holding the stick over when they press the button must not get a sideshift for
+/// free, nor one every tick after.
 #[test]
 fn a_novice_flick_arms_inside_the_threshold_and_fires_outside_it() {
     let mut state = ShipState::default();
@@ -555,10 +535,8 @@ fn a_novice_flick_left_shifts_left() {
     assert_eq!(state.sideshift_timers[1], 0.0);
 }
 
-/// Veteran: two taps inside the window shift, one tap does not.
-///
-/// A single tap is an ordinary airbrake press and has to stay one - this is
-/// the test that would catch a window left permanently open.
+/// Veteran: two taps inside the window shift, one tap does not. A single tap is an ordinary
+/// airbrake press; this catches a window left permanently open.
 #[test]
 fn a_veteran_double_tap_shifts_and_a_single_tap_does_not() {
     let mut state = ShipState::default();
@@ -585,10 +563,8 @@ fn a_veteran_tap_outside_the_window_is_a_first_tap_again() {
     assert!(state.shift_tap_windows[1] > 0.0);
 }
 
-/// One second between shifts, whichever gesture asked for the second one.
-///
-/// The lockout is refreshed while the shift itself runs, so it is measured
-/// from the end of the shift and the total gap is duration plus lockout.
+/// One second between shifts, whichever gesture asked for the second. The lockout is refreshed
+/// while the shift runs, so it is measured from the shift's end: total gap is duration plus lockout.
 #[test]
 fn the_lockout_holds_off_the_next_gesture_for_a_second() {
     let mut state = ShipState::default();
@@ -612,12 +588,9 @@ fn the_lockout_holds_off_the_next_gesture_for_a_second() {
     assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
 }
 
-/// The dormant scheme's fields are inert, which is what lets both machines
-/// run side by side.
-///
-/// `oag_gameplay::controls::ship_controls` guarantees only one scheme's
-/// fields are ever set; this pins that the other machine does nothing when
-/// they are not.
+/// The dormant scheme's fields are inert, which lets both machines run side by side.
+/// `oag_gameplay::controls::ship_controls` sets only one scheme's fields; this pins that the
+/// other machine does nothing without them.
 #[test]
 fn a_scheme_that_sends_nothing_produces_nothing() {
     let mut state = ShipState::default();
