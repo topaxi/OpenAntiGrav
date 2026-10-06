@@ -42,8 +42,9 @@ patch) carry **1**.
 
 EU reaches fourteen: English, French, Spanish, German, Italian, Dutch,
 Portuguese, Russian, Finnish, Swedish, Danish, Norwegian, Polish, Turkish.
-`portuguesebr` (mask 2) is not reachable; the project language stands in for
-it. Retail's EU store page lists twelve, which neither table gives:
+`portuguesebr` (mask 2) is not reachable on an EU package; it is listed last
+anyway (chosen, not measured) so the project's Brazilian Portuguese stands on
+the disc's own text for it instead of a copy of English. Retail's EU store page lists twelve, which neither table gives:
 corroboration only, not matched. Listed by
 `oag_omega::frontend::LANGUAGE_MANIFESTS` under `CUSA-05670`, in the table's
 own order.

@@ -95,6 +95,7 @@ const OMEGA_EU: &[(&str, &str)] = &[
     (r"Languages\norwegian", "Norwegian"),
     (r"Languages\polish", "Polish"),
     (r"Languages\turkish", "Turkish"),
+    (r"Languages\portuguesebr", "portuguesebr"),
 ];
 
 fn check(image: &str, serial: &str, expected: &[(&str, &str)]) {
@@ -134,8 +135,14 @@ fn check_at(
         .collect();
     // The disc's own languages in the disc's order, then the project language
     // after them, standing on the disc's English plugin (2026-10-06).
+    // A disc that ships it itself (Omega) is the base instead and gets no copy.
     let mut expected = expected.to_vec();
-    expected.push((expected[0].0, "PortugueseBR"));
+    if !expected
+        .iter()
+        .any(|(_, name)| name.eq_ignore_ascii_case("PortugueseBR"))
+    {
+        expected.push((expected[0].0, "PortugueseBR"));
+    }
     assert_eq!(got, expected, "{image}: {report:?}");
     assert_eq!(
         oag_ui::language::load::chosen_language(&languages, None).map(|l| l.name.as_str()),
@@ -221,7 +228,7 @@ fn two_thousand_forty_eight_usa_reaches_american_french_and_spanish() {
 
 #[test]
 #[ignore = "needs data/extracted/ps4"]
-fn omega_eu_reaches_fourteen_with_the_patch_and_assumes_its_release_without_a_serial() {
+fn omega_eu_reaches_fourteen_lists_its_own_brazilian_portuguese_and_assumes_its_release() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };

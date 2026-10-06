@@ -169,8 +169,8 @@ fn every_title_draws_the_brazilian_letters_except_c_cedilla_in_two_hud_faces() {
         let english = opened
             .languages
             .iter()
-            .find(|l| l.name == "English")
-            .expect("English")
+            .find(|l| l.name == "English" || l.name == "American")
+            .expect("English, or American on a release with no plain English")
             .clone();
         for (role, file) in &english.fonts {
             // The button-glyph face carries no letters on any title.

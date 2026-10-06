@@ -257,8 +257,10 @@ pub mod names {
 /// there, 0 in the base's). The patch is mandatory, so EU offers fourteen.
 /// `american`, `japanese`, `korean`, `portuguesebr`, `spanishla`, the Chinese
 /// pair and `arabic` ship on the disc and are not reachable on an EU package;
-/// `portuguesebr` is the project language here (`docs/ui/project-languages.md`),
-/// laid over English. Retail's EU store text counts twelve: not matched by
+/// `portuguesebr` is **not reachable** (mask 2) and is listed last anyway: this
+/// project offers Brazilian Portuguese on every title, and the disc's own text
+/// for it is the base it should stand on rather than a copy of English
+/// (`docs/ui/project-languages.md`) - chosen, not measured. Retail's EU store text counts twelve: not matched by
 /// either table, corroboration only.
 ///
 /// This project's PS4 extract keeps no `param.sfo`, so a source reports no serial
@@ -280,6 +282,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::Lang
         r"Languages\norwegian",
         r"Languages\polish",
         r"Languages\turkish",
+        r"Languages\portuguesebr",
     ],
     evidence: "omega-ps4-eu eboot FUN_0174ca60 table, region mask 1 (USER_DEFINED_PARAM_1 = 1); patch 1.07 table adds Turkish",
 }];

@@ -1154,7 +1154,7 @@ Omega, 85 on HD (its Europe region value is by elimination, 70).
 | HD EU (`BCES-00664`) | variable `0x938564`, not 1/2/3 | English, French, Spanish, German, Italian, Dutch, Portuguese, Russian, Finnish, Swedish, Danish, Norwegian (12) | American, Japanese, Korean, TraditionalChinese |
 | 2048 EU (`PCSF-00007`) | mode word 0 in the executable | the same twelve plus Polish (13) | American, Japanese, Korean, TraditionalChinese |
 | 2048 USA (`PCSA-00015`) | mode word 1 (one byte differs) | American, French, Spanish (3) | the other fourteen |
-| Omega EU (`CUSA-05670`) | `param.sfo` `USER_DEFINED_PARAM_1` = 1, mask 1 | the thirteen plus Turkish from the 1.07 patch's table (14) | American, Japanese, Korean, PortugueseBR, SpanishLA, the Chinese pair, Arabic |
+| Omega EU (`CUSA-05670`) | `param.sfo` `USER_DEFINED_PARAM_1` = 1, mask 1 | the thirteen plus Turkish from the 1.07 patch's table (14); `portuguesebr` listed last as the project language's base (unreachable in the original) | American, Japanese, Korean, SpanishLA, the Chinese pair, Arabic |
 
 2048 EU's thirteen is exactly its retail listing (no American, Japanese, Korean
 or Traditional Chinese), which is corroboration only. Omega's EU store page
