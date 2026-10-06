@@ -2,14 +2,11 @@
 //!
 //! One theme of `driver.rs`'s tests - see [`super`] for the fixtures.
 //!
-//! These drive [`Driver::avoidance`] directly rather than through
-//! [`Driver::drive`]. That is deliberate and it is the opposite of what
-//! `reaction_tests` does: the *lean* is one term among five that `drift` sums
-//! and clamps, so a test that watched the steering command would be measuring
-//! the sum, and a term that had stopped working would still leave a craft on a
-//! plausible line. The one place the sum is worth watching is
-//! [`the_lean_reaches_the_steering_command`], which is here so the term cannot
-//! be correct and unwired at the same time.
+//! These drive [`Driver::avoidance`] directly, the opposite of
+//! `reaction_tests`: the lean is one of five terms `drift` sums and clamps, so
+//! watching the steering command would measure the sum, and a dead term would
+//! still leave a plausible line. [`the_lean_reaches_the_steering_command`] is
+//! the one place the sum is watched, so the term cannot be correct and unwired.
 
 use super::*;
 use crate::Hazard;
@@ -39,11 +36,9 @@ fn a_driver_leans_away_from_a_charge() {
     );
 }
 
-/// **Harder the nearer it is**, and nothing at all at the edge of the lookahead.
-///
-/// The ramp is what makes an instant *noticing* look like a gradual reaction -
-/// see `Reflex::filter`, which passes a hazard through with no latency and says
-/// why.
+/// **Harder the nearer it is**, nothing at the edge of the lookahead. The ramp
+/// makes an instant *noticing* look gradual (`Reflex::filter` passes a hazard
+/// through with no latency).
 #[test]
 fn the_lean_grows_as_the_charge_nears() {
     let driver = Driver::seeded(11);
@@ -66,11 +61,8 @@ fn the_lean_grows_as_the_charge_nears() {
     );
 }
 
-/// **Nothing behind, and nothing when there is nothing.**
-///
-/// The caller already drops anything level or astern, so this is the belt to
-/// that braces: a negative distance is meaningless here and must not produce a
-/// lean of some arbitrary sign.
+/// **Nothing behind, nothing when there is nothing.** The caller drops anything
+/// level or astern; a negative distance must not yield a lean of arbitrary sign.
 #[test]
 fn a_driver_ignores_a_charge_it_has_passed() {
     let driver = Driver::seeded(11);
@@ -79,12 +71,9 @@ fn a_driver_ignores_a_charge_it_has_passed() {
     assert_eq!(driver.avoidance(charge(0.0, 3.0)), 0.0);
 }
 
-/// **A charge dead ahead splits the field rather than sending it one way.**
-///
-/// Its offset's sign is noise at that range, so the side comes from the driver's
-/// own seed. What matters is not which way any one craft goes but that they do
-/// not all go the same way - a field diving as one is both a worse look and a
-/// worse outcome, since they would then all still be in line astern.
+/// **A charge dead ahead splits the field.** The offset's sign is noise there,
+/// so the side comes from the driver's seed; what matters is that craft do not
+/// all go the same way (they would still be in line astern).
 #[test]
 fn craft_meeting_a_charge_head_on_do_not_all_dive_the_same_way() {
     let sides: Vec<f32> = (0..8)
@@ -101,13 +90,10 @@ fn craft_meeting_a_charge_head_on_do_not_all_dive_the_same_way() {
     assert_eq!(driver.avoidance(charge(30.0, 0.0)), once);
 }
 
-/// **The lean reaches the steering command.**
-///
-/// The term above could be perfectly correct and summed into nothing, so this
-/// is the one test that goes through [`Driver::drive`]: two identical drivers on
-/// one line, one of them with a charge to its right, and the one that can see it
-/// must steer differently. Not *how* differently - that is the sum's business
-/// and the corridor's - only that the term is wired.
+/// **The lean reaches the steering command.** The term could be correct and
+/// summed into nothing, so this goes through [`Driver::drive`]: two identical
+/// drivers, one with a charge to its right, must steer differently. Not *how*,
+/// only that the term is wired.
 #[test]
 fn the_lean_reaches_the_steering_command() {
     let line = straight_with_corridor();

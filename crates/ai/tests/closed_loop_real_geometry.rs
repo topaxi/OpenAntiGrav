@@ -1,30 +1,23 @@
 //! Drives the differential airbrake against a line that is never *exactly*
-//! straight, the way a real disc track's spline samples never are either.
+//! straight, as a real disc track's spline samples never are.
 //!
-//! Split out of `closed_loop.rs` rather than added to it, because that file
-//! sits at its `BASELINE` ceiling in `scripts/check-file-size.py` and this
-//! fixture could not be written inside it. The ratchet only ever lowers, so
-//! the move claws a row back rather than raising one. The helpers below are
-//! the same deliberate near-duplicates `ship_spawn_ground_truth.rs`,
-//! `mine_ground_truth.rs` and `plasma_ground_truth.rs` carry, for the same
-//! reason: nothing here is `pub`, so a second binary that wants a real
-//! `Handling`, a real oval or a real [`drive_the_oval_as`] has to build its
-//! own.
+//! Split out of `closed_loop.rs`, which sits at its `BASELINE` ceiling in
+//! `scripts/check-file-size.py`. The helpers are deliberate near-duplicates, as
+//! in `ship_spawn_ground_truth.rs`, `mine_ground_truth.rs` and
+//! `plasma_ground_truth.rs`: nothing here is `pub`, so a second binary builds
+//! its own.
 //!
 //! # Why this fixture exists
 //!
-//! `closed_loop.rs`'s own `oval_of` builds its straights from
-//! `push_straight`, so [`Line::curvature`] reads exactly `0.0` on them and
-//! `corner_target` returns exactly [`f32::INFINITY`]. A real racing line
-//! never does that - over two full laps of Talon's Junction (Pulse PSP),
-//! zero of 5,336 ticks had an infinite target, against 303 on `oval_of` in
-//! the same length of run - so a fix that only reads `!target.is_finite()`
-//! as "this is a straight" passes every test built on `oval_of` and still
-//! regresses on disc geometry, which is exactly what happened here once
-//! already: see `oag_ai::driver::pace::trail`'s own doc (not linkable from a
-//! separate crate's integration test) and `docs/gameplay/ai.md`, "Airbrakes,
-//! and what a differential one actually does". [`noisy_oval_of`] is the one
-//! fixture in this crate's tests where that is no longer true.
+//! `closed_loop.rs`'s `oval_of` builds straights from `push_straight`, so
+//! [`Line::curvature`] reads exactly `0.0` and `corner_target` returns
+//! [`f32::INFINITY`]. A real line never does: over two laps of Talon's Junction
+//! (Pulse PSP) zero of 5,336 ticks had an infinite target, against 303 on
+//! `oval_of`. A fix reading `!target.is_finite()` as "straight" passes every
+//! `oval_of` test and regresses on disc geometry, as happened once already (see
+//! `oag_ai::driver::pace::trail` and `docs/gameplay/ai.md`, "Airbrakes, and what
+//! a differential one actually does"). [`noisy_oval_of`] is the one fixture here
+//! where that is no longer true.
 
 use oag_ai::{Context, Driver, Field, Frame, Line, Pilot, Tuning};
 use oag_core::math::{Quat, Vec3};
@@ -32,7 +25,7 @@ use oag_physics::{
     Body, Environment, Handling, Ray, RaycastHit, Raycaster, ShipState, Surface, params,
 };
 
-/// An infinite horizontal floor at `y = 0`. See `closed_loop.rs`'s own copy.
+/// An infinite horizontal floor at `y = 0`. See `closed_loop.rs`'s copy.
 struct Plane;
 
 impl Raycaster for Plane {
@@ -72,9 +65,8 @@ impl Raycaster for Plane {
     }
 }
 
-/// A craft that can drive, with invented numbers. See `closed_loop.rs`'s own
-/// copy, `handling`, for what each field is for and why none of it is the
-/// game's.
+/// A craft that can drive, with invented numbers. See `closed_loop.rs`'s
+/// `handling` for what each field is for and why none is the game's.
 fn handling() -> Handling {
     Handling {
         engine: params::Engine {
@@ -111,9 +103,8 @@ fn handling() -> Handling {
     }
 }
 
-/// The tuning this file's invented craft is driven with. See
-/// `closed_loop.rs`'s own copy, `tuning`, for why `Tuning::default` does not
-/// describe this hull.
+/// The tuning this file's invented craft is driven with. See `closed_loop.rs`'s
+/// `tuning` for why `Tuning::default` does not describe this hull.
 fn tuning() -> Tuning {
     Tuning {
         lateral_accel: 55.0,
@@ -122,8 +113,7 @@ fn tuning() -> Tuning {
 }
 
 /// The same craft, with airbrakes that do something. See `closed_loop.rs`'s
-/// own copy, `handling_with_airbrakes`, for why this is a second fixture
-/// rather than an extension of the first.
+/// `handling_with_airbrakes` for why it is a second fixture.
 fn handling_with_airbrakes() -> Handling {
     Handling {
         airbrake: params::Airbrake {
@@ -147,16 +137,14 @@ fn handling_with_airbrakes() -> Handling {
 /// How much room the oval's corridor gives either side of the line.
 const CORRIDOR: f32 = 12.0;
 
-/// [`closed_loop.rs`'s own `oval_of`](../closed_loop.rs), but with a lateral
-/// wobble on the straights so three consecutive points are never *exactly*
-/// collinear.
+/// [`closed_loop.rs`'s `oval_of`](../closed_loop.rs) with a lateral wobble on the
+/// straights so three consecutive points are never *exactly* collinear.
 ///
-/// `wobble` is the amplitude in units; the period is fixed at 40 units so
-/// the curvature it produces is small and roughly constant regardless of
-/// `wobble` - [`a_realistic_straight_never_fires_the_differential`] has the
-/// actual measured range. Returns the line and the point count of the
-/// *first* straight, so a caller can measure curvature over just that
-/// stretch rather than averaging it in with the corners either side.
+/// `wobble` is the amplitude in units; the period is fixed at 40 units so the
+/// curvature is small and roughly constant regardless of it
+/// ([`a_realistic_straight_never_fires_the_differential`] has the measured
+/// range). Returns the line and the *first* straight's point count, so curvature
+/// can be measured over just that stretch.
 fn noisy_oval_of(radius: f32, straight: f32, wobble: f32) -> (Line, usize) {
     let spacing = 2.5f32;
     let period = 40.0f32;
@@ -212,7 +200,7 @@ fn noisy_oval_of(radius: f32, straight: f32, wobble: f32) -> (Line, usize) {
 }
 
 /// Signed distance from the craft to its line, across the line. See
-/// `closed_loop.rs`'s own copy.
+/// `closed_loop.rs`'s copy.
 fn cross_track(line: &Line, index: usize, position: Vec3) -> f32 {
     let here = line.point(index);
     let next = line.point(index + 1);
@@ -222,7 +210,7 @@ fn cross_track(line: &Line, index: usize, position: Vec3) -> f32 {
 }
 
 /// Runs the craft round the line and reports what happened. See
-/// `closed_loop.rs`'s own copy, `Run`, for what each field means.
+/// `closed_loop.rs`'s `Run` for what each field means.
 struct Run {
     peak_error: f32,
     steer_reversals: usize,
@@ -297,25 +285,21 @@ fn drive_the_oval_as(
 }
 
 /// The regression [`noisy_oval_of`] exists for: the differential's
-/// `speed < target` gate was replaced with a curvature floor and an
-/// exit-decay check. The first replacement tried, `!target.is_finite()`,
-/// passed every test built on an exactly-straight synthetic segment and
-/// still ground a real opponent's shield to zero on disc geometry, because
-/// no disc track's `target` is ever literally infinite. See the module doc
-/// above for the full account.
+/// `speed < target` gate was replaced by a curvature floor and an exit-decay
+/// check. `!target.is_finite()`, tried first, passed every exactly-straight
+/// synthetic test and still ground a real opponent's shield to zero, since no
+/// disc track's `target` is ever literally infinite (module doc).
 #[test]
 fn a_realistic_straight_never_fires_the_differential() {
     let tuning = tuning();
-    // 0.02 units of lateral wobble over a 40-unit period reads as ~0.00038
-    // curvature on the straight (measured below) - inside the 0.0003-0.0005
-    // band Talon's Junction's own straights carry, and well under
-    // `trail_curvature_floor`, which the assertion checks rather than
-    // assumes.
+    // 0.02 units of wobble over a 40-unit period reads as ~0.00038 curvature on
+    // the straight (measured below), inside the 0.0003-0.0005 band Talon's
+    // Junction's straights carry and well under `trail_curvature_floor`, which
+    // the assertion checks rather than assumes.
     let (line, straight_len) = noisy_oval_of(120.0, 400.0, 0.02);
-    // `Line::curvature`'s own walk reaches `3 * span` ahead of `index`, so an
-    // index within that of the straight's end reads into the arc that
-    // follows it - excluded here, rather than mistaken for what the wobble
-    // itself produces.
+    // `Line::curvature` walks `3 * span` ahead of `index`, so an index within
+    // that of the straight's end reads into the following arc: excluded, not
+    // mistaken for the wobble.
     let span = 11.0f32;
     let margin = (span * 3.0 / 2.5).ceil() as usize;
     let max_curvature = (0..straight_len.saturating_sub(margin))

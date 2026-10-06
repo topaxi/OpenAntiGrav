@@ -73,12 +73,10 @@ fn a_novice_field_is_slower_and_turns_less_hard() {
     assert_eq!(Difficulty::Ace.tune(&measured).mistake_rate, 0.0);
 }
 
-/// The three roll axes degrade in the directions their meanings run, and
-/// `Ace` gets the pilot's own numbers back untouched.
-///
-/// **Degradation, never a boost** - the module's own rule. A level that
-/// rolled *more* readily than the pilot asked for would be tuning nobody
-/// had measured, on the setting that matters most.
+/// The three roll axes degrade the ways their meanings run, and `Ace` gets the
+/// pilot's numbers untouched. **Degradation, never a boost** (the module's
+/// rule): rolling *more* readily than the pilot asked is untested tuning on the
+/// setting that matters most.
 #[test]
 fn a_lower_level_rolls_less_readily_off_more_shield_and_after_a_longer_jump() {
     let base = Pilot::BALANCED;
@@ -150,14 +148,10 @@ fn no_level_lets_a_pilot_ask_for_more_grip_than_the_hull_has() {
     }
 }
 
-/// `1.0`/`2.0`/`3.0` must agree with `Novice`/`Skilled`/`Elite`'s own
-/// `tune`, or the continuous path is not actually the discrete one
-/// generalised.
-///
-/// **Within a ULP, not bit-exact**: `lerp(a, b, 1.0)` is `a + (b - a)`,
-/// which IEEE-754 rounding does not always recover as exactly `b` - the
-/// ordinary lerp-endpoint wart, not a determinism gap (the same inputs
-/// still give the same output every run).
+/// `1.0`/`2.0`/`3.0` must agree with `Novice`/`Skilled`/`Elite`'s own `tune`, or
+/// the continuous path is not the discrete one generalised. **Within a ULP, not
+/// bit-exact**: `lerp(a, b, 1.0)` is `a + (b - a)`, the ordinary lerp-endpoint
+/// wart, not a determinism gap (same inputs, same output every run).
 #[test]
 fn tune_at_scale_agrees_with_the_named_levels_at_the_integers() {
     let measured = Tuning::default();

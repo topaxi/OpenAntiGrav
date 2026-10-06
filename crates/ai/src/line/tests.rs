@@ -94,10 +94,8 @@ fn a_line_can_have_no_corridor() {
     assert_eq!(line.aim(0, 0.5).corridor, None);
 }
 
-/// A corridor that does not match the points is dropped rather than
-/// half-used: a truncated one would silently give the back of the track no
-/// room, and that reads as a driver bug rather than as the wiring mistake
-/// it is.
+/// A corridor not matching the points is dropped, not half-used: a truncated
+/// one would silently give the back of the track no room.
 #[test]
 fn a_mismatched_corridor_is_dropped() {
     let line = Line::with_corridor(
@@ -107,11 +105,9 @@ fn a_mismatched_corridor_is_dropped() {
     assert!(!line.has_corridor());
 }
 
-/// **The bound is interpolated onto the same segment fraction the aim point
-/// is**, not snapped to the sample. Snapped, it steps by a whole sample's
-/// worth every time the walk crosses one, and a driver that clamps its
-/// drift against a stepping bound puts that step into the commanded turn
-/// rate.
+/// **The bound is interpolated onto the same segment fraction as the aim
+/// point**, not snapped: snapped, it steps a sample's worth each crossing and
+/// the driver's drift clamp puts that step into the commanded turn rate.
 #[test]
 fn the_corridor_is_interpolated_rather_than_snapped() {
     let line = widening();
@@ -145,15 +141,13 @@ fn a_straight_line_has_no_curvature() {
     assert!(line.curvature(0, 10.0).abs() < 1e-6);
 }
 
-/// A straight line stays straight even where one of its segments is longer
-/// than the span being asked for.
+/// A straight line stays straight even where a segment is longer than the span.
 ///
 /// **This failed at 28.6 radians per unit before the walk was rooted at
-/// `index`**, and the shape is the one every circuit on the disc ships: two
-/// authored paths meet, the samples bunch to a tenth of a unit, and one
-/// segment jumps the gap. `06_Track`'s jump is 14.78 units and is the only
-/// one on the disc longer than ten, which is why it was the only circuit an
-/// AI could be parked on by a corner that is not there.
+/// `index`**: every circuit ships a seam (two authored paths meet, samples bunch
+/// to a tenth of a unit, one segment jumps the gap). `06_Track`'s jump is 14.78
+/// units, the only one on the disc over ten, hence the only circuit an AI could
+/// be parked on by a corner that is not there.
 #[test]
 fn a_long_segment_is_still_straight() {
     let mut points = Vec::new();

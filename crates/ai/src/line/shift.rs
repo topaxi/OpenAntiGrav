@@ -15,7 +15,6 @@ use super::Frame;
 /// [`Frame::lateral`] points) across the line at sample `index`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Target {
-    /// The sample the line should be moved at.
     pub index: usize,
     /// How far across, before the corridor clamps it.
     pub offset: f32,

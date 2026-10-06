@@ -1,34 +1,25 @@
 //! How fast the corner ahead allows, and the brake that gets the craft there.
 //!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`, and the seam is a real one rather than a
-//! convenient cut: everything here is a **pure** function of the road, the
-//! craft's speed, and whatever of [`Driver`](crate::Driver)'s own state the
-//! caller chooses to pass in - never [`Driver`](crate::Driver) itself. That is
-//! why all six are testable without a craft, and why the steering loop above -
-//! which is stateful, and closed on a rate - stays where it is.
+//! Split out of [`super`] for `scripts/check-file-size.py`. Everything here is
+//! a **pure** function of the road, the speed and whatever [`Driver`](crate::Driver)
+//! state the caller passes in, so it is testable without a craft.
 //!
-//! The chain runs [`curvature_span`] (what the estimator measures over) ->
-//! [`corner_target`] (how fast that corner allows) -> [`throttle`] (thrust and
-//! the both-sides brake) -> [`track_peak_curvature`] (this tick's high-water
-//! mark, which the caller stores) -> [`trail`] (the differential) ->
-//! [`airbrakes`] (the two commands the physics actually reads).
+//! The chain: [`curvature_span`] (what the estimator measures over) ->
+//! [`corner_target`] -> [`throttle`] -> [`track_peak_curvature`] (the mark the
+//! caller stores) -> [`trail`] (the differential) -> [`airbrakes`] (the two
+//! commands the physics reads).
 
 use super::{Personality, Steer, Tuning};
 
-/// The chord [`Line::curvature`](crate::Line::curvature) measures over, for a driver looking `look`
-/// ahead.
+/// The chord [`Line::curvature`](crate::Line::curvature) measures over, for a
+/// driver looking `look` ahead: half the lookahead unless
+/// [`Tuning::curvature_span`] caps it (reasoning and sweep there).
 ///
-/// Half the lookahead unless [`Tuning::curvature_span`] caps it, which is where
-/// the reasoning and the sweep behind the cap are written down.
-///
-/// **All three callers share this** - the braking window in [`Driver::drive`](crate::Driver::drive),
-/// [`Driver::allows_speed`](crate::Driver::allows_speed)'s boost gate and the rocket gate in
-/// [`super::weapons`] - because they are asking one estimator the same question
-/// about the same road. A span that differed between them would mean a corner a
-/// craft brakes for is one it will still fire a rocket through, and the
-/// twelve-circuit sweep only reproduces its reference point with all three
-/// capped together.
+/// **All three callers share this** - [`Driver::drive`](crate::Driver::drive)'s
+/// braking window, [`Driver::allows_speed`](crate::Driver::allows_speed) and
+/// the rocket gate in [`super::weapons`] - or a corner a craft brakes for is
+/// one it fires a rocket through, and the twelve-circuit sweep only reproduces
+/// its reference with all three capped together.
 pub(super) fn curvature_span(tuning: &Tuning, look: f32) -> f32 {
     let span = look * 0.5;
     match tuning.curvature_span {
@@ -37,54 +28,37 @@ pub(super) fn curvature_span(tuning: &Tuning, look: f32) -> f32 {
     }
 }
 
-/// The chord a reading averages over, given the step
-/// [`curvature_span`] chose. `None` keeps the two equal - see
-/// [`Tuning::curvature_chord`].
+/// The chord a reading averages over, given the step [`curvature_span`] chose.
+/// `None` keeps the two equal, see [`Tuning::curvature_chord`].
 pub(super) fn curvature_chord(tuning: &Tuning, step: f32) -> f32 {
     tuning.curvature_chord.map_or(step, |chord| chord.min(step))
 }
 
-/// The fastest the corner ahead can be taken, or infinity where there is no
-/// corner.
+/// The fastest the corner ahead can be taken, or infinity where there is none.
 ///
-/// **Two limits, and the smaller of them binds.**
+/// **Two limits, the smaller binds.** `sqrt(lateral_accel / curvature)` is the
+/// grip limit, scaled by [`Personality::commitment`] (under the root, so a few
+/// per cent of commitment is half that in speed) so the field does not brake in
+/// unison. `max_turn_rate / curvature` is **kinematics, not a tuned
+/// constant**: yawing at `v * k` is required to hold a line, so a hull that
+/// cannot rotate faster than `w` cannot hold it above `w / k` whatever its
+/// grip. The craft leaves the line pointing the wrong way with slip flat.
 ///
-/// `sqrt(lateral_accel / curvature)` is the ordinary cornering limit - how fast
-/// the craft can go round before it slides. [`Personality::commitment`] scales
-/// the grip a driver assumes it has, so the eight targets are eight different
-/// numbers and the field does not lift off and brake in unison. It is under the
-/// square root, so a spread of a few per cent in commitment is half that in
-/// speed.
+/// # Why the kinematic limit was added
 ///
-/// `max_turn_rate / curvature` is the other one, and it is **kinematics rather
-/// than a tuned constant**: a craft at speed `v` on a line of curvature `k` has
-/// to yaw at `v * k` to stay on it, so a hull that cannot rotate faster than
-/// `w` cannot hold that line above `w / k` however much grip it has. Nothing to
-/// do with sliding - the craft leaves the line pointing the wrong way, with slip
-/// flat and every wheel on the ground.
+/// `07_Track`'s tightest arc (curvature 0.047, radius 21) admits **33 units/s**.
+/// The hull's ceiling is `steer * Turning.amount / (5 * I_yy)` = `100 * 1.68 /
+/// 108` = 1.556 rad/s, within a few per cent of the 1.42-1.51
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures on the original.
+/// The grip limit said 74, the craft arrived at 94 and shed **34-35 shield a
+/// lap** on the outside wall. Dropping [`Tuning::lateral_accel`] 260 to 90
+/// could not reach it (24.08 to 24.11 loss; `sqrt(90 / 0.047)` is 43.8).
+/// Board-wide it is worth **51 shield across twelve circuits** for 1.2 s of
+/// mean clean lap (`sweep_curvature_span`, `race_ground_truth.rs`). It binds
+/// above `k = max_turn_rate^2 / lateral_accel`, about 0.0125, which is 20 per
+/// cent of `07`'s samples and 26 per cent of `06`'s.
 ///
-/// # Why the second one was missing, and what it cost
-///
-/// `07_Track`'s tightest arc has curvature 0.047 - radius 21 - which admits
-/// **33 units/s**. The hull's ceiling is `steer * Turning.amount / (5 * I_yy)` =
-/// `100 * 1.68 / 108` = 1.556 rad/s, within a few per cent of the 1.42-1.51 that
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures on the original. The
-/// grip limit alone said 74 and the craft arrived at 94, left the line, and shed
-/// **34-35 shield a lap** grinding down the outside wall.
-///
-/// The grip term cannot reach that corner from either end: dropping
-/// [`Tuning::lateral_accel`] from 260 to 90 moved the loss from 24.08 to 24.11,
-/// because `sqrt(90 / 0.047)` is still 43.8 against a yaw limit of 33.
-///
-/// Board-wide this is worth **51 shield across the twelve circuits** for 1.2 s
-/// of mean clean lap, measured by `sweep_curvature_span` in
-/// `race_ground_truth.rs`. It binds above `k = max_turn_rate^2 / lateral_accel`,
-/// about 0.0125 at the defaults, which is 20 per cent of `07`'s samples and 26
-/// per cent of `06`'s.
-///
-/// Infinity rather than an option, because every caller wants "is this speed
-/// allowed", and `speed <= f32::INFINITY` is the right answer for a straight
-/// without a branch of its own.
+/// Infinity rather than an option, so a straight needs no branch of its own.
 pub(super) fn corner_target(
     curvature: f32,
     tuning: &Tuning,
@@ -95,42 +69,36 @@ pub(super) fn corner_target(
         return f32::INFINITY;
     }
     let grip = (tuning.lateral_accel * personality.commitment / curvature).sqrt();
-    // **The smaller of what the hull can do and what this driver is allowed**,
-    // and the two are different questions. See [`hull_yaw_ceiling`] for why the
-    // hull's number belongs here and [`Tuning::max_turn_rate`] for why the
-    // permission still caps it: `Difficulty::tune` scales the permission, and a
-    // Novice that read the hull directly would corner like an Ace.
+    // The smaller of what the hull can do ([`hull_yaw_ceiling`]) and what this
+    // driver is allowed ([`Tuning::max_turn_rate`]): `Difficulty::tune` scales
+    // the permission, and a Novice reading the hull directly would corner like
+    // an Ace.
     let rate = hull_yaw_ceiling.map_or(tuning.max_turn_rate, |hull| hull.min(tuning.max_turn_rate));
     let yaw = rate / curvature;
     grip.min(yaw)
 }
 
-/// The yaw rate a craft's own hull can actually sustain, in radians per second.
+/// The yaw rate a craft's own hull can sustain, in radians per second.
 ///
-/// **Authored data, not a tuned constant**, which is the whole point: the
-/// steady state of `oag_physics`'s own yaw axis, evaluated on the craft being
-/// flown rather than on one global belief.
+/// **Authored data, not a tuned constant**: the steady state of `oag_physics`'s
+/// yaw axis on the craft being flown.
 ///
 /// ```text
 /// omega = steer * Turning.amount / (damping * I_yy)
 /// ```
 ///
-/// `oag_physics::engine::steering` is `steer * Turning.amount` as a body-local
-/// yaw drive with no speed factor; `oag_physics::passive::YAW_DAMPING` damps
-/// yaw *momentum* at `-5`; and `I_yy` is `1 /
-/// oag_physics::forces::YAW_INVERSE_INERTIA`. `steer` runs to
-/// `oag_physics::controls::CONTROL_RANGE`, so full lock is `100`.
+/// `oag_physics::engine::steering` is `steer * Turning.amount` as a yaw drive
+/// with no speed factor; `oag_physics::passive::YAW_DAMPING` is `-5`; `I_yy` is
+/// `1 / oag_physics::forces::YAW_INVERSE_INERTIA`; full lock is
+/// `oag_physics::controls::CONTROL_RANGE` (`100`).
 ///
 /// # `I_yy` is global and `Turning.amount` is not
 ///
-/// The inertia box `(12, 8, 12)` and the mass `0.9` it is built with are **code
-/// literals at a single call site** in the ship-entity constructor - `Misc`
-/// `width`/`length`/`height` reach the *collider*, not the tensor - so every
-/// craft in the game has the same `I_yy` of `21.6`. See
-/// [`oag_physics::forces::YAW_INVERSE_INERTIA`], which records the
-/// disassembly. The only per-craft term is `<Turning amount>`, and that one is
-/// **per team and constant across the four speed classes**, measured over the
-/// whole disc by `crates/game/tests/ai_clean_lap_board.rs`:
+/// The inertia box `(12, 8, 12)` and mass `0.9` are code literals at one call
+/// site, so every craft has `I_yy` 21.6 (see
+/// [`oag_physics::forces::YAW_INVERSE_INERTIA`]). `<Turning amount>` is **per
+/// team, constant across speed classes**, measured by
+/// `crates/game/tests/ai_clean_lap_board.rs`:
 ///
 /// | team | `amount` | ceiling | against `Tuning::max_turn_rate` 1.8 |
 /// | --- | ---: | ---: | ---: |
@@ -140,13 +108,9 @@ pub(super) fn corner_target(
 /// | EGX, Goteki | 1.42 | 1.315 | -27.0 % |
 /// | Triakis, Piranha | 1.30 | 1.204 | -33.1 % |
 ///
-/// **No craft on the disc can reach 1.8**, so the kinematic half of
-/// [`corner_target`] was asking every one of them for a corner speed its hull
-/// could not rotate at - by 7 % on the best team and 33 % on the worst. The
-/// 1.556 row is the one the Outpost 7 thread measured by hand, and
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures the *original*
-/// hull at 1.42-1.51 under full lock, so this arithmetic lands within a few per
-/// cent of the original's own behaviour.
+/// No craft reaches 1.8, so the old kinematic limit asked every one for a
+/// corner speed its hull could not rotate at. The 1.556 row is the Outpost 7
+/// thread's hand measurement.
 #[must_use]
 pub fn hull_yaw_ceiling(handling: &oag_physics::Handling) -> f32 {
     let i_yy = 1.0 / oag_physics::forces::YAW_INVERSE_INERTIA;
@@ -158,20 +122,18 @@ pub fn hull_yaw_ceiling(handling: &oag_physics::Handling) -> f32 {
 /// ahead allows.
 ///
 /// Past [`Tuning::brake_margin`] the command climbs from
-/// [`Tuning::brake_floor`] with the overspeed rather than snapping to one.
+/// [`Tuning::brake_floor`] with the overspeed rather than snapping.
 ///
-/// **This does not ramp the deceleration.** `oag_physics::controls::update`
-/// gates `ShipState::brake` on both inputs being strictly positive and its ramp
-/// rate never reads their level, so a command of `0.35` and a command of `1.0`
-/// slow the craft at exactly the same rate. What climbs with the command is
-/// `max(L, R)`, which is what the lateral-grip coefficient reads. So this is a
-/// dial on **how much cornering grip the deceleration is bought with**, and a
-/// driver only a little over its target keeps the grip it is about to need.
+/// **It does not ramp the deceleration**: `oag_physics::controls::update` gates
+/// `ShipState::brake` on both inputs being strictly positive and never reads
+/// their level. What climbs is `max(L, R)`, which the lateral-grip coefficient
+/// reads, so this dials **how much cornering grip the deceleration is bought
+/// with**.
 pub(super) fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
     if speed <= target {
         return (1.0, 0.0);
     }
-    // Finite, because `speed <= target` already returned for an infinite one.
+    // Finite: `speed <= target` already returned for an infinite one.
     let overspeed = speed / target - 1.0;
     if overspeed <= tuning.brake_margin {
         return (0.0, 0.0);
@@ -186,80 +148,52 @@ pub(super) fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
 ///
 /// # This is not a brake
 ///
-/// Braking one side alone yaws the nose toward that side, pushes the body away
-/// from it, adds a little forward speed, and cuts lateral grip exactly as hard
-/// as holding both sides would - and it engages no deceleration at all, because
-/// that needs both. Three of those four are the wrong sign for what "trail
-/// braking" usually means. What it actually buys is **yaw authority, paid for
-/// in grip**, which is why it is spent only where the steering loop has run out
-/// of authority of its own.
+/// One side alone yaws the nose toward it, pushes the body away, adds a little
+/// forward speed and cuts lateral grip as hard as both sides would, with no
+/// deceleration (that needs both). It buys **yaw authority, paid for in grip**,
+/// so it is spent only where the steering loop has run out of authority.
 ///
 /// # What used to gate this, and why it was replaced
 ///
-/// The original gate was `speed < target`: off below the corner's modelled
-/// target speed, meant to read as "corner exit, where the grip is wanted for
-/// accelerating". **Measured** on a real circuit (Talon's Junction, Pulse PSP)
-/// it instead gated out corner *entry* too - `command` pinned at `+-1.0`,
-/// `rate_error` 0.5-0.6 rad/s, for over ten consecutive ticks while speed
-/// collapsed from 111 to 39.5 units/s and `target` sat at 160-180 throughout,
-/// `speed < target` holding on every one of them. Replacing it with
-/// `!target.is_finite()` was tried and reverted: `target` is a real number
-/// everywhere on disc geometry - zero of 5,336 ticks over two laps of Talon's
-/// Junction were infinite, against 303 on `tests/closed_loop.rs`'s exactly
-/// collinear synthetic straights - so the replacement gated out nothing there
-/// and ground one opponent's shield to zero on
+/// The gate was `speed < target`, meant as "corner exit". **Measured** on
+/// Talon's Junction (Pulse PSP) it also gated out corner *entry*: `command`
+/// pinned at `+-1.0`, `rate_error` 0.5-0.6 rad/s for over ten ticks while speed
+/// fell from 111 to 39.5 and `target` sat at 160-180. `!target.is_finite()` was
+/// tried and reverted: no disc track's `target` is infinite (0 of 5,336 ticks
+/// over two laps, against 303 on `tests/closed_loop.rs`'s collinear synthetic
+/// straights), so it gated out nothing and ground one opponent's shield to
+/// zero on
 /// `opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`.
-/// Full account, including the attempt and its revert, in `docs/gameplay/ai.md`,
-/// "Airbrakes, and what a differential one actually does".
+/// Account: `docs/gameplay/ai.md`, "Airbrakes, and what a differential one
+/// actually does".
 ///
-/// **What actually discriminates entry from exit, measured on the same real
-/// lap**: not `target`'s absolute value - two real segments, one still
-/// tightening into the corner and one already accelerating out of it, both
-/// held `speed` a similar fraction below `target` throughout, so no ratio of
-/// the two separates them either. What differs is `curvature`'s own *trend*:
-/// flat to rising while still working the corner, falling once the corner
-/// opens up on exit. [`Driver::peak_curvature`](crate::Driver::peak_curvature)
-/// tracks the high-water mark since the line last went straight, and
-/// `curvature` falling meaningfully below it is what exit looks like.
+/// What discriminates entry from exit is `curvature`'s own *trend*, not
+/// `target` or any `speed / target` ratio (an entry segment and an exit segment
+/// both held `speed` a similar fraction below `target`): flat to rising while
+/// working the corner, falling once it opens.
+/// [`Driver::peak_curvature`](crate::Driver::peak_curvature) tracks the
+/// high-water mark.
 ///
-/// A second, unrelated real-track failure mode surfaced by the same
-/// measurement: a weapon hit **halves a craft's speed in a single tick**
-/// (`ShipState::slowdown_timer` arms the tick after), which the pure-pursuit
-/// loop reads as exactly the shape of a genuine corner - `command` and
-/// `rate_error` both saturate correcting for the sudden mismatch between
-/// heading and velocity - on track geometry that is nearly straight the whole
-/// time. `oag_physics::forces::evaluate` already skips lateral grip entirely
-/// while the timer runs, so a differential spent there buys nothing and
-/// affects nothing the craft can use; gated out below, alongside
-/// [`ShipState::stun_timer`] for the same reason once something arms it.
+/// A second failure: a weapon hit **halves a craft's speed in one tick**, which
+/// pure pursuit reads as a genuine corner on near-straight track (`command` and
+/// `rate_error` both saturate). `oag_physics::forces::evaluate` skips lateral
+/// grip while the timer runs, so a differential there buys nothing.
 ///
-/// Four gates now, each doing a different job:
+/// Four gates:
 ///
-/// - **Recovering.** [`ShipState::slowdown_timer`] or
-///   [`ShipState::stun_timer`] positive - the craft is not steering into
-///   anything, it is coasting off a hit with no lateral grip to spend the
-///   differential against.
-/// - **Curvature floor.** [`Tuning::trail_curvature_floor`] - below it this is
-///   a straight, or close enough that the chord estimate's own noise (~5e-5 on
-///   Talon's Junction) cannot be told from one. `!target.is_finite()`'s
-///   mistake was assuming a straight makes itself known this cleanly; it does
-///   not, curvature does.
-/// - **Exit.** `curvature < peak_curvature * `[`Tuning::trail_exit_decay`] -
-///   the corner has opened up enough since its tightest point that this reads
-///   as corner exit rather than still being fought through.
-/// - **Saturation and deadband.** The gate logic is unchanged from before:
-///   below [`Tuning::trail_saturation`] of full lock the rate loop still has
-///   authority of its own, and [`Tuning::trail_deadband`] keeps this out of
-///   the small-signal regime `tests/closed_loop.rs` linearised about. The
-///   *values* moved on the same date as the three gates above, for an
-///   unrelated reason - see [`Tuning::trail_saturation`]'s own doc.
+/// - **Recovering**: [`ShipState::slowdown_timer`] or [`ShipState::stun_timer`]
+///   positive.
+/// - **Curvature floor**: [`Tuning::trail_curvature_floor`]; below it the chord
+///   estimate's noise (~5e-5 on Talon's Junction) cannot be told from a
+///   straight, which `!target.is_finite()` wrongly assumed announces itself.
+/// - **Exit**: `curvature < peak_curvature * `[`Tuning::trail_exit_decay`].
+/// - **Saturation and deadband**: below [`Tuning::trail_saturation`] of full
+///   lock the rate loop has its own authority; [`Tuning::trail_deadband`] keeps
+///   this out of the small-signal regime `tests/closed_loop.rs` linearised
+///   about.
 ///
-/// No slew limiting here, and none needed: this is a *target*, and
-/// `oag_physics::controls::update` ramps the airbrake states toward it at
-/// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the caller's
-/// own state - [`Driver::peak_curvature`](crate::Driver::peak_curvature) -
-/// is the only memory this needs, and this function stays a pure scalar
-/// function of it.
+/// No slew limiting: this is a *target* and `oag_physics::controls::update`
+/// ramps the airbrake states at `Airbrake::gain`/`falloff`.
 ///
 /// [`ShipState::slowdown_timer`]: oag_physics::ShipState::slowdown_timer
 /// [`ShipState::stun_timer`]: oag_physics::ShipState::stun_timer
@@ -281,11 +215,11 @@ pub(super) fn trail(
     }
     let past = steer.rate_error.abs() - tuning.trail_deadband;
     let magnitude = (past * tuning.trail_gain * personality.trail).min(tuning.trail_max);
-    // Positive `rate_error` is a craft that wants to turn further right, and a
-    // nose-right yaw needs `imbalance = L - R` negative - so the **right** side
-    // is the one braked. Getting this backwards is what `5ad69f3` shipped for
-    // months; `the_differential_brakes_the_side_the_nose_is_turning_toward`
-    // pins it, and `oag_physics::airbrake`'s own header settles the sign.
+    // Positive `rate_error` wants to turn further right, and a nose-right yaw
+    // needs `imbalance = L - R` negative, so the **right** side is braked.
+    // `5ad69f3` shipped this backwards for months;
+    // `the_differential_brakes_the_side_the_nose_is_turning_toward` pins it and
+    // `oag_physics::airbrake`'s header settles the sign.
     if steer.rate_error >= 0.0 {
         magnitude
     } else {
@@ -297,38 +231,23 @@ pub(super) fn trail(
 /// high-water mark since the line last went straight, or `curvature` itself
 /// once it has.
 ///
-/// Runs every tick regardless of saturation, so the mark is already current
-/// the moment a corner does saturate the steering loop - a craft that enters a
-/// bend below `trail_saturation` and only saturates near the apex must not
-/// read as "exiting" on its first saturated tick for want of a mark taken this
-/// tick.
+/// Runs every tick regardless of saturation, so a craft that saturates only
+/// near the apex does not read as "exiting" for want of a mark.
 ///
-/// # The mark leaks, and before it did the gate below it almost never opened
+/// # The mark leaks
 ///
-/// "Since the line last went straight" was the intent and
-/// [`Tuning::trail_curvature_floor`] was the definition of straight - and
-/// **on this disc's geometry the line never goes straight by it.** Measured on
-/// `07_Track`, lone Ace, 6,000 ticks: the smallest windowed curvature seen all
-/// run is `0.00127` against a floor of `0.00100`, so the reset branch above
-/// fires **zero** times and the mark is a monotone running maximum over the
-/// whole race. It latches at `0.04566` on the circuit's tightest corner and
-/// stays there.
+/// "Straight" is [`Tuning::trail_curvature_floor`], and **on this disc's
+/// geometry the line never goes straight by it**: on `07_Track`, lone Ace,
+/// 6,000 ticks, the smallest windowed curvature is `0.00127` against `0.00100`,
+/// so the reset fires **zero** times and the mark latches at `0.04566`. The
+/// exit gate then meant "not the tightest corner seen this race" and rejected
+/// **4,486** ticks (74.8 %); the differential fired on **227** (3.78 %).
+/// Through `07`'s 2,150-2,199 hairpin steering sat at **full lock** with a rate
+/// error of 0.22 rad/s against a windowed curvature of `0.0139` and a bound of
+/// `0.0320`.
 ///
-/// What that did to [`trail`]'s exit gate is the whole of a player report that
-/// the airbrake looked timid in hairpins. With the mark latched, `curvature <
-/// peak * trail_exit_decay` means "this is not the tightest corner seen so far
-/// this race", which after the first lap is true almost everywhere. Over the
-/// same 6,000 ticks the gate alone rejected **4,486** of them - 74.8 % - and
-/// the differential fired on **227**, or 3.78 %. Through `07`'s own
-/// 2,150-2,199 hairpin the steering sat at **full lock** with a rate error of
-/// 0.22 rad/s - exactly the state a differential exists for - against a
-/// windowed curvature of `0.0139` and a bound of `0.0320`, less than half.
-///
-/// [`Tuning::trail_peak_decay`] makes the mark a **leaky** high-water mark
-/// instead, so "exit" means the corner has opened up since its tightest point
-/// *recently* rather than since the start of the race. `1.0` is exactly the
-/// old behaviour, which is what lets the sweep that chose the value include
-/// the row it replaced.
+/// [`Tuning::trail_peak_decay`] makes the mark leaky; `1.0` is the old latch,
+/// so the sweep includes the row it replaced.
 pub(super) fn track_peak_curvature(curvature: f32, previous_peak: f32, tuning: &Tuning) -> f32 {
     if curvature <= tuning.trail_curvature_floor {
         curvature
@@ -339,24 +258,17 @@ pub(super) fn track_peak_curvature(curvature: f32, previous_peak: f32, tuning: &
 
 /// The two airbrake commands, from the symmetric brake and the differential.
 ///
-/// The two sides are an interval of width `differential` slid to sit as near
-/// the symmetric brake as it will go, rather than the brake plus and minus half
-/// of it. Two reasons, and both are about not losing the yaw where it is most
-/// needed:
+/// The sides are an interval of width `differential` slid to sit as near the
+/// symmetric brake as it will go, not the brake plus and minus half of it:
 ///
-/// - **A craft braking flat out has no headroom above.** Adding to one side
-///   alone would clip against `1.0` and deliver nothing, exactly in the corner
-///   the driver is most in trouble in. Sliding the interval down instead keeps
-///   the imbalance the caller asked for.
-/// - **The low side must stay strictly positive whenever the brake is on**,
-///   because both sides positive is the only thing that engages
-///   `ShipState::brake`. Dropping one to zero mid-corner would silently cancel
-///   the deceleration. `floor` is the limit it may slide to; below it the
-///   differential is what shrinks, never the brake.
+/// - **A craft braking flat out has no headroom above**: adding to one side
+///   would clip at `1.0` and deliver nothing, exactly when needed.
+/// - **The low side must stay strictly positive whenever the brake is on**:
+///   both sides positive is what engages `ShipState::brake`. Below `floor` the
+///   differential shrinks, never the brake.
 ///
-/// With the brake off, `floor` is zero and one side rises from nothing: yaw
-/// authority and no deceleration, which is what a differential airbrake
-/// physically is.
+/// With the brake off `floor` is zero and one side rises from nothing: yaw
+/// authority, no deceleration.
 pub(super) fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32) {
     let limit = if brake > 0.0 { floor } else { 0.0 };
     let width = differential.abs().min(1.0 - limit);
