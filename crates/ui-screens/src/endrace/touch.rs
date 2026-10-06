@@ -399,7 +399,7 @@ pub fn draw_list(
             if !shown(image.name.as_deref(), model, page) {
                 continue;
             }
-            if let Some(draw) = image_draw(image, model, layouts, sprites) {
+            if let Some(draw) = image_draw(image, model, sprites) {
                 out.push(draw);
             }
         }
@@ -437,7 +437,6 @@ fn is_placeholder(text: &Text) -> bool {
 fn image_draw(
     image: &Image,
     model: &Summary,
-    layouts: &Layouts,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Option<Draw> {
     let placed = sprites(&image.src)?;
@@ -464,7 +463,6 @@ fn image_draw(
     } else {
         (image.x, image.y)
     };
-    let _ = layouts;
     Some(sprite_draw(&image, placed, x, y, image.color))
 }
 
