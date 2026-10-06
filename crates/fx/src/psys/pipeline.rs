@@ -7,6 +7,8 @@ use super::sprite::{SHEET_SIZE, Sheet};
 use super::{MAX_INSTANCES, MAX_PARTICLES};
 use oag_mesh::mesh::GpuVertex;
 
+mod distort;
+
 /// The additive blend - the original's blend class 2, `BlendFunc(ADD,
 /// SRC_ALPHA, FIX 0xffffff)`, used by the three bright emitters. The same
 /// shape [`crate::exhaust::BLEND`] uses, and for the same reason: additive
@@ -80,6 +82,8 @@ pub struct Pipeline {
     /// The screen flash, which shares this pass's targets - see
     /// [`crate::flash`].
     flash: crate::flash::Pipeline,
+    /// Blend class 8's offset target - see [`distort`].
+    distort: distort::Distort,
 }
 
 impl Pipeline {
@@ -204,6 +208,8 @@ impl Pipeline {
         let additive = build("psys additive", BLEND);
         let alpha_over = build("psys alpha-over", BLEND_ALPHA_OVER);
 
+        let distort = distort::Distort::new(device, &pipeline_layout, sample_count);
+
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("psys uniforms"),
             size: oag_mesh::mesh_render::UNIFORMS_SIZE,
@@ -280,6 +286,7 @@ impl Pipeline {
             alpha_vertices,
             additive_count: 0,
             alpha_count: 0,
+            distort,
         }
     }
 
@@ -358,6 +365,35 @@ impl Pipeline {
             bytemuck::cast_slice(&alpha_over[..n]),
         );
         self.alpha_count = n as u32;
+    }
+
+    /// Uploads this frame's blend class 8 quads, [`super::Stage::extend_distort_vertices`].
+    pub fn upload_distort(&mut self, queue: &wgpu::Queue, vertices: &[GpuVertex]) {
+        self.distort.upload(queue, vertices);
+    }
+
+    /// Draws the frame's offsets into their own target, **after** the scene
+    /// pass has closed, and returns the texture the composite reads; `None`
+    /// when the frame drew none. `depth` is the scene's depth attachment,
+    /// `size` its extent and `viewport` the rectangle the scene pass drew -
+    /// see [`distort`] for the executable's law and what differs from it.
+    pub fn encode_distort(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        depth: &wgpu::TextureView,
+        size: (u32, u32),
+        viewport: (f32, f32, f32, f32),
+    ) -> Option<&wgpu::TextureView> {
+        self.distort
+            .encode(device, encoder, &self.bind_group, depth, size, viewport)
+    }
+
+    /// The texture behind [`Self::encode_distort`]'s view, for a readback. It
+    /// holds the last frame that drew anything; `None` before the first.
+    #[must_use]
+    pub fn offset_texture(&self) -> Option<&wgpu::Texture> {
+        self.distort.texture()
     }
 
     /// This frame's screen flash, [`crate::flash::ScreenFlash::colour`].

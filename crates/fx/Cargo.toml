@@ -14,6 +14,7 @@ oag-core.workspace = true
 oag-formats.workspace = true
 oag-texture.workspace = true
 oag-mesh.workspace = true
+oag-gpu.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
 
@@ -28,3 +29,4 @@ oag-testdata.workspace = true
 pollster.workspace = true
 oag-assets.workspace = true
 oag-pulse.workspace = true
+oag-tables.workspace = true

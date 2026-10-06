@@ -198,3 +198,137 @@ the format, **50** for "linear view depth" (the only consistent reading, not a r
 
 Nothing is drawn, for those three reasons: each is a number or a binding the drawn
 strength or the depth gate depends on.
+
+## 2026-10-06, `heat-haze-3`: the pass, the clear, the depth's writer, and the patch vertex program read
+
+Same program (`/omega/eboot-ps4-omega-eu.bin`, base eboot) plus the patch eboot
+(`data/extracted/ps4/omega-eu-patch/uroot/eboot.bin`, file offsets), static evidence
+only, so every score stays at or under 84. All three items the previous section left
+open are read, and so is the patch vertex program.
+
+### Closed: pass 9 is the distortion target's pass, and it clears to `(0,0,0,0)`
+
+| Item | Address | What |
+| --- | --- | --- |
+| `Renderer_OpenDrawSegment` | `FUN_016304d0` (`0x016304d0`) | Appends a 0x60-byte draw-list segment and stores its `param_1` (the pass number) at `segment+0x30de8` (`0x01630580` onward). This is the call `FUN_01711310` makes with `9` for blend class 8. |
+| `Renderer_RunPassSegments` | `FUN_01629ce0` (`0x01629ce0`) | The frame's pass dispatcher. `switch((int)*(segment + 0x30de8))` (`FUN_01629ce0` line 963 of the decompile): case 5/6 = the post pass (target `DAT_01fc6bd8`), **8** `FUN_0161c960`, **9** `FUN_0161d040`, **10** `FUN_0161cf50`. The same function ends with `if ((DAT_0202f011 & 1) == 0) FUN_0161d040(...)`: **pass 9 runs even when no particle opened it**, so the target is cleared every frame whether or not a haze emitter exists. |
+| `Renderer_BeginDistortionPass` | `FUN_0161d040` (`0x0161d040`) | `FUN_01788a40(param_1, &DAT_01fc6c68, 0, &DAT_01fc6ac8, 0, 0)`: render-target object `0x01fc6c68`, **no depth** (third argument 0), **one colour attachment: the surface descriptor `DAT_01fc6ac8`, the copy of `DAT_01fc6b08`'s descriptor, i.e. the `R8G8_SNORM` `DistortionTexture`**. Then `FUN_01793990(0, 0, 0, 0, pass, attachment)` for every bound attachment. |
+| `Gnm_ClearSurface` | `FUN_01793990` (`0x01793990`) | `(r,g,b,a, pass, surface)`: a cache flush then `FUN_0122cac0(ctx, surface, &{r,g,b,a})`, which packs the four floats with `FUN_012289a0` into the surface's own format (the same call `FUN_01621650` uses to pack the depth surface's fast-clear colour). A **clear**, with the colour in the first four arguments. |
+| `Renderer_BeginScenePass` | `FUN_0161c960` (`0x0161c960`) | Pass 8, the scene: `FUN_01788a40(pass, &DAT_01fc6b48, 0, colour0, &DAT_01fc61a0, colour2)`, so **`DAT_01fc61a0` (the descriptor of the `R16F` `DAT_01fc61e0`) is the scene pass's colour attachment 1**, written by the scene's own fragment shaders. |
+| `Renderer_BeginPass10` | `FUN_0161cf50` (`0x0161cf50`) | Pass 10: `FUN_01788a40(pass, &DAT_01fc6c20, 0, &DAT_01fc6a08, 0, 0)`, one colour attachment, the `0x3ac706` float surface (`DAT_01fc6a48`, the `LowResAdditive` input of the composite); the same `(0,0,0,0)` clear. |
+| `Renderer_ResizeTargets` | `FUN_01621650` (`0x01621650`) | Creates the targets at `(param_6, param_7)`: the `R16F` depth (`0x204702`), the `R8G8_SNORM` distortion target (`0x22c103`) and both pass objects `0x01fc6c20`/`0x01fc6c68` (their size words `+0x4`/`+0x6` are `param_6`/`param_7`). **Distortion target and depth share one size**, and the scene pass's own size is the other pair `(param_4, param_5)`. |
+
+The distortion target's clear value is therefore `(0,0,0,0)`, and in `R8G8_SNORM`
+that is zero displacement: an untouched pixel does not distort. Confidence **80** (the
+pass number, the dispatcher's switch, the attachment list and the clear call are each
+read; the call that opens pass 9 stores the same field the switch reads).
+
+### Closed: the depth's writer is the scene pass, and its clear is `1000.0`
+
+`FUN_0161c960` clears its attachments from a table on its stack
+(`[RBP-0x60]` = `0x01fc6d60`, `[RBP-0x50]` = the constant at `0x017f92c0`,
+`[RBP-0x40]` = `0x01fc6d70`, `0x0161caa5`..`0x0161cabf`, then four floats per
+bound attachment at `0x0161cae8`..`0x0161cb07`). The constant at `0x017f92c0`
+reads (`read_memory`) `00 00 7a 44 | 00 00 80 3f | 0 | 0` = **`(1000.0, 1.0, 0, 0)`**,
+attachment 1's clear colour, so the `R16F` depth starts every frame at `1000.0`.
+`FUN_01621650` independently packs `0x447a0000` (1000.0) as that surface's fast-clear colour
+(`local_68 = 0x447a0000`, `FUN_012289a0`, written to the descriptor's `+0x2c`/`+0x30`).
+Two reads, one value: **far is 1000.0**, a distance in the same units as the heathaze
+program's clip `w`, which is what its fragment compares it with. Confidence **75**.
+
+**Not read: what the scene's fragment shaders write there.** 13,326 of the 27,657
+distinct `.rcsmaterial` shaders in the base `data00.psarc` export to `tgt=1` (a packed
+half export), and several carry the literal `0x447a0000`; the scratch GCN disassembler
+mis-decodes the middle of them (`.word 0xcc..` opcodes), so no export's source value was
+traced to a `w`, a view `z` or a radial distance. The gate in the heathaze fragment is
+`depth >= w` either way; planar versus radial stays **open** and any implementation that
+uses a linearised depth buffer is **chosen, not measured** for that point.
+
+### Closed: the patch vertex program agrees
+
+The patch's heathaze vertex program is the blob at file offset `0x9d147c` (176 bytes;
+the other two blobs carrying the `0.75` literal, `0x9d177c` and `0x9cfb2c`, multiply the
+colour by the input colour and are the `psys_normal` variants). Instruction by
+instruction: position `exp tgt=12` from `kWorldViewProj`; `v_log_f32 |w|`, `* 0.75`,
+`v_exp_f32`, `v_rcp_f32 mul:2` = **`fade = 2 / |w|^0.75`**; params:
+`param0 = (kColourScale, kColourScale, kColourScale, in.alpha)` where `kColourScale` is
+`s_buffer_load_dword [cb + 0x10]`, `param1 = uv`, `param2 = (clip.x, clip.y, fade, w)`.
+The only difference from the base program is that the patch exports **clip `xy` and the
+fragment forms `fb_uv`** (`attr2.xy * rcp(attr2.w) * (0.5, -0.5) + 0.5`); the base
+program forms it in the vertex stage. The patch fragment (`0x9d116c`, re-read in full
+this lane) matches the law above exactly: gate `v_cmp_nlt_f32 depth, w`, `k = colour.a *
+fade * t.a`, `out = colour.rgb * k * (t.rgb - 0.5)`, alpha 1.0, `(0,0,0,0)` where the gate
+fails. Confidence **80**.
+
+### Still not read
+
+- What the scene shaders store in the `R16F` (planar `w` or radial distance): see above.
+- The pixel size of the distortion target and depth (`FUN_01621650`'s `param_6`/`param_7`;
+  `FUN_016134d0` creates the depth at a literal `0x3c0` by `0x21c` first). The composite
+  samples both with a normalised coordinate, so the law does not depend on it.
+- Nothing in the three items above needed a live run: there is no PS4 emulator in the
+  toolchain, so no score exceeds 84.
+
+Cross-title: HD and 2048 unchanged (no `psys_normal_heathaze`, no `DistortionTexture`; see
+the first section).
+
+### What was built from it (`heat-haze-3`)
+
+Everything the drawn effect needs is read at or above 70 (strength 85, target
+format 75, blend 80, clear 80, pass and attachment 80, vertex and fragment
+arithmetic 80, depth units 75), so blend class 8 is drawn on Omega. The pass is
+title-agnostic; only the composite that consumes it is Omega's.
+
+| Piece | Where | Law it carries |
+| --- | --- | --- |
+| Strength | `oag_pob::Emitter::distort_strength` (`+0xc84`, class 8 only) | `kColourScale`, the file's own float; read, never a constant. |
+| Quads | `oag_fx::psys::distort` | Vertex colour `(k, k, k, alpha)`, **palette unused**; an emitter with no sprite on the sheet draws nothing (the program displaces by the sprite). |
+| Pass | `oag_fx::psys::Pipeline::encode_distort`, `distort.wesl` | One colour attachment, no depth of its own, cleared `(0,0,0,0)`, additive `(One, Add, One)`, `out = colour.rg * (colour.a * 2/|w|^0.75 * sprite.a) * (sprite.rg - 0.5)`. |
+| Gate | the depth test | `depth_compare: LessEqual` against the scene's own depth attachment, read-only: the executable's `depth >= w`. |
+| Composite | `oag_post::omega_tonemap`, `omega_tonemap.wesl` | The scene is sampled at `uv + 0.0100021 * (16/9 * d.x, d.y)`; a frame with no class 8 particle alive samples a zero texture and is byte-identical to before. |
+
+**Chosen, not measured, and said at the code:** the target is `Rg16Float`
+(`oag_gpu::formats::DISTORTION_FORMAT`), because WebGPU cannot render to
+`rg8snorm`, with the composite clamping its read to the `[-1, 1]` an SNORM write
+leaves; the depth gate uses the scene's 32-bit depth buffer rather than the
+executable's `R16F`, planar like `w`, where the scene shaders' own `R16F` value
+(planar or radial) is unread; the horizontal factor is the executable's
+constant 16/9, not the window's aspect; the tone curve is per pixel, so resampling the scene before it equals resampling the curved frame (the original's composite also resamples a LowRes layer and the bloom, which this renderer's Omega chain does not draw); the
+luminance ladder reads the undistorted scene.
+
+**Checked before drawing: the displacement sprite is read raw, and 128 means zero.**
+`shockdistort`'s sprite is `Data/particles/Tex/heat_distort_sphereout2_N.gnf` (base
+`data00.psarc` only; 512 by 512), GNF channel type **Unorm**, not sRGB, so the
+original's sampler returns the bytes as they are; its alpha-weighted median is
+**r 128, g 129** and its corner texel `(15, 17, 1, 1)`, i.e. `rg - 0.5` averages to zero
+as a ring should. `crates/fx/examples/distort_sprite.rs` prints it; the same holds for
+the heat-haze sprites it finds. The sheet's raw `Rgba8Unorm` read is therefore right.
+
+**Census: every Omega circuit gets the composite.** `crates/fx/examples/omega_tonemap_census.rs`
+over both package sets (`omega-eu`, `omega-eu-patch`; `environments` and `environments2048`):
+**80 circuit `.envsettings` files, all 80 author a complete `Tonemap` block, 0 do not.** The
+distortion's only consumer, the tone-map chain, exists for all of them, so no race drops the
+effect silently.
+
+**Pinned on a real device** (`crates/fx/tests/distort_pass.rs`, reading the target back):
+one quad against a known sprite texel gives `strength * alpha * 2/|w|^0.75 * sprite.a *
+(sprite.rg - 0.5)` within half-float tolerance, nothing outside the quad (the zero clear),
+the sum of two overlapping quads, and zero where the scene's depth is nearer; each term was
+checked by breaking it in the shader and watching the test fail.
+
+Two further things are chosen, not measured: the composite's **linear filter** on the offset
+texture (the original's sampler is unread), and the offset target's **size**, the scene's
+where the executable's shares the `R16F`'s `(param_6, param_7)` of `FUN_01621650`, which
+`FUN_016134d0` creates at 960 by 540 (likely half resolution at 1080p).
+
+Judged (`data/scratch/heat-haze-3/shots/`, Omega Tech De Ra, rocket fired at
+the wall ahead, 1440x816, `on<tick>.png` and `off<tick>.png` side by side in
+`sheetA.png` and `sheetB.png`, ticks 500, 530, 560, 602, 650, 700): the frames
+with the distortion bend the walls and the hull near the blast by up to about
+25 pixels, over the whole blast's life, and are otherwise the same picture; no
+artefact, no black, MSAA 4x draws the same (`msaa500.png`). No frame of the
+original exists to compare against (no PS4 emulator).
+
+- **Cross-title: not ported, checked.** No other title's `.pob` carries class 8,
+  and 2048's own composite is a different program; the pass is the same shape
+  Omega's heat-haze set will need.

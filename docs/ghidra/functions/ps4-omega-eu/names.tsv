@@ -107,3 +107,10 @@
 0x01711af0	function	Particle_AcquireRenderState	80	heat-haze.md
 0x01710ec0	function	Particle_BuildBlendVariants	75	heat-haze.md
 0x01714000	function	Particle_PushQuadBatch	70	heat-haze.md
+0x016304d0	function	Renderer_OpenDrawSegment	75	heat-haze.md
+0x01629ce0	function	Renderer_RunPassSegments	75	heat-haze.md
+0x0161c960	function	Renderer_BeginScenePass	80	heat-haze.md
+0x0161d040	function	Renderer_BeginDistortionPass	80	heat-haze.md
+0x0161cf50	function	Renderer_BeginPass10	70	heat-haze.md
+0x01793990	function	Gnm_ClearSurface	75	heat-haze.md
+0x01621650	function	Renderer_ResizeTargets	75	heat-haze.md

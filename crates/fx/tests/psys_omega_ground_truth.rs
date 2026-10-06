@@ -16,7 +16,9 @@
 //! (blend class 4) and `WO_BARRIER_COLLISION` (render mode 3), in each directory.
 //! The one thing Omega adds, blend class 8 (the heat-haze and shock-distortion
 //! emitters its `psys_normal_heathaze` shader draws), is read as
-//! [`Blend::Distort`]: simulated and named, not drawn.
+//! [`Blend::Distort`] and drawn into the offset target the composite reads
+//! (`psys/distort.rs`, `heat-haze.md`): the strength is the emitter's own
+//! `+0xc84` float.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -141,7 +143,8 @@ fn every_emitter_names_a_gnf_that_ships_and_decodes() {
 }
 
 /// The five explosions the player sees parse, their `shockdistort` emitter is
-/// the one that draws nothing, and every other emitter keeps a drawn blend.
+/// the one that draws nothing **until its sprite reads** (`Effect::parse` takes
+/// none), and every other emitter keeps a drawn blend.
 #[test]
 #[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
 fn the_explosions_play_with_only_their_distortion_emitter_undrawn() {
@@ -206,5 +209,41 @@ fn the_explosions_sprites_all_fit_the_sheet() {
         let placed = library.get(name).expect("inserted");
         let unplaced: Vec<&str> = placed.unplaced_sprites().collect();
         assert!(unplaced.is_empty(), "{name}: {unplaced:?} did not fit");
+    }
+}
+
+/// The strength each `shockdistort` emitter authors at `+0xc84`, read off both
+/// archives: the base's `10.0` on every explosion and the patch's retune to `2.0`,
+/// with the missile's `1.0` - `heat-haze.md`, "`kColourScale` is authored per
+/// emitter". Dropping the field, or reading another word, fails this.
+#[test]
+#[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
+fn the_distortion_strength_is_the_emitters_own_float() {
+    for (rel, expect) in [
+        (
+            ARCHIVES[0],
+            [("WO_ROCKET_EXPLO", 10.0), ("WO_MISSILE_EXPLO", 10.0)],
+        ),
+        (
+            ARCHIVES[1],
+            [("WO_ROCKET_EXPLO", 2.0), ("WO_MISSILE_EXPLO", 1.0)],
+        ),
+    ] {
+        let Some(mut archive) = open(rel) else {
+            return;
+        };
+        for (name, strength) in expect {
+            let blob = archive
+                .read_path(&format!("Data/particles/{name}.pob"))
+                .expect("the effect ships");
+            let effect = Effect::parse(&blob, ColourScale::Full).expect("it parses");
+            let distort: Vec<f32> = effect
+                .emitters
+                .iter()
+                .filter(|spec| spec.blend == Blend::Distort)
+                .map(|spec| spec.distort_strength)
+                .collect();
+            assert_eq!(distort, [strength], "{rel}: {name}");
+        }
     }
 }

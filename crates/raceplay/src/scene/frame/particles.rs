@@ -31,7 +31,49 @@ impl super::super::Scene {
         // The effects' own sprites - a no-op after the first frame of a race.
         pipeline.sync_sheet(queue, race.view.effects.sheet());
         pipeline.upload(queue, vp, additive, alpha);
+        let mut distort = Vec::new();
+        race.extend_distort_vertices(&mut distort, right, up);
+        pipeline.upload_distort(queue, &distort);
         let flash = race.view.screen_flash.as_ref().and_then(|f| f.colour());
         pipeline.upload_flash(queue, flash);
+    }
+}
+
+impl super::super::Scene {
+    /// Omega's tone map and composite over the frame the race pass just
+    /// drew, with the offsets blend class 8 wrote this frame.
+    ///
+    /// The offset pass runs here, after the scene pass has closed, because it
+    /// reads that pass's depth attachment: the executable's pass 9 follows its
+    /// scene pass the same way. A frame with no class 8 particle alive draws
+    /// no pass and the composite samples a zero texture.
+    pub(super) fn run_omega(
+        &self,
+        omega: &oag_post::omega_tonemap::Chain,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let depth = self.depth.size();
+        let mut sparks = self.sparks.borrow_mut();
+        let offsets = sparks.encode_distort(
+            device,
+            encoder,
+            &self.attachment_views.depth,
+            (depth.width, depth.height),
+            viewport,
+        );
+        let rect = (viewport.2 as u32, viewport.3 as u32);
+        omega.run(
+            device,
+            queue,
+            encoder,
+            view,
+            (viewport.0, viewport.1),
+            rect,
+            offsets,
+        );
     }
 }

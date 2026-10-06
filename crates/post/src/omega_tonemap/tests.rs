@@ -198,7 +198,15 @@ fn the_chain_draws_the_law_on_a_real_device() {
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    chain.run(&queue, &mut encoder, &out_view, (0.0, 0.0), size);
+    chain.run(
+        &device,
+        &queue,
+        &mut encoder,
+        &out_view,
+        (0.0, 0.0),
+        size,
+        None,
+    );
     let pixel = read_pixel(&device, &queue, encoder, &out, (4, 4));
 
     let luma: f32 = colour.iter().zip(law::LUMA).map(|(c, w)| c * w).sum();
@@ -218,5 +226,108 @@ fn the_chain_draws_the_law_on_a_real_device() {
         (i32::from(pixel[0]) - plain).abs() > 10,
         "red {} is the untoned encode {plain}",
         pixel[0]
+    );
+}
+
+/// A half-float scene, `(0.6, 0, 0)` on its left half and `(0, 0.6, 0)` on its
+/// right, run through the composite twice on a real device: once with no
+/// offset texture and once with one holding `(1, 0)` everywhere.
+///
+/// The offset moves every sample by `DISTORT_SCALE * DISTORT_ASPECT` of the
+/// width to the right, 1.14 texels at 64 wide, so the texel just left of the
+/// seam reads the right half's colour - and does not without the offset.
+/// **Skips when there is no adapter.**
+#[test]
+fn the_composite_moves_the_scene_sample_by_the_offset_texture() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let size = (64, 8);
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let chain = Chain::new(&device, format, size, params()).expect("the chain builds");
+    let extent = wgpu::Extent3d {
+        width: size.0,
+        height: size.1,
+        depth_or_array_layers: 1,
+    };
+    let upload = |texture: &wgpu::Texture, texel: &dyn Fn(u32) -> Vec<u8>, bytes: u32| {
+        let rows: Vec<u8> = (0..size.1)
+            .flat_map(|_| (0..size.0).flat_map(texel))
+            .collect();
+        queue.write_texture(
+            texture.as_image_copy(),
+            &rows,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.0 * bytes),
+                rows_per_image: None,
+            },
+            extent,
+        );
+    };
+    // `Rgba16Float` texels of 0.6 and 0: 0x38cd and 0.
+    let half = |bits: u16| bits.to_le_bytes();
+    let scene = |x: u32| {
+        let (r, g) = if x < size.0 / 2 {
+            (0x38cd, 0)
+        } else {
+            (0, 0x38cd)
+        };
+        [half(r), half(g), half(0), half(0x3c00)].concat()
+    };
+    let scene_texture = chain.scene_texture();
+    upload(scene_texture, &scene, 8);
+    // `Rg16Float` texels of (1, 0).
+    let offsets = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("offsets"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: oag_gpu::formats::DISTORTION_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    upload(&offsets, &|_| [half(0x3c00), half(0)].concat(), 4);
+    let offsets_view = offsets.create_view(&Default::default());
+
+    let pixel_left_of_seam = |distortion: Option<&wgpu::TextureView>| {
+        let out = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("out"),
+            size: extent,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let out_view = out.create_view(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
+        chain.run(
+            &device,
+            &queue,
+            &mut encoder,
+            &out_view,
+            (0.0, 0.0),
+            size,
+            distortion,
+        );
+        read_pixel(&device, &queue, encoder, &out, (size.0 / 2 - 1, 4))
+    };
+    let plain = pixel_left_of_seam(None);
+    assert!(
+        plain[0] > plain[1],
+        "without an offset the seam's left texel is the left half's red: {plain:?}"
+    );
+    let moved = pixel_left_of_seam(Some(&offsets_view));
+    assert!(
+        moved[1] > moved[0],
+        "with (1, 0) the seam's left texel reads the right half's green: {moved:?}"
     );
 }

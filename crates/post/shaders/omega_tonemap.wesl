@@ -27,6 +27,10 @@ struct Params {
     brightness: f32,
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
+    // `0.0100021 * (16/9, 1)`: the composite's offset per unit of the
+    // distortion texture, heat-haze.md.
+    distortion: vec2<f32>,
+    _pad: vec2<f32>,
 }
 
 struct State {
@@ -134,13 +138,23 @@ fn cs_coefficients() {
 }
 
 @group(1) @binding(0) var<storage, read> curve: State;
+@group(2) @binding(0) var distortion_tex: texture_2d<f32>;
 
 // The curve resolve, per channel, then the display encode every linear
 // target in this crate ends on (ADR-0026's stand-in): the curve's [0, 1] is
 // taken as linear light, which is what its HDR twin's 0..40 range implies.
 @fragment
 fn fs_apply(in: VertexOutput) -> @location(0) vec4<f32> {
-    let c = textureSampleLevel(source_tex, source_sampler, drawn(in.uv), 0.0).rgb;
+    // wo_composite*: `uv' = uv + 0.0100021 * (Aspect * d.x, d.y)` with `d` the
+    // distortion texture's `rg`, and the scene sampled at `uv'`. The original
+    // texture is SNORM, so a read is already inside [-1, 1]; the half-float
+    // stand-in is clamped to match.
+    let d = clamp(
+        textureSampleLevel(distortion_tex, source_sampler, drawn(in.uv), 0.0).rg,
+        vec2<f32>(-1.0),
+        vec2<f32>(1.0),
+    );
+    let c = textureSampleLevel(source_tex, source_sampler, drawn(in.uv + params.distortion * d), 0.0).rgb;
     let w = curve.window;
     let x = clamp(c * w.z, vec3<f32>(w.x), vec3<f32>(w.y));
     let k = curve.abcd;

@@ -939,8 +939,7 @@ impl Scene {
         } else if let Some(omega) = &self.omega {
             // Omega's tone map: the executable's exposure and curve over the
             // linear scene, encoded into `view`. See `Self::omega`.
-            let rect = (viewport.2 as u32, viewport.3 as u32);
-            omega.run(queue, encoder, view, (viewport.0, viewport.1), rect);
+            self.run_omega(omega, device, queue, encoder, view, viewport);
         } else if self.bloom.is_some() || self.ps2_bloom.is_some() {
             // The recovered post-process, reading the alpha channel the scene
             // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and

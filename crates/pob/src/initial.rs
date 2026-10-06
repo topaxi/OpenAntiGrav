@@ -158,6 +158,7 @@ fn parse_one(record: &[u8], order: ByteOrder, offset: usize) -> Option<Emitter> 
         rotation_speed,
         stretch,
         aspect: 1.0,
+        distort_strength: 0.0,
         frame_rate: constant(),
         emission_scale: constant(),
         playback_rate: 1.0,
