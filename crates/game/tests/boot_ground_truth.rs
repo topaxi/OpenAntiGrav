@@ -209,8 +209,11 @@ fn the_disc_offers_five_languages_each_naming_itself() {
             ("PI008", "French", "Français"),
             ("PI009", "German", "Deutsch"),
             ("PI011", "Italian", "Italiano"),
+            // The project's own language, after the disc's, standing on the
+            // disc's English plugin (2026-10-06).
+            ("PI012", "PortugueseBR", "Português (Brasil)"),
         ],
-        "the USA disc's language plugins, in its executable's manifest order"
+        "the USA disc's language plugins, in its executable's manifest order, then the project's"
     );
 
     for language in languages {
