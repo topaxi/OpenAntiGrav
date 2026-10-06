@@ -448,35 +448,22 @@ pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
 /// # Derived from [`psmt8_offset`], not from a table
 ///
 /// Both answer where in a **linear `PSMCT32` source image** an indexed texel
-/// lives, because the blob is the source of a blit, not a copy of GS memory.
-/// The formulas share a shape with three geometric differences:
-///
-/// | | `PSMT8` | `PSMT4` |
-/// | --- | --- | --- |
-/// | source rectangle | `(width/2, height/2)` | `(width/2, height/4)` |
-/// | page | 128x64 texels | 128x128 texels |
-/// | block | 16x16 texels | 32x16 texels |
-///
-/// A `PSMCT32` page is 64x32 and its block 8x8, so `PSMT8`'s page and block are
-/// exactly twice the source's in both axes: its blocks land in raster order and
-/// [`psmt8_offset`] needs no page term. `PSMT4`'s page is 2x wider and 4x taller
-/// than the source's while its block is 4x wider and 2x taller, so within a page
-/// the block at block-column `bx`, block-row `by` sits at source block-column
-/// `by`, source block-row `bx`. That transposition (`blockTable4` is the
-/// transpose of `blockTable32`) is the only new fact here.
-///
-/// Inside a block: a 32x16 `PSMT4` block is 512 nibbles over an 8x8 patch of
-/// 32-bit source pixels, so `x`'s low three bits pick the source column, its
-/// next two the byte within that word, `y`'s bit 1 the nibble, and `y`'s
-/// remaining bits the source row through [`psmt8_offset`]'s two-of-four row swap.
+/// lives (the blob is the source of a blit, not GS memory). `PSMT8`: source
+/// `(width/2, height/2)`, page 128x64, block 16x16. `PSMT4`: source `(width/2,
+/// height/4)`, page 128x128, block 32x16. `PSMT8`'s blocks land in raster order,
+/// so it needs no page term; within a `PSMT4` page the block at block-column `bx`,
+/// block-row `by` sits at source block-column `by`, source block-row `bx` (the
+/// transposition is the only new fact; `blockTable4` is the transpose of
+/// `blockTable32`). Inside a block, `x`'s low three bits pick the source column,
+/// its next two the byte within that word, `y`'s bit 1 the nibble, and `y`'s
+/// remaining bits the source row via [`psmt8_offset`]'s two-of-four row swap.
 ///
 /// # Evidence
 ///
-/// A permutation of `0..width * height` at every shape on the disc, asserted by
-/// the tests; the non-transposed reading is not one and dies on that test alone.
-/// Decoded, the five blobs are the PS2 font atlases and every lit texel of
-/// `pulse_text` lands inside a glyph box its `.fnt` declares. See
-/// `docs/formats/ps2-texture.md`.
+/// A permutation of `0..width * height` at every disc shape (asserted by the
+/// tests; the non-transposed reading fails it). The five blobs are the PS2 font
+/// atlases and every lit texel of `pulse_text` lands inside a glyph box its `.fnt`
+/// declares. See `docs/formats/ps2-texture.md`.
 #[must_use]
 pub fn psmt4_offset(x: usize, y: usize, width: usize) -> (usize, usize) {
     // Pages tile the source in raster order, and a PSMT4 page covers a whole

@@ -11,15 +11,12 @@
 //! BC expands one 4x4 block into sixteen texels. PVRTC does not, and a port that
 //! treats it as a block codec produces a plausible-looking wrong picture:
 //!
-//! - A **word** is 8 bytes and covers 4x4 texels, but stores only *two* colours
-//!   (A and B) plus sixteen 2-bit modulation values.
-//! - Those colours are the *low-frequency* image, one point per word. Every
-//!   output texel bilinearly interpolates the A colours of the **four** words
-//!   around it, likewise B, then blends the two by its own modulation value. A
-//!   word contributes to four texel quadrants.
-//! - Words are stored in **Morton (twiddled) order**, via [`crate::gxt::twiddle`],
-//!   applied **once**, inside this codec - `.gxt` does not twiddle a PVRTC
-//!   payload again.
+//! - A **word** is 8 bytes covering 4x4 texels but stores only *two* colours (A
+//!   and B) plus sixteen 2-bit modulation values.
+//! - Every output texel bilinearly interpolates the A colours of the **four**
+//!   words around it, likewise B, then blends the two by its own modulation.
+//! - Words are stored in **Morton order** ([`crate::gxt::twiddle`]), applied
+//!   **once**, inside this codec.
 //!
 //! # PVRTC-II is not PVRTC-I
 //!
@@ -50,21 +47,16 @@
 //! **The 92 is the cross-title oracle's, not the reference's.** Checked here:
 //!
 //! - **Wipeout HD decodes the same art, and this agrees with it.** 2048's DLC
-//!   re-ships HD/Fury's circuits and roster, so 2,284 textures exist twice: a
-//!   `.gtf` in a BC format ([`crate::gtf`]) and a `PVRTII4BPP` `.gxt`. Median
-//!   mean-absolute difference between the two decodes is **3.83** of 255. Against
-//!   the HD texture flipped vertically it is 10.01 (the Vita's rows are
-//!   top-down, measured); against the same payload in **raster** word order,
-//!   34.60; against a different same-size texture, 59.74. Two lossy codecs on
-//!   one source cannot agree better than the first number, and a wrong decode
-//!   cannot agree that well. See `crates/texture/tests/gxt_ground_truth.rs`.
-//! - **The word size closes on the corpus.** All 10,204 `PVRTII4BPP` textures
-//!   across the three EU packages have a declared texel length equal to their mip
-//!   chain at 8 bytes per word, floored at [`crate::gxt::MIN_LEVEL_LEN`].
-//! - **A font atlas comes out legible.** `RussianHud.gxt` renders the full Latin
-//!   and Cyrillic alphabets, crisp and upright, over a 1024x1024 twiddled
-//!   surface. A smoothness metric barely separates wrong readings (an untwiddled
-//!   control is only 1.4x rougher, the bilinear upscale smoothing it too).
+//!   re-ships HD/Fury's circuits and roster, so 2,284 textures exist as both a BC
+//!   `.gtf` ([`crate::gtf`]) and a `PVRTII4BPP` `.gxt`. Median mean-absolute
+//!   difference is **3.83** of 255, against 10.01 flipped, 34.60 in raster word
+//!   order and 59.74 for a different texture (`docs/formats/gxt.md`,
+//!   `crates/texture/tests/gxt_ground_truth.rs`).
+//! - **The word size closes on the corpus**: all 10,204 `PVRTII4BPP` textures in
+//!   the three EU packages match their mip chain at 8 bytes per word, floored at
+//!   [`crate::gxt::MIN_LEVEL_LEN`].
+//! - **A font atlas comes out legible**: `RussianHud.gxt` renders the full Latin
+//!   and Cyrillic alphabets crisp and upright.
 //! - **Synthetic words decode to the colours they name** (this module's tests).
 //!
 //! **What holds the 92 back**: the local-palette path (`+30`) needs the
@@ -72,8 +64,8 @@
 //! base package reaches it** (0 of 1,082,941,440). It is implemented from the
 //! reference but unexercised, and the reference's palette index is transposed
 //! relative to how the table reads - see [`palette`]. The hard-transition path
-//! *is* exercised: 4,802,259 of 67,683,840 words (7.1%) set bit 15, so a
-//! PVRTC-I decoder would be wrong on 7% of this corpus's words.
+//! *is* exercised (7.1% of words set bit 15), so a PVRTC-I decoder would be wrong
+//! on 7% of this corpus's words.
 
 use crate::gxt::twiddle;
 

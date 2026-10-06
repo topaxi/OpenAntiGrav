@@ -40,56 +40,44 @@
 //! # Where this layout comes from
 //!
 //! Three independent open-source projects agree on it, checked against this
-//! project's own extracted `.gnf` files (see [`tests`]):
+//! project's extracted `.gnf` files (see [`tests`]):
 //!
-//! 1. [GFD-Studio](https://github.com/tge-was-taken/GFD-Studio)'s
-//!    `GFDLibrary.Textures.GNF.GNFTexture` gives the byte offsets and bitfield
-//!    widths above, verified against
-//!    `Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf` (a
-//!    real `omega-ps4-eu` entry, `docs/formats/psarc.md`'s "Block data location"
-//!    section): `word1` decodes to `SurfaceFormat::BC7`/`ChannelType::Srgb`,
-//!    `word2` to 128x64, `word3` to a standard RGBA channel order (4,5,6,7) and
-//!    tile mode 13, `TileMode::Thin_1DThin` (GFD-Studio's `TileMode.cs`:
-//!    13 is `Thin_1DThin`, micro-tiled only; **14** is `Thin_2DThin`,
-//!    macro-tiled).
+//! 1. [GFD-Studio](https://github.com/tge-was-taken/GFD-Studio)'s `GNFTexture`
+//!    gives the offsets and bitfield widths above, verified on
+//!    `Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf`
+//!    (`omega-ps4-eu`): `word1` is `SurfaceFormat::BC7`/`ChannelType::Srgb`,
+//!    `word2` 128x64, `word3` an RGBA channel order (4,5,6,7) and tile mode 13
+//!    (`Thin_1DThin`, micro-tiled; **14** is `Thin_2DThin`, macro-tiled).
 //! 2. The [PlayStation GNF Image page](https://rewiki.miraheze.org/wiki/PlayStation_GNF_Image)
-//!    gives the same header/contents split and the same fixed values (version
-//!    2, alignment 8).
+//!    gives the same header/contents split and fixed values (version 2,
+//!    alignment 8).
 //! 3. [shadPS4](https://github.com/shadps4-emu/shadPS4)'s `AmdGpu::Image`
-//!    (`src/video_core/amdgpu/resource.h`) is the same 32-byte, 8-dword
-//!    descriptor one layer down, the raw GCN "T#" resource AMD's public "Sea
-//!    Islands Series Instruction Set Architecture" manual documents (Table
-//!    8.13). Its `DataFormat`/`NumberFormat` enums share GFD-Studio's numeric
-//!    values (`BC7 = 0x29`, `Srgb = 9` on both), so the two readings are one
-//!    fact, not two guesses.
+//!    (`src/video_core/amdgpu/resource.h`) is the same descriptor one layer down,
+//!    the GCN "T#" of AMD's public "Sea Islands" ISA manual (Table 8.13); its
+//!    `DataFormat`/`NumberFormat` values match GFD-Studio's (`BC7 = 0x29`,
+//!    `Srgb = 9`).
 //!
 //! # What this does not do
 //!
 //! **[`Texture::decode`] untiles a linear surface unconditionally, and a
 //! micro-tiled (`Thin_1DThin`) BC7 surface only when its base level carries no
-//! corrupt block.** AMD's `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT
-//! `addrlib`, `egbaddrlib.cpp`) is a row-major-tiles formula with no banks,
-//! pipes or row-size unknowns. Checked against oracle-paired textures
-//! (`crates/texture/src/gnf/micro_tile_tests.rs`, `#[ignore]`d): a
-//! single-micro-tile 32x32 image decodes **exactly** (MAD 0.00), and on larger
-//! images the first several tiles decode near-perfectly before a region that
-//! looked like periodic corruption. **That region is explained**: a byte-level
-//! scan of the same ship-livery oracle pair
-//! (`crates/texture/examples/gnf_tile_row_byte_check.rs`) finds it dense with
-//! BC7 blocks whose byte 0 carries no valid mode bit, which no real encoder
-//! produces. It is the PSARC-level missing/garbage-content population
-//! `docs/formats/psarc.md`'s "Block data location" documents family-wide, not a
-//! wrong tile order. See `docs/formats/gnf.md`'s "Tiling" section.
+//! corrupt block.** AMD's `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa `addrlib`,
+//! `egbaddrlib.cpp`) has no banks, pipes or row-size unknowns. Against
+//! oracle-paired textures (`crates/texture/src/gnf/micro_tile_tests.rs`,
+//! `#[ignore]`d) a single-tile 32x32 image decodes **exactly** (MAD 0.00), and
+//! larger ones decode near-perfectly until a region of invalid BC7 blocks
+//! (byte 0 with no valid mode bit; no real encoder emits one,
+//! `crates/texture/examples/gnf_tile_row_byte_check.rs`). That is the
+//! PSARC-level missing/garbage-content population of `docs/formats/psarc.md`'s
+//! "Block data location", not a wrong tile order; see `docs/formats/gnf.md`'s
+//! "Tiling".
 //!
-//! So [`Texture::decode`] scans the base level's block grid for that invalid-mode
-//! signature first and refuses the whole surface with [`Error::CorruptBlocks`],
-//! rather than a picture with silent garbage patches. A census of the front
+//! So [`Texture::decode`] scans the base level's block grid for that signature and
+//! refuses the whole surface with [`Error::CorruptBlocks`]. A census of the front
 //! end's sprite sheet (`crates/texture/examples/gnf_frontend_census.rs`) finds
-//! many single-mip images clean at 0% and others (mostly multi-mip, where a
-//! per-level tile-alignment pad is expected past the base level) well into
-//! double digits, so the guard does title-wide work. `SurfaceFormat::Bc1`/`Bc3`
-//! decode only through the linear path; no sampled `.gnf` ships either under
-//! `TileMode(13)`.
+//! many single-mip images clean and others (mostly multi-mip, with per-level tile
+//! padding) well into double digits. `SurfaceFormat::Bc1`/`Bc3` decode only
+//! through the linear path; no sampled `.gnf` ships either under `TileMode(13)`.
 
 use std::fmt;
 
@@ -260,9 +248,9 @@ impl ChannelType {
 }
 
 /// How pixels are ordered in GPU memory: GFD-Studio's `TileMode`, an index into
-/// the PS4 SDK's fixed 32-entry table (pipe config, micro/macro tile mode, bank
-/// swizzle). This keeps the raw index and distinguishes only the two untiled
-/// entries, since the rest need the whole table.
+/// the PS4 SDK's 32-entry table (pipe config, micro/macro tile mode, bank swizzle).
+/// This keeps the raw index and names only the two linear entries and
+/// `Thin_1DThin`, since the rest need the whole table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TileMode(pub u8);
 

@@ -378,24 +378,16 @@ impl Texture {
 /// # The block grid is tiled (measured)
 ///
 /// A raster read of `Data\XML\2048_hud\Texture\missile_reticule.gxt` (256x256,
-/// one `UBC2` level) decodes to noise with one clean horizontal band, the
-/// signature of a swizzle agreeing with raster along one axis. Morton order
-/// over the *block* coordinates (`bx` in the odd bit positions, `by` in the
-/// even, via [`twiddle`]) decodes to a clean lock-on reticle atlas. The same
-/// even/odd interleave is what `ClassiCube`'s Vita port (`TwiddleCalcFactors`)
-/// writes for `sceGxmTextureInitSwizzled`, so this is Sony's hardware tiling.
+/// one `UBC2` level) is noise with one clean band; Morton order over the *block*
+/// coordinates (`bx` odd bits, `by` even, via [`twiddle`]) is a clean reticle
+/// atlas, and matches `ClassiCube`'s Vita `TwiddleCalcFactors`. No linear bit
+/// exists to read (`+0x10`, `type`, was 0 on every `2048_hud` texture).
 ///
-/// Unlike `.gtf`, the descriptor carries no linear bit this module reads
-/// (`+0x10`, `type`, was 0 on every `2048_hud` texture), so the layout was
-/// settled by decoding both ways and looking.
-///
-/// **Scope**: measured on this one square texture. `blocks` applies
-/// [`twiddle`]'s non-square algorithm to every BC-family texture, including
-/// `hud_2048.gxt`'s 1024x512 (sprite art, no single recognisable shape).
-///
-/// `UBC1` ([`bcn::dxt1`]) and `UBC3` ([`bcn::dxt45`]) reuse this walk: the
-/// twiddle order is a property of the block *grid*, not of the block's codec.
-/// See `docs/formats/gxt.md`, "`UBC1`/`UBC3` decode too".
+/// **Scope**: measured on this one square texture; `blocks` applies [`twiddle`]'s
+/// non-square algorithm to every BC-family texture, including `hud_2048.gxt`'s
+/// 1024x512. `UBC1` ([`bcn::dxt1`]) and `UBC3` ([`bcn::dxt45`]) reuse the walk, as
+/// the order belongs to the block *grid*: `docs/formats/gxt.md`, "`UBC1`/`UBC3`
+/// decode too".
 fn blocks(
     texels: &[u8],
     width: u32,
@@ -437,22 +429,14 @@ fn blocks(
 ///
 /// # Measured on 2048's Zone/Detonator speed-class art
 ///
-/// `data/Tex/zoneModeTrack{0,7,14}.gxt` (256x256, `0x0c001000`) is the corpus
-/// [docs/formats/gxt.md](../../../docs/formats/gxt.md) left the tiling order
-/// open on. Raster order decodes to horizontal-banded noise; twiddled order
-/// decodes cleanly: every texel's `A`, `R` and `G` bytes agree (all 65,536
-/// texels, zero mismatches) - a binary stencil mask, opaque on exactly 2,048
-/// texels on all three stages - while `B` alone carries a smooth gradient. The
-/// mask's *shape* escalates, not its area: a thin horizontal band, solid at
-/// stage 0 and increasingly dashed by stages 7 and 14 - see
+/// `data/Tex/zoneModeTrack{0,7,14}.gxt` (256x256, `0x0c001000`): raster order is
+/// banded noise, twiddled order decodes cleanly. Every texel's `A`, `R` and `G`
+/// agree (65,536 texels, zero mismatches), a stencil mask opaque on exactly 2,048
+/// texels on all three stages, while `B` carries a smooth gradient. The mask's
+/// *shape* escalates (solid at stage 0, increasingly dashed by 7 and 14): see
 /// `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages` in
-/// `gxt_ground_truth.rs`. This agrees with Wipeout HD's `.gtf` copy of the art
-/// (`docs/formats/gxt.md`, "Track" texture-set section) only in role, as the
-/// varying half of a flat/varying pair.
-///
-/// Channel order: the lockstep `A`/`R`/`G` mask against `B`'s continuous
-/// gradient agrees with the ARGB swizzle already corroborated against the
-/// `vitasdk` headers in [`docs/formats/gxt.md`](../../../docs/formats/gxt.md).
+/// `gxt_ground_truth.rs` and [docs/formats/gxt.md](../../../docs/formats/gxt.md),
+/// which also covers the ARGB channel order and the HD `.gtf` copy of the art.
 fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];

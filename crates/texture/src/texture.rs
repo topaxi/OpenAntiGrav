@@ -21,7 +21,7 @@
 //!
 //! See `docs/formats/psp-texture.md` for the evidence.
 //!
-//! # These are not swizzled
+//! # Most are not swizzled
 //!
 //! The PSP GPU reads swizzled textures and games commonly store them
 //! pre-swizzled, which decodes recognisable but scrambled in 16-byte-wide

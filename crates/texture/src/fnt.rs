@@ -25,13 +25,9 @@
 //! and no caller passes a platform in, as `oag_vex::vex::byte_order` does.
 //!
 //! This is not a word swap: HD's codepoint table reads `00 20 00 21 00 22`,
-//! ascending as big-endian `u16`s, where a swapped little-endian file would give
-//! `00 21 00 20`. Every offset in `pulsehud.fnt` closes on that reading: the
-//! offset table at `0x30 + 166*2 = 0x17c`, the atlas at `0x17c + 166*4 +
-//! 166*18 = 0xfc0`, the last byte at `0xfc0 + 64 + 64 + 2048*1024/2`.
-//!
-//! Two HD atlas traits that are *not* byte order and would each be a silently
-//! wrong picture:
+//! ascending as big-endian `u16`s, and every offset in `pulsehud.fnt` closes on
+//! that reading (`docs/formats/fnt.md`). Two HD atlas traits that are *not* byte
+//! order and would each be a silently wrong picture:
 //!
 //! - **`flags` is 0**, so the texels are linear. The unswizzle keys on the bit,
 //!   not on a console, so it skips itself.
@@ -60,10 +56,9 @@
 //! +0x80  texels
 //! ```
 //!
-//! Reading the palette at `+0x10` and texels at `+0x50`, as a `.mip` header
-//! implies, puts both 48 bytes early: 12 of 16 palette entries come out fully
-//! transparent (the tell) and the texels shift by 96 pixels. At `+0x40` and
-//! `+0x80` the palette is a clean 16-level alpha ramp.
+//! A `.mip` reading (palette `+0x10`, texels `+0x50`) is 48 bytes early: 12 of 16
+//! palette entries come out transparent. At `+0x40`/`+0x80` it is a clean 16-level
+//! alpha ramp.
 //!
 //! # The texels are stored already swizzled
 //!
@@ -80,18 +75,11 @@
 //! As in [`crate::texture`]: the one 4bpp `.mip` on the disc is a smooth hexagon
 //! read low-nibble-first and a combed one read the other way.
 //!
-//! **Byte order does not change it (measured).** The test is each glyph's own
-//! box: the column left of `u0` and the column at `u1` should hold no ink. Over
-//! HD's three Latin faces:
-//!
-//! | font | low nibble first | high nibble first |
-//! | --- | ---: | ---: |
-//! | `helv.fnt` (242 boxes) | **0** spilt rows | 2,808 |
-//! | `pulsehud.fnt` (164 boxes) | **0** spilt rows | 5,490 |
-//! | `small.fnt` (164 boxes) | **0** spilt rows | 1,776 |
-//!
-//! A one-pixel pair swap still reads as a font at a glance, so the boxes are
-//! the test and the picture only a sanity check.
+//! **Byte order does not change it (measured).** Each glyph's box must hold no ink
+//! in the column left of `u0` or at `u1`: HD's three Latin faces spill **0** rows
+//! low-nibble-first against 1,776 to 5,490 the other way (table in
+//! `docs/formats/fnt.md`). A one-pixel pair swap still reads as a font, so the
+//! boxes are the test.
 
 /// Bytes of file header before the codepoint table.
 pub const HEADER_LEN: usize = 0x30;

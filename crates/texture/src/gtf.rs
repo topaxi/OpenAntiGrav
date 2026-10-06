@@ -41,15 +41,9 @@
 //! # `pitch` does not halve down the mip chain
 //!
 //! When `pitch` is non-zero it is one row of the **base** level, and every
-//! further level uses the same pitch. Getting it wrong looks like a corrupt
-//! file. `zone_2/gradienttex_tr01_set01.gtf`: 3x1 `A8R8G8B8`, pitch 12, two
-//! levels, 24 bytes (12 + 12, not 12 + 6).
-//! `amphiseum/textures/dds/air_traffic_test_a_atoc.gtf`: 1028x256 `DXT45`, pitch
-//! 4112, eleven levels, **538,672 bytes = 4,112 x 131**, 131 being the sum of
-//! the chain's block-row counts.
-//!
-//! Those four files also show **a pitch can be declared for a compressed
-//! texture**, where it is bytes of one *block* row (4,112 = 257 blocks of 16).
+//! further level uses the same pitch (`zone_2/gradienttex_tr01_set01.gtf`: 3x1,
+//! pitch 12, two levels, 24 bytes). For a compressed texture it is bytes of one
+//! *block* row (four such files; witness in `docs/formats/gtf.md`).
 //!
 //! # What is on the disc
 //!
@@ -68,36 +62,29 @@
 //!
 //! **All 7,333 decode.**
 //!
-//! The 9 `B8` files are each a ship's `textures/ambient_shadow.gtf`, 128x64.
-//! Read in Morton order each is that team's craft in silhouette; the stored
-//! byte is the shadow's coverage, and the descriptor's own [`Remap`] broadcasts
-//! it to four channels. See
-//! `gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap`.
+//! The 9 `B8` files are each a ship's `textures/ambient_shadow.gtf`, 128x64: the
+//! stored byte is the shadow's coverage and the descriptor's [`Remap`] broadcasts
+//! it to four channels
+//! (`gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap`).
 //!
 //! **The 44 swizzled `A8R8G8B8`/`A8B8G8R8` decode through
-//! [`decode::morton_index`]**, the RSX's Morton-order texel address (no `0x20`
-//! bit, no block compression). A linear read of one is a recognisable picture
-//! in scrambled tiles, the kind of wrong answer that survives review. The
-//! address function is the platform's documented `cellGcm` tiling, not reversed
-//! from this disc - **confidence 88**: an exact match on a 4x4 synthetic
-//! fixture (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`),
-//! and **all 43 judgeable swizzled files** on disc decode smoother than a
-//! deliberately wrong linear misread, measured on both axes because a raster
-//! misread of a tiled surface comes out as row-uniform stripes that a
-//! within-row metric scores as smooth. Numbers: `docs/formats/gtf.md` and
-//! `crates/texture/tests/gtf_ground_truth.rs`. Not corroborated against the
-//! executable: `EBOOT.elf` carries no `swizzle` string and no upload routine
-//! has been located. Block-compressed formats are never swizzled, so the `0x20`
-//! bit is not consulted for them.
+//! [`decode::morton_index`]**, the RSX's Morton-order texel address (a linear
+//! read is a recognisable picture in scrambled tiles). The address function is
+//! the platform's documented `cellGcm` tiling - **confidence 88**: an exact match
+//! on a 4x4 fixture
+//! (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`) and
+//! all 43 judgeable swizzled files decode smoother than a linear misread (both
+//! axes measured; numbers in `docs/formats/gtf.md` and
+//! `crates/texture/tests/gtf_ground_truth.rs`). No upload routine has been located
+//! in `EBOOT.elf` to corroborate. Block-compressed formats are never swizzled, so
+//! `0x20` is not consulted for them.
 //!
 //! # 23 cubemaps, decoded face by face
 //!
-//! `cubemap` is set on 23 files, all a `sky` or an environment probe. Six faces
-//! follow one another, face-major, decoded by [`Texture::face_to_rgba`] and
-//! drawn as a race's sky by `oag_mesh::mesh::sky_cube`. The length invariant
-//! holds on all 23, with **an unexplained 360 bytes** on the 20 that carry a
-//! mip chain, the same whether the faces are 128x128 `DXT1` or 2048x2048
-//! (recorded in [`Texture::chain_len`]).
+//! `cubemap` is set on 23 files (skies and probes). Six faces follow one another,
+//! face-major ([`Texture::face_to_rgba`], drawn by `oag_mesh::mesh::sky_cube`).
+//! The length invariant holds on all 23 with **an unexplained 360 bytes** on the
+//! 20 carrying a mip chain (see [`Texture::chain_len`]).
 //!
 //! See `docs/formats/gtf.md` for the evidence, and `docs/formats/hd-hud.md` for
 //! what needed this.
@@ -178,7 +165,8 @@ pub enum Error {
         /// Length it declares.
         declared: u32,
     },
-    /// A cubemap, whose face layout is parsed but not decoded.
+    /// [`Texture::to_rgba`] was given a cubemap, or [`Texture::face_to_rgba`] a
+    /// texture that is not one.
     Cubemap,
 }
 
@@ -298,14 +286,13 @@ const CHANNEL_SLOT: [usize; 4] = [3, 0, 1, 2];
 ///
 /// # Corroborated by the disc
 ///
-/// Three words appear on the HD disc, and each decomposes into something its
-/// file independently agrees with:
+/// Three words appear on the HD disc, each agreeing with its file:
 ///
 /// | Word | Files | Decomposes to | Agrees with |
 /// | --- | ---: | --- | --- |
-/// | `0xaae4` | 7,317 | every control `Read`, sources `A<-A, R<-R, G<-G, B<-B` | the identity, which is what decoding a texel straight already does |
-/// | `0xa9e4` | 7 | the same, but alpha forced to one | `fealphaluminancetexture.gtf` is **100% grayscale** - all four of every texel's bytes equal - so its RGB is a luminance and its alpha is not stored art |
-/// | `0xa9ff` | 9 | alpha forced to one, and **every** other output reading the *blue* source | these are exactly the disc's 9 [`Format::B8`] files, whose one stored byte **is** the blue channel |
+/// | `0xaae4` | 7,317 | every control `Read`, sources `A<-A, R<-R, G<-G, B<-B` | the identity |
+/// | `0xa9e4` | 7 | the same, alpha forced to one | `fealphaluminancetexture.gtf` is **100% grayscale**, so alpha is not stored art |
+/// | `0xa9ff` | 9 | alpha forced to one, every other output reading *blue* | exactly the disc's 9 [`Format::B8`] files, whose one byte **is** blue |
 ///
 /// The third row is the load-bearing one: `0xff` selects source `3` (blue)
 /// four times, and the format carrying it stores one byte in blue. Format and
@@ -314,9 +301,6 @@ const CHANNEL_SLOT: [usize; 4] = [3, 0, 1, 2];
 /// **Confidence 85.** The layout predicts three distributions, one of them
 /// (`0xa9ff`) cross-checked against an unrelated field. Not corroborated
 /// against the executable. See `docs/formats/gtf.md`.
-///
-/// An earlier constant forced *blue* to one for `0xa9e4` (alpha's control pair
-/// misplaced) and rendered all 7 `A8B8G8R8` files solid blue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Remap {
     /// Which slot of the decoded texel each output reads, in R, G, B, A order.
