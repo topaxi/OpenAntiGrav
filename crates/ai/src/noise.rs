@@ -1,28 +1,21 @@
-//! Smooth, seeded, repeatable noise - the wobble a driver's line is given.
+//! Smooth, seeded, repeatable noise: the wobble a driver's line is given.
 //!
 //! # Why not `sin`
 //!
-//! A sum of sines is the obvious way to make a slow wobble, and it is the one
-//! thing this crate may not do. IEEE-754 requires `sqrt` to be correctly
-//! rounded and does **not** require it of `sin`, so a sine resolves to whatever
-//! the platform's libm does and the simulation stops being bit-identical across
-//! the three operating systems CI runs. See `docs/architecture/determinism.md`,
-//! which says in as many words that if platform libm ever forces the issue the
-//! fix is to bring our own implementation rather than weaken the test.
+//! IEEE-754 requires `sqrt` to be correctly rounded and does **not** require it
+//! of `sin`, so a sine resolves to the platform's libm and the simulation stops
+//! being bit-identical across the three CI operating systems
+//! (`docs/architecture/determinism.md`: bring our own implementation rather
+//! than weaken the test).
 //!
-//! So this is value noise: an integer hash at each whole step, and a smoothstep
-//! between neighbours. Every operation is an integer op or an `f32`
-//! multiply-add, both of which are exactly specified, and there is no state to
-//! carry - `wobble(seed, t)` is a pure function of its arguments, so a replay
-//! that reaches the same tick with the same seed gets the same number without
-//! anything having been stored.
+//! So this is value noise: an integer hash at each whole step and a smoothstep
+//! between neighbours. Every operation is an integer op or an `f32` multiply-add,
+//! both exactly specified, and `wobble(seed, t)` is a pure function of its
+//! arguments, so a replay needs nothing stored.
 
-/// Avalanches an integer, so neighbouring inputs give unrelated outputs.
-///
-/// The 32-bit finaliser from MurmurHash3. Chosen because it is published and
-/// unremarkable: what is wanted here is *a* good bit mixer, and one whose
-/// constants can be checked against a reference is worth more than a clever
-/// one that cannot.
+/// Avalanches an integer so neighbouring inputs give unrelated outputs: the
+/// 32-bit MurmurHash3 finaliser, chosen because it is published, so its
+/// constants can be checked against a reference.
 const fn mix(mut x: u32) -> u32 {
     x ^= x >> 16;
     x = x.wrapping_mul(0x85eb_ca6b);
@@ -33,18 +26,15 @@ const fn mix(mut x: u32) -> u32 {
 
 /// The value at whole step `step` of `seed`'s own sequence, in `-1..1`.
 fn value(seed: u32, step: u32) -> f32 {
-    // 24 bits, scaled by 2^-24 - exact, the way `oag_core::Rng::next_f32` is
-    // exact, and for the same reason: a division could round.
+    // 24 bits scaled by 2^-24: exact, as `oag_core::Rng::next_f32` is; a
+    // division could round.
     let unit = (mix(seed ^ mix(step)) >> 8) as f32 * (1.0 / 16_777_216.0);
     unit * 2.0 - 1.0
 }
 
 /// A smooth signal in `-1..1`, one whole step of `t` per whole step of the
-/// sequence.
-///
-/// Two octaves, the second three times as fast and a third as tall, because one
-/// octave alone is visibly a sine: it turns one way, then the other, evenly.
-/// The second breaks that up without adding anything a craft has to chase.
+/// sequence. Two octaves (the second three times as fast, a third as tall):
+/// one alone is visibly a sine.
 #[must_use]
 pub fn wobble(seed: u32, t: f32) -> f32 {
     octave(seed, t) * 0.75 + octave(seed ^ 0x9e37_79b9, t * 3.0) * 0.25
@@ -52,22 +42,17 @@ pub fn wobble(seed: u32, t: f32) -> f32 {
 
 /// A fresh value in `0.0..1.0` for this seed, this tick and this stream.
 ///
-/// **Independent per tick, where [`wobble`] is smooth by design.** A line wants
-/// a drift and a decision gate wants a roll, and one function cannot be both: a
-/// gate driven off `wobble` would fire in long runs rather than at a rate,
-/// because consecutive ticks are correlated on purpose.
+/// **Independent per tick, where [`wobble`] is smooth by design**: a gate
+/// driven off `wobble` would fire in long runs, not at a rate. `stream` keeps
+/// unrelated decisions apart (ramming and firing are not one coin twice).
 ///
-/// `stream` keeps unrelated decisions apart, so ramming and firing do not turn
-/// out to be the same coin landing twice.
-///
-/// No state, no clock, and **not a draw from the world's generator** - one taken
-/// from that stream would move every later pickup roll and make a driver's
-/// decisions depend on how many pickups had been handed out. The rule
-/// `Personality::from_pilot` follows, for the same reason.
+/// No state, no clock, and **not a draw from the world's generator**, which
+/// would move every later pickup roll and make a driver's decisions depend on
+/// how many pickups had been handed out (`Personality::from_pilot` follows the
+/// same rule).
 #[must_use]
 pub fn roll(seed: u32, phase: u32, stream: u32) -> f32 {
-    // 24 bits, scaled by 2^-24, exactly as `value` and `oag_core::Rng::next_f32`
-    // do it.
+    // 24 bits scaled by 2^-24, as `value` does.
     (mix(seed ^ mix(phase ^ mix(stream))) >> 8) as f32 * (1.0 / 16_777_216.0)
 }
 
@@ -75,15 +60,13 @@ pub fn roll(seed: u32, phase: u32, stream: u32) -> f32 {
 fn octave(seed: u32, t: f32) -> f32 {
     let whole = t.floor();
     let fraction = t - whole;
-    // Wrapping rather than saturating: the argument is a tick count times a
-    // rate, so it only ever grows, and a race that ran long enough to wrap
-    // should carry on wobbling rather than flatten out.
+    // Wrapping, not saturating: the argument only grows, and a race long enough
+    // to wrap should keep wobbling.
     let step = whole as i64 as u32;
     let here = value(seed, step);
     let there = value(seed, step.wrapping_add(1));
-    // Smoothstep, so the signal has no corner where it crosses a whole step. A
-    // corner is a step in the *derivative*, and the derivative is what the
-    // steering loop sees.
+    // Smoothstep: a corner in the signal is a step in the derivative, which is
+    // what the steering loop sees.
     let blend = fraction * fraction * (3.0 - 2.0 * fraction);
     here + (there - here) * blend
 }
@@ -163,11 +146,9 @@ mod tests {
     }
     use super::*;
 
-    /// The published MurmurHash3 finaliser, against values from a separate
-    /// implementation of the same five lines rather than from this one. It is
-    /// the same guard `oag_core::rng`'s reference vector is: it fails loudly if
-    /// the mixer quietly becomes a different mixer, and nothing else here would
-    /// notice.
+    /// The published MurmurHash3 finaliser against values from a separate
+    /// implementation, as `oag_core::rng`'s reference vector is: it fails loudly
+    /// if the mixer quietly changes.
     #[test]
     fn the_mixer_matches_the_published_finaliser() {
         assert_eq!(mix(0), 0);
