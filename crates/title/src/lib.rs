@@ -36,8 +36,8 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
-pub mod endrace;
 pub mod effects;
+pub mod endrace;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
@@ -50,11 +50,11 @@ pub mod touch;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
-pub use endrace::{EndRaceDialect, EndRaceStyle, StyleProvenance};
 pub use effects::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
     Trigger,
 };
+pub use endrace::{EndRaceDialect, EndRaceStyle, StyleProvenance};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
