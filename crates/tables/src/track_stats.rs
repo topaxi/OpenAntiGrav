@@ -111,6 +111,7 @@ pub enum Error {
     Expand(fexml::Error),
     /// A required element is absent.
     MissingElement {
+        /// The element that was looked for.
         element: &'static str,
     },
     /// A required attribute is absent.

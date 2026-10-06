@@ -187,6 +187,7 @@ pub enum Error {
     /// **No longer produced.** A `mode=` outside the nine is [`Mode::Other`];
     /// kept for API stability.
     UnknownMode {
+        /// What was found.
         name: String,
     },
 }

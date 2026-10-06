@@ -124,6 +124,7 @@ pub enum Error {
     Expand(fexml::Error),
     /// A required element is absent.
     MissingElement {
+        /// The element that was looked for.
         element: &'static str,
     },
     /// A required attribute is absent. Never defaulted: see the module docs.
@@ -140,22 +141,27 @@ pub enum Error {
     },
     /// A `<Class name>` that is not one of the four speed classes.
     UnknownClass {
+        /// What was found.
         name: String,
     },
     /// Two `<Class>` blocks claim the same speed class.
     DuplicateClass {
+        /// The class named twice.
         class: SpeedClass,
     },
     /// One of the four speed classes has no `<Class>` block.
     MissingClass {
+        /// The class with no block.
         class: SpeedClass,
     },
     /// Two `<GlobalClass>` blocks claim the same speed class.
     DuplicateGlobalClass {
+        /// The class named twice.
         class: SpeedClass,
     },
     /// One of the four speed classes has no `<GlobalClass>` block.
     MissingGlobalClass {
+        /// The class with no block.
         class: SpeedClass,
     },
 }
