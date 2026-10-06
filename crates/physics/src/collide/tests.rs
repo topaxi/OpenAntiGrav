@@ -1,13 +1,10 @@
-//! What the collision query surface in [`super`] is asserted to do.
-//!
-//! Split out of `collide.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the collision query surface in [`super`] is asserted to do. Split out of `collide.rs` under the
+//! 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 
-/// A single triangle in the `y = height` plane, wound so that its normal is
-/// `+Y` under this crate's assumption. Large enough that a probe near the
-/// origin is well inside it.
+/// A single triangle in the `y = height` plane, wound so its normal is `+Y` under this crate's
+/// assumption, large enough that a probe near the origin is well inside it.
 fn floor(height: f32, surface: Surface, collider: u32) -> TriangleSoup {
     TriangleSoup::new(
         vec![
@@ -39,9 +36,8 @@ fn a_downward_ray_hits_a_floor_below_it() {
     assert_eq!(hit.collider, 0);
 }
 
-/// The winding convention this crate assumes, stated as a test because the
-/// parser that will feed it is being written separately and the handedness of
-/// the track data is not established.
+/// The winding convention this crate assumes, as a test because the parser that will feed it is
+/// written separately and the track data's handedness is not established.
 #[test]
 fn a_counter_clockwise_floor_seen_from_above_reports_an_upward_normal() {
     let soup = floor(0.0, Surface::Floor, 0);

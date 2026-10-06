@@ -1,47 +1,35 @@
 //! The cross-platform determinism gate, over the **actual** simulation.
 //!
-//! `oag-core`'s `tests/determinism.rs` is the older half of this gate and hashes
-//! `oag_core::probe`, a miniature simulation written before there was a real
-//! one. It exercises the shared float pipeline and nothing else: no force law,
-//! no collision query, no branch that depends on where a ship is. This file is
-//! the other half, and it steps [`oag_physics::step`] - the same entry point
-//! `oag_game`'s race loop steps - through [`oag_physics::probe`], which is where
-//! the scenario, the fixture world and the hashing live.
+//! `oag-core`'s `tests/determinism.rs` is the older half: it hashes `oag_core::probe`, a
+//! miniature simulation, so it covers the shared float pipeline and nothing else. This file
+//! steps [`oag_physics::step`], the entry point `oag_game`'s race loop uses, through
+//! [`oag_physics::probe`] (scenario, fixture world and hashing).
 //!
-//! `docs/reverse-engineering/verification-protocol.md` makes this a precondition
-//! rather than a nicety: *before any comparison against the original is
-//! meaningful, our own simulation must be reproducible.* Until this file
-//! existed, the gate that sentence points at did not see the simulation at all.
+//! `docs/reverse-engineering/verification-protocol.md` makes this a precondition: *before any
+//! comparison against the original is meaningful, our own simulation must be reproducible.*
 //!
 //! # When this test fails
 //!
-//! Do not update the constants to make it pass. That converts a real bug into a
-//! silent one. The usual suspects, in order of likelihood:
+//! Do not update the constants to make it pass: that turns a real bug into a silent one. In
+//! order of likelihood:
 //!
 //! 1. A `mul_add` crept into `crates/physics/src`.
 //! 2. A build flag enabled fast-math or FMA contraction.
-//! 3. `glam`'s `scalar-math` feature got dropped, re-enabling SIMD.
-//! 4. A transcendental entered the simulation path. **`crates/physics/src` had
-//!    none outside `#[cfg(test)]` when this gate was written**, and that is a
-//!    property to preserve rather than a coincidence: IEEE-754 requires correct
-//!    rounding for `sqrt` but not for `sin`/`cos`/`exp`, so those are genuinely
-//!    platform-dependent.
-//! 5. A `HashMap`/`HashSet` reached the collision world or the parameter path.
-//!    `CollisionWorld` is ordered storage for exactly this reason - see
-//!    `docs/architecture/determinism.md`.
+//! 3. `glam`'s `scalar-math` feature was dropped, re-enabling SIMD.
+//! 4. A transcendental entered the simulation path (`crates/physics/src` had none outside
+//!    `#[cfg(test)]` when this gate was written; preserve that). IEEE-754 requires correct
+//!    rounding for `sqrt` but not `sin`/`cos`/`exp`, which are platform-dependent.
+//! 5. A `HashMap`/`HashSet` reached the collision world or parameter path (`CollisionWorld` is
+//!    ordered storage for this reason, `docs/architecture/determinism.md`).
 //!
-//! A failure here with `oag-core`'s gate passing narrows the cause to this
-//! crate; a failure in both is the shared foundation. A failure of
-//! [`the_simulation_is_stable_across_repeated_runs`] alone is not a float
-//! problem at all - it is uninitialised or address-dependent state, so look for
-//! a map or a pointer-derived value before looking at arithmetic.
+//! A failure here with `oag-core`'s gate passing narrows the cause to this crate; both failing
+//! is the shared foundation. A failure of [`the_simulation_is_stable_across_repeated_runs`]
+//! alone is not a float problem: it is uninitialised or address-dependent state, so look for a
+//! map or pointer-derived value first.
 //!
-//! Debug and release are both covered, between two jobs rather than inside this
-//! file: CI's `check` job runs the whole workspace's tests in debug and its
-//! `determinism` job runs this one in release.
-//!
-//! Regenerate deliberately, only after establishing that a change of behaviour
-//! is intended - a change to the force law changes these hashes and *should*:
+//! Debug and release are covered between two CI jobs: `check` runs the workspace in debug and
+//! `determinism` runs this in release. Regenerate deliberately, only after establishing the
+//! behaviour change is intended:
 //!
 //! ```sh
 //! cargo run -q -p oag-physics --example physics_determinism_report
@@ -53,270 +41,99 @@ use oag_physics::maglock::MagContact;
 use oag_physics::probe::{self, Script};
 use oag_physics::{CraftState, Environment, ShipState, step};
 
-/// `(ticks, script, final_hash, trajectory_hash)`.
-///
-/// Recorded on x86_64 Linux with the example named in the module docs.
+/// `(ticks, script, final_hash, trajectory_hash)`, recorded on x86_64 Linux with the example
+/// named in the module docs.
 ///
 /// # History
 ///
-/// - **First recorded 2026-07-29**, when this gate was added. Nothing was
-///   regenerated: there was no previous reference for the simulation, because
-///   the simulation was not covered by any determinism gate.
-/// - **Regenerated 2026-07-30.** `hull_sample_points`/`hull_extent`
-///   (`crates/physics/src/wall.rs`) now scale `<Misc>` hull dimensions by
-///   `hover::TARGET_GLOBAL_SCALE` (`0.75`) before building the collision box,
-///   matching `Ship_InitCraft`'s box-collider setup read at instruction level -
-///   see `docs/ghidra/functions/psp-pulse-usa/collision.md`. Only the two
-///   3,600-tick hashes moved; the 600-tick `Corridor` entry is untouched
-///   because that scenario never reaches a wall in 600 ticks, which is the
-///   expected shape of a change scoped to contact geometry.
-/// - **Regenerated 2026-08-12 (second time today), behaviour again, and no
-///   field was added at all** - so unlike every entry below it there is nothing
-///   to isolate: the whole movement is the force law.
-///   `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0`, the cached
-///   forward speed. Above that threshold it casts **one** ray and, if it hits,
-///   manufactures the rear probe's entire hit record from the front one -
-///   translated by the vector between the probes and pushed along `up` by
-///   `dot(normal, forward) * 6.0`. The hit flag is copied with it, so at speed a
-///   front probe in contact guarantees a rear probe in contact. This crate cast
-///   two independent rays at every speed, and so shed half its suspension the
-///   moment one probe overran a lip. See [`hover::FAST_PROBE_SPEED`].
+/// A *hash-input* change (a `ShipState` field added to `probe::hash_state`) lengthens the FNV-1a
+/// stream and moves **every** row, the 600-tick `Corridor` included; a *behaviour* change moves
+/// only the rows that reach it. **Check the cause directly before pasting new constants**: remove
+/// only the new `hash_state` write(s), keep every other change, and the previous constants must
+/// reproduce bit for bit (hash-input), or removing the one suspect call must reproduce the old
+/// row (behaviour). Entries marked *argued* were reasoned from which rows moved and not isolated;
+/// the rest were checked this way.
 ///
-///   Worth what it cost: on the disc's twelve circuits a lone craft went from
-///   seven clean laps to **nine**, `05_Track` from never completing a second lap
-///   to a clean one with zero recoveries, and `09_Track` from six recoveries to
-///   three.
-/// - **Regenerated 2026-08-12, and behaviour *did* change** - the first entry
-///   here that is not a pure hash-input change, so it is isolated differently.
-///   `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne clock at `craft+0x284`
-///   and `Ship_HoverTwoPoint` zeroes the landing clock **while the craft is in
-///   the air**, once that airborne clock has passed `Antigrav::rebound_jump_time`,
-///   a parameter this crate parsed and never read. So a hop shorter than the
-///   parameter never arms `landing_rebound`, where this crate previously reset
-///   the landing clock on every touchdown edge. `ShipState` gains
-///   `time_airborne`, and `time_since_landing`'s initial value goes from an
-///   invented `1.0` to `Ship_InitCraft`'s recovered `10.0`, which is
-///   behaviourally identical because both sit outside the 0.2 s window.
-///
-///   **Isolated by removing only `write_f32(time_airborne)` and keeping the
-///   force-law change**: all three rows still moved, which is the honest result
-///   and the opposite of the 2026-08-03 tell below. A hash-input change moves
-///   every row *because* the stream is longer; here every row moves because
-///   every script leaves the ground and the landing response now fires on fewer
-///   ticks than it did. The reference was regenerated on that understanding, not
-///   on an assumption that nothing moved.
-/// - **Regenerated 2026-08-03**, and **no behaviour changed**. `ShipState` gained
-///   `pad_timer` and `pad_direction` for the speed-pad boost
-///   (`crates/physics/src/engine.rs`, `speedup_pad`), so `probe::hash_state`
-///   writes four more `f32`s per tick and the FNV-1a stream is longer. The boost
-///   itself cannot have run: `probe::run` drives every script with
-///   `Environment::default()`, whose `pad_hit` is `None`, and with no hit the
-///   timer never leaves `0.0` and the term returns `Vec3::ZERO` before touching
-///   an accumulator. So the two fields hold their defaults for all 3,600 ticks of
-///   every script and contribute a *constant* run of bytes.
-///
-///   **All three rows moved this time, including the 600-tick `Corridor`**, which
-///   is the tell that this is a hash-input change rather than a force-law one: a
-///   change to behaviour reaches the scenarios that exercise it, a change to what
-///   is hashed reaches all of them equally.
-/// - **Regenerated 2026-08-04**, and **no behaviour changed**. `ShipState` gained
-///   `shift_tap_windows`, `shift_armed` and `shift_lockout` for the two sideshift
-///   gestures the original triggers on (`crates/physics/src/airbrake.rs`,
-///   `advance_sideshift`; see
-///   `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`), so `probe::hash_state`
-///   writes three more `f32`s and a `u8` per tick.
-///
-///   All three rows moved again, same tell as above. This time it was also
-///   **checked directly** rather than argued from the shape: with exactly the
-///   four new writes deleted from `hash_state` and nothing else changed, the run
-///   reproduces the 2026-08-03 hashes bit for bit. So the trajectory is
-///   untouched and only the stream is longer. That is the check to repeat before
-///   pasting new constants in here - it is cheap, and it is the difference
-///   between "the hash moved because I added a field" and "the hash moved and I
-///   assumed that was why".
-///
-///   The reason behaviour cannot have changed: `probe::controls` never sets
-///   `shift_modifier` or either `shift_tap_*`, so no gesture can arm on any
-///   script, and the one `Sideshift::Left` at tick 1200 goes through
-///   `ShipControls::sideshift`, which is a direct request and deliberately
-///   bypasses `shift_lockout`. The 600-tick `Corridor` row does not even reach
-///   that tick, so on that row all four new fields hold their defaults for the
-///   whole run - and it moved anyway, which is the tell.
-/// - **Regenerated 2026-08-08, and this time behaviour *did* change - on
-///   purpose.** Two things landed together and both are deliberate:
-///
-///   1. `crate::engine::speedup_pad` implements `<Special speedpad_jump>`, the
-///      original's `if (controls->0x24 & 1) dir += craft+0x160 * jump` - a
-///      5.71-degree tilt of the boost toward the hull's up axis while d-pad Up is
-///      held. See that function's docs and
-///      `docs/ghidra/functions/psp-pulse-usa/engine.md`.
-///   2. **`probe::environment` is new and the scenario now crosses a speed pad,
-///      twice.** Until now no script ever set `pad_hit`, so step 15 of 15 was
-///      the one force term this gate did not cover at all - and a new branch
-///      inside an uncovered term would have landed with the hashes not moving,
-///      which is the worst possible outcome for a gate.
-///
-///   **No `ShipState` field was added**, so unlike the four entries above this is
-///   not a longer hash stream: the movement is trajectory, not bookkeeping. Two
-///   things say so, and both were checked rather than argued:
-///
-///   - **The 600-tick `Corridor` row does not move.** The first crossing is at
-///     tick 1600. A change to what is *hashed* reaches every row equally; a
-///     change to *behaviour* reaches only the rows that reach it.
-///   - **With `environment` returning `Environment::default()` and nothing else
-///     touched, all three rows reproduce the 2026-08-04 constants bit for bit.**
-///     That is the check the entry above asks for, and it isolates the cause to
-///     the two crossings alone - the two crossings are deliberately placed inside
-///     stretches of `probe::controls` that already hold the pitch axis on either
-///     side of the tilt's threshold, so **not one byte of the input script
-///     changed** and there is no second cause to disentangle.
-/// - **Regenerated 2026-08-10, and behaviour did *not* change.** `ShipState`
-///   gained `shield`, the energy pool at the original's `entity+0x88`, and
-///   `crate::damage::apply_contact` spends it out of the frame's contact
-///   impulses. **Nothing reads the pool back**, so no force term can see it and
-///   the trajectory is untouched; the movement is a longer hash stream, the same
-///   kind as the four bookkeeping entries above.
-///
-///   That is checked rather than argued, by the isolation those entries ask for:
-///   with `hasher.write_f32(shield)` alone commented out and every other change
-///   in place, **all six constants from 2026-08-08 reproduce bit for bit**. So
-///   the field reaches the hash and reaches nothing else.
-///
-///   `probe::start` now fills the pool through `crate::damage::reset`, because
-///   `ShipState::default()` starts it at zero and an already-empty pool cannot be
-///   depleted - `the_run_visits_the_paths_it_claims_to_cover` asserts the run
-///   actually spends energy, for the same reason the speed-pad entry above exists.
-/// - **Regenerated 2026-08-10 a second time, and behaviour did not change
-///   either.** `ShipState` gained `craft_state` and `state_timer`, the three
-///   states the energy pool reaches (`crate::damage::CraftState`) and their
-///   timer. Nothing in the force law reads them and no probe script empties a
-///   pool, so both hold their defaults for every tick of every run - a longer
-///   hash stream and nothing else. Checked the same way: with the two writes at
-///   the end of `hash_state` commented out and every other change in place, the
-///   constants from earlier the same day reproduce bit for bit.
-/// - **Regenerated 2026-08-11, and behaviour did not change either.**
-///   `ShipState` gained `turbo_timer`, the seconds left on a fired Turbo pickup
-///   (`crate::engine::ENGINE_PICKUP_SPEEDUP`). No probe script fires one and
-///   none *can* - a pickup comes from a `Weapon Pad` and there is no track in a
-///   corridor - so the field holds zero on every tick of every run here.
-///   Checked the same way and it is the same result: with
-///   `hasher.write_f32(turbo_timer)` alone removed and every other change in
-///   place, the six constants from 2026-08-10 reproduce bit for bit. The
-///   trajectory is untouched; what moved is the length of the hash stream.
-/// - **Regenerated 2026-08-11 a second time, and behaviour did not change
-///   either.** `ShipState` gained `shield_pickup_timer`, the seconds left on a
-///   fired Shield pickup. No probe script fires one and none *can*, for the same
-///   reason the Turbo entry above gives, so the field holds zero on every tick
-///   of every run here.
-///
-///   This one needed the isolation check more than its predecessors did, because
-///   unlike `turbo_timer` it is **read by a branch this gate does exercise**:
-///   `crate::damage::apply_contact` now returns early while the timer runs, and
-///   the probe scripts scrape a wall. A zero timer must take the same path a
-///   craft with no such field took. Checked the same way and it is the same
-///   result: with `hasher.write_f32(shield_pickup_timer)` alone removed and
-///   every other change in place - the `apply_contact` guard, the
-///   `advance_shield_pickup` call in `crate::step`, and `damage::reset` clearing
-///   the field - the three constants from earlier the same day reproduce bit for
-///   bit. So the new branch is never taken here and what moved is the length of
-///   the hash stream.
-/// - **Regenerated 2026-08-19, and behaviour did not change.** `ShipState`
-///   gained `pending_impulse`, the collision-stun vector at the original's
-///   `entity->0x4c + 0x110` - see `crate::wall::apply_pending_impulse`, the new
-///   port of `Ship_ApplyCollisionImpulse`, now called unconditionally every tick
-///   from `crate::step` (right after `wall::resolve`), the same as the
-///   original's `FUN_0883f540` calls it per ship. No probe script writes
-///   `pending_impulse` and nothing in this crate does either yet: the two
-///   producers the original has, `Weapon_PostBlastImpulse_q` and an unnamed
-///   second writer, are read but not ported
-///   (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`). So the field
-///   holds `Vec3::ZERO` on entry to `apply_pending_impulse` every tick of every
-///   run, its own zero-check makes the call a true no-op (the early return, not
-///   its absence), and this is a longer hash stream only. Checked the same way
-///   as every entry above: with `hasher.write_vec3(pending_impulse)` alone
-///   removed - `apply_pending_impulse` still called from `crate::step` - the
-///   three constants from 2026-08-11 (the `shield_pickup_timer` entry)
-///   reproduce bit for bit.
-/// - **Regenerated 2026-09-05, and behaviour did not change.** `ShipState`
-///   gained four fields for the barrel roll's gesture and phase - `roll_taps`,
-///   `roll_tap_timer`, `roll_phase` and `roll_target` - see
-///   `crate::barrel_roll` and `docs/ghidra/functions/psp-pulse-usa/
-///   input-bindings.md`. This adds the barrel roll's tap history, phase ramp
-///   and shield-gated arm read-out, all unit-tested directly against
-///   `ShipState` and none of it wired into `crate::forces::evaluate` yet - a
-///   later commit does that alongside the landing payout, and regenerates
-///   this again.
-///
-///   `probe::hash_state` now writes three more `u8`s and three more `f32`s
-///   per tick, and nothing here can have exercised any of the four: nothing
-///   in `oag_gameplay` or this crate's own probe scripts calls
-///   `barrel_roll::record_tap` or `barrel_roll::arm`, so all four hold their
-///   defaults for every tick of every run. Checked the same way as every
-///   entry above: with the six new `hash_state` writes alone removed, the
-///   three constants from 2026-08-19 (the `pending_impulse` entry) reproduce
-///   bit for bit.
-/// - **Regenerated 2026-09-05, later the same day, and behaviour did not
-///   change either.** `ShipState` gained a fifth barrel-roll field,
-///   `roll_payout_timer`, ours for the original's `craft+0x1c0 & 0x400` -
-///   the barrel roll's landing-payout read-out. Three
-///   branches were wired into terms this gate exercises every tick -
-///   `crate::airbrake::lateral_grip`'s `ROLL_GRIP_MULTIPLIER`,
-///   `crate::hover::probe_from_hit`'s `barrel_roll::rebound_override`, and
-///   `crate::engine::engine`'s turbo add - and `crate::forces::evaluate`
-///   now resolves [`crate::barrel_roll::release`] on the airborne-to-grounded
-///   transition and counts the new timer down.
-///
-///   All three branches are provably inert here, the same way the four
-///   fields above are: nothing calls `barrel_roll::record_tap` or `arm`, so
-///   `roll_payout_timer` can never leave `0.0` and every new branch's `else`
-///   arm is byte-for-byte what ran before it existed. Checked the same way as
-///   every entry above: with the one new `hash_state` write alone removed and
-///   every other change - the three consumer branches, the phase ramp calls,
-///   the payout countdown, and the landing-transition arm in
-///   `crate::forces::evaluate` - left in place, the three constants from
-///   earlier the same day (the four-field entry above) reproduce bit for bit.
-/// - **Regenerated 2026-09-06, and this one needed checking rather than
-///   assuming.** The barrel roll became *reachable*: `ShipControls` gained the
-///   d-pad tap edges, `crate::barrel_roll::advance_gesture` reads them and the
-///   steering axis, and `ShipState` gained `roll_axis_zone` - the latch that
-///   makes an axis *crossing* distinguishable from a held axis. So for the
-///   first time a probe script could arm a roll, and the two entries above
-///   cannot lean on "nothing calls `record_tap`" any more.
-///
-///   **It still does not, and that is a fact about the scripts.**
-///   `crate::probe::controls` holds `steer_x` at `+-0.8` through its slalom and
-///   at `+-0.6` through its two wall runs, inside
-///   `crate::barrel_roll::AXIS_TAP_THRESHOLD` (`0.9`), and it sets neither
-///   `roll_tap_left` nor `roll_tap_right`. So no crossing is ever recorded, all
-///   six roll fields hold their defaults for every tick of every run, and the
-///   whole movement is the one extra `u8` per tick that `roll_axis_zone` adds
-///   to the stream. Checked the same way as every entry above: with that single
-///   `hash_state` write alone removed and every other change - the gesture, the
-///   d-pad fields, the input mapping - left in place, the three constants from
-///   2026-09-05 reproduce bit for bit. A script that pushed the axis past `0.9`
-///   in an alternation would move these for a real reason, and should.
-/// - **Regenerated 2026-09-29, a real change of behaviour.** The hull port of
-///   the original's sunk-craft recovery landed: floor contacts
-///   (`Collision_BoxAgainstMesh`), `Collision_AddContact`'s projection gate and
-///   `Body_StepWorld`'s pass 1, the pre-integration clip along the velocity
-///   (`crate::wall::pre_integration_clip`, `0x0884f70c`). Only the
-///   3,600-tick `Aerobatic` entry moved; both `Corridor` entries are
-///   untouched. Checked: with the one `pre_integration_clip` call removed and
-///   the floor contacts, the gate and the swept ray's removal all left in, the
-///   old `Aerobatic` pair reproduces bit for bit, so pass 1 is the whole
-///   movement - its clip fires on the script's wall runs, where the swept ray
-///   it replaced never did.
-/// - **The two 3,600-tick rows regenerated 2026-09-30, behaviour.**
-///   `airbrake::evaluate`'s forward `drag` term multiplied the raw `steerX` on
-///   `ShipControls`' `-1..=1` where `Ship_UpdateAirbrakes` reads it off the
-///   input snapshot on `+/-100` (`Ship_UpdateSteering` compares that field
-///   straight against the `+/-100` ramped state at `0x088487b8`), so the term
-///   ran 100x weak. Found by a one-tick pose walk of
-///   `talons-junction-clean-lap.csv`; see `lap_window_ground_truth.rs` in
-///   `oag-trace`. **The 600-tick `Corridor` row did not move**, which is the
-///   check that this is the force law and not a hash-input change: the term
-///   needs an airbrake imbalance *and* a steering deflection at once, and the
-///   short corridor never holds both.
+/// - **2026-07-29**, first recorded. No earlier reference: no gate covered the simulation.
+/// - **2026-07-30, behaviour (argued).** `hull_sample_points`/`hull_extent` scale `<Misc>` dimensions by
+///   `hover::TARGET_GLOBAL_SCALE` (`0.75`), as `Ship_InitCraft`'s box-collider setup does
+///   (`collision.md`). Only the two 3,600-tick rows moved; 600-tick `Corridor` never reaches a
+///   wall.
+/// - **2026-08-03, hash input (argued).** `pad_timer`, `pad_direction` added (`engine.rs`,
+///   `speedup_pad`). `Environment::default()` has no `pad_hit`, so the fields stay at defaults
+///   for every tick and add a constant run of bytes. All three rows moved (the tell).
+/// - **2026-08-04, hash input.** `shift_tap_windows`, `shift_armed`, `shift_lockout` for the
+///   sideshift gestures (`airbrake.rs`, `advance_sideshift`; `input-bindings.md`). Deleting the
+///   four new writes reproduced the 2026-08-03 hashes. `probe::controls` never sets
+///   `shift_modifier` or `shift_tap_*`, and its one `Sideshift::Left` (tick 1200) is a direct
+///   request that bypasses `shift_lockout`.
+/// - **2026-08-08, behaviour, deliberate.** `engine::speedup_pad` implements `<Special
+///   speedpad_jump>` (a 5.71-degree tilt toward the hull's up axis while d-pad Up is held), and
+///   `probe::environment` is new: the scenario now crosses a speed pad twice. Until then no
+///   script set `pad_hit`, so step 15 of 15 was uncovered and a new branch there would have
+///   landed with the hashes unmoved. No field added; the 600-tick row did not move (first
+///   crossing at tick 1600); `environment` returning the default reproduced the 2026-08-04
+///   constants, and the control script is unchanged.
+/// - **2026-08-10, hash input.** `shield` added (the energy pool, `entity+0x88`;
+///   `damage::apply_contact`). Nothing reads it back. Removing `write_f32(shield)` reproduced
+///   the 2026-08-08 constants. `probe::start` fills the pool via `damage::reset` (an empty pool
+///   cannot be depleted) and `the_run_visits_the_paths_it_claims_to_cover` asserts energy is
+///   spent.
+/// - **2026-08-10 (second), hash input.** `craft_state`, `state_timer`: defaults every tick
+///   (no script empties a pool). Removing the two writes reproduced the earlier constants.
+/// - **2026-08-11, hash input.** `turbo_timer` (`engine::ENGINE_PICKUP_SPEEDUP`): no probe script
+///   fires one, and a corridor has no `Weapon Pad`. Removing its write reproduced the six
+///   2026-08-10 constants.
+/// - **2026-08-11 (second), hash input.** `shield_pickup_timer`. Checked with extra care because
+///   `damage::apply_contact` (which the scripts exercise by scraping a wall) now returns early
+///   while it runs: with only the write removed and the `apply_contact` guard,
+///   `advance_shield_pickup` call and `damage::reset` clearing all in place, the earlier three
+///   constants reproduced, so the new branch is never taken.
+/// - **2026-08-12, behaviour.** `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne
+///   clock at `craft+0x284` and `Ship_HoverTwoPoint` zeroes the landing clock **while airborne**
+///   once it passes `Antigrav::rebound_jump_time`; a shorter hop never arms `landing_rebound`.
+///   `ShipState` gains `time_airborne`, and `time_since_landing` starts at the recovered `10.0`
+///   (was an invented `1.0`; both sit outside the 0.2 s window). Isolated by removing only
+///   `write_f32(time_airborne)`: all three rows still moved, since every script leaves the
+///   ground and the landing response fires on fewer ticks.
+/// - **2026-08-12 (second), behaviour (nothing to isolate: no field added).** `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0`; above
+///   it one ray is cast and the rear probe's hit record is manufactured from the front's
+///   ([`hover::FAST_PROBE_SPEED`]). This crate cast two rays at every speed and shed half its
+///   suspension over a lip. No field added. On the disc's twelve circuits a lone craft went from
+///   seven clean laps to nine, `05_Track` from never completing a second lap to a clean one, and
+///   `09_Track` from six recoveries to three.
+/// - **2026-08-19, hash input.** `pending_impulse` (`entity->0x4c + 0x110`), consumed by
+///   `wall::apply_pending_impulse` (`Ship_ApplyCollisionImpulse`) every tick from `step`. No
+///   producer is ported (`contact-response.md`), so the field is `Vec3::ZERO` on every entry and
+///   the call is a true no-op. Removing the write reproduced the 2026-08-11 constants.
+/// - **2026-09-05, hash input.** `roll_taps`, `roll_tap_timer`, `roll_phase`, `roll_target` for
+///   the barrel roll (`barrel_roll`, `input-bindings.md`), not yet wired into `forces::evaluate`;
+///   nothing calls `record_tap` or `arm`. Removing the six new writes reproduced the 2026-08-19
+///   constants.
+/// - **2026-09-05 (later), hash input.** `roll_payout_timer` (ours for `craft+0x1c0 & 0x400`),
+///   with three consumer branches wired into terms exercised every tick
+///   (`airbrake::lateral_grip`, `hover::probe_from_hit`'s `rebound_override`, `engine::engine`'s
+///   turbo add), plus `barrel_roll::release` on landing. The timer never leaves `0.0`, so every
+///   new `else` arm is what ran before. Removing the one write reproduced the earlier constants.
+/// - **2026-09-06, hash input; checked, not assumed.** The roll became *reachable*:
+///   `ShipControls` gained d-pad tap edges, `barrel_roll::advance_gesture` reads them and the
+///   axis, and `ShipState` gained `roll_axis_zone`. **Still no script arms one**:
+///   `probe::controls` holds `steer_x` at `+-0.8` (slalom) and `+-0.6` (wall runs), inside
+///   `barrel_roll::AXIS_TAP_THRESHOLD` (`0.9`), and sets neither tap field. Removing the one
+///   `roll_axis_zone` write reproduced the 2026-09-05 constants. A script pushing the axis past
+///   `0.9` in an alternation would move these for a real reason.
+/// - **2026-09-29, behaviour.** The hull port of the sunk-craft recovery: floor contacts
+///   (`Collision_BoxAgainstMesh`), `Collision_AddContact`'s projection gate, and
+///   `Body_StepWorld`'s pass 1 (`wall::pre_integration_clip`, `0x0884f70c`). Only the 3,600-tick
+///   `Aerobatic` row moved. Removing the `pre_integration_clip` call (all else left in)
+///   reproduced the old `Aerobatic` pair, so pass 1 is the whole movement: it fires on the wall
+///   runs where the swept ray it replaced never did.
+/// - **2026-09-30, behaviour (the two 3,600-tick rows).** `airbrake::evaluate`'s forward `drag`
+///   term multiplied `steerX` on `-1..=1` where `Ship_UpdateAirbrakes` reads it on `+/-100`
+///   (`Ship_UpdateSteering` compares that field to the `+/-100` ramped state at `0x088487b8`), so
+///   it ran 100x weak. Found by a one-tick pose walk of `talons-junction-clean-lap.csv`
+///   (`lap_window_ground_truth.rs` in `oag-trace`). The 600-tick row did not move: the term needs
+///   an airbrake imbalance and a steering deflection at once.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -364,9 +181,8 @@ fn the_simulation_matches_the_committed_reference() {
     );
 }
 
-/// Guards the property the reference depends on: that a run is a pure function
-/// of its inputs. If this fails, the test above is meaningless even when it
-/// passes.
+/// Guards the property the reference depends on: a run is a pure function of its inputs. If
+/// this fails the test above is meaningless even when it passes.
 #[test]
 fn the_simulation_is_stable_across_repeated_runs() {
     for &(ticks, script, _, _) in REFERENCE {
@@ -381,8 +197,7 @@ fn the_simulation_is_stable_across_repeated_runs() {
     }
 }
 
-/// The two scripts must actually be two experiments. If they produced the same
-/// trajectory the third reference row would be dead weight that still passed.
+/// The two scripts must be two experiments, or the third row is dead weight that still passes.
 #[test]
 fn the_two_scripts_are_different_experiments() {
     assert_ne!(
@@ -391,9 +206,8 @@ fn the_two_scripts_are_different_experiments() {
     );
 }
 
-/// Destructuring answers "is the field in the list". It does not answer "does
-/// the field reach the hash": a binding can be destructured and then never
-/// written, and two adjacent `f32`s can be transposed. This does.
+/// Destructuring answers "is the field in the list", not "does it reach the hash": a binding can
+/// be destructured and never written, and two adjacent `f32`s can be transposed. This does.
 #[test]
 fn every_hashed_field_reaches_the_hash() {
     fn hash_of(state: &ShipState) -> u64 {
@@ -437,8 +251,8 @@ fn every_hashed_field_reaches_the_hash() {
         ("mag_lock_blend", |s| s.mag_lock_blend = 1.0),
         ("pad_timer", |s| s.pad_timer = 1.0),
         ("pad_direction", |s| s.pad_direction.z = 1.0),
-        // The zeroed contact is the case the discriminant byte exists for: it
-        // is byte-identical to `None` in every field it has.
+        // The zeroed contact is what the discriminant byte exists for: byte-identical to `None`
+        // in every field it has.
         ("mag_contact", |s| {
             s.mag_contact = Some(MagContact {
                 point: Vec3::ZERO,
@@ -461,9 +275,8 @@ fn every_hashed_field_reaches_the_hash() {
     }
 }
 
-/// The run has to exercise the paths this gate claims to cover. A ship that
-/// never leaves its start, never touches a wall or never turns would give
-/// perfectly stable hashes over almost none of the crate.
+/// The run has to exercise the paths the gate claims to cover: a ship that never leaves its
+/// start, touches a wall or turns gives stable hashes over almost none of the crate.
 #[test]
 fn the_run_visits_the_paths_it_claims_to_cover() {
     let handling = probe::handling();
@@ -499,17 +312,12 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
             state.body.position.is_finite() && state.body.linear_velocity.is_finite(),
             "tick {tick}: the fixture run went non-finite, so the hashes mean nothing"
         );
-        // The claim the 2026-08-03 regeneration rests on: the boost is inert
-        // here, so its two fields hold their defaults for the whole run and the
-        // hashes moved only because the stream got longer. Asserted rather than
-        // asserted-in-prose, because a future `Environment` default carrying a
-        // pad hit would quietly turn that history note into a lie.
+        // The claims the history above rests on, asserted not just written: the boost and the
+        // pending impulse are inert here, so their fields hold defaults and those hashes moved
+        // only because the stream got longer. A future `Environment` default carrying a pad hit
+        // would otherwise quietly turn the notes into a lie.
         assert_eq!(state.pad_timer, 0.0, "tick {tick}: the boost armed");
         assert_eq!(state.pad_direction, Vec3::ZERO);
-        // Same claim, same reason, for the 2026-08-19 addition: no producer
-        // exists yet for `pending_impulse`, so it holds its default for the
-        // whole run and the hashes below moved only because the stream got
-        // longer.
         assert_eq!(
             state.pending_impulse,
             Vec3::ZERO,
@@ -523,10 +331,8 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
     assert!(touched_wall, "the run never reached a wall");
     assert!(sideshifted, "the sideshift never armed");
     assert!(yawed_left && yawed_right, "the run never yawed both ways");
-    // The pool is hashed, and a hashed field that never moves is coverage in
-    // name only - a new branch inside the damage law would land with the
-    // reference hashes unchanged, which is the worst outcome this gate has.
-    // `Environment::default()` has damage on, so the wall contacts above must
-    // cost something.
+    // The pool is hashed, and a hashed field that never moves is coverage in name only: a new
+    // branch in the damage law would land with the hashes unchanged. `Environment::default()`
+    // has damage on, so the wall contacts must cost something.
     assert!(lost_energy, "the run never spent any energy on a wall");
 }

@@ -1,7 +1,5 @@
-//! What the speed-up pad boost in [`super`] is asserted to do.
-//!
-//! Split out of `engine.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the speed-up pad boost in [`super`] is asserted to do. Split out of `engine.rs` under the
+//! 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::{PAD_RAMP_FLOOR, PAD_RAMP_RATE, SPEEDPAD_JUMP_THRESHOLD, speedup_pad};
 use crate::params::{Handling, SpeedupPads};
@@ -48,10 +46,9 @@ fn a_ship_that_has_touched_no_pad_gets_no_boost() {
     assert_eq!(state.pad_timer, 0.0);
 }
 
-/// The shape of the law: `amount * 10 * remaining` while there is more than
-/// [`PAD_RAMP_FLOOR`] left, flat `amount` after that, and **the decrement
-/// happens first** - so the very first tick is already one `dt` down the ramp
-/// rather than at `amount * 10 * time`.
+/// The shape of the law: `amount * 10 * remaining` while more than [`PAD_RAMP_FLOOR`] is left, flat
+/// `amount` after, and **the decrement happens first**, so the first tick is already one `dt` down
+/// the ramp, not at `amount * 10 * time`.
 #[test]
 fn the_boost_ramps_down_and_then_holds_flat() {
     let handling = padded_handling();
@@ -92,11 +89,9 @@ fn the_ramp_and_the_flat_branch_meet_at_the_crossover() {
     assert_eq!(PAD_RAMP_RATE * PAD_RAMP_FLOOR, 1.0);
 }
 
-/// Standing on a pad re-arms the timer every tick, so the force does not
-/// decay while the ship is still inside the volume. This is what makes a slow
-/// crossing boost for longer than a fast one, and it is why
-/// `Environment::pad_hit` is a per-tick containment answer rather than an
-/// entry edge.
+/// Standing on a pad re-arms the timer every tick, so the force does not decay inside the volume:
+/// a slow crossing boosts longer than a fast one, which is why `Environment::pad_hit` is a
+/// per-tick containment answer, not an entry edge.
 #[test]
 fn staying_inside_a_pad_holds_the_boost_at_its_peak() {
     let handling = padded_handling();
@@ -110,9 +105,8 @@ fn staying_inside_a_pad_holds_the_boost_at_its_peak() {
     }
 }
 
-/// Leaving the pad does not re-aim the remaining boost. A ship that turns
-/// after crossing keeps being pushed the way the pad faced, which is the
-/// original holding `craft+0x1b0` rather than recomputing it.
+/// Leaving the pad does not re-aim the remaining boost: a ship that turns after crossing keeps
+/// being pushed the way the pad faced, the original holding `craft+0x1b0` rather than recomputing.
 #[test]
 fn the_push_direction_is_held_after_the_pad_is_behind_the_ship() {
     let handling = padded_handling();
@@ -153,10 +147,8 @@ fn the_tilt_is_a_small_angle_and_a_smaller_force_increase() {
     assert!(with.dot(UP) > 0.0 && without.dot(UP) == 0.0, "{with}");
 }
 
-/// The gate is on the **negative** side of the pitch axis, because that is
-/// where `oag_gameplay::ship_controls` puts d-pad Up. A reimplementation that
-/// took the positive side would tilt on nose-down, which is the failure this
-/// pins.
+/// The gate is on the **negative** side of the pitch axis, where `oag_gameplay::ship_controls` puts
+/// d-pad Up. Taking the positive side would tilt on nose-down, the failure this pins.
 #[test]
 fn only_a_pitch_up_input_tilts_the_boost() {
     let handling = Handling {
@@ -193,10 +185,9 @@ fn only_a_pitch_up_input_tilts_the_boost() {
     }
 }
 
-/// The tilt is read from *this* tick's input, not baked into
-/// `pad_direction` when the pad armed the boost. So it can start and stop
-/// while the boost runs on behind the pad, which is what the original's
-/// recomputation of `dir` inside the timer block does.
+/// The tilt is read from *this* tick's input, not baked into `pad_direction` when the pad armed the
+/// boost, so it can start and stop while the boost runs on behind the pad (the original recomputes
+/// `dir` inside the timer block).
 #[test]
 fn the_tilt_follows_the_input_rather_than_the_pad() {
     let handling = Handling {

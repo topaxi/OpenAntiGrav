@@ -590,6 +590,22 @@ wrong: **it must not be modelled as a torque.** A torque would go through
 rotation is a kinematic rewrite of the basis. That is queued as a separate
 task rather than done here.
 
+### The hold, now measured as a trajectory (oag-trace locator)
+
+Moved from the `oag_physics::maglock` module docs. `oag-trace`'s `replay`/`drive`/`drive_with`
+and `plan::to_gate` take an `Option<&[oag_vex::track::Sample]>` and locate fresh every tick
+the way `oag_raceplay::Race::tick` locates the player (`crate::replay::locate` duplicates the
+resampling rather than sharing it). `crates/trace/src/replay/tests.rs` pins the mechanism on a
+synthetic magstrip fixture, and a freshly flown and captured Talon's Junction lap
+(`verification/scenarios/talons-junction-inverted-section.inputs`) measured it for real:
+reseeded near the inverted section, position error against the capture is roughly **half**
+with the locator attached versus without, and **298 of 3,020** probe raycasts over the lap hit
+`Surface::MagFloor` rather than `Floor`. **Resample density is not the residual's source**:
+1 to 4 samples per segment measurably improves tracking and 4 to 32 changes nothing outside
+noise. `crates/game/tests/maglock_ground_truth.rs` still carries the 49.5 % residual figure;
+the two are complementary (that one measures the hold's contribution to a rotation identity,
+this one its effect on a trajectory).
+
 ## The tensor is a world-axis diagonal, and that answers (A), not (C)
 
 2026-09-10, and it is the correction to bullet 2 above. `Body_Integrate` maps

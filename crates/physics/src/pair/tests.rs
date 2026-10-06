@@ -1,7 +1,5 @@
-//! What the craft-against-craft contact response in [`super`] is asserted to do.
-//!
-//! Split out of `pair.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the craft-against-craft contact response in [`super`] is asserted to do. Split out of
+//! `pair.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use oag_core::math::{Mat3, Quat};
@@ -35,12 +33,9 @@ fn craft_far_apart_do_not_touch() {
     assert!(overlap(&a.body, &hull(), &b.body, &hull()).is_none());
 }
 
-/// The regression the play reports produced, twice: craft shoved each other
-/// while visibly apart.
-///
-/// Two hulls of width `w` touch flank to flank at `w * HULL_SCALE` and not
-/// before - written against the constant rather than a literal, so retuning
-/// the feel moves one number and not a test's meaning.
+/// The regression the play reports produced, twice: craft shoved each other while visibly apart.
+/// Two hulls of width `w` touch flank to flank at `w * HULL_SCALE` and not before, written against
+/// the constant so retuning the feel moves one number, not a test's meaning.
 #[test]
 fn side_by_side_craft_touch_at_the_scaled_flank_and_not_before() {
     let b = craft(Vec3::ZERO, Vec3::ZERO);
@@ -150,10 +145,9 @@ fn a_pair_already_separating_is_left_alone() {
     assert!(resolve(&mut a, &hull(), &mut b, &hull()).is_none());
 }
 
-/// Momentum is conserved by the impulse half: equal and opposite, so the sum
-/// of `m*v` does not move. The positional split is a separate correction and
-/// is deliberately not momentum-conserving - it is a position fix, and the
-/// original's is symmetric rather than mass-weighted.
+/// Momentum is conserved by the impulse half (equal and opposite). The positional split is a
+/// separate correction, deliberately not momentum-conserving: a position fix, symmetric rather
+/// than mass-weighted, as in the original.
 #[test]
 fn the_impulse_conserves_momentum() {
     let mut a = craft(
@@ -194,10 +188,9 @@ fn the_argument_order_does_not_change_the_outcome() {
     assert_eq!(b1.body.position, b2.body.position);
 }
 
-/// A glancing hit does not spin either craft - the original applies the pair
-/// impulse at each body's own centre, so the lever arm is zero by
-/// construction (see [`respond`]). This test used to assert the opposite, and
-/// the opposite was `-267` degrees per second on a fast first contact.
+/// A glancing hit does not spin either craft: the original applies the pair impulse at each
+/// body's own centre, so the lever arm is zero ([`respond`]). This once asserted the opposite,
+/// which was `-267` degrees per second on a fast first contact.
 #[test]
 fn an_off_centre_hit_spins_neither_craft() {
     let mut a = craft(
@@ -211,19 +204,15 @@ fn an_off_centre_hit_spins_neither_craft() {
     assert_eq!(b.body.angular_velocity, Vec3::ZERO);
 }
 
-/// A body as PPSSPP read it: the original's basis rows `(up x forward, up,
-/// forward)` become this crate's `orientation`, and its raw `body+0x150` triple
-/// becomes this crate's `angular_velocity`.
+/// A body as PPSSPP read it: the original's basis rows `(up x forward, up, forward)` become this
+/// crate's `orientation`, and its raw `body+0x150` triple becomes `angular_velocity`.
 ///
-/// **Both mappings are frame changes, and the second one is the whole point of
-/// this fixture.** The rows map by `right = -row0`, `orientation * Z = -row2`,
-/// so `R^T v` - the `vtfm4.q C000,E100,C200` the resolvers apply to `+0x150` -
-/// is `orientation * (-v.x, v.y, -v.z)` in this crate's terms. And `+0x150`
-/// holds the rotation rate **negated and in body coordinates**
-/// ([`Body::velocity_at`]), so the world rate this crate stores is
-/// `-R^T(raw)`. Putting the raw triple straight into `angular_velocity` builds
-/// a `Body` the simulation would never produce, which is exactly how
-/// `respond`'s sign error survived a green test.
+/// **Both are frame changes, and the second is the point of this fixture.** The rows map by
+/// `right = -row0`, `orientation * Z = -row2`, so `R^T v` (the `vtfm4.q C000,E100,C200` the
+/// resolvers apply to `+0x150`) is `orientation * (-v.x, v.y, -v.z)` here. `+0x150` holds the
+/// rotation rate **negated and in body coordinates** ([`Body::velocity_at`]), so the world rate
+/// stored is `-R^T(raw)`. Putting the raw triple into `angular_velocity` builds a `Body` the
+/// simulation never produces, which is how `respond`'s sign error survived a green test.
 fn captured(
     position: [f32; 3],
     velocity: [f32; 3],
@@ -247,29 +236,22 @@ fn captured(
     }
 }
 
-/// Two contacts the original was caught resolving, 2026-09-10, PPSSPP
-/// v1.20.4, an eight-craft SINGLE RACE on `pulse-psp-usa.chd`: every input
-/// read off both bodies and the contact record at the `jal` into
-/// `Body_ApplyImpulseAtPoint`, and `j` read back from the impulse vector on
-/// the stack (`s4`). `scripts/psp-pair-capture.py` is the recipe.
+/// Two contacts the original was caught resolving, 2026-09-10, PPSSPP v1.20.4, an eight-craft
+/// SINGLE RACE on `pulse-psp-usa.chd`: every input read off both bodies and the contact record at
+/// the `jal` into `Body_ApplyImpulseAtPoint`, and `j` from the impulse vector on the stack (`s4`);
+/// recipe `scripts/psp-pair-capture.py`.
 ///
-/// The first is a staged rear-end hit at `vn = -78.5`. The second is a craft
-/// tumbling at 84 rad/s with its basis well off level, which is the case that
-/// separates the original's point velocity from the same expression fed this
-/// crate's own `angular_velocity` unmapped (`0.184` against `-0.085`) and the
-/// world-diagonal denominator from the rotated one (`0.18440` against
-/// `0.18398`). The tolerances are set between those alternatives, not at float
-/// noise.
+/// The first is a staged rear-end hit at `vn = -78.5`. The second is a craft tumbling at 84 rad/s
+/// with its basis well off level, which separates the original's point velocity from the same
+/// expression fed this crate's unmapped `angular_velocity` (`0.184` against `-0.085`) and the
+/// world-diagonal denominator from the rotated one (`0.18440` against `0.18398`); tolerances sit
+/// between those alternatives, not at float noise.
 ///
-/// **The frame mapping in [`captured`] is what these two numbers check.**
-/// `omega_ours == -R^T(raw)` makes `omega_ours x r` identically
-/// `cross(r, R^T raw)` - the same two products, subtracted the other way round,
-/// which IEEE-754 gives back bit for bit. So the corrected `respond` reproduces
-/// the original's `j` from the original's own bytes exactly as the literal
-/// transcription did; if either number moves, the mapping is wrong and the
-/// mapping is the thing to fix. It did not move: `43.1697235107` and
-/// `0.1843950450` before the correction and after it, to the last printed
-/// digit.
+/// **The frame mapping in [`captured`] is what these numbers check.** `omega_ours == -R^T(raw)`
+/// makes `omega_ours x r` identically `cross(r, R^T raw)` (the same products subtracted the other
+/// way, bit for bit under IEEE-754), so the corrected `respond` reproduces the original's `j` from
+/// its own bytes as the literal transcription did. If either moves, the mapping is wrong. It did
+/// not: `43.1697235107` and `0.1843950450` before and after the correction, to the last digit.
 #[test]
 fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
     let mut a = captured(
@@ -346,10 +328,9 @@ fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
     );
 }
 
-/// The contact point is the plain midpoint of the two bodies' positions,
-/// whatever axis the SAT chose - `Collision_BoxAgainstBox` writes
-/// `(colliderA.centre + colliderB.centre) * 0.5` and a collider's centre is
-/// its body's own position, unconditionally.
+/// The contact point is the plain midpoint of the two bodies' positions whatever axis the SAT
+/// chose: `Collision_BoxAgainstBox` writes `(colliderA.centre + colliderB.centre) * 0.5` and a
+/// collider's centre is its body's position.
 #[test]
 fn the_contact_point_is_the_midpoint_of_the_two_positions() {
     let a = craft(
@@ -361,17 +342,14 @@ fn the_contact_point_is_the_midpoint_of_the_two_positions() {
     assert_eq!(point, (a.body.position + b.body.position) * 0.5);
 }
 
-/// Only the six face axes ever choose the normal - the nine edge-edge cross
-/// products are reject-only in the original, so two boxes whose true
-/// shallowest separating axis is an edge-edge cross product must still
-/// resolve to a face normal, never that edge one.
+/// Only the six face axes ever choose the normal; the nine edge-edge cross products are
+/// reject-only in the original, so two boxes whose true shallowest separating axis is an
+/// edge-edge product must still resolve to a face normal.
 ///
-/// This exact pose was found by sweeping orientations and offsets against
-/// [`overlap_old`] (the pre-2026-09-07 all-fifteen-compete version, kept
-/// around only long enough to diff against): at this pose the true minimum
-/// SAT axis genuinely is one of the nine edge-edge cross products, not a
-/// face axis of either hull, so a port that let all fifteen compete (as this
-/// function used to) picks it - and this function must not.
+/// This pose was found by sweeping orientations and offsets against [`overlap_old`] (the
+/// pre-2026-09-07 all-fifteen-compete version, kept only to diff against): here the true minimum
+/// SAT axis is an edge-edge cross product, which a port letting all fifteen compete picks and
+/// this function must not.
 #[test]
 fn only_face_axes_ever_become_the_normal() {
     let long_hull = Dimensions {
@@ -388,10 +366,8 @@ fn only_face_axes_ever_become_the_normal() {
 
     let (normal, _, _) = overlap(&a.body, &long_hull, &b.body, &long_hull).expect("they overlap");
 
-    // A face axis is `+-right`, `+-up` or `+-forward` of one of the two
-    // hulls - each is a unit vector, so a match dots to (near) +-1. The true
-    // minimum axis at this pose is an edge-edge cross product, which would
-    // land well short of that.
+    // A face axis is `+-right`, `+-up` or `+-forward` of one hull, each a unit vector, so a match
+    // dots to (near) +-1. The true minimum axis here is an edge-edge product, well short of that.
     let is_face_axis = axes(&a.body)
         .into_iter()
         .chain(axes(&b.body))
@@ -399,17 +375,15 @@ fn only_face_axes_ever_become_the_normal() {
     assert!(is_face_axis, "normal {normal:?} is not a face axis");
 }
 
-/// Each hull's own "up" axis needs to beat *half* the reigning best depth to
-/// become the normal; a plain SAT (compare every axis with a strict `<`)
-/// would pick whichever axis is shallowest, full stop. Built so `up` is
-/// genuinely shallower than `right` - a plain-`<` port would pick it - but not
-/// shallower than half of it, so the original's own rule must keep `right`.
+/// Each hull's own "up" axis needs to beat *half* the reigning best depth to become the normal;
+/// a plain strict-`<` SAT would pick the shallowest axis. Built so `up` is shallower than `right`
+/// (a plain-`<` port picks it) but not shallower than half of it, so the original's rule keeps
+/// `right`.
 #[test]
 fn the_up_axis_needs_to_beat_half_the_best_depth_to_win() {
-    // width == length, both boxes identical and axis-aligned, offset only in
-    // y: `right`'s depth and `forward`'s depth are then both `2 * half_width`
-    // (9.0 below), and `up`'s is `2 * half_height - |dy|` (5.0) - shallower
-    // than `right`, but not under half of it.
+    // width == length, both boxes identical and axis-aligned, offset only in y: `right`'s and
+    // `forward`'s depths are `2 * half_width` (9.0 below) and `up`'s is `2 * half_height - |dy|`
+    // (5.0): shallower than `right`, not under half of it.
     let square_hull = Dimensions {
         width: 12.0,
         height: 8.0,

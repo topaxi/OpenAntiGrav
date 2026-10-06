@@ -1,7 +1,5 @@
-//! What the magstrip attitude hold in [`super`] is asserted to do.
-//!
-//! Split out of `maglock.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the magstrip attitude hold in [`super`] is asserted to do. Split out of `maglock.rs` under
+//! the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 use crate::collide::{CollisionWorld, TriangleSoup};
@@ -49,13 +47,10 @@ fn state_at(height: f32) -> ShipState {
     }
 }
 
-/// Five frames up, and six back down - which is not a typo.
-///
-/// `1.0 - 0.2` five times over leaves `2.98e-8` in `f32`, not zero, and the
-/// original's guard is `blend <= 0` rather than a tolerance, so the sixth
-/// frame is what actually clears it. Transcribed rather than rounded off: a
-/// `< 1e-6` clamp here would be this crate deciding the original meant
-/// something tidier than it wrote.
+/// Five frames up, and six back down, which is not a typo: `1.0 - 0.2` five times leaves
+/// `2.98e-8` in `f32`, not zero, and the original's guard is `blend <= 0`, not a tolerance, so
+/// the sixth frame clears it. Transcribed, not rounded: a `< 1e-6` clamp would decide the original
+/// meant something tidier than it wrote.
 #[test]
 fn the_blend_ramps_to_full_lock_in_five_frames_and_out_again_in_six() {
     let mut blend = 0.0;
@@ -223,10 +218,9 @@ fn the_hold_parks_the_craft_at_four_fifths_of_the_hover_target() {
     );
 }
 
-/// The velocity is turned, never shortened: the projection is renormalised to
-/// the magnitude it started with. `rigid-body.md` ruled this out as the
-/// missing linear resistance on exactly this ground, and the ruling is pinned
-/// here so an "optimisation" that drops the renormalisation gets caught.
+/// The velocity is turned, never shortened: the projection is renormalised to its starting
+/// magnitude. `rigid-body.md` ruled this out as the missing linear resistance on that ground;
+/// pinned so an "optimisation" dropping the renormalisation is caught.
 #[test]
 fn the_velocity_projection_preserves_speed() {
     let env = env_on_strip();
@@ -309,14 +303,10 @@ fn a_section_that_disagrees_with_the_ray_is_abandoned_for_it() {
     assert_eq!(hold.axis, normal);
 }
 
-/// A caller that supplies a contact but no spline still gets the mechanism, off
-/// the ray's own hit. That is the original's own fallback branch rather than an
-/// invented rule, and it is pinned so it stays one.
-///
-/// Note what it is *not*: a way for a caller with no track data to get a hold
-/// by accident. [`probe`] needs a sample to have a direction to cast along, so
-/// a caller that supplies neither gets no contact, no blend and no hold - which
-/// is `oag-trace`'s replay today, see this module's own note on it.
+/// A caller that supplies a contact but no spline still gets the mechanism, off the ray's own
+/// hit: the original's fallback branch, not an invented rule. It is *not* a way for a caller with
+/// no track data to get a hold by accident: [`probe`] needs a sample to cast along, so a caller
+/// supplying neither gets no contact, blend or hold (`oag-trace`'s replay, per this module's note).
 #[test]
 fn a_caller_with_no_spline_falls_back_to_the_rays_own_normal() {
     let contact = Some(MagContact {

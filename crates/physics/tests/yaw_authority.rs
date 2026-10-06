@@ -1,28 +1,19 @@
 //! What the steering term is worth, in rad/s.
 //!
-//! This file exists because the steering law alone predicts a yaw rate about 22x
-//! the one the hardware turns at, and the factor that closes the gap is the yaw
-//! entry of the body's inverse inertia tensor - see
-//! [`oag_physics::forces::YAW_INVERSE_INERTIA`] for the instruction-level
-//! reading. That constant used to be *fitted* and these tests existed to stop it
-//! drifting; it is now *recovered*, and they exist to pin the shape of the axis
-//! it acts on, which is still worth a test - the usual "don't pin this crate's
-//! own arithmetic" rule in `ship_dynamics.rs` is suspended here precisely because
-//! there *is* an external measurement behind it.
+//! The steering law alone predicts a yaw rate about 22x the hardware's; the factor closing the gap
+//! is the yaw entry of the body's inverse inertia tensor
+//! ([`oag_physics::forces::YAW_INVERSE_INERTIA`], instruction-level reading). That constant was
+//! once *fitted* and these tests stopped it drifting; it is now *recovered* and they pin the shape
+//! of the axis it acts on. The "don't pin this crate's own arithmetic" rule of `ship_dynamics.rs`
+//! is suspended here because an external measurement stands behind it.
 //!
-//! Both tests here run in CI on arbitrary round numbers, and pin the *shape* -
-//! that yaw settles at `steer * amount * inverse_inertia / |YAW_DAMPING|` -
-//! without reproducing any shipped handling value. One does it against a two-line
-//! ODE, so a failure points at the constant; the other drives the real `step`, so
-//! a failure points at the wiring.
-//!
-//! What pins the *number* is `crates/trace/tests/yaw_authority_ground_truth.rs`,
-//! which replays the original's own recorded captures. It lives over there rather
-//! than here because it has to read the player's disc, and `oag-physics` depends
-//! on `oag-core` and nothing else, deliberately.
-//!
-//! No handling data is reproduced here; see
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//! Both tests run in CI on arbitrary round numbers and pin the *shape* (yaw settles at
+//! `steer * amount * inverse_inertia / |YAW_DAMPING|`) with no shipped handling value
+//! (`docs/architecture/adr/0006-no-copyrighted-content.md`): one against a two-line ODE (a failure
+//! points at the constant), one through the real `step` (a failure points at the wiring). The
+//! *number* is pinned by `crates/trace/tests/yaw_authority_ground_truth.rs`, which replays the
+//! original's recorded captures; it lives there because it reads the player's disc and
+//! `oag-physics` depends on `oag-core` only.
 
 use oag_core::math::Vec3;
 use oag_physics::collide::{Surface, TriangleSoup};
@@ -32,21 +23,17 @@ use oag_physics::params::{Antigrav, Dimensions, Physical, Turning};
 use oag_physics::passive::YAW_DAMPING;
 use oag_physics::{Body, CollisionWorld, Environment, Handling, ShipControls, ShipState, step};
 
-/// One step of the isolated yaw equation, the rearrangement of the original's
-/// momentum-damped axis onto an angular acceleration - see
-/// [`oag_physics::forces::YAW_INVERSE_INERTIA`]:
+/// One step of the isolated yaw equation, the original's momentum-damped axis rearranged onto an
+/// angular acceleration ([`oag_physics::forces::YAW_INVERSE_INERTIA`]):
 ///
 /// ```text
 /// omega' = -steer * amount * inverse_inertia - YAW_DAMPING_MAGNITUDE * omega
 /// ```
 ///
-/// Isolated on purpose. Running the full `step` would fold in hover, grip and
-/// wall response, none of which the yaw axis's inertia describes, and all of
-/// which carry their own open questions.
-///
-/// The inverse inertia is applied here rather than inside `steering` because that is
-/// where [`oag_physics::forces::evaluate`] applies it: to the summed yaw drive,
-/// before the damping. Mirroring the pipeline's shape is the point.
+/// Isolated on purpose: the full `step` folds in hover, grip and wall response, none of which the
+/// yaw axis's inertia describes. The inverse inertia is applied here, not inside `steering`,
+/// because [`oag_physics::forces::evaluate`] applies it to the summed yaw drive before the
+/// damping; mirroring the pipeline's shape is the point.
 fn advance_yaw(omega: f32, steer: f32, handling: &Handling, dt: f32) -> f32 {
     let state = ShipState {
         steer,
@@ -70,13 +57,10 @@ fn handling_with_turning_amount(amount: f32) -> Handling {
     }
 }
 
-/// Steering is an angular *acceleration* damped by [`YAW_DAMPING`], so holding a
-/// deflection settles at a rate rather than spinning up without bound.
-///
-/// Both terms land in the same accumulator in the original
-/// (`Ship_UpdateSteering` and `Ship_ApplyAngularDamping` each add to
-/// `craft+0x340`), which is why every common factor - the inertia tensor
-/// included - cancels out of this equilibrium.
+/// Steering is an angular *acceleration* damped by [`YAW_DAMPING`], so a held deflection settles
+/// at a rate rather than spinning up. Both terms land in one accumulator in the original
+/// (`Ship_UpdateSteering` and `Ship_ApplyAngularDamping` each add to `craft+0x340`), so every
+/// common factor, the inertia tensor included, cancels out of this equilibrium.
 #[test]
 fn terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term() {
     // Arbitrary round numbers. **Not values from any ship.**
@@ -112,18 +96,13 @@ fn terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term() {
 
 /// Full lock has to beat the camber, or a banked corner steers the ship for you.
 ///
-/// Reported from play: on tilted track "I'm not able to steer in the opposite
-/// direction". [`oag_physics::hover::BANK_TO_YAW_GAIN`] writes `30 * right.y` into
-/// the *same* body-local yaw accumulator that steering writes to, so the two are
-/// in direct competition and their **ratio** is what decides whether a corner can
-/// be fought. At a bank of 30 degrees the camber asks for `30 * sin(30) = 15`,
-/// which full lock has to exceed.
-///
-/// This is a ratio, so it is invariant to
-/// [`oag_physics::forces::YAW_INVERSE_INERTIA`] - which is the whole point.
-/// Scaling *only* steering by that factor, and leaving bank-to-yaw at full
-/// strength, put the break-even bank at about 14 degrees and is exactly the bug
-/// this reproduces.
+/// Reported from play: on tilted track "I'm not able to steer in the opposite direction".
+/// [`oag_physics::hover::BANK_TO_YAW_GAIN`] writes `30 * right.y` into the *same* body-local yaw
+/// accumulator as steering, so their **ratio** decides whether a corner can be fought: at a bank
+/// of 30 degrees the camber asks for `30 * sin(30) = 15`, which full lock must exceed. A ratio is
+/// invariant to [`oag_physics::forces::YAW_INVERSE_INERTIA`]; scaling *only* steering by it and
+/// leaving bank-to-yaw at full strength put the break-even bank at about 14 degrees, the bug this
+/// reproduces.
 #[test]
 fn full_lock_out_yaws_the_bank_on_a_steeply_cambered_track() {
     // Arbitrary round numbers. **Not values from any ship.**
@@ -148,28 +127,21 @@ fn full_lock_out_yaws_the_bank_on_a_steeply_cambered_track() {
     }
 }
 
-/// The same equilibrium, but reached through the real [`step`] rather than through
-/// this file's own two-line ODE.
+/// The same equilibrium reached through the real [`step`], not this file's two-line ODE.
+/// [`terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term`] would pass if someone
+/// dropped `passive::angular_damping` from `forces::evaluate` or stopped routing
+/// `engine::steering` into the accumulator, as it never calls the pipeline. This one does, on a
+/// flat floor at hover height, pinning the wiring as well as the arithmetic.
 ///
-/// [`terminal_yaw_rate_is_the_damped_equilibrium_of_the_steering_term`] would still
-/// pass if someone dropped `passive::angular_damping` out of `forces::evaluate`, or
-/// stopped routing `engine::steering` into the accumulator at all - it never calls
-/// the pipeline. This one does, on a flat floor with a ship held at its hover
-/// height, so the wiring is pinned as well as the arithmetic.
+/// The tolerance is loose (30 %): the whole force law adds the weathervane, lateral grip and the
+/// probes' torques, none of which the yaw inertia describes; the assertion is yaw lands *at the
+/// right rate*, not that the models agree to the last digit.
 ///
-/// The tolerance is deliberately loose (30 %). Running the whole force law brings
-/// in the weathervane, lateral grip and the hover probes' own torques, none of
-/// which the yaw axis's inertia describes; the assertion is that yaw lands *at
-/// the right rate*, not that the two models agree to the last digit.
-///
-/// **This does not pin the constant's value**, and neither does the test above:
-/// both derive `expected` from [`YAW_INVERSE_INERTIA`], so editing it moves
-/// both sides and they stay green. That is deliberate - the number's only honest
-/// judge is the original's own behaviour, which is
-/// `crates/trace/tests/yaw_authority_ground_truth.rs` under `just test-data`.
-/// What this one pins is the *wiring*: unhooking `engine::steering` from
-/// `forces::evaluate` drops it to `0 rad/s` and fails here, where the ODE test
-/// above never notices.
+/// **This does not pin the constant's value**, nor does the ODE test: both derive `expected` from
+/// [`YAW_INVERSE_INERTIA`], so editing it moves both sides. The number's judge is the original's
+/// behaviour, `crates/trace/tests/yaw_authority_ground_truth.rs` under `just test-data`. This pins
+/// the *wiring*: unhooking `engine::steering` from `forces::evaluate` drops it to `0 rad/s` and
+/// fails here, where the ODE test never notices.
 #[test]
 fn steering_reaches_that_same_rate_through_the_real_force_law() {
     // Arbitrary round numbers. **Not values from any ship.**
