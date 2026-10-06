@@ -478,6 +478,18 @@ pub struct MenuBlocks {
     /// The settings rows' step arrow: `Data\FE\Images\HD_options_arrow.gtf`,
     /// loaded by `List_Construct`.
     pub arrow_texture: &'static str,
+    /// Whether the three textures above are stored in a `.gnf` with the
+    /// rows in the order HD's `.gtf` keeps them, bottom-up, so the sheet
+    /// must reverse them as it does a `.gtf`'s.
+    ///
+    /// `true` on Omega, `false` on HD (whose `.gtf` decode is reversed for
+    /// every image already). A `.gnf` carries no flag for it: Omega's
+    /// packager re-authored the images a screen *names* top-down (276 of 276
+    /// that differ from HD's), but the eight the executable draws on its own
+    /// (`file`, `file2`, `cursor`, `corner`, `corner2`, `square`, `line`,
+    /// `unlocked_corner`) are HD's bytes exactly, rows in HD's file order -
+    /// `docs/formats/omega-status.md`, "The menu blocks".
+    pub art_rows_bottom_up: bool,
     /// The `<HorizMenu>` widget's own numbers.
     pub strip: StripBlocks,
     /// The `<List>` widget's own numbers.
