@@ -174,18 +174,16 @@ pub fn hd_podium_draw_list(
         let slot = slot_of(place) as f32;
         let rise = PLACE_STEP * (4 - place) as f32;
         let ink = if entry.player { PLAYER_INK } else { OTHER_INK };
-        if let Some(authored) = plinth {
-            if let Some(placed) = sprites(&authored.src) {
-                let mut drawn = authored.clone();
-                drawn.x = PLINTH_X + COLUMN_STEP * slot;
-                drawn.y = PLINTH_BOTTOM - rise;
-                drawn.width = Some(PLINTH_WIDTH);
-                drawn.height = Some(rise);
-                drawn.texture_width = Some(PLINTH_WIDTH);
-                drawn.texture_height = Some(rise);
-                drawn.color = ink;
-                out.push(image_draw(&drawn, placed));
-            }
+        if let Some((authored, placed)) = plinth.and_then(|i| Some((i, sprites(&i.src)?))) {
+            let mut drawn = authored.clone();
+            drawn.x = PLINTH_X + COLUMN_STEP * slot;
+            drawn.y = PLINTH_BOTTOM - rise;
+            drawn.width = Some(PLINTH_WIDTH);
+            drawn.height = Some(rise);
+            drawn.texture_width = Some(PLINTH_WIDTH);
+            drawn.texture_height = Some(rise);
+            drawn.color = ink;
+            out.push(image_draw(&drawn, placed));
         }
         if let Some(authored) = heading {
             let mut head = text_draw(authored, strings.get_or_id(place_idstring(place)), layout);
