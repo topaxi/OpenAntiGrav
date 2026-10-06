@@ -266,6 +266,14 @@ pub struct HudArt {
     /// A name absent from a given layout is simply not found, so one list
     /// serves all of a title's modes.
     pub always_on: &'static [&'static str],
+    /// Whether this title's HUD is **raster art authored for a small screen**,
+    /// which is what makes a stretch filter (`oag_display`'s `HudScale`)
+    /// worth offering: Pulse's 256x256 sheet and 25 px face on a 480x272 PSP or
+    /// 640x448 PS2 panel, Pure's the same. `false` for HD, 2048 and Omega,
+    /// whose HUD sheets ship at 4x (1024) and whose faces are authored for a
+    /// 1080p grid - there is no stretch to sharpen. Measured as a census of
+    /// each title's sheet and grid, `docs/ui/hud-skins.md`.
+    pub raster: bool,
     /// How this title authors its lock-on reticle. See [`Sights`].
     ///
     /// Not part of [`Self::always_on`] and deliberately so: the sights are up

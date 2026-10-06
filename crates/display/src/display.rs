@@ -37,6 +37,7 @@
 use serde::{Deserialize, Serialize};
 
 mod aspect;
+mod hud_scale;
 mod motion_blur;
 mod msaa;
 mod reconstruction;
@@ -44,7 +45,7 @@ mod screen_filter;
 mod shadows;
 
 pub use {
-    aspect::Aspect, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
+    aspect::Aspect, hud_scale::*, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
     screen_filter::FilterStrength, shadows::Shadows,
 };
 

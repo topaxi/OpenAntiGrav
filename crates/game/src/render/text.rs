@@ -89,13 +89,18 @@ impl Renderer {
             GlyphSlot::Face => MODE_ATLAS,
             GlyphSlot::Buttons => MODE_BUTTONS_ATLAS,
         };
+        // `integer` resizes each texel to whole pixels, so the text is laid out
+        // at that size and its origin put on a whole pixel; every other mode
+        // leaves `scale` and the origin as given.
+        let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let width = font::measure(atlas, text) * scale;
         let texel = atlas.texel_scale;
-        let mut pen = match align {
+        let mut pen = self.hud.snap(match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
             Align::Right => x - width,
-        };
+        });
+        let y = self.hud.snap(y);
 
         for ch in text.chars() {
             // Re-derived rather than reusing `atlas` above: `self.quads.push`
@@ -174,6 +179,7 @@ impl Renderer {
         let Some(atlas) = self.atlas_for(slot) else {
             return;
         };
+        let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let line_height = atlas.line_height * scale;
         for (index, line) in wrap(atlas, text, scale, width).into_iter().enumerate() {
             self.push_text(
