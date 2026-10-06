@@ -190,3 +190,49 @@ fn an_id_the_table_lacks_draws_nothing() {
             .is_empty()
     );
 }
+
+/// The standing line is up from the first call, at full alpha, in the last slot,
+/// and survives long after a banner has expired.
+#[test]
+fn a_standing_line_stays_in_the_last_slot_for_good() {
+    let mut board = MessageBoard::default();
+    assert_eq!(board.lines()[SLOTS - 1], None);
+    board.set_standing("ER_BMA", [0.8, 0.5, 0.2]);
+    run(&mut board, 1);
+    let line = board.lines()[SLOTS - 1].clone().expect("standing is up");
+    assert_eq!(line.text, "ER_BMA");
+    assert_eq!(line.color, [0.8, 0.5, 0.2, 1.0]);
+    run(&mut board, 3000);
+    assert_eq!(board.lines()[SLOTS - 1], Some(line));
+    board.set_standing("ER_SMA", [0.9, 0.9, 0.9]);
+    assert_eq!(board.lines()[SLOTS - 1].clone().unwrap().text, "ER_SMA");
+}
+
+/// Banners queue in the first three slots while a standing line holds the
+/// last, and the same words are not drawn twice at once.
+#[test]
+fn banners_leave_the_last_slot_to_the_standing_line() {
+    let mut board = MessageBoard::default();
+    board.set_standing("ER_SMA", [1.0; 3]);
+    for text in ["a", "b", "c", "d"] {
+        board.push(text, true);
+    }
+    run(&mut board, 1);
+    let lines = board.lines();
+    assert_eq!(lines[3].as_ref().map(|l| l.text.as_str()), Some("ER_SMA"));
+    assert_eq!(lines[0].as_ref().map(|l| l.text.as_str()), Some("a"));
+    let mut board = MessageBoard::default();
+    board.set_standing("ER_SMA", [1.0; 3]);
+    board.push("ER_SMA", true);
+    run(&mut board, 30);
+    let said = board
+        .lines()
+        .iter()
+        .flatten()
+        .filter(|l| l.text == "ER_SMA")
+        .count();
+    assert_eq!(
+        said, 1,
+        "the banner and the standing line are the same words"
+    );
+}

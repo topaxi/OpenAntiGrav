@@ -656,7 +656,7 @@ pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
 /// measured table - since they are the same three-tier colour concept
 /// authored on the same screen, not an independently measured value for the
 /// hex fill itself.
-pub(super) fn medal_argb(medal: Medal) -> u32 {
+pub fn medal_argb(medal: Medal) -> u32 {
     match medal {
         Medal::Gold => 0xfffa_eb38,
         Medal::Silver => 0xffda_e3e4,

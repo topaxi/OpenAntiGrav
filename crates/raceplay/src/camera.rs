@@ -257,6 +257,12 @@ impl Race {
         self.view.messages.push(id, good);
     }
 
+    /// Sets the HUD line that stays up for the rest of the race - the best
+    /// medal earned so far. See [`oag_hud::messages::MessageBoard::set_standing`].
+    pub fn set_standing_message(&mut self, id: &str, rgb: [f32; 3]) {
+        self.view.messages.set_standing(id, rgb);
+    }
+
     /// Puts the craft in `slot` into the destroyed sequence, for
     /// `--force-wreck`: state 4 with its half second, which is what
     /// `Ship_Damage`'s depletion does (`oag_physics::damage`), so the
