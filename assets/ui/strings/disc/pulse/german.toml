@@ -1,0 +1,16 @@
+# German: the ids Wipeout Pulse's own PSP German table leaves empty, filled with
+# this project's own wording. Read only by a title whose front end names the
+# `pulse` namespace (`oag_title::FrontEnd::disc_strings`). The disc's own
+# language is only *filled*, never overlaid (`StringTable::fill`): the PS2 disc
+# ships both of these ids in German, and its words stand.
+#
+# **Every entry is `human = false`**: machine-written, not reviewed by a native
+# speaker. Wording follows the disc's own German ("Geisterschiff", "Taste").
+#
+# Left out on purpose: `MSC_QUICKBROWNFOX`, a font test pangram that is empty in
+# German on the disc too.
+
+[strings]
+
+M_SAVE_GHOST = { text = "Geisterschiff sichern", human = false }
+HM_SAVE_GHOST = { text = "Das Geisterschiff ist heruntergeladen. Drücke die Taste, um es zu sichern. Vor dem Einsatz muss es gesichert werden.", human = false }

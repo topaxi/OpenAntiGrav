@@ -46,7 +46,10 @@ pub fn load_languages(
             continue;
         };
         match Language::from_definition(plugin, &xml) {
-            Some(language) => out.push(language),
+            Some(language) => out.push(Language {
+                disc_strings,
+                ..language
+            }),
             None => report.push(format!(
                 "language plugin {plugin}: {name} declares no language"
             )),

@@ -271,6 +271,17 @@ impl StringTable {
         self.entries.extend(other);
     }
 
+    /// Adds the ids `other` has that this table lacks or holds empty, leaving
+    /// every id the table already says something for as it is.
+    pub fn fill(&mut self, other: HashMap<String, String>) {
+        for (id, text) in other {
+            let entry = self.entries.entry(id).or_default();
+            if entry.trim().is_empty() {
+                *entry = text;
+            }
+        }
+    }
+
     /// Looks up an id, falling back to the id itself.
     ///
     /// The front end references ids that are not in the table at all: the

@@ -1,13 +1,6 @@
-//! What the Missile's lock, guidance and speed ramp are asserted to do.
-//!
-//! Every fixture number here is **invented** - ADR-0006 - which is easy to keep
-//! to because none of these functions reads a shipped value that is not passed in.
-//!
-//! # What these tests can and cannot say
-//!
-//! They pin the *arithmetic* recovered from the original against the shape it was
-//! recovered as. They say nothing about whether a missile gets anywhere on a real
-//! circuit; that needs a track, and it is
+//! What the Missile's lock, guidance and speed ramp are asserted to do. Fixture
+//! numbers are invented (ADR-0006). These pin the recovered arithmetic against the
+//! shape it was recovered as; whether a missile gets anywhere on a real circuit is
 //! `crates/game/tests/missile_ground_truth.rs`'s job.
 
 use super::*;
@@ -54,9 +47,8 @@ fn the_speed_ramp_starts_at_the_launch_speed_and_ends_at_the_class_speed() {
     assert_eq!(speed_kmh(200.0, 800.0, 9.0), 800.0);
 }
 
-/// The blend is over a **code literal** second, not over the authored
-/// `slowdown_time`. The two read 1.0 on the shipped disc, so a test that used one
-/// second would pass either way; this one asserts the constant itself.
+/// The blend is over a code-literal second, not the authored `slowdown_time`; both
+/// read 1.0 on the disc, so this asserts the constant itself.
 #[test]
 fn the_ramp_window_is_one_second_and_not_the_authored_slowdown_time() {
     assert_eq!(SPEED_RAMP_SECONDS, 1.0);
@@ -65,8 +57,8 @@ fn the_ramp_window_is_one_second_and_not_the_authored_slowdown_time() {
     assert_eq!(speed_kmh(0.0, 100.0, 1.01), 100.0);
 }
 
-/// The guidance clamp is on a chord of the **unit** heading, so a missile pointed
-/// away from its target turns at a bounded rate rather than snapping round.
+/// The guidance clamp is on a chord of the unit heading, so a missile pointed away
+/// turns at a bounded rate rather than snapping round.
 #[test]
 fn guidance_turns_at_a_bounded_rate_when_the_error_is_large() {
     let dt = 1.0 / 60.0;
@@ -88,9 +80,8 @@ fn guidance_turns_at_a_bounded_rate_when_the_error_is_large() {
     );
 }
 
-/// And when the error is *small* the clamp does not bite: the whole error is
-/// taken in one tick. That is the `else` arm of `|step|^2 <= |err|^2`, and a
-/// missile that could not close the last degree would circle its target forever.
+/// When the error is small the clamp does not bite and the whole error is taken in
+/// one tick (the `else` arm of `|step|^2 <= |err|^2`); otherwise it would circle.
 #[test]
 fn guidance_takes_the_whole_error_when_it_is_smaller_than_one_tick_of_turn() {
     let dt = 1.0 / 60.0;
@@ -105,11 +96,9 @@ fn guidance_takes_the_whole_error_when_it_is_smaller_than_one_tick_of_turn() {
     );
 }
 
-/// **The direction is deliberately not renormalised before the speed scale**, so
-/// a turning missile flies *slower* than its ramp says - the correction points
-/// partly against the current heading. Pinned with the closed form, because the
-/// intuition runs the other way and a first reading of the disassembly recorded
-/// the opposite.
+/// The direction is deliberately not renormalised before the speed scale, so a
+/// turning missile flies slower than its ramp says. Pinned with the closed form:
+/// the intuition runs the other way, and a first disassembly reading recorded that.
 #[test]
 fn a_turning_missile_flies_slower_than_its_pinned_speed() {
     let dt = 1.0 / 60.0;
@@ -131,8 +120,7 @@ fn a_turning_missile_flies_slower_than_its_pinned_speed() {
         "speed ratio {ratio} against the predicted {expected}"
     );
 
-    // And it comes back to exactly one once the missile is on the line: there the
-    // clamp takes the whole error and `dir` is the unit desired direction.
+    // It returns to exactly one on the line: the clamp takes the whole error.
     let lined_up = steer(
         Vec3::Z * speed,
         Vec3::ZERO,
@@ -143,8 +131,7 @@ fn a_turning_missile_flies_slower_than_its_pinned_speed() {
     assert!((lined_up.length() / speed - 1.0).abs() < 1e-5);
 }
 
-/// A degenerate input leaves the velocity alone rather than producing a NaN the
-/// raycaster would then chase.
+/// A degenerate input leaves the velocity alone rather than producing a NaN.
 #[test]
 fn guidance_declines_rather_than_dividing_by_zero() {
     let dt = 1.0 / 60.0;
@@ -157,8 +144,8 @@ fn guidance_declines_rather_than_dividing_by_zero() {
     assert_eq!(steer(flying, Vec3::ZERO, Vec3::ZERO, dt, 100.0), flying);
 }
 
-/// A missile never locks the craft that fired it - the blast does not exclude its
-/// owner, so a self-lock is a craft shooting its own back.
+/// A missile never locks the craft that fired it (the blast does not exclude its
+/// owner).
 #[test]
 fn the_lock_never_picks_the_firer() {
     let grid = ships(&[Vec3::ZERO, Vec3::Z * 50.0]);
@@ -169,8 +156,8 @@ fn the_lock_never_picks_the_firer() {
     assert_eq!(lock(&alone, 0, Vec3::ZERO, Vec3::Z, &stats(), None), None);
 }
 
-/// The window is on the **longitudinal** distance, so a craft alongside is out of
-/// range however close it is, and one past the far bound is out however square-on.
+/// The window is on the longitudinal distance: a craft alongside is out however
+/// close, one past the far bound out however square-on.
 #[test]
 fn the_lock_window_is_measured_along_the_nose() {
     let stats = stats();
@@ -189,9 +176,8 @@ fn the_lock_window_is_measured_along_the_nose() {
     assert_eq!(lock(&near, 0, Vec3::ZERO, Vec3::Z, &stats, None), None);
 }
 
-/// Inside the window but outside the cone is refused. Built as two craft at the
-/// *same* longitudinal distance so the only thing separating them is the bearing,
-/// which is what makes this a test of the cone and not of the window again.
+/// Inside the window but outside the cone is refused. Two craft at the same
+/// longitudinal distance, so only the bearing separates them.
 #[test]
 fn the_lock_refuses_a_craft_outside_the_cone() {
     let stats = stats();
@@ -203,10 +189,8 @@ fn the_lock_refuses_a_craft_outside_the_cone() {
     assert_eq!(lock(&narrow, 0, Vec3::ZERO, Vec3::Z, &stats, None), Some(1));
 }
 
-/// Two candidates both inside every gate: the nearer **along the nose** wins, not
-/// the one with the better bearing. A test that put the nearer one dead ahead
-/// would pass whichever key were used, so the nearer one is deliberately the more
-/// off-axis of the two.
+/// Two candidates inside every gate: the nearer along the nose wins, not the better
+/// bearing. The nearer one is the more off-axis, so either key would not pass.
 #[test]
 fn the_lock_picks_the_nearest_by_longitudinal_distance() {
     let grid = ships(&[
@@ -217,8 +201,7 @@ fn the_lock_picks_the_nearest_by_longitudinal_distance() {
     assert_eq!(lock(&grid, 0, Vec3::ZERO, Vec3::Z, &stats(), None), Some(2));
 }
 
-/// An inactive slot is not a target. It holds whatever the last race left in it,
-/// which on a full array is a plausible-looking position.
+/// An inactive slot is not a target: it holds what the last race left in it.
 #[test]
 fn the_lock_skips_an_inactive_slot() {
     let mut grid = ships(&[Vec3::ZERO, Vec3::Z * 100.0]);
@@ -226,9 +209,8 @@ fn the_lock_skips_an_inactive_slot() {
     assert_eq!(lock(&grid, 0, Vec3::ZERO, Vec3::Z, &stats(), None), None);
 }
 
-/// The along-track screen rejects a craft that is near in space and far away round
-/// the circuit - the hairpin case. With no circuit length the test is skipped
-/// entirely, which is what a synthetic straight gets.
+/// The along-track screen rejects a craft near in space and far round the circuit
+/// (the hairpin). With no circuit length it is skipped, as for a synthetic straight.
 #[test]
 fn the_lock_refuses_a_craft_that_is_close_in_space_and_far_round_the_lap() {
     let stats = stats();
@@ -243,8 +225,7 @@ fn the_lock_refuses_a_craft_that_is_close_in_space_and_far_round_the_lap() {
         "a wrapped gap must be measured the short way round"
     );
 
-    // Now put it genuinely far along the road: 400 units of tarmac for 100 units
-    // of air is a ratio of 4.0.
+    // 400 units of tarmac for 100 of air: a ratio of 4.0.
     grid[1].standing.progress = Some(400.0);
     assert_eq!(
         lock(&grid, 0, Vec3::ZERO, Vec3::Z, &stats, Some(1000.0)),
@@ -254,8 +235,8 @@ fn the_lock_refuses_a_craft_that_is_close_in_space_and_far_round_the_lap() {
     assert_eq!(lock(&grid, 0, Vec3::ZERO, Vec3::Z, &stats, None), Some(1));
 }
 
-/// A missile leaves the rail at the firing craft's own speed plus `launchSpeed`,
-/// which is what `launchSpeed` turned out to be for.
+/// A missile leaves at the firing craft's speed plus `launchSpeed`, which is what
+/// `launchSpeed` turned out to be for.
 #[test]
 fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
     let stats = stats();
@@ -287,8 +268,8 @@ fn the_launch_speed_is_the_craft_speed_plus_the_authored_offset() {
     assert!(slow.length() > 0.0);
 }
 
-/// The spawn point is outside the hull that fired it, so the sweep does not have
-/// to special-case a projectile that starts inside a craft.
+/// The spawn point is outside the firing hull, so the sweep need not special-case
+/// a projectile starting inside a craft.
 #[test]
 fn a_missile_launches_from_the_nose_and_not_the_centre() {
     let dimensions = Dimensions {
@@ -305,14 +286,11 @@ fn a_missile_launches_from_the_nose_and_not_the_centre() {
     );
 }
 
-/// The multiply carries the executable's own bit pattern, and that pattern turns
-/// out to be exactly `1.0 / 3.6` - which is worth pinning precisely *because* an
-/// earlier reading claimed it was not. If the constant is ever edited toward some
-/// other "more correct" value, this is what says the executable disagrees.
-///
-/// The two conversions still differ as **operations**: `x * (1/3.6)` and `x / 3.6`
-/// are not the same `f32` function, and each is spent where the original spends
-/// it.
+/// The multiply carries the executable's own bit pattern, exactly `1.0 / 3.6`
+/// (pinned because an earlier reading claimed otherwise; an edit toward a "more
+/// correct" value fails here). The two conversions still differ as operations:
+/// `x * (1/3.6)` and `x / 3.6` are different `f32` functions, each spent where the
+/// original spends it.
 #[test]
 fn the_speed_conversion_is_the_executables_own_constant() {
     assert_eq!(KMH_TO_UNITS_PER_SECOND.to_bits(), 0x3e8e_38e4);
@@ -321,15 +299,13 @@ fn the_speed_conversion_is_the_executables_own_constant() {
         (1.0f32 / 3.6).to_bits(),
         "the executable's literal and the rounded reciprocal have stopped agreeing"
     );
-    // The multiply and the divide agree closely but are separate code paths, and
-    // the point of keeping both is that neither is derived from the other.
+    // Separate code paths; neither is derived from the other.
     let kmh = 800.0;
     assert!((speed_units_guided(kmh) - speed_units_on_surface(kmh)).abs() < 1e-3);
 }
 
-/// The Missile is the only weapon this module answers for, and `Weapon::Missile`
-/// is what `Projectiles::advance` branches on. A rename that split the two would
-/// silently stop every missile homing.
+/// `Weapon::Missile` is what `Projectiles::advance` branches on; a rename splitting
+/// the two would silently stop every missile homing.
 #[test]
 fn the_guided_weapon_is_the_missile() {
     assert_eq!(Weapon::Missile.as_type(), "Missile");

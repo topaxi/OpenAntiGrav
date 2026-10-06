@@ -156,7 +156,7 @@ BASELINE = {
     "crates/display/src/display.rs": 1043,
     "crates/formats/tests/audio_ground_truth.rs": 1226,
     "crates/view/src/main.rs": 1152,
-    "crates/ai/tests/closed_loop.rs": 1146,
+    "crates/ai/tests/closed_loop.rs": 1040,
     "crates/trace/src/compare.rs": 1038,
 }
 

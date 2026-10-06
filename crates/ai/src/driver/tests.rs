@@ -1,14 +1,12 @@
 //! What the AI driver in [`super`] is asserted to do, and the fixtures every
-//! theme of it is built from.
+//! theme is built from.
 //!
 //! Split out of `driver.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules, and split again by subject under the 1,000-line cap on a file;
-//! see `scripts/check-file-size.py`.
-//!
-//! The themes are named `<theme>_tests.rs` rather than `<theme>.rs` because
+//! modules, and by subject under the 1,000-line file cap
+//! (`scripts/check-file-size.py`). Themes are named `<theme>_tests.rs` because
 //! `scripts/check-transcendentals.py` decides what is test code from the file
-//! stem alone, and a theme that builds a fixture corner with `cos` is only
-//! legal under a name that stem recognises.
+//! stem alone, and a fixture corner built with `cos` is only legal under such a
+//! stem.
 
 use super::*;
 use crate::field::Rival;
@@ -165,9 +163,9 @@ fn straight_with_corridor() -> Line {
 
 /// An arc bending to the driver's right, with an even corridor.
 ///
-/// Built the same way `tests/closed_loop.rs` builds the oval's: the chord
-/// direction crossed with world up, which is only legitimate because this
-/// fixture is flat.
+/// An arc bending to the driver's right, with an even corridor. Built as
+/// `tests/closed_loop.rs` builds the oval's (chord direction crossed with world
+/// up), legitimate because the fixture is flat.
 fn right_hand_corner(radius: f32) -> Line {
     let points: Vec<Vec3> = (0..96)
         .map(|step| {

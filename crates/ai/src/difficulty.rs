@@ -2,42 +2,34 @@
 //!
 //! # It degrades a competent driver rather than boosting a weak one
 //!
-//! The top level is the tuning that was **measured** against the real hulls on
-//! a real circuit - see `Tuning::lateral_accel` and `Tuning::max_turn_rate`, both
-//! of which carry their sweeps - and every level below it takes something away.
-//! The other direction is the one that goes wrong: a baseline tuned for a novice
-//! and then multiplied upward has no measurement behind its top end, so the
-//! hardest setting is the least tested one, which is exactly backwards.
-//!
-//! `docs/gameplay/ai.md` sets out the same rule as a six-axis *degradation*
-//! vector. Four of those axes exist and are what a level moves here.
+//! The top level is the tuning **measured** against the real hulls on a real
+//! circuit (`Tuning::lateral_accel`, `Tuning::max_turn_rate`) and every level
+//! below takes something away. A baseline tuned for a novice and multiplied
+//! upward has no measurement behind its top end. `docs/gameplay/ai.md` states
+//! the rule as a six-axis degradation vector; four of those axes exist here.
 //!
 //! # What a level may not do
 //!
 //! **Nothing here reads the player.** The original schedules opponent thrust
-//! against the player's race position and the gap to them - `PosBalancing` and
-//! `RubberBanding`, both recovered - and this project [refuses to port
-//! that](../../docs/gameplay/ai.md#what-we-build-instead). A difficulty setting
-//! chooses how good the opponents are *before* the lights, and then they race.
-//! An easy field that is easy because it waits for you is not an easy field, it
-//! is a rigged one, and the player can feel the difference.
+//! against the player's position and gap (`PosBalancing`, `RubberBanding`, both
+//! recovered) and this project [refuses to port
+//! that](../../docs/gameplay/ai.md#what-we-build-instead). A difficulty is how
+//! good the opponents are *before* the lights; an easy field that waits for you
+//! is rigged, and the player can feel it.
 
 use crate::pilot::Pilot;
 use crate::{Span, Tuning};
 
 /// How often a driver at the *easiest* level misses a braking point, per tick
-/// of braking. About once a second spent slowing down.
+/// of braking: about once a second spent slowing.
 ///
-/// **It lives here and not in `Tuning`, whose default is zero.** Erring is a
-/// degradation, so a caller that has not chosen a difficulty - the closed-loop
-/// harness, a replay, a test - gets the competent driver rather than a quietly
-/// fallible one.
+/// **Here and not in `Tuning`, whose default is zero**: erring is a
+/// degradation, so a caller that chose no difficulty (closed-loop harness,
+/// replay, test) gets the competent driver.
 const MISTAKE_BASE: f32 = 1.0 / 90.0;
 
-/// How good the opponents are.
-///
-/// Four levels, and the names are this project's own rather than the original's
-/// - see [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
+/// How good the opponents are. Four levels, named by this project, not the
+/// original: [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Difficulty {
     /// Slow, forgiving, and largely uninterested in you.
@@ -70,11 +62,9 @@ impl Difficulty {
             .map_or("elite", |(name, _)| *name)
     }
 
-    /// A level by name, or `None`.
-    ///
-    /// **`None` rather than a default**, so a caller reading a config file can
-    /// decide whether an unrecognised value is worth a message. `oag-game`'s
-    /// settings path falls back and says so; a test would rather fail.
+    /// A level by name, or `None`, so a caller reading a config file can decide
+    /// whether an unrecognised value is worth a message (`oag-game`'s settings
+    /// path falls back and says so; a test would rather fail).
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL
@@ -86,36 +76,28 @@ impl Difficulty {
     /// How much of the measured cornering grip this level's drivers believe
     /// they have.
     ///
-    /// **The biggest single lever, and the one with a measurement behind it.**
-    /// `Tuning::lateral_accel` is the fastest a craft can be driven before it
-    /// stops cornering and starts sliding; at 55 - a third of it - an opponent
-    /// spent 45 per cent of a real race off the throttle. So this scale is not
-    /// arbitrary: it walks back down the curve that was swept.
+    /// **The biggest single lever, with a measurement behind it**: at 55, a
+    /// third of `Tuning::lateral_accel`, an opponent spent 45 per cent of a
+    /// real race off the throttle. This scale walks back down the swept curve.
     #[must_use]
     pub fn grip_believed(self) -> f32 {
         match self {
-            // **Novice is calibrated on a measurement rather than a fraction.**
-            // 0.3 of 180 is about 54, which is what `lateral_accel` was before
-            // it was swept - the tuning that was reported from play as "my
-            // craft is faster than the AI, first place within a few seconds".
-            // That is exactly what a novice level should feel like, and it is
-            // the one point on this scale with a play report behind it.
+            // Novice is calibrated on a measurement: 0.3 of 180 is about 54,
+            // `lateral_accel` before it was swept, reported from play as "my
+            // craft is faster than the AI". The one point with a play report.
             Self::Novice => 0.30,
-            // **Evenly spaced in corner speed, not in grip.** The target goes
-            // as the square root of this, so a linear grip scale bunches the
-            // hard end together: these four are 0.55, 0.69, 0.84 and 1.0 of the
-            // measured corner speed, which is four even steps.
+            // **Evenly spaced in corner speed, not grip**: the target goes as
+            // the square root, so these are 0.55, 0.69, 0.84 and 1.0 of the
+            // measured corner speed.
             Self::Skilled => 0.48,
             Self::Elite => 0.70,
             Self::Ace => 1.0,
         }
     }
 
-    /// How much of the turn rate the geometry is allowed to ask for.
-    ///
-    /// Lowering it is what makes a weaker driver run wide where a better one
-    /// tucks back in - the failure that was reported from play on Talon's
-    /// Junction, here on purpose.
+    /// How much of the turn rate the geometry may ask for. Lowering it makes a
+    /// weaker driver run wide where a better one tucks back in (the Talon's
+    /// Junction play report, here on purpose).
     #[must_use]
     pub fn turn_allowed(self) -> f32 {
         match self {
@@ -129,10 +111,9 @@ impl Difficulty {
     /// How much of a pilot's appetite for weapons, ramming and blocking
     /// survives.
     ///
-    /// **Zero at novice, and that is deliberate rather than lazy.** A slow
-    /// opponent that still shoots you in the back is not an easy race, it is an
-    /// annoying one; the thing a novice wants is to be left alone while they
-    /// learn the circuit.
+    /// **Zero at novice, deliberately**: a slow opponent that still shoots you
+    /// in the back is annoying, and a novice wants to be left alone to learn
+    /// the circuit.
     #[must_use]
     pub fn aggression(self) -> f32 {
         match self {
@@ -145,16 +126,11 @@ impl Difficulty {
 
     /// How much of a pilot's appetite for **barrel rolls** survives.
     ///
-    /// **A second axis rather than a reuse of [`Self::aggression`]**, and the
-    /// distinction is the same one `Driver::stew` draws: aggression is what a
-    /// driver does to *other craft*, and a roll is entirely what it asks of its
-    /// own. They also want different bottoms - a novice that never shoots is a
-    /// kindness, a novice that can never roll is a level with a mechanic
-    /// missing from it.
-    ///
-    /// `Ace` is the pilot's own value, per the module docs: the top level gives
-    /// back the measurement with nothing taken away, and every level below it
-    /// rolls less often. Ours, and a play-feel scale.
+    /// **A second axis, not a reuse of [`Self::aggression`]**: that is what a
+    /// driver does to *other craft* (`Driver::stew`'s distinction), a roll is
+    /// what it asks of its own, and they want different bottoms (a novice that
+    /// never shoots is a kindness, one that can never roll lacks a mechanic).
+    /// `Ace` is the pilot's own value. Ours, a play-feel scale.
     #[must_use]
     pub fn roll_appetite(self) -> f32 {
         match self {
@@ -166,15 +142,9 @@ impl Difficulty {
     }
 
     /// How much more of its pool a level keeps back from a roll, and how much
-    /// longer a jump it wants first, as one multiplier on both.
-    ///
-    /// **It rises as the level falls**, which is the same degradation the rest
-    /// of this type applies read from the other end: a weaker driver is more
-    /// cautious about spending, and slower to decide a jump is worth spending
-    /// on. `Ace` is `1.0`, so the pilot's own numbers reach it untouched.
-    ///
-    /// One multiplier for two axes because they are the same instinct, and two
-    /// scales would be two knobs that always moved together.
+    /// longer a jump it wants first, as one multiplier on both: the same
+    /// instinct, so two scales would always move together. It rises as the level
+    /// falls; `Ace` is `1.0`, so the pilot's numbers reach it untouched.
     #[must_use]
     pub fn roll_caution(self) -> f32 {
         match self {
@@ -186,23 +156,17 @@ impl Difficulty {
     }
 
     /// How long a driver takes to notice a craft arriving beside, in front of
-    /// or behind it, in ticks.
+    /// or behind it, in ticks. **Zero at Ace, like [`Self::mistakes`]**, or "the
+    /// measured ceiling, with nothing given back" stops being true.
     ///
-    /// **Zero at Ace, like [`Self::mistakes`]**, or "the measured ceiling, with
-    /// nothing given back" would stop being true of it.
+    /// The scale is a human's, the one axis modelling a person rather than a
+    /// car: a simple visual reaction is about a quarter of a second, fifteen
+    /// ticks, which is Skilled. Elite is quicker because it is already looking;
+    /// Novice is four tenths, still working out where the circuit goes.
     ///
-    /// The scale is a human's, because this is the one axis that models a human
-    /// rather than a car: a simple visual reaction is about a quarter of a
-    /// second, which is fifteen ticks, and that is Skilled. Elite is quicker
-    /// than a person because it is already looking, and Novice is four tenths
-    /// of a second - somebody still working out where the circuit goes, who
-    /// notices the craft alongside once it is properly there.
-    ///
-    /// **It is a delay, not a blindness.** What it costs is the early part of
-    /// a reaction - the lift for a craft closing ahead, the cover for one
-    /// coming up behind, the shot at one crossing the cone - which is exactly
-    /// the part a better driver has and a worse one does not. `driver/reflex.rs`
-    /// is what a channel does while the clock runs.
+    /// **A delay, not a blindness**: it costs the early part of a reaction (the
+    /// lift for a craft ahead, the cover for one behind, the shot at one
+    /// crossing the cone). `driver/reflex.rs` is what a channel does meanwhile.
     #[must_use]
     pub fn reaction_ticks(self) -> u16 {
         match self {
@@ -213,17 +177,15 @@ impl Difficulty {
         }
     }
 
-    /// The share of a speed plan's verified pace this level holds - on a plan,
-    /// the level's handicap on the straights, where the plan itself asks for
-    /// everything the craft has.
+    /// The share of a speed plan's verified pace this level holds: the level's
+    /// handicap on the straights, where the plan asks for everything.
     ///
-    /// **Calibrated, not measured off the original**: chosen so the
+    /// **Calibrated, not measured off the original**, so the
     /// `difficulty_ground_truth` ladder keeps the shape it had on the corner
-    /// model, where the four levels' leaders covered 5,885, 6,534, 6,806 and
-    /// 6,807 units in a minute (0.865, 0.96, 1.00, 1.00 of the Ace's) on the
-    /// tree the plan landed on. With the plan's corner margin alone they
-    /// covered 0.95, 0.99, 1.00, 1.00. See `docs/gameplay/ai.md`, "The speed
-    /// plan".
+    /// model, where the levels' leaders covered 5,885, 6,534, 6,806 and 6,807
+    /// units a minute (0.865, 0.96, 1.00, 1.00 of the Ace's). With the plan's
+    /// corner margin alone they covered 0.95, 0.99, 1.00, 1.00. See
+    /// `docs/gameplay/ai.md`, "The speed plan".
     #[must_use]
     pub fn pace_share(self) -> f32 {
         match self {
@@ -258,33 +220,21 @@ impl Difficulty {
         }
     }
 
-    /// A continuous position on this ladder, for a caller that has a
-    /// non-integer skill to place rather than a named level to pick.
+    /// A continuous position on this ladder, for a caller with a non-integer
+    /// skill to place.
     ///
-    /// `1.0` reads as [`Self::Novice`], `2.0` as [`Self::Skilled`], `3.0` as
-    /// [`Self::Elite`] - the same three-rung vocabulary the built-in
-    /// campaign's own Easy/Medium/Hard already carries: Wipeout HD's own
-    /// debug text equates them rung for rung
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡
-    /// ELITE` section, corroborated at the UI layer by
-    /// `docs/ui/campaign-screens.md`'s RPCS3 capture). A value between two
-    /// integers blends the neighbouring levels' axes linearly rather than
-    /// snapping to the nearer one, so a campaign cell's own authored
-    /// position on the disc's `SkillScaleValue` curve
-    /// (`oag_tables::track_stats::resolve_skill_scale`) is not discarded on
-    /// the way in - see `docs/gameplay/ai.md`'s own campaign section for
-    /// where this scale comes from and what it does not carry.
+    /// `1.0` is [`Self::Novice`], `2.0` [`Self::Skilled`], `3.0` [`Self::Elite`],
+    /// the campaign's Easy/Medium/Hard (HD's debug text equates them:
+    /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡ ELITE`,
+    /// `docs/ui/campaign-screens.md`). Between two integers the neighbouring
+    /// levels' axes blend linearly, so a cell's authored position on the disc's
+    /// `SkillScaleValue` curve (`oag_tables::track_stats::resolve_skill_scale`)
+    /// survives; see `docs/gameplay/ai.md`'s campaign section.
     ///
-    /// **`Ace` is unreachable through this path**, on purpose: the
-    /// campaign's own three-rung vocabulary never names a fourth, harder
-    /// setting either, and `Ace` stays what it always was - "the measured
-    /// ceiling, with nothing given back" - reachable only by naming it
-    /// directly (`--autopilot-skill ace`, the RACE page's own Ace choice).
-    ///
-    /// Clamped to `1.0..=3.0` - the curve a track authors can run slightly
-    /// outside that band (a cell's `skillEasy` a little under `1.0`, or a
-    /// track's own `SkillScaleValue` a little over `3.0`), and this project
-    /// has no fifth level to extrapolate into.
+    /// **`Ace` is unreachable here**: the campaign names no fourth setting, so
+    /// `Ace` is reachable only by name (`--autopilot-skill ace`, the RACE page).
+    /// Clamped to `1.0..=3.0`: an authored curve can run slightly outside, and
+    /// there is no fifth level to extrapolate into.
     #[must_use]
     pub fn tune_at_scale(scale: f32, measured: &Tuning) -> Tuning {
         let (lo, hi, t) = Self::straddle(scale);
@@ -316,20 +266,16 @@ impl Difficulty {
         }
     }
 
-    /// This level's version of a pilot.
-    ///
-    /// Only the axes that decide how a driver treats *other craft* are scaled.
-    /// The ones that decide its own line - bias, wander, the inside line - are
-    /// left alone, so a shy pilot at novice is still recognisably the same
-    /// character rather than a generic slow one.
+    /// This level's version of a pilot: only the axes deciding how a driver
+    /// treats *other craft* scale; its own line stays, so a shy novice is still
+    /// itself.
     #[must_use]
     pub fn temper(self, pilot: &Pilot) -> Pilot {
         let scale = self.aggression();
         let scaled = |span: Span| Span::new(span.low * scale, span.high * scale);
-        // The roll axes degrade in the two directions their own meanings run:
-        // less often, off more shield, after a longer jump. A floor is a
-        // fraction of the pool, so it clamps at one - which is a pilot that
-        // never rolls, and the honest end of the scale rather than a nonsense.
+        // The roll axes degrade the ways their meanings run: less often, off
+        // more shield, after a longer jump. A floor is a fraction of the pool and
+        // clamps at one, a pilot that never rolls.
         let appetite = self.roll_appetite();
         let caution = self.roll_caution();
         let dimmed = |span: Span| Span::new(span.low * appetite, span.high * appetite);
@@ -362,12 +308,10 @@ impl std::fmt::Display for Difficulty {
     }
 }
 
-/// So `--autopilot-skill` can be `Option<Difficulty>` directly, the same way
-/// `oag_gameplay::ControlScheme` lets `--scheme` be - clap rejects an
-/// unrecognised token at parse time and names the valid ones, rather than a
-/// caller having to do that by hand the way `oag_game`'s settings path (which
-/// wants to warn and fall back instead of refusing to boot) does through
-/// [`Difficulty::from_name`].
+/// So `--autopilot-skill` can be `Option<Difficulty>` directly: clap rejects an
+/// unrecognised token at parse time and names the valid ones, where
+/// [`Difficulty::from_name`] is for `oag_game`'s settings path (warn and fall
+/// back).
 impl std::str::FromStr for Difficulty {
     type Err = String;
 

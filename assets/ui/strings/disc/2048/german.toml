@@ -1,0 +1,20 @@
+# German: the ids Wipeout 2048's own German table leaves empty, filled with this
+# project's own wording. Read only by a title whose front end names the `2048`
+# namespace (`oag_title::FrontEnd::disc_strings`), and only to fill: the disc's
+# own German is never replaced (`StringTable::fill`).
+#
+# **Every entry is `human = false`**: machine-written, not reviewed by a native
+# speaker. Wipeout Omega's German table carries the same four ids and is
+# matched, so the two titles read alike. `%d %%` is a printf slot and a literal
+# percent sign and stays as written.
+#
+# Left out on purpose: `BOOT_LEGAL_TRADEMARK_FULL_Asia` and `_US` (legal notices
+# for other regions), `fe_hd_livery_normal` (a proper name, "HD"), `test_test`
+# (a leftover test string).
+
+[strings]
+
+3D_STRENGTH = { text = "3D-STÄRKE", human = false }
+FE_CAMPSEL_MODES = { text = "KAMPAGNENMODI", human = false }
+FE_PERCENT_COMPLETE = { text = "%d %% VOLLSTÄNDIG", human = false }
+STATS_ONLINE_RACES_LOST = { text = "VERLORENE ONLINE-RENNEN", human = false }

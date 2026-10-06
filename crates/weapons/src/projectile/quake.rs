@@ -1,143 +1,96 @@
-//! The Quake: a single travelling point on the track's own path, not a
-//! projectile at all.
+//! The Quake: a single travelling point on the track's own path, not a projectile.
 //!
-//! **Nothing here flies.** Every other module in [`super`] shares
-//! [`super::Projectiles`]'s array and its floor-following flight; the Quake
-//! has neither, because the original's own `Weapon_FireQuake` (`0x0886c600`)
-//! never gives it a position or a velocity - it locates the firing craft on
-//! the track's own spline and stores a travelling *distance*, not a point in
-//! space. See
-//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md` for the
-//! whole reading and `oag_gameplay::World::quake` for where the single instance
-//! this weapon ever has lives.
+//! Nothing here flies. `Weapon_FireQuake` (`0x0886c600`) gives the wave no
+//! position or velocity: it locates the firing craft on the track's spline and
+//! stores a travelling distance. See
+//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`; the single
+//! instance lives in `oag_gameplay::World::quake`.
 //!
 //! # What is recovered and what is ours
 //!
-//! **Recovered.** That the wave advances at a fixed, unauthored
-//! `270.0` units a second along the track's own spline
-//! ([`SPEED_UNITS_PER_SECOND`]), in a direction chosen once at launch by
-//! dotting the firing craft's forward against the track's own tangent there.
-//! That the hit/slowdown half reuses the same shared pending-hit channel the
-//! Missile and the Mine/Bomb already spend (`entity+0x130`/`+0x138`/`+0x13c`),
-//! gated on a per-craft latch (`entity+0x860 & 0x40`) that this project found
-//! 2026-09-07 to be a smoothed-proximity test - see [`Self::progress_delta`]'s
-//! doc comment for the recovered mechanism and the authored [`radius`
-//! substitution](oag_tables::weapons::QuakeStats::radius) this port makes
-//! for it.
+//! **Recovered.** The wave advances at a fixed, unauthored `270.0` units a second
+//! along the spline ([`SPEED_UNITS_PER_SECOND`]), in a direction chosen once at
+//! launch by dotting the craft's forward against the track tangent. The hit and
+//! slowdown half reuses the shared pending-hit channel the Missile and Mine/Bomb
+//! spend (`entity+0x130`/`+0x138`/`+0x13c`), gated on a per-craft latch
+//! (`entity+0x860 & 0x40`) found 2026-09-07 to be a smoothed-proximity test; see
+//! [`Self::progress_delta`] and the [`radius`
+//! substitution](oag_tables::weapons::QuakeStats::radius).
 //!
-//! **Ours.** The exact representation: this crate tracks the wave's position
-//! as a single `f32` distance-along-the-course, in the same units and the
-//! same convention [`oag_race::Standing::progress`] already gives every
-//! craft, rather than the original's segment-index-plus-parametric-`t` pair.
-//! The two are equivalent for a closed ring and this shape needs no new
-//! per-tick state on `oag_gameplay::World` beyond what standings already compute -
-//! see `crates/raceplay/src/weapons.rs::advance_quake` for where the wave's
-//! own world position is recovered from this distance for the visual, which
-//! needs [`oag_race::Course`] and therefore cannot live in this crate at all
-//! (`oag-gameplay` draws nothing - see `docs/architecture/adr/0003-no-ecs.md`'s
-//! neighbour, the "simulation must not know a renderer exists" rule in
-//! `CLAUDE.md`). **The original's own smoothed-proximity debounce is not
-//! reproduced bit for bit** - this uses a flat in/out-of-`radius` test on the
-//! circular distance between the wave's own progress and the craft's own
-//! [`oag_race::Standing::progress`], edge-triggered on [`Wave::hit`] the same
-//! way the original's latch is edge-triggered on `entity+0x860 & 0x40`. Both
-//! are a "the wave passed over this craft, once" rule; the original's is a
-//! smoothed analogue quantity crossing `0.1` at an unauthored `8.0`-per-second
-//! rate, and reproducing that exactly needs the two span-table fields
-//! (`Quake_SpanIntensityAt`'s own `+0x5c`/`+0x64`/`+0x6c`) this project has
-//! only read at the shape level. **Chosen, not measured.**
+//! **Ours.** The wave's position is one `f32` distance along the course, in
+//! [`oag_race::Standing::progress`]'s units, not the original's segment index plus
+//! parametric `t`; equivalent for a closed ring and no new `World` state.
+//! `crates/raceplay/src/weapons.rs::advance_quake` recovers the world position for
+//! the visual (it needs [`oag_race::Course`], which this crate cannot hold).
+//! **The smoothed-proximity debounce is not reproduced: chosen, not measured.**
+//! This uses a flat in/out-of-`radius` test on circular distance, edge-triggered on
+//! [`Wave::hit`] like the original's latch. The original's analogue quantity
+//! crosses `0.1` at an unauthored `8.0` per second and needs the span-table fields
+//! (`Quake_SpanIntensityAt`'s `+0x5c`/`+0x64`/`+0x6c`) read only at shape level.
 
 use crate::{Craft, MAX_SHIPS};
 use oag_tables::weapons::QuakeStats;
 
 /// World units of track the wave crosses every second.
 ///
-/// **Recovered, confidence 85** (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+/// **Recovered, confidence 85**
+/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
 /// "`Quake_Update` is the missing per-frame advance"). `Quake_Update`
-/// (`0x0891d268`) advances a parametric position at `270.0 * dt /
-/// <a per-launch value>`, but the *same* `270.0` is independently spent a
-/// second way in the same function, directly as `ABS(270.0) * dt` against
-/// Euclidean segment lengths - a plain world-distance rate, which is the
-/// reading this constant takes rather than the parametric one. Not authored:
-/// it is a fixed engine literal, not one of [`QuakeStats`]'s four attributes.
+/// (`0x0891d268`) advances a parametric position at `270.0 * dt / <per-launch
+/// value>`, but the same `270.0` is also spent as `ABS(270.0) * dt` against
+/// Euclidean segment lengths, a plain world-distance rate, which this takes. A
+/// fixed engine literal, not one of [`QuakeStats`]'s four attributes.
 pub const SPEED_UNITS_PER_SECOND: f32 = 270.0;
 
 /// Seconds a fired Quake lives, measured from launch.
 ///
-/// **Recovered, confidence 85** (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-/// "The lifetime is 5.0 seconds from launch, and the age is inherited"). The
-/// original does not carry the wave as one object with one clock: it arms a
-/// *road span* record, each of which ages by `dt` and sets its own retire byte
-/// (`+0x7d`) the frame `age + dt` exceeds `5.0` - the literal is a `lui a0,
-/// 0x40a0` at `0x0891cafc`, read at instruction level rather than off the
-/// decompiler. What makes that one wave lifetime rather than a per-span one is
-/// that `Quake_ArmSpan` (`0x0891b714`) copies its caller's *age* into the new
-/// span (`+0x74 = param_2`) instead of zeroing it, and both propagation
-/// functions pass the parent span's own `+0x74` along. `Quake_Init` starts the
-/// chain at `0`, so every span the ripple ever spreads to shares one clock
-/// begun at launch and the whole apparatus retires together.
-///
-/// Not authored: like [`SPEED_UNITS_PER_SECOND`] it is a fixed engine literal,
-/// not one of [`QuakeStats`]'s four attributes.
+/// **Recovered, confidence 85** (same page, "The lifetime is 5.0 seconds from
+/// launch, and the age is inherited"). Each road span record ages by `dt` and
+/// sets its retire byte (`+0x7d`) the frame `age + dt` exceeds `5.0` (`lui a0,
+/// 0x40a0` at `0x0891cafc`, read at instruction level). It is one wave lifetime
+/// because `Quake_ArmSpan` (`0x0891b714`) copies the caller's age into the new span
+/// (`+0x74 = param_2`) and both propagation functions pass the parent's `+0x74`
+/// along, from `Quake_Init`'s `0`. A fixed engine literal, not authored.
 pub const LIFETIME_SECONDS: f32 = 5.0;
 
-/// The single travelling wave a fired Quake ever has.
-///
-/// One instance for the whole race, matching `Weapon_FireQuake`'s own pool -
-/// a single slot, not an array
-/// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`) - so
-/// `oag_gameplay::World` carries `Option<Wave>` rather than a fixed array the way
-/// [`super::Projectiles`] does.
+/// The single travelling wave a fired Quake ever has, matching `Weapon_FireQuake`'s
+/// single-slot pool (same page), so `oag_gameplay::World` carries `Option<Wave>`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Wave {
-    /// Which ship slot fired it. Excluded from every hit test - the original
-    /// clears the latch outright for the shooter's own craft rather than
-    /// running the proximity test against it at all.
+    /// Which ship slot fired it. Excluded from every hit test: the original clears
+    /// the shooter's latch outright.
     pub owner: u8,
-    /// Distance from the course's own start line, in `oag_race::Standing::progress`'s
-    /// own convention and units - `0.0..course.length()`, wrapping.
+    /// Distance from the course's start line, in `oag_race::Standing::progress`'s
+    /// units: `0.0..course.length()`, wrapping.
     pub progress: f32,
-    /// Which way around the ring the wave travels: `1.0` toward increasing
-    /// progress, `-1.0` toward decreasing. Fixed at launch and never
-    /// re-evaluated, matching `Quake_Init`'s own one-shot dot product.
+    /// Which way around the ring: `1.0` toward increasing progress, `-1.0`
+    /// decreasing. Fixed at launch, as `Quake_Init`'s one-shot dot product.
     pub direction: f32,
-    /// Energy the wave costs a craft it passes over, once.
-    ///
-    /// Copied from [`QuakeStats::damage`] at launch rather than looked up
-    /// every tick, since only one wave ever exists at a time - see the
-    /// module doc comment on why this differs from the original's own
-    /// craft-side caching.
+    /// Energy the wave costs a craft it passes, once. Copied from
+    /// [`QuakeStats::damage`] at launch; only one wave exists at a time.
     pub damage: f32,
-    /// The wave's own proximity gate - see [`QuakeStats::radius`].
+    /// The wave's proximity gate, see [`QuakeStats::radius`].
     pub radius: f32,
     /// Seconds of slowdown the wave charges a craft it passes over, once.
     pub slowdown_time: f32,
-    /// Per-slot latch: whether this craft is currently inside [`Self::radius`]
-    /// of the wave, so a hit is credited on the rising edge only rather than
-    /// every tick a craft dawells inside the gate. Mirrors `entity+0x860 &
-    /// 0x40` - see the module doc comment on how the two gates differ.
+    /// Per-slot latch: whether this craft is inside [`Self::radius`], so a hit is
+    /// credited on the rising edge only. Mirrors `entity+0x860 & 0x40`.
     pub hit: [bool; MAX_SHIPS],
     /// Seconds since launch, against [`LIFETIME_SECONDS`].
     ///
-    /// **The one piece of per-wave state the original keeps per road span**, on
-    /// the reasoning [`LIFETIME_SECONDS`]'s own doc comment gives: the original's
-    /// spans inherit each other's age, so a single scalar here is the same
-    /// clock, not an approximation of several.
+    /// The one piece of per-wave state the original keeps per road span; the spans
+    /// inherit each other's age (see [`LIFETIME_SECONDS`]), so one scalar is the
+    /// same clock.
     pub age: f32,
 }
 
 impl Wave {
-    /// A freshly-launched wave, at the firing craft's own current progress.
+    /// A freshly launched wave at the firing craft's progress.
     ///
-    /// `forward_dot_tangent` is the dot product of the firing craft's own
-    /// forward vector against the track's own tangent at its current
-    /// position - the caller's job, since only `crates/raceplay/src` holds
-    /// an `oag_race::Course` to read a tangent from. Its sign alone is used;
-    /// a value of exactly `0.0` (forward perpendicular to the track, e.g. a
-    /// craft facing dead across it) takes the positive direction rather than
-    /// stalling on a `0.0 * SPEED` that never moves - **chosen, not
-    /// measured**, since `Quake_Init`'s own tie-break at a dot product of
-    /// exactly zero is not established.
+    /// `forward_dot_tangent` (craft forward against track tangent) is the caller's
+    /// job: only `crates/raceplay/src` holds a `Course`. Only its sign is used;
+    /// exactly `0.0` takes the positive direction rather than stall. **Chosen, not
+    /// measured**: `Quake_Init`'s tie-break there is not established.
     #[must_use]
     pub fn launch(owner: u8, progress: f32, forward_dot_tangent: f32, stats: &QuakeStats) -> Self {
         Self {
@@ -152,14 +105,10 @@ impl Wave {
         }
     }
 
-    /// Advances the wave one tick along a course of this `length`, wrapping,
-    /// and ages it.
-    ///
-    /// **The age advances on every path, including the degenerate one.** A
-    /// non-positive length leaves [`Self::progress`] alone - a course that
-    /// short has nothing for the wave to travel around - but a wave that cannot
-    /// move still has to expire, or the guard against firing a second Quake
-    /// never opens again.
+    /// Advances the wave one tick along a course of this `length`, wrapping, and
+    /// ages it. The age advances on every path: a non-positive length leaves
+    /// [`Self::progress`] alone, but a wave that cannot move must still expire or
+    /// a second Quake can never be fired.
     pub fn advance(&mut self, length: f32, dt: f32) {
         self.age += dt;
         if length <= 0.0 {
@@ -169,24 +118,18 @@ impl Wave {
             (self.progress + self.direction * SPEED_UNITS_PER_SECOND * dt).rem_euclid(length);
     }
 
-    /// Whether the wave has outlived [`LIFETIME_SECONDS`] and its caller should
-    /// drop it.
-    ///
-    /// Read *after* [`Self::advance`] and *before* [`Self::apply_hits`], so the
-    /// tick a wave expires on lands no hit - matching the original, where the
-    /// span's retire byte (`+0x7d`) short-circuits both its own ripple and its
-    /// propagation on the frame it is set.
+    /// Whether the wave has outlived [`LIFETIME_SECONDS`]. Read after
+    /// [`Self::advance`] and before [`Self::apply_hits`], so the expiring tick lands
+    /// no hit, as the span's retire byte (`+0x7d`) short-circuits ripple and
+    /// propagation.
     #[must_use]
     pub fn expired(&self) -> bool {
         self.age > LIFETIME_SECONDS
     }
 
-    /// The shortest distance around a ring of this `length` between the
-    /// wave's own progress and `other`.
-    ///
-    /// Split out for its own test: a ring wraps, so the straight difference
-    /// overstates the distance for a craft just the other side of the start
-    /// line from the wave.
+    /// The shortest distance around a ring of this `length` between the wave and
+    /// `other`: a ring wraps, so the straight difference overstates it across the
+    /// start line.
     #[must_use]
     pub fn progress_delta(&self, other: f32, length: f32) -> f32 {
         let raw = (other - self.progress).abs();
@@ -197,27 +140,15 @@ impl Wave {
         }
     }
 
-    /// One tick of the wave's own hit test against every active ship.
+    /// One tick of the wave's hit test against every active ship.
     ///
-    /// **Owner excluded outright**, matching the original's own
-    /// `craft_is_shooter` short-circuit rather than running the radius test
-    /// against the shooter and always missing it - the two read the same
-    /// from outside, but this is closer to what `FUN_088418e0`'s block
-    /// actually branches on.
-    ///
-    /// A ship with no [`oag_race::Standing::progress`] yet (not yet located
-    /// on the course) is skipped rather than treated as in or out of range -
-    /// the same "no reading, no claim" shape that field itself takes.
-    ///
-    /// Shielded craft take no hit and their latch clears, matching the
-    /// original's own shield branch (`entity+0x1b8 & 0x10`) clearing the bit
-    /// rather than holding it.
-    ///
-    /// `hits[slot]` records each hit as absorbed or landed - see
-    /// [`super::WeaponHit`] - the same out-parameter shape
-    /// [`super::blast::blast`] and [`super::cannon::direct_hit`] both take,
-    /// for the same reason: a swallowed hit is the only thing that makes the
-    /// shell visibly react.
+    /// The owner is excluded outright, as the original's `craft_is_shooter`
+    /// short-circuit (what `FUN_088418e0`'s block branches on). A ship with no
+    /// [`oag_race::Standing::progress`] yet is skipped. Shielded craft take no hit
+    /// and their latch clears, as the original's shield branch (`entity+0x1b8 &
+    /// 0x10`) clears the bit. `hits[slot]` records absorbed or landed, see
+    /// [`super::WeaponHit`], as for [`super::blast::blast`] and
+    /// [`super::cannon::direct_hit`].
     pub fn apply_hits<S: Craft>(
         &mut self,
         ships: &mut [S; MAX_SHIPS],

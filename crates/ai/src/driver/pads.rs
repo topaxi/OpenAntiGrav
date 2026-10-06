@@ -3,35 +3,28 @@
 //! # Ours, chosen, not measured
 //!
 //! Nothing read of the original says its opponents steer for a pad. The
-//! weapon-pad list (`world+0x10c`, count `+0x1d4`) has three documented
-//! readers - `World_CollectNodeLists`, `WeaponPads_TestCraft` and the
-//! weapons-off reset, all in `docs/ghidra/functions/psp-pulse-usa/pads.md` -
-//! and none of them is AI code. That is a reading of the documented callers,
-//! not an exhaustive cross-reference. So this is smarter driving of our own,
-//! under the rule that the AI obeys the player's physics: it chooses where in
-//! the road to be and nothing else.
+//! weapon-pad list (`world+0x10c`, count `+0x1d4`) has three documented readers
+//! (`World_CollectNodeLists`, `WeaponPads_TestCraft`, the weapons-off reset; all
+//! `docs/ghidra/functions/psp-pulse-usa/pads.md`) and none is AI code, a reading
+//! of the documented callers and not an exhaustive cross-reference. So this is
+//! our own smarter driving, under the rule that the AI obeys the player's
+//! physics: it chooses where in the road to be and nothing else.
 //!
 //! # A pull on the final offset, not another lean
 //!
 //! [`Driver::drift`]'s other terms are fractions of the corridor scaled by
-//! `corridor_use` and the pilot's `width`, which keeps them well inside the
-//! road - and would keep a pad near the edge out of reach. So this one blends
-//! the **finished** lateral offset toward the pad's own offset across the line,
-//! and the corridor clamp after it is still the backstop.
-//!
-//! A pad sits still in the corridor, so the target is the pad's offset from the
-//! line rather than from the craft: one that moved with the craft would chase
-//! itself as the craft swung toward it.
+//! `corridor_use` and `width`, which would keep a pad near the edge out of
+//! reach. So this blends the **finished** lateral offset toward the pad's own
+//! offset across the line; the corridor clamp after it is still the backstop.
+//! The target is the pad's offset from the line, not the craft: one that moved
+//! with the craft would chase itself.
 
 use super::Driver;
 use crate::Pad;
 
-/// How far ahead a pad starts to pull, in units along the line.
-///
-/// **Chosen.** About one second of travel at VENOM racing speed: long enough
-/// that the swing is a lean rather than a swerve, short enough that a pad a
-/// corner away does not drag the craft off its line through the corner before
-/// it.
+/// How far ahead a pad starts to pull, in units along the line. **Chosen.**
+/// About one second at VENOM racing speed: a lean rather than a swerve, and a
+/// pad a corner away does not drag the craft off its line first.
 pub const LOOKAHEAD: f32 = 150.0;
 
 /// Inside this distance the pull is total: the craft aims straight over the
@@ -39,13 +32,12 @@ pub const LOOKAHEAD: f32 = 150.0;
 const HOLD: f32 = 40.0;
 
 impl Driver {
-    /// `offset` - the lateral offset [`Driver::drift`] settled on, in units -
-    /// pulled toward `pad`, or `offset` itself when there is no pad.
+    /// `offset` (the lateral offset [`Driver::drift`] settled on, in units)
+    /// pulled toward `pad`, or `offset` itself with no pad.
     ///
-    /// **A charge being dodged wins outright**: while `dodging` the pad is
-    /// ignored, because a mine laid on a pad is exactly the one not to drive
-    /// over. Returns its argument untouched rather than blending by zero, so a
-    /// race that never hands a pad over computes the same bits it always did.
+    /// **A charge being dodged wins outright**: a mine laid on a pad is the one
+    /// not to drive over. Returns its argument untouched rather than blending by
+    /// zero, so a race that hands no pad computes the same bits it always did.
     pub(super) fn toward_pad(offset: f32, pad: Option<Pad>, dodging: bool) -> f32 {
         let Some(pad) = pad else {
             return offset;
