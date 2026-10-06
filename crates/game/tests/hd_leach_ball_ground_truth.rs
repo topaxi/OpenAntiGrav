@@ -17,7 +17,8 @@
 //! ball was then shaded from the direction to the origin, a ragged half-lit
 //! disc, and it carried about 40 % of the bright pixels the right eye gives.
 //! Nothing in the model or the program was wrong, so only a close frame tells
-//! the two apart.
+//! the two apart. On Talon's Junction at that camera: 1,186 near-white pixels in
+//! the ball's box with the write, 369 with it dropped, 0 with no ball.
 
 use std::path::Path;
 
@@ -65,30 +66,31 @@ fn floor_of(png: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-/// Talon's Junction with rivals, tick 340: a locked LeachBeam put on slot 1 at
-/// tick 330, photographed from a camera 7 units off the ball (which sits at
-/// about `(13.5, -49.8, -188.2)` then), or the same frame with no beam.
+/// Talon's Junction with rivals, tick 280: a locked LeachBeam put on slot 1 at
+/// tick 276, photographed from a camera 7 units off the ball (which sits at
+/// about `(-0.6, -50.0, -194.8)` then), or the same frame with no beam.
+///
+/// **Four ticks after the green light and no input**, so slot 1 has barely
+/// left its grid mark and the ball, which starts at the target, is where the
+/// camera was pointed whatever the rival AI does in the seconds after. A
+/// later tick would make this test a function of the AI's driving.
 fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
     let out = scratch.join("frame.png");
-    let script = scratch.join("go.inputs");
-    std::fs::write(&script, "330 cross\n1000 cross\n").expect("the input script");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
         .arg(image)
         .args(["--race", "--opponents", "--no-audio", "--size", "960x544"])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
-        .args(["--motion-blur", "off", "--ticks", "340"])
-        .args(["--camera-pose", "13.51,-46.8,-182.2,0,-0.45,-0.89,0,1,0"])
-        .arg("--input-script")
-        .arg(&script)
+        .args(["--motion-blur", "off", "--ticks", "280"])
+        .arg("--camera-pose=-0.58,-47.04,-188.2,0,-0.45,-0.89,0,1,0")
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .env("XDG_STATE_HOME", scratch.join("state"));
     if locked {
-        command.args(["--force-leach-lock", "330:1"]);
+        command.args(["--force-leach-lock", "276:1"]);
     }
     assert!(command.status().expect("running oag-game").success());
     floor_of(&std::fs::read(&out).expect("the frame"))

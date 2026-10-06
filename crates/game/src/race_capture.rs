@@ -63,7 +63,7 @@ pub struct CaptureOptions {
     /// `--force-leach-lock TICK:TARGET`: put a locked LeachBeam from the
     /// player onto that slot at the end of that tick, which a headless run
     /// otherwise has no rival close enough to give. See
-    /// [`Race::lock_leach_beam_for_tests`].
+    /// [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.

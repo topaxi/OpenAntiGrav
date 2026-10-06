@@ -78,9 +78,11 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
-        && !race.lock_leach_beam_for_tests(0, target as u8)
+        && !race.force_leach_lock(0, target as u8)
     {
-        log::warn!("--force-leach-lock: this title authors no LeachBeam");
+        log::warn!(
+            "--force-leach-lock: slot {target} is not racing (pass --opponents), or the title authors no LeachBeam"
+        );
     }
     // The race's own voices, on the tick that raised them - the same call
     // the windowed loop makes immediately after `Race::tick` in
