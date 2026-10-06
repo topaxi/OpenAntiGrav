@@ -8,6 +8,26 @@
 
 use super::super::*;
 
+/// Which advert pass `title` runs in `mode`, and why none does when it does not.
+///
+/// A Zone race on a title whose zone effects bind one shared texture in place of
+/// the per-slot targets draws no advert: that texture is unread.
+pub(super) fn adverts_for(
+    title: &oag_title::Title,
+    mode: Mode,
+) -> (Option<&oag_title::adverts::Adverts>, &'static str) {
+    let zone_shared = title
+        .adverts
+        .is_some_and(|spec| spec.zone_shares_one_texture && mode == Mode::Zone);
+    let reason = if zone_shared {
+        "a Zone race binds one shared billboard texture to every slot but 8 on this title and \
+         that texture is unread"
+    } else {
+        "this title's advert pass is not measured"
+    };
+    (title.adverts.filter(|_| !zone_shared), reason)
+}
+
 /// Places the start gantry (see [`gantry::place`]) and builds the track's
 /// [`TrackVisibility`] partition, in that order - `track_model` is stripped
 /// of its billboard-slot placeholders in between, which is why both live in
