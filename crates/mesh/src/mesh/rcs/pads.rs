@@ -69,6 +69,45 @@ pub(super) fn is_pad_material(name: &str) -> bool {
     )
 }
 
+/// Every chunk hash the world-space pass leaves to a node: the ones a `Mesh`
+/// node names ([`super::referenced`]) and the ones either pad class names.
+///
+/// **Both pad classes' chunks are excluded here too, not only the ordinary
+/// `Mesh` ones `referenced` names.** They would otherwise fall through to the
+/// unreferenced-chunk loop in [`super::build_scene`] exactly the way `referenced`'s
+/// own doc comment describes for an ordinary node - a `Weapon Pad`/`Speedup
+/// Pad` node's chunk hash never matches `mesh_class`, so `referenced` never
+/// even looks at it. [`build_pads`]/[`build_weapon_pads`] draw
+/// these same chunks through their own node-ordered pass instead, and this is
+/// what stops a pad drawing twice once a caller uses both - see that pair's own
+/// doc comment for why a separate pass exists at all.
+///
+/// One function for [`super::build_scene`] and the pad passes' report
+/// ([`world_pass_pad_chunks`]), so the chunks the report counts as drawn
+/// here are the chunks the scene pass leaves for itself.
+pub(super) fn placed_hashes(
+    data: &[u8],
+    nodes: &[vex::Node],
+    classes: Option<vex::classes::Classes>,
+    order: oag_formats::ByteOrder,
+    model: &rcsmodel::Model,
+) -> Vec<u32> {
+    let mut placed = match classes.and_then(|c| c.mesh) {
+        Some(mesh_class) => super::referenced(data, nodes, mesh_class, model),
+        None => Vec::new(),
+    };
+    for class in [
+        classes.and_then(|c| c.speedup_pad),
+        classes.and_then(|c| c.weapon_pad),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        placed.extend(pad_chunk_hashes(data, nodes, order, class));
+    }
+    placed
+}
+
 /// The chunks [`super::build_scene`]'s world-space pass draws on a pad
 /// material, and their triangles: what a pad is on a circuit whose pad nodes
 /// name no chunk. `named` is every hash a pad node of either class names.
@@ -284,7 +323,7 @@ pub(super) fn build_pad_class(
     }
     out.node_vertex_ranges = node_vertex_ranges;
     if report.nodes > report.addressed {
-        let named = super::placed_hashes(data, &nodes, Some(classes), order, &model);
+        let named = placed_hashes(data, &nodes, Some(classes), order, &model);
         (report.routed_chunks, report.routed_triangles) = world_pass_pad_chunks(&model, &named);
     }
     face_normals(&mut out);
