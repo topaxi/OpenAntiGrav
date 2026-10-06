@@ -18,10 +18,10 @@
 //!    `4.0` without turning the velocity.
 //! 2. The probe direction is never re-read: `Disruptor_Update` writes `bolt+0x100`
 //!    nowhere, so a bolt fired on a banked corner probes along that bank for life.
-//! 3. A floor hit aims the velocity at the ride point, `normalize(ride - position)
-//!    * speed`, with [`oag_tables::weapons::DisruptorStats::speed_for_class`]
-//!    re-pinned on every floor hit and guided tick; the 500 km/h launch holds
-//!    until then.
+//! 3. A floor hit aims the velocity at the ride point (`normalize(ride -
+//!    position)` times speed), with
+//!    [`oag_tables::weapons::DisruptorStats::speed_for_class`] re-pinned on every
+//!    floor hit and guided tick; the 500 km/h launch holds until then.
 //! 4. The hit test is a swept cylinder of its own radius, see [`HIT_RADIUS`].
 //!
 //! # What a hit does
