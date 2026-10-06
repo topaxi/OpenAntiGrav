@@ -1,10 +1,10 @@
-# Title behaviour as data: the 23 comparisons still to migrate
+# Title behaviour as data: the 20 comparisons still to migrate
 
 2026-10-06. [ADR-0058](../../docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md)
 decides that per-title behaviour is `Title` data with a provenance tag and that a
 generic crate never compares a title's identity. `just check-title-branching`
 (`scripts/check-title-branching.py`) freezes the sites below at the counts in its
-`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 23 remain. Each migration lowers the row it touches in the
+`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 20 remain (three more migrated 2026-10-06 by the `2048-endrace` lane). Each migration lowers the row it touches in the
 same change. Sites are `file:line` at main b115ec3ef - `python3
 scripts/check-title-branching.py --list` prints the current ones.
 
