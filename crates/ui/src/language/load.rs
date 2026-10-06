@@ -82,7 +82,7 @@ pub fn load_languages(
 /// of the same name (Omega's own `portuguesebr`) keeps its own plugin as the
 /// base, and nothing is added. `disc_strings` is [`oag_title::FrontEnd::disc_strings`].
 fn add_project_languages(out: &mut Vec<Language>, disc_strings: Option<&'static str>) {
-    let Some(base) = out.iter().find(|l| l.name == "English").cloned() else {
+    let Some(base) = english_base(out).cloned() else {
         return;
     };
     for project in PROJECT_LANGUAGES {
@@ -101,9 +101,19 @@ fn add_project_languages(out: &mut Vec<Language>, disc_strings: Option<&'static 
     }
 }
 
+/// The language a project language stands on, and the one a boot falls back to:
+/// the disc's `English`, else its `American`. A release whose executable reaches
+/// only `American` (2048 USA offers American, French and Spanish) has no plain
+/// English plugin to offer.
+fn english_base(languages: &[Language]) -> Option<&Language> {
+    ["English", "American"]
+        .iter()
+        .find_map(|name| languages.iter().find(|l| l.name == *name))
+}
+
 /// Which language a boot reads its text in.
 ///
-/// The saved language first, then English, then whatever comes first. The
+/// The saved language first, then English (or American), then whatever comes first. The
 /// fallback chain used to end at English with a note that there was nothing
 /// saved to prefer; there is now. A saved name this source does not carry falls
 /// through rather than failing - the same rule the picker's own preselection
@@ -120,7 +130,7 @@ pub fn chosen_language<'a>(
 ) -> Option<&'a Language> {
     preferred
         .and_then(|name| languages.iter().find(|l| l.name.eq_ignore_ascii_case(name)))
-        .or_else(|| languages.iter().find(|l| l.name == "English"))
+        .or_else(|| english_base(languages))
         .or_else(|| languages.first())
 }
 

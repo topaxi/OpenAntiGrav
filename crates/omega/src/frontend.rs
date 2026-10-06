@@ -158,7 +158,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     disc_strings: None,
-    language_manifests: &[],
+    language_manifests: LANGUAGE_MANIFESTS,
+    assumed_release: Some("CUSA-05670"),
     menu: Some(MENU_SKIN),
     menu_ps2: None,
     // Omega authors HD's `FEGlobals`/`<HorizMenu>` vocabulary, not 2048's
@@ -236,6 +237,55 @@ pub mod names {
     /// carries this as unresolved.
     pub const STUDIO_LOGO_MOVIE: &str = "Data/FE/Images/StudioLiverpool.bik";
 }
+
+/// What each Omega release offers: the rows of the executable's own language
+/// table whose region mask matches the package, **not a manifest** - Omega has no
+/// picker either.
+///
+/// `FrontendRoot_Construct` (0x013c3d53) formats `FUN_0174ca60`'s answer into
+/// `Data/Plugins/languages\%s`. That function reads the console language
+/// (`sceSystemServiceParamGetInt(1)`) and walks 23 rows at 0x01947160 (24 bytes
+/// each: console id, index, name, region mask) for the one whose id matches and
+/// whose mask meets the region word `Game_Main` stores at 0x02037c98 (0x0163ba10)
+/// from `sceAppContentAppParamGetInt(1)`, which is `param.sfo`'s
+/// `USER_DEFINED_PARAM_1`. Both EU packages carry 1. A console language with no
+/// row for the region falls back per region (EU to `English`).
+///
+/// Mask 1 rows, in table order: English, French, Spanish, German, Italian, Dutch,
+/// Portuguese, Russian, Finnish, Swedish, Danish, Norwegian, Polish - and
+/// **Turkish only in the 1.07 patch's table** (file offset 0x9ba330, mask 1
+/// there, 0 in the base's). The patch is mandatory, so EU offers fourteen.
+/// `american`, `japanese`, `korean`, `portuguesebr`, `spanishla`, the Chinese
+/// pair and `arabic` ship on the disc and are not reachable on an EU package;
+/// `portuguesebr` is **not reachable** (mask 2) and is listed last anyway: this
+/// project offers Brazilian Portuguese on every title, and the disc's own text
+/// for it is the base it should stand on rather than a copy of English
+/// (`docs/ui/project-languages.md`) - chosen, not measured. Retail's EU store text counts twelve: not matched by
+/// either table, corroboration only.
+///
+/// This project's PS4 extract keeps no `param.sfo`, so a source reports no serial
+/// and [`oag_title::FrontEnd::assumed_release`] names this release for it. Order is the table's.
+pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::LanguageManifest {
+    serial: "CUSA-05670",
+    plugins: &[
+        r"Languages\english",
+        r"Languages\french",
+        r"Languages\spanish",
+        r"Languages\german",
+        r"Languages\italian",
+        r"Languages\dutch",
+        r"Languages\portuguese",
+        r"Languages\russian",
+        r"Languages\finnish",
+        r"Languages\swedish",
+        r"Languages\danish",
+        r"Languages\norwegian",
+        r"Languages\polish",
+        r"Languages\turkish",
+        r"Languages\portuguesebr",
+    ],
+    evidence: "omega-ps4-eu eboot FUN_0174ca60 table, region mask 1 (USER_DEFINED_PARAM_1 = 1); patch 1.07 table adds Turkish",
+}];
 
 /// The language plugins `data09.psarc` carries, in the archive listing's own
 /// order (alphabetical, and therefore **not** a menu order, on the same

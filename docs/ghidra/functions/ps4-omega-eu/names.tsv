@@ -97,3 +97,6 @@
 0x01209170	function	BlendState_Clear	85	ships-effects.md
 0x015fa610	function	Scene_BuildMaterialSortKeys	75	material-state.md
 0x01301ba0	function	Ship_LoadModelSet	75	zone-craft.md
+0x0174ca60	function	Language_ChoosePluginName	90	language.md
+0x01947160	data	Language_PluginTable	90	language.md
+0x02037c98	data	Language_RegionMask	85	language.md

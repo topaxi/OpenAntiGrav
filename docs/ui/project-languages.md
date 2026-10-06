@@ -20,6 +20,11 @@ stem work on every title.
   made-up plugin id would read nothing there). Nothing is ever empty.
 - On top of that, in order: the title's disc-keyed overlay, then the project
   `OAG_` file.
+- **A release with no plain English stands on American.** 2048's USA
+  executable reaches only `american`, `french` and `spanish`
+  (`docs/ghidra/functions/vita-2048-eu-v104/language.md`), so the project
+  language copies the disc's `American` there, and a boot with nothing saved
+  reads `American`.
 - **Omega already ships Brazilian Portuguese.** A disc language of the same name
   (case-insensitive) suppresses the project one, so Omega's own
   `Languages\portuguesebr` plugin is the base and only our `OAG_` ids are laid

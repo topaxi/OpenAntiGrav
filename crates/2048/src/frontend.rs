@@ -224,6 +224,60 @@ pub const LANGUAGE_PLUGINS: &[&str] = &[
     r"languages\traditionalchinese",
 ];
 
+/// What each 2048 release offers: the languages `FUN_8122eac0` can reach, **not
+/// a manifest** - 2048 has no picker.
+///
+/// `FrontendRoot_Construct` (0x81063b48) formats one name into
+/// `Data/Plugins/languages\%s` (0x8142afa8) and logs `Setting languages : %s`.
+/// The name comes from `FUN_8122eac0`, which switches on a mode word at
+/// 0x81541318 that `Game_Main` stores once (0x81003e00, `movs r7,#N`): **the EU
+/// v1.04 executable stores 0 and the US v1.04 one 1** (file offset 0x4dfe, `00 27`
+/// against `01 27`; the two elfs differ nowhere else in that routine).
+///
+/// - Mode 0 (EU) maps the Vita system language to French (2), Spanish (3),
+///   German (4), Italian (5), Dutch (6), Portuguese (7), Russian (8), Finnish
+///   (12), Swedish (13), Danish (14), Norwegian (15) or Polish (16), and
+///   everything else - Japanese, American English, Korean, Chinese - to
+///   `English`. Thirteen names; `american`, `japanese`, `korean` and
+///   `traditionalchinese` ship on the disc and are unreachable.
+/// - Mode 1 (US) reaches French (2), Spanish (3) and otherwise `American`.
+/// - Modes 2 (Japanese or English) and 3 (English) exist in the code and no
+///   release held here stores them, so they have no row.
+///
+/// The picker order is **chosen, not measured**: English (American on the US
+/// release) first, then the console's language-id order. Confidence 90 on
+/// membership, off two executables.
+pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
+    oag_title::LanguageManifest {
+        serial: "PCSF-00007",
+        plugins: &[
+            r"languages\english",
+            r"languages\french",
+            r"languages\spanish",
+            r"languages\german",
+            r"languages\italian",
+            r"languages\dutch",
+            r"languages\portuguese",
+            r"languages\russian",
+            r"languages\finnish",
+            r"languages\swedish",
+            r"languages\danish",
+            r"languages\norwegian",
+            r"languages\polish",
+        ],
+        evidence: "2048 EU v1.04 eboot FUN_8122eac0, mode word 0 at Game_Main 0x81003e00",
+    },
+    oag_title::LanguageManifest {
+        serial: "PCSA-00015",
+        plugins: &[
+            r"languages\american",
+            r"languages\french",
+            r"languages\spanish",
+        ],
+        evidence: "2048 US v1.04 eboot, mode word 1 (file offset 0x4dfe), FUN_8122eac0 mode 1",
+    },
+];
+
 /// 2048's boot sequence, as far as this pass read and watched it.
 ///
 /// **`Declared`, not `Measured` - one boot is not [ADR-0025]'s bar.** Wipeout
@@ -387,7 +441,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     disc_strings: Some("2048"),
-    language_manifests: &[],
+    language_manifests: LANGUAGE_MANIFESTS,
+    assumed_release: None,
     menu: None,
     menu_ps2: None,
     touch: Some(TOUCH),

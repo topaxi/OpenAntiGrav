@@ -88,9 +88,9 @@ pub struct Layout {
     /// [`ArchiveCandidates::extra`](oag_title::ArchiveCandidates::extra) for why
     /// a third role exists and why it is a set rather than alternatives.
     pub extra: Vec<String>,
-    /// The disc's own serial, normalised to `AAAA-NNNNN`, when `source` is a
-    /// disc image. `None` for a directory source, which carries no
-    /// `UMD_DATA.BIN`/`SYSTEM.CNF` to read one out of - see [`survey`].
+    /// The release's own serial, normalised to `AAAA-NNNNN`: a disc image's
+    /// volume id, or the `TITLE_ID` of an extracted package's `param.sfo`
+    /// (`PCSF-00007`). `None` for a directory with neither - see [`survey`].
     ///
     /// **The second exception [`Self::platform`]'s own doc predicted.** Wipeout
     /// Pure's `Title Screen->TitleFrame` (the "wipEout pure" wordmark) is
@@ -707,7 +707,8 @@ fn survey(source: &str, title: &Title) -> Result<Surveyed> {
         // way on every filesystem, rather than in readdir order.
         files.sort();
         let platform = platform_of(&files);
-        return Ok((platform, files, None, None));
+        let serial = package_title_id(path, &files);
+        return Ok((platform, files, None, serial));
     }
 
     let disc = Arc::new(Mutex::new(DiscImage::open(source)?));
@@ -764,6 +765,18 @@ fn collect(dir: &std::path::Path, prefix: &str, into: &mut Vec<String>) {
             Err(_) => {}
         }
     }
+}
+
+/// The release an extracted package names in its own `param.sfo`, first match in
+/// the sorted file list (a Vita tree lists `base` before its patch and DLC).
+///
+/// `None` when the tree kept no `param.sfo`, as this project's PS4 extract does
+/// not; the caller then has no release to key anything on.
+fn package_title_id(root: &std::path::Path, files: &[String]) -> Option<String> {
+    files
+        .iter()
+        .filter(|f| names(f, "sce_sys/param.sfo") || names(f, "PS3_GAME/PARAM.SFO"))
+        .find_map(|f| oag_disc::sfo::title_id(&std::fs::read(root.join(f)).ok()?))
 }
 
 /// Which console a file list belongs to, by the file each one identifies itself

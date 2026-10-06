@@ -376,6 +376,12 @@ pub struct FrontEnd {
     /// in hand and for a release not listed here, so it is the *superset* a
     /// disc may carry, not an offered list. See [`Self::offered_languages`].
     pub language_manifests: &'static [language::LanguageManifest],
+    /// The release a source that reports **no serial** is taken to be, for
+    /// [`Self::offered_languages`] alone. `None` where every source this title
+    /// opens names its own release, which is every title but Omega: its PS4
+    /// extract keeps no `param.sfo`, and the EU base-plus-patch pair is the only
+    /// one this project holds. **Chosen, not measured.**
+    pub assumed_release: Option<&'static str>,
     /// The namespace under `assets/ui/strings/disc/` holding this project's own
     /// translations of this title's disc text, keyed by this title's idstrings.
     /// `None` for a title nobody has translated yet: Pure, HD and Omega reuse
@@ -582,7 +588,12 @@ impl FrontEnd {
     /// [`Self::language_plugins`].
     #[must_use]
     pub fn offered_languages(&self, serial: Option<&str>) -> &'static [&'static str] {
-        language::offered(self.language_manifests, self.language_plugins, serial)
+        language::offered(
+            self.language_manifests,
+            self.language_plugins,
+            self.assumed_release,
+            serial,
+        )
     }
 }
 

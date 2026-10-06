@@ -33,6 +33,7 @@ pub mod image;
 pub mod iso9660;
 pub mod platform;
 pub mod raw_source;
+pub mod sfo;
 pub mod source;
 
 pub use error::{Error, Result};

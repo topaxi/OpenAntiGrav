@@ -495,16 +495,21 @@ fn every_front_end_image_this_disc_names_decodes() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn all_sixteen_languages_load_including_the_latin_1_one() {
-    // (Seventeen entries since 2026-10-06: the disc's sixteen and PortugueseBR.)
+    // The disc's sixteen load from the superset; the shell offers the twelve
+    // its executable can reach on an EU disc, and the project's own
+    // `PortugueseBR` after them (2026-10-06).
     let Some(image) = image() else { return };
-    let (shell, _) = shell(&image);
-
-    // Sixteen on the disc and the project's own `PortugueseBR` after them.
-    assert_eq!(shell.languages.len(), 16 + 1);
+    let (shell, mut archives) = shell(&image);
+    assert_eq!(shell.languages.len(), 12 + 1);
+    let all = oag_ui::language::load::load_languages(
+        &mut archives,
+        oag_hd::frontend::LANGUAGE_PLUGINS,
+        None,
+        &mut Vec::new(),
+    );
+    assert_eq!(all.len(), 16 + 1);
     let native = |name: &str| {
-        shell
-            .languages
-            .iter()
+        all.iter()
             .find(|language| language.name == name)
             .map(|language| language.native_name.clone())
     };
