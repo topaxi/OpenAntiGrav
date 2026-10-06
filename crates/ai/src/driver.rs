@@ -3,22 +3,15 @@
 //! # The plant, and why the controller has the shape it has
 //!
 //! `oag_physics::engine::steering` feeds `Accumulators::local_angular`, which is
-//! **torque**. So the steering input commands yaw *acceleration* - not a yaw
-//! rate, and certainly not a heading. `controls::ramp_steering` puts a
-//! first-order lag in front of that, because the steering state moves toward its
-//! target at a finite rate rather than jumping.
+//! **torque**: steering commands yaw *acceleration*, behind the first-order lag
+//! of `controls::ramp_steering`. Proportional feedback on heading around that
+//! (a double integrator with a lag) overshoots forever, which is what this
+//! crate's first version did, wall to wall.
 //!
-//! A controller that sets steering in proportion to how far off the line it is
-//! is therefore proportional feedback around a double integrator with a lag. It
-//! overshoots, corrects, overshoots the other way, and keeps doing it. **That is
-//! what the first version of this crate did, and it drove wall to wall.** No
-//! gain fixes it; the loop has to be closed one derivative in.
-//!
-//! So: the geometry produces a **target turn rate**, and the loop is closed on
-//! the turn rate the craft actually has. Proportional feedback on a rate is
-//! derivative feedback on a heading, which is the damping the plant needs.
-//! `tests/closed_loop.rs` is the regression, and it was watched failing before
-//! this was written.
+//! So the geometry produces a **target turn rate** and the loop is closed on
+//! the rate the craft has: proportional feedback on a rate is derivative
+//! feedback on a heading, the damping the plant needs. `tests/closed_loop.rs` is
+//! the regression and was watched failing first.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
@@ -39,9 +32,7 @@ pub use tuning::Tuning;
 
 /// Everything a driver reads that is not its own craft.
 ///
-/// A bundle rather than a widening argument list, so a later stage adding a
-/// channel - what the other craft are doing, where the pads are - is one line
-/// at each call site instead of a signature churn through every test.
+/// A bundle so a new channel is one line per call site, not signature churn.
 #[derive(Debug, Clone, Copy)]
 pub struct Context<'a> {
     /// The line to follow, and the corridor around it.
@@ -55,22 +46,13 @@ pub struct Context<'a> {
     /// The yaw rate **this craft's own hull** can sustain, or `None` to fall
     /// back on [`Tuning::max_turn_rate`] alone.
     ///
-    /// **The one per-craft number in here**, and the axis that decides whether
-    /// the AI accommodates each team: `Tuning` is one set of constants for the
-    /// whole grid, while `<Turning amount>` is authored per team and spans
-    /// 1.30 to 1.80 across the disc's eight. See
-    /// [`hull_yaw_ceiling`](pace::hull_yaw_ceiling) for the derivation and the
-    /// table, and [`pace::corner_target`] for how it combines with the
-    /// permission.
-    ///
-    /// `None` is exactly the behaviour from before this field existed, which is
-    /// what lets a caller with no craft to hand - a synthetic closed-loop test,
-    /// a probe - stay on the old reading rather than invent a hull.
+    /// The one per-craft number here: `Tuning` is shared by the grid while
+    /// `<Turning amount>` is authored per team (1.30 to 1.80). See
+    /// [`hull_yaw_ceiling`](pace::hull_yaw_ceiling) and [`pace::corner_target`].
+    /// `None` is for a caller with no craft to hand (a synthetic test, a probe).
     pub yaw_ceiling: Option<f32>,
-    /// The speed plan for this line and this craft's handling, when the race
-    /// built one - see [`crate::plan`]. `None` keeps the corner model
-    /// (`pace::corner_target`), which is what every synthetic test and any
-    /// line without a verified plan drives on.
+    /// The speed plan for this line and craft, when the race built one (see
+    /// [`crate::plan`]). `None` keeps the corner model (`pace::corner_target`).
     pub plan: Option<&'a crate::SpeedPlan>,
 }
 
@@ -91,132 +73,80 @@ impl<'a> Context<'a> {
 
 /// What a driver carries from one tick to the next.
 ///
-/// Three `u32`s, and therefore `Copy`, `Eq` and free of allocation - which is
-/// what lets it sit on a `Ship` inside the world snapshot rather than beside it.
-/// A driver whose state lived in the composition root would be invisible to a
-/// replay, and two runs of the same race would not be the same race. See
+/// Plain integers, so it is `Copy` and `Eq` and sits on a `Ship` inside the
+/// world snapshot: state beside the world would be invisible to a replay. See
 /// [ADR-0003](../../../docs/architecture/adr/0003-no-ecs.md).
 ///
-/// **The [`Personality`] is not stored here**, it is derived from
-/// [`Self::seed`] each tick. Storing it would put six `f32`s in the snapshot
-/// that never change and cost the type its `Eq`, to save a handful of integer
-/// operations per craft per tick.
+/// **The [`Personality`] is not stored**, it is derived from [`Self::seed`]
+/// each tick: storing six unchanging `f32`s would cost the type its `Eq`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Driver {
-    /// Where on the line this craft was last found.
-    ///
-    /// The seed for the next windowed search, so the search stays local and a
-    /// craft cannot latch onto a section of track stacked above or below it.
+    /// Where on the line this craft was last found: the seed for the next
+    /// windowed search, so it stays local and cannot latch onto stacked track.
     pub index: u32,
     /// Which driver this is, as far as [`Personality::from_seed`] is concerned.
     ///
-    /// **Zero means the plain line-follower** - see that function - so a
-    /// `Driver::default()` behaves exactly as it did before personalities
-    /// existed, and a caller opts a craft into having a character by giving it
-    /// a seed. The caller derives it from the race's own seed and the craft's
-    /// slot, so the field is the same field on every replay of that race.
+    /// **Zero is the plain line-follower**, so `Driver::default()` has no
+    /// character. The caller derives it from the race seed and the slot, so a
+    /// replay fields the same field.
     pub seed: u32,
-    /// Ticks this driver has driven, which is the argument its wander is a
-    /// function of.
+    /// Ticks this driver has driven: the argument its wander is a function of.
     ///
-    /// A counter rather than a clock: `oag_core::TickClock` is the only time
-    /// the simulation may read, and this counts the ticks that reached *this
-    /// driver*, so a craft that spends thirty ticks wrecked and released comes
-    /// back where it left off instead of somewhere its own history cannot
-    /// explain.
+    /// Not a clock (`oag_core::TickClock` is the only time the simulation may
+    /// read): a craft wrecked for thirty ticks resumes where it left off.
     pub phase: u32,
-    /// Where this driver was placed last tick, `1`-based; `0` before it has ever
+    /// Where this driver was placed last tick, `1`-based; `0` before it has
     /// been placed.
     ///
-    /// The whole of what an overtake detector needs: a place that got *worse* is
-    /// a craft that was just passed. A `u8` because the grid is eight, and an
-    /// integer because this type is `Eq` and lives in the world snapshot.
-    ///
-    /// **Zero is not first.** A craft that has never been placed has not just
-    /// been overtaken, and reading it as first would provoke the whole grid on
-    /// the tick the standings first resolve.
+    /// A place that got worse is a craft just passed. **Zero is not first**:
+    /// reading it as first would provoke the grid when standings first resolve.
     pub place: u8,
     /// Ticks of provocation still to run, counting down.
     ///
-    /// **A countdown rather than a level with a decay rate**, because a rate
-    /// would be an `f32` on a type that must stay `Eq`. How provokable a pilot
-    /// is becomes how many ticks an overtake adds - see
-    /// [`Personality::provocation_ticks`] - which is the same knob from the
-    /// other end.
+    /// A countdown rather than a level with a decay rate, which would be an
+    /// `f32` on an `Eq` type. See [`Personality::provocation_ticks`].
     pub provocation: u16,
     /// A fingerprint of the pilot this craft is flying.
     ///
-    /// **Hashed, unlike `Ship::handling`, and the difference is the whole
-    /// point.** Handling comes off the player's own disc and is the same on
-    /// every machine that has that disc, so hashing it would make the gate
-    /// depend on which ship was picked rather than on what the simulation did.
-    /// A pilot can come out of `<config dir>/oag/pilots/`, which **differs
-    /// between machines by design**. Left out, two machines running "the same
-    /// race" with different `winston.toml` files would produce identical hashes
-    /// for different races - a gate claiming an agreement it does not have,
-    /// which is worse than no gate at all. In it, they visibly disagree.
+    /// **Hashed, unlike `Ship::handling`, on purpose.** Handling comes off the
+    /// player's disc and matches on every machine with that disc. A pilot can
+    /// come out of `<config dir>/oag/pilots/`, which **differs between machines
+    /// by design**: left out, two machines running "the same race" with
+    /// different `winston.toml` files would hash identically, a gate claiming
+    /// an agreement it does not have.
     ///
-    /// A digest of the **resolved numbers, not of the name**: two files both
-    /// called `winston` that say different things must not agree, and that is
-    /// exactly the case this exists to catch.
+    /// A digest of the **resolved numbers, not of the name**. `0` for
+    /// [`Driver::default`]; no built-in pilot digests to zero.
     ///
-    /// `0` for [`Driver::default`], and no built-in pilot digests to zero, so a
-    /// plain line-follower stays distinguishable from a balanced one.
-    ///
-    /// **It says "these differ", not *which* file differs.** Thirty-two bits
-    /// cannot be inverted, so the composition root logs every roster entry's
-    /// name and digest at startup; without that a divergence is merely
-    /// mysterious instead of silent, which is an improvement but not the whole
-    /// of one.
+    /// It says "these differ", not *which*: 32 bits cannot be inverted, so the
+    /// composition root logs every roster entry's name and digest at startup.
     pub pilot: u32,
     /// Ticks left of a braking point this driver is in the middle of missing.
     ///
-    /// **The whole of mistake injection, and the cheap half is the only half
-    /// there is.** `docs/gameplay/ai.md` calls recovery the expensive part of a
-    /// mistake, on the grounds that a driver which runs wide and then carries on
-    /// as though nothing happened is noise rather than an error. That is true of
-    /// a controller that has to be *told* how to recover - and this one does not:
-    /// it follows a line, so the recovery is the thing it was already doing. A
-    /// mistake here is a driver holding the throttle through a corner it should
-    /// have braked for; running wide and scrabbling back is then automatic.
-    ///
-    /// An integer, because this type is `Eq` and lives in the world snapshot,
-    /// for the reason [`Self::provocation`] gives.
+    /// The whole of mistake injection. `docs/gameplay/ai.md` calls recovery the
+    /// expensive half, but this controller follows a line, so recovery is what
+    /// it was already doing: a mistake is holding the throttle through a corner
+    /// it should have braked for. An integer, for [`Self::provocation`]'s reason.
     pub mistake: u16,
     /// The highest [`pace::corner_target`] curvature seen since the line last
     /// went straight, as `f32::to_bits`.
     ///
-    /// **What tells [`pace::trail`] the corner is opening up rather than still
-    /// being entered**, which `speed < target` used to and, measured on Talon's
-    /// Junction, does not - see that function's own doc for the two real-track
-    /// families this replaced it for. Bits rather than the float itself, for
-    /// the reason [`Self::provocation`] gives; `0` decodes to `0.0`, which is
-    /// the value a straight resets it to, so [`Driver::default`] needs nothing
-    /// special.
+    /// Tells [`pace::trail`] the corner is opening up rather than being
+    /// entered, which `speed < target` does not on Talon's Junction (see that
+    /// function). Bits for [`Self::provocation`]'s reason; `0` is `0.0`.
     pub peak_curvature: u32,
     /// What this driver has noticed of the craft around it, and what it is
-    /// still in the middle of noticing.
-    ///
-    /// Reaction latency, and the one piece of driver state that is about
-    /// *perception* rather than about driving - see [`Reflex`]. Integers, for
-    /// the reason [`Self::provocation`] gives; `Reflex::IDLE` for a driver that
-    /// has not ticked yet, which is not the same as one that has looked and
-    /// seen nobody.
+    /// still noticing: reaction latency, see [`Reflex`]. Integers, for
+    /// [`Self::provocation`]'s reason; `Reflex::IDLE` before the first tick is
+    /// not the same as having looked and seen nobody.
     pub reflex: Reflex,
-    /// Whether this driver has already made its mind up about a barrel roll
-    /// during the flight it is in.
+    /// Whether this driver has already decided about a barrel roll during the
+    /// flight it is in.
     ///
-    /// **One decision per airborne window, which is what makes
-    /// [`Personality::roll_chance`] a probability rather than a rate.** Rolled
-    /// every tick it would be neither: a chance of a tenth would fire in the
-    /// first second of any long jump, and the axis would do far more than its
-    /// number says.
-    ///
-    /// Set on the first tick past [`Personality::roll_airtime`] whichever way
-    /// the decision went - a driver that decided *not* to roll this jump does
-    /// not get to reconsider - and cleared the moment the craft is on the
-    /// ground again. A `bool` because this type is `Eq` and lives in the world
-    /// snapshot, for the reason [`Self::provocation`] gives.
+    /// One decision per airborne window, which is what makes
+    /// [`Personality::roll_chance`] a probability rather than a rate. Set on the
+    /// first tick past [`Personality::roll_airtime`] whichever way it went, and
+    /// cleared on landing.
     pub roll_decided: bool,
     /// Which line it is on and what it decided at the last fork: [`crate::branch`].
     pub branching: crate::branch::Branching,
@@ -224,15 +154,12 @@ pub struct Driver {
 
 /// How much of the line either side of the last index a driver looks at.
 ///
-/// Wide enough that a craft knocked sideways by a collision still finds itself,
-/// narrow enough that the search cannot cross to a stacked section. Eight craft
-/// pay it every tick, so it is also the cost that matters.
+/// Wide enough to find a craft knocked sideways, narrow enough not to cross to
+/// a stacked section. Eight craft pay it every tick.
 const SEARCH_WINDOW: usize = 48;
 
-/// The most provocation a driver can be carrying, in ticks - ten seconds.
-///
-/// A ceiling rather than an accumulator without one: a craft having a bad race
-/// would otherwise bank enough grievance to spend the rest of it at maximum.
+/// The most provocation a driver can carry, in ticks (ten seconds), so a craft
+/// having a bad race cannot bank grievance forever.
 const PROVOCATION_MAX: u16 = 600;
 
 /// The noise stream ramming decisions are rolled against.
@@ -254,51 +181,40 @@ const WEAPON_STREAM: u32 = 2;
 /// The noise stream the barrel roll's commit decision is rolled against.
 const ROLL_STREAM: u32 = 4;
 
-/// And the one that picks which way it goes. A stream of its own rather than a second use of [`ROLL_STREAM`]: sharing it
-/// would tie which way a driver rolls to how readily it rolls at all, so a
-/// pilot with a high [`Personality::roll_chance`] would only ever roll one way.
+/// The stream for which way a roll goes: separate from [`ROLL_STREAM`], else a
+/// pilot with a high [`Personality::roll_chance`] would only roll one way.
 const ROLL_SIDE_STREAM: u32 = 5;
 
-/// How often a driver at full `trigger` will fire once it has a target, per
-/// tick.
+/// How often a driver at full `trigger` fires once it has a target, per tick.
 ///
-/// **This is a rate, not a probability.** Rolled every tick, so at `1.0` the
-/// median wait once a target is in the cone is about thirteen ticks - a fifth
-/// of a second - and at `0.2` about a second and a half. Read as "a five per
-/// cent chance" it looks far too small; read as a delay it is what a driver
-/// taking a moment to line up looks like.
+/// **A rate, not a probability**: at `1.0` the median wait is about thirteen
+/// ticks, at `0.2` about a second and a half.
 const TRIGGER_RATE: f32 = 0.05;
 
 /// How much corridor room a driver wants on the side it is shifting toward,
-/// measured **from where the craft is** rather than from the line.
+/// measured **from where the craft is**, not from the line.
 ///
-/// A ram that puts the rammer into the wall is not aggression, it is a bug with
-/// a personality - and this was `3.0`, less than half of the **median 8.2
-/// units** a shift is measured to cover on `16_Track`, so the gate did not mean
-/// what it said. Twelve *and* the craft's own room took the rammer ending up
-/// outside the corridor from 54 of 208 to 11 of 138; neither half does much
-/// alone. Sweep, method and the two remainders are in `docs/gameplay/ai.md`,
-/// guarded by `crates/game/tests/ram_ground_truth.rs`.
+/// Was `3.0`, under half the median 8.2 units a shift covers on `16_Track`.
+/// Twelve plus the craft's own room took the rammer ending up outside the
+/// corridor from 54 of 208 to 11 of 138; neither half does much alone. Sweep:
+/// `docs/gameplay/ai.md`, guarded by `crates/game/tests/ram_ground_truth.rs`.
 ///
-/// **Ours, and measured against one hull.** The reach scales with
-/// `handling.airbrake.sideshift / mass` - `450` against `1` on Pulse - which
-/// this crate cannot see: `Context` carries no handling.
+/// **Ours, and measured against one hull.** Reach scales with
+/// `handling.airbrake.sideshift / mass` (`450` against `1` on Pulse), which
+/// `Context` cannot see.
 const RAM_CLEARANCE: f32 = 12.0;
 
-/// The turn, in radians across the stretch between a craft and its aim point,
-/// at which [`Personality::inside`] is asking for all the room it is allowed.
+/// The turn, in radians across the stretch to the aim point, at which
+/// [`Personality::inside`] asks for all the room it is allowed.
 ///
-/// `Line::bend` returns the turn itself, which is a tenth of a radian on the
-/// sort of corner a craft takes at speed - so without a scale here an `inside`
-/// of one would be worth a tenth of the corridor and the axis would read as
-/// broken rather than as subtle. Ours, and a feel knob: about nine degrees.
+/// `Line::bend` is about a tenth of a radian on a corner taken at speed, so
+/// without a scale `inside` would read as broken. Ours, a feel knob: about nine
+/// degrees.
 const FULL_BEND: f32 = 0.15;
 
 impl Driver {
-    /// A driver with a character of its own, from a seed.
-    ///
-    /// See [`Personality::from_seed`] for what the seed decides, and for why
-    /// zero is the plain line-follower.
+    /// A driver with a character of its own, from a seed; see
+    /// [`Personality::from_seed`] (zero is the plain line-follower).
     #[must_use]
     pub fn seeded(seed: u32) -> Self {
         Self {
@@ -307,25 +223,18 @@ impl Driver {
         }
     }
 
-    /// The driver for one slot of a race.
-    ///
-    /// **The race's own seed and the craft's slot, and nothing else**, so the
-    /// field has the same eight characters every time that race is replayed and
-    /// a different eight in the next race. Slot zero is the player's and gets
-    /// the plain line-follower, which costs nothing and means a caller that
-    /// seeds the whole array cannot accidentally give the player a personality
-    /// nothing reads.
+    /// The driver for one slot of a race, from the race seed and slot alone, so
+    /// replays field the same eight characters. Slot zero is the player's and
+    /// gets the plain line-follower.
     #[must_use]
     pub fn for_slot(race_seed: u64, slot: u32) -> Self {
         if slot == 0 {
             return Self::default();
         }
-        // Multiply the slot into the high bits before mixing, so slot 1 and slot
-        // 2 of the same race are not neighbouring seeds.
+        // Mix the slot into the high bits so slots 1 and 2 are not neighbours.
         let mixed = race_seed ^ u64::from(slot).wrapping_mul(0x9e37_79b9_7f4a_7c15);
         let seed = Rng::new(mixed).next_u32();
-        // Zero is the plain driver, and a one-in-four-billion race should not
-        // quietly field one.
+        // Zero is the plain driver; do not field one by accident.
         Self::seeded(if seed == 0 { 1 } else { seed })
     }
 
@@ -335,21 +244,18 @@ impl Driver {
         Personality::from_pilot_seed(pilot, self.seed)
     }
 
-    /// Chooses this tick's controls, and advances the driver's place on the line.
+    /// Chooses this tick's controls and advances the driver's place on the line.
     ///
-    /// Returns released controls when there is no line to follow: a track whose
-    /// spline produced nothing leaves the opponents sitting on the grid, which is
-    /// what this engine did before there was an AI at all.
+    /// Returns released controls when there is no line, which leaves opponents
+    /// on the grid.
     pub fn drive(&mut self, state: &ShipState, ctx: &Context<'_>) -> ShipControls {
         let (line, tuning) = (ctx.line, ctx.tuning);
         if line.is_empty() {
             return ShipControls::default();
         }
 
-        // **What this driver has noticed, not what the caller measured.** At
-        // the default zero latency the two are the same field; above it a craft
-        // that has just arrived is not in this one yet. Advanced before it is
-        // read, so a wait that runs out this tick is acted on this tick.
+        // What this driver has noticed, not what the caller measured. Advanced
+        // before it is read so a wait that runs out this tick is acted on now.
         self.reflex.advance(ctx.field, tuning.reaction_ticks);
         let noticed = self.reflex.filter(ctx.field);
         let ctx = &Context {
@@ -358,9 +264,8 @@ impl Driver {
         };
 
         let personality = self.personality(ctx.pilot);
-        // On a plan, a driver's line is a handicap: see `Personality::spent`
-        // and `planned::plan_slack`. Off one, untouched - not even multiplied
-        // by one, which would move the corner model's bits.
+        // On a plan a line is a handicap (`Personality::spent`, `plan_slack`).
+        // Off one it is untouched, not multiplied by one: that moves bits.
         let personality = if ctx.plan.is_some_and(|plan| plan.len() == line.len()) {
             personality.spent(plan_slack(ctx, &personality))
         } else {
@@ -375,9 +280,8 @@ impl Driver {
         self.phase = self.phase.wrapping_add(1);
         self.stew(ctx, &personality);
 
-        // Forward speed rather than speed: a craft sliding sideways at 60 is not
-        // approaching its corner at 60, and the lookahead is about how far away
-        // the corner is in time.
+        // Forward speed: a craft sliding sideways is not approaching its corner
+        // at that speed.
         let speed = body.linear_velocity.dot(forward).max(0.0);
         let look =
             (tuning.look_min + tuning.look_speed * speed).min(tuning.look_max) * personality.look;
@@ -387,11 +291,9 @@ impl Driver {
         let step = curvature_span(tuning, look);
         let curvature =
             line.max_curvature_stepped(index, window, pace::curvature_chord(tuning, step), step);
-        // **The speed plan, when the race built one for this line**, and the
-        // corner model otherwise. The plan is what our own physics showed the
-        // craft can carry, braking zones included (`crate::plan`); a level and
-        // a pilot handicap it by [`plan_margin`] rather than by believing in
-        // less grip, so an Ace drives the plan and a Novice drives under it.
+        // The plan when the race built one, else the corner model. A level and
+        // a pilot handicap the plan by [`plan_margin`], not by believing in
+        // less grip.
         let followed = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match followed {
             Some(plan) => planned::target(
@@ -412,20 +314,10 @@ impl Driver {
             // Sailing through it. See [`Self::mistake`].
             (1.0, 0.0)
         } else if state.time_airborne > 0.0 {
-            // **No lateral grip to spend a brake on.** `throttle`'s own doc
-            // says what the symmetric brake buys: cornering grip, traded for
-            // deceleration. Off the ground there is no cornering grip at
-            // all, so the same command that is a sensible trade on the
-            // track is a pure loss of the forward speed a landing needs.
-            // Found via a unit test with no craft or track at all -
-            // `time_airborne` was previously read nowhere in this function,
-            // so a grounded and an airborne fixture produced byte-identical
-            // controls on an ordinary corner - not by observing this on any
-            // one circuit; measured afterward not to be the cause of
-            // `13_Track`'s own Novice jump pathology, which this branch does
-            // not change. Chosen, not measured, no confidence score: this is
-            // our own driver's behaviour, not a recovered one - see
-            // `docs/gameplay/ai.md#the-jump-clearing-failure-the-mechanism-a-real-bug-that-turned-out-not-to-be-it-and-why-this-is-where-the-chase-stops`.
+            // No lateral grip airborne, so a symmetric brake is pure loss of the
+            // forward speed a landing needs. Chosen, not measured, no confidence
+            // score: our own behaviour. See `docs/gameplay/ai.md`, "The
+            // jump-clearing failure".
             (1.0, 0.0)
         } else if followed.is_some() {
             // The plan's own follower, the law it was learned with.
@@ -433,17 +325,15 @@ impl Driver {
         } else {
             throttle(speed, target, tuning)
         };
-        // **No lift on the run-up to a gap**: the clearing speed is the one
-        // thing a craft cannot buy back in the air. Chosen, not measured.
+        // No lift on the run-up to a gap: clearing speed cannot be bought back
+        // in the air. Chosen, not measured.
         let thrust = if line.is_takeoff(index) {
             thrust
         } else {
             thrust * self.caution(ctx, &personality)
         };
-        // Neither timer is a **momentary** hit flag: both are seconds still
-        // running, so a craft is "recovering" for as long as either does,
-        // which is exactly the window the differential buys nothing in - see
-        // `trail`'s own doc.
+        // Both timers are seconds still running, so "recovering" lasts while
+        // either does: the window the differential buys nothing in (see `trail`).
         let recovering = state.slowdown_timer > 0.0 || state.stun_timer > 0.0;
         let differential = trail(
             &steer,
@@ -466,24 +356,21 @@ impl Driver {
             airbrake_right,
             sideshift: self.ram(state, ctx, &personality),
             roll_request: self.wants_to_roll(state, &personality),
-            // Every tick, not only the ones a roll is asked for: it also gates
-            // the *gesture*, which this driver's own steering can complete by
-            // accident. See `oag_physics::barrel_roll::within_budget`.
+            // Every tick: it also gates the gesture, which this driver's own
+            // steering can complete by accident. See
+            // `oag_physics::barrel_roll::within_budget`.
             roll_shield_floor: personality.roll_floor,
             ..ShipControls::default()
         }
     }
 
-    /// Whether the line for `distance` ahead of this driver allows `speed`.
+    /// Whether the line for `distance` ahead allows `speed`.
     ///
-    /// The same cornering limit [`throttle`] brakes against, asked as a
-    /// question about a speed the craft does not have yet. **A boost is what
-    /// wants to know.** The driver's own braking horizon is built from the speed
-    /// it is doing now, so a craft that is about to double its speed outruns
-    /// what it looked at: on a real track a Turbo fired at 126 puts a craft
-    /// through the next corner at 270 having only ever checked 160 units ahead,
-    /// and that is a craft in the scenery. Measured, on `16_Track` - see
-    /// `docs/gameplay/ai.md`.
+    /// The cornering limit [`throttle`] brakes against, asked about a speed the
+    /// craft does not have yet: **a boost wants to know**. The braking horizon
+    /// is built from the current speed, so a Turbo at 126 puts a craft through
+    /// the next corner at 270 having checked 160 units (measured on `16_Track`,
+    /// `docs/gameplay/ai.md`).
     #[must_use]
     pub fn allows_speed(&self, ctx: &Context<'_>, speed: f32, distance: f32) -> bool {
         if ctx.line.is_empty() || distance <= 0.0 {
@@ -508,21 +395,15 @@ impl Driver {
 
     /// The steering command, as a turn-rate error.
     ///
-    /// Pure pursuit gives the curvature of the arc from the craft to a point on
-    /// the line: `k = 2 * e / L^2`, where `e` is how far off the craft's nose the
-    /// aim point sits and `L` is the distance to it. That curvature times the
-    /// craft's speed is the yaw rate needed to get there, and the loop is closed
-    /// on the difference between that and the rate the craft has.
+    /// Pure pursuit: the arc to a point on the line has curvature
+    /// `k = 2 * e / L^2` (`e` the aim point's offset from the nose, `L` its
+    /// distance). Times speed that is the yaw rate needed, and the loop closes
+    /// on its difference from the rate the craft has.
     ///
-    /// **`L` is the measured distance to the aim point, not the requested
-    /// lookahead.** They differ on a curve, and `k` divides by its square, so
-    /// using the request scales the whole command wrong exactly where the corner
-    /// is.
-    ///
-    /// Cross-track error needs no term of its own: the aim point is on the line
-    /// and the craft is not, so the vector between them already carries it. The
-    /// first version added a second, separate cross-track term on top, which
-    /// double-counted the same error.
+    /// **`L` is the measured distance, not the requested lookahead**: they
+    /// differ on a curve and `k` divides by the square. Cross-track error needs
+    /// no term of its own, the aim point already carries it (a second term
+    /// double-counted it).
     fn steering(
         &self,
         state: &ShipState,
@@ -534,12 +415,8 @@ impl Driver {
         let (line, tuning) = (ctx.line, ctx.tuning);
         let body = &state.body;
         let aim = line.aim(self.index as usize, look);
-        // **The drift moves the aim point, not the command.** Noise added to the
-        // steering output is noise inside a rate loop with a gain of five and
-        // nothing filtering it; noise on the point being aimed at is a driver
-        // choosing a slightly different line, which is what a driver who is not
-        // a machine actually does. The controller stays the one
-        // `tests/closed_loop.rs` measured.
+        // The drift moves the aim point, not the command: noise on a rate loop
+        // with gain five is unfiltered, noise on the aim is a different line.
         let aim = aim.point + self.drift(&aim, look, ctx, personality);
         let to_aim = aim - body.position;
         let distance = to_aim.length();
@@ -553,10 +430,9 @@ impl Driver {
         let wanted =
             (curvature * speed.max(1.0)).clamp(-tuning.max_turn_rate, tuning.max_turn_rate);
 
-        // Positive yaw about the craft's own up axis turns it **left** - the
-        // right-hand rule, with forward on `-Z`. Working in "rate of turning to
-        // the right" keeps every sign here the same as the steering input's.
-        // The craft's own up, never world up, or this is wrong the moment the
+        // Positive yaw about the craft's up turns it left (right-hand rule,
+        // forward on -Z); using "turning right" keeps signs equal to the
+        // steering input's. Craft up, never world up: wrong once the track rolls.
         // track rolls.
         let actual = -body.angular_velocity.dot(body.up());
 
@@ -570,22 +446,17 @@ impl Driver {
     /// Decides whether this driver is about to miss a braking point, and
     /// counts down one it is already missing.
     ///
-    /// **Rolled only where it would otherwise brake.** A mistake on a straight
-    /// is not a mistake, it is nothing at all - the throttle was already open -
-    /// so rolling everywhere would spend the whole rate on ticks where it
-    /// cannot show, and the setting would do far less than its number suggests.
-    /// Gating it on the braking point also makes the rate legible: it is per
-    /// tick *of braking*, so roughly once a second spent slowing down.
+    /// Rolled only where it would otherwise brake: a mistake on a straight
+    /// shows nothing and would waste the rate. The rate is per tick *of
+    /// braking*, roughly once a second spent slowing.
     fn blunder(&mut self, tuning: &Tuning, speed: f32, target: f32) {
         if self.mistake > 0 {
             self.mistake -= 1;
             return;
         }
-        // **Seed zero never errs**, for the same reason it has no personality:
-        // `Driver::default()` is the plain line-follower every exact assertion
-        // in this crate and in `oag-trace`'s replay path is written against,
-        // and a driver that occasionally sails through a corner is not one of
-        // those. See `Personality::from_seed`.
+        // Seed zero never errs, like its missing personality: `Driver::default()`
+        // is what every exact assertion here and in `oag-trace` is written
+        // against. See `Personality::from_seed`.
         if self.seed == 0 || tuning.mistake_rate <= 0.0 || speed <= target {
             return;
         }
@@ -596,17 +467,10 @@ impl Driver {
 
     /// Advances the grudge: notices being overtaken, and lets it cool.
     ///
-    /// **A place that got worse is a craft that was just passed**, which is the
-    /// whole of the detector. Both places have to be real: `0` means nothing
-    /// has placed this craft yet, and treating that as first would provoke the
-    /// entire grid on the tick the standings first resolve.
-    ///
-    /// What provocation does **not** touch is
-    /// [`Personality::commitment`]. It is the obvious thing to raise and the
-    /// wrong one: that axis is documented as the one where over what the hull
-    /// can hold is a driver in the wall, and an angry AI that drives into the
-    /// scenery reads as a bug rather than as character. It scales what a driver
-    /// does to *other craft*, not what it asks of its own.
+    /// A worse place is a craft just passed. Both places must be real: `0`
+    /// means unplaced. Provocation does **not** touch
+    /// [`Personality::commitment`]: an angry AI driving into the scenery reads
+    /// as a bug. It scales what a driver does to *other craft*.
     fn stew(&mut self, ctx: &Context<'_>, personality: &Personality) {
         let now = ctx.field.place;
         if now != 0 && self.place != 0 && now > self.place {
@@ -622,18 +486,13 @@ impl Driver {
         f32::from(self.provocation) / f32::from(PROVOCATION_MAX)
     }
 
-    /// How much of its thrust this driver keeps when it is closing on a craft
-    /// in front, `0.0..=1.0`.
+    /// How much of its thrust this driver keeps when closing on a craft ahead,
+    /// `0.0..=1.0`.
     ///
-    /// **A lift, never a brake.** Braking hard mid-corner for a craft ahead
-    /// spends the grip that was holding the corner, so the cure would put the
-    /// craft in the scenery rather than into the back of a rival. Lifting off
-    /// is what a driver actually does, and the speed target still owns the
-    /// braking.
-    ///
-    /// This axis exists because [`Self::social`] and
-    /// [`Personality::inside`] both sometimes move craft *toward* each other,
-    /// and nothing else in this controller reacts to a closing gap at all.
+    /// **A lift, never a brake**: braking mid-corner spends the grip holding
+    /// it. The speed target still owns braking. Exists because [`Self::social`]
+    /// and [`Personality::inside`] sometimes move craft toward each other and
+    /// nothing else reacts to a closing gap.
     fn caution(&self, ctx: &Context<'_>, personality: &Personality) -> f32 {
         if personality.caution <= 0.0 {
             return 1.0;
@@ -650,102 +509,51 @@ impl Driver {
     }
 
     /// Yielding and blocking, as **one signed lean** toward or away from the
-    /// craft behind, in the same fraction-of-the-room units as everything else
-    /// in [`Self::drift`].
+    /// craft behind, in the fraction-of-the-room units of [`Self::drift`].
     ///
-    /// **One term rather than two, and that is the design.** Courtesy moves
-    /// away from the side a rival is on and defence moves toward it; as two
-    /// separately gated terms they fight each other and the craft jitters
-    /// between them. As two signs of one number a pilot simply sits somewhere
-    /// on the axis, and `defence - courtesy` is where.
+    /// One term, not two: separately gated courtesy and defence fight and the
+    /// craft jitters; as two signs of one number a pilot sits at
+    /// `defence - courtesy`. Continuous in the gap, so no slew limiter or state.
     ///
-    /// Continuous in the gap, so it needs no slew limiter and no state on the
-    /// driver: it fades in as a rival closes and fades out as it drops away.
+    /// # A touching rival is `alongside`, not `behind`
     ///
-    /// # A touching rival is `alongside`, not `behind`, and this used to go blind there
+    /// Found from play 2026-09-07: two touching craft produced no lateral
+    /// response, since this read only [`Field::behind`] while `field_for`
+    /// buckets a rival as [`Field::alongside`] inside `ALONGSIDE_GAP` (16) and
+    /// `ALONGSIDE_WIDTH` (12). The lean dropped to zero at contact, and
+    /// `oag_physics::pair::resolve`'s nudge fought both drivers' aim, which
+    /// read as sticking. So `alongside` is read too and preferred, being the
+    /// more urgent. No new constant, and none of the existing ones moved.
     ///
-    /// **Found from play, 2026-09-07: two craft that are actually touching
-    /// produced *no* lateral response from either driver at all**, which reads
-    /// as sticking - `oag_physics::pair::resolve` pushes them apart by its own
-    /// small positional correction, and both drivers' steering just aims back
-    /// at the same corridor point a tick later, fighting it. The cause: this
-    /// function read only [`Field::behind`], and `crates/game`'s own
-    /// `field_for` classifies a rival as [`Field::alongside`] - a **different**
-    /// channel this function never read - the moment it is within
-    /// `ALONGSIDE_GAP` (16 units of track distance) and `ALONGSIDE_WIDTH` (12
-    /// lateral). A real hull touch (`oag_physics::pair::overlap`, measured
-    /// around 3-6 units on a realistic hull) is always well inside both, so a
-    /// rival close enough to actually be touching had *already left* the one
-    /// bucket this term reacted to, and the yield/cover lean it was building
-    /// as the rival closed **dropped to exactly zero at the moment contact
-    /// started** - confirmed directly: `social` returned the same value for a
-    /// touching alongside rival as for `Field::EMPTY`.
+    /// `ALONGSIDE_GAP` is a little past [`SOCIAL_MIN_GAP`] (14), so blocking
+    /// can still fire between 14 and 16, before anything touches; a real hull
+    /// touch (3-6 units, `oag_physics::pair::overlap`) is well inside.
+    /// **Chosen, not measured**, no confidence score: the original has no
+    /// social term. Before the fix a real 8-craft `VENOM` race's pair `(4,7)`
+    /// resolved on 90 consecutive ticks; the acceptance test is the longest
+    /// streak (see the ground-truth test added with it).
     ///
-    /// **The fix is to read `alongside` too, preferring it over `behind`** -
-    /// an alongside rival is the more urgent one whenever both are present,
-    /// since it is the one already in or entering contact. This is not a
-    /// widened *range*: `field_for` builds a [`Rival`] identically for every
-    /// channel (`gap`, `offset` and `closing` are the same computation, only
-    /// the bucket differs), and this function already takes `gap.abs()`, so
-    /// nothing here has to change to accept the new source. **No new
-    /// constant is introduced**, and none of `AWARENESS_RANGE`,
-    /// `SOCIAL_MIN_GAP`, `ASTERN_DEADBAND`, `CLOSING_FULL`, `SOCIAL_MAX` or
-    /// `YIELD_MAX` moved.
+    /// It will not:
     ///
-    /// `ALONGSIDE_GAP` (16) is a little *past* `SOCIAL_MIN_GAP` (14), so an
-    /// alongside rival between 14 and 16 units away is not automatically
-    /// forced to yield-only by gap alone - blocking can still fire there.
-    /// That is not a hole this change opens: a real hull touch
-    /// (`oag_physics::pair::overlap`, around 3-6 units on a realistic hull)
-    /// is well inside `SOCIAL_MIN_GAP` regardless, so blocking still cannot
-    /// fire at actual contact - the only place it can fire under `alongside`
-    /// is the few units between 14 and 16, where nothing is touching yet,
-    /// which is exactly "a block is something you do early" already
-    /// documented below, just reached from a different channel. So this is
-    /// **chosen, not measured** only in the sense that reusing these
-    /// constants for a second channel is a judgement call, not a fit - no
-    /// confidence score, because there is nothing recovered to score
-    /// against: the original has no such term at all (this driver's social
-    /// behaviour is `oag_ai`'s own, not a ported one).
-    ///
-    /// Verified against `crates/game`'s own probe methodology (an env-gated
-    /// instrument on `resolve_craft_pairs`, run and reverted): before this
-    /// change, a real 8-craft `VENOM` race's pair `(4,7)` resolved on **90**
-    /// consecutive ticks with `vn_before` negative on all 90; after, the
-    /// longest streak and the count of streaks past ten ticks are the
-    /// acceptance test - see the ground-truth test this change adds.
-    ///
-    /// Three things it will not do:
-    ///
-    /// - **Take over the whole line.** Capped at [`SOCIAL_MAX`], because
-    ///   provocation can push `defence` past the entire aim budget on its own -
-    ///   see that constant for what that looked like from the cockpit.
-    /// - **Swerve into somebody already there.** Below [`SOCIAL_MIN_GAP`] it
-    ///   stops: a block is something you do early.
-    /// - **Act mid-corner.** Both are straight-line manoeuvres; where the
-    ///   corridor is a couple of metres wide and both craft are at the grip
-    ///   limit, moving sideways on purpose is how two craft end up in the
-    ///   scenery. The gate is the same normalised `bend` the inside line uses.
-    /// - **React equally to a craft holding station and one closing.** Closing
-    ///   earns the rest of the lean on top of [`PRESENCE_SHARE`]; proximity
-    ///   alone is what triggers it, because a craft sitting on another's tail
-    ///   at matched pace is exactly when yielding matters.
-    /// - **Guess a side from noise.** A rival directly astern has an offset of
-    ///   about zero and its *sign* is meaningless, so inside a deadband the
-    ///   side comes from the corner ahead instead - yielding toward its
-    ///   outside, which is where an overtaker does not want to be.
+    /// - **Take over the whole line**: capped at [`SOCIAL_MAX`].
+    /// - **Swerve into somebody already there**: below [`SOCIAL_MIN_GAP`] it
+    ///   stops, a block is something you do early.
+    /// - **Act mid-corner**: both are straight-line manoeuvres. The gate is the
+    ///   normalised `bend` the inside line uses.
+    /// - **React equally to a craft holding station and one closing**: closing
+    ///   earns the rest of the lean on top of [`PRESENCE_SHARE`].
+    /// - **Guess a side from noise**: a rival dead astern has a meaningless
+    ///   offset sign, so inside a deadband the side comes from the corner ahead
+    ///   (yield toward its outside).
     fn social(&self, ctx: &Context<'_>, personality: &Personality, bend: f32) -> f32 {
         let touching = ctx.field.alongside;
         let Some(rival) = touching.or(ctx.field.behind) else {
             return 0.0;
         };
-        // **Provocation scales covering, not yielding.** A driver that has just
-        // been passed defends harder; it does not become more polite. Applied
-        // to the defence side alone so a shy pilot stays shy however cross it
-        // is - see `Self::stew`.
-        // Clamped *before* the scale below, so provocation raises the lean
-        // until it is total and then stops, rather than running past the budget
-        // the aim point is summed into.
+        // Provocation scales covering, not yielding: a passed driver defends
+        // harder, it does not get more polite (see `Self::stew`). Clamped before
+        // the budget scale so the lean saturates rather than overrunning the
+        // aim budget.
         let lean =
             (personality.defence * (1.0 + self.provoked()) - personality.courtesy).clamp(-1.0, 1.0);
 
@@ -753,10 +561,8 @@ impl Driver {
         if gap >= AWARENESS_RANGE {
             return 0.0;
         }
-        // Inside the close range only the yielding half survives - see
-        // [`SOCIAL_MIN_GAP`] - **and below that, everybody yields at least
-        // [`CONTACT_FLOOR`]**, whatever their personality says. See that
-        // constant.
+        // Inside the close range only yielding survives ([`SOCIAL_MIN_GAP`]),
+        // and everybody yields at least [`CONTACT_FLOOR`] when alongside.
         let lean = if touching.is_some() && gap < SOCIAL_MIN_GAP {
             lean.min(-CONTACT_FLOOR)
         } else if gap < SOCIAL_MIN_GAP {
@@ -770,12 +576,11 @@ impl Driver {
         let closeness = (AWARENESS_RANGE - gap) / AWARENESS_RANGE;
         let closing = (rival.closing / CLOSING_FULL).clamp(0.0, 1.0);
         let pressure = closeness * (PRESENCE_SHARE + (1.0 - PRESENCE_SHARE) * closing);
-        // `bend` is already normalised by `FULL_BEND` and clamped, so this is
-        // one at a corner worth the name and zero on a straight.
+        // `bend` is normalised by `FULL_BEND` and clamped: one at a corner,
+        // zero on a straight.
         let corner_gate = 1.0 - bend.abs().min(1.0);
 
-        // A rival dead astern gives a sign that is rounding noise. Fall back to
-        // the corner: its outside is the side an overtaker least wants.
+        // Dead astern the sign is noise: use the corner's outside instead.
         let side = if rival.offset.abs() > ASTERN_DEADBAND {
             rival.offset.signum()
         } else if bend.abs() > f32::EPSILON {
@@ -784,10 +589,9 @@ impl Driver {
             return 0.0;
         };
 
-        // **Two budgets, because the two halves fail differently.** Blocking is
-        // the half that swerves into somebody and is kept on a tight rein;
-        // yielding cannot, and gets a looser one - but not the whole corridor,
-        // or a craft hands over the entire track and reads as having given up.
+        // Two budgets, since the halves fail differently: blocking swerves into
+        // somebody and is kept tight; yielding gets more, but not the corridor,
+        // or a craft reads as having given up.
         let budget = if lean > 0.0 { SOCIAL_MAX } else { YIELD_MAX };
         lean * side * pressure * corner_gate * budget
     }
@@ -795,35 +599,25 @@ impl Driver {
     /// How far off the authored line this driver is aiming, as a world-space
     /// vector across it.
     ///
-    /// A constant lean plus a slow drift, both measured as a fraction of the
-    /// room the corridor gives **on the side being leant toward** - the two
-    /// sides are not the same width, and on a real track they are often nothing
-    /// like it. Scaled by [`Tuning::corridor_use`] so the corridor's own edge
-    /// stays a backstop, and clamped against it anyway.
+    /// A constant lean plus a slow drift, as a fraction of the room on the side
+    /// being leant toward (the sides differ), scaled by
+    /// [`Tuning::corridor_use`] and clamped against the corridor anyway.
     ///
-    /// Zero when the line carries no corridor. There is nothing to be off the
-    /// line *by* - no lateral axis and no bound - and guessing one from the
-    /// line's own shape and world up is exactly the mistake `docs/formats/track.md`
-    /// records: it is wrong the moment the track rolls. A line with no corridor
-    /// is a synthetic one, and every craft on it drives it exactly.
+    /// Zero when the line has no corridor (a synthetic line, driven exactly):
+    /// guessing a lateral axis from world up is wrong once the track rolls
+    /// (`docs/formats/track.md`).
     fn drift(&self, aim: &Aim, look: f32, ctx: &Context<'_>, personality: &Personality) -> Vec3 {
         let Some(frame) = aim.corridor else {
             return Vec3::ZERO;
         };
         let phase = self.phase as f32 * personality.wander_rate;
-        // The seed is the driver's, so two craft with the same wander amplitude
-        // still wander apart.
+        // The seed is the driver's, so equal amplitudes still wander apart.
         let wobbled = personality.wander * wobble(self.seed, phase);
-        // **Which way the corner goes, not how hard.** A fixed lean is a side
-        // of the line; an inside line swaps sides with the corner, so this is
-        // the one axis that has to read the geometry rather than just the
-        // craft. It fades out on a straight, where `bend` goes to zero.
-        // **From the craft's own index, not the aim point's.** The aim point is
-        // already `look` downtrack, and `bend` walks three spans past whatever
-        // it is given, so measuring from there would bias toward a corner two
-        // lookaheads away rather than the one being entered. A third of the
-        // lookahead per span puts the three samples between the craft and its
-        // aim point, which is the stretch this offset is steering through.
+        // Which way the corner goes, not how hard: an inside line swaps sides
+        // with the corner, so this axis reads geometry. Fades to zero on a
+        // straight. Measured from the craft's own index, not the aim point's,
+        // which is already `look` downtrack: three spans of `look / 3.0` sample
+        // the stretch being steered through.
         let bend = (ctx
             .line
             .bend(self.index as usize, look / 3.0, frame.lateral)
@@ -831,141 +625,97 @@ impl Driver {
             .clamp(-1.0, 1.0);
         let inside = personality.inside * bend;
         let social = self.social(ctx, personality, bend);
-        // **Summed with the rest rather than overriding them**, so a driver
-        // dodging a mine is still driving a line. It has the largest budget of
-        // the terms here and it still has to win the argument; see
+        // Summed, not overriding, so a driver dodging a mine still drives a
+        // line; avoidance has the largest budget and still has to win. See
         // [`Driver::avoidance`].
         let avoidance = self.avoidance(ctx.field.hazard);
-        // On a plan the bias, wander and inside line arrive already spent -
-        // see `Personality::spent`. Avoidance and the social terms - yielding,
-        // blocking, the contact floor - are about other craft, not character,
-        // and are never scaled: a lone craft has nobody to answer.
+        // On a plan the bias, wander and inside line arrive already spent
+        // (`Personality::spent`). Avoidance and the social terms are about other
+        // craft and are never scaled.
         let wanted =
             (personality.line_bias + wobbled + inside + social + avoidance).clamp(-1.0, 1.0);
-        // The terms above are fractions of the room, clamped once here; the pad
-        // pull is in units, and the corridor clamp backstops both.
+        // Fractions of the room are clamped once here; the pad pull is in units,
+        // and the corridor clamp backstops both.
         let offset = wanted * frame.room(wanted) * ctx.tuning.corridor_use * personality.width;
         let offset = Self::toward_pad(offset, ctx.field.pad, avoidance != 0.0);
         frame.lateral * frame.clamp(offset)
     }
 }
 
-/// How far a rival has to be behind before it stops being this driver's
-/// problem, in units along the track.
-///
-/// Ours. Wide enough that a craft closing at a real speed difference is seen
-/// before it arrives, narrow enough that a driver is not defending against
-/// somebody a corner away.
+/// How far behind a rival has to be before it stops being this driver's
+/// problem, in units along the track. Ours: wide enough to see a closing craft
+/// before it arrives, narrow enough not to defend against one a corner away.
 pub const AWARENESS_RANGE: f32 = 120.0;
 
-/// The closing speed, in units a second, at which a rival is taken as closing
-/// as hard as it is going to.
-///
-/// Small on purpose. Two craft racing each other differ by a few units a
-/// second, not by tens, so a threshold set at "obviously catching up" leaves
-/// the term reading as zero for the whole of a real battle.
+/// The closing speed, in units a second, at which a rival counts as closing as
+/// hard as it will. Small on purpose: two racing craft differ by a few units a
+/// second, and a "obviously catching up" threshold reads zero in a real battle.
 const CLOSING_FULL: f32 = 8.0;
 
-/// How much of the social lean a rival gets for merely being close, before any
-/// of it is earned by closing.
+/// How much of the social lean a rival gets for merely being close.
 ///
-/// **Not zero, and that is the point.** A craft sitting on another's tail at
-/// matched pace is exactly when yielding matters, and a term gated purely on
-/// closing speed would do nothing there - a shy driver would only move over for
-/// someone who was going to get past anyway.
+/// **Not zero**: a craft on another's tail at matched pace is when yielding
+/// matters, and a term gated purely on closing would do nothing there.
 const PRESENCE_SHARE: f32 = 0.5;
 
-/// How far off-centre a rival has to sit before the *sign* of its offset means
-/// anything. Ours, and about a hull's width.
+/// How far off-centre a rival must sit before its offset's *sign* means
+/// anything. Ours, about a hull's width.
 const ASTERN_DEADBAND: f32 = 2.0;
 
-/// How much of the aim budget a fully committed **block** is worth.
+/// How much of the aim budget a fully committed **block** is worth. Yielding is
+/// not scaled by it.
 ///
-/// Yielding is not scaled by it - see the use site.
+/// **A scale, not a clamp**: a clamp swallowed provocation (an aggressive
+/// pilot already sits near the top, so provoked and calm came out identical).
 ///
-/// **A scale on the term, not a clamp over it.** A clamp was tried first and
-/// swallowed provocation whole: an aggressive pilot sits near the top of the
-/// lean range already, so clamping made a provoked driver and a calm one
-/// identical. Scaling keeps the ordering - being passed still makes a driver
-/// cover harder - while making it impossible for the term to own the line.
-///
-/// **Reported from play: opponents were turning almost ninety degrees into the
-/// player to block, hitting them, and then hitting a wall.** The cause was that
-/// `defence` is scaled by provocation, so an aggressive pilot that had just
-/// been passed reached about 1.9 - nearly twice the whole `-1..1` budget the
-/// aim point is clamped into. It therefore saturated that clamp on its own,
-/// pinning the craft to the corridor edge on the rival's side and squeezing
-/// every other term - the racing line's own bias, the inside line - out of the
-/// sum entirely. Covering a line is worth part of the corridor; it is not worth
-/// all of it, and it is certainly not worth the wall.
+/// Reported from play: opponents turned almost ninety degrees into the player
+/// to block, then hit a wall. `defence` scaled by provocation reached about
+/// 1.9, nearly twice the `-1..1` budget, so it saturated the aim clamp alone
+/// and squeezed every other term out of the sum.
 const SOCIAL_MAX: f32 = 0.45;
 
 /// And how much a full yield is worth.
 ///
-/// **More than a block and far less than the corridor.** Yielding cannot swerve
-/// into anybody, so it does not need the block's tight rein - but a craft that
-/// hands over the whole track is not being courteous, it is abandoning the
-/// racing line, and it looks like it has given up rather than let somebody
-/// through. What is wanted is a bit of room to be passed in, so this is a lean
-/// rather than a move.
+/// **More than a block, far less than the corridor.** Yielding cannot swerve
+/// into anybody, but a craft that hands over the whole track looks like it has
+/// given up; what is wanted is room to be passed in.
 const YIELD_MAX: f32 = 0.55;
 
-/// How close a rival behind has to get before **blocking** stops.
+/// How close a rival behind has to get before **blocking** stops: you cover a
+/// line early, and past this a move across is a swerve into somebody.
 ///
-/// You cover a line *early*, while there is still room to do it smoothly. Past
-/// this the rival is already at your gearbox, and moving across is no longer a
-/// block - it is a swerve into somebody, which ends with both craft in the
-/// scenery and the blocker further back than if it had done nothing.
-///
-/// **Yielding is deliberately not gated on it**, and the first version of this
-/// gate was wrong for exactly that reason: it suppressed the whole term, and
-/// since a packed grid is *permanently* inside fourteen units, craft stopped
-/// getting out of each other's way at the only range where it matters. They
-/// bumped instead, and the whole field lost about an eighth of its pace -
-/// measured, 119 against 95 at elite. Moving away from somebody who is already
-/// there is never the wrong thing to do.
+/// **Yielding is deliberately not gated on it.** The first version suppressed
+/// the whole term, and since a packed grid is permanently inside fourteen
+/// units, craft stopped getting out of each other's way and the field lost
+/// about an eighth of its pace (119 against 95 at elite, measured).
 const SOCIAL_MIN_GAP: f32 = 14.0;
 
 /// The minimum yield every driver gives a rival it is **already alongside**,
 /// whatever its personality says.
 ///
-/// **Chosen, not measured. No confidence score** - the original has no social
-/// term at all, so there is nothing to recover this from, and opponent
-/// behaviour is a design axis on this project rather than a fidelity one.
+/// **Chosen, not measured. No confidence score**: the original has no social
+/// term, and opponent behaviour is a design axis here.
 ///
-/// # The hole this fills
+/// Inside [`SOCIAL_MIN_GAP`] only the yielding half of
+/// [`Driver::social`]'s `defence - courtesy` survives, so every driver whose
+/// defence is at least its courtesy (including `Personality::from_seed(0)`)
+/// contributed zero at contact: two touching craft had nothing steering them
+/// apart. That is the residue `craft_sticking_ground_truth`'s header records
+/// after the `alongside` fix.
 ///
-/// [`Driver::social`]'s lean is `defence - courtesy`, and inside
-/// [`SOCIAL_MIN_GAP`] only its yielding half survives. So **every driver whose
-/// defence is at least its courtesy contributes exactly zero at contact** -
-/// including the neutral baseline `Personality::from_seed(0)` gives, where both
-/// are zero. Two such craft that touch have nothing steering either of them
-/// apart: `oag_physics::pair::resolve` nudges them, both drivers aim straight
-/// back at the same corridor point, and they grind along together. That is the
-/// residue `craft_sticking_ground_truth`'s own header records as left over
-/// after the `alongside` fix - the fix made a touching rival *visible* to this
-/// term; this makes the term *say something* when it sees one.
-///
-/// Small on purpose. It is a floor, not a policy: an aggressive pilot still
-/// covers, a shy one still yields harder, and all this does is stop the
-/// aggressive one contributing nothing at the one range where contact is
-/// already happening. Scaled by [`YIELD_MAX`], pressure and the corner gate
-/// like any other yield, so it fades out mid-corner rather than steering two
-/// craft off a bend they are both at the grip limit on.
+/// Small on purpose: a floor, not a policy. Scaled by [`YIELD_MAX`], pressure
+/// and the corner gate, so it fades out mid-corner.
 const CONTACT_FLOOR: f32 = 0.25;
 
 /// How close a craft ahead has to be before a driver lifts for it, in units
-/// along the track. Shorter than [`AWARENESS_RANGE`]: a craft two seconds up
-/// the road is not something to lift for.
+/// along the track. Shorter than [`AWARENESS_RANGE`].
 const CAUTION_RANGE: f32 = 45.0;
 
 /// The steering command, and the turn-rate error it was computed from.
 ///
-/// **The error travels with the command because [`trail`] has to be a function
-/// of the same signal the rate loop closed on.** Feeding it `command` instead
-/// would be a path from the loop's own output back into the plant it drives,
-/// which is a second loop around the first - the shape this crate was rewritten
-/// to remove.
+/// **The error travels with the command because [`trail`] must be a function
+/// of the signal the rate loop closed on.** Feeding it `command` would be a
+/// second loop around the first, the shape this crate was rewritten to remove.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Steer {
     /// The steering input, `-1.0..=1.0`, positive to the right.
