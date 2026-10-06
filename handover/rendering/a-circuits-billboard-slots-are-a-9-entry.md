@@ -82,6 +82,10 @@ manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 - ~~`14_Track`'s three `num="8"` billboards~~ **Closed 2026-09-05**: it authors one.
 - ~~No transform writer has been found~~ **Closed 2026-10-06**: there is no transform; see above.
 - ~~The `func_0x00XXXXXX`/`jal`-relocation gap~~ **Resolved 2026-09-07**; the 2026-10-06 reads resolved every callee.
+- ~~The final texture bind is untraced~~ **Superseded 2026-10-06**: the bind is the card's target replacing the quad's material texture; the live frame shows the sampling prim, the binding instruction is still uncaught (above).
+- ~~The material object's live fields and the four `+0x88/+0x90/+0x98/+0xa0` sub-objects~~ **Explained, not re-read**: on the card object those offsets are the camera-matrix row, slot number and parameter, the render target and the `Gfx_Enqueue` sort keys (`+0x9c`/`+0xa0`); the competing "four state groups" candidate in `start-gantry.md`'s 55-scored claim is therefore weakened, not settled - the gantry's own material is a separate object.
+- ~~`0x0890cf34` has no function boundary~~ **Left as it was**: not needed by the card path.
+- **PS2**: the loader keeps and rebinds six placeholder draws on `16_Track`, but they are authored back-face-culled there and no tested frame shows the quad; only an autopilot frame differs (a red mark on the right wall). Not verified at the quad.
 
 ## Next Steps
 
