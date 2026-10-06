@@ -1,6 +1,6 @@
 //! [`MusicFetchWorker`]: locating and decoding one soundtrack track on its own
 //! thread so no caller waits on it: the race hand-off, the race-boundary
-//! prefetch and the `MUSIC SOURCE` row. Split out of `audio.rs` under the
+//! prefetch and the `MUSIC SOURCE` row. Split out of `lib.rs` under the
 //! 1,000-line rule.
 
 use super::*;
@@ -45,7 +45,7 @@ pub(super) fn locate(
 }
 
 /// One soundtrack track being located and decoded on its own thread, the shape
-/// of [`crate::race::LoadWorker`] and [`crate::boot::MediaWorker`]: a
+/// of `oag_raceplay::worker::LoadWorker` and `oag_game::boot::MediaWorker`: a
 /// synchronous fetch blocked the caller for a cold decode (2.83 s for a full
 /// PS2 track), the gap between the loading screen's fade and the first race
 /// frame. Also reused by [`Audio::maybe_prefetch_next_race_track`] and
@@ -54,7 +54,7 @@ pub(super) fn locate(
 /// Holds no [`Audio`]: [`fetch_track`] produces a plain [`Loaded`], and the
 /// mixer is only entered when a caller applies it on its own thread
 /// (`Audio::finish_race_music`, `Audio::advance_race_track`, `Audio::tick`'s
-/// poll), as [`crate::race::worker`] argues for [`crate::race::LoadWorker`].
+/// poll), as `oag_raceplay::worker` argues for `LoadWorker`.
 #[derive(Debug)]
 pub struct MusicFetchWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
@@ -95,7 +95,7 @@ impl MusicFetchWorker {
     }
 
     /// Whether the fetch has returned; `true` if the thread failed to spawn (as
-    /// [`crate::race::LoadWorker::is_finished`]), so a poller never waits on a
+    /// `oag_raceplay::worker::LoadWorker::is_finished`), so a poller never waits on a
     /// thread that never started and the error surfaces from [`Self::join`].
     #[must_use]
     pub fn is_finished(&self) -> bool {
@@ -256,7 +256,7 @@ impl Audio {
     /// Shared by [`Self::start_race_music`] and the advance-on-finish check in
     /// [`Self::tick`]. `seek` is `Some` for a resume, `None` for a fresh start.
     /// `pub(super)`: `Audio::start_race_music` is the general entry point and
-    /// stayed in `audio.rs`.
+    /// stayed in `lib.rs`.
     pub(super) fn play_race_track(
         &mut self,
         discs: &MusicDiscs,

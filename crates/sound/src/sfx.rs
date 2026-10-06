@@ -337,7 +337,7 @@ impl Audio {
             }
 
             // The Zone speed-class announcer: one voice line per stage raised this
-            // tick (see `race::tick`). Unlike the milestone one, this trigger is
+            // tick (see `oag_raceplay::tick`). Unlike the milestone one, this trigger is
             // not yet read from HD's executable (`oag_title::ZoneClassAnnouncer`).
             for stage in class_announcements {
                 let Some((sound, looping)) = class_announcer.pick(stage, &mut voices.rng) else {
@@ -716,7 +716,7 @@ impl Audio {
 /// [`None`] if either has gone from the grid.
 ///
 /// Chosen, not measured: the page never states what the beam's scene node
-/// tracks, and the two endpoints (which `crate::race::weapons::leach_beam_ribbon_vertices`
+/// tracks, and the two endpoints (which `oag_raceplay::weapons::visuals::leach_beam_ribbon_vertices`
 /// draws between) are the only positions this port has.
 fn leach_attach_point(
     craft: &[Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS],

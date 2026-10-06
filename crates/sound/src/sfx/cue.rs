@@ -203,7 +203,7 @@ pub enum Cue {
     /// A craft hit plays [`Self::PlasmaHitShip`] instead: `Plasma_SweepCraftHit`
     /// (`0x0886afb8`) plays `PLASMAHITSHIP` and clears the emitter before pass
     /// two, so the original never plays both (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
-    /// "a craft hit is the third ending"). The gate in `crate::race::tick`
+    /// "a craft hit is the third ending"). The gate in `oag_raceplay::tick`
     /// mirrors that split; an earlier pass reused this cue as a **chosen, not
     /// measured** placeholder. A craft ending is
     /// `Impact::struck.is_some()` (`crates/weapons/src/projectile/flight.rs`).
@@ -292,7 +292,7 @@ pub enum Cue {
     ///
     /// `missile.md` (around line 391) reads `Missile_Update`'s bounce branch as
     /// playing `WO_MISSILE_BOUNCE` and `MISSILEEXPWALL` together, on the edge of
-    /// the bounce visual (`crate::race::weapons::visuals::bounced_this_tick`). A
+    /// the bounce visual (`oag_raceplay::weapons::visuals::flares::bounced_this_tick`). A
     /// missile that exhausts its bounces and detonates (`struck: None`,
     /// `blast: true`) plays no cue here: the teardown plays `MISSILEEXPWALL` off
     /// bit `0x10`, whose setter is unread (see [`Self::MissileHitShip`]). Placed
@@ -318,7 +318,7 @@ pub enum Cue {
     /// original plays it, so it plays. Confidence 88 for the trigger; that it is
     /// a slip is inference. Fires for the Missile impact that struck nothing and
     /// spends no blast (`blast: false`), the fuse (`missile_ending_cue` in
-    /// `race::weapons`). On HD the call site is unread; HD's bank carries the
+    /// `oag_raceplay::weapons`). On HD the call site is unread; HD's bank carries the
     /// cue, so it plays there on Pulse's binary alone.
     MissileExpire,
     /// The Cannon's round leaving the barrel.
@@ -410,7 +410,7 @@ pub enum Cue {
     /// `LeachBeam_InitLocked` allocates a dedicated `SoundEmitter_Init` emitter at
     /// the instance's `+0x4c` (falloff `600.0`) "carried by the beam itself", so
     /// its life is the `Instance`'s, the span
-    /// `crate::race::weapons::advance_leach_beam_ribbon` reads for the ribbon.
+    /// `oag_raceplay::weapons::visuals::advance_leach_beam_ribbon` reads for the ribbon.
     /// The bank spells it `~LEACHATTACH` (prose says `_LEACHATTACH`; trust the
     /// bank, the trap [`Self::MissileTravel`] warns of). Position, the midpoint
     /// between the two craft, is chosen, not measured: the page never resolves
@@ -425,7 +425,7 @@ pub enum Cue {
     /// "Assets and cues - checked, not assumed". Wired 2026-09-25 off
     /// [`oag_fx::beam::Ribbon::advance`]'s pulse edge, pushed as a
     /// [`super::CueEvent::at_point`] in
-    /// `crate::race::weapons::visuals::Race::advance_leach_beam_ribbon`.
+    /// `oag_raceplay::weapons::visuals::advance_leach_beam_ribbon`.
     ///
     /// Position is chosen, not measured: the page does not show `LEACHENERGY`'s
     /// emitter argument apart from the effect's, so it uses the effect's point
@@ -444,7 +444,7 @@ pub enum Cue {
     ///
     /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT` on
     /// every bounce (`Sound_Play` at `0x08877b60`), on the edge of the
-    /// `WO_SHURIKEN_BOUNCE` visual (`crate::race::weapons::visuals::bounced_this_tick`).
+    /// `WO_SHURIKEN_BOUNCE` visual (`oag_raceplay::weapons::visuals::flares::bounced_this_tick`).
     /// On the blade's own emitter: it loads `round+0x50`, writes `300.0`
     /// (`0x43960000`) to `+0x38` and plays through it, correcting an earlier
     /// "placed on the firing craft" choice.
@@ -480,7 +480,7 @@ pub enum Cue {
     /// substates: `Sound_PlayNamedInSlot(..., "ready", 0x400, 0, 0, 0)`, the dry
     /// path of [`Self::Disengaging`]. Measured live on Pulse (PSP), Time Trial,
     /// a single race and Eliminator: it starts 180 ticks before [`Self::Go`]
-    /// (`crate::race::countdown`) with no other cue between. Its words are not
+    /// (`oag_raceplay::countdown`) with no other cue between. Its words are not
     /// identified, and the gantry's `3`, `2`, `1` start no cue.
     ///
     /// The bank is the mode's speech bank, picked by `World_LoadTrack`:

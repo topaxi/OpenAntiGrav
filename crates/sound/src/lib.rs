@@ -20,7 +20,7 @@
 //! [`settings::Settings`] is the `[audio]` section of the settings file.
 //!
 //! Everything here is driven by the **tick count** only, inside the
-//! fixed-timestep loop (`crate::race::Race::tick`), so a headless
+//! fixed-timestep loop (`oag_raceplay::Race::tick`), so a headless
 //! `--dump-audio` capture matches a window's samples at the same tick count
 //! (`docs/architecture/determinism.md`). There is deliberately **no** per-frame
 //! call: with a device `cpal` drains the mixer from its own thread, and with
@@ -185,7 +185,7 @@ impl std::fmt::Display for MusicSource {
 ///
 /// # The counterpart is confirmed by its soundtrack, not by its serial
 ///
-/// A file name cannot cover every regional pressing (`crate::source::IMAGE_NAMES`
+/// A file name cannot cover every regional pressing (`oag_source::source::IMAGE_NAMES`
 /// names only the copies this project has), and `oag_assets::Layout::resolve`'s
 /// deny-list is positive-only: it rules out the one verified Pure serial
 /// (`UCUS-98612`) and gives an unlisted serial no verdict. Measured, a
@@ -662,7 +662,7 @@ impl Audio {
     /// PSP's; [`Self::set_music_source`] enforces it.
     ///
     /// `cache_dir` is where a decoded PSP track lands
-    /// ([`crate::boot::default_audio_cache_dir`]); the PS2 path ignores it.
+    /// (`oag_source::cache::default_audio_cache_dir`); the PS2 path ignores it.
     ///
     /// Never fatal: a source with no decodable music (or no `ffmpeg` on `PATH`
     /// for a PSP disc) says so on stdout and plays nothing.
@@ -940,8 +940,8 @@ impl Audio {
     /// Starts one of the boot sequence's movie sounds, reporting what happened.
     ///
     /// The seam both tick loops go through, so the stdout line and the decision
-    /// cannot differ between them. `None` is the ordinary silent case (see
-    /// [`crate::boot::Boot::movie_sound`]). `what` names the movie, because
+    /// cannot differ between them. `None` is the ordinary silent case (see the boot movie
+    /// loading in `oag_game::boot`). `what` names the movie, because
     /// Pure plays a second one when `FMV Intro` is entered.
     ///
     /// The line reports what clocks the picture, checked against
@@ -1253,8 +1253,8 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
 /// The soundtrack entries of a source whose music is inside an archive (every
 /// release but PS2).
 ///
-/// Which entries depends on the booted title, so it is asked in [`crate::music`];
-/// [`Track::at`] is opaque ([`crate::music::Entry::at`]).
+/// Which entries depends on the booted title, so it is asked in `oag_music`;
+/// [`Track::at`] is opaque ([`oag_music::Entry::at`]).
 fn archived_soundtrack(library: &dyn Library, source: &str) -> Result<Option<Vec<Track>>> {
     Ok(listing(library, source)?.map(|entries| {
         entries

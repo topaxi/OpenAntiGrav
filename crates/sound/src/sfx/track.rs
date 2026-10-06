@@ -321,7 +321,7 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
 }
 
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:
-/// one read for the sound bank above and, from `race::scenery_fx`, its weather.
+/// one read for the sound bank above and, from `oag_raceplay`'s scenery effects, its weather.
 pub fn circuit_manifest(
     archives: &mut Archives,
     track: &str,
