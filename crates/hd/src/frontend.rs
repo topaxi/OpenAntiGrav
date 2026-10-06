@@ -360,7 +360,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
     disc_strings: None,
-    language_manifests: &[],
+    language_manifests: LANGUAGE_MANIFESTS,
+    assumed_release: None,
     menu: Some(MENU_SKIN),
     menu_ps2: None,
     // HD authors the controller-driven `FEGlobals`/`<HorizMenu>` vocabulary
@@ -427,6 +428,45 @@ pub const LANGUAGE_PLUGINS: &[&str] = &[
     r"Languages\Swedish",
     r"Languages\TraditionalChinese",
 ];
+
+/// What each HD release offers: the languages its executable's system-language
+/// chooser can reach, **not a manifest** - HD has no picker, and no list in code.
+///
+/// `FUN_003436b8` (0x003436b8) reads `cellSysutilGetSystemParamInt(0x111)` and
+/// returns one name, which the boot formats into `Data\Plugins\languages\%s`
+/// (0x007869c0). Its jump table (0x343734, TOC `r2` = 0x8bd3c4) reaches French,
+/// Spanish, German, Italian, Dutch, Portuguese and Russian (console ids 2-8) and
+/// Finnish, Swedish, Danish and Norwegian (12-15); every other id (Japanese,
+/// English, Korean, Chinese, and anything above 15) takes the default, which is
+/// `American` when the region variable at 0x938564 is 1 and `English` otherwise.
+/// Regions 2 (Japan: English or Japanese) and 3 (Asia/Korea: English,
+/// TraditionalChinese or Korean) take their own branches. Europe is the one
+/// region value left over, so a European release reaches `English` and never
+/// `American`, `Japanese`, `Korean` or `TraditionalChinese`: those four plugins
+/// ship on the disc and are unreachable on it. **The EU region value is by
+/// elimination, confidence 70** - the writer of 0x938564 was not found - and
+/// `FUN_00235190` shows `AmericanLegalLine` when it equals 2, which is open.
+///
+/// The picker order is **chosen, not measured**: the original shows no picker, so
+/// this is English first and then the console's own language-id order.
+pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::LanguageManifest {
+    serial: "BCES-00664",
+    plugins: &[
+        r"Languages\English",
+        r"Languages\French",
+        r"Languages\Spanish",
+        r"Languages\German",
+        r"Languages\Italian",
+        r"Languages\Dutch",
+        r"Languages\Portuguese",
+        r"Languages\Russian",
+        r"Languages\Finnish",
+        r"Languages\Swedish",
+        r"Languages\Danish",
+        r"Languages\Norwegian",
+    ],
+    evidence: "hdfury-ps3-eu EBOOT FUN_003436b8 jump table; EU region = the unmatched value",
+}];
 
 /// Screen names, spelled exactly as HD's XML spells them.
 ///

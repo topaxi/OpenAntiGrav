@@ -120,6 +120,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     language_plugins: LANGUAGE_PLUGINS,
     disc_strings: Some("pulse"),
     language_manifests: LANGUAGE_MANIFESTS,
+    assumed_release: None,
     menu: Some(frontend::MENU_SKIN),
     // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,
     // not scaled from the PSP's - see `frontend::PS2_MENU_SKIN`'s own doc.

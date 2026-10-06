@@ -255,7 +255,7 @@ fn serial_from_boot_path(boot: &str) -> Option<String> {
 /// PS2 boot paths write it as `SLES_557.12`; UMD_DATA already uses `ULUS-10358`.
 /// Normalising here means callers can compare serials without caring which
 /// disc they came from.
-fn normalise_serial(raw: &str) -> String {
+pub(crate) fn normalise_serial(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
