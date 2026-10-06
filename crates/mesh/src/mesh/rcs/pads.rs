@@ -69,6 +69,75 @@ pub(super) fn is_pad_material(name: &str) -> bool {
     )
 }
 
+/// Every chunk hash the world-space pass leaves to a node: the ones a `Mesh`
+/// node names ([`super::referenced`]) and the ones either pad class names.
+///
+/// **Both pad classes' chunks are excluded here too, not only the ordinary
+/// `Mesh` ones `referenced` names.** They would otherwise fall through to the
+/// unreferenced-chunk loop in [`super::build_scene`] exactly the way `referenced`'s
+/// own doc comment describes for an ordinary node - a `Weapon Pad`/`Speedup
+/// Pad` node's chunk hash never matches `mesh_class`, so `referenced` never
+/// even looks at it. [`build_pads`]/[`build_weapon_pads`] draw
+/// these same chunks through their own node-ordered pass instead, and this is
+/// what stops a pad drawing twice once a caller uses both - see that pair's own
+/// doc comment for why a separate pass exists at all.
+///
+/// One function for [`super::build_scene`] and the pad passes' report
+/// ([`world_pass_pad_chunks`]), so the chunks the report counts as drawn
+/// here are the chunks the scene pass leaves for itself.
+pub(super) fn placed_hashes(
+    data: &[u8],
+    nodes: &[vex::Node],
+    classes: Option<vex::classes::Classes>,
+    order: oag_formats::ByteOrder,
+    model: &rcsmodel::Model,
+) -> Vec<u32> {
+    let mut placed = match classes.and_then(|c| c.mesh) {
+        Some(mesh_class) => super::referenced(data, nodes, mesh_class, model),
+        None => Vec::new(),
+    };
+    for class in [
+        classes.and_then(|c| c.speedup_pad),
+        classes.and_then(|c| c.weapon_pad),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        placed.extend(pad_chunk_hashes(data, nodes, order, class));
+    }
+    placed
+}
+
+/// The chunks [`super::build_scene`]'s world-space pass draws on a pad
+/// material, and their triangles: what a pad is on a circuit whose pad nodes
+/// name no chunk. `named` is every hash a pad node of either class names.
+///
+/// The same routing [`bind_scene_pad_masks`] does for the `_ne` mask, read
+/// for the report; it chooses nothing, since the scene pass draws these
+/// chunks whether or not this counts them.
+pub(super) fn world_pass_pad_chunks(model: &rcsmodel::Model, named: &[u32]) -> (usize, usize) {
+    let mut chunks = 0;
+    let mut triangles = 0;
+    for chunk in model.meshes.iter().filter(|c| !named.contains(&c.hash)) {
+        if !chunk.surfaces().any(|s| {
+            model
+                .materials
+                .get(s.material as usize)
+                .is_some_and(|m| is_pad_material(&m.name))
+        }) {
+            continue;
+        }
+        chunks += 1;
+        triangles += chunk
+            .surfaces()
+            .flat_map(|s| s.submeshes.iter())
+            .filter(|sub| sub.vertex_count != 0 && sub.index_count != 0)
+            .map(|sub| sub.index_count / 3)
+            .sum::<usize>();
+    }
+    (chunks, triangles)
+}
+
 /// Binds the `_ne` mask to the pad materials [`super::build_scene`]'s
 /// unreferenced-chunk pass is about to draw: the speed pads of the four
 /// original circuits, routed by material because their `Speedup Pad` nodes
@@ -253,6 +322,10 @@ pub(super) fn build_pad_class(
         node_vertex_ranges.push(node_first_vertex..out.vertices.len() as u32);
     }
     out.node_vertex_ranges = node_vertex_ranges;
+    if report.nodes > report.addressed {
+        let named = placed_hashes(data, &nodes, Some(classes), order, &model);
+        (report.routed_chunks, report.routed_triangles) = world_pass_pad_chunks(&model, &named);
+    }
     face_normals(&mut out);
     let (centre, radius) = bounding_sphere(&out.vertices);
     out.centre = centre;

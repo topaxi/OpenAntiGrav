@@ -16,18 +16,41 @@ use oag_title::{
 /// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
 pub const ABSORB_BURST: Burst = Burst::MirroredPairs { stagger: 0.2 };
 
+/// The scenery effects HD's own disc authors: `wo_blue_welder.pob` and
+/// `wo_modesto_steam_a.pob` in `DATA02`. Pulse's list also names `WO_RAIN`,
+/// `WO_RAIN_LENS` and `WO_SNOW`, which no archive of HD's disc carries
+/// (`docs/formats/pob.md`, "Which names HD does not author").
+const SCENERY: &[&str] = &[
+    engine_effects::BLUE_WELDER_EFFECT,
+    engine_effects::MODESTO_STEAM_EFFECT,
+];
+
 /// HD's tables: the engine's own names by inheritance from Pulse, and HD's own
 /// weapon spark and absorb burst.
-pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pulse"))
-    // `Cannon_ApplyCraftHit`; `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`.
-    .with(
-        Trigger::WeaponSpark,
-        EffectSpec::new(engine_effects::WEAPON_SPARK_EFFECT, Origin::Measured),
-    )
-    .with(
-        Trigger::ShieldAbsorb,
-        EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
-    );
+///
+/// **Two inherited triggers are taken back.** `WO_MAGSTRIP_SPARKS` and
+/// `WO_MAGSTRIP_ZONE` are 2048-lineage files (Omega's `Data/particles2048`):
+/// no PSARC of HD's disc carries either, and HD builds the arc wake instead
+/// (`Title::magstrip_pob` is `false` here) - `docs/formats/pob.md`, "Which
+/// names HD does not author". The scenery list drops `WO_RAIN`, `WO_RAIN_LENS`
+/// and `WO_SNOW` for the same reason; see [`SCENERY`].
+pub const EFFECTS: &Effects = &{
+    let mut effects = Effects::engine(Origin::InheritedFrom("Wipeout Pulse"))
+        // `Cannon_ApplyCraftHit`; `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`.
+        .with(
+            Trigger::WeaponSpark,
+            EffectSpec::new(engine_effects::WEAPON_SPARK_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::ShieldAbsorb,
+            EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)
+                .with_burst(ABSORB_BURST),
+        )
+        .without(Trigger::MagstripSparks)
+        .without(Trigger::MagstripZone);
+    effects.scenery = SCENERY;
+    effects
+};
 
 /// Two of the palette's three colours are read off HD's executable
 /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is
@@ -54,3 +77,27 @@ pub const LOOKS: &Looks = &Looks {
     },
     ..Looks::unread(SHIELD)
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The five names no archive of HD's disc carries
+    /// (`docs/formats/pob.md`, "Which names HD does not author"); the
+    /// disc-backed half is `psys_inventory_ground_truth.rs`.
+    #[test]
+    fn hd_does_not_ask_for_the_effects_its_disc_does_not_author() {
+        let names = EFFECTS.names();
+        for absent in [
+            engine_effects::RAIN_EFFECT,
+            engine_effects::RAIN_LENS_EFFECT,
+            engine_effects::SNOW_EFFECT,
+            engine_effects::MAGSTRIP_SPARKS_EFFECT,
+            engine_effects::MAGSTRIP_ZONE_EFFECT,
+        ] {
+            assert!(!names.contains(&absent), "{absent}");
+        }
+        assert!(names.contains(&engine_effects::MODESTO_STEAM_EFFECT));
+        assert!(names.contains(&engine_effects::ROCKET_FLARE_EFFECT));
+    }
+}

@@ -114,6 +114,7 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     sources: &[&Screens],
     extra: &[&str],
+    bottom_up: &[&str],
     report: &mut Vec<String>,
 ) -> oag_hud::sprite::Sheet {
     let mut srcs: Vec<String> = Vec::new();
@@ -141,6 +142,7 @@ pub(super) fn load(
     }
 
     let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut reversed: Vec<oag_hud::sprite::DecodedImage> = Vec::new();
     for src in &srcs {
         match read_front_end_first(archives, src) {
             Ok(blob) => blobs.push((src.clone(), blob)),
@@ -155,6 +157,12 @@ pub(super) fn load(
             // to resolve, what `CLAUDE.md`'s "draw nothing and say so" asks
             // for.
             Err(e) => match gnf_sibling(archives, src) {
+                Some(Ok(blob)) if is_bottom_up(src, bottom_up) => {
+                    match bottom_up_rows(src, &blob) {
+                        Some(image) => reversed.push(image),
+                        None => report.push(format!("image {src}: .gnf rows would not reverse")),
+                    }
+                }
                 Some(Ok(blob)) => blobs.push((src.clone(), blob)),
                 Some(Err(reason)) => report.push(reason),
                 None => report.push(format!("image {src}: {e}")),
@@ -162,7 +170,7 @@ pub(super) fn load(
         }
     }
 
-    let sheet = oag_hud::sprite::Sheet::build(&blobs, report);
+    let sheet = oag_hud::sprite::Sheet::build_with(&blobs, reversed, report);
     report.push(format!(
         "{} of {} front-end image(s) decoded into a {}x{} sheet",
         sheet.len(),
@@ -266,4 +274,33 @@ pub(crate) fn gnf_sibling(
         Ok(_) => Some(Ok(bytes)),
         Err(e) => Some(Err(refuse(e.to_string()))),
     }
+}
+
+/// A `.gnf` whose rows are in HD's `.gtf` order, decoded and reversed into the
+/// top-down order a sheet holds - see
+/// [`oag_title::FrontEnd::bottom_up_gnf`] for which images and why.
+fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
+    let texture = oag_texture::gnf::Texture::parse(blob).ok()?;
+    let pixels = texture.decode(blob).ok()?;
+    let width = usize::try_from(texture.width).ok()?.max(1);
+    let rgba = pixels
+        .chunks_exact(width)
+        .rev()
+        .flat_map(|row| row.iter().flatten().copied())
+        .collect();
+    Some(oag_hud::sprite::DecodedImage {
+        src: src.to_string(),
+        width: texture.width,
+        height: texture.height,
+        rgba,
+        quad_extent: None,
+        blend: None,
+    })
+}
+
+/// Whether `src`'s file stem, lower-cased, is one of `stems`.
+fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
+    let leaf = src.rsplit(['\\', '/']).next().unwrap_or(src);
+    let stem = leaf.rsplit_once('.').map_or(leaf, |(stem, _)| stem);
+    stems.iter().any(|known| known.eq_ignore_ascii_case(stem))
 }

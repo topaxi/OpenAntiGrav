@@ -194,24 +194,40 @@ programs, the evidence and the frames are in
   model); a face turned away from the eye has `rim = 1`, so `a = 0` and the
   additive blend adds nothing there. In play it reads as a small cyan energy
   ball between the craft and its target.
-- **Plasma head: still off**, for a reason that is not this path's.
+- **Plasma head: drawn (2026-10-06).** `blast_models::HD_PLASMA_BALL_DRAWN` is
+  deleted rather than flipped. The defect that held it off was not the cull
+  (below), and the 2026-09-25 reading of it was wrong on that point.
   `HD_plasma_ball` is two coincident spheres, one wound outward and one
-  inward (`hd_unlit_probe.rs`: 760 of 760 triangles counter-clockwise about
-  their own normal in both; 760 and 0 normals outward), under a material that
-  culls. Drawn with debug output, every surviving fragment is `front_facing`
-  with its normal pointing away from the eye - also with the placement
-  replaced by a bare translation, so it is not a reflection in the placement.
-  With `rim = 1` there the program paints the whole disc white, where the
-  original's arithmetic gives a dark core in a blown-out rim. Every culled HD
-  weapon draw (`cull_as_authored`: the Rocket, the Bomb, the Plasma blast's
-  ring, sphere and halo) goes through the same cull, so the fix belongs to
-  that path, not to this model.
+  inward (`hd_unlit_probe.rs --built`: 760 of 760 triangles counter-clockwise
+  about their own normal in both, 760 and 0 wound outward, 760 and 0 with an
+  outward vertex normal), under a material that culls; the cull and the
+  winding are consistent. What was wrong is the eye: `rim = 1 - N.V` reads
+  the camera out of the drawable's own scene block (`Fog::camera`), and the
+  weapon drawables are written no scene block at all, so theirs held
+  `Scene::off`, whose camera is the origin. With a bolt at about `(6, -48,
+  -190)` the eye vector came out as `-position`, which is `(0.48, 0.62, 0.99)`
+  as a colour - the same value the debug frame showed - and `N.V` flipped sign
+  across the middle of the disc, so most of it was `rim` near 1 and white.
+  Proofs, on Talon's Junction at tick 112 with `--give plasma`: the flipped
+  cull (`Face::Front` on the blended pipelines) changed 2,379 pixels and the
+  disc stayed white; writing the hull's scene block to the ball's drawable
+  (`Scene::write_ship_scenes`) gave a dark core inside a blown-out rim, which
+  is what the program's arithmetic predicts. Pinned by
+  `crates/game/tests/hd_plasma_ball_ground_truth.rs` (387 dark pixels in the
+  bolt's box with a bolt, 16 without, 0 with the write dropped). **Checked
+  against Omega: not checkable** - Omega's bolt model is not built (its race
+  is incomplete, `omega-status.md`).
 
 ## Open
 
-- The back-face cull on HD `.rcsmodel` draws keeps the faces that turn away
-  from the eye (above). Until that is settled `HD_PLASMA_BALL_DRAWN` stays
-  `false`.
+- **Every other weapon drawable still holds `Scene::off`** (the Rocket, Mine,
+  Bomb, Cannon round, the blast trio, the LeachBall): no fog, no light rig and
+  an eye at the origin. Only the Plasma head was written, because it is the
+  one whose program reads the eye and whose picture was measured. The
+  LeachBall's `RIM_GLOW` reads the same eye, so its face-on brightness is
+  suspect; `frame.rs` already says the original shades rockets with the
+  circuit's rig. Not changed here: each needs its own frame against the
+  program, not a blanket write.
 - Which archive's `hd_leachbeam_ball_glow` the original serves; the two copies
   differ by the vertex alpha only.
 - No capture of the original's LeachBall or Plasma head exists under

@@ -206,6 +206,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `frontend::states::FE_SCREEN`'s own doc and
     // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
+    bottom_up_gnf: &[],
     // Pure's race box is a chain of screens (`Class Selection`, `League
     // Selection`, `Tournament Selection`, `Track Selection`,
     // `Team Selection`, ...) authored in one file, read 2026-09-10 - see

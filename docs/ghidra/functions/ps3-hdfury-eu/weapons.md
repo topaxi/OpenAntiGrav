@@ -611,8 +611,8 @@ only makes sense under an unlit/emissive shader (the texture alone is the
 picture; diffuse lighting is meant to contribute nothing), and this engine's
 one shared `mesh::rcs` shader (`mesh.wgsl`, the "lit race pass" `oag-view`
 itself names) has no such mode - it always multiplies texture by vertex
-colour by lighting, the same gap `blast_models::HD_PLASMA_BALL_DRAWN`'s own
-doc comment already documents for the Plasma bolt's head.
+colour by lighting, the same gap the Plasma bolt's head had until 2026-10-06
+(`docs/rendering/hd-unlit-programs.md`, "Gates").
 
 **Forced on and measured live, to see what that gap actually produces
 here**, since `HD_plasma_ball`'s own failure (an opaque black shard) is not
