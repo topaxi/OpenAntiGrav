@@ -8,16 +8,16 @@
 //! `docs/ghidra/functions/psp-pulse-usa/ai-branch-choice.md`.
 //!
 //! **What is ours is where the coin comes from.** The original draws from the
-//! one global generator everything shares; a draw here comes off
-//! `oag_core::Rng` seeded from this driver's own seed and how many forks it has
-//! decided, so it moves nothing else in the race and replays identically.
+//! one global generator everything shares; this draws off `oag_core::Rng`
+//! seeded from the driver's seed and its fork count, so it moves nothing else
+//! and replays identically.
 //!
 //! A fork can sit inside an alternate (2048's `square`, `mall`, `subway`), so a
 //! way round is a *sequence* of coins: [`choose`] rolls them in order against
-//! each route's own `choices` (`oag_race::course::Route::choices`), the same sequence the original
-//! rolls one path at a time, so a route two forks deep is taken one time in
-//! four. Rolling them all at the first fork rather than as each is reached
-//! changes when the draws happen, not what they decide.
+//! each route's own `choices` (`oag_race::course::Route::choices`), the sequence
+//! the original rolls one path at a time, so a route two forks deep is taken one
+//! time in four. Rolling them all at the first fork changes when the draws
+//! happen, not what they decide.
 
 use oag_core::rng::Rng;
 
@@ -28,26 +28,26 @@ pub struct Branching {
     /// The line the driver is on: `0` the ring, `k` the course's route `k - 1`.
     pub route: u16,
     /// The ring path whose fork this driver last decided at, plus one; `0`
-    /// when it is not on a pre-fork path. The latch that makes the coin one
-    /// draw per visit rather than one per tick - `Ai_ChooseBranch`'s state 1.
+    /// when not on a pre-fork path. The latch making the coin one draw per
+    /// visit, not per tick (`Ai_ChooseBranch`'s state 1).
     pub decided_at: u16,
-    /// Whether it has reached the route's own samples - state 2, after which
-    /// arriving back on the ring part of the line means it is past the merge.
+    /// Whether it has reached the route's own samples (state 2): arriving
+    /// back on the ring after that means it is past the merge.
     pub entered: bool,
     /// Forks decided so far, the counter the coins are drawn against.
     pub visits: u32,
-    /// The route the last coins chose, `k + 1`, while the driver is still on
-    /// the ring short of the split; `0` for none. The decision is the
-    /// original's (on entering the pre-fork path); when the driver moves onto
-    /// the route's line is ours - see `oag_raceplay`'s `routes` module.
+    /// The route the last coins chose, `k + 1`, while still on the ring short
+    /// of the split; `0` for none. The decision is the original's; when the
+    /// driver moves onto the route's line is ours (`oag_raceplay`'s
+    /// `routes` module).
     pub pending: u16,
 }
 
 impl Branching {
     /// On the ring, nothing decided: where a craft is put back after a respawn
-    /// or a teleport. **Ours**: the original keeps its excluded path through a
+    /// or teleport. **Ours**: the original keeps its excluded path through a
     /// respawn and lets the next locate sort it out, which this ring has no
-    /// equivalent of. The visit count survives, so the next coin is a fresh one.
+    /// equivalent of. The visit count survives, so the next coin is fresh.
     #[must_use]
     pub fn on_ring(self) -> Self {
         Self {
@@ -63,10 +63,9 @@ const BRANCH_STREAM: u64 = 0x6272_616e_6368;
 
 /// One fair coin for `seed`'s `visit`-th draw: `true` takes the alternate.
 ///
-/// Bit 8, like the original's `andi a0,v0,0x100` at `0x08854a24`, and with the
-/// same sense: bit set excludes the alternate, so it is clear that takes it.
-/// Any single bit of a well-mixed draw is fair; this one is kept so the
-/// reading and the port say the same thing.
+/// Bit 8, like the original's `andi a0,v0,0x100` at `0x08854a24`, with the same
+/// sense (bit set excludes the alternate). Any bit of a well-mixed draw is fair;
+/// this one keeps the reading and the port saying the same thing.
 #[must_use]
 pub fn coin(seed: u32, visit: u32) -> bool {
     let mixed = (u64::from(seed) << 32 | u64::from(visit)) ^ BRANCH_STREAM;
@@ -75,12 +74,11 @@ pub fn coin(seed: u32, visit: u32) -> bool {
 
 /// Rolls coins against `routes` - each a route's index and its `choices` - and
 /// returns the route they pick, or `None` for the ring.
-///
 /// The first coin is the ring fork: `false` stays on the ring. Each later coin
-/// narrows the candidates to the routes whose choices begin with what has been
-/// rolled, until one route's whole sequence is matched. A roll that matches
-/// nothing (a dead-end alternate the course dropped) stays on the ring.
-/// `visits` is advanced once per coin drawn.
+/// narrows the candidates to routes whose choices begin with what has been
+/// rolled, until one route's whole sequence matches; a roll matching nothing (a
+/// dead-end alternate the course dropped) stays on the ring. `visits` advances
+/// once per coin.
 pub fn choose<'a>(
     seed: u32,
     visits: &mut u32,
