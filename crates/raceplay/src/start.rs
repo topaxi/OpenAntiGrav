@@ -601,6 +601,7 @@ impl Race {
                 // to whatever the first real tick measures.
                 shield_flash_prev: 0.0,
                 shield_flash_timer: 0.0,
+                messages: oag_hud::messages::MessageBoard::default(),
                 shield_blink_timer: 0.0,
                 shield_flash_prev_whole: 0.0,
                 shield_flash_timer_whole: 0.0,

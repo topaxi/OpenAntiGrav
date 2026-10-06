@@ -100,6 +100,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `oag_title::HudArt::total_time_timed_modes_only`.
     total_time_timed_modes_only: true,
     kill_column: true,
+    message_slots: true,
     runtime: None,
 };
 

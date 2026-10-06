@@ -11,7 +11,6 @@ use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_race::RaceState;
 use oag_raceplay::*;
-
 mod bench;
 mod describe;
 pub mod gpu;
@@ -64,6 +63,8 @@ pub struct CaptureOptions {
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,
+    /// `--force-medal TICK:TIER`: a medal phrase id, raised as a HUD message.
+    pub force_medal: Vec<(u32, &'static str)>,
     /// Which control scheme maps the buttons. `[controls] scheme`.
     ///
     /// Here rather than left at the default because the novice sideshift is a

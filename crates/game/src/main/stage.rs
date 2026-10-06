@@ -644,6 +644,7 @@ impl Stage {
             // Nothing has been tried yet, so nothing has failed yet - see
             // `RaceStage::endrace_unavailable`.
             endrace_unavailable: false,
+            earned_medal: None,
         }))
     }
 }

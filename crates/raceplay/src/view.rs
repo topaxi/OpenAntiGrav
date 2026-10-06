@@ -182,6 +182,10 @@ pub struct RaceView {
     /// [`oag_hud::Readout::shield_flashing`] reads out of it every tick.
     /// Render-side, like [`Self::shield_was_up`], and out of the hash.
     pub(super) shield_flash_timer: f32,
+    /// The HUD's four message lines - `oag_hud::messages`. Render-side and out
+    /// of the hash; advanced a tick at a time by [`Race::tick`], so a paused race
+    /// holds them still. Raised by [`Race::raise_message`].
+    pub(super) messages: oag_hud::messages::MessageBoard,
     /// The shield bar's blink accumulator.
     ///
     /// `Hud_UpdateEnergyBar`'s own `hud+0x1dc`: advances by the tick's `dt`

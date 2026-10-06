@@ -192,6 +192,7 @@ impl Race {
             } else {
                 0
             },
+            messages: self.view.messages.lines(),
         }
     }
 
