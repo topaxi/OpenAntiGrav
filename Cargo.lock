@@ -2345,6 +2345,7 @@ dependencies = [
 name = "oag-log"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "dirs",
  "env_filter",
  "env_logger",
@@ -2688,11 +2689,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "env_logger",
  "log",
  "oag-ai",
  "oag-core",
  "oag-gameplay",
+ "oag-log",
  "oag-physics",
  "oag-pulse",
  "oag-race",
@@ -2771,10 +2772,10 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "clap",
- "env_logger",
  "log",
  "oag-assets",
  "oag-formats",
+ "oag-log",
  "oag-mesh",
  "oag-render",
  "oag-shader-check",

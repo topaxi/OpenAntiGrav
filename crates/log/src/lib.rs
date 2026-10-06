@@ -32,6 +32,7 @@
 pub mod path;
 pub mod prune;
 pub mod stamp;
+pub mod tool;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;

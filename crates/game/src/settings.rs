@@ -153,13 +153,10 @@ pub struct Log {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     /// The file's own filter, in `RUST_LOG` syntax. Absent:
-    /// [`DEFAULT_LOG_FILTER`]. The terminal is untouched by it.
+    /// [`oag_log::tool::FILE_FILTER`]. The terminal is untouched by it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
 }
-
-/// The file's default filter: the terminal's, with our own crates at `debug`.
-pub const DEFAULT_LOG_FILTER: &str = "warn,oag=debug,calloop=error";
 
 /// What the opponents are like.
 ///

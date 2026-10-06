@@ -115,7 +115,7 @@ pollster = "1"
 # about what the engine is doing goes through the `log` facade instead, so it
 # carries a level and can be filtered with `RUST_LOG`.
 #
-# `env_logger` is a dependency of the **binaries alone** - a library never picks
+# `env_logger` is a dependency of the binaries' sink `oag-log` alone - a library never picks
 # the sink. It is also deliberately absent from the simulation crates
 # (`oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-weapons`, `oag-gameplay`), which log
 # nothing at all: they take a snapshot in and emit one out, and a logger there

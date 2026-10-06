@@ -254,13 +254,3 @@ pub(crate) struct BlurArgs {
     #[arg(long)]
     pub(crate) motion_blur_resolution: Option<oag_display::display::BlurResolution>,
 }
-
-/// Where this run's log file goes.
-#[derive(clap::Args, Debug)]
-pub(crate) struct LogArgs {
-    /// Write this run's log to FILE instead of the settings file's `[log] file`
-    /// or the default (`$XDG_STATE_HOME/oag/logs/oag-game.log`). An empty
-    /// value (`--log-file ''`) writes no file. The terminal output is unchanged.
-    #[arg(long = "log-file", value_name = "FILE")]
-    pub(crate) file: Option<String>,
-}

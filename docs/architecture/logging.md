@@ -2,7 +2,7 @@
 
 What a launch prints, which level a message belongs at, and how to get the rest
 back. The sink is `env_logger` over the `log` facade, installed by the binaries
-alone (`oag-game`, `oag-view`, `oag-trace`); a library only calls the macros. The
+alone (`oag-game`, `oag-view`, `oag-trace`), all through `oag-log`; a library only calls the macros. The
 simulation crates log nothing - see the diagnostics note in the workspace
 `Cargo.toml`.
 
@@ -22,7 +22,7 @@ arrives through `wgpu` at whatever level the stack chose.
 
 ## The log file
 
-Every `oag-game` run also appends to one log file, **in addition to** the
+Every `oag-game`, `oag-view` and `oag-trace` run also appends to one log file, **in addition to** the
 terminal, which is unchanged. It exists because a launcher that swallows stderr
 (Steam, a desktop shortcut) leaves nothing to read.
 
@@ -52,7 +52,19 @@ terminal, which is unchanged. It exists because a launcher that swallows stderr
   appending interleave whole lines. A full queue drops a line and says so in the
   file; a panic is logged at `error` and flushed first.
 - **The code.** `crates/log` (`oag-log`); `oag-game` wires it in `main.rs`.
-  `oag-view` and `oag-trace` keep their own `env_logger` setup for now.
+- **`oag-view` and `oag-trace`** call `oag_log::tool::start` right after
+  parsing the command line, with their own name for the file
+  (`oag-view.log`, `oag-trace.log`, same directory, same seven-day prune, same
+  line format) and the terminal defaults they always had (`oag-view`:
+  `warn,oag=info,calloop=error`; `oag-trace`: `warn,oag=info`). Their stdout
+  reports are untouched. They read no settings file, so the file is `--log-file
+  <path>` (empty writes none; the same flag as `oag-game`'s, one shared
+  `oag_log::tool::LogArgs`) and the file's filter is the environment variable
+  `OAG_LOG_FILE_FILTER` in `RUST_LOG` syntax, else the same default as the
+  game's. **Chosen, not measured:** the tools log to a file by default, as the
+  maintainer's default is "a file in addition", so a launch under a launcher
+  that swallows stderr is not blind. A parse error from clap exits before the
+  file opens and leaves no file.
 
 ## Which level
 
@@ -130,4 +142,4 @@ RUST_LOG=error oag-game ...                          # only what the player lose
 
 The defaults live in `init_logging` in `crates/game/src/main.rs` (which carries
 the reasoning for `calloop`), `crates/view/src/logging.rs` and
-`crates/trace/src/logging.rs`.
+`crates/trace/src/logging.rs`; the file's is `oag_log::tool::FILE_FILTER`.

@@ -205,7 +205,7 @@ Existing crates:
 | `oag-present` | `crates/present` | What happens to a frame between the scene and the glass: the upscale/grade/screen-filter composite, dynamic resolution scaling, and the performance meter. Plain data in; knows no race, menu or settings file. |
 | `oag-shader-check` | `crates/shader-check` | A build-dependency of the shader-owning crates: links WESL and validates every shader with `naga` so a bad one fails `cargo build`. Never a normal dependency. |
 | `oag-livery` | `crates/livery` | A race's ship hulls, skins, shields, plumes and wrecks built from a title's own archive entries, plus the entry-name rules for them. |
-| `oag-log` | `crates/log` | The binaries' log sink: the terminal as `env_logger` always built it, plus one appended, timestamped file with its own filter, pruned to seven days at startup. Plain data in; knows no game. `oag-game` installs it; `oag-view` and `oag-trace` still build their own. |
+| `oag-log` | `crates/log` | The binaries' log sink: the terminal as `env_logger` always built it, plus one appended, timestamped file with its own filter, pruned to seven days at startup. Plain data in; knows no game. `oag-game`, `oag-view` and `oag-trace` install it, the last two through `oag_log::tool`. |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
