@@ -604,6 +604,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD needs a per-material shader path, and two general rules for finding one have been refuted](handover/rendering/hd-needs-a-per-material-shader-path-and.md)
 - [A PS3 title now boots, drives and screenshots from a script - and its savestates are not worth adopting](handover/tooling/a-ps3-title-now-boots-drives-and-screenshots.md)
 - [Reversed grids were putting craft off the track; fixed by walking the spline instead of extrapolating a straight line](handover/gameplay/reversed-grids-were-putting-craft-off-the-track.md)
+- [2048's sky turns and its fog draws on HD's curve; the 2048 law, two sky keys and Omega's pink road are open](handover/rendering/2048s-sky-turns-and-fog-draws-on-hds-curve.md) - 2026-10-06: 2048 and Omega domes turn by `Sky rotation`, fog from `Lighting.Fog colour` on HD's inherited curve; open: 2048's GXP fog term, the sign, `Sky brightness`/`Sky height offset`, Omega altima's flat pink road
 - [HD's sky, fog and lighting draw from the disc's own statements - three holds remain, each named where it lives](handover/rendering/hds-sky-fog-and-lighting-draw-from-the.md)
 - [A cue can play other cues, and that is what `.COLLISIONS` does on HD](handover/audio/a-cue-can-play-other-cues-and-that.md)
 - [Every SFX trigger is a Pulse reading, applied to Pure and HD on a bet](handover/audio/every-sfx-trigger-is-a-pulse-reading-applied.md)
