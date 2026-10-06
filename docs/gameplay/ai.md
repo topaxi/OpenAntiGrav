@@ -615,7 +615,7 @@ corridor needs during a fast transition. Lowered from `0.35` to **`0.30`**,
 swept the same way `Tuning::curvature_span` was - a lone Ace, twelve forward
 circuits, 18,000 ticks, against the two committed field fixtures so a value
 clean on all twelve *lone* circuits cannot hide a craft wedged in traffic.
-`Tuning::look_speed`'s own doc comment carries the full table; the summary is
+The full table is in "Tuning sweep tables" below; the summary is
 that `13`'s end-of-run shield rises from `6.52` to `39.07`, the twelve-circuit
 solo total rises from `705.68` to `863.10`, and the field floors - which fail
 outright at `0.22` and `0.20`, two adjacent points further down the same
@@ -3217,7 +3217,7 @@ measured by hand on `07_Track`, and
 *original* hull at 1.42-1.51 under full lock, so the arithmetic lands within a
 few per cent of the original's own behaviour.
 
-This settles the caveat `Tuning::max_turn_rate`'s own sweep table carries -
+This settles the caveat the `max_turn_rate` sweep table ("Tuning sweep tables") carries -
 that the curve "flattens either side of 1.8 rather than continuing to improve,
 which is the shape of a constraint that has stopped binding". **The constant
 was the wrong shape, not the wrong value.** That sweep measured the steering
@@ -3894,3 +3894,255 @@ the plan's pace, from `plan_margin`'s corner fractions (0.55 and 0.69) and
   after contact on lap 1; the beneath rescue now puts them back.
 - What the original does with a craft in this pit (a PPSSPP capture) was not
   measured.
+
+## Tuning sweep tables
+
+The evidence behind `oag_ai::Tuning`'s swept constants, moved here from the
+field doc comments in `crates/ai/src/driver/tuning.rs`. Every number is this
+project's own measurement of this project's own controller (chosen, not
+measured against the original).
+
+### `look_speed`
+
+Swept by `sweep_look_speed` and `sweep_rate_gain` in
+`crates/game/tests/ai_look_sweep.rs`: a lone Ace, twelve forward circuits,
+18,000 ticks each, against the two committed field fixtures (tuned through
+`Difficulty::tune` as `Race::start` does). `rate_gain` was swept first and
+ruled out: at `10.0` and `20.0` the loop is already saturated at full lock, and
+`opponent_weapons_ground_truth`'s floors fail (worst opponent shield `0.00`).
+
+| value | 13 end shield | 07 end shield | solo total | field mean | field worst |
+| --- | --- | --- | --- | --- | --- |
+| 0.35 (old) | 6.52 | 0.00 | 705.68 | 0.90 | 0.70 |
+| 0.33 | 17.86 | 0.00 | 774.28 | 0.86 | 0.75 |
+| 0.32 | 24.17 | 0.00 | 788.97 | 0.83 | 0.54 |
+| **0.30 (shipped)** | **39.07** | **0.00** | **863.10** | **0.73** | **0.00 (fails 0.45)** |
+| 0.25 | 59.50 | 0.00 | 932.20 | 0.92 | 0.67 |
+| 0.22 | 67.55 | 0.00 | 937.78 | 0.66 (fails 0.70) | 0.20 (fails 0.45) |
+| 0.20 | 63.45 | 0.00 | 934.48 | 0.68 (fails 0.70) | 0.00 (fails 0.45) |
+| 0.15 | 58.02 | 0.00 | 914.41 | 0.85 | 0.50 |
+
+Re-swept 2026-09-07 after `oag_physics::pair::overlap`'s correction. The solo
+columns (`13`, `07`, total) reproduce to the digit: a lone craft never touches
+the narrowphase. The two field columns are a single seed (`SEED = 1`) and moved:
+at `0.30` the corrected contact tie-break seats an opponent inside a Plasma
+blast, so `worst` reads `0.00`. Over 16 seeds
+(`crates/game/tests/weapon_floor_sweep.rs`, `sweep_worst_shield_over_seeds` and
+`sweep_lap_completion_over_seeds`):
+
+| value | mean-of-means shield | mean-of-worsts | seeds with a depleted craft | seeds with short opponent laps |
+| --- | --- | --- | --- | --- |
+| 0.30 | 0.68 | 0.32 | 2/16 | 2/16 |
+| 0.22 | 0.72 | 0.38 | 2/16 | 2/16 |
+| 0.20 | 0.71 | 0.30 | 3/16 | 3/16 |
+
+No field column separates `0.22` or `0.20` from the shipped `0.30` any more, so
+the original reason for `0.30` (distance from the field-floor cliff) is gone.
+On solo evidence alone `0.22` is the best row. **The constant was not moved**:
+the field board was the guard against a value that scores well solo and wrecks
+a race, and nothing has replaced it for a tuning regression.
+`opponent_weapons_ground_truth` is now deliberately coarse and is not an AI
+tuning guard. `07_Track` ends at `0.00` shield at every value (per-lap loss
+falls from 28-30 to 22-25 at `0.30`); that is the damage-charging model's
+wall-grind, not convergence.
+
+### `max_turn_rate`
+
+Was `1.2`, which bound a real corner on Talon's Junction: the craft sat below
+its speed target and never braked, yet drifted from 18 units inside the line to
+30 outside. A 57-unit lookahead at 30 units off asks for about 2 rad/s, and the
+clamp held it to 1.2 while the craft achieved 1.08. Swept on `16_Track`, a
+minute a run, seven craft:
+
+| value | worst excursion | mean off line | mean speed |
+| --- | --- | --- | --- |
+| 1.2 | 36 | 7.5 | 114 |
+| 1.6 | 27 | 6.0 | 122 |
+| **1.8** | **24** | **6.0** | **122** |
+| 2.2 | 29 | 6.1 | 122 |
+
+It flattens either side of 1.8: a constraint that has stopped binding. This is
+a permission only. Until 2026-09-12 it was also the kinematic corner limit in
+`pace::corner_target`, wrong for every craft (hull ceilings are 1.204 to 1.667
+rad/s, `oag_physics::forces::YAW_INVERSE_INERTIA` and `<Turning amount>`); that
+job is now `pace::hull_yaw_ceiling`'s. The flat table is evidence about the
+permission, not that 1.8 was ever the right corner limit. See "The clean-Ace
+board".
+
+### `lateral_accel`
+
+Was `55.0` until 2026-08-11, reported from play as "my craft is faster than the
+AI": an opponent spent 45 per cent of a real race off the throttle. Swept on
+`16_Track`, a minute a run, seven craft:
+
+| value | mean speed | off throttle | furthest off the line |
+| --- | --- | --- | --- |
+| 55 | 90 | 45% | 28 |
+| 130 | 113 | 16% | 32 |
+| **180** | **116** | **8%** | 36 |
+| 220 | 99 | 4% | 46 |
+
+Re-swept at 260 on 2026-08-12. The first sweep ran on a build where craft fell
+through the track (the respawn count did not respond to grip). With the hover
+fixed (`oag_physics::hover::sweep`, `FAST_PROBE_SPEED`) all twelve circuits lap
+cleanly. A lone Ace, every circuit, five minutes each:
+
+| value | clean laps | recoveries | mean clean lap |
+| --- | --- | --- | --- |
+| 120 | 12 | 1 | 43.5s |
+| 180 | 12 | 2 | 40.3s |
+| **260** | **12** | **2** | **39.2s** |
+| 340 | 12 | 8 | 39.1s |
+| 440 | 12 | 5 | 39.2s |
+| 560 | 11 | 6 | 38.1s |
+| 700 | 11 | 9 | 38.0s |
+
+260 is the knee: 340 buys 0.1 s and quadruples the recoveries. Lap time keeps
+falling past 560 only because a recovered craft's lap does not count. Harness:
+`sweep_grip` in `race_ground_truth.rs`, `#[ignore]`d and gated on `OAG_SWEEP`.
+
+### `curvature_span`
+
+`Line::max_curvature` is called with half the lookahead as its span, so at
+80 units/s `Line::curvature`'s chord triple covers about 72 units. A shorter
+corner is averaged with the straights either side: `07_Track`'s tightest arc
+(about 50 units) reads 0.0155-0.0186 against a local 0.047, 2.5-3x under, with
+its peak thirty samples early.
+
+`sweep_curvature_span` in `crates/game/tests/ai_span_sweep.rs` reports two
+boards. **Solo**: a lone Ace over twelve forward circuits, 18,000 ticks each,
+shield retained rather than lap time (`07_Track` banks 49.8 s while shedding
+34-35 shield on a wall). **Field**: the two committed field fixtures, with
+`untimed` (opponents past lap 2 with no lap time, must be zero) and opponent
+shield after a minute (floors 0.70 mean, 0.45 worst).
+
+| span | solo total | resp | clean | mean lap | 07 laps | untimed | field mean | field worst |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 | 689.31 | 3 | 11 | 43.6s | 4 | - | - | - |
+| 5 | 738.77 | 1 | 12 | 43.3s | 4 | 0 | 0.90 | 0.63 |
+| 6 | 726.01 | 1 | 12 | 42.8s | 4 | 0 | 0.78 | **0.29** |
+| 7 | 715.32 | 1 | 12 | 42.7s | 4 | 0 | 0.78 | **0.25** |
+| 8 | 709.29 | 7 | 11 | 43.5s | 4 | **1** | 0.91 | 0.78 |
+| 9 | 709.51 | 1 | 12 | 42.7s | 4 | 0 | 0.83 | **0.35** |
+| 10 | 725.91 | 1 | 12 | 42.8s | 4 | **1** | 0.84 | **0.41** |
+| **11** | **705.68** | **1** | **12** | **42.7s** | **4** | **0** | **0.88** | **0.64** |
+| 12 | 704.18 | 1 | 12 | 42.6s | 4 | 0 | 0.90 | 0.63 |
+| 13 | 675.59 | 1 | 12 | 42.5s | 4 | **1** | 0.91 | 0.81 |
+| 14 | 688.94 | 1 | 12 | 42.4s | 4 | 0 | 0.83 | 0.45 |
+| 15 | 683.72 | 1 | 12 | 42.4s | 3 | 0 | 0.87 | 0.69 |
+| 16 | 669.70 | 1 | 12 | 42.2s | 3 | 0 | 0.84 | 0.57 |
+| 18 | 649.39 | 1 | 12 | 42.2s | 3 | 0 | 0.93 | 0.78 |
+| 20 | 660.42 | 1 | 12 | 42.2s | 3 | 0 | 0.88 | 0.77 |
+| 25 | 620.39 | 1 | 12 | 42.0s | 3 | 0 | 0.86 | 0.76 |
+| 32 | 620.28 | 1 | 12 | 42.2s | 3 | - | - | - |
+| none | 613.52 | 1 | 12 | 42.2s | 3 | 0 | 0.83 | 0.50 |
+
+Ten was chosen first on the solo board alone and turns two green field tests
+red: a span can be clean on twelve solo circuits and still wedge a craft shoved
+by seven others, which the ordinary `just` gate does not run. The criterion,
+in order:
+
+1. Hard gates: twelve clean circuits, solo respawns at most the baseline's 1,
+   `13_Track` end shield above its 2.90 baseline, both field tests green. That
+   admits `none`, 5, 11, 12, 15, 16, 18, 20, 25.
+2. A band from the line's geometry. Below about 7 all three chords can fall in
+   one path segment (every circuit has two seams shaped `0.30, 0.11, ~7.0`
+   units, samples 0.89-1.77 apart), so sample spacing reads as curvature. Above
+   about 15 the triple (`3 * span`) cannot resolve `07`'s 50-unit arc and `07`
+   dies on lap 3 again. That leaves 11 and 12.
+3. Maximise solo total: 11 over 12 by 1.5 shield on a board of twelve, which is
+   a tie-break and nothing more.
+
+11 and 12 pass the field gate because a craft happened not to wedge. The field
+worst clusters (`{6,7}` 0.25-0.29, `{9,10}` 0.35-0.41, `{5,11,12}` 0.63-0.64):
+one craft switching basins, and the basin is not a property of the span. `None`
+is kept so the uncapped row stays re-runnable.
+
+Recorded 2026-09-12: every row above evaluated `pace::corner_target`'s
+kinematic limit at `max_turn_rate`'s 1.8, now the flown craft's own hull
+ceiling, so the sweep measured a different function from the shipped one.
+Nothing is broken (both field tests were green at eleven, checked), but the
+choice wants re-establishing with the estimator change the Outpost 7 thread
+names.
+
+### `curvature_chord`
+
+Separating the chord from the walk step is the only untried axis on the
+estimator: the span's value was swept three times, and it was never known
+whether a short chord costs resolution or sampling density. Swept 2026-09-12 on
+the current tree with `sweep_curvature_span`'s field columns (`worst` is
+`opponent_weapons_ground_truth`'s floor, `0.45`):
+
+| chord | step | solo total | respawns | clean | mean lap | field worst |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **11** | **11** | **907.97** | **1** | **12** | 43.6s | 0.57 |
+| 4 | 4 | 860.75 | 3 | 11 | 44.4s | 0.80 |
+| 6 | 6 | 830.42 | 2 | 11 | 43.6s | 0.74 |
+| 8 | 8 | 827.14 | 11 | 10 | 44.6s | **0.38** |
+| 4 | 11 | 844.01 | 5 | 11 | 44.7s | 0.54 |
+| 6 | 11 | 815.53 | 10 | 10 | 44.4s | 0.59 |
+| 8 | 11 | 798.39 | 10 | 10 | 44.4s | 0.63 |
+
+Every shortening is worse than `11`, coupled or decoupled, so the short chord's
+cost is resolution, not sampling density. Decoupling repairs one thing (chord 8
+at step 11 lifts the field floor from `0.38` to `0.63`) and buys nothing solo.
+This retires the chord-length theory of the understatement. The defect is real
+(the windowed reading is 1.66x/1.85x under the true apex and reports a hairpin
+as opening at full lock into a wall), but neither knob fixes it. What is left
+is a different estimator. See `Line::max_curvature_stepped`.
+
+### `trail_deadband`, `trail_gain`, `trail_saturation`
+
+All three moved on 2026-09-11 (`trail_deadband` `0.15` to `0.05`, `trail_gain`
+`1.2` to `3.0`, `trail_saturation` `0.85` to `0.7`). At the old values the
+deadband sat only `0.02` rad/s below the turn-rate error that `0.85 /
+rate_gain` (`0.17`) implies, so almost nothing was left to turn into a command:
+on a live `--race --autopilot` run of Talon's Junction's U-turn the
+differential peaked at 7.67 of the airbrake's `0..=100` range, 19 engaged ticks
+at mean magnitude 4.6. Three `trail_saturation` points on the same run and the
+real-disc regression
+`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`:
+
+| `trail_saturation` | engaged ticks | mean magnitude | mean-of-means energy | depleted |
+| --- | --- | --- | --- | --- |
+| `0.85` (old) | 19 | 4.6 | 0.67 | 0 |
+| `0.6` | 58 | 23.9 | 0.58 | 3 |
+| **`0.7`** | **41** | **25.2** | **0.67** | **1** |
+
+`0.6` engages longer and no stronger but costs the field test's energy floor.
+`trail_deadband` and `trail_gain` hold the magnitude in the 20s at every point;
+only saturation decides how much of the corner reaches it. Zero respawns on
+the live run at every point.
+
+### `trail_peak_decay`
+
+`1.0` latches `Driver::peak_curvature` for the whole race, which was a bug:
+`pace::track_peak_curvature` resets it when curvature falls to
+`trail_curvature_floor`, but `07_Track`'s smallest windowed curvature is
+`0.00127` against a floor of `0.00100`, so the reset never fires. The mark
+became a running maximum latching on the tightest corner, the exit gate then
+rejected 74.8 % of ticks and the differential fired on 3.78 %. A leak makes
+"exit" mean "opened up since the tightest point recently" (at `0.99` the mark
+halves in about 69 ticks).
+
+It ships at `1.0` anyway: the leak works as a mechanism and does not pay.
+`sweep_trail_peak_decay` over the 48-row board, lone Ace, charge capped at each
+row's pool:
+
+| decay | contact ticks | charged | end pool | respawns | eliminated | clean laps | mean lap |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **1.0** | **10,924** | **2,277.3** | **2,191.6** | 35 | **11** | 44/48 | 38.88s |
+| 0.998 | 14,228 | 2,373.4 | 2,057.1 | 40 | 10 | 44/48 | 38.95s |
+| 0.995 | 13,902 | 2,317.3 | 2,129.6 | 34 | 12 | 43/48 | 38.76s |
+| 0.99 | 14,973 | 2,339.5 | 2,112.7 | 34 | 12 | 43/48 | 38.72s |
+| 0.95 | 13,917 | 2,302.2 | 2,181.8 | 34 | 11 | 45/48 | 38.72s |
+
+Every leak value costs contact ticks and end shield and buys 0.16 s of mean
+lap. On `07_Track` the differential goes from 3.78 % to 11.58 % of ticks and the
+board gets worse. The differential is spent reactively (once
+`trail_saturation` says steering ran out of authority) and `pace::trail` "cuts
+lateral grip exactly as hard as holding both sides would", so spending it
+without banking the higher corner speed it permits (`v = omega_steer / (k - C)`,
+which `pace::corner_target` does not do) is pure loss. `1.0` is not an
+endorsement of the latch: it is the value that changes no behaviour until the
+differential becomes a plan.
