@@ -48,6 +48,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     texture_extension: None,
     always_on: &[],
+    raster: false,
     sights: &oag_title::hud::Sights::Unread,
     pickup_backdrop_colour: None,
     pickup_colours: None,

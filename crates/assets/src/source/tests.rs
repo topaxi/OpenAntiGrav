@@ -133,6 +133,7 @@ const TITLE: &Title = &Title {
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],
+        raster: false,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,

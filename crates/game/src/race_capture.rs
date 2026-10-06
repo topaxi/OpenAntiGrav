@@ -207,20 +207,19 @@ pub struct CaptureOptions {
     pub presented: Option<Presented>,
     /// How hard the frame is smeared along each surface's own motion.
     ///
-    /// Honoured the way `anti_aliasing` and the culling tiers are - a capture
-    /// is how a graphics setting gets compared against itself off - but this
-    /// one changes the *shape* of the run to do it: every velocity is a delta
-    /// against the previous simulation tick, so a one-render capture has no
-    /// previous tick and measures zero everywhere. With this on, the capture
-    /// holds the last tick back, renders a **primer** frame at the
-    /// tick-before-last pose (drawn and discarded - its only product is the
-    /// previous-transform cache it seeds), runs the final tick, and renders
-    /// the frame that is written out. See `oag_post::motion_blur` and
-    /// `docs/rendering/motion-blur.md`.
+    /// Honoured like `anti_aliasing` and the culling tiers, but this one changes
+    /// the *shape* of the run: every velocity is a delta against the previous
+    /// tick, so a one-render capture measures zero everywhere. With it on, the
+    /// capture holds the last tick back, renders a **primer** frame at the
+    /// tick-before-last pose (discarded; it seeds the previous-transform
+    /// cache), runs the final tick, and renders the frame written out. See
+    /// `oag_post::motion_blur` and `docs/rendering/motion-blur.md`.
     pub motion_blur: oag_display::display::MotionBlur,
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
     /// profile's. See `Scene::set_blur_resolution`.
     pub motion_blur_resolution: oag_display::display::BlurResolution,
+    /// `[graphics] hud_scale`, which only a raster HUD obeys.
+    pub hud_scale: oag_display::display::HudScale,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -829,6 +828,7 @@ pub fn capture(
             hud_viewport,
         );
     }
+    let scale = options.hud_scale;
     match race.results() {
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {
@@ -850,7 +850,7 @@ pub fn capture(
             Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
         },
         None if !race.hud_shown() => {}
-        None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud) {
+        None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale) {
             Ok(Some(mut overlay)) => {
                 let mut readout = race.readout();
                 // The rung the grade is showing - see `Scene::zone_stage`. A

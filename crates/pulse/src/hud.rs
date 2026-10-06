@@ -50,6 +50,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `.pct` rewrite is `crate::read_image`'s job and applies to every source.
     texture_extension: None,
     always_on: ALWAYS_ON,
+    raster: true,
     // Four instances of one corner-bracket model plus the closed box at the
     // middle, bound by `HudSight_Bind` (`0x0881b604`) in this order - which is
     // also the order `sight::BRACKET_ROTATIONS` is indexed by. See

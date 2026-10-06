@@ -124,3 +124,35 @@ impl Renderer {
         });
     }
 }
+
+/// Shared with both shaders.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub(super) struct Uniforms {
+    pub(super) viewport: [f32; 2],
+    pub(super) screen: [f32; 2],
+    pub(super) atlas: [f32; 2],
+    /// The sprite sheet's size, for normalising its pixel-space UVs. This took
+    /// the slot a padding pair held, so the struct is still 32 bytes.
+    pub(super) sprites: [f32; 2],
+    /// Where the movie sits in screen space: `[x, y, width, height]`. Only
+    /// `video.wgsl` reads this; `ui.wgsl` still declares the field so the two
+    /// shaders agree on the buffer's layout.
+    pub(super) video_rect: [f32; 4],
+    /// The face atlas's size, for normalising `Draw::FacedText`'s pixel-space
+    /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
+    /// field at all, the same way it already stops short of `sprites`.
+    pub(super) face_atlas: [f32; 2],
+    /// The buttons atlas's own size, the same idiom one field up -
+    /// `ui.wgsl` alone reads this too. Occupies the 8 bytes a `_padding`
+    /// field held before `Draw::FacedText { role: "Buttons" }` existed:
+    /// WGSL still rounds `Uniforms` to 64 bytes either way (`vec4`
+    /// alignment), so this has to be *this* field and not one appended
+    /// after it - appending would leave `ui.wgsl`'s own `buttons_atlas`
+    /// reading whatever the real padding held instead.
+    pub(super) buttons_atlas: [f32; 2],
+    /// `[pixels per grid unit, sharp-bilinear flag, 0, 0]`: the HUD stretch
+    /// `ui.wgsl` reads to blend only the last pixel of each texel. Zero flag
+    /// for everything but a raster HUD asked for `sharp-bilinear`.
+    pub(super) hud: [f32; 4],
+}

@@ -1,6 +1,8 @@
 # HUD legibility and HUD skins across titles
 
-Investigation, 2026-10-06 (`hud-skins` lane). No behaviour changed. Three parts:
+Investigation, 2026-10-06 (`hud-skins` lane); parts A and C are still the
+investigation, and [part D](#d-what-was-built-2026-10-06-hud-crisp-lane) records
+the two fixes the `hud-crisp` lane built from it the same day. Three parts:
 why Pulse's (and Pure's) HUD text reads poorly, which HUD variants the later
 titles ship and whether a player can reach them, and how forcing another
 title's skin would work here. Confidence scores follow the
@@ -252,16 +254,146 @@ another title's disc is a product decision. Recorded, not recommended.
 **What to build, in order.** See the handover thread; the first two are small
 and independent of the skin design.
 
+## D. What was built (2026-10-06, `hud-crisp` lane)
+
+### The halo: `borderExtendPixels` is read and drawn
+
+`oag_ui::language::Language::font_borders` holds each role's authored
+`borderExtendPixels` (`border_extend(role)`, `load::role_border` resolves it
+the way `role_font` resolves the file), `Atlas::with_border_extend` carries it
+and `Atlas::glyph_quad` grows each glyph's rect and UVs by it on all four
+sides; the pen advance and `measure` are untouched, so no layout moved. HUD and
+menu text share `Renderer::push_text`, so both pick it up wherever a face
+authors it - it is data, not a title branch. The UVs are clamped to the glyph
+rows (a bottom-row glyph never samples the solid patch), and where the clamp
+bites the rect shrinks with it.
+
+**A glyph's reach is cut to half its distance to the nearest other glyph's
+box. Chosen, not measured.** Extended in full, Pulse's PSP menu text came out
+garbled (every glyph drew a sliver of its neighbour; `data/scratch/hud-crisp/
+shots/menu-after.png` of the first attempt). The census,
+`crates/game/tests/font_border_ground_truth.rs` (English plugin of every
+title present, `just test-data`):
+
+| Title, role (font) | authored | drawn reach |
+| --- | --- | --- |
+| Pulse PSP EU and USA: `HUD` (PulseHud.fnt) | 5 | 5 |
+| Pulse PSP: `HUDSmall` (small.fnt) | 3 | 3 |
+| Pulse PSP: `Menu` (Pulse_20), `Small`/`Title` (Pulse_14) | 5, 3, 3 | **0**, boxes 1 px apart: drawn as before |
+| Pulse PS2: every role | 5, 5, 3, 3 | 5, 5, 3, 3 (boxes 7-12 px apart) |
+| Pure PSP: `HUD` (HUDFont.fnt), `HUDSmall` | 5, 3 | 5, 3 |
+| HD, Omega: `HUD`, `HUDSmall` | 5, 3 | 5, 3 |
+| 2048: `NEOSANS`, `NEOSANS_BOLD` | 15 | **3**, boxes 6 px apart |
+
+Screens that changed, **as seen**: the race HUD on Pulse PSP and Pure (viewed),
+and on HD (212 pixels over the whole 1080p frame, imperceptible when viewed);
+Pulse PS2's race and menu text (pixel diffs, not viewed beyond the menu).
+**No change observed**: Pulse PSP menus (reach 0), Pure's menu, 2048's
+`--menu-page main` (0 pixels, so no screen has been seen to show NEOSANS
+change), and an Omega race frame (0 pixels at tick 300, whose HUD text the
+border did not move; Omega's census row says 5 and 3 are authored and drawn).
+Whether the original extends a tightly packed face (the PSP menu faces) at all,
+and by how much, is not captured.
+
+**Halo depth against PPSSPP's software renderer** (`--graphics=software`, SDL
+build under its own Xvfb, USA pressing; ours the EU pressing, same assets),
+same ship and circuit (VENOM, Talon's Junction, craft on the line, 1x; the
+PPSSPP window halved back to 480x272 with a box filter). Metric: mean
+luminance in rings 1-8 px outside the readout's ink (`>= 190`) divided by the
+mean 9-11 px out, on the leading `0.` of `CurrentTime` (the one part both
+frames show; the other digits differ), three frames from one boot (the timer
+differed, the rings did not); script `data/scratch/hud-crisp/ring.py`
+(scratch, not committed). A first capture on PPSSPP's GL backend (the ini
+asked for software and PPSSPP ignored it) showed a *deeper* halo (rings 2-4
+0.60 / 0.61 / 0.64); it is discarded as not the reference.
+
+| Ring (px out) | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- |
+| PPSSPP software, frames 1 / 2 / 3 | 0.68 / 0.68 / 0.69 | 0.69 / 0.70 / 0.71 | 0.71 / 0.72 / 0.73 | 0.86 / 0.86 / 0.88 |
+| Ours before | 0.84 | 0.87 | 0.87 | 0.93 |
+| Ours now | 0.75 | 0.80 | 0.82 | 0.91 |
+
+The mean gap to the original over rings 2-5 went from 0.14 to 0.08: **about
+43 % of the missing halo is back**. The rest is a ring 2-4 still 0.07-0.10
+lighter than the original. The original's `best` readout peaks at 200-218 where
+ours is 254 (a dimmer authored colour or a blend we do not reproduce; the
+`current` readout matches). Open. Confidence 70 that the halo is drawn as the
+original draws it to within the blend.
+
+### The stretch: `[graphics] hud_scale`
+
+`integer`, `sharp-bilinear` (default), `nearest`, `linear` (the old draw), read
+by `oag_display::display::HudScale`, offered only where `HudArt::raster` is
+true: **Pulse (PSP and PS2) and Pure**; HD, 2048 and Omega draw linear
+whatever the file says (`oag_game::hud_overlay::stretch_for`, pinned by
+`hud_scale_gate.rs`). A settings-file value, no menu row. Both Pulse's and
+Pure's HUD sheets are 256x256 at a 480x272 (PSP) or 640x448 (PS2) grid; HD,
+2048 and Omega ship the sheet at 4x and a 1080p grid (census above).
+
+| Mode | What it does |
+| --- | --- |
+| `linear` | the stretch as before: a 4 px ramp on every edge at 1080p |
+| `nearest` | nearest sampler at the fractional factor: full size, but texels alternate between two widths (visible stair-steps) |
+| `integer` | nearest sampler and each glyph and plain sprite resized to a whole number of pixels per texel, top left on a whole pixel, positions still in layout space |
+| `sharp-bilinear` | nearest across a texel and a linear blend over its last output pixel (`ui.wgsl`'s `sharp_uv`) |
+
+`integer` takes the floor of the scale factor with a 2 % oversize tolerance
+(chosen, not measured): the PSP grid is 272 rows, so 1080p is 3.97 pixels per
+texel and 2160p is 7.94, and a strict floor would draw 3 and 7. Sprites that
+are rotated, tiled, chamfered or text are not resized as sprites (text is laid
+out at the whole size instead).
+
+**Default `sharp-bilinear`, from screenshots** (`data/scratch/hud-crisp/shots/
+crop-pulse-*.png`, `crop-pure-*.png`; Pulse PSP EU Time Trial and Pure PSP EU,
+four modes at each size):
+
+| Output | Pixels per texel | `integer` draws | Result |
+| --- | --- | --- | --- |
+| 1920x1080 | 3.97 | 4 (100.7 %, small 0.6-scale readouts 2 of 2.4: 84 %) | integer and sharp-bilinear look alike; linear is the soft one |
+| 3840x2160 | 7.94 | 8 (100.7 %, small readouts 4 of 4.8: 84 %) | same |
+| 1280x800 (Deck) | 2.67 | 2 (**75 %**, small readouts 1 of 1.6: **63 %**) | integer is visibly smaller and the small readouts shrink to 1 px strokes; sharp-bilinear stays full size and crisp |
+
+**This departs from the maintainer's hint**, which guessed integer (nearest)
+as the default: integer is the same picture at 1080p and 2160p and a smaller
+one on the Deck, so the default is the mode that is never worse. One line
+flips it: `hud_scale = "integer"` under `[graphics]` (or change
+`#[default]` on `HudScale`).
+
+The captures are the race load's own frame at `--size`; a `--presented`
+capture at 1920x1080 (render scale 100 %, `reconstruction` off, both the
+defaults) shows the same crisp edges (`shots/pres-cmp.png`, linear left,
+sharp-bilinear right), so the stretch reaches a player's window. **Below 100 %
+render scale, or with `fsr1`/`fsr3` on, the HUD is composited into the smaller
+target that is upscaled afterwards, and `hud_scale` then acts at the internal
+resolution** - not measured here. Whole frames at 1920x1080 and the 4K speed
+and shield bars were read unscaled: the bars are flat colour, and their
+stepped arrow ends are the raster art's own, as on the PSP.
+
+So `sharp-bilinear` is identical to `integer` wherever the factor is near a
+whole number, and the only mode that is both crisp and full size where it is
+not (the Deck, any 1440p or odd window). `nearest` is crisp but its uneven
+texel widths read as noise on a thin 0.6-scale digit. Integer is one config
+value away for anyone who wants blocks of identical pixels.
+
+### 2048 / Omega cross-check
+
+The halo reader: **ported** (HD, Omega and 2048 draw their authored
+`borderExtendPixels`; the census above is the ground truth, Omega 5 and 3 on
+its HD-derived faces, 2048's 15 cut to 3). The stretch: **checked, differs**
+(their HUD sheet is 4x and a 1080p grid; not offered). The 4x sheet as a
+substitute source for Pulse's sprites stays open (thread).
+
 ## Open
 
 - The bright-backdrop frame behind the washed-out readouts was not reproduced;
   a boost-pad frame on both sides is needed to size the bloom term.
-- The size of the halo the original draws (`borderExtendPixels` 5 and 3 read as
-  texels) and its exact blend over the extended area are not measured; only its
-  presence is. A frame with a bright, flat backdrop would give the depth.
+- ~~The size of the halo the original draws~~: measured in part D (about 43 % of
+  the gap closed; ring 2-4 still 0.07-0.10 shallower). The exact blend over
+  the extended area, and what the original does with a tightly packed face,
+  stay open.
 - The original's sampling rule for text at fractional scale (0.6) is not read;
   it only matters below about 800x450.
-- Pure was measured at header level only; no Pure frame was captured.
+- Pure: drawn and screenshotted (part D) but no PPSSPP Pure frame measured.
 - Whether `arcade_hud_old.xml`/`hud_timers.xml` are drawn anywhere in HD's,
   Omega's or 2048's executable is unchecked; they are unreferenced from data.
 - 2048's route to its `2097_hud`/`wo3_hud` sets, and Omega's default HUD

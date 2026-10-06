@@ -73,6 +73,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // See `texture_entry`, which is this row spelled out with its evidence.
     texture_extension: Some(TEXTURE_EXTENSION),
     always_on: ALWAYS_ON,
+    raster: false,
     // **Concentric sprites, not brackets.** HD's arcade HUD composes to zero
     // `<Mode3D>` models; its reticle is six `<Image>` widgets off
     // `Data\HUD\Textures\missile_reticule.gtf`, authored at 128, 108, 80 and

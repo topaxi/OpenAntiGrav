@@ -8,6 +8,20 @@
 
 use oag_hud::{Assets, Context, Layout, Readout, draw_list};
 
+/// The stretch a title's HUD is drawn with: the player's `[graphics] hud_scale`
+/// for a raster HUD, plain linear for every other.
+#[must_use]
+pub fn stretch_for(
+    art: &oag_title::HudArt,
+    requested: oag_display::display::HudScale,
+) -> oag_display::display::HudScale {
+    if art.raster {
+        requested
+    } else {
+        oag_display::display::HudScale::Linear
+    }
+}
+
 /// The HUD's three renderers and the data they draw.
 ///
 /// # Why two renderers
@@ -61,11 +75,15 @@ impl Overlay {
     /// # Errors
     ///
     /// Propagates pipeline creation.
+    ///
+    /// `hud_scale` is `[graphics] hud_scale`, which only a title whose HUD is
+    /// raster art ([`oag_title::HudArt::raster`]) obeys.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         assets: &Assets,
+        hud_scale: oag_display::display::HudScale,
     ) -> anyhow::Result<Option<Self>> {
         let Some(layout) = assets.layout.clone() else {
             return Ok(None);
@@ -104,6 +122,12 @@ impl Overlay {
             &assets.sheet,
         )?;
         rows.set_space(assets.space);
+        // The player's stretch, for a title whose HUD is raster art; every
+        // other HUD keeps the linear draw it was made for.
+        let stretch = stretch_for(assets.art, hud_scale);
+        for renderer in [&mut values, &mut captions, &mut rows] {
+            renderer.set_hud_scale(device, stretch);
+        }
 
         Ok(Some(Self {
             hud_line_height: assets.font.line_height,

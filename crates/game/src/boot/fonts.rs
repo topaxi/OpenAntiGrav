@@ -37,7 +37,7 @@
 //! nothing here had to change for the fonts to appear, only the parser.
 
 use super::*;
-use oag_ui::language::load::role_font;
+use oag_ui::language::load::{role_border, role_font};
 
 /// Reads the front end's own font, falling back to the built-in glyphs.
 ///
@@ -79,7 +79,8 @@ pub(super) fn load_font(
     };
     match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
-            let atlas = oag_ui::font::Atlas::from_font(&font);
+            let atlas = oag_ui::font::Atlas::from_font(&font)
+                .with_border_extend(role_border(languages, preferred, role));
             report.push(format!(
                 "font {name} (role {role:?}): {}x{} atlas, {} glyphs, line height {}",
                 font.width,
@@ -125,7 +126,10 @@ pub(super) fn load_menu_font(
                 "menu font {name} (role {role:?}): line height {}",
                 font.line_height
             ));
-            Some(oag_ui::font::Atlas::from_font(&font))
+            Some(
+                oag_ui::font::Atlas::from_font(&font)
+                    .with_border_extend(role_border(languages, preferred, role)),
+            )
         }
         Err(why) => {
             report.push(format!(
@@ -193,7 +197,10 @@ pub(super) fn load_title_font(
                 "title font {name} (role {role:?}): line height {}",
                 font.line_height
             ));
-            Some(oag_ui::font::Atlas::from_font(&font))
+            Some(
+                oag_ui::font::Atlas::from_font(&font)
+                    .with_border_extend(role_border(languages, preferred, role)),
+            )
         }
         Err(why) => {
             report.push(format!(
@@ -285,7 +292,10 @@ pub(super) fn load_buttons_font(
                 font.height,
                 font.glyphs.len()
             ));
-            Some(oag_ui::font::Atlas::from_font(&font))
+            Some(
+                oag_ui::font::Atlas::from_font(&font)
+                    .with_border_extend(role_border(languages, preferred, role)),
+            )
         }
         Err(why) => {
             report.push(format!(
