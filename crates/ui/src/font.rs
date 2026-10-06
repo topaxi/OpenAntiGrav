@@ -564,6 +564,10 @@ pub struct Cell {
     /// into the box and a quad drawn at the line's top edge lands correctly.
     /// There is no separate bearing to apply.
     pub advance: f32,
+    /// How many atlas pixels past this box the quad may draw: the face's
+    /// authored `borderExtendPixels`, cut to half the gap to the nearest other
+    /// box (see [`Atlas::with_border_extend`]). `0` until that is called.
+    pub extend: u32,
 }
 
 /// The glyph atlas: a coverage byte and a body/outline byte per pixel.
@@ -697,6 +701,7 @@ impl Atlas {
                     width: u32::from(glyph.width),
                     height: u32::from(glyph.height),
                     advance: f32::from(glyph.advance),
+                    extend: 0,
                 },
             );
         }
@@ -734,16 +739,49 @@ impl Atlas {
         self
     }
 
-    /// This atlas drawing each glyph `px` atlas pixels past its box, the
+    /// This atlas drawing each glyph up to `px` atlas pixels past its box, the
     /// `borderExtendPixels` its language definition authors. `0` is identity.
+    ///
+    /// **Each glyph's reach is cut to half its distance to the nearest other
+    /// glyph's box**, so two neighbours' halos never overlap and no quad
+    /// samples the next letter. Pulse's PSP menu faces pack their boxes 1 px
+    /// apart against an authored 3 and 5 (reach 0: drawn as before), 2048's
+    /// `NEOSANS` 6 px apart against 15 (reach 3); extended in full, every quad
+    /// draws a sliver of its neighbour. The PS2's menu faces and every HUD face
+    /// are packed far enough apart to get all of it. **Chosen, not measured**:
+    /// what the original does with a tightly packed face is not captured.
     #[must_use]
     pub fn with_border_extend(mut self, px: u32) -> Self {
         self.border_extend = px;
+        let boxes: Vec<(char, Cell)> = self.glyphs.iter().map(|(c, cell)| (*c, *cell)).collect();
+        for (index, (ch, cell)) in boxes.iter().enumerate() {
+            let (x0, y0) = (i64::from(cell.x), i64::from(cell.y));
+            let (x1, y1) = (x0 + i64::from(cell.width), y0 + i64::from(cell.height));
+            let mut reach = i64::from(px);
+            for (other_index, (_, other)) in boxes.iter().enumerate() {
+                // A codepoint sharing this glyph's very box (a caps-only face
+                // maps both cases to one) is the same ink, not a neighbour.
+                if other_index == index
+                    || (other.x, other.y, other.width, other.height)
+                        == (cell.x, cell.y, cell.width, cell.height)
+                {
+                    continue;
+                }
+                let (ox0, oy0) = (i64::from(other.x), i64::from(other.y));
+                let (ox1, oy1) = (ox0 + i64::from(other.width), oy0 + i64::from(other.height));
+                let gap_x = (ox0 - x1).max(x0 - ox1);
+                let gap_y = (oy0 - y1).max(y0 - oy1);
+                reach = reach.min(gap_x.max(gap_y).max(0) / 2);
+            }
+            if let Some(slot) = self.glyphs.get_mut(ch) {
+                slot.extend = reach as u32;
+            }
+        }
         self
     }
 
     /// The quad `cell` draws as with its pen at `(pen, y)`: `(rect, uv)`, the
-    /// box grown by [`Self::border_extend`] on all four sides in both spaces.
+    /// box grown by [`Cell::extend`] on all four sides in both spaces.
     ///
     /// `uv` is clamped to the glyph rows of the atlas so a bottom-row glyph
     /// never samples the opaque solid patch appended below them. Where the
@@ -752,7 +790,7 @@ impl Atlas {
     #[must_use]
     pub fn glyph_quad(&self, cell: &Cell, pen: f32, y: f32, scale: f32) -> ([f32; 4], [f32; 4]) {
         let unit = scale * self.texel_scale;
-        let grow = self.border_extend as f32;
+        let grow = cell.extend as f32;
         let (mut left, mut top) = (cell.x as f32 - grow, cell.y as f32 - grow);
         let (mut right, mut bottom) = (
             (cell.x + cell.width) as f32 + grow,
@@ -836,6 +874,7 @@ impl Atlas {
             width: GLYPH_WIDTH,
             height: GLYPH_HEIGHT,
             advance: (GLYPH_WIDTH + 1) as f32,
+            extend: 0,
         })
     }
 }
@@ -888,6 +927,7 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
         width: 2,
         height: 2,
         advance: 0.0,
+        extend: 0,
     }
 }
 
