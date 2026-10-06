@@ -49,6 +49,7 @@ mod spawn;
 mod spectator_press;
 mod spline;
 mod thrust_chase;
+mod title_effects;
 mod trail_hits;
 mod weapons;
 mod wreck_finished;

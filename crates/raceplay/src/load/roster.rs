@@ -208,14 +208,17 @@ pub(super) fn grid(
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,
-            hull_overlay: oag_fx::hull_overlay::DRAWN && craft_title.name == oag_pulse::TITLE.name,
+            hull_overlay: oag_fx::hull_overlay::DRAWN
+                && craft_title.looks.hull_overlay.applies_everywhere(),
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
-                && craft_title.name == oag_pulse::TITLE.name,
+                && craft_title.looks.hull_shine.applies_everywhere(),
             hull_wreck: options.hull_wreck
-                && craft_title.name == oag_pulse::TITLE.name
-                && archives.layout.platform == oag_assets::Platform::Psp,
-            absorb_shell: craft_title.name == oag_hd::TITLE.name,
+                && craft_title
+                    .looks
+                    .hull_wreck
+                    .applies(archives.layout.platform),
+            absorb_shell: craft_title.looks.absorb_shell.applies_everywhere(),
         },
         hull_variant,
         skin.as_deref(),
