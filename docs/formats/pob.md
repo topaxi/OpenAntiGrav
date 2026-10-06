@@ -1141,7 +1141,8 @@ effects to each); the same stems as 2048's directories, different bytes again.
   `rg8snorm`; the composite clamps its read to `[-1, 1]`), and the depth gate is the
   hardware depth test against the scene's own depth, planar like `w`, where the executable
   tests an `R16F` its scene shaders fill (what they store there is unread). Omega only
-  composites through its tone-map chain, so a circuit without a `Tonemap` block draws none.
+  composites through its tone-map chain, which all 80 circuit `.envsettings` build (census
+  `crates/fx/examples/omega_tonemap_census.rs`).
   The heat-haze set (`WO_RB_HEAT*`, `WO_ENV_*`) has no recovered trigger and plays nowhere
   today. Pinned by `psys/distort/tests.rs`, `psys_omega_ground_truth.rs` (the strengths) and
   `omega_tonemap/tests.rs` (the composite moves a sample).

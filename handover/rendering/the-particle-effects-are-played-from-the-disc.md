@@ -81,8 +81,8 @@ heat haze: rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) is re
 (`data/scratch/heat-haze-3/shots/`). Open on the distortion: the heat-haze set (`WO_RB_HEAT*`,
 `WO_ENV_*`) has no recovered trigger; the offset target is half floats where the original is
 `R8G8_SNORM`; the depth gate is our own depth buffer, planar, where the original reads an `R16F`
-its scene shaders fill (planar `w` or radial unread); an Omega circuit with no `Tonemap` block has
-no composite and draws none; a back-port to other titles is the maintainer's call (the
+its scene shaders fill (planar `w` or radial unread); all 80 Omega circuit `.envsettings` author the `Tonemap` block the composite hangs off (census
+`crates/fx/examples/omega_tonemap_census.rs`); a back-port to other titles is the maintainer's call (the
 pass is title-agnostic, no setting exists). Other open: read the flag's writers to make the per-circuit
 directory choice measured; the 2048 leftovers (rocket flare, Zone spark swap).
 Pulse's `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,
