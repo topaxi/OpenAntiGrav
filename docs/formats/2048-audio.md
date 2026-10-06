@@ -123,7 +123,7 @@ v3 copies gave 49 (those parse as v3 banks with no name table). Pinned by
 
 Most of the gap to 100% is cues with **no command at all**: six of the 63 cues in
 each `DLC1` 63-cue bank (`~neoon_small`, `~eleccarrier`, `~ind_factory_1`, ...)
-author nothing, so `~neoon_small` is silent on Metropia, Sebenco and Sol 2 where
+author nothing: the raw cue record of every one is the same, `first_command` `0x1fffffff` (the no-command sentinel, `raw` `0xfffffff8`), `commands` 0, `flags` 0, volume 120, where Altima's playing `~neoon_small` is `first_command` 21, `commands` 2, `flags` 9. So `~neoon_small` is silent on Metropia, Sebenco and Sol 2 where
 Altima's own `~neoon_small` plays. They are reported as an *empty cue* at debug,
 alongside the no-op and register-write control cues, and are not counted
 dangling. Cues with opcodes `0x05 0x15 0x1a 0x16` (`~advert_fem_r01`) bind no

@@ -104,9 +104,10 @@ its lines stay WARN with their cause.
 name `~voppler` itself, an authored trigger like every other. 101 of Ubermall's
 131 resolved cones are it. A 30 s autopilot lap of Ubermall through the real
 mixer, with it and with those nodes dropped (`audio-hd/05_ubermall-*.wav`,
-scratch): peak ambient voices 7 against 5, **0 clipped, 0 starved** in both; the
-same on Chenghou (30 nodes): 5 voices, 0 clipped, 0 starved, peak sample 22,083
-in both. The pool (`MAX_VOICES` 32) is not the constraint.
+scratch): peak ambient voices 7 against 5, **0 clipped, 0 starved** in both; Chenghou
+(30 voppler nodes) gave identical runs with and without them (5 voices, peak
+sample 22,083): **no voppler node was in range in those 30 s**, so that run
+says nothing about voppler. The pool (`MAX_VOICES` 32) is not the constraint.
 
 ## Checked against 2048
 
