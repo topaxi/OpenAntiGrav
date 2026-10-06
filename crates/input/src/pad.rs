@@ -474,8 +474,9 @@ pub struct Pad {
     assignment: Assignment,
     /// What Steam said about the controllers behind its virtual ones.
     launch: crate::prompt::Launch,
-    /// The family of the pad last pressed since [`Self::take_activity`].
-    active: Option<crate::prompt::PromptFamily>,
+    /// The family (`None` when unknown) of the real pad last pressed since
+    /// [`Self::take_activity`]; the outer `None` is no activity.
+    active: Option<Option<crate::prompt::PromptFamily>>,
 }
 
 impl std::fmt::Debug for Pad {
@@ -570,23 +571,44 @@ impl Pad {
         };
         gilrs
             .gamepads()
+            .filter(|(_, pad)| is_real_pad(pad))
             .map(|(_, pad)| pad.name().to_string())
             .collect()
     }
 
-    /// The prompt family of the first attached pad, `None` with none.
+    /// Names every device the OS lists as a joystick that is not a gamepad
+    /// (a keyboard's consumer-control interface, say), with its id, for the
+    /// log. Nothing reads these.
     #[must_use]
-    pub fn first_family(&self) -> Option<crate::prompt::PromptFamily> {
+    pub fn ignored(&self) -> Vec<String> {
+        let Some(gilrs) = &self.gilrs else {
+            return Vec::new();
+        };
+        gilrs
+            .gamepads()
+            .filter(|(_, pad)| !is_real_pad(pad))
+            .map(|(_, pad)| {
+                let info = pad_info(&pad);
+                format!("{} ({})", info.name, crate::prompt::uuid_string(info.uuid))
+            })
+            .collect()
+    }
+
+    /// The prompt family of the first attached real pad: the outer `None`
+    /// with none, the inner one when its family is unknown.
+    #[must_use]
+    pub fn first_family(&self) -> Option<Option<crate::prompt::PromptFamily>> {
         let gilrs = self.gilrs.as_ref()?;
         gilrs
             .gamepads()
-            .next()
+            .find(|(_, pad)| is_real_pad(pad))
             .map(|(_, pad)| self.launch.family_of(&pad_info(&pad)))
     }
 
-    /// The family of the pad pressed or pushed since the last call, and
-    /// clears it. Feeds [`crate::prompt::Detector::note_pad`].
-    pub fn take_activity(&mut self) -> Option<crate::prompt::PromptFamily> {
+    /// The family of the real pad pressed or pushed since the last call, and
+    /// clears it: the outer `None` is no activity, the inner one a pad of
+    /// unknown family. Feeds [`crate::prompt::Detector::note_pad`].
+    pub fn take_activity(&mut self) -> Option<Option<crate::prompt::PromptFamily>> {
         self.active.take()
     }
 
@@ -618,6 +640,9 @@ impl Pad {
             while gilrs.next_event().is_some() {}
 
             for (id, pad) in gilrs.gamepads() {
+                if !is_real_pad(&pad) {
+                    continue;
+                }
                 let slot = self.assignment.slot_of(id);
                 let Some(reading) = readings.get_mut(slot) else {
                     continue;
@@ -666,7 +691,43 @@ fn pad_info(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadInfo {
         name: pad.name().to_string(),
         vendor_id: pad.vendor_id(),
         product_id: pad.product_id(),
+        uuid: Some(pad.uuid()),
     }
+}
+
+/// What the backend knows of `pad`'s hardware, for [`crate::prompt::is_gamepad`].
+fn pad_caps(pad: &gilrs::Gamepad<'_>) -> crate::prompt::PadCaps {
+    let state = pad.state();
+    let has_button = |button| {
+        pad.button_code(button)
+            .is_some_and(|code| state.button_data(code).is_some())
+    };
+    let has_axis = |axis| {
+        pad.axis_code(axis)
+            .is_some_and(|code| state.axis_data(code).is_some())
+    };
+    let count =
+        |flags: &[bool]| u8::try_from(flags.iter().filter(|set| **set).count()).unwrap_or(0);
+    crate::prompt::PadCaps {
+        sdl_mapped: pad.mapping_source() == gilrs::MappingSource::SdlMappings,
+        face_buttons: count(&[
+            has_button(gilrs::Button::South),
+            has_button(gilrs::Button::East),
+            has_button(gilrs::Button::West),
+            has_button(gilrs::Button::North),
+        ]),
+        stick_axes: count(&[
+            has_axis(gilrs::Axis::LeftStickX),
+            has_axis(gilrs::Axis::LeftStickY),
+        ]),
+    }
+}
+
+/// Whether the OS's joystick is a gamepad at all, for the controls and the
+/// prompts alike. A keyboard's system-control interface is listed as a
+/// joystick and is neither.
+fn is_real_pad(pad: &gilrs::Gamepad<'_>) -> bool {
+    crate::prompt::is_gamepad(&pad_info(pad), pad_caps(pad))
 }
 
 /// A trigger's analog travel, falling back to its digital state on a pad whose

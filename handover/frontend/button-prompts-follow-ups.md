@@ -12,7 +12,17 @@ open.
   launch through Steam and read the `button prompts:` info line: it names the
   family and the last-used device. If the file is absent or the slot does not
   match the pad's name, `Launch::family_of` falls back to the pad's own ids
-  (Xbox for a virtual pad).
+  (Xbox for a virtual pad). **Deferred until the maintainer has a
+  controller**: the 2026-10-06 launch had none, so the live Steam Input pad
+  path is still unobserved.
+- **Debug-build Vulkan validation noise.** A debug build logs about 20 x
+  `VUID-vkAcquireNextImageKHR-fence-10066` (the fence is already in use) per
+  run on RADV. Recorded, not fixed: look at the swapchain's acquire fence in
+  `oag-game`'s present path.
+- **Steam runs the game under a separate home**, `/home/topaxi-insecure`, which
+  is where `SteamVirtualGamepadInfo` points; on 2026-10-06 that file was
+  empty because no controller was attached. The game's own log is under that
+  home's `~/.local/state/oag/logs/` for a Steam launch.
 - **Prompts outside the front end's renderer** draw the disc's glyphs
   whatever the pad: the in-race HUD's own text, a race's pause overlay, and
   the race-start prompts. They go through other renderers; each needs

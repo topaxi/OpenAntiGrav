@@ -100,20 +100,82 @@ pub struct PadInfo {
     pub vendor_id: Option<u16>,
     /// USB product id, where the backend knows it.
     pub product_id: Option<u16>,
+    /// The backend's 16-byte device id (SDL's joystick GUID), for the log.
+    pub uuid: Option<[u8; 16]>,
+}
+
+/// SDL's textual GUID for a device id, `unknown` without one.
+#[must_use]
+pub fn uuid_string(uuid: Option<[u8; 16]>) -> String {
+    let Some(bytes) = uuid else {
+        return "unknown".to_string();
+    };
+    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
+}
+
+/// What a device can do, as far as the backend can tell: the half of
+/// "is this a gamepad" the name cannot answer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PadCaps {
+    /// The backend holds an SDL controller mapping for this device.
+    pub sdl_mapped: bool,
+    /// How many of south, east, west and north the device really has.
+    pub face_buttons: u8,
+    /// How many of the left stick's two axes the device really has.
+    pub stick_axes: u8,
+}
+
+/// Interfaces a keyboard, mouse or pad's sensors expose that an OS lists as
+/// a joystick but that are never a pad in the hand. A Keychron keyboard's
+/// consumer-control HID interface is one: `Keychron Keychron K2 Pro System
+/// Control`.
+const NOT_A_PAD: [&str; 7] = [
+    "system control",
+    "consumer control",
+    "keyboard",
+    "mouse",
+    "touchpad",
+    "motion sensors",
+    "power button",
+];
+
+/// Whether a device is a gamepad a player could be holding.
+///
+/// A device whose name is a known non-pad interface never is. Otherwise it is
+/// when the backend has an SDL mapping for it, or it really has face buttons
+/// and both axes of a stick.
+#[must_use]
+pub fn is_gamepad(info: &PadInfo, caps: PadCaps) -> bool {
+    let name = info.name.to_ascii_lowercase();
+    if NOT_A_PAD.iter().any(|needle| name.contains(needle)) {
+        return false;
+    }
+    caps.sdl_mapped || (caps.face_buttons >= 2 && caps.stick_axes >= 2)
 }
 
 const VENDOR_SONY: u16 = 0x054c;
 const VENDOR_MICROSOFT: u16 = 0x045e;
 const VENDOR_NINTENDO: u16 = 0x057e;
+const VENDOR_VALVE: u16 = 0x28de;
 
-/// The family a pad's own name and VID/PID say. Anything unrecognised is
-/// [`PromptFamily::Xbox`], the layout SDL calls "standard".
+/// The family a pad's own name and VID/PID say, `None` for a pad nothing
+/// here recognises: a prompt then draws the disc's own glyphs rather than
+/// guessing a family. Valve's own pads (the Steam Controller, the Deck, Steam
+/// Input's virtual pad) are Xbox-shaped.
 #[must_use]
-pub fn classify_pad(info: &PadInfo) -> PromptFamily {
+pub fn classify_pad(info: &PadInfo) -> Option<PromptFamily> {
     match info.vendor_id {
-        Some(VENDOR_SONY) => return PromptFamily::Playstation,
-        Some(VENDOR_NINTENDO) => return PromptFamily::Nintendo,
-        Some(VENDOR_MICROSOFT) => return PromptFamily::Xbox,
+        Some(VENDOR_SONY) => return Some(PromptFamily::Playstation),
+        Some(VENDOR_NINTENDO) => return Some(PromptFamily::Nintendo),
+        Some(VENDOR_MICROSOFT | VENDOR_VALVE) => return Some(PromptFamily::Xbox),
         _ => {}
     }
     let name = info.name.to_ascii_lowercase();
@@ -127,11 +189,13 @@ pub fn classify_pad(info: &PadInfo) -> PromptFamily {
         "ps5",
         "wireless controller",
     ]) {
-        PromptFamily::Playstation
+        Some(PromptFamily::Playstation)
     } else if has(&["nintendo", "switch", "joy-con", "joycon", "pro controller"]) {
-        PromptFamily::Nintendo
+        Some(PromptFamily::Nintendo)
+    } else if has(&["xbox", "x-box", "xinput"]) {
+        Some(PromptFamily::Xbox)
     } else {
-        PromptFamily::Xbox
+        None
     }
 }
 
@@ -166,15 +230,17 @@ pub struct VirtualPad {
 }
 
 impl VirtualPad {
-    /// The family of the real controller behind this slot, from its
+    /// The family of the real controller behind this slot, `None` when
+    /// neither names one, from its
     /// `type=` first and its name and VID/PID second.
     #[must_use]
-    pub fn family(&self) -> PromptFamily {
-        family_of_sdl_type(&self.kind).unwrap_or_else(|| {
+    pub fn family(&self) -> Option<PromptFamily> {
+        family_of_sdl_type(&self.kind).or_else(|| {
             classify_pad(&PadInfo {
                 name: self.name.clone(),
                 vendor_id: Some(self.vendor_id),
                 product_id: Some(self.product_id),
+                uuid: None,
             })
         })
     }
@@ -256,15 +322,17 @@ impl Launch {
         })
     }
 
-    /// The family of `pad`, knowing what Steam said about it.
+    /// The family of `pad`, knowing what Steam said about it, `None` when
+    /// nothing says.
     ///
     /// A pad Steam Input virtualised carries the Steam slot in its name
     /// (`... pad 0`); that slot's real type wins. Without a slot match a
     /// single virtual pad is the answer; several that agree are too. A Deck
     /// with no file is Xbox-shaped.
     #[must_use]
-    pub fn family_of(&self, pad: &PadInfo) -> PromptFamily {
-        let steam_made = pad.vendor_id == Some(0x28de) || pad.vendor_id == Some(VENDOR_MICROSOFT);
+    pub fn family_of(&self, pad: &PadInfo) -> Option<PromptFamily> {
+        let steam_made =
+            pad.vendor_id == Some(VENDOR_VALVE) || pad.vendor_id == Some(VENDOR_MICROSOFT);
         let slot = pad
             .name
             .rsplit(|c: char| !c.is_ascii_digit())
@@ -276,15 +344,15 @@ impl Launch {
         if let Some(virtual_pad) = by_slot {
             return virtual_pad.family();
         }
-        let mut families: BTreeMap<PromptFamily, usize> = BTreeMap::new();
+        let mut families: BTreeMap<Option<PromptFamily>, usize> = BTreeMap::new();
         for virtual_pad in &self.virtual_pads {
             *families.entry(virtual_pad.family()).or_default() += 1;
         }
         if families.len() == 1 && (self.under_steam || steam_made) {
-            return *families.keys().next().unwrap_or(&PromptFamily::Xbox);
+            return families.into_keys().next().flatten();
         }
         if self.steam_deck && steam_made {
-            return PromptFamily::Xbox;
+            return Some(PromptFamily::Xbox);
         }
         classify_pad(pad)
     }
@@ -297,8 +365,8 @@ pub enum Used {
     Nothing,
     /// A key.
     Keyboard,
-    /// A pad of this family.
-    Pad(PromptFamily),
+    /// A real pad, of this family when one is known.
+    Pad(Option<PromptFamily>),
 }
 
 /// Tracks the last-used device and answers which glyph family follows it.
@@ -327,14 +395,15 @@ impl Detector {
         self.used = Used::Keyboard;
     }
 
-    /// A pad of `family` was pressed or pushed past its dead zone.
-    pub fn note_pad(&mut self, family: PromptFamily) {
+    /// A real pad of `family` (`None` when unknown) was pressed or pushed
+    /// past its dead zone. A device that is not a pad never reaches this.
+    pub fn note_pad(&mut self, family: Option<PromptFamily>) {
         self.used = Used::Pad(family);
     }
 
     /// A pad is attached and nothing has been touched yet: its family
     /// stands until something is.
-    pub fn seed_pad(&mut self, family: PromptFamily) {
+    pub fn seed_pad(&mut self, family: Option<PromptFamily>) {
         if self.used == Used::Nothing {
             self.used = Used::Pad(family);
         }
@@ -349,17 +418,18 @@ impl Detector {
     /// The family `style` draws now, or `None` for the disc's own glyphs.
     ///
     /// `Auto` follows the device: a PlayStation pad is the disc's own
-    /// glyphs, so it answers `None` too, and a run nothing has touched
-    /// answers `None` so a headless capture draws what it always drew.
+    /// glyphs, so it answers `None` too, as does a pad of unknown family,
+    /// and a run nothing has touched answers `None` so a headless capture
+    /// draws what it always drew.
     #[must_use]
     pub fn family(&self, style: PromptStyle) -> Option<PromptFamily> {
         match style {
             PromptStyle::Original => None,
             PromptStyle::Family(family) => Some(family),
             PromptStyle::Auto => match self.used {
-                Used::Nothing | Used::Pad(PromptFamily::Playstation) => None,
+                Used::Nothing | Used::Pad(None | Some(PromptFamily::Playstation)) => None,
                 Used::Keyboard => Some(PromptFamily::Keyboard),
-                Used::Pad(family) => Some(family),
+                Used::Pad(Some(family)) => Some(family),
             },
         }
     }
