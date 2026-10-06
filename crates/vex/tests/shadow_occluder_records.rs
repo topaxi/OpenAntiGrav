@@ -3,19 +3,17 @@
 //! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
 //! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
-//! Its own file rather than more tests in `shadow_occluder_ground_truth.rs`,
-//! which is at the 1,000-line rule in `scripts/check-file-size.py`. The seam is
-//! the natural one: that file pins the payload's *closure and census*, this one
-//! what is *inside* the records. The disc walker below is copied rather than
-//! shared, which is what every other ground-truth test in this directory does.
+//! Its own file because `shadow_occluder_ground_truth.rs` is at the 1,000-line
+//! rule (`scripts/check-file-size.py`); the seam is natural: that file pins the
+//! payload's *closure and census*, this one what is *inside* the records. The
+//! disc walker is copied, as in every ground-truth test here.
 //!
-//! Two claims live here, and both are closures rather than readings:
+//! Two claims, both closures rather than readings:
 //!
-//! 1. the face record's `+0x10` array is an edge graph, and it is reciprocal on
-//!    every one of 14,328 edges;
-//! 2. the silhouette that graph describes chains into closed rings on every
-//!    hull, from six directions - which is what the `original` shadow tier's
-//!    draw code fans into triangles.
+//! 1. the face record's `+0x10` array is an edge graph, reciprocal on every one
+//!    of 14,328 edges;
+//! 2. the silhouette it describes chains into closed rings on every hull from six
+//!    directions, which the `original` shadow tier's draw code fans into triangles.
 
 use std::path::PathBuf;
 
@@ -27,10 +25,9 @@ use oag_vex::vex;
 /// `0x08ab2370`.
 const CLASS_OCCLUDER: u32 = 0x3c3;
 
-/// A bounding-box centre further than this from the node's own origin makes it
-/// world-space. The two populations are not near the boundary - the local ones
-/// sit within a couple of units and the world ones hundreds out - so the exact
-/// value is not load-bearing.
+/// A bounding-box centre further than this from the node's origin makes it
+/// world-space; the populations are far apart (a couple of units against
+/// hundreds), so the value is not load-bearing.
 const WORLD_SPACE_CENTRE: f32 = 50.0;
 
 /// The `.vex` version Pulse ships throughout.
@@ -54,17 +51,13 @@ struct VexFile {
 /// Every `.vex` file of an accepted version in every `.wad` on the disc,
 /// decompressed and walked.
 ///
-/// **Every archive, not just `Data.wad`.** The named occluders live in both
-/// `Data.wad` and `BEData.wad`, and a sweep of one of them silently halves the
-/// population - which reads exactly like "the front end has no shadows."
+/// **Every archive, not just `Data.wad`**: the named occluders live in both it and
+/// `BEData.wad`, and one alone halves the population (reading as "the front end
+/// has no shadows").
 ///
-/// **The version filter is a parameter because the two discs disagree.** Pulse
-/// is version 6 throughout; Pure is version 4 with 15 version-3 files, per
-/// [`pure-status.md`]. Hard-coding 6 here walks **zero** Pure files and reports
-/// zero occluders, which is indistinguishable from Pure authoring none - the
-/// exact false negative the file-count assertion in each test exists to catch.
-///
-/// [`pure-status.md`]: ../../../docs/formats/pure-status.md
+/// **The version filter is a parameter**: Pulse is version 6, Pure version 4 with
+/// 15 version-3 files ([`pure-status.md`]); hard-coding 6 walks **zero** Pure
+/// files, the false negative the file-count assertion catches.
 fn vex_files(disc: &mut DiscImage, versions: &[u32]) -> Vec<VexFile> {
     let archives: Vec<_> = disc
         .entries()
@@ -147,50 +140,44 @@ const PSP_QUADS: usize = 1197;
 
 /// Directed edges whose `+0x10` slot names a face, disc-wide.
 ///
-/// Every one of them is reciprocal - see the test. This is the closure that
-/// settles the index layout, the same shape the payload length's own is.
+/// Every one is reciprocal (see the test): the closure that settles the index
+/// layout, as the payload length's own does.
 const PSP_ADJACENT_EDGES: usize = 14328;
 
-/// Edges carrying `NO_NEIGHBOUR` that are *not* a triangle's degenerate
-/// fourth: the boundary edges of the two open hulls, `Data.wad#242` and
-/// `#244`.
+/// Edges carrying `NO_NEIGHBOUR` that are *not* a triangle's degenerate fourth:
+/// the boundary edges of the two open hulls, `Data.wad#242` and `#244`.
 const PSP_OPEN_EDGES: usize = 12;
 
 /// The worst angle, in degrees, between a triangle's declared plane normal and
 /// the normal of the three vertices it indexes.
 ///
-/// **Stated over triangles only, and that is the honest population.** A quad
-/// is not planar - 300 of the 1,197 spread further than `1e-4` of their hull's
-/// own scale - so the same measurement on a sliver quad reaches 180 degrees
-/// and means nothing about the decode. Three points always describe a plane;
-/// four authored ones need not.
+/// **Stated over triangles only, the honest population**: a quad is not planar
+/// (300 of 1,197 spread past `1e-4` of their hull's scale), so a sliver quad
+/// reaches 180 degrees and says nothing about the decode. Three points always
+/// describe a plane; four authored ones need not.
 const PSP_WORST_TRIANGLE_NORMAL_DEGREES: f32 = 0.03;
 
 /// Faces that wind against their own declared normal, and faces with no area
 /// at all.
 ///
-/// One each, both named in `oag_vex::shadow_occluder`'s own docs and both
-/// **carried rather than rejected**: refusing them would refuse two whole
-/// hulls over two faces, and only a caller building a volume can decide what
-/// to do with a reversed face.
+/// One each, named in `oag_vex::shadow_occluder`'s docs and **carried rather than
+/// rejected**: refusing them would refuse two hulls over two faces, and only a
+/// caller building a volume can decide what to do with a reversed face.
 const PSP_NEGATIVE_WINDING: usize = 1;
 const PSP_DEGENERATE_WINDING: usize = 1;
 
 /// The face record's own two index arrays decode, and the edge graph they
 /// describe closes on itself.
 ///
-/// **This is the test that settles the layout**, and it rests on two
-/// independent facts rather than one reading:
+/// **The test that settles the layout**, on two independent facts:
 ///
-/// 1. Adjacency is reciprocal on every one of [`PSP_ADJACENT_EDGES`] edges -
-///    the face named across an edge owns that same edge. A wrong stride or a
-///    wrong offset does not produce a consistent edge graph on fourteen
-///    thousand edges.
-/// 2. A triangle's declared normal agrees with the geometry of the three
-///    vertices it indexes, to [`PSP_WORST_TRIANGLE_NORMAL_DEGREES`] - two
-///    quantities stored in different parts of the record, agreeing.
+/// 1. Adjacency is reciprocal on every one of [`PSP_ADJACENT_EDGES`] edges (the
+///    face named across an edge owns it); a wrong stride or offset does not give
+///    a consistent edge graph on fourteen thousand edges.
+/// 2. A triangle's declared normal agrees with its three vertices' geometry to
+///    [`PSP_WORST_TRIANGLE_NORMAL_DEGREES`]: two quantities stored apart, agreeing.
 ///
-/// Everything else here is a count that moves if the corpus does.
+/// Everything else is a count that moves if the corpus does.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd; run with `just test-data`"]
 fn the_face_records_index_the_vertex_array_and_each_other() {
@@ -321,10 +308,9 @@ fn the_face_records_index_the_vertex_array_and_each_other() {
 
 /// The six directions the silhouette walk is exercised over.
 ///
-/// The authored axis first - `oag_pulse::shadow::AUTHORED_AXIS`, what the
-/// original actually projects along - then five others, because a walk that
-/// works only for the direction it was written against is not a silhouette
-/// walk.
+/// The authored axis first (`oag_pulse::shadow::AUTHORED_AXIS`, what the original
+/// projects along), then five others: a walk that works only for the direction it
+/// was written against is not a silhouette walk.
 const WALK_DIRECTIONS: [[f32; 3]; 6] = [
     [0.097_589_54, -0.975_895_4, 0.195_179_08],
     [0.0, -1.0, 0.0],
