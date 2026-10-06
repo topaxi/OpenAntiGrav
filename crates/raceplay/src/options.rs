@@ -730,12 +730,10 @@ pub struct Loaded {
     /// borrowed coordinate: the mount is measured off each circuit's own
     /// geometry and every circuit's answer differs. See `race::gantry` and
     /// `docs/rendering/start-gantry.md`.
-    pub gantry: Option<crate::gantry::Placed>,
-    /// The billboard adverts this circuit's placeholder quads show, each drawn
-    /// through its own camera - see [`crate::adverts`]. Empty where the track
-    /// authors no placeholder a manifest slot names, and on HD, which rebinds
-    /// by name instead.
-    pub adverts: Vec<crate::adverts::Card>,
+    ///
+    /// **Beside it, the adverts** the other slots' placeholder quads show, each drawn
+    /// through its own camera - see [`crate::adverts::Billboards`].
+    pub billboards: crate::adverts::Billboards,
     /// One hull, plume, nozzle and spark-anchor set per grid slot, each off
     /// its own team's directory. Slot 0 is the player's.
     ///

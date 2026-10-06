@@ -36,6 +36,16 @@ const NEAR: f32 = 1.2;
 /// (`g_display + 0x1698`); a flat card does not depend on it.
 const FAR: f32 = 2017.7;
 
+/// What a circuit's billboard slots become: the start gantry on slot 8's quad,
+/// and an advert drawn into each of the other slots' quads that has a model.
+#[derive(Debug, Default)]
+pub struct Billboards {
+    /// Slot 8: [`crate::gantry`].
+    pub gantry: Option<crate::gantry::Placed>,
+    /// The other slots, see [`Card`].
+    pub adverts: Vec<Card>,
+}
+
 /// The slot a card fills, drawn through the camera its own file authors.
 pub struct Card {
     /// The billboard slot, the `num` of the manifest entry.
@@ -170,6 +180,19 @@ impl std::fmt::Debug for Cards {
 /// shader writes gamma-space values to a target that is not linear and the
 /// track samples this as an ordinary albedo.
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+/// Draws every card of `cards`, if the circuit has any, ahead of the scene pass
+/// that samples them, at `seconds` on the scenery clock.
+pub(super) fn render(
+    cards: &Option<Cards>,
+    queue: &wgpu::Queue,
+    encoder: &mut wgpu::CommandEncoder,
+    seconds: f32,
+) {
+    if let Some(cards) = cards {
+        cards.render(queue, encoder, seconds);
+    }
+}
 
 impl Cards {
     /// Builds a drawable and a target per card.

@@ -43,7 +43,7 @@ fn placed() -> Option<gantry::Placed> {
         .unwrap_or_else(|| panic!("no gantry line: {:#?}", loaded.report));
     assert!(line.contains("plays the FX-350 board"), "{line}");
     assert!(line.contains("fx350_nomip.gtf"), "{line}");
-    loaded.gantry
+    loaded.billboards.gantry
 }
 
 fn draws(model: &Model) -> impl Iterator<Item = &DrawCall> {

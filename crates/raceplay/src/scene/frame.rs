@@ -301,11 +301,7 @@ impl Scene {
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
-        // The adverts, into their own targets before the scene pass that
-        // samples them, on the scenery's own clock.
-        if let Some(adverts) = &self.adverts {
-            adverts.render(queue, encoder, seconds);
-        }
+        crate::adverts::render(&self.adverts, queue, encoder, seconds);
         oag_gpu::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the

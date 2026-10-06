@@ -183,7 +183,7 @@ fn race_load_places_a_gantry_on_talons_junction() {
     );
 
     assert!(
-        loaded.gantry.is_some(),
+        loaded.billboards.gantry.is_some(),
         "race::load did not carry a placed gantry through to Loaded"
     );
 

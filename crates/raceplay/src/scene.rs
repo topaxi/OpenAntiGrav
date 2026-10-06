@@ -425,8 +425,7 @@ impl Scene {
         sky_model: Option<Model>,
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
-        gantry: Option<gantry::Placed>,
-        adverts: Vec<crate::adverts::Card>,
+        billboards: crate::adverts::Billboards,
         weapons_on: bool,
         rocket_model: Option<Model>,
         mine_model: Option<Model>,
@@ -465,6 +464,7 @@ impl Scene {
         // `--screenshot` path did, and compiled 9,859 pipelines for 53
         // distinct ones - about 7 MiB of resident memory per weapon drawable,
         // 8.4 GiB for a Pulse race. See `pipeline_cache`.
+        let crate::adverts::Billboards { gantry, adverts } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
         // The far plane comes from the track's own bounding sphere: a track is
