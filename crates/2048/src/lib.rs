@@ -156,6 +156,8 @@ pub const TITLE: &Title = &Title {
         definition_entry: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        // Not wired, not measured absent: 2048's unlock rows are unread here.
+        unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },

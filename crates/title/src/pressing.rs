@@ -41,7 +41,8 @@ pub struct Pressings {
     pub listed: &'static [Pressing],
     /// What every other serial, and a source with none, gets.
     pub unlisted: Pressing,
-    /// Where the table came from.
+    /// Where the listed rows came from. [`Self::unlisted`]'s use for every other
+    /// serial is the project's own choice whatever this says.
     pub origin: Origin,
 }
 

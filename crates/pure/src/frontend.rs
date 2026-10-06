@@ -265,8 +265,9 @@ pub fn localised_movie_region(serial: Option<&str>) -> &'static str {
 ///
 /// Measured: `docs/ghidra/functions/psp-pure-eu/title-screen.md` (the
 /// wordmark) and `movie-localised-suffix.md` (`_EU`/`_US`), read off both
-/// executables. The USA serial is `oag_pure::tests`'s; an unlisted serial gets
-/// the EU row, this project's own "prefer EU" default.
+/// executables. The USA serial is `oag_pure::tests`'s. The rows are measured;
+/// that an unlisted serial gets the EU row is **chosen**, this project's own
+/// "prefer EU" default.
 pub const PRESSINGS: &oag_title::Pressings = &oag_title::Pressings {
     listed: &[oag_title::Pressing {
         serial: "UCUS-98612",

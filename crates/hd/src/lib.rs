@@ -149,6 +149,8 @@ pub const TITLE: &Title = &Title {
         definition_entry: Some(campaign::DEFINITION_ENTRY),
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        // Not wired, not measured absent: HD's unlock rows are unread here.
+        unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
         origin: oag_title::Origin::Measured,
     },

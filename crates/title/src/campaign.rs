@@ -65,10 +65,15 @@ pub struct Campaign {
     pub circuit_unlocks: bool,
     /// Whether craft variants carry `loyalty` unlock rows this build reads.
     pub loyalty_unlocks: bool,
+    /// Where [`Self::circuit_unlocks`] and [`Self::loyalty_unlocks`] came from,
+    /// apart from [`Self::origin`]: a `false` there is "measured absent" on one
+    /// title (Pure authors none) and merely "not wired" on the others, which is
+    /// [`Origin::Chosen`] and says so.
+    pub unlocks_origin: Origin,
     /// Whether `Campaign Selection`'s own ids are missing from the language
     /// table the front end carries and have to be overlaid from the archive
     /// that has them (HD/Fury only).
     pub selection_strings: bool,
-    /// Where these answers came from.
+    /// Where the dialect, grids file and selection flag came from.
     pub origin: Origin,
 }

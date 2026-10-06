@@ -125,6 +125,7 @@ const TITLE: &Title = &Title {
         definition_entry: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
+        unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
         origin: oag_title::Origin::Chosen,
     },

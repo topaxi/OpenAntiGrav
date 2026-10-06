@@ -75,12 +75,19 @@ Pure EU and USA, HD, 2048, Omega):
   (`PULSE_DENY_LIST_OPENERS`), not a name test; an error naming a title it does
   not list is still Pulse's.
 
+**2048 vs Omega, for `reships`**: checked, differs. Omega's own ship directory is
+`Data\art\published\hdships` (`oag_omega::race::SHIP_DIR`, the tree 2048's guest
+roster points at), so its HD-derived teams are its native roster and `guest_roster` is
+correctly `None`: nothing to reship. 2048 vs Omega on the other flags: Omega's campaign
+dialect is HD's (`load_omega`), `InheritedFrom("Wipeout HD")`; unlock rows unread on both.
+
 **Still open**: `crates/ui/src/frontend.rs:985`, HD's English preselect - lane
 `ptbr-a` owns language selection and takes it. `check-title-branching`'s
 `BASELINE` is that one row.
 
 ## Next Steps
 
-Start with item 1: read `crates/raceplay/src/absorb.rs` and `hit_sparks.rs`,
-sketch `Trigger` and `EffectSpec` per the ADR's section 5, and migrate
-`throws_weapon_spark` first (one site, one title, its test already exists).
+1. Lane `ptbr-a` migrates `crates/ui/src/frontend.rs:985` (HD's English preselect) into
+   `Title` data.
+2. Then delete the last `BASELINE` row in `scripts/check-title-branching.py`, this
+   thread and its `HANDOVER.md` index line together.
