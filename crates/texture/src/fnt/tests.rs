@@ -1,10 +1,9 @@
 //! What the `.fnt` reader in [`super`] is asserted to do, on fixtures built by
 //! hand.
 //!
-//! Its own file rather than a `#[cfg(test)] mod` at the end of `fnt.rs`, under
-//! the 200-line rule in `scripts/check-file-size.py`. Everything here is
-//! synthetic; the disc-backed half is `crates/formats/tests/fnt_ground_truth.rs`
-//! and `fnt_hd_ground_truth.rs`.
+//! Its own file under the 200-line rule in `scripts/check-file-size.py`.
+//! Everything here is synthetic; the disc-backed half is
+//! `crates/texture/tests/fnt_ground_truth.rs` and `fnt_hd_ground_truth.rs`.
 
 use super::*;
 use oag_formats::ByteOrder;
@@ -120,10 +119,8 @@ fn an_unswizzled_atlas_is_taken_verbatim() {
     let atlas_at = data.len() - (ATLAS_HEADER_LEN + 64 + 64 * 16 / 2);
     data[atlas_at + 6] = 0;
     let parsed = Font::parse(&data).expect("parse");
-    // The fixture's stored bytes are swizzled, so taking them verbatim puts
-    // stored byte 16 - which is the block's second row, value 1 - at linear
-    // byte 16, i.e. pixel 32 of row 0. Unswizzled it would be pixel 0 of
-    // row 1 instead.
+    // The stored bytes are swizzled: verbatim, stored byte 16 (the block's second
+    // row, value 1) would land at pixel 32 of row 0; unswizzled it is pixel 0 of row 1.
     assert_eq!(parsed.indices[32], 1);
     let swizzled = Font::parse(&font(64, 16, &[(65, 4, 8, 0, 4, 0, 8)])).expect("parse");
     assert_eq!(swizzled.indices[64], 1);
@@ -161,13 +158,11 @@ fn a_non_font_is_refused() {
 /// Rewrites a little-endian `.fnt` as the PS3 exporter would write it.
 ///
 /// **A structural swap, not a `chunks(4).rev()`.** The file is not an array of
-/// words: the magic is one, the codepoint table is `u16`s, the offset table is
-/// `u32`s, a glyph record mixes both with four bare bytes, and the atlas header
-/// mixes them again over a palette and texels that are byte streams and must
-/// not move at all. Walking it the way the parser does is the only way to
-/// produce a file that is *the same font* rather than a differently-corrupt
-/// one - which is exactly what makes
-/// [`swapping_a_font_changes_nothing_but_the_byte_order`] worth having.
+/// words: the magic is one, the codepoint table is `u16`s, the offset table `u32`s,
+/// a glyph record mixes both with four bare bytes, and the atlas header mixes them
+/// over a palette and texels that are byte streams and must not move. Walking it as
+/// the parser does yields *the same font*, which
+/// [`swapping_a_font_changes_nothing_but_the_byte_order`] relies on.
 fn to_big_endian(le: &[u8]) -> Vec<u8> {
     let w = |at: usize| u32::from_le_bytes(le[at..at + 4].try_into().unwrap());
     let mut out = le.to_vec();
@@ -196,8 +191,8 @@ fn to_big_endian(le: &[u8]) -> Vec<u8> {
     for i in 0..count {
         let record = w(offsets_at + i * 4) as usize;
         put32(&mut out, offsets_at + i * 4);
-        // The codepoint, then two bare bytes, then the four box edges. The
-        // advance and the trailing padding are bytes and stay put.
+        // The codepoint, two bare bytes, then the four box edges; the advance and
+        // trailing padding are bytes and stay put.
         put16(&mut out, record);
         for edge in 0..4 {
             put16(&mut out, record + 4 + edge * 2);
@@ -226,9 +221,8 @@ fn the_magic_says_which_end_the_words_start_at() {
     assert_eq!(byte_order(&[]), None);
 }
 
-/// [`looks_like_font`] widened when [`byte_order`] arrived, and
-/// `fnt_ground_truth.rs` uses it as a filter - so this pins that it now accepts
-/// both rather than having quietly started accepting neither.
+/// [`looks_like_font`] widened with [`byte_order`] and `fnt_ground_truth.rs`
+/// filters on it; this pins that it accepts both orders.
 #[test]
 fn a_font_looks_like_one_either_way_round() {
     assert!(looks_like_font(&[1, b'F', b'N', b'T']));
@@ -239,10 +233,9 @@ fn a_font_looks_like_one_either_way_round() {
 /// The whole claim about Wipeout HD's fonts, in one assertion: the same file
 /// written the other way round is the same font.
 ///
-/// Everything - the line height, the glyph boxes, the palette and every one of
-/// the unswizzled indices - has to come out identical, which is a much stronger
-/// statement than "it parses". A single scalar read at the wrong end would move
-/// a box, resize the atlas, or fail the size check outright.
+/// The line height, glyph boxes, palette and every unswizzled index must come out
+/// identical, much stronger than "it parses": a scalar read at the wrong end would
+/// move a box, resize the atlas, or fail the size check.
 #[test]
 fn swapping_a_font_changes_nothing_but_the_byte_order() {
     let little = font(64, 16, &[(65, 4, 8, 0, 4, 0, 8), (66, 8, 8, 4, 12, 0, 8)]);
@@ -266,8 +259,7 @@ fn coverage_claims_everything_but_the_reserved_header_tail_on_a_full_font() {
 #[test]
 fn coverage_on_a_metrics_only_blob_claims_no_atlas() {
     let mut data = font(64, 16, &[(65, 4, 8, 0, 4, 0, 8)]);
-    // Trim off the atlas, and point `atlas_at` at the new end - the PS2
-    // shape `Metrics::has_embedded_atlas` recognises.
+    // Trim off the atlas and point `atlas_at` at the new end: the PS2 shape.
     let metrics = Metrics::parse(&data).expect("metrics-only still parses");
     data.truncate(metrics.atlas_at);
     let seen = coverage(&data);

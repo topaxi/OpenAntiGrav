@@ -9,9 +9,8 @@ fn word(colour: u32, modulation: u32) -> [u8; WORD_LEN] {
     out
 }
 
-/// A whole 8x8 surface - four identical words, so every quad interpolates
-/// between four copies of the same colour and the bilinear step drops out.
-/// That is what makes these tests read the colour unpack and the blend alone.
+/// A whole 8x8 surface of four identical words, so the bilinear step drops out
+/// and the tests read the colour unpack and blend alone.
 fn uniform(colour: u32, modulation: u32) -> Vec<u8> {
     word(colour, modulation).repeat(4)
 }
@@ -27,8 +26,8 @@ const WHITE_A_BLACK_B: u32 = 0x8000_7ffe;
 /// The same word with the modulation-mode bit set.
 const WHITE_A_BLACK_B_MODE1: u32 = 0x8000_7fff;
 
-/// Colour A transparent, `ARGB 3:4:4:3` all ones. Alpha's low bit is a zero
-/// this format never fills in, so full alpha here is 14/15, not 15/15.
+/// Colour A transparent, `ARGB 3:4:4:3` all ones. Alpha's low bit is never
+/// filled in, so full alpha is 14/15, not 15/15.
 const TRANSPARENT_WHITE_A: u32 = 0x0000_7ffe;
 
 #[test]
@@ -55,14 +54,11 @@ fn modulation_three_takes_colour_b_whole() {
     assert!(out.iter().all(|&t| t == [0, 0, 0, 255]), "{:?}", out[0]);
 }
 
-/// Codes 0, 1, 2, 3 in mode 0 are weights 0, 3, 5, 8 of eight - so a word
-/// whose sixteen texels cycle through all four codes decodes to exactly four
-/// distinct greys, at exactly those four blends of white and black.
+/// Codes 0, 1, 2, 3 in mode 0 are weights 0, 3, 5, 8 of eight, so a word cycling
+/// all four codes decodes to exactly four greys at those blends of white and black.
 ///
-/// The *set* is asserted rather than the order: a texel reads its modulation
-/// from the quad's own half-word-offset grid, so which code lands on which
-/// texel is the mapping step's business and is pinned by
-/// [`a_non_square_surface_comes_out_row_major`] instead.
+/// The *set* is asserted, not the order: which code lands on which texel is the
+/// mapping step's business, pinned by [`a_non_square_surface_comes_out_row_major`].
 #[test]
 fn mode_zero_has_four_evenly_spaced_blend_steps() {
     // 0b11_10_01_00 per row of four texels, repeated for all sixteen.
@@ -91,8 +87,7 @@ fn transparent_mode_widens_every_channel_but_leaves_alphas_low_bit_clear() {
     );
 }
 
-/// A level below [`MIN_SIDE`] is decoded at the minimum surface and cropped
-/// back, rather than refused or read out of bounds - see that constant.
+/// A level below [`MIN_SIDE`] decodes at the minimum surface and is cropped back.
 #[test]
 fn a_level_below_the_minimum_surface_still_decodes_and_is_cropped() {
     let data = uniform(WHITE_A_BLACK_B, 0);
@@ -101,8 +96,8 @@ fn a_level_below_the_minimum_surface_still_decodes_and_is_cropped() {
     assert!(out.iter().all(|&t| t == [255, 255, 255, 255]));
 }
 
-/// Short data is read as zero words rather than panicking or refusing - the
-/// only way a 4x4 level (two words stored, four words needed) can decode.
+/// Short data reads as zero words: the only way a 4x4 level (two words stored,
+/// four needed) can decode.
 #[test]
 fn short_data_reads_as_zero_words() {
     let out = decode_ii_4bpp(&word(WHITE_A_BLACK_B, 0), 8, 8).expect("decodes");
@@ -110,9 +105,8 @@ fn short_data_reads_as_zero_words() {
     assert!(out.iter().any(|&t| t != [0, 0, 0, 0]), "not all absent");
 }
 
-/// The output is row-major and exactly `width * height`, on a non-square
-/// surface where a transposed decode would still have the right length but
-/// the wrong shape - so this pins the crop, not just the count.
+/// The output is row-major and exactly `width * height` on a non-square surface,
+/// where a transposed decode would have the right length but the wrong shape.
 #[test]
 fn a_non_square_surface_comes_out_row_major() {
     let mut data = Vec::new();

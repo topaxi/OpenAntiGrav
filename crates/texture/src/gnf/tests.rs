@@ -48,18 +48,16 @@ fn the_descriptor_decodes_to_a_plausible_bc7_srgb_livery_decal() {
 #[test]
 fn the_real_sample_is_tiled_not_linear() {
     let texture = Texture::parse(&holographic_glow_head()).expect("parses");
-    // TileMode 0x0d ("Thin_1DThin" - GFD-Studio's TileMode.cs enum) -
-    // micro-tiled, not linear, the reason `decode` refuses it. See the
-    // module's own "What this does not do".
+    // TileMode 0x0d (`Thin_1DThin`): micro-tiled, not linear. See the module's
+    // "What this does not do".
     assert_eq!(texture.tile_mode.0, 0x0d);
     assert!(!texture.is_linear());
 }
 
 #[test]
 fn the_channel_order_is_standard_rgba() {
-    // word3's four 3-bit channel-order fields decode to Red/Green/Blue/Alpha
-    // (4, 5, 6, 7 - AmdGpu::CompSwizzle's own values), the ordinary case, not
-    // decoded into its own field since nothing here reorders channels yet.
+    // word3's channel-order fields decode to Red/Green/Blue/Alpha (4, 5, 6, 7,
+    // `AmdGpu::CompSwizzle`'s values); not kept in a field, nothing reorders channels.
     let word3 = 0x96d7_0facu32;
     let cx = word3 & 0x7;
     let cy = (word3 >> 3) & 0x7;
@@ -105,12 +103,11 @@ fn linear_tile_modes_are_recognised() {
 
 #[test]
 fn decode_reports_out_of_bounds_on_the_truncated_real_sample() {
-    // `holographic_glow_head()` is the descriptor only - `docs/formats/gnf.md`'s
-    // own doc comment on the fixture says so - so decoding its `Thin_1DThin`
-    // base level (needs 8x4 = 32 BC7 blocks, 512 bytes past `data_offset`)
-    // runs off the end of the 52-byte fixture. See
+    // `holographic_glow_head()` is the descriptor only, so decoding its
+    // `Thin_1DThin` base level (32 BC7 blocks, 512 bytes past `data_offset`) runs
+    // off the 52-byte fixture. See
     // `decode_refuses_a_tile_mode_with_no_address_formula_by_name` for the
-    // actually-refused-by-name case (a genuinely unhandled `TileMode`).
+    // refused-by-name case.
     let texture = Texture::parse(&holographic_glow_head()).expect("parses");
     assert!(matches!(
         texture.decode(&holographic_glow_head()),
@@ -120,12 +117,9 @@ fn decode_reports_out_of_bounds_on_the_truncated_real_sample() {
 
 #[test]
 fn decode_refuses_a_tile_mode_with_no_address_formula_by_name() {
-    // `Thin_2DThin` (14) - macro-tiled, one index past the `Thin_1DThin`
-    // (13) this module's `decode` handles - still has no address formula
-    // here, and no real `.gnf` this project has sampled declares it. Built
-    // from the linear fixture with only `word3`'s `tile_mode` field
-    // rewritten, so the rest of the descriptor stays a small, valid 4x4 BC7
-    // texture and the refusal is provably about the tile mode alone.
+    // `Thin_2DThin` (14), macro-tiled, has no address formula here and no sampled
+    // `.gnf` declares it. Built from the linear fixture with only `word3`'s
+    // `tile_mode` rewritten, so the refusal is about the tile mode alone.
     let mut bytes = linear_bc7_4x4([0u8; 16]);
     let at = 16;
     let word3 = 0x0eu32 << 20; // TileMode 14, Thin_2DThin
@@ -134,10 +128,8 @@ fn decode_refuses_a_tile_mode_with_no_address_formula_by_name() {
     assert_eq!(texture.decode(&bytes), Err(Error::Tiled { tile_mode: 14 }));
 }
 
-/// A minimal synthetic single-block `.gnf`: linear, BC7, 4x4 - small enough
-/// to hand-build a fixture for, unlike every real sample this project has
-/// found (all genuinely tiled). Exercises the one path `Texture::decode`
-/// actually walks.
+/// A minimal synthetic single-block `.gnf`: linear, BC7, 4x4, hand-buildable
+/// unlike the real (tiled) samples. Exercises the linear path of `Texture::decode`.
 fn linear_bc7_4x4(block: [u8; 16]) -> Vec<u8> {
     let descriptor_len = 36;
     let contents_len = 8 + descriptor_len;
@@ -163,10 +155,8 @@ fn linear_bc7_4x4(block: [u8; 16]) -> Vec<u8> {
 
 #[test]
 fn decode_untiles_a_linear_bc7_surface() {
-    // An all-zero BC7 block is the spec's own reserved encoding, decoded as
-    // opaque black by this project's own `bcn::bc7` - see that module's
-    // doc. Picked here because its expected output needs no BC7 knowledge
-    // to state, unlike a real encoded block.
+    // An all-zero BC7 block is the spec's reserved encoding, decoded as opaque
+    // black by `bcn::bc7`; its expected output needs no BC7 knowledge to state.
     let bytes = linear_bc7_4x4([0u8; 16]);
     let texture = Texture::parse(&bytes).expect("parses");
     assert!(texture.is_linear());

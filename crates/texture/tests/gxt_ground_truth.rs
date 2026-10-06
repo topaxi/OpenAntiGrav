@@ -5,25 +5,22 @@
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-texture --run-ignored all \
 //!     -E 'binary(gxt_ground_truth)'
 //! ```
 //!
 //! # Why the sweep is the test
 //!
-//! [`oag_texture::gxt::Gxt::parse`] refuses a texture whose declared texel
-//! length is not what its own width, height, format and mip count imply - the
-//! same "the length is a function of everything else in the descriptor"
-//! argument [`oag_texture::gtf::Gtf::parse`] rests its own confidence on, in
-//! `gtf_ground_truth.rs`. `oag_2048::hud::ART`'s reticle only reaches the nine
-//! `.gxt` files [`docs/formats/2048-hud.md`] names, and this sweeps the whole
-//! corpus rather than just those nine.
+//! [`oag_texture::gxt::Gxt::parse`] refuses a texture whose declared texel length
+//! is not what its width, height, format and mip count imply, the argument
+//! [`oag_texture::gtf::Gtf::parse`] rests on in `gtf_ground_truth.rs`.
+//! `oag_2048::hud::ART` reaches only the nine `.gxt` files
+//! [`docs/formats/2048-hud.md`] names; this sweeps the whole corpus.
 //!
-//! **That check only runs on a format this crate knows the unit size of**, so
-//! teaching it `PVRTII4BPP` put 8,430 more textures under it in this package
-//! alone - and they only pass because a mip level is floored at
-//! [`oag_texture::gxt::MIN_LEVEL_LEN`] bytes, which is measured rather than
-//! assumed. See that constant.
+//! **That check only runs on a format whose unit size is known**, so `PVRTII4BPP`
+//! put 8,430 more textures under it in this package alone, and they pass only
+//! because a mip level is floored at [`oag_texture::gxt::MIN_LEVEL_LEN`] bytes
+//! (measured).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -100,30 +97,20 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 /// its own descriptor implies, and every texture in a format this crate
 /// decodes turns into exactly `width * height` texels.
 ///
-/// **The counts are pinned, not just printed.** `checked` and the survey's own
-/// totals increment on the same textures inside `survey`'s callback, so
-/// `checked == decoded + ubc1 + ubc3 + pvrtc + argb8888 + rgb888` alone would
-/// hold even if `Gxt::parse` silently skipped nine thousand files - it says
-/// nothing about whether the *right* files were seen. `9910`/`370`/`8430`/
-/// `99` are what the corpus actually is (measured 2026-08-26, the
-/// `PVRTII4BPP` count 2026-08-27, the `Argb8888` count 2026-08-28);
-/// `505`/`493`/`13` (`UBC1`/`UBC3`/`Rgb888`) were measured 2026-09-16, closing
-/// out every format byte this corpus carries - `unsupported` is empty from
-/// here on. A real regression changes one of these numbers, which only a
-/// pinned value can catch.
+/// **The counts are pinned, not just printed.** `checked == decoded + ubc1 +
+/// ubc3 + pvrtc + argb8888 + rgb888` alone would hold even if `Gxt::parse`
+/// silently skipped nine thousand files. `9910`/`370`/`8430`/`99` are what the
+/// corpus is (measured 2026-08-26/27/28); `505`/`493`/`13`
+/// (`UBC1`/`UBC3`/`Rgb888`) were measured 2026-09-16, closing out every format
+/// byte the corpus carries - `unsupported` is empty from here on. A regression
+/// changes one of these numbers.
 ///
-/// **The `PVRTII4BPP` half of this was the load-bearing new check when it
-/// landed.** Those 8,430 textures went through `Gxt::parse` unverified until
-/// this crate knew their unit size - their declared length was simply
-/// trusted. Now every one of them has to satisfy the same arithmetic, and
-/// does. `Argb8888`'s 99 and `Rgb888`'s 13 are smaller in count but exercise a
-/// different edge: no `MIN_LEVEL_LEN` floor applies to either (see
-/// `oag_texture::gxt::Texture::level_len`) - all nine distinct
-/// `(width, height, mip count)` `Argb8888` shapes, down to a chain that
-/// bottoms out at one 4x4 level, agree with the unfloored formula, and so does
-/// `Rgb888`'s one shape (512x64, one level, `width * height * 3` to the
-/// byte). `UBC1`/`UBC3` reuse `UBC2`'s own twiddled block walk and its
-/// already-floored arithmetic unchanged - see `docs/formats/gxt.md`.
+/// All 8,430 `PVRTII4BPP` textures satisfy the length arithmetic that was
+/// previously trusted. `Argb8888`'s 99 and `Rgb888`'s 13 take no
+/// `MIN_LEVEL_LEN` floor (see `oag_texture::gxt::Texture::level_len`): all nine
+/// `(width, height, mip count)` `Argb8888` shapes agree with the unfloored
+/// formula, as does `Rgb888`'s one shape (512x64, one level). `UBC1`/`UBC3` reuse
+/// `UBC2`'s twiddled walk and floored arithmetic - see `docs/formats/gxt.md`.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn every_shipped_gxt_parses_and_every_known_format_decodes() {
@@ -175,20 +162,16 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     );
 }
 
-/// Decodes a named entry and writes it to a checkerboard-composited PNG so a
-/// human (or a later `Read` of the file) can check it looks like authored art
-/// rather than noise or a solid fill. This format's version of `gtf`'s own
-/// smoothness check: there is no ground-truth frame to compare against, so
-/// the check is "does the picture look like something a game would ship".
+/// Decodes a named entry to a checkerboard-composited PNG so a human can check
+/// it looks like authored art, not noise or a solid fill: there is no
+/// ground-truth frame, so the check is "does it look like something a game would
+/// ship".
 ///
-/// `.gxt`'s block grid is **twiddled (Morton/Z-order), not raster** - see
-/// `oag_texture::gxt::blocks`'s own doc comment for how that was measured.
-/// This test is what the measurement rests on: a checkerboard-composited
-/// render of the wrong block order was noise with an anomalous clean band;
-/// the current, twiddled order renders four recognisable reticle pieces
-/// (`missile_reticule.gxt`) and a coherent-looking sprite atlas
-/// (`hud_2048.gxt`, the non-square 1024x512 case the same block-order rule
-/// has to hold for).
+/// `.gxt`'s block grid is **twiddled (Morton/Z-order), not raster** (see
+/// `oag_texture::gxt::blocks`), and this test is what that rests on: the wrong
+/// order renders noise with a clean band; the twiddled order renders four
+/// recognisable reticle pieces (`missile_reticule.gxt`) and a coherent sprite
+/// atlas (`hud_2048.gxt`, the non-square 1024x512 case).
 fn render_checkerboard(
     archive: &mut oag_assets::psarc::Archive,
     path: &str,
@@ -233,8 +216,7 @@ fn render_checkerboard(
     std::fs::write(&out, &png).unwrap_or_else(|e| panic!("writing {}: {e}", out.display()));
     println!("wrote {}", out.display());
 
-    // Not blank, not one flat colour, not a decode that collapsed to a solid
-    // fill (which `opaque > 0` alone would not catch).
+    // Not blank, not one flat colour (`opaque > 0` alone would miss a solid fill).
     let opaque = rgba.iter().filter(|p| p[3] > 0).count();
     assert!(opaque > 0, "{path}: nothing decoded opaque at all");
     assert!(
@@ -259,8 +241,7 @@ fn the_played_skin_s_own_textures_decode_to_something_a_human_can_check() {
     let mut archive = oag_assets::psarc::Archive::open(&path.display().to_string())
         .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
 
-    // Square (256x256, one level) and non-square (1024x512) - the twiddle
-    // rule's general, non-square path needs its own witness.
+    // Square (256x256) and non-square (1024x512): the non-square path needs its own witness.
     render_checkerboard(
         &mut archive,
         "data/xml/2048_hud/texture/missile_reticule.gxt",
@@ -273,20 +254,15 @@ fn the_played_skin_s_own_textures_decode_to_something_a_human_can_check() {
     );
 }
 
-/// The same "does the picture look like something a game would ship" check,
-/// on `UBC3` (BC3) - one of the two format bytes that reuse `UBC2`'s own
-/// twiddled block walk (see `oag_texture::gxt::blocks`) with BC3's 16-byte
-/// block math instead of BC2's. `UBC1`'s own check
-/// (`ubc1_decodes_to_something_a_human_can_check`, below) cannot reuse this
-/// helper - BC1 has no alpha channel, and `render_checkerboard`'s flatness
-/// assertions assume one. No HD `.gtf` twin exists for either format
-/// (`vita_gxt_ubc13_hd_oracle.rs`, `crates/game/examples/`, finds 0 same-name
-/// same-size pairs across all three EU packages), so a legible sample is the
-/// oracle: a front-end callout with a text label and a punch-through alpha
-/// edge. It renders legibly; the raster-order control this is compared
-/// against in that probe decodes to noise with the same "swizzle that
-/// happens to agree with raster order along one axis" signature this
-/// module's other formats show when read the wrong way.
+/// The same picture check on `UBC3` (BC3), which reuses `UBC2`'s twiddled walk
+/// (see `oag_texture::gxt::blocks`) with BC3's block math. `UBC1`'s check
+/// (`ubc1_decodes_to_something_a_human_can_check`) cannot reuse this helper:
+/// BC1 has no alpha and `render_checkerboard`'s flatness assertions assume one.
+/// No HD `.gtf` twin exists for either format (`vita_gxt_ubc13_hd_oracle.rs`,
+/// `crates/game/examples/`, finds 0 same-name same-size pairs across all three EU
+/// packages), so a legible sample is the oracle: a front-end callout with a text
+/// label and a punch-through alpha edge. The raster-order control in that probe
+/// decodes to noise.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn ubc3_decodes_to_something_a_human_can_check() {
@@ -303,15 +279,10 @@ fn ubc3_decodes_to_something_a_human_can_check() {
     );
 }
 
-/// `UBC1` (BC1)'s own check, on the same terms as `UBC3`'s above but without
-/// `render_checkerboard`'s alpha-based flatness assertions - BC1 has no
-/// interpolated alpha ramp and every texel measured on this sample decodes
-/// opaque, so "some texels transparent" would be the wrong invariant to check
-/// for this format. What a wrong block order or wrong palette math would
-/// still garble is the colour itself, so the check here is on distinct
-/// colours and on the picture, the same "look at the render" method the
-/// PVRTC font atlas and this module's other formats settled their own
-/// tiling/channel questions with.
+/// `UBC1` (BC1)'s check, as `UBC3`'s but without the alpha-based flatness
+/// assertions: every texel measured on this sample decodes opaque, so "some
+/// transparent" is the wrong invariant. A wrong block order or palette math would
+/// garble the colour, so the check is on distinct colours and the picture.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn ubc1_decodes_to_something_a_human_can_check() {
@@ -353,28 +324,22 @@ fn ubc1_decodes_to_something_a_human_can_check() {
     println!("wrote {}", out.display());
 }
 
-/// The same "does the picture look like something a game would ship" check, on
-/// the format that is 85% of the corpus: `PVRTII4BPP`.
+/// The same picture check on the format that is 85% of the corpus: `PVRTII4BPP`.
 ///
-/// **A font atlas is the strongest oracle available for this codec**, and it is
-/// why `RussianHud.gxt` is one of the two files rendered here rather than a
-/// prettier one. PVRTC decodes a texel out of *four* words' colours plus its
-/// own modulation, over a word grid stored in Morton order - so a wrong word
-/// order, a wrong bit layout, or the transposition its 4bpp path carries
-/// internally all garble glyph shapes immediately, while leaving the image
-/// smooth enough that a smoothness metric barely separates them (measured: a
-/// deliberately untwiddled control scores only 1.4x rougher). Legible letter-
-/// forms do not survive any of those errors. This one renders the full Latin
-/// and Cyrillic alphabets, crisp, right way up, on a 1024x1024 surface.
+/// **A font atlas is the strongest oracle for this codec**, which is why
+/// `RussianHud.gxt` is rendered here. A wrong word order, bit layout or the 4bpp
+/// path's internal transposition garbles glyph shapes while leaving the image
+/// smooth enough that a smoothness metric barely separates them (an untwiddled
+/// control scores only 1.4x rougher). It renders the full Latin and Cyrillic
+/// alphabets, crisp and upright, on a 1024x1024 surface.
 ///
-/// The assertions below are what a font atlas *is*, so they fail on a decode
-/// that merely looks busy:
+/// The assertions are what a font atlas *is*, so a decode that merely looks busy
+/// fails:
 ///
 /// - **Near-monochrome.** The face is white; a bit layout that mixed channels
-///   would tint it, and the three channels are read from three different bit
-///   fields in both colour modes.
-/// - **Bimodal alpha.** Glyph or background, with anti-aliasing in between -
-///   not the smeared middle a wrong modulation decode gives.
+///   would tint it (the three channels come from three different bit fields).
+/// - **Bimodal alpha.** Glyph or background with anti-aliasing between, not the
+///   smeared middle a wrong modulation decode gives.
 fn font_atlas_looks_like_a_font(rgba: &[[u8; 4]]) {
     let monochrome = rgba
         .iter()
@@ -390,11 +355,9 @@ fn font_atlas_looks_like_a_font(rgba: &[[u8; 4]]) {
     println!(
         "font atlas: {monochrome:.4} monochrome, {bimodal:.4} bimodal alpha, {clear:.4} clear"
     );
-    // Measured 2026-08-27: 1.0000 monochrome, 0.8221 bimodal, 0.6390 clear.
-    // The thresholds sit below those with room for a rounding difference and
-    // nowhere near enough room for a wrong decode - a garbled atlas loses the
-    // monochrome property outright, since the three channels come out of three
-    // different bit fields in both of this codec's colour modes.
+    // Measured 2026-08-27: 1.0000 monochrome, 0.8221 bimodal, 0.6390 clear. The
+    // thresholds sit below with room for rounding but not for a wrong decode,
+    // which loses the monochrome property outright.
     assert!(
         monochrome > 0.99,
         "font is white, got {monochrome:.4} monochrome"
@@ -422,8 +385,7 @@ fn the_pvrtc_textures_decode_to_something_a_human_can_check() {
     );
     font_atlas_looks_like_a_font(&font);
 
-    // A game-mode icon: two flat tones on transparency, so it exercises the
-    // alpha path on art with a shape a reader can name rather than on text.
+    // A game-mode icon: two flat tones on transparency, exercising the alpha path.
     render_checkerboard(
         &mut archive,
         "data/fe/images/detonator.gxt",
@@ -431,31 +393,22 @@ fn the_pvrtc_textures_decode_to_something_a_human_can_check() {
     );
 }
 
-/// `Argb8888`'s own picture check: 2048's Zone/Detonator "Track" speed-class
-/// art, the corpus `docs/formats/gxt.md` left this format's tiling order and
-/// channel order open on.
+/// `Argb8888`'s picture check: 2048's Zone/Detonator "Track" speed-class art, the
+/// corpus `docs/formats/gxt.md` left the tiling and channel order open on.
 ///
-/// **Why these three files rather than a prettier one**: an earlier pass
-/// measured, from raw bytes alone before either question was settled, that
-/// `data/Tex/zoneModeTrack{0..14}.gxt` visibly changes shape across the
-/// stage ladder while `data/Tex/zoneMode{0..14}.gxt` (the "general" set,
-/// swept separately below) stays a flat, identical blank across all fifteen,
-/// so a correct decode has a real prediction to check itself against, not
-/// just "does this look like art".
+/// Raw bytes showed `data/Tex/zoneModeTrack{0..14}.gxt` changing shape across the
+/// stage ladder while `data/Tex/zoneMode{0..14}.gxt` (the "general" set, swept
+/// below) is a flat, identical blank, so a correct decode has a real prediction
+/// to check against.
 ///
-/// Two invariants a wrong tiling order or a wrong channel order would not
-/// both survive:
+/// Two invariants a wrong tiling or channel order would not both survive:
 ///
-/// - **Opaque fraction is pinned identically across all three stages**,
-///   `2048 / 65536` texels (measured 2026-08-28) - the stencil mask's *area*
-///   does not grow with the stage ladder, only its *shape* does. A wrong
-///   tiling order scrambles which texels are opaque, not how many, so this
-///   alone would not catch it; it is here as a decode sanity check the
-///   shape-difference assertion below does not cover.
-/// - **No two stages decode to the same texel multiset.** The "Track" set is
-///   supposed to be the one that visibly escalates - `zoneMode0.gxt`'s own
-///   ground truth below is the control that shows what a *flat* set decodes
-///   to instead (a single solid colour, checked directly).
+/// - **Opaque fraction is `2048 / 65536` texels on all three stages** (measured
+///   2026-08-28): the stencil mask's *area* is constant, only its *shape*
+///   changes. A wrong tiling scrambles which texels are opaque, not how many,
+///   so this is a sanity check the shape assertion does not cover.
+/// - **No two stages decode to the same texel multiset.** `zoneMode0.gxt`'s
+///   ground truth below is the control: a flat set decodes to one solid colour.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages() {
@@ -489,11 +442,9 @@ fn the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages() {
         }
     }
 
-    // The control: the "general" set at the same stage is the flat
-    // placeholder `docs/formats/gxt.md` already found by byte pattern -
-    // every one of fifteen files identical, decoding to one solid colour.
-    // Checked here directly rather than trusted from the earlier byte-level
-    // finding, now that this format actually decodes.
+    // The control: the "general" set is the flat placeholder `docs/formats/gxt.md`
+    // found by byte pattern (fifteen identical files, one solid colour), checked
+    // here by decoding.
     let blank = archive
         .read_path("data/tex/zonemode0.gxt")
         .expect("zoneMode0.gxt");
@@ -512,18 +463,15 @@ fn the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages() {
 /// Wipeout HD's `.gtf` decode is ground truth for 2048's `PVRTII4BPP` one,
 /// over the 2,284 textures the two titles share.
 ///
-/// **This is the strongest evidence this format's decode has**, and it exists
-/// because 2048's DLC re-ships HD/Fury's circuits and its whole fourteen-team
-/// roster: the *same authored texture* is on the PS3 disc as a `.gtf` in a BC
-/// format this crate decoded and rendered long before this pass, and in the
-/// Vita package as a `.gxt` in `PVRTII4BPP`. It is the same HD-as-oracle
-/// method that settled the `WO Track` point tail, 2048's vertex normal and its
-/// `Uv1` - see `docs/formats/2048-rcsmodel.md`.
+/// **The strongest evidence this format's decode has.** 2048's DLC re-ships
+/// HD/Fury's circuits and fourteen-team roster, so the *same authored texture*
+/// is a BC `.gtf` on the PS3 disc and a `PVRTII4BPP` `.gxt` in the Vita package:
+/// the HD-as-oracle method that settled the `WO Track` point tail, 2048's vertex
+/// normal and its `Uv1` (`docs/formats/2048-rcsmodel.md`).
 ///
-/// Two lossy codecs never agree bit for bit on one source image, so the
-/// measurement is a *comparison of comparisons*, with the controls carrying
-/// the argument. Measured 2026-08-27, mean absolute per-channel difference out
-/// of 255, median over 2,284 pairs:
+/// Two lossy codecs never agree bit for bit, so the measurement is a *comparison
+/// of comparisons*. Measured 2026-08-27, mean absolute per-channel difference of
+/// 255, median over 2,284 pairs:
 ///
 /// | Compared against HD's own decode | Median |
 /// | --- | ---: |
@@ -532,15 +480,13 @@ fn the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages() {
 /// | the same payload read in raster word order | 34.60 |
 /// | a different texture of the same size (chance) | 59.74 |
 ///
-/// The flipped row is what says the Vita's rows are top-down where the PS3's
-/// are bottom-up, measured rather than assumed. The raster row is the wrong
-/// answer this codec is most likely to give, and it lands nine times further
-/// away. The last row is what "no relationship at all" looks like.
+/// The flipped row says the Vita's rows are top-down where the PS3's are
+/// bottom-up (measured). The raster row is the wrong answer most likely to
+/// occur, nine times further away; the last row is "no relationship".
 ///
-/// The threshold below is on the *median*, deliberately: a quarter of the
-/// pairs are genuinely different art that happens to share a basename (several
-/// circuits each ship their own `billboard3`), so a mean or a worst case would
-/// be measuring the pairing, not the decode.
+/// The threshold is on the *median*: a quarter of the pairs are different art
+/// sharing a basename (several circuits ship their own `billboard3`), so a mean
+/// or worst case would measure the pairing, not the decode.
 #[test]
 #[ignore = "needs both the Vita package and the decrypted PS3 disc"]
 fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
@@ -550,8 +496,8 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
         return;
     }
 
-    // Which basenames are worth decoding on the HD side at all - collected
-    // first so the sweep does not decode 3,588 PS3 textures to use 2,284.
+    // Collect the basenames worth decoding on the HD side first, so the sweep does
+    // not decode 3,588 PS3 textures to use 2,284.
     let mut wanted: BTreeMap<String, Vec<(usize, String)>> = BTreeMap::new();
     let mut archives: Vec<oag_assets::psarc::Archive> = packages
         .iter()
@@ -673,7 +619,7 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
 }
 
 /// The seven archives Wipeout HD's disc carries, as
-/// `crates/formats/tests/gtf_ground_truth.rs` names them.
+/// `crates/texture/tests/gtf_ground_truth.rs` names them.
 const HD_ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",
     "PS3_GAME/USRDIR/DATA01.PSARC",
@@ -684,9 +630,9 @@ const HD_ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA06.PSARC",
 ];
 
-/// Every Wipeout 2048 package that is present - the base and both DLC
-/// archives. **The DLC halves are load-bearing here**: they are where the
-/// re-shipped HD/Fury circuits live, and so where most of the shared art is.
+/// Every Wipeout 2048 package present: the base and both DLC archives.
+/// **The DLC halves are load-bearing**: the re-shipped HD/Fury circuits, and most
+/// of the shared art, live there.
 fn vita_packages() -> Vec<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")

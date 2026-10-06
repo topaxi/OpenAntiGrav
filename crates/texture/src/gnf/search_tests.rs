@@ -1,22 +1,15 @@
-//! **Superseded** - kept as evidence of a real negative, not the live
-//! tiling theory. See `docs/formats/gnf.md`'s "Tiling" section, "Superseded:
-//! the macro-tile search". This searched `TileMode(13)` as macro-tiled
-//! `Thin_2DThin`; it is actually micro-tiled `Thin_1DThin` (GFD-Studio's own
-//! `TileMode.cs` enum - `Thin_2DThin` is index 14) - which is why this
-//! search scored at chance across its whole space: it was searching the
-//! right hardware family for the wrong array mode. `micro_tile_tests.rs` is
-//! the corrected investigation. `#[ignore]`d, needs real game data, kept
-//! in-crate (rather than as an example under `examples/`) because it needs
-//! `crate::bcn::bc7`, which is `pub(crate)` and invisible outside this
-//! crate.
+//! **Superseded** - kept as evidence of a real negative. See
+//! `docs/formats/gnf.md`'s "Tiling", "Superseded: the macro-tile search". This
+//! searched `TileMode(13)` as macro-tiled `Thin_2DThin`; it is micro-tiled
+//! `Thin_1DThin` (`Thin_2DThin` is index 14), which is why it scored at chance
+//! across its whole space. `micro_tile_tests.rs` is the corrected investigation.
+//! `#[ignore]`d, needs real game data, in-crate because it needs `pub(crate)`
+//! `crate::bcn::bc7`.
 //!
-//! Ported more faithfully than an earlier, deleted attempt: this includes
-//! `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`'s pre-alignment steps
-//! and `HwlReduceBankWidthHeight`'s per-format bank-width/height reduction
-//! (both `egbaddrlib.cpp` in Mesa's MIT `addrlib`), not just the raw
-//! address formula. Judged by pixel match against the oracle across several
-//! differently sized real pairs - not eyeballed on one texture, which is
-//! exactly the mistake the earlier attempt made.
+//! It includes `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`'s pre-alignment
+//! steps and `HwlReduceBankWidthHeight`'s per-format reduction (both
+//! `egbaddrlib.cpp`, Mesa's MIT `addrlib`), not just the raw address formula, and
+//! is judged by pixel match across several differently sized real pairs.
 
 use crate::bcn::bc7;
 use crate::gnf::Texture;
@@ -117,10 +110,9 @@ impl PipeConfig {
     }
 }
 
-/// `pipe_interleave_bytes * bank_interleave` is 256 on every GFX6-8 GPU
-/// (kernel doc, `AMD_FMT_MOD_PIPE_CONFIG` commit) and `m_bankInterleave`
-/// defaults to 1 in every `addrlib` chip class (`egbaddrlib.cpp`
-/// constructor, never reassigned elsewhere) - neither is a search axis.
+/// `pipe_interleave_bytes * bank_interleave` is 256 on every GFX6-8 GPU (kernel
+/// doc, `AMD_FMT_MOD_PIPE_CONFIG` commit) and `m_bankInterleave` defaults to 1 in
+/// every `addrlib` chip class (`egbaddrlib.cpp` constructor): neither is a search axis.
 const PIPE_INTERLEAVE_BYTES: u32 = 256;
 const BANK_INTERLEAVE: u32 = 1;
 
@@ -143,12 +135,11 @@ struct TileConfig {
     aspect: u32,
 }
 
-/// `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`'s pre-alignment steps
-/// plus `HwlReduceBankWidthHeight`, both `egbaddrlib.cpp`, faithfully
-/// ported for a single-sample, BC7 (128 bits/element, thickness 1) surface
-/// with no tile split (`tileSplitBytes` treated as unconstrained, so
-/// `tileSize = 64 * bpp / 8` unconditionally). Returns `None` for a start
-/// `SanityCheckMacroTiled` or the reduction itself rejects.
+/// `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`'s pre-alignment steps plus
+/// `HwlReduceBankWidthHeight` (`egbaddrlib.cpp`), ported for a single-sample BC7
+/// (128 bits/element, thickness 1) surface with no tile split
+/// (`tileSize = 64 * bpp / 8`). `None` for a start `SanityCheckMacroTiled` or the
+/// reduction rejects.
 fn reduce(start: &StartConfig) -> Option<TileConfig> {
     if start.num_banks < start.aspect0 || start.pipe.num_pipes() * start.num_banks < 4 {
         return None; // SanityCheckMacroTiled
@@ -189,8 +180,7 @@ fn reduce(start: &StartConfig) -> Option<TileConfig> {
             aspect = pow_two_align(aspect, macro_aspect_align);
         }
 
-        // Second block: reduce bankHeight, unconditionally attempted next
-        // (not an "else" - the source runs both blocks in sequence).
+        // Second block: reduce bankHeight; the source runs both blocks in sequence.
         if still_greater && bank_height > bank_height_align {
             while still_greater && bank_height > bank_height_align {
                 bank_height >>= 1;
@@ -367,8 +357,7 @@ fn search_the_reduced_tile_config_space_against_multi_size_oracle_pairs() {
         println!("mean MAD {mean:.2}  start={start:?}  reduced={cfg:?}");
     }
 
-    // Per-pair breakdown for the best candidate, so a partial match is
-    // visible rather than hidden behind one averaged number.
+    // Per-pair breakdown for the best candidate, so a partial match shows.
     if let Some((_, _, best)) = results.first() {
         for (path, texture, blob, truth) in &pairs {
             let decoded = decode_with(blob, texture, best);

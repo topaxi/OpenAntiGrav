@@ -1,10 +1,9 @@
 //! PS2 palette-indexed textures: a Graphics Synthesizer upload packet.
 //!
-//! Where the PSP stores a texture as a header, a palette and pixels
-//! ([`crate::texture`]), the PS2 stores the **DMA packet that uploads it**. The
-//! blob is a 13-byte header followed by GIF packets that transfer the texels
-//! and then the palette into GS local memory, so the pixel data is in whatever
-//! layout the GS writes it in rather than in raster order.
+//! Where the PSP stores a header, palette and pixels ([`crate::texture`]), the
+//! PS2 stores the **DMA packet that uploads it**: a 13-byte header, then GIF
+//! packets transferring the texels and palette into GS local memory, so pixels
+//! are in the GS's layout rather than raster order.
 //!
 //! ```text
 //! +0x00  u8    log2 dimensions, high nibble log2(height), low nibble log2(width)
@@ -29,42 +28,37 @@
 //! ```
 //!
 //! Each transfer block is *budgeted* 256 bytes even when it needs fewer, so the
-//! total is `205 + max(texels, 256) + 64 + max(palette, 256)`, but the blocks
-//! themselves sit back to back and the slack lands at the end of the file. A
-//! 4x4 texture is 1,549 bytes with 240 of them trailing padding.
+//! total is `205 + max(texels, 256) + 64 + max(palette, 256)`, but the blocks sit
+//! back to back and the slack lands at the end. A 4x4 texture is 1,549 bytes
+//! with 240 of padding.
 //!
 //! See `docs/formats/ps2-texture.md` for the evidence.
 //!
 //! # The dimensions are stored height first
 //!
-//! Reading `+0x04` as the width decodes every square texture perfectly and
-//! scrambles every other one, which is exactly the kind of half-right that
-//! survives a spot check. `TRXREG` settles it: it is `(width/2, height/2)` in
-//! that order for the 32-bit transfer path, so the pair at `+0x04` is
-//! `(height, width)`.
+//! Reading `+0x04` as the width decodes every square texture and scrambles every
+//! other one, a half-right that survives a spot check. `TRXREG` settles it: it
+//! is `(width/2, height/2)` for the 32-bit transfer path, so the pair at `+0x04`
+//! is `(height, width)`.
 //!
 //! # Three transfer shapes, and the file says which
 //!
-//! `TRXREG` gives the destination rectangle, and dividing the texel byte count
-//! by its area gives the bytes per destination pixel, which identifies the
-//! transfer format without guessing:
+//! `TRXREG` gives the destination rectangle; the texel byte count divided by its
+//! area is the bytes per destination pixel, which identifies the transfer:
 //!
-//! - `(width/2, height/2)` at 4 bytes each: 8-bit texels blitted as **PSMCT32**,
-//!   the usual PS2 trick for uploading indexed textures. The stored bytes are
-//!   pre-swizzled into GS `PSMT8` order and have to be permuted back.
-//! - `(width, height)` at 1 byte each: a direct `PSMT8` transfer, so the stored
-//!   bytes are already in raster order. The game uses this whenever the width is
-//!   8 or less, where the halving above cannot produce a valid rectangle.
+//! - `(width/2, height/2)` at 4 bytes each: 8-bit texels blitted as **PSMCT32**.
+//!   The stored bytes are pre-swizzled into GS `PSMT8` order and permuted back.
+//! - `(width, height)` at 1 byte each: a direct `PSMT8` transfer, raster order.
+//!   Used whenever the width is 8 or less, where halving gives no valid rectangle.
 //! - `(width/2, height/4)` at 4 bytes each: the same trick for 4-bit texels
-//!   (`PSMT4`). Five blobs on the disc, and they are the five PS2 font atlases:
-//!   see [`psmt4_offset`] and [`crate::fnt`].
+//!   (`PSMT4`). Five blobs on the disc, the five PS2 font atlases: see
+//!   [`psmt4_offset`] and [`crate::fnt`].
 //!
 //! # Alpha is 0-128, not 0-255
 //!
-//! The GS treats 128 as full intensity through the texture-modulate path, the
-//! same convention `oag_vex::vex` documents for vertex colour. [`Ps2Texture`]
-//! keeps the palette exactly as stored and [`Ps2Texture::to_rgba`] doubles it,
-//! so a caller that wants the raw bytes still has them.
+//! The GS treats 128 as full intensity through texture-modulate, as
+//! `oag_vex::vex` documents for vertex colour. [`Ps2Texture`] keeps the palette
+//! as stored and [`Ps2Texture::to_rgba`] doubles it.
 
 /// Bytes of header before the GS state block.
 pub const HEADER_LEN: usize = 13;
@@ -86,9 +80,8 @@ pub const CLUT_SETUP_QWORDS: usize = 4;
 
 /// Smallest block the game transfers, in bytes.
 ///
-/// Each block is *budgeted* this much even when it needs less, which is why a
-/// 4x4 texture is 1,549 bytes rather than 1,309. The blocks themselves sit back
-/// to back and the slack lands at the end of the file.
+/// Each block is *budgeted* this much even when it needs less (a 4x4 texture is
+/// 1,549 bytes, not 1,309); the slack lands at the end of the file.
 pub const MIN_TRANSFER_BYTES: usize = 256;
 
 /// `GIFtag` `FLG` value for an image-mode transfer.
@@ -109,8 +102,7 @@ pub enum Error {
     },
     /// The log2 byte at `+0x00` disagrees with the dimensions at `+0x04`.
     ///
-    /// The two encode the same thing, so a disagreement means this is not a
-    /// texture rather than that it is a damaged one.
+    /// The two encode the same thing, so a disagreement means not a texture.
     DimensionMismatch {
         /// The packed log2 byte.
         packed: u8,
@@ -257,11 +249,10 @@ fn padded(bytes: usize) -> usize {
 
 /// Reads and checks the header without touching the pixel data.
 ///
-/// Every field here is cross-checked against another one, which is what makes
-/// this safe to run over a whole archive as a classifier: the packed log2 byte
-/// must agree with the dimension words, both `GIFtag`s must declare exactly the
-/// byte counts the dimensions imply, and the total must come out at the blob's
-/// actual length.
+/// Every field is cross-checked against another, so this is safe as a classifier
+/// over a whole archive: the log2 byte must agree with the dimension words, both
+/// `GIFtag`s must declare the byte counts the dimensions imply, and the total
+/// must equal the blob's length.
 pub fn header(data: &[u8]) -> Result<Header> {
     if data.len() < TEXEL_OFFSET {
         return Err(Error::TooShort { got: data.len() });
@@ -276,8 +267,7 @@ pub fn header(data: &[u8]) -> Result<Header> {
     if !matches!(bits_per_pixel, 4 | 8) {
         return Err(Error::UnsupportedDepth { bits_per_pixel });
     }
-    // Both nibbles are a shift count, so anything above 15 would overflow; the
-    // largest texture on either disc is 512x512, which is a shift of 9.
+    // Both nibbles are a shift count; above 15 would overflow (largest on disc is 9).
     let log_height = u32::from(packed >> 4);
     let log_width = u32::from(packed & 0x0f);
     if 1u32.checked_shl(log_height) != Some(u32::from(height))
@@ -296,11 +286,9 @@ pub fn header(data: &[u8]) -> Result<Header> {
 
     check_giftag(data, TEXEL_GIFTAG_OFFSET, texel_bytes, false)?;
 
-    // The palette packet follows the texels **unpadded**; the padding that
-    // brings each transfer up to its 256-byte minimum lands at the end of the
-    // file instead. Both blocks are at or above the minimum on all but 70 of
-    // the disc's textures, which is why padding the offset here reads correctly
-    // almost everywhere and then falls apart on the small ones.
+    // The palette packet follows the texels **unpadded**; padding to the 256-byte
+    // minimum lands at the end of the file. Padding the offset here would read
+    // correctly on all but 70 of the disc's textures, the small ones.
     let clut_setup = TEXEL_OFFSET + texel_bytes;
     let total_bytes =
         TEXEL_OFFSET + padded(texel_bytes) + CLUT_SETUP_QWORDS * 16 + padded(palette_bytes);
@@ -359,8 +347,7 @@ fn check_giftag(data: &[u8], offset: usize, expected: usize, last: bool) -> Resu
 
 /// Whether `data` is a PS2 texture.
 ///
-/// Cheaper than [`parse`] and just as strict: [`header`] already checks every
-/// declared size against every other one.
+/// Cheaper than [`parse`] and as strict: [`header`] checks every declared size.
 #[must_use]
 pub fn looks_like_ps2_texture(data: &[u8]) -> bool {
     header(data).is_ok()
@@ -371,29 +358,23 @@ pub fn looks_like_ps2_texture(data: &[u8]) -> bool {
 /// # Errors
 ///
 /// Every way [`header`] can fail, plus [`Error::UnsupportedLayout`] for a
-/// swizzled blob too small for its own permutation: [`Layout::Psmt4`] below one
-/// 128x128 GS page, and [`Layout::Psmt8`] narrower than 16 or shorter than 4.
-/// Neither shape exists on either disc. See [`psmt4_offset`] and
-/// [`psmt8_offset`].
+/// swizzled blob too small for its permutation: [`Layout::Psmt4`] below one
+/// 128x128 GS page, [`Layout::Psmt8`] narrower than 16 or shorter than 4.
+/// Neither exists on either disc. See [`psmt4_offset`] and [`psmt8_offset`].
 pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
     let head = header(data)?;
-    // A PSMT4 page is 128x128 texels and [`psmt4_offset`]'s transposition
-    // works inside one, so a texture narrower or shorter than a page would
-    // address source pixels that are not there. Nothing on the disc is: the
-    // five are 256x128, 512x256 and 512x512. Refusing beats indexing past the
-    // end of the blob.
+    // [`psmt4_offset`]'s transposition works inside a 128x128 page; a smaller
+    // texture would address missing pixels. The five on disc are 256x128,
+    // 512x256 and 512x512.
     if head.layout == Layout::Psmt4 && (head.width < 128 || head.height < 128) {
         return Err(Error::UnsupportedLayout(head.layout));
     }
-    // The same guard for PSMT8, which went without one until finding F1 of the
-    // 2026-08-18 review. [`psmt8_offset`] is a permutation of `0..width *
-    // height` only for widths of 16 or more and heights of 4 or more - the
-    // header already forces both to powers of two - and below that it indexes
-    // past the texels: a self-consistent 8x8 blob reaches byte 77 of a 64-byte
-    // buffer and panics the parser. `Archives::read_font` and any archive
-    // browse hand it whatever the file claims, so the shape has to be refused
-    // rather than trusted. The disc stores its narrow textures
-    // [`Layout::Linear`] for exactly this reason.
+    // The same guard for PSMT8: [`psmt8_offset`] is a permutation of
+    // `0..width * height` only for widths of 16+ and heights of 4+ (both powers
+    // of two), and below that it indexes past the texels - a self-consistent
+    // 8x8 blob reaches byte 77 of 64 and would panic. Archive browses hand the
+    // parser whatever the file claims. The disc stores narrow textures
+    // [`Layout::Linear`] for this reason.
     if head.layout == Layout::Psmt8 && (head.width < 16 || head.height < 4) {
         return Err(Error::UnsupportedLayout(head.layout));
     }
@@ -444,13 +425,11 @@ pub fn parse(data: &[u8]) -> Result<Ps2Texture> {
 /// Byte offset of texel `(x, y)` inside a `PSMT8`-swizzled block.
 ///
 /// The GS lays 8-bit textures out in 16x16 blocks of 16x4 columns with a
-/// two-of-four row swap, which is what the `swap` and `byte_select` terms are.
-/// This is a permutation of `0..width * height` for every power-of-two width of
-/// 16 or more **and height of 4 or more**, which the tests assert; the narrower
-/// textures on the disc are stored [`Layout::Linear`] precisely because it is
-/// not one below that. Outside those bounds it indexes past the texels rather
-/// than merely scrambling them, so [`parse`] refuses the shape - a guard PSMT4
-/// had from the start and this did not until 2026-08-18.
+/// two-of-four row swap (the `swap` and `byte_select` terms). This is a
+/// permutation of `0..width * height` for every power-of-two width of 16 or
+/// more **and height of 4 or more**, which the tests assert; narrower textures
+/// on the disc are stored [`Layout::Linear`]. Below those bounds it indexes
+/// past the texels, so [`parse`] refuses the shape.
 #[must_use]
 pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
     let block = (y & !0xf) * width + (x & !0xf) * 2;
@@ -468,41 +447,23 @@ pub fn psmt8_offset(x: usize, y: usize, width: usize) -> usize {
 ///
 /// # Derived from [`psmt8_offset`], not from a table
 ///
-/// Both offsets answer the same question - where in a **linear `PSMCT32`
-/// source image** does one indexed texel live - because the blob is the source
-/// of a blit rather than a copy of GS memory. That makes the two formulas the
-/// same shape with three differences, each of which follows from the geometry:
-///
-/// | | `PSMT8` | `PSMT4` |
-/// | --- | --- | --- |
-/// | source rectangle | `(width/2, height/2)` | `(width/2, height/4)` |
-/// | page | 128x64 texels | 128x128 texels |
-/// | block | 16x16 texels | 32x16 texels |
-///
-/// A `PSMCT32` page is 64x32 and its block is 8x8, so `PSMT8`'s page and block
-/// are both exactly twice the source's in both axes. Its blocks therefore land
-/// in the source in plain raster order and no block table is needed - which is
-/// why [`psmt8_offset`] has no page term at all. `PSMT4`'s page is 2x wider and
-/// 4x taller than the source's while its block is 4x wider and 2x taller, so
-/// the two disagree: within a page, the block at block-column `bx`, block-row
-/// `by` sits at source block-column `by`, source block-row `bx`. That
-/// transposition is the whole of `blockTable4` being the transpose of
-/// `blockTable32`, and it is the only new fact here.
-///
-/// Inside a block the split of the coordinates follows from the counts: a
-/// 32x16 `PSMT4` block is 512 nibbles over an 8x8 patch of 32-bit source
-/// pixels, so `x`'s low three bits pick the source column, `x`'s next two bits
-/// pick the byte within that word, `y`'s bit 1 picks the nibble, and `y`'s
-/// remaining bits pick the source row through the same two-of-four row swap
-/// [`psmt8_offset`] uses.
+/// Both answer where in a **linear `PSMCT32` source image** an indexed texel
+/// lives (the blob is the source of a blit, not GS memory). `PSMT8`: source
+/// `(width/2, height/2)`, page 128x64, block 16x16. `PSMT4`: source `(width/2,
+/// height/4)`, page 128x128, block 32x16. `PSMT8`'s blocks land in raster order,
+/// so it needs no page term; within a `PSMT4` page the block at block-column `bx`,
+/// block-row `by` sits at source block-column `by`, source block-row `bx` (the
+/// transposition is the only new fact; `blockTable4` is the transpose of
+/// `blockTable32`). Inside a block, `x`'s low three bits pick the source column,
+/// its next two the byte within that word, `y`'s bit 1 the nibble, and `y`'s
+/// remaining bits the source row via [`psmt8_offset`]'s two-of-four row swap.
 ///
 /// # Evidence
 ///
-/// A permutation of `0..width * height` at every shape on the disc, which the
-/// tests assert. The non-transposed reading is **not** a permutation and dies
-/// on that test alone. Decoded, the five `PSMT4` blobs are the five PS2 font
-/// atlases, and every lit texel of `pulse_text` lands inside a glyph box its
-/// own `.fnt` declares. See `docs/formats/ps2-texture.md`.
+/// A permutation of `0..width * height` at every disc shape (asserted by the
+/// tests; the non-transposed reading fails it). The five blobs are the PS2 font
+/// atlases and every lit texel of `pulse_text` lands inside a glyph box its `.fnt`
+/// declares. See `docs/formats/ps2-texture.md`.
 #[must_use]
 pub fn psmt4_offset(x: usize, y: usize, width: usize) -> (usize, usize) {
     // Pages tile the source in raster order, and a PSMT4 page covers a whole
@@ -519,11 +480,10 @@ pub fn psmt4_offset(x: usize, y: usize, width: usize) -> (usize, usize) {
 
 /// Reorders a 256-entry palette out of the GS's `CSM1` layout.
 ///
-/// A 256-entry CLUT is uploaded as a 16x16 `PSMCT32` rectangle, which puts
-/// entries 8-15 and 16-23 of each 32 the other way round. Getting this wrong
-/// leaves the shapes intact and bands the colours every eight indices, so it is
-/// worth knowing what the failure looks like. A 16-entry CLUT is a plain 8x2
-/// rectangle and needs no reordering.
+/// A 256-entry CLUT is uploaded as a 16x16 `PSMCT32` rectangle, which swaps
+/// entries 8-15 and 16-23 of each 32. Getting it wrong leaves shapes intact and
+/// bands the colours every eight indices. A 16-entry CLUT is a plain 8x2
+/// rectangle.
 #[must_use]
 pub fn unswizzle_clut(stored: &[u8], bits_per_pixel: u8) -> Vec<[u8; 4]> {
     let entries: Vec<[u8; 4]> = stored.as_chunks::<4>().0.to_vec();
@@ -537,8 +497,7 @@ pub fn unswizzle_clut(stored: &[u8], bits_per_pixel: u8) -> Vec<[u8; 4]> {
 
 /// [`Ps2Texture::roughness`] over an arbitrary index buffer.
 ///
-/// Free-standing so a caller can score a *different* reading of the same texels
-/// as a control.
+/// Free-standing so a caller can score a *different* reading as a control.
 #[must_use]
 pub fn roughness_of(indices: &[u8], width: usize, height: usize) -> u64 {
     if width < 2 || height < 2 || indices.len() < width * height {
@@ -560,19 +519,16 @@ impl Ps2Texture {
     /// Total variation of the decoded indices: the sum of `|delta|` between
     /// horizontally and vertically adjacent pixels.
     ///
-    /// This exists to **check this decoder**, not to describe the texture. Any
-    /// wrong permutation of the texels scatters pixels that belong together, so
-    /// it raises local discontinuity; the right one minimises it. Comparing this
-    /// against the same texels read the other way round is what says the
-    /// [`Layout::Psmt8`] permutation is correct rather than merely bijective,
-    /// and the ground-truth test runs that comparison over the whole disc.
+    /// This **checks the decoder**, not describes the texture: any wrong
+    /// permutation scatters pixels that belong together and raises local
+    /// discontinuity. Comparing against the same texels read the other way says
+    /// the [`Layout::Psmt8`] permutation is correct, not merely bijective; the
+    /// ground-truth test runs it over the whole disc.
     ///
-    /// The neighbour-*asymmetry* test that [`crate::texture::Texture::looks_swizzled`]
-    /// uses does **not** work here and was tried first: PSP swizzle moves data in
-    /// 16-byte rows, so reading it linearly leaves columns correlated and rows
-    /// not, but the GS `PSMT8` permutation is local in both axes and the
-    /// asymmetry barely moves (541 textures flagged decoded against 531 read
-    /// raw - no signal at all). Total variation separates them cleanly.
+    /// The neighbour-*asymmetry* test of [`crate::texture::Texture::looks_swizzled`]
+    /// does **not** work here: PSP swizzle moves 16-byte rows, but the GS
+    /// `PSMT8` permutation is local in both axes (541 textures flagged decoded
+    /// against 531 read raw, no signal). Total variation separates them.
     #[must_use]
     pub fn roughness(&self) -> u64 {
         let (w, h) = (usize::from(self.width), usize::from(self.height));
@@ -590,8 +546,7 @@ impl Ps2Texture {
                 .palette
                 .get(index as usize)
                 .copied()
-                // Cannot happen for 8bpp with a 256-entry palette, but magenta
-                // is a louder failure than a silent black.
+                // Cannot happen for 8bpp with a 256-entry palette; magenta beats silent black.
                 .unwrap_or([255, 0, 255, 128]);
             out.extend_from_slice(&[colour[0], colour[1], colour[2], colour[3].saturating_mul(2)]);
         }

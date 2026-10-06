@@ -14,32 +14,24 @@
 //!
 //! # What this asserts, and what it deliberately does not
 //!
-//! **`decode` now untiles `TileMode(13)` (`Thin_1DThin`) BC7 - see
-//! `docs/formats/gnf.md`'s "Tiling" section for the evidence trail that
-//! closed the open question this test used to pin (every entry refused by
-//! name).** A real, base-level-clean `Thin_1DThin` entry now decodes; one
-//! whose base level carries a block with no valid BC7 mode bit - the same
-//! PSARC-level missing/garbage-content population `docs/formats/psarc.md`'s
-//! "Block data location" section documents family-wide - is refused by name
-//! with [`oag_texture::gnf::Error::CorruptBlocks`] instead, never decoded
-//! around. `crates/texture/examples/gnf_frontend_census.rs` measures the
-//! split on the front end's own sprite sheet specifically.
+//! **`decode` untiles `TileMode(13)` (`Thin_1DThin`) BC7**; the evidence is
+//! `docs/formats/gnf.md`'s "Tiling" section. A base-level-clean entry decodes;
+//! one whose base level has a block with no valid BC7 mode bit (the PSARC-level
+//! missing/garbage-content population of `docs/formats/psarc.md`'s "Block data
+//! location") is refused with [`oag_texture::gnf::Error::CorruptBlocks`].
+//! `crates/texture/examples/gnf_frontend_census.rs` measures the split on the
+//! front end's sprite sheet.
 //!
-//! What this corpus sweep actually is a fact about:
+//! What the sweep asserts:
 //!
-//! 1. `Texture::decode` never panics on any real, `GNF `-valid entry across
-//!    the whole corpus - a decode-time analogue of
-//!    `omega_gnf_ground_truth.rs`'s own parse-time sweep.
-//! 2. Every entry's [`oag_texture::gnf::Error`] is one of the four
-//!    `decode` can raise for this corpus (`Tiled` no real entry here has
-//!    triggered since every one declares 8 or 13; `CorruptBlocks`,
-//!    `UnsupportedFormat`, `DataOutOfBounds`), and a still-tiled entry's
-//!    [`oag_texture::gnf::Error::Tiled`] names the *exact* `tile_mode` byte
-//!    the descriptor itself declares - not just "an error happened".
-//! 3. `data08.psarc`'s `Data/fe/` subtree specifically (the front-end
-//!    images and fonts) - named in the task brief as the set to sweep in
-//!    full - gets the same treatment, isolated from the rest so a reader
-//!    can see this specific, user-visible asset class is covered.
+//! 1. `Texture::decode` never panics on any `GNF `-valid entry in the corpus, the
+//!    decode-time analogue of `omega_gnf_ground_truth.rs`'s parse-time sweep.
+//! 2. Every entry's [`oag_texture::gnf::Error`] is one `decode` can raise here
+//!    (`Tiled` has not triggered since every entry declares 8 or 13;
+//!    `CorruptBlocks`, `UnsupportedFormat`, `DataOutOfBounds`), and a `Tiled`
+//!    error names the *exact* `tile_mode` the descriptor declares.
+//! 3. `data08.psarc`'s `Data/fe/` subtree (front-end images and fonts) is swept in
+//!    full and isolated, so this user-visible asset class is visibly covered.
 
 use std::path::PathBuf;
 
@@ -72,16 +64,12 @@ fn open_patch(name: &str) -> Option<Archive> {
     Some(Archive::open_file(&path).unwrap_or_else(|e| panic!("open {name}: {e}")))
 }
 
-/// Runs `decode` over every `.gnf` entry `paths` names in `archive`,
-/// asserting it never panics and, when it errs, that the error is one this
-/// module's own contract promises - [`Error::Tiled`]'s own `tile_mode`
-/// checked against the descriptor's, not just "an error came back".
-/// Returns `(decoded, corrupt, other_error, unparsed)` counts - `unparsed`
-/// is the still-open "garbage"/"all-zero" population `docs/formats/psarc.md`
-/// measures, already covered for panics by `omega_gnf_ground_truth.rs`, not
-/// this function's own concern beyond counting it; `corrupt` is
-/// [`Error::CorruptBlocks`], the base-level-only refusal this test's own doc
-/// comment explains.
+/// Runs `decode` over every `.gnf` entry `paths` names in `archive`, asserting it
+/// never panics and that any error is one the contract promises
+/// ([`Error::Tiled`]'s `tile_mode` checked against the descriptor's). Returns
+/// `(decoded, corrupt, other_error, unparsed)`; `unparsed` is the "garbage"/
+/// "all-zero" population of `docs/formats/psarc.md`, already covered for panics by
+/// `omega_gnf_ground_truth.rs`, and `corrupt` is [`Error::CorruptBlocks`].
 fn decode_all(
     archive: &mut Archive,
     paths: &[String],
@@ -227,16 +215,12 @@ fn patch_data09_gnf_entries_decode_or_refuse_by_name() {
     check_archive(|| open_patch(PATCH_ARCHIVES[3]), PATCH_ARCHIVES[3], (0, 1));
 }
 
-/// `data08.psarc`'s `Data/fe/` subtree specifically - the front-end images
-/// and fonts the task brief named directly (`Data/fe/images/*.gnf`,
-/// `Data/fe/fonts/*.gnf`) - swept in full rather than sampled, since it is
-/// small enough to (312 `.gnf` entries in the whole archive, per
-/// `docs/formats/gnf.md`'s census) and is exactly the asset class a reader
-/// would check first. Asserts `decoded > 0` outright, not just
-/// `decoded + corrupt + other > 0` the way the whole-archive sweeps above
-/// do - `crates/texture/examples/gnf_frontend_census.rs` measured 219 of
-/// this exact subtree drawing clean, so a regression that drops this back
-/// to zero real pictures is the one this test exists to catch.
+/// `data08.psarc`'s `Data/fe/` subtree (`Data/fe/images/*.gnf`,
+/// `Data/fe/fonts/*.gnf`), swept in full (312 `.gnf` entries in the archive, per
+/// `docs/formats/gnf.md`'s census). Asserts `decoded > 0` outright, not just
+/// `decoded + corrupt + other > 0` as the whole-archive sweeps do:
+/// `crates/texture/examples/gnf_frontend_census.rs` measured 219 of this subtree
+/// drawing clean, so a drop to zero real pictures is what this catches.
 #[test]
 #[ignore]
 fn data08_fe_gnf_entries_decode_or_refuse_by_name() {

@@ -9,24 +9,22 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-texture --run-ignored all \
 //!     -E 'binary(gtf_ground_truth)'
 //! ```
 //!
 //! # Why the sweep is the test
 //!
-//! [`oag_texture::gtf::Gtf::parse`] refuses a blob whose declared texel length
-//! is not what its own descriptor implies, and that length is a function of the
-//! format, both dimensions, the mip count, the cubemap flag and the pitch. So
-//! "all 7,333 parse" is not a claim that nothing crashed: it is five independent
-//! fields agreeing with a sixth, 7,333 times, over a corpus that runs 3x1 to
-//! 2048x2048 with ten distinct format bytes and 131 non-power-of-two textures.
+//! [`oag_texture::gtf::Gtf::parse`] refuses a blob whose declared texel length is
+//! not what its descriptor implies (a function of format, dimensions, mip count,
+//! cubemap flag and pitch). So "all 7,333 parse" is five independent fields
+//! agreeing with a sixth, 7,333 times, over a corpus running 3x1 to 2048x2048 with
+//! ten format bytes and 131 non-power-of-two textures.
 //!
-//! The decode is checked a different way, because there is no length invariant
-//! for pixels. [`the_dxt_endpoints_are_little_endian_inside_a_big_endian_file`]
-//! decodes both readings of a large sample and compares how smooth each comes
-//! out - the test that settles the question, and the same one
-//! `oag_texture::ps2_texture` uses for its swizzle permutation.
+//! The decode is checked differently, since pixels have no length invariant:
+//! [`the_dxt_endpoints_are_little_endian_inside_a_big_endian_file`] decodes both
+//! readings of a large sample and compares smoothness, as
+//! `oag_texture::ps2_texture` does for its swizzle permutation.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -150,18 +148,15 @@ fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
                 assert_eq!(rgba.len(), (w * h) as usize, "{path}");
                 decoded += 1;
             }
-            // Nothing on the disc reaches this any more - every format byte
-            // in `FORMATS` decodes. Kept so that a format this reader does
-            // not know shows up as a count rather than a panic.
+            // Nothing on the disc reaches this: every format byte in `FORMATS`
+            // decodes. Kept so an unknown format shows as a count, not a panic.
             Err(gtf::Error::UnknownFormat { .. }) => unknown_format += 1,
             Err(gtf::Error::Cubemap) => cubemaps += 1,
             Err(e) => panic!("{path}: {e}"),
         }
     });
 
-    // The only refusals left are cubemaps, which need `face_to_rgba`. The 9
-    // `B8` files that used to sit in `unknown_format` now decode, as the 44
-    // swizzled `A8R8G8B8`/`A8B8G8R8` did before them - see
+    // The only refusals left are cubemaps, which need `face_to_rgba`; see
     // `docs/formats/gtf.md`.
     println!("{decoded} decoded, {unknown_format} unknown format, {cubemaps} cubemaps");
     assert_eq!((decoded, unknown_format, cubemaps), (4513, 0, 8));
@@ -173,17 +168,12 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
     let Some(image) = image() else {
         return;
     };
-    // Only 53 files on the whole disc are swizzled and not block-compressed -
-    // 37 `A8R8G8B8`, 7 `A8B8G8R8` and the 9 `B8` ambient shadows - so the whole
-    // disc is a small enough sweep, no archive sampling needed, unlike the DXT
-    // endianness question this mirrors.
+    // Only 53 files on the disc are swizzled and not block-compressed (37
+    // `A8R8G8B8`, 7 `A8B8G8R8`, 9 `B8`), so the whole disc is a small sweep with no
+    // sampling.
     //
-    //
-    // **No named exceptions, and there used to be.** Three files were carried
-    // as ones the metric could not see past; all three were an artefact of
-    // measuring roughness along rows only, and [`roughness_2d`] retires them.
-    // A list of files a test is allowed to fail on is the thing to remove
-    // when a better metric makes it removable.
+    // **No named exceptions.** Three files once were, an artefact of measuring
+    // roughness along rows only; [`roughness_2d`] retires them.
     let (mut smoother, mut flat, mut rougher) = (0usize, 0usize, 0usize);
     for_every_gtf(&image, |path, blob| {
         let parsed = Gtf::parse(blob).expect("parses");
@@ -193,11 +183,8 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
         }
         let (width, height) = texture.level_size(0);
         let native = texture.to_rgba(blob).expect("decodes");
-        // The wrong reading: the same bytes, addressed as if the `0x20` bit
-        // had been misread and this were raster order after all - the
-        // mistake `Error::Swizzled` used to guard against by refusing outright
-        // rather than risk. `linear` forced regardless of what the descriptor
-        // says, which is exactly the bug being checked was never shipped.
+        // The wrong reading: the same bytes addressed as raster order, `linear`
+        // forced regardless of the descriptor (as if the `0x20` bit were misread).
         let range = texture.level_range(0);
         let texels = &blob[range];
         let mut wrong = gtf::decode_level(
@@ -209,19 +196,16 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
             true,
         )
         .expect("decodes");
-        // **The same remap on both sides.** `to_rgba` applies the descriptor's
-        // own; a `wrong` that skipped it would be a different picture for a
-        // second reason, and comparing the two would measure the remap rather
-        // than the addressing. Getting this wrong is what made `0xa9e4` look
-        // like it forced blue - see `gtf::Remap`.
+        // **The same remap on both sides.** `to_rgba` applies the descriptor's; a
+        // `wrong` that skipped it would measure the remap, not the addressing (the
+        // mistake that made `0xa9e4` look like it forced blue - see `gtf::Remap`).
         gtf::Remap::decode(texture.remap).apply(&mut wrong);
         let (a, b) = (
             roughness_2d(&native, width as usize),
             roughness_2d(&wrong, width as usize),
         );
-        // A handful of these are flat single-colour masks - `corner2.gtf`'s
-        // own RGB plane among them, alpha carrying the shape instead - which
-        // say nothing either way.
+        // A handful are flat single-colour masks (`corner2.gtf`'s RGB plane,
+        // alpha carrying the shape) and say nothing either way.
         if a < 0.005 && b < 0.005 {
             flat += 1;
         } else if a <= b {
@@ -245,10 +229,9 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
 
 /// Every `B8` file on the disc, and what each one is.
 ///
-/// Nine, one per ship team, all the same shape. Named rather than counted
-/// because the *names* are what settled the format: a one-channel 128x64
-/// texture called `ambient_shadow` is a craft's contact shadow, which is what
-/// makes a soft blob the right answer and horizontal banding the wrong one.
+/// Nine, one per ship team. Named rather than counted because the *names* settled
+/// the format: a one-channel 128x64 `ambient_shadow` is a craft's contact shadow,
+/// so a soft blob is right and horizontal banding wrong.
 const AMBIENT_SHADOWS: &[&str] = &[
     "/data/ships/ag_systems/textures/ambient_shadow.gtf",
     "/data/ships/assegai/textures/ambient_shadow.gtf",
@@ -264,17 +247,15 @@ const AMBIENT_SHADOWS: &[&str] = &[
 /// The one-channel format decodes, and comes out as a shadow rather than as
 /// noise.
 ///
-/// Three claims at once, none of which a wrong reading satisfies together:
+/// Three claims, which a wrong reading does not satisfy together:
 ///
-/// 1. The 9 `B8` files are exactly [`AMBIENT_SHADOWS`] - the format is a ship
-///    contact shadow and nothing else on the disc.
-/// 2. The descriptor's own `remap` broadcasts the stored byte, so every texel
-///    comes back grey with opaque alpha. Nothing in the decoder decides that;
-///    `Remap` reads it off `+0x10`.
-/// 3. A shadow is a soft blob, so the Morton reading has to be markedly
-///    smoother than the raster misread - and it is, by better than 1.6x on
-///    every one of the nine. See `docs/formats/gtf.md` for the picture, which
-///    is the evidence this number stands in for.
+/// 1. The 9 `B8` files are exactly [`AMBIENT_SHADOWS`]: nothing else on the disc
+///    uses the format.
+/// 2. The descriptor's `remap` broadcasts the stored byte, so every texel is grey
+///    with opaque alpha; `Remap` reads it off `+0x10`.
+/// 3. The Morton reading is markedly smoother than the raster misread, by better
+///    than 1.6x on all nine. `docs/formats/gtf.md` has the picture this number
+///    stands in for.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
@@ -304,9 +285,9 @@ fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
         let texels = &blob[texture.level_range(0)];
         let mut wrong =
             gtf::decode_level(texture.format, texels, width, height, 0, true).expect("decodes");
-        // The same remap on both sides - see the note in
-        // `the_swizzle_order_is_smoother_than_a_linear_misread`. Without it
-        // the broadcast alone makes the Morton reading three times rougher.
+        // The same remap on both sides (see
+        // `the_swizzle_order_is_smoother_than_a_linear_misread`); without it the
+        // broadcast alone makes the Morton reading three times rougher.
         gtf::Remap::decode(texture.remap).apply(&mut wrong);
         let (a, b) = (
             roughness_2d(&native, width as usize),
@@ -323,16 +304,12 @@ fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
 
 /// [`roughness`], plus the same thing down columns.
 ///
-/// **The swizzle question needs both axes and the endianness question does
-/// not.** A byte-swapped `R5G6B5` endpoint is wrong the same way in every
-/// direction, so one axis measures it. A Morton misread is not: reading a
-/// tiled surface as raster order lays each tile out as a run of consecutive
-/// texels, which comes out as *horizontal stripes* - and stripes are uniform
-/// along a row, so a within-row metric scores the wrong reading as the smooth
-/// one. Three of the disc's swizzled files were named exceptions for exactly
-/// that reason, all three visibly correct under Morton and visibly striped
-/// under the misread; adding the vertical axis retires all three rather than
-/// keeping a list of files the metric cannot see. See `docs/formats/gtf.md`.
+/// **The swizzle question needs both axes; the endianness question does not.** A
+/// byte-swapped `R5G6B5` endpoint is wrong in every direction. A Morton misread
+/// lays each tile out as consecutive texels, i.e. *horizontal stripes*, uniform
+/// along a row, so a within-row metric scores the wrong reading as smooth. Three
+/// swizzled files were named exceptions for that reason; the vertical axis retires
+/// them. See `docs/formats/gtf.md`.
 fn roughness_2d(rgba: &[[u8; 4]], width: usize) -> f64 {
     let across = roughness(rgba, width);
     let mut total = 0u64;
@@ -385,8 +362,7 @@ fn the_dxt_endpoints_are_little_endian_inside_a_big_endian_file() {
     let Some(image) = image() else {
         return;
     };
-    // `DATA00` alone is a large enough sample to settle this and keeps the test
-    // to about a minute; the full-disc figure is on the docs page.
+    // `DATA00` alone settles it in about a minute; the full-disc figure is on the docs page.
     let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
     let mut open = oag_assets::psarc::Archive::open(&spec).expect("opening the archive");
     let paths: Vec<String> = open
@@ -417,8 +393,8 @@ fn the_dxt_endpoints_are_little_endian_inside_a_big_endian_file() {
             roughness(&native, width as usize),
             roughness(&other, width as usize),
         );
-        // A mask whose RGB is uniformly white - and there are many, the retro
-        // HUD skins among them - is flat either way and says nothing.
+        // A mask whose RGB is uniformly white (many, the retro HUD skins among them)
+        // is flat either way.
         if a < 0.005 && b < 0.005 {
             flat += 1;
         } else if a <= b {
@@ -440,10 +416,9 @@ fn the_dxt_endpoints_are_little_endian_inside_a_big_endian_file() {
 
 /// The HUD's own twelve textures, which is what this format was read for.
 ///
-/// Names as `oag_hd::hud::TEXTURES` spells them cannot be used here -
-/// `oag-formats` does not depend on `oag-hd` - so these are the resolved entry
-/// paths, and `crates/game/tests/hd_hud_ground_truth.rs` is what ties the two
-/// spellings together.
+/// `oag_hd::hud::TEXTURES`'s spellings cannot be used (`oag-texture` does not
+/// depend on `oag-hd`), so these are the resolved entry paths;
+/// `crates/game/tests/hd_hud_ground_truth.rs` ties the two together.
 const HUD_TEXTURES: &[(&str, &str, u16, u16, Format)] = &[
     (
         "DATA02",
@@ -569,18 +544,15 @@ fn the_huds_own_textures_decode() {
 /// **All 23 cubemaps decode, six faces each, and the faces are stored
 /// face-major.**
 ///
-/// Face-major - all of one face's levels, then the next face's - is what
-/// `Texture::chain_len` already assumed to make the length invariant close, and
-/// it is asserted here rather than left implicit, because the other reading
-/// (level-major) produces exactly the same total length and a scrambled sky.
+/// Face-major (all of one face's levels, then the next) is what
+/// `Texture::chain_len` assumes, asserted here because level-major gives the same
+/// total length and a scrambled sky.
 ///
-/// The check that separates them without a picture: a **cube's six faces are
-/// six different images, and the four sides of a sky are more like one another
-/// than any of them is like the zenith or the nadir.** On Talon's Junction the
-/// zenith is deep blue (mean `(78, 123, 165)`), the nadir is blank white
-/// (`(255, 255, 255)`) and the four sides are pale horizon (`204..217` red).
-/// Read level-major, six "faces" of a single-level cubemap would each be a
-/// slice of one image and would not separate that way.
+/// The picture-free check: **a cube's six faces are six different images, and a
+/// sky's four sides are more alike than any is to the zenith or nadir.** On
+/// Talon's Junction the zenith is deep blue (mean `(78, 123, 165)`), the nadir
+/// blank white and the four sides pale horizon (`204..217` red). Read level-major,
+/// the "faces" would be slices of one image and not separate that way.
 #[test]
 #[ignore]
 fn every_cubemap_decodes_six_distinct_faces() {
@@ -595,8 +567,7 @@ fn every_cubemap_decodes_six_distinct_faces() {
         };
         let Some(texture) = parsed.only() else { return };
         if !texture.cubemap {
-            // A face index is meaningless on a flat texture and is refused as
-            // such, rather than answering the whole image.
+            // A face index is meaningless on a flat texture and is refused.
             assert!(
                 texture.face_to_rgba(blob, 0).is_err(),
                 "{path}: a flat texture accepted a face index"
@@ -627,14 +598,10 @@ fn every_cubemap_decodes_six_distinct_faces() {
                 })
             })
             .collect();
-        // **The content claim is asserted on the one sky whose picture was
-        // looked at, and reported for the rest.** Two circuits are why it is
-        // not a bar over the corpus: `amphiseum`'s sky is a night sky, every
-        // face near black, so a brightest-against-darkest bar measures
-        // exposure; and `zone_1`'s is a featureless grey void whose zenith and
-        // nadir genuinely are alike. Both are data, not decode errors, and a
-        // threshold that called either one a failure would be a threshold this
-        // file picked to pass.
+        // **The content claim is asserted on the one sky whose picture was looked
+        // at, and reported for the rest.** `amphiseum`'s is a night sky (every face
+        // near black, so a bar measures exposure) and `zone_1`'s a featureless grey
+        // void whose zenith and nadir are alike. Both are data, not decode errors.
         let luma = |m: &[u64; 3]| m[0] + m[1] + m[2];
         if path.ends_with("/sky.gtf") {
             skies += 1;
@@ -648,9 +615,9 @@ fn every_cubemap_decodes_six_distinct_faces() {
                 luma(&means[5])
             );
             if path.contains("talons_junction") {
-                // Read off the decoded faces and checked against the picture:
-                // blue zenith, blank white nadir, four pale horizon sides with
-                // a city skyline on them. See `docs/formats/gtf.md`.
+                // Read off the decoded faces and checked against the picture: blue
+                // zenith, white nadir, four pale horizon sides with a skyline. See
+                // `docs/formats/gtf.md`.
                 assert_eq!(
                     means[2],
                     [78, 123, 165],
