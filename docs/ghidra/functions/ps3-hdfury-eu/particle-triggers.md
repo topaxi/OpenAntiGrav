@@ -4,11 +4,14 @@
 question was "HD authors 82 effects and only 2 are wired - find the rest of the
 triggers". **The premise was out of date**: `docs/overview/status.md` section 4
 said 2 of 88, but `oag_raceplay::RACE_EFFECTS` already held 33 names HD's disc
-carries and a plain HD race loads all of them (the load report misses only
+carries and a plain HD race **loads** all of them (the load report misses only
 `WO_MAGSTRIP_SPARKS/ZONE`, `WO_RAIN`, `WO_RAIN_LENS`, `WO_SNOW`, which HD does not
-ship). What was wired is mostly **Pulse-inherited** (title-neutral weapon visuals);
-what this page adds is which of those have an HD function behind them, and the
-effects that have none wired.
+ship); with the Cannon spark below it is 34. Loading is not firing: the LeachBeam hit
+spark (`hit_sparks`) and the wreck trio (`wreck_fx`) are Pulse-gated and do not fire
+on HD, and `WO_BLUE_WELDER` / `WO_MODESTO_STEAM_A` fire only if an HD circuit places
+them as `ParticleSystem` nodes, which was not checked for HD. The rest are mostly
+**Pulse-inherited** (title-neutral weapon visuals); what this page adds is which of
+those have an HD function behind them, and the effects that have none wired.
 
 ## The scan (reproducible, validated)
 
@@ -141,17 +144,22 @@ port's mode to be mapped to those ids, and `zone-sky.md` records that the order 
 6 and 13 is not established. Left as the existing (non-Zone) names, which is what an
 HD Zone race already plays.
 
-## Omega, and the other titles
+## Omega, 2048, and the other titles
 
-Omega (`ps4-omega-eu/ship-collision-fx.md`) carries the same strings and the same
-`kind` switch, including `WO_SHIP_SPARK_DAMAGE_WEAPON` at `kind == 1`: **checked,
-applies, not wired** - the new trigger builds its anchors for HD only
-(`weapon_anchors` is empty on every other title, asserted by a test), so Pulse,
-Pure, 2048 and Omega are unchanged. Whether Omega's disc ships that `.pob` was not
-measured here (its archives list their `.pob` entries by hash). 2048: the executable
-has no `WO_SHIP_SPARK_DAMAGE_WEAPON` (`vita-2048-eu-v104/particle-paths.md` lists its
-own set), **checked, differs**. Pulse's `Ship_Damage` spark and HD's Cannon spark are
-two mechanisms for one outcome; Pulse keeps its own.
+- **Omega:** `ps4-omega-eu/ship-collision-fx.md` reads the same `kind` switch, with
+  `WO_SHIP_SPARK_DAMAGE_WEAPON` at `kind == 1`. **Checked, applies, not wired.**
+  Whether Omega's disc ships that `.pob` was not determined: `scripts/psarc.py list`
+  on its `data0*.psarc` returned no `.pob` rows in this run (a listing failure, not a
+  result), so the disc side is **not checkable here**.
+- **2048:** the Vita executable carries the string too (`strings -a` on
+  `PCSF00007/base/eboot.elf` and `patch-v104/eboot.elf`: 2 hits each, with
+  `WO_SHIP_COLL_SPARK_DAMAGE` and `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` beside it).
+  **Checked, applies, not wired**; 2048's own trigger was not read.
+- Both stay off by construction: `hit_sparks::throws_weapon_spark` is true for HD
+  only, `only_hd_throws_the_cannon_craft_hit_spark` asserts it false for Pulse, Pure,
+  2048 and Omega (mutation-checked), and a title with no anchors fires nothing.
+- Pulse's `Ship_Damage` spark and HD's Cannon spark are two mechanisms for one
+  outcome; Pulse keeps its own.
 
 ## Open
 

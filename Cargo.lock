@@ -2339,6 +2339,7 @@ dependencies = [
  "oag-input",
  "oag-livery",
  "oag-mesh",
+ "oag-omega",
  "oag-physics",
  "oag-pob",
  "oag-post",
