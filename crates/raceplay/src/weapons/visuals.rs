@@ -457,7 +457,7 @@ impl Race {
     ///   (`0x0885d2a8`) two collision branches, [`Trigger::CraftBlast`] from
     ///   `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
     ///   A craft hit is drawn at the *struck craft's* own position dropped by
-    ///   [`CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
+    ///   [`oag_title::engine_effects::CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
     ///   has since gone inactive falls back to the impact point rather than
     ///   reading a stale pose.
     /// - **`Missile`**: [`Trigger::MissileExplo`] always, whatever it struck -
@@ -505,7 +505,8 @@ impl Race {
             oag_tables::weapons::Weapon::Rocket => Some(match struck {
                 Some(slot) if self.sim.world.ships[slot].active => (
                     Trigger::CraftBlast,
-                    self.sim.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+                    self.sim.world.ships[slot].physics.body.position
+                        - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP,
                 ),
                 // A craft that has gone inactive since the hit falls back to
                 // the impact point rather than reading a stale pose - still

@@ -218,10 +218,6 @@ pub use hud::hud_layout;
 pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{load, load_event};
 pub(crate) use oag_title::Trigger;
-pub use oag_title::engine_effects::{
-    BLUE_WELDER_EFFECT, CRAFT_BLAST_DROP, MODESTO_STEAM_EFFECT, RAIN_EFFECT, RAIN_LENS_EFFECT,
-    SNOW_EFFECT, TRAIL_HITSHIP_EFFECT, TRAIL_HITSHIP_RED_EFFECT,
-};
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;

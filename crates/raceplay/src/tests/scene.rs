@@ -457,7 +457,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// **Both halves are the original's.** It authors `WO_ROCKET_EXPLO` and
 /// `WO_ROCKET_EXPLO_TRACK` separately, and `Rocket_HitCraft`
 /// (`0x0886ebdc`) puts the hull one at the *struck craft's* position dropped
-/// by [`CRAFT_BLAST_DROP`] rather than at the impact point. This engine drew
+/// by `CRAFT_BLAST_DROP` rather than at the impact point. This engine drew
 /// one invented flash at the impact point for both until 2026-08-12.
 ///
 /// Asserted through [`Race::blast_for`] rather than through the pool,
@@ -483,7 +483,10 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     race.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
         race.blast_for(Weapon::Rocket, impact, Some(struck)),
-        Some((Trigger::CraftBlast, craft - Vec3::Y * CRAFT_BLAST_DROP)),
+        Some((
+            Trigger::CraftBlast,
+            craft - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP
+        )),
         "a hull blast is its own effect, drawn under the craft"
     );
 
