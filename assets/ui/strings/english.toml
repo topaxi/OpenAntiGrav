@@ -57,19 +57,19 @@
 # first two rows (`FE_RACE_CAM`/`FE_RACEBOX`) - see
 # `docs/formats/fe-menu-definitions.md`; the subtitles themselves are this
 # project's own wording, not the disc's help text.
-OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
-OAG_MENU_RACE_CAMPAIGN = "RACE CAMPAIGN"
-OAG_MENU_RACE_CAMPAIGN_SUBTITLE = "The story mode: work your way up the tournament grid"
-OAG_MENU_RACEBOX = "RACEBOX"
-OAG_MENU_RACEBOX_SUBTITLE = "Set up your own race, split screen included"
-OAG_MENU_REMIX = "REMIX"
-OAG_MENU_REMIX_SUBTITLE = "Mix tracks and ships across every title you own"
-OAG_MENU_RECORDS = "RECORDS"
-OAG_MENU_RECORDS_SUBTITLE = "Your best times and scores, by track and class"
-OAG_MENU_OPTIONS = "OPTIONS"
-OAG_MENU_OPTIONS_SUBTITLE = "Display, audio and control settings"
-OAG_MENU_QUIT = "QUIT"
-OAG_MENU_QUIT_SUBTITLE = "Exit to the desktop"
+OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
+OAG_MENU_RACE_CAMPAIGN = { text = "RACE CAMPAIGN", human = false }
+OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "The story mode: work your way up the tournament grid", human = false }
+OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race, split screen included", human = false }
+OAG_MENU_REMIX = { text = "REMIX", human = false }
+OAG_MENU_REMIX_SUBTITLE = { text = "Mix tracks and ships across every title you own", human = false }
+OAG_MENU_RECORDS = { text = "RECORDS", human = false }
+OAG_MENU_RECORDS_SUBTITLE = { text = "Your best times and scores, by track and class", human = false }
+OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
+OAG_MENU_OPTIONS_SUBTITLE = { text = "Display, audio and control settings", human = false }
+OAG_MENU_QUIT = { text = "QUIT", human = false }
+OAG_MENU_QUIT_SUBTITLE = { text = "Exit to the desktop", human = false }
 
 # RACE and RACE REMIX share every row whose setting key and meaning are
 # identical between the two pages - `race.mode`, `race.class`, `ai.difficulty`,
@@ -78,121 +78,121 @@ OAG_MENU_QUIT_SUBTITLE = "Exit to the desktop"
 # `OAG_MENU_BACK` already models for a word that means the same thing on every
 # page that carries it. TRACK TITLE and CRAFT TITLE are REMIX's own, since
 # RACE has no title-picking row to share them with.
-OAG_RACE_PAGE_TITLE = "RACE"
-OAG_RACE_MODE = "MODE"
-OAG_RACE_SPEED_CLASS = "SPEED CLASS"
-OAG_RACE_WEAPONS = "WEAPONS"
-OAG_RACE_AI_DIFFICULTY = "AI DIFFICULTY"
-OAG_RACE_KILLS = "KILLS"
-OAG_RACE_TEAM = "TEAM"
-OAG_RACE_VARIANT = "VARIANT"
-OAG_RACE_TRACK = "TRACK"
-OAG_RACE_START = "START"
+OAG_RACE_PAGE_TITLE = { text = "RACE", human = false }
+OAG_RACE_MODE = { text = "MODE", human = false }
+OAG_RACE_SPEED_CLASS = { text = "SPEED CLASS", human = false }
+OAG_RACE_WEAPONS = { text = "WEAPONS", human = false }
+OAG_RACE_AI_DIFFICULTY = { text = "AI DIFFICULTY", human = false }
+OAG_RACE_KILLS = { text = "KILLS", human = false }
+OAG_RACE_TEAM = { text = "TEAM", human = false }
+OAG_RACE_VARIANT = { text = "VARIANT", human = false }
+OAG_RACE_TRACK = { text = "TRACK", human = false }
+OAG_RACE_START = { text = "START", human = false }
 
 # RACE REMIX's own two rows - see the block above for the rest of this page.
-OAG_REMIX_PAGE_TITLE = "RACE REMIX"
-OAG_REMIX_TRACK_TITLE = "TRACK TITLE"
-OAG_REMIX_CRAFT_TITLE = "CRAFT TITLE"
+OAG_REMIX_PAGE_TITLE = { text = "RACE REMIX", human = false }
+OAG_REMIX_TRACK_TITLE = { text = "TRACK TITLE", human = false }
+OAG_REMIX_CRAFT_TITLE = { text = "CRAFT TITLE", human = false }
 
 # RECORDS' own title - its MODE and TRACK rows reuse OAG_RACE_MODE/
 # OAG_RACE_TRACK above, and BACK reuses OAG_MENU_BACK, the same sharing RACE
 # REMIX's own page already does. See `docs/architecture/menus.md`'s RECORDS
 # section for what the page draws below these two rows.
-OAG_RECORDS_PAGE_TITLE = "RACE RECORDS"
+OAG_RECORDS_PAGE_TITLE = { text = "RACE RECORDS", human = false }
 
 # OPTIONS and its five submenu rows. Reused as the *target* page's own title
 # too - `OAG_OPTIONS_DISPLAY` covers both the OPTIONS row that opens DISPLAY
 # and the DISPLAY page's own title, since the two are the same word - the
 # AI PILOTS row below is the one exception, which reuses the pilots page's
 # own `OAG_PILOT_PAGE_TITLE` for the same reason.
-OAG_OPTIONS_PAGE_TITLE = "OPTIONS"
-OAG_OPTIONS_DISPLAY = "DISPLAY"
-OAG_OPTIONS_GRAPHICS = "GRAPHICS"
-OAG_OPTIONS_AUDIO = "AUDIO"
-OAG_OPTIONS_CONTROLS = "CONTROLS"
-OAG_OPTIONS_LANGUAGE = "LANGUAGE"
+OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONS", human = false }
+OAG_OPTIONS_DISPLAY = { text = "DISPLAY", human = false }
+OAG_OPTIONS_GRAPHICS = { text = "GRAPHICS", human = false }
+OAG_OPTIONS_AUDIO = { text = "AUDIO", human = false }
+OAG_OPTIONS_CONTROLS = { text = "CONTROLS", human = false }
+OAG_OPTIONS_LANGUAGE = { text = "LANGUAGE", human = false }
 
 # DISPLAY's own rows - its title is `OAG_OPTIONS_DISPLAY` above.
-OAG_DISPLAY_MONITOR = "MONITOR"
-OAG_DISPLAY_WINDOW_MODE = "WINDOW MODE"
-OAG_DISPLAY_WINDOW_SIZE = "WINDOW SIZE"
-OAG_DISPLAY_ASPECT_RATIO = "ASPECT RATIO"
-OAG_DISPLAY_FRONT_END_STYLE = "FRONT END STYLE"
-OAG_DISPLAY_VSYNC = "VSYNC"
-OAG_DISPLAY_FRAME_LIMIT = "FRAME LIMIT"
-OAG_DISPLAY_BRIGHTNESS = "BRIGHTNESS"
-OAG_DISPLAY_GAMMA = "GAMMA"
+OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
+OAG_DISPLAY_WINDOW_MODE = { text = "WINDOW MODE", human = false }
+OAG_DISPLAY_WINDOW_SIZE = { text = "WINDOW SIZE", human = false }
+OAG_DISPLAY_ASPECT_RATIO = { text = "ASPECT RATIO", human = false }
+OAG_DISPLAY_FRONT_END_STYLE = { text = "FRONT END STYLE", human = false }
+OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
+OAG_DISPLAY_FRAME_LIMIT = { text = "FRAME LIMIT", human = false }
+OAG_DISPLAY_BRIGHTNESS = { text = "BRIGHTNESS", human = false }
+OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 
 # GRAPHICS's own rows - its title is `OAG_OPTIONS_GRAPHICS` above.
 # `OAG_GRAPHICS_CAMERA_VIEW` is deliberately its own id rather than a reuse of
 # `OAG_CONTROLS_CAMERA_VIEW` below: this row picks which perspective the game
 # draws, that one picks which key cycles it - two different things that only
 # happen to share an English word.
-OAG_GRAPHICS_RENDERER = "RENDERER"
-OAG_GRAPHICS_RENDER_SCALE = "RENDER SCALE"
-OAG_GRAPHICS_TARGET_FPS = "TARGET FPS"
-OAG_GRAPHICS_MINIMUM_RESOLUTION = "MINIMUM RESOLUTION"
-OAG_GRAPHICS_RECONSTRUCTION = "RECONSTRUCTION"
-OAG_GRAPHICS_UPSCALER_SHARPNESS = "UPSCALER SHARPNESS"
-OAG_GRAPHICS_MSAA = "MSAA"
-OAG_GRAPHICS_MOTION_BLUR = "MOTION BLUR"
-OAG_GRAPHICS_MOTION_BLUR_RESOLUTION = "BLUR RESOLUTION"
-OAG_GRAPHICS_SHADOWS = "SHADOWS"
-OAG_GRAPHICS_MODEL_DETAIL = "MODEL DETAIL"
-OAG_GRAPHICS_TEXTURE_DETAIL = "TEXTURE DETAIL"
-OAG_GRAPHICS_SCREEN_FILTER = "SCREEN FILTER"
-OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = "SCREEN FILTER STRENGTH"
-OAG_GRAPHICS_ANISOTROPIC_FILTERING = "ANISOTROPIC FILTERING"
-OAG_GRAPHICS_CAMERA_VIEW = "CAMERA VIEW"
-OAG_GRAPHICS_FIELD_OF_VIEW = "FIELD OF VIEW"
-OAG_GRAPHICS_BOOST_FOV_KICK = "BOOST FOV KICK"
-OAG_GRAPHICS_PERFORMANCE_OVERLAY = "PERFORMANCE OVERLAY"
+OAG_GRAPHICS_RENDERER = { text = "RENDERER", human = false }
+OAG_GRAPHICS_RENDER_SCALE = { text = "RENDER SCALE", human = false }
+OAG_GRAPHICS_TARGET_FPS = { text = "TARGET FPS", human = false }
+OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "MINIMUM RESOLUTION", human = false }
+OAG_GRAPHICS_RECONSTRUCTION = { text = "RECONSTRUCTION", human = false }
+OAG_GRAPHICS_UPSCALER_SHARPNESS = { text = "UPSCALER SHARPNESS", human = false }
+OAG_GRAPHICS_MSAA = { text = "MSAA", human = false }
+OAG_GRAPHICS_MOTION_BLUR = { text = "MOTION BLUR", human = false }
+OAG_GRAPHICS_MOTION_BLUR_RESOLUTION = { text = "BLUR RESOLUTION", human = false }
+OAG_GRAPHICS_SHADOWS = { text = "SHADOWS", human = false }
+OAG_GRAPHICS_MODEL_DETAIL = { text = "MODEL DETAIL", human = false }
+OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURE DETAIL", human = false }
+OAG_GRAPHICS_SCREEN_FILTER = { text = "SCREEN FILTER", human = false }
+OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = { text = "SCREEN FILTER STRENGTH", human = false }
+OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "ANISOTROPIC FILTERING", human = false }
+OAG_GRAPHICS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
+OAG_GRAPHICS_FIELD_OF_VIEW = { text = "FIELD OF VIEW", human = false }
+OAG_GRAPHICS_BOOST_FOV_KICK = { text = "BOOST FOV KICK", human = false }
+OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 
 # AUDIO's own rows - its title is `OAG_OPTIONS_AUDIO` above.
-OAG_AUDIO_MUSIC_VOLUME = "MUSIC VOLUME"
-OAG_AUDIO_SFX_VOLUME = "SFX VOLUME"
-OAG_AUDIO_ANNOUNCER_VOLUME = "ANNOUNCER VOLUME"
-OAG_AUDIO_MASTER_VOLUME = "MASTER VOLUME"
-OAG_AUDIO_MUSIC_SOURCE = "MUSIC SOURCE"
+OAG_AUDIO_MUSIC_VOLUME = { text = "MUSIC VOLUME", human = false }
+OAG_AUDIO_SFX_VOLUME = { text = "SFX VOLUME", human = false }
+OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANNOUNCER VOLUME", human = false }
+OAG_AUDIO_MASTER_VOLUME = { text = "MASTER VOLUME", human = false }
+OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIC SOURCE", human = false }
 
 # CONTROLS's own rows - its title is `OAG_OPTIONS_CONTROLS` above.
 # `OAG_CONTROLS_FIRE_PICKUP`/`OAG_CONTROLS_ABSORB_PICKUP` are already declared
 # further down, beside the comment explaining their own wording.
-OAG_CONTROLS_THRUST = "THRUST"
-OAG_CONTROLS_STEER_LEFT = "STEER LEFT"
-OAG_CONTROLS_STEER_RIGHT = "STEER RIGHT"
-OAG_CONTROLS_PITCH_UP = "PITCH UP"
-OAG_CONTROLS_PITCH_DOWN = "PITCH DOWN"
-OAG_CONTROLS_AIRBRAKE_LEFT = "AIRBRAKE LEFT"
-OAG_CONTROLS_AIRBRAKE_RIGHT = "AIRBRAKE RIGHT"
-OAG_CONTROLS_CAMERA_VIEW = "CAMERA VIEW"
-OAG_CONTROLS_SIDESHIFT = "SIDESHIFT"
-OAG_CONTROLS_TRIGGERS = "TRIGGERS"
-OAG_CONTROLS_TRIGGER_SENSITIVITY = "TRIGGER SENSITIVITY"
+OAG_CONTROLS_THRUST = { text = "THRUST", human = false }
+OAG_CONTROLS_STEER_LEFT = { text = "STEER LEFT", human = false }
+OAG_CONTROLS_STEER_RIGHT = { text = "STEER RIGHT", human = false }
+OAG_CONTROLS_PITCH_UP = { text = "PITCH UP", human = false }
+OAG_CONTROLS_PITCH_DOWN = { text = "PITCH DOWN", human = false }
+OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AIRBRAKE LEFT", human = false }
+OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AIRBRAKE RIGHT", human = false }
+OAG_CONTROLS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
+OAG_CONTROLS_SIDESHIFT = { text = "SIDESHIFT", human = false }
+OAG_CONTROLS_TRIGGERS = { text = "TRIGGERS", human = false }
+OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "TRIGGER SENSITIVITY", human = false }
 
 # The AI PILOTS page's own rows and title.
-OAG_PILOT_PAGE_TITLE = "AI PILOTS"
-OAG_PILOT_PILOT = "PILOT"
-OAG_PILOT_AXIS = "AXIS"
-OAG_PILOT_LOW = "LOW"
-OAG_PILOT_HIGH = "HIGH"
-OAG_PILOT_SAVE = "SAVE"
-OAG_PILOT_NEW = "NEW FROM PILOT"
-OAG_PILOT_RENAME = "RENAME"
-OAG_PILOT_DELETE = "DELETE"
+OAG_PILOT_PAGE_TITLE = { text = "AI PILOTS", human = false }
+OAG_PILOT_PILOT = { text = "PILOT", human = false }
+OAG_PILOT_AXIS = { text = "AXIS", human = false }
+OAG_PILOT_LOW = { text = "LOW", human = false }
+OAG_PILOT_HIGH = { text = "HIGH", human = false }
+OAG_PILOT_SAVE = { text = "SAVE", human = false }
+OAG_PILOT_NEW = { text = "NEW FROM PILOT", human = false }
+OAG_PILOT_RENAME = { text = "RENAME", human = false }
+OAG_PILOT_DELETE = { text = "DELETE", human = false }
 
 # Appended to a `PILOT` row's own choice when the name is a built-in with no
 # file of its own yet - see `oag_raceplay::pilots::Entry::from_file`. Read by
 # Rust (`pilot_editor::pilot_choice`), not by a `menu.toml` `string_id`: the
 # suffix is glued onto a filename the row already holds, not a whole row's
 # label.
-OAG_PILOT_BUILT_IN_SUFFIX = " (built-in)"
+OAG_PILOT_BUILT_IN_SUFFIX = { text = " (built-in)", human = false }
 
 # The `back` row every page ends on. Shared rather than one id per page,
 # because it is one word in every language regardless of which page it is
 # leaving - the first page to actually name it is `pilots`, but any other
 # page's own `back` row may reuse it once it is converted.
-OAG_MENU_BACK = "BACK"
+OAG_MENU_BACK = { text = "BACK", human = false }
 
 # The CONTROLS page's key-capture prompt, drawn over the whole page while
 # `Session::awaiting_binding` is `Some` - see `docs/architecture/menus.md`'s
@@ -211,7 +211,7 @@ OAG_MENU_BACK = "BACK"
 # key-to-button - see `docs/architecture/menus.md`'s "What this does not
 # touch"), so there was nothing to look for beyond that gamepad-remapping
 # screen which is a different axis entirely.
-OAG_BINDING_CAPTURE_PROMPT = "PRESS A KEY FOR %s - ESCAPE CANCELS"
+OAG_BINDING_CAPTURE_PROMPT = { text = "PRESS A KEY FOR %s - ESCAPE CANCELS", human = false }
 
 # CONTROLS page rows for `square` and `circle`. Chosen, not measured - neither
 # PSP title's front-end XML authors this page - and picked to match the
@@ -222,8 +222,8 @@ OAG_BINDING_CAPTURE_PROMPT = "PRESS A KEY FOR %s - ESCAPE CANCELS"
 # which was wrong: there is no brake action in
 # `oag_gameplay::controls::ship_controls`, and circle absorbs a pickup, it
 # does not brake.
-OAG_CONTROLS_FIRE_PICKUP = "FIRE PICKUP"
-OAG_CONTROLS_ABSORB_PICKUP = "ABSORB PICKUP"
+OAG_CONTROLS_FIRE_PICKUP = { text = "FIRE PICKUP", human = false }
+OAG_CONTROLS_ABSORB_PICKUP = { text = "ABSORB PICKUP", human = false }
 
 # The on-screen keyboard. Unlike the rows above, these are read by Rust rather
 # than by a `string_id` in `menu.toml` - `crate::prompt` holds no string table
@@ -233,20 +233,20 @@ OAG_CONTROLS_ABSORB_PICKUP = "ABSORB PICKUP"
 # The key glyphs themselves are deliberately not here: `a`-`z`, `0`-`9`, `-`
 # and `_` are the characters a pilot name may contain, which is a filename
 # rule rather than language.
-OAG_KEYBOARD_DELETE = "DEL"
-OAG_KEYBOARD_ACCEPT = "OK"
+OAG_KEYBOARD_DELETE = { text = "DEL", human = false }
+OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
 
 # One line under the grid. Names abstract buttons, the same vocabulary the
 # CONTROLS page and `docs/architecture/menus.md` use, rather than this
 # machine's current bindings: a pad and a keyboard both reach the same four,
 # and a line naming keys would be wrong on a pad.
-OAG_KEYBOARD_HINT = "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL"
+OAG_KEYBOARD_HINT = { text = "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL", human = false }
 
 # The other RENAME PILOT shape: Pulse's own `TagInput` cell row, used instead
 # of the grid above when the disc's own alphabet can spell the name being
 # edited - see `docs/formats/fexml.md`'s `TagInput` section. One line under
 # the row, on the same terms as `OAG_KEYBOARD_HINT`.
-OAG_TAG_ENTRY_HINT = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL"
+OAG_TAG_ENTRY_HINT = { text = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL", human = false }
 
 # `%s` is the pilot's own name, substituted where the entry is read. A string
 # table is edited by translators and the disc's own tables already spell a
@@ -256,55 +256,55 @@ OAG_TAG_ENTRY_HINT = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIR
 # Renaming a pilot. The last two are shown live under what has been typed,
 # every keystroke, because finding out a name is refused only after typing it
 # on a grid is what makes an on-screen keyboard unbearable.
-OAG_PILOT_RENAME_TITLE = "RENAME PILOT"
-OAG_PILOT_NAME_TAKEN = "THERE IS ALREADY A PILOT CALLED %s"
-OAG_PILOT_RENAME_SHADOWS = "%s IS BUILT IN: A FILE OF THAT NAME REPLACES IT"
+OAG_PILOT_RENAME_TITLE = { text = "RENAME PILOT", human = false }
+OAG_PILOT_NAME_TAKEN = { text = "THERE IS ALREADY A PILOT CALLED %s", human = false }
+OAG_PILOT_RENAME_SHADOWS = { text = "%s IS BUILT IN: A FILE OF THAT NAME REPLACES IT", human = false }
 
 # Deleting one. `OAG_PILOT_DELETE_BUILT_IN` is the whole reason this asks at
 # all: a file named after one of the four built-ins was *replacing* it, so
 # removing the file restores the built-in rather than removing a pilot.
-OAG_PILOT_DELETE_TITLE = "DELETE PILOT"
-OAG_PILOT_DELETE_ASK = "DELETE %s? THIS CANNOT BE UNDONE."
-OAG_PILOT_DELETE_BUILT_IN = "%s IS BUILT IN AND YOUR FILE REPLACES IT. DELETING THE FILE RESTORES THE BUILT-IN INSTEAD OF REMOVING %s."
-OAG_PILOT_DELETE_YES = "DELETE"
-OAG_PILOT_DELETE_NO = "KEEP"
+OAG_PILOT_DELETE_TITLE = { text = "DELETE PILOT", human = false }
+OAG_PILOT_DELETE_ASK = { text = "DELETE %s? THIS CANNOT BE UNDONE.", human = false }
+OAG_PILOT_DELETE_BUILT_IN = { text = "%s IS BUILT IN AND YOUR FILE REPLACES IT. DELETING THE FILE RESTORES THE BUILT-IN INSTEAD OF REMOVING %s.", human = false }
+OAG_PILOT_DELETE_YES = { text = "DELETE", human = false }
+OAG_PILOT_DELETE_NO = { text = "KEEP", human = false }
 
 # Window titles and the key hints printed under them - `crates/game/src/main/hints.rs`.
 # Read by Rust, not by a `menu.toml` `string_id`: none of these has a disc
 # idstring to override, so what they needed was somewhere translatable to
 # live rather than an override.
-OAG_HINTS_TITLE = "OpenAntiGrav"
-OAG_HINTS_MENU_KEYS = "arrow keys or the left stick move, return, X or cross selects, space or start skips, escape quits"
-OAG_HINTS_SHELL_TITLE = "OpenAntiGrav - menu"
-OAG_HINTS_SHELL_KEYS = "up and down move, left and right change a setting, return, X or cross selects, backspace, circle or escape goes back"
-OAG_HINTS_RACE_TITLE = "OpenAntiGrav - race"
-OAG_HINTS_RACE_KEYS = "arrow keys or the left stick steer, X, return or R2 thrusts, Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it, space or start pauses"
-OAG_HINTS_ESC_TO_MENU = ", escape returns to the menus"
-OAG_HINTS_ESC_QUITS = ", escape quits"
+OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
+OAG_HINTS_MENU_KEYS = { text = "arrow keys or the left stick move, return, X or cross selects, space or start skips, escape quits", human = false }
+OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - menu", human = false }
+OAG_HINTS_SHELL_KEYS = { text = "up and down move, left and right change a setting, return, X or cross selects, backspace, circle or escape goes back", human = false }
+OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - race", human = false }
+OAG_HINTS_RACE_KEYS = { text = "arrow keys or the left stick steer, X, return or R2 thrusts, Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it, space or start pauses", human = false }
+OAG_HINTS_ESC_TO_MENU = { text = ", escape returns to the menus", human = false }
+OAG_HINTS_ESC_QUITS = { text = ", escape quits", human = false }
 
 # The loading screen's prose - `crates/game/src/loading/wording.rs`. `{done}`,
 # `{total}`, `{cached}` and `{failed}` are placeholders `wording::resolved`
 # substitutes after the lookup, so a translation is free to move them but
 # must keep the names themselves.
-OAG_LOADING_READING_ARCHIVES = "READING THE ARCHIVES"
-OAG_LOADING_GENERIC = "LOADING"
-OAG_LOADING_READY = "READY"
-OAG_LOADING_TRANSCODING_MOVIES = "TRANSCODING MOVIES"
-OAG_LOADING_LOADING_MOVIES = "LOADING MOVIES"
-OAG_LOADING_CONVERTING_ASSETS = "CONVERTING ASSETS"
-OAG_LOADING_STEP_CACHED = "already converted, reading the cache"
-OAG_LOADING_STEP_DECODING = "decoding"
-OAG_LOADING_STEP_TRANSCODING_TOTAL = "transcoding - frame {done} of {total}"
-OAG_LOADING_STEP_TRANSCODING = "transcoding - frame {done}"
-OAG_LOADING_COUNTING = "counting what needs converting"
-OAG_LOADING_COUNTS_LOADED = "{done} / {total} loaded"
-OAG_LOADING_COUNTS_CONVERTED = "{done} / {total} converted"
-OAG_LOADING_COUNTS_CACHED_SUFFIX = ", {cached} already cached"
-OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} failed"
+OAG_LOADING_READING_ARCHIVES = { text = "READING THE ARCHIVES", human = false }
+OAG_LOADING_GENERIC = { text = "LOADING", human = false }
+OAG_LOADING_READY = { text = "READY", human = false }
+OAG_LOADING_TRANSCODING_MOVIES = { text = "TRANSCODING MOVIES", human = false }
+OAG_LOADING_LOADING_MOVIES = { text = "LOADING MOVIES", human = false }
+OAG_LOADING_CONVERTING_ASSETS = { text = "CONVERTING ASSETS", human = false }
+OAG_LOADING_STEP_CACHED = { text = "already converted, reading the cache", human = false }
+OAG_LOADING_STEP_DECODING = { text = "decoding", human = false }
+OAG_LOADING_STEP_TRANSCODING_TOTAL = { text = "transcoding - frame {done} of {total}", human = false }
+OAG_LOADING_STEP_TRANSCODING = { text = "transcoding - frame {done}", human = false }
+OAG_LOADING_COUNTING = { text = "counting what needs converting", human = false }
+OAG_LOADING_COUNTS_LOADED = { text = "{done} / {total} loaded", human = false }
+OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} converted", human = false }
+OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} already cached", human = false }
+OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 
 # The line Cell Selection shows when a confirmed cell cannot launch - a mode
 # this build cannot run yet, or a circuit this disc does not carry. Ours, not
 # the disc's: nothing authored says either, and saying nothing left the cell
 # looking dead. `crates/game/src/main/campaign_stage.rs`.
-OAG_CAMPAIGN_MODE_UNSUPPORTED = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET"
-OAG_CAMPAIGN_TRACK_UNAVAILABLE = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC"
+OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
+OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }

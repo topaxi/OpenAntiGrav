@@ -48,7 +48,8 @@ fn check(image: &str, serial: &str, expected: &[(&str, &str)]) {
     let front_end = opened.title.front_end.expect("a front end");
     let plugins = front_end.offered_languages(Some(serial));
     let mut report = Vec::new();
-    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
     let got: Vec<(&str, &str)> = languages
         .iter()
         .map(|l| (l.plugin.as_str(), l.name.as_str()))

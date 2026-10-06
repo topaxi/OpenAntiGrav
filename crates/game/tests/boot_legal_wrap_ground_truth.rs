@@ -69,6 +69,7 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     let languages = oag_ui::language::load::load_languages(
         &mut archives,
         oag_pulse::LANGUAGE_PLUGINS,
+        None,
         &mut report,
     );
     let strings =

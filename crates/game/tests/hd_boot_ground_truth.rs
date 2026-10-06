@@ -231,7 +231,8 @@ fn every_declared_language_plugin_resolves() {
     // plugin went with it, silently. `oag_ui::xml::expand` falls back to Latin-1
     // now; `all_sixteen_languages_load_including_the_latin_1_one` asserts the
     // name comes out right rather than merely coming out.
-    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
     assert_eq!(languages.len(), 16, "every declared plugin parses");
     assert!(
         languages

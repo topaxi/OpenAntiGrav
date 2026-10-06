@@ -1,0 +1,1581 @@
+# Brazilian Portuguese: this project's own translation of Wipeout Pulse's disc
+# text, keyed by Pulse's own idstrings (`FE_MM`, `IG_HUD_LAP`, ...). Read only
+# by a title whose front end names the `pulse` namespace
+# (`oag_title::FrontEnd::disc_strings`), and laid over the disc's own English
+# table, so an id this file does not carry reads the disc's English.
+#
+# **Every entry is `human = false`**: written by a model, not reviewed by a
+# native speaker. These are this project's own sentences, keyed by the disc's
+# ids; no line of the disc's text is copied here (docs/overview/legal.md).
+# Terminology follows Wipeout Omega's own on-disc `portuguesebr` table (NAVE,
+# EQUIPE, VOLTA, ZONA, ELIMINATÓRIA, TORNEIO, ARMAS, COLETÁVEL, FREIO AÉREO,
+# skin, ...).
+#
+# Left out on purpose, so they read as the disc writes them: team, ship and
+# track proper names, speed-class names, button glyphs (ε γ δ β Λ Ν), unit
+# labels (MPH, KMH, kb) and the 59 ids whose Portuguese would be identical.
+# Where the file says "Preta"/"Branca" for a track's black and white runs it
+# is the project's own wording: chosen, not measured.
+
+[strings]
+
+TRC_MS_MINKB = { text = "São necessários pelo menos %d KB para salvar os dados.", human = false }
+TRC_MS_INSUFKB = { text = "Não há espaço suficiente para salvar os dados. São necessários pelo menos %d KB. Quer apagar alguns dados para liberar espaço agora?", human = false }
+TRC_SAVE_GHOST_AGAIN = { text = "Quer tentar salvar os dados do fantasma de novo?", human = false }
+TRC_SAVE_PROF_AGAIN = { text = "Quer tentar salvar os dados do perfil de novo?", human = false }
+BOOT_WWP = { text = "Bem-vindo ao WipEout® Pulse", human = false }
+BOOT_PRESS_START = { text = "Pressione o botão START", human = false }
+BOOT_PRESS_ANY = { text = "Pressione qualquer botão para começar", human = false }
+MSC_LOADING = { text = "CARREGANDO", human = false }
+FE_MM = { text = "MENU PRINCIPAL", human = false }
+FE_RACE_CAM = { text = "CAMPANHA DE CORRIDA", human = false }
+FE_ONLINE = { text = "ONLINE", human = false }
+FE_PROFILE = { text = "PERFIL", human = false }
+FE_OPT_PLUS = { text = "OPÇÕES", human = false }
+TRC_NO_MS = { text = "Nenhum Memory Stick Duo™ inserido.", human = false }
+FE_PRESS_TO_CONT = { text = "Aperte ε para continuar", human = false }
+TRC_MS_ACCESS = { text = "Se você vir este ícone durante o jogo, o Memory Stick Duo™ está sendo acessado.\n\nNesse momento, recomendamos não remover o Memory Stick Duo™.", human = false }
+FE_CON = { text = "CONFIRMAR", human = false }
+FE_SELECT = { text = "SELECIONAR", human = false }
+FE_BACK = { text = "Voltar", human = false }
+FE_CANCEL = { text = "CANCELAR", human = false }
+FE_YES = { text = "SIM", human = false }
+FE_NO = { text = "NÃO", human = false }
+FE_START = { text = "INICIAR", human = false }
+FE_START_RACE = { text = "INICIAR CORRIDA", human = false }
+FE_CONTINUE = { text = "CONTINUAR", human = false }
+FE_QUIT = { text = "SAIR", human = false }
+FE_RETRY = { text = "NOVA TENTATIVA", human = false }
+FE_ACCEPT = { text = "Aceitar", human = false }
+FE_EXIT = { text = "Sair", human = false }
+FE_DECLINE = { text = "Recusar", human = false }
+RC_GM = { text = "Medalhas de ouro", human = false }
+RC_TP = { text = "Total de pontos", human = false }
+RC_PN = { text = "Pontos necessários", human = false }
+Arcade = { text = "Corrida única", human = false }
+Tournament = { text = "Torneio", human = false }
+"Time Trial" = { text = "Time trial", human = false }
+"Speed Lap" = { text = "Volta de velocidade", human = false }
+Head2Head = { text = "Cara a cara", human = false }
+Zone = { text = "Zona", human = false }
+Elimination = { text = "Eliminatória", human = false }
+RC_RE = { text = "Evento de corrida", human = false }
+RC_RT = { text = "Tipo de corrida", human = false }
+RC_SC = { text = "Classe", human = false }
+RC_TRACK = { text = "Pista", human = false }
+RC_CELL = { text = "Célula", human = false }
+RC_CELLS = { text = "Células", human = false }
+RC_BLACKR = { text = "Corrida preta", human = false }
+RC_WHITER = { text = "Corrida branca", human = false }
+RC_TBLACKR = { text = "A corrida preta", human = false }
+RC_TWHITER = { text = "A corrida branca", human = false }
+RC_LAP = { text = "Volta", human = false }
+RC_LAPS = { text = "Voltas", human = false }
+RC_SHIP = { text = "Nave", human = false }
+RC_SHIPSEL = { text = "Seleção de nave", human = false }
+RC_GRID = { text = "Grade", human = false }
+RC_GRIDS = { text = "Grades", human = false }
+RC_SPEED = { text = "Velocidade", human = false }
+RC_THRUST = { text = "Propulsão", human = false }
+RC_HANDLING = { text = "Dirigibilidade", human = false }
+RC_SHIELD = { text = "Escudo", human = false }
+RC_TS = { text = "Velocidade máxima", human = false }
+RB_SP = { text = "Corrida personalizada", human = false }
+RB_YG = { text = "Suas grades", human = false }
+RB_JAHR = { text = "Entrar em corrida Ad Hoc", human = false }
+RB_CAHR = { text = "Criar corrida Ad Hoc", human = false }
+RB_OPP = { text = "Oponentes", human = false }
+RB_WEAP = { text = "Armas", human = false }
+RB_DIF = { text = "Dificuldade", human = false }
+FE_OFF = { text = "Desligado", human = false }
+FE_ON = { text = "Ligado", human = false }
+Easy = { text = "Fácil", human = false }
+Medium = { text = "Médio", human = false }
+Hard = { text = "Difícil", human = false }
+RC_LIVERY = { text = "Skin", human = false }
+RC_MUSIC = { text = "Música", human = false }
+RC_SPACE = { text = "Espaço", human = false }
+RC_BSPACE = { text = "Backspace", human = false }
+RB_LOAD_GRID = { text = "Carregar grade", human = false }
+RB_SAVE_GRID = { text = "Salvar grade", human = false }
+RB_DEL_GRID = { text = "Apagar grade", human = false }
+RB_EDIT_GRID_NAME = { text = "Editar nome da grade", human = false }
+RB_SET_START = { text = "Definir ponto de partida", human = false }
+RB_RESET_GRID = { text = "Zerar resultados da grade", human = false }
+RB_EMPTY_GRID = { text = "Esvaziar grade", human = false }
+RB_DEL_EVENT = { text = "Apagar evento", human = false }
+RB_AC = { text = "Aceitar mudanças", human = false }
+RB_EDIT_EVENT = { text = "Editar evento", human = false }
+RC_GRID_MENU = { text = "Menu da grade", human = false }
+RC_SEL_EVENT = { text = "Selecionar evento", human = false }
+"AI Race" = { text = "Corrida com IA", human = false }
+"Custom Grid" = { text = "Grade personalizada", human = false }
+RB_TRACK_SEL = { text = "Seleção de pista", human = false }
+RB_TOURN_SET = { text = "Configuração de torneio", human = false }
+RB_TRACKS = { text = "pistas", human = false }
+RB_MIN_TOURN = { text = "minuto de torneio", human = false }
+RB_MINS_TOURN = { text = "minutos de torneio", human = false }
+RB_ENTER_GRID_NAME = { text = "Digite o nome da grade", human = false }
+RB_ADD_TRACK = { text = "Adicionar pista", human = false }
+FE_DEL = { text = "Apagar", human = false }
+FE_EDIT = { text = "Editar", human = false }
+FE_MENU = { text = "Menu", human = false }
+FE_UNDO = { text = "Desfazer", human = false }
+FE_ADD = { text = "Adicionar", human = false }
+FE_REMOVE = { text = "Remover", human = false }
+FE_HELP = { text = "Ajuda", human = false }
+FE_RETURN = { text = "Voltar", human = false }
+FE_OFFLINE = { text = "Offline", human = false }
+FE_RANDOM = { text = "Aleatório", human = false }
+RB_GAME_LIST = { text = "Lista de jogos", human = false }
+RB_HOST = { text = "Anfitrião", human = false }
+RB_EVENT = { text = "Evento", human = false }
+RB_PLAYERS = { text = "Jogadores", human = false }
+RB_DOWNLOADS = { text = "Downloads", human = false }
+RB_AI = { text = "IA", human = false }
+RB_MSG_WAIT_HOST = { text = "Aguardando o anfitrião iniciar a corrida", human = false }
+RB_AI_OPP = { text = "Oponentes de IA", human = false }
+RB_GAME_LOBBY = { text = "Sala do jogo", human = false }
+RB_LOBBY = { text = "Sala", human = false }
+RB_START = { text = "Iniciar corrida", human = false }
+OPT_USERNAME = { text = "Nome de usuário", human = false }
+OPT_PASSWORD = { text = "Senha", human = false }
+OPT_ENT_USER = { text = "Digite o nome de usuário", human = false }
+OPT_EN_PASS = { text = "Senha", human = false }
+OPT_SAVE_PASS = { text = "Salvar senha", human = false }
+OPT_AUTO_LOGIN = { text = "Login automático", human = false }
+OPT_MSG_NO_PROF = { text = "Não é possível criar uma conta online sem um perfil salvo. Salve o perfil atual antes de voltar.", human = false }
+OPT_MSG_NEED_MAN_LOG = { text = "Esta opção só será ativada depois que você fizer um login manual completo.", human = false }
+OPT_MSG_MUST_SAVE = { text = "Você precisa salvar esta conta para usar \"Salvar senha\" ou \"Login automático\". Esta conta online ficará ligada ao seu perfil e será apagada se você apagar o perfil pelos menus. Salvar esta conta online antes de sair?", human = false }
+OPT_MSG_SP_AL_OFF = { text = "\"Salvar senha\" e \"Login automático\" foram desligados.", human = false }
+OPT_GAME_OPT = { text = "Opções de jogo", human = false }
+OPT_CTRL = { text = "Controles", human = false }
+OPT_MUSIC_PL = { text = "Playlist de músicas", human = false }
+OPT_MUSIC_VOL = { text = "Volume da música", human = false }
+OPT_SFX_VOL = { text = "Volume de SFX", human = false }
+OPT_SPEECH_VOL = { text = "Volume de fala", human = false }
+OPT_CAM = { text = "Câmera", human = false }
+OPT_INT = { text = "Interna", human = false }
+OPT_CLOSE = { text = "Perto", human = false }
+OPT_FAR = { text = "Longe", human = false }
+OPT_LANG = { text = "Idioma", human = false }
+OPT_ENGLISH = { text = "Inglês", human = false }
+OPT_FRENCH = { text = "Francês", human = false }
+OPT_ITALIAN = { text = "Italiano", human = false }
+OPT_GERMAN = { text = "Alemão", human = false }
+OPT_SPANISH = { text = "Espanhol", human = false }
+OPT_DUTCH = { text = "Holandês", human = false }
+OPT_PORTUGUESE = { text = "Português", human = false }
+OPT_SCAND = { text = "Escandinavo", human = false }
+OPT_RUSSIAN = { text = "Russo", human = false }
+OPT_POLISH = { text = "Polonês", human = false }
+OPT_HUNGARIAN = { text = "Húngaro", human = false }
+OPT_AL_GHOST = { text = "Carregar fantasma automaticamente", human = false }
+OPT_MP_TAGS = { text = "Tags de multijogador", human = false }
+OPT_CTRL_NOV = { text = "Novato", human = false }
+OPT_CTRL_VET = { text = "Veterano", human = false }
+OPT_CTRL_CUS = { text = "Personalizado", human = false }
+OPT_CTRL_LAB = { text = "Freio aéreo esquerdo", human = false }
+OPT_CTRL_RAB = { text = "Freio aéreo direito", human = false }
+OPT_CTRL_ACC = { text = "Acelerar", human = false }
+OPT_CTRL_ABS = { text = "Absorver coletável", human = false }
+OPT_CTRL_FIRE = { text = "Disparar/usar coletável", human = false }
+OPT_CTRL_LBACK = { text = "Olhar para trás", human = false }
+OPT_CTRL_PAUSE = { text = "Pausar jogo", human = false }
+OPT_CTRL_PHOTO = { text = "Tirar foto", human = false }
+OPT_CTRL_SSL = { text = "Deslocamento lateral à esquerda", human = false }
+OPT_CTRL_SSR = { text = "Deslocamento lateral à direita", human = false }
+OPT_CTRL_BRL = { text = "Giro lateral à esquerda", human = false }
+OPT_CTRL_BRR = { text = "Giro lateral à direita", human = false }
+OPT_CTRL_SS = { text = "Deslocamento lateral", human = false }
+OPT_CTRL_AIRBRAKES = { text = "Freios aéreos", human = false }
+OPT_CTRL_BRAKE_SYS = { text = "Sistema de freio", human = false }
+OPT_CTRL_DUAL_AIRB = { text = "Freios aéreos duplos", human = false }
+OPT_CTRL_SINGLE_AIRB = { text = "Freio aéreo único", human = false }
+FE_DEFAULT = { text = "Padrão", human = false }
+OPT_SONG = { text = "Música", human = false }
+OPT_ARTIST = { text = "Artista", human = false }
+OPT_LABEL = { text = "Gravadora", human = false }
+OPT_INFO = { text = "Info", human = false }
+OPT_MOVE_SONG = { text = "Mover música", human = false }
+OPT_SEQ = { text = "Sequencial", human = false }
+EXT_PHOTO = { text = "Modo foto", human = false }
+EXT_MANUAL = { text = "Manual de instruções", human = false }
+EXT_GAMESHARE = { text = "Compartilhamento de jogo", human = false }
+EXT_CREDITS = { text = "Créditos", human = false }
+EXT_TUT_VIDS = { text = "Vídeos tutoriais", human = false }
+PRO_MAN_PRO = { text = "Gerenciar perfis", human = false }
+PRO_YOUR_DET = { text = "Seus detalhes", human = false }
+PRO_STATS = { text = "Estatísticas", human = false }
+PRO_RACE_REC = { text = "Recordes de corrida", human = false }
+PRO_LOAD = { text = "Carregar", human = false }
+PRO_SAVE = { text = "Salvar", human = false }
+PRO_CREATE = { text = "Criar", human = false }
+PRO_DELETE = { text = "Apagar", human = false }
+PRO_TAG = { text = "Tag", human = false }
+PRO_NAME = { text = "Nome", human = false }
+PRO_DOB = { text = "Nasc.", human = false }
+PRO_COLOUR = { text = "Cor", human = false }
+PRO_CREATE_PRO = { text = "Criar perfil", human = false }
+PRO_ENTER_TAG = { text = "Digite sua tag", human = false }
+PRO_ENTER_NAME = { text = "Digite seu nome", human = false }
+PRO_ENTER_DOB = { text = "Digite sua data de nascimento", human = false }
+PRO_SEL_COLOUR = { text = "Escolha uma cor", human = false }
+PRO_SEL_LOGO = { text = "Escolha um logotipo", human = false }
+PRO_LOGO = { text = "Logotipo", human = false }
+PRO_MSG_CONF_LOAD = { text = "Você perderá os dados não salvos se continuar com o carregamento.", human = false }
+PRO_MSG_CONF_SAVE = { text = "Tem certeza de que quer salvar e sobrescrever o perfil atual?", human = false }
+PRO_MSG_CONF_DEL = { text = "Tem certeza de que quer apagar o perfil atual?", human = false }
+PRO_MSG_CONF_CREATE = { text = "Você perderá os dados não salvos se continuar para criar um novo perfil.", human = false }
+PRO_MSG_CONF_CREATE2 = { text = "Tem certeza de que quer criar este perfil?", human = false }
+PRO_ACH = { text = "Conquistas", human = false }
+PRO_GTBM = { text = "Tempo de jogo por modo", human = false }
+PRO_GTBE = { text = "Tempo de jogo por evento", human = false }
+PRO_SHIP_USE = { text = "Voltas por nave (4/12)", human = false }
+PRO_SHIP_LOY = { text = "Pontos de lealdade à nave (5/12)", human = false }
+PRO_WIU = { text = "Uso de armas e itens", human = false }
+PRO_WIA = { text = "Armas e itens absorvidos", human = false }
+PRO_DAMT = { text = "Unidades de dano sofrido (8/12)", human = false }
+PRO_PL = { text = "Pads e voltas (9/12)", human = false }
+PRO_LPT = { text = "Voltas por pista (10/12)", human = false }
+PRO_FAV = { text = "Favoritos", human = false }
+PRO_MULTI = { text = "Multijogador e online", human = false }
+PRO_OTHER_STATS = { text = "Outras estatísticas", human = false }
+PRO_SHARE_REC = { text = "Compartilhar recordes", human = false }
+PRO_LAP_TIME = { text = "Tempo de volta", human = false }
+PRO_TIME = { text = "Tempo", human = false }
+PRO_BOOSTS = { text = "Turbos", human = false }
+PRO_PERFECT_LAP = { text = "Voltas perfeitas", human = false }
+PRO_TOT_TIME = { text = "Tempo total de corrida", human = false }
+PRO_RACE_TIME = { text = "Tempo de corrida", human = false }
+PRO_STATUS = { text = "Status", human = false }
+PRO_SEARCH = { text = "Buscando", human = false }
+PRO_ID = { text = "ID", human = false }
+PRO_NICKNAME = { text = "Apelido", human = false }
+PRO_MSG_SHARE_SENT = { text = "Pedido de compartilhamento enviado para", human = false }
+PRO_MSG_WAIT_RESP = { text = "Aguardando resposta.", human = false }
+PRO_MSG_CONX_EST = { text = "Conexão estabelecida. Pronto para compartilhar.", human = false }
+PRO_MSG_SHARING = { text = "Compartilhando dados...", human = false }
+PRO_MSG_CONX_LOST = { text = "Conexão perdida. Tente de novo.", human = false }
+PRO_MSG_SHARE_DONE = { text = "Compartilhamento concluído.", human = false }
+PRO_MSG_REC_SAVE = { text = "Recomendamos salvar o seu perfil manualmente.", human = false }
+PRO_MSG_SHARE_INIT = { text = "Ao compartilhar dados, alguns dos seus recordes podem ser sobrescritos por tempos mais rápidos do perfil da outra pessoa.", human = false }
+BOOT_LOAD_LAST = { text = "Carregando o perfil usado mais recentemente", human = false }
+BOOT_LOAD_OK = { text = "Perfil carregado com sucesso.", human = false }
+BOOT_NO_PROFILE = { text = "Nenhum perfil encontrado no Memory Stick Duo™.", human = false }
+BOOT_CREATE_NOW = { text = "Quer criar um perfil agora?", human = false }
+BOOT_NO_SAVE = { text = "Você não poderá salvar o seu progresso.", human = false }
+ONL_MSG_CON_LOST = { text = "Conexão perdida.", human = false }
+ONL_MSG_RET_MEN = { text = "Voltando aos menus.", human = false }
+ONL_MSG_RET_MM = { text = "Voltando ao menu principal.", human = false }
+ONL_MSG_RET_OMM = { text = "Voltando ao menu principal online.", human = false }
+ONL_MSG_HOST_LOST = { text = "Conexão com o anfitrião perdida.", human = false }
+ONL_MSG_YOU_HOST = { text = "Você agora é o anfitrião deste jogo.", human = false }
+ONL_MSG_MSC_HOST = { text = "agora é o anfitrião deste jogo.", human = false }
+ONL_MSG_MSC_LOST = { text = "perdeu a conexão.", human = false }
+ER_PHOTO_TAKE = { text = "Tirar foto com HUD", human = false }
+ER_PHOTO_TAKE_NOHUD = { text = "Tirar foto sem HUD", human = false }
+ER_PHOTO_RESOURCE = { text = "Recursos insuficientes para tirar a foto", human = false }
+ER_PHOTO_SPACE = { text = "Não há espaço livre suficiente no Memory Stick Duo™ para salvar a foto. São necessários pelo menos %d KB.", human = false }
+TRC_MS_INSUFKB2 = { text = "Não há espaço livre suficiente no Memory Stick Duo™.", human = false }
+TRC_SAVING = { text = "Salvando. Não remova o Memory Stick Duo™.", human = false }
+TRC_SAVE_OK = { text = "Salvo com sucesso.", human = false }
+FE_MP = { text = "MULTIJOGADOR E COMPARTILHAMENTO", human = false }
+FE_HELP_RC = { text = "A experiência definitiva de WipEout® para um jogador", human = false }
+FE_HELP_RB = { text = "Personalize suas próprias corridas e grades de campanha", human = false }
+FE_HELP_MP = { text = "Corra online ou via Ad Hoc e compartilhe dados", human = false }
+FE_HELP_WOC = { text = "Visite o site oficial para downloads e mais", human = false }
+FE_HELP_PRO = { text = "Estatísticas, recordes e gerenciamento de perfis", human = false }
+FE_HELP_OPT = { text = "Mude configurações, controles e a playlist de músicas", human = false }
+FE_HELP_EXT = { text = "Manual, créditos da equipe e mais", human = false }
+RB_CUSTOM_RACE = { text = "Corrida personalizada", human = false }
+RB_SEND_GRID = { text = "Enviar grade", human = false }
+RB_REC_GRID = { text = "Receber grade", human = false }
+RB_AI_DIF = { text = "Dificuldade da IA", human = false }
+ONL_ONL_INF = { text = "Online (infraestrutura)", human = false }
+ONL_JLAN = { text = "Entrar na LAN", human = false }
+ONL_CLAN = { text = "Criar LAN", human = false }
+ONL_JAD = { text = "Entrar em Ad Hoc", human = false }
+ONL_CAD = { text = "Criar Ad Hoc", human = false }
+OPT_HUD = { text = "HUD dinâmico", human = false }
+FE_CONVEX = { text = "Convexo", human = false }
+FE_CONCAVE = { text = "Côncavo", human = false }
+FE_FLAT = { text = "Plano", human = false }
+FE_CURVED = { text = "Curvo", human = false }
+BOOT_PRESS_ANY2 = { text = "Pressione qualquer botão", human = false }
+ER_PHOTO_TAKE2 = { text = "Tirar foto", human = false }
+IG_PAUSE_PAUSE = { text = "Pausar", human = false }
+IG_PAUSE_PAUSED = { text = "Pausado", human = false }
+IG_PAUSE_GPAUSED = { text = "Jogo pausado", human = false }
+IG_PAUSE_CONT = { text = "Continuar", human = false }
+IG_PAUSE_OPT = { text = "Opções", human = false }
+IG_PAUSE_GMAN = { text = "Manual do jogo", human = false }
+IG_PAUSE_REST = { text = "Reiniciar corrida", human = false }
+IG_PAUSE_QUIT = { text = "Sair da corrida", human = false }
+IG_PAUSE_ENDSES = { text = "Encerrar sessão", human = false }
+IG_PAUSE_SKIP = { text = "Pular corrida", human = false }
+OPT_GHOST_VIS = { text = "Naves fantasma visíveis", human = false }
+MSC_TRACK_01 = { text = "Esta cidade cinza-metálico foi totalmente evacuada após o surto da Nova Escócia, deixando apenas letreiros de neon e sentinelas robóticas para vigiar de perto os avatares da multidão e as curvas magnéticas do circuito de 4,2 quilômetros de Basilico.", human = false }
+MSC_TRACK_17 = { text = "Em Basilico, as luzes estão acesas, mas não há ninguém em casa. São 3,9 quilômetros de deslize em granito-obsidiana por este formigueiro de cidade, enquanto a corrida mantém dóceis os caçadores de peste e os drones de carga abandonados.", human = false }
+MSC_TRACK_02 = { text = "Entre as torres e plataformas de pouso do coração corporativo do Leste Asiático, o circuito de 4,7 quilômetros de Metropia tem um trecho de vidro que dá vertigem e uma descida mortal para as entranhas da cidade. Corra com cuidado.", human = false }
+MSC_TRACK_18 = { text = "A Assembleia de Nova Kyoto apoia e autoriza plenamente a corrida em Metropia, onde a pista de 4,4 km conduz os competidores com eficiência pelas torres mais altas e pelos centros de convenções do quadrante empresarial reformado.", human = false }
+MSC_TRACK_03 = { text = "Construída numa cadeia exclusiva de ilhas na costa da Sicília, Moa Therma é a própria definição de glamour mediterrâneo. Corra pelo dínamo horizontal da Synchro Logistics e ajude a abastecer de eletricidade os ricos e saudáveis moradores desta pista de 5,3 km.", human = false }
+MSC_TRACK_19 = { text = "Com 5,3 quilômetros, o prestigioso circuito de Moa Therma, em meio a imóveis sicilianos de primeira linha, foi patrocinado à perfeição, das ondulações das cristas magnéticas ao esculpido anel do dínamo de alta velocidade.", human = false }
+MSC_TRACK_04 = { text = "Ar e água frescos são artigos de luxo no principado científico dos especialistas em energia solar da Tech De Ra, o último refúgio do grande deserto americano. Acelere por 5 quilômetros em torno dos cânions e ravinas frágeis desta antiga fazenda hidropônica.", human = false }
+MSC_TRACK_20 = { text = "Enquanto os painéis solares alimentam as roupas refrigeradas dos espectadores sob o sol escaldante do meio-dia, o circuito de 5 quilômetros de plasmetal faz um arco preguiçoso pelos cânions do Arizona. Fora do complexo da Tech De Ra, só restam ferrugem, poeira e a corrida.", human = false }
+MSC_TRACK_05 = { text = "Erguendo-se das cinzas de Genebra, a expansão de de Konstruct não para. Por isso, a torre de transmissão da ECS fica logo fora do alcance do anel de trânsito, e o cassino abriga um desvio elevado perto da entrada desta pista de quatro quilômetros e meio.", human = false }
+MSC_TRACK_21 = { text = "Quatro quilômetros e meio de pista de alta tensão se enroscam nas declarações art déco de de Konstruct, a cidade cuja única constante é a mudança, onde os sortudos podem ver de relance as ondas de rádio entre as chamas dos motores.", human = false }
+MSC_TRACK_06 = { text = "Quando as cidades das Ilhas Cayman se expandiram para o mar, nasceu Vertica. Este paraíso tropical abriga os últimos recifes de coral e é um refúgio para a elite e os reclusos, com acesso corporativo restrito às arquibancadas desta pista de 4,3 km.", human = false }
+MSC_TRACK_22 = { text = "Em Vertica, os negócios tomam emprestado da natureza, abrindo caminho pela paisagem, por túneis de musgo luminoso e descidas ladeadas de palmeiras numa pista de 4,9 km projetada para curvas em alta velocidade e cumes sem visibilidade.", human = false }
+MSC_TRACK_07 = { text = "5,1 quilômetros de pista cercados pelos servidores superresfriados e centros de dados de Outpost 7. As corridas trazem fundos vitais a este polo de comunicações no topo da Finlândia. Admire o gelo-nove que avança sem parar e atravesse a estreita ponte memorial.", human = false }
+MSC_TRACK_23 = { text = "As temperaturas abaixo de zero de Outpost 7 são compensadas, como emissões de carbono, pelas chamas dos motores e pela rivalidade que esquentam este circuito finlandês de 5,1 km, onde curvas duplas em V enfrentam os enlaces de satélite.", human = false }
+MSC_TRACK_08 = { text = "A construção deste porto submarino único levou o comitê de corridas da Ilha Vostok a criar um novo circuito de cinco quilômetros e meio sob o mar, que destaca os navios baleeiros e a comunidade de mineração no centro de Vostok Reef.", human = false }
+MSC_TRACK_24 = { text = "15 centímetros de vidro profissional reforçado mantêm a água fora dos 4,9 quilômetros de Vostok Reef, enquanto o túnel em espiral recém-polido e as estações de atracação destacam as curvas constantes deste circuito friamente distante.", human = false }
+MSC_TRACK_09 = { text = "A extensão natural de Las Vegas, The Amphiseum é uma cidade feita só para o entretenimento. Este circuito sem modéstia tem 6 quilômetros e contrasta os holofotes e as torres de mais uma noite movimentada com o fascínio das massas. Nunca esteve tão bonito.", human = false }
+MSC_TRACK_25 = { text = "Ao longo de 5,4 quilômetros, o piso de vidro de The Amphiseum leva às pistas dos espectadores separadas por retornos, e à colina magnética, depois faz uma longa curva à direita antes do retorno espetacular até a grade. Isto é entretenimento.", human = false }
+MSC_TRACK_10 = { text = "O que acontece quando o grande irmão invade a aldeia global? Arc Prime é a resposta, onde muros fortificados e canais de rede seguros oferecem privacidade a um preço. Só a corrida escapa, com parte de seus 5 km rompendo os limites do corredor interurbano de Seattle.", human = false }
+MSC_TRACK_26 = { text = "Não dá para parar o sinal? A fortaleza de dados de Arc Prime já parou. Paranoica com cada metro de seus 5,1 km, segue todos os protocolos e padrões de segurança, das arquibancadas aos nós de varredura à beira da pista deste circuito de complexo sem fio.", human = false }
+MSC_TRACK_11 = { text = "Esta pista de 5 quilômetros serpenteia pelo sistema de transporte e pelo distrito comercial da densa metrópole de Edgewinter, uma cidade-ilha flutuante no Pacífico, apanhada no meio de uma tempestade tropical.", human = false }
+MSC_TRACK_27 = { text = "Quando a chuva nunca para, Edgewinter continua. Vista pela última vez perto do Atol de Midway, esta pista de 5,3 km resiste além de sua reta central de alta velocidade, torcendo-se e ondulando com vontade para acomodar a cidade.", human = false }
+MSC_TRACK_12 = { text = "Gemini Dam é o eixo central das rotas comerciais do Norte da África, com a pista de 4,9 km mergulhando brevemente na escorregadia estação de purificação antes de emergir nos subúrbios castigados pelo sol.", human = false }
+MSC_TRACK_28 = { text = "Este local marroquino equilibra emoção e corrida técnica ao longo de 5,2 quilômetros de tarmacreto, entre plataformas de sustentação e estátuas, num clima ameno de fim de tarde.", human = false }
+MSC_TRACK_13 = { text = "Os parques da Groenlândia foram finalmente descongelados e preservados para sempre por um comitê de filantropos com ambições utópicas. Esta pista sob medida de 4,6 quilômetros oferece um passeio vertiginoso pela arquitetura azul-gelo e pelas árvores petrificadas de Platinum Rush.", human = false }
+MSC_TRACK_29 = { text = "As curvas impecáveis de Platinum Rush imitam o entorno, com trechos da pista de 4,6 km que acompanham a linha das árvores e depois viram para perseguir os viadutos e as ligações de monotrilho até o centro de eugenia.", human = false }
+MSC_TRACK_14 = { text = "As máquinas do clima vieram a Fort Gale, em Gibraltar, para pesquisar, mas ficaram pela corrida. Escondidas entre as aletas residenciais, elas vigiam com dedicação os cinco quilômetros e meio deste ninho de víboras de pista.", human = false }
+MSC_TRACK_30 = { text = "Moinhos de vento, cachoeiras e túneis baixos e largos se espalham pela guarnição rochosa de Fort Gale, criando uma sensação irregular, em dente de serra, que paira sobre as retas amigas das armas deste circuito de 5,4 km.", human = false }
+MSC_TRACK_15 = { text = "Nas redes subterrâneas abaixo do Alasca, oficiais de alto escalão trabalham em ambiente secreto esperando a bomba cair. Seu único entretenimento é a corrida, que carrega seu próprio nível de ameaça por 4,3 km de escuridão permanente. Este é Orcus.", human = false }
+MSC_TRACK_31 = { text = "Quatro quilômetros e meio de pista correm em silêncio pelo Centro de Prevenção de Catástrofes de Orcus, enquanto o ar fraco penetra este lugar subterrâneo onde a pista se retorce como casca sob as luzes âmbar do nível de código.", human = false }
+MSC_TRACK_16 = { text = "A corrida chegou a este parque de energia secreto nas Brecon Beacons quando o dinheiro público foi retirado após o incidente da gosma cinzenta. No centro do circuito de 5,2 km de Talon's Junction estão os disjuntores de aspecto de catedral e o dinâmico anel Concordia.", human = false }
+MSC_TRACK_32 = { text = "Escondido no centro de um geoparque galês, Talon's Junction é um ninho de atividades não aprovadas pelo governo. 5,2 quilômetros de pista passam pelos mecanismos e portais geométricos deste anel de pesquisa de energia escura.", human = false }
+MSC_EVENT_SR = { text = "Corrida única: enfrente uma grade completa de oponentes, com armas opcionais. Uma medalha de ouro espera quem sair vitorioso.", human = false }
+MSC_EVENT_HTH = { text = "Cara a cara: uma corrida única para dois jogadores, de rivalidade intensa. Prepare-se para brigar por cada metro do circuito para vencer o oponente. Acompanhe a distância entre vocês no HUD.", human = false }
+MSC_EVENT_TOURN = { text = "Torneio: participe de uma série de corridas únicas. Os pontos são dados entre as corridas e somados para definir o vencedor geral. Encare os maiores torneios para provar que é um piloto lendário. Você também pode salvar o progresso do torneio entre as corridas.", human = false }
+MSC_EVENT_TT = { text = "Time trial: vença o relógio nesta corrida solo. Aproveite cada turbo à perfeição e faça cada curva valer. Você ganha um turbo grátis por volta. Sua energia também se recupera sozinha, então não se preocupe em bater.", human = false }
+MSC_EVENT_SL = { text = "Volta de velocidade: concentre todos os esforços em arrasar a pista e bater o melhor tempo de uma única volta neste evento solo. Você ganha um turbo grátis por volta. Sua energia também se recupera sozinha, então não se preocupe em bater.", human = false }
+MSC_EVENT_ZONE = { text = "Zona: sua nave acelera sozinha e a velocidade máxima aumenta a cada período de dez segundos, chamado de zona. Use os freios aéreos esquerdo e direito (Λ e Ν por padrão) junto com a direção para percorrer a pista. Adapte sua técnica de freio aéreo conforme a velocidade sobe e sobreviva o máximo que puder antes de bater. Complete o número de zonas alvo para vencer o evento.", human = false }
+MSC_EVENT_ELIM = { text = "Eliminatória: corra por abates, não por posição, contra uma grade cheia de competidores de gatilho fácil num ambiente repleto de armas. Absorver coletáveis dá um escudo breve em vez de energia, mas você recupera a saúde a cada volta. O número de voltas não é fixo, e a corrida termina quando a meta de abates é atingida.", human = false }
+MSC_TEAMDES_FEI = { text = "O excelente controle da nave Feisar, do consórcio europeu, é um pouco traído pela falta de velocidade máxima, mas esta equipe é pra valer em qualquer padrão.", human = false }
+MSC_TEAMDES_AGS = { text = "Uma AG Systems renascida entregou este projeto elegante e evolutivo, vindo da sede no Japão: uma nave equilibrada, com aceleração praticamente sem rival.", human = false }
+MSC_TEAMDES_AUR = { text = "A Auricom se renovou com uma nova visão toda americana e uma nave à altura, com excelente velocidade máxima e escudo, prejudicados só um pouco pelo controle básico.", human = false }
+MSC_TEAMDES_QIR = { text = "A potência russa produziu uma nave ágil e bem protegida, cuja aceleração é o ponto mais fraco. A Qirex está voltando rápido à frente da grade.", human = false }
+MSC_TEAMDES_PIR = { text = "A Piranha pode se orgulhar de ter o motor mais rápido da liga, embora a equipe de controle brasileiro tenha sacrificado manobrabilidade e aceleração no processo.", human = false }
+MSC_TEAMDES_TRI = { text = "Esta fera de nave, da sede australiana da Triakis, oferece um sistema de escudo de classe mundial com ótima velocidade máxima, mas não vai quebrar recordes de controle ou aceleração.", human = false }
+MSC_TEAMDES_HAR = { text = "A nave Harimau tem um controle excelente, mas seu desempenho nas outras áreas é, no máximo, acima da média. Mesmo assim, a equipe asiática sempre consegue resultados na pista.", human = false }
+MSC_TEAMDES_ASS = { text = "O excepcional modelo de controle da Assegai é o núcleo da nova nave das Nações Africanas Unidas, que já mostrou boas habilidades gerais nas outras áreas.", human = false }
+MSC_TEAMDES_MIR = { text = "A Mirage espera largar bem na liga FX400, com os Emirados Árabes Unidos concentrando esforços em entregar a nave mais equilibrada disponível.", human = false }
+MSC_TEAMDES_EGX = { text = "Esta parceria improvável entre a EG-R da China e a Xios da Suécia faz sua nave de estreia surgir como uma espécie de zebra, com um motor muito capaz e um escudo respeitável.", human = false }
+MSC_TEAMDES_ICA = { text = "Os azarões britânicos da Icaras miraram na Piranha e produziram uma nave deliberadamente pouco blindada, com velocidade máxima e aceleração ofuscantes para superar os brasileiros.", human = false }
+MSC_TEAMDES_GOT = { text = "Recém-refundada na Ilha Makana, no Oceano Pacífico, a Goteki 45 construiu uma nave à prova de futuro, com aceleração incrível e excelente escudo.", human = false }
+MSC_TEAMDES_ZONE = { text = "Cada equipe produziu uma nave capaz de suportar as condições severas do modo Zona, que de algum modo aguentam velocidades extremas, deixando o erro do piloto como única causa de falha.", human = false }
+MSC_TEAMDES_ELIM = { text = "As equipes reformularam o formato de suas naves de corrida para refletir as reformas internas exigidas pelo modo Eliminatória, onde os disparos de armas são intensos e constantes.", human = false }
+MSC_TEAMDES_CONCEPT = { text = "Saídas fresquinhas das fábricas de ponta das equipes, chegam as naves da classe conceito, onde as possibilidades de ideias futuras viram realidade nestes protótipos de primeira geração.", human = false }
+IG_HUD_LAP = { text = "Volta", human = false }
+IG_HUD_LAPS = { text = "Voltas", human = false }
+IG_HUD_LAPTIME = { text = "Tempo da volta", human = false }
+IG_HUD_BEST = { text = "Melhor", human = false }
+IG_HUD_LAST = { text = "Última", human = false }
+IG_HUD_ENERGY = { text = "Energia", human = false }
+IG_HUD_POS = { text = "Pos", human = false }
+IG_HUD_POSITION = { text = "Posição", human = false }
+IG_HUD_1ST = { text = "1º", human = false }
+IG_HUD_2ND = { text = "2º", human = false }
+IG_HUD_3RD = { text = "3º", human = false }
+IG_HUD_4TH = { text = "4º", human = false }
+IG_HUD_5TH = { text = "5º", human = false }
+IG_HUD_6TH = { text = "6º", human = false }
+IG_HUD_7TH = { text = "7º", human = false }
+IG_HUD_8TH = { text = "8º", human = false }
+IG_HUD_DIST = { text = "Dist", human = false }
+IG_HUD_DISTANCE = { text = "Distância", human = false }
+IG_HUD_METRES = { text = "Metros", human = false }
+IG_HUD_METRE = { text = "Metro", human = false }
+IG_HUD_KILL = { text = "Abate", human = false }
+IG_HUD_KILLS = { text = "Abates", human = false }
+IG_HUD_BESTLAP = { text = "Melhor volta", human = false }
+IG_HUD_TARGET = { text = "Meta", human = false }
+IG_HUD_BRONZE = { text = "Bronze", human = false }
+IG_HUD_SILVER = { text = "Prata", human = false }
+IG_HUD_GOLD = { text = "Ouro", human = false }
+IG_HUD_TIME = { text = "Tempo", human = false }
+IG_HUD_RACE = { text = "Corrida", human = false }
+IG_HUD_ZONE = { text = "Zona", human = false }
+IG_HUD_ZONES = { text = "Zonas", human = false }
+IG_HUD_CLEAR = { text = "Completa", human = false }
+IG_HUD_SCORE = { text = "Pontos", human = false }
+IG_HUD_HISCORE = { text = "Recorde", human = false }
+IG_HUD_RIVAL = { text = "Rival", human = false }
+IG_HUD_LEADER = { text = "Líder", human = false }
+IG_HUD_ARTIST = { text = "Artista", human = false }
+IG_HUD_GROUP = { text = "Grupo", human = false }
+IG_HUD_TRACK = { text = "Pista", human = false }
+IG_HUD_NEWLAP_REC = { text = "Novo recorde de volta!", human = false }
+IG_HUD_LAP_REC = { text = "Recorde da volta", human = false }
+IG_HUD_PLAP = { text = "Volta perfeita!", human = false }
+IG_HUD_FIN_LAP = { text = "Volta final!", human = false }
+IG_HUD_FIRST_KILL = { text = "Primeiro abate!", human = false }
+IG_HUD_MUSIC = { text = "Música", human = false }
+IG_HUD_BEHIND = { text = "Atrás", human = false }
+IG_HUD_AHEAD = { text = "À frente", human = false }
+IG_HUD_RACE_LEAD = { text = "Líder da corrida", human = false }
+IG_HUD_TIED = { text = "Empatado na liderança", human = false }
+IG_HUD_LOST_CON = { text = "Conexão perdida", human = false }
+IG_HUD_DISCON = { text = "Desconectado", human = false }
+IG_HUD_NEW_HOST = { text = "É o novo anfitrião", human = false }
+IG_HUD_YOU_HOST = { text = "Você é o novo anfitrião", human = false }
+IG_HUD_TIME_AHEAD = { text = "Liderando por [ss.ms]", human = false }
+IG_HUD_TIME_BEHIND = { text = "[ss.ms] atrás do líder da corrida", human = false }
+IG_HUD_KILLS_AHEAD = { text = "Liderando por [x] abates", human = false }
+IG_HUD_KILLS_BEHIND = { text = "[x] abates atrás do líder da corrida", human = false }
+PRO_STATS_ACH = { text = "Conquistas (1/12)", human = false }
+PRO_STATS_GTMODE = { text = "Tempo de jogo por modo (2/12)", human = false }
+PRO_STATS_GTEVENT = { text = "Tempo de jogo por evento (3/12)", human = false }
+PRO_STATS_SHIPUSE = { text = "Uso de naves", human = false }
+PRO_STATS_SHIPLOY = { text = "Lealdade à nave", human = false }
+PRO_STATS_WIUSE = { text = "Uso de armas / itens (6/12)", human = false }
+PRO_STATS_WIABS = { text = "Armas / itens absorvidos (7/12)", human = false }
+PRO_STATS_DAM = { text = "Dano sofrido", human = false }
+PRO_STATS_PADSLAPS = { text = "Pads / voltas", human = false }
+PRO_STATS_LAPSCIR = { text = "Voltas por circuito", human = false }
+PRO_STATS_FAV = { text = "Favoritos (11/12)", human = false }
+PRO_STATS_MULT = { text = "Multijogador", human = false }
+PRO_STATS_OTHER = { text = "Outros (12/12)", human = false }
+PRO_STATS_KEY = { text = "Legenda", human = false }
+PRO_STATS_RCCOM = { text = "Campanha de Corrida: % concluído", human = false }
+PRO_STATS_EVENTCOM = { text = "Campanha de Corrida: eventos concluídos/total", human = false }
+PRO_STATS_GOLDMED = { text = "Campanha de Corrida: medalhas de ouro ganhas", human = false }
+PRO_STATS_TOTPOI = { text = "Campanha de Corrida: total de pontos ganhos", human = false }
+PRO_STATS_RBRACE = { text = "Corridas de Racebox disputadas", human = false }
+PRO_STATS_RBUNIQ = { text = "Combinações únicas de Racebox jogadas/total", human = false }
+PRO_STATS_AHL = { text = "Ad Hoc", human = false }
+PRO_STATS_ONLINE = { text = "Online (infraestrutura)", human = false }
+PRO_STATS_MENUS = { text = "Menus", human = false }
+PRO_STATS_TOT = { text = "Total", human = false }
+PRO_STATS_LAPSHIP = { text = "Voltas por nave", human = false }
+PRO_STATS_TOTLAP = { text = "Total de voltas corridas", human = false }
+PRO_STATS_LOYPOI = { text = "Pontos de lealdade por nave", human = false }
+PRO_STATS_WISPL = { text = "Divisão de armas/itens", human = false }
+PRO_STATS_WEAPFIRE = { text = "Armas disparadas", human = false }
+PRO_STATS_ITEMUSE = { text = "Itens usados", human = false }
+PRO_STATS_WEAPABS = { text = "Armas absorvidas", human = false }
+PRO_STATS_ITEMABS = { text = "Itens absorvidos", human = false }
+PRO_STATS_WEAPONS = { text = "Armas", human = false }
+PRO_STATS_ITEMS = { text = "Itens", human = false }
+PRO_STATS_ROCKETS = { text = "Foguetes", human = false }
+PRO_STATS_MISSILE = { text = "Míssil", human = false }
+PRO_STATS_MINES = { text = "Minas", human = false }
+PRO_STATS_BOMB = { text = "Bomba", human = false }
+PRO_STATS_PLASMA = { text = "Plasma", human = false }
+PRO_STATS_QUAKE = { text = "Tremor", human = false }
+PRO_STATS_REPULSOR = { text = "Repulsor", human = false }
+PRO_STATS_LEECH = { text = "Sanguessuga", human = false }
+PRO_STATS_SHURIKEN = { text = "Shuriken", human = false }
+PRO_STATS_CANNON = { text = "Canhão", human = false }
+PRO_STATS_AUTOPILOT = { text = "Piloto automático", human = false }
+PRO_STATS_SHIELD = { text = "Escudo", human = false }
+PRO_STATS_TURBO = { text = "Turbo", human = false }
+PRO_STATS_DAMREC = { text = "Dano recebido", human = false }
+PRO_STATS_SHIPCOL = { text = "Colisões entre naves", human = false }
+PRO_STATS_TRACKCOL = { text = "Colisões com a pista", human = false }
+PRO_STATS_TOTKILL = { text = "Total de abates", human = false }
+PRO_STATS_TOTDEATH = { text = "Total de mortes", human = false }
+PRO_STATS_PLAP = { text = "Voltas perfeitas", human = false }
+PRO_STATS_NPLAP = { text = "Voltas imperfeitas", human = false }
+PRO_STATS_TOTPAD = { text = "Total de pads atingidos", human = false }
+PRO_STATS_WEAPITEMPAD = { text = "Pads de armas/itens", human = false }
+PRO_STATS_SPEEDPAD = { text = "Pads de velocidade", human = false }
+PRO_STATS_TOTZONE = { text = "Total de zonas completas", human = false }
+PRO_STATS_PZONE = { text = "Zonas perfeitas", human = false }
+PRO_STATS_NPZONE = { text = "Zonas imperfeitas", human = false }
+PRO_STATS_DISTYOU = { text = "Distância corrida (km)", human = false }
+PRO_STATS_DISTAI = { text = "Distância corrida pela IA (km)", human = false }
+PRO_STATS_FAVSHIP = { text = "Nave favorita", human = false }
+PRO_STATS_FAVTRACK = { text = "Pista favorita", human = false }
+PRO_STATS_FAVSPEED = { text = "Classe favorita", human = false }
+PRO_STATS_FAVEVENT = { text = "Evento favorito", human = false }
+PRO_STATS_FAVGAME = { text = "Evento favorito", human = false }
+PRO_STATS_FAVWI = { text = "Arma/item favorito", human = false }
+PRO_STATS_FAVMUSIC = { text = "Música favorita", human = false }
+PRO_STATS_AHGAME = { text = "Jogos Ad Hoc disputados", human = false }
+PRO_STATS_AHWINLOSS = { text = "Corridas Ad Hoc ganhas/disputadas", human = false }
+PRO_STATS_LANGAME = { text = "Jogos em LAN disputados", human = false }
+PRO_STATS_LANWINLOSS = { text = "Vitórias/derrotas em jogos LAN", human = false }
+PRO_STATS_ONLGAME = { text = "Jogos online", human = false }
+PRO_STATS_ONLWINLOSS = { text = "Corridas online ganhas/disputadas", human = false }
+PRO_STATS_DISCON = { text = "Número de desconexões", human = false }
+PRO_STATS_LONGMULTI = { text = "Maior sessão multijogador", human = false }
+PRO_STATS_AIRTIME = { text = "Tempo no ar (mm:ss)", human = false }
+PRO_STATS_RANDOM = { text = "Número de jogos aleatórios disputados", human = false }
+PRO_STATS_PHOTO = { text = "Número de fotos tiradas", human = false }
+PRO_STATS_CUSTSHIP = { text = "Número de naves personalizadas baixadas", human = false }
+PRO_STATS_DATABLAST = { text = "Número de datablasts baixados", human = false }
+PRO_STATS_MP3 = { text = "Número de arquivos de música MP3 presentes", human = false }
+PRO_STATS_TOTMUSIC = { text = "Total de músicas ouvidas", human = false }
+PRO_STATS_CUSTGRID = { text = "Total de grades personalizadas criadas/jogadas", human = false }
+PRO_STATS_CUSTEVENT = { text = "Eventos de grade personalizada criados", human = false }
+PRO_STATS_STATTIME = { text = "Tempo gasto vendo estatísticas", human = false }
+PRO_STATS_LASTPLAY = { text = "Última vez que jogou WipEout® Pulse", human = false }
+PRO_STATS_DAYSAGO = { text = "há [x] dias", human = false }
+ER_PHOTO_OP = { text = "Hora da foto", human = false }
+ER_YOU_ELIM = { text = "Você foi eliminado!", human = false }
+ER_CONGRAT = { text = "Parabéns!", human = false }
+ER_YOU_WIN = { text = "Você venceu a corrida!", human = false }
+ER_RACE_COM = { text = "Corrida completa - ", human = false }
+ER_1STP = { text = "1º lugar", human = false }
+ER_2NDP = { text = "2º lugar", human = false }
+ER_3RDP = { text = "3º lugar", human = false }
+ER_4THP = { text = "4º lugar", human = false }
+ER_5THP = { text = "5º lugar", human = false }
+ER_6THP = { text = "6º lugar", human = false }
+ER_7THP = { text = "7º lugar", human = false }
+ER_8THP = { text = "8º lugar", human = false }
+ER_TT_COM = { text = "Time trial completo!", human = false }
+ER_SL_COM = { text = "Sessão de volta de velocidade completa!", human = false }
+ER_RACE_ABAN = { text = "Corrida abandonada...", human = false }
+ER_RACE_RES = { text = "Resultados da corrida", human = false }
+ER_RES = { text = "Resultados", human = false }
+ER_TEAM = { text = "Equipe", human = false }
+ER_POINTS = { text = "Pontos", human = false }
+ER_TOUR_STAN = { text = "Classificação do torneio", human = false }
+ER_END_TOUR = { text = "Fim do torneio", human = false }
+ER_FIN_STAN = { text = "Classificação final", human = false }
+ER_WON_TOUR = { text = "Você venceu o torneio!", human = false }
+ER_TOUR_COM = { text = "Torneio completo - ", human = false }
+ER_ZONE_COM = { text = "Sessão de zona completa!", human = false }
+ER_ZONE_DEST = { text = "Nave destruída na zona", human = false }
+ER_ZONE_CLEAR = { text = "Total de zonas completas:", human = false }
+ER_PERF_ZONE = { text = "Zonas perfeitas:", human = false }
+ER_TOP_SPEED = { text = "Velocidade máxima:", human = false }
+ER_ZONE_SCORE = { text = "Pontuação da zona:", human = false }
+ER_ELIM_COM = { text = "Eliminatória completa - ", human = false }
+ER_CONT_ELIM = { text = "Competidores eliminados:", human = false }
+ER_RACE_COM2 = { text = "Corrida completa!", human = false }
+ER_EVENT_COM = { text = "Evento completo - ", human = false }
+ER_MEDAL_AWARD = { text = "Medalha conquistada:", human = false }
+ER_REWARD = { text = "Recompensas", human = false }
+ER_REWARD2 = { text = "Recompensas!", human = false }
+ER_LOY = { text = "Lealdade", human = false }
+ER_STATWATCH = { text = "Estatísticas:", human = false }
+ER_TOT_LOY = { text = "Lealdade total:", human = false }
+ER_REC_SHIP = { text = "Nave recomendada", human = false }
+ER_SUG_SHIP = { text = "Nave sugerida", human = false }
+ER_SPEC_SHIP = { text = "Nave especificada", human = false }
+ER_EASY_DIF = { text = "Dificuldade fácil", human = false }
+ER_MED_DIFF = { text = "Dificuldade média", human = false }
+ER_HARD_DIF = { text = "Dificuldade difícil", human = false }
+ER_2MUL = { text = "multiplicador x2", human = false }
+ER_3MUL = { text = "multiplicador x3", human = false }
+ER_4MUL = { text = "multiplicador x4", human = false }
+ER_5MUL = { text = "multiplicador x5", human = false }
+ER_10MUL = { text = "multiplicador x10", human = false }
+ER_RC_POINTS = { text = "Pontos da Campanha de Corrida", human = false }
+ER_GHOST_REC = { text = "Recorde do fantasma:", human = false }
+ER_NO_GHOST = { text = "Nenhum recorde de fantasma encontrado", human = false }
+ER_NEW_GHOST = { text = "Novo recorde de fantasma", human = false }
+ER_SAVE_GHOST = { text = "Salvar fantasma", human = false }
+ER_DEL_GHOST = { text = "Apagar fantasma", human = false }
+ER_GHOST_FAIL = { text = "Falha ao salvar a nave fantasma", human = false }
+ER_NEXT_EVENT = { text = "Próximo evento", human = false }
+ER_RACE_AGAIN = { text = "Correr de novo", human = false }
+ER_SAVE_QUIT_OLD = { text = "Salvar e sair", human = false }
+ER_RETURN_MM = { text = "Voltar ao menu principal", human = false }
+ER_CONT_TOUR = { text = "Continuar torneio", human = false }
+ER_CREATE_NEW = { text = "Criar novo evento", human = false }
+ER_AWAIT_HOST = { text = "Aguardando decisão do anfitrião.", human = false }
+ER_RETURN_MENU = { text = "Voltar aos menus", human = false }
+ER_HOST_CREATE = { text = "O anfitrião decidiu criar uma nova corrida.", human = false }
+ER_HOST_RACE_AGAIN = { text = "O anfitrião decidiu correr de novo.", human = false }
+ER_FOLLOW_HOST = { text = "Seguir o anfitrião", human = false }
+ER_AWAIT_RES = { text = "Aguardando resultados", human = false }
+ER_DROP_OUT = { text = "Saiu", human = false }
+ER_ONINE_RES = { text = "Seus resultados online até agora:", human = false }
+ER_TOT_RACE = { text = "Total de corridas:", human = false }
+ER_WINS = { text = "Vitórias:", human = false }
+ER_LOSSES = { text = "Derrotas:", human = false }
+ER_ELIMS = { text = "Eliminações:", human = false }
+ER_DEATHS = { text = "Mortes:", human = false }
+ER_MOVE_MENU = { text = "Indo para os menus de fim de corrida em", human = false }
+ER_SECONDS = { text = "[x] segundos", human = false }
+ER_WAIT_HOST = { text = "Aguardando o anfitrião.", human = false }
+ER_RETURN_ONLINE = { text = "Voltar aos menus online.", human = false }
+ER_HOST_RESTART = { text = "O anfitrião está reiniciando a corrida.", human = false }
+ER_RACE_RESTART_IN = { text = "A corrida reiniciará em", human = false }
+ER_SHIP_SEL = { text = "Seleção de nave", human = false }
+ER_NOT_CHOSE_RESTART = { text = "Você não escolheu reiniciar a corrida.", human = false }
+ER_PRESS = { text = "Pressione", human = false }
+ER_TO_CON = { text = "para continuar", human = false }
+ER_TO_RET_MENU = { text = "para voltar aos menus online.", human = false }
+ER_RET_ONLINE = { text = "Voltar aos menus online", human = false }
+ER_ERR_RESTART = { text = "Erro ao reiniciar a corrida", human = false }
+ER_RACE_AGAIN2 = { text = "Correr este evento de novo", human = false }
+ER_HOST_LEAVING = { text = "O anfitrião está saindo do jogo.", human = false }
+ER_HOST_CREATE2 = { text = "O anfitrião está criando uma nova corrida.", human = false }
+ER_GOTO_NEW_LOBBY = { text = "Ir para a nova sala", human = false }
+ER_SERVER_ERROR = { text = "Erro do servidor", human = false }
+ER_NO_ACCESS_LOBBY = { text = "Não foi possível acessar a sala.", human = false }
+ER_NOT_CHOSE_JOIN = { text = "Você não escolheu entrar no novo jogo.", human = false }
+ER_RACE_POINTS = { text = "Pontos da corrida:", human = false }
+ER_FAST_LAP = { text = "Volta mais rápida:", human = false }
+ONL_ACC_OA = { text = "Conta online", human = false }
+ONL_ACC_USER = { text = "Nome de usuário", human = false }
+ONL_ACC_PASS = { text = "Senha", human = false }
+ONL_ACC_SAVE_PASS = { text = "Salvar senha", human = false }
+ONL_ACC_AUTO_LOGIN = { text = "Login automático", human = false }
+ONL_ACC_ENT_USER = { text = "Digite seu nome de usuário", human = false }
+ONL_ACC_ENT_PASS = { text = "Digite sua senha", human = false }
+ONL_ACC_MSG1 = { text = "Esta opção só será ativada depois que você fizer um login manual completo pela primeira vez.", human = false }
+ONL_ACC_MSG2 = { text = "Você precisa salvar estes dados no seu perfil para usar as opções Salvar senha ou Login automático. Eles são criptografados para a sua segurança e apagados junto com o perfil. Salvar estes dados antes de sair?", human = false }
+ONL_ACC_MSG3 = { text = "As opções Salvar senha e Login automático foram desligadas.", human = false }
+PRE_SG = { text = "Grade de largada", human = false }
+PRE_SFL = { text = "Linha de largada/chegada", human = false }
+PRE_DIR = { text = "Direção", human = false }
+PRE_LEN = { text = "Extensão", human = false }
+PRE_POI = { text = "Pontos de interesse", human = false }
+MSC_UNL_LIV = { text = "Você destravou uma nova skin de equipe!", human = false }
+MSC_UNL_ELIV = { text = "Skin da Eliminatória", human = false }
+MSC_UNL_ALIV = { text = "skin alternativa", human = false }
+MSC_UNL_ZLIV = { text = "Skin da Zona", human = false }
+MSC_UNL_SHIP = { text = "Você destravou uma nova nave", human = false }
+MSC_UNL_ZSHIP = { text = "Nave da Zona", human = false }
+MSC_UNL_CSHIP = { text = "nave conceito", human = false }
+MSC_UNL_GRID = { text = "Você destravou uma nova grade na Campanha de Corrida!", human = false }
+MSC_UNL_TRACK = { text = "Há novas pistas disponíveis no Racebox!", human = false }
+MSC_SQ_MSG1 = { text = "Tem certeza de que quer salvar e sair? O progresso do seu torneio será salvo neste modo de jogo e você voltará ao menu principal.", human = false }
+MSC_SQ_MSG2 = { text = "Você tem um torneio salvo neste modo de jogo. O que quer fazer? (Abandonar apagará o progresso do torneio)", human = false }
+MSC_SQ_MSG3 = { text = "Continuar o torneio", human = false }
+MSC_SQ_MSG4 = { text = "Abandonar o progresso do torneio e voltar à Campanha de Corrida", human = false }
+MSC_SQ_MSG5 = { text = "Abandonar o progresso do torneio e voltar ao Racebox", human = false }
+MSC_SQ_MSG6 = { text = "Não fazer nada e voltar ao menu principal", human = false }
+RB_EVENT_TYPE = { text = "Tipo de evento", human = false }
+RB_START_POINT = { text = "Ponto de partida", human = false }
+RB_START_ZONE = { text = "Zona de início", human = false }
+RB_BEGIN = { text = "Início", human = false }
+RB_PRO_BEST = { text = "Melhor do perfil", human = false }
+RB_HIGH_CLEAR_ZONE = { text = "Maior zona completa sem dano", human = false }
+RB_LOCKED = { text = "Bloqueado", human = false }
+RB_SEL_TRACK = { text = "Selecionar pista", human = false }
+RB_SEL_TOUR = { text = "Selecionar torneio", human = false }
+RB_SET_TARG = { text = "Definir metas", human = false }
+RB_TARG_TIMES = { text = "Tempos-meta", human = false }
+RB_GOLD_TARG = { text = "Meta de ouro", human = false }
+RB_SILV_TARG = { text = "Meta de prata", human = false }
+RB_BRON_TARG = { text = "Meta de bronze", human = false }
+MSC_HELP_RC_GS = { text = "A Campanha de Corrida se passa ao longo de uma série de grades. Cada grade tem um número fixo de eventos de corrida. Novas grades são destravadas conforme seu desempenho na grade anterior. As informações da grade em destaque aparecem à direita do seletor de grades.", human = false }
+MSC_HELP_RC_CS = { text = "Os detalhes e os requisitos de medalha deste evento aparecem à direita da grade. Nas corridas com naves de IA, você pode mudar a dificuldade com δ.", human = false }
+MSC_HELP_RC_SS = { text = "Escolha uma nave e a skin com os botões direcionais (incluindo suas skins personalizadas criadas em wipeout-game.com). Você também pode escolher rapidamente uma música para a corrida com δ.", human = false }
+MSC_HELP_RB = { text = "Um jogador: personalize um evento de corrida para um jogador com qualquer uma das configurações disponíveis.\n\nCarregar grade: carregue uma grade personalizada para jogar.\n\nEditar grade: crie, edite e personalize uma grade de eventos de corrida, como as da Campanha de Corrida.", human = false }
+MSC_HELP_RB_CRS = { text = "Escolha as configurações da sua corrida. Primeiro selecione um evento de corrida, depois escolha configurações como classe, oponentes, uso de armas e assim por diante. Cada evento tem configurações diferentes.", human = false }
+MSC_RB_CRTR = { text = "Escolha um circuito para correr. Selecione primeiro o circuito e depois a corrida preta ou a corrida branca dele. As corridas preta e branca variam em tamanho, direção ou dificuldade em cada circuito e podem oferecer desafios diferentes em cada classe.", human = false }
+MSC_HELP_RB_CRTN = { text = "Monte uma lista de corridas para o seu torneio. Use os botões direcionais para destacar uma vaga e selecionar uma pista, depois pressione ε ao terminar. Pressione δ para remover uma pista de uma vaga.", human = false }
+MSC_HELP_RB_CG = { text = "Crie ou edite aqui a sua própria grade. Destaque uma célula e pressione ε para criar um novo evento de corrida ou editar ou apagar um existente.\n\nPressione δ para abrir o menu onde você gerencia suas grades, dá nome a elas, apaga todos os eventos de corrida ou limpa resultados anteriores.\n\nLimpar os resultados é útil se outra pessoa já jogou a grade antes de você e ganhou medalhas, fez recordes etc. Todos os resultados são zerados, e a grade volta ao estado original, sem jogar.", human = false }
+MSC_HELP_RB_SG = { text = "Escolha uma grade para carregar e enviar por conexão sem fio. Na lista de pessoas que aparecer, escolha para quem enviar a grade. Quando vocês dois estabelecerem a conexão e a confirmarem, a grade é enviada.", human = false }
+MSC_RB_RG = { text = "Procure uma lista de pessoas enviando suas grades por conexão sem fio. Escolha uma para estabelecer a conexão. Quando vocês dois confirmarem a conexão, a grade é copiada para você. Ao terminar, você precisa salvar a grade se quiser guardá-la. Depois pode continuar procurando outras grades.", human = false }
+MSC_HELP_MP = { text = "Os jogos online (infraestrutura) são jogados pela internet. Os jogos Ad Hoc são jogados por conexão sem fio local. Você pode usar o menu Conta Online para ativar o login automático. No menu Ad Hoc você também pode compartilhar dados, como grades personalizadas.", human = false }
+MSC_HELP_PR = { text = "Gerenciar perfis permite salvar, carregar, criar e apagar perfis de jogador.\n\nSeus detalhes permite editar os dados do perfil, como nome e tag.\n\nEstatísticas é uma área completa onde você vê estatísticas de jogo em várias categorias, como tempo de jogo, uso de naves, uso de armas e itens e mais.\n\nRecordes permite ver recordes de corrida de vários tipos de corrida para um jogador.", human = false }
+MSC_HELP_PR_REC = { text = "Procure uma lista de pessoas dispostas a compartilhar seus recordes. Escolha uma para estabelecer a conexão. Quando vocês dois confirmarem a conexão, os recordes são compartilhados.\n\nOs melhores tempos dos dois conjuntos de recordes são combinados em um só, que é enviado aos dois jogadores. Isso significa que alguns dos seus tempos mais antigos podem ser sobrescritos por tempos melhores do outro jogador.", human = false }
+MSC_HELP_OPT = { text = "Configurações: ajuste várias configurações do jogo.\n\nControles: escolha um esquema de controle fixo ou personalize os controles do seu jeito.\n\nPlaylist de músicas: reordene as músicas do jogo e ligue ou desligue cada uma.", human = false }
+MSC_HELP_EXT = { text = "Explore os extras do WipEout® Pulse. Veja o manual de instruções eletrônico, confira os créditos da equipe e mais.", human = false }
+MSC_DATA_RCG = { text = "Medalhas de ouro da Campanha de Corrida:", human = false }
+MSC_DATA_RCP = { text = "Pontos da Campanha de Corrida:", human = false }
+MSC_DATA_RCC = { text = "Conclusão da Campanha de Corrida (%):", human = false }
+MSC_DATA_HTL = { text = "Maior lealdade à equipe:", human = false }
+MSC_DATA_LTL = { text = "Menor lealdade à equipe:", human = false }
+MSC_DATA_FT = { text = "Pista favorita:", human = false }
+MSC_DATA_FS = { text = "Classe favorita:", human = false }
+MSC_DATA_FTM = { text = "Equipe favorita:", human = false }
+MSC_DATA_FEV = { text = "Evento favorito:", human = false }
+MSC_DATA_GT = { text = "Tempo de jogo:", human = false }
+MSC_DATA_EVP = { text = "Eventos disputados:", human = false }
+MSC_DATA_TLAP = { text = "Total de voltas corridas:", human = false }
+MSC_DATA_TDR = { text = "Distância total corrida:", human = false }
+MSC_DATA_PLAP = { text = "Voltas perfeitas:", human = false }
+MSC_DATA_ZNC = { text = "Zonas completas:", human = false }
+MSC_DATA_ELIM = { text = "Eliminações:", human = false }
+MSC_DATA_MUS = { text = "Música tocando agora:", human = false }
+MSC_DATA_TSP = { text = "Velocidade máxima:", human = false }
+MSC_DATA_PHO = { text = "Fotos tiradas:", human = false }
+MSC_DATA_RECTT = { text = "Recorde recente de Time Trial:", human = false }
+MSC_DATA_RECZN = { text = "Recorde recente de Zona:", human = false }
+MSC_DATA_RECSL = { text = "Recorde recente de volta de velocidade:", human = false }
+MSC_DATA_SLOY = { text = "[team] lealdade:", human = false }
+MSC_DATA_WFIR = { text = "[weapon] disparada:", human = false }
+MSC_DATA_IUSE = { text = "[item] usado:", human = false }
+MSC_DATA_WABS = { text = "[weapon] absorvida:", human = false }
+MSC_DATA_IABS = { text = "[item] absorvido:", human = false }
+MSC_DATA_LAPR = { text = "Voltas corridas em [track]:", human = false }
+MSC_DATA_NEWLIV = { text = "Nova skin disponível para [team]:", human = false }
+MSC_DATA_NEWCON = { text = "Nova nave conceito disponível para [team]:", human = false }
+MSC_DATA_DAMWEAP = { text = "Dano sofrido por armas:", human = false }
+MSC_DATA_DAMSHIP = { text = "Dano sofrido por colisões entre naves:", human = false }
+MSC_DATA_DAMTRACK = { text = "Dano sofrido por colisões com a pista:", human = false }
+MSC_DATA_AIRT = { text = "Tempo no ar:", human = false }
+MSC_DATA_MUSTOT = { text = "Músicas ouvidas:", human = false }
+MSC_DATA_AHLRACE = { text = "Corridas Ad Hoc / LAN:", human = false }
+MSC_DATA_ONLRAC = { text = "Corridas online:", human = false }
+MSC_DATA_RCRAC = { text = "Corridas da Campanha de Corrida:", human = false }
+MSC_DATA_RBCUSRAC = { text = "Corridas de Racebox / personalizadas:", human = false }
+MSC_DATA_SUCBAR = { text = "Giros laterais bem-sucedidos/tentados:", human = false }
+MSC_DATA_UNSUCBAR = { text = "Giros laterais malsucedidos:", human = false }
+MSC_DATA_SSH = { text = "Deslocamentos laterais:", human = false }
+MSC_DATA_AUTOPILOTS = { text = "Pilotos automáticos", human = false }
+MSC_DATA_BOMBS = { text = "Bombas", human = false }
+MSC_DATA_CANNONS = { text = "Canhões", human = false }
+MSC_DATA_LEECHES = { text = "Sanguessugas", human = false }
+MSC_DATA_MISSILES = { text = "Mísseis", human = false }
+MSC_DATA_PLASMAS = { text = "Plasmas", human = false }
+MSC_DATA_QUAKES = { text = "Tremores", human = false }
+MSC_DATA_REPULSORS = { text = "Repulsores", human = false }
+MSC_DATA_SHIELDS = { text = "Escudos", human = false }
+MSC_DATA_SHURIKENS = { text = "Shurikens", human = false }
+MSC_DATA_TURBOS = { text = "Turbos", human = false }
+ONL_CON_CONSUC = { text = "Conexão bem-sucedida.", human = false }
+ONL_CON_CONUNSUC = { text = "Falha na conexão.", human = false }
+ONL_CON_UPD_MSG = { text = "Há uma atualização disponível para este jogo. É preciso baixá-la para jogar online. São necessários xxxKB de espaço livre. Ao terminar, o jogo pode precisar ser reiniciado. Continuar com o download?", human = false }
+ONL_CON_UPD_NEED = { text = "Não é possível jogar online sem a atualização. Você voltará aos menus.", human = false }
+ONL_CON_UPD_SUC = { text = "Download concluído.", human = false }
+ONL_CON_UPD_REST = { text = "Por favor, reinicie o jogo.", human = false }
+ONL_CON_UPD_ERR = { text = "Ocorreu um erro durante o download.", human = false }
+ONL_CON_RET = { text = "Tentar de novo?", human = false }
+ONL_CON_UPD_INST = { text = "Instalando atualização.", human = false }
+ONL_CON_UPD_MSG2 = { text = "Não desligue o sistema nem remova o Memory Stick Duo™.", human = false }
+ONL_CON_UPD_INSTOK = { text = "Instalação concluída.", human = false }
+ONL_CON_UPD_INSTFAI = { text = "Falha na instalação.", human = false }
+ONL_CON_DET_CHA = { text = "Alguns dados mudaram desde o último login.", human = false }
+ONL_CON_AUTO_OFF = { text = "O login automático foi desativado. Continue manualmente.", human = false }
+ONL_CON_CONUNI = { text = "Conectando ao universo", human = false }
+ONL_CON_UNIFUL = { text = "Não foi possível conectar. Universo cheio.", human = false }
+ONL_CON_UNIERR = { text = "Erro de conexão. Não foi possível conectar ao universo.", human = false }
+ONL_CON_SUCCESS = { text = "sucesso", human = false }
+ONL_CON_ACCEULA = { text = "Aceitando o EULA...", human = false }
+ONL_CON_SERVERR = { text = "Erro do servidor.", human = false }
+ONL_CON_AUTHUP = { text = "Autenticando nome de usuário e senha...", human = false }
+ONL_CON_AUTHERR = { text = "Não foi possível autenticar seus dados. O servidor pode estar ocupado.", human = false }
+ONL_CON_LOGSUC = { text = "Login bem-sucedido.", human = false }
+ONL_CON_AUTOLOGIN = { text = "Login automático", human = false }
+ONL_CON_ANNOU = { text = "Anúncios", human = false }
+ONL_CON_UNISEL = { text = "Seleção de universo", human = false }
+ONL_CON_UNI = { text = "Universo", human = false }
+ONL_CON_CURMAX = { text = "Jogadores atuais/máx.", human = false }
+ONL_CON_DESC = { text = "Descrição", human = false }
+ONL_CON_DISCONET = { text = "Desconectado da rede.", human = false }
+ONL_CON_UNISUC = { text = "Conectado ao universo com sucesso.", human = false }
+ONL_CON_NEW = { text = "Novo", human = false }
+ONL_CON_NEW2 = { text = "Novo!", human = false }
+ONL_CON_UNREAD = { text = "Não lido", human = false }
+ONL_CON_EULA = { text = "EULA", human = false }
+ONL_CON_MUSTEULA = { text = "Se você não aceitar o EULA, não poderá fazer login nem jogar online.", human = false }
+ONL_CON_LOGIN = { text = "Login", human = false }
+ONL_CON_USERFAI = { text = "Nome de usuário incorreto. Confira seus dados e tente de novo.", human = false }
+ONL_CON_PASSFAI = { text = "Senha incorreta. Confira seus dados e tente de novo.", human = false }
+ONL_CON_TRYLAT = { text = "Tente de novo mais tarde.", human = false }
+ONL_CON_AUTOLOG_OK = { text = "O login automático foi ativado.", human = false }
+ONL_CON_CHANSEL = { text = "Seleção de canal", human = false }
+ONL_CON_CHANNEL = { text = "Canal", human = false }
+ONL_CON_STATUS = { text = "Status", human = false }
+ONL_CON_CHANFAI = { text = "Erro de conexão. Não foi possível conectar ao canal.", human = false }
+ONL_CON_CHANFUL = { text = "O canal escolhido está cheio. Escolha outro canal.", human = false }
+ONL_CON_ENTCHAN = { text = "Entrando no canal...", human = false }
+ONL_CON_DECLINE = { text = "Recusar", human = false }
+ONL_CON_READEULA = { text = "Ler o EULA", human = false }
+ONL_CON_MUSTEULA2 = { text = "Se você não aceitar o EULA, será desconectado e voltará às telas de menu offline.", human = false }
+ONL_CON_EULAFULL = { text = "Contrato de licença de usuário final", human = false }
+ONL_MM = { text = "Menu principal online", human = false }
+ONL_CRGAM = { text = "Criar jogo", human = false }
+ONL_JGAM = { text = "Entrar em jogo", human = false }
+ONL_READEULA = { text = "Ler o EULA", human = false }
+ONL_QUITONL = { text = "Sair do online", human = false }
+ONL_QUITSURE = { text = "Tem certeza de que quer se desconectar e sair?", human = false }
+ONL_LOGOUT = { text = "Desconectado da rede.", human = false }
+ONL_UMDERR = { text = "Erro de leitura do disco. Reinsira o disco para continuar.", human = false }
+ONL_CONLOS = { text = "Conexão perdida. Voltando aos menus.", human = false }
+ONL_CRJ_PASSENT = { text = "Digitar senha", human = false }
+ONL_CRJ_SETPASS = { text = "Definir senha", human = false }
+ONL_CRJ_SMALL = { text = "Pequeno", human = false }
+ONL_CRJ_MEDIUM = { text = "Médio", human = false }
+ONL_CRJ_LARGE = { text = "Grande", human = false }
+ONL_CRJ_CREFAI = { text = "Falha ao criar o jogo por um erro do servidor. Tente de novo.", human = false }
+ONL_CRJ_LOBBY = { text = "Sala", human = false }
+ONL_CRJ_PLAYER = { text = "Jogador", human = false }
+ONL_CRJ_HOST = { text = "Anfitrião", human = false }
+ONL_CRJ_PUP = { text = "Página acima", human = false }
+ONL_CRJ_PDOWN = { text = "Página abaixo", human = false }
+ONL_CRJ_INMAX = { text = "Atual/máx.", human = false }
+ONL_CRJ_GAMDET = { text = "Detalhes do jogo", human = false }
+ONL_CRJ_LEFTGAM = { text = "%s saiu do jogo", human = false }
+ONL_CRJ_CHAT = { text = "Chat", human = false }
+ONL_CRJ_NAME = { text = "Nome", human = false }
+ONL_CRJ_NAMES = { text = "Nomes", human = false }
+ONL_CRJ_GAMES = { text = "Jogos", human = false }
+ONL_CRJ_GLIST = { text = "Lista de jogos", human = false }
+ONL_CRJ_ESTGTIME = { text = "Tempo estimado de jogo", human = false }
+ONL_CRJ_ESTTIME = { text = "Tempo estimado", human = false }
+ONL_CRJ_FILT = { text = "Filtro", human = false }
+ONL_CRJ_CONSP = { text = "Velocidade da conexão", human = false }
+ONL_CRJ_FILTLIST = { text = "Lista de filtros", human = false }
+ONL_CRJ_GAMFUL = { text = "Não foi possível entrar no jogo. O jogo está cheio.", human = false }
+ONL_CRJ_SERVERR = { text = "Não foi possível entrar no jogo. Houve um erro no servidor.", human = false }
+ONL_CRJ_JOINFAI = { text = "Falha ao entrar no jogo. Tente de novo.", human = false }
+ONL_CRJ_HOSTTER = { text = "O anfitrião encerrou o jogo. Você voltará à lista de jogos.", human = false }
+ONL_CRJ_LOBBYERR = { text = "Erro do servidor na sala. Você voltará à lista de jogos.", human = false }
+TRC_LOST_WLAN_OFF = { text = "Conexão com a rede perdida. A chave WLAN foi desligada.", human = false }
+TRC_LOST_SLEEP = { text = "Conexão com a rede perdida por entrar em modo de espera.", human = false }
+TRC_WLAN = { text = "A chave WLAN não está ligada.", human = false }
+MSC_MSG_AUTOSAVE1 = { text = "Para reativar o salvamento automático, salve o seu perfil manualmente", human = false }
+MSC_AUTOSAVE_DIS = { text = "O salvamento automático foi desativado.", human = false }
+FE_CONFIRM = { text = "Confirmar", human = false }
+FE_WARNING = { text = "Aviso", human = false }
+ER_PHOTO_CAM = { text = "Modo da câmera de foto", human = false }
+ER_PHOTO_CAM_SHIP = { text = "Nave", human = false }
+ER_PHOTO_CAM_TRACK = { text = "Pista", human = false }
+ER_PHOTO_CAM_ZOOM = { text = "Zoom da câmera da pista", human = false }
+ER_PHOTO_HUD = { text = "Exibição do HUD", human = false }
+ER_PRESS_SELECT_PHOTO = { text = "Pressione SELECT para o Modo Foto", human = false }
+MSC_SAVING_PROFILE = { text = "Salvando perfil", human = false }
+MSC_PROFILE_AUTOSAVING = { text = "Salvando perfil automaticamente", human = false }
+MSC_PROFILE_AUTOSAVED = { text = "Perfil salvo automaticamente", human = false }
+IG_HUD_CURRENT = { text = "Atual", human = false }
+ER_RACE_STAN = { text = "Classificação da corrida", human = false }
+ER_QUIT_TOUR = { text = "Sair do torneio", human = false }
+ER_NEXT_RACE = { text = "Próxima corrida", human = false }
+OPT_CTRL_STEER = { text = "Direção", human = false }
+ER_GHOST_AUTOSAVING = { text = "Salvando fantasma automaticamente", human = false }
+ER_GHOST_AUTOSAVED = { text = "Fantasma salvo automaticamente", human = false }
+ER_GHOST_CANCELLED = { text = "Salvamento do fantasma cancelado", human = false }
+ER_RETURN_GRID = { text = "Voltar à grade", human = false }
+FE_EXTRAS = { text = "Extras", human = false }
+FE_PRESS_TO_CONFIRM = { text = "Aperte ε para confirmar", human = false }
+TRC_MEMSTICK_STATUS = { text = "O estado do Memory Stick Duo™ mudou.", human = false }
+RB_EDIT_GRID = { text = "Editar grade", human = false }
+RB_DEL_CELL = { text = "Apagar célula", human = false }
+RB_RESET_RESULTS = { text = "Zerar resultados", human = false }
+RB_CLEAR_GRID = { text = "Limpar grade", human = false }
+ER_SHIP_DES = { text = "Nave destruída", human = false }
+ER_BAD_LUCK = { text = "Que azar", human = false }
+ER_FOR_SHIP = { text = "Nave forçada", human = false }
+PRO_SL_REC = { text = "Recordes de volta de velocidade", human = false }
+PRO_TT_REC = { text = "Recordes de Time Trial", human = false }
+PRO_POS = { text = "Pos", human = false }
+IG_HUD_PERF_ZONE = { text = "Zona perfeita!", human = false }
+IG_HUD_PERF_BOOST = { text = "Turbo perfeito!", human = false }
+IG_HUD_NEW_ZONE_RECORD = { text = "Novo recorde de zona!", human = false }
+IG_HUD_NEW_SCORE_RECORD = { text = "Novo recorde de pontos!", human = false }
+IG_HUD_CONT_ELIM = { text = "Competidor eliminado!", human = false }
+IG_HUD_READY = { text = "Prontos...", human = false }
+IG_HUD_GO = { text = "Vai!", human = false }
+IG_HUD_WRONG_WAY = { text = "Contramão!", human = false }
+ER_END_TOUR_1 = { text = "Parabéns! 1º lugar!", human = false }
+ER_END_TOUR_2 = { text = "2º lugar! Você ganhou a prata!", human = false }
+ER_END_TOUR_3 = { text = "Medalha de bronze! 3º lugar", human = false }
+ER_END_TOUR_4 = { text = "4º - que azar! Faltou pouco para uma medalha", human = false }
+ER_END_TOUR_5 = { text = "Sentimos muito. Tente de novo!", human = false }
+ER_END_TOUR_6 = { text = "Que azar! Mais sorte na próxima!", human = false }
+ER_END_TOUR_7 = { text = "Que azar! Tente mais uma vez!", human = false }
+ER_END_TOUR_8 = { text = "Que azar! Talvez na próxima!", human = false }
+MSC_LOAD_BOMB = { text = "Esta carga explosiva causa dano pesado a qualquer nave pega no raio da explosão. Muitas vezes só é vista tarde demais, em curvas cegas.", human = false }
+MSC_LOAD_MINES = { text = "Cinco minas explosivas são lançadas da traseira da nave e ficam à espera de pilotos desavisados. Funcionam melhor em trechos apertados e sinuosos.", human = false }
+MSC_LOAD_ROCKETS = { text = "Colados à superfície da pista em grupos de três, estes foguetes disparados para a frente são mais confiáveis em trechos retos.", human = false }
+MSC_LOAD_MISSILES = { text = "Estes mísseis potentes podem ser disparados às cegas, mas, para melhores resultados, espere que eles travem sozinhos nas naves rivais.", human = false }
+MSC_LOAD_PLASMA = { text = "Uma arma devastadora de tiro único: o raio de plasma precisa de um tempo de carga antes de ser liberado. Mire com cuidado.", human = false }
+MSC_LOAD_QUAKE = { text = "Mande uma onda destruidora pela pista com o tremor e leve tudo o que estiver no caminho.", human = false }
+MSC_LOAD_CANNON = { text = "O canhão de tiro rápido despeja uma saraivada de projéteis de prótons de alta densidade para ir roendo a energia do oponente.", human = false }
+MSC_LOAD_LEECH = { text = "O versátil raio sanguessuga drena a energia do oponente para reabastecer a sua - só não esqueça de travar a mira primeiro.", human = false }
+MSC_LOAD_SHURIKEN = { text = "Lance pela pista um projétil afiado como navalha, que ricocheteia e pode danificar várias naves antes de se autodestruir.", human = false }
+MSC_LOAD_REPULSOR = { text = "Sentindo a pressão? Abra espaço entre a sua nave e a concorrência com a onda de choque do repulsor.", human = false }
+MSC_LOAD_AUTOPILOT = { text = "Descanse das curvas difíceis em alta velocidade com o coletável de piloto automático e deixe o computador de bordo trabalhar.", human = false }
+MSC_LOAD_SHIELD = { text = "O escudo dá proteção total contra armas e colisões por tempo limitado. Ótimo para evitar armas com travamento de mira.", human = false }
+MSC_LOAD_TURBO = { text = "Dispare à frente do pelotão com um turbo breve e satisfatório e ganhe segundos preciosos sobre a concorrência.", human = false }
+MSC_LOAD_ABSORBING = { text = "Absorver armas e itens restaura os seus níveis de energia e pode fazer toda a diferença nas classes mais rápidas.", human = false }
+MSC_LOAD_AIRBRAKES = { text = "Acionar o freio aéreo esquerdo ou direito ao curvar mantém a sua velocidade, mas aumenta a sua capacidade de contornar curvas.", human = false }
+MSC_LOAD_AIRBRAKES2 = { text = "Dominar os freios aéreos é a chave da estratégia de corrida. Acione-os nas curvas fechadas para obter os melhores resultados.", human = false }
+MSC_LOAD_BARREL = { text = "Fazer um giro lateral no ar gasta um pouco de energia, mas dá um impulso de velocidade ao pousar.", human = false }
+MSC_LOAD_SIDESHIFT = { text = "Use o deslocamento lateral para mover a nave de lado com rapidez. Ótimo para manobras de última hora.", human = false }
+MSC_LOAD_SPEEDPADS = { text = "Há pads de velocidade em todos os circuitos, mas nem sempre na linha ideal. Use-os para tirar segundos dos seus tempos de volta.", human = false }
+MSC_WEAPONPADS = { text = "Há pads de armas em todos os circuitos na maioria dos tipos de evento. Passe por um para receber uma arma ou item aleatório.", human = false }
+MSC_LOAD_RACECAM = { text = "Avance pela completa Campanha de Corrida, uma série de grades cheias de eventos únicos e desafiadores.", human = false }
+MSC_LOAD_RACEBOX = { text = "Personalize suas próprias corridas com qualquer combinação de configurações. Complete as grades da Campanha de Corrida para destravar conteúdo novo no Racebox!", human = false }
+MSC_LOAD_AHLAN = { text = "Jogue sem fio contra os amigos com os modos multijogador Ad Hoc e LAN.", human = false }
+MSC_LOAD_ONLINE = { text = "Leve suas corridas para o online e prove seu valor contra amigos e oponentes em corridas, torneios e nos eventos Eliminatória cheios de ação!", human = false }
+MSC_LOAD_CUSTGRID = { text = "Crie suas próprias grades da Campanha de Corrida com este editor, depois salve e compartilhe com os amigos!", human = false }
+MSC_LOAD_SHIPLOY = { text = "Ganhe pontos de lealdade para cada nave, a cada corrida de que participar. Acumule pontos de lealdade para destravar conteúdo novo!", human = false }
+MSC_LOAD_MP3MUS = { text = "Crie sua própria playlist do WipEout® Pulse, com suporte a até 30 arquivos de música MP3.", human = false }
+MSC_LOAD_PHOTO = { text = "Tire uma foto durante o jogo, a qualquer momento de qualquer corrida, pela opção Modo Foto do menu de pausa.", human = false }
+MSC_LOAD_7EVENT = { text = "Participe de sete eventos diferentes, de corridas simples e torneios às brutais eliminatórias e ao modo zona, sedento de velocidade.", human = false }
+MSC_LOAD_VENOM = { text = "Venom é a classe mais lenta, ideal para iniciantes, com velocidade máxima de 462 km/h. A maioria dos eventos Venom dura 3 voltas.", human = false }
+MSC_LOAD_FLASH = { text = "Flash é uma classe rápida, mas controlável, ideal para jogadores intermediários, com velocidade máxima de 538 km/h. Os eventos Flash costumam durar 4 voltas.", human = false }
+MSC_LOAD_RAPIER = { text = "Jogadores experientes preferem a classe Rapier, que tem velocidade máxima de 657 km/h e 4 voltas na maioria dos eventos.", human = false }
+MSC_LOAD_PHANTOM = { text = "Phantom é a classe mais extrema, só para especialistas, com velocidade máxima de 793 km/h e punitivas 5 voltas de corrida na maioria dos eventos.", human = false }
+MSC_LOAD_DOWNLOAD = { text = "Acesse wipeout-game.com para ver os pacotes de download mais recentes - novas pistas, naves e mais esperam por você online!", human = false }
+MSC_LOAD_SHIPSKIN = { text = "Crie suas próprias skins de nave com o editor online de wipeout-game.com e leve-as para o jogo, até para corridas online!", human = false }
+MSC_LOAD_DUALAIR = { text = "O esquema de freios aéreos duplos traz a experiência clássica de WipEout® com freios aéreos esquerdo e direito separados, para curvas precisas em velocidade.", human = false }
+MSC_LOAD_SINGAIR = { text = "Os controles de freio aéreo único dão a sensação tradicional de arcade, com freios aéreos combinados que acionam à esquerda ou à direita junto com a direção.", human = false }
+MSC_LOAD_HELP = { text = "Pressione o botão START durante o jogo para abrir o manual e ver mais informações.", human = false }
+FE_AHS = { text = "AD HOC E COMPARTILHAMENTO", human = false }
+FE_SHD = { text = "COMPARTILHAR DADOS", human = false }
+MSC_MSG_AUTOSAVE2 = { text = "acessando o menu Perfil e depois Gerenciar perfis.", human = false }
+RC_FG = { text = "Grade completa", human = false }
+RC_HG = { text = "Meia grade", human = false }
+ER_LR = { text = "Recorde da volta", human = false }
+ER_RR = { text = "Recorde da corrida", human = false }
+MSC_COL_BLA = { text = "Preto", human = false }
+MSC_COL_BLU = { text = "Azul", human = false }
+MSC_COL_RED = { text = "Vermelho", human = false }
+MSC_COL_MAG = { text = "Magenta", human = false }
+MSC_COL_GRE = { text = "Verde", human = false }
+MSC_COL_CYA = { text = "Ciano", human = false }
+MSC_COL_YEL = { text = "Amarelo", human = false }
+MSC_COL_WHI = { text = "Branco", human = false }
+MSC_LOGO_SQ = { text = "Quadrado", human = false }
+MSC_LOGO_CI = { text = "Círculo", human = false }
+MSC_LOGO_TR = { text = "Triângulo", human = false }
+MSC_LOGO_CR = { text = "Cruz", human = false }
+PRO_BROAD_REC = { text = "Transmitir recordes", human = false }
+PRO_REC_REC = { text = "Receber recordes", human = false }
+PRO_SYNC_REC = { text = "Sincronizar recordes", human = false }
+PRO_BROAD_GRID = { text = "Transmitir grade", human = false }
+PRO_STATS_GM_RC = { text = "Campanha de Corrida", human = false }
+PRO_STATS_GM_RB = { text = "Racebox", human = false }
+PRO_STATS_GM_AHL = { text = "Ad Hoc", human = false }
+PRO_STATS_GM_ONL = { text = "Online", human = false }
+01_Track = { text = "Basilico Preta", human = false }
+02_Track = { text = "Metropia Preta", human = false }
+03_Track = { text = "Moa Therma Branca", human = false }
+04_Track = { text = "Tech de Ra Branca", human = false }
+05_Track = { text = "de Konstruct Preta", human = false }
+06_Track = { text = "Vertica Branca", human = false }
+07_Track = { text = "Outpost 7 Branca", human = false }
+08_Track = { text = "Vostok Reef Preta", human = false }
+09_Track = { text = "The Amphiseum Preta", human = false }
+10_Track = { text = "Arc Prime Branca", human = false }
+11_Track = { text = "Edgewinter Branca", human = false }
+12_Track = { text = "Gemini Dam Preta", human = false }
+13_Track = { text = "Platinum Rush Branca", human = false }
+14_Track = { text = "Fort Gale Preta", human = false }
+15_Track = { text = "Orcus Branca", human = false }
+16_Track = { text = "Talon's Junction Branca", human = false }
+17_Track = { text = "Basilico Branca", human = false }
+18_Track = { text = "Metropia Branca", human = false }
+19_Track = { text = "Moa Therma Preta", human = false }
+20_Track = { text = "Tech de Ra Preta", human = false }
+21_Track = { text = "de Konstruct Branca", human = false }
+22_Track = { text = "Vertica Preta", human = false }
+23_Track = { text = "Outpost 7 Preta", human = false }
+24_Track = { text = "Vostok Reef Branca", human = false }
+25_Track = { text = "The Amphiseum Branca", human = false }
+26_Track = { text = "Arc Prime Preta", human = false }
+27_Track = { text = "Edgewinter Preta", human = false }
+28_Track = { text = "Gemini Dam Branca", human = false }
+29_Track = { text = "Platinum Rush Preta", human = false }
+30_Track = { text = "Fort Gale Branca", human = false }
+31_Track = { text = "Orcus Preta", human = false }
+32_Track = { text = "Talon's Junction Preta", human = false }
+"1 Races" = { text = "1 corrida", human = false }
+"2 Races" = { text = "2 corridas", human = false }
+"3 Races" = { text = "3 corridas", human = false }
+"4 Races" = { text = "4 corridas", human = false }
+"5 Races" = { text = "5 corridas", human = false }
+"6 Races" = { text = "6 corridas", human = false }
+"7 Races" = { text = "7 corridas", human = false }
+"8 Races" = { text = "8 corridas", human = false }
+"9 Races" = { text = "9 corridas", human = false }
+"10 Races" = { text = "10 corridas", human = false }
+"11 Races" = { text = "11 corridas", human = false }
+"12 Races" = { text = "12 corridas", human = false }
+OPT_MUSIC_TL = { text = "Lista de faixas", human = false }
+MSC_MIN = { text = "Minuto", human = false }
+MSC_MINS = { text = "Minutos", human = false }
+MSC_HOUR = { text = "Hora", human = false }
+MSC_HOURS = { text = "Horas", human = false }
+MSC_SEC = { text = "Segundo", human = false }
+MSC_SECONDS = { text = "Segundos", human = false }
+PRO_STATS_FAVFRIEND = { text = "Amigo favorito", human = false }
+MSC_BROLLS = { text = "Giros laterais", human = false }
+MSC_SSHIFTS = { text = "Deslocamentos laterais", human = false }
+MSC_NONE = { text = "Nenhum", human = false }
+MSC_PRODAT = { text = "Dados do perfil", human = false }
+PRO_STATS_TOTGT = { text = "Tempo total de jogo", human = false }
+MSC_GHODAT = { text = "Dados da nave fantasma", human = false }
+MSC_CGDAT = { text = "Dados da grade personalizada", human = false }
+MSC_CGNAME = { text = "Nome da grade", human = false }
+MSC_CGNE = { text = "Número de eventos", human = false }
+MSC_GHOST_LOAD = { text = "Carregando nave fantasma", human = false }
+MSC_GHOST_LOADED = { text = "Nave fantasma carregada", human = false }
+MSC_GHOST_AUTOFAIL = { text = "Falha ao carregar a nave fantasma automaticamente", human = false }
+MSC_EMPTY_PRO = { text = "Perfil vazio", human = false }
+MSC_EMPTY_GHO = { text = "Fantasma vazio", human = false }
+MSC_EMPTY_GRD = { text = "Grade vazia", human = false }
+MSC_GHOST_LOADTIME = { text = "Carregando tempo do fantasma", human = false }
+MSC_GHOST_LOADFAIL = { text = "Falha ao carregar o tempo do fantasma", human = false }
+MSC_GHOST_NOGHOST = { text = "Nenhum tempo de fantasma encontrado", human = false }
+MSC_SHIPSKIN = { text = "Skin da nave", human = false }
+IG_HUD_RECORD = { text = "Recorde", human = false }
+ER_DNF = { text = "DNF", human = false }
+ER_RACING = { text = "Correndo", human = false }
+ER_PHOTO_CAM_FRONT = { text = "Frente", human = false }
+ER_PHOTO_CAM_ABOVE = { text = "Acima", human = false }
+ER_TARGTIME = { text = "Tempo-meta:", human = false }
+ER_TARGLOST = { text = "Você não conseguiu bater o tempo-meta", human = false }
+ER_TARGBEAT = { text = "Você bateu o tempo-meta!", human = false }
+ER_PHOTO_ROTATECAM = { text = "Analógico - girar a câmera", human = false }
+ER_PHOTO_RESETCAM = { text = "β - redefinir a câmera", human = false }
+ER_PHOTO_ZOOMCAM = { text = "Λ/Ν - zoom da câmera", human = false }
+ER_GMA = { text = "Medalha de ouro conquistada", human = false }
+ER_SMA = { text = "Medalha de prata conquistada", human = false }
+ER_BMA = { text = "Medalha de bronze conquistada", human = false }
+ER_NMA = { text = "Nenhuma medalha conquistada", human = false }
+ER_LAPSC = { text = "Voltas completas:", human = false }
+PRO_BROADCAST = { text = "Transmitir", human = false }
+PRO_RECEIVE = { text = "Receber", human = false }
+RC_INF = { text = "Infinito", human = false }
+ER_VIEW_AGAIN = { text = "Ver resultados de novo", human = false }
+MSC_HELP_RB_CS = { text = "Selecione o seu circuito e escolha a corrida preta ou a corrida branca dele. As corridas preta e branca variam em tamanho, direção ou dificuldade e podem oferecer desafios diferentes em cada classe.", human = false }
+PRO_ZONE_REC = { text = "Recordes de Zona", human = false }
+PRO_STATS_ONLLAPS = { text = "Total de voltas corridas online", human = false }
+PRO_STATS_ONLPLAPS = { text = "Total de voltas perfeitas corridas online", human = false }
+PRO_STATS_ONLELIM = { text = "Total de eliminações online", human = false }
+PRO_STATS_ONLDEATHS = { text = "Total de mortes online", human = false }
+RB_CG_MSG1 = { text = "Tem certeza de que quer sair? As mudanças não salvas serão perdidas.", human = false }
+RB_CG_MSG2 = { text = "Esta grade não pode ser salva no estado atual. Verifique se há pelo menos um evento destravado e se todos os outros eventos podem ser alcançados a partir de um evento destravado.", human = false }
+MAN_P1 = { text = "Manual - Parte 1/4", human = false }
+MAN_P2 = { text = "Manual - Parte 2/4", human = false }
+MAN_P3 = { text = "Manual - Parte 3/4", human = false }
+MAN_P4 = { text = "Manual - Parte 4/4", human = false }
+MAN_P1_PG1 = { text = "Conteúdo - Página 1/1", human = false }
+MAN_P2_PG1 = { text = "Modos de jogo - Campanha de Corrida - Página 1/3", human = false }
+MAN_P2_PG2 = { text = "Modos de jogo - Racebox - Página 2/3", human = false }
+MAN_P2_PG3 = { text = "Modos de jogo - Multijogador/Compartilhamento - Página 3/3", human = false }
+MAN_P3_PG1 = { text = "Recursos - Página 1/2", human = false }
+MAN_P3_PG2 = { text = "Recursos - Página 2/2", human = false }
+MAN_P4_PG1 = { text = "Guia de referência - Pistas/Classes - Página 1/7", human = false }
+MAN_P4_PG2 = { text = "Guia de referência - Tipos de evento - Página 2/7", human = false }
+MAN_P4_PG3 = { text = "Guia de referência - Armas padrão - Página 3/7", human = false }
+MAN_P4_PG4 = { text = "Guia de referência - Armas de lançamento traseiro - Página 4/7", human = false }
+MAN_P4_PG5 = { text = "Guia de referência - Armas avançadas - Página 5/7", human = false }
+MAN_P4_PG6 = { text = "Guia de referência - Itens - Página 6/7", human = false }
+MAN_P4_PG7 = { text = "Guia de referência - Armas experimentais - Página 7/7", human = false }
+MAN_P1_PG1_WEL = { text = "Bem-vindo ao manual eletrônico do WipEout® Pulse!", human = false }
+MAN_P1_PG1_CON = { text = "Parte 1 - Conteúdo", human = false }
+MAN_P1_PG1_GM = { text = "Parte 2 - Modos de jogo", human = false }
+MAN_P1_PG1_RC = { text = "        Campanha de Corrida", human = false }
+MAN_P1_PG1_RB = { text = "        Racebox", human = false }
+MAN_P1_PG1_MPS = { text = "        Multijogador/Compartilhamento", human = false }
+MAN_P1_PG1_F = { text = "Parte 3 - Recursos", human = false }
+MAN_P1_PG1_AB = { text = "        Freios aéreos", human = false }
+MAN_P1_PG1_WSP = { text = "        Pads de armas e de velocidade", human = false }
+MAN_P1_PG1_ENER = { text = "        Energia da nave", human = false }
+MAN_P1_PG1_ABS = { text = "        Absorção", human = false }
+MAN_P1_PG1_MAG = { text = "        Faixas magnéticas", human = false }
+MAN_P1_PG1_SLOY = { text = "        Lealdade à nave", human = false }
+MAN_P1_PG1_PHO = { text = "        Fotos", human = false }
+MAN_P1_PG1_MP3 = { text = "        Música MP3", human = false }
+MAN_P1_PG1_SKIN = { text = "        Editor de skins de nave", human = false }
+MAN_P1_PG1_GHO = { text = "        Naves fantasma", human = false }
+MAN_P1_PG1_REC = { text = "        Resgate", human = false }
+MAN_P1_PG1_ECS = { text = "        Gaiola ECS", human = false }
+MAN_P1_PG1_REF = { text = "Parte 4 - Guia de referência", human = false }
+MAN_P1_PG1_TRA = { text = "        Tipos de pista", human = false }
+MAN_P1_PG1_SPE = { text = "        Classes de velocidade", human = false }
+MAN_P1_PG1_EVE = { text = "        Tipos de evento", human = false }
+MAN_P1_PG1_WEAP = { text = "        Armas e itens", human = false }
+MAN_P2_PG1_RC = { text = "A Campanha de Corrida é a casa do jogo para um jogador do WipEout® Pulse. Centenas de eventos de corrida estão reunidos em grades pelas quais você precisa avançar, destravando novos eventos, grades e outros extras pelo caminho.", human = false }
+MAN_P2_PG1_RC2 = { text = "Cada evento é uma combinação única de circuito, classe e tipo de corrida. Nos eventos com oponentes de IA, você pode definir a dificuldade antes de começar. Você também pode escolher a nave com que vai correr. Cumpra as metas de cada evento para ganhar medalhas, somar pontos e abrir eventos vizinhos na grade. Avance pela grade e ganhe pontos suficientes para abrir a próxima.", human = false }
+MAN_P2_PG2_RB = { text = "O Racebox tem tudo o que você precisa para personalizar corridas para um jogador.", human = false }
+MAN_P2_PG2_CE = { text = "Corrida personalizada: escolha seu próprio tipo de evento, pista, classe e outras configurações. Dá até para criar torneios personalizados com até 12 pistas.", human = false }
+MAN_P2_PG2_LG = { text = "Carregar grade: carregue uma grade salva antes para jogar nela.", human = false }
+MAN_P2_PG2_EG = { text = "Editar grade: crie e personalize grades completas como as da Campanha de Corrida. Use o editor para criar o layout e depois adicione eventos. Use o menu para dar nome à grade, salvá-la e assim por diante. Com a grade pronta, corra nela pela opção Carregar grade ou compartilhe o arquivo salvo com os amigos para eles correrem na sua criação!", human = false }
+MAN_P2_PG3_ONL = { text = "Online (infraestrutura): escolha uma conexão de rede e acesse os servidores online do WipEout® Pulse. Depois de conectado, você pode entrar numa corrida online ou criar uma.", human = false }
+MAN_P2_PG3_JR = { text = "Entrar em corrida: selecione sua nave e escolha numa lista de corridas criadas por outras pessoas. Escolha uma para entrar e você irá para a sala com os outros jogadores. Quando todos estiverem prontos, o anfitrião inicia a corrida.", human = false }
+MAN_P2_PG3_CR = { text = "Criar corrida: personalize uma corrida para até 8 jogadores. Depois de criar o jogo, você irá para a sala. Conforme outras pessoas entrarem, elas aparecerão na sala. Como anfitrião, você pode iniciar a corrida.", human = false }
+MAN_P2_PG3_AHS = { text = "Ad Hoc e Compartilhamento: entre numa corrida Ad Hoc pela conexão sem fio local ou crie uma, de forma parecida com os jogos online acima. Aqui você também pode compartilhar dados com outros jogadores.", human = false }
+MAN_P2_PG3_LAN = { text = "LAN: entre numa corrida em LAN pela conexão sem fio local ou crie uma. Todos os jogadores precisam se conectar antes a um roteador sem fio. Entrar e criar jogos é parecido com os procedimentos dos jogos Online e Ad Hoc acima.", human = false }
+MAN_P2_PG3_ONLAC = { text = "Conta Online: use este recurso para salvar seu nome de usuário e senha e ligar o login automático, que pode acelerar a conexão Online (infraestrutura). Seus dados serão criptografados para a sua segurança e farão parte do seu perfil.", human = false }
+MAN_P2_PG3_AUTO = { text = "Login automático: se você ligar o login automático pelo menu Conta Online, precisa fazer login manualmente uma vez antes que o recurso seja ativado. Se algum dado de login mudar, o login automático será desativado e você precisará entrar manualmente para reativá-lo.", human = false }
+MAN_P3_PG1_AB = { text = "Freios aéreos: cada nave tem freios aéreos de ponta para ajudar a contornar curvas fechadas. Úteis principalmente em velocidades altas, quem domina os freios aéreos tem muito mais chance de sucesso. Acione o freio aéreo esquerdo ou direito numa curva fechada para manter a velocidade e aumentar a capacidade de contorno.", human = false }
+MAN_P3_PG1_WSP = { text = "Pads de armas e de velocidade: ficam na superfície das pistas, assim:", human = false }
+MAN_P3_PG1_WSP2 = { text = "Passe por cima deles para ativá-los. Os pads de armas dão uma arma ou um item aleatório. Só é possível carregar uma arma ou item de cada vez. Os pads de velocidade dão um impulso de velocidade. Armas e itens não estão disponíveis em alguns eventos.", human = false }
+MAN_P3_PG1_ENER = { text = "Energia da nave: sua nave tem uma quantidade limitada de energia, que pode se esgotar com colisões com as paredes da pista, outras naves ou armas. Na maioria das corridas, se a energia chegar a zero, a nave explode e você perde a corrida. Nos eventos Time Trial e Volta de velocidade, a energia da nave se recupera sozinha.", human = false }
+MAN_P3_PG1_ABS = { text = "Absorção: em vez de disparar uma arma ou ativar um coletável, você pode absorvê-lo e recuperar parte da energia da nave. Cada item e arma dá uma quantidade diferente de energia. Saber quando usar ou absorver os coletáveis é uma estratégia essencial que pode decidir se você ganha ou perde as corridas.", human = false }
+MAN_P3_PG1_MAG = { text = "Faixas magnéticas: são áreas especiais da pista que prendem a nave magneticamente à superfície, permitindo corridas dinâmicas que desafiam a gravidade. Fique de olho nelas na pista!", human = false }
+MAN_P3_PG1_SLOY = { text = "Lealdade à nave: você ganha pontos de lealdade em cada corrida de que participa, para a nave que usou nela. Os pontos de lealdade dependem do seu desempenho na corrida. Use a mesma nave em várias corridas e os pontos de lealdade se acumulam com o tempo. Você é recompensado automaticamente com bônus quando a lealdade atinge certo nível. Fique de olho no medidor de lealdade que aparece no fim de cada evento de corrida e compare a lealdade de várias naves na tela de Estatísticas.", human = false }
+MAN_P3_PG2_PHO = { text = "Fotos: durante qualquer corrida, você pode pausar a ação e escolher a opção Tirar foto para escolher um ângulo de câmera e fotografar. Também dá para tirar uma foto no fim da maioria das corridas. As fotos podem ser vistas pelo Menu Inicial do seu sistema PSP™ (PlayStation®Portable).", human = false }
+MAN_P3_PG2_MP3 = { text = "Música MP3: o WipEout® Pulse pode tocar seus arquivos de música MP3. Por um computador, na pasta raiz do Memory Stick Duo™, crie o diretório MUSIC, se ainda não existir. Dentro dele, crie a pasta WIPEOUT. Copie até 30 arquivos de música MP3 para a pasta. No jogo, escolha Playlist de músicas no menu Opções. Os nomes das faixas dos seus arquivos MP3 vêm das tags de ID dos arquivos ou, se não existirem, do nome do arquivo.", human = false }
+MAN_P3_PG2_SKIN = { text = "Editor de skins de nave: acesse wipeout-game.com para usar o editor de skins e criar uma skin personalizada para qualquer nave do WipEout® Pulse. Quando estiver satisfeito com o visual, baixe a skin para o jogo e leve para qualquer corrida, offline ou online.", human = false }
+MAN_P3_PG2_GHO = { text = "Naves fantasma: nos eventos Time Trial e Volta de velocidade, uma nave fantasma é carregada ou gerada automaticamente com base no seu desempenho. Você pode desativar o carregamento automático ou a visibilidade das naves fantasma no menu Opções de jogo. No fim do evento, você pode salvar a sua melhor nave fantasma da corrida.", human = false }
+MAN_P3_PG2_REC = { text = "Resgate: até os melhores pilotos antigravidade às vezes se excedem e fazem a nave sair voando da pista após um salto alto ou uma explosão de velocidade inesperada. Se isso acontecer, o serviço de resgate AG Salvage Shuttles devolve a nave à corrida - mas você terá perdido segundos valiosos e precisará correr forte para recuperá-los.", human = false }
+MAN_P3_PG2_ECS = { text = "Gaiola ECS: a Gaiola dos Sistemas de Confinamento de Entretenimento cerca a maior parte dos trechos de pista. Seu objetivo é proteger os espectadores e o ambiente em geral das naves e dos disparos de armas - não é proteger você. Se você bater nela, sofrerá dano. Lembre-se: a gaiola não está em todo lugar e, se você se afastar demais da pista em alguns trechos, ainda precisará do serviço de resgate.", human = false }
+MAN_P4_PG1_C = { text = "Tipos de pista: cada pista tem duas variações - a corrida preta e a corrida branca. As corridas preta e branca de cada pista podem variar em direção, tamanho ou traçado e trazem desafios diferentes conforme a classe e o tipo de evento escolhidos. Nas corridas fora da Campanha de Corrida, faça a escolha na tela de seleção de pista.", human = false }
+MAN_P4_PG1_SC = { text = "Classes de velocidade: há quatro classes de velocidade no WipEout® Pulse. A maioria dos eventos de corrida se concentra numa classe específica. A classe do evento também pode definir quantas voltas serão corridas em alguns eventos.", human = false }
+MAN_NEXTPART = { text = "Ν Próxima parte", human = false }
+MAN_PREVPART = { text = "Λ Parte anterior", human = false }
+MAN_CYCLEPART = { text = "Λ/Ν Alternar parte", human = false }
+MSC_SVENOM = { text = "Sub-Venom", human = false }
+MSC_SFLASH = { text = "Sub-Flash", human = false }
+MSC_SRAPIER = { text = "Sub-Rapier", human = false }
+MSC_SPHANTOM = { text = "Sub-Phantom", human = false }
+MSC_SPPHANTOM = { text = "Super-Phantom", human = false }
+MSC_UNL_YHU = { text = "Você destravou:", human = false }
+MSC_UNL_FRB = { text = "%s para usar no Racebox!", human = false }
+MSC_UNL_FRC = { text = "%s na Campanha de Corrida!", human = false }
+Grid0 = { text = "Grade 1", human = false }
+Grid1 = { text = "Grade 2", human = false }
+Grid2 = { text = "Grade 3", human = false }
+Grid3 = { text = "Grade 4", human = false }
+Grid4 = { text = "Grade 5", human = false }
+Grid5 = { text = "Grade 6", human = false }
+Grid6 = { text = "Grade 7", human = false }
+Grid7 = { text = "Grade 8", human = false }
+Grid8 = { text = "Grade 9", human = false }
+Grid9 = { text = "Grade 10", human = false }
+Grid10 = { text = "Grade 11", human = false }
+MSC_UNL_BIL = { text = "Outdoor %s!", human = false }
+MSC_UNL_MUS = { text = "Música %s!", human = false }
+MSC_UNL_SKI = { text = "Skin %s!", human = false }
+MSC_UNL_TEA = { text = "Equipe %s!", human = false }
+MSC_UNL_TOU = { text = "Torneio %s!", human = false }
+MSC_UNL_TM = { text = "Nave %s %s!", human = false }
+MSC_UNL_MS = { text = "Skin %s %s!", human = false }
+MSC_UNL_LS = { text = "Tela de carregamento %s!", human = false }
+Eliminator = { text = "Eliminatória", human = false }
+Alternative = { text = "Alternativa", human = false }
+Concept = { text = "Conceito", human = false }
+ONL_CRJ_JOINEDGAME = { text = "%s entrou no jogo", human = false }
+ONL_IGM_LAPRECORD = { text = "%s marcou um novo recorde de volta", human = false }
+ONL_LOB_ASKFRIEND = { text = "Você enviou um pedido de amizade para %s", human = false }
+ONL_LOB_ASKFRIEND_FAILED = { text = "Falha ao enviar o seu pedido de amizade para %s", human = false }
+ONL_LOB_ADDIGNORE = { text = "%s foi adicionado à sua lista de bloqueio", human = false }
+ONL_LOB_ADDIGNORE_FAILED = { text = "Não foi possível adicionar %s à sua lista de bloqueio agora - tente de novo mais tarde", human = false }
+ONL_COM_FRIEND_ONLINE = { text = "%s está online", human = false }
+ONL_COM_FRIEND_OFFLINE = { text = "%s está offline", human = false }
+ONL_LOB_FRIENDREQ = { text = "%s enviou um pedido de amizade para você", human = false }
+ONL_IGM_DIED = { text = "%s eliminou você!", human = false }
+ONL_IGM_SUICIDE = { text = "Você se eliminou!", human = false }
+ONL_LOB_STARTFAILED = { text = "Você não pode iniciar esta corrida até que haja pelo menos %d jogadores na sala", human = false }
+ONL_IGM_KILL = { text = "Você eliminou %s", human = false }
+ONL_IGM_INFORM_KILL = { text = "%s foi eliminado por %s", human = false }
+ONL_IGM_INFORM_SUICIDE = { text = "%s se eliminou!", human = false }
+ONL_DT_REQUEST_WITHDRAWN = { text = "O pedido foi retirado", human = false }
+ONL_DT_REQUEST_DECLINED = { text = "Seu pedido foi recusado.", human = false }
+ONL_DT_USER_BUSY = { text = "Este jogador está transferindo dados com outro jogador no momento", human = false }
+ONL_DT_TRANSFER_CANCELLED = { text = "A transferência foi cancelada", human = false }
+ONL_LOB_BLOCKED = { text = "bloqueado", human = false }
+ONL_LOB_NOT_BLOCKED = { text = "não bloqueado", human = false }
+FE_NA = { text = "N/D", human = false }
+ONL_LOB_FRIEND = { text = "Amigo", human = false }
+ONL_LOB_PENDING = { text = "Pendente", human = false }
+ONL_DT_WAITING = { text = "aguardando resposta de %s", human = false }
+ONL_DT_RECIEVING = { text = "Recebendo dados de %s", human = false }
+ONL_DT_SENDING = { text = "Enviando dados para %s", human = false }
+ONL_DT_SYNCING = { text = "Sincronizando dados com %s", human = false }
+ONL_DT_SETTINGUP = { text = "Preparando a transferência", human = false }
+ONL_DT_BRD_REQ = { text = "%s quer enviar a você os dados do perfil.", human = false }
+ONL_DT_SYNC_REQ = { text = "%s quer sincronizar os dados do perfil com você.", human = false }
+ONL_DT_GRID_REQ = { text = "%s quer enviar a você a grade personalizada.", human = false }
+ONL_DT_BRD = { text = "Transmitir recordes", human = false }
+ONL_DT_SYNC = { text = "Sincronizar recordes", human = false }
+ONL_DT_GRID = { text = "Transmitir grade", human = false }
+ONL_DT_SEARCH_FOR_PLAYERS = { text = "Procurando outros jogadores", human = false }
+ONL_DT_PERCENT_COMPLETE = { text = "%d %% concluído", human = false }
+ONL_PI_ADDFRIEND = { text = "Adicionar à lista de amigos", human = false }
+ONL_PI_FRIENDSENT = { text = "Pedido de amizade enviado", human = false }
+ONL_PI_MYFRIEND = { text = "Na minha lista de amigos", human = false }
+ONL_PI_ADDBLOCK = { text = "Adicionar à lista de bloqueio", human = false }
+ONL_PI_BLOCKSENT = { text = "Pedido de bloqueio enviado", human = false }
+ONL_PI_MYBLOCK = { text = "Na minha lista de bloqueio", human = false }
+ONL_PI_BLOCK_SKIN = { text = "Bloquear skin personalizada", human = false }
+ONL_PI_ALLOW_SKIN = { text = "Permitir skin personalizada", human = false }
+ONL_PI_SKINSTATUS = { text = "Skins personalizadas permitidas:", human = false }
+ONL_PI_BLOCKSTATUS = { text = "Status de bloqueio:", human = false }
+ONL_PI_FRIENDSTATUS = { text = "Status de amizade:", human = false }
+ONL_GL_NO_GAMES_FOUND = { text = "Nenhum jogo encontrado", human = false }
+ONL_GL_ZERO_GAMES_AFTER_FILTERED = { text = "Nenhum jogo encontrado - %d jogo(s) filtrado(s)", human = false }
+ONL_GL_SEARCHING = { text = "Procurando jogos", human = false }
+ONL_RANKED = { text = "Ranqueado", human = false }
+ONL_STANDARD = { text = "Padrão", human = false }
+ONL_CON_RETCHAN = { text = "Obtendo a lista de canais", human = false }
+ONL_M_FL = { text = "Lista de amigos", human = false }
+ONL_M_BL = { text = "Lista de bloqueio", human = false }
+ONL_QUIT_ONLINE = { text = "Sair do online", human = false }
+ONL_COM_PR = { text = "Pedidos pendentes", human = false }
+ONL_CON_SEARCHUNI = { text = "Procurando universos", human = false }
+TKR_FYIZONE = { text = "Os eventos de Zona são ótimos para aprender as pistas - personalize seu próprio evento de Zona no Racebox!", human = false }
+TKR_FYISL = { text = "Conheça melhor as pistas personalizando um evento de volta de velocidade no Racebox!", human = false }
+TKR_FYITRACK = { text = "Há novas pistas disponíveis no Racebox!", human = false }
+TKR_FYISHIP = { text = "Há novas skins de nave na tela de seleção de nave!", human = false }
+TKR_FYIGRID = { text = "Há uma nova grade disponível na Campanha de Corrida!", human = false }
+TKR_CANFIR = { text = "Total de canhões disparados: %d", human = false }
+TKR_CANABS = { text = "Total de coletáveis de canhão absorvidos: %d", human = false }
+TKR_CANDAM = { text = "Pontos de dano sofridos por canhões: %d", human = false }
+TKR_RCC = { text = "A Campanha de Corrida está %d%% concluída", human = false }
+TKR_RCP = { text = "Você ganhou %d pontos na Campanha de Corrida", human = false }
+TKR_PLC = { text = "Você correu %d voltas perfeitas", human = false }
+TKR_NPLC = { text = "Você sofreu dano em %d das suas voltas completas", human = false }
+TKR_MPLC = { text = "Você correu um total de %d voltas em corridas multijogador", human = false }
+TKR_VLC = { text = "Você correu %d voltas na classe Venom", human = false }
+TKR_FLC = { text = "Você correu %d voltas na classe Flash", human = false }
+TKR_RLC = { text = "Você correu %d voltas na classe Rapier", human = false }
+ONL_MPMM = { text = "Menu principal online", human = false }
+ER_RETURN_L = { text = "Voltar à sala", human = false }
+TKR_PHLC = { text = "Você correu %d voltas na classe Phantom", human = false }
+TKR_TLC = { text = "O total geral de todas as voltas que você correu é %d", human = false }
+TKR_PZC = { text = "No modo Zona, você sobreviveu a um total de %d zonas sem sofrer nenhum dano", human = false }
+TKR_NPZC = { text = "No modo Zona, você sofreu dano em %d zonas", human = false }
+TKR_TZC = { text = "Você completou um total geral de %d zonas no modo Zona", human = false }
+TKR_RCEC = { text = "Você completou %d eventos ao longo da Campanha de Corrida", human = false }
+TKR_GMW = { text = "Você recebeu %d medalhas de ouro até agora pelo seu esforço na Campanha de Corrida", human = false }
+TKR_TOTELIM = { text = "Você eliminou %d competidores ao longo do jogo", human = false }
+TKR_SRB = { text = "Número de giros laterais bem-sucedidos: %d", human = false }
+TKR_TSS = { text = "Você fez um total de %d deslocamentos laterais ao longo do jogo", human = false }
+TKR_SUP = { text = "Você passou por um total geral de %d pads de velocidade", human = false }
+TKR_WIP = { text = "Você passou por um total de %d pads de armas", human = false }
+TKR_MSABS = { text = "Total de mísseis absorvidos: %d", human = false }
+TKR_QUABS = { text = "Total de tremores absorvidos: %d", human = false }
+TKR_ROABS = { text = "Total de foguetes absorvidos: %d", human = false }
+TKR_BOABS = { text = "Você absorveu %d bombas no total", human = false }
+TKR_MNABS = { text = "Você absorveu um total de %d minas", human = false }
+TKR_PLABS = { text = "Ao longo do jogo, você absorveu %d plasmas.", human = false }
+TKR_LEABS = { text = "Ao longo do jogo, você absorveu %d armas de raio sanguessuga.", human = false }
+TKR_REABS = { text = "Ao longo do jogo, você absorveu %d repulsores.", human = false }
+TKR_SRABS = { text = "Ao longo do jogo, você absorveu %d shurikens.", human = false }
+TKR_TOTWABS = { text = "O total de todas as armas absorvidas na sua vida é %d", human = false }
+TKR_AUABS = { text = "Pilotos automáticos absorvidos: %d", human = false }
+TKR_TUABS = { text = "Turbos absorvidos: %d", human = false }
+TKR_SHABS = { text = "Total de coletáveis de escudo absorvidos: %d", human = false }
+TKR_MSFIR = { text = "Você disparou um total de %d mísseis", human = false }
+TKR_QUFIR = { text = "Você liberou um total de %d armas de tremor", human = false }
+TKR_ROFIR = { text = "Você disparou um total geral de %d foguetes", human = false }
+TKR_BOFIR = { text = "Você soltou um total de %d bombas na pista", human = false }
+TKR_MNFIR = { text = "Você soltou um total de %d minas na pista", human = false }
+TKR_PLFIR = { text = "O total de armas de plasma que você disparou é %d", human = false }
+TKR_LEFIR = { text = "O total de armas de raio sanguessuga que você disparou é %d", human = false }
+TKR_REFIR = { text = "Repulsores disparados: %d", human = false }
+TKR_SRFIR = { text = "Shurikens disparados: %d", human = false }
+TKR_TOTWFIR = { text = "O total de todas as armas disparadas na sua vida é %d", human = false }
+TKR_AUFIR = { text = "Você ativou um total de %d pilotos automáticos", human = false }
+TKR_TUFIR = { text = "Você ativou um total de %d coletáveis de turbo", human = false }
+TKR_SHFIR = { text = "Você ativou um total de %d escudos", human = false }
+TKR_TOTIFIR = { text = "Você ativou um total geral de %d itens.", human = false }
+TKR_MSDAM = { text = "Você sofreu %d pontos de dano de mísseis", human = false }
+TKR_QUDAM = { text = "Você sofreu %d pontos de dano de armas de tremor", human = false }
+TKR_RODAM = { text = "Você sofreu %d pontos de dano de foguetes", human = false }
+TKR_BODAM = { text = "Você sofreu %d pontos de dano de bombas", human = false }
+TKR_MNDAM = { text = "Você sofreu %d pontos de dano de minas", human = false }
+TKR_PLDAM = { text = "Você sofreu %d pontos de dano de armas de plasma", human = false }
+TKR_LEDAM = { text = "Raios sanguessuga drenaram %d pontos da sua energia", human = false }
+TKR_REDAM = { text = "Armas repulsoras causaram %d pontos de dano a você", human = false }
+TKR_SRDAM = { text = "Shurikens causaram %d pontos de dano a você", human = false }
+TKR_TOTWDAM = { text = "Você sofreu um total de %d pontos de dano de disparos de armas", human = false }
+TKR_TOTWALDAM = { text = "Você sofreu um total de %d pontos de dano de colisões na lateral da pista", human = false }
+TKR_TOTSHPDAM = { text = "Você sofreu um total de %d pontos de dano de colisões com outras naves", human = false }
+TKR_PHOTOS = { text = "Você tirou %d fotos", human = false }
+TKR_SONGS = { text = "Você ouviu um total de %d músicas", human = false }
+TKR_ENABS = { text = "O total de energia que você absorveu é %.2f pontos", human = false }
+TKR_DIST = { text = "Ao longo do jogo, você percorreu um total de %.2f km", human = false }
+TKR_RCTIM = { text = "O seu tempo total na Campanha de Corrida é %s", human = false }
+TKR_RBTIM = { text = "O seu tempo total no Racebox é %s", human = false }
+TKR_TTTIM = { text = "Você passou %s jogando eventos de Time Trial", human = false }
+TKR_SRTIM = { text = "Você passou %s jogando eventos de Corrida única", human = false }
+TKR_ZTIM = { text = "Você passou um total de %s jogando eventos do modo Zona", human = false }
+TKR_TOURTIM = { text = "Você correu por %s em torneios", human = false }
+TKR_ELIMTIM = { text = "Você passou um total de %s em eventos de Eliminatória", human = false }
+TKR_HTHTIM = { text = "Você participou de corridas Cara a cara por %s", human = false }
+TKR_SLTIM = { text = "O seu tempo em eventos de volta de velocidade é %s", human = false }
+TKR_MPTIM = { text = "Você passou um total de %s em corridas multijogador", human = false }
+TKR_AHTIM = { text = "O seu tempo total em corridas Ad Hoc é %s", human = false }
+TKR_INFTIM = { text = "Você correu online por %s", human = false }
+TKR_MENTIM = { text = "Você passou %s olhando os menus! Vá correr!", human = false }
+TKR_AIRTIM = { text = "Você passou %s no ar durante as corridas", human = false }
+TKR_STTIM = { text = "Sabia que você passou %s da sua vida olhando as páginas de estatísticas?", human = false }
+TKR_TOTTIM = { text = "O seu tempo total de jogo é %s", human = false }
+TKR_FAVTEAM = { text = "A sua equipe favorita é %s", human = false }
+TKR_FAVWEAP = { text = "A sua arma de preferência é %s", human = false }
+TKR_FAVTRK = { text = "A sua pista favorita é %s", human = false }
+TKR_FAVEVE = { text = "%s é o seu evento favorito", human = false }
+TKR_FAVSPE = { text = "%s é a sua classe de preferência", human = false }
+TKR_FAVMUS = { text = "A música que você mais ouviu é %s", human = false }
+TKR_FAVFRI = { text = "O seu melhor amigo é %s", human = false }
+MSC_GSHARE_RC = { text = "A Campanha de Corrida não está disponível nesta demo!\n\nNa versão completa, uma desafiadora coleção de grades espera por você, cada uma com vários eventos únicos para correr.\n\nSão centenas de eventos ao todo, em 4 classes cada vez mais rápidas, incluindo o ultrarrápido modo Zona e o modo Eliminatória, cheio de armas, com novas armas exclusivas.\n\nA Campanha de Corrida é a experiência definitiva de WipEout® para um jogador - só na versão completa do WipEout® Pulse!", human = false }
+MSC_GSHARE_RB = { text = "Esta é a versão demo do Racebox, com escolha limitada de pistas, naves e outras opções.\n\nNa versão completa do Racebox, você personaliza qualquer combinação de tipo de evento, classe, pista, nave e mais. Também há o completo editor de grades, que permite criar grades no mesmo estilo das da Campanha de Corrida e compartilhá-las com os amigos.\n\nConfira o modo Racebox completo na versão completa do WipEout® Pulse!", human = false }
+MSC_GSHARE_MP = { text = "Esta é a versão demo do modo multijogador.\n\nVocê só pode jogar uma corrida Ad Hoc por conexão sem fio local, com escolha limitada de pistas e naves.\n\nAs opções multijogador completas incluem corridas online para até 8 jogadores, com a possibilidade de correr contra skins de nave personalizadas de outros jogadores!", human = false }
+ONL_LOB_PLAYERINFO = { text = "Informações do jogador", human = false }
+ONL_LOB_EDIT = { text = "Editar configurações", human = false }
+ONL_LOB_STARTRACE = { text = "Iniciar corrida", human = false }
+MSC_GSHARE_WOC = { text = "Esta demo não dá acesso ao site wipeout-game.com.\n\nVisite o site por um computador para acessar o editor de skins de nave, personalizar as skins das suas equipes e baixá-las para usar no jogo completo.\n\nO site também tem os pacotes de download mais recentes, notícias, blogs dos desenvolvedores e mais!", human = false }
+MSC_GSHARE_PRO = { text = "Esta é uma versão limitada do menu Perfil e só traz as telas de estatísticas e os recordes de corrida do conteúdo disponível nesta demo.\n\nA versão completa permite gerenciar vários perfis de jogador e ver toda a gama de estatísticas, incluindo o medidor de lealdade às naves, atualizado após cada corrida para cada nave. Junte pontos de lealdade suficientes para destravar recompensas!", human = false }
+MSC_GSHARE_OPT = { text = "Esta tela de opções não traz toda a gama de opções da versão completa do jogo.\n\nVocê perde o prático salvamento automático e a playlist completa, com o que há de mais moderno em techno, house, drum and bass, break beat e eletrônica.\n\nVocê também perde a playlist de MP3, que permite tocar até 30 músicas suas do Memory Stick Duo™.", human = false }
+MSC_GSHARE_EXT = { text = "Esta é a versão demo do WipEout® Pulse, com modos de jogo e conteúdo limitados.\n\nA versão completa tem muitos recursos novos, como trechos de pista com faixas magnéticas, modo foto, novas armas, corrida online, editor de grades personalizadas, suporte a música MP3, recursos de compartilhamento, suporte a skins de nave personalizadas e uma porção de pistas novas em folha!", human = false }
+MSC_CAMREC = { text = "Recorde da campanha", human = false }
+TKR_TOTIABS = { text = "Você absorveu um total geral de %d itens.", human = false }
+ONL_IGM_LAST_PLAYER = { text = "Você é o último jogador no jogo, por favor saia.", human = false }
+CRED_DEV_SL = { text = "Créditos da equipe da Studio Liverpool", human = false }
+CRED_DEV_SD = { text = "Diretor do estúdio", human = false }
+CRED_DEV_GD = { text = "Diretor do jogo", human = false }
+CRED_DEV_PR = { text = "Produtor", human = false }
+CRED_DEV_TD = { text = "Diretor de tecnologia", human = false }
+CRED_DEV_LP = { text = "Programador-chefe", human = false }
+CRED_DEV_MPLP = { text = "Programador-chefe de multijogador", human = false }
+CRED_DEV_PT = { text = "Equipe de programação", human = false }
+CRED_DEV_LA = { text = "Artista-chefe", human = false }
+CRED_DEV_ALA = { text = "Artistas-chefes assistentes", human = false }
+CRED_DEV_TA = { text = "Artistas de pistas", human = false }
+CRED_DEV_SA = { text = "Artista de naves", human = false }
+CRED_DEV_PWE = { text = "Efeitos de partículas / armas", human = false }
+CRED_DEV_BP = { text = "Pinturas de fundo", human = false }
+CRED_DEV_LD = { text = "Designer-chefe", human = false }
+CRED_DEV_DT = { text = "Equipe de design", human = false }
+CRED_DEV_GGL = { text = "Líder do grupo de gráficos", human = false }
+CRED_DEV_GG = { text = "Grupo de gráficos", human = false }
+CRED_DEV_GRD = { text = "Design gráfico", human = false }
+CRED_DEV_WD = { text = "Desenvolvimento web", human = false }
+CRED_DEV_SE = { text = "Engenheiro de som", human = false }
+CRED_DEV_DSC = { text = "Coordenador de suporte ao desenvolvimento", human = false }
+CRED_DEV_PM = { text = "Gerente de produto", human = false }
+CRED_DEV_MC = { text = "Redator do manual", human = false }
+CRED_DEV_VT = { text = "Locução", human = false }
+CRED_DEV_SCT = { text = "Ferramenta de personalização de naves", human = false }
+CRED_SFPQA = { text = "Garantia de qualidade first party da SCEE", human = false }
+CRED_SFPQA_MAN = { text = "Gerente", human = false }
+CRED_SFPQA_C = { text = "Coordenador", human = false }
+CRED_SFPQA_TM = { text = "Gerente de testes", human = false }
+CRED_SFPQA_FTS = { text = "Supervisor de testes funcionais", human = false }
+CRED_SFPQA_FTL = { text = "Líder de testes funcionais", human = false }
+CRED_SFPQA_FTAL = { text = "Líder assistente de testes funcionais", human = false }
+CRED_SFPQA_FT = { text = "Testadores funcionais", human = false }
+CRED_SFPQA_TRCTS = { text = "Supervisor de testes de TRC", human = false }
+CRED_SFPQA_TRCTL = { text = "Líder de testes de TRC", human = false }
+CRED_SFPQA_TRCT = { text = "Testadores de TRC", human = false }
+CRED_SFPQA_LTS = { text = "Supervisor de testes de localização", human = false }
+CRED_SFPQA_LTC = { text = "Coordenador de testes de localização", human = false }
+CRED_SFPQA_LTAL = { text = "Líder de testes de localização", human = false }
+CRED_SFPQA_LT = { text = "Testadores de localização", human = false }
+CRED_SFPQA_SS = { text = "Supervisor de turno", human = false }
+CRED_SFPQA_SSTC = { text = "Supervisor de testes de serviços de suporte", human = false }
+CRED_SFPQA_SSC = { text = "Coordenador de serviços de suporte", human = false }
+CRED_SFPQA_QAT = { text = "Técnicos de QA", human = false }
+CRED_SFPQA_OQAL = { text = "Líder de QA online", human = false }
+CRED_SFPQA_OQAT = { text = "Testador de QA online", human = false }
+CRED_SFPQA_MC = { text = "Créditos da música", human = false }
+CRED_SFPQA_MS = { text = "Supervisor de música", human = false }
+CRED_DEV_TECHALM = { text = "Gerente-líder de artistas técnicos", human = false }
+CRED_DEV_TECHA = { text = "Artista técnico", human = false }
+CRED_MUS_MLARM = { text = "Gerente de licenciamento de música e A+R", human = false }
+ONL_COM_NO_FRIENDS = { text = "Você não tem amigos na sua lista", human = false }
+CRED_MUS_MSV = { text = "Supervisores de música", human = false }
+ONL_COM_NO_IGNORE = { text = "Você não tem jogadores na sua lista de bloqueio", human = false }
+ONL_COM_NO_PENDING = { text = "Você não tem pedidos de amizade pendentes", human = false }
+ONL_COM_FRIEND_CONFIRM = { text = "Adicionar %s como amigo?", human = false }
+ONL_COM_REMOVE_IGNORE_CONFIRM = { text = "Tem certeza de que quer remover %s da sua lista de bloqueio?", human = false }
+ONL_COM_REMOVE_FRIEND_CONFIRM = { text = "Tem certeza de que quer remover %s da sua lista de amigos?", human = false }
+ONL_COM_NUM_REQUESTS = { text = "%d pedido(s)", human = false }
+Grid11 = { text = "Grade 12", human = false }
+Grid13 = { text = "Grade Phantom 2", human = false }
+Grid14 = { text = "Grade Phantom 3", human = false }
+Grid15 = { text = "Grade Phantom 4", human = false }
+PRO_STATS_ONLMP = { text = "Online / Multijogador (12/13)", human = false }
+CRED_MUS_MC = { text = "Créditos da música", human = false }
+MSC_SQ_MSG7 = { text = "Abandonar o progresso do torneio", human = false }
+CRED_QAMAN = { text = "Aprovação manual de QA", human = false }
+ONL_KICK_MISSED_START = { text = "Este jogo já começou, escolha outro jogo.", human = false }
+ONL_KICK_TEAM = { text = "Você não escolheu uma nave a tempo. Escolha outro jogo.", human = false }
+ONL_KICK_BLOCKED = { text = "Há um jogador da sua lista de bloqueio neste jogo, escolha outro jogo.", human = false }
+ONL_KICK_YOU_ARE_BLOCKED = { text = "Um jogador deste jogo bloqueou você, escolha outro jogo.", human = false }
+ONL_KICK_CONTENT = { text = "O anfitrião mudou as configurações e escolheu conteúdo que você não tem. Escolha outro jogo.", human = false }
+ONL_KICK_COUNTDOWN = { text = "Selecione uma nave ou você sairá do jogo.", human = false }
+Grid12 = { text = "Grade Phantom 1", human = false }
+MSC_CG_MSG1 = { text = "Salvando os resultados da corrida no seu perfil", human = false }
+MSC_CG_MSG2 = { text = "Salvando o progresso da grade na sua grade personalizada", human = false }
+TRC_MS_INSUFKB3 = { text = "Não há espaço suficiente para salvar os dados. É preciso pelo menos mais %d KB de espaço. Quer apagar alguns dados para liberar espaço agora?", human = false }
+FE_CHECKING = { text = "Verificando", human = false }
+BOOT_CHECK_MS = { text = "Verificando o Memory Stick Duo™.", human = false }
+BOOT_DNR_MS = { text = "Por favor, não o remova.", human = false }
+BOOT_AUTOSAVE = { text = "Este jogo carrega e salva dados automaticamente em certos momentos. Não remova o Memory Stick Duo™ nem desligue o sistema enquanto o indicador de acesso ao Memory Stick Duo™ estiver piscando ou enquanto o ícone estiver piscando.", human = false }
+BOOT_LOAD_FAIL = { text = "Falha ao carregar automaticamente o perfil usado mais recentemente.", human = false }
+MSC_SAVE_CORRUPT = { text = "Os dados salvos estão corrompidos.", human = false }
+TKR_GSHARE1 = { text = "Na versão completa, esta barra exibe as estatísticas do seu perfil...", human = false }
+TKR_GSHARE2 = { text = "Visite wipeout-game.com para ver as novidades e os downloads mais recentes do WipEout® Pulse...", human = false }
+TKR_GSHARE3 = { text = "Esta demo tem conteúdo limitado - compre a versão comercial para a experiência completa...", human = false }
+TKR_GSHARE4 = { text = "A versão completa do WipEout® Pulse tem suporte a jogo online, música MP3 e muito mais...", human = false }
+TKR_GSHARE5 = { text = "A extensa Campanha de Corrida só está disponível na versão completa do WipEout® Pulse...", human = false }
+FE_CORRUPT = { text = "Dados corrompidos", human = false }
+TRC_LOCKED = { text = "O Memory Stick Duo™ está travado.", human = false }
+ONL_LOB_CS = { text = "Trocar nave", human = false }
+ONL_LOB_VCS = { text = "Ver skins personalizadas", human = false }
+ONL_PI_ALLOWED = { text = "Permitido", human = false }
+ONL_UNRANKED = { text = "Sem ranking", human = false }
+ONL_FILTAPP = { text = "Filtro aplicado", human = false }
+ONL_FILTSAPP = { text = "Filtros aplicados", human = false }
+MSC_ANY = { text = "Qualquer", human = false }
+MSC_GOOD = { text = "Bom", human = false }
+MSC_ANYONE = { text = "Qualquer um", human = false }
+ONL_GTPL = { text = "Ir para a lista de pendentes", human = false }
+ONL_FILT_MSG = { text = "Pressione δ para mudar quais filtros são aplicados", human = false }
+ONL_IGM_ER_COUNTDOWN = { text = "Você voltará à sala em %d segundos - termine a corrida", human = false }
+ONL_IGM_ERT_COUNTDOWN = { text = "A próxima corrida será carregada em %d segundos, termine a corrida.", human = false }
+MSC_SAVE_GRID_AGAIN = { text = "Quer tentar salvar os dados da grade de novo?", human = false }
+TKR_FYICONCEPT = { text = "Há uma nova nave conceito na tela de seleção de nave!", human = false }
+ONL_IGM_RTL_COUNTDOWN = { text = "Você voltará à sala em %d segundo(s)", human = false }
+ONL_IGM_LNR_COUNTDOWN = { text = "A PRÓXIMA CORRIDA SERÁ CARREGADA EM %d SEGUNDO(S)", human = false }
+CRED_DEV_TAT = { text = "Ferramentas e tecnologia", human = false }
+MSC_SQ_MSG8 = { text = "O progresso do seu torneio foi salvo no perfil ativo no Memory Stick Duo™. Você voltará agora ao menu principal.", human = false }
+ONL_CON_LOGOUT = { text = "Logout", human = false }
+MSC_MOVE = { text = "Λ/Ν Mover música", human = false }
+MSC_LOADTOURN = { text = "Carregar torneio", human = false }
+MSC_SQ_MSG9 = { text = "Não foi possível encontrar o conteúdo para download necessário para este torneio. Insira um Memory Stick Duo™ com o conteúdo correto ou abandone o torneio.", human = false }
+FE_CANCEL_LOW = { text = "Cancelar", human = false }
+PRO_SR_REC = { text = "Recordes de Corrida única", human = false }
+MSC_CLEAR_GRID_MSG = { text = "Isto apagará todas as células da grade.", human = false }
+MSC_ARE_YOU_SURE = { text = "Tem certeza de que quer continuar?", human = false }
+MSC_RESET_RESULTS_MSG = { text = "Isto zerará os resultados e o progresso obtidos nesta grade, devolvendo-a ao estado original.", human = false }
+MSC_REMOVE_TRACK = { text = "Remover pista", human = false }
+ONL_KICK_MS = { text = "O Memory Stick Duo™ foi removido. Agora você precisa sair do jogo.", human = false }
+ONL_SHARE_DATA = { text = "Compartilhar dados", human = false }
+ONL_ACC_SHIP_SKIN = { text = "Skins de nave", human = false }
+ONL_ACC_SHIP_SKIN_MSG = { text = "Escolha se as skins de nave personalizadas de outros jogadores podem ser vistas nos jogos Online (infraestrutura).", human = false }
+ONL_ACC_AUTO_LOGIN_MSG = { text = "Ligar esta opção automatiza a maior parte do login no modo Online (infraestrutura). Você ainda precisará confirmar algumas escolhas manualmente.", human = false }
+TKR_TEAM = { text = "Você completou %d voltas, correu por %s e ganhou %.2f%% de pontos de lealdade para %s", human = false }
+TKR_TRACK = { text = "Você completou %d voltas e correu por %s em %s", human = false }
+ONL_CG_GAME_NAME = { text = "NOME DO JOGO", human = false }
+ONL_CG_GAME_PASSWORD = { text = "SENHA DO JOGO", human = false }
+TKR_NOELIM = { text = "Você ainda não participou de nenhum evento de Eliminatória!", human = false }
+TKR_NOSR = { text = "Você ainda não experimentou nenhum evento de Corrida única", human = false }
+TKR_NOSL = { text = "Que tal experimentar os eventos de volta de velocidade?", human = false }
+TKR_NOTT = { text = "Você ainda não experimentou os eventos de Time Trial!", human = false }
+TKR_NOTOURN = { text = "Você ainda não participou de nenhum torneio - que tal experimentar no Racebox?", human = false }
+TKR_NOZONE = { text = "Você ainda não correu em nenhum evento do modo Zona - por que não?", human = false }
+MSC_DISTANCE = { text = "Distância (m)", human = false }
+PRO_STATS_NOWP = { text = "Tempo sem jogar WipEout® Pulse", human = false }
+PRO_STATS_BUTPRES = { text = "Número de botões pressionados", human = false }
+FE_PLAY_INTRO = { text = "Ver introdução", human = false }
+PRO_STATS_KMAN = { text = "Distância percorrida com o analógico (km)", human = false }
+MSC_LOY_LAP15 = { text = "1 volta +15 pontos", human = false }
+MSC_LOY_LAP30 = { text = "1 volta +30 pontos", human = false }
+MSC_LOY_LAP10 = { text = "1 volta +10 pontos", human = false }
+MSC_LOY_PLAP25 = { text = "1 volta perfeita +25 pontos", human = false }
+MSC_LOY_PLAP50 = { text = "1 volta perfeita +50 pontos", human = false }
+MSC_LOY_PLAP20 = { text = "1 volta perfeita +20 pontos", human = false }
+MSC_LOY_ELIM30 = { text = "1 eliminação +30 pontos", human = false }
+MSC_LOY_ELIM15 = { text = "1 eliminação +15 pontos", human = false }
+MSC_LOY_ZONE10 = { text = "1 zona +10 pontos", human = false }
+MSC_LOY_PZONE20 = { text = "1 zona perfeita +20 pontos", human = false }
+MSC_LOY_MULT = { text = "Multiplicadores:", human = false }
+MSC_LOY_EASY2 = { text = "multiplicador x2 (dificuldade fácil)", human = false }
+MSC_LOY_MED3 = { text = "multiplicador x3 (dificuldade média)", human = false }
+MSC_LOY_HARD4 = { text = "multiplicador x4 (dificuldade difícil)", human = false }
+MSC_LOY_SUG2 = { text = "multiplicador x2 (nave sugerida)", human = false }
+MSC_SPEEDUP = { text = "Aceleração", human = false }
+MSC_SPEEDUPS = { text = "Acelerações", human = false }
+MSC_SPEED_PAD = { text = "Pad de velocidade", human = false }
+MSC_SPEED_PADS = { text = "Pads de velocidade", human = false }
+MSC_NO_DLC = { text = "Não foi possível encontrar o conteúdo para download. Insira um Memory Stick Duo™ com o conteúdo correto.", human = false }
+TRC_ONL_SERVER = { text = "Ocorreu um erro ao contatar o servidor. Tente de novo.", human = false }
+TRC_ONL_MUIS = { text = "Ocorreu um erro ao obter a lista de universos. Tente de novo.", human = false }
+TRC_ONL_LOGOUT = { text = "Ocorreu um erro ao tentar fazer logout. Tente de novo.", human = false }
+TRC_ONL_GAMEUPDATE = { text = "Ocorreu um erro ao atualizar o jogo. Tente de novo.", human = false }
+TRC_ONL_LOGIN = { text = "Ocorreu um erro ao fazer login. Confira seu nome de usuário e senha e tente de novo.", human = false }
+TRC_ONL_CG = { text = "Ocorreu um erro ao criar o jogo. Tente de novo.", human = false }
+TRC_ONL_GAME_PASSWORD = { text = "A senha que você informou para este jogo está incorreta. Escolha outro jogo.", human = false }
+TRC_ONL_JOIN = { text = "Ocorreu um erro ao entrar no jogo. O jogo está cheio ou o anfitrião saiu do jogo.", human = false }
+TRC_ONL_CHANNEL = { text = "Ocorreu um erro ao entrar no canal. Tente de novo.", human = false }
+TRC_ONL_LEAVE_GAME = { text = "Ocorreu um erro ao sair deste jogo. Tente de novo.", human = false }
+TRC_ONL_GAME_EXISTS = { text = "O nome de jogo que você escolheu já existe.", human = false }
+TRC_ONL_VULGAR = { text = "O nome de jogo que você escolheu não é permitido.", human = false }
+ONL_COM_REMOVE_FRIEND = { text = "REMOVER DA LISTA DE AMIGOS", human = false }
+MSC_MSG_AUTOSAVE3 = { text = "O estado do Memory Stick Duo™ mudou. O salvamento automático foi desativado. Para reativá-lo, salve o seu perfil manualmente acessando o menu Perfil e depois Gerenciar perfis.", human = false }
+MSC_MSG_AUTOSAVE4 = { text = "O salvamento automático falhou e agora está desativado. Para reativá-lo, salve o seu perfil manualmente acessando o menu Perfil e depois Gerenciar perfis.", human = false }
+ONL_COM_DENY_REQUEST = { text = "RECUSAR ESTE PEDIDO", human = false }
+ONL_COM_STATUS_PENDING = { text = "STATUS: PENDENTE", human = false }
+ONL_COM_STATUS_BLOCKED = { text = "STATUS: BLOQUEADO", human = false }
+ONL_COM_REMOVE_BLOCK = { text = "REMOVER DA LISTA DE BLOQUEIO", human = false }
+MSC_MSG_UNSAVED_GRID = { text = "Todos os dados não salvos da grade atual serão perdidos se você continuar. Tem certeza de que quer continuar?", human = false }
+ONL_COM_BLOCK_CONFIRM = { text = "Tem certeza de que quer adicionar %s à sua lista de bloqueio?", human = false }
+ONL_COM_DENY_CONFIRM = { text = "Tem certeza de que não quer adicionar %s à sua lista de amigos?", human = false }
+MSC_DEL_DATA = { text = "Apagar dados", human = false }
+ONL_COM_FRIEND_TO_BLOCK = { text = "Este jogador está na sua lista de amigos. Tem certeza de que quer removê-lo e colocá-lo na sua lista de bloqueio?", human = false }
+ONL_COM_BLOCK_TO_FRIEND = { text = "Este jogador está na sua lista de bloqueio. Tem certeza de que quer removê-lo e colocá-lo na sua lista de amigos?", human = false }
+ONL_MSG_CHECK_PATCH = { text = "Verificando atualizações", human = false }
+ONL_MSG_LOGGING_IN = { text = "Entrando no servidor", human = false }
+ONL_MSG_LEAVE_GAME = { text = "Sair do jogo", human = false }
+ONL_MSG_LEAVING_GAME = { text = "Saindo do jogo", human = false }
+ONL_MSG_CREATING_GAME = { text = "Criando jogo", human = false }
+ONL_MSG_CONNECT_WLAN = { text = "Conectando à rede", human = false }
+ONL_MSG_LOADING_IN = { text = "Carregando", human = false }
+MSC_SKIN = { text = "Skin", human = false }
+ONL_MSG_WAITING_FOR = { text = "Aguardando", human = false }
+ONL_MSG_DISCON_COMP = { text = "Desconexão concluída", human = false }
+ONL_CON_UNILIST = { text = "Lista de universos", human = false }
+ONL_MSG_DOWNLOAD_EULA = { text = "Baixando o EULA", human = false }
+ONL_MSG_DISCONNECTING = { text = "Desconectando", human = false }
+MSC_UNL_ALL = { text = "Você destravou tudo!", human = false }
+ONL_NETWORK_ERROR = { text = "Ocorreu um erro de rede. Confira suas conexões de rede e tente de novo.", human = false }
+MSC_MSG_DEL_GHOST = { text = "Um arquivo de dados salvos de fantasma precisa de %d KB livres. Ir para a função de apagar?", human = false }
+MSC_MSG_DEL_PRO = { text = "Um arquivo de dados salvos de perfil precisa de %d KB livres. Ir para a função de apagar?", human = false }
+MSC_MSG_DEL_GRID = { text = "Um arquivo de dados salvos de grade precisa de %d KB livres. Ir para a função de apagar?", human = false }
+ER_SAVE_QUIT = { text = "Voltar ao menu principal", human = false }
+Normal = { text = "Clássico", human = false }
+Custom = { text = "Personalizado", human = false }
+MSC_BAD = { text = "Ruim", human = false }
+TKR_NOHH = { text = "Você ainda não experimentou nenhuma corrida Cara a cara!", human = false }
+MSC_ABSORB = { text = "Absorver", human = false }
+MSC_DAMAGE = { text = "Dano", human = false }
+MSC_INCOMING = { text = "Chegando", human = false }
+MSC_PROXIMITY = { text = "Proximidade", human = false }
+MSC_PHOTO_MODE = { text = "Modo foto", human = false }
+MSC_LOAD_WIPAD = { text = "Passe por estes pads de coletáveis para pegar armas ofensivas ou itens úteis durante a corrida.", human = false }
+MSC_LOAD_ENERGY = { text = "Se o seu nível de energia chegar a zero, a nave será destruída. Recupere a energia absorvendo armas e itens.", human = false }
+CRED_DEV_THANKS = { text = "Agradecimentos especiais", human = false }
+ONL_DT_HAS_DISCONNECTED = { text = "%s se desconectou.", human = false }
+ONL_SYNCHRONISING = { text = "Sincronizando", human = false }
+ONL_GR_GRIEF = { text = "Denunciar skin de nave", human = false }
+ONL_GR_CANCEL = { text = "A sua denúncia não foi enviada. Tem certeza de que quer cancelar?", human = false }
+ONL_GR_BEGIN = { text = "Todas as denúncias de skins de nave ofensivas são levadas a sério, mas o abuso deste serviço não será tolerado e pode levar à restrição ou ao banimento da conta. Tem certeza de que quer continuar?", human = false }
+ONL_GR_CHOOSESKIN = { text = "Selecione a skin de nave que você quer denunciar.", human = false }
+ONL_GR_CONFIRMSKIN = { text = "Tem certeza de que esta é a skin de nave que você quer denunciar?", human = false }
+ONL_GR_OFFENSIVE = { text = "Ajude-nos a tratar o seu pedido da forma mais eficaz possível respondendo a algumas perguntas. Esta skin de nave contém imagens ofensivas?", human = false }
+ONL_GR_COPYRIGHT = { text = "Ajude-nos a tratar o seu pedido da forma mais eficaz possível respondendo a algumas perguntas. Esta skin de nave contém imagens ou textos que violam direitos autorais?", human = false }
+ONL_GR_SUBMIT = { text = "Obrigado por fornecer as informações. A denúncia está pronta. Tem certeza de que quer enviá-la?", human = false }
+ONL_GR_CONFIRMSUBMIT = { text = "Esta é a sua última chance de cancelar a denúncia. Tem certeza de que quer continuar?", human = false }
+ONL_GR_SENDING = { text = "Enviando...", human = false }
+ONL_GR_REPORTSUCCESS = { text = "Obrigado. A sua denúncia foi recebida com sucesso. Você voltará ao menu principal.", human = false }
+ONL_GR_REPORTFAILURE = { text = "Ocorreu um erro durante o envio da denúncia.", human = false }
+ONL_GR_CONFIRMCANCEL = { text = "A denúncia ainda não foi enviada. Tem certeza de que quer cancelar?", human = false }
+MSC_RACE_ENDS = { text = "A corrida termina em:", human = false }
+ONL_MSG_JOINING_GAME = { text = "Entrando no jogo", human = false }
+ONL_MSG_TRANSFERING_DATA = { text = "TRANSFERINDO PINTURAS DE NAVE", human = false }
+IG_REPORT_GRIEF = { text = "Denunciar skin de nave", human = false }
+ONL_ERROR = { text = "ERRO DE REDE", human = false }
+ONL_MSG_APPLYING_SETTINGS = { text = "Aplicando configurações", human = false }
+MSC_SQ_MSG10 = { text = "O progresso do seu torneio não foi salvo no Memory Stick Duo™, mas continua ativo no jogo. Para salvar o progresso do torneio no Memory Stick Duo™, salve o seu perfil manualmente.", human = false }
+ER_PHOTO_SLEEP = { text = "Falha ao salvar a foto por entrar em modo de espera.", human = false }
+ONL_MSG_CONNECTING = { text = "Sincronizando perfil", human = false }
+ONL_CON_CHANLIST = { text = "Lista de canais", human = false }
+ONL_CON_CHANNAME = { text = "Nome", human = false }
+ONL_CON_PLRMAX = { text = "Atual/máx.", human = false }
+ONL_CON_UNINAME = { text = "Universo", human = false }
+ONL_DT_GHOST = { text = "TRANSMITIR FANTASMA", human = false }
+ONL_DT_GHOST_REQ = { text = "%s quer enviar a você os dados do fantasma.", human = false }
+ONL_TEAM_SELECT = { text = "Selecionar equipe", human = false }
+ONL_CONFIRM_LEAVE_GAME = { text = "Tem certeza de que quer sair deste jogo?", human = false }
+MSC_SHIPSKINDAT = { text = "Skin de nave personalizada", human = false }
+MSC_EMPTY_SHIPSKIN = { text = "Vaga de skin de nave vazia", human = false }
+MSC_MSG_ONLINE_INFO_1 = { text = "Para se conectar online, você precisará informar os dados da sua conta PLAYSTATION®Network. Se não tiver uma conta, veja como criar uma em wipeout-game.com, na seção Início rápido do multijogador.", human = false }
+MSC_MSG_ONLINE_INFO_2 = { text = "Para se conectar online, você precisará informar os dados da sua conta PLAYSTATION®Network. Se não tiver uma conta, veja como criar uma em wipeout-game.com, na seção Início rápido do multijogador. Você pode ver esta mensagem de novo abrindo o Manual de instruções pelo menu Extras.", human = false }
+TRC_NO_MS2 = { text = "Nenhum Memory Stick Duo™ inserido. São necessários pelo menos %d KB para salvar os dados. Você não poderá salvar o seu progresso.", human = false }
+TRC_MS_INSUFKB4 = { text = "Não há espaço livre suficiente no Memory Stick Duo™. São necessários pelo menos %d KB para salvar os dados. Você não poderá salvar o seu progresso.", human = false }
+BOOT_AUTOLOAD = { text = "O Memory Stick Duo™ inserido contém pelo menos um perfil. O último perfil modificado será carregado automaticamente agora.", human = false }
+ONL_LOC_SEARCH = { text = "Procurando locais...", human = false }
+ONL_LOC_SELECT = { text = "Seleção de local", human = false }
+ONL_LOCATION = { text = "Local", human = false }
+ONL_LOC_CON = { text = "Conectando...", human = false }
+ONL_WFP = { text = "Aguardando jogador", human = false }
+Grid16 = { text = "Baixar grade 1", human = false }
+Grid17 = { text = "Baixar grade 2", human = false }
+Grid18 = { text = "Baixar grade 3", human = false }
+Grid19 = { text = "Baixar grade 4", human = false }
+ONL_SHARE_DATA_WHAT = { text = "Que dados você quer compartilhar?", human = false }
+PRO_TAG2 = { text = "Tag:", human = false }
+PRO_NAME2 = { text = "Nome:", human = false }
+PRO_STATS_GOLDMED2 = { text = "Medalhas de ouro da Campanha de Corrida:", human = false }
+MSC_CGNAME2 = { text = "Nome da grade:", human = false }
+MSC_CGNE2 = { text = "Número de eventos:", human = false }
+PRO_STATS_TOTGT2 = { text = "Tempo total de jogo:", human = false }
+M_SAVE_GHOST = { text = "Salvar nave fantasma", human = false }
+HM_SAVE_GHOST = { text = "A nave fantasma foi baixada. Pressione o botão para salvá-la. A nave fantasma precisa ser salva antes de poder ser usada.", human = false }
+MSC_MSG_DL1 = { text = "Erro ao carregar o pacote de download %s contido no Memory Stick Duo™. Insira o Memory Stick Duo™ que contém este pacote para continuar.", human = false }
+MSC_MSG_DL2 = { text = "Não foi possível carregar o pacote de download %s do Memory Stick Duo™. Este pacote de download não estará disponível durante o jogo.", human = false }

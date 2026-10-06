@@ -386,6 +386,7 @@ pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
+    disc_strings: None,
     language_manifests: &[],
     menu: None,
     menu_ps2: None,

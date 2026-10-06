@@ -360,6 +360,12 @@ pub struct FrontEnd {
     /// in hand and for a release not listed here, so it is the *superset* a
     /// disc may carry, not an offered list. See [`Self::offered_languages`].
     pub language_manifests: &'static [language::LanguageManifest],
+    /// The namespace under `assets/ui/strings/disc/` holding this project's own
+    /// translations of this title's disc text, keyed by this title's idstrings.
+    /// `None` for a title nobody has translated yet: Pure, HD, 2048 and Omega
+    /// reuse id spellings, so a namespace is never shared between titles and a
+    /// project language there reads the disc's English until one is written.
+    pub disc_strings: Option<&'static str>,
     /// How this title lays menus out, for a title that authors the
     /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
     /// describes. See that type.
