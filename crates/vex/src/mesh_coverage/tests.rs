@@ -15,14 +15,11 @@ fn minimal_payload(material_count: u16) -> Vec<u8> {
     out
 }
 
-/// A payload whose list B offset is `0` (`Skycube`'s own shape on every real
-/// sky), whose mesh-flags word - what the walk would read as `pass_mask` if
-/// it treated `0` as a real offset - carries the list-B terminator bit, and
-/// whose header `+0x0c` is set so that, misread as a batch's `payload_size`,
-/// the fabricated "batch" would step past the material array into a
-/// trailing region that is a real, honest gap here (nothing after the
-/// materials is a batch at all). A walk that does not guard against a zero
-/// list offset claims into that region; this pins that it does not.
+/// A payload whose list B offset is `0` (`Skycube`'s shape on every real sky),
+/// with a mesh-flags word carrying the list-B terminator bit and header `+0x0c`
+/// set so a misread as a batch's `payload_size` would step past the material
+/// array into a trailing region that is an honest gap. A walk not guarding a zero
+/// list offset claims into it; this pins that it does not.
 #[test]
 fn a_zero_list_offset_is_not_walked_even_when_its_bit_would_pass() {
     let materials_end = HEADER_LEN + MATERIAL_STRIDE;
@@ -35,10 +32,8 @@ fn a_zero_list_offset_is_not_walked_even_when_its_bit_would_pass() {
     payload[4..8].copy_from_slice(&end.to_le_bytes());
     // List B's own offset, at `+0x08`, is the documented `0`.
     payload[8..12].copy_from_slice(&0u32.to_le_bytes());
-    // Header `+0x0c`: read as a batch's `payload_size` at offset 0, this
-    // would extend a fabricated batch 0x40 bytes past the material array,
-    // into the trailing region below - the shape a real undecoded gap has,
-    // nothing pointing at it at all.
+    // Header `+0x0c`: read as a batch's `payload_size` at offset 0, it would extend
+    // a fabricated batch 0x40 bytes into the trailing region, a real undecoded gap.
     payload[0x0c..0x0e].copy_from_slice(&0x40u16.to_le_bytes());
 
     let seen = coverage(&payload);

@@ -1,9 +1,9 @@
 //! Unit tests for [`super::anim_transform`], over payloads built here.
 //!
 //! The real payloads are exercised by
-//! `crates/render/tests/scenery_animation_ground_truth.rs`, which needs a disc
-//! image. These pin the arithmetic instead: the field offsets, the three
-//! quantisations, the hold-and-blend rule and the composition order.
+//! `crates/render/tests/scenery_animation_ground_truth.rs` (needs a disc image);
+//! these pin the arithmetic: field offsets, the three quantisations, the
+//! hold-and-blend rule and the composition order.
 
 use super::*;
 use oag_formats::ByteOrder;
@@ -12,8 +12,8 @@ use oag_formats::ByteOrder;
 struct Builder {
     header: [u8; 0x50],
     body: Vec<u8>,
-    /// Which way round to write every field, so one test can build the same
-    /// payload the way Pulse ships it and the way Wipeout HD does.
+    /// Which way round to write every field, so one test builds the payload as
+    /// Pulse and as Wipeout HD ship it.
     order: ByteOrder,
 }
 
@@ -117,16 +117,15 @@ fn translation_only_in(
     b.build()
 }
 
-/// A payload shorter than the header is not a transform, and is not read as a
-/// partly-filled one.
+/// A payload shorter than the header is not a transform, nor a partly-filled one.
 #[test]
 fn a_short_payload_decodes_to_nothing() {
     assert!(anim_transform(&[0u8; 0x4f], ByteOrder::Little).is_none());
     assert!(anim_transform(&[], ByteOrder::Little).is_none());
 }
 
-/// A key offset that runs past the payload fails the whole decode rather than
-/// yielding a transform with one plausible channel and one arbitrary one.
+/// A key offset past the payload fails the whole decode, not a transform with one
+/// plausible channel and one arbitrary one.
 #[test]
 fn a_key_array_past_the_payload_fails_the_decode() {
     let mut payload = translation_only(&[(0, (0, 0, 0))], [0.0; 3], [1.0; 3]);
@@ -135,8 +134,7 @@ fn a_key_array_past_the_payload_fails_the_decode() {
     assert!(anim_transform(&payload, ByteOrder::Little).is_none());
 }
 
-/// `pos = value * quantum + base`, which is what `FUN_088fed44` computes with
-/// one `vmul_q` and one `vadd_q`.
+/// `pos = value * quantum + base`, as `FUN_088fed44` computes (`vmul_q`, `vadd_q`).
 #[test]
 fn translation_is_the_key_times_the_quantum_plus_the_base() {
     let payload = translation_only(
@@ -152,8 +150,8 @@ fn translation_is_the_key_times_the_quantum_plus_the_base() {
     assert!((m[15] - 1.0).abs() < 1e-6);
 }
 
-/// Below the first key time and past the last, the evaluators hold the end key
-/// rather than extrapolating - the same clamp `TexAnim_EvalKeyframes` makes.
+/// Below the first key time and past the last the evaluators hold the end key (the
+/// `TexAnim_EvalKeyframes` clamp).
 #[test]
 fn a_track_holds_its_first_and_last_key() {
     let payload = translation_only(&[(60, (0, 0, 0)), (120, (100, 0, 0))], [0.0; 3], [1.0; 3]);
@@ -181,8 +179,7 @@ fn the_step_flag_holds_the_preceding_key() {
     assert!((anim.sample(0.5)[12] - 0.0).abs() < 1e-4, "stepped");
 }
 
-/// `LoopEnd` wraps the clock, so an animation past its end replays rather than
-/// holding its last key forever.
+/// `LoopEnd` wraps the clock: an animation past its end replays, not holds.
 #[test]
 fn loop_end_wraps_the_clock() {
     let payload = translation_only(&[(0, (0, 0, 0)), (60, (60, 0, 0))], [0.0; 3], [1.0; 3]);
@@ -199,9 +196,9 @@ fn loop_end_wraps_the_clock() {
     assert!((anim.sample(2.5)[12] - 30.0).abs() < 1e-3, "halfway again");
 }
 
-/// Rotation keys are the `(x, y, z)` of a unit quaternion in 1/32767 units,
-/// with `w` reconstructed - so a key of `(0, 0, 0)` is the identity and a
-/// quarter turn about `y` is `sin(45 deg) * 32767` in the `y` slot.
+/// Rotation keys are the `(x, y, z)` of a unit quaternion in 1/32767 units with
+/// `w` reconstructed: `(0, 0, 0)` is the identity, a quarter turn about `y` is
+/// `sin(45 deg) * 32767` in `y`.
 #[test]
 fn rotation_is_a_compressed_unit_quaternion() {
     let mut b = Builder::new();
@@ -243,9 +240,8 @@ fn scale_is_two_fifty_sixths_and_leaves_the_translation_alone() {
     );
 }
 
-/// A channel whose count is zero is not evaluated at all, even though the
-/// payload still stores one key for it - which is what makes the six arrays
-/// tile the payload whatever the counts say.
+/// A channel whose count is zero is not evaluated, though the payload still stores
+/// one key for it (which makes the six arrays tile the payload).
 #[test]
 fn a_zero_count_channel_contributes_nothing() {
     let payload = translation_only(&[(0, (0, 0, 0))], [0.0; 3], [1.0; 3]);
@@ -258,8 +254,7 @@ fn a_zero_count_channel_contributes_nothing() {
     assert_eq!(m[10], 1.0);
 }
 
-/// Key times are read in the file's own units, so a `seconds_per_key` of zero
-/// falls back to 60 Hz rather than dividing by it.
+/// A `seconds_per_key` of zero falls back to 60 Hz rather than dividing by it.
 #[test]
 fn a_zero_seconds_per_key_falls_back_to_sixty_hertz() {
     let mut payload = translation_only(&[(0, (0, 0, 0)), (60, (60, 0, 0))], [0.0; 3], [1.0; 3]);
@@ -269,13 +264,12 @@ fn a_zero_seconds_per_key_falls_back_to_sixty_hertz() {
 }
 
 /// The same keys written big-endian decode to the same transform, and read the
-/// wrong way round they decode to nothing at all.
+/// wrong way round decode to nothing.
 ///
-/// The second half is what matters: Wipeout HD writes this class big-endian on
-/// 5,518 nodes, and a little-endian read of one does **not** produce a slightly
-/// wrong matrix. It inflates the key counts by a factor of 256, the arrays then
-/// run past the payload, and the node falls back to the identity - which drops
-/// its placement along with its motion. See `docs/formats/hd-status.md`.
+/// HD writes this class big-endian on 5,518 nodes, and a little-endian read does
+/// **not** give a slightly wrong matrix: key counts inflate by 256, the arrays run
+/// past the payload, and the node falls back to the identity, dropping its
+/// placement with its motion. See `docs/formats/hd-status.md`.
 #[test]
 fn a_big_endian_payload_decodes_the_same_and_only_that_way() {
     let keys = [(0, (0, 0, 0)), (60, (100, -200, 300))];

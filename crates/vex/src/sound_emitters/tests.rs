@@ -2,11 +2,10 @@ use super::*;
 
 /// `01_Track`'s `basilic~OH_CARGO` node, byte for byte off the disc.
 ///
-/// Chosen because it is the first `sound` node on the first circuit and because
-/// its radius, `100.0`, encodes to a round `1310` - so a reader that got the
-/// scale wrong by a percent still lands on a plausible-looking number here and
-/// has to be caught by [`the_radius_encoding_is_the_executables_and_not_a_fit`]
-/// instead.
+/// `01_Track`'s `basilic~OH_CARGO` node, byte for byte off the disc: the first
+/// `sound` node on the first circuit, its radius `100.0` encoding to a round
+/// `1310`, so a wrong scale by a percent still looks plausible here and must be
+/// caught by [`the_radius_encoding_is_the_executables_and_not_a_fit`].
 fn oh_cargo() -> Vec<u8> {
     let mut p = vec![0u8; 0x50];
     let put_f32 = |p: &mut Vec<u8>, at: usize, v: f32| {
@@ -60,14 +59,13 @@ fn a_plain_sound_authors_no_cone() {
     assert_eq!(e.cone, None);
 }
 
-/// The flag at `+0x08`, not the angles, is what says a node is a cone: a
-/// reader keyed on "is `+0x00` negative" would agree here and disagree on a
-/// cone whose angles were ever authored as zero.
+/// The flag at `+0x08`, not the angles, says a node is a cone (a reader keyed on
+/// "is `+0x00` negative" would disagree on a cone whose angles were authored as
+/// zero).
 ///
-/// The two angles are asserted **by the offset they came from**, so swapping
-/// the two reads fails this. Sorting them into a wide/narrow pair at parse time,
-/// which this module did until the ordering was pinned against the disc, makes
-/// that swap invisible.
+/// The angles are asserted **by the offset they came from**, so swapping the two
+/// reads fails this; sorting them into wide/narrow at parse time (as this module
+/// once did) would hide the swap.
 #[test]
 fn the_cone_comes_from_the_flag_and_carries_both_angles() {
     let mut p = oh_cargo();
@@ -90,10 +88,10 @@ fn the_cone_comes_from_the_flag_and_carries_both_angles() {
     );
 }
 
-/// `+0x30` and `+0x34` read `64` and `66` on disc and are offsets to the two
-/// `u16` arrays, not values. A reader that took them as values would find no
-/// curve at all and fall back to the `f32`, which on this node is the same
-/// number - so this asserts the curve is *there*, not just that it agrees.
+/// `+0x30` and `+0x34` read `64` and `66` on disc: offsets to the two `u16`
+/// arrays, not values. A reader taking them as values finds no curve and falls
+/// back to the `f32` (the same number on this node), so this asserts the curve is
+/// *there*.
 #[test]
 fn the_curve_offsets_are_relocated_rather_than_read_as_values() {
     let e = SoundEmitter::parse(&oh_cargo(), vex::IDENTITY, ByteOrder::Little).expect("parse");
@@ -117,13 +115,10 @@ fn one_key_makes_the_radius_constant_and_close_to_the_f32() {
     );
 }
 
-/// The pair of constants out of `VexSound_SampleRadiusCurve`, against the four
-/// radii that separate them from the `13.1` a fit to the data produces.
-///
-/// `107.44` and `150.0` are the two that a `13.1` scale gets wrong on the disc
-/// (`1407` and `1965` against the stored `1408` and `1966`); `70.0` and `100.0`
-/// are two it gets right, so the test fails for the right reason rather than
-/// for any change at all.
+/// The constants from `VexSound_SampleRadiusCurve`, against four radii separating
+/// them from the `13.1` a data fit gives: `107.44` and `150.0` are wrong under
+/// `13.1` (`1407`/`1965` against stored `1408`/`1966`), `70.0` and `100.0` right,
+/// so the test fails for the right reason.
 #[test]
 fn the_radius_encoding_is_the_executables_and_not_a_fit() {
     for (radius, stored) in [(70.0, 917), (100.0, 1310), (107.44, 1408), (150.0, 1966)] {
