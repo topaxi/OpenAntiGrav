@@ -383,6 +383,113 @@ fn hd_endrace_rewards_draws_the_place_and_medal_off_the_real_definition() {
     );
 }
 
+/// `EndRace Podium` off the real disc: the loader finds it in `DATA05` (the
+/// copy `holder_of` does not serve, `DATA02`'s, has none) without disturbing
+/// the other three screens, and the draw puts first place in the middle
+/// column at the slot setter's own `x`, second to its left and third to its
+/// right, each lower than the last, with the authored placeholders
+/// (`BADGE NAME TEST`, `NAME OF PLAYER X`) never drawn.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_endrace_podium_draws_three_places_off_the_copy_that_authors_it() {
+    use oag_ui::frontend::Draw;
+    use oag_ui_screens::endrace::hd::{HdPodium, PodiumSlot};
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = open_hd_archives(&image.display().to_string());
+    let strings = english(&mut archives);
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &strings,
+        oag_ui_screens::picker::FaceScales::default(),
+        oag_hd::endrace::AUTHORED_GRID,
+        &oag_hud::sprite::Sheet::default(),
+        &[],
+        oag_hd::TITLE,
+    )
+    .expect("HD's own EndRace screens read off the real disc");
+    let podium = screens
+        .podium
+        .as_ref()
+        .expect("DATA05 authors EndRace Podium, so the loader must find it");
+    assert!(
+        screens.rewards.is_some(),
+        "the served copy still carries Rewards"
+    );
+    let slot = |name: &str, player| {
+        Some(PodiumSlot {
+            name: name.to_string(),
+            player,
+        })
+    };
+    let skin = oag_ui::menu::Skin::new(
+        oag_hd::frontend::FRONT_END
+            .menu
+            .expect("HD authors a MenuSkin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let draw = |model: &HdPodium| {
+        oag_ui_screens::endrace::hd::hd_podium_draw_list(
+            model,
+            podium,
+            &skin,
+            &oag_ui::menu::Frame::default(),
+            &strings,
+            None,
+            false,
+            &|_| None,
+        )
+    };
+    let at = |layers: &oag_ui::menu::Layers, wanted: &str| -> (f32, f32) {
+        layers
+            .body
+            .iter()
+            .find_map(|d| match d {
+                Draw::Text { text, x, y, .. } if text == wanted => Some((*x, *y)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{wanted:?} not drawn"))
+    };
+    let layers = draw(&HdPodium {
+        places: [
+            slot("ALPHA", true),
+            slot("BRAVO", false),
+            slot("CHARLIE", false),
+        ],
+    });
+    let (first_x, first_y) = at(&layers, "ALPHA");
+    let (second_x, second_y) = at(&layers, "BRAVO");
+    let (third_x, third_y) = at(&layers, "CHARLIE");
+    assert!((first_x - 790.0).abs() < 0.5, "winner is the middle column");
+    assert!(second_x < first_x && first_x < third_x, "2nd, 1st, 3rd");
+    assert!(first_y < second_y && second_y < third_y, "each place lower");
+    for heading in ["1ST", "2ND", "3RD"] {
+        at(&layers, heading);
+    }
+    assert!((at(&layers, "1ST").1 - 230.0).abs() < 0.5, "authored y");
+    for placeholder in ["BADGE NAME TEST", "NAME OF PLAYER X"] {
+        assert!(
+            !layers
+                .body
+                .iter()
+                .any(|d| matches!(d, Draw::Text { text, .. } if text == placeholder)),
+            "{placeholder:?} leaked"
+        );
+    }
+    let lone = draw(&HdPodium {
+        places: [slot("ALPHA", true), None, None],
+    });
+    assert!(
+        !lone
+            .body
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "2ND" || text == "3RD")),
+        "an empty place draws no heading"
+    );
+}
+
 /// A full eight-craft field on the real disc's own `EndRace Results`, laid
 /// out as `0x0022c068`'s race branch and `0x0022b688` lay it out
 /// (`docs/formats/hd-endrace-screens.md`): row `r` at the grid's `96 + 45 r`,

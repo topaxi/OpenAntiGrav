@@ -56,11 +56,8 @@
 //!   settled law behind its trigger, the same "not this pass" this project
 //!   already leaves Pulse's own trophy model in - see
 //!   [`super::Rewards`]'s module doc for the precedent.
-//! - **`EndRace Podium` is not read at all.** `Podium`'s own three
-//!   `pod_head.{1,2,3}` widgets all carry the identical idstring
-//!   `IG_HUD_1ST`, which reads as an authoring placeholder rather than
-//!   something this build could draw correctly, and its badge panels are an
-//!   achievement/online system with no analogue here.
+//! - **`EndRace Podium` draws ([`hd_podium_draw_list`]) but is never entered by
+//!   the live flow**: its entry is untraced. See [`podium`]'s module doc.
 //! - **`EndRace Rewards` draws ([`hd_rewards_draw_list`]) but is never
 //!   entered by the live flow**: the original never enters it either - no
 //!   redirect on any copy of any screen file names it, and the executable
@@ -94,6 +91,9 @@ use super::draw::{
 };
 use super::pointer::Target;
 use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
+
+mod podium;
+pub use podium::{HdPodium, PodiumSlot, hd_podium_draw_list};
 
 #[cfg(test)]
 mod tests;

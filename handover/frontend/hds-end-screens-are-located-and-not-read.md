@@ -1,4 +1,4 @@
-# HD's end screens: read and drawn (Results/Menu/Rewards); Podium still open
+# HD's end screens: read and drawn (Results/Menu/Rewards/Podium); Podium's entry still open
 
 2026-09-18: located, not read. **2026-09-21: `EndRace Results`/`EndRace Menu`
 read widget by widget and drawn.** Full write-up in
@@ -51,12 +51,17 @@ real `Board`, the real disc's `EndRace_Definition.xml`, and
   row <= 84); perfect laps and perfect zones are never counted by this project;
   a race with no cell uses the `Easy` rung (chosen); the ticker's animation
   is not reproduced; what byte `0x009384e1` and `g_GameState+0xe4` are.
-- **`EndRace Podium` (`DATA05`/`DATA06` only) is inventoried, not modelled.**
-  Its three `pod_head.{1,2,3}` widgets all carry the identical idstring
-  `IG_HUD_1ST`, which reads as an authoring placeholder rather than something
-  this build could draw correctly - see the formats page. Its eight badge
-  panels are an achievement/online system with no analogue in this project's
-  `oag_race`/`Session` state.
+- ~~`EndRace Podium` is inventoried, not modelled.~~ **2026-10-06
+  (`hd-endrace-podium`): read and drawn** off `DATA05`'s copy
+  (`load_hd_podium`) by `--menu-page endrace-podium`; the slot setter
+  (`0x00220108`, 78) and its one caller (`0x00220820`, 76) are in
+  `ps3-hdfury-eu/endrace-podium.md`. **Still open under it**: the code that
+  *enters* the screen (no `goto=` names it; found no code site) - until
+  then the live flow stays Results -> Menu; what game-state `0xe0 == 0x11`
+  is; the ship portraits and badge panels; its title string
+  (`FE_ENDRACE_PODIUM`) is only in `DATA05`/`06`'s English table, not the
+  served `DATA02`'s. Omega: checked, applies, not wired (Results, Menu,
+  Podium, no Rewards in all three copies).
 - **Which copy the runtime actually loads is still unresolved** - the same
   open question [hd-frontend.md](../../docs/formats/hd-frontend.md) records
   for `skin.xml`'s six copies. This build serves `DATA02`'s, by
