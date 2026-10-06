@@ -3,23 +3,26 @@
 Wipeout 2048 (Vita) keeps its sound banks as `SBlk` **version 5**
 ([2048-xfx.md](2048-xfx.md) has the container and the FNV-1 name rule). This
 page is what a circuit's authored `sound` nodes need to find a cue in one, and
-what the disc ships for them. Evidence is a census of
-`data/extracted/vita/PCSF00007/base/PSP2/data.psarc` and the ground truths
-named below; none of it is read off the executable's own loader, so the
-location rule is **confidence 60** (an archive census, not the loader).
+what the disc ships for them. The location rule is read off the executable's own
+loader ([`TrackStartup_Read`](../ghidra/functions/vita-2048-eu-v104/track-startup-sound-bank.md),
+confidence 85); the rest is a census of
+`data/extracted/vita/PCSF00007/base/PSP2/data.psarc` and the ground truths named
+below.
 
 ## Where a circuit's banks are
 
 | Claim | Evidence |
 | --- | --- |
-| A **base-package** circuit's own bank is `Data\audio\sound\<LoadSoundBank filename>`, **not** beside the track. The twelve downloadable circuits (`DLC1\environments\<X>\`) have theirs beside the track, so beside the track is tried first and the directory second. | `env_altima.bnk` reads there; `data/art/published/environments/altima/env_altima.bnk` does not exist. The filename is `trackstartup.xml`'s `<LoadSoundBank>`, as on Pulse and HD. |
-| Two shared banks hold the other labels a node spells: `crowd_NGP.bnk` (label `crowd`) and `generaltrack.bnk` (`gentrak`). | Altima's `crowd~crowd` nodes resolve in the first. |
-| HD keeps resolving beside the track. | `track_audio_ground_truth::hd_still_reads_its_circuit_bank_beside_the_track`: Talons Junction, 66 of 66. |
+| A circuit's own bank is `data/audio/sound/<LoadSoundBank filename>`, or, when that file does not exist, `data/audio/DLC1/<filename>`. **Never beside the track.** | `TrackStartup_Read` formats those two paths and has no other (confidence 85, the existence test inferred). `env_altima.bnk` reads under `sound`; the twelve downloadable circuits' beside-the-track copies are dead data. |
+| Four downloadable circuits (`Vineta_K`, `Anulpha_Pass`, `Chenghou_Project`, `Moa_Therma`) name a bank that also ships under `sound`, so the base copy wins; the other eight read `DLC1`. | `the_downloadable_circuits_read_sound_first_then_dlc1_never_beside_the_track`. |
+| Two shared banks hold the other labels a node spells: `crowd_NGP.bnk` (label `crowd`) and `generaltrack.bnk` (`gentrak`, **0 cues on 2048**). | The executable names both literals; Altima's `crowd~crowd` nodes resolve in the first. |
+| HD keeps resolving beside the track. | [hd-audio.md](hd-audio.md): every HD circuit. |
 
-This is `oag_title::TrackBanks` (`shared`, `circuit_directory`, `origin`) on
-`oag_title::SoundBanks::track`, which replaced the one-`Option`
-`track_general`; Pulse and Pure carry `generaltrack.bnk` as a one-element list,
-HD an empty one, Omega an empty one unswept.
+This is `oag_title::TrackBanks` (`shared`, `circuit`, `origin`) on
+`oag_title::SoundBanks::track`; `circuit` is `CircuitBanks::BesideTrack`
+(Pulse, Pure, HD) or `CircuitBanks::Directories` (2048:
+`Data\audio\sound`, `Data\audio\DLC1`; Omega: `Data\audio\sound`). Pulse and
+Pure carry `generaltrack.bnk` as a one-element list, HD five banks, Omega none.
 
 ## The name rule, proven on every bank that parses
 
@@ -53,10 +56,22 @@ the descriptor). `Bank::parse` now reads the section as the file holds it and
 keeps the claim in `Bank::declared_waveform_len`; a short file whose
 waveforms reach past its end is still refused. Confidence 90.
 
-Three other v5 banks still do not parse, for a different reason and unread
-here: `Speech_NGP.bnk`, `speech_fe_NGP.bnk` and `speech_zone_NGP.bnk` declare a
-waveform length (915, 1,566 and 1,242,097 bytes) that is not a whole number of
-ADPCM blocks.
+## `speech_*_NGP`: a pool of stream names, not ADPCM
+
+`Speech_NGP.bnk`, `speech_fe_NGP.bnk` and `speech_zone_NGP.bnk` declare a
+waveform length (1,566, 915 and 1,242,097 bytes) that is no multiple of a
+16-byte block, and **it is not a framing variant**: the waveform area holds a
+pool of NUL-terminated ATRAC9 stream file names (`WOVO_FE_01.at9`, 61 of them in
+`speech_fe_NGP`, 83 in `Speech_NGP`, 52 in `speech_zone_NGP`) after a zero
+prefix. The speech is streamed from
+`data/audio/sound/streams/atrac/<language>/<name>.at9`, and `WOVO_FE_01.at9`
+exists there (24,676 bytes). `speech_zone_NGP` carries 1.2 MB of data after its
+names that is not PS-ADPCM either (not decoded here). So `Bank::parse` refuses
+them with `Error::StreamNames { size, names }` instead of
+`PartialAdpcmBlock`, naming the cause, and no ADPCM decoder is ever pointed at a
+name pool (that would play noise). Decoding the `.at9` streams needs an ATRAC9
+decoder this project does not have; open. Pinned by
+`sblk_v5_hashed_names_ground_truth::a_speech_bank_refuses_as_a_pool_of_stream_names`.
 
 ## How many of a circuit's emitters resolve
 
@@ -82,16 +97,37 @@ exactly `~advert_fem_l01 ~advert_mle_r01 ~startline ~Heli_2 ~Heli_1
 ~neoon_small ~CITY ~neon_big ~INTERNAL ~wind_high`, no boat. `mall`'s manifest
 loads `env_tower.bnk` (label `env_tow`) while its nodes spell `env_mal`, a bank
 that ships nowhere. The Tannoy cues exist, in `Speech_NGP_Grid.bnk`, but the
-nodes name `env_tow`; resolving them there would be inventing a join. All stay
-at WARN with the cause.
+nodes name `env_tow`; resolving them there would be inventing a join. All are reported once per circuit as one WARN summary line, "N cue(s) the circuit names and its banks do not author", and per cue at debug.
 
-The twelve downloadable circuits keep reading the bank beside their track,
-pinned by `the_downloadable_circuits_still_read_the_bank_beside_their_track`:
-only `amphiseum`'s is a hashed v5 bank (25 of 25 resolve); the other eleven
-parse as v3 banks with no name table and resolve 0 to 5 emitters each
-(Metropia 1 of 13, Ubermall 3 of 131, Vineta K 0 of 48 ...). The copies under
-`data/audio/DLC1/` are hashed with 20 to 63 spelled cues, and which copy the
-original loads is **unmeasured**, so this lane does not switch them on.
+## The twelve downloadable circuits
+
+Read the way the executable does (`sound` first, then `DLC1`, never beside the
+track), the twelve resolve **212 of 468** emitters, where the beside-the-track
+v3 copies gave 49 (those parse as v3 banks with no name table). Pinned by
+`the_downloadable_circuits_read_sound_first_then_dlc1_never_beside_the_track`:
+
+| Circuit | Emitters | Resolve | Bank read from |
+| --- | --- | --- | --- |
+| Metropia | 13 | 4 | `DLC1` |
+| Sebenco_Climb | 37 | 9 | `DLC1` |
+| Sol_2 | 20 | 10 | `DLC1` |
+| Ubermall | 131 | 29 | `DLC1` (101 `voppler~voppler` dangle: 2048 has no `voppler.bnk`) |
+| amphiseum | 25 | 23 | `DLC1` |
+| modesto_heights | 23 | 19 | `DLC1` |
+| talons_junction | 57 | 54 | `DLC1` |
+| tech_de_ra | 32 | 29 | `DLC1` |
+| Vineta_K | 48 | 0 | `sound` (nodes spell the Pulse-era `VINETTA` and `GENTRAK`) |
+| Anulpha_Pass | 52 | 18 | `sound` |
+| Chenghou_Project | 13 | 12 | `sound` |
+| Moa_Therma | 17 | 5 | `sound` |
+
+Most of the gap to 100% is cues with **no command at all**: six of the 63 cues in
+each `DLC1` 63-cue bank (`~neoon_small`, `~eleccarrier`, `~ind_factory_1`, ...)
+author nothing, so `~neoon_small` is silent on Metropia, Sebenco and Sol 2 where
+Altima's own `~neoon_small` plays. They are reported as an *empty cue* at debug,
+alongside the no-op and register-write control cues, and are not counted
+dangling. Cues with opcodes `0x05 0x15 0x1a 0x16` (`~advert_fem_r01`) bind no
+waveform and stay at WARN: a genuine decode gap, not by design.
 
 Heard, not only resolved: a 40 s Altima autopilot lap rendered to WAV through
 the real mixer, once with its emitters and once with them dropped
@@ -105,7 +141,7 @@ one differ, up to the mix's full peak; the mix clips 0 samples with or without t
 (`BKHD`), not `SBlk`: none of `sblk::Bank::parse`, the hashed lookup or the
 stale-size reading applies, and a node's `bank~cue` pair is not yet mapped to a
 Wwise event. Omega keeps its circuits' banks under `Data\audio\sound\` too, so
-`oag_omega::race::SOUND_BANKS` carries `circuit_directory` for it (**ported**,
+`oag_omega::race::SOUND_BANKS` carries `CircuitBanks::Directories` for it (**ported**,
 location only): its load report now names the real cause, `env12_techdera.bnk is
 not a sound bank: unsupported bank version 1145588546` (`BKHD`), as one WARN
 line instead of a missing-file one. Nothing resolves on Omega. 2048's three shared labels (`crowd`, `gentrak`) exist on

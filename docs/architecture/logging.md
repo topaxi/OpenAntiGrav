@@ -104,6 +104,7 @@ through `oag_raceplay::loader_log`:
   is absent or was not used at `warn`.
 - `loader_log::lines_at(Level::Trace, ...)` is the same for a report with one
   line per item.
+- **A dangling track-audio reference is not an absence.** A circuit's node that names a label no loaded bank carries, or a cue its bank does not spell, is the disc's own authoring: its per-cue line (`node(s) dangle`) is `debug` and the circuit gets one `warn` summary (`N cue(s) the circuit names and its banks do not author`). It only counts as dangling when every bank the circuit tried to load parsed, so a Wwise bank that did not read (Omega) keeps its `warn` lines. `docs/formats/hd-audio.md` has the proof for HD, `2048-audio.md` for 2048.
 - One report gives at most eight absences a `warn` line of their own. The rest go to `debug`
   and one more `warn` line names each of them: 2048 lacks thirty-odd
   particle effects, and thirty near-identical lines bury the three that differ.
