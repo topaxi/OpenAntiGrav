@@ -621,6 +621,12 @@ pub enum ZoneCraft {
         root: &'static str,
         /// The Zone hull's directory name inside `root`.
         ship: &'static str,
+        /// The path component the hull's team texture sits under, which the
+        /// loader replaces with the craft's livery name: `zoneship_zone` on
+        /// 2048 v1.04, `zoneship_team` on Omega. Measured off the hull's own
+        /// texture requests (`.../zoneship_team/team.gnf`); the loader's
+        /// substitution is confidence 75, `zone-craft.md`.
+        livery_key: &'static str,
     },
 }
 
@@ -645,6 +651,17 @@ impl ZoneCraft {
         match self {
             Self::OwnShipAt { root, .. } => root,
             _ => default,
+        }
+    }
+
+    /// The path component a Zone hull's team texture sits under and a craft's
+    /// livery replaces, for the one shape that names it. See
+    /// [`Self::OwnShipAt`].
+    #[must_use]
+    pub fn livery_key(self) -> Option<&'static str> {
+        match self {
+            Self::OwnShipAt { livery_key, .. } => Some(livery_key),
+            _ => None,
         }
     }
 

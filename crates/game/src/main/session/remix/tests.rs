@@ -96,6 +96,45 @@ fn craft_title_choices_adds_wipeout_hd_only_when_2048_is_present_and_hd_is_not()
     );
 }
 
+/// Omega carries 2048's five teams as its own re-textured craft, so with no
+/// 2048 disc "Wipeout 2048" is still a CRAFT TITLE, backed by Omega; a real
+/// 2048 source always wins and the row is never offered twice.
+#[test]
+fn omegas_2048_era_craft_are_reachable_without_a_2048_disc_and_never_twice() {
+    let only_omega = [candidate(oag_omega::TITLE)];
+    let names: Vec<String> = craft_title_choices(&only_omega)
+        .iter()
+        .map(|choice| choice.value.clone())
+        .collect();
+    assert!(
+        names.iter().any(|name| name == oag_2048::TITLE.name),
+        "{names:?}"
+    );
+    let backing = resolve_craft_backing(&only_omega, oag_2048::TITLE.name)
+        .expect("Omega carries the 2048-era craft");
+    assert_eq!(backing.title(), oag_omega::TITLE.name);
+
+    let both = [candidate(oag_omega::TITLE), candidate(oag_2048::TITLE)];
+    let names: Vec<String> = craft_title_choices(&both)
+        .iter()
+        .map(|choice| choice.value.clone())
+        .collect();
+    assert_eq!(
+        names
+            .iter()
+            .filter(|name| *name == oag_2048::TITLE.name)
+            .count(),
+        1,
+        "{names:?}"
+    );
+    assert_eq!(
+        resolve_craft_backing(&both, oag_2048::TITLE.name)
+            .unwrap()
+            .title(),
+        oag_2048::TITLE.name
+    );
+}
+
 /// `settle` keeps a stored value the list still offers - a saved pick
 /// survives a menu reopen, which is the whole reason the section is
 /// persisted.

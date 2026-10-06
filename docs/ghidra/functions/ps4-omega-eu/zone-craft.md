@@ -36,10 +36,19 @@ mechanism is the same). Omega's per-team Zone liveries are
 no `ship_zone` string (63 `_zone` matches checked), so as on 2048 they are
 unreferenced as far as found.
 
-## Open
+## Zone livery, as wired (2026-10-06, `omega-2048-craft`)
 
-An Omega **2048-era** craft cannot start a race at all: `feisar2048\3` resolves its
-`handlingstats.xml` under `hdships\`, which does not hold it
-(`data09.psarc has no entry at Data\art\published\hdships\feisar2048\3\handlingstats.xml`).
-That is a roster gap independent of Zone mode, so Omega's Zone hull is shown on
-HD-era craft only.
+The plugin definition authors each HD-era team's livery name:
+`PI_TeamModel name="zone"` `texturelocation="zoneship_<x>"` (twelve teams plus
+`Tigron`/`VanUber`), each resolving to one `hdships/zone/Zoneship_<x>/Team.gnf`.
+The hull's own texture requests include `.../zoneship_team/team.gnf`; the swap
+replaces that component. 2048-era teams author no `zone` model: the hull keeps
+`Zoneship_Team`. What the original does for them (its fallback literal
+`Zoneship_Faisar`) is not wired - the entry's name field for such a craft was not
+read, so this port shows the default and says so. Confidence stays 75.
+
+## 2048-era craft
+
+Resolved 2026-10-06: the craft list carries `modellocation` and
+`handlingstatslocation` per craft, so a 2048-era craft was a roster gap
+(`GuestRoster.handling_dir`), see `docs/formats/omega-status.md`.

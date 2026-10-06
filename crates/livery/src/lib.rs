@@ -62,6 +62,7 @@ mod flare;
 mod shield;
 pub mod ship_skin;
 mod wreck;
+mod zone_livery;
 
 pub use draw::teams_for_slots;
 pub use shield::cockpit_shield;
@@ -196,6 +197,10 @@ pub struct LoadContext<'a> {
     pub hull_wreck: bool,
     /// Whether to load HD's absorb shell. See [`absorb::shell`].
     pub absorb_shell: bool,
+    /// Each craft's Zone livery name, `(team id, name)`, off the plugin
+    /// definition's `PI_TeamModel name="zone"` - empty outside Zone and for a
+    /// title that authors none. See `zone_livery`.
+    pub zone_liveries: &'a [(String, String)],
 }
 
 /// Loads one [`Livery`] per entry of `teams`, in that order.
@@ -349,11 +354,25 @@ fn one(
             // 2048's container is a different file under the same extension
             // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
             Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
-                mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
+                let swap = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
+                let (mut swapped, mut missing) = (0_usize, Vec::new());
+                let built = mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
+                    let Some(alt) = swap.as_ref().and_then(|swap| swap.rewrite(path)) else {
+                        return archives.read_name(path).ok();
+                    };
+                    if let Ok(blob) = archives.read_name(&alt) {
+                        swapped += 1;
+                        return Some(blob);
+                    }
+                    missing.push(alt);
                     archives.read_name(path).ok()
                 })
                 .map(|(model, built)| (model, built.describe()))
-                .map_err(|error| format!("{hull_name}: {error:#}"))
+                .map_err(|error| format!("{hull_name}: {error:#}"));
+                if let Some(swap) = &swap {
+                    report.push(zone_livery::describe(team, swap, swapped, &missing));
+                }
+                built
             }
             Some(geometry) => mesh::rcs::build(
                 &hull_name,

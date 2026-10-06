@@ -51,6 +51,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_craft: oag_title::ZoneCraft::OwnShipAt {
         root: HD_SHIP_DIR,
         ship: ZONE_SHIP,
+        livery_key: "zoneship_zone",
     },
     // Unread: this title's own boost-plume path (if it authors a standalone
     // one at all, off either roster) has not been searched for. `None` here
@@ -385,6 +386,7 @@ pub const GUEST_TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants
 /// terms.
 pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     dir: HD_SHIP_DIR,
+    handling_dir: None,
     variants: &GUEST_TEAM_VARIANTS,
     // `docs/formats/2048-status.md`: 2048 reships HD/Fury's twelve teams under
     // a tree of its own. Spelled out rather than read from `oag-hd`, which a

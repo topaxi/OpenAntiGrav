@@ -73,6 +73,5 @@ was not read; v1.04 is what is wired.
 
 ## Not checked
 
-- Livery texture swap by `zoneship_zone` (needs the material-substitution path).
-- Which livery name 2048-native craft carry (`+0x1ac`): no `Zoneship_feisar2048`
-  directory exists, so the fallback or a different name must apply.
+- ~~Livery texture swap by `zoneship_zone`~~ wired 2026-10-06: the `PI_TeamModel name="zone"` `texturelocation` replaces the path component on the hull's 9 texture requests; native teams author none, so no swap.
+- Which livery name 2048-native craft carry (`+0x1ac`): the definition authors none for them and no `Zoneship_feisar2048` exists; the original's fallback is unread, so the default skin is kept.
