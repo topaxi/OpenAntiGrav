@@ -1206,3 +1206,116 @@ and its own `VexCamera`-class equivalents were not read), and a Zone race takes 
 other branch of the function (the `else` that binds one shared `"billboard"` texture to
 every slot but 8). Status: **checked, applies, not wired**; the next step is an RPCS3
 capture of one advert pass, then `oag_raceplay::adverts::load` with HD's model reader.
+
+
+## 2026-10-06 (billboards-3 lane): the advert pass measured on RPCS3, and wired
+
+The earlier "checked, applies, not wired" section is closed: the target, the
+projection law and the clip planes were read live and `oag_raceplay::adverts` now
+draws HD's adverts through them (`oag_title::adverts::Adverts`, `Title::adverts`).
+
+### Method
+
+`scripts/rpcs3-drive.py capture --region` on a private display and GDB port, into a
+campaign race on Talon's Junction, stopped 60 s after the load, with the chain
+`0x008b6f38@:0xa00` (the word at `g_BillboardSlots` is the heap block, `0x00c48180` on
+both boots) and further chains to the objects it points at. Slot `k` (1 to 8) is
+`P + 0x10 + (k - 1) * 0x100`, as `Billboard_LoadModelAndBind` indexes it. Dumps:
+`data/scratch/billboards-3/cap2/`.
+
+### The per-slot struct, as read
+
+| Offset in the slot struct | Content | Confidence |
+| --- | --- | --- |
+| `+0x30` (4 x 4 floats) | the view matrix: identity until the slot's pass runs, then the inverse of the advert's `camera1` (slot 2: translation `(0, 0, -30)`, the `.vex` camera's z; slot 3: `-35.4028`; slot 5: `-12`; slot 8: `-30`) | 90 |
+| `+0x70` | view x projection, written by `Billboard_UpdateAndRender` (zero where the slot did not run) | 85 |
+| `+0xb0` | the projection | 90 |
+| `+0xf0` / `+0xf4` | the render-target objects, whose `+0x1c` is `0x200` and `+0x20` is `0x100`, `+0x28` (pitch) `0x400` | 88 |
+
+### The numbers (all eight slots, one frame)
+
+`x` and `y` are the projection's `[0][0]` and `[1][1]`; `fov` and `aspect` are the
+slot's own `.vex` `Camera` node (`oag_vex::camera::Camera`, the u16 at payload `+0x22`
+times `180 / 65535`, and `+0x1c`).
+
+| Slot | Model | fov | aspect | x live | y live | `1 / tan(fov / 2)` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `Icaras/Looping_Background` | 14.4747 | 1 | 7.8745 | 7.8745 | 7.8745 |
+| 2 | `EGX/EGX_LANDSCAPE_03` | 68.8771 | 2 | 1.4584 | 2.9167 | 1.4585 |
+| 3 | `AG_Systems/AG_Systems_Square` | 58.3218 | 2 | 1.7922 | 3.5843 | 1.7925 |
+| 4 | `Piranha/Piranha_LANDSCAPE` | 9.6764 | 2 | 11.8143 | 23.6285 | 11.814 |
+| 5 | `Auricom/Auricom_LANDSCAPE_01` | 18.0398 | 2 | 6.2996 | 12.5992 | 6.2995 |
+| 6 | `Ignition/Ignition_LANDSCAPE_01` | 19.1879 | 2 | 5.9161 | 11.8323 | 5.916 |
+| 7 | **not `fx350`** (below) | 70.6267 | 2 | 1.4117 | 2.8233 | 1.4117 |
+| 8 | `321Go/321Go_StartFinish` | 61.7276 | 4 | 1.6733 | 6.6931 | 1.6733 |
+
+- **The law is Pulse's**: `x = 1 / tan(fov / 2)`, `y = aspect * x`. **Confidence 90**
+  (eight of eight slots to four digits). Pinned by
+  `adverts::tests::hd_projection_matches_the_matrices_read_live_off_rpcs3`.
+- **Near plane exactly 0.5; far between 5400 and 5700.** The matrix is GL style
+  (`-(f + n) / (f - n)` = -1.0001818, `-2fn / (f - n)` = -1.0000910): the near term
+  solves to 0.5000000 and the far term moves by one float step across that range, so
+  5500 is a value inside it. A flat card does not depend on it. **85 near, far a range.**
+- **The target is 512 x 256.** Two sources: the literal rectangle
+  `FUN_005d7838(ctx, 0, 0x200, 0, 0x100, ...)` in `Billboard_UpdateAndRender`
+  (`0x003a5f68`; the callee passes `(x1 - x0, y1 - y0)` through to a viewport setter,
+  **60** for that reading alone) and the live objects
+  (`0x200`, `0x100`, **88**; a pitch of `0x400` at 512 wide would be 16 bits per pixel, an inference). Pulse's
+  is 128 x 128, so the two titles differ in size but not in law: a wide advert is
+  not squashed into a square on HD (aspect 2 on a 2:1 target frames undistorted).
+- **Clear**: `Rsx_SetColorClearValue(ctx, 0)` then `Rsx_ClearSurface(ctx, 0xf1)`, a
+  transparent black like Pulse's. **70**.
+- **Proximity gate**: slots 1, 4 and 6 had identity views and zero products in the
+  sampled frame, because `Billboard_UpdateAndRender` runs a slot only when its bit in
+  `*PTR_DAT_008b6f28` is set and `*(char *)(slot[2] + 0xa0)` is nonzero - the same
+  gate the original PS2 card pass showed. This project draws every card every frame.
+  **80** for the gate existing, nothing known about what sets the bit.
+
+### Slot 7 is not `fx350` in a campaign race
+
+`mode_descriptor` (`PTR_DAT_008b2dac`) read live on the same frame:
+`[[0x008b2dac] + 0x90]` points at the string `grid8_3_1`, `[0x008b2dac] + 0x58` is
+`grid8`, and `[[[0x008b2dac] + 0x4c] + 0xf0]` is the string
+`Data/Billboards/HD_Adverts/Blitzed/Blitzed_board.vex` - the exact branch
+`Billboard_CreateFromLocation_q` takes for `num == 7` (above). The slot's live camera
+(fov 70.6267, aspect 2, z 12) is the camera all eight `<grid>_board.vex` files share
+(`aftermath`, `blitzed`, `corruption`, `impact`, `nuked`, `turbulance`, `voltage`,
+`vortex`; read off DATA00). **Confidence 90 for the campaign case.**
+
+**Outside a campaign** the branch condition (`field_0x90 != 0`) is false when no event
+id is set, so the manifest's `fx350.vex` stands, which is what this project draws.
+That is an inference from the condition, **60**, not a read: the next capture is
+`0x008b2dac@+0x90` in a race that did not come from the campaign. This project does
+not map a campaign grid to its board (`grid8` is `Blitzed`; the other seven pairings are
+unread), so an HD campaign race, once one exists, would show `fx350` where the original
+shows a board.
+
+### What is wired, and what is not
+
+- Wired (Talon's Junction, default race): slots 2, 3, 5, 7 have a quad and a model and
+  get a 512 x 256 card; the load report's `31 billboard-slot placeholder draw(s)
+  suppressed` WARN is gone. Frames: `data/scratch/billboards-3/hd-cards.png` (the four
+  cards: EGX, AG Systems "A Friend in Speed", Auricom, FX-350, each upright).
+  Tests: `adverts::tests::hd_builds_a_512_by_256_card_for_each_slot_with_a_quad`,
+  `hd_cards_draw_something_into_their_targets`,
+  `tests::scene_build::hd_points_every_served_placeholder_at_its_card`.
+- **Not drawn, and the WARN names it**: a Zone race (`g_ZoneEffectsActive` makes
+  `Billboard_LoadModelAndBind` bind one shared `"billboard"` texture to every slot but
+  8; that texture is unread, `Adverts::zone_shares_one_texture`); a colour slot with a
+  quad (`04_chenghou_project` slots 1 and 2): `Billboard_CreateFromColour_q`'s pool order
+  is unread on HD, `Adverts::colour_pool` is false. Circuits whose colour slots have no
+  quad (`02_track`, `05_ubermall`, `12_sol_2`, `10_sebenco_climb`) log nothing.
+- **Orientation**: HD's quads author V running down (slot 2: `v` 0.16 at `y` -59.9 and
+  0.89 at `y` -82.9), so the target, top row first, is sampled upright with the authored
+  V and `Adverts::flip_v` is false. **Unverified against an original frame**: the
+  RPCS3 captures (`cap5-sheet.png`) show the original's boards (`blitzed` upright on boards in
+  four of the eight frames) but ours had no hoarding in an equivalent view.
+- Not measured: the card clock (slot 8's is `gantry-clock.md`; the others run on
+  this project's scenery clock, chosen), the 16-bit target format (ours is RGBA8).
+
+### Other titles
+
+- **Omega**: checked, applies, not wired. `Billboard_ConstructResource` carries HD's two
+  magic constants (above); no PS4 capture path exists here to measure the pass.
+- **2048**: checked, not wired. No `trackstartup.xml` or `billboard` quad was found on a
+  default race, so there is nothing to wire; not searched beyond that.

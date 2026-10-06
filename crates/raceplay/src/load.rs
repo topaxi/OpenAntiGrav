@@ -654,6 +654,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ps3_geometry.as_deref(),
         geometry_name.as_deref(),
         vex_geometry,
+        gantry_visibility::adverts_for(title, options.mode),
         start_position.as_ref(),
         &mut report,
     );

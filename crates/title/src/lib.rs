@@ -35,6 +35,7 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
+pub mod adverts;
 pub mod boot;
 pub mod campaign;
 pub mod effects;
@@ -212,6 +213,13 @@ pub struct Title {
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].
     pub pressings: Option<&'static pressing::Pressings>,
+    /// How this title draws its circuits' billboard adverts, or `None` where
+    /// they are not drawn. See [`adverts::Adverts`].
+    ///
+    /// **`None` is "not measured or not shipped", never a default**: Pulse and
+    /// Wipeout HD each carry their own target size and clip planes, and a title
+    /// with none of its own draws no advert rather than borrowing another's.
+    pub adverts: Option<&'static adverts::Adverts>,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
     /// **Ours, not the disc's, on every title.** Nothing in this lineage was
