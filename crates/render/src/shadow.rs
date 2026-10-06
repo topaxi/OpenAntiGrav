@@ -475,6 +475,10 @@ pub struct Silhouette {
     pub height: u32,
     /// `width * height * 4` bytes, RGBA8.
     pub rgba: Vec<u8>,
+    /// Whether this project made the image ([`Self::falloff`]) rather than
+    /// the disc shipping it. What lets the renderer say so the moment a
+    /// player's tier makes it visible.
+    pub generated: bool,
 }
 
 impl Silhouette {
@@ -489,6 +493,7 @@ impl Silhouette {
             width: 1,
             height: 1,
             rgba: vec![0xff; 4],
+            generated: false,
         }
     }
 
@@ -526,6 +531,7 @@ impl Silhouette {
             width: size,
             height: size,
             rgba,
+            generated: true,
         }
     }
 

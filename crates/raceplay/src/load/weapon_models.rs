@@ -219,29 +219,13 @@ fn load_flare_texture(
             }
         };
     }
-    let blob = match archives.read_name(entry) {
-        Ok(blob) => blob,
-        Err(_) => {
-            report.push(format!("{entry}: absent - {what} draws nothing"));
-            return None;
+    match super::super::assets::exhaust_texture(archives, entry) {
+        Ok((texture, note)) => {
+            report.push(format!("{note} - {what}'s own texture"));
+            Some(texture)
         }
-    };
-    match oag_texture::texture::Texture::parse(&blob) {
-        Ok(texture) => {
-            report.push(format!(
-                "{entry}: {}x{} .mip - {what}'s own texture",
-                texture.width, texture.height
-            ));
-            Some(FlareTexture {
-                width: u32::from(texture.width),
-                height: u32::from(texture.height),
-                rgba: texture.to_rgba(),
-            })
-        }
-        Err(error) => {
-            report.push(format!(
-                "{entry}: did not decode ({error}) - {what} draws nothing"
-            ));
+        Err(why) => {
+            report.push(format!("{why} - {what} draws nothing"));
             None
         }
     }

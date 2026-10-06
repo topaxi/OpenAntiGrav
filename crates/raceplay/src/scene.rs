@@ -243,6 +243,12 @@ pub struct Scene {
     /// applies live; the strength in `Scene::shadow` is what turns it on. See
     /// `oag_render::shadow::map`.
     shadow_map: std::cell::RefCell<oag_render::shadow::map::Map>,
+    /// How many `blob` silhouettes this project generated for want of the
+    /// disc's own, and whether the log has said so yet - see
+    /// `Scene::shadow_geometry`.
+    generated_silhouettes: usize,
+    shadow_silhouette_count: usize,
+    generated_silhouettes_said: std::cell::Cell<bool>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -830,6 +836,8 @@ impl Scene {
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
         // generated falloff.
+        let shadow_silhouette_count = shadows.len();
+        let generated_silhouettes = shadows.iter().filter(|s| s.generated).count();
         let shadow = std::cell::RefCell::new(oag_render::shadow::Pipeline::new(
             device,
             queue,
@@ -942,6 +950,9 @@ impl Scene {
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),
+            generated_silhouettes,
+            shadow_silhouette_count,
+            generated_silhouettes_said: std::cell::Cell::new(false),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),

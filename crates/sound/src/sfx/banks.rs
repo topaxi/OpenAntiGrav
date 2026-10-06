@@ -454,6 +454,27 @@ pub(super) fn load_indexed_cue(
     Ok((loaded, record))
 }
 
+/// A cue that binds no waveform because every command it runs is a no-op or a
+/// register write: it authors no sound, and nothing is missing.
+#[derive(Debug)]
+pub struct ControlOnlyCue {
+    name: String,
+    opcodes: Vec<u8>,
+}
+
+impl std::fmt::Display for ControlOnlyCue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} is a control cue: its commands run only {:02x?}, which do nothing or write \
+             a register, so it authors no sound",
+            self.name, self.opcodes
+        )
+    }
+}
+
+impl std::error::Error for ControlOnlyCue {}
+
 /// Decodes what an already-found cue binds; `name` only labels errors.
 pub(super) fn load_cue_record(
     bank: &sblk::Bank,
@@ -465,10 +486,22 @@ pub(super) fn load_cue_record(
     // `c_CShipShip` and `c_CShipWall`, each with S/M/L children (112 waveforms
     // in all). See `oag_formats::sblk::child`.
     let sounds = bank.cue_tree_sounds(record);
-    // The opcodes go in the message: 38 of a circuit's authored emitters land
-    // here (`track-sound-emitters.md`) and which opcode blocked them is the
-    // question (`0x1e` is in every `~SetReg*` cue and plausibly emits nothing,
-    // `0x14` is in cues named after sounds).
+    // A cue whose every command was read and none starts a waveform is a
+    // control cue, silent by design, not a decode gap: `0x14` is a bare no-op
+    // and `0x1e` writes a register byte
+    // (`docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`).
+    if sounds.is_empty() {
+        let timeline = bank.cue_timeline(record);
+        if timeline.is_complete() && timeline.grains.is_empty() && !timeline.passed.is_empty() {
+            return Err(ControlOnlyCue {
+                name: name.to_string(),
+                opcodes: cue_opcodes(bank, record),
+            }
+            .into());
+        }
+    }
+    // The opcodes go in the message: which opcode blocked a cue is the
+    // question for anything that is not a control cue.
     anyhow::ensure!(
         !sounds.is_empty(),
         "{name} binds no waveform: its {} command(s) run only {:02x?}, opcodes this does not read",
