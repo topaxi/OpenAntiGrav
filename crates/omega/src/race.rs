@@ -27,6 +27,9 @@
 /// scheme for its HD-derived roster, not HD's `Data\Ships`.
 pub const SHIP_DIR: &str = r"Data\art\published\hdships";
 
+/// The directory under [`SHIP_DIR`] Zone mode's one hull sits in.
+pub const ZONE_SHIP: &str = "Zone";
+
 /// Race defaults: two chosen entries, the directories, and unmeasured
 /// placeholders where nothing has been read.
 pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
@@ -76,9 +79,14 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // picked here only because it requires inventing nothing. Omega's Zone
     // mode has not been read; this is not a claim that it works like 2048's.
     zone: oag_title::ZoneCircuit::SameCircuit,
-    // Same reasoning as `zone` above: `PlayerShip` is the one `ZoneCraft`
-    // variant that names no model stem or directory. Not a finding.
-    zone_craft: oag_title::ZoneCraft::PlayerShip,
+    // `hdships\Zone\Ship.vex` for every craft in Zone mode: the ship-model
+    // loader's mode-6 case (`FUN_01301ba0`, confidence 80,
+    // `docs/ghidra/functions/ps4-omega-eu/zone-craft.md`) names it without
+    // reading the craft. The player's pick selects a livery on it.
+    zone_craft: oag_title::ZoneCraft::OwnShipAt {
+        root: SHIP_DIR,
+        ship: ZONE_SHIP,
+    },
     // Not searched for: `None` is silence, not a finding.
     boost: None,
     sounds: SOUND_BANKS,

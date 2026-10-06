@@ -122,8 +122,15 @@ fn check(source: &Path, tag: &str) {
         );
         let (left, right, centre) = columns(&brake, &rest);
         println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
+        // Zone's one shared hull is small and white, so its flaps move fewer
+        // pixels than a native craft's: 2048 measures 196 left and 123 right
+        // since `ZoneCraft::OwnShipAt` put it on that hull (it was over 200
+        // each on the player's own craft). A flap off its hinge puts almost
+        // nothing on the sides, so 100 still catches the defect; the
+        // mid-hull check below is the one that names it.
+        let floor = if mode == "zone" { 100 } else { 200 };
         assert!(
-            left > 200 && right > 200,
+            left > floor && right > floor,
             "{tag} {mode}: the brake changed {left} pixels left and {right} right of centre"
         );
         // On HD's single race this is what tells a flap on its hinge (about 2

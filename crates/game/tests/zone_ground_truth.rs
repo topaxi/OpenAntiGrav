@@ -741,10 +741,10 @@ fn zone_mode_on_hd_races_a_named_race_circuit_directly() {
 /// way: Pulse keeps the Zone hull inside the player's own team, Pure and HD give
 /// Zone a ship directory of its own. Two shapes, three titles, no hole - which
 /// is what licensed [`oag_title::ZoneCraft`] to be a type rather than a
-/// constant, on the same terms as [`ZoneCircuit`]. 2048 later added a third
-/// shape, [`oag_title::ZoneCraft::PlayerShip`] - source is play rather than a
-/// disc image, so it has no case here and the `match` below is exhaustive
-/// against it only to keep this test honest if that ever changes.
+/// constant, on the same terms as [`ZoneCircuit`]. 2048 and Omega are a third
+/// shape, [`oag_title::ZoneCraft::OwnShipAt`], covered by
+/// `zone_craft_ground_truth` since their sources are extracted packages and not
+/// disc images.
 ///
 /// Each title is asserted on both halves of its own shape, because either alone
 /// would pass on a build that had quietly fallen back to the other:
@@ -806,10 +806,12 @@ fn every_titles_zone_craft_resolves_and_is_not_the_race_hull() {
                 );
                 assert!(zoning.contains(ship), "{name}: {zoning} should name {ship}");
             }
-            oag_title::ZoneCraft::PlayerShip => unreachable!(
-                "{name}: none of the three titles this sweep covers is 2048, the only \
-                 one with no Zone-specific hull"
-            ),
+            oag_title::ZoneCraft::PlayerShip | oag_title::ZoneCraft::OwnShipAt { .. } => {
+                unreachable!(
+                    "{name}: none of the three titles this sweep covers is 2048 or Omega; \
+                 theirs are in zone_craft_ground_truth"
+                )
+            }
         }
         println!("{name}: race {racing} / zone {zoning}");
     }
