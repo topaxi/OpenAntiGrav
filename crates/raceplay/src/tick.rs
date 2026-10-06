@@ -401,6 +401,12 @@ impl Race {
                     .cues
                     .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
             }
+            // HD's Cannon throws its own spark on the craft it strikes, from
+            // the weapon's side - see `Race::throw_weapon_spark`. A no-op
+            // unless the title built weapon anchors (HD only).
+            if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck) {
+                self.throw_weapon_spark(usize::from(struck), impact.point);
+            }
             if let Some((wall, ship)) = hit_cues {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim

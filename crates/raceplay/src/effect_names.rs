@@ -392,6 +392,22 @@ pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
 /// that effect's own re-spawn-on-pulse behaviour did.
 pub const LEACHBEAM_ABSORB_EFFECT: &str = "WO_LEACHBEAM_ABSORB";
 
+/// What Wipeout HD's Cannon throws on the craft it hits: a one-shot spark
+/// burst on the hull's `Ship Collision Fx` locator nearest the contact.
+///
+/// **Recovered, confidence 72.** `Cannon_ApplyCraftHit` (`0x0010f730`) calls
+/// `Ship_DispatchCollisionFx` with `kind` hardcoded to `1`, and
+/// `ShipCollisionFx_Trigger`'s `kind == 1` branch names this effect from TOC
+/// slot `0x008b3f6c` -> string `0x007a1c68`. The branch spawns it unattached
+/// (the attach flag of the spawn call is `0`, where the ship's own attached
+/// wall spark passes `1`), so it is played with [`psys::Stage::play`]. HD-only:
+/// Pulse's Cannon spawns nothing on a craft and the struck hull sparks from
+/// `Ship_Damage` instead, see `race::hit_sparks`.
+///
+/// Not on the PSP or PS2 disc, so a Pulse race reports it as missing and
+/// fires nothing - its anchors are only built for HD.
+pub const WEAPON_SPARK_EFFECT: &str = "WO_SHIP_SPARK_DAMAGE_WEAPON";
+
 /// The welding sparks Basilico (`01_Track`) and circuit five place on their
 /// own scenery: three nodes on Basilico, six or seven on circuit five.
 ///

@@ -69,5 +69,6 @@ perf-probe = ["oag-render/perf-probe"]
 workspace = true
 
 [dev-dependencies]
+oag-omega.workspace = true
 oag-testdata.workspace = true
 pollster.workspace = true
