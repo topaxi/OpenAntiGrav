@@ -125,6 +125,31 @@ fn omega_uses_its_own_portuguesebr_plugin_as_the_base() {
     assert_eq!(table.get("OAG_MENU_QUIT"), Some("SAIR"), "our id on top");
 }
 
+/// **The race's HUD reads the project language too.** `load_hud` and the track
+/// panel call `load_languages` themselves; if either stopped passing the title's
+/// `disc_strings`, the HUD would drop to the disc's English while the menus stayed
+/// Portuguese, and nothing else here would notice.
+#[test]
+#[ignore = "needs data/images"]
+fn a_pulse_race_hud_captions_come_out_in_portuguese() {
+    let Some(path) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    let load = |language: &str| {
+        oag_raceplay::load(&oag_raceplay::Options {
+            source: path.display().to_string(),
+            language: Some(language.to_string()),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("loading the race")
+    };
+    assert_eq!(
+        load("PortugueseBR").hud.strings.get("IG_HUD_LAP"),
+        Some("Volta")
+    );
+    assert_eq!(load("English").hud.strings.get("IG_HUD_LAP"), Some("Lap"));
+}
+
 const WANT: &str = "ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ";
 
 #[test]

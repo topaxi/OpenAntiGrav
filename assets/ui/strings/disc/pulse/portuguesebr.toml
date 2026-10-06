@@ -12,8 +12,10 @@
 # skin, ...).
 #
 # Left out on purpose, so they read as the disc writes them: team, ship and
-# track proper names, speed-class names, button glyphs (ε γ δ β Λ Ν), unit
-# labels (MPH, KMH, kb) and the 59 ids whose Portuguese would be identical.
+# track proper names, speed-class names, button glyphs (ε γ δ β Λ Ν) and unit
+# labels (MPH, KMH, kb): 59 ids, all of which read the same in Portuguese or
+# are not words. Words that merely happen to be spelled the same in both
+# languages (Turbo, Plasma, Online) are in the file anyway.
 # Where the file says "Preta"/"Branca" for a track's black and white runs it
 # is the project's own wording: chosen, not measured.
 

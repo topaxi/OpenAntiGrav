@@ -111,6 +111,32 @@ fn every_file_under_assets_ui_strings_is_reachable_through_built_in() {
         checked >= 3,
         "expected english, french and portuguesebr here"
     );
+
+    // A title's disc-keyed files too: one with no `built_in_disc` arm validates
+    // in `check-strings` and ships nothing.
+    let mut disc_checked = 0;
+    for namespace in std::fs::read_dir(dir.join("disc")).expect("assets/ui/strings/disc") {
+        let namespace = namespace.expect("a readable dir entry").path();
+        let name = namespace
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("a name")
+            .to_string();
+        for entry in std::fs::read_dir(&namespace).expect("a namespace directory") {
+            let path = entry.expect("a readable dir entry").path();
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .expect("a stem")
+                .to_string();
+            assert!(
+                built_in_disc(&name, &stem).is_some(),
+                "disc/{name}/{stem}.toml exists but built_in_disc() does not embed it"
+            );
+            disc_checked += 1;
+        }
+    }
+    assert!(disc_checked >= 1, "expected disc/pulse/portuguesebr.toml");
 }
 
 /// French translates what the maintainer was confident about and defers

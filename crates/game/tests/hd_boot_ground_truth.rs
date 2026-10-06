@@ -495,6 +495,7 @@ fn every_front_end_image_this_disc_names_decodes() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn all_sixteen_languages_load_including_the_latin_1_one() {
+    // (Seventeen entries since 2026-10-06: the disc's sixteen and PortugueseBR.)
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
