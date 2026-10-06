@@ -1000,6 +1000,39 @@ Both are content, not byte order, and both are pinned as measurements:
 - **`LOOPING` is per-emitter** - see the retraction under
   [flag `0x1`](#flag-0x1-is-this-effect-loops---2026-08-12) above.
 
+### Which names HD does not author - 2026-10-06
+
+The race loader used to ask HD for five effects that no archive of its disc
+carries: `WO_RAIN`, `WO_RAIN_LENS`, `WO_SNOW` (Pulse's weather) and
+`WO_MAGSTRIP_SPARKS`, `WO_MAGSTRIP_ZONE` (2048's magstrip pair). Each was a
+`not in the archive set` warning, which was true and was HD inheriting a
+Pulse list. `oag_hd::effects::EFFECTS` now takes them back.
+
+- **Census, all seven PSARCs** (`crates/render/examples/hd_psarc_find.rs`,
+  paths read from each archive's manifest): 82 distinct `.pob` systems
+  under `/data/psys/`, none of the five. `rain` finds only `/data/tex/rain.gtf`
+  and unrelated circuit textures; `snow` finds `/data/tex/snow.gtf` and
+  `10_sebenco_climb`'s snow materials; `magstrip` finds the floor art and
+  `wo_magstrip_lightning.pob`, which no `EBOOT.elf` string names.
+- **Executable, `EBOOT.elf`** (`/hdfury/EBOOT-ps3-hdfury-eu.elf`, Ghidra
+  `search_strings`): 99 `WO_` strings, none of the five, and none of
+  `WO_BLUE_WELDER`/`WO_MODESTO_STEAM_A` either - an ambient effect's name is
+  not a load-path string on HD, so the string search alone proves nothing for
+  weather (the 2026-09-08 correction above). The disc census is what settles
+  it: a file that is on no archive cannot be played.
+- **Magstrip is a different mechanism on HD**: the arc wake (`MagstripWake`),
+  never the `.pob` - `Title::magstrip_pob` is `false` for HD and the thread
+  that recovered the law puts the `.pob` pair on the 2048 modes only
+  (confidence 80, Vita and Omega readings).
+- **HD's scenery list is two names**, `WO_BLUE_WELDER` and
+  `WO_MODESTO_STEAM_A` (`DATA02`), the two that are on its disc. Where HD
+  places weather, if it does (`rain.gtf` and `snow.gtf` are screen textures,
+  not particle systems), is unread.
+- **Checked against Omega / 2048**: Omega ships the magstrip pair under
+  `Data/particles2048/` and 2048 names it (`ships-effects.md`), which is why
+  those two are theirs; neither ships `WO_RAIN`/`WO_SNOW` (the 2048 census
+  above). **Checked, differs**: HD has neither.
+
 ### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
 
 HD does not embed pixels (see "The sprite pixels are on the disc after

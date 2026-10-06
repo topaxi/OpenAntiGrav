@@ -69,6 +69,36 @@ pub(super) fn is_pad_material(name: &str) -> bool {
     )
 }
 
+/// The chunks [`super::build_scene`]'s world-space pass draws on a pad
+/// material, and their triangles: what a pad is on a circuit whose pad nodes
+/// name no chunk. `named` is every hash a pad node of either class names.
+///
+/// The same routing [`bind_scene_pad_masks`] does for the `_ne` mask, read
+/// for the report; it chooses nothing, since the scene pass draws these
+/// chunks whether or not this counts them.
+pub(super) fn world_pass_pad_chunks(model: &rcsmodel::Model, named: &[u32]) -> (usize, usize) {
+    let mut chunks = 0;
+    let mut triangles = 0;
+    for chunk in model.meshes.iter().filter(|c| !named.contains(&c.hash)) {
+        if !chunk.surfaces().any(|s| {
+            model
+                .materials
+                .get(s.material as usize)
+                .is_some_and(|m| is_pad_material(&m.name))
+        }) {
+            continue;
+        }
+        chunks += 1;
+        triangles += chunk
+            .surfaces()
+            .flat_map(|s| s.submeshes.iter())
+            .filter(|sub| sub.vertex_count != 0 && sub.index_count != 0)
+            .map(|sub| sub.index_count / 3)
+            .sum::<usize>();
+    }
+    (chunks, triangles)
+}
+
 /// Binds the `_ne` mask to the pad materials [`super::build_scene`]'s
 /// unreferenced-chunk pass is about to draw: the speed pads of the four
 /// original circuits, routed by material because their `Speedup Pad` nodes
@@ -253,6 +283,19 @@ pub(super) fn build_pad_class(
         node_vertex_ranges.push(node_first_vertex..out.vertices.len() as u32);
     }
     out.node_vertex_ranges = node_vertex_ranges;
+    if report.nodes > report.addressed {
+        let mut named = match classes.mesh {
+            Some(mesh_class) => super::referenced(data, &nodes, mesh_class, &model),
+            None => Vec::new(),
+        };
+        for class in [classes.speedup_pad, classes.weapon_pad]
+            .into_iter()
+            .flatten()
+        {
+            named.extend(pad_chunk_hashes(data, &nodes, order, class));
+        }
+        (report.routed_chunks, report.routed_triangles) = world_pass_pad_chunks(&model, &named);
+    }
     face_normals(&mut out);
     let (centre, radius) = bounding_sphere(&out.vertices);
     out.centre = centre;

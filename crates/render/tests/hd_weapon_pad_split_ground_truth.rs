@@ -132,3 +132,50 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
         }
     }
 }
+
+/// Talon's Junction's 18 `Speedup Pad` nodes each name a hash no chunk of its
+/// `.rcsmodel` carries, so `build_pads`' node pass draws nothing - and the
+/// pads are on screen all the same, as 18 chunks on a pad material that
+/// `build_scene`'s world-space pass draws. The report has to say that rather
+/// than "0 of 18 ... (0 triangle(s))", which read as an absent picture.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:{ARCHIVE}", image.display());
+    let vex_data = mesh::read_blob(&spec, TRACK).expect("reading the .vex");
+    let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
+    let model_blob = mesh::read_blob(&spec, &model_name).expect("reading the .rcsmodel");
+    let rcs_model = oag_rcs::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
+
+    let nodes = vex::nodes(&vex_data).expect("walking the node tree");
+    let classes = vex::classes_of(&vex_data).expect("class table");
+    let speedup = classes
+        .speedup_pad
+        .expect("speedup_pad id recovered for v6");
+    let order = vex::byte_order(&vex_data);
+    let hashes: Vec<u32> = nodes
+        .iter()
+        .filter(|n| n.class_id == speedup)
+        .map(|n| order.u32(&vex_data[n.payload()], 0x30))
+        .collect();
+    assert_eq!(hashes.len(), 18, "talons_junction authors 18 speedup pads");
+    assert!(
+        hashes.iter().all(|h| rcs_model.mesh(*h).is_none()),
+        "a speedup node now resolves: the world-pass reading below needs revisiting"
+    );
+
+    let (pads, report) = mesh::rcs::build_pads(TRACK, &vex_data, &model_blob, &mut |path| {
+        mesh::read_blob(&spec, path).ok()
+    })
+    .expect("build_pads decodes talons_junction");
+    println!("{}", report.describe());
+    assert!(pads.indices.is_empty(), "the node pass draws no pad");
+    assert_eq!(report.routed_chunks, 18, "one world-pass chunk per pad");
+    assert!(report.routed_triangles > 0);
+    let line = report.describe();
+    assert!(!line.contains("(0 triangle(s))"), "{line}");
+    assert!(line.contains("18 chunk(s) on a pad material"), "{line}");
+}

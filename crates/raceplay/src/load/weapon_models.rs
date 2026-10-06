@@ -379,15 +379,6 @@ pub(super) fn load_bodies(
         bomb_blast,
         leach_ball,
     );
-    if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
-        report.push(
-            "HD_plasma_ball loaded, not drawn: its program is routed \
-             (RIM_EDGE), but this engine's back-face cull keeps the faces \
-             that turn away from the eye, which the program paints solid \
-             white - see docs/rendering/hd-unlit-programs.md"
-                .to_string(),
-        );
-    }
     bodies
 }
 
