@@ -38,7 +38,7 @@ value by hand, is to watch the access happen.
 | `0x08953ddc` | function | `Xml_OpenFile` | 92 (already named; see [`xml-reader.md`](xml-reader.md)) |
 | `0x08884ac4` | function | `TrackStartup_Parse` | 78 |
 | `0x089012d4` | function | `Billboard_CreateFromLocation_q` | 65 |
-| `0x08901004` | function | `Billboard_CreateFromColour_q` | 60 |
+| `0x08901004` | function | `Billboard_CreateFromColour` | 85 (2026-10-06, was 60) |
 | `0x08900220` | function | `Billboard_ConstructResource_q` | 75 |
 | `0x08a6bb30` | function | `Camera_GetTypeId_q` | 65 |
 | `0x08901764` | function | `Camera_Construct_q` | 65 |
@@ -693,3 +693,66 @@ but are two instances, not the code. Scored 85 for the binding, not 90.
 | --- | --- | --- | --- |
 | `0x089001a4` | function | `VexCamera_BuildViewMatrix` | 75 |
 | `0x089009a8` | function | `Billboard_UpdateViewMatrix` | 70 |
+
+## 2026-10-06 (billboards-2): the colour pool read, live, and PS2 captured
+
+### A colour slot draws from `PI004`'s catalogue through a fixed shuffle (88)
+
+PPSSPP v1.20.4 (own Xvfb and port), a Talon's Junction Racebox race, memory read
+through the websocket debugger.
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x08901004` | function | `Billboard_CreateFromColour` | 85 |
+| `0x08900e90` | function | `BillboardManager_BuildPool` | 88 |
+| `0x08900db4` | function | `BillboardManager_Construct` | 78 |
+| `0x08900fa0` | function | `BillboardManager_FreePool` | 80 |
+
+- The manager singleton is `*0x08ab22b4`; its pool is a pointer array at `+0x3c`
+  with the count at `+0x40` (35 in the race read).
+- `BillboardManager_Construct` (`0x08900db4`) stores itself in the singleton and
+  calls `BillboardManager_BuildPool` (`0x08900e90`): `FUN_08889a14` gathers the
+  catalogue objects into the array, then a counter at `0x08ab22b8`, reset to 0,
+  steps `2 * count` times, each step swapping the entries at `(counter & 0xff) %
+  n` and `(counter >> 8) % n`. **No random number is involved**: the result is a
+  function of the file order alone. The gather function's own work (it asks the
+  game object tree for every object of one class, retrying with a larger buffer
+  when the answer fills it) is read but left unnamed: that it is a catalogue
+  gather is the one inference here, and it is below 50 as a standalone claim.
+- Each pool entry is a `PI004` plugin object: `+0x94` the model path, `+0xa0` the
+  type (2 portrait, 3 landscape), `+0xa4` the colour mask (`grey` 1, `red` 2,
+  `green` 4, `blue` 8, `orange` 0x10, `purple` 0x20, `yellow` 0x40, `white` 0x80).
+  Every one of the 35 live masks equals the bit-OR of its catalogue line's colours.
+- `Billboard_CreateFromColour(type, num, colourMask, glow)` scans from entry 0 for
+  the first entry with equal type and `mask & colourMask != 0`, and only if slot
+  `num` is not yet filled (`0x08b323c0[num] == 0`). The match is **swapped with the
+  last pool entry**. It is called once per colour slot from `TrackStartup_Parse`
+  (`0x08885798`) in file order, **whether or not the circuit authors a quad for
+  that slot**.
+
+**Verification.** The live pool (35 entries) equals `Definition.xml` in file
+order put through that swap loop, entry for entry: indices 0 and 1 hold
+`Piranha_LANDSCAPE_02` and `QIREX_LANDSCAPE_02` (`Landscape22`, `Landscape23`), 2 to 13
+the portraits in file order. The one difference is the single draw the race had made:
+the grey portrait slot 3 took `TRIAKIS_PORTRAIT_01`, which sits last now, and the
+former last entry (`HARIMAU_LANDSCAPE_02`) stands in its old place at index 12.
+Slot 3's own object names `TRIAKIS_PORTRAIT_01.mb` at `+0x2f0`, and slots 1, 2 and 4
+to 7 name their manifest models the same way. **Not seen**: the rotation over more
+than one draw (read from the code, 80), and a circuit with several colour slots,
+which is what De Konstruct (`05_Track`, blue, blue, grey, yellow) would show.
+`crates/game/tests/billboard_adverts_ground_truth.rs` pins the order against the
+capture.
+
+Implemented as `oag_tables::billboard_pool` and wired in `oag_raceplay::adverts`.
+On the PSP and PS2 discs no circuit logs a billboard WARN any more; De Konstruct
+draws `ASSEGAI_PORTRAIT_01`, `AURICOM_PORTRAIT_01` and `Egx_PORTRAIT_01` on slots 1,
+2 and 4. Scope: Pulse. Pure ships the same `PI004` but this was not read there and
+nothing was changed. Wipeout HD has its own `Billboard_CreateFromColour_q`
+(`0x0029af88`): **checked, applies, not wired** (not read this lane).
+
+### Open from this section
+
+- Which entries the quads of circuits with several colour slots show was computed,
+  not seen on the original.
+- The advert's animation clock is still the scenery clock, **chosen, not
+  measured**. The PS2 states below suggest it is not the race clock, see there.

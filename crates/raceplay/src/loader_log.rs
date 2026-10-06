@@ -125,7 +125,7 @@ mod tests {
         r"Data\Weapons\Pulse_Bomb.vex: absent - a laid bomb falls back to a billboard",
         r"Data\Environments\x\cloud.mip: not found - 12 cloud sprite(s) decoded but not drawn",
         r"8 billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub",
-        r#"billboard slot 1 names a colour (Colour("blue")): which advert a colour picks is unrecovered, so its placeholder draws nothing"#,
+        r#"billboard slot 1 names a colour (Colour("blue")) and the advert catalogue holds no entry for it, so its placeholder draws nothing"#,
         r"track audio talonsj~SETREG_02: 2 node(s) play nothing: binds no waveform",
         r"Data\Weapons\Textures\x.mip: not in the archive set (no entry) - the LeachBeam draws without it",
         r"HUD atlas a.gtf did not decode; its sprites draw nothing",
@@ -148,6 +148,7 @@ mod tests {
         "start gantry x.vex on node Some(74): 6 draw(s) parked outside the panel are not drawn: the FINAL LAP states",
         r"billboard slot 7: /Data/Billboards/Pulse_Adverts/auricom/AURICOM_LANDSCAPE_01.vex drawn through its own camera into a 128x128 target shown on the circuit's billboard7.tga quad(s)",
         "1 billboard8 placeholder draw(s) replaced by the start gantry",
+        r#"billboard slot 1: the colour Colour("blue") draws Portrait3 from the engine's advert pool"#,
     ];
 
     #[test]

@@ -94,7 +94,8 @@
 //! circuit authors (`red`, `blue`, `green`, `grey`, `white`, `yellow`,
 //! `purple`, `orange`) appears in `PI004`'s tags. **Not confirmed**: which
 //! entry is picked when several match, or whether the catalogue is consulted at
-//! all; no function reading it has been traced.
+//! all; no function reading it had been traced. **Confirmed 2026-10-06**: it is
+//! the pool, see [`crate::billboard_pool`].
 //!
 //! # A placement hypothesis that does not hold
 //!
@@ -133,9 +134,8 @@
 //! settled; "drawn where the player sees it" is inference from node names. See
 //! `docs/rendering/start-gantry.md`.
 //!
-//! **One live lead remains.** `Billboard_CreateFromColour_q` walks a per-track
-//! pool, matching type and colour and consuming the match (reached in a real
-//! load); its entry layout is unread.
+//! **The colour pool is read (2026-10-06).** `Billboard_CreateFromColour` draws
+//! from `PI004`'s entries through a fixed shuffle; see [`crate::billboard_pool`].
 
 use crate::fexml;
 
@@ -269,7 +269,7 @@ fn schema_root(document: &fexml::Node) -> &fexml::Node {
 }
 
 /// Every element under `node`, itself included, depth-first.
-fn descendants(node: &fexml::Node) -> Vec<&fexml::Node> {
+pub(crate) fn descendants(node: &fexml::Node) -> Vec<&fexml::Node> {
     let mut out = vec![node];
     let mut at = 0;
     while at < out.len() {
@@ -286,7 +286,7 @@ fn number(text: &str) -> Option<u32> {
 }
 
 /// The manifest's `Data\A\B.vex` as the `/data/a/b.vex` an archive matches.
-fn entry_name(location: &str) -> String {
+pub(crate) fn entry_name(location: &str) -> String {
     format!(
         "/{}",
         location.trim_start_matches(['/', '\\']).replace('\\', "/")
