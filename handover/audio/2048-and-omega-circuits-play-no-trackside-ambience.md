@@ -12,8 +12,9 @@ Struck lines below landed 2026-10-06 (audio-2048); see
 
 1. ~~**The circuit bank is not beside the track.**~~ Done for 2048:
    `TrackBanks::circuit_directory`, HD proven beside the track. Omega keeps its
-   circuit banks under `Data\audio\sound\` too (checked, applies, not wired:
-   `oag_omega::race::SOUND_BANKS` stays unset until the Wwise lane maps cues).
+   circuit banks under `Data\audio\sound\` too (ported, location only:
+   `oag_omega::race::SOUND_BANKS` carries it, so its log names the Wwise cause
+   as one WARN line; nothing resolves until the Wwise lane maps cues).
 2. ~~**2048's banks are `SBlk` version 5.**~~ Done: the FNV-1 rule is proven on 33
    banks and 1,603 spelled names, the track path uses it, and the eight `env_*`
    banks that "did not span the blob" carry a stale waveform size (declared
@@ -39,7 +40,13 @@ Struck lines below landed 2026-10-06 (audio-2048); see
    `Speech_NGP_Grid.bnk`, which the nodes do not name). Whether the original
    falls back to another lookup is unread (`Scream_FindSoundInBank`'s hashed
    path on the Vita executable has not been decompiled for this).
-7. HD's other circuits are unswept for emitters: only Talons Junction (66 of
+7. **2048's twelve downloadable circuits** read their bank beside the track and
+   resolve 0 to 5 emitters each (only `amphiseum`'s is hashed v5, 25 of 25): the
+   beside-track copies parse as v3 banks with no name table. Hashed copies sit
+   under `data/audio/DLC1/` (20 to 63 spelled cues). Which one the original
+   loads is unmeasured, so none was switched on; measuring it (Vita3K log or the
+   executable's `LoadSoundBank`) is what 419 unresolved emitters on these circuits wait on.
+8. HD's other circuits are unswept for emitters: only Talons Junction (66 of
    66 cones) was run.
 
 ## Next Steps

@@ -18,7 +18,7 @@ use oag_sound::sfx::TrackEmitters;
 const IMAGE: &str = "data/extracted/vita/PCSF00007";
 
 fn track(circuit: &str) -> String {
-    format!(r"Data\art\published\environments\{circuit}\track.vex")
+    format!(r"Data\art\published\{circuit}\track.vex")
 }
 
 fn load(circuit: &str) -> Option<TrackEmitters> {
@@ -43,17 +43,22 @@ fn load(circuit: &str) -> Option<TrackEmitters> {
 /// manifest loads `env_tower.bnk` (label `env_tow`) while its two `startline`
 /// nodes spell `env_mal`, a bank that ships nowhere.
 const CIRCUITS: [(&str, usize, usize, &[&str]); 10] = [
-    ("altima", 41, 40, &["env_alt~boat"]),
-    ("arena", 3, 3, &[]),
-    ("bridge", 4, 4, &[]),
-    ("cathedral", 12, 12, &[]),
-    ("mall", 5, 3, &["env_mal~startline"]),
-    ("park", 2, 2, &[]),
-    ("sol", 57, 57, &[]),
-    ("square", 45, 0, &["crowd~crowdf", "env_squ~neoon_small"]),
-    ("subway", 9, 9, &[]),
+    (r"environments\altima", 41, 40, &["env_alt~boat"]),
+    (r"environments\arena", 3, 3, &[]),
+    (r"environments\bridge", 4, 4, &[]),
+    (r"environments\cathedral", 12, 12, &[]),
+    (r"environments\mall", 5, 3, &["env_mal~startline"]),
+    (r"environments\park", 2, 2, &[]),
+    (r"environments\sol", 57, 57, &[]),
     (
-        "tower",
+        r"environments\square",
+        45,
+        0,
+        &["crowd~crowdf", "env_squ~neoon_small"],
+    ),
+    (r"environments\subway", 9, 9, &[]),
+    (
+        r"environments\tower",
         48,
         44,
         &[
@@ -115,6 +120,7 @@ fn altima_resolves_forty_of_its_forty_one_emitters_and_the_rest_match_the_table(
 struct Render {
     pcm: Vec<i16>,
     peak_voices: usize,
+    clipped: u64,
     in_range_ticks: usize,
     in_range: Vec<bool>,
     wav: std::path::PathBuf,
@@ -125,7 +131,7 @@ struct Render {
 fn render(image: &Path, name: &str, keep: bool) -> Render {
     let mut loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        track: Some(track("altima")),
+        track: Some(track(r"environments\altima")),
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -136,8 +142,9 @@ fn render(image: &Path, name: &str, keep: bool) -> Render {
     let mut race = race::Race::start(loaded.setup);
     race.set_autopilot(true);
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../data/scratch/audio-2048")
+        .join("../../data/shots")
         .join(name);
+    std::fs::create_dir_all(wav.parent().expect("a parent")).expect("the shots directory");
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(wav.clone()),
@@ -156,6 +163,7 @@ fn render(image: &Path, name: &str, keep: bool) -> Render {
         in_range.push(emitters.in_range(&listener_of(&race)) > 0);
         in_range_ticks += usize::from(in_range[tick]);
     }
+    let clipped = audio.output().with_mixer(|mixer| mixer.clipped());
     audio.finish().expect("writing the dump");
     let file = std::fs::read(&wav).expect("the dump");
     let pcm = file[44..]
@@ -167,6 +175,7 @@ fn render(image: &Path, name: &str, keep: bool) -> Render {
     Render {
         pcm,
         peak_voices,
+        clipped,
         in_range_ticks,
         in_range,
         wav,
@@ -223,10 +232,13 @@ fn a_headless_lap_of_altima_hears_its_ambience_where_an_emitter_is_in_range() {
         .unwrap_or(0);
     println!(
         "{} - {} samples, {} ambient voice(s) at most, {quiet} tick(s) with none in range \
-         (identical in both laps), {heard} near one, of which {differing} differ, by up to {loudest}",
+         (identical in both laps), {heard} near one, of which {differing} differ, by up to {loudest}; \
+         clipped {} sample(s) with the emitters, {} without",
         with.wav.display(),
         with.pcm.len(),
         with.peak_voices,
+        with.clipped,
+        without.clipped,
     );
     assert!(
         differing > 0 && loudest > 0,
@@ -236,4 +248,53 @@ fn a_headless_lap_of_altima_hears_its_ambience_where_an_emitter_is_in_range() {
         quiet > 0,
         "an emitter was in range for the whole lap, so nothing was compared"
     );
+}
+
+/// `(circuit, emitters, resolved)` for the twelve downloadable circuits, whose
+/// bank sits **beside the track** and is read there, ahead of
+/// `Data\audio\sound\`. Only `amphiseum`'s is a hashed v5 bank; the other
+/// eleven parse as v3 banks with no name table, which is why they resolve few.
+/// The same circuits' banks under `Data\audio\DLC1\` are hashed with 20 to 63
+/// spelled cues, and which copy the original loads is unmeasured, so this
+/// records what the beside-the-track copy gives and no more.
+const DLC: [(&str, usize, usize); 12] = [
+    ("Metropia", 13, 1),
+    ("Sebenco_Climb", 37, 5),
+    ("Sol_2", 20, 0),
+    ("Ubermall", 131, 3),
+    ("amphiseum", 25, 25),
+    ("modesto_heights", 23, 5),
+    ("talons_junction", 57, 0),
+    ("tech_de_ra", 32, 2),
+    ("Vineta_K", 48, 0),
+    ("Anulpha_Pass", 52, 2),
+    ("Chenghou_Project", 13, 5),
+    ("Moa_Therma", 17, 1),
+];
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_downloadable_circuits_still_read_the_bank_beside_their_track() {
+    for (circuit, total, resolved) in DLC {
+        let Some(loaded) = load(&format!(r"DLC1\environments\{circuit}")) else {
+            return;
+        };
+        let playing = loaded
+            .omni
+            .iter()
+            .chain(&loaded.directional)
+            .filter(|n| n.sound.is_some())
+            .count();
+        assert_eq!(
+            (loaded.omni.len() + loaded.directional.len(), playing),
+            (total, resolved),
+            "{circuit}"
+        );
+        assert!(
+            loaded.report.iter().any(|l| l.contains(&format!(
+                r"circuit Data\art\published\DLC1\environments\{circuit}\env"
+            ))),
+            "{circuit}: its own bank was not read beside it"
+        );
+    }
 }

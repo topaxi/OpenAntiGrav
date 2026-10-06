@@ -176,17 +176,32 @@ impl TrackEmitters {
                 )),
             }
         }
-        match circuit_bank_entry(archives, banks.track.circuit_directory, track) {
-            Some(entry) => match archives.read_name(&entry) {
-                Ok(bytes) => blobs.push(("circuit", entry, bytes)),
-                Err(e) => parsed.report.push(format!(
-                    "track audio: {entry} not read: {e}; every emitter naming its label plays nothing"
-                )),
-            },
-            None => parsed.report.push(format!(
+        let candidates = circuit_bank_entries(archives, banks.track.circuit_directory, track);
+        if candidates.is_empty() {
+            parsed.report.push(format!(
                 "track audio: no trackstartup.xml beside {track} names a sound bank, so only the \
                  shared bank(s) can resolve"
-            )),
+            ));
+        } else {
+            let mut last = None;
+            let mut found = None;
+            for entry in &candidates {
+                match archives.read_name(entry) {
+                    Ok(bytes) => {
+                        found = Some((entry.clone(), bytes));
+                        break;
+                    }
+                    Err(e) => last = Some(e),
+                }
+            }
+            match (found, last) {
+                (Some((entry, bytes)), _) => blobs.push(("circuit", entry, bytes)),
+                (None, Some(e)) => parsed.report.push(format!(
+                    "track audio: {} not read: {e}; every emitter naming its label plays nothing",
+                    candidates.join(" or ")
+                )),
+                (None, None) => {}
+            }
         }
 
         // Keyed by the bank's own label, which a node spells and which is no
@@ -324,29 +339,37 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
     }
 }
 
-/// The archive entry holding the circuit's own sound bank, if it names one.
+/// The archive entries the circuit's own sound bank may be, in the order they
+/// are tried; empty when its manifest names none.
 ///
 /// `trackstartup.xml` sits beside the `.vex` and its `<LoadSoundBank
 /// Filename="...">` names a file. On Pulse, Pure and HD that file is in the
 /// track's directory, not under `Data\Sound\` where the executable's
-/// literal-named banks live; `directory` is [`None`] for them. 2048 passes
-/// [`oag_title::TrackBanks::circuit_directory`] and the file is read there.
-/// Pulse, measured:
+/// literal-named banks live. Pulse, measured:
 /// `Data\Sound\BASILICO_ENV.bnk` hashes to nothing on `pulse-psp-usa`, while
 /// `Data\Environments\01_Track\BASILICO_ENV.bnk` is a 253,664-byte `SBlk`
 /// labelled `basilic`, which `01_Track`'s fifty non-`gentrak` emitters spell.
-fn circuit_bank_entry(
+///
+/// 2048's base circuits have none beside them (`env_altima.bnk` is under
+/// `Data\audio\sound\`), but its downloadable circuits do
+/// (`DLC1\environments\Metropia\env2_metropia.bnk`), so beside the track is
+/// tried first and `directory`
+/// ([`oag_title::TrackBanks::circuit_directory`]) second.
+fn circuit_bank_entries(
     archives: &mut Archives,
     directory: Option<&str>,
     track: &str,
-) -> Option<String> {
-    let at = track.rfind(['/', '\\'])?;
-    let file = circuit_manifest(archives, track)?.sound_bank?;
-    if let Some(directory) = directory {
-        return Some(format!("{directory}\\{file}"));
-    }
-    let (directory, separator) = (&track[..at], &track[at..=at]);
-    Some(format!("{directory}{separator}{file}"))
+) -> Vec<String> {
+    let Some(at) = track.rfind(['/', '\\']) else {
+        return Vec::new();
+    };
+    let Some(file) = circuit_manifest(archives, track).and_then(|m| m.sound_bank) else {
+        return Vec::new();
+    };
+    let (beside, separator) = (&track[..at], &track[at..=at]);
+    let mut entries = vec![format!("{beside}{separator}{file}")];
+    entries.extend(directory.map(|d| format!("{d}\\{file}")));
+    entries
 }
 
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:

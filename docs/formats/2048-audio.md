@@ -12,7 +12,7 @@ location rule is **confidence 60** (an archive census, not the loader).
 
 | Claim | Evidence |
 | --- | --- |
-| A circuit's own bank is `Data\audio\sound\<LoadSoundBank filename>`, **not** beside the track. | `env_altima.bnk` reads there; `data/art/published/environments/altima/env_altima.bnk` does not exist. The filename is `trackstartup.xml`'s `<LoadSoundBank>`, as on Pulse and HD. |
+| A **base-package** circuit's own bank is `Data\audio\sound\<LoadSoundBank filename>`, **not** beside the track. The twelve downloadable circuits (`DLC1\environments\<X>\`) have theirs beside the track, so beside the track is tried first and the directory second. | `env_altima.bnk` reads there; `data/art/published/environments/altima/env_altima.bnk` does not exist. The filename is `trackstartup.xml`'s `<LoadSoundBank>`, as on Pulse and HD. |
 | Two shared banks hold the other labels a node spells: `crowd_NGP.bnk` (label `crowd`) and `generaltrack.bnk` (`gentrak`). | Altima's `crowd~crowd` nodes resolve in the first. |
 | HD keeps resolving beside the track. | `track_audio_ground_truth::hd_still_reads_its_circuit_bank_beside_the_track`: Talons Junction, 66 of 66. |
 
@@ -27,7 +27,7 @@ A node spells its cue (`~neoon_small`, `~startline`) and a v5 bank keys its
 table by `name_hash`. The name block carries 16-byte records from `+0x10`
 (`{u32 name offset, u32 hash, u16 cue, u16 next, u32 index}`) and a string pool
 at the offset `+0x0c` gives, so a bank **spells** most of its names beside the
-hashes: `Bank::hashed_names`. Across **33 hashed banks and 1,603 spelled
+hashes: `Bank::hashed_names`. Across **33 hashed banks of the base `data.psarc` (the DLC and patch archives were not censused) and 1,603 spelled
 names every name hashes to its own record's hash**
 (`sblk_v5_hashed_names_ground_truth`), which takes the rule from "32 names" to
 exhaustive. Confidence 98.
@@ -85,11 +85,19 @@ that ships nowhere. The Tannoy cues exist, in `Speech_NGP_Grid.bnk`, but the
 nodes name `env_tow`; resolving them there would be inventing a join. All stay
 at WARN with the cause.
 
+The twelve downloadable circuits keep reading the bank beside their track,
+pinned by `the_downloadable_circuits_still_read_the_bank_beside_their_track`:
+only `amphiseum`'s is a hashed v5 bank (25 of 25 resolve); the other eleven
+parse as v3 banks with no name table and resolve 0 to 5 emitters each
+(Metropia 1 of 13, Ubermall 3 of 131, Vineta K 0 of 48 ...). The copies under
+`data/audio/DLC1/` are hashed with 20 to 63 spelled cues, and which copy the
+original loads is **unmeasured**, so this lane does not switch them on.
+
 Heard, not only resolved: a 40 s Altima autopilot lap rendered to WAV through
 the real mixer, once with its emitters and once with them dropped
 (`altima-ambience.wav`, scratch). The 861 ticks with no emitter in range or in
 the ten before it are byte-identical in both, and 1,506 of the 1,539 ticks near
-one differ, up to the mix's full peak.
+one differ, up to the mix's full peak; the mix clips 0 samples with or without the emitters.
 
 ## Checked against Omega
 
@@ -97,7 +105,8 @@ one differ, up to the mix's full peak.
 (`BKHD`), not `SBlk`: none of `sblk::Bank::parse`, the hashed lookup or the
 stale-size reading applies, and a node's `bank~cue` pair is not yet mapped to a
 Wwise event. Omega keeps its circuits' banks under `Data\audio\sound\` too, so
-`TrackBanks::circuit_directory` will take the same value once the Wwise lane
-lands; it is left unset in `oag_omega::race::SOUND_BANKS` rather than switched on
-an unmeasured loader. 2048's three shared labels (`crowd`, `gentrak`) exist on
+`oag_omega::race::SOUND_BANKS` carries `circuit_directory` for it (**ported**,
+location only): its load report now names the real cause, `env12_techdera.bnk is
+not a sound bank: unsupported bank version 1145588546` (`BKHD`), as one WARN
+line instead of a missing-file one. Nothing resolves on Omega. 2048's three shared labels (`crowd`, `gentrak`) exist on
 Omega as `crowd.bnk`, `crowd_NGP.bnk` and `generaltrack.bnk`.

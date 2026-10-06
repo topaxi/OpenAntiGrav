@@ -79,13 +79,16 @@ pub struct TrackBanks {
     /// Pulse and Pure: `generaltrack.bnk`. 2048: `crowd_NGP.bnk` (label
     /// `crowd`) and `generaltrack.bnk` (`gentrak`).
     pub shared: &'static [&'static str],
-    /// The archive directory a circuit's own bank is read from, or [`None`]
-    /// where it sits beside the track, named by the `trackstartup.xml`
-    /// `<LoadSoundBank>` filename (Pulse, Pure and HD).
+    /// The archive directory a circuit's own bank is read from when it is not
+    /// beside the track (tried first, named by the `trackstartup.xml`
+    /// `<LoadSoundBank>` filename), or [`None`] where it always is: Pulse, Pure
+    /// and HD.
     ///
-    /// 2048 keeps every circuit's bank in `Data\audio\sound\` instead:
-    /// `env_altima.bnk` reads there and `Data\art\published\environments\altima\env_altima.bnk`
-    /// does not exist.
+    /// 2048's base circuits keep their bank in `Data\audio\sound\` instead:
+    /// `env_altima.bnk` reads there and
+    /// `Data\art\published\environments\altima\env_altima.bnk` does not
+    /// exist. Its downloadable circuits do sit beside their track
+    /// (`DLC1\environments\Metropia\env2_metropia.bnk`).
     pub circuit_directory: Option<&'static str>,
     /// Where this came from: ADR-0058's per-entry provenance.
     pub origin: crate::Origin,
