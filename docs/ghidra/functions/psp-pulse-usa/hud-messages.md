@@ -15,8 +15,9 @@ the live-frame half open (see the end).
 `Hud_BindWidgets` (`0x08820ab8`) binds the four slot widgets: `Info1` to
 `hud+0x134`, `Info2` to `+0x144`, `Info3` to `+0x154`, `Info4` to `+0x164`. The
 layouts author them at `x=240`, `y=80/95/110/125`, `font="HUD"`, `scale=0.6`,
-centred (`TimeTrial_HUD.xml`; the other four Pulse layouts and all three of
-Pure's carry the same four). `docs/ui/hud.md` had them as "debug, inferred from
+centred (`TimeTrial_HUD.xml`, and `Zone_HUD.xml` the same; Speed Lap reads the
+Time Trial layout; the other layouts and Pure's three were not all
+counted line by line). `docs/ui/hud.md` had them as "debug, inferred from
 the names, confidence 40".
 
 ## The flag bits - and no medal among them
