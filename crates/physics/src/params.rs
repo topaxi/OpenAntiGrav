@@ -100,6 +100,7 @@ pub struct Turning {
     /// [`Self::gain`] by intent: a fast bite and slow return, or the reverse.
     pub falloff: f32,
     /// Per-second rate while the steering state moves toward a larger-magnitude target.
+    pub gain: f32,
 }
 
 /// Airbrake response. `<Airbrake amount drag falloff gain turn slidegrip sideshift/>`.
@@ -113,6 +114,7 @@ pub struct Airbrake {
     pub amount: f32,
     /// Feeds the forward slide term, which *accelerates* along `+forward`
     /// ([`crate::airbrake::evaluate`]).
+    pub drag: f32,
     /// Per-second decay toward the analog input.
     pub falloff: f32,
     /// Per-second rise toward the analog input.

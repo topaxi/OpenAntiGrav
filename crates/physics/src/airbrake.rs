@@ -34,6 +34,7 @@ pub struct AirbrakeForces {
     /// World-space force: the forward slide term and the lateral term.
     pub world_force: Vec3,
     /// Body-local angular. **Its X and Z components are always zero**; only yaw is written.
+    pub local_angular: Vec3,
 }
 
 /// The lateral grip coefficient `k`.

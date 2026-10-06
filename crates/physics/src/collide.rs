@@ -67,6 +67,7 @@ impl Surface {
 
 /// Friction of a [`Surface::Wall`], from `collider+0x64`: the only non-sentinel value in the
 /// file.
+pub const WALL_FRICTION: f32 = 0.05;
 
 /// Friction of a contact between two colliders.
 ///
@@ -139,6 +140,7 @@ pub trait Raycaster {
     /// **The default implementation is a trap**: it reports only the nearest hit, so a
     /// `Raycaster` that has not overridden this (a test double) yields one contact per probe.
     /// Right for a query-counting double, wrong to debug for an hour.
+    fn raycast_all(
         &self,
         ray: Ray,
         skip: Option<u32>,
@@ -237,6 +239,7 @@ pub struct SegmentTriangleHit {
     pub t: f32,
     /// The triangle's **unnormalised** winding normal, `(b - a) x (c - a)`: all three edge
     /// tests use this vector, and normalising first only adds rounding.
+    pub normal: Vec3,
 }
 
 /// Tests a segment against one triangle.
@@ -316,6 +319,7 @@ pub fn segment_triangle(
 /// 22 bits (`bits[0:11] = ((int)coord + 0x400) * 2`, `bits[12:21] = objectId`), which
 /// **quantises coordinates to 1 unit over roughly +/-1024 and caps ids at 1024 per list**,
 /// though the format's `u16` triangle count permits more.
+#[derive(Debug, Clone)]
 pub struct TriangleSoup {
     vertices: Vec<Vec3>,
     triangles: Vec<[u32; 3]>,

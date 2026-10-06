@@ -348,7 +348,9 @@ pub struct ShipState {
     ///
     /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero**; see
     /// [`crate::slowdown`] for why that differs from the sideshift timers.
+    pub slowdown_timer: f32,
     /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}`: probes in contact over two.
+    pub grounded: f32,
     /// Last frame's [`Self::grounded`], which **every control term reads**.
     ///
     /// Hover is step 8 of 15 in the original's craft update and clears the contact flag
@@ -448,6 +450,7 @@ pub struct ShipState {
     /// The same fact as `!`[`Self::on_grid`]. The launch boost's clock starts here
     /// ([`crate::launch`]); Zone's auto-speed uses the same multiplier. Written by the
     /// race, not hashed, for [`Self::on_grid`]'s reason.
+    pub released: bool,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
     /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). Today it changes only the
@@ -519,8 +522,10 @@ pub struct ShipState {
     /// In this crate and hashed, because the original keeps it on the craft: it is
     /// written from the contact response ([`crate::damage::apply_contact`]), and a pool
     /// outside [`ShipState`] would be a simulation field the determinism gate cannot see.
+    pub shield: f32,
     /// Where the craft is in the destroyed sequence, the original's `entity+0x8c`; only
     /// the three states the energy pool reaches ([`crate::damage::CraftState`]).
+    pub craft_state: crate::damage::CraftState,
     /// Seconds left on the current craft state, `entity+0x874`. Only
     /// [`crate::damage::CraftState::Destroyed`] runs it down; zero otherwise, which keeps
     /// it out of the hash on a race nobody dies in.

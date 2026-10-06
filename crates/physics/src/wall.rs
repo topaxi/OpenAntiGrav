@@ -187,6 +187,7 @@ pub struct WallResponse {
     pub contacts: u32,
     /// How many of those were resolved. Equal to [`Self::contacts`] today; kept separate
     /// because the original's depth gate can drop one.
+    pub resolved_count: u32,
     /// The deepest contact resolved this frame, or the swept one.
     /// The deepest contact resolved this frame, or the swept one. **Reporting only**: every
     /// contact in [`Self::contacts`] was resolved; this is the representative one for

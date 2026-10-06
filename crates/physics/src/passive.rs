@@ -114,6 +114,7 @@ pub const ROLL_DAMPING: f32 = -2.0;
 
 /// Vertical damping coefficient, along the ship's own up axis. **Airborne only**: scaled by
 /// `1 - grounded` ([`vertical_damping`]), so zero on a fully grounded craft.
+pub const VERTICAL_DAMPING: f32 = -0.25;
 
 /// Quadratic drag, as a world-space force.
 ///

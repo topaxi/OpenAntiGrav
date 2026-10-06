@@ -342,6 +342,7 @@ pub struct Evaluated {
     /// What the magstrip hold did, or `None` on ordinary track.
     /// What the magstrip hold did, or `None` on ordinary track. Not a force: a kinematic
     /// rewrite of the body, reported so a caller can see it ([`crate::maglock`]).
+    pub mag_lock: Option<maglock::Hold>,
     /// The airbrake path's output, excluding lateral grip and the sideshift.
     pub airbrake: AirbrakeForces,
     /// The engine's body-local contribution.
@@ -379,6 +380,7 @@ pub struct Evaluated {
     /// Left at default by [`evaluate`], which runs before the body moves;
     /// [`crate::integrate::step`] fills it in. A caller driving `evaluate` directly sees
     /// "no wall response", which is true for that caller.
+    pub wall: crate::wall::WallResponse,
     /// What this frame did to the energy pool, **after** the wall constraint ran. Left at
     /// default by [`evaluate`] for [`Self::wall`]'s reason. Both are edges, so reading this
     /// the tick after reads zeroes ([`crate::damage::Shield`]).
@@ -572,6 +574,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // `advance_sideshift` clamps because every reader gates on `> 0.0`; **that premise is
     // false here**: `crate::slowdown::add` reads this field arithmetically (`timer +=
     // seconds` before its clamp), so the residue is observable in the next hit.
+    // Outside the branch chain below: a stunned and weapon-slowed craft still counts this
+    // timer down while the stun branch owns the grip.
+    if state.slowdown_timer > 0.0 {
         state.slowdown_timer -= dt;
     }
 
