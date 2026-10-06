@@ -157,7 +157,7 @@ pub(super) fn load(
             // to resolve, what `CLAUDE.md`'s "draw nothing and say so" asks
             // for.
             Err(e) => match gnf_sibling(archives, src) {
-                Some(Ok(blob)) if bottom_up.contains(&src.as_str()) => {
+                Some(Ok(blob)) if is_bottom_up(src, bottom_up) => {
                     match bottom_up_rows(src, &blob) {
                         Some(image) => reversed.push(image),
                         None => report.push(format!("image {src}: .gnf rows would not reverse")),
@@ -278,7 +278,7 @@ pub(crate) fn gnf_sibling(
 
 /// A `.gnf` whose rows are in HD's `.gtf` order, decoded and reversed into the
 /// top-down order a sheet holds - see
-/// [`oag_title::MenuBlocks::art_rows_bottom_up`] for which images and why.
+/// [`oag_title::FrontEnd::bottom_up_gnf`] for which images and why.
 fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImage> {
     let texture = oag_texture::gnf::Texture::parse(blob).ok()?;
     let pixels = texture.decode(blob).ok()?;
@@ -296,4 +296,11 @@ fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImag
         quad_extent: None,
         blend: None,
     })
+}
+
+/// Whether `src`'s file stem, lower-cased, is one of `stems`.
+fn is_bottom_up(src: &str, stems: &[&str]) -> bool {
+    let leaf = src.rsplit(['\\', '/']).next().unwrap_or(src);
+    let stem = leaf.rsplit_once('.').map_or(leaf, |(stem, _)| stem);
+    stems.iter().any(|known| known.eq_ignore_ascii_case(stem))
 }

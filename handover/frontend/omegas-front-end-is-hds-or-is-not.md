@@ -30,14 +30,23 @@ content against `hd-frontend.md`.
 ## Open
 
 - **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
-  is in a state HD/Fury's was in earlier.** In the maintainer's words: "The
-  Omega frontend renders in a state the HD/Fury frontend was in the past,
-  it's not yet accurate and the menu items do not render correctly and they
-  do not animate yet." So the menu items misdraw and nothing animates.
-  `docs/overview/status.md`'s Omega front-end cells are `partial` at best
-  and say so. What would settle it: a side-by-side of each Omega page against
-  the HD page it was cut from, naming the widgets that misdraw, plus the
-  animation channels HD's front end plays that Omega's do not.
+  is in a state HD/Fury's was in earlier** ("the menu items do not render
+  correctly and they do not animate yet"). **Main menu and settings rows
+  closed 2026-10-06 (`omega-frontend`)**, see `docs/formats/omega-status.md`,
+  "The menu block art": Omega's executable-drawn `.gnf` art keeps HD's
+  bottom-up row order, so the block nine-patch was never drawn (and the strip
+  took the unanimated measured-tab path). Blocks, eased focus and the
+  underline mark now draw on HD's table, **chosen, not measured** for Omega;
+  reference is HD on this engine, no PS4 emulator. What is still different
+  from HD, drawn from `--menu-page grid-select`/`cell-select` side by side
+  (`data/scratch/omega-frontend/campaign.png`): no flyer card, five hexagons
+  where HD draws six (a different authored cluster, unchecked), circuit
+  names as ids, the three medal icons in the wrong order and no `TARGET
+  (NOVICE)` line. Also unverified: the strip's pointer hit regions on the
+  new geometry, the `EndRace Menu` option blocks (the old "draws no blocks"
+  cause may be this one; `--menu-page endrace-menu` still says the source has
+  no EndRace screens), and 971 Omega `.gnf` with no HD file of the stem, whose
+  row order is unchecked.
 
 - **Load order between the patch's own four archives is not settled, but
   both files this bullet used to call unreadable now read clean everywhere,

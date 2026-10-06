@@ -167,6 +167,20 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     touch: None,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
+    // The eight `.gnf` that are HD's `.gtf` bytes in HD's own row order,
+    // measured against HD's file of the same stem: the nine-patch and its two
+    // marks, the rule texture `skin.xml` stretches into the frame's two lines,
+    // and four corner and square tiles. See `docs/formats/omega-status.md`.
+    bottom_up_gnf: &[
+        "file",
+        "file2",
+        "cursor",
+        "corner",
+        "corner2",
+        "square",
+        "line",
+        "unlocked_corner",
+    ],
     // See this module's own "What is not here" section.
     race_box: None,
     // `Team_Selection_Definition.xml` is in `data09.psarc` at HD's own path,
@@ -329,10 +343,9 @@ pub const LANGUAGE_PLUGINS: &[&str] = &[
 /// Omega's `eboot.bin`. What supports carrying them: the nine-patch Omega
 /// ships (`file2.gnf`) is HD's `file2.gtf` byte for byte once decoded, and the
 /// three textures are named the way HD's loader names them. What does not
-/// carry is the row order, see [`oag_title::MenuBlocks::art_rows_bottom_up`].
+/// carry is the row order, see `oag_title::FrontEnd::bottom_up_gnf`.
 pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
     frame_texture: r"Data\FE\Images\file2.gtf",
-    art_rows_bottom_up: true,
     cursor_texture: r"Data\FE\Images\cursor.gtf",
     arrow_texture: r"Data\FE\Images\HD_options_arrow.gtf",
     strip: oag_title::StripBlocks {

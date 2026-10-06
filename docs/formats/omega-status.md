@@ -253,25 +253,42 @@ Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell
   front-end asset this lane looked for. Whether it is elsewhere under a
   different name, or genuinely absent from this build of the front end, was
   not chased.
-- **The menu block art** (`MenuSkin::blocks`) - deliberately left `None` (trying HD's
-  `MENU_BLOCKS` on Omega on 2026-09-30 put HD's geometry squarely on Omega's own `file2.gtf`
-  outline, but the fill swatch HD's loader samples reads alpha 0.004 on Omega's copy - cause
-  unread - so the rows came out as outlines with no fill and the white text still
-  invisible).
-  **Its consequence, fixed 2026-09-30:** with no block behind them, Omega's option rows were
-  white (`FEGlobals->TextColor`) on a white page (`HD_BG`). Where a row's text cannot be
-  read on the page the frame clears to (`menu::rows::text_is_lost_on_page`, lightness within
-  a quarter), each row and value now sits on a box in the frame's own authored `HD_Grey`
-  (`HD_Blue` selected), the way the strip's tabs are filled when there is no block art. The
-  box's size and the lightness threshold are **chosen, not measured**; the colours are
-  authored. Pulse, Pure and HD captures of `options`/`graphics` are byte-identical before
-  and after (their text is light on a dark page).
-  HD's own `MenuBlocks` numbers are read out of `EBOOT.elf` at named
-  addresses, nothing authored in any XML, and nobody has disassembled
-  Omega's PS4 executable; pointing at HD's table would assert an unmeasured
-  equivalence between two different binaries. The menu strip and list
-  positions (`MenuStrip`/`MenuList`) **are** authored and independently
-  re-derived off Omega's own `mainmenu_definition.xml`/`additional_definition.xml`.
+- ~~**The menu block art** (`MenuSkin::blocks`) - deliberately left `None`~~ **drawn, 2026-10-06
+  (`omega-frontend`).** The 2026-09-30 reading "the fill swatch reads alpha 0.004 on Omega's copy,
+  cause unread" had a cause: **Omega's `file2.gnf`, `cursor.gnf` (and `file`, `corner`, `corner2`,
+  `square`, `line`, `unlocked_corner`) decode to HD's `.gtf` pictures in HD's own file row order,
+  bottom-up**, where every image a screen names was re-authored top-down. A `.gnf` carries no
+  flag, and the sheet leaves a `.gnf` unreversed (right for the 276 re-authored ones), so the
+  nine-patch came out mirrored and the swatch texel `(4.5, 58.5)` of the file was read at the
+  wrong row. Census (`data/scratch/omega-frontend/orient-census.txt`, Omega `.gnf` against HD
+  `.gtf` of the same stem and size, deduplicated across the base and patch archives): the
+  re-authored ones match HD's rows reversed (135), the eight above match HD's rows as stored,
+  22 are symmetric (no verdict), 41 differ in size, and 971 have no HD file of the stem to
+  compare (so they are unverified, drawn unreversed as before). The census compares each Omega `.gnf`'s decoded rows with HD's `.gtf` of the same stem,
+  as stored and reversed (a throwaway probe, not committed). Fix: `oag_title::FrontEnd::bottom_up_gnf`
+  (the eight stems, empty on every other title) makes `boot::sprites::load` reverse them as it
+  does a `.gtf`; that includes `line` (the two rules `skin.xml` stretches across the frame) and
+  `unlocked_corner` (the selection and manual screens), which now match HD's sheet; `oag_omega::frontend::MENU_BLOCKS` is
+  HD's table, **chosen, not measured** for Omega - every number is read from HD's `EBOOT.elf`
+  and nobody has read Omega's `eboot.bin`; what supports it is that the nine-patch decodes to
+  HD's picture to within BC7 error (`omega_menu_blocks_ground_truth.rs`, texel for texel
+  within 8/255 of HD's sheet on this engine, and a focus move eases the strip) and that the boot report reads
+  `menu blocks: HD style, fill swatch alpha 0.427 then 1.000, underline decoded, arrows decoded`.
+  **Reference: HD's front end on this engine, and Omega's own shipped data. No PS4 emulator
+  exists, so nothing here is compared with the original console.** The strip is now bordered
+  blocks with a chamfered landing, the selected one eased wider (`Menu::focus_of`, one sixth a
+  tick) with the underline mark sliding and blinking; before, the blocks-less strip took the
+  measured-tab path whose tabs are fixed to their text - the "do not animate" in the report.
+  Settings rows take the List blocks (520/280 to 340) and step arrows the same way. Not yet
+  verified live: the pointer hit regions on the new block geometry are HD's own code path
+  (`regions`), covered by `campaign_pointer_ground_truth` only for the campaign.
+  **Removed with it:** the 2026-09-30 white-row-on-white-page boxes
+  (`rows::text_is_lost_on_page`, `row_box`); Omega no longer reaches the bare-text row path,
+  and no other title had a light page under light rows, so it was dead.
+  **2048 cross-check:** `checked, applies, not wired` - 2048 declares no `MenuBlocks` and
+  draws a touch front end, so there is no block art to reverse; whether its package ships
+  `file2.gxt` in HD's row order was not opened.
+
 - **Most of the campaign hex textures** (`Hexagon_HD_OUTLINE.gtf`,
   `Hexagon_HD.gtf`, `Hexlock_HD.gtf`, `Hexagon_HD_THICK_OUT.gtf`,
   `NonSelectable_Arrow_HD.gtf`) - `crates/game/src/campaign.rs::load_omega`

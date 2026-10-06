@@ -135,6 +135,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `<Screen>` levels down. Naming it puts that bar on screen and changes a
     // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
+    bottom_up_gnf: &[],
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,

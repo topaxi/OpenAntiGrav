@@ -48,14 +48,13 @@ pub(super) fn draw(
     menu: &Menu,
     skin: &Skin,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
-    measure: &dyn Fn(&str) -> f32,
     frame: &super::Frame,
 ) -> Vec<Draw> {
     match (skin.blocks(), skin.list(), frame.blocks) {
         (Some(blocks), Some(list), Some(art)) => {
             draw_list_rows(menu, skin, bindings, frame, blocks, list, art)
         }
-        _ => draw_text_rows(menu, skin, bindings, measure, frame),
+        _ => draw_text_rows(menu, skin, bindings),
     }
 }
 
@@ -261,8 +260,6 @@ fn draw_text_rows(
     menu: &Menu,
     skin: &Skin,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
-    measure: &dyn Fn(&str) -> f32,
-    frame: &super::Frame,
 ) -> Vec<Draw> {
     let page = menu.page();
     let margin_x = skin.menu_x();
@@ -276,7 +273,6 @@ fn draw_text_rows(
     // keeping it fresh - see `menu::visible_rows`'s own doc for who that is
     // and why it takes `reserve_note`.
     let visible = menu.visible_rows();
-    let needs_box = text_is_lost_on_page(skin, frame);
 
     let mut out = Vec::new();
 
@@ -331,29 +327,11 @@ fn draw_text_rows(
                 wrap_width: None,
             });
         }
-        let box_fill = if !needs_box {
-            None
-        } else if selected {
-            frame.tab_selected.or(frame.ink)
-        } else {
-            frame.ink
-        };
-        if let Some(color) = box_fill {
-            out.push(row_box(
-                skin,
-                margin_x,
-                y,
-                measure(entry.label()) * row_scale,
-                color,
-            ));
-        }
         out.push(Draw::Text {
             x: margin_x,
             y,
             scale: row_scale,
-            color: if inert && box_fill.is_some() {
-                on_box_dimmed(skin.normal())
-            } else if inert {
+            color: if inert {
                 DIMMED
             } else if selected {
                 skin.selected()
@@ -381,23 +359,11 @@ fn draw_text_rows(
             other => menu.shown(other).map(|value| value.to_string()),
         };
         if let Some(text) = value {
-            if let Some(color) = box_fill {
-                let width = measure(&text) * row_scale;
-                out.push(row_box(skin, skin.value_right() - width, y, width, color));
-            }
             out.push(Draw::Text {
                 x: skin.value_right(),
                 y,
                 scale: row_scale,
-                color: if box_fill.is_some() {
-                    // The dim shade is a value's on a dark page; on its own
-                    // grey box it is unreadable, so it takes the label's.
-                    if inert {
-                        on_box_dimmed(skin.normal())
-                    } else {
-                        skin.normal()
-                    }
-                } else if selected && entry.is_adjustable() && !inert {
+                color: if selected && entry.is_adjustable() && !inert {
                     skin.selected()
                 } else {
                     DIMMED
@@ -451,46 +417,6 @@ fn draw_text_rows(
     }
 
     out
-}
-
-/// Whether this skin's row text cannot be read on the page the frame clears to:
-/// Omega authors white rows (`FEGlobals->TextColor`) and a white page
-/// (`FEGlobals->HD_BG`), and HD's answer - a dark box behind every row - is
-/// code in an executable this project has read for HD alone. `false` for a
-/// frame that clears to nothing, which leaves every title with a dark page
-/// (both PSP titles) exactly as it was. The two lightnesses must differ by a
-/// quarter: **chosen, not measured**.
-fn text_is_lost_on_page(skin: &Skin, frame: &super::Frame) -> bool {
-    let Some(Draw::Fill { color: page, .. }) = frame.clear else {
-        return false;
-    };
-    (lightness(skin.normal()) - lightness(page)).abs() < 0.25
-}
-
-/// An inert row's text on its box: the row's own colour at half strength,
-/// since [`DIMMED`] is a shade picked for a dark page. Chosen, not measured.
-fn on_box_dimmed(color: [f32; 4]) -> [f32; 4] {
-    [color[0], color[1], color[2], color[3] * 0.5]
-}
-
-fn lightness(color: [f32; 4]) -> f32 {
-    0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
-}
-
-/// A plain box behind one row's label or value, where the page would swallow
-/// the text: the frame's own `HD_Grey` (`HD_Blue` on the selected row), as the
-/// strip's tabs are filled on a title with no block art
-/// ([`super::strip`]'s `draw_measured`). Its height is four fifths of a row's
-/// pitch and it runs the text's width plus the strip tab's own left pad on each
-/// side - **chosen, not measured**: no executable this project has read
-/// draws Omega's rows.
-fn row_box(skin: &Skin, text_left: f32, y: f32, text_width: f32, color: [f32; 4]) -> Draw {
-    let (pad, _) = skin.tab_pad();
-    let height = skin.row_pitch() * 0.8;
-    Draw::Fill {
-        rect: [text_left - pad, y, text_width + 2.0 * pad, height],
-        color,
-    }
 }
 
 /// The two blocks of one HD list row, at the row's own focus: `[x, y,

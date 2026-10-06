@@ -241,7 +241,6 @@ pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
     frame_texture: names::MENU_BLOCK_FRAME,
     cursor_texture: names::MENU_STRIP_CURSOR,
     arrow_texture: names::MENU_LIST_ARROW,
-    art_rows_bottom_up: false,
     strip: oag_title::StripBlocks {
         // `HorizMenu_Construct`, `0x001b47c8`: `+0xe0 = 298.0`, the field
         // `HorizMenu_ParseXml` fills from `ItemWidth`.
@@ -370,6 +369,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     touch: None,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
+    bottom_up_gnf: &[],
     // HD authors its track and ship screens in two files of their own, in
     // its own dialect - see `track_select` and `team_select`.
     race_box: None,
