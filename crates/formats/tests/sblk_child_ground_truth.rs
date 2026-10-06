@@ -1,7 +1,7 @@
 //! The child-sound grain, against every bank on every disc this project reads.
 //!
-//! **`#[ignore]`d and never run in CI.** They need game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//! **`#[ignore]`d, never run in CI**: needs game content; see
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
 //! just test-data
@@ -11,18 +11,15 @@
 //!
 //! # What this is for
 //!
-//! `docs/formats/psp-audio.md` recorded Wipeout HD's `.COLLISIONS` as binding
-//! no waveform because "all four of its commands are among the 43 unread
-//! opcodes". That was true and it was a dead end: two of those four are
-//! `0x08`, which plays **another cue**, and the record it points at holds the
-//! child's name in plain ASCII.
+//! `docs/formats/psp-audio.md` recorded HD's `.COLLISIONS` as binding no
+//! waveform because "all four of its commands are among the 43 unread opcodes",
+//! a dead end: two of the four are `0x08`, which plays **another cue**, and the
+//! record holds the child's name in ASCII.
 //!
-//! The evidence that the record is being read at the right offsets is not that
-//! `.COLLISIONS` produces a legible answer - a wrong offset can do that once.
-//! It is that across the whole corpus the field is **either** an in-range cue
-//! index **or** `0xffffffff` beside a name the bank's own name table holds, and
-//! almost never anything else. Neither half is something a wrong stride
-//! manufactures.
+//! That `.COLLISIONS` reads legibly proves little (a wrong offset can do that
+//! once). The evidence is that across the corpus the field is **either** an
+//! in-range cue index **or** `0xffffffff` beside a name the bank's own name
+//! table holds, almost never anything else; a wrong stride manufactures neither.
 
 use std::path::PathBuf;
 
@@ -72,8 +69,8 @@ const BY_INDEX: usize = 1153;
 /// Of those, the ones carrying a name their own bank holds.
 const BY_NAME: usize = 300;
 
-/// Grains that resolve to no child at all. Two different faults, and worth
-/// keeping apart: [`NEITHER_FIELD`] plus [`OUT_OF_RANGE_INDEX`].
+/// Grains that resolve to no child at all: two faults worth keeping apart,
+/// [`NEITHER_FIELD`] plus [`OUT_OF_RANGE_INDEX`].
 const MALFORMED: usize = NEITHER_FIELD + OUT_OF_RANGE_INDEX;
 
 /// Grains storing `0xffffffff` with no name to fall back on: six, all in
@@ -83,10 +80,10 @@ const NEITHER_FIELD: usize = 6;
 /// Grains storing an index past the end of their own cue table: one, in
 /// `weapons_det.bnk`, which holds 65 in a 55-cue bank.
 ///
-/// **Not the same fault as [`NEITHER_FIELD`], and the raw byte check is what
-/// separates them**: this record does store an index, so a check for "neither
-/// field is set" does not see it. It is what SCREAM's
-/// `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d` exists to print.
+/// **Not the same fault as [`NEITHER_FIELD`]**: this record does store an
+/// index, so a "neither field is set" check misses it; the raw byte check
+/// separates them. It is what SCREAM's `snd_SFX_GRAIN_TYPE_BRANCH invalid sound
+/// index %d` prints.
 const OUT_OF_RANGE_INDEX: usize = 1;
 
 fn image(name: &str) -> Option<PathBuf> {
@@ -194,10 +191,9 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
             for child in bank.cue_children(cue) {
                 grains += 1;
 
-                // **Straight off the bytes, not off `Child`.** The struct is
-                // what is under test, so classifying by its fields would make
-                // the exclusivity below a property of the parser. These two
-                // reads go to the record itself.
+                // **Straight off the bytes, not off `Child`**: classifying by the
+                // struct under test would make the exclusivity a property of the
+                // parser. These two reads go to the record itself.
                 let at = child.record as usize;
                 let record = &bank.block[at..at + 32];
                 let stored = bank.order.u32(record, 0x0c);
@@ -233,30 +229,26 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
     assert_eq!(grains, CHILD_GRAINS);
     assert_eq!(by_index, BY_INDEX);
     assert_eq!(by_name, BY_NAME);
-    // The one grain that reaches across: `env0_det.bnk` asks for
-    // `".COLLISIONS"`, which `shiphd.bnk` holds.
+    // The one cross-bank grain: `env0_det.bnk` asks for `".COLLISIONS"`, which
+    // `shiphd.bnk` holds.
     assert_eq!(foreign, 1);
     assert_eq!(malformed.len(), MALFORMED);
-    // **The two forms are exclusive.** This is the assertion that says the
-    // record is being read at the right offsets rather than plausibly: an
-    // index and a name in the same record would mean the two fields are not
-    // what they are taken to be.
+    // **The two forms are exclusive**: the assertion that the record is read at
+    // the right offsets rather than plausibly (an index and a name in one record
+    // would mean the fields are not what they are taken to be).
     //
-    // Asserted off the raw bytes first, because that is the form that can
-    // fail. `Child`'s own fields agree, and are checked second so that a
-    // future change to `cue_children` that quietly derived one field from the
-    // other would show up as a disagreement between the two counts rather than
-    // as a test that still passes.
+    // Raw bytes first, since that form can fail. `Child`'s fields are checked
+    // second, so a change to `cue_children` that derived one field from the
+    // other shows as a disagreement between the counts.
     println!("raw both       {raw_both}");
     println!("raw neither    {raw_neither}");
     println!("raw bad index  {raw_out_of_range}");
     assert_eq!(raw_both, 0, "a record stored an index and a name");
     assert_eq!(indexed_and_named, 0, "a record carried both forms");
 
-    // The two faults, kept apart. `weapons_det.bnk`'s grain *does* store an
-    // index - it is simply past the end of the bank - so a check for "neither
-    // field is set" counts six here and not seven. Asserting seven was this
-    // test's own sloppiness and the raw read is what exposed it.
+    // The two faults kept apart: `weapons_det.bnk`'s grain *does* store an index
+    // (past the end of the bank), so "neither field is set" counts six, not
+    // seven; the raw read exposed that.
     assert_eq!(raw_neither, NEITHER_FIELD);
     assert_eq!(raw_out_of_range, OUT_OF_RANGE_INDEX);
     assert_eq!(
@@ -265,9 +257,8 @@ fn a_child_grain_is_an_index_or_a_name_and_almost_never_neither() {
         "the two raw faults account for every unresolvable grain"
     );
 
-    // The split by platform, which is a fact about the two library
-    // generations rather than about this reader: every PSP and PS2 grain is
-    // indexed and every named one is on Wipeout HD.
+    // The split by platform, a fact about two library generations, not this
+    // reader: every PSP and PS2 grain is indexed, every named one is on HD.
     assert!(
         by_index > by_name,
         "the corpus is mostly the older, indexed form"
@@ -286,8 +277,7 @@ fn wipeout_hd_collisions_reaches_the_ship_and_wall_trees() {
     let bank = Bank::parse(&blob).expect("parse");
 
     let root = bank.cue_named(".COLLISIONS").expect(".COLLISIONS");
-    // The whole shape of the problem: four grains, and not one of them a
-    // key-on. `cue_sounds` is empty and the cue is not broken.
+    // Four grains, none a key-on: `cue_sounds` is empty and the cue is not broken.
     assert_eq!(root.commands, 4);
     assert!(bank.cue_sounds(&root).is_empty());
 
@@ -299,8 +289,8 @@ fn wipeout_hd_collisions_reaches_the_ship_and_wall_trees() {
         "Wipeout HD names its children rather than indexing them"
     );
 
-    // One level further: each of those splits three ways by a suffix that is
-    // *not* wired to anything - see `oag_sound::sfx`.
+    // Each splits three ways by a suffix not wired to anything; see
+    // `oag_sound::sfx`.
     for child in &children {
         let cue = bank.resolve_child(child).expect("a child of .COLLISIONS");
         let leaves: Vec<String> = bank
@@ -316,7 +306,7 @@ fn wipeout_hd_collisions_reaches_the_ship_and_wall_trees() {
         assert!(leaves.len() >= 3, "{leaves:?}");
     }
 
-    // And the reason any of this matters: the tree reaches real audio.
+    // The tree reaches real audio.
     let sounds = bank.cue_tree_sounds(&root);
     assert_eq!(sounds.len(), 112);
     assert!(

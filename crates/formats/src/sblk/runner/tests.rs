@@ -1,5 +1,5 @@
-//! Hardware-free tests for [`super::Runner`]. The corpus half, `~BLOWUP` and
-//! `~ROCKLOCK` as Pulse's own `hud.bnk` authors them, is
+//! Hardware-free tests for [`super::Runner`]. The corpus half (`~BLOWUP` and
+//! `~ROCKLOCK` from Pulse's `hud.bnk`) is
 //! `crates/game/tests/sfx_repeating_ground_truth.rs`.
 
 use crate::sblk::Bank;
@@ -52,8 +52,8 @@ fn lock() -> Vec<u8> {
 #[test]
 fn a_guard_picks_which_key_on_the_loop_plays_and_so_the_tempo() {
     let data = lock();
-    // Parameter 0 skips the second key-on, and a skipped key-on takes its own
-    // delay with it: one beep every 30 ticks.
+    // Parameter 0 skips the second key-on, taking its own delay with it: one
+    // beep every 30 ticks.
     assert_eq!(keyed_at(&data, 0, 130, 0), vec![30, 60, 90, 120]);
     assert!(keyed_at(&data, 16, 130, 0).is_empty());
 }
@@ -61,9 +61,9 @@ fn a_guard_picks_which_key_on_the_loop_plays_and_so_the_tempo() {
 #[test]
 fn a_parameter_written_mid_play_takes_hold_at_the_next_pass_of_the_loop() {
     let data = lock();
-    // Written right after the start, when the first pass has already tested its
-    // guards against zero: that pass still keys the first waveform at 30, and
-    // every pass after it skips it for the second, every 15.
+    // Written right after the start, when the first pass has tested its guards
+    // against zero: it still keys the first waveform at 30, then every pass
+    // skips it for the second, every 15.
     assert_eq!(keyed_at(&data, 0, 130, 1), vec![30]);
     assert_eq!(keyed_at(&data, 16, 130, 1), vec![45, 60, 75, 90, 105, 120]);
 }
@@ -71,7 +71,7 @@ fn a_parameter_written_mid_play_takes_hold_at_the_next_pass_of_the_loop() {
 #[test]
 fn a_loop_that_waits_repeats_on_its_delay_and_a_second_loop_back_in_a_tick_pays_one_tick() {
     // `~BLOWUP`: a held loop, a marker, a key-on, a random wait of 43 (operand
-    // 0, so a draw of zero) and the loop back.
+    // 0, a draw of zero) and the loop back.
     let data = build(&[Spec(
         "A",
         100,
@@ -86,9 +86,8 @@ fn a_loop_that_waits_repeats_on_its_delay_and_a_second_loop_back_in_a_tick_pays_
     assert_eq!(keyed_at(&data, 0, 200, 0), vec![0]);
     assert_eq!(keyed_at(&data, 16, 200, 0), vec![0, 43, 86, 129, 172]);
 
-    // No wait at all: the first `0x16` of a tick costs nothing, the second
-    // returns one and pushes the next pass a tick out, so it runs twice a tick
-    // instead of forever.
+    // No wait: the first `0x16` of a tick costs nothing, the second returns one
+    // and pushes the next pass a tick out, so twice a tick, not forever.
     let spin = build(&[Spec(
         "A",
         100,

@@ -1,12 +1,11 @@
 //! The rate a waveform plays at: SCREAM's note-to-pitch arithmetic, ported.
 //!
-//! Nothing in a bank states a sample rate. What the descriptor carries is a
-//! **centre note** and a **centre fine-tune** (`+0x02`, `+0x03`, one signed
-//! byte each), and the engine turns those into the pitch word it hands
-//! `sceSasSetPitch`, where `0x1000` is the SAS core's own rate of 44,100 Hz.
-//! The chain on `psp-pulse-usa`, every link decompiled and the whole of it
-//! confirmed live (190 of 190 breakpoint hits at `__sceSasSetPitch`, front
-//! end and race, reproduced to the last bit by this port):
+//! Nothing in a bank states a sample rate. The descriptor carries a **centre
+//! note** and **centre fine-tune** (`+0x02`, `+0x03`, one signed byte each);
+//! the engine turns them into the pitch word for `sceSasSetPitch`, where
+//! `0x1000` is the SAS core's 44,100 Hz. The chain on `psp-pulse-usa`, every
+//! link decompiled and confirmed live (190 of 190 breakpoint hits at
+//! `__sceSasSetPitch`, reproduced to the last bit by this port):
 //!
 //! ```text
 //! Scream_StartSound   0x0898f864   note = 60, fine = 0 on every play
@@ -18,44 +17,38 @@
 //! ```
 //!
 //! `Scream_NoteToPitch` is a 12-entry semitone table and a 128-entry fine table,
-//! both Q15, both read straight off the executable at `0x08ac36dc` and
-//! `0x08ac370c` (they abut: 560 bytes, 140 words, no slack). Their closed forms
-//! are `floor(32768 * 2^(i/12))` and `floor(32768 * 2^(i/1536))` - checked entry
-//! for entry in this module's tests - so a fine-tune step is 1/128 of a semitone
-//! and a note is a MIDI note. Neither table is computed here: this crate is
-//! scanned for platform transcendentals (`scripts/check-transcendentals.py`),
-//! and the integer walk is what the hardware was actually given.
+//! both Q15, read off the executable at `0x08ac36dc` and `0x08ac370c` (they
+//! abut: 560 bytes). Their closed forms are `floor(32768 * 2^(i/12))` and
+//! `floor(32768 * 2^(i/1536))`, checked entry for entry in this module's tests,
+//! so a fine step is 1/128 semitone and a note a MIDI note. Neither is computed
+//! here: this crate is scanned for platform transcendentals
+//! (`scripts/check-transcendentals.py`) and the hardware was given the integers.
 //!
 //! **Every centre note on every Pulse and Pure disc is negative** (0 of 2,334
 //! key-on descriptors positive, none `-128`), so the `0x1278b` multiply is
 //! universal on this data. `0x1278b / 0x10000 = 1.154465` is read off
-//! `lui a0,0x1; addiu a0,a0,0x278b` and is not explained: it is not
-//! `48000 / 44100`, and not that times `2^(1/12)` either (`0x12735`). What it
-//! does is put `(-86, 66)` on exactly `0x400` (11,025 Hz), `(-74, 66)` on
-//! `0x800` (22,050 Hz) and `(-62, 66)` on `0x1000` (44,100 Hz), which is what
-//! the disc's own banks are full of.
+//! `lui a0,0x1; addiu a0,a0,0x278b` and unexplained: it is not `48000 / 44100`
+//! nor that times `2^(1/12)` (`0x12735`). It puts `(-86, 66)` on `0x400`
+//! (11,025 Hz), `(-74, 66)` on `0x800` (22,050 Hz) and `(-62, 66)` on `0x1000`
+//! (44,100 Hz), which the disc's banks are full of.
 //!
-//! What this decodes is the **playback rate at the default note**, not an
-//! authored sample rate: `(note, fine)` cancelling against the centre gives
-//! `0x1000`, so a deliberate transposition and a native rate are the same
-//! bytes. About two thirds of the descriptors on the PSP disc land within 0.2%
-//! of a standard rate (11,025 / 16,000 / 18,000 / 22,050 / 32,000 / 44,100 /
-//! 48,000); the rest do not, and `speech.bnk`'s thirty-eight are all at
-//! 18,002 Hz. Whether 15,569 Hz is a 16 kHz recording pitched down or a
-//! recording at 15,569 Hz is not separable from the disc, and it does not
-//! matter for playing it.
+//! This decodes the **playback rate at the default note**, not an authored
+//! sample rate: a deliberate transposition and a native rate are the same
+//! bytes. About two thirds of PSP descriptors land within 0.2% of a standard
+//! rate (11,025 / 16,000 / 18,000 / 22,050 / 32,000 / 44,100 / 48,000);
+//! `speech.bnk`'s thirty-eight are all at 18,002 Hz. Whether 15,569 Hz is a
+//! 16 kHz recording pitched down is not separable, and does not matter for
+//! playing it.
 //!
 //! # Wipeout HD runs the same walk on a different scale and a different base
 //!
-//! `Bank::sounds` reads HD's descriptor the same way byte-for-byte - `+0x02`
-//! and `+0x03` sit where the PSP keeps them, byte-swap and all - and HD's own
-//! `Scream_KeyOnVoice` (`ps3-hdfury-eu`, `0x00630310`) calls the exact same
-//! three-function chain (compute-note, table-walk, queue-pitch) shape for
-//! shape. What differs is [`HD_NEGATIVE_CENTRE_SCALE`] in place of
-//! [`NEGATIVE_CENTRE_SCALE`] and [`HD_SAMPLE_RATE`] (48,000) in place of
-//! [`SAS_SAMPLE_RATE`] (44,100) - both read off immediates in the PS3
-//! disassembly, not guessed. See [`Sound::pitch`](super::Sound::pitch), which
-//! picks the pair off the bank's own [`ByteOrder`](crate::byte_order::ByteOrder).
+//! `Bank::sounds` reads HD's descriptor the same way (`+0x02`/`+0x03`, byte-swap
+//! and all), and HD's `Scream_KeyOnVoice` (`ps3-hdfury-eu`, `0x00630310`) calls
+//! the same three-function chain. What differs is [`HD_NEGATIVE_CENTRE_SCALE`]
+//! for [`NEGATIVE_CENTRE_SCALE`] and [`HD_SAMPLE_RATE`] (48,000) for
+//! [`SAS_SAMPLE_RATE`] (44,100), both read off PS3 disassembly immediates.
+//! [`Sound::pitch`](super::Sound::pitch) picks the pair off the bank's
+//! [`ByteOrder`](crate::byte_order::ByteOrder).
 //!
 //! See `docs/formats/psp-audio.md` and
 //! `docs/ghidra/functions/psp-pulse-usa/sound.md` for the PSP chain, and
@@ -64,42 +57,37 @@
 /// The pitch word at which SAS plays a voice at its own rate.
 pub const SAS_PITCH_BASE: u32 = 0x1000;
 
-/// The SAS core's output rate, and so the rate a pitch of [`SAS_PITCH_BASE`]
-/// plays at. `Sas_Init` (`0x08a2ac90`) opens the core at this rate.
+/// The SAS core's output rate, so the rate a pitch of [`SAS_PITCH_BASE`] plays
+/// at. `Sas_Init` (`0x08a2ac90`) opens the core at it.
 pub const SAS_SAMPLE_RATE: u32 = 44_100;
 
-/// Wipeout HD's own core rate: a pitch of [`SAS_PITCH_BASE`] plays at
-/// 48,000 Hz, not the PSP's 44,100.
+/// Wipeout HD's own core rate: a pitch of [`SAS_PITCH_BASE`] plays at 48,000 Hz.
 ///
 /// Read off the float literal at `0x008c02c4` (`0x413b8000` = `11.71875` =
-/// `48000 / 4096`) that `_opd_FUN_006332e0` - the PS3 analogue of
+/// `48000 / 4096`) that `_opd_FUN_006332e0` (the PS3 analogue of
 /// `Sas_QueuePitch`/`Sas_CommitVoices`, called from `Scream_KeyOnVoice`
-/// `0x00630310` - multiplies the pitch word by to get the rate it hands
-/// `CellMs_QueueVoice`'s caller. Disassembly: `lfs f0,0x2f00(r2)` (the TOC
-/// slot Ghidra resolves to that address) then `fmuls f13,f13,f0` on the pitch
-/// word converted to float.
+/// `0x00630310`) multiplies the pitch word by: `lfs f0,0x2f00(r2)` then
+/// `fmuls f13,f13,f0`.
 pub const HD_SAMPLE_RATE: u32 = 48_000;
 
 /// The note every play starts at. `Scream_StartSound` writes `0x3c` to the
-/// handler's `+0x34` unconditionally, and nothing else in the sound module
-/// writes that byte (searched: one `sb` to `0x34(...)` in `0x0898xxxx`-
-/// `0x0899xxxx`, and it is this one).
+/// handler's `+0x34` unconditionally; nothing else in the sound module writes
+/// that byte (one `sb` to `0x34(...)` in `0x0898xxxx`-`0x0899xxxx`).
 pub const DEFAULT_NOTE: i32 = 60;
 
 /// `Scream_VoicePitch`'s multiplier for a negative centre note, `Q16`.
 ///
-/// `lui a0,0x1; addiu a0,a0,0x278b` at `0x08995078`. Applied after the table
-/// walk, `pitch * 0x1278b >> 16`. Not explained; see the module doc.
+/// `lui a0,0x1; addiu a0,a0,0x278b` at `0x08995078`, applied after the table
+/// walk as `pitch * 0x1278b >> 16`. Unexplained; see the module doc.
 pub const NEGATIVE_CENTRE_SCALE: u32 = 0x1278b;
 
-/// Wipeout HD's own multiplier for a negative centre note, `Q16` - the same
-/// shape as [`NEGATIVE_CENTRE_SCALE`], a different constant.
+/// Wipeout HD's multiplier for a negative centre note, `Q16`: the same shape
+/// as [`NEGATIVE_CENTRE_SCALE`], a different constant.
 ///
 /// `lis r0,0x1; ori r0,r0,0xf4a` at `0x0062ecb0`/`0x0062ecb8`, inside the PS3
-/// analogue of `Scream_VoicePitch` (`ps3-hdfury-eu`'s `_opd_FUN_0062ec38`,
-/// called from `Scream_KeyOnVoice` `0x00630310`). `0x10f4a / 0x10000 =
-/// 1.059875`, close to but not exactly a semitone (`2^(1/12) = 1.059463`); see
-/// the module doc for what it does to the corpus.
+/// analogue of `Scream_VoicePitch` (`_opd_FUN_0062ec38`, called from
+/// `Scream_KeyOnVoice` `0x00630310`). `0x10f4a / 0x10000 = 1.059875`, near but
+/// not a semitone (`2^(1/12) = 1.059463`); see the module doc.
 pub const HD_NEGATIVE_CENTRE_SCALE: u32 = 0x10f4a;
 
 /// `2^(i/12) * 32768`, truncated, at `0x08ac36dc`.
@@ -126,11 +114,10 @@ pub const FINE_TABLE: [u16; 128] = [
 /// centre note.
 ///
 /// `centre_fine + fine - 127` is the fine offset, borrowing a semitone from
-/// `note` while it is negative - so a centre fine of `127` is "in tune" and a
-/// centre fine of `0` is one semitone flat. The result is `0x1000 * 2^(d/12)`
-/// with `d` the signed semitone distance from the centre, split into an octave
-/// shift and a table entry, then scaled by the fine entry. Returned masked to
-/// 16 bits, as the original is.
+/// `note` while negative, so a centre fine of `127` is "in tune" and `0` one
+/// semitone flat. The result is `0x1000 * 2^(d/12)` with `d` the signed
+/// semitone distance from the centre, split into an octave shift and a table
+/// entry, scaled by the fine entry, and masked to 16 bits as the original is.
 #[must_use]
 pub fn note_to_pitch(centre_note: i32, centre_fine: i32, note: i32, fine: i32) -> u16 {
     let mut note = note;
@@ -147,8 +134,8 @@ pub fn note_to_pitch(centre_note: i32, centre_fine: i32, note: i32, fine: i32) -
         let index = (distance - (distance / 12) * 12) as usize;
         ((i64::from(SAS_PITCH_BASE) << octaves) * i64::from(SEMITONE_TABLE[index])) >> 15
     } else {
-        // The original's `-(d / 12)` and `d % 12` truncate toward zero, which
-        // is what Rust's `/` and `%` do on signed integers too.
+        // The original's `-(d / 12)` and `d % 12` truncate toward zero, as
+        // Rust's `/` and `%` do on signed integers.
         let mut octaves = -(distance / 12);
         let index = if distance % 12 == 0 {
             0
@@ -165,26 +152,23 @@ pub fn note_to_pitch(centre_note: i32, centre_fine: i32, note: i32, fine: i32) -
 /// descriptor's `(centre_note, centre_fine)` played at `(note, fine)`.
 ///
 /// A negative centre note is negated before the walk and the result scaled by
-/// [`NEGATIVE_CENTRE_SCALE`]. Every descriptor on the Pulse and Pure discs
-/// takes that branch. Thin wrapper over [`sas_pitch_scaled`] for the PSP's own
-/// scale; see [`Sound::pitch`](super::Sound::pitch) for the platform switch.
+/// [`NEGATIVE_CENTRE_SCALE`]; every Pulse and Pure descriptor takes that branch.
+/// Wraps [`sas_pitch_scaled`] for the PSP's scale; see
+/// [`Sound::pitch`](super::Sound::pitch) for the platform switch.
 #[must_use]
 pub fn sas_pitch(centre_note: i8, centre_fine: i8, note: i32, fine: i32) -> u16 {
     sas_pitch_scaled(centre_note, centre_fine, note, fine, NEGATIVE_CENTRE_SCALE)
 }
 
-/// [`sas_pitch`], with the negative-centre scale as a parameter rather than
-/// baked in - so the same table walk serves Wipeout HD's
-/// [`HD_NEGATIVE_CENTRE_SCALE`] too. The scale only ever applies in the
-/// negative branch, on both platforms: a non-negative centre note returns the
-/// table walk unscaled.
+/// [`sas_pitch`] with the negative-centre scale as a parameter, so the same walk
+/// serves HD's [`HD_NEGATIVE_CENTRE_SCALE`]. The scale only applies in the
+/// negative branch, on both platforms.
 #[must_use]
 pub fn sas_pitch_scaled(centre_note: i8, centre_fine: i8, note: i32, fine: i32, scale: u32) -> u16 {
     let negative = centre_note < 0;
     // `-(-128)` does not fit an `i8`; the original's `subu; sll; sra; andi
-    // 0xffff` leaves it at `0xff80`, and the walk then runs with that as the
-    // centre. No descriptor on any disc surveyed carries it, so match the
-    // original rather than guess.
+    // 0xffff` leaves `0xff80` as the centre. No surveyed descriptor carries
+    // it, so match the original rather than guess.
     let centre = if negative {
         i32::from(centre_note.wrapping_neg()) & 0xffff
     } else {
@@ -198,21 +182,19 @@ pub fn sas_pitch_scaled(centre_note: i8, centre_fine: i8, note: i32, fine: i32, 
     }
 }
 
-/// The playback rate in Hz a pitch word means on the PSP's SAS core, rounded
-/// to the nearest Hz. Thin wrapper over [`sample_rate_hz_at`] for
-/// [`SAS_SAMPLE_RATE`].
+/// The playback rate in Hz a pitch word means on the PSP's SAS core, rounded to
+/// the nearest Hz. Wraps [`sample_rate_hz_at`] for [`SAS_SAMPLE_RATE`].
 ///
 /// `SAS_SAMPLE_RATE * pitch / SAS_PITCH_BASE`; the rounding is this port's,
-/// since SAS never expresses the rate in Hz - it steps through the waveform by
-/// `pitch / 0x1000` samples per output sample. A mixer that resamples by ratio
-/// loses nothing to it worth hearing (under 0.005% at 11 kHz).
+/// since SAS steps through the waveform by `pitch / 0x1000` samples per output
+/// sample. A resampling mixer loses under 0.005% at 11 kHz to it.
 #[must_use]
 pub fn sample_rate_hz(pitch: u16) -> u32 {
     sample_rate_hz_at(pitch, SAS_SAMPLE_RATE)
 }
 
-/// [`sample_rate_hz`], with the core rate as a parameter rather than baked
-/// in - so the same rounding serves Wipeout HD's [`HD_SAMPLE_RATE`] too.
+/// [`sample_rate_hz`] with the core rate as a parameter, so the rounding serves
+/// HD's [`HD_SAMPLE_RATE`] too.
 #[must_use]
 pub fn sample_rate_hz_at(pitch: u16, base_rate: u32) -> u32 {
     let scaled = base_rate * u32::from(pitch);

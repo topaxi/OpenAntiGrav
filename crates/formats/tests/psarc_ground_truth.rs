@@ -1,38 +1,29 @@
 //! Validates the PSARC reader against the real PS3 disc.
 //!
-//! **`#[ignore]`d and never run in CI.** They need game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
-//!
-//! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
+//! **`#[ignore]`d, never run in CI**: needs game content (`just test-data`);
+//! see `docs/architecture/adr/0006-no-copyrighted-content.md`. Tests skip with
+//! a printed message when the image is absent; `OAG_REQUIRE_GAME_DATA=1` turns
+//! that into a failure, since a skipped ground-truth test proves nothing.
 //!
 //! # The image has to be decrypted first
 //!
-//! `hdfury-ps3-eu.iso` is per-sector AES-128-CBC and a `.psarc` inside it reads
-//! as noise. These tests want `hdfury-ps3-eu-dec.iso`, which
-//! `scripts/ps3iso.py decrypt` writes from the maintainer's own `.dkey`; see
-//! `docs/formats/ps3-disc.md`. Neither the key nor the decrypted image is
-//! committed.
+//! `hdfury-ps3-eu.iso` is per-sector AES-128-CBC, so a `.psarc` inside reads as
+//! noise. These tests want `hdfury-ps3-eu-dec.iso`, written by
+//! `scripts/ps3iso.py decrypt` from the maintainer's own `.dkey` (see
+//! `docs/formats/ps3-disc.md`); neither key nor image is committed.
 //!
 //! # What these are for
 //!
-//! The load-bearing one is [`every_entry_carries_md5_of_its_own_uppercased_path`].
-//! A single check ties three readings together that could each be wrong on
-//! their own: the manifest parse (a path off by one line hashes to nothing),
-//! the entry ordering (the manifest is in entry order and nothing states so),
-//! and the entry stride (30-byte entries read one byte adrift shift every
-//! digest). The lowercase spelling matches zero entries, so the uppercasing is
-//! measured rather than assumed.
+//! The load-bearing one is [`every_entry_carries_md5_of_its_own_uppercased_path`],
+//! one check tying three readings that could each be wrong alone: the manifest
+//! parse (a path off by one line hashes to nothing), the entry ordering (nothing
+//! states the manifest is in entry order) and the stride (30-byte entries read a
+//! byte adrift shift every digest). Lowercase matches zero entries, so the
+//! uppercasing is measured.
 //!
-//! The rest corroborate the *decompression* half, which no digest can reach:
-//! a deflate stream does not survive a container misread, so an entry whose
-//! inflated bytes carry the magic its extension predicts is a check on the
-//! block walk and the block-width probe together.
+//! The rest corroborate *decompression*, which no digest reaches: a deflate
+//! stream does not survive a container misread, so inflated bytes carrying the
+//! magic their extension predicts check the block walk and width probe together.
 
 use std::path::PathBuf;
 
@@ -57,10 +48,8 @@ fn image(name: &str) -> Option<PathBuf> {
 }
 
 /// One archive, read in place out of the image at the LBA the ISO walk reports.
-///
-/// Nothing is extracted: the header, the table of contents and each entry's
-/// blocks are read as ranges within the archive's own extent, which is why
-/// listing 2.1 GiB of archives takes seconds.
+/// Nothing is extracted: the header, table of contents and each entry's blocks
+/// are ranges within the archive's extent, so listing 2.1 GiB takes seconds.
 struct Archive {
     path: String,
     entry: Entry,

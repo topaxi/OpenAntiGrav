@@ -16,33 +16,29 @@
 //!
 //! Despite the extension. The ordinary [WAD](crate::wad) stores
 //! `{hash, offset, size_uncompressed, size}` in 16 bytes; this stores
-//! `{hash, size, offset}` in 12, and has no compression field because nothing
-//! in it is compressed. Reading it as a WAD directory puts the first track at
-//! offset 36,018,740.
+//! `{hash, size, offset}` in 12, with no compression field. Read as a WAD
+//! directory, the first track lands at offset 36,018,740.
 //!
 //! # The payload is raw PCM
 //!
-//! Signed 16-bit little-endian, two channels interleaved left first, 48,000 Hz.
-//! None of that is stated in the file. The frame size follows from the entry
-//! sizes - all divisible by 4, only 6 of 16 by 8 - and both the rate and the
-//! channel order from the PSP disc, which carries the same sixteen tracks as
-//! ATRAC3plus: their durations match the PS2 byte counts at 48 kHz to within 10
-//! milliseconds each, and correlating the two discs' *side* signals - the one
-//! statistic that changes sign when the channels swap - comes out at +0.98.
+//! Signed 16-bit little-endian, two channels interleaved left first, 48,000 Hz,
+//! none of it stated in the file. The frame size follows from the entry sizes
+//! (all divisible by 4, only 6 of 16 by 8); the rate and channel order from the
+//! PSP disc, which carries the same sixteen tracks as ATRAC3plus: durations
+//! match the PS2 byte counts at 48 kHz to within 10 ms each, and correlating
+//! the discs' *side* signals (the one statistic that changes sign when channels
+//! swap) gives +0.98. `docs/formats/ps2-audio.md` has both tables.
 //! `docs/formats/ps2-audio.md` has both tables.
 
-/// Bytes before the first entry.
 pub const HEADER_LEN: usize = 4;
 
-/// Bytes per directory entry.
 pub const ENTRY_LEN: usize = 12;
 
-/// Bytes per sample frame: 16-bit, two channels.
 pub const FRAME_LEN: usize = 4;
 
 /// Sample rate of the PCM payload, in hertz.
 ///
-/// Not read from the file - see the module docs for how it was established.
+/// Not read from the file; see the module docs.
 pub const SAMPLE_RATE: u32 = 48_000;
 
 /// Channels in the PCM payload.
@@ -54,30 +50,22 @@ const MAX_ENTRIES: u32 = 4096;
 /// Something wrong with a music archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes supplied.
         got: usize,
     },
     /// The entry count is missing or implausible.
     BadEntryCount {
-        /// The value found.
         count: u32,
     },
     /// An entry runs past the end of the archive.
     OutOfRange {
-        /// Which entry.
         index: usize,
-        /// Where it claims to start.
         offset: u32,
-        /// How long it claims to be.
         size: u32,
     },
     /// An entry's size is not a whole number of sample frames.
     PartialFrame {
-        /// Which entry.
         index: usize,
-        /// How long it claims to be.
         size: u32,
     },
 }
@@ -105,7 +93,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// One track.
@@ -141,7 +128,6 @@ impl Entry {
 /// The archive directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directory {
-    /// Tracks, in stored order.
     pub entries: Vec<Entry>,
 }
 
@@ -170,10 +156,9 @@ pub fn peek_entry_count(data: &[u8]) -> Result<u32> {
 impl Directory {
     /// Parses a directory.
     ///
-    /// `archive_len`, when known, bounds every entry. Passing it is what turns
-    /// this from a plausible read into a checked one: the entries chain
-    /// end-to-end with no padding, so the last one has to finish exactly at the
-    /// archive's length.
+    /// `archive_len`, when known, bounds every entry, turning a plausible read
+    /// into a checked one: entries chain end-to-end with no padding, so the last
+    /// finishes exactly at the archive's length.
     ///
     /// # Errors
     ///
@@ -218,12 +203,9 @@ impl Directory {
         Ok(Self { entries })
     }
 
-    /// Whether the entries chain end to end with no gaps, starting right after
-    /// the directory and finishing at `archive_len`.
-    ///
-    /// This holds exactly on the shipped archive and is the check that says the
-    /// second word is the size and the third the offset rather than the other
-    /// way round.
+    /// Whether the entries chain end to end with no gaps, from just after the
+    /// directory to `archive_len`. Exact on the shipped archive; it says the
+    /// second word is the size and the third the offset, not the reverse.
     #[must_use]
     pub fn chains_exactly(&self, archive_len: u64) -> bool {
         let mut cursor = directory_len(self.entries.len() as u32);
@@ -243,10 +225,8 @@ impl Directory {
     }
 }
 
-/// Wraps raw PCM in a canonical WAV header, so a decoded track can be played.
-///
-/// This archive's own rate and channel count. Anything else - a mixer render,
-/// a decoded sound bank - wants [`wav_with`].
+/// Wraps raw PCM in a canonical WAV header, at this archive's own rate and
+/// channel count. Anything else wants [`wav_with`].
 #[must_use]
 pub fn wav(pcm: &[u8]) -> Vec<u8> {
     wav_with(pcm, SAMPLE_RATE, CHANNELS)
@@ -255,10 +235,8 @@ pub fn wav(pcm: &[u8]) -> Vec<u8> {
 /// Wraps raw 16-bit little-endian PCM in a canonical WAV header.
 ///
 /// The payload is copied verbatim: it is already the sample format a WAV
-/// `data` chunk wants, which is the whole reason this is 40 lines and not a
-/// codec. It lives here, beside the archive that first needed it, so the
-/// workspace has one WAV writer rather than one per caller - `oag-audio` uses
-/// it for `--dump-audio`.
+/// `data` chunk wants. It lives here so the workspace has one WAV writer;
+/// `oag-audio` uses it for `--dump-audio`.
 #[must_use]
 pub fn wav_with(pcm: &[u8], sample_rate: u32, channels: u16) -> Vec<u8> {
     let data_len = pcm.len() as u32;
@@ -344,8 +322,8 @@ mod tests {
     #[test]
     fn a_wad_directory_is_not_mistaken_for_this() {
         // The ordinary container's header is `{version = 1, entry_count}`, so a
-        // count of 1 with a 16-byte entry stride reads here as one entry whose
-        // size is the WAD's entry count. Bounding it is what rejects that.
+        // count of 1 and a 16-byte stride reads here as one entry whose size is
+        // the WAD's entry count. Bounding rejects that.
         let mut data = 1u32.to_le_bytes().to_vec();
         data.extend_from_slice(&7u32.to_le_bytes());
         data.extend_from_slice(&0x1234_5678u32.to_le_bytes());

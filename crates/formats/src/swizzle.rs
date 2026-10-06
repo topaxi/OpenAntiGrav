@@ -1,10 +1,9 @@
 //! The GE's block swizzle, and the flag that says a blob is in it.
 //!
-//! This is byte layout rather than pixel format: it says where a texel *is*,
-//! never what colour it decodes to. That is why it sits here beside
-//! [`crate::byte_order`] rather than in `oag-texture` - `.mip` textures, `.fnt`
-//! glyph atlases and `.vex` embedded textures all store their texels this way,
-//! and they are decoded in three different crates. See
+//! Byte layout, not pixel format: where a texel *is*, never its colour. It sits
+//! beside [`crate::byte_order`] rather than in `oag-texture` because `.mip`
+//! textures, `.fnt` glyph atlases and `.vex` embedded textures all store texels
+//! this way and are decoded in three crates. See
 //! [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md).
 
 /// Bit 0 of `+0x07`: the pixels are stored swizzled for the GE.
@@ -14,10 +13,8 @@
 /// See `docs/formats/psp-texture.md`.
 pub const FLAG_SWIZZLED: u8 = 1;
 
-/// Bytes of one swizzle block row.
 pub const SWIZZLE_BLOCK_BYTES: usize = 16;
 
-/// Rows in one swizzle block.
 pub const SWIZZLE_BLOCK_ROWS: usize = 8;
 
 /// Undoes the GE's 16-byte by 8-row block swizzle.

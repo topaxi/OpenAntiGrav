@@ -19,28 +19,24 @@
 //! # Why the details matter
 //!
 //! 13 + 4 bits is 17, so a match does not fit in whole bytes. That rules out
-//! the conventional Okumura arrangement, where a byte of flags is followed by
-//! byte-aligned literals and 12/4 matches. Everything here comes from one
-//! continuous bit stream instead.
+//! the Okumura arrangement (a flag byte, byte-aligned literals, 12/4 matches).
 //!
-//! Absolute positions rather than back-distances mean a match can read ring
-//! bytes that have not been written during this stream. We return zero for
-//! those. The PS2 does not: its ring is a fresh heap allocation that is never
-//! cleared, so the original reads whatever was there. No shipped stream tells
-//! the two apart, because the encoder never emits such a match, but a
-//! hand-built one can - see `docs/formats/lzss.md`.
+//! Absolute positions mean a match can read ring bytes not yet written in this
+//! stream. We return zero; the PS2's ring is a never-cleared heap allocation,
+//! so the original reads whatever was there. No shipped stream tells the two
+//! apart (the encoder never emits such a match), but a hand-built one can; see
+//! `docs/formats/lzss.md`.
 //!
-//! The cursor starting at 1 rather than 0 is load-bearing: starting at 0
-//! corrupts roughly 1300 of 1500 bytes on the first entry tested.
+//! The cursor starting at 1 is load-bearing: at 0 roughly 1300 of 1500 bytes
+//! of the first entry tested are corrupt.
 //!
 //! # Checked against the other binary
 //!
 //! `tests/lzss_ps2_reference.rs` holds a second decoder transcribed from
-//! `Lzss_Decode` at `0x00214080` in the PS2 `SCES_547.48`, and the two agree on
-//! every byte of 40,000 random streams. Changing any parameter in this file
-//! without changing that one will fail the comparison, which is the point: the
-//! unit tests below share this module's assumptions and cannot catch a
-//! misreading of the format.
+//! `Lzss_Decode` at `0x00214080` in the PS2 `SCES_547.48`; the two agree on
+//! every byte of 40,000 random streams. The unit tests below share this
+//! module's assumptions and cannot catch a misreading of the format; that
+//! comparison can.
 
 /// Size of the sliding-window ring buffer.
 const RING_SIZE: usize = 8192;
@@ -51,10 +47,8 @@ const RING_MASK: usize = RING_SIZE - 1;
 /// Initial write cursor. Not zero, and not the Okumura `N - F` convention.
 const RING_START: usize = 1;
 
-/// Bits in an encoded ring position. Addresses all of `RING_SIZE`.
 const POSITION_BITS: u32 = 13;
 
-/// Bits in an encoded match length.
 const LENGTH_BITS: u32 = 4;
 
 /// Added to every encoded length, so matches are 3..=18 bytes.
@@ -64,13 +58,10 @@ const LENGTH_BIAS: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// The input ran out before `expected_len` bytes had been produced.
-    ///
-    /// Usually means the stream is not this format, or the expected length is
-    /// wrong.
+    /// Usually the stream is not this format or the expected length is wrong.
     UnexpectedEnd {
         /// Bytes produced before the input ran out.
         produced: usize,
-        /// Bytes the caller asked for.
         expected: usize,
     },
 }
@@ -88,13 +79,11 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Decompresses `input` into exactly `expected_len` bytes.
 ///
-/// The length must be supplied: the format has no end-of-stream marker, and the
-/// WAD directory always knows it.
+/// The length must be supplied: the format has no end-of-stream marker.
 ///
 /// # Errors
 ///
@@ -107,12 +96,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// assert_eq!(out, b"A");
 /// ```
 pub fn decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
-    // Reserve for what the input could plausibly produce, not for what it
-    // claims. `expected_len` comes from a WAD entry's size field, so a hostile
-    // archive can declare 2 GiB and have it committed before a single bit is
-    // read. The densest possible encoding is a 17-bit match producing 18 bytes,
-    // so 9 output bytes per input byte is a generous ceiling; anything beyond it
-    // will fail on input exhaustion anyway, and the Vec grows if it is wrong.
+    // Reserve for what the input could plausibly produce, not what it claims:
+    // `expected_len` is a WAD size field, so a hostile archive could declare
+    // 2 GiB. The densest encoding is a 17-bit match producing 18 bytes, so 9
+    // output bytes per input byte is a generous ceiling; the Vec grows if wrong.
     decompress_with(&mut BitReader::new(input), expected_len)
 }
 
@@ -139,8 +126,8 @@ fn decompress_with(bits: &mut BitReader<'_>, expected_len: usize) -> Result<Vec<
 
             let mut from = position & RING_MASK;
             for _ in 0..length + LENGTH_BIAS {
-                // A match may legitimately run past the expected length; the
-                // encoder has no reason to avoid it on the final match.
+                // A match may run past the expected length; the encoder has no
+                // reason to avoid it on the final match.
                 if out.len() == expected_len {
                     break;
                 }
@@ -158,27 +145,20 @@ fn decompress_with(bits: &mut BitReader<'_>, expected_len: usize) -> Result<Vec<
 
 /// Bytes a well-formed stream may leave unread at the end.
 ///
-/// Every one of the 6,053 LZSS streams in the PS2 archives leaves **one or two**
-/// bytes untouched, never zero and never three, which is what an encoder with a
-/// 16-bit output bit buffer looks like when it flushes at the end.
-///
-/// That regularity is the useful part. A stream is read to within two bytes of
-/// its end or the layout is wrong, and unlike the output length that is not a
-/// property the decoder can satisfy by construction.
+/// All 6,053 LZSS streams in the PS2 archives leave **one or two** bytes
+/// untouched, never zero or three: an encoder with a 16-bit output bit buffer
+/// flushing at the end. A stream is read to within two bytes of its end or the
+/// layout is wrong, which the decoder cannot satisfy by construction.
 pub const MAX_TRAILING_BYTES: usize = 2;
 
 /// Decompresses, and reports how much of the input was consumed.
 ///
 /// # Why this exists
 ///
-/// [`decompress`] stops as soon as it has produced `expected_len` bytes, so
-/// `out.len() == expected_len` is a tautology on success and says nothing about
-/// whether the bit layout is right. What *is* informative is where the reader
-/// stopped: a correct decode consumes every input byte, since the encoder had no
-/// reason to emit bytes nobody reads. A wrong field order or bit order generally
-/// still terminates, but it terminates somewhere else in the stream.
-///
-/// So this returns how much input was touched, and
+/// [`decompress`] stops once it has `expected_len` bytes, so
+/// `out.len() == expected_len` is a tautology on success. What is informative
+/// is where the reader stopped: a correct decode consumes every input byte,
+/// while a wrong field or bit order terminates somewhere else. So
 /// `leftover <= MAX_TRAILING_BYTES` is a real check where a size match is not.
 ///
 /// # Errors
@@ -198,7 +178,6 @@ pub fn decompress_reporting(input: &[u8], expected_len: usize) -> Result<Decoded
 /// A decompressed blob, with what it cost to read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decoded {
-    /// The decompressed bytes.
     pub bytes: Vec<u8>,
     /// Input bytes the reader touched, including a partially used final byte.
     pub consumed: usize,
@@ -305,9 +284,8 @@ mod tests {
 
     #[test]
     fn the_cursor_starts_at_one() {
-        // Reading ring position 0 gives the byte before the first literal,
-        // which is the ring's initial zero. If the cursor started at 0 this
-        // would return 'a' instead.
+        // Ring position 0 is the ring's initial zero; with the cursor at 0 this
+        // would return 'a'.
         let mut w = Writer::default();
         w.literal(b'a');
         w.matched(0, 0);
@@ -360,9 +338,8 @@ mod tests {
     fn ring_positions_wrap() {
         let mut w = Writer::default();
         w.literal(b'z');
-        // Start at the last ring slot and copy three bytes, so the read wraps
-        // 8191 -> 0 -> 1. Slots 8191 and 0 are still zero, but slot 1 holds the
-        // 'z' just written, so the wrap is visible in the output.
+        // Copy three bytes from the last ring slot so the read wraps 8191 -> 0
+        // -> 1; slot 1 holds the 'z' just written, so the wrap shows.
         w.matched(8191, 0);
         assert_eq!(decompress(&w.out, 4).unwrap(), b"z\0\0z");
     }

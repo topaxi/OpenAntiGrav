@@ -49,7 +49,6 @@ impl MediaRef {
 /// What playing an event reaches.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EventPlan {
-    /// The `Play` targets, in action order.
     pub targets: Vec<u32>,
     /// Every distinct media the targets' sounds and tracks name.
     pub media: Vec<MediaRef>,
@@ -223,7 +222,6 @@ pub struct SongChain {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SegmentChain {
     pub segment: u32,
-    /// Milliseconds.
     pub duration: f64,
     pub tracks: Vec<TrackChain>,
 }

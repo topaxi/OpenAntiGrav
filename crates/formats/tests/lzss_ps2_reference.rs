@@ -3,42 +3,35 @@
 //!
 //! # Why this file exists
 //!
-//! `docs/formats/lzss.md` says outright that its evidence has one gap: the
-//! decoder has only ever been checked against data and against its own inverse.
-//! The encoder in the unit tests was written to match the decoder, so it is not
-//! an independent oracle, and "every archive entry produced its declared size"
-//! is close to a tautology because the decoder stops *on* that size.
+//! `docs/formats/lzss.md` records that the decoder was only ever checked against
+//! data and its own inverse: the unit-test encoder was written to match it, and
+//! "every entry produced its declared size" is near a tautology because the
+//! decoder stops *on* that size.
 //!
-//! `reference_decode` below closes that gap. `oag_formats::lzss` was derived
-//! from `Lzss_Decode` at `0x089419d8` in the PSP `BOOT.BIN`; this one is
-//! transcribed from `Lzss_Decode` at `0x00214080` in the PS2 `SCES_547.48`, a
-//! different binary built by a different compiler for a different ISA, and it is
-//! written in the shape the PS2 code actually has - a resumable state machine
+//! `reference_decode` closes the gap. `oag_formats::lzss` was derived from
+//! `Lzss_Decode` at `0x089419d8` in the PSP `BOOT.BIN`; this one is transcribed
+//! from `Lzss_Decode` at `0x00214080` in the PS2 `SCES_547.48` (a different
+//! compiler and ISA), in the shape the PS2 code has: a resumable state machine
 //! with a walking mask byte, a match-in-progress flag and a length stored biased
-//! by two - rather than in the shape of the Rust decoder. Two transcriptions
-//! from two binaries agreeing byte for byte on arbitrary input is evidence
-//! neither one can manufacture alone.
-//!
-//! See `docs/ghidra/functions/ps2-pulse-eu/lzss.md` for the disassembly this is
-//! transcribed from.
+//! by two. Two transcriptions from two binaries agreeing byte for byte on
+//! arbitrary input is evidence neither can manufacture alone. See
+//! `docs/ghidra/functions/ps2-pulse-eu/lzss.md`.
 //!
 //! # What it does not cover
 //!
-//! The PS2 ring buffer is a fresh heap allocation that is never zeroed, so what
-//! the original produces for a match reading a ring slot the stream has not yet
-//! written is whatever the allocator left there. Both decoders here assume
-//! zeros. Random streams read unwritten slots constantly, so this test pins the
-//! two implementations to each other, not to the console.
+//! The PS2 ring is a never-zeroed heap allocation, so a match reading an
+//! unwritten slot yields whatever the allocator left. Both decoders here assume
+//! zeros, and random streams read unwritten slots constantly: this pins the two
+//! implementations to each other, not to the console.
 
 /// Ring size, from the `& 0x1fff` masks on every ring index in `Lzss_Decode`.
 const RING_SIZE: usize = 8192;
 
 /// Decodes exactly `expected_len` bytes, transcribed from PS2 `Lzss_Decode`.
 ///
-/// Returns the bytes produced before the input ran out, as an `Err`, when the
-/// stream ends early. The original has no such check: it reads past its staging
-/// buffer. The bound is placed where the original would have needed another
-/// input byte, which is the same point `oag_formats::lzss` gives up at.
+/// Returns the bytes produced so far as an `Err` when the stream ends early.
+/// The original has no such check (it reads past its staging buffer); the bound
+/// sits where it would need another input byte, as in `oag_formats::lzss`.
 fn reference_decode(input: &[u8], expected_len: usize) -> Result<Vec<u8>, Vec<u8>> {
     let mut s = Ps2Stream {
         input,
@@ -61,7 +54,7 @@ fn reference_decode(input: &[u8], expected_len: usize) -> Result<Vec<u8>, Vec<u8
     while out.len() < expected_len {
         if s.in_match {
             // The PS2 copy step: one byte per iteration, reading the ring at an
-            // absolute position plus how far the match has come.
+            // absolute position plus the match's progress.
             let byte = s.ring[(s.position + s.progress) & (RING_SIZE - 1)];
             out.push(byte);
             s.ring[s.write] = byte;
@@ -115,12 +108,9 @@ struct Ps2Stream<'a> {
 }
 
 impl Ps2Stream<'_> {
-    /// One bit, exactly as the PS2 code takes it.
-    ///
-    /// A fresh input byte is fetched whenever the mask is back at `0x80`, the
-    /// mask walks right, and it is reset to `0x80` once it walks off the end.
-    /// The bit's value is `current & mask` *before* the shift, which is what
-    /// makes this MSB first.
+    /// One bit, as the PS2 code takes it: a fresh input byte whenever the mask
+    /// is back at `0x80`, the mask walking right and resetting past the end. The
+    /// value is `current & mask` *before* the shift, so MSB first.
     fn flag_bit(&mut self) -> Option<bool> {
         if self.mask == 0x80 {
             self.current = *self.input.get(self.cursor)?;
@@ -134,11 +124,9 @@ impl Ps2Stream<'_> {
         Some(self.current & bit != 0)
     }
 
-    /// `count` bits, transcribed from PS2 `Lzss_ReadBits`.
-    ///
-    /// The original walks an output mask `1 << (count - 1)` rightwards and ORs
-    /// it in when the input bit is set, so the first bit read is the field's
-    /// most significant.
+    /// `count` bits, from PS2 `Lzss_ReadBits`: an output mask `1 << (count - 1)`
+    /// walks rightwards and is ORed in per set input bit, so the first bit read
+    /// is the field's most significant.
     fn take(&mut self, count: u32) -> Option<u32> {
         let mut out = 0u32;
         let mut place = 1u32 << (count - 1);
@@ -173,14 +161,12 @@ impl Rng {
     }
 }
 
-/// Runs both decoders over one stream. Reports whether it decoded in full.
+/// Runs both decoders over one stream, reporting whether it decoded in full.
 ///
-/// The distinction matters and is why this returns anything at all. A run that
-/// ends in exhaustion only compares *where* the two readers gave up, which no
-/// amount of ring, cursor or match-length disagreement can affect - the bit
-/// consumption is the same either way. Only a complete decode compares content.
-/// Callers count the completions so a test cannot quietly decay into checking
-/// nothing but the exhaustion point.
+/// A run ending in exhaustion only compares *where* the readers gave up, which
+/// no ring, cursor or match-length disagreement affects (bit consumption is the
+/// same either way); only a complete decode compares content. Callers count
+/// completions so a test cannot decay into checking only the exhaustion point.
 fn compare(input: &[u8], expected_len: usize) -> bool {
     let ours = oag_formats::lzss::decompress(input, expected_len);
     let theirs = reference_decode(input, expected_len);
@@ -211,11 +197,10 @@ fn compare(input: &[u8], expected_len: usize) -> bool {
 
 /// Random bit streams, decoded to random lengths, by both implementations.
 ///
-/// Random input is the point: it puts roughly half the flags on the match
-/// branch, spreads match positions across the whole ring, and lands field
-/// boundaries at every offset within a byte. A field order, a bit order, a
-/// length bias or a cursor start that differed between the two would show up
-/// within a handful of streams.
+/// Random input puts about half the flags on the match branch, spreads match
+/// positions over the ring and lands field boundaries at every offset in a
+/// byte, so a differing field order, bit order, length bias or cursor start
+/// shows within a handful of streams.
 #[test]
 fn agrees_with_the_ps2_decoder_on_random_streams() {
     let mut rng = Rng(0x5eed_1234_9abc_def0);
@@ -224,7 +209,7 @@ fn agrees_with_the_ps2_decoder_on_random_streams() {
         let len = 1 + rng.below(96);
         let input = rng.bytes(len);
         // Well under what the input can produce, so most runs decode fully and
-        // the comparison is on content rather than on where it gave up.
+        // compare content, not the give-up point.
         let expected_len = 1 + rng.below(input.len() * 4);
         complete += usize::from(compare(&input, expected_len));
     }
@@ -235,11 +220,9 @@ fn agrees_with_the_ps2_decoder_on_random_streams() {
     );
 }
 
-/// The same, driven past the end of the input on purpose.
-///
-/// Asking for far more output than the stream can supply makes every run end in
-/// exhaustion, which checks that both decoders consume the same number of bits
-/// before giving up - a stricter constraint than agreeing on a complete decode.
+/// The same, driven past the end of the input on purpose: every run ends in
+/// exhaustion, checking that both decoders consume the same number of bits
+/// before giving up, stricter than agreeing on a complete decode.
 #[test]
 fn agrees_with_the_ps2_decoder_when_the_input_runs_out() {
     let mut rng = Rng(0x0bad_c0de_1234_5678);
@@ -250,11 +233,10 @@ fn agrees_with_the_ps2_decoder_when_the_input_runs_out() {
     }
 }
 
-/// Streams built entirely from one repeated byte.
-///
-/// All-zero input is every flag on the match branch, position 0, length 0, so
-/// it exercises reading ring slots this stream never wrote. All-ones is every
-/// flag on the literal branch. Neither is likely to come up at random.
+/// Streams built entirely from one repeated byte. All-zero is every flag on the
+/// match branch at position 0, length 0, reading ring slots the stream never
+/// wrote; all-ones is every flag on the literal branch. Neither is likely at
+/// random.
 #[test]
 fn agrees_with_the_ps2_decoder_on_degenerate_streams() {
     for fill in [0x00u8, 0x01, 0x55, 0xaa, 0xfe, 0xff] {
@@ -262,23 +244,19 @@ fn agrees_with_the_ps2_decoder_on_degenerate_streams() {
             compare(&vec![fill; len], 512);
         }
     }
-    // An all-zero stream is a run of minimum-length matches at ring position 0:
-    // eighteen bits in, three bytes out. 4 KiB of input therefore carries about
-    // 5,460 bytes of output, so asking for 4,096 compares content rather than
-    // stopping at an exhausted reader.
+    // An all-zero stream is minimum-length matches at ring position 0: eighteen
+    // bits in, three bytes out, so 4 KiB of input carries about 5,460 bytes and
+    // asking for 4,096 compares content.
     assert!(
         compare(&[0x00; 4096], 4096),
         "the all-zero stream exhausted, so nothing was compared"
     );
 }
 
-/// The ring wraps at 8192 and the write cursor starts at 1, so a stream long
-/// enough to fill the ring puts the two implementations' cursors out of step if
-/// either one wraps differently.
-///
-/// The output length is chosen so these decode in full rather than exhausting:
-/// random flags average a little over eleven output bytes per twenty-seven bits
-/// of input, so 4 KiB of input carries well past one wrap.
+/// The ring wraps at 8192 and the cursor starts at 1, so a stream filling the
+/// ring puts the cursors out of step if either wraps differently. Random flags
+/// average a little over eleven output bytes per twenty-seven bits, so 4 KiB of
+/// input carries well past one wrap and these decode in full.
 #[test]
 fn agrees_with_the_ps2_decoder_across_a_full_ring_wrap() {
     let mut rng = Rng(0xfeed_face_dead_beef);
