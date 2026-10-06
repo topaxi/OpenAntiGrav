@@ -1080,14 +1080,24 @@ name** - `crates/fx/tests/psys_2048_ground_truth.rs`.
 effects to each); the same stems as 2048's directories, different bytes again.
 `crates/fx/tests/psys_omega_ground_truth.rs`.
 
-- **80 of 97 and 96 of 112 parse**; the rest are refused by name. The refusals are **blend class 8** on every shock-distortion and
-  heat-haze effect (`shockdistort`, `distort`, `Heathaze`: `WO_ROCKET_EXPLO`,
-  `WO_MISSILE_EXPLO`, `WO_MINE_EXPLO`'s `shockdistort`, `WO_BOMB_SMOKERING`,
-  `WO_PLASMA_LIGHTNING_EXPAND`, the `WO_RB_HEAT*` set) - a dialect 2048 does not
-  have and the eboot's `psys_normal_heathaze_vp/fp` shaders draw - plus the
-  two 2048 already refused (`WO_BARRIER_COLLISION` render mode 3,
-  `WO_NITRO_SHIP_DEATH` blend class 4). No reader change: every file the
-  reader takes it takes unchanged.
+- **95 of 97 and 110 of 112 parse** (2026-10-06; 80 and 96 before blend class 8 was read). The two refused in each
+  directory are `WO_NITRO_SHIP_DEATH` (blend class 4) and `WO_BARRIER_COLLISION`
+  (render mode 3), both also refused on 2048.
+- **Blend class 8 is read as `oag_fx::psys::Blend::Distort`: simulated, not drawn.** It
+  is on 31 emitters of 20 Omega effects (all census runs 2026-10-06 over `data05.psarc`),
+  every shock-distortion and heat-haze one: `shockdistort`, `distort`, `Heathaze` and the
+  `WO_RB_HEAT*` set, always render mode 2. In the five explosions a player sees
+  (`WO_ROCKET_EXPLO`, `_TRACK`, `WO_MISSILE_EXPLO`, `WO_BOMB_SMOKERING`,
+  `WO_PLASMA_LIGHTNING_EXPAND`) it is exactly one emitter, `shockdistort`, and the
+  fireball, smoke, spikes and sparks beside it are class 2 or 3 and now play (they were
+  refused with it before). What `psys_normal_heathaze_vp/fp` reads and writes (a scene
+  grab refracted by the sprite) is **unrecovered**, and no scene-colour grab exists in
+  `oag-render`/`oag-post`/`oag-fx`, so the emitter ticks, spawns its children and draws
+  nothing; the loader report names it at WARN. Nothing is drawn in its place.
+  **2048 cross-check: checked, differs.** No 2048 `.pob` (`data.psarc`, both patch
+  archives, both DLC packs) carries class 8; its explosions have no `shockdistort`.
+  Pulse PSP, PS2 and HD carry none either (HD's only unnamed class is 4).
+  Pinned by `psys_omega_ground_truth.rs`.
 - **Sprites are `.gnf`**, 521 under `Data/particles*/Tex/`, every one BC7 with
   tile mode 13 and every one decodes (`Sprite::from_gnf`). The authored path
   is `C:\WOPS4\Wipeout\Data\particles\Tex\<stem>.tga`, and it names the
@@ -1441,3 +1451,41 @@ first tick's ageing for a template particle. An emitter's particles are not
 treated that way - unmeasured. (Their roll and aspect are a different law: a
 constant `+0x4c8` aspect and a roll that is always a rate; see the emitter
 record's table above.)
+
+## Effects Pulse names that 2048 and Omega never author - 2026-10-06
+
+`WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,
+`WO_RAIN`, `WO_RAIN_LENS` and `WO_SNOW` are Pulse's, and the engine's name table
+inherits them to every title (`Effects::engine`). On **neither** 2048 nor Omega is any
+of the seven authored:
+
+- No `.pob` of that stem in any archive: 2048's `data.psarc`, `data1`/`data2`,
+  `dlc1`/`dlc2` (both regions, `PCSF00007` and `PCSA00015`, identical `.pob` sets) and
+  Omega's `data00`/`data05` (`WO_ENV_SEB_SNOW`, `WO_ENV_ALT_CAMFLASH_1` and the 2048
+  `WO_LENS_FLARE_*` are different effects, not stand-ins).
+- No string of the executable names them (`grep -a` over the v1.04 and base 2048
+  `eboot.elf` and Omega's `eboot.bin`: 0 hits for each, against 2 for
+  `WO_ROCKET_FLARE`, `WO_MAGSTRIP_SPARKS` and `WO_PLASMA_HEAD`).
+
+So they are by design absent, not mislooked: `oag_2048::TITLE` and `oag_omega::TITLE`
+drop the three triggers (`PlasmaBlast`, `EngineFlare`, `LeachbeamEnergy`) and keep only
+`WO_MODESTO_STEAM_A` (which both ship) as scenery. 2048's engine flare is the per-ship
+`engineflare.rcsmodel`/`.vex` the livery path loads, a model and not a `.pob`.
+**Cross-check:** the same finding holds on both titles, recorded once; HD is
+`logwarn-hd`'s. Omega alone drops `MagstripSparks`/`MagstripZone` too: its
+`WO_MAGSTRIP_*` ship only under `Data/particles2048/`, and nothing on Omega fires them
+(`weapon_models.magstrip_pob` is false; the arc wake is HD's mechanism, see
+`ps4-omega-eu/ships-effects.md`), so loading them from `Data\particles` was an
+unread-trigger absence. No cross-directory fallback was added.
+
+### The weapon textures keep their stems and change extension
+
+`Data\Weapons\Textures\Cannon_bolt`, `cannon_muzzle_flash`, `pulse_leechbeam1_ADD` and
+`Data\Tex\staticglow` ship on 2048 as `.gxt` and on Omega as `.gnf` (Omega under
+`Data/weapons/` and `Data/weapons2048/`), the same stems Pulse ships as `.mip`; the
+loader asked for `.mip` and logged four absences. `oag_raceplay::assets::platform_sibling`
+now swaps the extension on the Vita and PS4. Both executables name `Cannon_bolt` and
+`Cannon_muzzle` (3 and 2 hits) and neither names `pulse_leechbeam1` or `staticglow`: the
+bolt and flash textures are the engine's own, the leech ribbon and ghost static are
+Pulse's law applied to an asset the title happens to ship (unmeasured title inherits
+Pulse's rule, **chosen, not measured**).
