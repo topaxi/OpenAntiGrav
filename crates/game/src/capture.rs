@@ -419,9 +419,8 @@ pub fn run(
             .get(&crate::settings::profile_key(title, platform))
             .cloned()
             .unwrap_or_default();
-        // Read-only, off whatever `<config dir>/oag/records.toml` already
-        // holds - see `crate::race_capture::CaptureOptions::previous_best`'s own doc for why
-        // this never writes one back.
+        // Read-only, off whatever `<config dir>/oag/records.toml` already holds - see
+        // `crate::race_capture::CaptureOptions::previous_best`'s own doc for why.
         let previous_best = crate::records::load()
             .get(&crate::records::Key::new(
                 loaded.title.name,
