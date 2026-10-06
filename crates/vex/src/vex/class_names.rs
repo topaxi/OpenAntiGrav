@@ -2,38 +2,35 @@
 //!
 //! # Where it comes from
 //!
-//! Wipeout HD's `EBOOT.elf`, at **`0x00921110`**: stride 12,
-//! `{u32 id, char *name, ptr}`, terminated by `id == -1` at `0x009239a8`, names
-//! packed from `0x0079c000`. **866 records.** The same table is in Pulse's PSP
-//! `BOOT.BIN` at `0x08ab2370` in the same shape, now also read to its own
-//! terminator (`0x08ab4be4`): **863 records**, three short - `wingtip`
-//! (`0x3ec`), `Track Wall Collision` (`0x3ed`) and `absorb` (`0x3ee`) are not
-//! in Pulse's copy. HD's table is still the authority here since it is the
-//! larger, superset reading. See
+//! Wipeout HD's `EBOOT.elf`, at **`0x00921110`**: stride 12, `{u32 id, char
+//! *name, ptr}`, terminated by `id == -1` at `0x009239a8`, names packed from
+//! `0x0079c000`. **866 records.** Pulse's PSP `BOOT.BIN` has the same table in the
+//! same shape at `0x08ab2370`, read to its terminator (`0x08ab4be4`): **863
+//! records**, three short (`wingtip` `0x3ec`, `Track Wall Collision` `0x3ed`,
+//! `absorb` `0x3ee`). HD's superset is the authority. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/vex-classes.md` and
 //! `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
 //!
 //! # Its shape, which is why the game's ids start where they do
 //!
 //! **Maya's own class enumeration first**, `0x0000` `Invalid` through `0x03b8`
-//! `Last`, and then the **58 game classes**, `0x03b9`..`0x03ee`. Nine of the
-//! game's classes take Maya ids instead - `Transform`, `World`, `Camera`,
-//! `Mesh`, `NurbsSurface`, `LodGroup` and the three lights - and are listed once,
-//! in the game block. No id appears twice in the whole 866.
+//! `Last`, then the **58 game classes** `0x03b9`..`0x03ee`. Nine of the game's
+//! classes take Maya ids instead (`Transform`, `World`, `Camera`, `Mesh`,
+//! `NurbsSurface`, `LodGroup` and the three lights) and are listed once, in the
+//! game block. No id appears twice in the 866.
 //!
-//! **The generic classes are here because shipped files use them.** Omitting
-//! them was the first thing tried and it is wrong: Pulse's own version-6 `.vex`
-//! files carry **379 nodes of class `0x0000`** (`ViewCompass` and friends, Maya
-//! scene furniture the exporter left in) and one `0x0108` `NurbsCircle`.
-//! `vex_class_ground_truth.rs` is what caught it.
+//! **The generic classes are here because shipped files use them**: Pulse's
+//! version-6 `.vex` files carry **379 nodes of class `0x0000`** (`ViewCompass` and
+//! friends, Maya scene furniture) and one `0x0108` `NurbsCircle`
+//! (`vex_class_ground_truth.rs` caught the omission).
 //!
 //! # This is version 6's id space and not the only one
 //!
-//! Pulse's **version-4** files use a different enumeration entirely - `0x0378`
-//! is its `skycube` where version 6's is `0x03c6`, and `0x006d`, `0x00ee`,
-//! `0x0101`, `0x011e`, `0x0372`, `0x0373`, `0x0375`, `0x0382`, `0x038f` and
-//! `0x0397` are all live there and mean nothing here. [`super::classes`] carries
-//! what is known of that mapping; this table must not be consulted for one.
+//! Pulse's **version-4** files use a different enumeration entirely: `0x0378` is
+//! its `skycube` where version 6's is `0x03c6`, and `0x006d`, `0x00ee`, `0x0101`,
+//! `0x011e`, `0x0372`, `0x0373`, `0x0375`, `0x0382`, `0x038f` and `0x0397` are
+//! live there and mean nothing here. [`super::classes`] carries what is known of
+//! that mapping; this table must not be consulted for one.
 //!
 //! # Names, not content
 //!

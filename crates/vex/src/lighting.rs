@@ -1,15 +1,14 @@
 //! `AmbientLight` `0x12c`, `DirectionalLight` `0x131` and `PointLight` `0x132`:
 //! the track's authored light rig.
 //!
-//! All three are small, fixed-length payloads - 16 bytes for the first two, 32
-//! for `PointLight` - and none of them is a [`vex::Mesh`](vex::CLASS_MESH)
-//! payload the way [`Skycube`](vex::CLASS_SKYCUBE) or
-//! [`Speedup Pad`](vex::CLASS_SPEEDUP_PAD) turned out to be: both are far
-//! shorter than [`vex::mesh_materials`]'s `len >= 0x30` precondition, so there
-//! is no batch-decoder reuse trick here, only three small standalone parsers.
-//! See [`crate::pads`] and `docs/formats/skycube.md` for the classes where reuse
-//! *did* apply, and `docs/formats/lighting.md` for the evidence and confidence
-//! scores behind everything in this module.
+//! All three are small fixed-length payloads (16 bytes for the first two, 32 for
+//! `PointLight`), shorter than [`vex::mesh_materials`]'s `len >= 0x30`
+//! precondition, so unlike [`Skycube`](vex::CLASS_SKYCUBE) and
+//! [`Speedup Pad`](vex::CLASS_SPEEDUP_PAD) they are not [`vex::Mesh`](vex::CLASS_MESH)
+//! payloads and there is no batch-decoder reuse. See [`crate::pads`] and
+//! `docs/formats/skycube.md` for where reuse applied, and
+//! `docs/formats/lighting.md` for the evidence and confidence scores behind
+//! everything here.
 //!
 //! ```text
 //! AmbientLight / DirectionalLight, 16 bytes:
@@ -27,62 +26,56 @@
 //!
 //! # Placement is the transform chain, not the payload
 //!
-//! None of these three payloads carries a matrix, unlike a locator class such
-//! as [`Engine Flare`](vex::CLASS_ENGINE_FLARE) or
-//! [`Start Position`](vex::CLASS_START_POSITION). So a light's `to_world` comes
-//! from [`vex::world_transforms`] - the full per-node chain, which contributes
-//! the identity for any node that is not itself a
-//! [`Transform`](vex::CLASS_TRANSFORM) - the same source
-//! [`pads::volumes`](crate::pads::volumes) uses for exactly the same reason.
+//! None of these payloads carries a matrix, unlike a locator class such as
+//! [`Engine Flare`](vex::CLASS_ENGINE_FLARE) or
+//! [`Start Position`](vex::CLASS_START_POSITION). A light's `to_world` comes from
+//! [`vex::world_transforms`] (the full per-node chain, the identity for any node
+//! that is not a [`Transform`](vex::CLASS_TRANSFORM)), as
+//! [`pads::volumes`](crate::pads::volumes) does.
 //!
-//! **Not [`vex::class_world_transforms`].** That helper reads a matching
-//! node's *own* payload as the 64-byte matrix, which is right for a locator
-//! class and wrong here: handed a 16- or 32-byte light payload, its
-//! `vex::transform` call sees a non-empty payload under 64 bytes, returns
-//! `None`, and the light is silently `filter_map`'d out of the result. The
-//! failure mode is not a wrong matrix, it is an empty `Vec` - every light on
-//! every track missing at once, which is exactly the trap
-//! [`pads::volumes`](crate::pads::volumes)'s own doc comment already names for
-//! the mesh-shaped pad payload.
+//! **Not [`vex::class_world_transforms`].** It reads a node's *own* payload as
+//! the 64-byte matrix: right for a locator, wrong here, where a 16- or 32-byte
+//! payload makes `vex::transform` return `None` and the light is silently
+//! `filter_map`'d out. The failure is an empty `Vec` (every light on every track
+//! missing), the trap [`pads::volumes`](crate::pads::volumes) names for the
+//! mesh-shaped pad payload.
 //!
 //! # Wipeout HD authors these too, and read little-endian they are denormals
 //!
 //! 17 `AmbientLight`, 17 `DirectionalLight` and **1,160 `PointLight`** nodes
-//! across HD's 742 `.vex` files - so this module is not a Pulse-only one and
-//! reading a `f32` little-endian here was a live bug, not a latent one.
+//! across HD's 742 `.vex` files, so reading an `f32` little-endian here was a
+//! live bug.
 //!
-//! It is the quiet kind. `start_grid.vex`'s point light is `3f 80 00 00` four
-//! times over: white at range 1.0 big-endian, and `4.6006e-41` in all four
-//! fields little-endian. A denormal, not a `NaN` and not an error - it would
-//! have travelled all the way to a shader as a light that contributes nothing
-//! visible. The matrix beside it came out *right* the whole time, because
-//! [`vex::world_transforms`] has always sniffed the file's order, which is what
-//! made the wrong half look plausible.
+//! The quiet kind: `start_grid.vex`'s point light is `3f 80 00 00` four times,
+//! white at range 1.0 big-endian and `4.6006e-41` in all four fields
+//! little-endian: a denormal, neither `NaN` nor error, reaching a shader as a
+//! light that contributes nothing. The matrix beside it came out *right*
+//! throughout ([`vex::world_transforms`] sniffs the file's order), which made
+//! the wrong half look plausible.
 //!
 //! The order is sniffed once per file by the three collectors and handed to
-//! `parse`, the shape [`pads::volumes`](crate::pads::volumes) already uses.
+//! `parse`, as [`pads::volumes`](crate::pads::volumes) does.
 //!
 //! # The trailer and the intensity range are both open
 //!
-//! `PointLight`'s second 16 bytes decode as four `u32` and read `{1, 0, 0, 0}`
-//! on every Pulse sample seen so far. Nothing here reads what they mean; they
-//! are carried on [`PointLight::trailer`] rather than dropped, the same
-//! judgement call [`pads::PadVolume::disabled`](crate::pads::PadVolume::disabled)
-//! already makes for a field that is provably present and not provably inert.
+//! `PointLight`'s second 16 bytes decode as four `u32` and read `{1, 0, 0, 0}` on
+//! every Pulse sample. Their meaning is unread; they are carried on
+//! [`PointLight::trailer`] rather than dropped, as
+//! [`pads::PadVolume::disabled`](crate::pads::PadVolume::disabled) does for a
+//! field provably present and not provably inert.
 //!
 //! HD's 1,160 point lights split `{0, 0, 0, 0}` on 1,151 and
-//! `{0x0001_0000, 0, 0, 0}` on 9. **If the first word were a `u16` pair rather
-//! than a `u32`, those nine would read 1 - the value Pulse's carry.** That is
-//! noted and deliberately not acted on: nine samples against one alternative
-//! reading is a hypothesis, the field is undecoded either way, and re-typing it
-//! on that basis would turn a coincidence into a claim. `u32` is what both
-//! discs are read as until something in the runtime says otherwise.
+//! `{0x0001_0000, 0, 0, 0}` on 9. **If the first word were a `u16` pair, those
+//! nine would read 1, Pulse's value.** Deliberately not acted on: nine samples
+//! against one alternative is a hypothesis and re-typing the field would turn a
+//! coincidence into a claim. `u32` is what both discs are read as until the
+//! runtime says otherwise.
 //!
 //! Intensities up to 5.7854 have been observed, so `colour`/`intensity` and
-//! `colour`/`range` are **not** clamped to `0..=1` here the way
-//! [`fog::FogParams::colour`](crate::fog::FogParams::colour) is - see
-//! `docs/formats/lighting.md`'s Open section for the tension with an 8-bit GE
-//! colour register that this raises and does not resolve.
+//! `colour`/`range` are **not** clamped to `0..=1` as
+//! [`fog::FogParams::colour`](crate::fog::FogParams::colour) is; see
+//! `docs/formats/lighting.md`'s Open section for the unresolved tension with an
+//! 8-bit GE colour register.
 
 use crate::vex::{self, Node};
 use oag_formats::ByteOrder;
@@ -96,8 +89,7 @@ pub const POINT_PAYLOAD_LEN: usize = 0x20;
 /// Reads the four `f32` at the front of `payload`, in the file's own order.
 ///
 /// Shared by [`AmbientLight::parse`], [`DirectionalLight::parse`] and
-/// [`PointLight::parse`], all of which start with the same four-float shape
-/// before their payload lengths diverge.
+/// [`PointLight::parse`], which all start with this four-float shape.
 fn read_four_f32(payload: &[u8], order: ByteOrder) -> Option<[f32; 4]> {
     if payload.len() < 0x10 {
         return None;
@@ -114,12 +106,10 @@ pub struct AmbientLight {
     /// Scale on `colour`, applied at an unrecovered point in the original's
     /// pipeline. Not clamped.
     pub intensity: f32,
-    /// This node's own world transform, from [`vex::world_transforms`].
-    ///
-    /// The payload carries no matrix, so this is placement in name only for an
-    /// ambient light's own colour contribution - but it is what would
-    /// disambiguate one ambient light from another if a track ever authored
-    /// more than one, and every other light class here carries the same field.
+    /// This node's own world transform, from [`vex::world_transforms`]. The
+    /// payload carries no matrix, so for an ambient light this is placement in
+    /// name only; it would disambiguate lights if a track authored several, and
+    /// every other light class carries it.
     pub to_world: [f32; 16],
 }
 
@@ -147,10 +137,9 @@ impl AmbientLight {
 ///
 /// Byte-identical payload shape to [`AmbientLight`]; only the class ID and,
 /// presumably, the runtime's handling of `to_world` differ. **Whether the
-/// direction the original draws with comes from this matrix's rotation basis
-/// or its translation is not settled here** - see `docs/formats/lighting.md`'s
-/// Open section and the direction-basis survey in
-/// `crates/formats/tests/lighting_ground_truth.rs`.
+/// original's direction comes from this matrix's rotation basis or its
+/// translation is not settled**: see `docs/formats/lighting.md`'s Open section
+/// and the direction-basis survey in `crates/vex/tests/lighting_ground_truth.rs`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DirectionalLight {
     /// Linear RGB, as authored. Not clamped to `0..=1` - see the module docs.
@@ -187,20 +176,17 @@ impl DirectionalLight {
 pub struct PointLight {
     /// Linear RGB, as authored. Not clamped to `0..=1` - see the module docs.
     pub colour: [f32; 3],
-    /// Falloff distance. Not clamped; expected finite and positive, checked in
-    /// the ground-truth test rather than enforced here, the same trade
-    /// [`fog::FogVolume::parse`](crate::fog::FogVolume::parse) makes for its own
-    /// edge length.
+    /// Falloff distance. Not clamped; expected finite and positive, checked in the
+    /// ground-truth test rather than enforced (as
+    /// [`fog::FogVolume::parse`](crate::fog::FogVolume::parse) does for its edge
+    /// length).
     pub range: f32,
     /// This node's own world transform, from [`vex::world_transforms`]. The
     /// light's position is this matrix's translation, row 3.
     pub to_world: [f32; 16],
-    /// The payload's second sixteen bytes, four `u32` in the file's order.
-    ///
-    /// `{1, 0, 0, 0}` on every shipped sample seen so far. Nothing here reads
-    /// what they mean; carried rather than dropped because a field that is
-    /// provably present should be visible in the reimplementation, even
-    /// undecoded.
+    /// The payload's second sixteen bytes, four `u32` in the file's order:
+    /// `{1, 0, 0, 0}` on every shipped sample seen. Meaning unread; carried
+    /// because a provably present field should be visible even undecoded.
     pub trailer: [u32; 4],
 }
 
@@ -228,8 +214,8 @@ impl PointLight {
 /// Every `AmbientLight` a `.vex` file authors, in node order.
 ///
 /// Placement is [`vex::world_transforms`], **not**
-/// [`vex::class_world_transforms`] - see the module docs for why the latter
-/// silently drops every light rather than misreading one.
+/// [`vex::class_world_transforms`], which would silently drop every light (see
+/// the module docs).
 #[must_use]
 pub fn ambient_lights(data: &[u8], nodes: &[Node]) -> Vec<AmbientLight> {
     let chain = vex::world_transforms(data, nodes);

@@ -1,25 +1,21 @@
 //! Byte coverage of a `Mesh`-shaped `.vex` payload.
 //!
-//! `Mesh` (`vex::CLASS_MESH`) itself, `Skycube` (a `Mesh` payload verbatim,
-//! see [`vex::CLASS_SKYCUBE`]'s own doc) and the two pad classes (a `Mesh`
-//! bind first, then the pad's own trigger box already inside the same
-//! header, see [`crate::pads`]) all decode through this one layout, so one
-//! coverage walk serves all four. See `crates/formats/src/coverage.rs` for
-//! what a claim and a gap mean, and `docs/formats/README.md#coverage` for why
-//! this module exists: the risk this instrument was built for is highest in
-//! a container of tables reached by offsets, and a batch list, a material
-//! array and a texture-transform block array are exactly that.
+//! `Mesh` (`vex::CLASS_MESH`), `Skycube` (a `Mesh` payload verbatim, see
+//! [`vex::CLASS_SKYCUBE`]) and the two pad classes (a `Mesh` bind, then the pad's
+//! trigger box already in the same header, see [`crate::pads`]) decode through
+//! this one layout, so one coverage walk serves all four. See
+//! `crates/formats/src/coverage.rs` for what a claim and a gap mean and
+//! `docs/formats/README.md#coverage` for why this exists: the risk is highest in
+//! a container of tables reached by offsets, which a batch list, material array
+//! and texture-transform block array are.
 //!
-//! **A batch's own vertex or VIF payload is claimed as one span**, not split
-//! into position/normal/texcoord/colour sub-fields - [`vex::mesh_batches`]
-//! already validates those byte-for-byte (every decoded vertex has to fall
-//! inside the batch's own bounding box), so claiming the whole span is the
-//! honest statement of what *this* instrument checks: whether a region is
-//! reached at all, not whether every field inside it is understood. The batch
-//! walk below is deliberately a second, independent read of the header
-//! fields `mesh_batches` itself reads - `pass_mask`, the header-size flag and
-//! `payload_size` - rather than a call into it, because `mesh_batches`
-//! returns decoded vertices and never the file offset they came from.
+//! **A batch's vertex or VIF payload is claimed as one span**, not split into
+//! sub-fields: [`vex::mesh_batches`] already validates those (every decoded
+//! vertex must fall inside the batch's bounding box), and this instrument checks
+//! whether a region is reached, not whether every field is understood. The batch
+//! walk is a second, independent read of `pass_mask`, the header-size flag and
+//! `payload_size`, not a call into `mesh_batches`, which returns vertices and
+//! never the file offsets they came from.
 
 use oag_formats::ByteOrder;
 use oag_formats::coverage::Coverage;
@@ -60,9 +56,8 @@ fn align_up(value: usize) -> usize {
 
 /// Coverage of one `Mesh`-shaped payload.
 ///
-/// Safe to call on any payload; a truncated or non-mesh-shaped blob simply
-/// stops claiming early; and `min` in [`Coverage::gaps`] is what turns "the
-/// header is missing" into a visible gap rather than a panic.
+/// Safe on any payload: a truncated or non-mesh blob stops claiming early, and
+/// `min` in [`Coverage::gaps`] turns a missing header into a visible gap.
 #[must_use]
 pub fn coverage(payload: &[u8]) -> Coverage {
     let mut seen = Coverage::new(payload.len());
@@ -96,9 +91,8 @@ pub fn coverage(payload: &[u8]) -> Coverage {
         claim_batch_list(&mut seen, payload, list, terminator);
     }
 
-    // `Skycube`'s own leftover - see `docs/formats/skycube.md#the-extra-block`.
-    // Only fires when there really is a gap before the geometry offset; a
-    // `None` here just leaves the span an ordinary reported gap.
+    // `Skycube`'s own leftover (`docs/formats/skycube.md#the-extra-block`); only
+    // fires when there is a gap before the geometry offset, else an ordinary gap.
     let materials_end = align_up(tex_transform_base);
     if let Some(block) = skycube_extra_block(payload, materials_end) {
         seen.claim(
@@ -111,7 +105,7 @@ pub fn coverage(payload: &[u8]) -> Coverage {
     seen
 }
 
-/// Claims one material's texture-transform key arrays, the same offsets
+/// Claims one material's texture-transform key arrays, the offsets
 /// [`vex::mesh_tex_transforms`] resolves internally but does not expose.
 fn claim_tex_transform_keys(
     seen: &mut Coverage,
@@ -142,21 +136,16 @@ fn claim_tex_transform_keys(
     claim_track(scale_count, 0x08, 0x14);
 }
 
-/// Claims every batch of one list, by re-reading the same three header
-/// fields [`vex::mesh_batches`] uses to step: `pass_mask`, the header-size
-/// flag at `+0x03`, and `payload_size` at `+0x0c`. Deliberately stops on the
-/// same conditions `mesh_batches` does, so this walks exactly the batches it
-/// decodes and no further.
+/// Claims every batch of one list by re-reading the three header fields
+/// [`vex::mesh_batches`] steps on (`pass_mask`, header-size flag at `+0x03`,
+/// `payload_size` at `+0x0c`), stopping on the same conditions, so it walks
+/// exactly the batches that decode.
 fn claim_batch_list(seen: &mut Coverage, payload: &[u8], list: u8, terminator: u16) {
     let list_offset = u32_le(payload, if list == 0 { 4 } else { 8 }) as usize;
-    // Zero is a real, documented value - "offset to batch list B, 0 on every
-    // sky" (`docs/formats/skycube.md`) - and it means "this list does not
-    // exist", not "the list starts at the mesh header". A batch record can
-    // never legally sit before the header ends, so walking from an offset
-    // that lands inside it would read the header's own bytes as a `pass_mask`
-    // and, whenever that word's low bits happen to agree with `terminator`,
-    // fabricate "batch" claims out of header and material data instead of
-    // reporting the honest gap this instrument exists to find.
+    // Zero is real ("offset to batch list B, 0 on every sky",
+    // `docs/formats/skycube.md`): it means the list does not exist, not that it
+    // starts at the header. Walking from inside the header would read its bytes as
+    // a `pass_mask` and fabricate "batch" claims instead of the honest gap.
     if list_offset < HEADER_LEN {
         return;
     }
@@ -164,11 +153,9 @@ fn claim_batch_list(seen: &mut Coverage, payload: &[u8], list: u8, terminator: u
     while at + BATCH_HEADER <= payload.len() {
         let pass_mask = u16_le(payload, at);
         if pass_mask & terminator == 0 {
-            // Not a batch - the header-shaped record that ends the list. It
-            // occupies real space (measured: a fixed `BATCH_HEADER` bytes on
-            // every list-end this crate's corpus sweep found), so it is
-            // claimed rather than left as the "batch and end of file"/"batch
-            // and a batch" gap the coverage sweep first reported it as.
+            // Not a batch: the header-shaped record that ends the list. It
+            // occupies a fixed `BATCH_HEADER` bytes on every list-end in the
+            // corpus, so it is claimed (else the sweep reported it as a gap).
             seen.claim(at, BATCH_HEADER, "a batch-list terminator record");
             break;
         }
@@ -201,17 +188,15 @@ pub struct SkycubeExtraBlock {
 }
 
 /// Recognises the shape `docs/formats/skycube.md#the-extra-block` measured on
-/// `06_Track`'s sky: a `0x10`-byte lead-in whose first word states the exact
-/// byte length of what follows, that many bytes of `0x40`-byte records each
-/// self-indexed at `+0x20` (`0`, `1`, `2`, ...), then zero padding out to the
+/// `06_Track`'s sky: a `0x10`-byte lead-in whose first word states the byte
+/// length of what follows, that many bytes of `0x40`-byte records each
+/// self-indexed at `+0x20` (`0`, `1`, `2`, ...), then zero padding to the
 /// geometry offset.
 ///
-/// **Structure only, not meaning.** The records hold stale PSP main-RAM
-/// pointers baked in at export time (`0x080db6c0` on every one measured) and
-/// neither `Skycube` handler is recovered, so what - if anything - reads this
-/// block is still open. Returns `None` on anything that does not close this
-/// exactly, which is deliberate: a near-miss here is not this block, it is an
-/// ordinary reported gap.
+/// **Structure only, not meaning.** The records hold stale PSP main-RAM pointers
+/// (`0x080db6c0` on every one measured) and neither `Skycube` handler is
+/// recovered, so what reads this block is open. `None` on anything that does not
+/// close exactly: a near-miss is an ordinary reported gap.
 #[must_use]
 pub fn skycube_extra_block(payload: &[u8], materials_end: usize) -> Option<SkycubeExtraBlock> {
     if materials_end + 0x30 > payload.len() {
@@ -253,12 +238,10 @@ pub fn skycube_extra_block(payload: &[u8], materials_end: usize) -> Option<Skycu
     })
 }
 
-/// Coverage of a `fogCube` payload: a fixed-size volume with no offset table
-/// at all, so there is nothing to claim beyond the whole 128 bytes.
-///
-/// Kept here rather than skipped, so the corpus sweep in
-/// `crates/vex/tests/payload_coverage_ground_truth.rs` reports every
-/// environment class it touches, not only the ones with something to find.
+/// Coverage of a `fogCube` payload: fixed-size with no offset table, so nothing to
+/// claim beyond the 128 bytes. Kept so the corpus sweep in
+/// `crates/vex/tests/payload_coverage_ground_truth.rs` reports every environment
+/// class it touches.
 #[must_use]
 pub fn fogcube_coverage(payload: &[u8]) -> Coverage {
     let mut seen = Coverage::new(payload.len());

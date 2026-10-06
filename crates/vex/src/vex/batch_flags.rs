@@ -2,22 +2,18 @@
 //! whether it is a cutout, whether it is back-face culled, and the alpha-test
 //! reference the GE compares its fragments against.
 //!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`, and the seam is a real one: everything here
-//! decodes bits of [`Batch::pass_mask`] and [`Batch::header_flags`] and reads
-//! nothing else, so the parser stays in `vex.rs` and the *meaning* of what it
-//! parsed lives here.
+//! Split out of [`super`] under the 1,000-line rule: everything here decodes
+//! bits of [`Batch::pass_mask`] and [`Batch::header_flags`] and reads nothing
+//! else, so the parser stays in `vex.rs` and the *meaning* lives here.
 //!
 //! Every reading is against `Gfx_BuildBatchStateList` (`0x0891f890`) in the PSP
-//! Pulse executable - see `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
+//! Pulse executable; see `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
 
 use super::Batch;
 
-/// Which blend equation a transparent batch asks for.
-///
-/// Recovered from `Gfx_BuildBatchStateList`; see [`Batch::blend_class`] for the
-/// bits and the branch order. Not a quality setting and not a choice - the
-/// batch's own `pass_mask` picks one.
+/// Which blend equation a transparent batch asks for, from `Gfx_BuildBatchStateList`
+/// (see [`Batch::blend_class`]). Not a quality setting: the batch's `pass_mask`
+/// picks one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlendClass {
     /// `pass_mask & 0x100`: ordinary alpha blend, `SrcAlpha` over
@@ -32,24 +28,20 @@ pub enum BlendClass {
 }
 
 impl Batch {
-    /// Whether this batch is transparent and must be drawn after opaque ones.
-    ///
-    /// The `0x0700` mask is confirmed operationally: it is the exact test
-    /// `Gfx_BuildBatchStateList` branches on. Which of the three bits is set
-    /// decides *how* it blends - see [`Batch::blend_class`].
+    /// Whether this batch is transparent and must be drawn after opaque ones. The
+    /// `0x0700` mask is the exact test `Gfx_BuildBatchStateList` branches on;
+    /// which bit is set decides *how* it blends ([`Batch::blend_class`]).
     #[must_use]
     pub fn is_transparent(&self) -> bool {
         self.pass_mask & 0x0700 != 0
     }
 
-    /// Which blend equation a transparent batch asks for, or `None` when it is
-    /// not transparent at all.
+    /// Which blend equation a transparent batch asks for, or `None` when it is not
+    /// transparent.
     ///
-    /// The three bits inside `is_transparent`'s `0x0700` are not
-    /// interchangeable, and the reimplementation drew all of them with one
-    /// equation until this was recovered. From `Gfx_BuildBatchStateList`, whose
-    /// branch order this method reproduces - `0x100` wins over `0x200`, which
-    /// wins over `0x400`:
+    /// The three bits inside `is_transparent`'s `0x0700` are not interchangeable
+    /// (all were once drawn with one equation). From `Gfx_BuildBatchStateList`,
+    /// whose branch order this reproduces (`0x100` over `0x200` over `0x400`):
     ///
     /// | Bit | The original programs |
     /// | --- | --- |
@@ -57,12 +49,10 @@ impl Batch {
     /// | `0x200` | `GU_ADD`, `GU_SRC_ALPHA` / `GU_FIX 0xffffff`, colour test on |
     /// | `0x400` | `Gu_Disable(GU_BLEND)` - in the transparent class, not blended |
     ///
-    /// Only the blend equation and the colour test differ between them; the
-    /// depth-write disable, the alpha test and the stencil setup are emitted
-    /// outside the nest and are common to all three.
-    ///
-    /// See `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "Three
-    /// `pass_mask` bits decoded, inside the `0x0700` transparent class".
+    /// Only the blend equation and colour test differ; the depth-write disable,
+    /// alpha test and stencil setup sit outside the nest, common to all three.
+    /// See `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "Three `pass_mask`
+    /// bits decoded, inside the `0x0700` transparent class".
     #[must_use]
     pub fn blend_class(&self) -> Option<BlendClass> {
         if self.pass_mask & 0x0100 != 0 {
@@ -84,70 +74,58 @@ impl Batch {
 
     /// Whether back-face culling is enabled. Set means two-sided.
     ///
-    /// **The sense of the bit is the opposite of what it looks like, and this
-    /// method used to have it backwards.** `Mesh_SetBatchDrawState` reads
-    /// `if ((pass_mask & 0x20) == 0) { Gu_Enable(5) } else { Gu_Disable(5) }`,
-    /// state index `5` being `GU_CULL_FACE` - so the bit **set** *disables*
-    /// culling. Read at instruction level, confidence 90; see
+    /// **The sense of the bit is the opposite of what it looks like.**
+    /// `Mesh_SetBatchDrawState` reads `if ((pass_mask & 0x20) == 0) { Gu_Enable(5)
+    /// } else { Gu_Disable(5) }`, state `5` being `GU_CULL_FACE`: the bit **set**
+    /// *disables* culling. Instruction level, confidence 90; see
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`, "The plume is
     /// two-sided".
     ///
-    /// Nothing in this workspace consumes this yet - every `mesh_render`
-    /// pipeline sets `cull_mode: None` deliberately, because strip winding is
-    /// reconstructed rather than read from the file and culling would turn a
-    /// winding mistake into missing geometry. So the inversion never reached a
-    /// picture. It is corrected here because the first consumer would have
-    /// culled exactly the surfaces the original draws two-sided, and on the
-    /// boost plume - all 32 of whose batches carry the bit - that means every
-    /// batch.
+    /// Nothing consumes this yet (every `mesh_render` pipeline sets `cull_mode:
+    /// None`, since strip winding is reconstructed and culling would turn a
+    /// winding mistake into missing geometry), so the old inversion never reached
+    /// a picture. The first consumer would have culled the surfaces the original
+    /// draws two-sided: on the boost plume, all 32 batches.
     #[must_use]
     pub fn is_culled(&self) -> bool {
         self.pass_mask & 0x0020 == 0
     }
 
-    /// Whether the PSP draw path's shared per-batch state setup
-    /// (`Mesh_SetBatchDrawState`) takes its pure-additive blend branch
-    /// (`Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff, GU_FIX 0xffffff)`, i.e.
-    /// `dst + src`) rather than its "replace" branch (`GU_FIX 0xffffff,
-    /// GU_FIX 0`, i.e. `src` alone, discarding `dst`). Selected by
-    /// `header_flags & 0x10`, clear for additive.
+    /// Whether the PSP draw path's per-batch state setup (`Mesh_SetBatchDrawState`)
+    /// takes its pure-additive branch (`Gu_BlendFunc(GU_ADD, GU_FIX 0xffffff,
+    /// GU_FIX 0xffffff)`, `dst + src`) rather than "replace" (`GU_FIX 0xffffff,
+    /// GU_FIX 0`, `src` alone). Selected by `header_flags & 0x10`, clear for
+    /// additive.
     ///
-    /// Confidence 85 for what this method decodes: the branch selection and
-    /// blend-equation decode are confirmed against a live Ghidra decompile.
-    /// That number is not a claim about any specific batch's real value -
-    /// whether a given model's batches actually read additive, and whether
-    /// `GU_BLEND` is actually *enabled* when they do, are separate,
-    /// lower-confidence claims. See
+    /// Confidence 85 for the decode (branch selection and blend equation, against
+    /// a live Ghidra decompile), not for any batch's real value: whether a model's
+    /// batches read additive, and whether `GU_BLEND` is *enabled* then, are
+    /// separate, lower-confidence claims. See
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
     ///
-    /// **This reads the file's byte, and the running game's can differ.**
+    /// **This reads the file's byte; the running game's can differ.**
     /// `Mesh_CountBatchesPerList` ORs `0x10` into every list-A batch with
-    /// `pass_mask & 0x2000` and without `0x0800` at load, so those batches draw
-    /// with the replace branch in the original whatever the disc says - read
-    /// live on Assegai's hull, where five batches carry it at runtime and none
-    /// on disc. See "The hull's extra pass" in that page.
+    /// `pass_mask & 0x2000` and without `0x0800` at load, so those draw "replace"
+    /// whatever the disc says (live on Assegai's hull: five batches at runtime,
+    /// none on disc). See "The hull's extra pass" in that page.
     #[must_use]
     pub fn is_additive_blend(&self) -> bool {
         self.header_flags & 0x10 == 0
     }
 
     /// The alpha-test reference the GE compares this batch's fragment alpha
-    /// against, or `None` when the batch is drawn with the alpha test off or
-    /// with a function of `GU_ALWAYS`.
+    /// against, or `None` when the test is off or `GU_ALWAYS`.
     ///
-    /// The comparison is always `GU_GREATER` and the mask always `0xff`, so
-    /// the reference is the whole of it: a fragment survives when its 8-bit
-    /// alpha is **strictly greater** than the value returned here.
+    /// The comparison is always `GU_GREATER` with mask `0xff`: a fragment survives
+    /// when its 8-bit alpha is **strictly greater** than the returned value.
     ///
     /// # The branch, in the original's own order
     ///
-    /// `Gfx_BuildBatchStateList` (`0x0891f890`) is handed this batch's
-    /// `pass_mask` and `header_flags` directly - `Mesh_InitBatch`
-    /// (`0x0890e8b4`) passes `*batch` and `*(u8 *)(batch + 3)` into
-    /// `Gfx_AcquireBatchStateList` (`0x0891df48`), which interns them, and
-    /// `Gfx_CompileDirtyBatchStateLists` (`0x0891e054`) replays them into the
-    /// builder unchanged. No transform sits in between, which is what lets
-    /// this method be a pure function of the two words the file authors:
+    /// `Gfx_BuildBatchStateList` (`0x0891f890`) gets this batch's `pass_mask` and
+    /// `header_flags` untransformed (`Mesh_InitBatch` `0x0890e8b4` passes them to
+    /// `Gfx_AcquireBatchStateList` `0x0891df48`, which interns them, and
+    /// `Gfx_CompileDirtyBatchStateLists` `0x0891e054` replays them), so this is a
+    /// pure function of the two words the file authors:
     ///
     /// | Test, in order | What the original programs |
     /// | --- | --- |
@@ -158,37 +136,27 @@ impl Batch {
     /// | `pass_mask & 0x0080` set | `Gu_AlphaFunc(GU_GREATER, 0, 0xff)` |
     /// | otherwise | `Gu_AlphaFunc(GU_GREATER, 0x7f, 0xff)` |
     ///
-    /// The `0x0700` row is why a transparent batch gets `0` and never one of
-    /// the other two: the enable and the func for that class sit **outside**
-    /// the `0x100`/`0x200`/`0x400` nest, so every blended batch in the game
-    /// shares them.
+    /// The `0x0700` row is why a transparent batch gets `0`: the enable and func
+    /// for that class sit **outside** the `0x100`/`0x200`/`0x400` nest.
     ///
     /// # Confidence: 86
     ///
-    /// The decompile is unambiguous and `Gfx_BuildBatchStateList` has exactly
-    /// one argument-supplying chain, which transforms neither word - that much
-    /// alone is the rubric's 84 for "decompilation only, consistent call
-    /// sites". What lifts it two points is that the shipped data separates this
-    /// reading from its obvious rival, and the separation is *rendered*, not
-    /// only counted:
-    ///
-    /// Every corpus authors three of the four selector-bit combinations, and
-    /// the third one - `pass_mask & 0x80` set with `header_flags & 0x20`
-    /// **clear** - is what the two readings disagree about. This branch gives
-    /// it `0`; a selector keyed on `header_flags & 0x20` alone gives it `0x7f`.
-    /// The batches carrying it are Wipeout Pure's `Speedup Pad`, 349 of them,
-    /// and the pad's glow texture tops out at alpha `58/255` - so the rival
-    /// reading discards the pad whole, which is precisely the regression
+    /// The decompile is unambiguous and `Gfx_BuildBatchStateList` has exactly one
+    /// argument-supplying chain, transforming neither word: the rubric's 84 for
+    /// "decompilation only, consistent call sites". Two points more because the
+    /// shipped data separates this reading from its rival, *rendered*, not only
+    /// counted: every corpus authors three of the four selector-bit combinations,
+    /// and the third (`pass_mask & 0x80` set, `header_flags & 0x20` **clear**) is
+    /// what they disagree about. This branch gives `0`; a selector on
+    /// `header_flags & 0x20` alone gives `0x7f`. Those batches are Wipeout Pure's
+    /// `Speedup Pad` (349), whose glow texture tops out at alpha `58/255`, so the
+    /// rival discards the pad whole, the regression
     /// `crates/render/tests/pad_alpha_test_ground_truth.rs` catches by counting
-    /// lit pixels in a real capture. It draws.
+    /// lit pixels in a real capture. Short of 90: no runtime trace saw the GE
+    /// programmed this way.
     ///
-    /// Still short of 90 because none of it is a runtime trace of the original:
-    /// what is measured is that the recovered branch is the one consistent with
-    /// what the discs author and with what the pads have to look like, not that
-    /// a breakpoint saw the GE programmed this way.
-    ///
-    /// The **counts** by pattern, and their agreement across three corpora, are
-    /// frozen in `crates/vex/tests/alpha_test_reference_ground_truth.rs`:
+    /// The **counts** by pattern, across three corpora, are frozen in
+    /// `crates/vex/tests/alpha_test_reference_ground_truth.rs`:
     ///
     /// | `pass_mask & 0x880` | `header_flags & 0x30` | reference | PSP Pulse | PSP Pure | PS2 Pulse |
     /// | --- | --- | --- | ---: | ---: | ---: |
@@ -196,11 +164,9 @@ impl Batch {
     /// | `0x0880` | `0x00` | `0` | - | 349 | 20 |
     /// | `0x0880` | `0x20` | `0x10` | 7,823 | 1,749 | 14,046 |
     ///
-    /// The selector was read in the **PSP Pulse** executable only. PS2 Pulse
-    /// and PSP Pure author the same patterns in the same fields, which is why
-    /// this method is not gated by platform, but neither of their executables
-    /// has been read.
-    ///
+    /// The selector was read in the **PSP Pulse** executable only; PS2 Pulse and
+    /// PSP Pure author the same patterns in the same fields (so no platform gate),
+    /// but neither executable has been read.
     #[must_use]
     pub fn alpha_test_reference(&self) -> Option<u8> {
         if self.header_flags & 0x10 != 0 {

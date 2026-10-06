@@ -2,37 +2,26 @@
 //! tracks, and surveys the full disc for how far the two light classes that
 //! can appear off-track (`AmbientLight`, `DirectionalLight`) actually spread.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
-//!
-//! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What this is for
 //!
-//! `docs/formats/lighting.md` claims three fixed-length payloads decode
-//! cleanly against real data - 16 bytes for `AmbientLight`/`DirectionalLight`,
-//! 32 for `PointLight` - and that placement is the transform chain, not the
-//! payload. Two sweeps check that:
+//! `docs/formats/lighting.md` claims three fixed-length payloads decode cleanly
+//! against real data (16 bytes for `AmbientLight`/`DirectionalLight`, 32 for
+//! `PointLight`) and that placement is the transform chain, not the payload. Two
+//! sweeps check that:
 //!
-//! - **Primary**: every one of `Data.wad`'s 1142 entries, unfiltered by name,
-//!   because `AmbientLight` and `DirectionalLight` are generic scene classes
-//!   that may be authored off-track. It does find more than the 40-track-file
-//!   figures below - 106 `AmbientLight` and 114 `DirectionalLight` against 74
-//!   and 86, mostly single instances on non-track `.vex` files - while
-//!   `PointLight` and `Dynamic Point Light` come out unchanged (10 and 0). See
-//!   `docs/formats/lighting.md`'s Open section for what that excess is.
-//! - **Secondary, track-scoped**: exactly the 40 known track/zone `.vex`
-//!   files, resolved by name hash the way `pads_ground_truth.rs` already does,
-//!   where a live `oag-view --nodes --class` census this session already
-//!   established 74 `AmbientLight`, 86 `DirectionalLight` and 10 `PointLight`
-//!   instances - asserted here as literal known values, not discovered and
-//!   then pinned.
+//! - **Primary**: every one of `Data.wad`'s 1142 entries, unfiltered, because
+//!   `AmbientLight` and `DirectionalLight` are generic scene classes that may be
+//!   authored off-track. It finds more than the track-scoped figures (106
+//!   `AmbientLight` and 114 `DirectionalLight` against 74 and 86, mostly single
+//!   instances on non-track `.vex` files); `PointLight` and `Dynamic Point Light`
+//!   are unchanged (10 and 0). See `docs/formats/lighting.md`'s Open section.
+//! - **Secondary, track-scoped**: the 40 known track/zone `.vex` files, resolved
+//!   by name hash as `pads_ground_truth.rs` does, asserted against the literal
+//!   74 `AmbientLight`, 86 `DirectionalLight` and 10 `PointLight` of a live
+//!   `oag-view --nodes --class` census.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,9 +33,8 @@ use oag_vex::vex;
 
 /// Track directories present on the PSP disc, from the plugin definitions.
 ///
-/// Duplicated from `pads_ground_truth.rs` rather than shared - in-pattern for
-/// this test file, which each ground-truth test already does for its own
-/// `image()`/`archive_path()`/`vex_files()` trio.
+/// Duplicated from `pads_ground_truth.rs` rather than shared (each ground-truth
+/// test keeps its own `image()`/`archive_path()`/`vex_files()` trio).
 const TRACK_DIRS: &[&str] = &[
     "01_Track", "02_Track", "03_Track", "04_Track", "05_Track", "06_Track", "07_Track", "08_Track",
     "09_Track", "10_Track", "11_Track", "12_Track", "13_Track", "14_Track", "15_Track", "16_Track",
@@ -67,31 +55,27 @@ const MIN_TRACK_FILES: usize = 20;
 /// `AmbientLight` instances across the full unfiltered `Data.wad` sweep.
 ///
 /// Pinned from a real run against `pulse-psp-usa.chd`. **Higher than
-/// [`TRACK_SCOPED_AMBIENT_LIGHTS`]** by 32: `AmbientLight` is a generic scene
-/// class and is genuinely authored off the 40 track/zone files this sweep also
-/// covers, mostly as single instances on files outside `Data\Environments\`.
+/// [`TRACK_SCOPED_AMBIENT_LIGHTS`]** by 32: a generic scene class, authored off the
+/// 40 track/zone files, mostly as single instances outside `Data\Environments\`.
 /// See `docs/formats/lighting.md`'s Open section.
 const PSP_AMBIENT_LIGHTS: usize = 106;
 
 /// `DirectionalLight` instances across the full unfiltered sweep.
 ///
-/// **Higher than [`TRACK_SCOPED_DIRECTIONAL_LIGHTS`]** by 28, the same
-/// off-track pattern as [`PSP_AMBIENT_LIGHTS`].
+/// **Higher than [`TRACK_SCOPED_DIRECTIONAL_LIGHTS`]** by 28 (the off-track
+/// pattern of [`PSP_AMBIENT_LIGHTS`]).
 const PSP_DIRECTIONAL_LIGHTS: usize = 114;
 
 /// `PointLight` instances across the full unfiltered sweep.
 ///
-/// Equal to [`TRACK_SCOPED_POINT_LIGHTS`] - no off-track instance found; the
-/// full sweep's own clustering (density 5..5 per authoring file) lands on the
-/// same two files the track-scoped sweep does.
+/// Equal to [`TRACK_SCOPED_POINT_LIGHTS`]: no off-track instance (the same two
+/// files, five each).
 const PSP_POINT_LIGHTS: usize = 10;
 
 /// `Dynamic Point Light` (`0x3c2`) instances across the full unfiltered sweep.
 ///
-/// Zero, confirming the track-only census this session's plan already
-/// recorded: the class is authored nowhere on the disc, not just nowhere on a
-/// track, so it stays out of render scope entirely rather than merely out of
-/// the track-scoped count.
+/// Zero: the class is authored nowhere on the disc, so it stays out of render
+/// scope entirely.
 const PSP_DYNAMIC_POINT_LIGHTS: usize = 0;
 
 /// `AmbientLight` instances across exactly the 40 track/zone files.
@@ -114,11 +98,9 @@ struct VexFile {
     tree: Vec<vex::Node>,
 }
 
-/// Finds an archive by its full path, not by suffix.
-///
-/// A suffix match is a trap here: `ends_with("Data.wad")` also matches
-/// `BEData.wad` and `FEData.wad`, and the first of those in disc order holds
-/// no tracks at all.
+/// Finds an archive by its full path, not by suffix: `ends_with("Data.wad")` also
+/// matches `BEData.wad` and `FEData.wad`, the first of which in disc order holds
+/// no tracks.
 fn archive_path(disc: &mut DiscImage, name: &str) -> String {
     disc.entries()
         .expect("entries")
@@ -167,10 +149,8 @@ fn vex_files(disc: &mut DiscImage, archive_path: &str) -> Vec<VexFile> {
         if !vex::has_magic(&bytes) {
             continue;
         }
-        // Only the current format version. `Data\Defaults\Skycube.vex` is a
-        // version-4 file whose class ids are from an older numbering, so
-        // walking it here would look for `0x12c`/`0x131`/`0x132` in a file
-        // that predates that numbering entirely.
+        // Only the current format version: `Data\Defaults\Skycube.vex` is version 4
+        // with older class ids, so `0x12c`/`0x131`/`0x132` cannot appear in it.
         if vex::version(&bytes) != Ok(6) {
             continue;
         }
@@ -281,14 +261,11 @@ fn assert_ambient_or_directional_sane(label: &str, colour: [f32; 3], intensity: 
 /// Every light node's payload is **exactly** the length its class expects,
 /// not merely long enough to parse.
 ///
-/// Run on both sweeps: `AmbientLight::parse`/`DirectionalLight::parse`/
-/// `PointLight::parse` all accept a payload that is merely `>=` their
-/// minimum, so a longer-than-expected payload decodes without error and
-/// would otherwise only surface here. This matters most on the full sweep,
-/// not the track-scoped one - the 32 off-track `AmbientLight`/
-/// `DirectionalLight` instances come mostly from a different authoring
-/// pipeline (`ship_FE.vex` front-end models), which is exactly the
-/// population where a different payload length would plausibly turn up.
+/// Run on both sweeps: the `parse` functions accept any payload `>=` their
+/// minimum, so a longer one would otherwise go unseen. It matters most on the full
+/// sweep: the 32 off-track `AmbientLight`/`DirectionalLight` instances come mostly
+/// from a different authoring pipeline (`ship_FE.vex` front-end models), where a
+/// different payload length would plausibly turn up.
 fn assert_payload_lengths(label: &str, tree: &[vex::Node]) {
     for node in vex::nodes_by_class(tree, vex::CLASS_AMBIENT_LIGHT) {
         assert_eq!(
@@ -335,8 +312,7 @@ fn assert_point_sane(label: &str, colour: [f32; 3], range: f32, trailer: [u32; 4
 }
 
 /// Density across files: the count of one class in each file that authors at
-/// least one, so a min/max/mean can be printed without every empty file
-/// dragging the mean toward zero.
+/// least one, so empty files do not drag the mean to zero.
 fn density(counts: &[usize]) -> Option<(usize, usize, f64)> {
     if counts.is_empty() {
         return None;
@@ -347,10 +323,8 @@ fn density(counts: &[usize]) -> Option<(usize, usize, f64)> {
     Some((min, max, mean))
 }
 
-/// The full, unfiltered sweep: every `.vex` in `Data.wad`, every light class,
-/// no name filter. Also settles [`PSP_DYNAMIC_POINT_LIGHTS`], which the
-/// track-only census could not: `Dynamic Point Light` was never checked
-/// off-track before this test existed.
+/// The full, unfiltered sweep: every `.vex` in `Data.wad`, every light class. Also
+/// settles [`PSP_DYNAMIC_POINT_LIGHTS`], never checked off-track before.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd; run with `just test-data`"]
 fn the_full_disc_sweep_matches_the_pinned_counts() {
@@ -369,9 +343,8 @@ fn the_full_disc_sweep_matches_the_pinned_counts() {
     let mut directional_files = Vec::new();
     let mut point_files = Vec::new();
 
-    // Intensity/range extremes across every light of every class: the check
-    // that the "not clamped to 0..=1, HDR-ish" reading in the module docs is
-    // measured on this run rather than carried forward from an earlier one.
+    // Intensity/range extremes across every light: measured on this run, not
+    // carried forward, for the "not clamped to 0..=1" reading in the module docs.
     let mut max_intensity = 0.0f32;
     let mut max_range = 0.0f32;
     let mut max_colour_channel = 0.0f32;
@@ -382,10 +355,9 @@ fn the_full_disc_sweep_matches_the_pinned_counts() {
         let point = lighting::point_lights(&file.bytes, &file.tree);
         let dynamic_point = vex::nodes_by_class(&file.tree, vex::CLASS_DYNAMIC_POINT_LIGHT).count();
 
-        // Decoded count must equal authored count: `filter_map` drops parse
-        // failures silently in the production path, which is right for a
-        // loader and wrong for a check. A dropped light would otherwise read
-        // as "this file has fewer lights", not as an error.
+        // Decoded count must equal authored count: `filter_map` silently drops parse
+        // failures, right for a loader and wrong for a check (a dropped light would
+        // read as "fewer lights").
         let ambient_authored = vex::nodes_by_class(&file.tree, vex::CLASS_AMBIENT_LIGHT).count();
         let directional_authored =
             vex::nodes_by_class(&file.tree, vex::CLASS_DIRECTIONAL_LIGHT).count();
@@ -469,11 +441,9 @@ fn the_full_disc_sweep_matches_the_pinned_counts() {
         println!("PointLight density per authoring file: {min}..{max}, mean {mean:.2}");
     }
 
-    // Deliberately not `assert_eq!(count, 74)` here: this sweep can
-    // legitimately exceed the track-only figures below, since AmbientLight and
-    // DirectionalLight are generic scene classes. What is asserted is the
-    // number this run actually observed against the real disc, pinned so a
-    // later regression shows up as a count that moved.
+    // Not `assert_eq!(count, 74)`: this sweep can exceed the track-only figures
+    // (generic scene classes). The observed number is pinned so a regression shows
+    // as a moved count.
     assert_eq!(
         ambient_total, PSP_AMBIENT_LIGHTS,
         "the full-sweep AmbientLight count moved from the pinned {PSP_AMBIENT_LIGHTS}"
@@ -493,9 +463,8 @@ fn the_full_disc_sweep_matches_the_pinned_counts() {
     );
 }
 
-/// The track-scoped assertion: exactly the 40 known track/zone files, where
-/// this session's own live `oag-view --nodes --class` census already
-/// established 74/86/10. Asserted as literal known values.
+/// The track-scoped assertion: exactly the 40 known track/zone files, against the
+/// live census's 74/86/10 as literal values.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd; run with `just test-data`"]
 fn every_track_file_authors_the_light_counts_the_census_found() {
@@ -508,14 +477,13 @@ fn every_track_file_authors_the_light_counts_the_census_found() {
     let mut directional_total = 0usize;
     let mut point_total = 0usize;
 
-    // Point-light clustering: which source file each instance came from, so
-    // the "exactly 2 files, 5 each" structural claim can be checked without
-    // hardcoding which two files they are.
+    // Point-light clustering by source file, so "exactly 2 files, 5 each" is
+    // checked without hardcoding which two.
     let mut point_files: HashMap<String, usize> = HashMap::new();
 
-    // Direction-basis survey: exploratory data collection for the Ghidra
-    // stage that decides whether direction reads from the rotation basis or
-    // the translation row. Not a strict assertion either way.
+    // Direction-basis survey: exploratory data for the Ghidra stage deciding
+    // whether direction reads from the rotation basis or the translation row; not
+    // a strict assertion.
     let mut identity_rotation_directional = 0usize;
     let mut total_directional = 0usize;
     let mut row2_lengths = Vec::new();
@@ -531,9 +499,8 @@ fn every_track_file_authors_the_light_counts_the_census_found() {
         for light in &directional {
             assert_ambient_or_directional_sane(&name, light.colour, light.intensity);
             total_directional += 1;
-            // 1e-4 per element: loose enough that authoring-time float noise
-            // does not flip the classification, tight enough that a real
-            // rotation does not read as identity.
+            // 1e-4 per element: loose enough for authoring float noise, tight enough
+            // that a real rotation does not read as identity.
             if is_identity_rotation(&light.to_world, 1e-4) {
                 identity_rotation_directional += 1;
             }

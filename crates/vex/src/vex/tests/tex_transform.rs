@@ -1,16 +1,10 @@
 //! The texture-transform keyframe block: how it parses, how it samples, and
 //! when a material has no transform at all.
-//!
-//! Split out of `vex.rs`'s `#[cfg(test)] mod tests`, which was 1,108
-//! lines - past the 200 an inline test module may hold, and past the 1,000
-//! a file may. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
 
-/// A minimal mesh payload carrying the boost plume's own keyframe block -
-/// the bytes as they sit on disc (`docs/formats/vex.md`, "The
-/// texture-transform keyframe block"), so the parser and the sampler are
-/// covered without a disc image; `boost_plume_ground_truth.rs` pins the
-/// same values against every team's real file.
+/// A minimal mesh payload carrying the boost plume's keyframe block as it sits on
+/// disc (`docs/formats/vex.md`, "The texture-transform keyframe block"), covering
+/// the parser and sampler without a disc; `boost_plume_ground_truth.rs` pins the
+/// values against every team's real file.
 #[test]
 fn tex_transform_block_parses_and_samples_like_the_engine() {
     let mut payload = vec![0u8; 0x30];
@@ -58,11 +52,10 @@ fn tex_transform_block_parses_and_samples_like_the_engine() {
 /// Two materials, two blocks, and the second one's key offsets resolving
 /// off the **array base** rather than off its own block.
 ///
-/// Shaped after `16_Track`'s hologram panels, whose two materials scroll V
-/// one tile per 60 and per 120 frames. Read off the wrong base, material 1
-/// decodes to noise (key times in the tens of thousands) rather than
-/// failing, which is why this is pinned rather than left to the
-/// ground-truth test.
+/// Shaped after `16_Track`'s hologram panels (two materials scrolling V one tile
+/// per 60 and per 120 frames). Read off the wrong base, material 1 decodes to
+/// noise (key times in the tens of thousands) rather than failing, hence pinned
+/// here, not left to the ground-truth test.
 #[test]
 fn a_second_materials_block_resolves_its_keys_off_the_array_base() {
     let mut payload = vec![0u8; 0x30];
@@ -120,10 +113,10 @@ fn a_second_materials_block_resolves_its_keys_off_the_array_base() {
 /// The loop period is the block's own `+0x2c`, not the last key time, and
 /// bit 0 of that word snaps the sample to the preceding key.
 ///
-/// Shaped after `16_Track`'s flicker sequences: keys in pairs one frame
-/// apart, ending at frame 12, over an authored 50-frame loop. Reading the
-/// period as `period()` would run them at four times speed and destroy the
-/// phase interleave with their siblings.
+/// Shaped after `16_Track`'s flicker sequences: key pairs one frame apart, ending
+/// at frame 12, over an authored 50-frame loop. Reading the period as `period()`
+/// would run them at four times speed and destroy the phase interleave with their
+/// siblings.
 #[test]
 fn the_loop_period_and_step_flag_come_from_the_block_not_the_keys() {
     let mut payload = vec![0u8; 0x30];
@@ -171,11 +164,10 @@ fn the_loop_period_and_step_flag_come_from_the_block_not_the_keys() {
 /// A material without the `& 0x10` flag has no transform, whatever the
 /// bytes where its block would sit happen to say.
 ///
-/// The engine's own gate (`Mesh_UpdateTextureTransforms` evaluates only
-/// flagged materials), and the thing that keeps a payload which is not
-/// really an animated mesh from picking up an animation: arbitrary bytes
-/// read as a plausible block often enough that "the counts are non-zero"
-/// is not a safe predicate on its own.
+/// The engine's own gate (`Mesh_UpdateTextureTransforms` evaluates only flagged
+/// materials), which keeps a non-animated payload from picking up an animation:
+/// arbitrary bytes read as a plausible block often enough that "the counts are
+/// non-zero" is not a safe predicate alone.
 #[test]
 fn a_material_without_the_flag_has_no_transform_however_the_bytes_read() {
     let mut payload = vec![0u8; 0x30];

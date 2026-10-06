@@ -1,18 +1,15 @@
 //! What [`super::Occluder`] is asserted to do, on a payload built here.
 //!
-//! The disc-wide numbers this module's docs quote are pinned by
-//! `crates/formats/tests/shadow_occluder_ground_truth.rs`, which needs a disc
-//! image. What is here is the arithmetic that has to hold whatever the disc
-//! says: the strides, the sentinel, and the silhouette walk.
+//! The disc-wide numbers the module docs quote are pinned by
+//! `crates/vex/tests/shadow_occluder_ground_truth.rs` (needs a disc image);
+//! this is the arithmetic that holds whatever the disc says: the strides, the
+//! sentinel, the silhouette walk.
 
 use super::*;
 
-/// A tetrahedron in the shipped layout: four triangles over four vertices,
-/// wound and cross-linked the way `shadow_mineShape` is.
-///
-/// Built rather than copied out of a file - no game content lands in this
-/// repository, per ADR-0006 - but the *shape* is that node's: one face
-/// pointing down, three up-and-outward, each edge naming the face across it.
+/// A tetrahedron in the shipped layout, wound and cross-linked like
+/// `shadow_mineShape`: built, not copied (no game content in the repository,
+/// ADR-0006), but one face pointing down and three up-and-outward.
 fn tetrahedron() -> Vec<u8> {
     // (0,0,0), (1,0,0), (0,0,1) on the floor, (0,1,0) above them.
     let vertices: [[f32; 3]; 4] = [
@@ -170,18 +167,17 @@ fn the_silhouette_is_the_ring_between_what_faces_the_light_and_what_does_not() {
 fn a_direction_nothing_faces_has_no_silhouette() {
     let occluder = Occluder::parse(&tetrahedron(), ByteOrder::Little).expect("closes");
     // Every edge of a closed hull is shared by two faces, so a direction where
-    // *every* face is front-facing cancels every edge. The fixture has no such
-    // direction, but the empty case has to be reachable rather than a panic:
-    // the degenerate zero direction faces nothing at all.
+    // *every* face is front-facing cancels every edge. The fixture has none, but
+    // the empty case must be reachable rather than a panic (the zero direction
+    // faces nothing).
     assert!(occluder.silhouette([0.0, 0.0, 0.0]).is_empty());
 }
 
 #[test]
 fn an_open_hull_keeps_its_boundary_edges() {
-    // Two faces sharing one edge, six boundary edges between them - the shape
-    // `Data.wad#242` and `#244` actually carry. A boundary edge has nothing on
-    // the other side to cancel it, so it is on the silhouette whenever its own
-    // face is.
+    // Two faces sharing one edge, six boundary edges: the shape `Data.wad#242`
+    // and `#244` carry. A boundary edge has nothing to cancel it, so it is on the
+    // silhouette whenever its own face is.
     let mut payload = tetrahedron();
     // Drop to one face by rewriting the count and truncating - the closure
     // check is what keeps this honest.
@@ -210,10 +206,9 @@ fn the_silhouette_chains_into_one_closed_ring() {
 
 #[test]
 fn a_tetrahedron_outlines_three_edges_from_every_direction() {
-    // A convex hull's silhouette is one ring from any direction that is not
-    // exactly edge-on, and a tetrahedron's is always three edges. Six
-    // directions rather than one: a walk that only works for the direction it
-    // was written against is not a silhouette walk.
+    // A convex hull's silhouette is one ring from any direction not exactly
+    // edge-on, a tetrahedron's always three edges. Six directions: a walk that
+    // only works for the one it was written against is not a silhouette walk.
     let occluder = Occluder::parse(&tetrahedron(), ByteOrder::Little).expect("closes");
     for direction in [
         [0.097_589_54, -0.975_895_4, 0.195_179_08],

@@ -1,21 +1,12 @@
 //! PS2 batches: the VIF command stream decoded into vertices, and the packets
 //! refused.
-//!
-//! Split out of `vex.rs`'s `#[cfg(test)] mod tests`, which was 1,108
-//! lines - past the 200 an inline test module may hold, and past the 1,000
-//! a file may. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
 
 use crate::vex::*;
 
-/// Builds a PS2 batch: a 0x40 header, then the region header, DMA tag and
-/// VIF command stream a real one carries.
-///
-/// Hand-built rather than captured, because a real batch is game data and
-/// cannot be committed. The shape is the one
-/// `crates/formats/tests/vex_ps2_ground_truth.rs` checks against every model
-/// on the disc; this is what keeps the same paths covered in CI, where there
-/// is no disc.
+/// Builds a PS2 batch: a 0x40 header, then the region header, DMA tag and VIF
+/// command stream a real one carries. Hand-built (a real batch is game data), in
+/// the shape `crates/vex/tests/vex_ps2_ground_truth.rs` checks against every
+/// model on the disc, keeping the same paths covered in CI.
 fn ps2_batch(
     vertex_type: u16,
     primitive_type: u8,

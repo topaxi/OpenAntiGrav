@@ -1,10 +1,5 @@
 //! The node tree: the class table a version word selects, the walk over the
 //! nodes, and the world transforms composed down the chain.
-//!
-//! Split out of `vex.rs`'s `#[cfg(test)] mod tests`, which was 1,108
-//! lines - past the 200 an inline test module may hold, and past the 1,000
-//! a file may. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
 
 use crate::vex::*;
 use oag_formats::ByteOrder;
@@ -62,9 +57,8 @@ fn build_tree(nodes: &[(u32, usize, usize)]) -> Vec<u8> {
 
 /// The same file, written the way the console `order` names would write it.
 ///
-/// The PS3 export is not a different layout, only a different byte order and a
-/// reversed magic - which is the claim `docs/formats/hd-status.md` measures over
-/// 40 shipped files and this builder lets a unit test state.
+/// The PS3 export is the same layout with a different byte order and a reversed
+/// magic, which `docs/formats/hd-status.md` measures over 40 shipped files.
 fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
     let u16 = |v: u16| -> Vec<u8> {
         match order {
@@ -107,10 +101,9 @@ fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
 
 /// The same tree, written both ways round, walks to the same nodes.
 ///
-/// A file declares its order in its own magic, so nothing outside has to be
-/// told which console it came from - see `oag_formats::byte_order`. The
-/// negative half matters as much: read the big-endian file little-endian and
-/// the header alone is nonsense.
+/// A file declares its order in its own magic (`oag_formats::byte_order`). The
+/// negative half matters as much: read the big-endian file little-endian and the
+/// header alone is nonsense.
 #[test]
 fn a_big_endian_file_walks_to_the_same_tree_as_its_little_endian_twin() {
     let shape = [(1, 1, 0), (2, 0, 16), (3, 0, 0)];
@@ -160,10 +153,9 @@ fn walks_a_flat_tree() {
 
 /// A parent whose subtree is finished must stop counting as an ancestor.
 ///
-/// `root -> a -> b`, then a sibling of `root`. The sibling is at depth 0, and
-/// reporting it at depth 2 is what an implementation does if it retires
-/// finished subtrees after reading the depth instead of before. Nothing reads
-/// `depth` yet, which is the only reason this was survivable.
+/// `root -> a -> b`, then a sibling of `root` at depth 0 (not 2, as results if
+/// finished subtrees retire after reading the depth instead of before). Nothing
+/// reads `depth` yet, the only reason the bug was survivable.
 #[test]
 fn depth_returns_to_zero_after_a_completed_subtree() {
     let data = build_tree(&[(1, 1, 0), (2, 1, 0), (3, 0, 0), (4, 0, 0)]);

@@ -3,12 +3,8 @@
 //! environment classes (`sea` `0x3d5`, `seareflect` `0x3d7`, `seaweed` `0x3d6`)
 //! author no instance anywhere on either disc.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content; see
-//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! See `crates/vex/src/cloud.rs` and
 //! `docs/ghidra/functions/psp-pulse-usa/clouds.md` for the claim under test and
