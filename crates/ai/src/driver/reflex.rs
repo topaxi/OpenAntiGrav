@@ -48,6 +48,7 @@ pub struct Reflex {
     /// taking the channel mid-wait starts its own clock instead of inheriting
     /// the first one's remainder.
     pub pending: [u8; 3],
+    /// Ticks left before [`Self::pending`] is acted on.
     pub wait: [u16; 3],
 }
 

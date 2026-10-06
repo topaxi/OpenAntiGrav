@@ -18,6 +18,7 @@
 /// evidence is in `docs/gameplay/ai.md`, "Tuning sweep tables".
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tuning {
+    /// Lookahead distance at a standstill.
     pub look_min: f32,
     /// Extra lookahead per unit of forward speed, roughly "seconds ahead".
     ///
@@ -40,6 +41,7 @@ pub struct Tuning {
     pub look_speed: f32,
     /// Lookahead ceiling. Past this a craft stops seeing the corner it is in.
     pub look_max: f32,
+    /// Gain from turn-rate error onto the steering input.
     pub rate_gain: f32,
     /// Ceiling on the turn rate the geometry may ask for, in radians per second.
     ///

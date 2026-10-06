@@ -478,6 +478,7 @@ impl Driver {
         self.place = now;
     }
 
+    /// How provoked this driver is, `0.0..=1.0`.
     fn provoked(&self) -> f32 {
         f32::from(self.provocation) / f32::from(PROVOCATION_MAX)
     }

@@ -16,6 +16,7 @@ use oag_physics::Raycaster;
 use super::{Course, Craft, Run, SpeedPlan, forward_speed};
 use crate::Tuning;
 
+/// Width of one speed bin, units per second.
 const BIN: f32 = 10.0;
 
 /// Bins in the table: up to 640 units per second, past every class's top

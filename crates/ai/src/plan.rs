@@ -81,6 +81,7 @@ pub struct Course<'a, R: Raycaster + ?Sized> {
 /// The craft the plan is for, and where it starts.
 #[derive(Debug, Clone, Copy)]
 pub struct Craft {
+    /// Its handling, off the disc.
     pub handling: Handling,
     pub start: ShipState,
     pub start_index: u32,
@@ -114,6 +115,7 @@ pub struct Report {
     /// included. Multiply by the per-step cost for a build time.
     pub steps: u64,
     pub passes: u32,
+    /// Ceilings lowered, summed over every pass.
     pub lowerings: u32,
     /// Line samples where the search gave up: the craft still failed there
     /// after [`MAX_TRIES`] lowerings. Each is a corner the plan cannot promise.

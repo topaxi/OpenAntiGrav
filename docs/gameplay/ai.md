@@ -622,6 +622,10 @@ outright at `0.22` and `0.20`, two adjacent points further down the same
 slope - **improve** over the old default at `0.30` rather than merely holding,
 which is why `0.30` was chosen over the lower values that scored higher on
 `13` alone.
+**Superseded 2026-09-07** for the field columns: after
+`oag_physics::pair::overlap`'s correction the field floors no longer separate
+`0.22` or `0.20` from `0.30`, so the reason for `0.30` over the lower values is
+gone and it stays shipped unmoved. See "Tuning sweep tables".
 
 **`07_Track` is unchanged by this**, at `0.00` end shield in every row swept.
 Its per-lap loss falls (28-30 down to 22-25 at `0.30`) but the craft still

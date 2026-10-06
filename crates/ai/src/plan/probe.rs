@@ -28,7 +28,9 @@ pub struct Row {
     pub right: f32,
     pub steer: f32,
     pub position: Vec3,
+    /// World-Y velocity.
     pub climb: f32,
+    /// World-Y component of the craft's nose direction.
     pub pitch: f32,
     pub contact: bool,
     pub airborne: bool,

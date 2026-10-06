@@ -59,11 +59,9 @@ use oag_ai::probe::{self, Scenario};
 /// # History
 ///
 /// Each regeneration was a deliberate behaviour change; which rows moved says
-/// what the change reached. `oag-core`, `oag-physics` and `oag-gameplay`'s gates
-/// passed unchanged each time unless noted, and the scenario's own curvature
-/// spread stayed `0.000255..0.020490` / `0.000036..0.026295`
-/// ([`the_scenario_still_exercises_corners_and_craft_that_drive`] measures the
-/// line, not what a driver read off it).
+/// what the change reached. Where an entry says the other gates held it is
+/// because that entry's change recorded it. [`the_scenario_still_exercises_corners_and_craft_that_drive`]
+/// measures the line, not what a driver read off it.
 ///
 /// - **2026-08-15**: first recorded with the `acos` fix. No previous reference.
 /// - **2026-08-24, `Field` rows, twice**: `Driver::ram` measures corridor
@@ -71,11 +69,12 @@ use oag_ai::probe::{self, Scenario};
 ///   ram may only target the player's slot (`driver::ram`'s `PLAYER_SLOT`).
 ///   **`Solo` did not move on either**: a craft with nobody alongside never
 ///   reaches the gate, the check that each change stayed on its path.
+///   `oag_gameplay`'s gate did not move (its scenario flies no pilot).
 /// - **2026-09-06, all rows**: [`oag_ai::Line::curvature`]'s three walks all
 ///   root at `index` instead of chaining off each other's landing index, moving
 ///   every angle by a sub-sample amount (hence `Solo` moved). **Isolated**: the
 ///   same commit's zero-chord guard applied alone reproduced all rows bit for
-///   bit.
+///   bit. `oag-core`, `oag-physics` and `oag-gameplay`'s gates passed unchanged.
 /// - **2026-09-06, all rows, later**: [`oag_ai::Tuning::curvature_span`]'s
 ///   ceiling (eleven units), changing what the estimator measures over on every
 ///   reading above a standstill. **Isolated**: the same change's yaw-rate term in
@@ -84,16 +83,20 @@ use oag_ai::probe::{self, Scenario};
 ///   reproduced them again, so the ceiling is the whole movement. **Recorded
 ///   twice that day**: the first chosen value was ten and turned two disc-backed
 ///   field tests red; these are the eleven-unit hashes (a `Solo` row reading
-///   `0x94d4_044f...` is the rejected value's).
+///   `0x94d4_044f...` is the rejected value's). The three gates above passed
+///   unchanged and the scenario's curvature spread was untouched
+///   (`0.000255..0.020490`, `0.000036..0.026295`).
 /// - **2026-09-06, all rows, third**: [`oag_ai::Tuning::look_speed`] `0.35` to
 ///   `0.30`, which sets the steering lookahead on every reading, so all three
-///   moved.
+///   moved. The three gates above passed unchanged, spread untouched.
 /// - **2026-09-07, `Field` rows**: [`oag_ai::Driver::social`] reads
 ///   `ctx.field.alongside` (preferred over `behind`). `Solo` carries no rival and
-///   reproduced bit for bit (`0x65d7_0dd3_7566_c624`).
+///   reproduced bit for bit (`0x65d7_0dd3_7566_c624`). The three gates above
+///   passed unchanged, spread untouched.
 /// - **2026-09-08, `Field` rows**: `Driver::social`'s `CONTACT_FLOOR`. `Solo`
 ///   reproduced bit for bit again (`0x65d7_0dd3_7566_c624`, `0xb1f8_d6c8_1437_06ee`),
-///   confirming the floor fires only alongside a rival. `Driver::holds_fire`,
+///   confirming the floor fires only alongside a rival; the three gates above
+///   passed unchanged. `Driver::holds_fire`,
 ///   added the same day, cannot reach this file: no weapon exists in the probe.
 /// - **2026-09-11, all rows**: the differential airbrake's
 ///   `Driver::peak_curvature` and `driver::pace::trail`'s gate built on it. Not a
@@ -104,7 +107,8 @@ use oag_ai::probe::{self, Scenario};
 ///   hashes were `0x00ba_9d38_3cae_9ba4` / `0x7f2b_8f0b_f392_44fa` (`Solo`),
 ///   `0x7a39_e5be_5990_378b` / `0x72cc_ce44_8811_242c` (`Field`/600) and
 ///   `0xf426_db64_a7e7_393b` / `0x986a_1ec6_55d7_a781` (`Field`/1,800), still
-///   moved from before: the gate alone accounts for it.
+///   moved from before: the gate alone accounts for it. `oag-core` and
+///   `oag-physics`'s gates were untouched (`trail` is `oag-ai` only).
 /// - **2026-09-11, all rows, later**: [`oag_ai::Tuning::trail_deadband`],
 ///   [`oag_ai::Tuning::trail_gain`], [`oag_ai::Tuning::trail_saturation`]
 ///   (`0.7`/`0.05`/`3.0`; sweep in `docs/gameplay/ai.md`, "Tuning sweep tables").
@@ -115,7 +119,8 @@ use oag_ai::probe::{self, Scenario};
 /// - **2026-09-30, all rows**: `Line::curvature`'s `bend_angle` (yaw plus the
 ///   *convex* pitch). This line is flat so no corner moved: the yaw from chords
 ///   flattened onto the ground plane differs from the plain chord angle in the
-///   last bit. No transcendental added; `oag_core::math::acos` is the only one.
+///   last bit; the spread reads `0.000255..0.020490` and `0.000030..0.026295`.
+///   No transcendental added; `oag_core::math::acos` is the only one.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,

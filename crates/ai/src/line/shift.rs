@@ -16,6 +16,7 @@ use super::Frame;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Target {
     pub index: usize,
+    /// How far across, before the corridor clamps it.
     pub offset: f32,
 }
 

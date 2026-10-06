@@ -236,6 +236,7 @@ impl WeaponAi {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mover {
     pub position: Vec3,
+    /// World velocity, units a second.
     pub velocity: Vec3,
 }
 
