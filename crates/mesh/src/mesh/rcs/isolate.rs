@@ -26,7 +26,7 @@
 //!   off, which answers the question that follows: "is this surface dark
 //!   because its *art* is dark, or because the light reaching it is". Both
 //!   this and `OAG_TINT_MATERIALS` work by clearing `GpuVertex::lit`, the
-//!   flag `mesh.wgsl` already reads to pick its unlit path, so neither needs a
+//!   flag `mesh.wesl` already reads to pick its unlit path, so neither needs a
 //!   pipeline or a shader of its own.
 //!
 //! Both match the material's own archive path

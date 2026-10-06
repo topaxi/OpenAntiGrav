@@ -5,7 +5,7 @@
 //! `device.create_render_pipeline` several times, once per drawable - once
 //! per craft, per plume, per shield, per weapon model, some seventy calls in
 //! one race scene. Naga reparses, revalidates and re-lowers the same
-//! `mesh.wgsl` text every time, and re-specialises an override-constant
+//! `mesh.wesl` text every time, and re-specialises an override-constant
 //! pipeline from scratch, even between two drawables asking for the exact
 //! same pipeline - eight identical hulls built eight identical pipelines.
 //! That is the bulk of the 7.2-8.1 s `race::Scene::new` measures on a
@@ -124,7 +124,7 @@ impl Scope {
     /// Only Omega's nova prelit curve so far: a light that is not nova is a
     /// title that never is, since nothing mid-race turns it on - a Zone grade
     /// rebuilds the light from this one and carries its flag, never sets it.
-    /// A drawable built outside the scope keeps `mesh.wgsl`'s live default and
+    /// A drawable built outside the scope keeps `mesh.wesl`'s live default and
     /// shades the same, only without the saving. Call it before the first
     /// `build()`: a pipeline built earlier is cached without the constant.
     pub fn lit_by(&self, light: &super::Light) {
@@ -211,7 +211,9 @@ pub(crate) fn shared_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule 
 fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("mesh"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("../mesh.wgsl").into()),
+        source: wgpu::ShaderSource::Wgsl(
+            include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl")).into(),
+        ),
     })
 }
 

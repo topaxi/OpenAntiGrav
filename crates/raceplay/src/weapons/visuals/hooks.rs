@@ -11,8 +11,8 @@ impl Race {
     pub fn leach_energy_for_tests(&self) -> (Option<oag_fx::psys::Playing>, usize) {
         let alive = self
             .view
-            .effects
-            .get(LEACHBEAM_ENERGY_EFFECT)
+            .handles
+            .get(Trigger::LeachbeamEnergy)
             .map_or(0, |effect| self.view.stage.alive_of_effect(effect));
         (self.view.leach_beam_effect, alive)
     }
@@ -35,10 +35,13 @@ impl Race {
         true
     }
 
-    /// A loaded particle effect by name, for tests.
+    /// The loaded particle effect a trigger plays, for tests.
     #[doc(hidden)]
     #[must_use]
-    pub fn effect_for_tests(&self, name: &str) -> Option<std::sync::Arc<oag_fx::psys::Effect>> {
-        self.view.effects.get(name).cloned()
+    pub fn effect_for_tests(
+        &self,
+        trigger: Trigger,
+    ) -> Option<std::sync::Arc<oag_fx::psys::Effect>> {
+        self.view.handles.get(trigger).cloned()
     }
 }

@@ -41,7 +41,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// see that test's `mod hd` doc comment for why the fuller three-bucket sweep
 /// does not run there yet.
 ///
-/// **The two [`TRAIL_HITSHIP_EFFECT`] variants are the one exception**, and a
+/// **The two [`Trigger::TrailHitship`] variants are the one exception**, and a
 /// narrow one: their consumer, spawner and colour select are all read, and
 /// only the geometric *test* - which runs in the `Trails` SPU job - is not.
 /// Nothing about the effect is invented, only the moment it fires, and
@@ -51,68 +51,71 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// own archive membership, independent of the executable's variant-select
 /// instruction engine-trail.md reads.
 ///
-/// **It is a superset across sources, not a per-disc list.** An entry absent
-/// from the mounted archives is reported by the loader and skipped, so naming
-/// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 39] = [
-    sparks::DAMAGE_EFFECT,
-    ROCKET_FLARE_EFFECT,
-    MISSILE_FLARE_EFFECT,
-    PLASMA_FLARE_EFFECT,
-    PLASMA_BLAST_EFFECT,
-    // HD's own Plasma detonation pair - see both constants' own doc
-    // comments. `_EXPAND` at detonation, `_COLLAPSE` 1.3 s later; neither
-    // is on the PSP or PS2 disc, so both are absent from `PSP_WIRED` and
-    // `PS2_WIRED` in `crates/game/tests/psys_inventory_ground_truth.rs`.
-    PLASMA_LIGHTNING_EXPAND_EFFECT,
-    PLASMA_LIGHTNING_COLLAPSE_EFFECT,
-    SHURIKEN_FLARE_EFFECT,
-    SHURIKEN_BOUNCE_EFFECT,
-    SHURIKEN_EXPIRE_EFFECT,
-    TRACK_BLAST_EFFECT,
-    CRAFT_BLAST_EFFECT,
-    MISSILE_EXPLO_EFFECT,
-    MISSILE_BOUNCE_EFFECT,
-    MINE_EXPLO_EFFECT,
-    BOMB_SMOKERING_EFFECT,
-    CANNON_SPARKS_EFFECT,
-    ENGINE_FLARE_EFFECT,
-    TRAIL_HITSHIP_EFFECT,
-    TRAIL_HITSHIP_RED_EFFECT,
-    QUAKE_EFFECT,
-    REPULSER_BLAST_EFFECT,
-    REPULSER_EFFECT,
-    LEACHBEAM_ENERGY_EFFECT,
-    LEACHBEAM_CHARGING_EFFECT,
-    // Wipeout HD's own drain-trip burst - see that constant's own doc
-    // comment. Not on the PSP or PS2 disc, the same footing the two Plasma
-    // lightning names above already have.
-    LEACHBEAM_ABSORB_EFFECT,
-    // HD's Cannon craft-hit spark - see `race::hit_sparks::throw_weapon_spark`.
-    WEAPON_SPARK_EFFECT,
-    // The absorb burst - see `race::absorb` for its trigger on each title.
-    ABSORB_EFFECT,
-    // A landed LeachBeam drain's hull sparks - see `race::hit_sparks`. The
-    // other weapons' are `sparks::DAMAGE_EFFECT`, already first above.
-    super::hit_sparks::LEACHBEAM_HIT_SPARK_EFFECT,
-    // What a craft throws at each wreck node as it goes out - see
-    // `race::wreck_fx`.
-    super::wreck_fx::FXNODE_EXPLO_EFFECT,
-    super::wreck_fx::DEATH_SPARKS_EFFECT,
-    super::wreck_fx::EXPLOSION_EFFECT,
-    // 2048's magstrip contact effect - see `race::magstrip_wake`.
-    super::effect_names::MAGSTRIP_SPARKS_EFFECT,
-    super::effect_names::MAGSTRIP_ZONE_EFFECT,
-    // What a circuit places on its own scenery, from load - see
-    // `race::scenery_fx`.
-    BLUE_WELDER_EFFECT,
-    MODESTO_STEAM_EFFECT,
-    // A circuit's `<Weather>` element names one of these - see
-    // `race::scenery_fx::weather`.
-    RAIN_EFFECT,
-    RAIN_LENS_EFFECT,
-    SNOW_EFFECT,
-];
+/// **It is derived, and a superset across titles.** Every name any title's
+/// [`oag_title::Effects`] table carries, each once. A race loads only its own
+/// title's names - [`oag_title::Effects::names`] - and resolves each
+/// [`Trigger`] to its loaded effect once, in [`EffectHandles`]. An entry
+/// absent from the mounted archives is reported by the loader and skipped, so
+/// naming a PS2-only effect costs a PSP race one report line and nothing
+/// else.
+pub const RACE_EFFECTS: RaceEffects = RaceEffects;
+
+/// The names [`RACE_EFFECTS`] holds, derived once from the titles' tables. A
+/// unit type behind a `const` so the list reads as the array it replaced:
+/// `RACE_EFFECTS.iter()`, `.contains(..)`, `for name in RACE_EFFECTS`.
+#[derive(Debug, Clone, Copy)]
+pub struct RaceEffects;
+
+static RACE_EFFECT_NAMES: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| {
+    let mut names: Vec<&'static str> = Vec::new();
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_2048::TITLE,
+    ] {
+        for name in title.effects.names() {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
+});
+
+impl RaceEffects {
+    /// Every name, in first-seen order.
+    pub fn iter(self) -> std::slice::Iter<'static, &'static str> {
+        RACE_EFFECT_NAMES.iter()
+    }
+
+    /// Whether `name` is one of them.
+    #[must_use]
+    pub fn contains(self, name: &&str) -> bool {
+        RACE_EFFECT_NAMES.contains(name)
+    }
+
+    /// How many there are.
+    #[must_use]
+    pub fn len(self) -> usize {
+        RACE_EFFECT_NAMES.len()
+    }
+
+    /// Whether there are none.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        RACE_EFFECT_NAMES.is_empty()
+    }
+}
+
+impl IntoIterator for RaceEffects {
+    type Item = &'static str;
+    type IntoIter = std::iter::Copied<std::slice::Iter<'static, &'static str>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        RACE_EFFECT_NAMES.iter().copied()
+    }
+}
 
 impl Race {
     /// Advances every active craft's exhaust and lays down its trail sample.
@@ -288,12 +291,12 @@ impl Race {
                     self.view.trail_inside[owner] &= !bit;
                     continue;
                 }
-                let name = if self.view.hd_trail_red[intruder] > 0.5 {
-                    TRAIL_HITSHIP_RED_EFFECT
+                let trigger = if self.view.hd_trail_red[intruder] > 0.5 {
+                    Trigger::TrailHitshipRed
                 } else {
-                    TRAIL_HITSHIP_EFFECT
+                    Trigger::TrailHitship
                 };
-                let Some(effect) = self.view.effects.get(name).cloned() else {
+                let Some(effect) = self.view.handles.get(trigger).cloned() else {
                     continue;
                 };
                 // **On the hull, not on the ribbon.** The original parents the
@@ -360,12 +363,12 @@ impl Race {
         let probe = self.spark_anchor_of(0, 0).unwrap_or_else(|| {
             hull_contact_point(body.position, above, self.view.hull_reach[0].max(1.0))
         });
-        let name = if self.view.hd_trail_red[0] > 0.5 {
-            TRAIL_HITSHIP_RED_EFFECT
+        let trigger = if self.view.hd_trail_red[0] > 0.5 {
+            Trigger::TrailHitshipRed
         } else {
-            TRAIL_HITSHIP_EFFECT
+            Trigger::TrailHitship
         };
-        let Some(effect) = self.view.effects.get(name).cloned() else {
+        let Some(effect) = self.view.handles.get(trigger).cloned() else {
             return;
         };
         self.view.stage.play(&effect, probe, 1.0);
@@ -782,7 +785,7 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
-        let Some(effect) = self.view.effects.get(sparks::DAMAGE_EFFECT) else {
+        let Some(effect) = self.view.handles.get(Trigger::CollisionSpark) else {
             return;
         };
         self.view
@@ -850,7 +853,7 @@ impl Race {
     /// neither of those has an authored counterpart on either disc.
     #[must_use]
     pub fn engine_flare_effect(&self) -> bool {
-        self.view.effects.get(ENGINE_FLARE_EFFECT).is_some()
+        self.view.handles.get(Trigger::EngineFlare).is_some()
     }
 
     /// How many spark bursts the contact rule has triggered.

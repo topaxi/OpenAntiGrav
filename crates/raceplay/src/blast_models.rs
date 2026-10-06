@@ -299,8 +299,8 @@ impl Race {
         let collapse_effect = hd
             .then(|| {
                 self.view
-                    .effects
-                    .get(PLASMA_LIGHTNING_COLLAPSE_EFFECT)
+                    .handles
+                    .get(Trigger::PlasmaLightningCollapse)
                     .cloned()
             })
             .flatten();

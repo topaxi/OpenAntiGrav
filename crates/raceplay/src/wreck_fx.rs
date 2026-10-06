@@ -48,15 +48,6 @@
 use super::*;
 use oag_livery::SparkAnchor;
 
-/// The blast at each wreck node.
-pub const FXNODE_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_EXPLO";
-
-/// The sparks beside it.
-pub const DEATH_SPARKS_EFFECT: &str = "WO_SHIP_DEATH_SPARKS";
-
-/// The big blast, 1.5 s after the state 5 edge.
-pub const EXPLOSION_EFFECT: &str = "WO_SHIP_EXPLOSION";
-
 /// How far below the craft's model origin the big blast is placed, in the
 /// model's own rows: `FUN_088407b0` subtracts `DAT_08ab0de8` (`4.0`, read in
 /// `.data` and live) times the world matrix's second row, which is `0.75`
@@ -72,7 +63,7 @@ pub(super) fn anchors(
     title: &oag_title::Title,
     liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
-    if title.effect_on(oag_title::Trigger::Wreck).is_none() {
+    if title.effect_on(oag_title::Trigger::WreckNode).is_none() {
         return Vec::new();
     }
     liveries
@@ -124,8 +115,8 @@ impl Race {
         for node in 0..nodes {
             // The explosion first and the sparks second, per node, as the
             // original's loop spawns them.
-            for name in [FXNODE_EXPLO_EFFECT, DEATH_SPARKS_EFFECT] {
-                let Some(effect) = self.view.effects.get(name).cloned() else {
+            for trigger in [Trigger::WreckNode, Trigger::WreckSparks] {
+                let Some(effect) = self.view.handles.get(trigger).cloned() else {
                     continue;
                 };
                 let anchor = self.view.wreck_fx.anchors[slot][node];
@@ -165,7 +156,7 @@ impl Race {
             model.w_axis.truncate(),
             model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y),
         );
-        let Some(effect) = self.view.effects.get(EXPLOSION_EFFECT).cloned() else {
+        let Some(effect) = self.view.handles.get(Trigger::WreckExplosion).cloned() else {
             return;
         };
         let at = model.transform_point3(Vec3::new(0.0, -EXPLOSION_DROP, 0.0));

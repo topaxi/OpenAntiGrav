@@ -564,7 +564,7 @@ still open, most player-visible first:
   unported (unread meaning). Verified by screenshot against
   `data/images/pulse-psp-eu.chd`, growth clearest in the back half of the
   1 s wind-up; see
-  [`PLASMA_FLARE_EFFECT`](../../crates/raceplay/src/effect_names.rs)'s
+  [`PLASMA_FLARE_EFFECT`](../../crates/title/src/engine_effects.rs)'s
   doc comment.
 - ~~**`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
   site.** It sits immediately before the plasma blast's own models in the same

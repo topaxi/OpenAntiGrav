@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the shading-change pass, ported to
 // WGSL. Transliterated from `ffx_fsr3upscaler_shading_change.h`, AMD FidelityFX
-// SDK v1.1.4, MIT - see `common.wgsl`'s header and
+// SDK v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // Reads the pyramid the previous pass built and collapses three of its levels
@@ -21,6 +21,15 @@
 // the pyramid through a linear clamp sampler at an explicit mip level, so the
 // half-resolution grid it walks is interpolated across each level's coarser
 // one rather than snapped to it.
+import package::fsr3::common::{
+    I_SHADING_CHANGE_MIP_START,
+    clamp_uv,
+    is_on_screen,
+    jitter,
+    linear_clamp,
+    render_size,
+    shading_change_render_size,
+};
 
 @group(1) @binding(0) var r_spd_mips: texture_2d<f32>;
 @group(1) @binding(1) var rw_shading_change: texture_storage_2d<rgba8unorm, write>;

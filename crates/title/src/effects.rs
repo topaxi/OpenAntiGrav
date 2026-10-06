@@ -12,28 +12,32 @@
 //!   re-exported at this crate's root and matched in `oag-game`; a second enum
 //!   under the same name would be a trap. `Origin` is the ADR's `Provenance`
 //!   with its three variants.
-//! - **[`Effects`] is a struct of `Option`s, not a slice of `(Trigger,
-//!   EffectSpec)`.** ADR item 4 wants a title to build its table from Pulse's
-//!   with struct-update syntax, and a `const` slice cannot be updated, only
-//!   replaced whole. [`Title::effect_on`](crate::Title::effect_on) is a `match`
-//!   over the fields, so a new [`Trigger`] cannot be added without answering it
-//!   here.
-//! - **[`EffectSpec::effects`] is a list.** A wreck throws three effects, and
-//!   one string would have named one of them.
+//! - **[`Effects`] is an array indexed by [`Trigger`], built with
+//!   [`Effects::with`], not a slice of `(Trigger, EffectSpec)`.** ADR item 4
+//!   wants a title to build its table from another's, and a `const` slice
+//!   cannot be updated, only replaced whole; `with` is a `const fn` over a
+//!   fixed-size array, so a new [`Trigger`] cannot be added without growing
+//!   [`Trigger::COUNT`] and answering it in [`Effects::engine`] or by a title.
+//! - **[`EffectSpec::effect`] is one name.** A moment that throws several
+//!   effects (a wreck throws three) is several triggers.
 //! - **[`Burst`] lives here** (it was `oag_raceplay::AbsorbBurst`): this crate is
 //!   below `oag-raceplay`, and a title's table has to be able to hold it.
 //!
 //! # 2048 and Omega
 //!
-//! Both carry [`Effects::NONE`], checked against each other as CLAUDE.md asks.
-//! Omega's executable carries HD's weapon-spark and absorb strings, so its
-//! entries are "checked, applies, not wired": the wiring is unread, and a
-//! string in a binary is not a measured trigger. 2048's are unread outright.
-//! Neither draws anything, which is the same silence the loader had before this
-//! table; no report line was written for it then and none is now.
+//! Both carry [`Effects::engine`] only, taken from Pulse by inheritance, and
+//! none of the four triggers a title answers for itself (the weapon-hit
+//! sparks, the weapon spark, the absorb burst, the wreck), checked against
+//! each other as CLAUDE.md asks. Omega's executable carries HD's weapon-spark
+//! and absorb strings, so its entries are "checked, applies, not wired": the
+//! wiring is unread, and a string in a binary is not a measured trigger.
+//! 2048's are unread outright. Neither draws anything there, which is the same
+//! silence the loader had before this table; no report line was written for it
+//! then and none is now.
 //!
 //! [ADR-0058]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md
 
+use crate::engine_effects;
 use oag_disc::Platform;
 
 /// Where one entry of a title's behaviour table came from.
@@ -57,19 +61,136 @@ pub enum Origin {
 
 /// A moment in a race a title answers with an effect.
 ///
+/// One effect per trigger. A moment that throws several (a wreck throws three)
+/// is several triggers, so the effect a firing site wants is an index and a
+/// misspelt one is a compile error. [`Self::ALL`] is in the order the loader
+/// loads them, which is the order its report reads in.
+///
 /// Added to per trigger as each is read: one measured on a single title alone
 /// would stay a title-local constant until a second corpus exists (ADR-0058).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trigger {
+    /// A craft's damaging wall contact.
+    CollisionSpark,
     /// A weapon hit lands on a craft, thrown from its own hull's locators.
     HitSpark,
+    /// A Rocket in flight.
+    RocketFlare,
+    /// A Missile in flight, at two anchors.
+    MissileFlare,
+    /// A Plasma bolt, charging and in flight.
+    PlasmaFlare,
+    /// A Plasma detonation's flash.
+    PlasmaBlast,
+    /// HD's Plasma detonation, at the blast.
+    PlasmaLightningExpand,
+    /// HD's Plasma detonation, 1.3 s later.
+    PlasmaLightningCollapse,
+    /// A Shuriken in flight.
+    ShurikenFlare,
+    /// A Shuriken glancing off a wall.
+    ShurikenBounce,
+    /// A Shuriken running out.
+    ShurikenExpire,
+    /// A Rocket detonating on the track.
+    TrackBlast,
+    /// A Rocket detonating on a craft.
+    CraftBlast,
+    /// A Missile detonating.
+    MissileExplo,
+    /// A Missile glancing off a wall.
+    MissileBounce,
+    /// A Mine detonating.
+    MineExplo,
+    /// A Bomb's smoke ring.
+    BombSmokering,
+    /// A Cannon bolt's impact.
+    CannonSparks,
+    /// A craft's engine flare.
+    EngineFlare,
+    /// A craft flying through an engine trail (HD).
+    TrailHitship,
+    /// The same, on a Fury-skinned trail.
+    TrailHitshipRed,
+    /// The Quake wave.
+    Quake,
+    /// A Repulser's blast.
+    RepulserBlast,
+    /// A Repulser's waves.
+    Repulser,
+    /// A LeachBeam's energy ball.
+    LeachbeamEnergy,
+    /// A LeachBeam charging.
+    LeachbeamCharging,
+    /// HD's LeachBeam drain-trip burst.
+    LeachbeamAbsorb,
     /// A weapon's own hit spark on the craft it strikes, thrown from the
     /// weapon's side rather than the craft's.
     WeaponSpark,
     /// A craft absorbs a pickup.
     ShieldAbsorb,
-    /// A craft goes out of the race.
-    Wreck,
+    /// A landed LeachBeam drain, thrown from the struck hull's locators.
+    LeachHitSpark,
+    /// The blast at each wreck node as a craft goes out of the race.
+    WreckNode,
+    /// The sparks beside it.
+    WreckSparks,
+    /// The big blast after it.
+    WreckExplosion,
+    /// A craft over a magstrip (2048), outside a Zone.
+    MagstripSparks,
+    /// The same inside a Zone.
+    MagstripZone,
+}
+
+impl Trigger {
+    /// Every trigger, in load order.
+    pub const ALL: [Self; 35] = [
+        Self::CollisionSpark,
+        Self::HitSpark,
+        Self::RocketFlare,
+        Self::MissileFlare,
+        Self::PlasmaFlare,
+        Self::PlasmaBlast,
+        Self::PlasmaLightningExpand,
+        Self::PlasmaLightningCollapse,
+        Self::ShurikenFlare,
+        Self::ShurikenBounce,
+        Self::ShurikenExpire,
+        Self::TrackBlast,
+        Self::CraftBlast,
+        Self::MissileExplo,
+        Self::MissileBounce,
+        Self::MineExplo,
+        Self::BombSmokering,
+        Self::CannonSparks,
+        Self::EngineFlare,
+        Self::TrailHitship,
+        Self::TrailHitshipRed,
+        Self::Quake,
+        Self::RepulserBlast,
+        Self::Repulser,
+        Self::LeachbeamEnergy,
+        Self::LeachbeamCharging,
+        Self::LeachbeamAbsorb,
+        Self::WeaponSpark,
+        Self::ShieldAbsorb,
+        Self::LeachHitSpark,
+        Self::WreckNode,
+        Self::WreckSparks,
+        Self::WreckExplosion,
+        Self::MagstripSparks,
+        Self::MagstripZone,
+    ];
+
+    /// How many there are: the length of a table indexed by trigger.
+    pub const COUNT: usize = Self::ALL.len();
+
+    /// This trigger's position in [`Self::ALL`].
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self as usize
+    }
 }
 
 /// How a title staggers a burst over a hull's locators.
@@ -123,53 +244,226 @@ impl Burst {
 /// What a title does on one [`Trigger`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EffectSpec {
-    /// The `Data\Psys\<name>.POB` effects it throws, the disc's own. Names only:
-    /// the generic particle library resolves them, so no render-side crate
+    /// The `Data\Psys\<name>.POB` effect it throws, the disc's own. A name
+    /// only: the generic particle library resolves it, so no render-side crate
     /// reaches a title package.
-    pub effects: &'static [&'static str],
-    /// How the effects are staggered over the hull's locators, for a trigger
+    pub effect: &'static str,
+    /// How the effect is staggered over the hull's locators, for a trigger
     /// that has one.
     pub burst: Option<Burst>,
     /// Where this entry came from.
     pub origin: Origin,
 }
 
+impl EffectSpec {
+    /// An entry with no burst.
+    #[must_use]
+    pub const fn new(effect: &'static str, origin: Origin) -> Self {
+        Self {
+            effect,
+            burst: None,
+            origin,
+        }
+    }
+
+    /// This entry staggered over the hull's locators by `burst`.
+    #[must_use]
+    pub const fn with_burst(self, burst: Burst) -> Self {
+        Self {
+            burst: Some(burst),
+            ..self
+        }
+    }
+}
+
 /// Every trigger's answer for one title. `None` means the title draws nothing
 /// there: it either does not do it or it is unread, which is visible here and
 /// not Pulse's value by the fall through of an `else`.
 ///
-/// Built from Pulse's with struct-update syntax where a title inherits any of
-/// it.
+/// A title builds its own from [`Self::engine`] or [`Self::NONE`] with
+/// [`Self::with`], which stands in for the struct-update syntax ADR-0058 item 4
+/// names: an array cannot be updated field by field.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Effects {
-    /// [`Trigger::HitSpark`].
-    pub hit_spark: Option<EffectSpec>,
-    /// [`Trigger::WeaponSpark`].
-    pub weapon_spark: Option<EffectSpec>,
-    /// [`Trigger::ShieldAbsorb`].
-    pub shield_absorb: Option<EffectSpec>,
-    /// [`Trigger::Wreck`].
-    pub wreck: Option<EffectSpec>,
+    table: [Option<EffectSpec>; Trigger::COUNT],
+    /// Effects a circuit's own data may name - placed scenery and weather -
+    /// loaded for every race so the track's name can find them. A name the
+    /// track data supplies cannot be a [`Trigger`], so these stay looked up by
+    /// name.
+    pub scenery: &'static [&'static str],
 }
 
 impl Effects {
     /// A title that throws none of them: every trigger unread.
     pub const NONE: Self = Self {
-        hit_spark: None,
-        weapon_spark: None,
-        shield_absorb: None,
-        wreck: None,
+        table: [None; Trigger::COUNT],
+        scenery: &[],
     };
 
     /// The entry for `trigger`.
     #[must_use]
     pub const fn on(&self, trigger: Trigger) -> Option<&EffectSpec> {
-        match trigger {
-            Trigger::HitSpark => self.hit_spark.as_ref(),
-            Trigger::WeaponSpark => self.weapon_spark.as_ref(),
-            Trigger::ShieldAbsorb => self.shield_absorb.as_ref(),
-            Trigger::Wreck => self.wreck.as_ref(),
+        self.table[trigger.index()].as_ref()
+    }
+
+    /// This table with `trigger` answered by `spec`.
+    #[must_use]
+    pub const fn with(mut self, trigger: Trigger, spec: EffectSpec) -> Self {
+        self.table[trigger.index()] = Some(spec);
+        self
+    }
+
+    /// This table with `trigger` answering nothing.
+    #[must_use]
+    pub const fn without(mut self, trigger: Trigger) -> Self {
+        self.table[trigger.index()] = None;
+        self
+    }
+
+    /// Every effect name this table loads, each once, in [`Trigger::ALL`]
+    /// order and then the [`Self::scenery`] names. Order is the loader
+    /// report's, so it reads the same way twice.
+    #[must_use]
+    pub fn names(&self) -> Vec<&'static str> {
+        let mut names: Vec<&'static str> = Vec::new();
+        let triggered = Trigger::ALL.iter().filter_map(|&t| self.on(t));
+        for name in triggered
+            .map(|spec| spec.effect)
+            .chain(self.scenery.iter().copied())
+        {
+            if !names.contains(&name) {
+                names.push(name);
+            }
         }
+        names
+    }
+
+    /// The effects every weapon, craft and circuit of the engine plays, as
+    /// Pulse's executable names them, each tagged `origin`.
+    ///
+    /// Pulse passes [`Origin::Measured`]; another title takes the same names
+    /// by inheritance (`Origin::InheritedFrom("Wipeout Pulse")`) because a
+    /// name that is on its disc is what its race has always played. An
+    /// effect absent from a disc is reported and skipped by the loader, which
+    /// is how a name this title does not author costs one report line and
+    /// nothing else. The four triggers that vary by title - the weapon-hit
+    /// sparks, the weapon spark, the absorb burst and the wreck - are *not*
+    /// here: each title answers them itself.
+    #[must_use]
+    pub const fn engine(origin: Origin) -> Self {
+        use Trigger as T;
+        use engine_effects as n;
+        let mut e = Self::NONE;
+        e.scenery = &[
+            n::BLUE_WELDER_EFFECT,
+            n::MODESTO_STEAM_EFFECT,
+            n::RAIN_EFFECT,
+            n::RAIN_LENS_EFFECT,
+            n::SNOW_EFFECT,
+        ];
+        e.with(
+            T::CollisionSpark,
+            EffectSpec::new(n::COLLISION_SPARK_EFFECT, origin),
+        )
+        .with(
+            T::RocketFlare,
+            EffectSpec::new(n::ROCKET_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::MissileFlare,
+            EffectSpec::new(n::MISSILE_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::PlasmaFlare,
+            EffectSpec::new(n::PLASMA_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::PlasmaBlast,
+            EffectSpec::new(n::PLASMA_BLAST_EFFECT, origin),
+        )
+        .with(
+            T::PlasmaLightningExpand,
+            EffectSpec::new(n::PLASMA_LIGHTNING_EXPAND_EFFECT, origin),
+        )
+        .with(
+            T::PlasmaLightningCollapse,
+            EffectSpec::new(n::PLASMA_LIGHTNING_COLLAPSE_EFFECT, origin),
+        )
+        .with(
+            T::ShurikenFlare,
+            EffectSpec::new(n::SHURIKEN_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::ShurikenBounce,
+            EffectSpec::new(n::SHURIKEN_BOUNCE_EFFECT, origin),
+        )
+        .with(
+            T::ShurikenExpire,
+            EffectSpec::new(n::SHURIKEN_EXPIRE_EFFECT, origin),
+        )
+        .with(
+            T::TrackBlast,
+            EffectSpec::new(n::TRACK_BLAST_EFFECT, origin),
+        )
+        .with(
+            T::CraftBlast,
+            EffectSpec::new(n::CRAFT_BLAST_EFFECT, origin),
+        )
+        .with(
+            T::MissileExplo,
+            EffectSpec::new(n::MISSILE_EXPLO_EFFECT, origin),
+        )
+        .with(
+            T::MissileBounce,
+            EffectSpec::new(n::MISSILE_BOUNCE_EFFECT, origin),
+        )
+        .with(T::MineExplo, EffectSpec::new(n::MINE_EXPLO_EFFECT, origin))
+        .with(
+            T::BombSmokering,
+            EffectSpec::new(n::BOMB_SMOKERING_EFFECT, origin),
+        )
+        .with(
+            T::CannonSparks,
+            EffectSpec::new(n::CANNON_SPARKS_EFFECT, origin),
+        )
+        .with(
+            T::EngineFlare,
+            EffectSpec::new(n::ENGINE_FLARE_EFFECT, origin),
+        )
+        .with(
+            T::TrailHitship,
+            EffectSpec::new(n::TRAIL_HITSHIP_EFFECT, origin),
+        )
+        .with(
+            T::TrailHitshipRed,
+            EffectSpec::new(n::TRAIL_HITSHIP_RED_EFFECT, origin),
+        )
+        .with(T::Quake, EffectSpec::new(n::QUAKE_EFFECT, origin))
+        .with(
+            T::RepulserBlast,
+            EffectSpec::new(n::REPULSER_BLAST_EFFECT, origin),
+        )
+        .with(T::Repulser, EffectSpec::new(n::REPULSER_EFFECT, origin))
+        .with(
+            T::LeachbeamEnergy,
+            EffectSpec::new(n::LEACHBEAM_ENERGY_EFFECT, origin),
+        )
+        .with(
+            T::LeachbeamCharging,
+            EffectSpec::new(n::LEACHBEAM_CHARGING_EFFECT, origin),
+        )
+        .with(
+            T::LeachbeamAbsorb,
+            EffectSpec::new(n::LEACHBEAM_ABSORB_EFFECT, origin),
+        )
+        .with(
+            T::MagstripSparks,
+            EffectSpec::new(n::MAGSTRIP_SPARKS_EFFECT, origin),
+        )
+        .with(
+            T::MagstripZone,
+            EffectSpec::new(n::MAGSTRIP_ZONE_EFFECT, origin),
+        )
     }
 }
 
@@ -280,6 +574,12 @@ pub struct Looks {
     pub ps2_glow_mask: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
+    /// The front end never waits at its language picker on a fresh run: the
+    /// original leaves `Language Selection` within milliseconds, so this build
+    /// defaults to English instead of stopping there. Not a race look, but the
+    /// same yes-or-no-with-origin shape; kept here so a title carries one
+    /// table of such rules.
+    pub skips_language_picker: Rule,
 }
 
 impl Looks {
@@ -298,6 +598,7 @@ impl Looks {
             measured_draws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             shield_palette,
+            skips_language_picker: Rule::UNREAD,
         }
     }
 }

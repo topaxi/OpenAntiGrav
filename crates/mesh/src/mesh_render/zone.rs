@@ -9,7 +9,7 @@
 //! second one here means the first reads as it always did.
 //!
 //! See [`super::Zone`] for what the shader does with the stage texture, and
-//! `mesh.wgsl`'s own `zone_glow` for the visualiser term this module now also
+//! `mesh.wesl`'s own `zone_glow` for the visualiser term this module now also
 //! feeds. [`write_vis`] is the seam a caller updates every frame; the rest of
 //! bind group 2's own contents are built once at model load, by
 //! [`scene_bind_group`] - except [`StageArt`]'s four texture views, which
@@ -22,7 +22,7 @@ use crate::mesh::ModelTexture;
 
 /// Texels in [`Resources::vis_texture`]. Matches the original's own
 /// `zoneTexVis` - a 256-entry lookup keyed on a texel's alpha - not a choice
-/// this project made; see `mesh.wgsl`'s `zone_glow` and
+/// this project made; see `shaders/zone.wesl`'s `zone_glow` and
 /// `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`.
 pub const VIS_WIDTH: u32 = 256;
 
@@ -51,7 +51,7 @@ pub const SMOOTH_BASE: usize = 161;
 /// parameters go out in two paired blocks: `zoneModeTrack<n>.gtf` beside the
 /// `Track.*` colours for a chunk whose render-block flags carry the track bit
 /// (`oag_rcs::rcsmodel::RENDER_TRACK`), and `zoneMode<n>.gtf` beside the
-/// `Scene.*` colours for every other chunk - `mesh.wgsl` selects per fragment
+/// `Scene.*` colours for every other chunk - `mesh.wesl` selects per fragment
 /// on `slots::ZONE_TRACK`. Each of those two is published again as `zoneTex
 /// Inner`/`zoneTexOuter`: the showing stage's own texture and the one being
 /// swept out by the transition sphere, selected per fragment on
@@ -293,7 +293,7 @@ pub(super) fn resources(
     );
     let vis_view = vis_texture.create_view(&wgpu::TextureViewDescriptor::default());
     // Clamp, not repeat: the shader indexes this by a texel alpha in
-    // `0.0..=1.0` (see `mesh.wgsl`'s `zone_glow`), which never leaves that
+    // `0.0..=1.0` (see `shaders/zone.wesl`'s `zone_glow`), which never leaves that
     // range, and nearest-filtered for the same reason the stage texture's own
     // clone is - a band lookup wants a discrete answer, not a blend between
     // two neighbours.

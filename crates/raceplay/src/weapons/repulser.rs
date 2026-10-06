@@ -121,13 +121,13 @@ impl Race {
     /// Keeps each live Repulser's three particle instances where the original
     /// keeps them, and releases them when it retires.
     ///
-    /// - [`REPULSER_BLAST_EFFECT`] starts on the Repulser's first tick
+    /// - [`Trigger::RepulserBlast`] starts on the Repulser's first tick
     ///   (`Repulser_Init`) at the firer and follows the firer from then on,
     ///   because the matrix it is anchored to (`+0x1a0`) is rebuilt from the
     ///   firer's node every tick.
-    /// - Two [`REPULSER_EFFECT`]s start on the tick the waves start
+    /// - Two [`Trigger::Repulser`]s start on the tick the waves start
     ///   (`Repulser_SpawnWaves`) and follow the two wave centres.
-    /// - A third [`REPULSER_EFFECT`] starts on the update a wave forks at a
+    /// - A third [`Trigger::Repulser`] starts on the update a wave forks at a
     ///   split. All four are released when the slot empties (`Repulser_Reset`).
     ///
     /// The field model `Data\Weapons\pulse_repulsorwave.vex` steps here too
@@ -153,7 +153,7 @@ impl Race {
             // The first tick, and only the first: a refused attach is not
             // retried later, so the blast cannot appear late.
             if handles[0].is_none() && repulser.age <= dt * 1.5 {
-                if let Some(effect) = self.view.effects.get(REPULSER_BLAST_EFFECT).cloned() {
+                if let Some(effect) = self.view.handles.get(Trigger::RepulserBlast).cloned() {
                     let playing = self.view.stage.attach(&effect, firer, 1.0);
                     // `Repulser_SpawnBlastEffect` hands `Psys_Spawn_q` its `+0x1a0` by
                     // pointer (`param_5 = 1`), so the beads (flag `0x2`) ride it.
@@ -210,7 +210,7 @@ impl Race {
                         Some(playing)
                     }
                     None if starts => {
-                        let effect = self.view.effects.get(REPULSER_EFFECT).cloned();
+                        let effect = self.view.handles.get(Trigger::Repulser).cloned();
                         let attached =
                             effect.and_then(|e| self.view.stage.attach(&e, front.point, 1.0));
                         self.view.repulser_effects[index][1 + slot] = attached;

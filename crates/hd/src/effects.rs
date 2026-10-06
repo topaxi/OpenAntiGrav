@@ -8,6 +8,7 @@
 
 use oag_title::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
+    Trigger, engine_effects,
 };
 
 /// `FUN_000d9398`: six `absorb` locators, three mirrored pairs at `0.0`, `0.2`
@@ -15,21 +16,18 @@ use oag_title::{
 /// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
 pub const ABSORB_BURST: Burst = Burst::MirroredPairs { stagger: 0.2 };
 
-/// HD's tables.
-pub const EFFECTS: &Effects = &Effects {
+/// HD's tables: the engine's own names by inheritance from Pulse, and HD's own
+/// weapon spark and absorb burst.
+pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pulse"))
     // `Cannon_ApplyCraftHit`; `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`.
-    weapon_spark: Some(EffectSpec {
-        effects: &["WO_SHIP_SPARK_DAMAGE_WEAPON"],
-        burst: None,
-        origin: Origin::Measured,
-    }),
-    shield_absorb: Some(EffectSpec {
-        effects: &["WO_WEAPON_ABSORB"],
-        burst: Some(ABSORB_BURST),
-        origin: Origin::Measured,
-    }),
-    ..Effects::NONE
-};
+    .with(
+        Trigger::WeaponSpark,
+        EffectSpec::new(engine_effects::WEAPON_SPARK_EFFECT, Origin::Measured),
+    )
+    .with(
+        Trigger::ShieldAbsorb,
+        EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
+    );
 
 /// Two of the palette's three colours are read off HD's executable
 /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is
@@ -44,6 +42,13 @@ const SHIELD: ShieldPalettes = ShieldPalettes {
 pub const LOOKS: &Looks = &Looks {
     // `ShipAbsorbShell_Load` and its step; `absorb-feedback.md`, "The absorb shell".
     absorb_shell: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
+    // `Language Selection` left within 2-296 ms on four RPCS3 boots through
+    // the screen's own `LanguageAutoRedirect`;
+    // `docs/formats/hd-frontend.md#is-the-language-picker-ever-shown`.
+    skips_language_picker: Rule {
         on: Platforms::Any,
         origin: Origin::Measured,
     },

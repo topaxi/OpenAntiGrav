@@ -512,7 +512,7 @@ fn build_planned(
         // across the corpus scale non-uniformly (88 of them carry meshes),
         // and a normal turned by the plain matrix skews under one. A moving
         // node's normals go through the shader's node matrix instead, which
-        // takes no inverse transpose - `mesh.wgsl`'s own caveat, on lit
+        // takes no inverse transpose - `mesh.wesl`'s own caveat, on lit
         // geometry here rather than Pulse's prelit.
         let normal_to_world = to_world.inverse().transpose();
         let base = u32::try_from(model.vertices.len()).unwrap_or(u32::MAX);

@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the prepare-reactivity pass, ported to
 // WGSL. Transliterated from `ffx_fsr3upscaler_prepare_reactivity.h`, AMD
-// FidelityFX SDK v1.1.4, MIT - see `common.wgsl`'s header and
+// FidelityFX SDK v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // The pass that decides, per render-resolution texel, **how much the history is
@@ -26,6 +26,41 @@
 // `dilate_transparency_and_composition_masks` are the two functions that grow a
 // texture read. That is a deliberately small change, and it is why they exist
 // as functions rather than being folded away.
+import package::fsr3::common::{
+    ACCUMULAION,
+    DISOCCLUSION,
+    FSR3UPSCALER_FP16_MAX,
+    FSR3UPSCALER_FP32_MAX,
+    FSR3UPSCALER_FP32_MIN,
+    F_RECONSTRUCTED_DEPTH_BILINEAR_WEIGHT_THRESHOLD,
+    REACTIVE,
+    SHADING_CHANGE,
+    accumulation_added_per_frame,
+    clamp_load,
+    clamp_uv,
+    compute_hr_pos_from_lr_pos,
+    exposure,
+    get_4k_velocity,
+    get_bilinear_sampling_data,
+    get_view_space_depth,
+    get_view_space_depth_in_meters,
+    is_on_screen,
+    is_uv_inside,
+    jitter,
+    linear_clamp,
+    max_render_size,
+    min_disocclusion_accumulation,
+    min_divided_by_max,
+    previous_frame_render_size,
+    reactiveness_scale,
+    reconstructed_depth_mv_px_threshold,
+    render_size,
+    shading_change_max_render_size,
+    shading_change_render_size,
+    shading_change_scale,
+    velocity_factor,
+    view_space_to_meters_factor,
+};
 
 @group(1) @binding(0) var r_dilated_motion_vectors: texture_2d<f32>;
 @group(1) @binding(1) var r_dilated_depth: texture_2d<f32>;

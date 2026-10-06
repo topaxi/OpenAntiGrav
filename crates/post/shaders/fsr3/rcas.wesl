@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the RCAS pass, ported to WGSL.
 // Transliterated from `ffx_fsr3upscaler_rcas.h` and the `FsrRcasF` it includes
-// from `fsr1/ffx_fsr1.h`, AMD FidelityFX SDK v1.1.4, MIT - see `common.wgsl`'s
+// from `fsr1/ffx_fsr1.h`, AMD FidelityFX SDK v1.1.4, MIT - see `common.wesl`'s
 // header and `licences/AMD-FidelityFX-MIT.txt`.
 //
 // **This is FSR 1's RCAS, and this project already had it** - see
@@ -26,6 +26,12 @@
 // Both the exposure multiply on the way in and the divide on the way out are
 // upstream's; with this port's constant exposure of one, they cancel. Kept so
 // the shader still reads like `CurrFilter`.
+import package::fsr3::common::{
+    exposure,
+    is_on_screen,
+    rcas_sharpness,
+    upscale_size,
+};
 
 @group(1) @binding(0) var r_rcas_input: texture_2d<f32>;
 @group(1) @binding(1) var rw_upscaled_output: texture_storage_2d<rgba16float, write>;

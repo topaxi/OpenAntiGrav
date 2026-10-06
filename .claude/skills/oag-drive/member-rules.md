@@ -115,6 +115,12 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 
 ## Project rules that bite members
 
+- **No compatibility re-exports.** None of this workspace's crates is
+  published, so when you move an item, update every call site in the same
+  change instead of leaving a `pub use old::path` behind. A re-export is
+  indirection with no consumer to protect (maintainer, 2026-10-06).
+- **The maintainer may type into your pane directly.** Act on it like the
+  brief, and name it as the maintainer's instruction in your report.
 - **Never invent what the assets author.** Parse it and play it. If it won't
   parse, draw or play nothing and say so in the loader report. Anything
   genuinely chosen is labelled **chosen, not measured**, with no confidence

@@ -22,6 +22,9 @@ serde.workspace = true
 log.workspace = true
 pollster.workspace = true
 
+[build-dependencies]
+wesl = "0.6"
+
 [features]
 perf-probe = ["oag-gpu/perf-probe"]
 

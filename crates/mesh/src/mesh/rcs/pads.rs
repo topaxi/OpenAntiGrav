@@ -216,7 +216,7 @@ pub(super) fn build_pad_class(
     // **`true`, exactly like every other PS3 model this crate builds.** A pad
     // chunk's `in.colour` is HD's baked per-vertex *light*, the term the
     // fragment program adds inside its authored lighting sum - see
-    // [`super::emit`] and `mesh.wgsl`'s `lit_texel`. It is not a tint, and a
+    // [`super::emit`] and `shaders/shade.wesl`'s `lit_texel`. It is not a tint, and a
     // pad's own colour is not in it: `12_sol_2`'s ten `Speedup Pad` and eight
     // `Weapon Pad` chunks all carry a flat `0,0,0` colour set, and the blue
     // chevron and red cross are painted into `ds_speedup_cs.gtf` and

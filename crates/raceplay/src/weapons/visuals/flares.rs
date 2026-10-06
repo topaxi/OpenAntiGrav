@@ -14,7 +14,7 @@
 use super::super::*;
 
 /// Which flare effect, if any, a projectile of this kind rides - the
-/// Rocket's [`ROCKET_FLARE_EFFECT`], the Missile's [`MISSILE_FLARE_EFFECT`],
+/// Rocket's [`Trigger::RocketFlare`], the Missile's [`Trigger::MissileFlare`],
 /// or `None` for everything else, including a Mine or a Bomb.
 ///
 /// Split out of [`Race::advance_projectile_flares`] so the gate is testable
@@ -23,12 +23,12 @@ use super::super::*;
 /// asset attached, which a headless unit test has no disc to load. See that
 /// method's doc comment for the reading.
 #[must_use]
-pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Option<&'static str> {
+pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Option<Trigger> {
     match kind? {
-        oag_tables::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
-        oag_tables::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
-        oag_tables::weapons::Weapon::Plasma => Some(PLASMA_FLARE_EFFECT),
-        oag_tables::weapons::Weapon::Shuriken => Some(SHURIKEN_FLARE_EFFECT),
+        oag_tables::weapons::Weapon::Rocket => Some(Trigger::RocketFlare),
+        oag_tables::weapons::Weapon::Missile => Some(Trigger::MissileFlare),
+        oag_tables::weapons::Weapon::Plasma => Some(Trigger::PlasmaFlare),
+        oag_tables::weapons::Weapon::Shuriken => Some(Trigger::ShurikenFlare),
         _ => None,
     }
 }
@@ -44,13 +44,13 @@ pub(crate) fn flare_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Opt
 /// live at once without a second borrow of `self`.
 pub(super) fn advance_one_flare(
     stage: &mut psys::Stage,
-    effects: &psys::Library,
-    name: Option<&'static str>,
+    handles: &EffectHandles,
+    trigger: Option<Trigger>,
     at: Vec3,
     scale: f32,
     playing: &mut Option<psys::Playing>,
 ) {
-    match (name, *playing) {
+    match (trigger, *playing) {
         // Gone, or a weapon with no flare of its own: release the instance
         // (templates at once, the emitters' own particles fade out) rather
         // than riding a weapon that never authored this effect.
@@ -66,8 +66,8 @@ pub(super) fn advance_one_flare(
         // Freshly in the air. `attach` returning `None` means the stage is
         // full of flares already, and this projectile simply flies without
         // one rather than evicting someone else's.
-        (Some(name), None) => {
-            if let Some(effect) = effects.get(name).cloned() {
+        (Some(trigger), None) => {
+            if let Some(effect) = handles.get(trigger).cloned() {
                 *playing = stage.attach(&effect, at, scale);
             }
         }
@@ -79,7 +79,7 @@ pub(super) fn advance_one_flare(
 /// is not a Plasma at all.
 ///
 /// **Ports `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`** - see
-/// [`PLASMA_FLARE_EFFECT`]'s doc comment and
+/// [`Trigger::PlasmaFlare`]'s doc comment and
 /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "The charge is real,
 /// and it is not `charge_time`" section. `remaining` there is a countdown in
 /// *seconds*, `1.0` at press and `0.0` at release, exactly like this
@@ -261,10 +261,10 @@ pub(crate) fn bounced_this_tick(
 /// `WO_SHURIKEN_BOUNCE`, both read directly out of `.rodata`. Playing one
 /// weapon's file for the other is the bug that shipped as a mine riding the
 /// Rocket's flare.
-pub(crate) fn bounce_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Option<&'static str> {
+pub(crate) fn bounce_effect_for(kind: Option<oag_tables::weapons::Weapon>) -> Option<Trigger> {
     match kind? {
-        oag_tables::weapons::Weapon::Missile => Some(MISSILE_BOUNCE_EFFECT),
-        oag_tables::weapons::Weapon::Shuriken => Some(SHURIKEN_BOUNCE_EFFECT),
+        oag_tables::weapons::Weapon::Missile => Some(Trigger::MissileBounce),
+        oag_tables::weapons::Weapon::Shuriken => Some(Trigger::ShurikenBounce),
         _ => None,
     }
 }

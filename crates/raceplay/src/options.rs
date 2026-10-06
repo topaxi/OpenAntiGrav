@@ -573,6 +573,9 @@ pub struct Setup {
     /// than the game's. Headless tests that build a `Race` by hand leave the
     /// library empty, which is the same path.
     pub effects: psys::Library,
+    /// Each [`Trigger`] resolved against [`Self::effects`] once at load, off the
+    /// craft's title's table. Empty where nothing loaded.
+    pub handles: super::EffectHandles,
     /// The decoded sound cues, out of `Data\Sound\*.bnk`.
     ///
     /// The audio counterpart of [`Self::effects`] and held to the same rule: a

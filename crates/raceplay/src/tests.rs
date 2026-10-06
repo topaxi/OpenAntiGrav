@@ -248,6 +248,7 @@ fn setup(handling: Handling) -> Setup {
         // A headless test that wants real particles parses a blob itself
         // and inserts it here.
         effects: psys::Library::new(),
+        handles: Default::default(),
         // No disc, so no banks: a headless race raises its cues and plays none
         // of them, which is the same path a source with no sound banks takes.
         sounds: oag_sound::sfx::Banks::default(),

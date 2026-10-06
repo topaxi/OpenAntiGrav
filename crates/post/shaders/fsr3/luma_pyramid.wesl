@@ -1,6 +1,6 @@
 // AMD FidelityFX Super Resolution 3.1 - the luma pyramid, ported to WGSL.
 // Transliterated from `ffx_fsr3upscaler_luma_pyramid.h`, AMD FidelityFX SDK
-// v1.1.4, MIT - see `common.wgsl`'s header and
+// v1.1.4, MIT - see `common.wesl`'s header and
 // `licences/AMD-FidelityFX-MIT.txt`.
 //
 // **This is one dispatch where upstream has a Single Pass Downsampler, and it
@@ -29,7 +29,7 @@
 // only comes from `frame_info` when `FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE` is
 // set; otherwise it is the app's, and an app that supplies none gets upstream's
 // 1x1 default, which is a zero that `Exposure()` maps to one. See
-// `common.wgsl`'s own `exposure`. The pyramid's other 1x1 product,
+// `common.wesl`'s own `exposure`. The pyramid's other 1x1 product,
 // `SceneAverageLuma()`, is **dead in v1.1.4** - it is declared in
 // `ffx_fsr3upscaler_common.h` and called from nowhere at all, which was checked
 // across every pass header rather than assumed.
@@ -44,6 +44,11 @@
 // the reduction goes: a mip chain over `(log(luma), luma)` down to 1x1 and the
 // `ComputeAutoExposureFromLavg` smoothing at the end. It is left out rather than
 // left half-built.
+import package::fsr3::common::{
+    clamp_load,
+    is_on_screen,
+    render_size,
+};
 
 @group(1) @binding(0) var r_farthest_depth: texture_2d<f32>;
 @group(1) @binding(1) var rw_farthest_depth_mip1: texture_storage_2d<rgba16float, write>;

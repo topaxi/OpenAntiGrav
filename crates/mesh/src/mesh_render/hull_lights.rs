@@ -14,7 +14,7 @@
 //! colour = clamp(ambient + sum(diffuse_i * max(0, N . L_i)), 0, 1)
 //! ```
 //!
-//! and `MODULATE`s the texel by it. `mesh.wgsl`'s `vs_main` does exactly that
+//! and `MODULATE`s the texel by it. `mesh.wesl`'s `vs_main` does exactly that
 //! for a lit vertex whenever [`HullLights::enabled`] is set, in place of the
 //! stand-in rig and the invented grey a vertex without colour otherwise
 //! carries.
@@ -40,7 +40,7 @@ use oag_vex::{lighting, vex};
 /// original collects (`World_CollectMarkerLists` caps the list at four).
 pub const HULL_LIGHTS: usize = 4;
 
-/// The GE light list, as `mesh.wgsl` reads it: one global ambient and four
+/// The GE light list, as `mesh.wesl` reads it: one global ambient and four
 /// directional lights, colours already in `0..=1`.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
@@ -62,7 +62,7 @@ impl HullLights {
         diffuse: [[0.0; 4]; HULL_LIGHTS],
     };
 
-    /// Whether `mesh.wgsl` lights a hull with this rig.
+    /// Whether `mesh.wesl` lights a hull with this rig.
     #[must_use]
     pub fn enabled(&self) -> bool {
         self.ambient[3] > 0.5

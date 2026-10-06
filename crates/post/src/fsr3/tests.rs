@@ -78,7 +78,7 @@ fn the_downscale_factor_is_render_over_presentation() {
 
 #[test]
 fn the_motion_vector_scale_reverses_this_renderer_s_velocity() {
-    // `mesh.wgsl`'s `velocity_of` stores current-minus-previous in uv units;
+    // `shaders/velocity.wesl`'s `velocity_of` stores current-minus-previous in uv units;
     // FSR 3.1 reprojects with `uv + motionVector` and therefore wants
     // previous-minus-current. The whole conversion is the sign, because the
     // units already agree - and the jitter cancellation is zero because

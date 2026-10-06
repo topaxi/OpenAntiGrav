@@ -275,7 +275,7 @@ fn a_bc7_chain_uploads_on_a_device_without_block_compression() {
 
 /// A scene lit by any rig but Omega's compiles the nova curve out of every
 /// pipeline it builds, and one lit by Omega's - or no scene at all - keeps
-/// `mesh.wgsl`'s live default.
+/// `mesh.wesl`'s live default.
 #[test]
 fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
     assert_eq!(

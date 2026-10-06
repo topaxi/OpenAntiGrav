@@ -393,7 +393,10 @@ fn the_sprite_flares_constants_are_the_discs_own() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_trail_hit_effects_are_on_the_disc_and_load() {
     let Some(loaded) = load() else { return };
-    for name in [race::TRAIL_HITSHIP_EFFECT, race::TRAIL_HITSHIP_RED_EFFECT] {
+    for name in [
+        oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
+        oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT,
+    ] {
         let line = loaded
             .report
             .iter()

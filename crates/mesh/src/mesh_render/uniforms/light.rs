@@ -5,7 +5,7 @@
 ///
 /// # Why this exists
 ///
-/// **`mesh.wgsl`'s two-light rig is a stand-in and says so**, with invented
+/// **`mesh.wesl`'s two-light rig is a stand-in and says so**, with invented
 /// directions chosen so geometry reads clearly. Wipeout HD authors the real
 /// thing in plain text, one file per circuit - see
 /// `oag_tables::envsettings` - and `CLAUDE.md`'s rule about not inventing
@@ -41,7 +41,7 @@
 pub struct Light {
     /// Unit direction **towards** the light, which is what a normal dots with.
     pub direction: [f32; 3],
-    /// `1.0` to use this rig, `0.0` for `mesh.wgsl`'s stand-in.
+    /// `1.0` to use this rig, `0.0` for `mesh.wesl`'s stand-in.
     pub enabled: f32,
     /// Constant ambient, passed through as authored - see [`Light::authored`].
     pub ambient: [f32; 3],
@@ -64,7 +64,7 @@ pub struct Light {
     /// `Lighting.Sun specular scale`, weighting the read specular term
     /// `pow(max(dot(H, N), 0), 32) * max(dot(N, L), 0) * lightmap.a`.
     /// The exponent 32 is an **inline** microcode constant, not a patched
-    /// parameter, so it lives in `mesh.wgsl` rather than here.
+    /// parameter, so it lives in `mesh.wesl` rather than here.
     pub specular_scale: f32,
     /// `Lighting.Prelit ambient colour power` - the exponent in the same
     /// prelit term.

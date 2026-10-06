@@ -73,7 +73,7 @@ pub enum Texels {
     /// The PSP `.vex` textures, whose levels are authored bytes in the file
     /// (`oag_vex::vex::EmbeddedTexture::levels`) and were being thrown away and
     /// re-derived by box filter. **Its presence on a model is also what turns
-    /// on the GE's slope level selection**, `texlod_slope` in `mesh.wgsl`: the
+    /// on the GE's slope level selection**, `texlod_slope` in `mesh.wesl`: the
     /// levels are the game's and so is the rule that picks among them.
     Chain(Vec<Vec<u8>>),
     /// The disc's own blocks and the disc's own mip chain, base level first,

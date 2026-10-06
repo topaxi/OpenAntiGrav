@@ -3,7 +3,7 @@
 // headers it pulls in whole, `ffx_fsr3upscaler_upsample.h` and
 // `ffx_fsr3upscaler_reproject.h`, plus the Lanczos helpers of
 // `ffx_fsr3upscaler_sample.h`. AMD FidelityFX SDK v1.1.4, MIT - see
-// `common.wgsl`'s header and `licences/AMD-FidelityFX-MIT.txt`.
+// `common.wesl`'s header and `licences/AMD-FidelityFX-MIT.txt`.
 //
 // **The resolve itself, and the first pass here that runs at presentation
 // resolution.** Everything before it was measurement; this is where a
@@ -27,13 +27,48 @@
 // - `FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT` is off. This renderer's scene
 //   target is low dynamic range, so the tonemap-either-side-of-accumulation
 //   dance has nothing to do. `tonemap` and `inverse_tonemap` stay in
-//   `common.wgsl` for when it does.
+//   `common.wesl` for when it does.
 // - `FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE` is **2, approximate**,
 //   and `..._REPROJECT_USE_LANCZOS_TYPE` is **0, reference** - both upstream's
 //   own defaults, and both analytic. That is why `LANCZOS_LUT` is not among
 //   this port's resources: neither default reads it.
 // - `FFX_FSR3UPSCALER_OPTION_APPLY_SHARPENING` is on, so this pass writes only
 //   the internal history and `rcas` writes the output. See `post::fsr3`.
+import package::fsr3::common::{
+    ACCUMULAION,
+    DISOCCLUSION,
+    FSR3UPSCALER_EPSILON,
+    FSR3UPSCALER_FP16_MIN,
+    FSR3UPSCALER_FP32_MAX,
+    F_AVERAGE_LANCZOS_WEIGHT_PER_FRAME,
+    F_LOCK_MAX,
+    F_LOCK_THRESHOLD,
+    REACTIVE,
+    RectificationBox,
+    SHADING_CHANGE,
+    clamp_load,
+    clamp_uv,
+    constants,
+    delta_pre_exposure,
+    downscale_factor,
+    exposure,
+    frame_index,
+    get_4k_velocity,
+    is_on_screen,
+    is_uv_inside,
+    jitter,
+    jitter_phase_count,
+    linear_clamp,
+    max_render_size,
+    previous_frame_upscale_size,
+    rectification_box_add_sample,
+    rectification_box_compute_variance_box_data,
+    render_size,
+    rgb_to_ycocg,
+    upscale_size,
+    velocity_factor,
+    ycocg_to_rgb,
+};
 
 @group(1) @binding(0) var r_input_color_jittered: texture_2d<f32>;
 @group(1) @binding(1) var r_dilated_motion_vectors: texture_2d<f32>;

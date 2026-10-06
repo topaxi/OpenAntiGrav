@@ -6,9 +6,9 @@
 //! hit landing in `Race::tick` reaches it.
 
 use super::*;
-use crate::hit_sparks::{HIT_SPARK_EFFECT, LEACHBEAM_HIT_SPARK_EFFECT};
 use oag_gameplay::PlayerInputs;
 use oag_livery::SparkAnchor;
+use oag_title::Trigger::{HitSpark, LeachHitSpark};
 use oag_weapons::projectile::WeaponHit;
 
 /// Six locators, Assegai's count, a unit apart along the hull.
@@ -27,11 +27,11 @@ fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
     let mut setup = setup(handling);
-    for name in [HIT_SPARK_EFFECT, LEACHBEAM_HIT_SPARK_EFFECT] {
-        let blob = super::respawn::one_emitter_pob(name, 0);
+    for trigger in [HitSpark, LeachHitSpark] {
+        let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
         let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
             .expect("the hand-laid effect parses");
-        setup.effects.insert(name, effect);
+        setup.handles.insert(trigger, effect);
     }
     setup.hit_spark_anchors = vec![locators];
     Race::start(setup)
@@ -118,10 +118,11 @@ fn a_rocket_striking_the_player_in_the_tick_throws_its_hull_sparks() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     race.view.hit_sparks = crate::hit_sparks::HitSparks::new(vec![six_locators()]);
-    let blob = super::respawn::one_emitter_pob(HIT_SPARK_EFFECT, 0);
+    let blob =
+        super::respawn::one_emitter_pob(crate::tests::respawn::trigger_name(Trigger::HitSpark), 0);
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    race.view.effects.insert(HIT_SPARK_EFFECT, effect);
+    race.view.handles.insert(Trigger::HitSpark, effect);
     // Past the countdown, so the craft is racing and the gate admits the hit.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 2 {
         race.tick(&PlayerInputs::none());
@@ -166,10 +167,13 @@ fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let blob = super::respawn::one_emitter_pob(crate::WEAPON_SPARK_EFFECT, 0);
+    let blob = super::respawn::one_emitter_pob(
+        crate::tests::respawn::trigger_name(Trigger::WeaponSpark),
+        0,
+    );
     let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
         .expect("the hand-laid effect parses");
-    setup.effects.insert(crate::WEAPON_SPARK_EFFECT, effect);
+    setup.handles.insert(Trigger::WeaponSpark, effect);
     setup.weapon_spark_anchors = weapon_anchors;
     let mut race = Race::start(setup);
     race.sim.world.ship_count = 2;

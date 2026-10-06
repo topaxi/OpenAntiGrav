@@ -1,7 +1,7 @@
 //! The Bomb's own detonation: the hemisphere and the shockwave
 //! `BombBlast_Construct` loads, plus `WO_BOMB_SMOKERING` - the psys effect
 //! that already plays through [`super::weapons::visuals`]'s ordinary
-//! [`super::effect_names::BOMB_SMOKERING_EFFECT`] mechanism and needs no
+//! [`Trigger::BombSmokering`] mechanism and needs no
 //! render-side state of its own. See
 //! `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read`
 //! for the full read this plays back - `BombBlast_Construct` (`0x08872078`)

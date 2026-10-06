@@ -78,7 +78,7 @@ pub struct Built {
     /// [`Prepass`].
     pub prepass: Option<Prepass>,
     /// Cutout pass: depth write on, no blending, `discard` below
-    /// `mesh.wgsl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
+    /// `shaders/alpha_test.wesl`'s `alpha_test_ref`. Draws [`Model::alpha_tested_draws`] as
     /// a second `set_pipeline` in the same render pass as `pipeline`, before
     /// `blend_pipeline`.
     ///
@@ -86,7 +86,7 @@ pub struct Built {
     /// Wipeout HD material authors it (`GL_GREATER`/`0.5` disc-wide - see
     /// [`Model::alpha_test_ref`] and `mesh::rcs::cutout`) and [`build`]
     /// pushes it here as a pipeline override. A model that authors none keeps
-    /// the shader's default, which is the PSP reference `mesh.wgsl`'s own
+    /// the shader's default, which is the PSP reference `mesh.wesl`'s own
     /// `ALPHA_TEST_THRESHOLD` carries the evidence for.
     pub alpha_test_pipeline: wgpu::RenderPipeline,
     /// One cutout pipeline per alpha-test reference the model's own batches
@@ -316,7 +316,7 @@ pub fn build_with(
     }
     // A fourth: the alpha-test reference the model's own materials author,
     // which on Wipeout HD is the `GL_GREATER`/`0.5` pair its mode-2 materials
-    // carry. Left off for a model with none, so `mesh.wgsl`'s own default -
+    // carry. Left off for a model with none, so `mesh.wesl`'s own default -
     // the recovered PSP reference - stands. See `mesh::rcs::cutout`.
     if let Some(reference) = model.alpha_test_ref {
         constants.push(("alpha_test_ref", f64::from(reference)));
@@ -871,7 +871,7 @@ pub fn build_with(
     // switches the prelit term off, which is what a surface with no lightmap
     // gets in the original too. The alpha of 1 now gates **only the
     // specular** - the diffuse sun term it used to gate as well was removed
-    // from `mesh.wgsl` once `track_surface.rcsmaterial` block #8 was read and
+    // from `mesh.wesl` once `track_surface.rcsmaterial` block #8 was read and
     // turned out to light a lightmap-less surface with `(f[TC1] + k) *
     // albedo`, no `N.L` and no sun colour at all. See renderer.md, "The lit
     // track material". Full gloss is the honest default there: the specular
