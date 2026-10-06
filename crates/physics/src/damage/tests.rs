@@ -1,7 +1,5 @@
-//! What the energy pool and the cost of a wall in [`super`] are asserted to do.
-//!
-//! Split out of `damage.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! What the energy pool and the cost of a wall in [`super`] are asserted to do. Split out of
+//! `damage.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -247,11 +245,10 @@ fn a_shield_with_no_contact_reports_no_absorb() {
     assert_eq!(report, Shield::default(), "an untouched shield flashed");
 }
 
-/// The timer runs one tick longer than the arithmetic, for the reason
-/// [`advance_shield_pickup`] gives, and the tick it expires on is a tick
-/// that takes damage again. The pair is what pins the ordering in
-/// `crate::step`: advancing before `apply_contact` would cost the firing
-/// tick, and reading `>= 0.0` would leak a tick at the other end.
+/// The timer runs one tick longer than the arithmetic ([`advance_shield_pickup`]) and the tick it
+/// expires on takes damage again. The pair pins the ordering in `crate::step`: advancing before
+/// `apply_contact` would cost the firing tick, and reading `>= 0.0` would leak a tick at the other
+/// end.
 #[test]
 fn a_fired_shield_refuses_damage_for_its_authored_duration() {
     let d = dimensions(300.0);
