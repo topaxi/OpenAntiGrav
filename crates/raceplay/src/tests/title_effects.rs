@@ -65,6 +65,25 @@ const PULSE_ABSENT: [Trigger; 7] = [
     Trigger::MagstripZone,
 ];
 
+/// The 2048-lineage magstrip pair, which no archive of HD's disc carries and
+/// which HD replaces with the arc wake (`docs/formats/pob.md`, "Which names HD
+/// does not author").
+const HD_ABSENT: [Trigger; 2] = [Trigger::MagstripSparks, Trigger::MagstripZone];
+
+#[test]
+fn hd_asks_for_none_of_the_effects_its_disc_does_not_author() {
+    for trigger in HD_ABSENT {
+        assert!(oag_hd::TITLE.effect_on(trigger).is_none(), "{trigger:?}");
+        for title in [oag_pure::TITLE, oag_2048::TITLE] {
+            assert!(
+                title.effect_on(trigger).is_some(),
+                "{} {trigger:?}",
+                title.name
+            );
+        }
+    }
+}
+
 #[test]
 fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
     for trigger in PULSE_ABSENT {
@@ -73,6 +92,9 @@ fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
             "Pulse names {trigger:?}"
         );
         for title in [oag_pure::TITLE, oag_hd::TITLE, oag_2048::TITLE] {
+            if title.name == oag_hd::TITLE.name && HD_ABSENT.contains(&trigger) {
+                continue;
+            }
             assert!(
                 title.effect_on(trigger).is_some(),
                 "{} {trigger:?}",
@@ -106,16 +128,8 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
             !OWN.contains(t)
                 && *t != Trigger::WreckExplosion
                 && !(title.name == oag_pulse::TITLE.name && PULSE_ABSENT.contains(t))
+                && !(title.name == oag_hd::TITLE.name && HD_ABSENT.contains(t))
         }) {
-            // HD authors neither magstrip `.pob` (it builds the arc wake) and its
-            // table takes the inherited pair back - `docs/formats/pob.md`, "Which
-            // names HD does not author".
-            if std::ptr::eq(title, oag_hd::TITLE)
-                && matches!(trigger, Trigger::MagstripSparks | Trigger::MagstripZone)
-            {
-                assert!(title.effect_on(trigger).is_none(), "{trigger:?}");
-                continue;
-            }
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));

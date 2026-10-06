@@ -178,4 +178,56 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
     let line = report.describe();
     assert!(!line.contains("(0 triangle(s))"), "{line}");
     assert!(line.contains("18 chunk(s) on a pad material"), "{line}");
+
+    // **The report must be about what is drawn.** Every chunk on a pad
+    // material that no pad node names has a draw call in the circuit's own
+    // model, and the count of them is the report's.
+    let (track_model, _) = mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
+        mesh::read_blob(&spec, path).ok()
+    })
+    .expect("build_scene decodes talons_junction");
+    let drawn: std::collections::BTreeSet<u32> = [
+        &track_model.draws,
+        &track_model.alpha_tested_draws,
+        &track_model.transparent_draws,
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|draw| draw.chunk)
+    .collect();
+    let pad_chunks: Vec<u32> = rcs_model
+        .meshes
+        .iter()
+        .enumerate()
+        .filter(|(_, chunk)| {
+            chunk.surfaces().any(|s| {
+                rcs_model
+                    .materials
+                    .get(s.material as usize)
+                    .is_some_and(|m| m.name.ends_with("weapon_pads.rcsmaterial"))
+            })
+        })
+        .filter(|(_, chunk)| {
+            ![classes.weapon_pad.expect("weapon_pad id recovered for v6")]
+                .iter()
+                .any(|&class| {
+                    nodes
+                        .iter()
+                        .filter(|n| n.class_id == class)
+                        .any(|n| order.u32(&vex_data[n.payload()], 0x30) == chunk.hash)
+                })
+        })
+        .map(|(index, _)| u32::try_from(index).expect("a chunk index fits in u32"))
+        .collect();
+    assert_eq!(
+        pad_chunks.len(),
+        18,
+        "the chunks on a pad material no node names"
+    );
+    for chunk in &pad_chunks {
+        assert!(
+            drawn.contains(chunk),
+            "chunk {chunk} is counted but not drawn"
+        );
+    }
 }

@@ -284,16 +284,7 @@ pub(super) fn build_pad_class(
     }
     out.node_vertex_ranges = node_vertex_ranges;
     if report.nodes > report.addressed {
-        let mut named = match classes.mesh {
-            Some(mesh_class) => super::referenced(data, &nodes, mesh_class, &model),
-            None => Vec::new(),
-        };
-        for class in [classes.speedup_pad, classes.weapon_pad]
-            .into_iter()
-            .flatten()
-        {
-            named.extend(pad_chunk_hashes(data, &nodes, order, class));
-        }
+        let named = super::placed_hashes(data, &nodes, Some(classes), order, &model);
         (report.routed_chunks, report.routed_triangles) = world_pass_pad_chunks(&model, &named);
     }
     face_normals(&mut out);
