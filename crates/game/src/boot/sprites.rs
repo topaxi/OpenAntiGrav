@@ -191,7 +191,7 @@ pub(super) fn load(
 /// [`oag_assets::Archives::read_hash`] already searches every mounted
 /// archive, so this both short-circuits and replaces the FE-then-Data order
 /// below, which a raw hash has no use for.
-pub(super) fn read_front_end_first(
+pub(crate) fn read_front_end_first(
     archives: &mut oag_assets::Archives,
     name: &str,
 ) -> oag_assets::Result<Vec<u8>> {

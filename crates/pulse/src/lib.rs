@@ -123,6 +123,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // own long-standing constant, restated here now that a second title
     // needs this axis. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: Some(r"Data\Plugins\PI001\GUI\EndRace_Definition.xml"),
+    endrace_style: Some(oag_title::EndRaceStyle::measured(
+        oag_title::EndRaceDialect::Pulse,
+    )),
 };
 
 /// The bulk archive's candidates, in the order they are tried.

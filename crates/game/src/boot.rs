@@ -1570,7 +1570,7 @@ fn load_second_movie(
 }
 
 pub mod backdrop;
-mod campaign2048;
+pub(crate) mod campaign2048;
 pub mod fonts;
 pub mod fury;
 mod images;

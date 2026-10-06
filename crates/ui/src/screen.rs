@@ -391,6 +391,15 @@ pub struct Screens {
     /// The same list with each include's `SrcRel`/`localised` shape kept -
     /// what a loader that follows them needs. See [`Include`].
     pub includes: Vec<Include>,
+    /// Whether a colour-only `Image`'s own `OffsetX`/`OffsetY` is folded into
+    /// its [`Fill`]'s position, as an `Image` with a `src` already does.
+    /// `false` by default: Pulse's `EndRace Results` authors its `tablebg{n}`
+    /// rows as fills with their own `OffsetY` and `oag_ui_screens::endrace::table`
+    /// adds that back by name, so folding it for them would move a picture
+    /// that is measured. Wipeout 2048's `EndRace_Definition.xml` authors
+    /// `MessageBox`, `ResultBox` and the rest the same way and places them
+    /// by the offset alone, so it reads with [`Self::from_xml_folding_fill_offsets`].
+    pub fold_fill_offsets: bool,
 }
 
 impl Screens {
@@ -449,6 +458,30 @@ impl Screens {
         }
         for node in &root.children {
             out.collect(node, None, fallback_images);
+        }
+        out
+    }
+
+    /// [`Self::from_xml_with_fallback_globals`], with a colour-only `Image`'s
+    /// own `OffsetX`/`OffsetY` folded into its [`Fill`] - see
+    /// [`Self::fold_fill_offsets`]'s field doc for who needs which reading.
+    #[must_use]
+    pub fn from_xml_folding_fill_offsets(xml: &str, fallback: &[(&str, &str)]) -> Self {
+        let root = parse(xml);
+        let mut out = Self {
+            fold_fill_offsets: true,
+            ..Self::default()
+        };
+        for node in &root.children {
+            out.collect_globals(node, None);
+        }
+        for &(name, value) in fallback {
+            out.globals
+                .entry(name.to_string())
+                .or_insert_with(|| value.to_string());
+        }
+        for node in &root.children {
+            out.collect(node, None, &[]);
         }
         out
     }
@@ -641,7 +674,8 @@ impl Screens {
                         screen.images.push(image);
                     }
                     None => {
-                        if let Some(mut fill) = self.fill_from_node(child, offset) {
+                        let at = if self.fold_fill_offsets { inner } else { offset };
+                        if let Some(mut fill) = self.fill_from_node(child, at) {
                             fill.transition = transition;
                             screen.fills.push(fill);
                         }

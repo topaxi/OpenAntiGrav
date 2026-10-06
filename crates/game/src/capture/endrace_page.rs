@@ -206,7 +206,7 @@ fn endrace_page(
     )
     .context("this source has no EndRace screens to show")?;
     *sprites = screens.sprites;
-    if title.name == oag_hd::TITLE.name {
+    if crate::endrace::dialect(title) == Some(oag_title::EndRaceDialect::Field) {
         return hd_endrace_page(
             kind,
             &screens.results,

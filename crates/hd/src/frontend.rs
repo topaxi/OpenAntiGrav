@@ -384,6 +384,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // **This build's own mount order, not a measurement of the original's** -
     // see `docs/formats/hd-endrace-screens.md`.
     endrace_entry: Some(names::ENDRACE_DEFINITION),
+    endrace_style: Some(oag_title::EndRaceStyle::measured(
+        oag_title::EndRaceDialect::Field,
+    )),
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.

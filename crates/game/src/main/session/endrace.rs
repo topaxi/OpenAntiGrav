@@ -169,7 +169,7 @@ impl Session {
             }
         };
 
-        let is_hd = title_ref.name == oag_hd::TITLE.name;
+        let is_hd = oag_game::endrace::dialect(title_ref) == Some(oag_title::EndRaceDialect::Field);
 
         // HD shows its loyalty on `Results` itself. The law is HD's own
         // (`oag_hd::loyalty`), not the Pulse `award` above, which only the
