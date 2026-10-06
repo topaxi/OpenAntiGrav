@@ -20,6 +20,9 @@ const NAMES: &[&str] = &[
     "GlowTint",
 ];
 
+/// A material's name and its named parameter values.
+type Material = (String, Vec<(String, Vec<f32>)>);
+
 fn norm(name: &str) -> String {
     name.trim_start_matches(|c: char| c.is_ascii_digit() || c == '_')
         .to_ascii_lowercase()
@@ -28,7 +31,7 @@ fn norm(name: &str) -> String {
 fn main() -> anyhow::Result<()> {
     let _ = ();
     let hd_image = "data/images/hdfury-ps3-eu-dec.iso";
-    let mut hd: BTreeMap<String, Vec<(String, Vec<(String, Vec<f32>)>)>> = BTreeMap::new();
+    let mut hd: BTreeMap<String, Vec<Material>> = BTreeMap::new();
     for archive in [
         "PS3_GAME/USRDIR/DATA00.PSARC",
         "PS3_GAME/USRDIR/DATA02.PSARC",
