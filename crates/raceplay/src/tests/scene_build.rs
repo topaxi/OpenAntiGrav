@@ -150,3 +150,93 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         "{distinct} distinct pipelines for identical models: the cache is not sharing ({reused} of {asked} reused)"
     );
 }
+
+/// **A circuit's advert cards are what its placeholder quads sample.**
+///
+/// Builds the real scene of each disc's default circuit and counts the track
+/// materials `Scene::new` pointed at a card. Drop the rebinding and every
+/// placeholder shows its 8x8 digit stub (or, once stripped, nothing), and this
+/// reads zero.
+fn adverts_rebound(source: &str) -> Option<(usize, usize)> {
+    let image = oag_testdata::image(source)?;
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &mesh_render::device_descriptor("advert rebind test", &adapter),
+    ))
+    .ok()?;
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let served: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
+    let wanted = oag_render::gantry::placeholder_texture_slots(&loaded.track_model)
+        .iter()
+        .filter(|(_, number)| served.contains(number))
+        .count();
+    let scene = Scene::new(
+        &device,
+        &queue,
+        loaded.track_model,
+        &[livery()],
+        None,
+        None,
+        None,
+        None,
+        loaded.billboards,
+        true,
+        None,
+        None,
+        None,
+        None,
+        Default::default(),
+        Default::default(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Default::default(),
+        None,
+        wgpu::TextureFormat::Rgba8Unorm,
+        (64, 64),
+        Anisotropy::Off,
+        None,
+        oag_display::display::Msaa::Off,
+        Vec::new(),
+        mesh_render::Light::stand_in(),
+        None,
+        None,
+        None,
+        None,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("the scene builds");
+    Some((wanted, scene.adverts_rebound()))
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn pulse_psp_points_every_served_placeholder_at_its_card() {
+    let Some((wanted, rebound)) = adverts_rebound("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    assert!(wanted > 0, "the circuit authors no placeholder with a card");
+    assert_eq!(rebound, wanted, "placeholders rebound to a card");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_points_every_served_placeholder_at_its_card() {
+    let Some((wanted, rebound)) = adverts_rebound("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    assert!(wanted > 0, "the circuit authors no placeholder with a card");
+    assert_eq!(rebound, wanted, "placeholders rebound to a card");
+}

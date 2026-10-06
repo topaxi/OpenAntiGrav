@@ -401,6 +401,15 @@ pub struct Scene {
 type BuildCacheCounts = (u32, u32, usize);
 
 impl Scene {
+    /// How many of the track's placeholder materials were pointed at an advert
+    /// card when this scene was built.
+    #[cfg(test)]
+    pub(crate) fn adverts_rebound(&self) -> usize {
+        self.adverts
+            .as_ref()
+            .map_or(0, crate::adverts::Cards::rebound)
+    }
+
     /// This scene's pipeline cache, as `(asked for, reused, distinct built)`.
     #[must_use]
     pub fn build_cache(&self) -> (u32, u32, usize) {
@@ -573,7 +582,7 @@ impl Scene {
         let adverts = if adverts.is_empty() {
             None
         } else {
-            let cards = crate::adverts::Cards::new(device, queue, adverts, anisotropy)?;
+            let mut cards = crate::adverts::Cards::new(device, queue, adverts, anisotropy)?;
             cards.bind_into(device, queue, &mut track, &placeholders);
             Some(cards)
         };
