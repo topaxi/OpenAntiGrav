@@ -57,6 +57,8 @@ unnamed rather than forced.
 
 ## Pages
 
+- [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
+  every craft; the pick selects a livery.
 - [particle-paths.md](particle-paths.md) - the `Data/Particles` versus
   `Data/Particles2048` choice and its runtime flag; no names applied.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, the first

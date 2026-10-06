@@ -17,13 +17,16 @@
 /// **Both Zone fields used to be wrong, and both were fixed by playing the
 /// mode rather than by reading further disc data - 2026-08-28.**
 ///
-/// `zone_craft` used to be [`oag_title::ZoneCraft::OwnShip`], reasoning by
-/// analogy from Pure and HD's own Zone ship directories: the name it built,
-/// `Data\art\published\hdships\Zone\Ship.vex`, sits under [`HD_SHIP_DIR`]
-/// rather than this title's native [`SHIP_DIR`], so it never resolved and
-/// every Zone race on this title failed to load. 2048 has no dedicated Zone
-/// ship at all - Zone flies whichever of the twenty native craft the player
-/// picked, exactly as any other mode. See [`oag_title::ZoneCraft::PlayerShip`].
+/// `zone_craft` was [`oag_title::ZoneCraft::OwnShip`] (never resolved: it composed
+/// `hdships\Zone` under the native [`SHIP_DIR`]), then
+/// [`oag_title::ZoneCraft::PlayerShip`] on 2026-08-28 ("2048 has no dedicated
+/// Zone ship"), and is now [`oag_title::ZoneCraft::OwnShipAt`] -
+/// `Data\art\published\hdships\Zone\Ship.vex` for every craft, rooted in
+/// [`HD_SHIP_DIR`]. The v1.04 executable's ship-model loader names that file in
+/// its mode-6 case without reading the craft
+/// (`docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`); the 2026-08-28
+/// play note was right that the player picks their ship (it picks the livery)
+/// and wrong that the hull is theirs.
 ///
 /// `zone` used to be [`oag_title::ZoneCircuit::Separate`], pointed at one of
 /// four Zone-named environments `dlc2.psarc` ships - which
@@ -45,7 +48,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     effect_dir: EFFECT_DIR,
     effect_dir_by_circuit: &[],
     zone: oag_title::ZoneCircuit::SameCircuit,
-    zone_craft: oag_title::ZoneCraft::PlayerShip,
+    zone_craft: oag_title::ZoneCraft::OwnShipAt {
+        root: HD_SHIP_DIR,
+        ship: ZONE_SHIP,
+    },
     // Unread: this title's own boost-plume path (if it authors a standalone
     // one at all, off either roster) has not been searched for. `None` here
     // is silence, not the measured absence Pure's own row records.
@@ -247,6 +253,10 @@ pub const SHIP_DIR: &str = r"Data\art\published\Ships";
 /// and their `_c1`/`_n1` Fury variants; see [`GUEST_TEAM_VARIANTS`] for the
 /// twelve spelled out and confirmed against the manifest.
 pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
+
+/// The directory under [`HD_SHIP_DIR`] Zone mode's one hull sits in, for
+/// every craft: [`oag_title::ZoneCraft::OwnShipAt`].
+pub const ZONE_SHIP: &str = "Zone";
 
 /// What the numbered directory under a native team selects: **the four craft
 /// each of 2048's five teams flies**.
