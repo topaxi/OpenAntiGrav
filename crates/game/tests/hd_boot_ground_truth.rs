@@ -231,8 +231,15 @@ fn every_declared_language_plugin_resolves() {
     // plugin went with it, silently. `oag_ui::xml::expand` falls back to Latin-1
     // now; `all_sixteen_languages_load_including_the_latin_1_one` asserts the
     // name comes out right rather than merely coming out.
-    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
-    assert_eq!(languages.len(), 16, "every declared plugin parses");
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
+    // Sixteen plugins, then the project's own `PortugueseBR` appended after them
+    // (`oag_ui::strings::PROJECT_LANGUAGES`): a deliberate 2026-10-06 change.
+    assert_eq!(languages.len(), 16 + 1, "every declared plugin parses");
+    assert_eq!(
+        languages.last().map(|l| l.name.as_str()),
+        Some("PortugueseBR")
+    );
     assert!(
         languages
             .iter()
@@ -488,10 +495,12 @@ fn every_front_end_image_this_disc_names_decodes() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn all_sixteen_languages_load_including_the_latin_1_one() {
+    // (Seventeen entries since 2026-10-06: the disc's sixteen and PortugueseBR.)
     let Some(image) = image() else { return };
     let (shell, _) = shell(&image);
 
-    assert_eq!(shell.languages.len(), 16);
+    // Sixteen on the disc and the project's own `PortugueseBR` after them.
+    assert_eq!(shell.languages.len(), 16 + 1);
     let native = |name: &str| {
         shell
             .languages

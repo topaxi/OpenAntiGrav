@@ -101,6 +101,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
+    disc_strings: Some("pulse"),
     language_manifests: LANGUAGE_MANIFESTS,
     menu: Some(frontend::MENU_SKIN),
     // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,

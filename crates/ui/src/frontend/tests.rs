@@ -69,6 +69,7 @@ fn languages() -> Vec<Language> {
         // The picker draws in the default face whatever the plugin's slots
         // say, so these fixtures need none.
         fonts: Vec::new(),
+        disc_strings: None,
     })
     .collect()
 }

@@ -472,11 +472,14 @@ fn pures_picker_offers_its_own_manifest_english_included() {
             .collect();
         // Each pressing's own executable manifest, in order: the USA one
         // offers three of the five plugins its disc carries.
+        // ... then the project's own `PortugueseBR` after the disc's languages,
+        // on the disc's English plugin (2026-10-06).
         let expected: &[(&str, &str)] = if label == "pure-psp-usa" {
             &[
                 ("PI000", "English"),
                 ("PI010", "Spanish"),
                 ("PI008", "French"),
+                ("PI000", "PortugueseBR"),
             ]
         } else {
             &[
@@ -485,6 +488,7 @@ fn pures_picker_offers_its_own_manifest_english_included() {
                 ("PI008", "French"),
                 ("PI009", "German"),
                 ("PI011", "Italian"),
+                ("PI000", "PortugueseBR"),
             ]
         };
         assert_eq!(

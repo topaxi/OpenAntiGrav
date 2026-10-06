@@ -52,7 +52,8 @@ fn table_and_entries(source: &Path) -> (StringTable, Option<String>) {
     let mut archives = opened.archives;
     let mut report = Vec::new();
     let plugins: &[&str] = opened.title.front_end.map_or(&[], |fe| fe.language_plugins);
-    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
     let chosen = oag_ui::language::load::chosen_language(&languages, Some("English"));
     let entries = chosen.and_then(|language| language.entries.clone());
     (

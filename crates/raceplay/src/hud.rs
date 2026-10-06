@@ -126,7 +126,12 @@ pub(super) fn load_hud(
     //
     // **Before the fonts now**, because the plugins parsed here are also what
     // name the two faces below - the same reordering `boot::load_shell` needed.
-    let languages = oag_ui::language::load::load_languages(archives, language_plugins, report);
+    let languages = oag_ui::language::load::load_languages(
+        archives,
+        language_plugins,
+        title.front_end.and_then(|front_end| front_end.disc_strings),
+        report,
+    );
     let chosen = oag_ui::language::load::chosen_language(&languages, preferred_language);
     let strings =
         oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);
