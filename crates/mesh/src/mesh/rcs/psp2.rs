@@ -121,6 +121,13 @@ pub struct Report {
     pub glow_layers: usize,
     /// Materials that scroll their one texture off `speed_multipliaer`.
     pub scrolling_materials: usize,
+    /// Materials that scroll off HD's vertex law, **inherited by shader name and
+    /// authored rate hashes, no 2048 or Omega instruction read** - see
+    /// `vertex_scroll::inherited_rate`.
+    pub inherited_scrolls: usize,
+    /// Of those, the ones admitted without a readable shader program to
+    /// confirm the vertex stage declares `time` (every Omega one: GCN).
+    pub inherited_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`) not drawn - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
@@ -177,13 +184,14 @@ impl Report {
                 self.placeholder_submeshes
             )
         };
-        let scrolls = if self.glow_layers + self.scrolling_materials == 0 {
+        let scrolls = if self.glow_layers + self.scrolling_materials + self.inherited_scrolls == 0 {
             String::new()
         } else {
             format!(
                 "; {} glow layer(s) and {} plain scroll(s) off the materials' own uniforms \
-                 (rates chosen, not measured)",
-                self.glow_layers, self.scrolling_materials
+                 (rates chosen, not measured), {} scroll(s) inherited from HD's vertex law by \
+                 shader name and authored rate (no instruction read here)",
+                self.glow_layers, self.scrolling_materials, self.inherited_scrolls
             )
         };
         let zone_colours = if self.zone_colour_submeshes == 0 {

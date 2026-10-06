@@ -1688,7 +1688,10 @@ the eye inside a wall); no frame of a scrolled hologram is in the evidence.
 and `scrollingalpha` with HD's `VSpeed`/`V_Offset` names
 ([omega-status.md](omega-status.md)), but its programs are GCN and unread, so
 whether Omega's vertex stage computes `uv + time * rate` is not established.
-2048 animates through its own skeleton and glow path and is out of scope.
+**2048 and Omega: ported by name, 2026-10-06** - both author the same rate hashes
+on the same shader names and play them through the same track, labelled inherited
+(2048's vertex programs declare `time`; Omega's are unread). See
+[2048-material-params.md](2048-material-params.md#inherited-from-hd-the-vertex-scroll-2026-10-06-psp2-scroll).
 
 ## The ship hull's dark materials: a wrong colour-set match, not a wrong vertex class (2026-09-13)
 

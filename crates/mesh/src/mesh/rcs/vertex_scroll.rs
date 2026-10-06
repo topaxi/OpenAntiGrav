@@ -43,6 +43,9 @@ const TIME: u32 = 0x906b_67ba;
 struct Shape {
     u: Option<u32>,
     v: Option<u32>,
+    /// Lower-case shader-name prefixes of the family, used where a material's
+    /// own program cannot be read (see [`inherited_rate`]).
+    stems: &'static [&'static str],
 }
 
 /// The shapes read, by the shader they were read on. The names are for the
@@ -54,6 +57,7 @@ const SHAPES: &[(&str, Shape)] = &[
         Shape {
             u: Some(0x1abb_e1f7),
             v: Some(0x9c2f_9359),
+            stems: &["basic_uv_scroll"],
         },
     ),
     // `cf_uvanim_emssive*`: two unnamed floats, `x` and `y` in that order.
@@ -62,6 +66,7 @@ const SHAPES: &[(&str, Shape)] = &[
         Shape {
             u: Some(0x87d7_69dc),
             v: Some(0x2481_ef75),
+            stems: &["cf_uvanim_emssive"],
         },
     ),
     // `hologram`: `Speed`, on `u` alone.
@@ -70,6 +75,7 @@ const SHAPES: &[(&str, Shape)] = &[
         Shape {
             u: Some(0x3118_2e0d),
             v: None,
+            stems: &["hologram"],
         },
     ),
     // `emissive_bloom` and `emissive_lights`: one unnamed float, on `v`.
@@ -78,6 +84,7 @@ const SHAPES: &[(&str, Shape)] = &[
         Shape {
             u: None,
             v: Some(0x6829_2521),
+            stems: &["emissive_bloom", "emissive_lights"],
         },
     ),
     // `uv_anim_diffuse_alpha`: one unnamed float, on `u`.
@@ -86,6 +93,7 @@ const SHAPES: &[(&str, Shape)] = &[
         Shape {
             u: Some(0x33d5_1367),
             v: None,
+            stems: &["uv_anim_diffuse_alpha"],
         },
     ),
 ];
@@ -158,4 +166,43 @@ pub(super) fn vertex_scroll(
         material_anim[slot] = u32::try_from(at + 1).unwrap_or(0);
         report.vertex_scrolls += 1;
     }
+}
+
+/// The rate a **Wipeout 2048 or Omega** material inherits from HD's vertex
+/// scroll, or `None`.
+///
+/// **Inherited, not measured, on those two titles.** The material's shader
+/// carries a name HD also ships, authors the very rate hashes HD's vertex block
+/// adds `time` times to the coordinate (`oag_render`'s
+/// `psp2_hd_rate_census` finds `cf_uvanim_emssive`'s `0x87d769dc`/`0x2481ef75`
+/// pair on 2048 and Omega with HD's own meaning), and on 2048 the shader's
+/// vertex program declares `time`. No 2048 or Omega instruction was read, so
+/// the sign and the unit of `time` are HD's, carried over by name. `vertex_declares_time`
+/// is `None` where the shader's programs cannot be read (Omega's are GCN):
+/// the name and the hashes alone admit it there. A material that names more
+/// than one texture besides its lightmap draws still, as HD's does.
+pub(in crate::mesh::rcs) fn inherited_rate(
+    stem: &str,
+    own_textures: usize,
+    vertex_declares_time: Option<bool>,
+    authored: impl Fn(u32) -> Option<f32>,
+) -> Option<[f32; 2]> {
+    if own_textures != 1 {
+        return None;
+    }
+    if vertex_declares_time == Some(false) {
+        return None;
+    }
+    let stem = stem.to_ascii_lowercase();
+    let shape = SHAPES.iter().map(|(_, s)| s).find(|s| {
+        s.stems.iter().any(|p| stem.starts_with(p))
+            && [s.u, s.v]
+                .into_iter()
+                .flatten()
+                .all(|h| authored(h).is_some())
+            && (s.u.is_some() || s.v.is_some())
+    })?;
+    let rate = |hash: Option<u32>| hash.and_then(&authored).unwrap_or(0.0);
+    let rate = [rate(shape.u), rate(shape.v)];
+    (rate.iter().all(|r| r.is_finite()) && rate != [0.0, 0.0]).then_some(rate)
 }
