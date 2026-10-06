@@ -2,54 +2,37 @@
 //!
 //! # Why this exists
 //!
-//! The controller's unit tests ask what it holds on one tick from one pose. That
-//! cannot see the failure this file was written for, because the failure is a
-//! *loop* property: the first version of this AI tracked the line perfectly on
-//! any single tick and drove wall to wall in a race, which is what the plant
-//! makes inevitable.
+//! The controller's unit tests cannot see the failure this file was written for,
+//! a *loop* property: the first version of this AI tracked the line on any single
+//! tick and drove wall to wall in a race.
 //!
 //! **The plant is a double integrator with a lag in front of it.**
-//! `oag_physics::engine::steering` feeds `Accumulators::local_angular`, which is
-//! **torque** - so the steering input commands yaw *acceleration*, not yaw rate
-//! and not heading. On top of that `controls::ramp_steering` moves the steering
-//! state toward its target at a finite rate, so the input itself lags. A
-//! controller that sets steering proportionally to how far off the line it is
-//! will overshoot, correct, overshoot the other way, and keep doing it: that is
-//! a limit cycle, not a tuning error, and no gain fixes it.
-//!
-//! So the assertion here is **how often the craft crosses its own line**. A craft
-//! tracking a line crosses it a few times settling in. A craft in a wall-to-wall
-//! wave crosses it on every swing.
+//! `oag_physics::engine::steering` feeds `Accumulators::local_angular`, a
+//! **torque**, so steering commands yaw *acceleration*; `controls::ramp_steering`
+//! lags the input itself. A controller proportional to line error overshoots and
+//! keeps doing it: a limit cycle, not a tuning error, and no gain fixes it.
 //!
 //! # The numbers that justified the rewrite
 //!
-//! **This test was written first and watched failing.** Against the
-//! proportional-on-error controller it replaced, on the oval below over 1,800
-//! ticks:
+//! **Written first and watched failing.** Against the proportional-on-error
+//! controller it replaced, on the oval below over 1,800 ticks:
 //!
 //! | | peak error from the line |
 //! | --- | --- |
 //! | proportional on error | **84.1** |
 //! | yaw-rate tracking | **7.3** |
 //!
-//! On a line whose corners are 120 units across, 84 units off it is not tracking
-//! anything.
-//!
-//! **Amplitude is what is asserted, and counting line crossings was tried and
-//! discarded.** The two controllers cross the line about as often as each other
-//! (19 against 16 over the same run), because a craft that tracks a line tightly
-//! still crosses it at every corner entry and exit - four to eight times a lap
-//! on this oval. The count measures the geometry more than the controller. How
-//! far it goes is what distinguishes tracking from weaving.
+//! **Amplitude is what is asserted; counting line crossings was tried and
+//! discarded**: both controllers cross about as often (19 against 16), since a
+//! tight tracker still crosses at every corner entry and exit.
 //!
 //! # What this is not
 //!
-//! **It is not the game.** The surface is an infinite flat plane, the handling is
-//! invented (see [`handling`]), and a real circuit rolls, banks, narrows and has
-//! walls. Nothing here says the field gets round `16_Track` - that is
+//! **It is not the game**: a flat infinite plane, invented handling (see
+//! [`handling`]). Whether the field gets round `16_Track` is
 //! `race_ground_truth::the_ai_drives_the_field_along_the_track`, which needs a
-//! disc image. What this says is that the controller is stable against a plant of
-//! the right *shape*, which is the property that was broken.
+//! disc. This says the controller is stable against a plant of the right
+//! *shape*.
 
 use oag_ai::{Driver, Field, Frame, Line, Pilot, Rival, Span, Tuning};
 use oag_core::math::{Quat, Vec3};
@@ -57,11 +40,8 @@ use oag_physics::{
     Body, Environment, Handling, Ray, RaycastHit, Raycaster, ShipState, Surface, params,
 };
 
-/// An infinite horizontal floor at `y = 0`.
-///
-/// Enough for the hover probes to find a surface and for the craft to have grip;
-/// there are no walls, so a craft that leaves the line simply keeps going, which
-/// is what lets the cross-track error be measured rather than clipped.
+/// An infinite horizontal floor at `y = 0`: enough for the hover probes and
+/// grip. No walls, so cross-track error is measured rather than clipped.
 struct Plane;
 
 impl Raycaster for Plane {
@@ -104,12 +84,9 @@ impl Raycaster for Plane {
 
 /// A craft that can drive, with invented numbers.
 ///
-/// **None of these is the game's.** Per ADR-0006 no shipped value is in this
-/// repository, and these were picked to give a craft that accelerates, corners
-/// and settles on the plane above - round figures a reader can check the test's
-/// arithmetic against, not a measurement of anything. The one that matters to
-/// what is being asserted is `turning.amount`, because it is the gain of the
-/// double integrator the controller has to be stable against.
+/// **None of these is the game's** (ADR-0006): round figures a reader can check
+/// the arithmetic against. The one that matters is `turning.amount`, the gain of
+/// the double integrator the controller must be stable against.
 fn handling() -> Handling {
     Handling {
         engine: params::Engine {
@@ -148,23 +125,14 @@ fn handling() -> Handling {
 
 /// The tuning this file's invented craft is driven with.
 ///
-/// **`Tuning::default()`'s `lateral_accel` is a measurement against the real
-/// hulls and does not describe this one.** The disc's craft carry
-/// `grip_ground` 10 and `accelcap` 17 in the units the loader scales them
-/// into; [`handling`] below invents 40 and 60. The two are not commensurate -
-/// the invented craft reaches 187 and the real one 300 - so a speed target
-/// tuned for one over-drives the other, and at the shipped 180 this fixture
-/// slides 81 units off its line.
-///
-/// So the hull is invented and the tuning that matches it is invented beside
-/// it, which keeps every regression number in this file measuring the thing it
-/// was written to measure: **controller stability, not the speed target**. The
-/// speed target is answered by real data, in
-/// `race_ground_truth::the_ai_drives_the_field_along_the_track`.
-///
-/// `the_default_tuning_is_not_this_ones` pins the split, the way
-/// `the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`
-/// pins the other one.
+/// **`Tuning::default()`'s `lateral_accel` is measured against the real hulls
+/// and does not describe this one**: the disc's craft carry `grip_ground` 10
+/// and `accelcap` 17 in loader units, [`handling`] invents 40 and 60 (187
+/// against 300 top speed), so at the shipped 180 this fixture slides 81 units
+/// off its line. The invented hull gets an invented matching tuning, so every
+/// number here measures **controller stability, not the speed target** (real
+/// data: `race_ground_truth::the_ai_drives_the_field_along_the_track`).
+/// `the_default_tuning_is_not_this_ones` pins the split.
 fn tuning() -> Tuning {
     Tuning {
         lateral_accel: 55.0,
@@ -174,45 +142,36 @@ fn tuning() -> Tuning {
 
 /// The same craft, with airbrakes that do something.
 ///
-/// **A second fixture rather than an extension of the first, and the split is
-/// load-bearing.** [`handling`] leaves `airbrake` and `brakes` at
-/// `Handling::ZERO`, so in it a driver's airbrake commands go nowhere at all:
-/// the ramped states never leave zero, `ShipState::brake` never rises, and
-/// every `imbalance` term in `oag_physics::airbrake` is zero. Braking there is
-/// `thrust = 0` and nothing else. The bounds in
+/// **A second fixture, and the split is load-bearing.** [`handling`] leaves
+/// `airbrake` and `brakes` at `Handling::ZERO`, so airbrake commands go nowhere
+/// and braking is `thrust = 0`. The bounds in
 /// [`a_craft_settles_onto_the_line_instead_of_weaving`] were calibrated against
-/// exactly that craft, so giving it airbrakes would silently re-baseline the
-/// regression this file exists for.
+/// that craft, so giving it airbrakes would silently re-baseline the regression.
 /// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`]
-/// pins the split.
-///
-/// **None of these is the game's**, per ADR-0006 - round figures picked to give
-/// a craft whose airbrakes slow it, yaw it and cost it grip on the same order
-/// as its other forces, so the differential has something to be measured
-/// against.
+/// pins it. **None of these is the game's** (ADR-0006): round figures giving
+/// airbrakes that slow, yaw and cost grip on the order of the other forces.
 fn handling_with_airbrakes() -> Handling {
     Handling {
         airbrake: params::Airbrake {
-            // A lateral force gain, not a drag, and already scaled by 1e-4 -
-            // see `docs/physics/README.md` and `params::Airbrake`.
+            // A lateral force gain, not a drag, scaled by 1e-4: see
+            // `docs/physics/README.md` and `params::Airbrake`.
             amount: 0.0005,
             drag: 1.0,
             gain: 400.0,
             falloff: 400.0,
-            // Sized against the steering it assists: `engine::steering` gives a
-            // yaw torque of `steer * turning.amount`, so up to 100 here, while
-            // this term gives `speed * turn * imbalance * 0.001` - about 18 at
-            // 150 units a second and a full differential. An assist worth a
-            // fifth of the stick, which is what an assist should be.
+            // Against `engine::steering`'s yaw torque of `steer * turning.amount`
+            // (up to 100) this gives `speed * turn * imbalance * 0.001`, about 18
+            // at 150 units a second and a full differential: an assist worth a
+            // fifth of the stick.
             turn: 2.0,
-            // Already scaled by 1e-4, so this lives on `0.0..=0.01`: 0.004 is
-            // forty per cent of the lateral grip kept at full airbrake.
+            // Scaled by 1e-4, so `0.0..=0.01`: 0.004 keeps forty per cent of
+            // lateral grip at full airbrake.
             slidegrip: 0.004,
             sideshift: 20.0,
         },
         brakes: params::Brakes {
-            // **Already scaled by -0.01 and so negative** - the force is applied
-            // along `+unit(velocity)` and the sign is carried here.
+            // **Scaled by -0.01 and so negative**: the force is along
+            // `+unit(velocity)` and the sign is carried here.
             amount: -0.4,
             gain: 400.0,
             falloff: 400.0,
@@ -222,11 +181,8 @@ fn handling_with_airbrakes() -> Handling {
 }
 
 /// An oval: two 120-unit-radius half circles joined by 400-unit straights.
-///
-/// Deliberately not a circle. A constant-curvature loop is the easy case - the
-/// controller can settle on one steering value and stay there. What excites an
-/// oscillator is the *transitions*, entering and leaving the corners, which is
-/// where a real circuit's problems are too.
+/// Deliberately not a circle: constant curvature is the easy case, and what
+/// excites an oscillator is the *transitions* into and out of corners.
 fn oval() -> Line {
     oval_of(120.0, 400.0)
 }
@@ -266,14 +222,12 @@ fn oval_of(radius: f32, straight: f32) -> Line {
         std::f32::consts::TAU,
     );
 
-    // A corridor `CORRIDOR` units either side, so a seeded driver has somewhere
-    // to be other than the line. A real track's comes off the disc, one bound
-    // per control point; this one is even, because what is under test is the
-    // driver and not the shape of a corridor.
+    // A corridor `CORRIDOR` either side, even because the driver is under test,
+    // not a corridor's shape (a real one comes off the disc per control point).
     //
-    // **The frame is built from the line itself and world up**, which is only
-    // right because this plane is flat. A real track rolls, and there the axis
-    // is the sample's own `lateral` - see `docs/formats/track.md`.
+    // **The frame is built from the line and world up**, right only because this
+    // plane is flat; on a real track it is the sample's `lateral`
+    // (`docs/formats/track.md`).
     let corridor = (0..points.len())
         .map(|index| {
             let here = points[index];
@@ -308,28 +262,22 @@ struct Run {
     peak_error: f32,
     /// Mean distance from the line over the run.
     mean_error: f32,
-    /// Mean *signed* distance, positive to the left of the line.
-    ///
-    /// This is the one that says which part of the corridor a driver held. The
-    /// unsigned mean above cannot: two craft running the same distance off the
-    /// line on opposite sides have the same one.
+    /// Mean *signed* distance, positive to the left of the line: which part of
+    /// the corridor a driver held (the unsigned mean cannot tell opposite sides
+    /// apart).
     mean_offset: f32,
     /// How far along the line it travelled, in points.
     progress: usize,
-    /// How often the steering command crossed zero, counting only crossings
-    /// where it had committed to a side first.
-    ///
-    /// A ringing loop reverses far more often than a tracking one, so this is
+    /// How often the steering command crossed zero, counting only crossings from
+    /// a committed side. A ringing loop reverses far more than a tracking one:
     /// the guard on adding a second path into the steering.
     steer_reversals: usize,
     /// Ticks the steering command spent pinned at full lock.
     ///
-    /// **What the differential is for, measured at the outcome rather than at
-    /// the trigger.** Saturation is the loop asking for more yaw than the
-    /// steering input can deliver; an assist that supplies some of it gets the
-    /// craft onto the rate it wanted sooner, so the loop comes off the stop
-    /// earlier. Counting the ticks the assist *fired* would just be counting
-    /// its own gate.
+    /// **What the differential is for, measured at the outcome**: saturation is
+    /// the loop asking for more yaw than the stick delivers, and an assist gets
+    /// it off the stop sooner. Counting ticks the assist *fired* would count its
+    /// own gate.
     saturated_ticks: usize,
 }
 
@@ -406,8 +354,8 @@ fn drive_the_oval_as(
         last_index = index;
 
         let error = cross_track(line, index, state.body.position);
-        // Ignore the first second: the craft starts at rest and the settling
-        // transient is not the property under test.
+        // Skip the first second: the craft starts at rest and settling is not the
+        // property under test.
         if tick > 60 {
             peak_error = peak_error.max(error.abs());
             if controls.steer_x.abs() >= 1.0 {
@@ -417,8 +365,8 @@ fn drive_the_oval_as(
             total_offset += error;
             samples += 1;
 
-            // Only a command that picked a side counts as having a side to
-            // reverse from, or every wander through zero scores.
+            // Only a command that picked a side has one to reverse from, or every
+            // wander through zero scores.
             if controls.steer_x.abs() > 0.1 {
                 let side = controls.steer_x.signum();
                 if committed != 0.0 && side != committed {
@@ -443,12 +391,10 @@ fn drive_the_oval_as(
     }
 }
 
-/// The regression this file exists for.
-///
-/// The bounds are loose against the rewritten controller (7.3 peak, ~2 mean) and
-/// nowhere near the broken one (84.1 peak), so this catches a return of the wave
-/// rather than grading the driving. Tightening them to the current numbers would
-/// make every future tuning change a test failure.
+/// The regression this file exists for. The bounds are loose against the
+/// rewritten controller (7.3 peak, ~2 mean) and nowhere near the broken one
+/// (84.1), so this catches the wave's return without grading the driving;
+/// tightening them would make every tuning change a failure.
 #[test]
 fn a_craft_settles_onto_the_line_instead_of_weaving() {
     let run = drive_the_oval(1800);
@@ -494,13 +440,10 @@ fn drive_the_field(ticks: usize) -> Vec<Run> {
         .collect()
 }
 
-/// **The reason personalities exist.** Seven drivers on one line hold seven
-/// different parts of the corridor, rather than the same centimetre of it.
-///
-/// Asserted on the *signed* mean offset, and on the spread between drivers
-/// rather than on any driver's own number: what is wrong with a field that
-/// tracks one line is that they agree, and this is the direct measurement of
-/// them not agreeing.
+/// **The reason personalities exist**: seven drivers on one line hold seven
+/// parts of the corridor, not the same centimetre. Asserted on the *signed* mean
+/// offset and the spread between drivers: what is wrong with a field tracking
+/// one line is that they agree.
 #[test]
 fn a_field_of_seeded_drivers_does_not_drive_one_line() {
     let runs = drive_the_field(1800);
@@ -515,11 +458,9 @@ fn a_field_of_seeded_drivers_does_not_drive_one_line() {
         CORRIDOR * 2.0
     );
 
-    // And the spread is the field's, not two outliers with five craft still
-    // nose to tail. Mean absolute deviation rather than a nearest-neighbour
-    // check: **two drivers are allowed to pick similar lines**, the same way two
-    // human drivers are, and a test that forbade it would be pinning the
-    // distribution's luck rather than the property under test.
+    // The spread is the field's, not two outliers with five craft nose to tail:
+    // mean absolute deviation, not nearest-neighbour, since **two drivers may
+    // pick similar lines** and forbidding it would pin the distribution's luck.
     let mean = offsets.iter().sum::<f32>() / offsets.len() as f32;
     let deviation = offsets
         .iter()
@@ -532,15 +473,14 @@ fn a_field_of_seeded_drivers_does_not_drive_one_line() {
     );
 }
 
-/// The spread is the corridor's to give. A driver that used more of it than
-/// [`Tuning::corridor_use`] allows would be relying on a clamp that only knows
-/// about the point it is aiming at, and on a real track the room either side of
-/// the line is the only thing between the field and the scenery.
+/// The spread is the corridor's to give. Using more than
+/// [`Tuning::corridor_use`] allows would rely on a clamp that knows only the
+/// point being aimed at, and the room either side is all that stands between a
+/// real field and the scenery.
 #[test]
 fn a_seeded_driver_stays_inside_the_corridor() {
-    // The lag between aiming and arriving, which the corridor does not bound:
-    // the controller's own tracking error, measured at 7.3 units peak on this
-    // oval by the run above. Loose for the same reason that bound is loose.
+    // The aiming-to-arriving lag the corridor does not bound: the controller's
+    // own tracking error, 7.3 units peak on this oval. Loose like that bound.
     const TRACKING: f32 = 12.0;
 
     for (slot, run) in drive_the_field(1800).iter().enumerate() {
@@ -566,8 +506,7 @@ fn a_field_of_seeded_drivers_strings_out() {
         high > low,
         "every driver covered exactly {high} points, so nothing separates them"
     );
-    // And they all still got round: a spread produced by one craft stopping is
-    // not a race.
+    // They all still got round: a spread from one craft stopping is not a race.
     assert!(
         low > oval().len(),
         "the slowest driver covered {low} of {} points",
@@ -601,16 +540,13 @@ fn the_same_seed_drives_the_same_race() {
 }
 
 /// The finding that made [`handling_with_airbrakes`] necessary, pinned so the
-/// next reader does not helpfully merge the two fixtures.
+/// next reader does not merge the two fixtures.
 ///
-/// Every number this file's module docs quote - the 84.1 against the 7.3, the
-/// bounds in [`a_craft_settles_onto_the_line_instead_of_weaving`] - was
-/// measured against a craft whose airbrakes do **nothing**: `Handling::ZERO`
-/// leaves `airbrake.gain` at zero, so the ramped states never move off zero
-/// whatever the driver commands, and `brakes.amount` at zero, so the brake
-/// state has nothing to apply. Braking in that fixture is `thrust = 0`. That is
-/// deliberate, and it is why the differential is invisible to the six tests
-/// above rather than silently changing them.
+/// Every number in this file's module docs (84.1 against 7.3, the bounds in
+/// [`a_craft_settles_onto_the_line_instead_of_weaving`]) was measured on a craft
+/// whose airbrakes do **nothing**: `Handling::ZERO` leaves `airbrake.gain` and
+/// `brakes.amount` at zero, so braking is `thrust = 0`. Deliberate, and why the
+/// differential is invisible to the six tests above.
 #[test]
 fn the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it() {
     let plain = handling();
@@ -624,8 +560,8 @@ fn the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it() {
     assert_ne!(braked.brakes, plain.brakes);
 }
 
-/// The guard on the new fixture: if it were inert too, everything below would
-/// pass by measuring nothing.
+/// The guard on the new fixture: were it inert too, everything below would pass
+/// by measuring nothing.
 #[test]
 fn the_airbrake_fixture_actually_slows_and_yaws_a_craft() {
     let handling = handling_with_airbrakes();
@@ -681,9 +617,9 @@ fn the_airbrake_fixture_actually_slows_and_yaws_a_craft() {
     );
 }
 
-/// The stability guard. A second path into a loop that already oscillates is
-/// what this crate was rewritten to remove, so the differential has to earn its
-/// place without widening the wave or reversing more often.
+/// The stability guard: a second path into a loop that already oscillates is
+/// what this crate was rewritten to remove, so the differential must not widen
+/// the wave or reverse more often.
 #[test]
 fn a_differential_braking_driver_does_not_ring() {
     let symmetric = Tuning {
@@ -729,17 +665,13 @@ fn a_differential_braking_driver_does_not_ring() {
 
 /// And what it buys, on a corner the steering alone cannot hold.
 ///
-/// **The measurement that justifies the feature, and it only shows up where the
-/// design says it should.** On [`oval`]'s 120-unit corners the craft is not
-/// grip-limited - it spends about twenty ticks of an 1,800-tick run at full
-/// lock - so there is no understeer to help with and the differential is
-/// noise. Tighten the corners to 60 units and the same craft spends over seven
-/// hundred ticks pinned at lock, which is the loop saying it cannot produce the
-/// yaw it wants. That is the case this exists for.
+/// **It only shows up where the design says.** On [`oval`]'s 120-unit corners
+/// the craft spends about twenty of 1,800 ticks at full lock, so there is no
+/// understeer to help; at 60 units it spends over seven hundred pinned, the
+/// loop saying it cannot make the yaw it wants.
 ///
-/// **The gain is not monotonic in how tight the corner is**, which is worth
-/// knowing before anyone "improves" this fixture by tightening it. Measured
-/// over 2,400 ticks, peak error with the differential against without:
+/// **The gain is not monotonic in how tight the corner is**; do not "improve"
+/// this fixture by tightening it. Peak error over 2,400 ticks:
 ///
 /// | corners | with | without |
 /// | --- | --- | --- |
@@ -749,10 +681,9 @@ fn a_differential_braking_driver_does_not_ring() {
 /// | 35-unit, 600-unit straights | 98.5 | 98.8 |
 /// | 25-unit, 700-unit straights | 163.3 | 164.6 |
 ///
-/// A 98-unit peak error on a 35-unit corner is a craft *missing the turn and
-/// rejoining*, not one cornering badly - there is no grip left for extra yaw to
-/// buy anything with. The benefit peaks where the craft is **marginally** past
-/// the steering's authority, which is the 60-unit case below.
+/// A 98-unit error on a 35-unit corner is a craft *missing the turn and
+/// rejoining*, with no grip left for extra yaw to buy. The benefit peaks where
+/// the craft is **marginally** past the steering's authority: the 60-unit case.
 #[test]
 fn a_differential_holds_a_corner_the_steering_alone_cannot() {
     let symmetric = Tuning {
@@ -800,13 +731,10 @@ fn a_differential_holds_a_corner_the_steering_alone_cannot() {
     );
 }
 
-/// The other half of the claim: where the craft can already make the corner,
-/// the differential stays out of the way.
-///
-/// It is not exactly nothing - it costs about a tenth of a unit of peak error
-/// on the wide oval, against 7.4 - and that is recorded here rather than
-/// hidden, because a bound that pretended it was zero would be a bound that
-/// fails on the next tuning change for no reason worth investigating.
+/// The other half: where the craft can already make the corner, the
+/// differential stays out of the way. Not exactly nothing (about a tenth of a
+/// unit of peak error on the wide oval, against 7.4), recorded because a bound
+/// pretending zero fails on the next tuning change for no reason worth chasing.
 #[test]
 fn a_differential_barely_touches_a_corner_the_craft_can_already_make() {
     let symmetric = Tuning {
@@ -847,15 +775,14 @@ fn a_differential_barely_touches_a_corner_the_craft_can_already_make() {
 }
 
 /// The safety net on the four built-in characters: a pilot that cannot get
-/// round is a pilot that puts a craft in the scenery in a real race, and the
-/// disc-backed test that would catch it does not run in CI.
+/// round puts a craft in the scenery in a real race, and the disc-backed test
+/// that would catch it does not run in CI.
 #[test]
 fn every_built_in_pilot_gets_round_the_oval() {
     let line = oval();
-    // **Both fixtures.** `handling()` has no airbrakes at all, so a pilot whose
-    // distinguishing trait is `trail` would be validated there on a craft that
-    // cannot use it - see
-    // `the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`.
+    // **Both fixtures**: `handling()` has no airbrakes, so a pilot whose trait is
+    // `trail` would be validated on a craft that cannot use it (see
+    // `the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`).
     for craft in [handling(), handling_with_airbrakes()] {
         for (name, pilot) in Pilot::BUILT_IN {
             for slot in 1..3u32 {
@@ -882,17 +809,16 @@ fn every_built_in_pilot_gets_round_the_oval() {
     }
 }
 
-/// The characters have to be distinguishable by driving, not just by their
-/// numbers. Aggression is late braking plus commitment, so it shows up as
-/// distance covered.
+/// The characters must be distinguishable by driving, not just numbers:
+/// aggression is late braking plus commitment, so it shows as distance covered.
 #[test]
 fn an_aggressive_pilot_gets_further_round_than_a_shy_one() {
     let line = oval();
     let mut aggressive_wins = 0;
     for slot in 1..8u32 {
         let driver = Driver::for_slot(0xC0FFEE, slot);
-        // On the airbrake fixture, so `trail` - 1.0-1.4 against 0.1-0.5 - is
-        // part of what is being compared rather than inert.
+        // On the airbrake fixture, so `trail` (1.0-1.4 against 0.1-0.5) is
+        // compared, not inert.
         let run = |pilot: &Pilot| {
             drive_the_oval_as(
                 1800,
@@ -914,12 +840,9 @@ fn an_aggressive_pilot_gets_further_round_than_a_shy_one() {
     );
 }
 
-/// What two craft driving against each other did.
-///
-/// A struct of its own rather than a pair of [`Run`]s: a `Run` is a lap-counted
-/// solo drive, and reusing it here would mean `progress` silently dropping its
-/// lap term and `peak_error` meaning "on the last tick". Fields that lie are
-/// worse than fields that are missing.
+/// What two craft driving against each other did. Its own struct: a [`Run`] is a
+/// lap-counted solo drive, and reusing it would make `progress` drop its lap
+/// term and `peak_error` mean "on the last tick".
 struct Pair {
     /// The closest the two ever came after settling, centre to centre.
     closest: f32,
@@ -931,16 +854,12 @@ struct Pair {
 
 /// Two craft on one line, each seeing the other, with the real force law.
 ///
-/// **The only test here that closes the social loop.** Every other awareness
-/// test hands a driver a `Field` written by hand and held still; this one
-/// measures each craft from the other's actual state every tick, so a yielding
-/// rule that oscillates, or one that walks two craft into each other, shows up
-/// as a number rather than as an argument.
-///
-/// Craft 0 leads and craft 1 chases from 25 units back and six across, which is
-/// the situation the social rules are about. It is still not the game: a flat
-/// plane, no walls, and the gap measured along the line rather than out of
-/// `oag_race::Standing`.
+/// **The only test here that closes the social loop.** Other awareness tests
+/// hand a driver a `Field` held still; this measures each craft from the
+/// other's actual state every tick, so a yielding rule that oscillates or walks
+/// two craft into each other shows as a number. Craft 0 leads, craft 1 chases
+/// from 25 units back and six across. Still not the game: flat plane, no walls,
+/// gap along the line rather than `oag_race::Standing`.
 fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
     let line = oval();
     let handling = handling_with_airbrakes();
@@ -1049,15 +968,15 @@ fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
     }
 }
 
-/// Two craft that can see each other must not converge on one line - which is
-/// the failure the whole personality system exists to prevent, now that there
-/// are rules deliberately moving craft *toward* each other.
+/// Two craft that can see each other must not converge on one line, the failure
+/// the personality system exists to prevent now that rules move craft *toward*
+/// each other.
 #[test]
 fn two_craft_that_can_see_each_other_do_not_converge() {
     for (name, pilot) in Pilot::BUILT_IN {
         let pair = drive_two_round_the_oval(1800, [&pilot, &Pilot::AGGRESSIVE]);
-        // A hull is 8 long and 4 wide, so this is clear of contact without
-        // asserting they never race each other closely.
+        // A hull is 8 long and 4 wide: clear of contact without asserting they
+        // never race closely.
         assert!(
             pair.closest > 5.0,
             "{name}: two craft closed to {:.1} units, which is contact",
@@ -1073,23 +992,19 @@ fn two_craft_that_can_see_each_other_do_not_converge() {
     }
 }
 
-/// **The test that proves the social axes are load-bearing rather than
-/// decorative**, and the reason it exists: zeroing `courtesy`, `defence` and
-/// `caution` on all four built-in pilots was tried, and every other test in the
-/// crate still passed. The unit tests build a `Personality` by hand and so
-/// cannot see a pilot that declares nothing.
+/// **Proves the social axes are load-bearing, not decorative**: zeroing
+/// `courtesy`, `defence` and `caution` on all four built-in pilots left every
+/// other test in the crate passing, since unit tests build a `Personality` by
+/// hand and cannot see a pilot that declares nothing.
 ///
-/// The chaser sits to the leader's **left** (a negative offset), so a leader
-/// that yields drifts right and one that covers drifts left. `mean_offset` is
-/// positive to the craft's own right, so the yielder must come out above the
-/// coverer.
+/// The chaser sits to the leader's **left**, so a yielding leader drifts right
+/// and a covering one left; `mean_offset` is positive to the craft's right, so
+/// the yielder must come out above the coverer.
 ///
-/// **Two variants of one pilot rather than two different pilots.** Comparing
-/// `SHY` against `AGGRESSIVE` was tried first and measures the wrong thing:
-/// they differ in `line_bias` and `width` too, and those dominate. These two
-/// declare identical spans on every axis but the social pair, so they draw
-/// identical values for all of them from the same seed, and the only thing that
-/// can move the result is the lean.
+/// **Two variants of one pilot, not two pilots**: `SHY` against `AGGRESSIVE`
+/// also differ in `line_bias` and `width`, which dominate. These declare
+/// identical spans on every axis but the social pair, so only the lean can move
+/// the result.
 #[test]
 fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
     let yielding = Pilot {
@@ -1107,11 +1022,10 @@ fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
     let gave_way = drive_two_round_the_oval(1800, [&yielding, &chaser]);
     let covered = drive_two_round_the_oval(1800, [&covering, &chaser]);
 
-    // **A tenth of a unit of mean offset, held over 1,800 ticks.** The margin
-    // is small because the social lean is deliberately a minority share of the
-    // aim budget - see `SOCIAL_MAX`, which exists because an unbounded version
-    // of this term was swerving craft into the player and then into a wall.
-    // What is asserted is a consistent bias over a whole run, not a lurch.
+    // **A tenth of a unit of mean offset, held over 1,800 ticks**: small because
+    // the social lean is a minority of the aim budget (see `SOCIAL_MAX`, which
+    // exists because an unbounded term swerved craft into the player and a
+    // wall). A consistent bias over a run, not a lurch.
     assert!(
         gave_way.mean_offset[0] > covered.mean_offset[0] + 0.1,
         "a yielding leader should move away from a chaser on its left, and a \
@@ -1122,15 +1036,12 @@ fn a_yielding_leader_gives_way_where_a_covering_one_does_not() {
 }
 
 /// The companion to
-/// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`],
-/// and it exists for the same reason: to stop the next reader collapsing two
-/// deliberately different things into one.
-///
+/// [`the_default_fixture_has_no_airbrakes_and_the_regression_bounds_know_it`]:
+/// stops the next reader collapsing two different things into one.
 /// `Tuning::default()`'s `lateral_accel` was swept against the **real** hulls
-/// on a real circuit and is roughly three times what this file's invented craft
-/// can hold. Driving this fixture with it puts the craft 81 units off its line,
-/// which would read as the controller weaving when it is really the speed
-/// target asking for grip the invented hull does not have.
+/// and is roughly three times what this invented craft holds; driving it with
+/// that puts the craft 81 units off its line, which would read as weaving when
+/// it is the speed target asking for grip the hull lacks.
 #[test]
 fn the_default_tuning_is_not_this_ones() {
     assert_ne!(
@@ -1138,8 +1049,7 @@ fn the_default_tuning_is_not_this_ones() {
         Tuning::default().lateral_accel,
         "if these ever agree, one of them stopped describing its own craft"
     );
-    // Everything else is shared, so a change to the real tuning still reaches
-    // this file.
+    // Shared, so a change to the real tuning still reaches this file.
     assert_eq!(tuning().rate_gain, Tuning::default().rate_gain);
     assert_eq!(tuning().trail_gain, Tuning::default().trail_gain);
     assert_eq!(tuning().brake_floor, Tuning::default().brake_floor);
