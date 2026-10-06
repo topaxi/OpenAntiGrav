@@ -419,3 +419,34 @@ fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label()
     }
     assert_eq!(found, 12, "twelve race circuits, and this found {found}");
 }
+
+/// HD keeps resolving its circuit's bank beside the track, not under a
+/// directory: `TrackBanks::circuit_directory` is `None` there, and 2048's
+/// `Data\audio\sound\` must not have reached it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_still_reads_its_circuit_bank_beside_the_track() {
+    let Some(path) = image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening the source");
+    assert_eq!(opened.title.race.sounds.track.circuit_directory, None);
+    let mut archives = opened.archives;
+    let track = oag_hd::race::DEFAULT_TRACK;
+    let blob = archives.read_name(track).expect("the circuit");
+    let loaded = TrackEmitters::load(&mut archives, opened.title.race.sounds, track, &blob);
+    for line in &loaded.report {
+        println!("{line}");
+    }
+    let directory = &track[..track.rfind('/').expect("a path")];
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.contains(&format!("circuit {directory}/")) && l.contains(".bnk")),
+        "HD's circuit bank was not looked for beside the track: {:#?}",
+        loaded.report
+    );
+}
