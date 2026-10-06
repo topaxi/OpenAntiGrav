@@ -211,6 +211,9 @@ pub struct Report {
     /// Magstrip materials that declare the wave and could not be bound: a
     /// texture did not decode or an authored value is missing. Drawn without.
     pub mag_wave_unread: usize,
+    /// Materials whose vertex program scrolls their one texture off `time`
+    /// and an authored rate - see `super::vertex_scroll`.
+    pub vertex_scrolls: usize,
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
@@ -323,6 +326,9 @@ impl Report {
         } + &match self.mag_wave_unread {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) whose wave could not be read (drawn without)"),
+        } + &match self.vertex_scrolls {
+            0 => String::new(),
+            n => format!(", {n} material(s) scrolling their texture off an authored rate"),
         } + &match self.light_cone_bound {
             0 => String::new(),
             n => format!(", {n} light-cone material(s) with their facing ramp bound"),
