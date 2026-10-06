@@ -1,32 +1,23 @@
 //! The physics parameter set, one block per ship and speed class.
 //!
-//! Every field here is a tunable the original reads from
-//! `Data\Ships\<Team>\handlingstats.xml` on the player's own disc. Nothing in
-//! this crate ships a value: [`Handling::ZERO`] exists so a test can name the
-//! two or three fields it cares about, and everything real is loaded.
+//! Every field is a tunable the original reads from `Data\Ships\<Team>\handlingstats.xml` on
+//! the player's own disc. No value ships in this crate ([`Handling::ZERO`] lets a test name
+//! the two or three fields it cares about), per
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! # Why this is not the format's own type
 //!
-//! `oag_tables::handling` parses the XML, cameras and front-end bars included,
-//! and its types describe the *document*. This one describes what the force law
-//! consumes, and it exists separately so that `oag-physics` depends on nothing
-//! but `oag-core` - a schema change cannot reach the simulation without someone
-//! deliberately updating the mapping in `oag-gameplay`. The field names are kept
-//! identical to the XML attribute names on purpose, so the mapping is
-//! inspectable rather than clever.
-//!
-//! The schema is documented in `docs/formats/handling-stats.md`; how each field
-//! is consumed is in `docs/physics/README.md` and
-//! `docs/ghidra/functions/psp-pulse-usa/engine.md`, which is the authority where the
-//! two disagree. Per `docs/architecture/adr/0006-no-copyrighted-content.md` no
-//! values are reproduced here or anywhere else in the repository.
+//! `oag_tables::handling` parses the XML (cameras and front-end bars included) and its types
+//! describe the *document*; this one describes what the force law consumes, so `oag-physics`
+//! depends on nothing but `oag-core` and a schema change reaches the simulation only through
+//! the mapping in `oag-gameplay`. Field names match the XML attributes so the mapping is
+//! inspectable. Schema: `docs/formats/handling-stats.md`; consumption: `docs/physics/README.md`
+//! and `docs/ghidra/functions/psp-pulse-usa/engine.md` (the authority where they disagree).
 //!
 //! # This is the in-memory form, already scaled
 //!
-//! **Four fields are pre-scaled by the original's XML loader**, so the number the
-//! craft code reads is not the number in the file. `oag-physics` holds the
-//! *scaled* form, the same value the original's force law consumes, and the force
-//! law here is written against that:
+//! **Four fields are pre-scaled by the original's XML loader**, and this crate holds the
+//! *scaled* form its force law consumes:
 //!
 //! | Field | Stored as | Consequence |
 //! | --- | --- | --- |
@@ -35,25 +26,17 @@
 //! | [`Airbrake::amount`] | `xml * 0.0001` | |
 //! | [`Airbrake::slidegrip`] | `xml * 0.0001` | an XML 0..100 becomes 0..0.01, which is what makes the grip coefficient reach exactly zero at full airbrake |
 //!
-//! Confidence 88, from the parsers themselves
-//! (`HandlingXml_ParseEngine` at `0x0883945c` and friends).
+//! Confidence 88, from the parsers (`HandlingXml_ParseEngine`, `0x0883945c`, and friends).
+//! **Applying the factors is `oag-gameplay`'s job**, not this crate's nor
+//! `oag_tables::handling`'s (which returns raw values). Applying them twice is the likeliest
+//! integration bug here, and silent: the ship is just sluggish.
 //!
-//! **Applying those factors is `oag-gameplay`'s job, not this crate's and not
-//! `oag_tables::handling`'s**, which deliberately returns the document's raw
-//! values. Applying them twice is the most likely integration bug in this area,
-//! and it would be silent: the ship would simply be sluggish.
+//! # Where the simulation's numbers come from
 //!
-//! # Where the simulation's numbers come from: the seam, stated
-//!
-//! Stage 6 of the engine/title split ([ADR-0022]) is this paragraph and the ones
-//! like it, and it deliberately **moves nothing**. Naming the boundary is the
-//! work; relocating constants across it is not, because
-//! [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md) item 2
-//! gates second-title *simulation* work behind M4's exit and the force law is
-//! that milestone's live subject. A constant moved mid-investigation is a
-//! constant nobody can find in the diff they are bisecting.
-//!
-//! Every number the simulation reads falls in exactly one of three places:
+//! Stage 6 of the engine/title split ([ADR-0022]) names this seam and **moves nothing**:
+//! [ADR-0009](../../../docs/architecture/adr/0009-multi-game-fanout.md) item 2 gates
+//! second-title *simulation* work behind M4's exit, and a constant moved mid-investigation
+//! is one nobody can find in the diff they are bisecting. Every number falls in one place:
 //!
 //! | Where it comes from | Lives in | Example |
 //! | --- | --- | --- |
@@ -61,21 +44,16 @@
 //! | The player's disc, engine-wide | `oag_tables::handling::Global` | `<SpeedupPads>`, `<GravityMul>` |
 //! | The original's **code**, recovered by reading it | a `pub const` beside the law that uses it | `crate::passive::DRAG_GROUND` |
 //!
-//! The third row is the one the split has to be careful about. Those constants
-//! are `oag-physics`'s today and would become **a title package's** the day a
-//! second title's force law is opened - they are literals out of *Pulse's*
-//! executable, so a title that compiled a different number is a different table,
-//! not a different engine. Nothing acts on that yet, on purpose: which of them
-//! generalise is unmeasured, and `docs/formats/pure-status.md` measured none of
-//! Pure's simulation. Recording which side of the line each is on is what makes
-//! the move mechanical when M4 closes, and what stops it being guessed at now.
+//! The third row would become **a title package's** the day a second title's force law opens:
+//! they are literals out of *Pulse's* executable, so a different compiled number is a
+//! different table, not a different engine. Which generalise is unmeasured
+//! (`docs/formats/pure-status.md` measured none of Pure's simulation); recording the side of
+//! the line each is on makes the move mechanical when M4 closes.
 //!
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
-/// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
-///
-/// Offsets `0xb8..0xcc` of the class block; see
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md`.
+/// Engine response. `<Engine accelcap amount falloff gain turbo/>`. Offsets `0xb8..0xcc` of
+/// the class block; see `engine.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Engine {
     /// Base of the thrust ceiling: `cap = 0.5 * speed + accelcap`.
@@ -84,13 +62,11 @@ pub struct Engine {
     pub amount: f32,
     /// **Dead.** Parsed at `+0xc0` and consumed by nothing.
     ///
-    /// `Ship_UpdateEngine` computes a throttle ramp in exactly the shape the
-    /// airbrakes use, stores it at `craft+0x2b8`, and then overwrites it with the
-    /// raw input at `0x0884c728` before computing thrust from the raw value. Both
-    /// branches of the ramp land on that store. Verified in disassembly rather
-    /// than in the decompiler, confidence 85. Kept here because it really is in
-    /// the data, and because reintroducing the ramp is the obvious mistake: the
-    /// resulting throttle lag reads as "feels close enough".
+    /// `Ship_UpdateEngine` computes a throttle ramp shaped like the airbrakes', stores it at
+    /// `craft+0x2b8`, then overwrites it with the raw input at `0x0884c728` before computing
+    /// thrust; both ramp branches land on that store. Verified in disassembly, confidence 85.
+    /// Kept because it is in the data and reintroducing the ramp is the obvious mistake (the
+    /// throttle lag reads as "feels close enough").
     pub falloff: f32,
     /// **Dead**, at `+0xb8`. See [`Self::falloff`].
     pub gain: f32,
@@ -98,16 +74,14 @@ pub struct Engine {
     pub turbo: f32,
 }
 
-/// Braking response. `<Brakes amount falloff gain/>`.
-///
-/// Offsets `0xac..0xb8`. There is **no brake axis**: the brake engages when both
-/// airbrake inputs are positive at once, and it is applied only while grounded.
+/// Braking response. `<Brakes amount falloff gain/>`. Offsets `0xac..0xb8`. There is **no
+/// brake axis**: the brake engages when both airbrake inputs are positive and applies only
+/// while grounded.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Brakes {
-    /// Brake magnitude, **already scaled by `-0.01` and so negative**.
-    ///
-    /// The force is applied along `+unit(velocity)`, so the sign is carried here.
-    /// Negating at the use site as well would accelerate under braking.
+    /// Brake magnitude, **already scaled by `-0.01` and so negative**. The force is applied
+    /// along `+unit(velocity)`, so the sign is carried here; negating at the use site too
+    /// would accelerate under braking.
     pub amount: f32,
     /// Per-second decay of the brake ramp. **Live**, unlike the engine's.
     pub falloff: f32,
@@ -115,51 +89,41 @@ pub struct Brakes {
     pub gain: f32,
 }
 
-/// Steering response. `<Turning amount falloff gain/>`.
-///
-/// Offsets `0xcc..0xd8`.
+/// Steering response. `<Turning amount falloff gain/>`. Offsets `0xcc..0xd8`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Turning {
-    /// Yaw authority. Feeds body-local yaw directly, with **no speed factor**, so
-    /// steering authority at a standstill is not zero.
+    /// Yaw authority. Feeds body-local yaw directly with **no speed factor**, so authority
+    /// at a standstill is not zero.
     pub amount: f32,
     /// Per-second rate while the steering state moves back toward centre.
-    ///
-    /// Asymmetric with [`Self::gain`] by intent rather than by sign: the pair gives
-    /// a fast bite and a slow return, or the reverse.
+    /// Per-second rate while the steering state moves back toward centre. Asymmetric with
+    /// [`Self::gain`] by intent: a fast bite and slow return, or the reverse.
     pub falloff: f32,
-    /// Per-second rate while the steering state moves toward a larger-magnitude
-    /// target.
-    pub gain: f32,
+    /// Per-second rate while the steering state moves toward a larger-magnitude target.
 }
 
 /// Airbrake response. `<Airbrake amount drag falloff gain turn slidegrip sideshift/>`.
 ///
-/// All seven names were recovered twice independently, from the XML and from the
-/// parameter block at `+0xd8`, which is what retired the three the static
-/// reading had left unresolved.
+/// All seven names were recovered twice independently, from the XML and from the parameter
+/// block at `+0xd8`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Airbrake {
-    /// **A lateral force gain, not a drag.** Scales the sideways force from an
-    /// airbrake imbalance. **Already scaled by `0.0001`.**
+    /// **A lateral force gain, not a drag.** Scales the sideways force from an airbrake
+    /// imbalance. **Already scaled by `0.0001`.**
     pub amount: f32,
-    /// Feeds the forward slide term. Whether it accelerates or decelerates is
-    /// unresolved; see `docs/physics/README.md`.
-    pub drag: f32,
+    /// Feeds the forward slide term, which *accelerates* along `+forward`
+    /// ([`crate::airbrake::evaluate`]).
     /// Per-second decay toward the analog input.
     pub falloff: f32,
     /// Per-second rise toward the analog input.
     pub gain: f32,
     /// Feeds body-local angular acceleration directly.
     pub turn: f32,
-    /// Percent of lateral grip retained at full airbrake, **already scaled by
-    /// `0.0001`** and so held on `0.0..=0.01`.
-    ///
-    /// The scaling is what makes the grip coefficient's `(0.01 - slidegrip)` reach
-    /// exactly zero at an XML value of 100. Confidence 90, arithmetic rather than
-    /// interpretation.
+    /// Percent of lateral grip retained at full airbrake, **already scaled by `0.0001`** and
+    /// so held on `0.0..=0.01`; the scaling makes `(0.01 - slidegrip)` reach exactly zero at
+    /// an XML value of 100. Confidence 90, arithmetic.
     pub slidegrip: f32,
-    /// One-shot lateral impulse, applied straight to the body.
+    /// Sideshift force magnitude, applied while a shift timer runs ([`crate::airbrake::sideshift_force`]).
     pub sideshift: f32,
 }
 
@@ -176,14 +140,11 @@ pub struct Antigrav {
     pub rebound: f32,
     /// Unused by the recovered force law; carried because the XML has it.
     pub rebound_jump_time: f32,
-    /// The raycast length for the hover probes, **and the primary term of the
-    /// hover spring's target height**.
-    ///
-    /// `docs/physics/README.md` originally said this "never appears in the force
-    /// law". `docs/ghidra/functions/psp-pulse-usa/engine.md` traced the offset chain and
-    /// showed otherwise, at confidence 88: the parser stores it at `+0x94`,
-    /// `craft+0x70` points at it, and `Ship_UpdateCraft` builds the spring target
-    /// `craft+0x2f0` from it. See [`crate::hover::target_height`].
+    /// The raycast length for the hover probes, **and the primary term of the hover spring's
+    /// target height**. `docs/physics/README.md` once said it "never appears in the force law";
+    /// `engine.md` traced the offset chain (parser `+0x94`, `craft+0x70`, `Ship_UpdateCraft`
+    /// builds the spring target `craft+0x2f0`), confidence 88. See
+    /// [`crate::hover::target_height`].
     pub ride_height: f32,
 }
 
@@ -194,54 +155,41 @@ pub struct Physical {
     pub flight_gravity: f32,
     /// Ship mass, at `+0xf4`.
     ///
-    /// **Every force term in the original reads the mass at `body+0x374` instead**,
-    /// and how the two relate was not traced. This crate reads this field for the
-    /// hover spring, per `docs/physics/README.md`, and [`crate::ship::Body::mass`]
-    /// for gravity, per `docs/ghidra/functions/psp-pulse-usa/engine.md`. Keeping the two
-    /// equal is the integration layer's job.
+    /// Ship mass, at `+0xf4`. **Every force term in the original reads the mass at
+    /// `body+0x374` instead**, and how the two relate was not traced. This crate reads this
+    /// field for the hover spring (`docs/physics/README.md`) and [`crate::ship::Body::mass`]
+    /// for gravity (`engine.md`); keeping them equal is the integration layer's job.
     pub mass: f32,
-    /// Gravity along world down while grounded, additionally scaled by the
-    /// per-class factor in [`crate::forces::Environment::class_gravity_scale`] -
-    /// which is authored under an attribute named `airborne`, and does not scale
-    /// the airborne term. Class-block offset `+0xf8`.
+    /// Gravity along world down while grounded, additionally scaled by
+    /// [`crate::forces::Environment::class_gravity_scale`] (authored under an attribute named
+    /// `airborne`, which does not scale the airborne term). Class-block offset `+0xf8`.
     pub normal_gravity: f32,
-    /// Gravity along the track's own up axis, which is what makes inversions work.
-    ///
-    /// **It appears only in the hover spring's calibration**, never in the gravity
-    /// force itself: the inline gravity term blends `normal_gravity` against
-    /// `flight_gravity` and does not mention this one.
+    /// Gravity along the track's own up axis, which is what makes inversions work. **It
+    /// appears only in the hover spring's calibration**, never in the gravity force itself.
     pub track_gravity: f32,
 }
 
 /// Pitch response. `<pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>`.
-///
 /// Offsets `0x104..0x114`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pitch {
-    /// Pitch authority while airborne. A plain gain on the input axis, not a rate:
-    /// there is no ramp and no state.
+    /// Pitch authority while airborne: a plain gain on the input axis, with no ramp or state.
     pub pitch_air: f32,
     /// Pitch authority while grounded.
     pub pitch_ground: f32,
-    /// Pitch-axis angular damping.
-    ///
-    /// **Consumed by `Ship_ApplyAngularDamping`, not by the pitch term.** It is the
-    /// only per-ship component of the angular damping triple; yaw and roll are hard
-    /// `-5.0` and `-2.0` for every craft in the game.
+    /// Pitch-axis angular damping. **Consumed by `Ship_ApplyAngularDamping`, not the pitch
+    /// term**; the only per-ship component of the damping triple (yaw and roll are hard `-5.0`
+    /// and `-2.0`).
     pub pitch_damping: f32,
-    /// Offset applied to the hover target height, **probably**.
-    ///
-    /// An additive offset does sit in the hover target chain, at `craft+0x74`, and
-    /// nothing was found that writes this field there; a search for readers of
-    /// `+0x110` in the craft path found none. That is a weak negative (it does not
-    /// cover VFPU loads or a cached copy), so "parsed but never consumed" is a
-    /// hypothesis at confidence 50 rather than a finding. [`crate::hover::target_height`]
-    /// feeds it into that slot and says so.
+    /// Offset applied to the hover target height, **probably**. An additive offset sits in the
+    /// target chain at `craft+0x74` and nothing was found that writes this field there (no
+    /// readers of `+0x110` in the craft path; a weak negative, since it misses VFPU loads and
+    /// cached copies), so "parsed but never consumed" is a hypothesis at confidence 50.
+    /// [`crate::hover::target_height`] takes the offset as zero.
     pub antigrav_height_adjust: f32,
 }
 
-/// Hull dimensions and the shield pool. From `<Misc/>`, which is per ship rather
-/// than per speed class.
+/// Hull dimensions and the shield pool, from `<Misc/>` (per ship, not per speed class).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Dimensions {
     /// Hull height, and so the box half-extent used for contact generation.
@@ -250,33 +198,22 @@ pub struct Dimensions {
     pub length: f32,
     /// Hull width.
     pub width: f32,
-    /// The energy pool this ship starts a race with, **already resolved for the
-    /// race's skill level**.
-    ///
-    /// `<Misc>` authors three slots and the original indexes them with the
-    /// `SkillLevel` race option; picking the slot is
-    /// `oag_tables::handling::Misc::shield_for`, and what arrives here is its
-    /// answer. This crate never sees the ladder, because the force law has no
-    /// business knowing what difficulty the race is on - it only needs the
-    /// number that bounds the pool.
-    ///
-    /// It is the maximum as well as the start: `Ship_SetShield` clamps every
-    /// write to it and never floors at zero. See
-    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+    /// The energy pool this ship starts a race with, **already resolved for the race's skill
+    /// level**: `<Misc>` authors three slots indexed by the `SkillLevel` option, picked by
+    /// `oag_tables::handling::Misc::shield_for`, so this crate never sees the ladder. It is the
+    /// maximum as well as the start: `Ship_SetShield` clamps every write to it and never
+    /// floors at zero (`shield.md`).
     pub shield: f32,
     /// Fore/aft mass bias.
     pub weight_distribution: f32,
 }
 
-/// The speed-pad boost, per speed class. From `<GlobalClass><SpeedupPads/>`.
+/// The speed-pad boost, per speed class, from `<GlobalClass><SpeedupPads/>`.
 ///
-/// The one member of [`Handling`] that does **not** come from the ship's own
-/// `handlingstats.xml`: it lives in the engine-wide `Data\XML\HandlingStats.xml`
-/// instead, and is per speed class rather than per team. It is here anyway
-/// because it is a tunable the force law reads for one ship in one class, which
-/// is what [`Handling`] is; where the number was authored is the format's
-/// business, not this crate's.
-///
+/// The one [`Handling`] member **not** from the ship's own `handlingstats.xml`: it is in the
+/// engine-wide `Data\XML\HandlingStats.xml`, per class not per team. It is here because the
+/// force law reads it for one ship in one class. Neither value is pre-scaled
+/// (`oag_gameplay::handling::SCALED_FIELDS`).
 /// Neither value is pre-scaled - see `oag_gameplay::handling::SCALED_FIELDS`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SpeedupPads {
@@ -307,39 +244,26 @@ pub struct Handling {
     pub dimensions: Dimensions,
     /// `<GlobalClass><SpeedupPads/>`, which is shared by all eight teams.
     pub speedup_pads: SpeedupPads,
-    /// `<Global><Special speedpad_jump>`, which is shared by all eight teams
-    /// **and** by all four classes.
-    ///
-    /// How far the speed-pad boost tilts toward the hull's up axis while the
-    /// pitch-up input is held. Not per class, unlike [`Self::speedup_pads`]:
-    /// `g_speedpad_jump` (`0x08b36bec`) is a single float rather than a
-    /// four-entry table, and it sits here beside the boost it modifies rather
-    /// than in a second parameter block of one field.
-    ///
-    /// Unscaled, like both `<SpeedupPads>` fields. See
+    /// `<Global><Special speedpad_jump>`, shared by all eight teams **and** all four classes:
+    /// how far the speed-pad boost tilts toward the hull's up axis while pitch-up is held.
+    /// A single float (`g_speedpad_jump`, `0x08b36bec`) rather than a per-class table, so it
+    /// sits beside the boost it modifies. Unscaled, like both `<SpeedupPads>` fields; see
     /// `crate::engine::speedup_pad`.
     pub speedpad_jump: f32,
-    /// `<Global><Special roll_cost>`: what a completed barrel roll costs, as a
-    /// percentage of [`Dimensions::shield`]. See
-    /// [`crate::barrel_roll::arm`].
+    /// `<Global><Special roll_cost>`: what a completed barrel roll costs, as a percentage of
+    /// [`Dimensions::shield`] ([`crate::barrel_roll::arm`]).
     pub roll_cost: f32,
-    /// `<Global><Special roll_speed>`: how fast
-    /// [`crate::ship::ShipState::roll_phase`] ramps, in units per second. See
-    /// [`crate::barrel_roll::advance_phase`].
+    /// `<Global><Special roll_speed>`: how fast [`crate::ship::ShipState::roll_phase`] ramps,
+    /// in units per second ([`crate::barrel_roll::advance_phase`]).
     pub roll_speed: f32,
-    /// `<Global><Special roll_turbotime>`: how long the landing payout holds,
-    /// in seconds. See
-    /// [`crate::ship::ShipState::roll_payout_timer`].
+    /// `<Global><Special roll_turbotime>`: how long the landing payout holds, in seconds
+    /// ([`crate::ship::ShipState::roll_payout_timer`]).
     pub roll_turbotime: f32,
 }
 
 impl Handling {
-    /// Every tunable zero.
-    ///
-    /// Not a playable ship. It exists so a unit test can start from a known
-    /// nothing and set only the two or three fields whose behaviour it is
-    /// pinning, which keeps the test readable and keeps invented constants out
-    /// of the repository.
+    /// Every tunable zero. Not a playable ship: a unit test starts from a known nothing and
+    /// sets only the fields it pins, keeping invented constants out of the repository.
     pub const ZERO: Self = Self {
         engine: Engine {
             accelcap: 0.0,
@@ -455,9 +379,8 @@ mod tests {
         assert_eq!(SpeedClass::from_name("nonsense"), None);
     }
 
-    /// `ride_height` looking like a target height is the single most likely
-    /// misreading of this parameter set, so the correction is a test rather than
-    /// only a doc comment.
+    /// `ride_height` looking like a target height is the likeliest misreading of this
+    /// parameter set, so the correction is a test and not only a doc comment.
     #[test]
     fn zero_handling_is_not_a_ship() {
         assert_eq!(Handling::ZERO.physical.mass, 0.0);
