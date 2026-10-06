@@ -1,7 +1,4 @@
 //! What the `track_col.col` reader in [`super`] is asserted to do.
-//!
-//! Its own file rather than an inline block: the rule in `CLAUDE.md` caps an
-//! inline `#[cfg(test)] mod` at 200 lines and these are past it.
 
 use super::*;
 
@@ -10,11 +7,9 @@ fn build(surfaces: &[u8]) -> Vec<u8> {
     build_with(surfaces, NodeLayout::Wide)
 }
 
-/// Builds a file with one internal node, two leaves and `surfaces` triangles.
-///
-/// The geometry is a fan around the origin, which is enough for the reader:
-/// nothing here checks that a triangle is well formed, only that every index
-/// names something and every section closes.
+/// Builds a file with one internal node, two leaves and `surfaces` triangles,
+/// as a fan around the origin: enough for the reader, which only checks that
+/// every index names something and every section closes.
 fn build_with(surfaces: &[u8], layout: NodeLayout) -> Vec<u8> {
     let triangles = surfaces.len();
     let vertices = triangles + 2;
@@ -96,8 +91,7 @@ fn it_reads_a_tree_a_leaf_array_and_a_soup() {
 }
 
 /// The Omega Collection's 19-byte node decodes to the same tree as 2048's
-/// 24-byte one: the same children, axes, split positions, runs and leaf
-/// starts, and no `unknown` half-word because the packed record has none.
+/// 24-byte one, with no `unknown` half-word.
 #[test]
 fn a_packed_node_decodes_to_the_same_tree_as_a_wide_one() {
     let wide = parse(&build(&[2, 4, 7, 2])).expect("the wide fixture parses");
@@ -132,8 +126,7 @@ fn a_packed_node_decodes_to_the_same_tree_as_a_wide_one() {
     assert_eq!(wide.mesh, packed.mesh);
 }
 
-/// The two strides are the only ones read. 20 is neither, and is refused by
-/// name rather than walked as if it were 19 or 24.
+/// The two strides are the only ones read; 20 is refused by name.
 #[test]
 fn it_refuses_a_node_stride_that_is_neither_layout() {
     let mut broken = build(&[2, 4]);
@@ -157,9 +150,8 @@ fn a_packed_file_with_a_short_node_array_is_refused() {
     assert!(parse(&broken).is_err());
 }
 
-/// The root splits and the two below it hold triangles - the distinction the
-/// child fix-up loop in `KdTree_Load` draws, and the only thing that separates
-/// a node's `split` from its leaf run.
+/// The root splits and the two below it hold triangles: the distinction the
+/// child fix-up loop in `KdTree_Load` draws.
 #[test]
 fn a_node_is_a_split_or_a_run_of_triangles_and_never_both() {
     let decoded = parse(&build(&[2, 4, 7, 2])).expect("the fixture parses");
@@ -178,9 +170,8 @@ fn a_node_is_a_split_or_a_run_of_triangles_and_never_both() {
     assert_eq!(decoded.nodes[2].first_leaf, 2);
 }
 
-/// The pair at the end of each section is a centre and a half-extent, not a
-/// min and a max. Reading it the other way is plausible and wrong - see the
-/// module docs for the six numbers that settle it on the real file.
+/// The pair at the end of each section is a centre and a half-extent, not a min
+/// and a max (see the module docs for the six numbers that settle it).
 #[test]
 fn the_bounds_are_a_centre_and_a_half_extent() {
     let decoded = parse(&build(&[2])).expect("the fixture parses");
@@ -202,10 +193,9 @@ fn the_six_surface_bytes_the_executable_names_map_to_their_classes() {
     assert_eq!(class_of(7), Some(SurfaceKind::Reset));
 }
 
-/// `10`, `11` and `12` are placed by measurement rather than by the executable,
-/// and the two routes are deliberately separate functions so a caller can tell
-/// them apart. See [`super::is_measured_floor`] for the evidence and its
-/// confidence.
+/// `10`, `11` and `12` are placed by measurement, not by the executable, in
+/// separate functions so a caller can tell them apart; see
+/// [`super::is_measured_floor`].
 #[test]
 fn the_measured_floors_are_not_claimed_to_come_from_a_class() {
     for byte in [10u8, 11, 12] {
