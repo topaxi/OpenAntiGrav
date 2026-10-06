@@ -106,18 +106,12 @@ impl Renderer {
             };
             // Size and advance come from the cell rather than a constant: the
             // disc's fonts are proportional, and the built-in set fills the
-            // same fields in with its fixed 5x7 box.
-            let (w, h) = (
-                cell.width as f32 * scale * texel,
-                cell.height as f32 * scale * texel,
-            );
-            let mut rect = [pen, y, w, h];
-            let mut uv = [
-                cell.x as f32,
-                cell.y as f32,
-                cell.width as f32,
-                cell.height as f32,
-            ];
+            // same fields in with its fixed 5x7 box. The quad itself is the
+            // box grown by the face's authored `borderExtendPixels`.
+            let Some(atlas) = self.atlas_for(slot) else {
+                continue;
+            };
+            let (mut rect, mut uv) = atlas.glyph_quad(&cell, pen, y, scale);
             if let Some((left, right)) = clip {
                 let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
                 if glyph_right <= left || glyph_left >= right {

@@ -136,6 +136,12 @@ pub struct Language {
     /// differ resolves its own without this build knowing either list: Pure
     /// names `Title`, `Stats` and `scroll` where Pulse names `menu`.
     pub fonts: Vec<(String, String)>,
+    /// `borderExtendPixels` per font role: how many atlas pixels around a
+    /// glyph's metric box hold the baked halo the quad must also draw.
+    ///
+    /// `<Font><Values name="HUD" ... borderExtendPixels="5">`. Only roles that
+    /// author it appear; [`Self::border_extend`] answers `0` for the rest.
+    pub font_borders: Vec<(String, u32)>,
     /// The per-title namespace of this project's disc-keyed translations that
     /// applies to this language, read by [`crate::strings::overlay_disc`].
     ///
@@ -159,6 +165,16 @@ impl Language {
             .map(|(_, src)| src.as_str())
     }
 
+    /// The `borderExtendPixels` this language authors for `role`, matched
+    /// case-insensitively; `0` when it authors none.
+    #[must_use]
+    pub fn border_extend(&self, role: &str) -> u32 {
+        self.font_borders
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(role))
+            .map_or(0, |(_, px)| *px)
+    }
+
     /// Reads a language plugin's `Definition.xml`.
     ///
     /// Returns `None` when the file names no language, which is how a non-language
@@ -180,6 +196,7 @@ impl Language {
 
         Some(Self {
             fonts: font_slots(&root),
+            font_borders: font_borders(&root),
             plugin: plugin.to_string(),
             native_name: native_name.unwrap_or_else(|| name.clone()),
             name,
@@ -468,6 +485,27 @@ fn collect_font_slots(node: &Node, out: &mut Vec<(String, String)>) {
     }
 }
 
+/// Each font role's `borderExtendPixels`, for the slots that author one.
+fn font_borders(node: &Node) -> Vec<(String, u32)> {
+    let mut out = Vec::new();
+    collect_font_borders(node, &mut out);
+    out
+}
+
+fn collect_font_borders(node: &Node, out: &mut Vec<(String, u32)>) {
+    if node.name.eq_ignore_ascii_case("Font")
+        && let Some(name) = node.value("name")
+        && let Some(px) = node.value("borderExtendPixels")
+        && let Ok(px) = px.trim().parse::<u32>()
+        && !name.is_empty()
+    {
+        out.push((name.to_string(), px));
+    }
+    for child in &node.children {
+        collect_font_borders(child, out);
+    }
+}
+
 /// Every `<Entry ID=... String=...>` in the tree, in document order.
 fn string_entries(node: &Node) -> Vec<(String, String)> {
     let mut out = Vec::new();
@@ -551,5 +589,19 @@ mod tests {
         assert!(table.is_empty());
         assert_eq!(table.get("Language Selection"), None);
         assert_eq!(table.get_or_id("Language Selection"), "Language Selection");
+    }
+
+    #[test]
+    fn reads_the_border_a_font_role_authors() {
+        let xml = r#"<Screen name="Top">
+  <Font><Values name="HUD" Language="English" Src="Data\FE\Fonts\PulseHud.fnt" borderExtendPixels="5"></Values></Font>
+  <Font><Values name="HUDSmall" Language="English" Src="Data\FE\Fonts\small.fnt" borderExtendPixels="3"></Values></Font>
+  <Font><Values name="Menu" Language="English" Src="Data\FE\Fonts\Pulse_20.fnt"></Values></Font>
+</Screen>"#;
+        let language = Language::from_definition("PI012", xml).unwrap();
+        assert_eq!(language.border_extend("HUD"), 5);
+        assert_eq!(language.border_extend("hudsmall"), 3);
+        assert_eq!(language.border_extend("Menu"), 0, "authored none");
+        assert_eq!(language.border_extend("Absent"), 0);
     }
 }

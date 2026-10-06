@@ -564,7 +564,9 @@ pub(super) fn hud_font(
                 font.glyphs.len(),
                 font.line_height
             ));
-            oag_ui::font::Atlas::from_font(&font)
+            oag_ui::font::Atlas::from_font(&font).with_border_extend(
+                oag_ui::language::load::role_border(languages, preferred, role),
+            )
         }
         Err(why) => {
             report.push(format!(

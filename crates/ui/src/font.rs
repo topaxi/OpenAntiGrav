@@ -599,6 +599,11 @@ pub struct Atlas {
     /// faces are drawn at a higher resolution than its grid - see
     /// [`Self::with_texel_scale`].
     pub texel_scale: f32,
+    /// `borderExtendPixels`: atlas pixels outside a glyph's metric box that
+    /// hold its baked halo. A quad draws the box grown by this on every side
+    /// (see [`Self::glyph_quad`]); the pen advance is untouched. `0` for the
+    /// built-in set and for a face whose language definition authors none.
+    pub border_extend: u32,
     /// Whether this came off the disc.
     real: bool,
 }
@@ -643,6 +648,7 @@ impl Atlas {
             line_height: CELL as f32,
             glyphs: BTreeMap::new(),
             texel_scale: 1.0,
+            border_extend: 0,
             real: false,
         }
     }
@@ -708,6 +714,7 @@ impl Atlas {
             line_height: font.line_height as f32,
             glyphs,
             texel_scale: 1.0,
+            border_extend: 0,
             real: true,
         }
     }
@@ -725,6 +732,60 @@ impl Atlas {
         self.line_height *= scale;
         self.texel_scale *= scale;
         self
+    }
+
+    /// This atlas drawing each glyph `px` atlas pixels past its box, the
+    /// `borderExtendPixels` its language definition authors. `0` is identity.
+    #[must_use]
+    pub fn with_border_extend(mut self, px: u32) -> Self {
+        self.border_extend = px;
+        self
+    }
+
+    /// The quad `cell` draws as with its pen at `(pen, y)`: `(rect, uv)`, the
+    /// box grown by [`Self::border_extend`] on all four sides in both spaces.
+    ///
+    /// `uv` is clamped to the glyph rows of the atlas so a bottom-row glyph
+    /// never samples the opaque solid patch appended below them. Where the
+    /// clamp bites the rect shrinks by the same amount, so the texel size on
+    /// screen stays constant.
+    #[must_use]
+    pub fn glyph_quad(&self, cell: &Cell, pen: f32, y: f32, scale: f32) -> ([f32; 4], [f32; 4]) {
+        let unit = scale * self.texel_scale;
+        let grow = self.border_extend as f32;
+        let (mut left, mut top) = (cell.x as f32 - grow, cell.y as f32 - grow);
+        let (mut right, mut bottom) = (
+            (cell.x + cell.width) as f32 + grow,
+            (cell.y + cell.height) as f32 + grow,
+        );
+        let (mut dl, mut dt, mut dr, mut db) = (grow, grow, grow, grow);
+        let glyph_rows = self.glyph_rows() as f32;
+        for (edge, lo, hi, d) in [
+            (&mut left, 0.0, self.width as f32, &mut dl),
+            (&mut right, 0.0, self.width as f32, &mut dr),
+            (&mut top, 0.0, glyph_rows, &mut dt),
+            (&mut bottom, 0.0, glyph_rows, &mut db),
+        ] {
+            let clamped = edge.clamp(lo, hi);
+            *d -= (clamped - *edge).abs();
+            *edge = clamped;
+        }
+        let rect = [
+            pen - dl * unit,
+            y - dt * unit,
+            (cell.width as f32 + dl + dr) * unit,
+            (cell.height as f32 + dt + db) * unit,
+        ];
+        (rect, [left, top, right - left, bottom - top])
+    }
+
+    /// Rows of the atlas that hold glyphs: everything above the solid patch.
+    fn glyph_rows(&self) -> u32 {
+        if self.real {
+            self.height.saturating_sub(2)
+        } else {
+            self.height
+        }
     }
 
     /// Whether these glyphs came off the disc rather than out of this file.
