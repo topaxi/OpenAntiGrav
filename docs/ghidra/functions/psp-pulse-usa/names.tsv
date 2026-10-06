@@ -1325,3 +1325,4 @@
 0x08852334	function	Ai_RandUnit	90	ai-branch-choice.md
 0x0881b52c	function	Hud_PushMessage	80	hud-messages.md
 0x0881f148	function	Hud_UpdateMessages	80	hud-messages.md
+0x0890514c	function	ExhaustFlare_OnTurbo	85	perfect-start.md
