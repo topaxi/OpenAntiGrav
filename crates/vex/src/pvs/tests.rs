@@ -1,10 +1,5 @@
-//! What the authored potentially-visible-set reader in [`super`] is asserted
-//! to do: the section masks it decodes, and the payloads it refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `pvs.rs`: the tests are 336 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! What the authored potentially-visible-set reader in [`super`] is asserted to
+//! do: the section masks it decodes, and the payloads it refuses.
 
 use super::*;
 use crate::track::{AiTrack, Junction, Path, SplinePoint};
@@ -54,9 +49,8 @@ fn payload(index: u8, lo: u32, hi: u32, bounds: Option<([f32; 3], [f32; 3])>) ->
     out
 }
 
-/// A `Node` standing in for one the tree walker would have produced. The
-/// walk itself is `vex`'s business and is tested there; what is under test
-/// here is the payload reading.
+/// A `Node` standing in for one the tree walker produced (the walk is `vex`'s
+/// business; the payload reading is under test here).
 fn node(offset: usize, len: usize) -> Node {
     Node {
         class_id: vex::CLASS_SECTION,
@@ -71,13 +65,8 @@ fn node(offset: usize, len: usize) -> Node {
     }
 }
 
-/// A minimal but honest `.vex` file header, so a fixture's `data` really is
-/// a file.
-///
-/// [`TrackPvs::from_nodes`] reads the class table out of the version word,
-/// which means a bare payload no longer stands in for a file. It never
-/// should have: the parameter has always been documented as the whole file,
-/// and the fixtures were relying on nothing looking.
+/// A minimal `.vex` file header, so a fixture's `data` is a file:
+/// [`TrackPvs::from_nodes`] reads the class table out of the version word.
 fn vex_header() -> Vec<u8> {
     let mut header = vec![0u8; vex::FILE_HEADER_LEN];
     header[0..4].copy_from_slice(&6u32.to_le_bytes());
@@ -178,15 +167,13 @@ fn the_mask_is_one_64_bit_field_low_word_first_on_a_little_endian_file() {
     assert_eq!(pvs.visible_from(0), 0x0000_0001_0000_0002 | 1);
 }
 
-/// The same mask, on a big-endian file, and **not** the two words swapped in
+/// The same mask on a big-endian file, and **not** the two words swapped in
 /// place.
 ///
-/// This is the module's one silent-garbage trap. A mechanical
-/// `from_le_bytes` -> `from_be_bytes` sweep over a `lo`/`hi` pair leaves the
-/// halves the wrong way round and raises nothing; measured over Wipeout HD's
-/// 24 circuits, that reading names a section the file does not declare on
-/// 55.6 % of set bits against 22.2 % for the correct one, and turns 15
-/// circuits from clean into 100 % dangling. See
+/// The module's one silent-garbage trap: a mechanical `from_le_bytes` ->
+/// `from_be_bytes` sweep over a `lo`/`hi` pair raises nothing. Measured over
+/// Wipeout HD's 24 circuits, that reading names an undeclared section on 55.6 %
+/// of set bits against 22.2 % for the correct one. See
 /// `docs/formats/hd-status.md#the-pvs-mask-and-the-byte-order-trap`.
 #[test]
 fn a_big_endian_mask_is_one_field_and_not_two_words_swapped_in_place() {
@@ -194,8 +181,7 @@ fn a_big_endian_mask_is_one_field_and_not_two_words_swapped_in_place() {
     let pvs = pvs_from_be(&[payload_be(0, mask)]).expect("parse");
     assert_eq!(pvs.visible_from(0), mask | 1);
 
-    // What the wrong reading would have produced, spelled out so the two are
-    // visibly different rather than merely asserted to be.
+    // What the wrong reading would produce, spelled out so the two visibly differ.
     let swapped_in_place = mask.rotate_left(32);
     assert_ne!(
         pvs.visible_from(0),
@@ -294,9 +280,9 @@ fn an_index_past_the_cap_is_refused() {
     assert_eq!(err, Error::IndexOutOfRange { node: 0, index: 64 });
 }
 
-/// Shipped tracks do author one id several times over. The masks agree
-/// there, so this only fixes the resolution for a case the data does not
-/// currently produce - and it resolves the safe way, by drawing more.
+/// Shipped tracks author one id several times over with agreeing masks, so this
+/// fixes the resolution for a case the data does not produce, the safe way: draw
+/// more.
 #[test]
 fn two_nodes_claiming_one_index_are_unioned() {
     let pvs = pvs_from(&[
@@ -320,9 +306,9 @@ fn two_nodes_claiming_one_index_are_unioned() {
     );
 }
 
-/// A mask may name a section the file does not declare - one bit in fifty
-/// on shipped data. It must survive the parse rather than being filtered,
-/// because filtering would hide a real misparse behind a clean result.
+/// A mask may name a section the file does not declare (one bit in fifty on
+/// shipped data). It must survive the parse: filtering would hide a real
+/// misparse behind a clean result.
 #[test]
 fn a_mask_may_name_an_undeclared_section() {
     let pvs = pvs_from(&[payload(0, 1 << 9, 0, None)]).expect("parse");

@@ -1,11 +1,10 @@
 //! The authored potentially-visible set: the `section` node's `0x3c9` payload.
 //!
-//! **The visibility set is shipped data, not something this project computes.**
-//! Every track on the disc partitions itself into at most 64 `section` nodes,
-//! and each one carries a 64-bit mask naming the sections visible from inside
-//! it. The artists baked it; the original binary looks it up and nothing more.
-//! See `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md` for
-//! why this crate reads that set rather than deriving its own.
+//! **The visibility set is shipped data, not computed here.** Every track
+//! partitions itself into at most 64 `section` nodes, each carrying a 64-bit
+//! mask naming the sections visible from inside it; the original looks it up
+//! and nothing more. See
+//! `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
 //!
 //! ```text
 //! payload:
@@ -18,48 +17,42 @@
 //!   +0x20  f32[4] bbox_max
 //! ```
 //!
-//! Confidence **90** for the mask and **85** for the bounding box, both carried
-//! over unchanged from `docs/formats/track.md`, which holds the evidence. This
-//! module adds no new claim about the layout; it implements the one already
-//! recorded there.
+//! Confidence **90** for the mask and **85** for the bounding box, carried over
+//! from `docs/formats/track.md`, which holds the evidence; this module adds no
+//! new claim about the layout.
 //!
-//! # Three things the layout will punish a consumer for assuming
+//! # What the layout will punish a consumer for assuming
 //!
-//! 1. **The cap is 64 and it is real.** It falls out of the mask width and a
-//!    64-entry gather buffer in the original. `01_Track` carries exactly 64
-//!    `section` nodes - the cap predicted from the mask width, hit on the nose,
-//!    which is the strongest single piece of evidence that the mask reading is
-//!    right. See [`Error::IndexOutOfRange`].
+//! 1. **The cap is 64 and it is real**, from the mask width and a 64-entry
+//!    gather buffer in the original. `01_Track` carries exactly 64 `section`
+//!    nodes, the cap predicted from the mask width hit on the nose, the
+//!    strongest evidence the mask reading is right. See
+//!    [`Error::IndexOutOfRange`].
 //! 2. **Ids are not dense.** `09_Track`'s reversed variant has 44 `section`
-//!    nodes and a maximum index of 45, so an id is what the node's own `index`
-//!    field says and never its position in the array. A consumer that assumes
-//!    `id < count` is wrong on a shipped track. This is why [`TrackPvs`] is
-//!    indexed by id over a fixed 64 slots rather than by a packed vector.
-//! 3. **An id can be authored more than once**, and the masks a mask names need
-//!    not all exist. Both are ordinary authoring slop rather than parse errors,
-//!    both were found by measurement rather than predicted, and both are
-//!    quantified in `crates/vex/tests/pvs_ground_truth.rs`: one bit in
-//!    fifty names a section its own file does not declare, and one id on four
-//!    tracks is authored three times over with identical masks. Duplicates are
-//!    unioned here; a mask bit for a section that does not exist is inert,
-//!    because nothing ever asks about it.
+//!    nodes and a maximum index of 45, so an id is the node's own `index`, never
+//!    its array position, and [`TrackPvs`] is indexed by id over a fixed 64
+//!    slots.
+//! 3. **An id can be authored more than once**, and a mask can name sections that
+//!    do not exist. Both are authoring slop, found by measurement and quantified
+//!    in `crates/vex/tests/pvs_ground_truth.rs` (one bit in fifty names a
+//!    section its file does not declare; one id on four tracks is authored three
+//!    times with identical masks). Duplicates are unioned; a bit for a missing
+//!    section is inert.
 //! 4. **The out-of-range answer is "everything".** The original's lookup at
-//!    `0x0891e908` returns all ones for an index it does not have. That is not
-//!    an error path to tighten up: it is the conservative fallback that keeps a
-//!    craft which has left the authored partition - fallen off, been reset,
-//!    airborne over a gap - from watching the world disappear. [`ALL_VISIBLE`]
-//!    reproduces it.
+//!    `0x0891e908` returns all ones for an index it does not have: the
+//!    conservative fallback that keeps a craft that left the authored partition
+//!    (fallen off, reset, over a gap) from watching the world disappear.
+//!    [`ALL_VISIBLE`] reproduces it.
 //!
 //! # Which geometry a section governs
 //!
 //! The payload says which sections are visible from which; **which geometry
-//! belongs to a section is structural**: a `section` node governs its
-//! parent's whole subtree, because tracks are authored as sibling groups -
-//! one transform per group holding the `section` and the group's meshes.
-//! [`governing_sections`] derives it, and
-//! `docs/formats/track.md` holds the evidence, including the far-LOD case
-//! that proves membership is not spatial. Turning that into per-draw-call
-//! masks is `oag_render::pvs`'s business.
+//! belongs to a section is structural**: a `section` node governs its parent's
+//! whole subtree, tracks being authored as sibling groups (one transform per
+//! group holding the `section` and the group's meshes). [`governing_sections`]
+//! derives it; `docs/formats/track.md` holds the evidence, including the far-LOD
+//! case proving membership is not spatial. Per-draw-call masks are
+//! `oag_render::pvs`'s business.
 
 use crate::vex::{self, Node};
 use oag_formats::ByteOrder;
@@ -68,11 +61,9 @@ use std::fmt;
 /// The hard cap on sections, from the 64-bit mask width.
 pub const MAX_SECTIONS: usize = 64;
 
-/// Every section visible - the answer for an id the track does not declare.
-///
-/// Matches the original lookup at `0x0891e908`, which returns all ones out of
-/// range. Culling with this mask draws everything, which is always correct and
-/// merely slow.
+/// Every section visible: the answer for an id the track does not declare,
+/// matching the original lookup at `0x0891e908` (all ones out of range). Culling
+/// with it draws everything, always correct and merely slow.
 pub const ALL_VISIBLE: u64 = u64::MAX;
 
 /// Bytes of `section` payload before the optional bounding box.
@@ -83,9 +74,8 @@ const BOUNDS_LEN: usize = 0x20;
 
 /// An axis-aligned box, as authored.
 ///
-/// The payload stores four floats per corner. The fourth is not a coordinate -
-/// it is padding to the vector alignment the original's VFPU loads want - and
-/// is dropped here rather than preserved, because nothing reads it.
+/// The payload stores four floats per corner; the fourth is VFPU-alignment
+/// padding, dropped here since nothing reads it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Aabb {
     pub min: [f32; 3],
@@ -130,12 +120,10 @@ pub enum Error {
         got: usize,
         need: usize,
     },
-    /// An index at or above [`MAX_SECTIONS`], which no mask could address.
-    ///
-    /// Corroborated as impossible on shipped data: no control point on any of
-    /// the 40 PSP track files carries a `section_id` above 63. Hitting this
-    /// means the payload is being read at the wrong offset, not that a track
-    /// has more sections than the original supports.
+    /// An index at or above [`MAX_SECTIONS`], which no mask could address. No
+    /// control point on any of the 40 PSP track files carries a `section_id` above
+    /// 63, so hitting this means a wrong read offset, not a track with more
+    /// sections than the original supports.
     IndexOutOfRange { node: usize, index: u8 },
     /// The scene tree itself would not parse.
     Vex(vex::Error),
@@ -181,10 +169,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Section {
     /// The node's own index, which is also its bit position in every mask.
     pub index: u8,
-    /// Sections visible from here, with this section's own bit set.
-    ///
-    /// The own-bit OR happens at load in the original too, so a section always
-    /// sees itself and the mask is never zero.
+    /// Sections visible from here, with this section's own bit set (the original
+    /// ORs it in at load too, so the mask is never zero).
     pub visible: u64,
     /// The authored bounding box, when the node carries one.
     pub bounds: Option<Aabb>,
@@ -192,10 +178,10 @@ pub struct Section {
 
 /// Every `section` node of one track, indexed by id.
 ///
-/// The layout is deliberately flat and fixed-size: 64 masks is 512 bytes, one
-/// or two cache lines of the hot path, and a lookup is a bounds check and an
-/// array index with no indirection. See the ADR for why this is preferred to
-/// the offsets-plus-ids pair a variable-size visible list would need.
+/// The layout is flat and fixed-size: 64 masks is 512 bytes, one or two cache
+/// lines of the hot path, a lookup a bounds check and an array index. See the
+/// ADR for why this is preferred to the offsets-plus-ids pair a variable-size
+/// visible list would need.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackPvs {
     /// One mask per id. [`ALL_VISIBLE`] where no node declares that id, so an
@@ -215,11 +201,8 @@ impl Default for TrackPvs {
 }
 
 impl TrackPvs {
-    /// A set that declares nothing, and therefore hides nothing.
-    ///
-    /// Every lookup returns [`ALL_VISIBLE`], so a track with no `section` nodes
-    /// draws exactly as it does today. This is the value the renderer falls
-    /// back to rather than refusing to draw.
+    /// A set that declares nothing and hides nothing: every lookup returns
+    /// [`ALL_VISIBLE`], so a track with no `section` nodes draws as it does today.
     #[must_use]
     pub fn empty() -> Self {
         Self {
@@ -249,12 +232,10 @@ impl TrackPvs {
                 pvs.bounds[id] = section.bounds;
                 continue;
             }
-            // A repeated index. Both parts are unioned rather than
-            // last-write-wins, because a union can only ever draw more, and
-            // which node the original keeps has not been read. On shipped data
-            // the choice is moot: the only duplicate anywhere is one id
-            // authored three times over, in 2 of 40 PSP tracks and 2 of 59 PS2
-            // ones, with byte-identical masks every time. See
+            // A repeated index: union rather than last-write-wins, since a union
+            // only draws more and which node the original keeps is unread. The
+            // only duplicate on shipped data is one id authored three times with
+            // byte-identical masks (2 of 40 PSP tracks, 2 of 59 PS2); see
             // `crates/vex/tests/pvs_ground_truth.rs`.
             pvs.masks[id] |= section.visible;
             pvs.bounds[id] = match (pvs.bounds[id], section.bounds) {
@@ -275,9 +256,9 @@ impl TrackPvs {
     /// Sections visible from `id`.
     ///
     /// Returns [`ALL_VISIBLE`] for an id past the cap or one no node declared,
-    /// reproducing the original's out-of-range answer. **This is the whole
-    /// safety story of the runtime path**: any confusion about where the camera
-    /// is degrades to drawing everything rather than to drawing nothing.
+    /// reproducing the original. **This is the whole safety story of the runtime
+    /// path**: confusion about where the camera is degrades to drawing everything,
+    /// not nothing.
     #[must_use]
     pub fn visible_from(&self, id: u8) -> u64 {
         let id = usize::from(id);
@@ -289,11 +270,10 @@ impl TrackPvs {
 
     /// The union of [`Self::visible_from`] over several ids.
     ///
-    /// The renderer needs this because the camera and the craft are not
-    /// reliably in the same section - a chase camera lags through a corner and
-    /// swings wide on a crash - and because a set of neighbours is unioned in
-    /// as padding. An empty iterator yields [`ALL_VISIBLE`] rather than zero:
-    /// "no idea where we are" must mean "draw everything".
+    /// The renderer needs this because the camera and craft are not reliably in
+    /// the same section (a chase camera lags through a corner and swings wide on a
+    /// crash) and a set of neighbours is unioned in as padding. An empty iterator
+    /// yields [`ALL_VISIBLE`]: "no idea where we are" means "draw everything".
     #[must_use]
     pub fn visible_from_any(&self, ids: impl IntoIterator<Item = u8>) -> u64 {
         let mut ids = ids.into_iter().peekable();
@@ -338,15 +318,13 @@ impl TrackPvs {
 
     /// The declared section whose authored box contains `point`.
     ///
-    /// Boxes are axis-aligned and adjacent sections along a winding track
-    /// overlap freely, so more than one can contain a point. The lowest such id
-    /// wins, deterministically. Returns `None` when the point is outside every
-    /// box or when no section carries bounds - both of which the caller must
-    /// treat as [`ALL_VISIBLE`] rather than as "nothing is visible".
+    /// Boxes are axis-aligned and adjacent sections overlap freely, so the lowest
+    /// containing id wins, deterministically. `None` when the point is outside
+    /// every box or no section carries bounds; the caller must treat that as
+    /// [`ALL_VISIBLE`], not "nothing is visible".
     ///
-    /// **This is not how the original finds its current section.** Nothing has
-    /// been recovered about that. Prefer the spline's own
-    /// `SplinePoint::section_id`, which is authored, and keep this for
+    /// **This is not how the original finds its current section** (unrecovered).
+    /// Prefer the spline's authored `SplinePoint::section_id`; keep this for
     /// positions with no meaningful spline parameter.
     #[must_use]
     pub fn section_at(&self, point: [f32; 3]) -> Option<u8> {
@@ -359,9 +337,9 @@ impl TrackPvs {
 /// node no section governs.
 ///
 /// The association is structural, not spatial: **a `section` node governs its
-/// parent's whole subtree.** On disc a track is authored as sibling groups -
-/// one transform per group, whose first child is the `section` and whose
-/// remaining children are the group's geometry:
+/// parent's whole subtree.** A track is authored as sibling groups, one
+/// transform per group, whose first child is the `section` and whose other
+/// children are the group's geometry:
 ///
 /// ```text
 /// Transform
@@ -371,7 +349,13 @@ impl TrackPvs {
 /// ...
 /// ```
 ///
-/// Every one of Moa Therma's 64 sections has exactly this shape, and it is
+/// All 64 of Moa Therma's sections have this shape, and it is what makes a
+/// far-LOD copy of the track disappear while racing on the real one: the copy's
+/// group carries a section only a few distant sections list in their masks,
+/// though its *geometry* occupies the same world-space boxes as the craft's. A
+/// spatial rule places it with the craft; the authored rule hides it. See
+/// `docs/formats/track.md` and
+/// `crates/render/tests/pvs_placement_ground_truth.rs`.
 /// what makes a far-LOD copy of the track disappear while racing on the real
 /// one: the copy's group carries a section only a handful of distant vantage
 /// sections list in their masks, even though its *geometry* occupies the same
@@ -380,13 +364,9 @@ impl TrackPvs {
 /// `docs/formats/track.md` and
 /// `crates/render/tests/pvs_placement_ground_truth.rs`.
 ///
-/// A node above every section group - the world root, or a group transform
-/// with no `section` child on the path up - answers `None`, which callers
-/// must treat as "always visible", never as "never visible".
-///
-/// If several sections share one parent the lowest node index wins; shipped
-/// data has no such group, so the tie-break is a determinism guard rather
-/// than a behaviour anyone relies on.
+/// A node above every section group answers `None`, which callers must treat as
+/// "always visible". If several sections share one parent the lowest node index
+/// wins (no shipped group does; a determinism guard).
 pub fn governing_sections(data: &[u8], nodes: &[Node]) -> Result<Vec<Option<u8>>> {
     // parent node index -> the id of its section child.
     let mut section_of_parent: Vec<Option<u8>> = vec![None; nodes.len()];
@@ -420,15 +400,10 @@ pub fn governing_sections(data: &[u8], nodes: &[Node]) -> Result<Vec<Option<u8>>
 
 /// Sections reachable within a few control points along the spline.
 ///
-/// The padding the renderer applies is "also draw what is next door", and
-/// *next door* has to mean adjacency along the track, not `id + 1`. Ids are
-/// neither dense nor guaranteed to run in track order, so numeric neighbours
-/// are not spatial ones. The authored spline knows the truth: consecutive
-/// control points carry `section_id`, so a change between two of them is an
-/// edge, and junctions join the ends of paths.
-///
-/// Built from authored data throughout. The only free parameter is how many
-/// hops to take.
+/// "Next door" must mean adjacency along the track, not `id + 1`: ids are
+/// neither dense nor in track order. Consecutive control points carry
+/// `section_id`, so a change between two is an edge, and junctions join path
+/// ends. Built from authored data; the only free parameter is the hop count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionAdjacency {
     within: [u64; MAX_SECTIONS],
@@ -453,9 +428,9 @@ impl SectionAdjacency {
 
     /// Builds the table from a track's spline graph.
     ///
-    /// `hops` is how far to spread; `0` reproduces [`Self::none`]. Two is the
-    /// value the renderer uses, which covers a craft that has crossed a
-    /// boundary the camera has not yet reached and vice versa.
+    /// `hops` is how far to spread; `0` reproduces [`Self::none`]. The renderer
+    /// uses two, covering a craft that crossed a boundary the camera has not yet
+    /// reached and vice versa.
     #[must_use]
     pub fn from_track(track: &crate::track::AiTrack, hops: u32) -> Self {
         let mut direct = [0u64; MAX_SECTIONS];
@@ -473,9 +448,9 @@ impl SectionAdjacency {
             }
         }
 
-        // A junction joins the last point of each arriving path to the first
-        // point of each leaving one. Without this a ring track built from
-        // several paths would have a seam the padding does not cross.
+        // A junction joins the last point of each arriving path to the first of
+        // each leaving one; without it a ring built from several paths has a seam
+        // the padding does not cross.
         for junction in &track.junctions {
             for arriving in junction.prev.iter().flatten() {
                 let Some(end) = track.paths.get(*arriving).and_then(|p| p.points.last()) else {
@@ -508,8 +483,8 @@ impl SectionAdjacency {
 
     /// Sections within the configured number of hops of `id`, including `id`.
     ///
-    /// An id past the cap pads to nothing, because the caller will already be
-    /// treating it as [`ALL_VISIBLE`] and there is nothing to add.
+    /// An id past the cap pads to nothing (the caller already treats it as
+    /// [`ALL_VISIBLE`]).
     #[must_use]
     pub fn near(&self, id: u8) -> u64 {
         let id = usize::from(id);
@@ -541,19 +516,15 @@ fn parse_section(data: &[u8], node: &Node, at: usize, order: ByteOrder) -> Resul
         return Err(Error::IndexOutOfRange { node: at, index });
     }
     let has_bounds = data[base + 1] != 0;
-    // **One 64-bit read, not two 32-bit ones**, and the difference is silent.
-    // On a little-endian file the two spellings are identical, which is why the
-    // field sat here as a `lo`/`hi` pair for a year without anything noticing.
-    // On a big-endian file they are not: swapping each word in place leaves the
-    // halves the wrong way round, and `docs/formats/hd-status.md` measures what
-    // that costs - 55.6 % of set bits naming a section the file does not
-    // declare, against 22.2 % for the correct reading, with no error raised
-    // either way. 15 of Wipeout HD's 24 circuits go from clean to 100 %
-    // dangling.
+    // **One 64-bit read, not two 32-bit ones**, silently different: identical on
+    // a little-endian file (so a `lo`/`hi` pair sat here for a year), but on a
+    // big-endian one swapping each word in place leaves the halves the wrong way
+    // round. `docs/formats/hd-status.md` measures it: 55.6 % of set bits naming
+    // an undeclared section against 22.2 % for the correct reading, with no
+    // error either way; 15 of HD's 24 circuits go from clean to 100 % dangling.
     let mask = order.u64(data, base + 0x08);
-    // The own bit is OR'd in at load in the original, so a section always sees
-    // itself. Doing it here rather than at lookup keeps the hot path a plain
-    // array read.
+    // The own bit is OR'd in at load, as the original does, keeping the hot path
+    // a plain array read.
     let visible = mask | (1u64 << index);
 
     let bounds = if has_bounds {
