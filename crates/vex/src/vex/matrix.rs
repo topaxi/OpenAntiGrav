@@ -9,21 +9,20 @@ use super::{Node, byte_order, classes_of};
 
 /// Model-space matrices of every node of `class_id` that carries a 4x4 payload.
 ///
-/// The locator classes - `Engine Flare`, `Ship Muzzle`, `Ship Collision Fx`,
-/// `cannon_flash`, `Start Position` - all store a **64-byte payload in exactly
-/// the layout [`transform`] reads**: row-major, translation in row 3. That is not
-/// assumed here; [`crate::track::start_position`] already decodes `Start
-/// Position` that way, and its reading is corroborated against the running game
-/// to within 1.12 degrees of heading (see `docs/formats/track.md`).
+/// The locator classes (`Engine Flare`, `Ship Muzzle`, `Ship Collision Fx`,
+/// `cannon_flash`, `Start Position`) store a **64-byte payload in exactly the
+/// layout [`transform`] reads**. Not assumed: [`crate::track::start_position`]
+/// decodes `Start Position` that way, corroborated against the running game to
+/// within 1.12 degrees of heading (`docs/formats/track.md`).
 ///
-/// [`world_transforms`] deliberately treats every non-`Transform` class as the
-/// identity, because a track's assembly must not depend on guessing at payloads
-/// it does not decode. This function is the opposite trade, taken explicitly for
-/// one class at a time, and it composes with the parent chain the same way.
+/// [`world_transforms`] treats every non-`Transform` class as the identity, so a
+/// track's assembly does not depend on guessing at payloads; this is the opposite
+/// trade, taken explicitly for one class at a time, composing with the parent
+/// chain the same way.
 ///
-/// Nodes whose payload is too short to be a matrix are skipped rather than
-/// defaulted to the identity: a locator at the origin and a locator that failed
-/// to decode should not look the same to a caller.
+/// Nodes whose payload is too short to be a matrix are skipped, not defaulted to
+/// the identity: a locator at the origin and one that failed to decode must not
+/// look the same.
 pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<[f32; 16]> {
     named_class_world_transforms(data, nodes, class_id)
         .into_iter()
@@ -31,9 +30,9 @@ pub fn class_world_transforms(data: &[u8], nodes: &[Node], class_id: u32) -> Vec
         .collect()
 }
 
-/// [`class_world_transforms`], each matrix beside its node's own name - for a
-/// class whose nodes the original tells apart by name, as Wipeout HD does its
-/// two `cannon_flash` locators.
+/// [`class_world_transforms`], each matrix beside its node's name, for a class
+/// whose nodes the original tells apart by name (HD's two `cannon_flash`
+/// locators).
 pub fn named_class_world_transforms<'a>(
     data: &[u8],
     nodes: &'a [Node],
@@ -54,22 +53,21 @@ pub fn named_class_world_transforms<'a>(
         .collect()
 }
 
-/// Where every node sits **relative to the `Anim Transform` above it**, and
-/// which one that is.
+/// Where every node sits **relative to the `Anim Transform` above it**, and which
+/// one that is.
 ///
-/// One entry per node of `nodes`. `anchor` is the index of the nearest
-/// `Anim Transform` on the ancestor chain (the node itself if it is one), and
-/// `local` is the product of the matrices between that anchor and this node,
-/// with the anchor's own contributing the identity.
+/// One entry per node. `anchor` is the nearest `Anim Transform` on the ancestor
+/// chain (the node itself if it is one); `local` is the product of the matrices
+/// between anchor and node, the anchor's own contributing the identity.
 ///
-/// This is the split a renderer needs and [`world_transforms_at`] cannot give
-/// it. Vertices are baked into a buffer once, at load, so anything that moves
-/// per frame has to stay *out* of the bake: bake `local`, and multiply by the
-/// anchor's own world matrix - which [`anchor_world`] evaluates - in the shader.
+/// The split a renderer needs and [`world_transforms_at`] cannot give: vertices
+/// are baked once at load, so anything moving per frame stays out of the bake.
+/// Bake `local`, multiply by the anchor's world matrix ([`anchor_world`]) in the
+/// shader.
 ///
 /// A node with no `Anim Transform` above it gets `anchor: None` and its full
-/// world matrix in `local`, which is exactly [`world_transforms`]'s answer, so
-/// a caller can use one array for both cases.
+/// world matrix in `local` ([`world_transforms`]'s answer), so one array serves
+/// both cases.
 #[must_use]
 pub fn anim_anchors(data: &[u8], nodes: &[Node]) -> Vec<Anchored> {
     let classes = classes_of(data).ok();
@@ -80,8 +78,8 @@ pub fn anim_anchors(data: &[u8], nodes: &[Node]) -> Vec<Anchored> {
     for (index, node) in nodes.iter().enumerate() {
         let parent = node.parent.and_then(|p| out.get(p).copied());
         let is_anim = Some(node.class_id) == anim_class;
-        // An `Anim Transform` anchors *itself*: everything below it, including
-        // its own local matrix, is evaluated per frame rather than baked.
+        // An `Anim Transform` anchors *itself*: it and everything below, its own
+        // local matrix included, is evaluated per frame rather than baked.
         if is_anim {
             out.push(Anchored {
                 anchor: Some(index),
@@ -120,15 +118,13 @@ pub struct Anchored {
     pub local: [f32; 16],
 }
 
-/// The world matrix of every `Anim Transform`, evaluated at `seconds`.
-///
-/// `None` for every other node. Composes through nested anchors: 14 of Pulse's
-/// 393 `Anim Transform` nodes sit under another one, so an anchor's own parent
-/// chain can itself be moving and cannot be folded into the bake either.
+/// The world matrix of every `Anim Transform`, evaluated at `seconds`; `None` for
+/// every other node. Composes through nested anchors (14 of Pulse's 393 sit under
+/// another), whose parent chain can itself be moving.
 ///
 /// Pair with [`anim_anchors`]: a vertex baked with `local` and drawn through
-/// `anchor_world[anchor]` lands exactly where [`world_transforms_at`] would put
-/// it, and moves when the node does.
+/// `anchor_world[anchor]` lands where [`world_transforms_at`] would put it and
+/// moves with the node.
 #[must_use]
 pub fn anchor_world(data: &[u8], nodes: &[Node], seconds: f32) -> Vec<Option<[f32; 16]>> {
     let anim_class = classes_of(data)
@@ -141,9 +137,9 @@ pub fn anchor_world(data: &[u8], nodes: &[Node], seconds: f32) -> Vec<Option<[f3
             continue;
         }
         let local = super::anim_transform_of(data, node).map_or(IDENTITY, |a| a.sample(seconds));
-        // The chain above this node: static matrices up to the next anchor,
-        // then that anchor's own world matrix, which is already resolved
-        // because nodes precede their descendants in the tree.
+        // The chain above this node: static matrices up to the next anchor, then
+        // that anchor's world matrix, already resolved (nodes precede their
+        // descendants).
         let above = node.parent.and_then(|p| anchors.get(p).copied());
         let (static_above, parent_anchor) = above.map_or((IDENTITY, None), |a| (a.local, a.anchor));
         let parent_world = parent_anchor
@@ -156,20 +152,16 @@ pub fn anchor_world(data: &[u8], nodes: &[Node], seconds: f32) -> Vec<Option<[f3
 
 /// A `Transform` node's matrix, or `None` if the payload is not one.
 ///
-/// **Row-major, translation in row 3**, which is the row-vector convention:
-/// `v' = v * M`. Rows 0 to 2 are an orthonormal basis in every node checked, and
-/// row 3 ends in `1.0`.
+/// **Row-major, translation in row 3**, the row-vector convention `v' = v * M`.
+/// Rows 0 to 2 are an orthonormal basis in every node checked, row 3 ends in
+/// `1.0`. An empty payload is the identity (57 of `01_Track`'s 715 transforms).
 ///
-/// A `Transform` with an empty payload is the identity, which is how 57 of
-/// `01_Track`'s 715 transforms are stored.
+/// Corroborated outside this format: the `Start Position` bind forces **row 1**
+/// to `(0, 1, 0)` when re-orthonormalising a grid slot, so row 1 is up and `+y`
+/// is world up (`docs/formats/track.md`).
 ///
-/// The convention is corroborated outside this format: the `Start Position` bind
-/// forces **row 1** to `(0, 1, 0)` when it re-orthonormalises a grid slot, so row
-/// 1 is the up axis and `+y` is world up. See `docs/formats/track.md`.
-///
-/// `order` is the containing file's, from [`byte_order`]. A payload carries no
-/// magic of its own, so it cannot say - and a PS3 track authors 28,545
-/// `Transform` nodes, so this is one of the decoders that has to be told.
+/// `order` is the containing file's ([`byte_order`]): a payload carries no magic
+/// (a PS3 track authors 28,545 `Transform` nodes, so this decoder has to be told).
 #[must_use]
 pub fn transform(payload: &[u8], order: ByteOrder) -> Option<[f32; 16]> {
     if payload.is_empty() {
@@ -221,9 +213,7 @@ pub fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
 
 /// World matrix of every node, composed down the tree, at time zero.
 ///
-/// [`world_transforms_at`] with `seconds` of `0.0`. Every caller that places
-/// static geometry wants this one; a caller that animates wants the other and
-/// has to say when.
+/// [`world_transforms_at`] at `0.0`: what callers placing static geometry want.
 pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
     world_transforms_at(data, nodes, 0.0)
 }
@@ -231,35 +221,24 @@ pub fn world_transforms(data: &[u8], nodes: &[Node]) -> Vec<[f32; 16]> {
 /// World matrix of every node, composed down the tree, with every
 /// [`AnimTransform`](super::AnimTransform) evaluated at `seconds`.
 ///
-/// One entry per node of [`nodes`], in the same order. A node's matrix is the
-/// product of every `Transform` matrix on its ancestor chain, itself included, so
-/// a `Mesh` can be placed with a single lookup.
+/// One entry per node of [`nodes`], in order: the product of every `Transform`
+/// matrix on its ancestor chain, itself included, so a `Mesh` is placed with one
+/// lookup. This is what makes a track assemblable: mesh vertices are in the local
+/// space of the enclosing transform, and on `01_Track` a mesh sits under up to 25
+/// nested transforms.
 ///
-/// This is what makes a whole track assemblable: mesh vertices are in the local
-/// space of whichever transform encloses them, and on `01_Track` a mesh sits
-/// under up to 25 nested transforms.
-///
-/// **`Anim Transform` contributes its evaluated matrix, not the identity.**
-/// Treating it as the identity - which this function did until 2026-08-18 -
-/// drops the node's placement along with its animation, and left 245 of the 474
-/// meshes below one at the world origin. Every other class still contributes
-/// the identity, because a track's assembly must not depend on guessing at
-/// payloads this crate does not decode.
-///
-/// `step` is `FixedFrames`, which lives on the node's attribute list rather
-/// than in its payload; this crate does not decode that list, so it is passed
-/// as `false`. Between two 60 Hz keys the difference is a blend the original
-/// would have snapped, which moves a stepped object early by at most one key
-/// rather than putting it anywhere else. Recorded in
-/// `docs/rendering/scenery-animation.md` as the one part of the reproduction
-/// that is knowingly approximate.
+/// **`Anim Transform` contributes its evaluated matrix, not the identity**:
+/// treating it as the identity dropped its placement with its animation and left
+/// 245 of the 474 meshes below one at the world origin. Every other class
+/// contributes the identity, so a track's assembly does not depend on guessing at
+/// undecoded payloads. `LoopEnd` and `FixedFrames` node attributes are applied
+/// ([`super::anim_transform_of`]); see `docs/rendering/scenery-animation.md`.
 pub fn world_transforms_at(data: &[u8], nodes: &[Node], seconds: f32) -> Vec<[f32; 16]> {
     // **From the file's own version word.** `CLASS_TRANSFORM` is version 6's
-    // `0x6e`; a version-4 file numbers `Transform` `0x6d`, so composing against
-    // the constant would leave every matrix at identity and pile a whole track
-    // into one space. `None` for a version whose id is unrecovered, which gives
-    // the same identity-everywhere result - but only where nobody has measured
-    // otherwise, rather than on a title that has been.
+    // `0x6e`; version 4 numbers it `0x6d`, so composing against the constant
+    // would leave every matrix at identity and pile a track into one space.
+    // `None` for a version whose id is unrecovered gives the same result, but only
+    // where nobody has measured otherwise.
     let classes = classes_of(data).ok();
     let transform_class = classes.and_then(|classes| classes.transform);
     let anim_class = classes.and_then(|classes| classes.anim_transform);
@@ -277,14 +256,12 @@ pub fn world_transforms_at(data: &[u8], nodes: &[Node], seconds: f32) -> Vec<[f3
                 .unwrap_or(IDENTITY)
         } else if Some(node.class_id) == anim_class {
             // An `Anim Transform` this crate cannot decode falls back to the
-            // identity, which is the old behaviour and is wrong in a visible
-            // way - but a half-read payload would place the mesh somewhere
-            // arbitrary, which is worse and harder to spot.
+            // identity, wrong visibly but better than a half-read payload placing
+            // the mesh somewhere arbitrary.
             //
             // `anim_transform_of` rather than `anim_transform`: `LoopEnd` and
-            // `FixedFrames` are node attributes, and without them a looping
-            // object runs on past its authored end and a stepped one smears
-            // between its key pairs.
+            // `FixedFrames` are node attributes, and without them a looping object
+            // runs past its authored end and a stepped one smears between key pairs.
             super::anim_transform_of(data, node).map_or(IDENTITY, |anim| anim.sample(seconds))
         } else {
             IDENTITY
