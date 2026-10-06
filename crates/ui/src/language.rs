@@ -316,6 +316,11 @@ impl StringTable {
     }
 
     /// How many entries the table holds.
+    /// Every id the table holds, in no particular order.
+    pub fn ids(&self) -> impl Iterator<Item = &str> {
+        self.entries.keys().map(String::as_str)
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()

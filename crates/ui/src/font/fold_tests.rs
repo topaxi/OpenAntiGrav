@@ -44,7 +44,10 @@ fn an_unknown_accent_falls_back_to_its_base_letter() {
     assert_eq!(atlas.cell('Å'), atlas.cell('A'));
     assert_eq!(atlas.cell('å'), atlas.cell('A'));
     assert_eq!(atlas.cell('Ø'), atlas.cell('O'));
+    assert_eq!(atlas.cell('º'), atlas.cell('O'));
     assert_eq!(base_letter('Ç'), 'C');
+    assert_eq!(base_letter('º'), 'o');
+    assert_eq!(base_letter('ª'), 'a');
     assert_eq!(base_letter('Z'), 'Z');
 }
 

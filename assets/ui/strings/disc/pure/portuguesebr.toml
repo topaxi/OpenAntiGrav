@@ -1,0 +1,825 @@
+# Brazilian Portuguese: this project's own translation of Wipeout Pure's disc
+# text. Read only by a title whose front end names the `pure` namespace
+# (`oag_title::FrontEnd::disc_strings`), and laid over the disc's own English
+# table, so an id this file does not carry reads the disc's own English.
+#
+# **Pure keys most of its strings by their English text** (535 of its 888 disc
+# ids are the English text itself, and most of the rest are English phrases with
+# spaces). Those ids are never spelled out here: each is
+# stored as `h_xxxxxxxx`, `h_` and the 32-bit FNV-1a of the exact id string in
+# eight hex digits (`oag_ui::strings::hashed_key`), and `overlay_disc` hashes the
+# ids of the base table at load and lays each entry over its match. A plain id
+# still matches by name. The ids that are code-like names (`HUD_Lap`,
+# `Text->Options->Option->Music`) and single words stay keyed by name. No disc text is committed: every
+# value is this project's own Portuguese (docs/overview/legal.md).
+#
+# **Every entry is `human = false`**: written by a model, not reviewed by a
+# native speaker. Terminology follows Wipeout Omega's own on-disc
+# `portuguesebr` table (NAVE, EQUIPE, VOLTA, ZONA, TORNEIO, ARMAS, COLETÁVEL,
+# FREIO AÉREO, ...), and the same wording as the `2048` and `hd` files where an
+# id and its English text coincide.
+#
+# Left out on purpose, so they read as the disc writes them: team, ship, track
+# and music proper names, button glyphs, unit labels (KPH, MPH), and a handful
+# of words that read the same in both languages, and the 22 bare numbers and
+# percentages: 91 ids in all. Pure's HUD faces carry no `ç`, so the HUD ids are worded without it where a plain word exists.
+
+[strings]
+
+h_35d9a56b = { text = "1º", human = false }
+h_5b7efcdf = { text = "2º", human = false }
+h_9d5a7ab4 = { text = "2º Melhor Recorde", human = false }
+h_0cad4b1c = { text = "3º", human = false }
+h_f84e5c03 = { text = "3º Melhor Recorde", human = false }
+h_f99bb067 = { text = "4º", human = false }
+h_978e02ec = { text = "4º Melhor Recorde", human = false }
+h_6b04310c = { text = "5º", human = false }
+h_61946033 = { text = "5º Melhor Recorde", human = false }
+h_b94480fd = { text = "6º", human = false }
+h_481f434a = { text = "7º", human = false }
+h_ecf660f3 = { text = "8º", human = false }
+h_4fac9a6d = { text = "Ocorreu um erro de conexão. A chave WLAN não está ligada.", human = false }
+h_c8b6fed4 = { text = "Ocorreu um erro de conexão.", human = false }
+h_cbb7038d = { text = "A chave WLAN não está ligada.", human = false }
+h_135b201e = { text = "Você não pode participar desta corrida.", human = false }
+h_125b1e8b = { text = "Falta uma nave necessária.", human = false }
+h_302c171c = { text = "Naves de IA", human = false }
+h_ded3ec04 = { text = "Absorver coletável", human = false }
+Accellerate = { text = "Acelerar", human = false }
+h_50b26149 = { text = "Aceitar", human = false }
+h_9ed4f4c8 = { text = "Ás", human = false }
+h_85569ef1 = { text = "Ativando rede", human = false }
+h_747fe288 = { text = "Viciado", human = false }
+h_a3f3dfba = { text = "Freio aéreo", human = false }
+h_5bd5943b = { text = "Freio aéreo esquerdo", human = false }
+h_89a61404 = { text = "Freio aéreo direito", human = false }
+h_8b799e0e = { text = "Tipo de freio aéreo", human = false }
+h_4f3af80b = { text = "Resultados de todos os jogadores", human = false }
+h_54489c01 = { text = "Todos os jogadores seguem para a próxima corrida…", human = false }
+h_39618d18 = { text = "Permitir ou proibir o uso de naves baixadas pelos jogadores.", human = false }
+h_586f52e3 = { text = "Permitido", human = false }
+h_0348724b = { text = "Alfa", human = false }
+h_a90dc102 = { text = "Amador", human = false }
+And = { text = "E…", human = false }
+Arcade = { text = "Corrida Única", human = false }
+h_97b5612f = { text = "Tem certeza? Os dados desta corrida serão perdidos", human = false }
+h_fe49bbee = { text = "Tem certeza?", human = false }
+h_68981be8 = { text = "Tem certeza?", human = false }
+h_441552f7 = { text = "Artistas", human = false }
+h_1d4a0e59 = { text = "Produtor Associado", human = false }
+h_3d96b655 = { text = "Carregar fantasma automaticamente", human = false }
+h_1029260f = { text = "Salvar automaticamente", human = false }
+h_0ca524d4 = { text = "Piloto automático", human = false }
+h_909b14ef = { text = "Piloto automático: ligado", human = false }
+h_ef32b9f3 = { text = "Salvamento automático", human = false }
+h_62ab8a7b = { text = "Preparando para salvar", human = false }
+h_16015149 = { text = "Salvando o perfil automaticamente", human = false }
+h_644330fe = { text = "Tempo médio de volta", human = false }
+h_c2954bc2 = { text = "Voltar", human = false }
+h_43dfc8e3 = { text = "Voltar ao menu principal", human = false }
+h_31438bb5 = { text = "Para trás", human = false }
+h_fb8a1879 = { text = "Falta de sorte", human = false }
+h_5d7a3df2 = { text = "Melhor novo recorde", human = false }
+h_6be20cec = { text = "Melhor recorde", human = false }
+h_bb201f35 = { text = "Melhor pontuação", human = false }
+h_ff142067 = { text = "Melhor zona", human = false }
+h_3be711ea = { text = "Melhor volta", human = false }
+h_16617be7 = { text = "Beta", human = false }
+h_64543955 = { text = "Outdoors", human = false }
+h_3178acb1 = { text = "Bomba", human = false }
+h_0b8fda9b = { text = "Capô", human = false }
+h_e2733e04 = { text = "Transmitir dados", human = false }
+h_4f729074 = { text = "Transmitindo dados", human = false }
+h_43aa2876 = { text = "Medalha de bronze concedida", human = false }
+h_7aed5e95 = { text = "Troféu de bronze concedido", human = false }
+h_c093437a = { text = "Tempo de bronze", human = false }
+h_d8da8e15 = { text = "Bug", human = false }
+h_e74c7b6e = { text = "Câmera", human = false }
+h_35afca3b = { text = "Cancelar", human = false }
+h_e2b90c4d = { text = "Cancelar download", human = false }
+h_0855387f = { text = "Cartão", human = false }
+Championship = { text = "Ascensão", human = false }
+h_77029e8d = { text = "Escolha de classe", human = false }
+h_7b47b1f3 = { text = "Clássico", human = false }
+h_cd86acc3 = { text = "Fechar", human = false }
+h_1c5f792f = { text = "Gerenciador de comunicações", human = false }
+h_a183c9ef = { text = "Confirmar", human = false }
+h_5670abd2 = { text = "Confirmar exclusão", human = false }
+h_9a91c751 = { text = "Confirmar download", human = false }
+h_8f9aa8b4 = { text = "Parabéns", human = false }
+h_a577628f = { text = "Parabéns!", human = false }
+h_8a4eca63 = { text = "Erro de conexão", human = false }
+h_30e84ec7 = { text = "Conectando", human = false }
+h_16919b7a = { text = "Conexão com o servidor perdida, download cancelado", human = false }
+h_10ab773e = { text = "Competidor eliminado!", human = false }
+h_c1679f62 = { text = "Conteúdo", human = false }
+h_94bb72a5 = { text = "Gerenciador de conteúdo", human = false }
+h_ab43d664 = { text = "Continuar", human = false }
+h_f5d201c3 = { text = "O salvamento automático ficará desativado até que o perfil", human = false }
+h_f6d20356 = { text = "seja salvo pelo menu de perfil", human = false }
+h_754aebfd = { text = "Continuar sem perfil", human = false }
+h_378de8f4 = { text = "Continuar com o download", human = false }
+h_e0e9c92e = { text = "Continuar sem salvar", human = false }
+h_adf42431 = { text = "Configuração do controle", human = false }
+h_f6f22637 = { text = "Controles", human = false }
+h_990de47d = { text = "Criar", human = false }
+h_44b0574d = { text = "Criar jogo livre", human = false }
+h_975b1d23 = { text = "Criar jogo infinito", human = false }
+h_3f057e0d = { text = "Criar tipo infinito", human = false }
+h_fda12eb0 = { text = "Criar corrida única", human = false }
+h_fcf2f906 = { text = "Criar contra o relógio", human = false }
+h_fddc0c54 = { text = "Criar torneio", human = false }
+h_80e13d7f = { text = "Criando perfil", human = false }
+h_0f9ade75 = { text = "Créditos", human = false }
+h_e7c94efa = { text = "Cruze a linha", human = false }
+h_cc7b0eb4 = { text = "Recorde atual de volta", human = false }
+h_7251f898 = { text = "Recorde atual de corrida", human = false }
+h_80b54501 = { text = "Recorde atual de pontuação", human = false }
+h_ef6cb785 = { text = "Recorde atual de zona", human = false }
+h_62e2fae0 = { text = "Visualizando agora:", human = false }
+h_19dc307e = { text = "Padrão", human = false }
+h_5797ea6a = { text = "Apagar", human = false }
+h_1ecfdc2e = { text = "Confirmar exclusão", human = false }
+h_5b98e869 = { text = "Apagar plugin", human = false }
+h_f5772386 = { text = "Descrição, linha 1", human = false }
+h_f47721f3 = { text = "Descrição, linha 2", human = false }
+h_f3772060 = { text = "Descrição, linha 3", human = false }
+h_b5353e75 = { text = "Designers", human = false }
+h_31a08d87 = { text = "Opções de desenvolvedor", human = false }
+h_90534137 = { text = "Tela de desenvolvedora e publicadora", human = false }
+h_8520a210 = { text = "Dificuldade", human = false }
+h_bfce9925 = { text = "Desativado", human = false }
+h_ce0ce9e1 = { text = "Proibido", human = false }
+h_828d5507 = { text = "Desengatando", human = false }
+h_911ed587 = { text = "Raio de Disrupção", human = false }
+h_fa5f9886 = { text = "Não remova o Memory Stick Duo Ι.", human = false }
+h_07bd48e3 = { text = "Ocorreu um erro durante o download.", human = false }
+h_23a99ee1 = { text = "Download concluído com sucesso", human = false }
+h_fbfaaa3b = { text = "Naves baixadas", human = false }
+h_8ce9e23e = { text = "Naves baixadas não são permitidas nesta corrida", human = false }
+h_8d063a47 = { text = "Baixando", human = false }
+h_8fed9ae2 = { text = "Freio aéreo duplo", human = false }
+h_d24e8ad6 = { text = "Somente efeitos", human = false }
+h_77a931cb = { text = "Eliminações", human = false }
+h_50599e63 = { text = "Eliminações:", human = false }
+h_566d2dc1 = { text = "Fantasma vazio", human = false }
+h_05c5f227 = { text = "Perfil vazio", human = false }
+h_9c86e43e = { text = "Ativado", human = false }
+h_a1afe312 = { text = "Encerrar sessão", human = false }
+h_654007c9 = { text = "Encerrar torneio", human = false }
+EndTournament1 = { text = "Parabéns! 1º lugar!", human = false }
+EndTournament2 = { text = "2º lugar! Você levou a prata!", human = false }
+EndTournament3 = { text = "Medalha de bronze! 3º lugar.", human = false }
+EndTournament4 = { text = "4º lugar - que pena! A medalha passou raspando", human = false }
+EndTournament5 = { text = "Que pena. Tente de novo!", human = false }
+EndTournament6 = { text = "Que pena! Mais sorte na próxima!", human = false }
+EndTournament7 = { text = "Que pena! Tente mais uma vez!", human = false }
+EndTournament8 = { text = "Que azar! Quem sabe na próxima!", human = false }
+h_2c5f985d = { text = "Energia crítica!", human = false }
+h_5322209a = { text = "Economia de energia", human = false }
+h_1b9ae0bb = { text = "Inglês", human = false }
+h_1a725b9d = { text = "Digite a tag", human = false }
+h_1adc1a53 = { text = "Entrando em site seguro", human = false }
+h_fb8bbceb = { text = "Entusiasta", human = false }
+h_f0408340 = { text = "Tudo", human = false }
+h_8a10e111 = { text = "Especialista", human = false }
+h_fc3d669b = { text = "Externa distante", human = false }
+h_162c79e8 = { text = "Externa próxima", human = false }
+h_03c93cfe = { text = "FMV", human = false }
+h_3107ef24 = { text = "Abertura em FMV", human = false }
+h_1099f340 = { text = "Efeitos", human = false }
+h_1f84448e = { text = "Longe", human = false }
+h_d1622c84 = { text = "Volta mais rápida", human = false }
+h_d8a26cb9 = { text = "Feminino", human = false }
+h_ad128e4f = { text = "Voz feminina", human = false }
+h_3994a061 = { text = "Volta final!", human = false }
+h_bde0e832 = { text = "Primeira pista", human = false }
+h_8dad7253 = { text = "Bronze Flash concedido", human = false }
+h_c1b72a91 = { text = "Ouro Flash concedido", human = false }
+h_091efc8a = { text = "Prata Flash concedida", human = false }
+h_5567756b = { text = "Para a frente", human = false }
+h_d80fdb17 = { text = "Jogo livre", human = false }
+h_cf297035 = { text = "Resultados da sessão de jogo livre", human = false }
+h_7fa5ff5c = { text = "Completo", human = false }
+h_2166174a = { text = "FIM DE JOGO!", human = false }
+h_e5f6455e = { text = "JÁ!", human = false }
+h_1595da18 = { text = "Compartilhar jogo", human = false }
+h_c59bc988 = { text = "A experiência de jogo pode mudar", human = false }
+h_7cb0427c = { text = "Jogo lotado", human = false }
+h_0c3df36d = { text = "Geek", human = false }
+h_7c236d72 = { text = "Falha no carregamento automático da nave fantasma", human = false }
+h_0721d51e = { text = "Dados da nave fantasma", human = false }
+h_155a5f7f = { text = "Nave fantasma carregada", human = false }
+h_d10fb7d2 = { text = "Carregando nave fantasma", human = false }
+h_4c0b7480 = { text = "Salvamento da nave fantasma cancelado", human = false }
+h_5ea836e0 = { text = "Falha ao salvar a nave fantasma", human = false }
+h_5697686d = { text = "Nave fantasma salva", human = false }
+h_d9a477b0 = { text = "Falha ao carregar o tempo do fantasma", human = false }
+h_118862ea = { text = "Efeitos de brilho", human = false }
+h_37b42983 = { text = "Ficar ao vivo", human = false }
+h_c0c06ea0 = { text = "Medalha de ouro concedida", human = false }
+h_16da2c03 = { text = "Troféu de ouro concedido", human = false }
+h_707a1300 = { text = "Tempo de ouro", human = false }
+h_dc6f4681 = { text = "Designers gráficos", human = false }
+h_be0acbdc = { text = "Guru", human = false }
+h_af858b74 = { text = "MANOBRABILIDADE", human = false }
+h_cc5a8282 = { text = "ALTURA", human = false }
+h_a4f88150 = { text = "AGUENTE FIRME!", human = false }
+h_162ff503 = { text = "Opacidade do HUD", human = false }
+h_f11bdc90 = { text = "Tempo de bronze", human = false }
+h_c0f96e00 = { text = "Competidor eliminado!", human = false }
+h_8f847447 = { text = "Volta final!", human = false }
+"HUD_GO!" = { text = "JÁ!", human = false }
+h_a7773d62 = { text = "Tempo de ouro", human = false }
+HUD_Lap = { text = "Volta", human = false }
+h_102b7157 = { text = "Novo recorde de volta", human = false }
+h_a4e4605a = { text = "Novo recorde de pontuação", human = false }
+h_eb31dae0 = { text = "Novo recorde de zona", human = false }
+h_0913735a = { text = "Impulso perfeito!", human = false }
+h_b6de8710 = { text = "Volta perfeita!", human = false }
+h_c7197c79 = { text = "Zona perfeita!", human = false }
+"HUD_Ready..." = { text = "Prontos...", human = false }
+h_232c3ac7 = { text = "Tempo recorde", human = false }
+h_8c675397 = { text = "Tempo de prata", human = false }
+HUD_Total = { text = "Total", human = false }
+h_993b1308 = { text = "Tempo total", human = false }
+h_53b1151e = { text = "Contramão", human = false }
+h_d42fca1b = { text = "Você está %.1f s à frente", human = false }
+h_2758fec2 = { text = "Você está %.1f s atrás", human = false }
+h_93617b35 = { text = "Você está >%.1f s à frente", human = false }
+HUD_Zone = { text = "Zona", human = false }
+HUD_best = { text = "melhor", human = false }
+HUD_current = { text = "atual", human = false }
+HUD_pos = { text = "pos", human = false }
+HUD_score = { text = "pontos", human = false }
+h_26a9999f = { text = "Hacker", human = false }
+h_20aca19b = { text = "Produtor Principal", human = false }
+h_f3922c19 = { text = "Chefe de Arte", human = false }
+h_c3d276fa = { text = "Chefe de Design", human = false }
+h_edd57ed1 = { text = "Chefe de Programação", human = false }
+h_be0a061d = { text = "Alto", human = false }
+h_4e8f56b1 = { text = "Ir para a página inicial", human = false }
+h_c1316ad8 = { text = "Conexão com o anfitrião perdida", human = false }
+h_e740d999 = { text = "Infinito", human = false }
+h_7a7776f7 = { text = "O jogo infinito continua…", human = false }
+h_dbb3afd8 = { text = "Progresso do infinito:", human = false }
+h_7fd89903 = { text = "Tipo infinito", human = false }
+h_a73eb420 = { text = "Interno", human = false }
+h_ff7bf0e9 = { text = "Gerente de QA Interno", human = false }
+h_94a2d714 = { text = "Supervisor de QA Interno", human = false }
+h_903742d9 = { text = "Entrar no jogo", human = false }
+h_324ed8d3 = { text = "Entrar em jogo de rede", human = false }
+h_0e1ef32d = { text = "Salto", human = false }
+h_868ab1b9 = { text = "Fanático", human = false }
+h_32df512b = { text = "RECORDE DE VOLTA", human = false }
+h_7b0c6115 = { text = "EXTENSÃO", human = false }
+h_9a73db9b = { text = "Idioma", human = false }
+h_b39a1c39 = { text = "Escolha do idioma", human = false }
+h_0c632e38 = { text = "Idiomas", human = false }
+h_b6eb148a = { text = "Volta", human = false }
+h_8498987d = { text = "Volta 1", human = false }
+h_819893c4 = { text = "Volta 2", human = false }
+h_82989557 = { text = "Volta 3", human = false }
+h_7f98909e = { text = "Volta 4", human = false }
+h_80989231 = { text = "Volta 5", human = false }
+h_8ae57fe6 = { text = "Artista Principal", human = false }
+h_b624cddc = { text = "Designer Principal", human = false }
+h_36daf80d = { text = "Programador Principal", human = false }
+h_c9b8e487 = { text = "Testadores Principais", human = false }
+h_5e72cd70 = { text = "Liga", human = false }
+h_22270bde = { text = "Escolha da liga", human = false }
+h_4a4f4cf2 = { text = "Liga não encontrada", human = false }
+h_33f7f96b = { text = "Saindo de site seguro", human = false }
+h_c4dc2b41 = { text = "Botões direcionais esquerdo e direito para trocar de nave", human = false }
+h_482a0984 = { text = "Lenda", human = false }
+h_a7a7b5da = { text = "Pintura", human = false }
+h_68afa209 = { text = "Carregar", human = false }
+h_bb208344 = { text = "Carregamento do estado do jogo concluído", human = false }
+h_7803d3ff = { text = "Carregar/Salvar", human = false }
+h_bb92f759 = { text = "Carregando tempo do fantasma", human = false }
+h_a6f3dd5e = { text = "Carregando perfil", human = false }
+h_1f21327f = { text = "Coordenador de Localização", human = false }
+h_dc010835 = { text = "Testador Líder de Localização", human = false }
+h_b1134bc0 = { text = "Testadores de Localização", human = false }
+h_3c23caff = { text = "Travar alvo", human = false }
+h_421841af = { text = "Maior tempo de corrida", human = false }
+h_d3337947 = { text = "Procurando dados", human = false }
+h_b1dd9521 = { text = "Baixo", human = false }
+h_0a4d0943 = { text = "Ocorreu um erro ao ler o Memory Stick Duo™.  O aplicativo não pode continuar.  Aperte o botão HOME e saia.", human = false }
+h_3f18df8c = { text = "O Memory Stick Duo Ι está inserido corretamente.", human = false }
+h_a16fec6d = { text = "Nenhum Memory Stick Duo Ι inserido.", human = false }
+h_afad559d = { text = "Não há espaço suficiente no Memory Stick Duo Ι.", human = false }
+h_b7022fd9 = { text = "São necessários pelo menos 512 KB para salvar os dados deste jogo", human = false }
+h_03716ef1 = { text = "e 385 KB para cada arquivo de nave fantasma.", human = false }
+h_d0b10d2d = { text = "Se você vir este ícone durante o jogo, significa que", human = false }
+h_cdb10874 = { text = "o Memory Stick Duo Ι está sendo acessado. Durante", human = false }
+h_ceb10a07 = { text = "esse tempo, recomendamos que você não remova o", human = false }
+h_cbb1054e = { text = "Memory Stick Duo Ι.", human = false }
+h_63c15c8e = { text = "CRÉDITOS MUSICAIS", human = false }
+h_6373783f = { text = "Menu principal", human = false }
+h_487d36f0 = { text = "Masculino", human = false }
+h_d0df790a = { text = "Voz masculina", human = false }
+h_d7aff116 = { text = "Gerenciar", human = false }
+h_a116b053 = { text = "Mestre", human = false }
+h_3745317b = { text = "Máx. de jogadores", human = false }
+h_bc23314c = { text = "Medalha", human = false }
+h_7e5be935 = { text = "Medalhas de ouro concedidas", human = false }
+h_09be5f96 = { text = "Médio", human = false }
+h_13aad174 = { text = "Falha na mesclagem", human = false }
+h_0e746a3b = { text = "Mesclagem concluída", human = false }
+h_ca1bcfbf = { text = "Minas", human = false }
+h_2b903d23 = { text = "Míssil", human = false }
+h_5eca15f7 = { text = "Mais voltas perfeitas", human = false }
+h_6ccee24b = { text = "Multijogador", human = false }
+h_01ee4ae7 = { text = "Lobby multijogador", human = false }
+h_584a1d74 = { text = "Música", human = false }
+h_2ddfc4b0 = { text = "Licenciamento musical", human = false }
+h_12dd328e = { text = "Gerente de Licenciamento Musical e A&R", human = false }
+h_7a3e7a34 = { text = "Ordem das músicas", human = false }
+h_5606d3de = { text = "Volume da música", human = false }
+MusicTrack = { text = "Faixa", human = false }
+h_b9b7160b = { text = "Conexão de rede perdida. Saindo para o menu multijogador…", human = false }
+h_8b242db1 = { text = "Novo", human = false }
+h_d38468b0 = { text = "Novo 2º melhor recorde de corrida", human = false }
+h_65f2c10a = { text = "Nova pontuação de zona em 2º lugar", human = false }
+h_dcb66e13 = { text = "Novo 3º melhor recorde de corrida", human = false }
+h_a81d779b = { text = "Nova pontuação de zona em 3º lugar", human = false }
+h_dbf227e2 = { text = "Nova pontuação de zona em 4º lugar", human = false }
+h_095c0d33 = { text = "Nova pontuação de zona em 5º lugar", human = false }
+h_d5d0c25b = { text = "Nova melhor pontuação de zona", human = false }
+h_75c2058d = { text = "Novo fantasma!", human = false }
+h_e721a573 = { text = "Nova pontuação máxima", human = false }
+h_ca71a611 = { text = "Novo recorde de volta", human = false }
+h_2e713f5f = { text = "Novo recorde de corrida", human = false }
+h_85fa26f2 = { text = "Novo recorde", human = false }
+h_19d36f84 = { text = "Novo recorde de pontuação", human = false }
+h_5085b698 = { text = "Novo melhor recorde de corrida", human = false }
+h_3da6ddca = { text = "Novo recorde de zona", human = false }
+h_107391f3 = { text = "Novo tempo do fantasma:", human = false }
+NewProfileWarning0 = { text = "O perfil será criado agora.", human = false }
+NewProfileWarning1 = { text = "Todo o progresso não salvo será perdido se você", human = false }
+NewProfileWarning2 = { text = "continuar.", human = false }
+NewProfileWarning3 = { text = "Tem certeza de que quer continuar?", human = false }
+h_1d692ebd = { text = "Próxima corrida", human = false }
+NicknameIs = { text = "Seu apelido no PSP é :", human = false }
+h_61e6be1a = { text = "Não", human = false }
+h_ca0f7657 = { text = "Sem naves de IA", human = false }
+h_54430905 = { text = "Nenhuma medalha concedida", human = false }
+h_296e5201 = { text = "Nenhum ponto concedido", human = false }
+h_22531a70 = { text = "Nenhum troféu concedido", human = false }
+h_3b226a36 = { text = "Nenhum tempo de fantasma encontrado", human = false }
+h_4bf10921 = { text = "Sem novas tentativas", human = false }
+NoNickname = { text = "Seu PSP não tem apelido", human = false }
+h_58de2772 = { text = "Normal", human = false }
+h_ec1e07f1 = { text = "Pilotos automáticos absorvidos", human = false }
+h_dfd58af8 = { text = "Pilotos automáticos usados", human = false }
+h_515df7ec = { text = "Bombas absorvidas", human = false }
+h_1e19f45d = { text = "Bombas usadas", human = false }
+h_a70a9d55 = { text = "Medalhas de bronze ganhas", human = false }
+h_2ba2683a = { text = "Disruptores absorvidos", human = false }
+h_12be4833 = { text = "Disruptores usados", human = false }
+h_79ebc687 = { text = "Medalhas de ouro ganhas", human = false }
+h_c933d843 = { text = "Minas absorvidas", human = false }
+h_de5828aa = { text = "Minas usadas", human = false }
+h_630def96 = { text = "Mísseis absorvidos", human = false }
+h_a3d71eff = { text = "Mísseis usados", human = false }
+h_eb9594d2 = { text = "Plasmas absorvidos", human = false }
+h_d25560db = { text = "Plasmas usados", human = false }
+h_7d7641bb = { text = "Número de jogadores:", human = false }
+h_86eec7ef = { text = "Tremores absorvidos", human = false }
+h_85bfdca6 = { text = "Tremores usados", human = false }
+h_7aa8ff7c = { text = "Foguetes absorvidos", human = false }
+h_8172002d = { text = "Foguetes usados", human = false }
+h_f89fa53d = { text = "Escudos absorvidos", human = false }
+h_fedea274 = { text = "Escudos usados", human = false }
+h_22c59e10 = { text = "Medalhas de prata ganhas", human = false }
+h_925617b2 = { text = "Turbos absorvidos", human = false }
+h_433919bb = { text = "Turbos usados", human = false }
+h_9d7a6bdd = { text = "Voltas", human = false }
+h_fa01146e = { text = "Voltas perfeitas", human = false }
+h_2e6ba947 = { text = "Pontos de velocidade", human = false }
+h_2eb30947 = { text = "Pontos de armas", human = false }
+h_12ae2a3e = { text = "Zonas", human = false }
+h_2e1505ea = { text = "DESLIGADO", human = false }
+OK = { text = "OK", human = false }
+h_80e4b050 = { text = "LIGADO", human = false }
+h_2590770a = { text = "Online", human = false }
+h_e73d5a89 = { text = "Um botão", human = false }
+OnlineFileWrite = { text = "Arquivo do sistema online gravado", human = false }
+OnlineSystemInfo = { text = "Informações do sistema online", human = false }
+h_353e0d45 = { text = "Opções", human = false }
+h_6c814ac8 = { text = "Sobrescrever o estado salvo atual?", human = false }
+h_029db61e = { text = "Sobrescrever arquivos existentes", human = false }
+h_019999d0 = { text = "Aperte o botão start", human = false }
+h_e23fc6bb = { text = "Pontos", human = false }
+h_de281feb = { text = "Pausado", human = false }
+h_4b556d18 = { text = "Impulso perfeito!", human = false }
+h_56b9612e = { text = "Volta perfeita!", human = false }
+h_04b8e018 = { text = "Voltas perfeitas", human = false }
+h_9108d586 = { text = "Voltas perfeitas:", human = false }
+h_ddf92e6f = { text = "Zona perfeita!", human = false }
+h_0ff97d25 = { text = "Zonas perfeitas", human = false }
+h_289cb99a = { text = "Bronze Phantom concedido", human = false }
+h_3c75aefc = { text = "Ouro Phantom concedido", human = false }
+h_2585c653 = { text = "Prata Phantom concedida", human = false }
+h_5349f03f = { text = "Plasma", human = false }
+h_78dce9db = { text = "Jogar agora", human = false }
+h_1eeb8d81 = { text = "Ligue a rede", human = false }
+h_a9f0a4e6 = { text = "Pontos", human = false }
+h_7587cd36 = { text = "Pontos concedidos", human = false }
+h_e27f342a = { text = "Posição", human = false }
+h_ab9a15b7 = { text = "Aperte Ϋ para mudar o status de pronto", human = false }
+h_c96725b2 = { text = "Aperte β para sair para o menu sem fio", human = false }
+h_e9f3f1d1 = { text = "Aperte β para cancelar", human = false }
+h_d4e5cfd1 = { text = "Aperte ε para confirmar", human = false }
+h_fae606ee = { text = "Aperte ε para continuar", human = false }
+h_6ca9e0cf = { text = "Aperte ε para carregar", human = false }
+h_81cc79bd = { text = "Aperte 'confirmar' para começar", human = false }
+h_fbf80b68 = { text = "Aperte έ para continuar", human = false }
+h_94839caa = { text = "Aperte qualquer botão", human = false }
+h_7feba156 = { text = "Aperte 'confirmar' para continuar", human = false }
+h_25eb65ca = { text = "Tempo do fantasma salvo:", human = false }
+h_cd17328e = { text = "Perfil", human = false }
+h_4cdf3e41 = { text = "Não foi possível salvar os dados", human = false }
+h_766f4f09 = { text = "Perfil inválido", human = false }
+h_6f4f0411 = { text = "Gerenciador de perfis", human = false }
+h_2634fab2 = { text = "Tag do perfil", human = false }
+h_345035a4 = { text = "Perfil salvo automaticamente", human = false }
+h_26b3499a = { text = "Dados do perfil", human = false }
+h_9851d4a4 = { text = "O estado do Memory Stick Duo Ι mudou", human = false }
+h_5ed1a822 = { text = "O salvamento automático foi desativado", human = false }
+h_5fd1a9b5 = { text = "Agora é preciso salvar manualmente", human = false }
+h_58d19eb0 = { text = "para salvar os dados do jogo", human = false }
+h_d16cad0f = { text = "Nome do perfil", human = false }
+h_76322d82 = { text = "Programadores", human = false }
+h_1a36a166 = { text = "Progresso", human = false }
+h_766b7118 = { text = "Purista", human = false }
+h_ea17cf5e = { text = "Tremor", human = false }
+h_c7b3d356 = { text = "Sair", human = false }
+h_9e909b25 = { text = "Sair da demonstração", human = false }
+h_2e625f7d = { text = "Sair do torneio", human = false }
+h_49f5fabd = { text = "RECORDE DA CORRIDA", human = false }
+h_0ee9a1b8 = { text = "Corrida", human = false }
+h_2053cf8b = { text = "Corrida %d de %d", human = false }
+h_cea09a0c = { text = "Corrida abandonada", human = false }
+h_bf765e0f = { text = "Corrida concluída", human = false }
+h_0fe71f8a = { text = "Recordes de corrida", human = false }
+h_4ef4fe70 = { text = "Classificação da corrida", human = false }
+h_6e880624 = { text = "Correr de novo", human = false }
+h_6ab3b253 = { text = "Correndo", human = false }
+h_4115d182 = { text = "Aleatório", human = false }
+RandomRoot = { text = "Aleatório", human = false }
+h_56e5dcb1 = { text = "Ranking", human = false }
+h_146a8e3c = { text = "Bronze Rapier concedido", human = false }
+h_965c7b7a = { text = "Ouro Rapier concedido", human = false }
+h_72bee7f5 = { text = "Prata Rapier concedida", human = false }
+"Ready..." = { text = "Prontos…", human = false }
+h_786e1166 = { text = "Receber dados", human = false }
+h_1e2f5947 = { text = "Recebendo dados", human = false }
+h_9f4565ec = { text = "Recorde", human = false }
+h_0f04f4a5 = { text = "Tempo recorde", human = false }
+h_593ef94d = { text = "Recordes", human = false }
+h_c4684d02 = { text = "Voltar ao jogo", human = false }
+h_02918ea6 = { text = "Repetir jogo livre", human = false }
+h_7fea97fb = { text = "Repetir corrida", human = false }
+h_9ac90b9b = { text = "Repetir contra o relógio", human = false }
+h_2f44ed8c = { text = "Reiniciar", human = false }
+h_504af044 = { text = "Resultado", human = false }
+h_9cf82695 = { text = "Resultados", human = false }
+h_d65d33a6 = { text = "Tentativas restantes", human = false }
+h_2f8fb314 = { text = "Voltar ao menu principal", human = false }
+h_59f90fcd = { text = "Voltar ao menu sem fio", human = false }
+h_92691030 = { text = "Câmera traseira", human = false }
+h_2bdd1772 = { text = "Foguetes", human = false }
+h_4863e402 = { text = "Principiante", human = false }
+h_16dde6b4 = { text = "Sala 2", human = false }
+h_30d8e7e6 = { text = "Volume de efeitos", human = false }
+h_d1208570 = { text = "ESCUDO", human = false }
+h_5e35d5e0 = { text = "VELOCIDADE", human = false }
+h_4d2d5d68 = { text = "Salvar", human = false }
+h_5add0360 = { text = "Salvar dados", human = false }
+h_9027b7c5 = { text = "Salvamento do estado do jogo concluído", human = false }
+h_ac880818 = { text = "Salvar fantasma?", human = false }
+h_0948af9d = { text = "Salvar perfil", human = false }
+h_36bfe27a = { text = "Salvar e continuar", human = false }
+h_7e79c10a = { text = "Salvando perfil", human = false }
+h_c88c47f3 = { text = "Procurando jogos multijogador…", human = false }
+h_9f7587f8 = { text = "Selecione os dados para mesclar", human = false }
+h_40f2f82a = { text = "Escolher música", human = false }
+h_f3e0cf89 = { text = "Produtor Sênior", human = false }
+h_336a386e = { text = "Sequencial", human = false }
+h_ff4d9630 = { text = "Sessão encerrada", human = false }
+h_8b46e3b2 = { text = "Definir nome", human = false }
+h_5d196e3f = { text = "Definir tag", human = false }
+h_4b058728 = { text = "Configurações", human = false }
+h_798a26d0 = { text = "Escudo", human = false }
+h_d7e41f64 = { text = "Nave destruída", human = false }
+h_35da68b5 = { text = "Nave eliminada", human = false }
+h_fe9a7a84 = { text = "Naves", human = false }
+h_102252a5 = { text = "Não foi possível salvar o arquivo.  O arquivo exige %d KB, mas há apenas %d KB no seu \\\nMemory Stick Duo™.", human = false }
+h_ddd65abe = { text = "Deslocamento lateral", human = false }
+h_1abf701b = { text = "Medalha de prata concedida", human = false }
+h_92eedcf2 = { text = "Troféu de prata concedido", human = false }
+h_6105d4d9 = { text = "Tempo de prata", human = false }
+h_ad8195b0 = { text = "Freio aéreo único", human = false }
+h_f281dada = { text = "Um jogador", human = false }
+h_79c32976 = { text = "Corrida única", human = false }
+h_62ccb031 = { text = "Skins", human = false }
+h_5cca5f25 = { text = "Designer de Som", human = false }
+h_acb4911e = { text = "Volume do som", human = false }
+h_0ce10025 = { text = "Modo espectador", human = false }
+h_5cdf4b9f = { text = "Volume da fala", human = false }
+h_d55c49f7 = { text = "Pontos de velocidade acertados", human = false }
+h_06c2266e = { text = "Unidade de velocidade", human = false }
+h_76de6051 = { text = "Pontos de velocidade", human = false }
+h_16a15383 = { text = "Dividido", human = false }
+h_0fec8e8c = { text = "Estatísticas", human = false }
+h_f1daef0b = { text = "Administração do Estúdio", human = false }
+h_25af12d5 = { text = "Créditos da Equipe do Studio Liverpool", human = false }
+h_d0264e18 = { text = "Gerente do Estúdio", human = false }
+h_40408cce = { text = "Sincronizar dados", human = false }
+h_b4fb2d5b = { text = "Sincronizando", human = false }
+h_57090a03 = { text = "ή voltar", human = false }
+h_1833d4b3 = { text = "TAG", human = false }
+h_e2b122f3 = { text = "PROPULSÃO", human = false }
+h_397f1f1a = { text = "Supervisor de TRC", human = false }
+h_8a934da0 = { text = "Testadores de TRC", human = false }
+h_e8d49522 = { text = "Assume o primeiro lugar", human = false }
+h_15c5944a = { text = "Escolha da equipe", human = false }
+h_71de88be = { text = "Prévias", human = false }
+h_cde54aff = { text = "Testadores", human = false }
+h_8e7bc154 = { text = "Transmitindo dados", human = false }
+h_3daf9e1d = { text = "Agora sim é corrida AG de verdade. Se você dá conta das naves da classe Flash, está indo bem.", human = false }
+h_34785726 = { text = "São as corridas AG mais rápidas que você já viu. Você tem o que é preciso para a classe Phantom?", human = false }
+h_b6740b30 = { text = "A Rapier aumenta a velocidade e a habilidade dos adversários, então é melhor aumentar as suas. Novatos, fiquem longe; veteranos, sejam bem-vindos.", human = false }
+h_17c9efee = { text = "As corridas mais lentas e fáceis de qualquer Liga AG. A Vector é um passeio no parque.", human = false }
+h_3425dc36 = { text = "Um curso de reciclagem em velocidade média para veteranos e uma boa porta de entrada para o piloto em treinamento. Boas-vindas à Venom.", human = false }
+h_06177e92 = { text = "Voltar à demonstração.", human = false }
+h_4bf16487 = { text = "Sair da demonstração.", human = false }
+h_d8041493 = { text = "Erro de conexão", human = false }
+"Text->Controls" = { text = "Ajuste a configuração dos seus controles.", human = false }
+"Text->Create" = { text = "Salve um novo perfil no seu Memory Stick Duo Ι.", human = false }
+h_2c0525d3 = { text = "Ligue ou desligue os adversários de IA.", human = false }
+h_c3f6026e = { text = "Defina o número de jogadores, de 2 a 8.", human = false }
+h_9fffa815 = { text = "Ligue ou desligue os adversários de IA.", human = false }
+h_a051ce35 = { text = "Escolha a primeira pista a ser jogada.", human = false }
+h_86893188 = { text = "Defina como a próxima pista é escolhida.", human = false }
+h_2a991a7c = { text = "Defina o número de jogadores, de 2 a 8.", human = false }
+h_29578e59 = { text = "Ligue ou desligue as armas, ou deixe só o Raio de Disrupção.", human = false }
+h_b0fb4c92 = { text = "Ligue ou desligue os adversários de IA.", human = false }
+h_0e239629 = { text = "Permita ou proíba o uso de naves baixadas pelos jogadores.", human = false }
+h_09155115 = { text = "Defina o número de jogadores, de 2 a 8.", human = false }
+h_9c417eb8 = { text = "Ligue ou desligue as armas.", human = false }
+h_a53bfc63 = { text = "Permita ou proíba o uso de naves baixadas pelos jogadores.", human = false }
+h_192f07f3 = { text = "Defina o número de jogadores, de 2 a 8.", human = false }
+h_2dfa41e6 = { text = "Ligue ou desligue os adversários de IA.", human = false }
+h_ead7aa15 = { text = "Permita ou proíba o uso de naves baixadas pelos jogadores.", human = false }
+h_46b1dd29 = { text = "Defina o número de jogadores, de 2 a 8.", human = false }
+h_07dc4174 = { text = "Ligue ou desligue as armas.", human = false }
+"Text->Credits" = { text = "As pessoas que trouxeram o Wipeout PureΙ para você.", human = false }
+"Text->DeleteData" = { text = "Apague dados do seu Memory Stick Duo Ι.", human = false }
+"Text->DeleteProfile" = { text = "Apague dados do seu Memory Stick Duo Ι.", human = false }
+"Text->DoTeaser->Answer->Cancel" = { text = "Voltar ao menu de seleção de prévias.", human = false }
+h_0b3b50cc = { text = "Assistir à prévia.", human = false }
+h_d0a89683 = { text = "Mesclagem concluída", human = false }
+h_85bde9b8 = { text = "Falha na mesclagem", human = false }
+h_f498cc08 = { text = "O anfitrião saiu do jogo.", human = false }
+h_6243a489 = { text = "Escolha na lista o jogo em que você quer entrar.", human = false }
+h_898a5ded = { text = "As quatro pistas da Liga Alfa nos levam para fora do mar, pela cidade e pelo campo, cada pista mais alta que a anterior.", human = false }
+h_3d0a7371 = { text = "A subida continua pelas quatro pistas da Liga Beta, por cidades e montanhas, até alturas absurdas.", human = false }
+h_8eba483a = { text = "Este é o grande desafio. Corra nas pistas da Liga Alfa e, logo em seguida, nas da Liga Beta. Aguente a ascensão.", human = false }
+h_9d54e8dd = { text = "O passado evoluiu.", human = false }
+"Text->Load" = { text = "Carregue outro perfil do seu Memory Stick Duo Ι.", human = false }
+"Text->Lobby" = { text = "O anfitrião está esperando a entrada de outros jogadores…", human = false }
+h_04ffd24c = { text = "Procure jogos multijogador disponíveis ou crie o seu. Até 8 jogadores podem se conectar por WLAN para a ação multijogador. ", human = false }
+h_ec880fb5 = { text = "Boas-vindas ao Wipeout PureΙ On-Line…", human = false }
+h_c03bdfe1 = { text = "Gerencie seu perfil, acompanhe seu progresso, acesse seus recordes e mais.", human = false }
+h_ab9e9b4a = { text = "Saia da demonstração e volte ao jogo.", human = false }
+h_5b861b05 = { text = "Escolha um dos cinco modos para um jogador: Corrida Única, Torneio, Contra o Relógio, Modo Zona ou Jogo Livre.", human = false }
+h_4922b561 = { text = "Escolha uma prévia para jogar ou compartilhar. Opções: Fired Up, MedievilΙ: Resurrection e Wipeout PureΙ.", human = false }
+h_d019487d = { text = "Crie e hospede uma corrida multijogador em uma pista de sua escolha.", human = false }
+h_80cbac75 = { text = "Crie e hospede uma corrida contra o relógio multijogador em uma pista de sua escolha.", human = false }
+h_47e9b0ef = { text = "Crie e hospede um torneio multijogador.", human = false }
+h_ea9c3442 = { text = "Procure uma lista de jogos criados por outras pessoas e escolha um para entrar.", human = false }
+"Text->MultiplayerTag" = { text = "Digite a tag", human = false }
+"Text->Music->MusicMenu" = { text = "Aperte os botões esquerdo ou direito para incluir ou remover cada faixa da playlist.", human = false }
+"Text->NameSetup2" = { text = "Digite o nome do seu perfil.", human = false }
+h_a9910d61 = { text = "Ativando rede", human = false }
+h_df7049df = { text = "Erro de rede.", human = false }
+h_42bd7107 = { text = "Erro de rede.", human = false }
+h_6ea9ca48 = { text = "Sincronizando.", human = false }
+"Text->NewProfileWarning" = { text = "Atenção! Todo o progresso não salvo será perdido!", human = false }
+h_561d1f22 = { text = "Liga o salvamento automático dos dados do perfil.", human = false }
+"Text->Options->Difficulty" = { text = "Escolha o nível de dificuldade normal ou difícil.", human = false }
+"Text->Options->Option->Billboards" = { text = "Troque e veja os outdoors e anúncios que você baixou.", human = false }
+"Text->Options->Option->Controls" = { text = "Ajuste a configuração dos seus controles.", human = false }
+"Text->Options->Option->Credits" = { text = "As pessoas que trouxeram o Wipeout PureΙ para você.", human = false }
+h_0e0a20c9 = { text = "Copia temporariamente os dados do jogo para o Memory Stick Duo Ι para reduzir o consumo de bateria.", human = false }
+"Text->Options->Option->Music" = { text = "Escolha a música que quer ouvir.", human = false }
+"Text->Options->Option->Ships" = { text = "Veja aqui todas as naves de corrida que você baixou.", human = false }
+"Text->Options->Option->Skins" = { text = "Veja os diferentes estilos do menu inicial. Escolha o que preferir.", human = false }
+"Text->Profile->Option->Create" = { text = "Crie um novo perfil de jogador.", human = false }
+"Text->Profile->Option->Delete" = { text = "Apague dados do seu Memory Stick Duo Ι.", human = false }
+"Text->Profile->Option->Load" = { text = "Carregue outro perfil do seu Memory Stick Duo Ι.", human = false }
+"Text->Profile->Option->Manage" = { text = "Gerencie seus dados salvos antes de começar.", human = false }
+"Text->Profile->Option->New" = { text = "Crie um novo perfil de jogador.", human = false }
+h_789aa034 = { text = "Gerencie suas listas de amigos, sincronize dados entre perfis e mais.", human = false }
+"Text->Profile->Option->Options" = { text = "Configure seus controles, o áudio e ajuste outras opções do jogo.", human = false }
+"Text->Profile->Option->Progress" = { text = "Confira seu progresso geral no jogo.", human = false }
+"Text->Profile->Option->Records" = { text = "Veja os tempos de volta mais rápidos e os recordes das pistas.", human = false }
+"Text->Profile->Option->Save" = { text = "Salve seu progresso atual no seu Memory Stick Duo Ι.", human = false }
+"Text->Profile->Option->Settings" = { text = "Ajuste várias configurações do jogo.", human = false }
+"Text->Profile->Option->Stats" = { text = "Um resumo das suas estatísticas de jogo.", human = false }
+"Text->Progress" = { text = "Este é o seu progresso no jogo. Onde houver uma medalha de ouro em destaque, aperte confirmar para ver uma imagem da galeria.", human = false }
+h_a78d331a = { text = "Aperte os botões esquerdo ou direito para ver os recordes das outras pistas e os botões para cima e para baixo para ver os recordes das outras classes.", human = false }
+h_7c3f3356 = { text = "Receber dados", human = false }
+h_4de16c37 = { text = "Recebendo dados", human = false }
+h_4466f04b = { text = "Compartilhe seus recordes com um amigo.", human = false }
+"Text->Records->Mode->Race" = { text = "Veja os recordes do modo Corrida Única.", human = false }
+h_a4f6f401 = { text = "Mescle seus recordes com os de um amigo.", human = false }
+h_c954b183 = { text = "Veja os recordes do modo Contra o Relógio.", human = false }
+"Text->Records->Mode->Zone" = { text = "Veja os recordes do modo Zona.", human = false }
+"Text->SaveOptionsProperly" = { text = "Salvando as opções no perfil automaticamente", human = false }
+"Text->SaveProfile" = { text = "Salve seu progresso atual no seu Memory Stick Duo Ι.", human = false }
+"Text->SaveSettingsProperly" = { text = "Salvando as configurações no perfil automaticamente", human = false }
+"Text->SaveSyncSettingsProperly" = { text = "Salvando os dados no perfil automaticamente", human = false }
+h_3396e98b = { text = "Carrega automaticamente as naves fantasma nos modos Contra o Relógio e Jogo Livre para um jogador.", human = false }
+"Text->Settings->Camera" = { text = "Defina seu ângulo de câmera favorito.", human = false }
+h_8563f69d = { text = "Altere o nível de transparência do HUD.", human = false }
+"Text->Settings->Language" = { text = "Escolha o idioma.", human = false }
+h_bb8141b2 = { text = "Escolha tocar as faixas da playlist em ordem ou aleatoriamente.", human = false }
+h_791cb2f6 = { text = "Toca as faixas da playlist de forma aleatória.", human = false }
+h_8a94c402 = { text = "Toca as faixas da playlist em ordem.", human = false }
+h_4157f36c = { text = "Ajuste o volume da música.", human = false }
+h_8d5e837c = { text = "Ajuste o volume dos efeitos sonoros.", human = false }
+h_b6c9bb61 = { text = "Ajuste o volume da fala.", human = false }
+h_5794d0bc = { text = "Milhas ou quilômetros por hora? A escolha é sua.", human = false }
+h_fcaeb160 = { text = "Escolha o gênero da voz do computador de bordo da sua nave.", human = false }
+"Text->Settings->Weapons" = { text = "Ligue ou desligue as armas nas corridas para um jogador.", human = false }
+h_40db3e22 = { text = "Escolha seu estilo.", human = false }
+h_64580954 = { text = "Veja os modos de demonstração solo e multijogador do Fired Up, do Studio London.", human = false }
+h_4d4097f2 = { text = "Veja o trailer do MedievilΙ: Resurrection, do Studio Cambridge.", human = false }
+h_780a4cf4 = { text = "Compartilhe a versão de demonstração do Wipeout PureΙ. Os modos para um jogador e multijogador estão disponíveis.", human = false }
+h_6e847d11 = { text = "DISPUTE UMA CORRIDA ÚNICA EM UMA PISTA DE SUA ESCOLHA.", human = false }
+h_8a51c687 = { text = "Só você e a pista pelo tempo que quiser. Divirta-se.", human = false }
+h_0c2fb3d0 = { text = "Uma corrida contra o tempo: seu único adversário é o cronômetro.", human = false }
+h_5350a8c2 = { text = "Corra em uma série de pistas em sequência, somando pontos pelas posições de chegada. Lembre-se: só uma equipe pode levar o ouro para casa.", human = false }
+h_86c16177 = { text = "Quando você acha que não dá para ir mais rápido, vai. Quanto tempo você aguenta?", human = false }
+"Text->Stats" = { text = "Aperte os botões para cima e para baixo para rolar.", human = false }
+"Text->TagSetup2->Tag" = { text = "Digite suas iniciais para usar nas tabelas de pontuação, na troca de dados e nos jogos multijogador.", human = false }
+h_b55a7ef0 = { text = "Nova equipe desconhecida.", human = false }
+h_2f176279 = { text = "Neste ano a AG-Systems traz uma máquina muito afiada e responsiva, com velocidade onde importa. A AG-Systems sempre entrega.", human = false }
+h_fd781e92 = { text = "A confiança é alta no hangar da Assegai, enquanto sua nova cria salta para a pista com uma mistura impressionante de agilidade e potência.", human = false }
+h_bd3ba31d = { text = "Mais uma vez a Auricom leva problemas à pista e impõe autoridade com esta versão resistente e intimidadora.", human = false }
+h_4cf51154 = { text = "Os detalhes desta nave são desconhecidos…", human = false }
+h_a3ca5f99 = { text = "Com uma Feisar, você sabe o que esperar, e este ano não é exceção. A nova fera é uma combinação típica e de referência entre agilidade e confiabilidade.", human = false }
+h_bb785cba = { text = "A Harimau está chamando atenção em sua viagem de estreia. Este novato canhoto está provocando ondas perigosas entre os veteranos ortodoxos.", human = false }
+h_c6848758 = { text = "A prova de que a corrida AG está saindo do túmulo é que até os mortos-vivos querem participar da ação. Hora de virar Medievil.", human = false }
+h_74706796 = { text = "Potência bruta com estética à altura e uma reputação a manter, a nova Piranha é um passeio emocionante que borra a paisagem… prepare-se para ver muito a aleta traseira.", human = false }
+h_e8c484c8 = { text = "A Qirex apresenta uma combinação inteligente de elegância, velocidade e equilíbrio, que resulta em um desempenho empolgante toda vez que vai à pista.", human = false }
+h_dd7b0f0c = { text = "Elevado à terceira potência. Os novatos da Triakis chegam à cena AG com força total nesta máquina robusta e ameaçadora, um verdadeiro tridente… fique de olho nesses rapazes.", human = false }
+h_039f4f51 = { text = "A nave Zone se destaca em quase todas as áreas.", human = false }
+h_1bd66592 = { text = "Aperte os botões esquerdo ou direito para ver os recordes das outras pistas e os botões para cima e para baixo para ver os recordes das outras classes.", human = false }
+h_da9369c3 = { text = "Esta opção ainda não foi feita", human = false }
+h_d22e48e5 = { text = "As quatro pistas da Liga Alfa nos levam para fora do mar, pela cidade e pelo campo, cada pista mais alta que a anterior.", human = false }
+h_6e80b659 = { text = "A ascensão continua pelas quatro pistas da Liga Beta, por cidades e montanhas, até alturas absurdas.", human = false }
+h_a3547c12 = { text = "Este é o grande desafio. Corra nas pistas da Liga Alfa e, logo em seguida, nas da Liga Beta. Aguente a ascensão.", human = false }
+h_de6de095 = { text = "O passado evoluiu.", human = false }
+h_bc9fd994 = { text = "Um número aleatório de pistas aleatórias, corridas em ordem aleatória. Um torneio verdadeiramente aleatório.", human = false }
+h_55faac40 = { text = "4,78 K. Como a natureza, só que mais agradável. A Hab-Zona de Passageiros de Blue Ridge dá boas-vindas a motoristas cuidadosos.", human = false }
+h_b9c99889 = { text = "4,87 K. Sinta o pulso no coração corporativo dos Projetos de Mid-Town.", human = false }
+h_96f5140d = { text = "5,4 K de híbrido de carbo-aço de alta densidade. A Associação de Moradores de Citta-Nuova pede respeitosamente que você voe com o devido cuidado e atenção.", human = false }
+h_79bb336a = { text = "3,26 K. Recriação neotrônica do clássico Circuito Karbonis de 2050.", human = false }
+h_183492d7 = { text = "3,91 K. Recriação neotrônica do clássico Circuito Mandrashee de 2156.", human = false }
+h_793d4df7 = { text = "4,2 K. Recriação neotrônica do clássico Circuito Manor Top de 2116.", human = false }
+h_1be90d7c = { text = "4,58 K. Rocha-concreto reforçada pelos cortiços e pelo metrô dos Hi-Stacks de Old Modesto.", human = false }
+h_a0e38130 = { text = "4,54 K. Recriação neotrônica do clássico Circuito Sagarmatha de 2097.", human = false }
+h_74795917 = { text = "4,8 K de pista gelada e traiçoeira ao redor das Hidrofazendas do Flanco Inferior.", human = false }
+h_1491202a = { text = "6,12 K. Aberto 24 horas por dia, 7 dias por semana. Percorra os Poços de Prazer e os Palácios da Discoteca do Lado Alto.", human = false }
+h_9ac493e1 = { text = "4,4 K no Topo do Mundo. Não olhe para baixo!", human = false }
+h_2c9b7e4d = { text = "4,45 K de Tungstênio-Alúmen Hi-Bounce TM serpenteiam por imóveis de primeira linha à beira-mar. Cuidado com o guano que cai.", human = false }
+h_5532c21b = { text = "Boas-vindas ao Wipeout PureΙ On-Line…", human = false }
+h_21273776 = { text = "Boas-vindas ao Wipeout PureΙ On-Line…", human = false }
+h_ca93561d = { text = "Boas-vindas ao Wipeout PureΙ On-Line…", human = false }
+h_97c5bf69 = { text = "Gerencie todo o conteúdo que você baixou.", human = false }
+h_bb52baef = { text = "Conexão com o site do Wipeout PureΙ para as últimas novidades. Você também pode baixar novo conteúdo!", human = false }
+h_fef757dd = { text = "Aperte os botões direcionais esquerdo ou direito para ver os recordes das outras pistas.", human = false }
+h_bcf84f0e = { text = "Uma pista neotrônica-albina com sabor de grafite quadrado da velha escola. Violeta.", human = false }
+h_bbf84d7b = { text = "Uma pista neotrônica-albina com sabor de grafite abstrato de mangá. Azul frio.", human = false }
+h_baf84be8 = { text = "Uma pista neotrônica-albina com sabor de grafite de mecha alado. Azul aço.", human = false }
+h_c1f856ed = { text = "Uma pista neotrônica-albina com sabor de grafite de moto espacial alienígena que passou por um buraco de minhoca. Verde menta.", human = false }
+h_e05f3f36 = { text = "Somente textura", human = false }
+h_6d5feb4d = { text = "O sistema", human = false }
+h_bd9391a1 = { text = "O pacote será", human = false }
+h_b9fb5980 = { text = "Contra o relógio", human = false }
+h_e0878b49 = { text = "Contra o relógio concluído", human = false }
+h_59893982 = { text = "Recordes de contra o relógio", human = false }
+h_3dbf8420 = { text = "Tempo no ar (segundos)", human = false }
+h_051db771 = { text = "Tempo vendo estatísticas", human = false }
+h_0b9933e4 = { text = "Vezes que a nave explodiu", human = false }
+h_da389717 = { text = "Tela de título", human = false }
+h_399881d3 = { text = "A fazer", human = false }
+h_f475bc2d = { text = "Ferramentas e Tecnologia", human = false }
+h_495261b1 = { text = "3 melhores voltas", human = false }
+h_ad066d9d = { text = "Total", human = false }
+h_54eceeac = { text = "Tempo de jogo em Corrida Única", human = false }
+h_7faf57ae = { text = "Tempo de jogo em Jogo Livre", human = false }
+h_9d07e9ce = { text = "Tempo total de jogo", human = false }
+h_0e85de69 = { text = "Total de voltas", human = false }
+h_d950ff74 = { text = "Total de voltas concluídas", human = false }
+h_00f4c536 = { text = "Tempo de jogo em multijogador", human = false }
+h_554d86b6 = { text = "Tempo total", human = false }
+h_ef5a0955 = { text = "Tempo de jogo em Contra o Relógio", human = false }
+h_0a19e9b3 = { text = "Tempo de jogo em Torneio", human = false }
+h_2b03fd03 = { text = "Pontos de torneio ganhos", human = false }
+h_ac050d66 = { text = "Tempo de jogo em Zona", human = false }
+h_75cb7bd7 = { text = "Total de zonas concluídas", human = false }
+h_bd217353 = { text = "Distância corrida (KM)", human = false }
+h_42e7c2bd = { text = "Distância corrida pela IA (KM)", human = false }
+h_37551325 = { text = "Energia absorvida", human = false }
+h_e4b87101 = { text = "Dano por colisão com naves", human = false }
+h_5e4a17b3 = { text = "Dano por colisão com paredes", human = false }
+h_b54473c7 = { text = "Dano por armas", human = false }
+h_77569cd2 = { text = "Torneio", human = false }
+h_3baa0cad = { text = "Torneio concluído", human = false }
+h_439024d0 = { text = "Escolha do torneio", human = false }
+h_74202a26 = { text = "Classificação do torneio", human = false }
+h_20f8dddc = { text = "Pista", human = false }
+h_85e45b6b = { text = "Menu de pistas", human = false }
+h_7010d8fa = { text = "Escolha da pista", human = false }
+h_61aa1356 = { text = "Pista não encontrada", human = false }
+h_96c4fa7d = { text = "Pistas", human = false }
+h_67768fb3 = { text = "Aprendiz", human = false }
+h_5badf19b = { text = "Turbo", human = false }
+h_68dfd285 = { text = "Ligue a chave de rede", human = false }
+h_816de273 = { text = "Dois botões", human = false }
+h_d28632aa = { text = "Outdoor %s", human = false }
+h_2e17b407 = { text = "Classe Flash", human = false }
+h_008b81f6 = { text = "Liga %s", human = false }
+h_0a45b480 = { text = "Novas pinturas de nave", human = false }
+h_934cbbd2 = { text = "Música %s", human = false }
+h_2f4d30b0 = { text = "Classe Phantom", human = false }
+h_7d09ea5a = { text = "Classe Rapier", human = false }
+h_bf314786 = { text = "Skin %s", human = false }
+h_c0e7e5ee = { text = "Equipe %s", human = false }
+h_1b3d4b9c = { text = "Torneio %s", human = false }
+h_e71cc99e = { text = "Pista %s", human = false }
+h_1874352c = { text = "Classe Vector", human = false }
+h_1424290c = { text = "Classe Venom", human = false }
+h_5ed602e5 = { text = "Botões direcionais para cima e para baixo para trocar de câmera", human = false }
+h_76aa6b22 = { text = "Use os botões esquerdo, direito, para cima e para baixo para navegar pelas Opções", human = false }
+h_9f134270 = { text = "Usar coletável", human = false }
+h_5a6db215 = { text = "Nome de usuário", human = false }
+h_59d5fc46 = { text = "Tag do usuário", human = false }
+h_8125907a = { text = "Bronze Vector concedido", human = false }
+h_b2b0105c = { text = "Ouro Vector concedido", human = false }
+h_17159533 = { text = "Prata Vector concedida", human = false }
+h_12676382 = { text = "Bronze Venom concedido", human = false }
+h_a2b17a74 = { text = "Ouro Venom concedido", human = false }
+h_889c514b = { text = "Prata Venom concedida", human = false }
+h_e27847b4 = { text = "Veterano", human = false }
+h_ac23aac2 = { text = "Gênero da voz", human = false }
+h_f51d590c = { text = "Aguardando nova corrida…", human = false }
+h_1b468bc7 = { text = "Aguardando", human = false }
+h_a48c69e8 = { text = "Aguardando o anfitrião iniciar", human = false }
+h_b6b2bb00 = { text = "Aguardando o fim da corrida", human = false }
+h_9d4e3155 = { text = "Aguardando a entrada de outros", human = false }
+h_37c4fc8f = { text = "Aviso", human = false }
+h_56d7d556 = { text = "Armas", human = false }
+h_c6da8b9f = { text = "Armas desligadas", human = false }
+h_7b4cd1bb = { text = "Armas ligadas", human = false }
+h_21d3f45d = { text = "Comunicação web", human = false }
+h_f732a101 = { text = "Demonstração do Wipeout PureΙ", human = false }
+h_13af9e33 = { text = "O Wipeout PureΙ foi trazido a você por…", human = false }
+h_47cd7bb3 = { text = "Com agradecimentos especiais", human = false }
+h_ba79d49f = { text = "Com ajuda adicional de…", human = false }
+h_038232b2 = { text = "Com sua equipe…", human = false }
+h_b9868b58 = { text = "Contramão!", human = false }
+h_bf9fa06d = { text = "α selecionar", human = false }
+h_b3a43630 = { text = "Sim", human = false }
+h_940cb333 = { text = "Você liberou:", human = false }
+h_3b96dfd5 = { text = "%.1f s à frente", human = false }
+h_2c657588 = { text = "%.1f s atrás", human = false }
+h_9fdaff9f = { text = ">%.1f s à frente", human = false }
+h_d274d35c = { text = "Agora você é o anfitrião deste jogo", human = false }
+h_8bfc0b47 = { text = "Você não pode entrar neste jogo", human = false }
+h_1217ad43 = { text = "Você fará 0 ponto nesta corrida", human = false }
+h_86379167 = { text = "Zona", human = false }
+h_d60e904d = { text = "Recordes de zona", human = false }
+best = { text = "Melhor", human = false }
+current = { text = "Atual", human = false }
+h_bd3c1882 = { text = "durante o jogo sem fio", human = false }
+h_80a991ee = { text = "ir para a próxima página", human = false }
+h_33a7f7ef = { text = "saiu do jogo", human = false }
+h_54e6a1d9 = { text = "perdeu a conexão", human = false }
+h_6ce424db = { text = "voltas", human = false }
+h_73cf107b = { text = "apagados permanentemente", human = false }
+pos = { text = "Pos", human = false }
+h_1d207201 = { text = "corridas encerradas", human = false }
+h_d22f9095 = { text = "pontos", human = false }
+h_ea1deeb1 = { text = "temporadas", human = false }
+h_d0bf2a23 = { text = "pontos de velocidade", human = false }
+h_a2fd7d0c = { text = "equipe", human = false }
+h_5d3c9be4 = { text = "tempo", human = false }
+h_3527f99f = { text = "velocidade máx.", human = false }
+h_d10aa5dc = { text = "zonas", human = false }

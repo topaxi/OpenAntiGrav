@@ -776,6 +776,7 @@ impl Atlas {
                 .or_else(|| self.glyphs.get(&folded))
                 .or_else(|| self.glyphs.get(&base_letter(ch)))
                 .or_else(|| self.glyphs.get(&base_letter(folded)))
+                .or_else(|| self.glyphs.get(&base_letter(ch).to_ascii_uppercase()))
                 .copied();
         }
 
@@ -784,7 +785,9 @@ impl Atlas {
             return Some(*cell);
         }
         let find = |c: char| GLYPHS.iter().position(|(g, _)| *g == c);
-        let index = find(folded).or_else(|| find(base_letter(folded)))?;
+        let index = find(folded)
+            .or_else(|| find(base_letter(folded)))
+            .or_else(|| find(base_letter(folded).to_ascii_uppercase()))?;
         Some(Cell {
             x: index as u32 * CELL,
             y: 0,
@@ -812,6 +815,10 @@ pub fn base_letter(ch: char) -> char {
         '\u{d9}'..='\u{dc}' => 'U',
         '\u{dd}' => 'Y',
         '\u{df}' => 'S',
+        // The ordinal indicators Portuguese writes after a number (`1º`, `2ª`):
+        // a face with no superscript glyph draws the plain letter, `1o`.
+        '\u{ba}' => 'o',
+        '\u{aa}' => 'a',
         other => other,
     }
 }

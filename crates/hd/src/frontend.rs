@@ -359,7 +359,7 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
-    disc_strings: None,
+    disc_strings: Some("hd"),
     language_manifests: LANGUAGE_MANIFESTS,
     assumed_release: None,
     menu: Some(MENU_SKIN),

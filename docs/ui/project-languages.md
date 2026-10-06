@@ -36,13 +36,55 @@ stem work on every title.
 | --- | --- | --- |
 | `assets/ui/strings/portuguesebr.toml` | this project's own `OAG_` ids | every title |
 | `assets/ui/strings/disc/pulse/portuguesebr.toml` | our translation of **Pulse's** disc text, keyed by Pulse's idstrings (1,560 of 1,619) | titles whose `FrontEnd::disc_strings` is `Some("pulse")` |
+| `assets/ui/strings/disc/pure/portuguesebr.toml` | **Pure's** disc text (797 of 888 ids) | `Some("pure")` |
+| `assets/ui/strings/disc/hd/portuguesebr.toml` | **HD / Fury's** disc text (1,503 of 1,602 ids) | `Some("hd")` |
+| `assets/ui/strings/disc/2048/portuguesebr.toml` | **2048's** disc text (2,704 of 2,965 ids) | `Some("2048")` |
 
 The disc-keyed file is **per title on purpose**: Pure, HD and 2048 reuse id
 spellings, and `overlay` does not know which title it runs on, so one shared
 file would turn Pulse's wording on for them. The namespace is `Title` data
 (`oag_title::FrontEnd::disc_strings`, ADR-0058), not a `title.name` branch.
-Pure, HD, 2048 and Omega are `None` and read the disc's English until their
-file is written.
+Omega is `None`: it ships `portuguesebr` itself and reads nothing of ours but
+the `OAG_` ids.
+
+### What the three later files leave out (2026-10-06)
+
+Ids left to read as the disc writes them, so they fall back to the disc's own
+base text. Counts are of the disc's English ids with `OAG_` ones removed.
+
+| Title | Translated | Left out | Of which |
+| --- | ---: | ---: | --- |
+| 2048 (American base on the Vita USA release) | 2,704 | 261 | 82 empty on disc; 36 circuit keys (`NN_TRACK`, `_OLD`); 93 team, ship, track, grid and music proper names; 20 unit labels (KMH, MPH, MACH); 10 other-region legal notices; 5 button glyphs; 6 bare numbers or formats; 8 identical words; 1 font test string |
+| HD / Fury | 1,503 | 99 | 32 circuit keys; 43 proper names; 9 unit labels; 6 identical words; 5 glyphs; 2 bare numbers; 1 legal notice; 1 font test string |
+| Pure | 797 | 91 | 22 bare numbers and percentages; 59 proper names; 4 glyphs; 4 identical words; 2 unit labels |
+
+**The circuit keys stay English on purpose.** HD keys its circuits `NN_TRACK`
+and `CircuitNames` resolves them through its own chosen copy of the table, so
+nothing there is touched by this overlay (ground truth: `01_TRACK` reads the same
+under `PortugueseBR` as under `English`).
+
+**Pure keys most strings by their English text** (535 of its 888 ids read
+`key == value`, e.g. `Overwrite Current State Save?`, and most of the rest are
+English phrases with spaces). Spelling those ids in a committed file would commit
+disc text, which legal.md forbids even for a key, so the maintainer ruled
+(2026-10-06): **the file stores them as `h_xxxxxxxx`**, `h_` and the 32-bit
+FNV-1a of the exact id string in eight hex digits (`oag_ui::strings::hashed_key`;
+exact bytes, not the folding CRC of `oag_formats::wad::hash_name`, because Pure has
+ids that differ only by case). `overlay_disc` hashes every id of the base table at
+load and lays each `h_` entry over its match (`resolve_hashed_keys`), for every
+title and language, so it is one mechanism: a plain id still matches by name, and
+an `h_` key that matches no id is dropped. 719 of Pure's 797 entries are hashed;
+the 78 code-like names (`HUD_Lap`, `Text->Options->Option->Music`) and single
+words stay keyed by name. Ground truth: every `h_` key of the file matches a base
+id, and none survives as an id (`the_pure_disc_text_...`).
+
+**Ids shared with 2048.** HD shares 1,439 ids with 2048 whose English text is
+identical, and those carry the same Portuguese in both files (the HD file was
+prefilled from the 2048 one, then the 129 HD-only texts were written). Where an
+id also exists in Omega's own `portuguesebr`, the terms follow Omega's and the
+sentence is ours: no text of seven words or more is byte-identical to
+Omega's (checked over every id the two share, with no length cap; shorter
+formulaic labels such as `SEM ARMAS` converge and are left).
 
 ## Entry shape and the `human` flag
 
@@ -125,13 +167,23 @@ No glyph is invented. `oag_ui::font::Atlas::cell` already falls back to the
 That fallback is **chosen, not measured**, the pre-existing rule for every
 language. Pulse's only HUD word with `ç` is `Posição`.
 
-## Counts for the next lanes
+**A new gap, found when the Pure file landed (2026-10-06): the ordinal
+indicators.** The disc files write `1º` for the English `1st`. Pure's
+`small.fnt` carries no `º`, and its `FX300ANG.fnt` carries no `ª`; before this
+change a missing `º` drew as nothing, so `1º` read `1`. `base_letter` now maps
+`º` to `o` and `ª` to `a` (chosen, not measured, the same rule as `ç` to `c`),
+the lookup also tries the upper-case letter for an all-caps face, and the Pure
+file avoids `ª` altogether (`Nova pontuação de zona em 2º lugar`). The ground
+truth for Pulse, Pure, HD and 2048 asserts every Portuguese letter of its file draws on every
+face of the base language, as itself or as its base letter.
+
+## Counts
 
 Disc English entries (`Entry` rows in the English table, measured 2026-10-06):
-Pulse 1,619 (done, minus 59 proper names/glyphs/identical), Pure 911, HD about
-1,602, 2048 2,965, Omega 2,831 (Omega ships its own pt-BR; no lane needed).
-Pure, HD and 2048 are later lanes: one `assets/ui/strings/disc/<namespace>/
-portuguesebr.toml` each, plus the title's `disc_strings` value.
+Pulse 1,619, Pure 888 (911 with our `OAG_` ids), HD 1,602, 2048 2,965, Omega
+2,831 (Omega ships its own pt-BR; no file needed). **All four non-Omega titles
+now have a disc-keyed file**; no id is waiting to be written. What is open is a
+native-speaker pass: every entry is `human = false`.
 
 ## 2048 and Omega check
 
@@ -139,3 +191,20 @@ Checked, differs: Omega ships `portuguesebr` itself, 2048 ships only
 `Portuguese` (European; native name `Portugus`, a Latin-1 byte the XML reader
 folds). 2048's `Portuguese` is not used as the base for PortugueseBR: it is a
 different dialect and the project language stands on 2048's English.
+
+Checked for the disc files (2026-10-06): **ported**. 2048 and Omega share 2,642 ids
+(2,559 with non-empty text) and HD shares 1,354 with Omega. The `2048` file
+reads its terms from Omega's table and the `hd` file from the `2048` one; a long
+text is never byte-identical to Omega's. The reverse direction is not needed:
+Omega already ships its own Brazilian Portuguese. The 2048 USA release stands on
+`American` (lang-manifests) and the file reads over it id for id; the
+EU release (`data/extracted/vita/PCSF00007`) stands on `English` and reads the same
+file id for id. Ground truth: `the_2048_disc_text_is_translated_...` (USA) and
+`the_2048_eu_release_reads_the_same_file_...` (EU) in
+`crates/game/tests/portuguese_br_ground_truth.rs`.
+
+**The `º`/`ª` fallback is shared code** (`oag_ui::font::base_letter`), so it
+reaches every language on every title, not only Portuguese: any text with an
+ordinal indicator (Spanish, Italian and Portuguese disc tables, Pulse's own
+`IG_HUD_1ST` = `1º`) on a face without the glyph now draws `o`/`a` where it drew
+nothing.

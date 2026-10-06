@@ -183,7 +183,7 @@ fn every_shipped_file_parses() {
 fn a_disc_namespace_a_title_does_not_name_reads_nothing() {
     let mut table = StringTable::default();
     let mut report = Vec::new();
-    overlay_disc(&mut table, "pure", "PortugueseBR", &mut report);
+    overlay_disc(&mut table, "omega", "PortugueseBR", &mut report);
     overlay_disc(&mut table, "pulse", "French", &mut report);
     assert!(table.is_empty());
     assert!(report.is_empty());
@@ -208,4 +208,31 @@ fn our_ids_win_over_the_disc_keyed_file_and_both_over_the_disc() {
         "an id we have not reached stays the disc's"
     );
     assert!(table.get("OAG_MENU_RACEBOX").is_some());
+}
+
+/// A file may name an id by its hash instead of spelling it, so a Pure string
+/// keyed by English text commits no English. The hash is of the exact id.
+#[test]
+fn a_hashed_key_lands_on_the_id_it_hashes_and_a_plain_id_is_left_alone() {
+    assert_eq!(hashed_key("Continue"), "h_ab43d664");
+    assert_ne!(hashed_key("Awarded"), hashed_key("awarded"));
+    let table = StringTable::from_xml(
+        r#"<StringTable><Entry ID="Continue" String="Continue"></Entry><Entry ID="HUD_Lap" String="Lap"></Entry></StringTable>"#,
+    );
+    let texts = HashMap::from([
+        (hashed_key("Continue"), "Continuar".to_string()),
+        ("HUD_Lap".to_string(), "Volta".to_string()),
+        (hashed_key("Not an id"), "x".to_string()),
+    ]);
+    let resolved = resolve_hashed_keys(&table, texts);
+    assert_eq!(
+        resolved.get("Continue").map(String::as_str),
+        Some("Continuar")
+    );
+    assert_eq!(resolved.get("HUD_Lap").map(String::as_str), Some("Volta"));
+    assert_eq!(
+        resolved.len(),
+        2,
+        "an unmatched hash is dropped: {resolved:?}"
+    );
 }

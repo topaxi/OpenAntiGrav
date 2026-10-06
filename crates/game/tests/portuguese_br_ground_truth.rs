@@ -78,28 +78,200 @@ fn pulse_translates_its_disc_ids_and_falls_back_to_the_discs_english() {
     assert_eq!(table.get("OAG_MENU_QUIT"), Some("SAIR"));
 }
 
+/// The ids a shipped disc-keyed file translates, read off the file's own lines
+/// (`ID = { text = ... }`, the id bare or quoted).
+fn translated_ids(namespace: &str) -> Vec<String> {
+    let path = oag_testdata::repo_root()
+        .join("assets/ui/strings/disc")
+        .join(namespace)
+        .join("portuguesebr.toml");
+    let text = std::fs::read_to_string(&path).expect("the shipped disc file");
+    text.lines()
+        .filter(|line| !line.starts_with('#') && line.contains(" = { text = "))
+        .map(|line| {
+            let key = line.split(" = { text = ").next().expect("a key");
+            key.trim_matches('"').to_string()
+        })
+        .collect()
+}
+
+/// A project-language disc file must only name ids its title's base table
+/// carries (a typo, or another title's id, would translate nothing), and the
+/// letters it uses must exist in the faces the front end draws with.
+fn assert_file_resolves_and_is_drawable(
+    opened: &mut Opened,
+    namespace: &str,
+    base: &StringTable,
+    table: &StringTable,
+) {
+    let keys = translated_ids(namespace);
+    // A `h_xxxxxxxx` key stands for the base id that hashes to it; one that
+    // matches none is a typo or another title's id.
+    let mut ids = Vec::new();
+    let mut unmatched = Vec::new();
+    for key in keys {
+        if key.len() == 10 && key.starts_with("h_") && base.get(&key).is_none() {
+            let before = ids.len();
+            ids.extend(
+                base.ids()
+                    .filter(|id| oag_ui::strings::hashed_key(id) == key)
+                    .map(str::to_string),
+            );
+            if ids.len() == before {
+                unmatched.push(key);
+            }
+        } else {
+            ids.push(key);
+        }
+    }
+    assert!(
+        unmatched.is_empty(),
+        "{namespace}: hashed keys that match no id: {unmatched:?}"
+    );
+    assert!(ids.len() > 100, "{namespace}: {} ids", ids.len());
+    let unknown: Vec<&String> = ids.iter().filter(|id| base.get(id).is_none()).collect();
+    assert!(
+        unknown.is_empty(),
+        "{namespace}: not in the base: {unknown:?}"
+    );
+    let differing = ids
+        .iter()
+        .filter(|id| table.get(id) != base.get(id))
+        .count();
+    assert!(
+        differing * 100 >= ids.len() * 95,
+        "{namespace}: only {differing} of {} read differently from the base",
+        ids.len()
+    );
+    let chars: std::collections::BTreeSet<char> = ids
+        .iter()
+        .filter_map(|id| table.get(id))
+        .flat_map(str::chars)
+        .filter(|c| !c.is_ascii() || c.is_ascii_graphic())
+        .collect();
+    let base_language = opened
+        .languages
+        .iter()
+        .find(|l| l.name == "English" || l.name == "American")
+        .expect("a base language")
+        .clone();
+    for (role, file) in &base_language.fonts {
+        if role == "Buttons" {
+            continue;
+        }
+        let font = opened.archives.read_font(file).expect("the face reads");
+        let atlas = oag_ui::font::Atlas::from_font(&font);
+        // Every letter draws as itself or, where the face lacks it, as its
+        // base letter (`ç` as `c`, `º` as `o`): never as nothing.
+        let undrawn: String = chars
+            .iter()
+            .filter(|c| c.is_ascii_alphabetic() || WANT.contains(**c) || **c == 'º')
+            .filter(|c| atlas.cell(**c).is_none())
+            .collect();
+        assert_eq!(
+            undrawn, "",
+            "{namespace} {role} {file}: letters that draw nothing"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs data/images"]
-fn pure_reads_the_discs_english_with_our_ids_in_portuguese() {
+fn the_2048_disc_text_is_translated_and_falls_back_to_the_discs_base() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita") else {
+        return;
+    };
+    let mut opened = open(&path);
+    assert_eq!(opened.disc_strings, Some("2048"));
+    let base = strings(&mut opened, "American");
+    let table = strings(&mut opened, "PortugueseBR");
+
+    assert_eq!(table.get("FE_BACK"), Some("VOLTAR"));
+    assert_eq!(table.get("IG_HUD_LAP"), Some("VOLTA"));
+    assert_ne!(table.get("FE_OPTIONS"), base.get("FE_OPTIONS"));
+    // A team name is left to read as the disc writes it.
+    assert_eq!(table.get("Qirex"), base.get("Qirex"));
+    assert!(table.get("Qirex").is_some());
+    assert_eq!(table.get("OAG_MENU_QUIT"), Some("SAIR"));
+    assert!(table.len() >= base.len());
+    assert_file_resolves_and_is_drawable(&mut opened, "2048", &base, &table);
+}
+
+/// The EU release stands on plain English, not `American`: the same file must
+/// resolve there id for id.
+#[test]
+#[ignore = "needs data/extracted/vita"]
+fn the_2048_eu_release_reads_the_same_file_over_its_english() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut opened = open(&path);
+    assert_eq!(opened.disc_strings, Some("2048"));
+    let base = strings(&mut opened, "English");
+    let table = strings(&mut opened, "PortugueseBR");
+    assert_eq!(table.get("FE_BACK"), Some("VOLTAR"));
+    assert_eq!(table.get("Qirex"), base.get("Qirex"));
+    assert_file_resolves_and_is_drawable(&mut opened, "2048", &base, &table);
+}
+
+#[test]
+#[ignore = "needs data/images"]
+fn the_hd_disc_text_is_translated_and_falls_back_to_the_discs_english() {
+    let Some(path) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut opened = open(&path);
+    assert_eq!(opened.disc_strings, Some("hd"));
+    let base = strings(&mut opened, "English");
+    let table = strings(&mut opened, "PortugueseBR");
+
+    assert_eq!(table.get("FE_BACK"), Some("VOLTAR"));
+    assert_eq!(table.get("IG_HUD_LAP"), Some("VOLTA"));
+    assert_ne!(table.get("FE_MM"), base.get("FE_MM"));
+    // A team name and a circuit key are left to read as the disc writes them.
+    assert_eq!(table.get("Qirex"), base.get("Qirex"));
+    assert!(table.get("Qirex").is_some());
+    assert_eq!(table.get("01_TRACK"), base.get("01_TRACK"));
+    assert_eq!(table.get("OAG_MENU_QUIT"), Some("SAIR"));
+    assert!(table.len() >= base.len());
+    assert_file_resolves_and_is_drawable(&mut opened, "hd", &base, &table);
+}
+
+#[test]
+#[ignore = "needs data/images"]
+fn the_pure_disc_text_is_translated_and_falls_back_to_the_discs_english() {
     let Some(path) = oag_testdata::image("pure-psp-eu.chd") else {
         return;
     };
     let mut opened = open(&path);
-    assert_eq!(
-        opened.disc_strings, None,
-        "no Pure namespace is written yet"
-    );
-    let english = strings(&mut opened, "English");
-    let table = strings(&mut opened, "PortugueseBR");
+    assert_eq!(opened.disc_strings, Some("pure"));
+    let base = strings(&mut opened, "English");
     assert!(
-        !english.is_empty(),
+        !base.is_empty(),
         "Pure keeps English inline in its definition"
     );
-    // Same ids as English (the disc's, plus our `OAG_` ones): nothing is lost
-    // and nothing is empty, only our own ids differ.
-    assert_eq!(table.len(), english.len());
-    assert_ne!(table.get("OAG_MENU_QUIT"), english.get("OAG_MENU_QUIT"));
+    let table = strings(&mut opened, "PortugueseBR");
+
+    // Pure keys most strings by their English text, so the key is the id.
+    assert_eq!(table.get("Continue"), Some("Continuar"));
+    assert_eq!(table.get("HUD_Lap"), Some("Volta"));
+    assert_eq!(table.get("1st"), Some("1º"));
+    // The 719 entries keyed by a hash of the disc id (no English committed)
+    // land on the ids themselves, and no hashed key survives as an id.
+    let hashed = translated_ids("pure")
+        .iter()
+        .filter(|key| key.starts_with("h_"))
+        .count();
+    assert!(hashed > 700, "{hashed}");
+    assert!(table.ids().all(|id| !id.starts_with("h_")));
+    // A team name is left to read as the disc writes it, and still resolves.
+    assert_eq!(table.get("Qirex"), base.get("Qirex"));
+    assert!(table.get("Qirex").is_some());
     assert_eq!(table.get("OAG_MENU_QUIT"), Some("SAIR"));
+    // Same ids as English (the disc's, plus our `OAG_` ones): nothing is lost
+    // and nothing is empty.
+    assert_eq!(table.len(), base.len());
+    assert_file_resolves_and_is_drawable(&mut opened, "pure", &base, &table);
 }
 
 #[test]

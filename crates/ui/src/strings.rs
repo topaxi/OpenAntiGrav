@@ -133,6 +133,15 @@ fn built_in_disc(namespace: &str, language: &str) -> Option<&'static str> {
         "pulse" if is("German") => Some(include_str!(
             "../../../assets/ui/strings/disc/pulse/german.toml"
         )),
+        "pure" if is("PortugueseBR") => Some(include_str!(
+            "../../../assets/ui/strings/disc/pure/portuguesebr.toml"
+        )),
+        "hd" if is("PortugueseBR") => Some(include_str!(
+            "../../../assets/ui/strings/disc/hd/portuguesebr.toml"
+        )),
+        "2048" if is("PortugueseBR") => Some(include_str!(
+            "../../../assets/ui/strings/disc/2048/portuguesebr.toml"
+        )),
         "2048" if is("German") => Some(include_str!(
             "../../../assets/ui/strings/disc/2048/german.toml"
         )),
@@ -167,6 +176,51 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
     }
 }
 
+/// The key a disc-keyed file uses for an id it must not spell out: `h_` and
+/// the 32-bit FNV-1a of the exact id string, in eight hex digits.
+///
+/// Pure keys most strings by their English text, so naming such an id in a
+/// committed file would commit disc text. [`overlay_disc`] hashes every id the
+/// base table holds and lays a `h_xxxxxxxx` entry over each match. FNV-1a over
+/// the exact bytes, not the folding CRC of `oag_formats::wad::hash_name`: Pure
+/// has ids that differ only by case.
+#[must_use]
+pub fn hashed_key(id: &str) -> String {
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in id.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    format!("h_{hash:08x}")
+}
+
+/// Rewrites a file's `h_xxxxxxxx` keys to the base table's own ids. A plain id,
+/// or a hashed key that is itself an id, is left as written.
+fn resolve_hashed_keys(
+    table: &StringTable,
+    texts: HashMap<String, String>,
+) -> HashMap<String, String> {
+    let is_hashed = |key: &str| key.len() == 10 && key.starts_with("h_");
+    if !texts.keys().any(|key| is_hashed(key)) {
+        return texts;
+    }
+    let mut by_hash: HashMap<String, Vec<&str>> = HashMap::new();
+    for id in table.ids() {
+        by_hash.entry(hashed_key(id)).or_default().push(id);
+    }
+    let mut out = HashMap::new();
+    for (key, text) in texts {
+        if is_hashed(&key) && table.get(&key).is_none() {
+            for id in by_hash.get(&key).into_iter().flatten() {
+                out.insert((*id).to_string(), text.clone());
+            }
+        } else {
+            out.insert(key, text);
+        }
+    }
+    out
+}
+
 /// Merges the title's own disc-keyed translations into `table`, before the
 /// project's `OAG_` file so that one still wins. A *project* language is
 /// overlaid; a language the disc ships itself only has its gaps filled
@@ -183,18 +237,19 @@ pub fn overlay_disc(
     };
     match toml::from_str::<File>(text) {
         Ok(file) => {
+            let texts = resolve_hashed_keys(table, file.texts());
             report.push(format!(
                 "assets/ui/strings/disc/{namespace}/{}.toml: {} translation(s)",
                 language.to_lowercase(),
-                file.strings.len()
+                texts.len()
             ));
             if PROJECT_LANGUAGES
                 .iter()
                 .any(|project| project.name.eq_ignore_ascii_case(language))
             {
-                table.merge(file.texts());
+                table.merge(texts);
             } else {
-                table.fill(file.texts());
+                table.fill(texts);
             }
         }
         Err(e) => report.push(format!(
