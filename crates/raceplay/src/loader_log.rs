@@ -40,6 +40,7 @@ const ABSENCE: &[&str] = &[
     "did not decode",
     "not in the archive set",
     "shows no stills",
+    "did not fit the sprite sheet",
 ];
 
 /// Whether a report line says an asset is missing or was not used.
@@ -130,6 +131,7 @@ mod tests {
         r"Data\Weapons\x.vex: 0 of 2 mesh node(s) drawn from the .rcsmodel (0 triangle(s)); 2 addressed no chunk",
         r"Data\Tex\staticglow.mip: absent - the ghost ship's static draws nothing",
         r"Data\Mixed\Case.mip: ABSENT - Draws Nothing",
+        r"WO_X: sprite of a, b did not fit the sprite sheet - drawn as the procedural profile",
     ];
 
     /// Sentences that report what loaded, which must stay out of the default log.

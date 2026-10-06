@@ -204,6 +204,21 @@ fn load_flare_texture(
     what: &str,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
+    if let Some(own) = super::super::assets::platform_sibling(archives, entry) {
+        return match super::super::assets::decode_texture(archives, &own) {
+            Ok(texture) => {
+                report.push(format!(
+                    "{own}: {}x{} - {what}'s own texture",
+                    texture.width, texture.height
+                ));
+                Some(texture)
+            }
+            Err(why) => {
+                report.push(format!("{why} - {what} draws nothing"));
+                None
+            }
+        };
+    }
     match super::super::assets::exhaust_texture(archives, entry) {
         Ok((texture, note)) => {
             report.push(format!("{note} - {what}'s own texture"));

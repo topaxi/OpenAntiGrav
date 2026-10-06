@@ -72,12 +72,18 @@ Seen on screen: wall sparks, a rocket flare and a rocket detonation
 (`Sprite::from_gnf`); `RaceDefaults::effect_dir_by_circuit` picks the set per
 circuit, **chosen, not measured** - the eboot's flag at `0x01f99bc0` decides
 and which circuit sets it is unread (`ps4-omega-eu/particle-paths.md`). 80/97
-and 96/112 parse; the rest are **blend class 8** (distortion and heat haze:
-rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) and draw
-nothing until that class is read. Seen: wall sparks, rocket flare
-(`data/scratch/omega-particles/shots/`). Open: read the flag's writers to make
-the per-circuit choice measured; blend class 8; the 2048 leftovers (rocket
-flare, Zone spark swap).
+and 110/112 (95/97) parse since 2026-10-06 (logwarn-2048): blend class 8 (distortion and
+heat haze: rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) is read as
+`Blend::Distort`, simulated and **not drawn**, and the loader names each such emitter at
+WARN. Seen: wall sparks, rocket flare (`data/scratch/omega-particles/shots/`), the rocket
+explosion's fireball (`data/scratch/logwarn-2048/shots/omega-rocket.png`). Open: **draw
+the distortion** (what `psys_normal_heathaze_vp/fp` samples and how it offsets is
+unrecovered; no scene-colour grab pass exists in `oag-render`/`oag-post`/`oag-fx`; Omega
+only, no 2048 `.pob` uses class 8); read the flag's writers to make the per-circuit
+directory choice measured; the 2048 leftovers (rocket flare, Zone spark swap).
+Pulse's `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,
+`WO_RAIN*` and `WO_SNOW` are authored by neither 2048 nor Omega (`pob.md`, "Effects Pulse
+names that 2048 and Omega never authors") and no longer load there.
 
 ## Open
 

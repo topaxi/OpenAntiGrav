@@ -83,3 +83,18 @@ impl Library {
         &self.sheet
     }
 }
+
+impl Effect {
+    /// The names of the emitters whose sprite loaded but did not fit the
+    /// [`Library`]'s sheet, which draw the procedural profile instead.
+    pub fn unplaced_sprites(&self) -> impl Iterator<Item = &str> {
+        self.emitters
+            .iter()
+            .filter(|spec| {
+                let sampled =
+                    spec.render == Render::Billboard || spec.streak != StreakDraw::Procedural;
+                sampled && spec.sprite.is_some() && spec.sheet_rect.is_none()
+            })
+            .map(|spec| spec.name.as_str())
+    }
+}
