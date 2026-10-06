@@ -178,6 +178,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
+    /// With `--race --screenshot`, put a locked LeachBeam from the player onto
+    /// a rival at the end of a tick: `TICK:SLOT`, e.g. `300:1`. A verification
+    /// aid for the LeachBall's own draw, there because a headless run has no
+    /// rival in the beam's cone. Writes the world the way `--force-wreck`
+    /// does, from outside `Race::tick`.
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_leach_lock: Option<String>,
+
     /// With `--race --screenshot`, set the player's shield to a percentage of
     /// its maximum at the end of a tick: `TICK:PERCENT`, e.g. `0:15` for a
     /// craft at 15 % from the first frame. Repeat the flag to script a drop:

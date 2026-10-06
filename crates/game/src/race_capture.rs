@@ -60,6 +60,11 @@ pub struct CaptureOptions {
     /// would - state 4, then state 5 half a second later. See
     /// [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
+    /// `--force-leach-lock TICK:TARGET`: put a locked LeachBeam from the
+    /// player onto that slot at the end of that tick, which a headless run
+    /// otherwise has no rival close enough to give. See
+    /// [`Race::lock_leach_beam_for_tests`].
+    pub force_leach_lock: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,

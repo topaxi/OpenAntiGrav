@@ -205,7 +205,16 @@ impl Scene {
         // is the origin: the rim came out of the direction to the world's origin
         // and painted the whole disc white. Fog and light reach it as they
         // reach a hull; its program applies neither.
-        for drawable in &self.plasma_blast.ball {
+        //
+        // **The LeachBall's `RIM_GLOW` reads the same eye** (`rim = saturate(1 -
+        // N.V)`, brightest face-on): left on `Scene::off` its brightness and
+        // falloff came from the direction to the world's origin.
+        for drawable in self
+            .plasma_blast
+            .ball
+            .iter()
+            .chain(self.leach_ball.as_ref())
+        {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(ship_scene));
         }
     }

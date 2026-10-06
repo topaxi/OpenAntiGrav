@@ -292,11 +292,12 @@ pub(crate) fn force_medal(texts: &[String]) -> Result<Vec<(u32, &'static str)>> 
         .collect()
 }
 
-/// Parses `--force-wreck`'s `TICK:SLOT`.
-pub(crate) fn force_wreck(text: Option<&str>) -> Result<Option<(u32, usize)>> {
+/// Parses `--force-wreck`'s and `--force-leach-lock`'s `TICK:SLOT`; `what`
+/// names the flag's own effect in the error.
+pub(crate) fn force_at_slot(text: Option<&str>, what: &str) -> Result<Option<(u32, usize)>> {
     let Some(text) = text else { return Ok(None) };
     let bad =
-        || anyhow::anyhow!("{text:?} is not a forced wreck; write it as TICK:SLOT, e.g. 60:3");
+        || anyhow::anyhow!("{text:?} is not a forced {what}; write it as TICK:SLOT, e.g. 60:3");
     let (tick, slot) = text.split_once(':').ok_or_else(bad)?;
     Ok(Some((
         tick.trim().parse().map_err(|_| bad())?,
