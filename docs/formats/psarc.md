@@ -451,3 +451,12 @@ damaged copy.
 - [PS3 disc encryption](ps3-disc.md) - the layer that has to come first
 - [HD status](hd-status.md) - what is inside, and what already parses
 - [Legal](../overview/legal.md) - why no key and no content is committed
+
+## `scripts/psarc.py` reads a NUL-delimited manifest too (2026-10-06)
+
+The Python helper split the manifest on `\n` only, so on a PS4 archive its
+`list` printed one giant entry and `cat`/`extract` found nothing by name. A
+census made with it said Omega ships no `arcade_hud.xml`; it ships five roots
+at HD's own paths (`omega-status.md`, the HUD section). It now splits on NUL as
+well, as `parse_manifest` does. `extract` on `data00.psarc` still fails with a
+zlib "incorrect header check" on that archive: use the Rust reader there.
