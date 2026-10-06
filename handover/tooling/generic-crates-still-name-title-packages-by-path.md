@@ -41,3 +41,4 @@ modules; those need no Cargo edge and are not counted.
    `check-dependency-rules.py` so the edge cannot return.
 3. Last: `oag-game` itself, where what remains is the composition root and moves into
    `oag-source`'s registry.
+- **Decided 2026-10-06 (maintainer, on the lead's recommendation):** when `check-deps` grows the end-state rule, it forbids only normal `[dependencies]` on title packages from generic crates. `[dev-dependencies]` stay allowed: ground-truth tests need each disc's own constants, and fixtures would not exercise the real data.
