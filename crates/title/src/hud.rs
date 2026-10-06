@@ -508,6 +508,12 @@ pub struct HudArt {
     /// (`docs/formats/hd-hud.md`) and nothing has measured what it writes in
     /// them, so it stays off there rather than borrowing Pulse's answer.
     pub kill_column: bool,
+    /// Whether the four `Info1`-`Info4` widgets are the HUD's message lines -
+    /// `oag_hud::messages`. **Pulse only**: `Hud_UpdateMessages`
+    /// (`0x0881f148`) is Pulse's own executable, and HD authors an `Info1` of its
+    /// own in `HUD_Elim_info_text.xml` for something else
+    /// (`docs/formats/hd-hud.md`), so it stays off there.
+    pub message_slots: bool,
     /// What this title's per-tick HUD update writes over its layout: the
     /// shield readout's runtime colours and fill, and which segments of the
     /// lap and place arcs are up. See [`RuntimeHud`].

@@ -13,6 +13,8 @@ pub(crate) mod endrace;
 pub(crate) mod ghost;
 #[path = "race_stage/hd_loyalty.rs"]
 pub(crate) mod hd_loyalty;
+#[path = "race_stage/medal_message.rs"]
+mod medal_message;
 
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {
@@ -151,6 +153,9 @@ pub(crate) struct RaceStage {
     ///
     /// [`Session::build_endrace`]: crate::main::session::Session::build_endrace
     pub(crate) endrace_unavailable: bool,
+    /// The best medal [`Self::tick_messages`] has already announced, so a medal
+    /// is raised once however many ticks it stays earned.
+    pub(super) earned_medal: Option<oag_game::records::Medal>,
 }
 
 impl RaceStage {

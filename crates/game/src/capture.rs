@@ -450,6 +450,7 @@ pub fn run(
                 intro_ticks: 0,
                 force_wreck: None,
                 force_shield: Vec::new(),
+                force_medal: Vec::new(),
                 scheme: options.scheme,
                 size: (width, height),
                 log_every: options.log_every,

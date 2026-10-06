@@ -183,6 +183,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:PERCENT", requires = "race")]
     pub(crate) force_shield: Vec<String>,
 
+    /// With `--race --screenshot`, raise the "medal awarded" HUD message at the
+    /// end of a tick: `TICK:TIER`, `TIER` being `gold`, `silver` or `bronze`,
+    /// e.g. `10:gold`. A verification aid for the message lines, which a real
+    /// race raises only from a campaign Zone or Speed Lap cell - a state a
+    /// headless capture has no way to reach. Written from outside `Race::tick`.
+    #[arg(long, value_name = "TICK:TIER", requires = "race")]
+    pub(crate) force_medal: Vec<String>,
+
     /// Keep a destroyed craft's hull instead of swapping in its
     /// `shipwreck.vex`: the headless way to measure what the wreck adds, by
     /// rendering the same frame with and without it.

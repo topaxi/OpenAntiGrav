@@ -662,6 +662,7 @@ impl Session {
                     // snapshot the single-argument signature used to take, in
                     // the slot it used to go to.
                     stage.race.tick(&inputs);
+                    stage.tick_messages();
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See

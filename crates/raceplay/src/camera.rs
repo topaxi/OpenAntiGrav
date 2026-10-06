@@ -250,6 +250,13 @@ impl Race {
         );
     }
 
+    /// Raises a HUD message line - `id` is a language-table id, `good` its
+    /// colour. See [`oag_hud::messages`], and `RaceStage::tick_messages` for the
+    /// one thing the windowed game raises.
+    pub fn raise_message(&mut self, id: &str, good: bool) {
+        self.view.messages.push(id, good);
+    }
+
     /// Puts the craft in `slot` into the destroyed sequence, for
     /// `--force-wreck`: state 4 with its half second, which is what
     /// `Ship_Damage`'s depletion does (`oag_physics::damage`), so the
