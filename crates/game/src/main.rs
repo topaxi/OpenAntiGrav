@@ -175,7 +175,7 @@ fn attach_log_file(cli: &Cli, settings: &settings::Settings) {
         "oag-game",
     );
     let Some(file) = oag_log::path::resolve(
-        cli.log_file.as_deref(),
+        cli.log.file.as_deref(),
         settings.log.file.as_deref(),
         default,
     ) else {
