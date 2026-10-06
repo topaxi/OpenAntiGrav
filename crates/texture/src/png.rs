@@ -1,12 +1,8 @@
 //! A minimal PNG writer, for looking at decoded assets.
 //!
-//! Deliberately dependency-free. PNG requires a zlib stream, but zlib permits
-//! **stored** (uncompressed) deflate blocks, so a valid file needs only CRC-32
-//! and Adler-32, both a few lines each. Output is around 5% larger than a real
-//! encoder would produce, which does not matter for inspecting textures.
-//!
-//! This exists to make assets *visible*, not to be an image library. If the
-//! project ever needs real encoding, take a dependency then.
+//! Dependency-free: zlib permits **stored** deflate blocks, so a valid file
+//! needs only CRC-32 and Adler-32. Output is around 5% larger than a real
+//! encoder's. This makes assets *visible*; it is not an image library.
 
 /// Largest payload in one stored deflate block.
 const MAX_STORED_BLOCK: usize = 0xFFFF;
@@ -42,8 +38,7 @@ pub fn encode_rgba(width: u32, height: u32, pixels: &[u8]) -> Vec<u8> {
     ]);
     chunk(&mut out, b"IHDR", &ihdr);
 
-    // Each scanline is prefixed with its filter type. Filter 0 (none) keeps the
-    // writer trivial at the cost of compression we are not doing anyway.
+    // Each scanline is prefixed with its filter type; 0 (none) keeps the writer trivial.
     let mut raw = Vec::with_capacity(pixels.len() + height as usize);
     for row in pixels.chunks_exact(width as usize * 4) {
         raw.push(0);
@@ -92,8 +87,7 @@ fn zlib_stored(data: &[u8]) -> Vec<u8> {
 /// CRC-32 as PNG uses it: reflected, polynomial `0xEDB88320`, initialised to
 /// all ones.
 ///
-/// Note this differs from `oag_formats::wad::hash_name` only in its initial value,
-/// which is exactly the kind of near-miss worth stating out loud.
+/// Differs from `oag_formats::wad::hash_name` only in its initial value.
 struct Crc32(u32);
 
 impl Crc32 {

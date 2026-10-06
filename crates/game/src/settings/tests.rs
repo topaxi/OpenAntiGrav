@@ -689,3 +689,16 @@ fn the_weapons_pick_is_a_single_race_launch_option_only() {
     };
     assert_eq!(on.weapons_override(Mode::SingleRace), Some(true));
 }
+
+#[test]
+fn the_hud_scale_defaults_to_sharp_bilinear_and_reads_every_spelling() {
+    use oag_display::display::HudScale;
+    let empty: Settings = toml::from_str("").expect("parse");
+    assert_eq!(empty.graphics.hud_scale, HudScale::SharpBilinear);
+    for mode in HudScale::ALL {
+        let settings: Settings =
+            toml::from_str(&format!("[graphics]\nhud_scale = \"{mode}\"")).expect("parse");
+        assert_eq!(settings.graphics.hud_scale, mode);
+    }
+    assert!(toml::from_str::<Settings>("[graphics]\nhud_scale = \"crisp\"").is_err());
+}

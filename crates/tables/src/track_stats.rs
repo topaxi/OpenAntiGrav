@@ -1,13 +1,11 @@
-//! `stats.xml` / `stats_reversed.xml`: a track's own per-class numbers,
-//! inside `FEData.wad` at the same directory
-//! [`crate::race_campaign`]'s `Cell::track` resolves through a title's
-//! `PI_Track` catalogue (`oag_raceplay::catalogue::Track::location`) - `<that
-//! directory>\stats.xml`. Confirmed directly: `pulse-psp-usa.chd`'s
-//! `FEData.wad` carries an entry whose hash matches
-//! `Data\Environments\16_Track\stats.xml` exactly, and its content is the
-//! record `docs/formats/race-setup.md`'s own live capture already measured
-//! off `16_Track`: `Physical Length="5178"`, `SkillScaleValue` `0.9` at
-//! `Easy`/`Venom`, matching that page character for character.
+//! `stats.xml` / `stats_reversed.xml`: a track's per-class numbers, in
+//! `FEData.wad` at the directory [`crate::race_campaign`]'s `Cell::track`
+//! resolves through a title's `PI_Track` catalogue
+//! (`oag_raceplay::catalogue::Track::location`), `<that directory>\stats.xml`.
+//! `pulse-psp-usa.chd`'s `FEData.wad` has an entry hashing to
+//! `Data\Environments\16_Track\stats.xml`, whose content matches
+//! `docs/formats/race-setup.md`'s live capture of `16_Track` exactly
+//! (`Physical Length="5178"`, `SkillScaleValue` `0.9` at `Easy`/`Venom`).
 //!
 //! ```text
 //! <RaceTimes Venom="117" Flash="138" Rapier="119" Phantom="128"/>
@@ -24,40 +22,33 @@
 //! </SkillLevels>
 //! ```
 //!
-//! (element and attribute names already expanded by [`crate::fexml`] - the
-//! file on disc spells them `<k>`/`<l>`/`<c>`/`<f>` and one/two-letter
-//! attributes, per the shipped `<code>` dictionary. **The dictionary, not the
-//! order, says which class a figure is**: the file spells `<RaceTimes n="138"
-//! m="128" o="119" p="117"/>` with `n`=Flash, `m`=Phantom, `o`=Rapier,
-//! `p`=Venom. An earlier revision of this comment had Venom and Flash and
-//! Phantom rotated; a live PPSSPP read of `DAT_08b310b4+0xa0` gives
-//! `(117.0, 138.0, 119.0, 128.0)` in Venom/Flash/Rapier/Phantom order, and
-//! `RaceTimes` are **seconds** - `PlayerStatus_Update` multiplies them by 100
-//! into centiseconds, and the HUD's `record` counts down from `1.57.0`.)
+//! Names are already expanded by [`crate::fexml`]; on disc they are `<k>`/`<l>`/
+//! `<c>`/`<f>` with short attributes. **The dictionary, not the order, says which
+//! class a figure is**: the file spells `<RaceTimes n="138" m="128" o="119"
+//! p="117"/>` with `n`=Flash, `m`=Phantom, `o`=Rapier, `p`=Venom. (An earlier
+//! comment had them rotated; a live PPSSPP read of `DAT_08b310b4+0xa0` gives
+//! `(117.0, 138.0, 119.0, 128.0)` in Venom/Flash/Rapier/Phantom order.)
+//! `RaceTimes` are **seconds**: `PlayerStatus_Update` multiplies by 100 into
+//! centiseconds, and the HUD's `record` counts down from `1.57.0`.
 //!
-//! `TrackStats_Load` (`0x088c454c`) and `TrackStats_ParseElement`
-//! (`0x088c46f8`) in `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`
-//! are the decompiled law this schema is read against; confidence 90 there,
-//! carried here unchanged since this reader adds no claim of its own beyond
-//! "the shipped file matches this shape".
+//! `TrackStats_Load` (`0x088c454c`) and `TrackStats_ParseElement` (`0x088c46f8`)
+//! in `docs/ghidra/functions/psp-pulse-usa/race-campaign.md` are the law this is
+//! read against, confidence 90 there; this reader adds only "the shipped file
+//! matches this shape".
 //!
 //! # What this crate does with it
 //!
-//! [`resolve_skill_scale`] reimplements `AI_ResolveSkillScale`'s campaign-cell
-//! branch (`0x08834df4`, confidence 85) - **only** that branch: a campaign
-//! cell's own interpolation replaces the mode-modifier arithmetic rather than
-//! adding to it (the decompile reassigns the working value outright once a
-//! cell is in play), so [`TrackStats::skill_curve`]'s `ModeModifiers` fields
-//! are carried on this type for completeness and are not read by
-//! [`resolve_skill_scale`] - see that function's own doc.
+//! [`resolve_skill_scale`] reimplements **only** the campaign-cell branch of
+//! `AI_ResolveSkillScale` (`0x08834df4`, confidence 85): a cell's interpolation
+//! replaces the mode-modifier arithmetic (the decompile reassigns the working
+//! value outright), so [`TrackStats::skill_curve`]'s `ModeModifiers` are carried
+//! but not read by it.
 //!
-//! `RaceTimes`/`LapTimes`/`Targets`/`Physical` are parsed and carried too,
-//! since they are on the same record. This crate reads neither;
-//! `oag_hud::RecordTarget` does, for the Time Trial and Speed Lap
-//! `RECORD` readout - `<RaceTimes>` (whole race) and `<LapTimes>` (one lap),
-//! both seconds. `docs/formats/race-setup.md`'s note that a single number per
-//! class carries no gold/silver/bronze split still applies: that split is a
-//! campaign cell's own.
+//! `RaceTimes`/`LapTimes`/`Targets`/`Physical` are parsed and carried too. This
+//! crate reads none; `oag_hud::RecordTarget` does, for the Time Trial and Speed
+//! Lap `RECORD` readout (whole race, one lap; seconds). A single number per
+//! class carries no gold/silver/bronze split (`docs/formats/race-setup.md`); that
+//! split is a campaign cell's.
 
 use crate::fexml::{self, Node};
 use crate::handling::SpeedClass;
@@ -66,34 +57,30 @@ use crate::race_campaign::{Cell, Difficulty};
 /// One track's `stats.xml` record.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrackStats {
-    /// `<RaceTimes>`, one figure per class, indexed by [`SpeedClass`]'s own
-    /// discriminant. Seconds - see the module docs.
+    /// `<RaceTimes>`, one figure per class, indexed by [`SpeedClass`]'s
+    /// discriminant. Seconds.
     pub race_times: [f32; 4],
     /// `<LapTimes>`, the same shape.
     pub lap_times: [f32; 4],
-    /// `<Targets Elimination="..."/>` - the kill count. `None` on the four
-    /// files this project has not seen carry the attribute, never observed
-    /// missing on `pulse-psp-usa.chd`'s own 24.
+    /// `<Targets Elimination="..."/>`: the kill count. `None` when absent (never
+    /// missing across `pulse-psp-usa.chd`'s 24 files).
     pub elimination_target: Option<u32>,
     /// `<Targets Zone="..."/>` - the zone count.
     pub zone_target: Option<u32>,
-    /// `<Physical Length="..."/>`, in the same units
-    /// `docs/formats/race-setup.md`'s own PPSSPP capture measured metres in.
+    /// `<Physical Length="..."/>`, in the units `race-setup.md`'s PPSSPP capture
+    /// measured metres in.
     pub length: Option<u32>,
-    /// `<SkillLevels><Entry>`: `[class][difficulty]`, both indexed by their
-    /// own discriminant (`Difficulty::Easy` is `0`) - see
-    /// [`TrackStats::skill_curve`].
+    /// `<SkillLevels><Entry>`: `[class][difficulty]`, both by discriminant
+    /// (`Difficulty::Easy` is `0`); see [`TrackStats::skill_curve`].
     pub skill_scale: [[f32; 3]; 4],
-    /// `<SkillLevels><ModeModifiers>`, one row a class - not consumed by
-    /// [`resolve_skill_scale`] (see the module docs for why), read by
-    /// [`ambient_skill_scale`].
+    /// `<SkillLevels><ModeModifiers>`, one row a class; read by
+    /// [`ambient_skill_scale`], not [`resolve_skill_scale`].
     pub mode_modifiers: [ModeModifiers; 4],
 }
 
-/// One `<ModeModifiers>` row - `AI_ResolveSkillScale`'s non-campaign terms,
-/// added to the plain `SkillScaleValue` lookup when no cell is in play
-/// ([`ambient_skill_scale`]). Not read by [`resolve_skill_scale`]; see the
-/// module docs.
+/// One `<ModeModifiers>` row: `AI_ResolveSkillScale`'s non-campaign terms, added
+/// to the plain `SkillScaleValue` when no cell is in play
+/// ([`ambient_skill_scale`]).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ModeModifiers {
     /// Added when `mode == Head2Head`.
@@ -109,9 +96,8 @@ pub struct ModeModifiers {
 }
 
 impl TrackStats {
-    /// This track's own Easy/Medium/Hard `SkillScaleValue` curve for
-    /// `class`: `[Difficulty::Easy, Difficulty::Medium, Difficulty::Hard]`,
-    /// the three points [`resolve_skill_scale`] interpolates between.
+    /// This track's `SkillScaleValue` curve for `class`, `[Easy, Medium, Hard]`:
+    /// the points [`resolve_skill_scale`] interpolates between.
     #[must_use]
     pub fn skill_curve(&self, class: SpeedClass) -> [f32; 3] {
         self.skill_scale[class as usize]
@@ -130,27 +116,19 @@ pub enum Error {
     },
     /// A required attribute is absent.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute that was looked for.
         attribute: &'static str,
     },
     /// An attribute is present but does not parse as the type it should.
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute it was on.
         attribute: &'static str,
-        /// What was found, so the error names the offending text.
         value: String,
     },
-    /// `<SkillLevels>` is missing an `<Entry>` for one of the twelve
-    /// `{Easy,Medium,Hard} x {Venom,Flash,Rapier,Phantom}` combinations every
-    /// one of the 24 shipped files on `pulse-psp-usa.chd` carries.
+    /// `<SkillLevels>` lacks an `<Entry>` for one of the twelve `{Easy,Medium,Hard}
+    /// x {Venom,Flash,Rapier,Phantom}` combinations all 24 shipped files carry.
     MissingSkillEntry {
-        /// The difficulty the missing row was for.
         difficulty: &'static str,
-        /// The class the missing row was for.
         class: &'static str,
     },
 }
@@ -190,11 +168,9 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Reads an **already expanded** `stats.xml`. Use [`from_blob`] for bytes
-/// straight out of an archive.
+/// Reads an **already expanded** `stats.xml`; see [`from_blob`] for raw bytes.
 pub fn parse(expanded: &str) -> Result<TrackStats> {
     let root = fexml::parse(expanded);
     let stats = root
@@ -337,8 +313,8 @@ fn optional_u32(node: &Node, attribute: &'static str) -> Option<Result<u32>> {
     }))
 }
 
-/// `AI_ResolveSkillScale`'s campaign-cell branch (`0x08834df4`, confidence
-/// 85, `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`):
+/// `AI_ResolveSkillScale`'s campaign-cell branch (`0x08834df4`, confidence 85,
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`):
 ///
 /// ```text
 /// t = Cell_SkillForDifficulty(cell, difficulty)
@@ -346,21 +322,16 @@ fn optional_u32(node: &Node, attribute: &'static str) -> Option<Result<u32>> {
 ///                 : lerp(curve[Medium], curve[Hard], t - 2.0)
 /// ```
 ///
-/// `curve` is `stats`'s own [`TrackStats::skill_curve`] for `cell`'s class,
-/// or the parser's documented default `[1.0, 2.0, 3.0]` when `stats` is
-/// `None` - the same default the original substitutes when its own track
-/// table has not loaded (`DAT_08b310b4 == 0` in the decompile).
+/// `curve` is [`TrackStats::skill_curve`] for `cell`'s class, or `[1.0, 2.0,
+/// 3.0]` when `stats` is `None`, as the original substitutes when its track
+/// table has not loaded (`DAT_08b310b4 == 0`).
 ///
-/// `None` when `cell` carries no [`Cell::skill`] at all - a solo-mode cell
-/// (`Time Trial`, `Speed Lap`, `Zone`) has no AI to scale, the same case
-/// [`Cell::skill_for_difficulty`] already returns `None` for.
+/// `None` when `cell` has no [`Cell::skill`] (a solo-mode cell has no AI).
 ///
-/// **Only this branch.** The decompile computes the mode-modifier terms
-/// (`HeadToHead`, the four `Race` Full/Half x With/Without Weapons fields)
-/// first and then *discards* them the moment a campaign cell is in play -
-/// its own working value is reassigned outright, not added to - so a
-/// campaign launch never reaches [`TrackStats::mode_modifiers`] at all. See
-/// the module docs.
+/// **Only this branch.** The decompile computes the mode-modifier terms first and
+/// *discards* them once a campaign cell is in play (the working value is
+/// reassigned, not added to), so a campaign launch never reaches
+/// [`TrackStats::mode_modifiers`].
 #[must_use]
 pub fn resolve_skill_scale(
     cell: &Cell,
@@ -379,8 +350,8 @@ pub fn resolve_skill_scale(
     })
 }
 
-/// Which of `AI_ResolveSkillScale`'s mode terms a race with no campaign
-/// cell adds to its track's plain `SkillScaleValue`.
+/// Which of `AI_ResolveSkillScale`'s mode terms a race with no campaign cell
+/// adds to its track's plain `SkillScaleValue`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModeTerm {
     /// `g_game_mode == 9`: `+ HeadToHead`.
@@ -408,9 +379,9 @@ pub enum ModeTerm {
 ///
 /// Read live on a Venom Easy Single Race on Talon's Junction, 2026-10-04:
 /// `0.9 + FullGridWithWeapons 0.0 = 0.9`
-/// (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`). `stats` absent
-/// gives the original's own `2.0` default and no mode term (the original
-/// would read the terms through a null table; this does not).
+/// (`docs/ghidra/functions/psp-pulse-usa/race-finish.md`). With `stats` absent
+/// this gives the original's `2.0` and no mode term (the original would read the
+/// terms through a null table).
 #[must_use]
 pub fn ambient_skill_scale(
     stats: Option<&TrackStats>,

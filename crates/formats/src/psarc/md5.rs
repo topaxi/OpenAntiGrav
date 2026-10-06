@@ -1,11 +1,9 @@
 //! MD5, because a PSARC directory row carries one and this crate checks it.
 //!
-//! RFC 1321, hand-rolled for the same reason `png`'s CRC-32 and Adler-32 are:
-//! it is a fixed, fully specified algorithm with published test vectors, so it
-//! costs a page and pulls in nothing. It is **not** used as a security
-//! primitive here - the digest is a directory-integrity field, and what this
-//! module buys is the check that
-//! [`super::path_digest`] can predict every entry's row from its own path.
+//! RFC 1321, hand-rolled like `png`'s CRC-32 and Adler-32: a fixed, specified
+//! algorithm with published test vectors. **Not** a security primitive: the
+//! digest is a directory-integrity field, and this module buys the check that
+//! [`super::path_digest`] predicts every entry's row from its own path.
 
 /// Per-round left-rotation amounts, four rounds of four.
 const SHIFTS: [u32; 64] = [
@@ -17,8 +15,8 @@ const SHIFTS: [u32; 64] = [
 
 /// `floor(abs(sin(i + 1)) * 2^32)`, the constant table RFC 1321 tabulates.
 ///
-/// Written out rather than computed, so no transcendental reaches this file -
-/// see `docs/architecture/determinism.md` and `just check-determinism`.
+/// Written out rather than computed, so no transcendental reaches this file
+/// (`docs/architecture/determinism.md`, `just check-determinism`).
 #[rustfmt::skip]
 const K: [u32; 64] = [
     0xd76a_a478, 0xe8c7_b756, 0x2420_70db, 0xc1bd_ceee,
@@ -97,8 +95,8 @@ mod tests {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
-    /// RFC 1321's own test suite, which is what says this is MD5 and not
-    /// something that merely mixes bits.
+    /// RFC 1321's own test suite: what says this is MD5, not something that
+    /// mixes bits.
     #[test]
     fn rfc_1321_test_vectors() {
         for (input, want) in [
@@ -124,8 +122,8 @@ mod tests {
         }
     }
 
-    /// The padding branch that lands exactly on a block boundary, which is the
-    /// one an implementation gets wrong without noticing.
+    /// The padding branch landing exactly on a block boundary, which an
+    /// implementation gets wrong without noticing.
     #[test]
     fn a_message_of_exactly_one_block_pads_into_a_second() {
         let input = vec![b'x'; 56];

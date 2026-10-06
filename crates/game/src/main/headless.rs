@@ -580,6 +580,7 @@ pub(crate) fn run_race(
                 msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
                 motion_blur_resolution: render_profile.motion_blur_resolution,
+                hud_scale: settings.graphics.hud_scale,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

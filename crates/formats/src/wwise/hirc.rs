@@ -26,7 +26,6 @@ pub enum Kind {
     MusicTrack,
     MusicSwitch,
     MusicRanSeq,
-    /// A type this crate does not read.
     Other(u8),
 }
 
@@ -72,7 +71,6 @@ impl Kind {
 pub struct Object {
     pub kind: Kind,
     pub id: u32,
-    /// The bytes after the id.
     pub body: Range<usize>,
 }
 
@@ -157,7 +155,6 @@ impl<'a> Reader<'a> {
 /// An event: the actions it runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
-    /// Action object ids, in order.
     pub actions: Vec<u32>,
 }
 
@@ -187,7 +184,6 @@ pub struct Action {
     /// `0x0403` is `Play`; the others seen (`0x2103`, `0x1204`, `0x1e03`,
     /// `0x1901`, ...) are not read.
     pub kind: u16,
-    /// The object the action acts on.
     pub target: u32,
     /// The byte after the target id; `0` on every `Play`.
     pub target_flags: u8,
@@ -197,7 +193,6 @@ pub struct Action {
 }
 
 impl Action {
-    /// The `Play` action type.
     pub const PLAY: u16 = 0x0403;
 
     /// Reads an action body.
@@ -236,7 +231,6 @@ pub struct SetState {
 }
 
 impl SetState {
-    /// The `SetState` action type.
     pub const KIND: u16 = 0x1204;
 
     /// Reads a `SetState` body, exactly: `u16 kind, u32 target, u8 flags`,
@@ -326,7 +320,6 @@ impl Plugin {
 pub struct Source {
     pub plugin: Plugin,
     pub stream: StreamType,
-    /// The media id, which is the `DIDX` id and the loose file's name.
     pub media_id: u32,
     /// The media's size in memory: the `DIDX` size for an embedded source
     /// (5,892 of 5,892), the prefetched head for a prefetched one.
@@ -337,7 +330,6 @@ pub struct Source {
     pub bits: u8,
 }
 
-/// Bytes of a source record.
 const SOURCE_LEN: usize = 14;
 
 impl Source {

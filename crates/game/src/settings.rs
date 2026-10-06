@@ -304,6 +304,16 @@ pub struct Graphics {
     /// frame nobody is presenting is the one way to get it wrong.
     #[serde(default)]
     pub perf_overlay: oag_present::perf::Overlay,
+    /// How a raster HUD is stretched to the screen: `integer`,
+    /// `sharp-bilinear`, `nearest` or `linear`.
+    ///
+    /// **Read only by the titles whose HUD is raster art** (Pulse on the PSP
+    /// and PS2, Pure - `oag_title::HudArt::raster`); HD, 2048 and Omega draw
+    /// as before whatever it says. Taken when a race loads. No menu row: it is
+    /// a one-line settings-file choice, the way [`Self::frustum_culling`] is.
+    /// See [`oag_display::display::HudScale`] and `docs/ui/hud-skins.md`.
+    #[serde(default)]
+    pub hud_scale: oag_display::display::HudScale,
     /// Whether the track's draw calls are tested against the camera's view
     /// frustum before being submitted, skipping the ones entirely outside it.
     ///
@@ -413,6 +423,7 @@ impl Default for Graphics {
             anisotropy: Anisotropy::default(),
             fov: oag_display::display::Fov::default(),
             perf_overlay: oag_present::perf::Overlay::default(),
+            hud_scale: oag_display::display::HudScale::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),

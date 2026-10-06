@@ -20,6 +20,7 @@ use oag_ui::frontend::{Align, Draw};
 
 mod backdrop;
 mod face;
+mod hud_scale;
 mod quad;
 mod resources;
 mod scene;
@@ -32,42 +33,16 @@ use resources::{
     upload_rgba,
 };
 
+use hud_scale::HudStretch;
 use quad::{
     MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad,
+    Uniforms,
 };
 use text::GlyphSlot;
 use video::Video;
 
 pub use backdrop::FuryBackdrop;
 pub use scene::SceneBackdrop;
-
-/// Shared with both shaders.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    viewport: [f32; 2],
-    screen: [f32; 2],
-    atlas: [f32; 2],
-    /// The sprite sheet's size, for normalising its pixel-space UVs. This took
-    /// the slot a padding pair held, so the struct is still 32 bytes.
-    sprites: [f32; 2],
-    /// Where the movie sits in screen space: `[x, y, width, height]`. Only
-    /// `video.wgsl` reads this; `ui.wgsl` still declares the field so the two
-    /// shaders agree on the buffer's layout.
-    video_rect: [f32; 4],
-    /// The face atlas's size, for normalising `Draw::FacedText`'s pixel-space
-    /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
-    /// field at all, the same way it already stops short of `sprites`.
-    face_atlas: [f32; 2],
-    /// The buttons atlas's own size, the same idiom one field up -
-    /// `ui.wgsl` alone reads this too. Occupies the 8 bytes a `_padding`
-    /// field held before `Draw::FacedText { role: "Buttons" }` existed:
-    /// WGSL still rounds `Uniforms` to 64 bytes either way (`vec4`
-    /// alignment), so this has to be *this* field and not one appended
-    /// after it - appending would leave `ui.wgsl`'s own `buttons_atlas`
-    /// reading whatever the real padding held instead.
-    buttons_atlas: [f32; 2],
-}
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
 ///
@@ -195,6 +170,8 @@ pub struct Renderer {
     /// as. [`Space::PSP`] until someone says otherwise, which is what every
     /// caller that draws our own layouts - the loading screen, the menus, the HUD.
     space: Space,
+    /// How a raster HUD is stretched - see [`hud_scale`].
+    hud: HudStretch,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -443,6 +420,7 @@ impl Renderer {
             target_format: format,
             quads: Vec::new(),
             space: Space::PSP,
+            hud: HudStretch::default(),
         })
     }
 
@@ -626,6 +604,7 @@ impl Renderer {
         clip: Option<(usize, f32, f32)>,
     ) {
         self.quads.clear();
+        self.hud.pixels_per_grid = HudStretch::measure(self.space, viewport);
         // Where the movie sits in the quad order. The list is painted back to
         // front, and the `LogoFMV` screen puts a black `Image` *behind* its
         // `Movie`, so drawing the movie first unconditionally would let that
@@ -817,6 +796,9 @@ impl Renderer {
             }
         }
 
+        if self.hud.mode.snaps_geometry() {
+            hud_scale::snap_sprites(&mut self.quads, self.hud.pixels_per_grid);
+        }
         queue.write_buffer(
             &self.uniform_buffer,
             0,
@@ -840,6 +822,7 @@ impl Renderer {
                 video_rect,
                 face_atlas: face_atlas_size(self.face_atlas.as_ref()),
                 buttons_atlas: face_atlas_size(self.buttons_atlas.as_ref()),
+                hud: self.hud.uniform(),
             }),
         );
 

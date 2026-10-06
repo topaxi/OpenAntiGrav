@@ -13,10 +13,8 @@
 //!
 //! # What this is for
 //!
-//! The atlas layout resisted several passes of blind structural search, and the
-//! thing that settles it is not a block geometry - it is where the pixels start.
-//! Three independent checks say the same thing, and each of them fails on the
-//! reading this project used before:
+//! The atlas layout is settled not by a block geometry but by where the pixels
+//! start. Three independent checks agree, and each fails on the earlier reading:
 //!
 //! - The atlas block closes **exactly** at `64 + clut_size + width * height / 2`
 //!   with no padding, which pins the header at 64 bytes.
@@ -47,9 +45,8 @@ fn image(name: &str) -> Option<PathBuf> {
 
 /// Inked pixels over total, across the ten digit glyphs.
 ///
-/// The measure that separates a bare stroke from a pre-outlined one: a normal
-/// typeface inks about a quarter of a digit's box, and a glyph carrying a baked
-/// outline inks nearly two thirds of it.
+/// Separates a bare stroke from a pre-outlined one: a normal typeface inks about
+/// a quarter of a digit's box, a baked outline nearly two thirds.
 fn digit_ink(font: &Font) -> (usize, usize) {
     let (mut inked, mut total) = (0usize, 0usize);
     for ch in "0123456789".chars() {
@@ -72,10 +69,9 @@ fn digit_ink(font: &Font) -> (usize, usize) {
 
 /// Fraction of glyphs whose leftmost and rightmost box column both hold ink.
 ///
-/// `u1 - u0` is the glyph's declared width, so the box is tight horizontally and
-/// both edge columns must be inked. Vertically it is not: `v0`/`v1` are shared
-/// by every glyph on an atlas row, so a lowercase letter legitimately leaves the
-/// top rows empty and this deliberately does not test them.
+/// `u1 - u0` is the declared width, so both edge columns must be inked.
+/// Vertically it is not tight (`v0`/`v1` are shared by a whole atlas row), so
+/// rows are not tested.
 fn tight_horizontal_bounds(font: &Font) -> (usize, f64) {
     let mut checked = 0;
     let mut touching = 0;
@@ -158,9 +154,8 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
         );
         assert_eq!(font.palette.len(), 16, "entry {index}: palette length");
 
-        // A quantised antialiasing ramp uses its whole palette. Read 48 bytes
-        // early the palette has four or five distinct alphas and a dozen dead
-        // entries, so this is the check that the palette is where it belongs.
+        // A quantised antialiasing ramp uses its whole palette; read 48 bytes early
+        // it has four or five distinct alphas and a dozen dead entries.
         let levels = font
             .palette
             .iter()
@@ -173,9 +168,8 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
             "entry {index}: only {levels} distinct palette alphas, expected a full ramp"
         );
 
-        // How many distinct greys the palette carries, and how much of a digit's
-        // box is inked. Together these separate the two HUD fonts from the three
-        // menu ones - see `outlined` below.
+        // Distinct greys and the inked fraction of a digit's box separate the two
+        // HUD fonts from the three menu ones - see `outlined` below.
         let greys = font
             .palette
             .iter()
@@ -187,8 +181,8 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
         let ink_rate = ink as f64 / ink_total.max(1) as f64;
         if font.is_outlined() {
             outlined += 1;
-            // A pre-outlined glyph's silhouette covers far more of its box than a
-            // bare stroke does. Measured: 62-65 % against 25-26 %.
+            // A pre-outlined glyph covers far more of its box than a bare stroke:
+            // measured 62-65 % against 25-26 %.
             assert!(
                 ink_rate > 0.45,
                 "entry {index}: outlined but only {ink_rate:.3} of a digit box is inked"
@@ -225,18 +219,17 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
 
     assert_eq!(fonts, EXPECTED_FONTS, "wrong number of fonts found");
     assert!(glyphs > 800, "only {glyphs} glyphs decoded");
-    // `PulseHud.fnt` and `small.fnt`, the `HUD` and `HUDSmall` roles, and nothing
-    // else. This is the property a renderer has to act on: their palette RGB is a
-    // body/outline mask rather than a constant, so reading alpha alone fills the
-    // outline with glyph and a digit becomes a solid box. Pinned here because it
-    // was got wrong - see `oag_game::font` and `docs/formats/fnt.md`.
+    // `PulseHud.fnt` and `small.fnt` (the `HUD` and `HUDSmall` roles) and nothing
+    // else. A renderer must act on it: their palette RGB is a body/outline mask, so
+    // alpha alone turns a digit into a solid box (see `oag_game::font` and
+    // `docs/formats/fnt.md`).
     assert_eq!(
         outlined, 2,
         "expected exactly two outlined fonts, found {outlined}"
     );
-    // The old reading scored 0.44 here; a correct one is near 1. The bound is
-    // set below the observed 0.967 to leave room for a glyph whose leftmost
-    // column is genuinely a fully-transparent antialiasing step.
+    // The old reading scored 0.44; a correct one is near 1. The bound sits below
+    // the observed 0.967 for a glyph whose leftmost column is a transparent
+    // antialiasing step.
     assert!(
         worst_bounds > 0.90,
         "worst edge-ink rate {worst_bounds:.3}: glyph boxes do not bound the ink"
@@ -245,12 +238,10 @@ fn every_font_decodes_and_its_glyph_boxes_bound_real_ink() {
 
 /// Mean pixel step across a swizzle-block seam, over the mean step elsewhere.
 ///
-/// The GE's blocks are 16 bytes wide. A correct decode has nothing special
-/// happening at those boundaries, so the ratio sits near 1; reading a swizzled
-/// image linearly - or unswizzling one that was already linear - splices
-/// unrelated pixels together there and the ratio climbs. This is the check that
-/// says which reading the `+0x07` flag is selecting, and it works on both
-/// answers rather than only on "swizzled".
+/// The GE's blocks are 16 bytes wide. A correct decode has nothing special at
+/// those boundaries (ratio near 1); a wrong swizzle splices unrelated pixels there
+/// and the ratio climbs. This says which reading the `+0x07` flag selects, for
+/// both answers.
 fn seam_ratio(indices: &[u8], width: usize, height: usize, block_pixels: usize) -> f64 {
     let (mut seam, mut seam_n, mut other, mut other_n) = (0u64, 0u64, 0u64, 0u64);
     for y in 0..height {
@@ -321,8 +312,8 @@ fn mip_textures_honour_the_swizzle_flag() {
         let is_swizzled = parsed.unknown[2] & swizzle::FLAG_SWIZZLED != 0;
         flagged += usize::from(is_swizzled);
 
-        // One block column makes the swizzle the identity, so a texture that
-        // narrow cannot tell the two readings apart at all.
+        // One block column makes the swizzle the identity, so a texture that narrow
+        // cannot tell the readings apart.
         if row_bytes <= swizzle::SWIZZLE_BLOCK_BYTES {
             continue;
         }
@@ -368,10 +359,9 @@ fn mip_textures_honour_the_swizzle_flag() {
         discriminating >= 10,
         "only {discriminating} wide enough to check"
     );
-    // Both answers are exercised: some blobs are stored linear and some
-    // swizzled, and the flag picks the seam-free reading either way. The one
-    // allowed miss is a 32x16 blob, four blocks in total, where the statistic
-    // has almost nothing to average over.
+    // Both answers are exercised (some blobs linear, some swizzled) and the flag
+    // picks the seam-free reading. The one allowed miss is a 32x16 blob, four
+    // blocks, with almost nothing to average over.
     assert!(
         flag_wins + 1 >= discriminating,
         "the +0x07 flag picked the seamier reading on {} of {discriminating}",

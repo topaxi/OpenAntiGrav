@@ -1,8 +1,7 @@
 //! The vocabulary the picture is configured in: which screen, what shape, how
 //! big, how bright.
 //!
-//! Every setting here is a separate question, which is why it is a separate
-//! type:
+//! Every setting here is a separate question, which is why it is a separate type:
 //!
 //! - [`Monitor`] is *which* screen, when there is more than one.
 //! - [`WindowMode`] is what the compositor is asked for.
@@ -37,6 +36,7 @@
 use serde::{Deserialize, Serialize};
 
 mod aspect;
+mod hud_scale;
 mod motion_blur;
 mod msaa;
 mod reconstruction;
@@ -44,7 +44,7 @@ mod screen_filter;
 mod shadows;
 
 pub use {
-    aspect::Aspect, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
+    aspect::Aspect, hud_scale::*, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
     screen_filter::FilterStrength, shadows::Shadows,
 };
 

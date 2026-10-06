@@ -22,75 +22,57 @@
 //! # The last two fields are easy to get backwards
 //!
 //! Every PSP archive stores everything uncompressed, so the two size fields are
-//! always equal there and their order is unobservable. The PS2 archives *are*
-//! compressed, and their offset chain resolves it: taking the fourth word as
-//! the stored size makes all 193 entries of `WADSP.WAD` chain correctly, and
-//! taking the third makes 2 of 193 chain.
+//! equal there and their order is unobservable. The PS2 archives are
+//! compressed and their offset chain resolves it: taking the fourth word as the
+//! stored size chains all 193 entries of `WADSP.WAD`; the third chains 2.
 //!
 //! # Names
 //!
-//! Names are not stored. The directory holds only [`hash_name`] of each name,
-//! so an entry can be *found* by name but not listed with one. Recovering a
-//! listing means hashing a candidate name list and matching.
+//! Names are not stored, only [`hash_name`] of each: an entry can be *found* by
+//! name but not listed with one. A listing means hashing a candidate list.
 
 use std::fmt;
 
-/// Bytes before the first entry.
 pub const HEADER_LEN: usize = 8;
 
-/// Bytes per directory entry.
 pub const ENTRY_LEN: usize = 16;
 
 /// Observed alignment of the blob region and of each blob within it.
 ///
-/// Not enforced. It holds in every archive examined, but a deviation is a
-/// finding to report rather than a reason to reject the file.
+/// Not enforced: a deviation is a finding, not a reason to reject the file.
 pub const BLOB_ALIGNMENT: u32 = 64;
 
-/// The only version seen.
 pub const KNOWN_VERSION: u32 = 1;
 
 /// Bit 31 of the uncompressed-size field selects zlib over LZSS.
 ///
-/// It is only consulted for an entry that is compressed at all: see
-/// [`Compression`] and `Wad_Read`.
+/// Only consulted for a compressed entry: see [`Compression`] and `Wad_Read`.
 const ZLIB_FLAG: u32 = 0x8000_0000;
 
 /// How a blob is stored.
 ///
 /// # The flag alone does not decide this
 ///
-/// `Wad_Read` asks two questions in order, and the order is the part that is
-/// easy to get wrong:
+/// `Wad_Read` asks two questions in order:
 ///
 /// 1. Does `size_in` equal `size_out & 0x7fffffff`? Then the blob is **stored**,
 ///    whatever bit 31 says.
 /// 2. Only then does bit 31 choose zlib over LZSS.
 ///
-/// Reading it as "bit 31 clear means LZSS" is the natural mistake, and it makes
-/// nonsense of the shipped data: every one of the 1,142 entries in `Data.wad`
-/// has bit 31 clear and equal sizes, so that rule would have the game LZSS-decode
-/// the entire archive.
-///
-/// The consequence for us is a real one rather than a technicality. An
-/// incompressible blob whose LZSS encoding came out exactly its own size is
-/// classified `None` here and returned verbatim, which is what the game does too,
-/// so we match. But it means `size_in == size_out` is **not** evidence that a
-/// blob was stored rather than compressed, and `oag-wad verify` cannot tell those
-/// apart either.
+/// "Bit 31 clear means LZSS" is the natural mistake: all 1,142 entries in
+/// `Data.wad` have bit 31 clear and equal sizes, so it would LZSS-decode the
+/// whole archive. An incompressible blob whose LZSS encoding came out its own
+/// size is classified `None` and returned verbatim, as the game does, so
+/// `size_in == size_out` is **not** evidence a blob was stored rather than
+/// compressed, and `oag-wad verify` cannot tell them apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
     /// Stored verbatim. Every entry in every PSP archive.
     None,
-    /// LZSS with a 8192-byte ring, 13-bit offsets and 4-bit lengths.
-    ///
-    /// Used by the PS2 archives.
+    /// LZSS with a 8192-byte ring, 13-bit offsets and 4-bit lengths, on PS2.
     Lzss,
-    /// zlib.
-    ///
-    /// Not seen in any of Pure or Pulse's own **base disc** archives, but
-    /// real in shipped data: 187 of 192 entries in Pure's Gamma DLC pack, and
-    /// most entries in its other six PSN packs, are zlib rather than LZSS.
+    /// zlib. Not in Pure or Pulse's **base disc** archives, but 187 of 192
+    /// entries in Pure's Gamma DLC pack and most in its other six PSN packs.
     /// See `docs/formats/dlc-pack.md#pures-packs-decrypt-with-an-external-key-table`.
     Zlib,
 }
@@ -112,17 +94,11 @@ pub struct Entry {
     pub name_hash: u32,
     /// Offset of the blob from the start of the archive.
     pub offset: u32,
-    /// Size after decompression, with the zlib flag masked off.
-    ///
-    /// Equal to [`size`](Self::size) when the blob is stored as-is, which is
-    /// the case for every entry in every PSP archive.
+    /// Size after decompression, with the zlib flag masked off. Equal to
+    /// [`size`](Self::size) when stored as-is.
     pub size_uncompressed: u32,
-    /// Bytes actually occupied in the archive.
-    ///
-    /// This is the field the offset chain advances by, which is how its
-    /// position was determined.
+    /// Bytes occupied in the archive; the offset chain advances by it.
     pub size: u32,
-    /// How the blob is stored.
     pub compression: Compression,
 }
 
@@ -154,48 +130,35 @@ impl Entry {
 pub struct Directory {
     /// Format version. Expected to be [`KNOWN_VERSION`].
     pub version: u32,
-    /// The entries, in the order they appear in the file.
     pub entries: Vec<Entry>,
 }
 
 /// Something wrong with an archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes required.
         need: usize,
-        /// Bytes supplied.
         got: usize,
     },
     /// The version field is not one we recognise.
     UnknownVersion {
-        /// The value found.
         version: u32,
     },
     /// The entry count is implausible for the archive's size.
     ImplausibleEntryCount {
-        /// The value found.
         entry_count: u32,
-        /// Size of the archive, when known.
         archive_len: Option<u64>,
     },
     /// An entry points outside the archive.
     EntryOutOfBounds {
-        /// Index of the offending entry.
         index: usize,
-        /// Where its data would end.
         end: u64,
-        /// Size of the archive.
         archive_len: u64,
     },
     /// An entry's data would overlap the directory.
     EntryOverlapsDirectory {
-        /// Index of the offending entry.
         index: usize,
-        /// The entry's offset.
         offset: u32,
-        /// Where the directory ends.
         directory_end: u64,
     },
 }
@@ -206,12 +169,10 @@ impl fmt::Display for Error {
             Self::TooShort { need, got } => {
                 write!(f, "need at least {need} bytes, got {got}")
             }
-            // Two files on the PS2 disc land here and are not corrupt:
-            // `PS2MUSIC.WAD` (reads as version 16) and `PRERACE.WAD` (version
-            // 32). Both are count-first PCM archives whose first word is an
-            // entry count, so the bare message sends the reader looking for a
-            // WAD variant that does not exist. Naming the alternative costs
-            // nothing and is the difference between a dead end and a pointer.
+            // `PS2MUSIC.WAD` (version 16) and `PRERACE.WAD` (version 32) are
+            // not corrupt: count-first PCM archives whose first word is an
+            // entry count. Naming that points the reader away from a WAD
+            // variant that does not exist.
             Self::UnknownVersion { version } => write!(
                 f,
                 "unknown WAD version {version} (only {KNOWN_VERSION} is known); \
@@ -253,7 +214,6 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Directory {
@@ -263,10 +223,9 @@ impl Directory {
         HEADER_LEN as u64 + u64::from(entry_count) * ENTRY_LEN as u64
     }
 
-    /// Reads the entry count from the first [`HEADER_LEN`] bytes.
-    ///
-    /// Lets a caller size a single read of the directory rather than reading
-    /// the whole archive, which matters when the archive is 315 MiB.
+    /// Reads the entry count from the first [`HEADER_LEN`] bytes, so a caller
+    /// can size one read of the directory instead of the whole (up to 315 MiB)
+    /// archive.
     pub fn peek_entry_count(header: &[u8]) -> Result<u32> {
         if header.len() < HEADER_LEN {
             return Err(Error::TooShort {
@@ -286,20 +245,15 @@ impl Directory {
     }
 
     /// Parses a directory.
-    ///
     /// `data` must hold at least [`directory_len`](Self::directory_len) bytes;
-    /// anything beyond that is ignored, so passing the whole archive is fine.
-    ///
-    /// `archive_len` enables bounds checking. Pass `None` when the total size
-    /// is not known, and entry bounds go unchecked.
+    /// more is ignored. `archive_len` enables bounds checking; `None` skips it.
     pub fn parse(data: &[u8], archive_len: Option<u64>) -> Result<Self> {
         let entry_count = Self::peek_entry_count(data)?;
         let version = KNOWN_VERSION;
 
         let needed = Self::directory_len(entry_count);
 
-        // Guard before allocating: a corrupt count of 0xFFFFFFFF would
-        // otherwise ask for a 64 GiB directory.
+        // Guard before allocating: a count of 0xFFFFFFFF would ask for 64 GiB.
         if let Some(len) = archive_len
             && needed > len
         {
@@ -326,11 +280,9 @@ impl Directory {
             let size = word(3);
             let size_uncompressed = size_out_raw & !ZLIB_FLAG;
 
-            // Two tests, in this order, mirroring `Wad_Read`: the sizes
-            // agreeing means stored, and only when they differ does bit 31
-            // choose between zlib and LZSS. Reversing them matters, because an
-            // entry with bit 31 set and equal sizes is read verbatim by the game
-            // and would be handed to inflate here.
+            // Same order as `Wad_Read`: equal sizes mean stored, and only then
+            // does bit 31 choose zlib or LZSS. Reversed, an entry with bit 31 set
+            // and equal sizes would reach inflate though the game reads it verbatim.
             let compression = if size_uncompressed == size {
                 Compression::None
             } else if size_out_raw & ZLIB_FLAG != 0 {
@@ -359,8 +311,7 @@ impl Directory {
 
     fn check_bounds(&self, archive_len: u64, directory_end: u64) -> Result<()> {
         for (index, entry) in self.entries.iter().enumerate() {
-            // A zero-size entry is legitimate: real archives contain them.
-            // Its offset still has to be sane.
+            // Zero-size entries are legitimate; the offset must still be sane.
             if entry.end() > archive_len {
                 return Err(Error::EntryOutOfBounds {
                     index,
@@ -407,15 +358,12 @@ impl Directory {
     }
 
     /// Checks the observed packing rule: each blob begins at the previous
-    /// blob's end rounded up to [`BLOB_ALIGNMENT`], and the first begins just
-    /// after the padded directory.
+    /// blob's end rounded up to [`BLOB_ALIGNMENT`], the first just after the
+    /// padded directory.
     ///
-    /// This is what pins down the field ordering, since no other assignment of
-    /// the four words produces a consistent chain. It is a diagnostic rather
-    /// than a validation: an archive that breaks it is interesting, not
-    /// invalid.
-    ///
-    /// Returns the indices of entries that break the rule.
+    /// This pins down the field ordering. A diagnostic, not a validation: a
+    /// breaking archive is interesting, not invalid. Returns the indices of
+    /// entries that break the rule.
     #[must_use]
     pub fn offset_chain_breaks(&self) -> Vec<usize> {
         let mut breaks = Vec::new();
@@ -424,8 +372,7 @@ impl Directory {
         for (index, entry) in self.entries.iter().enumerate() {
             if u64::from(entry.offset) != expected {
                 breaks.push(index);
-                // Resynchronise, so one anomaly does not report every
-                // subsequent entry as broken too.
+                // Resynchronise so one anomaly is not reported for every later entry.
                 expected = align_up(entry.end());
             } else {
                 expected = align_up(entry.end());
@@ -445,12 +392,9 @@ pub fn align_up(value: u64) -> u64 {
 
 /// Inflates a [`Compression::Zlib`] blob.
 ///
-/// A thin wrapper over `miniz_oxide`, the crate's one third-party dependency
-/// (see the crate docs) - kept here so a caller reaches it through this
-/// module like every other kind of compression, rather than depending on
-/// `miniz_oxide` directly. The error is a message rather than a typed error:
-/// `miniz_oxide`'s own error carries no more than its `Debug` output already
-/// says.
+/// A thin wrapper over `miniz_oxide`, the crate's one third-party dependency,
+/// so callers reach it through this module. The error is a message:
+/// `miniz_oxide`'s own carries no more than its `Debug` output.
 ///
 /// # Errors
 ///
@@ -464,15 +408,14 @@ const CRC32_POLY: u32 = 0xEDB8_8320;
 
 /// Hashes an entry name the way the game does.
 ///
-/// This is CRC-32 with the standard reflected polynomial, but **initialised to
-/// zero rather than `0xFFFFFFFF`**, so it is not `zlib`'s `crc32`. The name is
-/// normalised first: backslashes become forward slashes, and ASCII `A`-`Z` fold
-/// to lowercase. Bytes at or above `0x80` pass through unchanged, because the
-/// game's fold is driven by newlib's `_ctype_` table.
+/// CRC-32 with the standard reflected polynomial but **initialised to zero
+/// rather than `0xFFFFFFFF`**, so not `zlib`'s `crc32`. The name is normalised
+/// first: backslashes become forward slashes and ASCII `A`-`Z` fold to
+/// lowercase; bytes at or above `0x80` pass through (newlib's `_ctype_` table
+/// drives the game's fold).
 ///
-/// Recovered from `Wad_HashName` at `0x08940d0c` in the PSP `BOOT.BIN`, and
-/// verified against 176 real entries across four archives. See
-/// `docs/formats/wad.md`.
+/// Recovered from `Wad_HashName` at `0x08940d0c` in the PSP `BOOT.BIN`, verified
+/// against 176 real entries across four archives. See `docs/formats/wad.md`.
 ///
 /// ```
 /// use oag_formats::wad::hash_name;
@@ -486,10 +429,7 @@ pub fn hash_name(name: &str) -> u32 {
     hash_name_bytes(name.as_bytes())
 }
 
-/// As [`hash_name`], for a name that is not valid UTF-8.
-///
-/// Names on these discs are ASCII, but the game hashes bytes, so this is the
-/// honest signature.
+/// As [`hash_name`], for a name that is not valid UTF-8. The game hashes bytes.
 #[must_use]
 pub fn hash_name_bytes(name: &[u8]) -> u32 {
     let mut crc: u32 = 0;
@@ -508,9 +448,7 @@ pub fn hash_name_bytes(name: &[u8]) -> u32 {
 
 /// One byte of reflected CRC-32.
 ///
-/// Computed rather than table-driven. A 256-entry table would be faster, but
-/// hashing happens once per lookup on a handful of names, and the shift form is
-/// obviously the algorithm it claims to be.
+/// Computed, not table-driven: hashing is once per lookup on a handful of names.
 fn crc32_step(crc: u32, byte: u8) -> u32 {
     let mut v = (crc ^ u32::from(byte)) & 0xff;
     for _ in 0..8 {
@@ -525,10 +463,9 @@ fn crc32_step(crc: u32, byte: u8) -> u32 {
 
 /// The leading bytes of a blob.
 ///
-/// Blobs seen so far begin with a version byte followed by a three-character
-/// ASCII type code, for example `\x01FNT`. Whether that holds for every asset
-/// type is not yet established, so this reports what it sees rather than
-/// insisting on the pattern.
+/// Blobs seen begin with a version byte and a three-character ASCII type code,
+/// for example `\x01FNT`. Whether that holds for every asset type is not
+/// established, so this reports what it sees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Blob {
     /// The first byte, presumed a version.
@@ -576,33 +513,28 @@ impl Blob {
 /// What the PS2 build calls the texture a PSP name asks for, if the name is one
 /// it would rewrite.
 ///
-/// The two discs share their XML, their `.vex` models and their authored asset
-/// paths; what they do not share is the compiled texture container. The PS2
-/// build's texture resolver takes the declared name and **replaces the source
-/// art's extension with its own** before it hashes anything, so one name serves
-/// both pressings:
+/// The two discs share XML, `.vex` models and authored asset paths, not the
+/// compiled texture container. The PS2 texture resolver **replaces the source
+/// art's extension with its own** before hashing, so one name serves both:
 ///
 /// | Declared | PSP entry | PS2 entry |
 /// | --- | --- | --- |
 /// | `Data\Tex\engineFlare\Engine_noise.mip` | `008d70a2` | `e9f16c12` |
 ///
-/// `.tga` is rewritten as well as `.mip` - the executable's own table lists
-/// both - because a good many names in it are still the artist's source path.
-/// Anything else is left alone, which is why this returns [`None`] rather than
-/// a name: a `.vex` or a `.pob` is found under its declared name on both discs.
+/// `.tga` is rewritten as well as `.mip` (the executable's table lists both).
+/// Anything else returns [`None`]: a `.vex` or `.pob` is found under its
+/// declared name on both discs.
 ///
 /// # Where this comes from
 ///
-/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) canonicalises the name
-/// before hashing it: it strips a leading `WIPEOUT PSP\PS2\` build path, then
-/// replaces `.TGA` and then `.MIP` with `.PCT`, hashes the result with the WAD
-/// name hash, and looks it up. A name that resolves to no file is replaced
-/// wholesale with `Data/Tex/Missing.pct` - itself entry 6910 of `WADS2.WAD` -
-/// and retried, which is the game's own visible "texture not found".
+/// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) strips a leading
+/// `WIPEOUT PSP\PS2\` build path, replaces `.TGA` then `.MIP` with `.PCT`,
+/// hashes with the WAD name hash and looks it up. A name resolving to no file
+/// becomes `Data/Tex/Missing.pct` (entry 6910 of `WADS2.WAD`) and is retried.
 ///
 /// See `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`, and
-/// `oag_pulse::PS2_IMAGES` for the three entries that were found by their picture before
-/// the rule was known and now serve as its check.
+/// `oag_pulse::PS2_IMAGES` for the three entries found by their picture before
+/// the rule was known, which now check it.
 #[must_use]
 pub fn ps2_texture_name(name: &str) -> Option<String> {
     let (stem, extension) = name.rsplit_once('.')?;
@@ -613,17 +545,12 @@ pub fn ps2_texture_name(name: &str) -> Option<String> {
 /// The build-time path prefix `Texture_FindOrLoad` strips before it hashes a
 /// name, if present.
 ///
-/// A `Texture` node's own declared name is sometimes the artists' authoring
-/// path rather than the archive-relative one every other asset class uses.
+/// A `Texture` node's declared name is sometimes the artists' authoring path.
 /// `Texture_FindOrLoad` (`0x0010c1e0` in `SCES_547.48`) removes this one
-/// substring, wherever it occurs in the name, before doing anything else -
-/// see the pseudocode in
-/// `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`. The disc's own
-/// constant is spelled uppercase and matched there with a case-sensitive
-/// `strstr`; stripped case-insensitively here instead, since a name that
-/// varies only in case would otherwise resolve on one disc and not the
-/// other for no reason the format cares about, and [`hash_name`]
-/// downstream lower-cases everything anyway.
+/// substring wherever it occurs; see
+/// `docs/ghidra/functions/ps2-pulse-eu/texture-names.md`. The disc's constant
+/// is uppercase and matched with a case-sensitive `strstr`; stripped
+/// case-insensitively here, since [`hash_name`] lower-cases anyway.
 #[must_use]
 pub fn ps2_strip_build_prefix(name: &str) -> String {
     const PREFIX: &str = r"WIPEOUT PSP\PS2\";

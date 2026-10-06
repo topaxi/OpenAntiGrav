@@ -1,8 +1,6 @@
 //! `Table.P2`, `Table.P3`, `Table.A2`, `Table.A3a`, `Table.A3b` and the
-//! interpolation weight tables, transcribed verbatim from the Khronos
-//! `GL_ARB_texture_compression_bptc` extension specification's "Appendix:
-//! BPTC Compressed Texture Image Format" - see `bc7`'s own module doc for
-//! the exact source URL and what each table means.
+//! interpolation weight tables, verbatim from the Khronos BPTC spec; see `bc7`'s
+//! module doc for the source URL.
 
 /// Subset index (0 or 1) of each of a 4x4 block's 16 texels, one row per
 /// partition number, for a 2-subset mode.

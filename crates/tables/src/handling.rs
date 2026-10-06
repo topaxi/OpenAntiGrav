@@ -1,12 +1,10 @@
 //! `handlingstats.xml`: every ship-handling tunable the game reads at runtime.
 //!
-//! Ship handling in Pulse is **data, not code**. There is one file per team at
-//! `Data\Ships\<Team>\handlingstats.xml` inside `Data.wad`, and it carries the
-//! whole parameter set: five camera rigs, the airbrake animation, hull
-//! dimensions, the four front-end bars, and then one `<Class>` block per speed
-//! class holding engine, brakes, steering, airbrake, antigravity, mass and
-//! pitch. The physics code defines the *shape* of the model; these files supply
-//! every constant in it.
+//! Ship handling is **data, not code**: one file per team at
+//! `Data\Ships\<Team>\handlingstats.xml` in `Data.wad` holds the whole
+//! parameter set (five camera rigs, airbrake animation, hull dimensions, the
+//! four front-end bars, then one `<Class>` block per speed class). The physics
+//! code defines the *shape* of the model; these files supply every constant.
 //!
 //! ```text
 //! <Handling>
@@ -22,64 +20,48 @@
 //! </Handling>
 //! ```
 //!
-//! # There is a second file with the same root element
+//! # A second file with the same root element
 //!
-//! `Handling_ParseStats` (`0x0883a2f0`) has **two** callers, and they pass
-//! different files:
+//! `Handling_ParseStats` (`0x0883a2f0`) has **two** callers:
 //!
-//! - `0x088c291c` builds `%s\handlingstats.xml` per team - the schema above.
-//! - `0x0894f6a8` passes the literal [`GLOBAL_ENTRY`],
-//!   `Data\XML\HandlingStats.xml`, once at system-root creation.
+//! - `0x088c291c` builds `%s\handlingstats.xml` per team, the schema above.
+//! - `0x0894f6a8` passes [`GLOBAL_ENTRY`], `Data\XML\HandlingStats.xml`, once at
+//!   system-root creation.
 //!
-//! Both go through the same parser, which walks `<Handling>`'s children looking
-//! for `<Stats>` *and* for `<Global>`, handing the latter to
-//! `Xml_ReadGlobalSettings` (`0x0883a970`). `<Global>` carries engine-wide
-//! statics: Zone mode's speed law, the speed-pad and weapon-pad tunables,
-//! per-class gravity, the start boost and three camera pitch modifiers.
+//! The parser walks `<Handling>` for `<Stats>` *and* `<Global>` (handed to
+//! `Xml_ReadGlobalSettings`, `0x0883a970`), which carries engine-wide statics:
+//! Zone mode's speed law, speed-pad and weapon-pad tunables, per-class gravity,
+//! the start boost, three camera pitch modifiers.
 //!
-//! **Which file carries which is measured, not assumed.** The ground-truth test
-//! `which_top_level_elements_handlingstats_carries` reads all sixteen shipped
-//! per-team files - eight teams on each of the PSP and PS2 discs - and every one
-//! holds `<Stats>` and nothing else. So `<Global>` belongs to the global file
-//! alone, and [`parse`] does not look for it. [`global_from_blob`] reads it.
+//! **Measured**: `which_top_level_elements_handlingstats_carries` reads all
+//! sixteen per-team files (eight teams on each of PSP and PS2) and every one
+//! holds `<Stats>` only. So [`parse`] does not look for `<Global>`;
+//! [`global_from_blob`] does. Only `<Zone>`, and `<SpeedupPads>` and
+//! `<GravityMul>` under `<GlobalClass>`, are decoded; the rest is named on
+//! [`Global`] and `docs/ghidra/functions/psp-pulse-usa/engine.md`.
 //!
-//! Only the parts this project has a consumer for are decoded out of `<Global>`:
-//! `<Zone>`, and `<SpeedupPads>` and `<GravityMul>` under `<GlobalClass>`. The rest is named on
-//! [`Global`] and in `docs/ghidra/functions/psp-pulse-usa/engine.md`, and can be added
-//! when something needs it.
-//!
-//! The files are stored as [shortened XML](crate::fexml), so they go through
-//! [`fexml::expand`] before they can be read: [`from_blob`] does both steps and
-//! is what a caller holding an archive entry wants.
+//! The files are [shortened XML](crate::fexml); [`from_blob`] expands and parses.
 //!
 //! # Nothing here defaults
 //!
-//! Every element and every attribute the schema lists is **required**, and a
-//! missing one is an [`Error`] rather than a zero. This is the one design
-//! decision in the module worth arguing for: a `mass` that quietly arrived as
-//! `0.0` does not crash, it produces a ship that behaves oddly, and that reads
-//! as a tuning problem or a bug in the force law. It would be looked for in the
-//! wrong place for a long time. The same goes for `"nan"` and `"inf"`, which
-//! Rust's `f32` parser accepts quite happily, so non-finite values are rejected
-//! too.
+//! Every element and attribute the schema lists is **required**, and a missing
+//! one is an [`Error`], not a zero: a `mass` quietly arriving as `0.0` produces
+//! a ship that behaves oddly and reads as a tuning bug. `"nan"` and `"inf"`,
+//! which `f32`'s parser accepts, are rejected too.
 //!
-//! For the same reason the four `<Class>` blocks are collected into a
-//! fixed-length array indexed by [`SpeedClass`]: a fifth block, a duplicate, an
-//! unknown class name and a missing one are each a distinct error, and there is
-//! no map whose iteration order could reach the simulation.
+//! The `<Class>` blocks go into a fixed-length array indexed by [`SpeedClass`]:
+//! a fifth block, a duplicate, an unknown name and a missing one are each a
+//! distinct error, and no map iteration order can reach the simulation.
 //!
 //! # No values live here
 //!
 //! Per `docs/architecture/adr/0006-no-copyrighted-content.md` this module
-//! describes the schema only. The names of the fields are a description of the
-//! format; the numbers are the game's design data and are read at runtime from
-//! the player's own disc. The unit-test fixtures use obviously invented values
-//! for the same reason. **Pulse's own eight-team roster used to sit here
-//! too**, an ADR-0022 title fact rather than a format one, and moved to
-//! `oag_pulse::race::TEAMS` on 2026-09-01.
+//! describes the schema only; the numbers are read from the player's own disc,
+//! and test fixtures use invented values. Pulse's eight-team roster moved to
+//! `oag_pulse::race::TEAMS` (2026-09-01) as an ADR-0022 title fact.
 //!
-//! See `docs/formats/handling-stats.md` for the evidence and the confidence
-//! scores, and `oag_physics::Handling` for the subset the force law consumes.
+//! Evidence and confidence: `docs/formats/handling-stats.md`; the subset the
+//! force law consumes: `oag_physics::Handling`.
 
 use std::fmt;
 
@@ -94,24 +76,19 @@ pub use global::{
 
 /// The four speed classes, in the order the XML lists them.
 ///
-/// A separate type from `oag_physics::SpeedClass` for the same reason the
-/// parameter blocks are: this one describes the document, that one describes what
-/// the simulation consumes, and `oag-physics` depends on nothing but `oag-core`.
+/// Separate from `oag_physics::SpeedClass`: this describes the document, that
+/// the simulation's input, and `oag-physics` depends on `oag-core` alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpeedClass {
-    /// Slowest.
     Venom,
-    /// Second.
     Flash,
-    /// Third.
     Rapier,
-    /// Fastest.
     Phantom,
 }
 
 impl SpeedClass {
-    /// All four, slowest first. The position in this array is the discriminant,
-    /// which is what makes [`Stats::classes`] indexable by class.
+    /// All four, slowest first; the position is the discriminant, so
+    /// [`Stats::classes`] is indexable by class.
     pub const ALL: [Self; 4] = [Self::Venom, Self::Flash, Self::Rapier, Self::Phantom];
 
     /// The `name` attribute the XML uses.
@@ -152,21 +129,14 @@ pub enum Error {
     },
     /// A required attribute is absent. Never defaulted: see the module docs.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute that was looked for.
         attribute: &'static str,
     },
-    /// An attribute is present but is not a finite number.
-    ///
-    /// Covers both text that will not parse and text that parses to `NaN` or an
-    /// infinity, which `f32`'s parser accepts and the simulation must not see.
+    /// An attribute is present but not a finite number (unparseable, or `NaN`/
+    /// infinity, which the simulation must not see).
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute it was on.
         attribute: &'static str,
-        /// What was found, so the error names the offending text.
         value: String,
     },
     /// A `<Class name>` that is not one of the four speed classes.
@@ -238,7 +208,6 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 mod cameras;
@@ -247,23 +216,21 @@ mod names;
 pub use cameras::{AirbrakeGraphics, BonnetCamera, Camera, ExternalCamera};
 pub use names::{SHIP_DIR, entry_name, entry_name_in};
 
-/// Hull dimensions and the shield pool. `<Misc/>`.
-///
-/// Per ship rather than per speed class, so all four `<Class>` blocks share it.
+/// Hull dimensions and the shield pool. `<Misc/>`. Per ship, shared by all four
+/// `<Class>` blocks.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Misc {
     /// Hull height, and so the box half-extent used for contact generation.
     pub height: f32,
     /// Hull length. Also sets where the two hover probes sit.
     pub length: f32,
-    /// Shield pool. **A bulk default for all three difficulty slots**, not a
-    /// fourth value beside them - see [`Misc::shield_for`].
+    /// Shield pool. **A bulk default for all three difficulty slots**; see
+    /// [`Misc::shield_for`].
     pub shield: f32,
-    /// Shield pool on the easy skill level, overriding [`Self::shield`] for that
-    /// slot alone.
+    /// Shield pool on easy, overriding [`Self::shield`] for that slot.
     pub easyshield: Option<f32>,
-    /// Shield pool on the medium skill level. **No shipped file authors this**;
-    /// the PS2 parser accepts it, so the decoder does too.
+    /// Shield pool on medium. **No shipped file authors it**; the PS2 parser
+    /// accepts it, so this does.
     pub mediumshield: Option<f32>,
     /// Shield pool on the hard skill level. Also authored nowhere.
     pub hardshield: Option<f32>,
@@ -292,17 +259,14 @@ impl Misc {
 
     /// The pool for a skill level, `0` easy through `2` hard.
     ///
-    /// **Three slots, not two.** `HandlingXml_ParseMisc` (`0x0014db08` in the PS2
-    /// `SCES_547.48`) writes `easyshield`/`mediumshield`/`hardshield` to
-    /// `0x84`/`0x88`/`0x8c` on the stats base and plain `shield` to all three at
-    /// once, and the PSP's `Ship_SetShield` indexes exactly that range as
-    /// `0x84 + skill * 4`. A writer on one binary and a reader on the other,
-    /// which is what puts this at confidence 88 -
+    /// **Three slots, not two.** `HandlingXml_ParseMisc` (`0x0014db08` in PS2
+    /// `SCES_547.48`) writes the three to `0x84`/`0x88`/`0x8c` and plain `shield`
+    /// to all three; PSP `Ship_SetShield` indexes that range as `0x84 + skill *
+    /// 4`. Writer on one binary, reader on the other: confidence 88,
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     ///
-    /// Out-of-range skill levels clamp to hard rather than panicking: the index
-    /// comes from a race option, and the original reads three words whatever is
-    /// in it.
+    /// Out-of-range skill clamps to hard: the index comes from a race option and
+    /// the original reads three words whatever is in it.
     #[must_use]
     pub fn shield_for(&self, skill: u8) -> f32 {
         match skill {
@@ -313,24 +277,20 @@ impl Misc {
     }
 }
 
-/// Zone mode's speed law and its reward. `<Zone start increment recharge/>`.
+/// Zone mode's speed law and reward. `<Zone start increment recharge/>`.
 ///
-/// Lives under `<Handling><Global>`, beside `<Special>`, `<GlobalClass>` and
-/// `<StartBoost>` - a sibling of `<Stats>`, not a child of it. `Handling_ParseStats`
-/// (`0x0883a2f0`) dispatches the `<Global>` subtree to `Xml_ReadGlobalSettings`
-/// (`0x0883a970`), which is where these three attributes are read. Confidence
-/// **84**.
+/// Under `<Handling><Global>`, a sibling of `<Stats>`. `Handling_ParseStats`
+/// (`0x0883a2f0`) dispatches `<Global>` to `Xml_ReadGlobalSettings`
+/// (`0x0883a970`), where these are read. Confidence **84**.
 ///
-/// The two speed values land in `g_autospeed_base` (`0x08b36be0`) and
-/// `g_autospeed_step` (`0x08b36be4`), which `Ship_UpdateEngine`'s four-corner
-/// branch reads as `base + step * (float)(uint32)zone`. `recharge` goes to
-/// `0x08b34360` and is added to the shield when a zone is completed without
-/// touching anything.
+/// The speeds land in `g_autospeed_base` (`0x08b36be0`) and `g_autospeed_step`
+/// (`0x08b36be4`); `Ship_UpdateEngine`'s four-corner branch reads `base + step *
+/// (float)(uint32)zone`. `recharge` goes to `0x08b34360` and is added to the
+/// shield when a zone is completed without contact.
 ///
-/// **Global despite living in a per-team file.** All eight teams carry a copy;
-/// which one the game reads is whichever ship it happened to load. Nothing here
-/// makes the copies agree, and if they ever disagree that is a fact about the
-/// disc worth surfacing rather than averaging away.
+/// **Global despite living in a per-team file.** All eight teams carry a copy
+/// and nothing makes them agree; a disagreement is a fact worth surfacing, not
+/// averaging.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Zone {
     /// The target speed at zone zero.
@@ -356,18 +316,12 @@ impl Zone {
 
 /// The four bars on the ship-select screen. `<FE speed thrust handling shield/>`.
 ///
-/// **Presentation only.** They need not agree with the physics, and nothing in
-/// the simulation may read them: a ship whose bar says it is fast is not
-/// thereby fast.
+/// **Presentation only**: nothing in the simulation may read them.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Fe {
-    /// The speed bar.
     pub speed: f32,
-    /// The thrust bar.
     pub thrust: f32,
-    /// The handling bar.
     pub handling: f32,
-    /// The shield bar.
     pub shield: f32,
 }
 
@@ -465,10 +419,8 @@ impl Turning {
 
 /// Airbrake response. `<Airbrake amount drag falloff gain turn slidegrip sideshift/>`.
 ///
-/// All seven names were recovered twice independently, from this XML and from the
-/// parameter block at `+0xd8` in the PSP executable, which is what retired the
-/// three the static reading had left unresolved. Two sources agreeing on a set of
-/// names is much stronger than either alone.
+/// All seven names were recovered twice independently, from this XML and from
+/// the parameter block at `+0xd8` in the PSP executable.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Airbrake {
     /// A lateral force gain, **not** a drag, despite the name.
@@ -518,10 +470,8 @@ pub struct Antigrav {
     pub rebound: f32,
     /// Unused by the recovered force law; carried because the XML has it.
     pub rebound_jump_time: f32,
-    /// The raycast length for the hover probes.
-    ///
-    /// **Not a target height.** It never appears in the force law; the height the
-    /// ship settles at is emergent.
+    /// The raycast length for the hover probes. **Not a target height**: it
+    /// never appears in the force law; the settled height is emergent.
     pub ride_height: f32,
 }
 
@@ -544,9 +494,8 @@ impl Antigrav {
 /// Mass and the three gravity values.
 /// `<Physical flight_gravity mass normal_gravity track_gravity/>`.
 ///
-/// These four names were also recovered twice: the block at `+0xf8` in the PSP
-/// executable holds `normal_gravity`, `flight_gravity` and `track_gravity` in
-/// that order.
+/// Names also recovered twice: the PSP block at `+0xf8` holds `normal_gravity`,
+/// `flight_gravity`, `track_gravity` in that order.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Physical {
     /// Gravity applied while airborne.
@@ -555,8 +504,7 @@ pub struct Physical {
     pub mass: f32,
     /// Gravity along world down.
     pub normal_gravity: f32,
-    /// Gravity along the track's own up axis, which is what makes inversions
-    /// work.
+    /// Gravity along the track's own up axis, which makes inversions work.
     pub track_gravity: f32,
 }
 
@@ -576,10 +524,8 @@ impl Physical {
 
 /// Pitch response. `<pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>`.
 ///
-/// The element name is lower case on PSP, where every sibling is capitalised -
-/// and capitalised on PS2, which is the only element the two releases spell
-/// differently. Element lookup is case-insensitive, so that costs nothing, but it
-/// is worth knowing before searching an expanded file for one spelling.
+/// The element name is lower case on PSP and capitalised on PS2, the only
+/// element the releases spell differently. Lookup is case-insensitive.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Pitch {
     /// Pitch authority while airborne.
@@ -608,16 +554,14 @@ impl Pitch {
 
 /// One speed class's worth of tunables: a whole `<Class>` block.
 ///
-/// No longer `Copy`, because [`Self::raw_name`] has to carry a rung this
-/// project has no enum variant for: Pure ships a fifth class below Pulse's
-/// slowest, and dropping its name to keep the type `Copy` would throw away the
-/// one fact about it worth recording.
+/// Not `Copy`: [`Self::raw_name`] carries a rung with no enum variant (Pure
+/// ships a fifth class below Pulse's slowest).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Class {
     /// Which of Pulse's four this is, or `None` for a rung outside that ladder.
     pub name: Option<SpeedClass>,
-    /// The `name` attribute exactly as written, which is the only handle on a
-    /// rung [`SpeedClass`] cannot name.
+    /// The `name` attribute as written; the only handle on a rung [`SpeedClass`]
+    /// cannot name.
     pub raw_name: String,
     /// `<Engine/>`.
     pub engine: Engine,
@@ -633,19 +577,15 @@ pub struct Class {
     pub physical: Physical,
     /// `<pitch/>`, when the file authors one.
     ///
-    /// **`None` on Pure, which omits the element from every `<Class>` block on
-    /// both pressings** - enumerated with the rest of that title's schema delta
-    /// by `crates/pure/tests/handling_schema_ground_truth.rs`. The same shape as
-    /// [`Stats::fe`] and for the same reason: a block a file does not author is
-    /// a fact about that file, and `Option` is how this parser states it rather
-    /// than handing back a zeroed struct that reads like authored data.
+    /// **`None` on Pure, which omits it from every `<Class>` on both pressings**
+    /// (`crates/pure/tests/handling_schema_ground_truth.rs`). A block a file does
+    /// not author is a fact about that file; `Option` states it rather than
+    /// returning a zeroed struct that reads like authored data.
     ///
-    /// Unlike `fe`, this one is **not** presentation - it feeds
-    /// `oag_physics::Pitch`, so somebody has to decide what a ship with no
-    /// authored pitch response does. That decision is deliberately not made
-    /// here: `oag_gameplay::handling::handling_for` substitutes a stand-in and
-    /// says which, because picking a number is a claim about a *title* and this
-    /// crate must not make one. See [ADR-0022].
+    /// Unlike `fe`, this is **not** presentation: it feeds `oag_physics::Pitch`.
+    /// What a ship with no pitch does is not decided here:
+    /// `oag_gameplay::handling::handling_for` substitutes a stand-in and says
+    /// which, because a number is a claim about a *title*. See [ADR-0022].
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub pitch: Option<Pitch>,
@@ -674,9 +614,8 @@ impl Class {
             antigrav: Antigrav::from_node(child(node, Antigrav::ELEMENT)?)?,
             physical: Physical::from_node(child(node, Physical::ELEMENT)?)?,
             // Absent from every Pure `<Class>`. A *malformed* one still fails:
-            // `transpose` propagates a parse error and only a missing element
-            // becomes `None`, so a typo'd attribute cannot arrive here disguised
-            // as an older schema.
+            // `transpose` propagates a parse error, so a typo cannot pass as an
+            // older schema.
             pitch: node
                 .children_named(Pitch::ELEMENT)
                 .next()
@@ -707,64 +646,45 @@ pub struct Stats {
     pub misc: Misc,
     /// `<FE/>`: the ship-select bars, when the file has them.
     ///
-    /// `None` on Pure, which omits the element entirely. Presentation only, so
-    /// nothing in the simulation notices its absence.
-    ///
-    /// It was the fourth schema difference found, and the first one no survey
-    /// had predicted: it turned up by pointing the parser at a real Pure file,
-    /// which is the argument for `oag-pure` existing at all. Pure's whole
-    /// element set has since been enumerated in one pass against both discs -
-    /// see `docs/formats/pure-status.md` and
-    /// `crates/pure/tests/handling_schema_ground_truth.rs` - so this is now a
-    /// listed difference rather than a surprise.
+    /// `None` on Pure, which omits the element. Presentation only. Found by
+    /// pointing the parser at a real Pure file; the full delta is in
+    /// `docs/formats/pure-status.md` and
+    /// `crates/pure/tests/handling_schema_ground_truth.rs`.
     pub fe: Option<Fe>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
-    /// Look one up with [`Self::class`], which matches on the rung's own name;
-    /// indexing by `SpeedClass as usize` would find the wrong block in a file
-    /// whose ladder is not Pulse's.
+    /// Look one up with [`Self::class`], which matches on name; indexing by
+    /// `SpeedClass as usize` would pick the wrong block in a file whose ladder is
+    /// not Pulse's.
     ///
-    /// A `Vec` rather than a fixed array, and reluctantly: "exactly four, one
-    /// each" was a property of the type until Pure turned out to ship **five**
-    /// speed classes, one below Pulse's slowest (`docs/formats/pure-status.md`).
-    /// The ordering guarantee survives - it is built in ladder order and never
-    /// from a hasher - but the count is now the file's business rather than the
-    /// type's, so [`Self::class`] returns an `Option`.
-    ///
-    /// Every Pulse file still yields exactly four, which
-    /// [`Self::has_pulse_class_ladder`] states as a checkable claim rather than
-    /// an assumption.
+    /// A `Vec` because Pure ships **five** classes, one below Pulse's slowest
+    /// (`docs/formats/pure-status.md`). Order is built in ladder order, never
+    /// from a hasher; the count is the file's business, so [`Self::class`]
+    /// returns an `Option`. Every Pulse file yields four, checkable with
+    /// [`Self::has_pulse_class_ladder`].
     pub classes: Vec<Class>,
 }
 
 impl Stats {
     /// The block for one of Pulse's four speed classes, if this file has it.
     ///
-    /// `None` where the file's ladder does not reach that far, which is not a
-    /// defect: a schema with a different ladder is a different generation of the
-    /// format, not a broken file.
+    /// `None` where the ladder does not reach that far: a different generation
+    /// of the format, not a broken file.
     #[must_use]
     pub fn class(&self, class: SpeedClass) -> Option<&Class> {
         self.classes.iter().find(|block| block.name == Some(class))
     }
 
-    /// The block for a rung named the way the document spells it, matched
-    /// case-insensitively.
+    /// The block for a rung named as the document spells it, case-insensitively.
     ///
-    /// The lookup for a ladder that is not Pulse's. [`Self::class`] can only ask
-    /// for a rung [`SpeedClass`] has a variant for, and Pure authors one it does
-    /// not: `VECTOR`, below `VENOM`, in every race team's file. That block is
-    /// parsed and kept - see [`Class::raw_name`] - and this is how it is
-    /// reached.
+    /// For ladders that are not Pulse's: [`Self::class`] cannot ask for Pure's
+    /// `VECTOR` (below `VENOM`, in every race team's file), which is parsed and
+    /// kept (see [`Class::raw_name`]). It answers for Pulse's four identically,
+    /// since [`Class::from_node`] writes the canonical [`SpeedClass::as_str`]
+    /// spelling into `raw_name`.
     ///
-    /// It answers for Pulse's four identically to [`Self::class`], because
-    /// [`Class::from_node`] writes the canonical [`SpeedClass::as_str`] spelling
-    /// into `raw_name` rather than the document's literal one. So a caller
-    /// holding nothing but a name never has to know whether the rung is one of
-    /// the four.
-    ///
-    /// `None` means **this file does not author that rung**. It is not an
-    /// invitation to fall back on a neighbouring one.
+    /// `None` means **this file does not author that rung**, not an invitation to
+    /// fall back on a neighbour.
     #[must_use]
     pub fn class_named(&self, name: &str) -> Option<&Class> {
         self.classes
@@ -772,11 +692,9 @@ impl Stats {
             .find(|block| block.raw_name.eq_ignore_ascii_case(name))
     }
 
-    /// The rungs this file authors, in ladder order, as a readable list.
-    ///
-    /// For the one thing a caller does when [`Self::class_named`] returns
-    /// `None`: say what the file *does* carry. A message naming only the rung
-    /// that was missing sends the reader to the wrong file.
+    /// The rungs this file authors, in ladder order, as a readable list, for
+    /// when [`Self::class_named`] returns `None`: a message naming only the
+    /// missing rung sends the reader to the wrong file.
     #[must_use]
     pub fn ladder(&self) -> String {
         self.classes
@@ -786,20 +704,16 @@ impl Stats {
             .join(", ")
     }
 
-    /// Whether this file carries exactly Pulse's four-class ladder.
-    ///
-    /// Every shipped Pulse `handlingstats.xml` does. Pure's do not - they carry
-    /// five, the extra one below `Venom`.
+    /// Whether this file carries exactly Pulse's four-class ladder (every Pulse
+    /// file does; Pure's carry five).
     #[must_use]
     pub fn has_pulse_class_ladder(&self) -> bool {
         self.classes.len() == SpeedClass::ALL.len()
     }
 }
 
-/// Reads an **already expanded** `handlingstats.xml`.
-///
-/// Use [`from_blob`] for bytes straight out of an archive; those are shortened
-/// and this would not find a single element.
+/// Reads an **already expanded** `handlingstats.xml`; use [`from_blob`] for raw
+/// archive bytes.
 pub fn parse(expanded: &str) -> Result<Stats> {
     let root = fexml::parse(expanded);
     let handling = descendant(&root, "Handling").ok_or(Error::MissingElement {
@@ -837,21 +751,12 @@ pub fn parse(expanded: &str) -> Result<Stats> {
     })
 }
 
-/// Reads an archive blob, expanding it first if it needs it.
+/// Reads an archive blob, expanding it first if needed.
 ///
-/// The two shipped releases store this file differently and both are handled
-/// here, because which one a caller is holding is a property of the disc rather
-/// than of the caller:
-///
-/// - **PSP** stores it as [shortened XML](crate::fexml) with a per-file `<code>`
-///   dictionary, which has to be expanded before a single element name is
-///   recognisable.
-/// - **PS2** stores it as plain text beginning `<?xml`, and expanding that would
-///   fail for want of a dictionary.
-///
-/// The leading bytes say which, per `docs/formats/fexml.md`, so the dispatch is
-/// [`fexml::is_fexml`] rather than a flag the caller has to pass and can get
-/// wrong.
+/// PSP stores the file as [shortened XML](crate::fexml) with a per-file `<code>`
+/// dictionary; PS2 stores plain text beginning `<?xml`, which expanding would
+/// fail on. [`fexml::is_fexml`] tells them apart from the leading bytes
+/// (`docs/formats/fexml.md`), so callers pass no flag.
 pub fn from_blob(data: &[u8]) -> Result<Stats> {
     if fexml::is_fexml(data) {
         parse(&fexml::expand(data)?)
@@ -860,17 +765,12 @@ pub fn from_blob(data: &[u8]) -> Result<Stats> {
     }
 }
 
-/// Collects the four `<Class>` blocks into an array indexed by [`SpeedClass`].
-///
-/// One pass over the blocks the document actually has, which is what lets an
-/// extra block, a duplicate and an unknown name each be caught. Looking the four
-/// names up instead would silently ignore all three.
+/// Collects the `<Class>` blocks, one pass over what the document has, so an
+/// extra block, a duplicate and an unknown name are each caught.
 fn classes(stats: &Node) -> Result<Vec<Class>> {
     let mut found: [Option<Class>; 4] = [None, None, None, None];
     // Blocks whose `name` is not one of Pulse's four. Pure's fifth class lives
-    // here rather than being rejected: an unrecognised rung is a different
-    // ladder, not a corrupt file, and `UnknownClass` was previously the reason
-    // this parser refused Pure's `handlingstats.xml` outright.
+    // here: an unrecognised rung is a different ladder, not a corrupt file.
     let mut extra: Vec<Class> = Vec::new();
 
     for node in stats.children_named(Class::ELEMENT) {
@@ -891,8 +791,8 @@ fn classes(stats: &Node) -> Result<Vec<Class>> {
         *slot = Some(Class::from_node(class, node)?);
     }
 
-    // A file that names *some* of Pulse's ladder must name all of it; a file
-    // that names none of it is another generation's ladder and is kept whole.
+    // A file naming *some* of Pulse's ladder must name all of it; one naming
+    // none is another generation's ladder and is kept whole.
     let named = found.iter().filter(|slot| slot.is_some()).count();
     if named == 0 {
         return Ok(extra);
@@ -908,8 +808,8 @@ fn classes(stats: &Node) -> Result<Vec<Class>> {
         .into_iter()
         .map(|class| class.expect("every slot filled above"))
         .collect();
-    // The extra rungs sit after the recognised ladder, so `SpeedClass`'s
-    // discriminant stays a valid index into the front of the vector.
+    // Extra rungs follow the recognised ladder so `SpeedClass`'s discriminant
+    // stays a valid index into the front.
     out.extend(extra);
     Ok(out)
 }
@@ -924,9 +824,8 @@ fn child<'a>(parent: &'a Node, element: &'static str) -> Result<&'a Node> {
 
 /// The first element with this name anywhere in the tree.
 ///
-/// Needed because [`fexml::parse`] returns a synthetic `#document` root and the
-/// real files have been seen with and without a wrapping element around
-/// `<Handling>`.
+/// [`fexml::parse`] returns a synthetic `#document` root, and real files have
+/// been seen with and without a wrapper around `<Handling>`.
 fn descendant<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
     if node.name.eq_ignore_ascii_case(name) {
         return Some(node);
@@ -934,17 +833,11 @@ fn descendant<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
     node.children.iter().find_map(|c| descendant(c, name))
 }
 
-/// Reads one attribute as a finite `f32`.
-///
-/// `f32`'s parser accepts `"nan"` and `"inf"`, both of which would propagate
-/// silently through the whole simulation, so they are rejected here rather than
-/// found later in a state hash that will not reproduce.
 /// An attribute a *later* schema added, so its absence is a fact about the
-/// file's generation rather than a defect in it.
+/// file's generation, not a defect.
 ///
-/// `Ok(None)` only for an attribute that is not there at all. A present but
-/// unparseable value is still an error: "Pure does not have this field" and
-/// "this number is broken" must not collapse into one answer.
+/// `Ok(None)` only when the attribute is absent; a present unparseable value is
+/// still an error.
 fn optional_number(
     node: &Node,
     element: &'static str,
@@ -956,6 +849,8 @@ fn optional_number(
     number(node, element, attribute).map(Some)
 }
 
+/// Reads one attribute as a finite `f32`. `"nan"` and `"inf"` parse but are
+/// rejected, or they would surface later as a state hash that will not reproduce.
 fn number(node: &Node, element: &'static str, attribute: &'static str) -> Result<f32> {
     let raw = node
         .value(attribute)

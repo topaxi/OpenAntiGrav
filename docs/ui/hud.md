@@ -592,9 +592,12 @@ pair of the 26 code-only keys; the other 25 are not read.
   original's outline reads crisper and darker than 25 % alpha produces. Measuring
   it off the frame is the fix; opaque black is the obvious candidate.
   **Tried 2026-10-06 and refuted**: an opaque outline fills the digits with
-  black halos the original does not show; the likelier gap is the glyph quad
-  clipped to its metric box, cutting the baked halo and ignoring
-  `borderExtendPixels` - see [hud-skins.md](hud-skins.md#a-why-pulses-hud-text-reads-poorly).
+  black halos the original does not show; the gap was the glyph quad clipped
+  to its metric box. **Fixed 2026-10-06**: the quad now draws the authored
+  `borderExtendPixels` and the halo closes about 43 % of the measured gap -
+  see [hud-skins.md part D](hud-skins.md#d-what-was-built-2026-10-06-hud-crisp-lane).
+  `[graphics] hud_scale` (default `sharp-bilinear`) is the other half, for the
+  raster HUDs.
 - **`TotalTime` overflows the right edge.** `align="left"` at `OffsetX="475"
   x="-75"` starts at 400, and a `HUD`-font time at scale 1.0 measures 92 px - 12 px
   past the 480-wide screen. Tenths rather than hundredths narrows it but not

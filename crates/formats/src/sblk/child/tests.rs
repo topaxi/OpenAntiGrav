@@ -1,8 +1,5 @@
-//! Hardware-free tests for the child-sound grain.
-//!
-//! Every bank here is assembled byte by byte, so nothing needs game content.
-//! The corpus half - 1,153 indexed children and 300 named ones across the five
-//! PSP/PS2 discs and Wipeout HD - is
+//! Hardware-free tests for the child-sound grain, every bank assembled byte by
+//! byte. The corpus half (1,153 indexed and 300 named children) is
 //! `crates/formats/tests/sblk_child_ground_truth.rs`.
 
 use crate::sblk::{
@@ -26,10 +23,9 @@ enum Grain {
 struct Spec(&'static str, Vec<Grain>);
 
 /// Assembles a bank whose cues own contiguous runs of the command table.
-///
-/// The records all sit at a [`CHILD_RECORD_LEN`] stride, which a waveform
-/// descriptor fits inside; the two kinds are told apart by the opcode that
-/// reaches them, exactly as they are on disc.
+/// Assembles a bank whose cues own contiguous runs of the command table.
+/// Records sit at a [`CHILD_RECORD_LEN`] stride a waveform descriptor fits
+/// inside; the opcode that reaches them tells the two kinds apart, as on disc.
 fn build(specs: &[Spec]) -> Vec<u8> {
     let cues = u16::try_from(specs.len()).expect("few cues");
     let grains: usize = specs.iter().map(|s| s.1.len()).sum();
@@ -135,8 +131,7 @@ fn a_parent_binds_nothing_of_its_own_and_names_its_children() {
     let bank = Bank::parse(&data).expect("parse");
     let parent = bank.cue_named(".PARENT").expect("the parent");
 
-    // The whole reason this module exists: the cue plays, owns grains, and
-    // `cue_sounds` is still empty.
+    // The cue plays and owns grains, yet `cue_sounds` is empty.
     assert!(parent.plays());
     assert_eq!(parent.commands, 2);
     assert!(bank.cue_sounds(&parent).is_empty());
@@ -149,7 +144,7 @@ fn a_parent_binds_nothing_of_its_own_and_names_its_children() {
     assert_eq!(children[1].cue, None);
     assert_eq!(children[1].name, "LEAF_TWO");
     assert!(children[1].is_named());
-    // Both forms carry the record's volume, which is the same field either way.
+    // Both forms carry the record's volume, the same field either way.
     assert!(children.iter().all(|c| c.volume == 0x7f));
     assert!(children.iter().all(super::Child::is_resolvable));
 }
@@ -162,8 +157,7 @@ fn the_tree_walk_reaches_both_leaves_in_command_order() {
 
     let sounds = bank.cue_tree_sounds(&parent);
     assert_eq!(sounds.len(), 2);
-    // Sorted by command index, so the two orders a frontier could pop them in
-    // cannot change what a caller sees.
+    // Sorted by command index, so the frontier's pop order cannot show.
     assert!(sounds[0].command < sounds[1].command);
     assert_eq!(sounds[0].offset, 0);
     assert_eq!(sounds[1].offset, 16);
@@ -171,9 +165,8 @@ fn the_tree_walk_reaches_both_leaves_in_command_order() {
 
 #[test]
 fn a_leaf_walks_to_exactly_what_it_binds_itself() {
-    // The property that makes `cue_tree_sounds` safe to use everywhere: on the
-    // PSP, PS2 and Pure discs no wired cue has children, so it must be
-    // `cue_sounds` for them rather than merely usually agreeing with it.
+    // On PSP, PS2 and Pure no wired cue has children, so this must equal
+    // `cue_sounds` there, not merely usually agree.
     let data = collisions();
     let bank = Bank::parse(&data).expect("parse");
     for name in ["LEAF_ONE", "LEAF_TWO"] {
@@ -185,8 +178,7 @@ fn a_leaf_walks_to_exactly_what_it_binds_itself() {
 
 #[test]
 fn a_cycle_terminates_and_yields_each_waveform_once() {
-    // Nothing on any disc does this. It is data off a disc, though, and a walk
-    // that trusted it not to would hang rather than fail.
+    // Nothing on any disc does this, but a walk trusting that would hang.
     let data = build(&[
         Spec("A", vec![Grain::KeyOn(0, 16), Grain::ByIndex(1)]),
         Spec("B", vec![Grain::KeyOn(16, 16), Grain::ByIndex(0)]),
@@ -212,9 +204,8 @@ fn a_diamond_yields_its_shared_leaf_once() {
 
 #[test]
 fn an_index_past_the_cue_table_is_dropped_rather_than_carried() {
-    // `weapons_det.bnk` on the Wipeout HD disc holds index 65 in a 55-cue bank,
-    // which is what SCREAM's "snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d"
-    // exists to print about.
+    // `weapons_det.bnk` on HD holds index 65 in a 55-cue bank, what SCREAM's
+    // "snd_SFX_GRAIN_TYPE_BRANCH invalid sound index %d" prints about.
     let data = build(&[
         Spec("ROOT", vec![Grain::ByIndex(99)]),
         Spec("LEAF", vec![Grain::KeyOn(0, 16)]),
@@ -232,10 +223,8 @@ fn an_index_past_the_cue_table_is_dropped_rather_than_carried() {
 
 #[test]
 fn a_name_this_bank_does_not_hold_resolves_to_nothing() {
-    // One grain on the Wipeout HD disc reaches across banks: `env0_det.bnk`
-    // asks for ".COLLISIONS", which lives in `shiphd.bnk`. Silence here rather
-    // than an error, because the record is well formed and the runtime would
-    // have found it.
+    // `env0_det.bnk` asks for ".COLLISIONS", which lives in `shiphd.bnk`.
+    // Silence, not an error: the record is well formed.
     let data = build(&[
         Spec("ROOT", vec![Grain::ByName("SOMEWHERE_ELSE")]),
         Spec("LEAF", vec![Grain::KeyOn(0, 16)]),
@@ -264,17 +253,16 @@ fn the_walk_stops_at_the_depth_cap() {
     let data = build(&specs);
     let bank = Bank::parse(&data).expect("parse");
     let root = bank.cue(0).expect("the root");
-    // Depth 0 through MAX inclusive is MAX + 1 cues; the one past it is not
+    // Depth 0 through MAX inclusive is MAX + 1 cues; the one past is not
     // visited, so its key-on is not collected.
     assert_eq!(bank.cue_tree_sounds(&root).len(), MAX_CHILD_DEPTH + 1);
 }
 
 #[test]
 fn a_record_carrying_both_an_index_and_a_name_is_reported_as_both() {
-    // The corpus assertion is "no record carries both forms", and a parser
-    // that derived the name from "the index did not resolve" would make that
-    // unfalsifiable. This is the case the ground-truth test looks for, so it
-    // has to be one this reader can express.
+    // The corpus assertion is "no record carries both forms"; deriving the name
+    // from "the index did not resolve" would make that unfalsifiable, so this
+    // reader has to be able to express the case.
     let mut data = build(&[
         Spec("ROOT", vec![Grain::ByIndex(1)]),
         Spec("LEAF", vec![Grain::KeyOn(0, 16)]),
@@ -290,16 +278,15 @@ fn a_record_carrying_both_an_index_and_a_name_is_reported_as_both() {
     assert_eq!(children[0].cue, Some(1), "the index is still read");
     assert_eq!(children[0].name, "BOTH", "the name is read independently");
     assert!(children[0].is_both());
-    // The index wins, which is what the runtime's own load-time fixup leaves
-    // behind: it is the resolved form, and the name is what it resolved from.
+    // The index wins, as the runtime's load-time fixup leaves it: the resolved
+    // form, with the name what it resolved from.
     assert_eq!(bank.resolve_child(&children[0]).map(|c| c.index), Some(1));
 }
 
 #[test]
 fn an_out_of_range_index_is_not_mistaken_for_a_named_child() {
-    // `weapons_det.bnk` holds index 65 in a 55-cue bank. Folding "the index
-    // did not resolve" into "so read the name" would have made that grain
-    // arrive looking like a named child of whatever the name field held.
+    // Folding "the index did not resolve" into "read the name" would make this
+    // grain look like a named child of whatever the name field held.
     let data = build(&[
         Spec("ROOT", vec![Grain::ByIndex(99)]),
         Spec("LEAF", vec![Grain::KeyOn(0, 16)]),

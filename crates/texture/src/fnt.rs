@@ -19,34 +19,26 @@
 //!
 //! # Wipeout HD writes the same layout big-endian
 //!
-//! Every field above, the glyph records and the atlas header included, with
-//! nothing moved and nothing resized. The first four bytes are one `u32`
-//! constant written in the file's own order - `\x01FNT` on the PSP and PS2,
-//! `TNF\x01` on the PS3 - so [`byte_order`] sniffs it and no caller passes a
-//! platform in, exactly as `oag_vex::vex::byte_order` does.
+//! Every field above, the glyph records and atlas header included, with nothing
+//! moved. The first four bytes are one `u32` constant in the file's own order
+//! (`\x01FNT` on PSP and PS2, `TNF\x01` on PS3), so [`byte_order`] sniffs it
+//! and no caller passes a platform in, as `oag_vex::vex::byte_order` does.
 //!
-//! This is not a word swap, and the distinction is checkable: HD's codepoint
-//! table reads `00 20 00 21 00 22` - ascending as big-endian `u16`s, where a
-//! swapped little-endian file would give `00 21 00 20`. Every offset in
-//! `pulsehud.fnt` closes on that reading and on no other: the offset table at
-//! `0x30 + 166*2 = 0x17c`, the atlas at `0x17c + 166*4 + 166*18 = 0xfc0`, and
-//! the file's last byte at `0xfc0 + 64 + 64 + 2048*1024/2`.
+//! This is not a word swap: HD's codepoint table reads `00 20 00 21 00 22`,
+//! ascending as big-endian `u16`s, and every offset in `pulsehud.fnt` closes on
+//! that reading (`docs/formats/fnt.md`). Two HD atlas traits that are *not* byte
+//! order and would each be a silently wrong picture:
 //!
-//! Two things about HD's atlases that are *not* byte order, and would each be a
-//! silently wrong picture:
+//! - **`flags` is 0**, so the texels are linear. The unswizzle keys on the bit,
+//!   not on a console, so it skips itself.
+//! - **The palette's alpha is full-range 0-255** (`0xd9`, `0xf6`, `0xfe`), so the
+//!   PS2's 0-128 doubling in `oag_assets::Archives::read_font` must not reach
+//!   it. It cannot: that is the no-embedded-atlas branch.
 //!
-//! - **`flags` is 0**, so the texels are linear. The unswizzle below already
-//!   keys on the bit rather than on a console, so it skips itself.
-//! - **The palette's alpha is full-range 0-255** - `0xd9`, `0xf6`, `0xfe` all
-//!   appear - so the PS2's 0-128 doubling in `oag_assets::Archives::read_font`
-//!   must not reach it. It cannot: that is the no-embedded-atlas branch and
-//!   HD's atlas is embedded.
+//! # The atlas header is 64 bytes
 //!
-//! # The atlas header is 64 bytes, and that was the whole problem
-//!
-//! It is not a [`crate::texture`] `.mip` header. It is the same **`Texture`
-//! node payload** a `oag_vex::vex` model embeds, and the data does not start
-//! until `+0x40`:
+//! It is not a [`crate::texture`] `.mip` header but the same **`Texture` node
+//! payload** a `oag_vex::vex` model embeds; data starts at `+0x40`:
 //!
 //! ```text
 //! +0x00  u16   width
@@ -64,43 +56,30 @@
 //! +0x80  texels
 //! ```
 //!
-//! Reading the palette at `+0x10` and the texels at `+0x50`, as a `.mip` header
-//! would imply, puts both 48 bytes early. The palette then comes out with 12 of
-//! its 16 entries fully transparent - which is the tell, because no font can be
-//! drawn with that - and the texels come out shifted by 96 pixels, which no
-//! amount of sweeping block geometries can undo. Read at `+0x40` and `+0x80`
-//! the palette is a clean 16-level alpha ramp and the atlas is a font.
+//! A `.mip` reading (palette `+0x10`, texels `+0x50`) is 48 bytes early: 12 of 16
+//! palette entries come out transparent. At `+0x40`/`+0x80` it is a clean 16-level
+//! alpha ramp.
 //!
 //! # The texels are stored already swizzled
 //!
 //! `Texture_SwizzleForGe` (`0x08926da8` in the PSP executable) converts a linear
 //! image into the GE's 16-byte by 8-row block layout, and
 //! `Texture_BindEmbeddedData` calls it **only when bit 0 of `flags` is clear**,
-//! setting the bit afterwards. Every font atlas ships with that bit already set,
-//! so the game skips the conversion: the file holds swizzled data and a reader
-//! has to undo it. The same bit lives at `+0x07` of a standalone
-//! [`.mip`](crate::texture) header, where it is set on 6 of the 13 in `FE.wad`.
+//! setting the bit afterwards. Every font atlas ships with the bit set, so the
+//! file holds swizzled data and a reader must undo it. The same bit is at `+0x07`
+//! of a standalone [`.mip`](crate::texture) header, set on 6 of the 13 in
+//! `FE.wad`.
 //!
 //! # 4bpp packs the left pixel in the low nibble
 //!
-//! The same order as [`crate::texture`], confirmed the same way: the one 4bpp
-//! `.mip` on the disc is a smooth hexagon read low-nibble-first and a combed one
-//! read the other way.
+//! As in [`crate::texture`]: the one 4bpp `.mip` on the disc is a smooth hexagon
+//! read low-nibble-first and a combed one read the other way.
 //!
-//! **Byte order does not change it, and that was measured rather than assumed** -
-//! a nibble is not a byte, and a big-endian file has no obligation to reverse
-//! them. The test is each glyph's own box: the column left of `u0` and the
-//! column at `u1` should hold no ink. Over HD's three Latin faces:
-//!
-//! | font | low nibble first | high nibble first |
-//! | --- | ---: | ---: |
-//! | `helv.fnt` (242 boxes) | **0** spilt rows | 2,808 |
-//! | `pulsehud.fnt` (164 boxes) | **0** spilt rows | 5,490 |
-//! | `small.fnt` (164 boxes) | **0** spilt rows | 1,776 |
-//!
-//! Eyeballing the sheet does not settle this on its own: a one-pixel horizontal
-//! pair swap still reads as a font at a glance, which is why the boxes are the
-//! test and the picture is only the sanity check.
+//! **Byte order does not change it (measured).** Each glyph's box must hold no ink
+//! in the column left of `u0` or at `u1`: HD's three Latin faces spill **0** rows
+//! low-nibble-first against 1,776 to 5,490 the other way (table in
+//! `docs/formats/fnt.md`). A one-pixel pair swap still reads as a font, so the
+//! boxes are the test.
 
 /// Bytes of file header before the codepoint table.
 pub const HEADER_LEN: usize = 0x30;
@@ -216,8 +195,7 @@ pub struct Glyph {
     pub u1: u16,
     /// Top edge in the atlas.
     ///
-    /// Shared by every glyph on the same atlas row rather than tight to the
-    /// ink, unlike the horizontal pair.
+    /// Shared by every glyph on the same atlas row, unlike the horizontal pair.
     pub v0: u16,
     /// Bottom edge, exclusive.
     pub v1: u16,
@@ -246,10 +224,9 @@ pub struct Font {
 
 /// Which way round this `.fnt` is written, or `None` if it is not one.
 ///
-/// The first four bytes are one `u32` constant written in the file's own order:
-/// `\x01FNT` little-endian, `TNF\x01` big-endian. Nothing else is consulted -
-/// the same rule `oag_vex::vex::byte_order` follows, and the
-/// reason no caller passes a platform in.
+/// The first four bytes are one `u32` constant in the file's own order:
+/// `\x01FNT` little-endian, `TNF\x01` big-endian. Nothing else is consulted,
+/// as in `oag_vex::vex::byte_order`.
 #[must_use]
 pub fn byte_order(data: &[u8]) -> Option<ByteOrder> {
     let head = data.get(..4)?;
@@ -270,14 +247,13 @@ pub fn looks_like_font(data: &[u8]) -> bool {
 
 /// The metrics half of a `.fnt`: everything but the pixels.
 ///
-/// Split out because the PS2 build ships exactly this and keeps its atlas
-/// somewhere else - see [`Font::with_atlas`].
+/// The PS2 build ships exactly this and keeps its atlas elsewhere; see
+/// [`Font::with_atlas`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Metrics {
     /// Which way round the file is written, from its own magic.
     ///
-    /// Carried rather than re-sniffed because the atlas header shares it and
-    /// has no magic of its own to ask.
+    /// Kept because the atlas header shares it and has no magic of its own.
     pub order: ByteOrder,
     /// Distance between baselines, in pixels.
     pub line_height: u32,
@@ -291,13 +267,12 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    /// Parses the header, the codepoint table and the glyph records, and stops
-    /// before the atlas.
+    /// Parses the header, codepoint table and glyph records, stopping before the atlas.
     ///
     /// # Errors
     ///
-    /// Fails when the magic is wrong, a declared table runs past the end, or a
-    /// glyph record's box disagrees with its declared size.
+    /// The magic is wrong, a declared table runs past the end, or a glyph
+    /// record's box disagrees with its declared size.
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < HEADER_LEN {
             return Err(Error::TooShort { got: data.len() });
@@ -322,9 +297,7 @@ impl Metrics {
 
         let mut glyphs = Vec::with_capacity(count);
         for index in 0..count {
-            // A terminating 0x0000 is present in three of the five fonts and
-            // has no record behind it, so it ends the list rather than being
-            // an error.
+            // A terminating 0x0000 (three of five fonts) has no record behind it.
             if order.u16(codepoints, index * 2) == 0 {
                 break;
             }
@@ -340,8 +313,7 @@ impl Metrics {
                 v1: order.u16(record, 10),
                 advance: record[12],
             };
-            // The box and the size are stored separately, so they agree or this
-            // is not a glyph record.
+            // Box and size are stored separately; they must agree.
             if u16::from(glyph.width) != glyph.u1.wrapping_sub(glyph.u0)
                 || u16::from(glyph.height) != glyph.v1.wrapping_sub(glyph.v0)
             {
@@ -396,9 +368,8 @@ impl Font {
         if atlas.len() < ATLAS_HEADER_LEN {
             return Err(Error::TooShort { got: atlas.len() });
         }
-        // The atlas header has no magic of its own, so it inherits the order
-        // the file's did. Its three size fields close on each other below,
-        // which is what proves the inheritance right rather than assumed.
+        // The atlas header inherits the file's byte order; its size fields
+        // closing on each other below proves it.
         let width = order.u16(atlas, 0);
         let height = order.u16(atlas, 2);
         let bits_per_pixel = atlas[4];
@@ -411,8 +382,7 @@ impl Font {
         }
         let pixels = usize::from(width) * usize::from(height);
         let expected = ATLAS_HEADER_LEN + clut_size + texel_size;
-        // The block closes exactly, with no padding. That is what pins the
-        // header at 64 bytes rather than 16.
+        // The block closes exactly with no padding, which pins the header at 64 bytes.
         if texel_size != pixels / 2 || clut_size != 4 << bits_per_pixel || atlas.len() != expected {
             return Err(Error::AtlasSizeMismatch {
                 expected,
@@ -430,10 +400,9 @@ impl Font {
         let linear = if flags & FLAG_SWIZZLED == 0 {
             texels.to_vec()
         } else {
-            // The block walk only covers whole 16-byte columns and whole 8-row
-            // bands. Every shipped atlas is 256 or 512 wide by 128 or 256 tall,
-            // so this never fires; refusing beats returning wrong pixels
-            // silently, which is the same call `texture` makes for odd 4bpp.
+            // The walk covers whole 16-byte columns and 8-row bands. Shipped atlases
+            // are 256 or 512 by 128 or 256, so this never fires; refusing beats
+            // wrong pixels, as `texture` does for odd 4bpp.
             if row_bytes % SWIZZLE_BLOCK_BYTES != 0 || usize::from(height) % SWIZZLE_BLOCK_ROWS != 0
             {
                 return Err(Error::UnswizzleableAtlas { width, height });
@@ -459,22 +428,19 @@ impl Font {
         })
     }
 
-    /// Builds a font from metrics that carry no pixels and an atlas read from
-    /// somewhere else.
+    /// Builds a font from metrics with no pixels and an atlas read elsewhere.
     ///
     /// This is the PS2 build: its `.fnt` ends where the atlas would start and
-    /// the glyph sheet is its own archive entry, a
-    /// [`PSMT4`](crate::ps2_texture::Layout::Psmt4) texture. `indices` is one
-    /// palette index per pixel in raster order and `palette` is RGBA8888.
+    /// the glyph sheet is its own [`PSMT4`](crate::ps2_texture::Layout::Psmt4)
+    /// archive entry. `indices` is one palette index per pixel in raster order,
+    /// `palette` is RGBA8888.
     ///
     /// # Alpha is the caller's to normalise
     ///
-    /// A [`crate::ps2_texture`] palette keeps the GS's 0-128 alpha, and
-    /// [`Self::alpha_at`] is read as coverage on the usual 0-255 scale, so a
-    /// caller handing over a PS2 palette has to double it first -
-    /// [`crate::ps2_texture::Ps2Texture::to_rgba`] is where that rule is
-    /// written down. Doing it here would be wrong for a palette that was
-    /// already full range.
+    /// A [`crate::ps2_texture`] palette keeps the GS's 0-128 alpha and
+    /// [`Self::alpha_at`] reads coverage on 0-255, so the caller doubles it first
+    /// ([`crate::ps2_texture::Ps2Texture::to_rgba`] has the rule). Doing it here
+    /// would be wrong for an already full-range palette.
     ///
     /// # Errors
     ///
@@ -539,23 +505,20 @@ impl Font {
 
     /// Grey level of the atlas pixel at `(x, y)`, or 0 outside it.
     ///
-    /// Every palette entry in every shipped font is a **neutral grey** - `r == g ==
-    /// b` on all 16 entries of all five Pulse fonts and all six of Pure's - so this
-    /// reads the red channel rather than computing a weighted luminance, and the
-    /// choice costs nothing.
+    /// Every palette entry in every shipped font is a **neutral grey** (`r == g ==
+    /// b` on all 16 entries of all five Pulse fonts and all six of Pure's), so
+    /// this reads the red channel rather than a weighted luminance.
     ///
     /// # What it means
     ///
     /// The **body/outline mask**. The three menu fonts are a single pure white, so
-    /// this is a constant 255 for them and carries nothing. The two HUD fonts carry
-    /// six distinct greys and are pre-outlined: light is glyph body, dark is
-    /// outline. A renderer that wants the original's look mixes the text colour
-    /// toward the border colour by this and takes its opacity from
-    /// [`Self::alpha_at`].
+    /// this is a constant 255 for them. The two HUD fonts carry six distinct
+    /// greys and are pre-outlined: light is glyph body, dark is outline. A
+    /// renderer wanting the original's look mixes the text colour toward the
+    /// border colour by this and takes opacity from [`Self::alpha_at`].
     ///
-    /// Reading alpha alone draws body and outline in one colour, which turns an
-    /// outlined digit into a filled box - measured, not hypothesised. See
-    /// `docs/formats/fnt.md` and `oag_game::font`.
+    /// Reading alpha alone draws an outlined digit as a filled box (measured).
+    /// See `docs/formats/fnt.md` and `oag_game::font`.
     #[must_use]
     pub fn luma_at(&self, x: usize, y: usize) -> u8 {
         let (w, h) = (usize::from(self.width), usize::from(self.height));
@@ -570,16 +533,13 @@ impl Font {
 
     /// Whether this font bakes an outline into its atlas.
     ///
-    /// True when the palette holds more than one distinct grey, which is the
-    /// property that distinguishes the two HUD fonts from the three menu ones. A
-    /// caller that only wants to know whether [`Self::luma_at`] carries information
-    /// can ask this instead of inspecting the palette.
+    /// True when the palette holds more than one distinct grey: the two HUD fonts
+    /// against the three menu ones. Says whether [`Self::luma_at`] carries information.
     #[must_use]
     pub fn is_outlined(&self) -> bool {
         let mut seen: Option<u8> = None;
         for entry in &self.palette {
-            // Fully transparent entries carry no colour worth comparing: their RGB
-            // is never sampled, and in these fonts it is zero regardless.
+            // Fully transparent entries carry no colour worth comparing.
             if entry[3] == 0 {
                 continue;
             }
@@ -595,11 +555,9 @@ impl Font {
 
 /// Byte coverage of one `.fnt` blob.
 ///
-/// Works on both shapes: a PS2 font, where [`Metrics::parse`] alone succeeds
-/// and there is no atlas to claim, and a PSP/PS3 font, where [`Font::parse`]
-/// also succeeds and the atlas header, palette and texels are claimed too.
-/// The 20 bytes at `+0x1c` are deliberately left unclaimed: the module doc
-/// calls them zero, but nothing here reads them to check.
+/// Works on a PS2 font (only [`Metrics::parse`] succeeds, no atlas to claim) and
+/// a PSP/PS3 font (the atlas header, palette and texels are claimed too). The 20
+/// bytes at `+0x1c` are left unclaimed: nothing reads them to check they are zero.
 #[must_use]
 pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
     let mut seen = oag_formats::coverage::Coverage::new(data.len());
@@ -611,16 +569,13 @@ pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
     let count = metrics.glyphs.len().max(1);
     let codepoints_at = order.u32(data, 0x08) as usize;
     let offsets_at = order.u32(data, 0x0c) as usize;
-    // The codepoint table is `count` entries as declared at `+0x04`, which
-    // may be one longer than `glyphs.len()` when a trailing zero terminates
-    // the list early - claimed at the declared length either way, since that
-    // is what the file's own table actually spans.
+    // Claimed at the declared `+0x04` count, which may be one longer than
+    // `glyphs.len()` when a trailing zero ends the list early.
     let declared_count = order.u32(data, 0x04) as usize;
     seen.claim(codepoints_at, declared_count * 2, "the codepoint table");
     seen.claim(offsets_at, declared_count * 4, "the offset table");
-    // A glyph record's own file offset is not kept on `Glyph`, so this
-    // re-walks the offset table exactly as `Metrics::parse` does, once per
-    // glyph, to claim each record's span.
+    // `Glyph` keeps no file offset, so this re-walks the offset table as
+    // `Metrics::parse` does.
     for i in 0..count.min(metrics.glyphs.len()) {
         let Some(bytes) = data.get(offsets_at + i * 4..offsets_at + i * 4 + 4) else {
             break;

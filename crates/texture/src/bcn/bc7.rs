@@ -1,19 +1,13 @@
-//! BC7 (BPTC): one 128-bit block, one of eight modes, decoded straight from
-//! the public spec text - no reference decoder's code was read to write
-//! this, only the format description.
+//! BC7 (BPTC): one 128-bit block, one of eight modes, decoded from the public
+//! spec text alone - no reference decoder's code was read.
 //!
-//! Source: Khronos's `GL_ARB_texture_compression_bptc` extension
-//! specification (the same public text Microsoft's DirectX BC7 and the
-//! Khronos Data Format Specification describe; this project reads the
-//! Khronos copy at
-//! <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_compression_bptc.txt>),
-//! "Appendix: BPTC Compressed Texture Image Format" - `Table.M` (the eight
-//! modes' field widths), `Table.P2`/`Table.P3` (partition assignment, 64
-//! rows of 16 each), `Table.A2`/`Table.A3a`/`Table.A3b` (anchor index per
-//! partition) and the interpolation weight tables, reproduced verbatim in
-//! [`tables`]. `oag_texture::gnf` is this decoder's only caller - HD's own
-//! `.gtf` and 2048's own `.gxt` never carry a BC7 surface, only Omega's
-//! `.gnf` does (`docs/formats/gnf.md`'s census).
+//! Source: Khronos's `GL_ARB_texture_compression_bptc` extension specification,
+//! <https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_compression_bptc.txt>,
+//! "Appendix: BPTC Compressed Texture Image Format": `Table.M` (mode field
+//! widths), `Table.P2`/`Table.P3` (partition assignment), `Table.A2`/`Table.A3a`/
+//! `Table.A3b` (anchor index per partition) and the interpolation weights,
+//! reproduced verbatim in [`tables`]. `oag_texture::gnf` is the only caller:
+//! only Omega's `.gnf` carries a BC7 surface (`docs/formats/gnf.md`'s census).
 //!
 //! # Block layout
 //!
@@ -26,10 +20,8 @@
 //! its top bit is known to be zero), secondary indices (same shape, if the
 //! mode carries them).
 //!
-//! Endpoints are widened to 8 bits by left-shifting into the top bits and
-//! replicating the value's own high bits into the low ones - the same
-//! technique [`crate::bcn::rgb565`] uses for BC1/2/3's 5/6-bit channels,
-//! generalised to an arbitrary bit count in [`expand`].
+//! Endpoints are widened to 8 bits by replicating their high bits into the low
+//! ones, as [`crate::bcn::rgb565`] does for BC1-3, generalised in [`expand`].
 
 mod tables;
 
@@ -159,10 +151,9 @@ const MODES: [Mode; 8] = [
 
 /// Reads bits LSB-first out of a 16-byte block, advancing a cursor.
 ///
-/// The block is held as one little-endian `u128`, whose bit `i` is bit `i % 8`
-/// of byte `i / 8` - the stream order - so a field is a shift and a mask rather
-/// than a loop over its bits. This was a bit-at-a-time loop and was 94% of the
-/// Omega GNF pixel sweep's profile.
+/// The block is one little-endian `u128`, whose bit `i` is bit `i % 8` of byte
+/// `i / 8` (the stream order), so a field is a shift and a mask. A bit-at-a-time
+/// loop was 94% of the Omega GNF pixel sweep's profile.
 struct BitStream {
     bits: u128,
     pos: u32,
@@ -176,10 +167,8 @@ impl BitStream {
         }
     }
 
-    /// Reads `n` bits (`n` up to 32), LSB of the stream into bit 0 of the
-    /// result. `n == 0` reads nothing and returns 0, so every call site can
-    /// pass a field width that happens to be zero for a given mode without
-    /// a separate branch.
+    /// Reads `n` bits (`n` up to 32), stream LSB into bit 0. `n == 0` reads
+    /// nothing and returns 0, so a zero field width needs no branch.
     fn read(&mut self, n: u32) -> u32 {
         let out = ((self.bits >> self.pos) & ((1u128 << n) - 1)) as u32;
         self.pos += n;
@@ -187,10 +176,9 @@ impl BitStream {
     }
 }
 
-/// Widens a `bits`-wide value to 8 bits by replicating its own high bits
-/// into the low ones - the spec's own words: "the top bits of the value are
-/// replicated into any remaining bits in the byte". Every channel width BC7
-/// actually uses is at least 4, so one replication pass always fills the
+/// Widens a `bits`-wide value to 8 bits by replicating its high bits into the low
+/// ones (the spec: "the top bits of the value are replicated into any remaining
+/// bits in the byte"). BC7 channel widths are at least 4, so one pass fills the
 /// byte (`2 * bits >= 8`).
 fn expand(value: u32, bits: u32) -> u8 {
     if bits == 0 {
@@ -242,11 +230,9 @@ fn lerp(e0: u8, e1: u8, w: u32) -> u8 {
 
 /// Decodes one 16-byte BC7 block to 16 RGBA8 texels, raster order.
 ///
-/// A block whose low byte carries no mode bit at all (all eight bits zero)
-/// is the spec's own reserved encoding ("should not be used when encoding a
-/// BPTC texture") - returned as opaque black rather than panicking, since
-/// this reads real shipped disc data and a single malformed block must not
-/// take an otherwise-decodable image down with it.
+/// A block whose low byte is zero is the spec's reserved encoding ("should not
+/// be used when encoding a BPTC texture"); it returns opaque black rather than
+/// panicking, so one malformed block cannot take down an image.
 pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
     let mut bits = BitStream::new(block);
 
@@ -382,10 +368,9 @@ pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
         let g = lerp(e0[1], e1[1], cw);
         let b = lerp(e0[2], e1[2], cw);
         let a = lerp(e0[3], e1[3], aw);
-        // Rotation swaps alpha with one colour channel. Written as a choice of
-        // whole arrays rather than a `swap` on a built one: the swap made the
-        // compiler store the four bytes singly and reload them as a word, a
-        // store-forwarding stall that was over half this function's time.
+        // Rotation swaps alpha with one colour channel. A choice of whole arrays,
+        // not a `swap`: the swap caused a store-forwarding stall (over half this
+        // function's time).
         out[t] = match rotation {
             1 => [a, g, b, r],
             2 => [r, a, b, g],

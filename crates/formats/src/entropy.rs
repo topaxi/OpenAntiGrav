@@ -43,11 +43,9 @@ pub fn shannon(data: &[u8]) -> f64 {
 pub enum Density {
     /// Mostly text, padding or sparse tables.
     Sparse,
-    /// Structured binary data.
     Structured,
     /// Mixed content, or a container holding compressed payloads.
     Mixed,
-    /// Compressed or encrypted.
     Packed,
 }
 

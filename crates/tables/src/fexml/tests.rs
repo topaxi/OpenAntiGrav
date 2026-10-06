@@ -1,10 +1,7 @@
 //! What the front-end XML reader in [`super`] is asserted to do: the `<code>`
-//! name mapping, the tree it builds, and the documents it refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `fexml.rs`: the tests are 212 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! name mapping, the tree it builds, and the documents it refuses. Its own file
+//! because the tests exceed the 200-line inline limit
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -38,16 +35,14 @@ fn expands_elements_and_attributes() {
 
 #[test]
 fn leaves_unmapped_names_alone() {
-    // `x` is not in the dictionary, so it must survive untouched rather
-    // than being dropped or renamed.
+    // `x` is not in the dictionary: it must survive untouched.
     let out = expand(SAMPLE.as_bytes()).unwrap();
     assert!(out.contains(r#"x="1.0""#), "{out}");
 }
 
 #[test]
 fn the_dictionary_is_per_file() {
-    // The same short name means different things in different files, which
-    // is why a shared table would corrupt most of them.
+    // The same short name means different things per file, so a shared table would corrupt.
     let other = r#"<code as="Class" bs="Difficulty"></code><a b="Hard"></a>"#;
     let out = expand(other.as_bytes()).unwrap();
     assert!(out.contains(r#"<Class Difficulty="Hard">"#), "{out}");
@@ -80,9 +75,8 @@ fn handles_self_closing_tags() {
 
 #[test]
 fn keeps_attributes_after_an_angle_bracket_in_a_value() {
-    // `FEGlobals->TitleColor` is how the real front-end XML references a
-    // global. Treating its `>` as the end of the tag drops `color` and
-    // spills the rest into the text content.
+    // `FEGlobals->TitleColor` is how real front-end XML references a global;
+    // ending the tag at its `>` drops `color` and spills the rest into text.
     let src = concat!(
         r#"<code as="Values" bs="Text" xs="x" cs="color"></code>"#,
         r#"<b><a x="FEGlobals->TitleXOffset" c="FEGlobals->TitleColor"></a></b>"#
@@ -191,9 +185,8 @@ fn an_elements_own_attribute_beats_its_values_carrier() {
     assert_eq!(movie.flag("absent"), None);
 }
 
-/// The PS2 ship files really do ship this declaration. Its unquoted
-/// `encoding` leaves an odd number of quotes in the tag, so tracking them
-/// across a `>` puts the parser out of phase for the whole file: every
+/// The PS2 ship files really ship this declaration; its unquoted `encoding`
+/// leaves an odd number of quotes, putting quote tracking out of phase so every
 /// element after it disappears.
 #[test]
 fn a_malformed_declaration_does_not_swallow_the_document() {
@@ -219,14 +212,10 @@ fn children_are_selected_by_name_case_insensitively() {
     assert_eq!(root.children[0].children_named("CLASS").count(), 2);
 }
 
-/// Wipeout HD/Fury's own `grid_04.xml` really does ship a `<Values>` start
-/// tag with no `>` before the real `</Values>` closes it - synthetic here
-/// (made-up attributes and names, not disc content), but the exact shape:
-/// `<Foo attr="x"</Foo>` immediately followed by the sibling that should
-/// have been `Foo`'s own. Left untreated, that shape merges `Foo`'s open
-/// tag with the real `</Foo>` into one never-closed opening tag, and every
-/// following sibling becomes `Foo`'s own child instead of its parent's -
-/// see [`tag_end`]'s own doc for the full mechanism.
+/// HD/Fury's `grid_04.xml` ships a `<Values>` start tag with no `>` before the
+/// real `</Values>`. Synthetic here (made-up names), same shape:
+/// `<Foo attr="x"</Foo>` then the sibling. Untreated, every following sibling
+/// becomes `Foo`'s child; see [`tag_end`].
 #[test]
 fn an_unquoted_lt_ends_a_tag_one_character_short_of_it() {
     let root = parse(r#"<Outer><Foo attr="x"</Foo><Bar/></Outer>"#);
@@ -237,37 +226,26 @@ fn an_unquoted_lt_ends_a_tag_one_character_short_of_it() {
         "Foo and Bar both children of Outer, not Bar nested inside Foo: {outer:?}"
     );
     assert_eq!(outer.children[0].name, "Foo");
-    // The truncated attribute value still reads whole - the missing
-    // trailing quote costs nothing, since the value scan already treats
-    // end-of-input as an unterminated value's own close.
+    // The truncated value still reads whole (end-of-input closes an unterminated value).
     assert_eq!(outer.children[0].attr("attr"), Some("x"));
     assert_eq!(outer.children[1].name, "Bar");
 }
 
-/// A stray `<<` - two unquoted `<` back to back, nothing the disc ships but
-/// a case `tag_end`'s new branch has to survive rather than panic on: its
-/// own `close = index - 1` would be `0` here, and every caller slices
-/// `rest[1..close]` for a tag's inner content, which panics (start past
-/// end) at `rest[1..0]`. The `index > 1` guard (not `index > 0`) exists for
-/// exactly this input - see [`tag_end`]'s own doc.
+/// A stray `<<`, not on any disc: `tag_end`'s `close = index - 1` would be `0`
+/// and callers slice `rest[1..close]`, which panics. The `index > 1` guard
+/// exists for this input; see [`tag_end`].
 #[test]
 fn a_stray_double_lt_does_not_panic() {
     let root = parse("<Outer><<Foo/></Outer>");
-    // What exactly this parses to is not the point - only that it returns
-    // rather than panicking. `#[cfg(test)]` running at all past this line
-    // is the assertion.
+    // Only that it returns rather than panicking.
     let _ = root;
 }
 
-/// [`tag_end`]'s recovery is reached through [`expand`] too, not only
-/// through [`parse`] on already-plain text - and the two paths are not
-/// interchangeable: `expand` runs the recovery *before* the short-name
-/// dictionary substitutes real names in, so this is the only test that
-/// exercises the recovery on a shortened blob at all. That gap was real:
-/// a cross-title census (`cargo run -p oag-game --example
-/// fexml_recovery_noop_census`) found the identical `attr="x"</Tag>` shape
-/// on Pulse's own shortened "stats holder" screen (`Data.wad`, PSP EU/USA
-/// both), which only reaches `tag_end` through this path.
+/// [`tag_end`]'s recovery is reached through [`expand`] too, and `expand` runs it
+/// *before* the dictionary substitutes names, so this is the only test of the
+/// recovery on a shortened blob. A cross-title census (`cargo run -p oag-game
+/// --example fexml_recovery_noop_census`) found the same `attr="x"</Tag>` shape
+/// on Pulse's shortened "stats holder" screen (`Data.wad`, PSP EU/USA).
 #[test]
 fn expand_recovers_a_start_tag_missing_its_closing_bracket() {
     let src = concat!(

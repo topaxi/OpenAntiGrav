@@ -22,44 +22,28 @@
 //! +0x20  u32   GPU offset           filled in at load
 //! ```
 //!
-//! Everything is big-endian, this being a PS3 file, and the descriptor is
-//! Sony's own `CellGcmTexture` written out - which is why it carries fields a
-//! file has no use for, `location` and the GPU `offset` among them.
+//! Everything is big-endian, and the descriptor is Sony's own `CellGcmTexture`
+//! written out, hence `location` and the GPU `offset`.
 //!
-//! # The whole thing is self-checking, and it closes on the whole disc
+//! # Self-checking: closes on the whole disc
 //!
-//! **Confidence 92.** Two independent arithmetic invariants hold on **7,333 of
-//! 7,333** `.gtf` files across all seven of Wipeout HD / Fury's archives:
+//! **Confidence 92.** Two arithmetic invariants hold on **7,333 of 7,333**
+//! `.gtf` files across all seven Wipeout HD / Fury archives:
 //!
-//! 1. `12 + 36 * count + size` is the file length, or equivalently the texel
-//!    data starts at `+0x80` and runs to the end.
-//! 2. The declared `length` is exactly what the format, the dimensions, the mip
-//!    count and the pitch imply - see [`Texture::chain_len`].
+//! 1. `12 + 36 * count + size` is the file length.
+//! 2. The declared `length` is what the format, dimensions, mip count and pitch
+//!    imply - see [`Texture::chain_len`].
 //!
-//! Neither can come out right by accident on a file this varied: the corpus runs
-//! 3x1 to 2048x2048, one to twelve mip levels, ten distinct format bytes and
-//! 131 non-power-of-two textures.
-//!
-//! 92 rather than higher because **nothing has been compared against the running
-//! original**, which is the ceiling this project's rubric puts on a static
-//! reading.
+//! The corpus runs 3x1 to 2048x2048, one to twelve mips, ten format bytes and
+//! 131 non-power-of-two textures. 92 rather than higher because nothing has
+//! been compared against the running original.
 //!
 //! # `pitch` does not halve down the mip chain
 //!
-//! This is the rule that four files turn on, and getting it wrong looks like a
-//! corrupt file rather than a wrong reading. When `pitch` is non-zero it is one
-//! row of the **base** level, and every further level uses the same pitch rather
-//! than half of it. `zone_2/gradienttex_tr01_set01.gtf` is the smallest witness:
-//! 3x1 `A8R8G8B8`, pitch 12, two levels, 24 bytes - which is 12 + 12, not
-//! 12 + 6. `amphiseum/textures/dds/air_traffic_test_a_atoc.gtf` is the one that
-//! makes it unmistakable: 1028x256 `DXT45`, pitch 4112, eleven levels,
-//! **538,672 bytes, which is 4,112 x 131** where 131 is the sum of the chain's
-//! block-row counts.
-//!
-//! Those four also show that **a pitch can be declared for a compressed
-//! texture**, where it is bytes of one *block* row rather than one pixel row -
-//! 4,112 is 257 blocks of 16. A reader that treats pitch as pixels there is out
-//! by a factor of four.
+//! When `pitch` is non-zero it is one row of the **base** level, and every
+//! further level uses the same pitch (`zone_2/gradienttex_tr01_set01.gtf`: 3x1,
+//! pitch 12, two levels, 24 bytes). For a compressed texture it is bytes of one
+//! *block* row (four such files; witness in `docs/formats/gtf.md`).
 //!
 //! # What is on the disc
 //!
@@ -78,47 +62,29 @@
 //!
 //! **All 7,333 decode.**
 //!
-//! The last 9 were `B8`, and what settled them was their own names: every one
-//! is a ship's `textures/ambient_shadow.gtf`, 128x64, one per team. Read in
-//! Morton order each is that team's craft in silhouette, soft-edged - Feisar's
-//! delta and tailfin, Qirex's blunt oval - where a raster read is horizontal
-//! banding. The single stored byte is that shadow's coverage, and the
-//! descriptor's own [`Remap`] is what broadcasts it to four channels rather
-//! than anything here deciding to; see that type, and
-//! `gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap`.
+//! The 9 `B8` files are each a ship's `textures/ambient_shadow.gtf`, 128x64: the
+//! stored byte is the shadow's coverage and the descriptor's [`Remap`] broadcasts
+//! it to four channels
+//! (`gtf::tests::a_single_channel_texture_is_broadcast_by_its_own_remap`).
 //!
 //! **The 44 swizzled `A8R8G8B8`/`A8B8G8R8` decode through
-//! [`decode::morton_index`]**, the RSX's Morton-order texel address: no `0x20`
-//! bit and no block compression, so the texels are tiled rather than raster,
-//! and a linear read of one is a recognisable picture in scrambled tiles -
-//! exactly the kind of wrong answer that survives review, which is why this
-//! was refused by name rather than misread for as long as it was. The address
-//! function is the platform's own documented `cellGcm` tiling, not reversed
-//! from this disc - **confidence 88**: an exact match on a 4x4 synthetic
-//! fixture (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`),
-//! and on the disc, **all 43 judgeable swizzled files** decode smoother than a
-//! deliberately wrong linear misread, with no exceptions - the same roughness
-//! test the DXT endianness question above uses, measured on both axes rather
-//! than along rows only, because a raster misread of a tiled surface comes out
-//! as row-uniform stripes that a within-row metric scores as the smooth one.
-//! See `docs/formats/gtf.md` for the numbers and
-//! `crates/formats/tests/gtf_ground_truth.rs`. Not corroborated against the
-//! executable's own texture upload code - `EBOOT.elf` carries no `swizzle`
-//! string to search for, and no upload routine has been located - which is
-//! why this stops at 88 rather than reaching for a runtime-verified score.
-//! Block-compressed formats are never swizzled - the block layout is the
-//! tiling - so the `0x20` bit is not consulted for them.
+//! [`decode::morton_index`]**, the RSX's Morton-order texel address (a linear
+//! read is a recognisable picture in scrambled tiles). The address function is
+//! the platform's documented `cellGcm` tiling - **confidence 88**: an exact match
+//! on a 4x4 fixture
+//! (`gtf::tests::a_swizzled_texture_reads_the_rsx_z_order_not_raster_order`) and
+//! all 43 judgeable swizzled files decode smoother than a linear misread (both
+//! axes measured; numbers in `docs/formats/gtf.md` and
+//! `crates/texture/tests/gtf_ground_truth.rs`). No upload routine has been located
+//! in `EBOOT.elf` to corroborate. Block-compressed formats are never swizzled, so
+//! `0x20` is not consulted for them.
 //!
-//! # And 23 cubemaps, which decode face by face
+//! # 23 cubemaps, decoded face by face
 //!
-//! `cubemap` is set on 23 files, all of them a `sky` or an environment probe.
-//! Six faces follow one another - face-major, decoded by
-//! [`Texture::face_to_rgba`], drawn as a race's sky by
-//! `oag_mesh::mesh::sky_cube` - and the length invariant holds on all 23,
-//! with **an unexplained 360 bytes** on the 20 that carry a mip chain, the
-//! same 360 whether the faces are 128x128 `DXT1` or 2048x2048. Six times
-//! sixty, and sixty is not a multiple of any block size here; the slack is
-//! recorded in [`Texture::chain_len`] rather than explained away.
+//! `cubemap` is set on 23 files (skies and probes). Six faces follow one another,
+//! face-major ([`Texture::face_to_rgba`], drawn by `oag_mesh::mesh::sky_cube`).
+//! The length invariant holds on all 23 with **an unexplained 360 bytes** on the
+//! 20 carrying a mip chain (see [`Texture::chain_len`]).
 //!
 //! See `docs/formats/gtf.md` for the evidence, and `docs/formats/hd-hud.md` for
 //! what needed this.
@@ -141,13 +107,12 @@ const UNNORMALISED: u8 = 0x40;
 
 /// Most textures one file may declare.
 ///
-/// Every file on the HD disc declares exactly one. The cap exists so that a
-/// garbage count cannot make the header arithmetic accept an arbitrary blob.
+/// Every HD file declares one; the cap stops a garbage count passing.
 pub const MAX_TEXTURES: u32 = 64;
 
 /// Most mip levels a descriptor may declare.
 ///
-/// Twelve is the largest on the disc, on a 2048x2048 sky. Same reasoning as
+/// Twelve is the largest on disc (a 2048x2048 sky). Same reasoning as
 /// [`MAX_TEXTURES`].
 pub const MAX_MIP_LEVELS: u8 = 16;
 
@@ -193,15 +158,15 @@ pub enum Error {
     },
     /// The declared texel length is not what the descriptor implies.
     ///
-    /// The strongest signal that a blob is not a `.gtf` at all, the length being
-    /// fully determined by the rest of the descriptor. Holds on 7,333 of 7,333.
+    /// The strongest signal a blob is not a `.gtf`. Holds on 7,333 of 7,333.
     ChainLengthMismatch {
         /// Length the descriptor implies.
         expected: usize,
         /// Length it declares.
         declared: u32,
     },
-    /// A cubemap, whose face layout is parsed but not decoded.
+    /// [`Texture::to_rgba`] was given a cubemap, or [`Texture::face_to_rgba`] a
+    /// texture that is not one.
     Cubemap,
 }
 
@@ -243,10 +208,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// The texel format, from the low five bits of the descriptor's format byte.
 ///
-/// Named as Sony names them, so `A8R8G8B8` is a big-endian `u32` whose top byte
-/// is alpha - which on this console means the bytes arrive in the order A, R, G,
-/// B. Only the variants the HD disc actually carries are here; a format byte
-/// outside them is [`Error::UnknownFormat`] rather than a guess.
+/// Named as Sony names them: `A8R8G8B8` is a big-endian `u32` with alpha on top,
+/// so bytes arrive A, R, G, B. Only formats the HD disc carries are here; any
+/// other byte is [`Error::UnknownFormat`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
     /// `0x01`, one byte per texel.
@@ -312,42 +276,31 @@ const CHANNEL_SLOT: [usize; 4] = [3, 0, 1, 2];
 
 /// The descriptor's `+0x10` channel remap, decomposed.
 ///
-/// Two per-channel tables packed into sixteen bits, laid out the way the RSX's
-/// own `NV4097_SET_TEXTURE_CONTROL1` register reads them: the **low** byte
-/// holds four 2-bit *source* selectors and the **high** byte four 2-bit
-/// *controls*, both in `A`, `R`, `G`, `B` order from the least significant
-/// pair up. A source names which of the texel's own channels an output reads
-/// (`0` = A, `1` = R, `2` = G, `3` = B); a control says whether that read
-/// happens at all, or the output is forced to zero or one instead.
+/// Two per-channel tables packed into sixteen bits, laid out as the RSX's
+/// `NV4097_SET_TEXTURE_CONTROL1` register reads them: the **low** byte holds
+/// four 2-bit *source* selectors and the **high** byte four 2-bit *controls*,
+/// both in `A`, `R`, `G`, `B` order from the least significant pair up. A
+/// source names which of the texel's channels an output reads (`0` = A, `1` =
+/// R, `2` = G, `3` = B); a control says whether that read happens, or the
+/// output is forced to zero or one.
 ///
-/// # The packing is corroborated by the disc, not only published
+/// # Corroborated by the disc
 ///
-/// Three distinct words appear on the HD disc, and each decomposes into
-/// something the file carrying it independently agrees with - which a wrong
-/// reading of the bit layout would not produce three times over:
+/// Three words appear on the HD disc, each agreeing with its file:
 ///
 /// | Word | Files | Decomposes to | Agrees with |
 /// | --- | ---: | --- | --- |
-/// | `0xaae4` | 7,317 | every control `Read`, sources `A<-A, R<-R, G<-G, B<-B` | the identity, which is what decoding a texel straight already does |
-/// | `0xa9e4` | 7 | the same, but alpha forced to one | `fealphaluminancetexture.gtf` is **100% grayscale** - all four of every texel's bytes equal - so its RGB is a luminance and its alpha is not stored art |
-/// | `0xa9ff` | 9 | alpha forced to one, and **every** other output reading the *blue* source | these are exactly the disc's 9 [`Format::B8`] files, whose one stored byte **is** the blue channel |
+/// | `0xaae4` | 7,317 | every control `Read`, sources `A<-A, R<-R, G<-G, B<-B` | the identity |
+/// | `0xa9e4` | 7 | the same, alpha forced to one | `fealphaluminancetexture.gtf` is **100% grayscale**, so alpha is not stored art |
+/// | `0xa9ff` | 9 | alpha forced to one, every other output reading *blue* | exactly the disc's 9 [`Format::B8`] files, whose one byte **is** blue |
 ///
-/// The third row is the load-bearing one: the low byte `0xff` selects source
-/// `3` four times, `3` is blue under the same table that makes `0xe4` the
-/// identity, and the format that carries it stores one byte in blue and
-/// nothing else. Format and remap were read from different halves of the
-/// descriptor and say the same thing.
+/// The third row is the load-bearing one: `0xff` selects source `3` (blue)
+/// four times, and the format carrying it stores one byte in blue. Format and
+/// remap come from different halves of the descriptor and agree.
 ///
-/// **Confidence 85.** Up from the 75 this carried while it was a bare
-/// constant matched by value: the layout now predicts three distributions
-/// rather than asserting one, and one of the three (`0xa9ff`) is
-/// cross-checked against an unrelated field. Still not corroborated against
-/// the executable, which is the ceiling. See `docs/formats/gtf.md`.
-///
-/// **This corrected a real bug.** The constant this replaced forced *blue* to
-/// one for `0xa9e4`, on a reading of the high byte that put alpha's control
-/// pair where blue's is. It rendered all 7 `A8B8G8R8` files - one of them a
-/// texture whose own name says luminance - solid blue.
+/// **Confidence 85.** The layout predicts three distributions, one of them
+/// (`0xa9ff`) cross-checked against an unrelated field. Not corroborated
+/// against the executable. See `docs/formats/gtf.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Remap {
     /// Which slot of the decoded texel each output reads, in R, G, B, A order.
@@ -382,11 +335,7 @@ impl Remap {
 
     /// Rewrites each texel's four channels in place.
     ///
-    /// Public for the same reason [`decode_level`] is: a caller that decoded a
-    /// level itself still has to apply the descriptor's remap, and comparing a
-    /// remapped buffer against a non-remapped one is not a comparison of
-    /// anything. That mistake is why `0xa9e4` was read as forcing blue - see
-    /// this type's own doc.
+    /// Public so a caller that decoded a level itself can apply the remap too.
     pub fn apply(&self, out: &mut [[u8; 4]]) {
         if self.is_identity() {
             return;
@@ -421,10 +370,8 @@ pub struct Texture {
     pub cubemap: bool,
     /// `+0x10`, a per-channel source-and-force table.
     ///
-    /// Kept as the raw word; [`Remap::decode`] is what reads it, and both
-    /// [`Self::to_rgba`] and [`Self::face_to_rgba`] act on all three of the
-    /// values the disc carries. See [`Remap`] for the packing, the
-    /// distribution and the confidence.
+    /// Kept raw; [`Remap::decode`] reads it, and [`Self::to_rgba`] and
+    /// [`Self::face_to_rgba`] apply it. See [`Remap`].
     pub remap: u32,
     /// Width of the base level, in texels.
     pub width: u16,
@@ -436,8 +383,7 @@ pub struct Texture {
     pub location: u8,
     /// Bytes of one base-level row, or 0 when the levels are tightly packed.
     ///
-    /// **A row of blocks** for a compressed format. See this module's header for
-    /// why it does not halve down the chain.
+    /// A row of blocks for a compressed format; does not halve down the chain.
     pub pitch: u32,
     /// `+0x20`, the GPU address, filled in at load and meaningless in a file.
     pub gpu_offset: u32,
@@ -462,8 +408,8 @@ impl Texture {
         self.format_byte & UNNORMALISED != 0
     }
 
-    /// Applies [`Self::remap`]'s effect to an already-decoded RGBA8 buffer, in
-    /// place. A no-op on the 7,317 files whose word is the identity.
+    /// Applies [`Self::remap`] to a decoded RGBA8 buffer; a no-op on the 7,317
+    /// identity files.
     fn apply_remap(&self, out: &mut [[u8; 4]]) {
         Remap::decode(self.remap).apply(out);
     }
@@ -509,10 +455,8 @@ impl Texture {
 
     /// Bytes the whole texture occupies, every level of every face.
     ///
-    /// The 360 bytes a multi-level cubemap carries beyond six of its own faces
-    /// are included, because the check this feeds is against the declared
-    /// length and that length includes them on all 20. **What they are is not
-    /// known**; see the module docs.
+    /// Includes the 360 unexplained bytes a multi-level cubemap carries, since
+    /// the declared length includes them on all 20; see the module docs.
     #[must_use]
     pub fn chain_len(&self) -> usize {
         let one_face: usize = (0..self.mip_levels)
@@ -524,11 +468,9 @@ impl Texture {
 
     /// Byte range of one mip level, inside the blob.
     ///
-    /// **Non-cubemaps only.** For a cubemap this is level `level` of
-    /// whichever face comes first, and that the first face starts at offset
-    /// zero is the natural reading rather than a checked one - see this
-    /// module's header and the 360 unexplained bytes. [`Self::to_rgba`]
-    /// refuses a cubemap, so nothing reaches this with one today.
+    /// **Non-cubemaps only.** For a cubemap this is the level of the first face,
+    /// assuming it starts at offset zero (not checked); see the 360 unexplained
+    /// bytes in the module docs. [`Self::to_rgba`] refuses a cubemap.
     #[must_use]
     pub fn level_range(&self, level: u8) -> Range<usize> {
         let start = self.data.start + (0..level).map(|l| self.level_len(l)).sum::<usize>();
@@ -537,14 +479,12 @@ impl Texture {
 
     /// Byte range of one mip level of one **face**.
     ///
-    /// **All of a face's levels are consecutive, then the next face's.** That is
-    /// what [`Self::chain_len`] computes and what the length invariant holds on
-    /// across all 23 of the disc's cubemaps: `one_face * faces() + slack`. A
-    /// caller that walked level-major instead would read face 1's base level as
-    /// face 0's second.
+    /// **All of a face's levels are consecutive, then the next face's**
+    /// (`one_face * faces() + slack`, holding on all 23 cubemaps). A level-major
+    /// walk would read face 1's base level as face 0's second.
     ///
-    /// `face` past [`Self::faces`] answers the last face rather than panicking,
-    /// which keeps this total; [`Self::face_to_rgba`] range-checks properly.
+    /// `face` past [`Self::faces`] answers the last face rather than panicking;
+    /// [`Self::face_to_rgba`] range-checks.
     #[must_use]
     pub fn face_range(&self, face: usize, level: u8) -> Range<usize> {
         let one_face: usize = (0..self.mip_levels).map(|l| self.level_len(l)).sum();
@@ -559,12 +499,10 @@ impl Texture {
     ///
     /// # The face order is the RSX's, which is OpenGL's
     ///
-    /// `0`..`5` are `+X, -X, +Y, -Y, +Z, -Z`. **That is the published order
-    /// rather than something measured here** - `CELL_GCM_TEXTURE_DIMENSION_CUBE`
-    /// inherits it, and nothing in a `.gtf` names a face. What it is checked
-    /// against is a picture: on a sky the four side faces have to meet at their
-    /// vertical edges, and a wrong order or a wrong rotation shows as a seam.
-    /// See `docs/formats/gtf.md`.
+    /// `0`..`5` are `+X, -X, +Y, -Y, +Z, -Z`: the published order, not measured
+    /// here (nothing in a `.gtf` names a face). Checked by picture: on a sky the
+    /// four side faces must meet at their vertical edges. See
+    /// `docs/formats/gtf.md`.
     ///
     /// # Errors
     ///
@@ -589,12 +527,7 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** Every format this reads now decodes regardless
-        // of layout, so a `None` here is the decoder running out of texels - a
-        // truncated blob - and reporting that as "swizzled, not implemented"
-        // sent the reader looking for a Morton order that is not the problem.
-        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
-        // honest errors.
+        // `None` is a truncated blob, not an unimplemented swizzle.
         let mut out = decode::level(
             self.format,
             texels,
@@ -614,15 +547,12 @@ impl Texture {
 
     /// Decodes the base mip level to straight RGBA8.
     ///
-    /// `blob` must be the bytes [`Gtf::parse`] was given, since [`Self::data`]
-    /// indexes into it.
+    /// `blob` must be the bytes [`Gtf::parse`] was given.
     ///
     /// # Errors
     ///
     /// [`Error::Cubemap`] for a cubemap, and [`Error::DataOutOfBounds`] if the
-    /// level does not fit - which `parse` has already ruled out, so it means
-    /// the wrong blob was passed, or a blob whose texels stop short of what the
-    /// descriptor declares.
+    /// level does not fit (the wrong blob, since `parse` ruled it out).
     pub fn to_rgba(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
         if self.cubemap {
             return Err(Error::Cubemap);
@@ -634,12 +564,7 @@ impl Texture {
             got: blob.len(),
         })?;
         let (width, height) = self.level_size(0);
-        // **Not `Swizzled`.** Every format this reads now decodes regardless
-        // of layout, so a `None` here is the decoder running out of texels - a
-        // truncated blob - and reporting that as "swizzled, not implemented"
-        // sent the reader looking for a Morton order that is not the problem.
-        // Finding F7 of the 2026-08-18 review, in a codebase that prizes
-        // honest errors.
+        // `None` is a truncated blob, not an unimplemented swizzle.
         let mut out = decode::level(
             self.format,
             texels,
@@ -660,20 +585,15 @@ impl Texture {
 
 /// Decodes one mip level to straight RGBA8, given that level's own texels.
 ///
-/// The free-function half of [`Texture::to_rgba`], for a caller holding a
-/// level's bytes without the descriptor they came out of: `oag_render`'s
-/// fallback for an adapter with no block-compression support, which uploads
-/// the disc's own DXT blocks where it can and decodes them here where it
-/// cannot. `pitch` is the descriptor's, in bytes, and 0 means tightly packed.
+/// The free-function half of [`Texture::to_rgba`], for `oag_render`'s fallback
+/// on an adapter with no block-compression support. `pitch` is the descriptor's,
+/// in bytes, 0 meaning tightly packed.
 ///
-/// `linear` is the descriptor's `0x20` bit - see [`Texture::is_linear`] - and
-/// only matters for the two uncompressed formats; every caller today only
-/// ever passes a block-compressed `format` (see [`Format::is_block_compressed`]),
-/// which ignores it, so `true` is a safe default where the descriptor is not
-/// at hand.
+/// `linear` is the descriptor's `0x20` bit ([`Texture::is_linear`]); it only
+/// matters for the two uncompressed formats, so `true` is safe for a
+/// block-compressed `format`.
 ///
-/// Returns `None` for texels that stop short of the dimensions given; every
-/// format this module names now decodes.
+/// `None` for texels that stop short of the dimensions given.
 #[must_use]
 pub fn decode_level(
     format: Format,
@@ -688,8 +608,7 @@ pub fn decode_level(
 
 /// The unexplained tail on a cubemap that carries a mip chain.
 ///
-/// The same 360 bytes on all 20 of them, whatever the face size or format. See
-/// the module docs.
+/// The same 360 bytes on all 20, whatever the face size or format.
 const CUBEMAP_SLACK: usize = 360;
 
 /// A parsed `.gtf`.
@@ -715,8 +634,7 @@ impl Gtf {
         }
         let version = be32(data, 0);
         let count = be32(data, 8);
-        // Saturating rather than wrapping: a garbage count must fail the bounds
-        // test below, not wrap round it.
+        // Saturating: a garbage count must fail the bounds test, not wrap.
         let descriptors_end =
             HEADER_LEN.saturating_add(DESCRIPTOR_LEN.saturating_mul(count as usize));
         if count == 0 || count > MAX_TEXTURES || descriptors_end > data.len() {
@@ -731,9 +649,8 @@ impl Gtf {
 
     /// The one texture a Wipeout HD `.gtf` carries.
     ///
-    /// Every file on that disc declares exactly one, so this is what a caller
-    /// wants and the plural is what a caller has to handle. `None` only for a
-    /// file that declares none, which `parse` already refuses.
+    /// Every HD file declares exactly one. `None` only for a file declaring
+    /// none, which `parse` refuses.
     #[must_use]
     pub fn only(&self) -> Option<&Texture> {
         self.textures.first()

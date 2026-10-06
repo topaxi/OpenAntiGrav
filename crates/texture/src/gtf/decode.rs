@@ -3,32 +3,22 @@
 //!
 //! # The colour endpoints are little-endian inside a big-endian file
 //!
-//! Every field of a [`.gtf`](super) header is big-endian, so the natural guess
-//! is that a `DXT` block's two `R5G6B5` endpoints are too. They are not: the
-//! texel payload is whatever the RSX consumes, and that is the same block layout
-//! a `.dds` stores, endpoints included.
+//! Every field of a [`.gtf`](super) header is big-endian, but a `DXT` block's
+//! two `R5G6B5` endpoints are not: the texel payload is the block layout a
+//! `.dds` stores.
 //!
-//! **Measured rather than assumed**, by decoding both readings of every HUD
-//! texture on the disc and comparing how smooth each comes out - the same test
-//! [`crate::ps2_texture`] settles its swizzle permutation with. Real art is
-//! smooth across a block boundary and a byte-swapped `R5G6B5` endpoint is not:
-//! swapping moves five bits of red into the low bits of blue. See
-//! `docs/formats/gtf.md` for the numbers.
+//! **Measured**, by decoding both readings of every HUD texture on the disc and
+//! comparing smoothness (the test [`crate::ps2_texture`] uses for its swizzle).
+//! Real art is smooth across a block boundary and a byte-swapped endpoint is
+//! not. Numbers: `docs/formats/gtf.md`. The 2-bit index word is read a byte per
+//! row, the same either way round.
 //!
-//! The 2-bit index word is read a byte per row, which is the same answer either
-//! way round and so needs no such argument.
+//! # The Morton order is the RSX's standard `cellGcm` tiling
 //!
-//! # The Morton order is the RSX's standard `cellGcm` tiling, not a guess
-//!
-//! [`morton_index`]'s bit-interleave is the documented PS3 SDK swizzle used
-//! everywhere the platform tiles a 2D surface, not something reverse-engineered
-//! from this disc alone - it is the same address function RPCS3's own texture
-//! cache and every other PS3 homebrew GCM reader use. What *is* measured against
-//! this disc, rather than assumed from the platform, is that it is the right one
-//! *here*: `docs/formats/gtf.md` runs the same roughness comparison the DXT
-//! endianness question above used, over every swizzled `A8R8G8B8`/`A8B8G8R8`
-//! texture on the disc, against a deliberately wrong permutation (row-major, as
-//! if the `0x20` linear bit had been misread). See that page for the numbers.
+//! [`morton_index`]'s bit-interleave is the documented PS3 SDK swizzle, also
+//! used by RPCS3. Measured here: `docs/formats/gtf.md` runs the same roughness
+//! comparison over every swizzled `A8R8G8B8`/`A8B8G8R8` texture against a
+//! row-major misread.
 
 use crate::bcn;
 
@@ -37,15 +27,10 @@ use super::Format;
 /// Decodes one mip level to straight RGBA8, or `None` for a layout this does
 /// not read.
 ///
-/// `pitch` is the descriptor's, in bytes, and 0 means tightly packed. Consulted
-/// for the linear layouts only - a swizzled texture's addressing has no notion
-/// of a row stride, and block compression is a tiling of its own that the
-/// `0x20` bit is not read for either; see [`Format::is_block_compressed`].
-///
-/// `linear` is the descriptor's `0x20` bit, and only the two uncompressed
-/// formats consult it - a compressed one is block-order regardless, so a
-/// caller with nothing to say about linearity (`oag_render`'s block-only
-/// decode fallback, [`super::decode_level`]) can pass either.
+/// `pitch` is the descriptor's, in bytes, 0 meaning tightly packed; only the
+/// linear layouts use it. `linear` is the descriptor's `0x20` bit; only the two
+/// uncompressed formats consult it, so a block-only caller
+/// ([`super::decode_level`]) can pass either.
 pub fn level(
     format: Format,
     texels: &[u8],
@@ -68,11 +53,9 @@ pub fn level(
             linear_texels(texels, width, height, pitch, &mut out, [3, 2, 1, 0])?
         }
         (Format::A8B8G8R8, false) => swizzled(texels, width, height, &mut out, [3, 2, 1, 0])?,
-        // One byte per texel, landing in **blue** and nothing else. The
-        // broadcast that makes it a picture is the descriptor's own `remap`,
-        // which on all 9 of the disc's `B8` files selects the blue source for
-        // every output channel - see [`super::Remap`]. Doing it here instead
-        // would be inventing what the file already says.
+        // One byte per texel, into blue only. The broadcast is the descriptor's
+        // own `remap` (all 9 `B8` files select blue for every output) - see
+        // [`super::Remap`].
         (Format::B8, true) => single(texels, width, height, pitch, &mut out)?,
         (Format::B8, false) => swizzled_single(texels, width, height, &mut out)?,
     }
@@ -111,14 +94,11 @@ fn linear_texels(
 /// The RSX's Morton-order texel index for `(x, y)` in a `width x height`
 /// swizzled surface.
 ///
-/// The standard `cellGcm` tiling: interleave the low bit of `x` then the low
-/// bit of `y`, one pair at a time, shifting each pair out as it is consumed,
-/// until the *narrower* dimension's bits run out - then let the wider
-/// dimension's remaining high bits continue linearly rather than interleave
-/// with nothing. A square power-of-two texture never reaches that second
-/// phase, since both dimensions run out together - which was every swizzled
-/// file this read until the 9 `B8` ambient shadows joined them at 128x64, the
-/// only textures on the disc that exercise it.
+/// The standard `cellGcm` tiling: interleave the low bit of `x` then of `y`,
+/// shifting each pair out, until the *narrower* dimension's bits run out; the
+/// wider dimension's remaining high bits then continue linearly. A square
+/// power-of-two texture never reaches that second phase; only the 9 `B8`
+/// ambient shadows (128x64) exercise it.
 fn morton_index(x: u32, y: u32, width: u32, height: u32) -> usize {
     let (mut bits_x, mut bits_y) = (width.trailing_zeros(), height.trailing_zeros());
     let (mut x, mut y) = (x, y);
@@ -141,10 +121,8 @@ fn morton_index(x: u32, y: u32, width: u32, height: u32) -> usize {
     index as usize
 }
 
-/// Four bytes per texel, in the RSX's Morton order rather than raster order -
-/// see [`morton_index`]. `order` is the same per-format channel permutation
-/// [`linear_texels`] takes; swizzling moves where a texel's four bytes sit,
-/// not what they mean.
+/// Four bytes per texel in the RSX's Morton order ([`morton_index`]). `order`
+/// is the channel permutation [`linear_texels`] takes.
 fn swizzled(
     texels: &[u8],
     width: u32,
@@ -169,10 +147,7 @@ fn swizzled(
 
 /// One byte per texel in raster order, into blue.
 ///
-/// No `B8` file on the disc is linear, so this path is exercised by
-/// [`super::tests`] and nothing else. It is here rather than refused because a
-/// one-byte row is the same arithmetic [`linear_texels`] already does, not a
-/// reading that would need its own evidence.
+/// No `B8` file on the disc is linear; only [`super::tests`] exercise this.
 fn single(texels: &[u8], width: u32, height: u32, pitch: usize, out: &mut [[u8; 4]]) -> Option<()> {
     let row_bytes = width as usize;
     let stride = if pitch == 0 { row_bytes } else { pitch };
@@ -187,10 +162,9 @@ fn single(texels: &[u8], width: u32, height: u32, pitch: usize, out: &mut [[u8; 
 
 /// One byte per texel in the RSX's Morton order, into blue.
 ///
-/// The same address function [`swizzled`] uses - a texel index, so at one byte
-/// per texel it is the byte offset outright. **`128x64` is where the
-/// non-square branch of [`morton_index`] first carries weight**: every other
-/// swizzled texture on the disc is square, and all 9 `B8` files are not.
+/// The address function [`swizzled`] uses, a byte offset at one byte per texel.
+/// All 9 `B8` files are 128x64, the only non-square swizzled textures on disc,
+/// so this is where [`morton_index`]'s non-square branch carries weight.
 fn swizzled_single(texels: &[u8], width: u32, height: u32, out: &mut [[u8; 4]]) -> Option<()> {
     for y in 0..height {
         for x in 0..width {

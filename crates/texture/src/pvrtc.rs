@@ -2,38 +2,27 @@
 //! `SceGxmTextureBaseFormat`'s `PVRTII4BPP` (format byte `0x83`) names, and
 //! what almost every texture Wipeout 2048 ships is stored in.
 //!
-//! Lives beside [`crate::bcn`] and for the same reason: the block layout is a
-//! hardware standard Imagination Technologies defines, not something
-//! [`crate::gxt`]'s container does, so the container's header rules stay in
-//! that module and the codec lives here.
+//! Lives beside [`crate::bcn`]: the block layout is Imagination Technologies'
+//! hardware standard, not [`crate::gxt`]'s container's, so the container's
+//! header rules stay there and the codec lives here.
 //!
 //! # Nothing about this codec is per-block
 //!
-//! [`crate::bcn`]'s BC family expands one 4x4 block into sixteen texels and is
-//! done. PVRTC does not work that way, and a port that treats it as a block
-//! codec produces a plausible-looking wrong picture rather than an obviously
-//! wrong one:
+//! BC expands one 4x4 block into sixteen texels. PVRTC does not, and a port that
+//! treats it as a block codec produces a plausible-looking wrong picture:
 //!
-//! - A **word** is 8 bytes and covers 4x4 texels, but it stores only *two*
-//!   colours (A and B) plus sixteen 2-bit modulation values.
-//! - Those two colours are the *low-frequency* image, sampled at one point per
-//!   word. Every output texel bilinearly interpolates the A colours of the
-//!   **four** words around it, and likewise the B colours, then blends the two
-//!   results by its own modulation value. So a texel's colour depends on four
-//!   words, and a word contributes to four different texel quadrants.
-//! - The words are stored in **Morton (twiddled) order**, which is why
-//!   [`crate::gxt::twiddle`] is reached from here: the same hardware tiling
-//!   scheme the container already applies to its BC block grid, applied here
-//!   to the word grid instead. It is applied **once**, inside this codec -
-//!   `.gxt` does not twiddle a PVRTC payload a second time on top.
+//! - A **word** is 8 bytes covering 4x4 texels but stores only *two* colours (A
+//!   and B) plus sixteen 2-bit modulation values.
+//! - Every output texel bilinearly interpolates the A colours of the **four**
+//!   words around it, likewise B, then blends the two by its own modulation.
+//! - Words are stored in **Morton order** ([`crate::gxt::twiddle`]), applied
+//!   **once**, inside this codec.
 //!
-//! # PVRTC-II is not PVRTC-I, and the difference is not cosmetic
+//! # PVRTC-II is not PVRTC-I
 //!
-//! The public PowerVR SDK decompressor (`PVRTDecompress.cpp`) implements
-//! PVRTC-**I** only. Its bit layout is a near-lookalike, so decoding a
-//! `PVRTII4BPP` payload with it renders something that reads as a picture
-//! while being wrong. Three things actually differ, and all three are
-//! implemented here:
+//! The public PowerVR SDK decompressor (`PVRTDecompress.cpp`) implements PVRTC-**I**
+//! only. Its bit layout is a near-lookalike, so it renders a `PVRTII4BPP`
+//! payload as a wrong picture. Three differences, all implemented here:
 //!
 //! 1. **One opacity flag, not two.** PVRTC-I gives colour A its own opaque bit
 //!    at bit 15 and colour B one at bit 31. PVRTC-II spends bit 15 on the
@@ -48,58 +37,39 @@
 //!
 //! # Where this reading comes from, and its confidence
 //!
-//! **Confidence 92.** The bit layout and the decode arithmetic are a port of
-//! **Vita3K**'s `vita3k/renderer/src/texture/pvrt-dec.cpp`, whose PVRTC-II
-//! path that project's own header credits to the Vita3K team ("PVRT2
-//! decompression is implemented by Vita3K team") as an addition to the
-//! Imagination SDK's PVRTC-I decompressor. That is a decoder an emulator runs
-//! real Vita titles through, which is the strongest external corroboration
-//! available for a codec Sony never documented publicly - the same class of
-//! evidence `docs/formats/gxt.md`'s own twiddle finding rests on
-//! (`ClassiCube`'s Vita port).
+//! **Confidence 92.** The bit layout and decode arithmetic are a port of
+//! **Vita3K**'s `vita3k/renderer/src/texture/pvrt-dec.cpp` (its PVRTC-II path
+//! is credited there to the Vita3K team, as an addition to the Imagination SDK's
+//! PVRTC-I decompressor): an emulator decoder real Vita titles run through, the
+//! strongest external corroboration for a codec Sony never documented (the same
+//! class as the `ClassiCube` finding behind `docs/formats/gxt.md`'s twiddle).
 //!
-//! **The 92 is not the reference's, though - it is the cross-title oracle's.**
-//! Every claim below was checked here rather than taken on trust:
+//! **The 92 is the cross-title oracle's, not the reference's.** Checked here:
 //!
 //! - **Wipeout HD decodes the same art, and this agrees with it.** 2048's DLC
-//!   re-ships HD/Fury's circuits and its whole roster, so 2,284 textures exist
-//!   twice: as a `.gtf` in a BC format [`crate::gtf`] decoded long before this
-//!   pass, and as a `PVRTII4BPP` `.gxt` here. Median mean-absolute difference
-//!   between the two decodes is **3.83** of 255. Against the same HD texture
-//!   flipped vertically it is 10.01 (so the Vita's rows are top-down, measured
-//!   rather than assumed); against the same payload read in **raster** word
-//!   order, 34.60; against a different texture of the same size, 59.74. Two
-//!   lossy codecs on one source image cannot agree better than the first
-//!   number, and a wrong decode cannot agree that well at all. See
-//!   `crates/formats/tests/gxt_ground_truth.rs`.
-//! - **The word size closes on the corpus.** Every one of 10,204 `PVRTII4BPP`
-//!   textures across all three EU packages has a declared texel length equal
-//!   to its own mip chain at 8 bytes per 4x4 word, floored at
-//!   [`crate::gxt::MIN_LEVEL_LEN`] - a check [`crate::gxt::Gxt::parse`] could
-//!   not run at all until this module gave it the unit size.
-//! - **A font atlas comes out legible.** `RussianHud.gxt` renders the full
-//!   Latin and Cyrillic alphabets, crisp and right way up, over a 1024x1024
-//!   twiddled surface. Letterforms do not survive a wrong word order, a wrong
-//!   bit layout or a wrong transposition, where a smoothness metric barely
-//!   separates them (a deliberately untwiddled control scores only 1.4x
-//!   rougher, because the bilinear upscale smooths the wrong answer too).
-//! - **Synthetic words decode to the colours they name** - this module's own
-//!   tests, which need no game content.
+//!   re-ships HD/Fury's circuits and roster, so 2,284 textures exist as both a BC
+//!   `.gtf` ([`crate::gtf`]) and a `PVRTII4BPP` `.gxt`. Median mean-absolute
+//!   difference is **3.83** of 255, against 10.01 flipped, 34.60 in raster word
+//!   order and 59.74 for a different texture (`docs/formats/gxt.md`,
+//!   `crates/texture/tests/gxt_ground_truth.rs`).
+//! - **The word size closes on the corpus**: all 10,204 `PVRTII4BPP` textures in
+//!   the three EU packages match their mip chain at 8 bytes per word, floored at
+//!   [`crate::gxt::MIN_LEVEL_LEN`].
+//! - **A font atlas comes out legible**: `RussianHud.gxt` renders the full Latin
+//!   and Cyrillic alphabets crisp and upright.
+//! - **Synthetic words decode to the colours they name** (this module's tests).
 //!
-//! **What the 92 is held back by**: the local-palette path (`+30`). It needs
-//! the hard-transition bit *and* modulation mode 1 on the same quad, and
-//! **no texel in the base package reaches it** - 0 of 1,082,941,440 measured.
-//! So it is implemented (from the reference) but unexercised, and the
-//! reference's own index into its palette table is transposed relative to the
-//! way that table reads - see [`palette`]. The hard-transition path it shares
-//! a flag with *is* exercised: 4,802,259 of 67,683,840 words (7.1%) set bit
-//! 15, which is also why decoding this corpus with a PVRTC-I decoder would be
-//! wrong on 7% of its words rather than merely imprecise.
+//! **What holds the 92 back**: the local-palette path (`+30`) needs the
+//! hard-transition bit *and* modulation mode 1 on one quad, and **no texel in the
+//! base package reaches it** (0 of 1,082,941,440). It is implemented from the
+//! reference but unexercised, and the reference's palette index is transposed
+//! relative to how the table reads - see [`palette`]. The hard-transition path
+//! *is* exercised (7.1% of words set bit 15), so a PVRTC-I decoder would be wrong
+//! on 7% of this corpus's words.
 
 use crate::gxt::twiddle;
 
-/// Bytes one word occupies. A word covers [`WORD_SIDE`] x [`WORD_SIDE`]
-/// texels, so 4 bits per texel.
+/// Bytes one word occupies: [`WORD_SIDE`] x [`WORD_SIDE`] texels at 4 bits each.
 pub const WORD_LEN: usize = 8;
 
 /// Texels a word spans, in each direction.
@@ -107,11 +77,10 @@ pub const WORD_SIDE: usize = 4;
 
 /// Smallest surface this codec decodes, in texels, in each direction.
 ///
-/// A word quad needs a 2x2 neighbourhood of words to interpolate between, so
-/// a surface smaller than two words across cannot be decoded at all. A level
-/// below this is decoded as if it were this size - with absent words read as
-/// zero - and cropped back down; 35 of the 10,204 `PVRTII4BPP` textures the
-/// three EU packages ship have a base level that needs this.
+/// A word quad needs a 2x2 neighbourhood of words, so a smaller surface cannot
+/// decode. A level below this decodes at this size with absent words read as
+/// zero, then is cropped; 35 of the 10,204 `PVRTII4BPP` textures in the three
+/// EU packages have a base level that needs this.
 pub const MIN_SIDE: u32 = 8;
 
 /// One 8-byte word: sixteen 2-bit modulation values, then the colour pair.
@@ -152,11 +121,10 @@ impl Colour {
 
 /// Colour A, out of the word's colour half.
 ///
-/// **The opacity flag is bit 31, not bit 15.** That is the PVRTC-I/II
-/// difference that matters most here: PVRTC-I reads colour A's own opacity at
-/// bit 15, where PVRTC-II spends bit 15 on the hard-transition flag and lets
-/// bit 31 answer for both colours. Reading it at 15 decodes half the words in
-/// the wrong colour mode - a picture, but the wrong one.
+/// **The opacity flag is bit 31, not bit 15.** PVRTC-I reads colour A's opacity
+/// at bit 15; PVRTC-II spends bit 15 on the hard-transition flag and lets bit
+/// 31 answer for both colours. Reading it at 15 decodes half the words in the
+/// wrong colour mode.
 fn colour_a(data: u32) -> Colour {
     let d = data as i32;
     if data & 0x8000_0000 != 0 {
@@ -181,8 +149,8 @@ fn colour_a(data: u32) -> Colour {
 
 /// Colour B, out of the same word.
 ///
-/// **Alpha's low bit is forced to 1** in transparent mode, where PVRTC-I
-/// leaves it 0 - the third of this codec's three departures from PVRTC-I.
+/// **Alpha's low bit is forced to 1** in transparent mode (PVRTC-I leaves it 0):
+/// the third departure from PVRTC-I.
 fn colour_b(data: u32) -> Colour {
     if data & 0x8000_0000 != 0 {
         // Opaque: RGB 5:5:5, no channel widening needed.
@@ -205,9 +173,9 @@ fn colour_b(data: u32) -> Colour {
 /// Widens a stored colour to eight bits per channel without interpolating it -
 /// what the hard-transition path uses in place of the bilinear result.
 ///
-/// The scaling is the reference's, and it is exact at both ends: a five-bit
-/// channel times 16 then `(v >> 6) + (v >> 1)` maps 31 to 255, and a four-bit
-/// alpha times 16 then `(v >> 4) + v` maps 15 to 255.
+/// The reference's scaling, exact at both ends: a five-bit channel times 16 then
+/// `(v >> 6) + (v >> 1)` maps 31 to 255; a four-bit alpha times 16 then
+/// `(v >> 4) + v` maps 15 to 255.
 fn expand(colour: Colour) -> Colour {
     colour
         .map(|v| v * 16, |v| v * 16)
@@ -217,10 +185,9 @@ fn expand(colour: Colour) -> Colour {
 /// Bilinearly interpolates one colour across the 4x4 texels a word quad
 /// covers, from the four words' own colours.
 ///
-/// `p` is the top-left word of the quad, `q` its horizontal neighbour, `r` its
-/// vertical one and `s` the diagonal. The result is indexed `[row][column]` in
-/// texel space, and is already widened to eight bits per channel by the same
-/// arithmetic [`expand`] uses.
+/// `p` is the quad's top-left word, `q` its horizontal neighbour, `r` its
+/// vertical one, `s` the diagonal. Indexed `[row][column]`, widened to eight
+/// bits per channel as [`expand`] does.
 fn interpolate(p: Colour, q: Colour, r: Colour, s: Colour) -> [[Colour; WORD_SIDE]; WORD_SIDE] {
     let q_minus_p = q.zip(p, |a, b| a - b);
     let s_minus_r = s.zip(r, |a, b| a - b);
@@ -249,18 +216,15 @@ const PALETTE_SOURCES: usize = 8;
 /// from: for each of the sixteen texels, which of the quad's eight colours
 /// each of the four modulation values picks.
 ///
-/// Texel 0 is special-cased in [`palette`] - it is a four-step ramp between
-/// P's own two colours rather than a pick from the eight - so its row here is
-/// a placeholder the caller never reads.
+/// Texel 0 is special-cased in [`palette`] (a four-step ramp between P's own two
+/// colours), so its row here is a placeholder never read.
 ///
-/// **The texel index is column-major** (`column * 4 + row`), which is how the
-/// reference indexes this table even though the table itself reads as though
-/// it were authored row-major: entry 1 names Q, the *horizontal* neighbour,
-/// at what column-major indexing places one texel *below* P. Ported as the
-/// reference computes it rather than as the table reads, because the
-/// reference is the half with evidence behind it; see the module doc's
-/// confidence note and `docs/formats/gxt.md` for how often this path is
-/// reached at all.
+/// **The texel index is column-major** (`column * 4 + row`), as the reference
+/// indexes it, though the table reads as if authored row-major: entry 1 names Q,
+/// the *horizontal* neighbour, at what column-major indexing places one texel
+/// *below* P. Ported as the reference computes it, the half with evidence behind
+/// it; see the module doc's confidence note and `docs/formats/gxt.md` for how
+/// often this path is reached.
 const PALETTE: [[u8; 4]; 16] = [
     [0, 0, 0, 0], // texel 0: a P-only ramp, see `palette`
     [0, 1, 2, 3],
@@ -301,8 +265,8 @@ fn palette(sources: &[Colour; PALETTE_SOURCES], texel: usize, modulation: usize)
 /// `north_west` is the quad's own top-left word, whose bit 15 carries the
 /// hard-transition flag for the whole quad.
 ///
-/// The value written is not the raw 2-bit code but a small tagged integer the
-/// blend step decodes, exactly as the reference does it:
+/// The value written is a small tagged integer the blend step decodes, as in the
+/// reference, not the raw 2-bit code:
 ///
 /// | Written | Means |
 /// | --- | --- |
@@ -325,9 +289,8 @@ fn unpack_modulations(
     for row in 0..WORD_SIDE {
         for column in 0..WORD_SIDE {
             let (r, c) = (row + row_offset, column + column_offset);
-            // The centre 4x4 of the quad's 8x8 grid is the only part a hard
-            // transition applies to - and it is exactly the part the blend
-            // step reads back.
+            // Only the centre 4x4 of the quad's 8x8 grid takes a hard transition,
+            // and it is the part the blend step reads back.
             let central = (2..=5).contains(&r) && (2..=5).contains(&c);
             let code = (bits & 3) as i32;
             out[r][c] = if interpolated {
@@ -354,9 +317,8 @@ fn unpack_modulations(
 
 /// Decodes the 4x4 texels one quad of words covers, indexed `[row][column]`.
 ///
-/// The quad's own top-left word is `p`; the texels this produces are **not**
-/// `p`'s own 4x4 - they straddle all four words, which is what
-/// [`decode_ii_4bpp`]'s mapping step then places.
+/// The texels produced are **not** `p`'s own 4x4 but straddle all four words;
+/// [`decode_ii_4bpp`]'s mapping step places them.
 fn quad(p: Word, q: Word, r: Word, s: Word) -> [[[u8; 4]; WORD_SIDE]; WORD_SIDE] {
     let mut modulations = [[0i32; 8]; 8];
     unpack_modulations(p, p, 0, 0, &mut modulations);
@@ -432,16 +394,13 @@ fn quad(p: Word, q: Word, r: Word, s: Word) -> [[[u8; 4]; WORD_SIDE]; WORD_SIDE]
 
 /// Decodes one `PVRTII4BPP` surface to straight RGBA8, row-major.
 ///
-/// `data` is the level's texels alone - [`WORD_LEN`] bytes per 4x4 word, in
-/// twiddled word order. Returns `None` only when the arithmetic overflows;
-/// a `data` shorter than the surface needs is read as zero words rather than
-/// refused, which is what lets a level below [`MIN_SIDE`] decode at all (see
-/// that constant).
+/// `data` is the level's texels alone, [`WORD_LEN`] bytes per 4x4 word in
+/// twiddled order. `None` only when the arithmetic overflows; short `data` reads
+/// as zero words, which lets a level below [`MIN_SIDE`] decode.
 ///
 /// # Panics
 ///
-/// Never: every index is derived from `width`/`height`, both clamped to
-/// [`MIN_SIDE`] and used to size the output.
+/// Never: every index derives from `width`/`height`, clamped to [`MIN_SIDE`].
 #[must_use]
 pub fn decode_ii_4bpp(data: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let surface_w = width.max(MIN_SIDE) as usize;
@@ -462,10 +421,8 @@ pub fn decode_ii_4bpp(data: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4
         }
     };
 
-    // Each iteration decodes the 4x4 texels *between* four words, so the grid
-    // of quads is offset half a word from the grid of words and wraps at both
-    // edges - PVRTC's own addressing, and why a naive per-word loop cannot
-    // reproduce this codec.
+    // Each iteration decodes the 4x4 texels *between* four words, so the quad
+    // grid is offset half a word from the word grid and wraps at both edges.
     for quad_y in 0..words_y {
         for quad_x in 0..words_x {
             let px = (quad_x + words_x - 1) % words_x;

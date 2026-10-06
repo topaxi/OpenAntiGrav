@@ -85,8 +85,7 @@ fn stage_accessors_answer_none_for_a_stage_the_file_does_not_name() {
 
 #[test]
 fn a_key_with_no_space_before_the_dot_is_not_read_as_a_stage() {
-    // "Lighting" alone never parses as a stage number, so it stays a
-    // title-wide key rather than colliding with a real "0 Start" prefix.
+    // "Lighting" alone never parses as a stage number: it stays title-wide.
     let e = EffectSettings::parse("\"Lighting.Constant Ambient Colour\"=1.0 1.0 1.0\n")
         .expect("it parses");
     assert!(e.stages.is_empty());
@@ -120,10 +119,8 @@ fn cross_fade_at_zero_weight_is_just_the_previous_stage() {
 
 #[test]
 fn cross_fade_at_the_midpoint_averages_each_channel() {
-    // Each term truncates toward zero before the two are summed - not the
-    // same as truncating the sum - so 255*0.5 + 255*0.5 lands on 254, one
-    // short of a rounded average. That is the traced arithmetic, not a
-    // rounding bug: see `cross_fade_rgba8`'s own doc comment.
+    // Each term truncates toward zero before summing, so 255*0.5 + 255*0.5 is
+    // 254: the traced arithmetic, not a rounding bug (see `cross_fade_rgba8`).
     assert_eq!(
         cross_fade_rgba8([100, 0, 255, 10], [0, 100, 255, 20], 0.5),
         [50, 50, 254, 15]
@@ -132,21 +129,19 @@ fn cross_fade_at_the_midpoint_averages_each_channel() {
 
 #[test]
 fn cross_fade_clamps_high_rather_than_wrapping() {
-    // An out-of-range weight (never seen at a real call site, but not
-    // checked on the low end by the traced code either) must clamp, not
-    // wrap the way a raw `u8` cast would. A zero previous channel keeps
-    // the negative `other_weight` term from cancelling the overflow out.
+    // An out-of-range weight (not checked on the low end by the traced code
+    // either) must clamp, not wrap like a raw `u8` cast; a zero previous channel
+    // keeps the negative term from cancelling the overflow.
     assert_eq!(
         cross_fade_rgba8([200, 0, 0, 0], [0, 0, 0, 0], 1.5),
         [255, 0, 0, 0]
     );
 }
 
-/// Two whole stages of HD's own file, verbatim - `Start` and `Sub Venom`, the
-/// pair every blend test below fades between. Copied from the disc
-/// (`just psarc cat ... /data/environments/zonemode.effectsettings`), not
-/// invented: `effectsettings_ground_truth.rs` asserts the same numbers
-/// straight off the image, so a drift here fails there too.
+/// Two stages of HD's file, verbatim (`Start`, `Sub Venom`), copied from the disc
+/// (`just psarc cat ... /data/environments/zonemode.effectsettings`):
+/// `effectsettings_ground_truth.rs` asserts the same numbers off the image, so a
+/// drift here fails there too.
 const HD_TWO_STAGES: &str = concat!(
     "\"0 Start.Lighting.Sky reflection colour\"=0 0 0 255\n",
     "\"0 Start.Lighting.Sun colour\"=1.000000 1.000000 1.000000 0.000000\n",
@@ -170,8 +165,7 @@ fn a_stage_palette_reads_the_keys_the_schema_names() {
     assert_eq!(one.fog_density, Some(0.002_1));
     assert_eq!(one.ambient_colour, Some([1.5, 1.5, 1.5]));
     assert_eq!(one.sky_reflection_colour, Some([255, 255, 255, 255]));
-    // Absent on both stages of this excerpt, and absent rather than
-    // substituted: `zonemode.effectsettings` exercises only part of the schema.
+    // Absent on both stages and not substituted: the file exercises part of the schema.
     assert_eq!(one.prelit_power, None);
 }
 
@@ -217,10 +211,9 @@ fn the_ends_of_a_cross_fade_are_the_two_stages_themselves() {
     );
 }
 
-/// Halfway between `Start` and `Sub Venom`, per field and per domain: the
-/// float keys fade in floats, and the one byte-written key fades through the
-/// recovered byte arithmetic - `(int)(255*0.5) + (int)(0*0.5)` is 127, not the
-/// 127.5 a float blend would give.
+/// Halfway between `Start` and `Sub Venom`: float keys fade in floats, the one
+/// byte-written key through the recovered byte arithmetic (`(int)(255*0.5) +
+/// (int)(0*0.5)` is 127, not 127.5).
 #[test]
 fn a_half_weight_blend_fades_each_field_in_its_own_domain() {
     let e = EffectSettings::parse(HD_TWO_STAGES).expect("it parses");
@@ -228,11 +221,8 @@ fn a_half_weight_blend_fades_each_field_in_its_own_domain() {
     assert_eq!(half.fog_colour, Some([0.0, 1.305_882 / 2.0, 0.9]));
     assert_eq!(half.fog_density, Some(0.002_1 / 2.0));
     assert_eq!(half.ambient_colour, Some([1.25, 1.25, 1.25]));
-    // Alpha is `255` on both stages and still lands on `254`: the recovered
-    // arithmetic truncates **each term** before summing them, so a channel
-    // blended against its own value loses up to one unit at an intermediate
-    // weight. That is the original's own rounding, not a rounding this
-    // project chose - see `cross_fade_rgba8`.
+    // Alpha `255` on both stages lands on `254`: each term truncates before
+    // summing, the original's own rounding.
     assert_eq!(half.sky_reflection_colour, Some([127, 127, 127, 254]));
 }
 
@@ -246,10 +236,9 @@ fn a_float_colour_over_one_is_faded_rather_than_clipped_to_white() {
     assert_eq!(full.fog_colour, Some([0.0, 1.305_882, 1.8]));
 }
 
-/// Stage zero pairs with itself - `stage - 1` saturates - so at the ends of
-/// the fade it is exactly its own palette. That matters because nothing drives
-/// the stage yet: a race sits on stage zero at weight `1.0`, and sitting there
-/// must change nothing at all.
+/// Stage zero pairs with itself (`stage - 1` saturates), so at the ends of the
+/// fade it is exactly its own palette: a race sits on stage zero at weight `1.0`
+/// and that must change nothing.
 #[test]
 fn stage_zero_blends_against_itself() {
     let e = EffectSettings::parse(HD_TWO_STAGES).expect("it parses");
@@ -257,18 +246,15 @@ fn stage_zero_blends_against_itself() {
     for weight in [0.0, 1.0] {
         assert_eq!(e.blended_palette(0, weight), Some(zero), "weight {weight}");
     }
-    // **Not** at an intermediate weight, on the byte-written key alone: the
-    // recovered blend truncates each term separately, so `255` faded against
-    // `255` at `0.5` is `254`. Pinned rather than papered over - it is why the
-    // resting weight is `1.0` and not something in between.
+    // **Not** at an intermediate weight on the byte key: `255` faded against
+    // `255` at `0.5` is `254`, which is why the resting weight is `1.0`.
     let half = e.blended_palette(0, 0.5).expect("stage 0");
     assert_eq!(half.sky_reflection_colour, Some([0, 0, 0, 254]));
     assert_eq!(half.fog_colour, zero.fog_colour, "the float keys are exact");
 }
 
-/// A field only fades where both stages author it; where only the current
-/// stage does, its own value stands rather than fading up from an invented
-/// zero.
+/// A field fades only where both stages author it; otherwise the current
+/// stage's value stands, not a fade from an invented zero.
 #[test]
 fn a_key_the_previous_stage_omits_keeps_the_current_stages_value() {
     let text = concat!(

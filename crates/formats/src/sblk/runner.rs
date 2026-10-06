@@ -1,40 +1,37 @@
 //! A cue's command list run as the handler runs it: tick by tick, with a
 //! parameter, so a cue that **repeats** can be played for as long as it is held.
 //!
-//! [`Bank::cue_timeline`](super::Bank::cue_timeline) lays a list down once, start
-//! to end, which is the right answer for a cue that plays and stops. It has no
-//! answer for a list with a loop in it: `~BLOWUP` re-keys a waveform every
-//! 43 ticks for as long as the explosion holds the handler, and `~ROCKLOCK`
-//! beeps at a tempo the reticle's parameter picks. Both end only when the
-//! caller kills the handler, so there is no whole timeline to unroll and no
-//! honest horizon to unroll it to.
+//! [`Bank::cue_timeline`](super::Bank::cue_timeline) lays a list down once, which
+//! suits a cue that plays and stops. It cannot answer a list with a loop:
+//! `~BLOWUP` re-keys a waveform every 43 ticks while the explosion holds the
+//! handler, and `~ROCKLOCK` beeps at a tempo the reticle's parameter picks.
+//! Both end only when the caller kills the handler, so there is no honest
+//! horizon to unroll to.
 //!
 //! A [`Runner`] is `Scream_StartSound`'s and `Scream_TickCommandList`'s own
 //! arithmetic (`0x0898f864`, `0x0898db80`, `0x0898efd8`) in whole master ticks:
 //!
-//! - **Start**: the counter is the first command's delay, and commands run
-//!   while it is zero, so a zero-delay prefix keys on inside the start call.
+//! - **Start**: the counter is the first command's delay, and commands run while
+//!   it is zero, so a zero-delay prefix keys on inside the start call.
 //! - **Every tick**: the counter falls by one, the per-tick flag byte
-//!   (`handler + 0x16`, `& 0xaf`) is cleared, and commands run while the
-//!   counter is below one.
-//! - **After a command**: the program counter steps on, and the counter is
-//!   loaded with the *next* command's delay plus whatever the handler returned.
-//!   Running off the end stops the list.
+//!   (`handler + 0x16`, `& 0xaf`) is cleared, and commands run while the counter
+//!   is below one.
+//! - **After a command**: the program counter steps on and the counter loads the
+//!   *next* command's delay plus whatever the handler returned. Running off the
+//!   end stops the list.
 //! - **`0x15`** is a no-op marker. **`0x16`** (`Scream_OpLoopBack_q`) scans back
-//!   for the nearest `0x15` and resumes there, returning `1` (one extra tick of
-//!   delay) only when it is run a **second time within one tick** - the flag it
-//!   sets is cleared by the tick, so a loop that waits does not pay the extra
-//!   tick and a loop that does not wait cannot spin. No `0x15` behind it kills
-//!   the handler.
+//!   for the nearest `0x15` and resumes there, returning `1` (one extra tick)
+//!   only when run a **second time within one tick**: the flag it sets is
+//!   cleared by the tick, so a waiting loop pays nothing and a non-waiting loop
+//!   cannot spin. No `0x15` behind it kills the handler.
 //! - **`0x22`** (`Scream_OpGuard`) compares one of the handler's four parameter
 //!   bytes (`handler + 0x4c + index`, written by `Scream_SetCueParameter`'s
 //!   `FUN_0898daf0`) against an immediate and, when the test says so, steps the
-//!   program counter over the **next** command - which also skips that
-//!   command's own delay.
+//!   program counter over the **next** command, skipping its delay too.
 //! - **`0x1a`** returns `rand() % (operand + 1)` as extra delay on the next.
 //!
 //! Every parameter byte starts at zero: `Scream_StartSound` clears them unless
-//! its caller supplies initial ones, and `Sound_PlayNamedInSlot` supplies none.
+//! its caller supplies some, and `Sound_PlayNamedInSlot` supplies none.
 //!
 //! Anything else in the list - a child, an alternate group, a bend, a goto, a
 //! global-variable guard - is not run: [`Bank::cue_runner`] returns `None`

@@ -1,7 +1,6 @@
 //! Hardware-free tests for the cue timeline.
-//!
-//! Every bank is assembled byte by byte. The corpus half - Pulse's
-//! `speech_zone.bnk`, where the shape was found - is
+//! Every bank is assembled byte by byte. The corpus half (Pulse's
+//! `speech_zone.bnk`, where the shape was found) is
 //! `crates/formats/tests/sblk_timeline_ground_truth.rs`.
 
 use crate::sblk::{
@@ -178,8 +177,8 @@ fn a_cue_is_a_sequence_with_its_delays_accumulated() {
         .map(|g| (g.tick, g.sound.offset, g.angle))
         .collect();
     // ZONE at 0 and 10, the number at 105 and 115, CLEAR at 115 + 140 and 10
-    // after: a child's own list runs from the tick its parent started it on and
-    // the parent's next delay counts from the child *command*, not its end.
+    // after: a child's list runs from the tick its parent started it, and the
+    // parent's next delay counts from the child *command*, not its end.
     assert_eq!(
         got,
         vec![
@@ -443,8 +442,8 @@ fn a_goto_and_its_marker_are_unread_unless_the_walk_is_asked_to_follow_them() {
 
 #[test]
 fn a_goto_skips_to_the_marker_with_its_id_and_counts_the_markers_own_delay() {
-    // key at 0; goto #1 after 3; a key that is jumped over; marker #2 (not
-    // ours); marker #1 after 2 more; a key after 4 more.
+    // key at 0; goto #1 after 3; a jumped-over key; marker #2 (not ours);
+    // marker #1 after 2 more; a key after 4 more.
     let data = build(&[Spec(
         "A",
         100,
@@ -485,8 +484,7 @@ fn a_ninth_goto_within_one_tick_is_refused_and_a_waited_loop_terminates() {
     let bank = Bank::parse(&tight).expect("parse");
     let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], GOTO_MODEL);
     assert_eq!(t.unread, vec![0x24]);
-    // With a wait each pass the guard resets; the step bound ends the walk and
-    // says so.
+    // With a wait each pass the guard resets; the step bound ends the walk.
     let waited = build(&[Spec(
         "A",
         100,

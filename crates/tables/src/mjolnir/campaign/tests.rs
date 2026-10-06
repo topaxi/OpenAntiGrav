@@ -1,10 +1,10 @@
 use super::*;
 use crate::mjolnir::parse;
 
-/// Four instances covering the whole typed view: a `RACE_A` event chained to
-/// a `RACE_B` one (the way `"2048 - Event 3"` really chains to
-/// `"2048 - Event 4"`), a `ZONE` event with no track/speed-class, a
-/// `TrackDefinition` and a `WeaponSetDefinition`.
+/// Four instances covering the typed view: a `RACE_A` event chained to a
+/// `RACE_B` one (as `"2048 - Event 3"` chains to `"2048 - Event 4"`), a `ZONE`
+/// event with no track/speed class, a `TrackDefinition` and a
+/// `WeaponSetDefinition`.
 const FIXTURE: &str = r#"<mjolnir><instance instanceid="-1143582041" typedefid="-1915183557" name="2048 - Event 3" schema="0" version="0" file="SP.xml"><DATA>
 <M_DESCRIPTION name="m_description" type="char" length="64" typedefid="1380284284"><ARRAY value="2048_EVENT_3" typedefid="1380284284"/></M_DESCRIPTION>
 <M_TRACKDEF name="m_trackDef" type="TrackDefinition" length="1" typedefid="205052969"><ARRAY value="-1892961298" typedefid="205052969"/></M_TRACKDEF>
@@ -116,10 +116,8 @@ fn event_3_reads_the_full_field_set_measured_off_the_real_file() {
 
 #[test]
 fn laps_zero_is_not_produced_by_this_fixture_but_the_field_still_parses_as_some_zero() {
-    // Speed Lap's own sentinel (see typedef::RACE_A's doc comment) - checked
-    // directly against a synthetic zero rather than relying on the shared
-    // fixture, since `laps: Option<u32>` must distinguish "authored zero"
-    // from "absent" the same way every other field here does.
+    // Speed Lap's sentinel (typedef::RACE_A): a synthetic zero, since
+    // `Option<u32>` must tell "authored zero" from "absent".
     let xml = r#"<mjolnir><instance instanceid="1" typedefid="-1915183557" name="Bridge Speed Lap - Flash"><DATA>
 <M_NUMOFLAPS name="m_numOfLaps" type="int" length="1" typedefid="351272028"><ARRAY value="0" typedefid="351272028"/></M_NUMOFLAPS>
 </DATA></instance></mjolnir>"#;
@@ -170,12 +168,10 @@ fn tracks_and_weapon_sets_are_found_by_typedef_not_by_field_shape() {
     assert_eq!(sets[0].name, "Rockets Only");
 }
 
-/// [`WeaponSet::allowed_weapons`] against the values `SP.xml`'s real 20
-/// `WeaponSetDefinition` instances actually carry - see
-/// `docs/formats/2048-campaign.md`'s "The weapon set gate" section for the
-/// full census this pins these against, and
-/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for
-/// `WeaponType`'s own declaration this now decodes all eleven bits from.
+/// [`WeaponSet::allowed_weapons`] against the values `SP.xml`'s 20
+/// `WeaponSetDefinition` instances carry; census in
+/// `docs/formats/2048-campaign.md`'s "The weapon set gate", `WeaponType`'s
+/// declaration in `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md`.
 #[test]
 fn allowed_weapons_decodes_every_weapon_type_bit() {
     use crate::weapons::Weapon;
@@ -186,27 +182,23 @@ fn allowed_weapons_decodes_every_weapon_type_bit() {
         available_bits: Some(bits),
     };
 
-    // A single named bit each, the way `"Rockets Only"`/`"Missile
-    // Only"`/... author them.
+    // A single named bit each, as `"Rockets Only"`/`"Missile Only"`/... author them.
     assert_eq!(of(1).allowed_weapons(), vec![Weapon::Rocket]);
     assert_eq!(of(2).allowed_weapons(), vec![Weapon::Missile]);
     assert_eq!(of(1024).allowed_weapons(), vec![Weapon::LeachBeam]);
 
-    // `"Cannons, Missile, Plasma"` = 162 = 128 + 32 + 2, in `WEAPON_BITS`'s
-    // own bit order.
+    // `"Cannons, Missile, Plasma"` = 162 = 128 + 32 + 2, in `WEAPON_BITS` order.
     assert_eq!(
         of(162).allowed_weapons(),
         vec![Weapon::Missile, Weapon::Cannon, Weapon::Plasma]
     );
 
-    // `"Mines Only"` = 768 = bit 8 (`Bomb`) and bit 9 (`Mine`) together -
-    // `WeaponType`'s own declaration order, not the HUD held-weapon id
-    // table's reversed one.
+    // `"Mines Only"` = 768 = bit 8 (`Bomb`) + bit 9 (`Mine`): `WeaponType`'s order,
+    // not the HUD held-weapon id table's.
     assert_eq!(of(768).allowed_weapons(), vec![Weapon::Bomb, Weapon::Mine]);
 
-    // `"DemoWeapons"` = 1023 sets bit 4 - `Shield` - alongside every
-    // confidence-95 bit below it and the mines pair. This is the
-    // discriminating case against the prior reading, which left bit 4 out.
+    // `"DemoWeapons"` = 1023 sets bit 4 (`Shield`) alongside the rest: the case
+    // that discriminates against the prior reading, which left bit 4 out.
     assert_eq!(
         of(1023).allowed_weapons(),
         vec![
@@ -223,9 +215,8 @@ fn allowed_weapons_decodes_every_weapon_type_bit() {
         ]
     );
 
-    // `"EliminatorWeapons"` = 1959 sets every bit except Turbo (3), Shield
-    // (4) and Autopilot (6) - confirms Shield stays out when its own bit is
-    // clear, not decoded unconditionally.
+    // `"EliminatorWeapons"` = 1959 sets every bit but Turbo (3), Shield (4) and
+    // Autopilot (6): Shield stays out when its bit is clear.
     assert_eq!(
         of(1959).allowed_weapons(),
         vec![
@@ -240,8 +231,7 @@ fn allowed_weapons_decodes_every_weapon_type_bit() {
         ]
     );
 
-    // No bits at all, and no `available_bits` at all, both decode to
-    // nothing rather than to every weapon.
+    // No bits, and no `available_bits`, decode to nothing, not every weapon.
     assert_eq!(of(0).allowed_weapons(), Vec::<Weapon>::new());
     assert_eq!(
         WeaponSet {
@@ -255,11 +245,9 @@ fn allowed_weapons_decodes_every_weapon_type_bit() {
 }
 
 /// `RACE_A`/`RACE_B`/`ELIMINATION`/`ZONE` are `GameMode_SpeedLapRace`/
-/// `GameMode_ArcadeRace`/`GameMode_EliminatorRace`/`GameMode_ZoneRace`'s own
-/// typedef ids, not four IDs whose class this pass had to guess -
-/// `oag_formats::wad::hash_name` of each class name matches exactly, the
-/// same case-folded-CRC-32 convention the five in-file names below
-/// corroborate on the same test. See `typedef::RACE_A`'s own doc comment.
+/// `GameMode_ArcadeRace`/`GameMode_EliminatorRace`/`GameMode_ZoneRace`'s typedef
+/// ids: `oag_formats::wad::hash_name` of each class name matches exactly, the
+/// convention the five in-file names corroborate. See `typedef::RACE_A`.
 #[test]
 fn typedef_ids_are_hash_name_of_the_class_they_are() {
     let hash = |name: &str| i64::from(oag_formats::wad::hash_name(name) as i32);
@@ -269,17 +257,15 @@ fn typedef_ids_are_hash_name_of_the_class_they_are() {
     assert_eq!(hash("GameMode_EliminatorRace"), typedef::ELIMINATION);
     assert_eq!(hash("GameMode_ZoneRace"), typedef::ZONE);
 
-    // The five typedefs SP.xml already names in-file corroborate the same
-    // hash convention from the opposite direction.
+    // The five in-file typedef names corroborate the same convention.
     assert_eq!(hash("GameModeObjective"), typedef::GAME_MODE_OBJECTIVE);
     assert_eq!(hash("GameModeBase"), typedef::GAME_MODE_BASE);
     assert_eq!(hash("WOShipModelData"), typedef::SHIP_MODEL_DATA);
     assert_eq!(hash("TrackDefinition"), typedef::TRACK_DEFINITION);
     assert_eq!(hash("WeaponSetDefinition"), typedef::WEAPON_SET_DEFINITION);
 
-    // The other two `GameMode_*` names `eboot.elf`'s string table carries
-    // match no typedef id `SP.xml` authors at all - shipped classes this
-    // file's own campaign never instantiates.
+    // The other two `GameMode_*` names in `eboot.elf` match no `SP.xml` typedef:
+    // shipped classes the campaign never instantiates.
     assert!(
         ![
             typedef::RACE_A,

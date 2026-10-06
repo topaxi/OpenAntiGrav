@@ -2,9 +2,8 @@
 //! random/sequence containers (13), plus the clip list of a music track (11).
 //!
 //! Read forward, field by field, and **every layout here refuses by name** on a
-//! value it was not measured against instead of skipping it. The census and its
-//! counts are in `docs/formats/wwise.md`, "Music"; the ground truth is
-//! `crates/formats/tests/wwise_music_ground_truth.rs`.
+//! value it was not measured against. The census is in `docs/formats/wwise.md`,
+//! "Music"; the ground truth is `crates/formats/tests/wwise_music_ground_truth.rs`.
 //!
 //! A music node is `{ u8 flags, base parameters, u32 n, n child ids, meter,
 //! stingers }` and then what its kind adds:
@@ -114,16 +113,14 @@ pub type StateGroup = (u32, u8, Vec<(u32, u32)>);
 /// What every music node carries before its own fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MusicNode {
-    /// The node above this one; `None` at the root.
     pub parent: Option<u32>,
     /// The four bytes after the properties (positioning, auxiliary sends,
     /// advanced settings): `c0 00 00 01` on every node but one switch's
-    /// `c3 00 00 01`. Kept raw, not interpreted.
+    /// `c3 00 00 01`. Kept raw.
     pub flags: [u8; 4],
     /// State groups the node binds: `(group id, change-occurs byte, states)`
     /// with each state `(state id, state instance id)`.
     pub state_groups: Vec<StateGroup>,
-    /// The children, in file order.
     pub children: Vec<u32>,
     /// Tempo in beats per minute, and the time signature.
     pub tempo: f32,
@@ -199,7 +196,6 @@ fn expect(kind: Kind, want: Kind) -> Result<(), MusicError> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Segment {
     pub node: MusicNode,
-    /// Length in milliseconds.
     pub duration: f64,
     /// `(id, position in ms)`; the marker names are empty on every segment.
     pub markers: Vec<(u32, f64)>,
@@ -236,12 +232,10 @@ impl Segment {
     }
 }
 
-/// Skips `rules` transition rules.
-///
-/// A rule is `u32 n, n ids, u32 m, m ids`, a source rule of 21 bytes, a
-/// destination rule of 24 and a flag byte that, when `1`, is followed by a
-/// 30-byte transition object. Nothing in them decides what plays, so they are
-/// counted and not kept.
+/// Skips `rules` transition rules: each is `u32 n, n ids, u32 m, m ids`, a
+/// 21-byte source rule, a 24-byte destination rule and a flag byte that, when
+/// `1`, precedes a 30-byte transition object. Nothing in them decides what
+/// plays, so they are counted, not kept.
 fn skip_rules(c: &mut Cursor<'_>, rules: u32) -> Result<(), MusicError> {
     for _ in 0..rules {
         for _ in 0..2 {
@@ -264,7 +258,6 @@ fn skip_rules(c: &mut Cursor<'_>, rules: u32) -> Result<(), MusicError> {
 /// One node of a switch's decision tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TreeNode {
-    /// The state or switch value this node matches; `0` at the root.
     pub key: u32,
     /// An object id at a leaf, else `first child index | count << 16`.
     pub target: u32,
@@ -384,7 +377,6 @@ impl Switch {
 /// One playlist item of a random/sequence container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlaylistItem {
-    /// The segment this item plays; `0` for a grouping item.
     pub segment: u32,
     pub item_id: u32,
     pub children: u32,
@@ -518,9 +510,8 @@ pub fn track_clips(body: &[u8]) -> Result<Vec<Clip>, MusicError> {
 }
 
 /// A music track's type: the byte five from the end, before the look-ahead.
-///
-/// `0` is a normal track (every track in the census). Fitted from the tail,
-/// not read forward - the track's own base parameters are unread.
+/// `0` is a normal track (every track in the census). Fitted from the tail, as
+/// the track's own base parameters are unread.
 #[must_use]
 pub fn track_type(body: &[u8]) -> Option<u8> {
     body.len().checked_sub(5).map(|i| body[i])

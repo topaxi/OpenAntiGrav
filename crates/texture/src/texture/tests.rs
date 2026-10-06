@@ -1,11 +1,7 @@
-//! What the `.mip` texture reader in [`super`] is asserted to do: palette and
-//! pixel decoding at each bit depth, the mip chain, and the headers it
-//! refuses.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `texture.rs`: the tests are 269 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! What the `.mip` reader in [`super`] is asserted to do: palette and pixel
+//! decoding at each bit depth, the mip chain, and the headers it refuses. Its
+//! own file because the tests pass the 200-line inline limit
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -32,19 +28,16 @@ fn build(width: u16, height: u16, bpp: u8, fill: u8) -> Vec<u8> {
 
 /// `+0x06` is a mip count, and a chain of them still decodes to level 0.
 ///
-/// This exists because the parser assumed one level for a long time and
-/// `psp-texture.md` flagged the assumption as untested against `Data.wad`.
-/// The engine-flare sprite is the counter-example: 128x64 at 8bpp with
-/// `+0x06 == 4` and 11,920 bytes, where one level implies 9,232. The shape is
-/// reproduced here synthetically - no game data in any test.
+/// The engine-flare sprite is the counter-example to a one-level assumption:
+/// 128x64 at 8bpp with `+0x06 == 4` and 11,920 bytes, where one level implies
+/// 9,232. The shape is reproduced synthetically.
 #[test]
 fn a_mipmapped_blob_declares_its_chain_and_decodes_level_zero() {
     let (w, h) = (128u16, 64u16);
     let mut blob = build(w, h, 8, 0);
     blob[6] = 4;
-    // Levels 1..3, appended after the level-0 pixels `build` already wrote.
-    // Every row here is already at least 16 bytes, so no padding applies -
-    // which is exactly why the flare sprite's length is unaffected by it.
+    // Levels 1..3, after the level-0 pixels `build` wrote. Every row is at least
+    // 16 bytes, so no padding applies, as with the flare sprite.
     for (lw, lh) in [(64usize, 32usize), (32, 16), (16, 8)] {
         blob.extend(std::iter::repeat_n(0u8, lw * lh));
     }
@@ -56,12 +49,10 @@ fn a_mipmapped_blob_declares_its_chain_and_decodes_level_zero() {
     assert_eq!(parsed.mip_levels, 4);
     assert_eq!(parsed.width, w);
     assert_eq!(parsed.height, h);
-    // Level 0 only: the extra levels must not lengthen `indices`, or
-    // `png::encode_rgba` would reject the buffer for its dimensions.
+    // Level 0 only: extra levels must not lengthen `indices`.
     assert_eq!(parsed.indices.len(), usize::from(w) * usize::from(h));
 
-    // Truncating the chain must be refused rather than read as a shorter
-    // texture, which is the property that keeps `looks_like_texture` strong.
+    // A truncated chain must be refused, which keeps `looks_like_texture` strong.
     blob.truncate(blob.len() - 1);
     assert!(matches!(
         Texture::parse(&blob),
@@ -71,10 +62,9 @@ fn a_mipmapped_blob_declares_its_chain_and_decodes_level_zero() {
 
 /// A tail level narrower than 16 bytes pads its rows to 16.
 ///
-/// This is the rule the noise texture forced:
-/// `Data\Tex\engineFlare\Engine_noise.mip` is 64x64 at 8bpp with 4 levels
-/// and **6,544** bytes, where an unpadded chain implies 6,480. The whole
-/// 64-byte difference is level 3, an 8x8 whose 8-byte rows pad to 16.
+/// `Data\Tex\engineFlare\Engine_noise.mip` is 64x64 at 8bpp with 4 levels and
+/// **6,544** bytes where an unpadded chain implies 6,480; the 64-byte difference
+/// is level 3, an 8x8 whose 8-byte rows pad to 16.
 #[test]
 fn a_narrow_tail_level_pads_its_rows_to_sixteen_bytes() {
     let mut blob = build(64, 64, 8, 0);
@@ -90,8 +80,7 @@ fn a_narrow_tail_level_pads_its_rows_to_sixteen_bytes() {
     assert_eq!(parsed.mip_levels, 4);
     assert_eq!(parsed.indices.len(), 64 * 64);
 
-    // Without the padding the blob is 64 bytes shorter, and must be refused -
-    // that is what makes the rule load-bearing rather than cosmetic.
+    // Without the padding the blob is 64 bytes shorter and must be refused.
     let mut unpadded = build(64, 64, 8, 0);
     unpadded[6] = 4;
     for n in [32 * 32usize, 16 * 16, 8 * 8] {
@@ -106,8 +95,7 @@ fn a_narrow_tail_level_pads_its_rows_to_sixteen_bytes() {
 
 /// A single-level blob is unaffected by the mip arithmetic.
 ///
-/// The 346 standalone `.mip` entries that already decoded must keep decoding;
-/// this pins that the change only widened what parses.
+/// The 346 standalone `.mip` entries that decoded before must keep decoding.
 #[test]
 fn one_level_is_still_the_plain_case() {
     for (w, h, bpp) in [(64u16, 16u16, 8u8), (32, 32, 4), (8, 8, 8)] {
@@ -135,8 +123,8 @@ fn unswizzle_is_a_permutation_and_its_own_documented_inverse() {
         b.sort_unstable();
         assert_eq!(a, b, "{row_bytes}x{height} is not a permutation");
     }
-    // One block column makes the swizzle the identity, which is exactly why
-    // the disc's 32x32 4bpp texture cannot distinguish the two readings.
+    // One block column makes the swizzle the identity, so the disc's 32x32 4bpp
+    // texture cannot distinguish the two readings.
     let src: Vec<u8> = (0..16 * 32).map(|i| (i % 251) as u8).collect();
     assert_eq!(unswizzle(&src, 16, 32), src);
 }
