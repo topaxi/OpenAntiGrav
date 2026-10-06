@@ -79,9 +79,11 @@ WARN. Seen: wall sparks, rocket flare (`data/scratch/omega-particles/shots/`), t
 explosion's fireball (`data/scratch/logwarn-2048/shots/omega-rocket.png`). Open: **draw
 the distortion** - the program's arithmetic is READ (2026-10-06,
 `ps4-omega-eu/heat-haze.md`: signed offset buffer, composite resamples at
-`uv + 0.0100021 * (16/9 * d.x, d.y)`), but it stays undrawn until three CPU-side facts are read: the per-batch `kColourScale`
-(batch float `+0x1c`, pushed by `FUN_0132c250`/`FUN_0132cfb0`/`FUN_01714de0` and kin),
-the distortion target's format/clear/pass-9 blend, and the linear-depth resolve; then
+`uv + 0.0100021 * (16/9 * d.x, d.y)`), but it stays undrawn. `kColourScale` is now READ
+(emitter `+0xc84`, an authored float: 2.0 on the patch's explosions), the target is
+`R8G8_SNORM` with an additive One/One blend, the depth is `R16F` 960 by 540
+(`heat-haze.md`, `heat-haze-2` section). Still unread: the target's clear value, which pass
+attaches it in pass 9, and the pass that writes the `R16F` depth (and its encoding); then
 the work is a distortion input on `oag-post`'s composite, not a scene grab (Omega
 only, no 2048 `.pob` uses class 8); read the flag's writers to make the per-circuit
 directory choice measured; the 2048 leftovers (rocket flare, Zone spark swap).
