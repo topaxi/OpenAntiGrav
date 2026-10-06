@@ -1,28 +1,25 @@
-//! A cue played as the timeline it authors: several voices, each keyed on
-//! after its own delay, rather than one waveform chosen from the set.
+//! A cue played as the timeline it authors: several voices, each keyed on after
+//! its own delay, rather than one waveform chosen from the set.
 //!
-//! Pulse's `PLASMAHITSHIP` is three waveforms keyed on together and a fourth
-//! 200 master ticks later; `~SHIELD` is two loops held at once; `PLASMA` is one
-//! shot fired at +30 degrees and again at -30 fifteen ticks later, then a tail.
-//! Choosing one of them at random is the bug the Zone announcer had. See
-//! `oag_formats::sblk::timeline` for what the command list does and
-//! `docs/formats/psp-audio.md` for the evidence.
+//! Pulse's `PLASMAHITSHIP` is three waveforms keyed on together and a fourth 200
+//! master ticks later; `~SHIELD` is two loops held at once; `PLASMA` is one shot
+//! at +30 degrees and again at -30 fifteen ticks later, then a tail. Choosing one
+//! at random is the bug the Zone announcer had. See `oag_formats::sblk::timeline`
+//! and `docs/formats/psp-audio.md`.
 //!
-//! **Voices, not a mixed buffer.** The original keys each grain on its own SAS
-//! voice, and a cue's grains differ in sample rate, in whether they loop and in
-//! how far they are pitch-bent, so a single pre-mixed buffer cannot hold them.
-//! Each grain is one [`CueVoice`]; [`start`] hands them to the mixer with the
-//! start delay [`oag_audio::Mixer::delay_start`] gives.
+//! Voices, not a mixed buffer: the original keys each grain on its own SAS voice,
+//! and grains differ in rate, looping and pitch bend. Each grain is one
+//! [`CueVoice`]; [`start`] hands them to the mixer with the delay
+//! [`oag_audio::Mixer::delay_start`] gives.
 //!
-//! What is authored: which waveforms, when (in master ticks at the build's
-//! [`SequenceTick::ticks_per_second`]), each grain's volume
-//! terms, its descriptor pan angle, the alternate groups (`0x19`) and the
-//! random bend (`0x1b`) through each descriptor's bend range. What is chosen,
-//! not measured: a delay is rounded to a whole output frame; a **placed** cue's
-//! emitter pan and a grain's authored angle are combined as
-//! `sin(asin(emitter pan) + angle)`, which assumes an emitter in the front half;
-//! and the pitch a bend draw becomes is the linear-in-semitones law the
-//! descriptor's range implies (`Scream_ComputeVoiceNote`), not a table read.
+//! Authored: which waveforms, when (master ticks at the build's
+//! [`SequenceTick::ticks_per_second`]), each grain's volume terms and descriptor
+//! pan angle, the alternate groups (`0x19`) and the random bend (`0x1b`) through
+//! each descriptor's bend range. Chosen, not measured: a delay is rounded to a
+//! whole output frame; a placed cue's emitter pan and a grain's angle combine as
+//! `sin(asin(emitter pan) + angle)`, assuming an emitter in the front half; and
+//! a bend draw becomes the linear-in-semitones pitch the descriptor's range
+//! implies (`Scream_ComputeVoiceNote`), not a table read.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -138,10 +135,9 @@ impl Timeline {
 
 /// Every alternate combination of `name` as a timeline, when it is worth one.
 ///
-/// `Ok(None)` keeps the flat pick: the title's tick is unknown, the walk does
-/// not model the cue completely, a grain's angle is in the rear half the pan law
-/// does not model, or the cue is what a flat pick already plays (one centred
-/// grain at tick zero, no audible bend).
+/// `Ok(None)` keeps the flat pick: unknown tick, an incompletely modelled walk,
+/// a grain angle in the rear half the pan law does not model, or a cue a flat
+/// pick already plays (one centred grain at tick zero, no audible bend).
 ///
 /// # Errors
 ///
@@ -330,11 +326,10 @@ impl Where {
 
 /// The pan a voice at `angle` takes under `at`.
 ///
-/// A dry cue whose voices are all centred keeps no pan at all, as every
-/// single-waveform cue always played. Once any voice of the cue is off-centre
-/// every voice takes its authored angle, so a centred grain does not sit 3 dB
-/// louder beside a panned one. A placed cue shifts the emitter's own pan by the
-/// angle.
+/// A dry cue with all voices centred keeps no pan, as every single-waveform cue
+/// did. Once any voice is off-centre every voice takes its authored angle, so a
+/// centred grain is not 3 dB louder beside a panned one. A placed cue shifts the
+/// emitter's pan by the angle.
 fn pan_for(at: Where, angle: i32, any_off_centre: bool) -> Option<f32> {
     match at.pan {
         Some(pan) if angle == 0 => Some(pan),

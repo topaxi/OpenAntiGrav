@@ -1,61 +1,50 @@
 //! A circuit's own authored sound emitters: the ambience a track carries with
 //! its geometry, rather than a cue any craft fires.
 //!
-//! [`super`] plays the cues a *race* raises - a collision, a pad, an engine.
-//! This is the other half of what a circuit sounds like: 1,298 `sound` and
-//! `soundcone` nodes authored across the twelve Pulse circuits, each naming a
-//! bank, a cue and a radius, each placed by the transform chain.
+//! [`super`] plays the cues a race raises; this is the other half of what a
+//! circuit sounds like: 1,298 `sound` and `soundcone` nodes authored across the
+//! twelve Pulse circuits, each naming a bank, a cue and a radius.
 //! `oag_vex::sound_emitters` decodes them and
 //! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md` is the
-//! evidence; this module is only the wiring above it.
+//! evidence; this module is the wiring above it.
 //!
 //! # Every emitter is live from construction
 //!
 //! `VexSound_Init` (`0x089259a4`) allocates the emitter and calls `Sound_Play`
-//! on the spot, so the original does not start a circuit's ambience when the
-//! player comes near it: it starts all of it at load, and the out-of-range
-//! latch in `SoundEmitter_ServiceRequests` (`0x089394dc`) is what keeps a
-//! distant one silent.
+//! on the spot, so the original starts all of a circuit's ambience at load, and
+//! the out-of-range latch in `SoundEmitter_ServiceRequests` (`0x089394dc`) keeps
+//! a distant one silent.
 //!
-//! **This does start a cue on approach, and that is the port's one knowing
-//! deviation** - because it also *stops* one on departure, where the original
-//! leaves a latched request untouched. The two go together and neither is
-//! free-standing: [`Ambience::tick`] has the reasoning and what is unread
-//! behind it. The audible consequence is that a looping emitter restarts from
-//! sample zero on each pass rather than being sampled mid-loop, which is worth
-//! knowing before anyone compares a capture against the original.
+//! This port starts a cue on approach, its one knowing deviation, because it
+//! also stops one on departure, where the original leaves a latched request
+//! untouched (reasoning in [`Ambience::tick`]). A looping emitter therefore
+//! restarts from sample zero on each pass, which matters when comparing a
+//! capture against the original.
 //!
 //! # The cone is wired
 //!
 //! `soundcone` `0x3e9` carries two authored angles and its own enable byte.
-//! **Which of them reaches the emitter's `+0x40` half-angle is read**:
-//! `VexSoundCone_Init` (`0x08925ff4`,
-//! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s own
-//! section) is a four-line wrapper around `VexSound_Init` that copies the
-//! node's own `+0x00` there - `Cone::wide()`, never smaller than the other
-//! authored angle on any of the 134 nodes. [`TrackEmitters::directional`]
-//! carries them, placed by [`oag_audio::Emitter::cone`], the same law
-//! [`TrackEmitters::omni`] already used.
+//! `VexSoundCone_Init` (`0x08925ff4`, `track-sound-emitters.md`) is a four-line
+//! wrapper around `VexSound_Init` that copies the node's `+0x00` to the
+//! emitter's `+0x40` half-angle: `Cone::wide()`, never smaller than the other
+//! angle on any of the 134 nodes. [`TrackEmitters::directional`] carries them,
+//! placed by [`oag_audio::Emitter::cone`], as [`TrackEmitters::omni`] uses the
+//! same law.
 //!
-//! **A cone's radius is `SoundEmitter::radius`, not `sample_radius`.**
-//! `VexSound_Update` - the only function that ever resamples the radius
-//! curve - has exactly two static call sites in the executable, both gated on
-//! the payload's own `+0x3c`, which is `0` on all 1,298 authored nodes. So the
-//! curve is never actually driven for anything Pulse ships, which is what
-//! explains a cone's own curve value key reading `0` on all 134 of them: it is
-//! dead data, not a second bug. Reading it as the radius would silence every
-//! cone; reading `+0x10` - what `Init` actually writes into the emitter and
-//! what stays there - plays the authored value.
+//! A cone's radius is `SoundEmitter::radius`, not `sample_radius`:
+//! `VexSound_Update`, the only function that resamples the radius curve, has two
+//! static call sites, both gated on the payload's `+0x3c`, which is `0` on all
+//! 1,298 nodes. The curve is never driven, so a cone's curve value key reading
+//! `0` on all 134 is dead data. Reading it as the radius would silence every
+//! cone; `+0x10`, what `Init` writes, plays the authored value.
 //!
-//! **A cone inside its radius but outside its angle still holds a voice, at
-//! zero gain.** That is a straight read of the law, not a choice made here:
-//! `oag_audio::spatial::Emitter::place` only refuses past the radius, and the
-//! angle term is a multiplier that can reach zero without the emitter ever
-//! becoming "out of range" - the same distinction
-//! `docs/.../positional-audio.md` draws for the radius-only case. So
-//! [`Ambience::tick`] opens and holds a silent voice for a cone the listener
-//! never enters the angle of, which is real cost against the 32-voice pool
-//! and not yet measured against it the way the omnidirectional census was.
+//! A cone inside its radius but outside its angle still holds a voice at zero
+//! gain, a straight read of the law: `oag_audio::spatial::Emitter::place` only
+//! refuses past the radius and the angle term is a multiplier that can reach
+//! zero (the distinction `docs/.../positional-audio.md` draws for the radius).
+//! So [`Ambience::tick`] holds a silent voice for a cone whose angle the
+//! listener never enters, a real cost against the 32-voice pool, not yet
+//! measured as the omnidirectional census was.
 
 use std::collections::BTreeMap;
 
@@ -71,28 +60,25 @@ pub struct Authored {
     /// The node, as `oag_vex::sound_emitters` decoded it.
     pub emitter: SoundEmitter,
     /// The cue's waveforms, or [`None`] where the reference does not resolve.
+    /// The cue's waveforms, or [`None`] where the reference does not resolve.
     ///
-    /// **[`None`] is a real state and is reported rather than dropped**, with
-    /// the reason, because there are three of them and they are different
-    /// findings:
+    /// [`None`] is reported, with its reason, because the three causes are
+    /// different findings:
     ///
-    /// 1. **The reference dangles.** Five of them on the Pulse disc name a cue
-    ///    or a bank that does not exist - the disc's own bugs, decoded in
-    ///    `track-sound-emitters.md` - and whether the original silently drops
-    ///    one or falls back to a bank-index lookup is unread:
-    ///    `Scream_FindSoundInBank`'s name comparison has not been decompiled.
-    /// 2. **The cue binds no waveform**, because its whole command run is
-    ///    opcodes `oag_formats::sblk` does not read. 38 nodes across eight
-    ///    circuits, and the report names the opcodes: `0x1e` on every
-    ///    `~SetReg*` cue, `0x14` on `moather~birds`, `dekonst~CRANE` and both
-    ///    of `talonsj`'s. This port's gap rather than the disc's, and not on
-    ///    `track-sound-emitters.md`'s dangling list, because that sweep checked
-    ///    the name table and not the command run.
-    /// 3. **No loaded bank carries that label**, which is what a title with no
-    ///    shared track bank gets for every `gentrak` node.
+    /// 1. **The reference dangles.** Five on the Pulse disc name a cue or bank
+    ///    that does not exist (the disc's own bugs, `track-sound-emitters.md`);
+    ///    whether the original drops one or falls back to a bank-index lookup is
+    ///    unread (`Scream_FindSoundInBank`'s name comparison is not decompiled).
+    /// 2. **The cue binds no waveform**, its command run being opcodes
+    ///    `oag_formats::sblk` does not read: 38 nodes across eight circuits,
+    ///    the report naming `0x1e` on every `~SetReg*` cue and `0x14` on
+    ///    `moather~birds`, `dekonst~CRANE` and both of `talonsj`'s. This port's
+    ///    gap, and not on the page's dangling list, which checked the name
+    ///    table and not the command run.
+    /// 3. **No loaded bank carries that label**, what a title with no shared
+    ///    track bank gets for every `gentrak` node.
     ///
-    /// All three play nothing and say so, which is what `CLAUDE.md` asks of an
-    /// asset that will not resolve.
+    /// All three play nothing and say so (`CLAUDE.md`).
     pub sound: Option<Loaded>,
 }
 
@@ -101,11 +87,8 @@ pub struct Authored {
 pub struct TrackEmitters {
     /// The omnidirectional `sound` `0x3e1` nodes, in authored order.
     pub omni: Vec<Authored>,
-    /// The directional `soundcone` `0x3e9` nodes, in authored order.
-    ///
-    /// Split from [`Self::omni`] because [`Ambience::tick`] needs to know
-    /// which law to place each one under, not because either is treated as
-    /// more real than the other - both are played.
+    /// The directional `soundcone` `0x3e9` nodes, in authored order. Split from
+    /// [`Self::omni`] because [`Ambience::tick`] places each under its own law.
     pub directional: Vec<Authored>,
     /// What parsing did, for the race's own report.
     pub report: Vec<String>,
@@ -114,14 +97,10 @@ pub struct TrackEmitters {
 impl TrackEmitters {
     /// Reads every authored emitter out of one circuit's `.vex`, unresolved.
     ///
-    /// **Never fails.** A `.vex` with no nodes, a Zone circuit (which authors
-    /// none of the three classes at all) and a title that has never been swept
-    /// all produce an empty result and a report line, on the same terms
-    /// [`super::Banks::load`] reports a bank it could not read: silence with a
-    /// reason beats a race that will not start.
-    ///
-    /// Every [`Authored::sound`] is [`None`]; [`Self::load`] is the one that
-    /// resolves them against the circuit's banks.
+    /// Never fails: a `.vex` with no nodes, a Zone circuit (none of the three
+    /// classes) or a never-swept title gives an empty result and a report line,
+    /// as [`super::Banks::load`] does. Every [`Authored::sound`] is [`None`];
+    /// [`Self::load`] resolves them.
     #[must_use]
     pub fn parse(track: &str, blob: &[u8]) -> Self {
         let mut report = Vec::new();
@@ -155,24 +134,22 @@ impl TrackEmitters {
 
     /// [`Self::parse`], with every cue looked up in the bank its node names.
     ///
-    /// # Where a circuit's banks are, and how that is derived
+    /// # Where a circuit's banks are
     ///
-    /// An emitter spells its bank by that bank's own seven-character **label**,
-    /// not by a path - `basilic`, `gentrak` - and a label is not a truncation of
-    /// anything (`docs/formats/psp-audio.md`). So the two banks are opened by
-    /// name and then matched on the label each one reports about itself, which
-    /// is what makes this generalise past the circuit it was written against:
+    /// An emitter spells its bank by that bank's seven-character **label**
+    /// (`basilic`, `gentrak`), not a path or truncation
+    /// (`docs/formats/psp-audio.md`), so the two banks are opened by name and
+    /// matched on the label each reports:
     ///
-    /// 1. The **circuit's own** bank is named by the circuit's own
-    ///    `trackstartup.xml`, in its `<LoadSoundBank Filename="...">`, and sits
-    ///    beside that manifest in the circuit's directory -
+    /// 1. The circuit's own bank is named by its `trackstartup.xml`
+    ///    `<LoadSoundBank Filename="...">` and sits beside it:
     ///    `Data\Environments\01_Track\BASILICO_ENV.bnk`, 253,664 bytes, label
-    ///    `basilic`. Nothing needs to know the twelve circuit names.
-    /// 2. The **shared** bank is `oag_title::SoundBanks::track_general`, the one
-    ///    entry no cue names and the executable does - see that field.
+    ///    `basilic`.
+    /// 2. The shared bank is `oag_title::SoundBanks::track_general`, the one
+    ///    entry no cue names and the executable does.
     ///
-    /// A cue is decoded **once per distinct pair**, not once per node: an
-    /// `~ELEVATOR` authored four times over is one `Loaded` shared four ways.
+    /// A cue is decoded once per distinct pair, not per node (`~ELEVATOR`
+    /// authored four times is one `Loaded` shared four ways).
     #[must_use]
     pub fn load(
         archives: &mut Archives,
@@ -182,8 +159,7 @@ impl TrackEmitters {
     ) -> Self {
         let mut parsed = Self::parse(track, blob);
 
-        // Read whole first and parse after, because `sblk::Bank` borrows the
-        // blob it was read out of and both have to outlive the cue lookups.
+        // Read whole, parsed after: `sblk::Bank` borrows the blob.
         let mut blobs: Vec<(&str, String, Vec<u8>)> = Vec::new();
         match banks.track_general {
             Some(entry) => match archives.read_name(entry) {
@@ -211,8 +187,8 @@ impl TrackEmitters {
             )),
         }
 
-        // Keyed by the bank's own label, which is what a node spells - a label
-        // is not a truncation of the path, so nothing can be inferred from one.
+        // Keyed by the bank's own label, which a node spells and which is no
+        // truncation of the path.
         let mut by_label: BTreeMap<String, sblk::Bank<'_>> = BTreeMap::new();
         for (why, entry, bytes) in &blobs {
             match sblk::Bank::parse(bytes) {
@@ -230,16 +206,12 @@ impl TrackEmitters {
             }
         }
 
-        // Decoded once per distinct pair, and the *reason* a pair failed is
-        // cached with it: "no bank here spells that label", "that bank has no
-        // such cue" and "the cue binds no waveform" are three different
-        // findings and only the middle one is what
-        // `track-sound-emitters.md` calls a dangling reference.
+        // Decoded once per distinct pair, with the failure reason cached: no bank
+        // with that label, no such cue and no waveform are three findings, only
+        // the middle one a dangling reference in `track-sound-emitters.md`.
         let mut cache: BTreeMap<(String, String), Result<Loaded, String>> = BTreeMap::new();
         let mut unplayed: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
-        // Both lists, together: a cone names a bank and a cue exactly the way
-        // a plain `sound` does, and the resolution and its failure modes are
-        // the same code either way.
+        // Both lists together: a cone names bank and cue as a plain `sound` does.
         for node in parsed.omni.iter_mut().chain(&mut parsed.directional) {
             let key = (node.emitter.bank.clone(), node.emitter.cue.clone());
             let loaded = cache
@@ -275,9 +247,8 @@ impl TrackEmitters {
         parsed.report.push(format!(
             "track audio: {playing} of {total} emitter(s) resolved to a cue"
         ));
-        // Reported per reference rather than as a total, so a decode that broke
-        // a *different* reference could not hide behind breaking as many as it
-        // fixed - the same reason `sound_emitter_ground_truth` pins a list.
+        // Reported per reference, so a decode that broke a different reference
+        // cannot hide behind fixing as many (`sound_emitter_ground_truth` pins a list).
         for ((bank, cue), (nodes, why)) in &unplayed {
             parsed.report.push(format!(
                 "track audio: {nodes} node(s) name {bank}{cue} and play nothing: {why}"
@@ -287,21 +258,17 @@ impl TrackEmitters {
         parsed
     }
 
-    /// How many emitters the listener is inside the radius (and cone, where
-    /// there is one) of, this tick.
-    ///
-    /// The budget question, answered off the recovered law rather than
-    /// estimated: `SoundEmitter_ServiceRequests` refuses to touch a request
-    /// whose emitter is out of range, so this is exactly the set of authored
-    /// cues that want a voice. See
-    /// `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`.
+    /// How many emitters the listener is inside the radius (and cone) of this
+    /// tick: exactly the cues that want a voice, since
+    /// `SoundEmitter_ServiceRequests` refuses an out-of-range request
+    /// (`docs/ghidra/functions/psp-pulse-usa/positional-audio.md`).
     #[must_use]
     pub fn in_range(&self, listener: &oag_audio::Listener) -> usize {
         self.placed(listener).count()
     }
 
-    /// Every emitter, [`Self::omni`] then [`Self::directional`], in that
-    /// concatenated order - the order [`Ambience`] indexes its voices by.
+    /// Every emitter, [`Self::omni`] then [`Self::directional`]: the order
+    /// [`Ambience`] indexes its voices by.
     fn all(&self) -> impl Iterator<Item = &Authored> {
         self.omni.iter().chain(&self.directional)
     }
@@ -313,30 +280,25 @@ impl TrackEmitters {
         listener: &'a oag_audio::Listener,
     ) -> impl Iterator<Item = (usize, oag_audio::Placed)> + 'a {
         self.all().enumerate().filter_map(move |(at, node)| {
-            // The volume `Sound_Play` is handed at every recovered call site,
-            // and `VexSound_Init`'s is no exception - it passes `1.0f`.
+            // The volume every recovered `Sound_Play` call site passes, `VexSound_Init`'s included.
             Some((at, placed_emitter(&node.emitter).place(listener, 1.0)?))
         })
     }
 }
 
-/// Builds the `oag_audio::Emitter` a node's own decode already specifies.
+/// Builds the `oag_audio::Emitter` a node's own decode specifies.
 ///
-/// **The radius is [`SoundEmitter::radius`], not
-/// [`SoundEmitter::sample_radius`]** - see this module's own header for why:
-/// `VexSound_Update`'s curve resample has two static call sites, both gated on
-/// a payload byte that is `0` on every one of the 1,298 authored nodes, so the
-/// curve is never actually driven for anything Pulse ships and `+0x10` is the
-/// one radius that plays. Using the curve here would be silently wrong for a
-/// `soundcone` in particular: its own value key is `0` on all 134 of them.
+/// The radius is [`SoundEmitter::radius`], not [`SoundEmitter::sample_radius`]
+/// (see the module header): the curve resample is never driven for anything
+/// Pulse ships, and using it would silence a `soundcone` (value key `0` on all
+/// 134).
 fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
     oag_audio::Emitter {
         position: node.position(),
         radius: node.radius,
         cone: node.cone.map(|cone| oag_audio::Cone {
-            // Row `1` of the emitter's own world matrix, raw - see
-            // `oag_audio::spatial`'s own header for why this is not
-            // renormalised.
+            // Row `1` of the emitter's world matrix, raw (not renormalised, see
+            // `oag_audio::spatial`).
             axis: [node.to_world[4], node.to_world[5], node.to_world[6]],
             half_angle: cone.wide(),
         }),
@@ -345,13 +307,12 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
 
 /// The archive entry holding the circuit's own sound bank, if it names one.
 ///
-/// `trackstartup.xml` sits beside the circuit's `.vex` and its
-/// `<LoadSoundBank Filename="...">` names a file in that same directory -
-/// **not** under `Data\Sound\` where every bank the executable names by a
-/// literal string lives. Measured: `Data\Sound\BASILICO_ENV.bnk` hashes to
-/// nothing on `pulse-psp-usa`, and `Data\Environments\01_Track\BASILICO_ENV.bnk`
-/// is a 253,664-byte `SBlk` whose own label is `basilic` - which is exactly what
-/// `01_Track`'s fifty non-`gentrak` emitters spell.
+/// `trackstartup.xml` sits beside the `.vex` and its `<LoadSoundBank
+/// Filename="...">` names a file in that directory, not under `Data\Sound\`
+/// where the executable's literal-named banks live. Measured:
+/// `Data\Sound\BASILICO_ENV.bnk` hashes to nothing on `pulse-psp-usa`, while
+/// `Data\Environments\01_Track\BASILICO_ENV.bnk` is a 253,664-byte `SBlk`
+/// labelled `basilic`, which `01_Track`'s fifty non-`gentrak` emitters spell.
 fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     let at = track.rfind(['/', '\\'])?;
     let (directory, separator) = (&track[..at], &track[at..=at]);
@@ -359,18 +320,15 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     Some(format!("{directory}{separator}{file}"))
 }
 
-/// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none.
-///
-/// One read for everything a circuit asks for beside its `.vex`: the sound bank
-/// above and, from `race::scenery_fx`, its weather.
+/// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:
+/// one read for the sound bank above and, from `oag_raceplay`'s scenery effects, its weather.
 pub fn circuit_manifest(
     archives: &mut Archives,
     track: &str,
 ) -> Option<oag_tables::trackstartup::TrackStartup> {
     let at = track.rfind(['/', '\\'])?;
-    // The circuit's own separator, kept rather than normalised: Pulse spells a
-    // path with `\\` and Wipeout HD with `/`, and a name that mixes them reads
-    // like a bug even where the archive's hash tolerates it.
+    // The circuit's own separator is kept: Pulse spells paths with `\\`, HD with
+    // `/`, and a mix reads like a bug even where the archive's hash tolerates it.
     let (directory, separator) = (&track[..at], &track[at..=at]);
     let manifest = archives
         .read_name(&format!("{directory}{separator}trackstartup.xml"))
@@ -380,18 +338,15 @@ pub fn circuit_manifest(
     ))
 }
 
-/// The held voices a circuit's ambience owns, one slot per authored emitter.
-///
-/// Held rather than fired, because these cues loop and the original opens each
-/// of them once, at load. See this module's own header.
+/// The held voices a circuit's ambience owns, one slot per authored emitter:
+/// held because these cues loop and the original opens each once at load.
 #[derive(Debug, Default)]
 pub struct Ambience {
     /// Index-parallel to [`TrackEmitters::all`], `omni` then `directional`;
     /// [`None`] where the emitter is out of range and so has no voice at all.
     voices: Vec<Option<oag_audio::VoiceId>>,
-    /// Index-parallel to [`Self::voices`]: each held voice's last-frame
-    /// distance, for the doppler term. An authored emitter does not move, so
-    /// the change it reads is the listener's own approach and departure.
+    /// Index-parallel to [`Self::voices`]: each voice's last-frame distance for
+    /// the doppler term (the emitter is fixed, so the change is the listener's).
     dopplers: Vec<oag_audio::Doppler>,
     /// The authored volume group the emitters play on (`user8`), when the
     /// title has an authored mix; the effects bus otherwise.
@@ -406,12 +361,10 @@ impl Ambience {
         self
     }
 
-    /// How many of the circuit's emitters are sounding right now.
-    ///
-    /// Asked of the mixer rather than counted off the slots, because a slot
-    /// holds a [`oag_audio::VoiceId`] for as long as its emitter is in range
-    /// and a one-shot alternate will have ended inside that window - see
-    /// [`Self::tick`]'s finished-cue arm.
+    /// How many of the circuit's emitters are sounding now. Asked of the mixer,
+    /// not the slots: a slot holds a [`oag_audio::VoiceId`] while in range and a
+    /// one-shot alternate will have ended meanwhile ([`Self::tick`]'s
+    /// finished-cue arm).
     #[must_use]
     pub fn playing(&self, mixer: &oag_audio::Mixer) -> usize {
         self.voices
@@ -426,20 +379,17 @@ impl Ambience {
     /// # The one place this knowingly differs from the original
     ///
     /// `SoundEmitter_ServiceRequests` (`0x089394dc`) leaves a latched request
-    /// **completely untouched** - not updated and, per `positional-audio.md`,
-    /// "not even reaped". So the original's voice keeps playing at whatever
-    /// gain the last in-range frame gave it, which is near zero because the
-    /// linear falloff reaches zero exactly at the radius. What reclaims that
-    /// voice is a path this project has not read.
+    /// completely untouched (per `positional-audio.md`, "not even reaped"), so
+    /// the original's voice keeps playing at the last in-range gain, near zero
+    /// since the falloff reaches zero at the radius. What reclaims it is
+    /// unread.
     ///
-    /// **This stops the voice instead**, which is the same reading [`super`]
-    /// already applies to the other half of the latch: `Sound_Play` refuses to
-    /// *start* a cue on a latched emitter, so a rival's scrape on the far side
-    /// of the circuit is not started rather than started silent. Holding 97
-    /// silent loops open against a 32-voice pool would starve the race's own
-    /// cues to reproduce something inaudible either way. The gap is the unread
-    /// reclamation path, and it is written down here rather than made to look
-    /// like a decision.
+    /// This stops the voice instead, matching [`super`]'s reading of the latch's
+    /// other half: `Sound_Play` refuses to start a cue on a latched emitter, so a
+    /// distant rival's scrape is not started rather than started silent. Holding
+    /// 97 silent loops against a 32-voice pool would starve the race's cues to
+    /// reproduce something inaudible. The gap is the unread reclamation path,
+    /// recorded here rather than dressed as a decision.
     pub fn tick(
         &mut self,
         mixer: &mut oag_audio::Mixer,
@@ -456,34 +406,29 @@ impl Ambience {
         {
             let placed = placed_emitter(&node.emitter).place(listener, 1.0);
             match (placed, *held) {
-                // In range with a voice open: this is the per-frame
-                // `SoundInstance_UpdateSpatial`, doppler included. An
-                // authored emitter does not move, so the distance change is
-                // the listener's own, and the camera-cut guard at `mgr+0x8d`
-                // is `doppler_enabled` - the caller's, because the guard is
-                // the manager's and one answer covers every voice this tick.
+                // In range with a voice open: the per-frame
+                // `SoundInstance_UpdateSpatial`, doppler included (the distance
+                // change is the listener's); `doppler_enabled` is the
+                // camera-cut guard at `mgr+0x8d`, the caller's as the manager's
+                // one answer covers every voice this tick.
                 (Some(placed), Some(id)) if mixer.is_playing(id) => {
                     mixer.set_gain(id, placed.gain);
                     mixer.set_pan(id, Some(placed.pan));
                     mixer.set_pitch(id, doppler.ratio(placed.distance, dt, doppler_enabled));
                 }
-                // **In range, opened once, and finished: leave it alone.**
-                // Not every alternate loops - `platinu~BIRDS` binds sixteen
-                // waveforms and only some of them do, and five cues across the
-                // disc are mixed like that - so a cue can end while its
-                // emitter is still in range. The original runs `Sound_Play`
-                // once, at construction, and nothing re-runs it while the
-                // latch is clear; restarting here would machine-gun a one-shot
-                // at 60 Hz, which sounds like a broken sample rather than like
-                // an absence and so would survive listening to it.
+                // In range, opened once, finished: leave it alone. Not every
+                // alternate loops (`platinu~BIRDS` binds sixteen waveforms, only
+                // some loop; five cues on the disc are mixed so), so a cue can end
+                // while its emitter is in range. The original runs `Sound_Play`
+                // once at construction; restarting here would machine-gun a
+                // one-shot at 60 Hz, which sounds like a broken sample and so
+                // would survive listening.
                 (Some(_), Some(_)) => {}
-                // In range with nothing open: open one. A voice the pool
-                // refuses is already counted by `Mixer::starved`, and an
-                // emitter whose cue never resolved holds `None` forever.
+                // In range with nothing open: open one. A refused voice is counted
+                // by `Mixer::starved`; a never-resolved cue holds `None` forever.
                 (Some(placed), None) => {
-                    // Seeds the doppler with this frame's distance, so the
-                    // first held frame reads no change rather than a jump
-                    // from wherever the voice last closed.
+                    // Seeds the doppler with this frame's distance, so the first
+                    // held frame reads no change.
                     doppler.reset();
                     doppler.ratio(placed.distance, dt, false);
                     *held = node.sound.as_ref().and_then(|loaded| {
@@ -511,7 +456,7 @@ impl Ambience {
         }
     }
 
-    /// Releases every voice this holds, which is what leaving a race does.
+    /// Releases every voice this holds, on leaving a race.
     pub fn stop(&mut self, mixer: &mut oag_audio::Mixer) {
         for id in self.voices.drain(..).flatten() {
             mixer.stop(id);
@@ -519,11 +464,9 @@ impl Ambience {
     }
 }
 
-/// Which of a cue's waveforms an emitter opens.
-///
-/// A uniform draw, the same rule [`super::Banks::pick`] reads off opcode
-/// `0x19`, minus its no-repeat cache: that cache matters for a one-shot fired
-/// over and over, where this is opened once and then loops for the whole race.
+/// Which of a cue's waveforms an emitter opens: a uniform draw, as
+/// [`super::Banks::pick`] reads off opcode `0x19` minus its no-repeat cache,
+/// which matters for a one-shot fired repeatedly, not one opened once.
 fn pick(
     loaded: &Loaded,
     rng: &mut oag_core::Rng,
