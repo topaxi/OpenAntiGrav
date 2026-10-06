@@ -24,7 +24,7 @@ per-subsystem matrix, before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-title-branching + check-names + check-handover + check-status - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
@@ -34,6 +34,7 @@ just check-deps   # asserts the three dependency-boundary rules below (scripts/c
 just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
+just check-title-branching # ratchet on `title.name == oag_X::TITLE.name`-style comparisons in generic crates; per-title behaviour is `Title` data, ADR-0058 (scripts/check-title-branching.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
 just check-status # docs/overview/status.md's RE-coverage table matches names.tsv and the evidence pages; `just gen-status` regenerates it (scripts/gen-re-coverage.py)
