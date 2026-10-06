@@ -52,6 +52,7 @@ mod draw;
 mod head_to_head;
 pub mod kill_tags;
 mod lap_splits;
+pub mod messages;
 mod pickup;
 mod runtime;
 mod shield_bar;
@@ -698,6 +699,8 @@ pub struct Readout {
     /// The Eliminator's kill target, resolved: the number in `KILLS (5)`.
     /// Zero in every other mode. See [`kill_tags::header`].
     pub kill_target: u32,
+    /// The message slots this frame - `Info1` to `Info4`. See [`messages`].
+    pub messages: messages::Lines,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.

@@ -138,6 +138,7 @@ fn the_column_draws_in_the_default_bucket_and_only_where_the_title_has_it() {
 
     let other = oag_title::HudArt {
         kill_column: false,
+        message_slots: false,
         ..*oag_pulse::hud::ART
     };
     let mut cx = crate::tests::context(&layout, &strings);

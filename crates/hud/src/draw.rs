@@ -276,6 +276,12 @@ pub(super) fn text_for(
         "LapOf" => (readout.lap > 0 && readout.laps > 0).then(|| literal("/")),
         "PositionOf" => (readout.place > 0 && readout.ships > 0).then(|| literal("/")),
 
+        // The four message slots - see [`super::messages`]. An id the table lacks
+        // draws nothing rather than itself: Pure's table has no `ER_GMA`.
+        name if super::messages::slot_of(name).is_some() => super::messages::slot_of(name)
+            .and_then(|slot| readout.messages[slot].as_ref())
+            .and_then(|line| strings.get(&line.text).map(str::to_string)),
+
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {
             label.idstring.as_deref().map_or_else(
@@ -646,19 +652,35 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// too faint to see at that exposure, this rule is what to revisit.
 #[must_use]
 pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
-    // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`].
+    // The kill column is Pulse's alone - see [`oag_title::HudArt::kill_column`] -
+    // and so are the message lines, [`oag_title::HudArt::message_slots`].
     let ungated;
-    let readout =
-        if cx.art.kill_column || (readout.kill_tags.is_empty() && readout.kill_target == 0) {
-            readout
-        } else {
-            ungated = Readout {
-                kill_tags: Vec::new(),
-                kill_target: 0,
-                ..readout.clone()
-            };
-            &ungated
+    let readout = if (cx.art.kill_column
+        || (readout.kill_tags.is_empty() && readout.kill_target == 0))
+        && (cx.art.message_slots || readout.messages.iter().all(Option::is_none))
+    {
+        readout
+    } else {
+        ungated = Readout {
+            kill_tags: if cx.art.kill_column {
+                readout.kill_tags.clone()
+            } else {
+                Vec::new()
+            },
+            kill_target: if cx.art.kill_column {
+                readout.kill_target
+            } else {
+                0
+            },
+            messages: if cx.art.message_slots {
+                readout.messages.clone()
+            } else {
+                Default::default()
+            },
+            ..readout.clone()
         };
+        &ungated
+    };
     let mut frame = Frame::default();
 
     // An always-on name draws **once**, even where the layout authors it twice.
@@ -822,14 +844,19 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // so it takes it unconverted rather than through `top_edge`.
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
-            color: super::time_trial_pace::time_trial_colour(readout, &label.name)
+            color: super::messages::colour(readout, &label.name)
+                .or_else(|| super::time_trial_pace::time_trial_colour(readout, &label.name))
                 .or_else(|| super::runtime::colour(cx, readout, &label.name))
                 .unwrap_or(label.color),
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The
             // 57 widgets that name none still get one - the original draws it -
             // from the layout's `HudBGColour`. See `oag_ui::font::Atlas::luma`.
-            border: Some(label.border.unwrap_or(cx.default_border)),
+            border: Some(super::messages::fade_border(
+                readout,
+                &label.name,
+                label.border.unwrap_or(cx.default_border),
+            )),
             align: label.align,
             text,
             wrap_width: None,

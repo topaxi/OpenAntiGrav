@@ -1323,3 +1323,5 @@
 0x0887d39c	function	AiTrack_SampleAhead	80	ai-branch-choice.md
 0x08852318	function	Ai_Rand	90	ai-branch-choice.md
 0x08852334	function	Ai_RandUnit	90	ai-branch-choice.md
+0x0881b52c	function	Hud_PushMessage	80	hud-messages.md
+0x0881f148	function	Hud_UpdateMessages	80	hud-messages.md
