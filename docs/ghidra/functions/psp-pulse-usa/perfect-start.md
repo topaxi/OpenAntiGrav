@@ -65,8 +65,9 @@ the loader. Tests: `launch_boost_ground_truth::only_a_perfect_start_fires_the_fl
 craft bit `0x200`, `craft+0x14c = <Turbo time>`, clears the held id and, when the
 craft has an exhaust flare (`craft->0xf0->0x78`), calls `FUN_0890514c`: `flare+0xb8 =
 0.8f` and `Sound_Play(TURBO)`. That is `ExhaustFlare_OnSpeedupPad`'s body with the
-other cue, and `Ship_UpdateSideshiftInput_q` (`0x08846b60`) calls it too (the
-perfect start). Confidence 88. So the plume a fired Turbo draws is the pad's, by the
+other cue, and `Ship_UpdateSideshiftInput_q` (`0x08846b60`) calls it too - on the
+side-shift roll turbo (`+0x898 = g_roll_turbotime`, read from the call site's listing),
+not the perfect start, which arms the flare by the pad's routine. Confidence 88. So the plume a fired Turbo draws is the pad's, by the
 original's own path - the `weapons.rs` note calling it chosen is retired.
 
 ## The AI's grade 3, confirmed from both ends

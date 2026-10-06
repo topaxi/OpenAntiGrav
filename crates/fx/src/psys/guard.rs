@@ -11,8 +11,15 @@
 //! boundary itself was not located. Confidence 80; the reference is PPSSPP's
 //! rasteriser, not a PSP.
 //!
-//! Applied to template quads on Pulse's PSP source only: the law is the GE's,
-//! so it very likely holds for every primitive, but only these were measured.
+//! **Applied to `WO_REPULSER`'s template quads alone**, on Pulse's PSP source. The
+//! law is the GE's and very likely holds for every primitive, but an A/B of the
+//! guard on and off (2026-10-06) showed it moves the Quake's start frame too, and
+//! there the original's first frame **is** a white wash across the upper screen
+//! (`data/scratch/fx-brightness/ppsspp-quake-montage.png`) that our geometry,
+//! which falls out of range, would lose. Until the Quake's own quad is measured
+//! the guard stays off it. Rockets, plasma and the Repulser's standing frames
+//! other than the wave start were identical, AE 0. The fixed projection is the
+//! dump's standstill one: Pulse's race camera was not checked for a speed fov.
 
 use oag_core::math::Vec3;
 
@@ -36,14 +43,20 @@ pub struct GuardBand {
     pub forward: Vec3,
 }
 
+/// The one effect the law was measured on.
+const MEASURED_EFFECT: &str = "WO_REPULSER";
+
 /// Whether a template quad's `corners` are dropped, under `guard` if there is one.
 #[must_use]
 pub fn drops(
     guard: Option<&GuardBand>,
+    effect: &str,
     template: bool,
     corners: &[oag_mesh::mesh::GpuVertex],
 ) -> bool {
-    template && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
+    template
+        && effect == MEASURED_EFFECT
+        && guard.is_some_and(|g| g.drops(corners.iter().map(|v| Vec3::from(v.position))))
 }
 
 impl GuardBand {

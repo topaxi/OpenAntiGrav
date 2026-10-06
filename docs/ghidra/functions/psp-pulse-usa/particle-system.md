@@ -1763,11 +1763,15 @@ submitted commands and nothing else):
 window screenshots at fire+49/50/51 agree: blue tint, then a white band on one side.) So a
 primitive with a vertex beyond `+-2048` px of the centre is **dropped**. This promotes the
 hypothesis above from 65 to **80**: two frames, the boundary not located, and the reference
-is PPSSPP's rasteriser, not a PSP. Played by `oag_fx::psys::guard::GuardBand` on template
-quads on Pulse's PSP source only (the predicate the screen flash uses); the law is
-presumably every primitive's, but only these were measured. Our frame at the wave start is
+is PPSSPP's rasteriser, not a PSP. Played by `oag_fx::psys::guard::GuardBand` on `WO_REPULSER`'s template
+quads alone, on Pulse's PSP source (the screen flash's predicate). An A/B with the guard on and off showed it
+also moves the Quake's start frame (AE 0.18 of the frame at tick 303), and there the PSP's
+first frame is a white wash across the upper screen (`data/scratch/fx-brightness/ppsspp-quake-montage.png`),
+so the guard stays off it until the Quake's own quad is measured; rockets, plasma and the Repulser
+outside its wave start were identical (AE 0). The law is presumably every primitive's. Our frame at the wave start is
 now the blue tint (`data/scratch/weapon-visuals/strip_ours_rep_after.png` against
 `strip_psp_orig.png`). The second wave's `shazzam` absent from later submissions stays
 unexplained. The class-6 root's white blob was already replaced by the bars (2026-10-04);
-no `crates/pob` change was needed, both were decoded. Cross-title: **not checkable** - HD
-and 2048 build this effect on their own formats and no frame was read.
+no `crates/pob` change was needed, both were decoded. Cross-title: **checked, differs by scope** - HD and 2048 load a `WO_REPULSER`-named effect
+from their own `.pob` archives, (load reports 2026-10-06), but the guard band is a PSP GE law, unmeasured on
+those GPUs; the guard is off there.

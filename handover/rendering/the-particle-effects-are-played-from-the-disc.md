@@ -1,4 +1,4 @@
-# The particle effects are played from the disc; 32 of the PSP's 35 play, 3 wait on a trigger
+# The particle effects are played from the disc; 33 of the PSP's 35 play, 2 wait on a trigger
 
 2026-08-12, census rewritten 2026-10-02. `oag_pob` parses every emitter
 tree, `oag_fx::psys::Library` loads any `Data\Psys\<name>.POB` by name, and

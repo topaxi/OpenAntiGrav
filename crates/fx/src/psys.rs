@@ -1144,7 +1144,7 @@ impl System {
             if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
             }
-            if guard::drops(guard, spec.template, &corners) {
+            if guard::drops(guard, &effect.name, spec.template, &corners) {
                 continue;
             }
             out.extend_from_slice(&corners);

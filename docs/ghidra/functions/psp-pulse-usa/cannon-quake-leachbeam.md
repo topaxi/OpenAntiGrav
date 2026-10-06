@@ -898,13 +898,13 @@ excluded.
 `Quake_Update` uses the two edge points from `Quake_SampleSpan` to build a
 transform: position is their midpoint, and the basis comes from their
 normalized separation crossed with a fixed reference vector
-(`0x0891dad8`-`0x0891dbc0`). **In the same block**, a call into
+(`0x0891dad8`-`0x0891dbc0`). ~~**In the same block**, a call into
 `AiTrack_LocatePosition` (`0x0887ce78`, already named) is made with the
 midpoint slot as one argument (`0x0891da70`-`0x0891da90`) - but it runs
 *before* the basis is built and none of the cross-product/normalize
 instructions that build the basis consume its result, so **"orientation
 refined by the track" is not what this reading supports**; the call's purpose
-here is not established. And, the first time a given wave instance's node id
+here is not established.~~ **Wrong, corrected 2026-10-06** (last section of this page): the call fills the record row 1 is read from. And, the first time a given wave instance's node id
 is zero, calls:
 
 ```
@@ -1111,13 +1111,13 @@ DAT literal was tracked down to a real cue name this pass; both are read as
   "possibly a camera-shake or screen-effect trigger" guess is right, is not -
   the table's own entries were not walked this pass. Not renamed, for the same
   reason as the pair above.
-- **Orientation remains unestablished, now cross-checked rather than merely
+- ~~**Orientation remains unestablished, now cross-checked rather than merely
   read once.** `Quake_Update`'s own `AiTrack_LocatePosition` call was
   independently re-derived this pass rather than only quoted from
   `decompile_function`'s text: its output record is written and then never
   read by anything that feeds the cross-product basis built two dozen lines
   later, confirming (not merely repeating) "orientation refined by the track
-  is not what this reading supports". Nothing new narrows it.
+  is not what this reading supports". Nothing new narrows it.~~ **Wrong, corrected 2026-10-06** (last section of this page): the record feeds row 1.
 
 ### 2026-09-08: the lifetime, found - 5.0 seconds from launch, and the Quake does deform the track
 
