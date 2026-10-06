@@ -1132,10 +1132,48 @@ plugin is never loaded, which closes the question `pure-status.md` left open.
 `language_plugins` stays the superset default for a caller with no serial.
 Pinned per image by `language_offered_ground_truth`.
 
-HD, 2048 and Omega: every plugin on the disc still loads (16, 17 and 23). Whether
-their executables narrow it the way Pure's does is **not read**; Omega's store
-listing offers 12 screen languages of its 23 plugins, which suggests it does.
-Open, named in the language thread.
+### HD, 2048 and Omega follow the system language and have no manifest
+
+Their executables do not walk a list. Each formats **one** language name into
+`Data\Plugins\languages\%s` and loads that plugin: 2048
+(`FrontendRoot_Construct`, which logs `Setting languages : %s`) and Omega choose
+it from the Vita/PS4 system language, HD from the PS3's (`cellSysutilGetSystemParamInt(0x111)`).
+That fits HD's `Language Selection` screen never being presented in four RPCS3
+boots ([hd-frontend.md](../formats/hd-frontend.md)): the screen is carried over
+from Pure and nothing on this path opens it. What a release *offers* is
+therefore the set its chooser can reach, which is per release and is data keyed
+by the release's `TITLE_ID` (`FrontEnd::language_manifests`, the same shape as
+the PSP/PS2 manifests). Evidence pages:
+[2048](../ghidra/functions/vita-2048-eu-v104/language.md),
+[HD](../ghidra/functions/ps3-hdfury-eu/language.md),
+[Omega](../ghidra/functions/ps4-omega-eu/language.md). Confidence 90 on 2048 and
+Omega, 85 on HD (its Europe region value is by elimination, 70).
+
+| Release | Region key | Reaches | Ships but unreachable |
+| --- | --- | --- | --- |
+| HD EU (`BCES-00664`) | variable `0x938564`, not 1/2/3 | English, French, Spanish, German, Italian, Dutch, Portuguese, Russian, Finnish, Swedish, Danish, Norwegian (12) | American, Japanese, Korean, TraditionalChinese |
+| 2048 EU (`PCSF-00007`) | mode word 0 in the executable | the same twelve plus Polish (13) | American, Japanese, Korean, TraditionalChinese |
+| 2048 USA (`PCSA-00015`) | mode word 1 (one byte differs) | American, French, Spanish (3) | the other fourteen |
+| Omega EU (`CUSA-05670`) | `param.sfo` `USER_DEFINED_PARAM_1` = 1, mask 1 | the thirteen plus Turkish from the 1.07 patch's table (14) | American, Japanese, Korean, PortugueseBR, SpanishLA, the Chinese pair, Arabic |
+
+2048 EU's thirteen is exactly its retail listing (no American, Japanese, Korean
+or Traditional Chinese), which is corroboration only. Omega's EU store page
+lists twelve, which neither the base table (13) nor the patched one (14)
+gives; unresolved. The picker order is **chosen, not measured**, since the
+original shows no picker: the default language first, then the console's own
+language-id order. Omega's is its table's order.
+
+How a source learns its release: a disc image reports its serial; an extracted
+package reports the `TITLE_ID` of its `sce_sys/param.sfo`
+(`oag_disc::sfo::title_id`, `Layout::serial`). This project's PS4 extract kept
+no `param.sfo`, so Omega reports none and `FrontEnd::assumed_release` names the
+EU release for it (**chosen, not measured**; the only one held).
+`FrontEnd::language_plugins` stays the superset: fonts, the HUD and the race
+loader read every plugin's `<Font>` slots from it.
+
+A release whose chooser reaches no plain `English` (2048 USA offers `American`)
+stands the project language on `American` and defaults to it; see
+[project-languages.md](../ui/project-languages.md).
 
 **This screen was very likely carried over from Wipeout Pure with only its
 `FEGlobals` retuned.** Pure's own `Skin.xml` (`data/images/pure-psp-usa.chd`)

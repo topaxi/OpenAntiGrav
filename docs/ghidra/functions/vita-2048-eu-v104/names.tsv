@@ -126,3 +126,5 @@
 0x8134bb9e	function	Scream_StartCueByIndex	72	crossfader.md
 0x8134bca8	function	Scream_StartCueByName	72	crossfader.md
 0x811b6dae	function	Ship_LoadModelSet	75	zone-craft.md
+0x8122eac0	function	Language_ChoosePluginName	90	language.md
+0x81541318	data	Language_RegionMode	85	language.md
