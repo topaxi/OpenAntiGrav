@@ -200,14 +200,6 @@ impl Scene {
             queue.write_buffer(&pass.fog, 0, bytemuck::bytes_of(&shine));
         }
         self.write_wreck_scenes(queue, ship_scene);
-        // **The Plasma bolt's head reads the eye out of this block** (`rim = 1 -
-        // N.V`), and a drawable nothing writes holds `Scene::off`, whose camera
-        // is the origin: the rim came out of the direction to the world's origin
-        // and painted the whole disc white. Fog and light reach it as they
-        // reach a hull; its program applies neither.
-        for drawable in &self.plasma_blast.ball {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(ship_scene));
-        }
     }
 
     /// Writes every live craft's pose and its environment-mapped coordinates:

@@ -277,6 +277,7 @@ impl Scene {
             ..scene
         };
         self.write_ship_scenes(queue, &ship_scene);
+        self.write_weapon_scenes(queue, &scene);
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),

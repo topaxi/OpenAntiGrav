@@ -53,10 +53,19 @@ pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD
 /// in this module follows. No per-title axis the way [`flare_texture`]'s
 /// `oag_title::flare::Flare` is: the LeachBeam is Pulse's own weapon and this
 /// is its one literal path, found and read on one binary.
+///
+/// `own_strips` is a title with its own LeachBeam model (HD): its beam is two
+/// SPU-extruded strips of `leachbeam_triangle`, unread, so it is not asked for
+/// Pulse's texture.
 pub(super) fn leach_beam_texture(
     archives: &mut oag_assets::Archives,
+    own_strips: bool,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
+    if own_strips {
+        report.push("the LeachBeam's own strips are not built - no ribbon body".into());
+        return None;
+    }
     let own = platform_sibling(archives, LEACHBEAM_TEXTURE);
     let found = match &own {
         Some(entry) => decode_texture(archives, entry).map(|texture| {

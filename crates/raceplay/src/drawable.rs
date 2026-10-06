@@ -356,6 +356,14 @@ impl Drawable {
     /// the GPU with a second pipeline rather than re-uploading it - a full grid
     /// is some twelve thousand triangles, which would be more traffic per frame
     /// than the whole rest of the pass.
+    /// Whether this model is shaded by a shipped PS3 program: some material
+    /// resolved to an `.rcsmaterial` variant (`Model::material_variants`).
+    /// Only `mesh::rcs::build` fills that, so a Pulse or Pure body, whose
+    /// materials are the GE's fixed pipeline, answers `false`.
+    pub(super) fn is_ps3_shaded(&self) -> bool {
+        self.model.material_variants.iter().any(Option::is_some)
+    }
+
     pub(super) fn caster(&self, model: Mat4) -> oag_render::shadow::map::Caster<'_> {
         oag_render::shadow::map::Caster {
             vertices: &self.vertices,
