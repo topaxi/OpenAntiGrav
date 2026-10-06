@@ -1,45 +1,30 @@
 //! A fixed scenario the determinism gate runs the drivers over.
 //!
-//! The third of its kind, after [`oag_core::probe`] (the math foundation) and
-//! `oag_physics::probe` (the force law). It exists because neither of those
-//! reaches this crate: the physics probe drives a *scripted* input, so no
-//! controller decision is in its hash, and `oag_gameplay`'s own determinism
-//! scenario fields no opponent at all - `Driver::place` and
-//! `Driver::provocation` are zero throughout it by design.
-//!
-//! So until this file existed, **every arithmetic decision an opponent makes
-//! was outside the cross-platform gate**, which is how
-//! [`Line::curvature`](crate::Line::curvature) came to call the platform's own
-//! `acos` for months without anything failing. It calls
-//! `oag_core::math::acos` now, and this is the gate that would have said so.
+//! The third probe, after [`oag_core::probe`] and `oag_physics::probe`.
+//! Neither reaches this crate: the physics probe drives *scripted* input, and
+//! `oag_gameplay`'s scenario fields no opponent. Until this file existed
+//! **every arithmetic decision an opponent makes was outside the cross-platform
+//! gate**, which is how [`Line::curvature`](crate::Line::curvature) called the
+//! platform's own `acos` for months. It uses `oag_core::math::acos` now.
 //!
 //! # What it exercises that the other two cannot
 //!
-//! - [`Line::curvature`](crate::Line::curvature), over a **spread** of real
-//!   angles rather than one - see [`RunResult::curvature`] and the scenario
-//!   note on [`circuit`]. A gate whose corners are all one radius passes under
-//!   any monotone error in the angle.
-//! - The personality draws, which turn a seed into seven-plus spans in a frozen
-//!   order.
-//! - The social axes, which need craft that can see each other: the field here
-//!   is four, built into a [`Field`] per craft per tick.
-//! - The mistake and provocation counters, which are integer state carried
-//!   between ticks and so cannot drift *gradually* - they either agree or they
-//!   do not.
+//! - [`Line::curvature`](crate::Line::curvature) over a **spread** of angles
+//!   (see [`RunResult::curvature`] and [`circuit`]): corners of one radius pass
+//!   under any monotone error in the angle.
+//! - The personality draws, seven-plus spans in a frozen order.
+//! - The social axes: four craft, a [`Field`] per craft per tick.
+//! - The mistake and provocation counters: integer state that cannot drift
+//!   gradually, it agrees or it does not.
 //!
 //! # No disc image
 //!
-//! Same reasoning as `oag_physics::probe`, and the same constraint: `data/` is
-//! gitignored, so a disc-backed scenario would never run on Windows or macOS,
-//! which is exactly where a portability bug shows up. The circuit below is
-//! built in this file.
-//!
-//! **The hulls and the circuit are invented**, per
-//! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md) -
-//! round numbers picked to give a craft that corners and a circuit that makes
-//! it work, not a measurement of anything. Whether the field gets round a
-//! *real* track is `race_ground_truth::the_ai_drives_the_field_along_the_track`,
-//! which needs the disc.
+//! `data/` is gitignored, so a disc-backed scenario would never run on Windows
+//! or macOS, where portability bugs show. The circuit is built here, and **the
+//! hulls and circuit are invented** per
+//! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
+//! Whether the field gets round a *real* track is
+//! `race_ground_truth::the_ai_drives_the_field_along_the_track`.
 
 use crate::{Context, Driver, Field, Frame, Line, Pilot, Rival, Tuning};
 use oag_core::hash::StateHasher;
@@ -51,37 +36,29 @@ use oag_physics::{
 /// Our own fixed timestep. ADR-0007.
 const TICK: f32 = 1.0 / 60.0;
 
-/// How many craft take the scenario's grid.
-///
-/// Four rather than eight: the social axes need only that a craft has somebody
-/// ahead, somebody behind and somebody alongside, and four halves the run time
-/// of a gate three platforms pay for on every push.
+/// How many craft take the scenario's grid. Four, not eight: the social axes
+/// need somebody ahead, behind and alongside, and four halves the run time of a
+/// gate three platforms pay for on every push.
 pub const CRAFT: usize = 4;
 
 /// How much room the circuit's corridor gives either side of the line.
 const CORRIDOR: f32 = 14.0;
 
-/// The span [`RunResult::curvature`] is measured over.
-///
-/// Fixed rather than the driver's own lookahead, which varies with speed: a
-/// spread that moved because the craft was slower would say nothing about
-/// whether the circuit still has corners in it.
+/// The span [`RunResult::curvature`] is measured over. Fixed, not the driver's
+/// lookahead: a spread that moved because the craft was slower would say
+/// nothing about whether the circuit still has corners.
 const CURVATURE_SPAN: f32 = 30.0;
 
 /// Which committed scenario a reference row runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scenario {
-    /// Four seeded pilots, each a different built-in, released together.
-    ///
-    /// They start abreast and a little apart, so the field interacts from the
-    /// first tick rather than after a settling straight.
+    /// Four seeded pilots, each a different built-in, released together,
+    /// abreast and a little apart so the field interacts from the first tick.
     Field,
-    /// The same circuit driven by one craft with a `Driver::default()`.
-    ///
-    /// The plain line-follower: no personality, no rivals, no social axis. It
-    /// isolates the line-following arithmetic - the aim point, the curvature
-    /// and the speed target - from everything the pilots add on top, so a
-    /// divergence in one and not the other says which half moved.
+    /// The same circuit driven by one craft with a `Driver::default()`: the
+    /// plain line-follower, which isolates the aim point, curvature and speed
+    /// target from everything the pilots add, so a divergence says which half
+    /// moved.
     Solo,
 }
 
@@ -99,43 +76,31 @@ impl std::fmt::Display for Scenario {
 pub struct RunResult {
     /// Hash of the final state of every craft and every driver.
     pub final_hash: u64,
-    /// Hash of every tick's state and controls, folded together.
-    ///
-    /// Catches a divergence that happens mid-run and then cancels out, which a
-    /// final-state hash alone would miss.
+    /// Hash of every tick's state and controls, folded together: catches a
+    /// divergence that happens mid-run and cancels out.
     pub trajectory_hash: u64,
-    /// The smallest and largest curvature any craft was steering to, over the
-    /// whole run, in radians per unit.
+    /// The smallest and largest curvature any craft was steering to, in radians
+    /// per unit.
     ///
     /// **Reported so the test can assert the scenario still exercises a range
-    /// of angles**, which is the property that makes the hashes above worth
-    /// anything for this crate specifically. A circuit that flattened into one
-    /// radius - or a driver whose index stopped advancing - would still hash
-    /// consistently while testing almost nothing, and the spread is what makes
-    /// that visible instead of silent.
+    /// of angles**: a circuit flattened to one radius, or a driver whose index
+    /// stopped advancing, would hash consistently while testing nothing.
     pub curvature: (f32, f32),
-    /// How far the *least* travelled craft went, in world units.
+    /// How far the *least* travelled craft went, in world units: the other half
+    /// of "this scenario still tests something". Four craft spun off at tick 30
+    /// hash reproducibly and say nothing about a driver; a controller that cannot
+    /// hold this circuit, or a grid beside the line, are what an invented
+    /// fixture invites.
     ///
-    /// The other half of "this scenario still tests something". A hash over
-    /// four craft that spun off on tick 30 and lay still for the rest of the
-    /// run is perfectly reproducible and says nothing about a driver, and the
-    /// two failures that would produce it - a controller that cannot hold this
-    /// circuit, and a grid placed beside the line rather than on it - are
-    /// exactly the ones an invented fixture invites.
-    ///
-    /// **Path length, not line index.** A driver's index is the answer to a
-    /// windowed nearest-point search and jitters back and forth by a point or
-    /// two every tick; summing its deltas measures that jitter far more than it
-    /// measures progress. How far the hull actually moved cannot be argued
-    /// with.
+    /// **Path length, not line index**: a driver's index is a windowed
+    /// nearest-point search that jitters by a point or two per tick, which
+    /// summing its deltas measures instead of progress.
     pub travelled: f32,
 }
 
-/// An infinite horizontal floor at `y = 0`.
-///
-/// No walls: a craft that leaves the line keeps going rather than being caught
-/// by geometry, so what the hash covers is the controller's own arithmetic and
-/// not a contact response that `oag_physics::probe` already gates.
+/// An infinite horizontal floor at `y = 0`. No walls, so the hash covers the
+/// controller's arithmetic and not a contact response `oag_physics::probe`
+/// already gates.
 struct Plane;
 
 impl Raycaster for Plane {
@@ -177,15 +142,11 @@ impl Raycaster for Plane {
 
 /// A craft that can drive, with invented numbers, **and airbrakes that work**.
 ///
-/// The airbrakes are the difference from `closed_loop.rs`'s default fixture,
-/// which ends `..Handling::ZERO` and so leaves every airbrake and brake term at
-/// zero. That fixture is deliberate there - its regression bounds were
-/// calibrated against a craft whose airbrakes do nothing - but it is the wrong
-/// choice here: a determinism gate that leaves a whole control path at zero
-/// hashes a path nobody drives. This one commands, ramps and spends all of
-/// them.
-///
-/// **None of these is the game's**, per ADR-0006.
+/// `closed_loop.rs`'s default fixture ends `..Handling::ZERO`, leaving every
+/// airbrake and brake term at zero; its bounds were calibrated that way. A
+/// determinism gate that leaves a control path at zero hashes a path nobody
+/// drives, so this one commands, ramps and spends all of them. **None of these
+/// is the game's**, per ADR-0006.
 fn handling() -> Handling {
     Handling {
         engine: params::Engine {
@@ -236,12 +197,9 @@ fn handling() -> Handling {
     }
 }
 
-/// The tuning the invented craft is driven with.
-///
-/// `Tuning::default()`'s `lateral_accel` is a measurement against the *real*
-/// hulls, which corner harder than this one; `closed_loop.rs` records why the
-/// two are not commensurate. The gate wants a craft that holds its line, so it
-/// takes the same invented figure that file does.
+/// The tuning the invented craft is driven with: `Tuning::default()`'s
+/// `lateral_accel` is measured against the *real* hulls, which corner harder
+/// (`closed_loop.rs` records why), so this takes that file's invented figure.
 fn tuning() -> Tuning {
     Tuning {
         lateral_accel: 55.0,
@@ -251,32 +209,23 @@ fn tuning() -> Tuning {
 
 /// A closed circuit with corners of several different radii.
 ///
-/// The shape is the scenario's whole point. An oval has one radius, so every
-/// curvature the drivers ever compute is the same number and any error in the
-/// angle that is monotone in that number moves nothing here. This loop opens
-/// out into long sweeps and closes into tight bends, so
-/// [`Line::curvature`](crate::Line::curvature) is sampled across a real range
-/// and the speed target is repeatedly re-decided. [`RunResult::curvature`]
-/// reports the spread that actually resulted, and `tests/determinism.rs`
-/// asserts on it - a circuit that flattened would otherwise keep hashing
-/// consistently while testing almost nothing.
+/// The shape is the point. An oval has one radius, so every curvature is the
+/// same number and a monotone angle error moves nothing. This loop opens into
+/// long sweeps and closes into tight bends so [`Line::curvature`](crate::Line::curvature)
+/// is sampled across a range; [`RunResult::curvature`] reports the spread and
+/// `tests/determinism.rs` asserts on it.
 ///
-/// # No `sin` or `cos`, and that is not a style choice
+/// # No `sin` or `cos`
 ///
-/// The obvious way to draw a circuit is arcs off `angle.cos()`, which is what
-/// `closed_loop.rs`'s oval does. **It cannot be done here.** Those are the same
-/// platform transcendentals this gate exists to keep out of the simulation, and
-/// a fixture built from them would put a platform-dependent *circuit* under a
-/// cross-platform hash - the gate would fail on macOS for a reason that had
-/// nothing to do with the drivers, which is worse than not gating at all.
-///
-/// So the loop is a closed uniform Catmull-Rom spline through the control
-/// points below: polynomial evaluation, `+ - * /` only, identical everywhere.
-/// It also closes exactly by construction, and a seam would otherwise read as
-/// one enormous curvature sample.
+/// Arcs off `angle.cos()` (as `closed_loop.rs`'s oval does) are the platform
+/// transcendentals this gate exists to keep out: the gate would fail on macOS
+/// for a reason unrelated to the drivers. So the loop is a closed uniform
+/// Catmull-Rom spline through the control points: `+ - * /` only, identical
+/// everywhere, and closed exactly (a seam would read as one enormous
+/// curvature).
 pub fn circuit() -> Line {
     /// The outline, anticlockwise in the XZ plane. Roughly evenly spaced, which
-    /// is what keeps a *uniform* Catmull-Rom from overshooting between them.
+    /// keeps a *uniform* Catmull-Rom from overshooting.
     const CONTROL: [(f32, f32); 12] = [
         (320.0, -420.0),
         (320.0, 60.0),
@@ -291,9 +240,8 @@ pub fn circuit() -> Line {
         (-20.0, -480.0),
         (180.0, -470.0),
     ];
-    /// Samples per control-point span. Twelve spans of these over a loop about
-    /// 2,600 units round is a point every five units or so, the order of
-    /// magnitude a real track's spline carries.
+    /// Samples per control-point span: twelve spans over a loop about 2,600
+    /// units round is a point every five units or so, like a real spline.
     const PER_SPAN: usize = 40;
 
     let control = |index: i32| -> Vec3 {
@@ -314,10 +262,8 @@ pub fn circuit() -> Line {
             let t = step as f32 / PER_SPAN as f32;
             let t2 = t * t;
             let t3 = t2 * t;
-            // The uniform Catmull-Rom basis, halved as it is conventionally
-            // written. Interpolating, so the curve passes through every control
-            // point and the outline above is the circuit rather than a hint at
-            // it.
+            // The uniform Catmull-Rom basis, halved as conventionally written.
+            // Interpolating: the curve passes through every control point.
             points.push(
                 (p1 * 2.0
                     + (p2 - p0) * t
@@ -328,13 +274,10 @@ pub fn circuit() -> Line {
         }
     }
 
-    // A corridor an even `CORRIDOR` either side. A real track's comes off the
-    // disc, one bound per control point; what is under gate here is the driver.
-    //
-    // **The frame is `along.cross(Y)`, the driver's right**, matching
-    // `Body::right` and the disc's own `sample.lateral`. Every synthetic
-    // corridor in this crate had this backwards once, and symmetric bounds hid
-    // it until a term needed the sign - see `closed_loop.rs`.
+    // A corridor an even `CORRIDOR` either side (a real one comes off the
+    // disc). **The frame is `along.cross(Y)`, the driver's right**, matching
+    // `Body::right` and `sample.lateral`. Every synthetic corridor here had
+    // this backwards once, and symmetric bounds hid it; see `closed_loop.rs`.
     let corridor = (0..points.len())
         .map(|index| {
             let here = points[index];
@@ -350,14 +293,11 @@ pub fn circuit() -> Line {
     Line::with_corridor(points, corridor)
 }
 
-/// Places craft `slot` on the line's own first points, staggered like a grid.
-///
-/// Two columns eleven units apart across the line and twenty-two along it,
-/// which is a grid's shape without being the recovered one - the real geometry
-/// is `oag_gameplay::spawn::grid_pose` and belongs to a race, not to a gate.
-///
-/// **Derived from the line rather than written out**, so an edit to [`circuit`]
-/// moves the grid with it instead of leaving four craft beside the track.
+/// Places craft `slot` on the line's own first points, staggered like a grid:
+/// two columns eleven units apart across and twenty-two along, a grid's shape
+/// without being the recovered one (`oag_gameplay::spawn::grid_pose` belongs to
+/// a race). **Derived from the line**, so an edit to [`circuit`] moves the grid
+/// with it.
 fn grid_pose(line: &Line, slot: usize) -> (Vec3, Quat) {
     let row = (slot / 2) as f32;
     let side = if slot.is_multiple_of(2) { -1.0 } else { 1.0 };
@@ -367,17 +307,15 @@ fn grid_pose(line: &Line, slot: usize) -> (Vec3, Quat) {
     let across = along.cross(Vec3::Y).normalize_or_zero();
     (
         here + across * (side * 11.0) + Vec3::Y * 4.0,
-        // `from_rotation_arc` is `sqrt` and arithmetic, not a transcendental -
-        // see the note on `circuit` about why that matters here.
+        // `from_rotation_arc` is `sqrt` and arithmetic, not a transcendental:
+        // see [`circuit`].
         Quat::from_rotation_arc(Vec3::Z, along),
     )
 }
 
-/// Across the line at `index`, pointing to the driver's right.
-///
-/// Built from the line itself rather than read off [`Frame::lateral`], because
-/// that is what [`circuit`] built the corridor from in the first place and one
-/// derivation is one thing to get the sign of wrong.
+/// Across the line at `index`, pointing to the driver's right. Built from the
+/// line, not [`Frame::lateral`], because [`circuit`] built the corridor from it:
+/// one derivation is one thing to get the sign of wrong.
 fn lateral(line: &Line, index: i64) -> Vec3 {
     let at = index.rem_euclid(line.len().max(1) as i64) as usize;
     let along = (line.point(at + 1) - line.point(at)).normalize_or_zero();
@@ -386,11 +324,10 @@ fn lateral(line: &Line, index: i64) -> Vec3 {
 
 /// The rivals craft `slot` can see, out of the poses of all of them.
 ///
-/// The same three questions `oag_game`'s `Race::field_for` answers - nearest
-/// ahead, nearest behind, one alongside - resolved here off the drivers' own
-/// line indices so the probe needs no race. It is not that function: this one
-/// has no wrap-aware lap ordering, because four craft released together on one
-/// straight never lap each other inside the scenario's length.
+/// The three questions `oag_game`'s `Race::field_for` answers (nearest ahead,
+/// behind, alongside), resolved off the drivers' line indices so the probe needs
+/// no race. No wrap-aware lap ordering: four craft released together on one
+/// straight never lap each other here.
 fn field_for(slot: usize, drivers: &[Driver], states: &[ShipState], line: &Line) -> Field {
     let mine = drivers[slot].index as i64;
     let my_state = &states[slot];
@@ -440,11 +377,9 @@ fn field_for(slot: usize, drivers: &[Driver], states: &[ShipState], line: &Line)
     field
 }
 
-/// Runs `scenario` for `ticks` and returns its hashes and its curvature spread.
-///
-/// The same entry points a race steps: [`Driver::drive`] for the controls and
-/// [`oag_physics::step`] for what they do, in that order, once per craft per
-/// tick.
+/// Runs `scenario` for `ticks` and returns its hashes and curvature spread,
+/// stepping what a race steps: [`Driver::drive`] then [`oag_physics::step`],
+/// once per craft per tick.
 #[must_use]
 pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
     let line = circuit();
@@ -456,9 +391,8 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
         Scenario::Field => CRAFT,
         Scenario::Solo => 1,
     };
-    // A different built-in pilot per craft, in a fixed order, so the run covers
-    // four distinct sets of draws rather than four copies of one. `Solo` takes
-    // a `Driver::default()`, whose zero seed is the plain line-follower.
+    // A different built-in pilot per craft in a fixed order, so the run covers
+    // four sets of draws. `Solo` takes `Driver::default()`, the plain follower.
     let pilots: [&Pilot; CRAFT] = [
         &Pilot::BALANCED,
         &Pilot::AGGRESSIVE,
@@ -481,9 +415,8 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
         .collect();
     let mut drivers: Vec<Driver> = (0..craft)
         .map(|slot| match scenario {
-            // Seeds a caller would derive from a race seed and a slot. Fixed
-            // here, because a gate over an arbitrary seed is a gate over
-            // whatever seed happened to run.
+            // Seeds a caller would derive from a race seed and a slot, fixed:
+            // a gate over an arbitrary seed is a gate over whichever ran.
             Scenario::Field => Driver {
                 seed: 0x51ed_0000 + slot as u32,
                 ..Driver::default()
@@ -531,11 +464,8 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
                 TICK,
             );
 
-            // The angle the acos actually saw this tick, at the index this
-            // craft is steering from. `CURVATURE_SPAN` rather than the
-            // driver's own lookahead because the driver's varies with speed,
-            // and a spread that moved because the craft was slower would say
-            // nothing about the circuit.
+            // The angle the acos saw this tick, at the index this craft steers
+            // from; `CURVATURE_SPAN`, not the driver's speed-varying lookahead.
             let curvature = line.curvature(drivers[slot].index as usize, CURVATURE_SPAN);
             lowest = lowest.min(curvature);
             highest = highest.max(curvature);
@@ -567,9 +497,7 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
 
 /// The speed plan [`crate::SpeedPlan::build`] learns on [`circuit`], hashed:
 /// every sample's ceiling, target and verified pace as bits, then the build's
-/// own report. What the determinism gate pins for the plan, on the same
-/// invented circuit, hull and floor every other scenario here uses - the plan
-/// is built at race start from disc data on a player's machine, so a platform
+/// report. The plan is built at race start on a player's machine, so a platform
 /// that learned a different plan would field a different race.
 #[must_use]
 pub fn speed_plan() -> (u64, crate::plan::Report) {
@@ -626,10 +554,8 @@ pub fn speed_plan() -> (u64, crate::plan::Report) {
 
 /// One craft's hashable state: what it is doing, and what its driver remembers.
 ///
-/// **Every `Driver` field, deliberately.** They are the whole of what a driver
-/// carries between ticks, and a field left out of here is a field a divergence
-/// can hide in - which is the failure `oag_gameplay::hash` records having had
-/// when the pickups landed.
+/// **Every `Driver` field, deliberately**: a field left out is a field a
+/// divergence can hide in, as `oag_gameplay::hash` recorded when pickups landed.
 fn write_craft(hasher: &mut StateHasher, state: &ShipState, driver: &Driver) {
     hasher.write_vec3(state.body.position);
     hasher.write_quat(state.body.orientation);
