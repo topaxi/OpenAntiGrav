@@ -1,19 +1,13 @@
-//! What the `handlingstats.xml` reader in [`super`] is asserted to do: the
-//! scaled tunables, the per-class blocks, and the shapes a malformed file
-//! must not produce.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `handling.rs`: the tests are 672 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! What the `handlingstats.xml` reader in [`super`] is asserted to do: scaled
+//! tunables, per-class blocks, and the shapes a malformed file must not produce.
+//! Its own file because the tests exceed the 200-line inline limit
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
-/// Every number in these fixtures is **invented**: a plain 1, 2, 3 ... in
-/// document order. Per
-/// `docs/architecture/adr/0006-no-copyrighted-content.md` no shipped tuning
-/// value may appear anywhere in this repository, tests included, and
-/// counting from one is about as obviously synthetic as data gets.
+/// Every number is **invented** (1, 2, 3 ... in document order): no shipped
+/// tuning value may appear in this repository
+/// (`docs/architecture/adr/0006-no-copyrighted-content.md`).
 const HEADER: &str = concat!(
     r#"<InternalCamera fov="1" headtilt="2" height="3" length="4" pitch="5"/>"#,
     r#"<BackwardCamera fov="6" headtilt="7" height="8" length="9" pitch="10"/>"#,
@@ -42,8 +36,8 @@ const CLASS_BODY: &str = concat!(
     r#" antigrav_height_adjust="32"/>"#,
 );
 
-/// Attributes the fixture carries, which is also the count the schema lists:
-/// 41 in the header plus `team`, and 32 per class plus its `name`.
+/// The attribute count the schema lists: 41 in the header plus `team`, 32 per
+/// class plus its `name`.
 const FIXTURE_ATTRIBUTES: usize = 42 + 4 * 33;
 
 fn class_block(name: &str) -> String {
@@ -59,8 +53,7 @@ fn all_four() -> String {
     document(&["VENOM", "FLASH", "RAPIER", "PHANTOM"])
 }
 
-/// Every ` name="value"` span in `doc`, so a test can remove them one at a
-/// time. Crude on purpose: the fixture is the only input it ever sees.
+/// Every ` name="value"` span in `doc`, so a test can remove them one at a time.
 fn attribute_spans(doc: &str) -> Vec<std::ops::Range<usize>> {
     let bytes = doc.as_bytes();
     let mut out = Vec::new();
@@ -121,9 +114,9 @@ fn every_class_block_is_read_and_indexed_by_its_own_name() {
     );
 }
 
-/// The invariant that matters most. A silently absent attribute defaulting
-/// to zero would be a physics bug that reads as a tuning problem, so every
-/// one of them is removed in turn and every removal must be a typed error.
+/// The key invariant: a silently defaulted attribute would be a physics bug that
+/// reads as tuning, so each is removed in turn and every removal must be a typed
+/// error.
 #[test]
 fn a_missing_attribute_is_an_error_not_a_default() {
     let doc = all_four();
@@ -135,12 +128,9 @@ fn a_missing_attribute_is_an_error_not_a_default() {
     );
 
     for span in spans {
-        // Attributes whose absence is a fact about a *generation* of the
-        // schema rather than a defect in a file, so they are exempt here and
-        // pinned separately: the three Pulse added, by
-        // `the_three_pulse_era_attributes_are_absent_rather_than_missing`, and
-        // `headtilt`, which Wipeout HD's team files drop and its own mode
-        // ships keep.
+        // Exempt: absent by *schema generation*, pinned separately: the three
+        // Pulse added (`the_three_pulse_era_attributes_are_absent_rather_than_missing`)
+        // and `headtilt`, which HD's team files drop and its mode ships keep.
         let text = &doc[span.clone()];
         if ["easyshield", "weight_distribution", "sideshift", "headtilt"]
             .iter()
@@ -171,14 +161,9 @@ fn a_missing_element_is_an_error() {
         "ExternalCameraClose",
         "AirbrakeGraphics",
         "Misc",
-        // **`FE` and `pitch` are deliberately absent from this list.** Pure
-        // omits both from every file on both pressings, so their absence is
-        // a schema difference rather than a defect, and `Stats::fe` and
-        // `Class::pitch` are `Option` for it. Everything else here is still
-        // required, which is what keeps this test meaningful rather than a
-        // formality - and the two optional ones get their own test below,
-        // because "may be absent" must not quietly become "may be
-        // malformed".
+        // **`FE` and `pitch` are deliberately absent.** Pure omits both on both
+        // pressings (`Stats::fe` and `Class::pitch` are `Option`), and they get
+        // their own test so "may be absent" does not become "may be malformed".
         "Engine",
         "Brakes",
         "Turning",
@@ -201,14 +186,10 @@ fn a_missing_element_is_an_error() {
 
 /// Dropping `headtilt` gives `None`; breaking one still fails.
 ///
-/// The same pair of claims as the `<pitch>` test below, for the same reason
-/// and one schema generation later. **Wipeout HD's team files omit the
-/// attribute** - `<InternalCamera fov="65" height="0" length="3" pitch="0"/>`
-/// on Feisar - where its own Zone and Detonator ships still carry it, so the
-/// absence is a fact about a document rather than a defect in one. Only the
-/// cockpit view applies `headtilt` (see `oag_render::camera::internal`), and an
-/// absence there tilts nothing; what an `Option` buys here is that a typo cannot
-/// become a silent zero.
+/// **HD's team files omit the attribute** (`<InternalCamera fov="65" height="0"
+/// length="3" pitch="0"/>` on Feisar) where its Zone and Detonator ships keep
+/// it. Only the cockpit view applies it (`oag_render::camera::internal`); an
+/// `Option` keeps a typo from becoming a silent zero.
 #[test]
 fn an_absent_headtilt_is_none_and_a_broken_one_is_still_an_error() {
     let doc = all_four();
@@ -233,13 +214,9 @@ fn an_absent_headtilt_is_none_and_a_broken_one_is_still_an_error() {
     );
 }
 
-/// Dropping `<pitch>` gives `None`; breaking one still fails.
-///
-/// The pair of claims `Class::pitch`'s `Option` makes, and they have to be
-/// tested together: an `Option` that swallowed a parse error would turn a
-/// typo in a Pulse file into a silent fall-through to
-/// `oag_gameplay::handling::PITCH_STAND_IN` - another title's tuning, applied
-/// because of a typo, with nothing on screen to say so.
+/// Dropping `<pitch>` gives `None`; breaking one still fails. An `Option` that
+/// swallowed a parse error would turn a Pulse typo into a silent fall-through to
+/// `oag_gameplay::handling::PITCH_STAND_IN`, another title's tuning.
 #[test]
 fn an_absent_pitch_is_none_and_a_broken_one_is_still_an_error() {
     let doc = all_four();
@@ -277,8 +254,7 @@ fn an_absent_pitch_is_none_and_a_broken_one_is_still_an_error() {
         "a malformed <pitch> must not pass as an absent one"
     );
 
-    // And an attribute *dropped* from a present block is still an error too,
-    // which is the shape a half-written element would take.
+    // An attribute *dropped* from a present block still errors (a half-written element).
     let short = doc.replace(r#"pitch_air="29" "#, "");
     assert_eq!(
         parse(&short),
@@ -291,11 +267,9 @@ fn an_absent_pitch_is_none_and_a_broken_one_is_still_an_error() {
 }
 
 #[test]
-/// A file that names *some* of Pulse's ladder must name all of it.
-///
-/// Narrowed rather than relaxed: the check now applies only where the file
-/// has shown it is using Pulse's ladder, so a partial Pulse file is still an
-/// error while a different generation's ladder is not.
+/// A file naming *some* of Pulse's ladder must name all of it: the check applies
+/// only where the file uses Pulse's ladder, so a partial Pulse file errors and
+/// another generation's ladder does not.
 fn a_partly_present_pulse_ladder_is_an_error() {
     assert_eq!(
         parse(&document(&["VENOM", "FLASH", "RAPIER"])),
@@ -317,12 +291,9 @@ fn a_partly_present_pulse_ladder_is_an_error() {
     );
 }
 
-/// The three attributes Pulse added read as `None` when absent, and the
-/// exemption goes no further than those three.
-///
-/// `None` is "this schema predates the field", which is why it is not an
-/// error - and why a *present but broken* value still is. Collapsing those
-/// two would let a typo pass as an older file.
+/// The three attributes Pulse added read `None` when absent ("this schema
+/// predates the field") and the exemption goes no further; a present but broken
+/// value still errors, or a typo would pass as an older file.
 #[test]
 fn the_three_pulse_era_attributes_are_absent_rather_than_missing() {
     let doc = all_four();
@@ -349,7 +320,7 @@ fn the_three_pulse_era_attributes_are_absent_rather_than_missing() {
         assert_eq!(read, None, "{attribute} should read as absent");
     }
 
-    // Present but unparseable is still an error, for the same three.
+    // Present but unparseable is still an error.
     let broken = doc.replace(r#"easyshield="35""#, r#"easyshield="oops""#);
     assert!(
         matches!(parse(&broken), Err(Error::NotANumber { .. })),
@@ -357,16 +328,10 @@ fn the_three_pulse_era_attributes_are_absent_rather_than_missing() {
     );
 }
 
-/// A rung outside Pulse's four is **kept**, not rejected.
-///
-/// This used to be `Error::UnknownClass`, and that strictness was what made
-/// this parser refuse Pure's `handlingstats.xml` outright: Pure ships a
-/// fifth speed class below Pulse's slowest. An unrecognised rung is a
-/// different ladder, not a corrupt file.
-///
-/// What is still guaranteed: Pulse's four keep their `SpeedClass`
-/// discriminants as indices into the front of the vector, so the extra rung
-/// cannot displace them.
+/// A rung outside Pulse's four is **kept**, not rejected (this was
+/// `Error::UnknownClass`, which made the parser refuse Pure's file: a fifth
+/// class below Pulse's slowest). Pulse's four keep their discriminants as
+/// indices into the front of the vector.
 #[test]
 fn a_class_name_outside_pulses_ladder_is_kept_after_the_four() {
     let doc = document(&["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERSONIC"]);
@@ -388,8 +353,8 @@ fn a_class_name_outside_pulses_ladder_is_kept_after_the_four() {
     assert_eq!(stats.classes[4].raw_name, "SUPERSONIC");
 }
 
-/// A file naming *none* of Pulse's ladder is another generation's, and is
-/// kept whole rather than reported as four missing classes.
+/// A file naming *none* of Pulse's ladder is another generation's and is kept
+/// whole.
 #[test]
 fn a_ladder_with_no_pulse_rung_at_all_is_kept_whole() {
     let doc = document(&["ALPHA", "BETA"]);
@@ -423,8 +388,8 @@ fn a_non_numeric_attribute_is_an_error() {
     );
 }
 
-/// `"nan"` and `"inf"` parse fine as `f32`, and either one would poison every
-/// state hash downstream of it without ever failing a parse.
+/// `"nan"` and `"inf"` parse as `f32` and would poison every downstream state
+/// hash without failing a parse.
 #[test]
 fn a_non_finite_attribute_is_an_error() {
     for text in ["nan", "NaN", "inf", "-inf", "infinity"] {
@@ -436,8 +401,8 @@ fn a_non_finite_attribute_is_an_error() {
     }
 }
 
-/// `<Values>` is an attribute carrier for its parent throughout this format,
-/// so a block may be written either way round.
+/// `<Values>` carries attributes for its parent, so a block may be written
+/// either way round.
 #[test]
 fn attributes_may_arrive_on_a_values_carrier() {
     let doc = all_four().replace(
@@ -455,10 +420,9 @@ fn attributes_may_arrive_on_a_values_carrier() {
     );
 }
 
-/// The files on disc are shortened, so the expander and the schema have to
-/// join up. Only the outer three element names are shortened here; names
-/// absent from a dictionary pass through untouched, which is what keeps the
-/// fixture readable.
+/// The files on disc are shortened, so expander and schema must join up. Only
+/// the outer three names are shortened here; names absent from a dictionary pass
+/// through.
 #[test]
 fn reads_a_shortened_blob() {
     let doc = all_four()
@@ -476,8 +440,8 @@ fn reads_a_shortened_blob() {
     );
 }
 
-/// The PS2 release ships this file as plain text beginning `<?xml`, so a blob
-/// with no `<code>` dictionary is not an error: it is the other platform.
+/// PS2 ships plain text beginning `<?xml`, so a blob with no `<code>` dictionary
+/// is the other platform, not an error.
 #[test]
 fn reads_a_plain_unshortened_document() {
     let plain = format!("<?xml version=\"1.0\"?>{}", all_four());
@@ -524,10 +488,9 @@ fn entry_names_are_built_the_way_the_loader_builds_them() {
     assert_eq!(entry_name("Feisar"), r"Data\Ships\Feisar\handlingstats.xml");
 }
 
-/// A `<Global>` document with `classes` as its `<GlobalClass>` names, in the
-/// order given. Every number is invented and none is the game's; the two
-/// `<SpeedupPads>` attributes count from the block's position so a test can
-/// tell the slots apart.
+/// A `<Global>` document with `classes` as its `<GlobalClass>` names, in order.
+/// Invented numbers; the `<SpeedupPads>` attributes count from the block's
+/// position so slots can be told apart.
 fn global_document(classes: &[&str]) -> String {
     let blocks: String = classes
         .iter()
@@ -550,8 +513,8 @@ fn global_document(classes: &[&str]) -> String {
     )
 }
 
-/// [`global_document`] with a `<StartBoost>` appended to `<Global>`. Invented
-/// numbers, each distinct so a swapped attribute shows.
+/// [`global_document`] with a `<StartBoost>` appended; distinct numbers so a
+/// swapped attribute shows.
 fn global_with_start_boost(element: &str) -> String {
     global_document(&FOUR).replace("</Global>", &format!("{element}</Global>"))
 }
@@ -595,9 +558,8 @@ fn a_start_boost_missing_an_attribute_is_an_error_not_a_zero() {
     );
 }
 
-/// `<Special>` as [`global_document`] authors it. All five attributes, so
-/// the fixture is the shape the disc's own file is rather than only the four
-/// [`Special`] reads; `turbo_jump` is authored but not asserted on.
+/// `<Special>` as [`global_document`] authors it: all five attributes, as the
+/// disc's file has them; `turbo_jump` is authored, not asserted.
 const SPECIAL: &str = r#"<Special roll_cost="4" roll_speed="5" roll_turbotime="6" speedpad_jump="7" turbo_jump="8"/>"#;
 
 const FOUR: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
@@ -613,8 +575,7 @@ fn each_global_class_lands_in_its_own_slot() {
         .expect("parses")
         .expect("has a <Global>");
     assert_eq!(global.zone.start, 1.0);
-    // The four `<Special>` attributes with a consumer, read off the same
-    // `<Global>` as the rest and each distinct from every other number here.
+    // The four `<Special>` attributes with a consumer, each distinct.
     assert_eq!(global.special.roll_cost, 4.0);
     assert_eq!(global.special.roll_speed, 5.0);
     assert_eq!(global.special.roll_turbotime, 6.0);
@@ -628,8 +589,7 @@ fn each_global_class_lands_in_its_own_slot() {
                 time: n * 10.0
             }
         );
-        // Read from the same block, so a reader that took the pads from one
-        // `<GlobalClass>` and the gravity from another would show up here.
+        // Same block, so pads from one `<GlobalClass>` and gravity from another would show.
         assert_eq!(
             global.gravity_mul(class),
             GravityMul {
@@ -646,11 +606,9 @@ fn each_global_class_lands_in_its_own_slot() {
     }
 }
 
-/// Pure authors `<WeaponPad refresh_time>` and no
-/// `elimination_refresh_time`, having no Eliminator - see
-/// `crates/pure/tests/handling_schema_ground_truth.rs`. So the second
-/// attribute is absent rather than zero, and the distinction has to survive
-/// the parse.
+/// Pure authors `<WeaponPad refresh_time>` and no `elimination_refresh_time`
+/// (no Eliminator; `crates/pure/tests/handling_schema_ground_truth.rs`), so the
+/// second attribute is absent, not zero.
 #[test]
 fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
     let pure_shaped = global_document(&FOUR).replace(r#" elimination_refresh_time="10000""#, "");
@@ -664,8 +622,7 @@ fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
             elimination_refresh_time: None,
         }
     );
-    // The other three still carry theirs, so this is about the attribute
-    // rather than about the element.
+    // The other three still carry theirs: this is about the attribute, not the element.
     assert_eq!(
         global
             .weapon_pads(SpeedClass::Flash)
@@ -674,11 +631,9 @@ fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
     );
 }
 
-/// The finding this reader is shaped around: both shipped discs author a
-/// fifth `<GlobalClass name="VECTOR">` **first**, and it must neither be an
-/// error nor shift the four that follow into the wrong slots. Position
-/// indexing would put every class one slot out and produce a boost that is
-/// wrong by a plausible-looking amount on all four.
+/// Both shipped discs author a fifth `<GlobalClass name="VECTOR">` **first**; it
+/// must neither error nor shift the four after it (position indexing would put
+/// every class one slot out, wrong by a plausible amount).
 #[test]
 fn an_unrecognised_global_class_is_skipped_without_shifting_the_others() {
     let with_vector = ["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
@@ -688,8 +643,7 @@ fn an_unrecognised_global_class_is_skipped_without_shifting_the_others() {
     assert_eq!(shifted.speedup_pads(SpeedClass::Venom).amount, 2.0);
     assert_eq!(shifted.speedup_pads(SpeedClass::Phantom).amount, 5.0);
 
-    // And the same four names without it keep the same *relative* order, so
-    // the assertion above is about the skip rather than about the numbering.
+    // The same four names without it keep the same *relative* order.
     let without = parse_global(&global_document(&FOUR))
         .expect("parses")
         .expect("has a <Global>");
@@ -715,10 +669,8 @@ fn a_global_block_missing_a_speed_class_is_an_error() {
     );
 }
 
-/// `<Global>` present but incomplete is an error rather than `Ok(None)`,
-/// which is the tightening this reader makes over the `<Zone>`-only one it
-/// replaced. Half a configuration is worse than none: the boost would be
-/// silently absent on whichever class lost its block.
+/// `<Global>` present but incomplete is an error, not `Ok(None)`: half a
+/// configuration would silently lose the boost on whichever class lost its block.
 #[test]
 fn a_global_block_missing_its_zone_or_its_pads_is_an_error() {
     let no_zone =
