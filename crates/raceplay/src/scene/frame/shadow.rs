@@ -74,6 +74,17 @@ impl super::super::Scene {
         // no placements clears the runs, which is what makes turning the row
         // off take effect on the next frame rather than leaving the last
         // frame's quads in the buffer.
+        if shadows == oag_display::display::Shadows::Blob
+            && self.generated_silhouettes > 0
+            && !self.generated_silhouettes_said.replace(true)
+        {
+            log::warn!(
+                "blob shadow: {} of {} slot(s) draw a generated falloff, which is this \
+                 project's and not the disc's - this title ships no silhouette",
+                self.generated_silhouettes,
+                self.shadow_silhouette_count
+            );
+        }
         let placements = if shadows.draws() {
             race.shadow_placements()
         } else {
