@@ -1,149 +1,102 @@
-//! Typed view of [`super::Document`] for Wipeout 2048's own campaign schema -
-//! the shape `data/xml/SP.xml` and `data/xml/MP.xml` both author. See the
-//! parent module's doc comment for the full typedef census and how each name
-//! below was read.
+//! Typed view of [`super::Document`] for Wipeout 2048's campaign schema, the
+//! shape `data/xml/SP.xml` and `data/xml/MP.xml` both author. The parent module
+//! holds the typedef census and how each name was read.
 //!
-//! **Entry names and what 2048 ships live in `oag_2048::campaign`, per
-//! [ADR-0022] - this module knows the file's shape, not that Wipeout 2048 is
-//! the title that ships it.**
+//! Entry names and what 2048 ships live in `oag_2048::campaign`, per
+//! [ADR-0022]: this module knows the file's shape, not which title ships it.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 use super::{Document, Instance, Reference};
 
-/// Typedef ids this module resolves, named where `SP.xml`'s own
-/// `type=`/`typedefid=` pairs name them and left as bare constants where they
-/// do not - see [`super`]'s own doc comment for which is which and the
-/// confidence on each.
+/// Typedef ids this module resolves: named where `SP.xml`'s own
+/// `type=`/`typedefid=` pairs name them, bare otherwise. Confidence per
+/// [`super`]'s doc comment.
 pub mod typedef {
-    /// `GameModeObjective`, confidence 95 (named in-file). 96 instances:
-    /// pass/elite objectives an event's own [`super::super::Field`] pair
-    /// (`M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE`) points at - see [`Objective`],
-    /// which reads `M_OBJECTIVETYPE`/`M_OBJECTIVETARGET` as raw numbers.
-    /// **What each `ObjectiveValue` ordinal (`1`, `2`, `4`, `7`, and one
-    /// empty, measured across the 96) means is not this module's to say** -
-    /// that is `oag_2048::campaign`'s own reading, measured against 2048's
-    /// particular `(pass, elite)` type pairs per event kind; see
-    /// `docs/formats/2048-campaign.md`'s "The objective law" section.
+    /// `GameModeObjective`, confidence 95 (named in-file). 96 instances: the
+    /// pass/elite objectives an event's `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE`
+    /// point at; see [`Objective`]. **What each `ObjectiveValue` ordinal (`1`,
+    /// `2`, `4`, `7`, one empty) means is `oag_2048::campaign`'s reading**; see
+    /// `docs/formats/2048-campaign.md`'s "The objective law".
     pub const GAME_MODE_OBJECTIVE: i64 = 380278911;
-    /// `GameModeBase`, confidence 95 (named in-file, as the abstract static
-    /// type of every polymorphic reference field). No instance in `SP.xml`
-    /// carries this as its own `typedefid` - every real event is one of
-    /// [`RACE_A`], [`RACE_B`], [`ELIMINATION`] or [`ZONE`].
+    /// `GameModeBase`, confidence 95 (named in-file, the abstract type of every
+    /// polymorphic reference field). No `SP.xml` instance carries it as its own
+    /// `typedefid`.
     pub const GAME_MODE_BASE: i64 = 366306753;
-    /// `TrackDefinition`, confidence 95 (named in-file; also an exact name
-    /// match against `data/plugins/tracks/Definition.xml`'s own ten
-    /// `<PI_Track name="...">` stems). 10 instances - see [`Track`].
-    ///
-    /// **This is the typedef a prior pass guessed [`WEAPON_SET_DEFINITION`]
-    /// was** ("2048 ships 20 track profiles"); the guess was wrong on the
-    /// count alone (2048 ships ten circuits, not twenty) and the file's own
-    /// field-type pairs settle it either way.
+    /// `TrackDefinition`, confidence 95 (named in-file; its names match
+    /// `data/plugins/tracks/Definition.xml`'s ten `<PI_Track name="...">` stems).
+    /// 10 instances; see [`Track`]. An earlier pass guessed
+    /// [`WEAPON_SET_DEFINITION`] was this ("20 track profiles"); wrong on the
+    /// count alone.
     pub const TRACK_DEFINITION: i64 = 205052969;
-    /// `WeaponSetDefinition`, confidence 95 (named in-file). 20 instances,
-    /// each one `M_WEAPONAVAILABLEBITS` field carrying a single value.
-    /// **2026-09-28: `WeaponType`'s bit meanings are decoded for the bits
-    /// pinned at confidence >= 70** - see [`WeaponSet::allowed_weapons`] and
-    /// `docs/formats/2048-campaign.md`'s "The weapon set gate" section.
-    /// **2026-09-28: all eleven bits now pinned**, including bit 4
-    /// (`Shield`) and the `Mine`/`Bomb` split, from `WeaponType`'s own enum
-    /// declaration in `eboot.elf` -
-    /// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md`.
+    /// `WeaponSetDefinition`, confidence 95 (named in-file). 20 instances, each
+    /// one `M_WEAPONAVAILABLEBITS` field. **All eleven `WeaponType` bits are
+    /// pinned (2026-09-28)** from the enum declaration in `eboot.elf`; see
+    /// [`WeaponSet::allowed_weapons`],
+    /// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` and
+    /// `docs/formats/2048-campaign.md`'s "The weapon set gate".
     pub const WEAPON_SET_DEFINITION: i64 = -966434245;
     /// `WOShipModelData`, confidence 95 (named in-file). 21 instances: a
     /// team+livery craft catalogue (`M_TEAM`/`M_LIVERY`, e.g.
-    /// `"Feisar2048"`/`"speed"`) with its own rank-unlock ladder
-    /// (`M_RANKUNLOCK`) or campaign-unlock edge (`M_PCAMPAIGNUNLOCK`) - the
-    /// roster screen's own unlock table. **Not the rare case it first looked
-    /// like**: `M_PPLAYERSHIPMODELDATA` is authored (non-empty) on 14 of
-    /// `SP.xml`'s 141 events - forcing that event's player craft - and
-    /// `M_PGRIDSHIPMODELDATA` on most numbered events, sizing the AI grid
-    /// explicitly. See [`ShipModel`] and `oag_2048::campaign` for what
-    /// forcing a craft this way means for a launch.
+    /// `"Feisar2048"`/`"speed"`) with a rank-unlock ladder (`M_RANKUNLOCK`) or
+    /// campaign-unlock edge (`M_PCAMPAIGNUNLOCK`). Forcing a craft is not rare:
+    /// `M_PPLAYERSHIPMODELDATA` is authored on 14 of `SP.xml`'s 141 events and
+    /// `M_PGRIDSHIPMODELDATA` on most numbered ones. See [`ShipModel`] and
+    /// `oag_2048::campaign`.
     pub const SHIP_MODEL_DATA: i64 = 520725191;
-    /// One of two "lap race" typedefs. **2026-09-28: this is
-    /// `GameMode_ArcadeRace`'s and `GameMode_SpeedLapRace`'s own typedef,
-    /// confirmed at confidence 92** - `oag_formats::wad::hash_name` of the
-    /// literal string `"GameMode_ArcadeRace"` hashes to `-1353052320`
-    /// ([`RACE_B`]) and `"GameMode_SpeedLapRace"` to `-1915183557` (this
-    /// one), the same case-folded-CRC-32 convention every other named
-    /// typedef in this module's own census already matches, zero exceptions
-    /// across ten names checked - see `docs/formats/2048-campaign.md`'s
-    /// "Craft choice"-adjacent typedef table for the full cross-reference.
-    /// This is `GameMode_SpeedLapRace`: 53 instances, the only typedef whose
-    /// instances ever carry a non-empty `M_MAXGHOSTSHIPS` field (all 53 do;
-    /// neither [`RACE_B`] nor [`ELIMINATION`] nor [`ZONE`] carries that field
-    /// at all) - a real, checkable discriminator that now has a name to
-    /// match it: a dedicated Speed Lap class plausibly needs its own ghost
-    /// capacity where an ordinary race does not. Also the only typedef
-    /// carrying `laps == 0`: all 40 of the `SP.xml` instances literally named
-    /// `"<Track> Speed Lap - <Class>"` are `RACE_A` with `M_NUMOFLAPS`
-    /// absent/zero; `RACE_A`'s other 13 instances are ordinary 2-3 lap
-    /// `"20XX - Event N"` nodes. See [`EventKind::Race`] and [`Event::laps`].
+    /// `GameMode_SpeedLapRace`'s typedef, **confidence 92 (2026-09-28)**:
+    /// `oag_formats::wad::hash_name` of `"GameMode_ArcadeRace"` is
+    /// `-1353052320` ([`RACE_B`]) and of `"GameMode_SpeedLapRace"` `-1915183557`
+    /// (this), the case-folded CRC-32 every other named typedef here matches
+    /// (ten names checked, no exceptions); see `docs/formats/2048-campaign.md`'s
+    /// typedef table. 53 instances, the only typedef whose instances carry a
+    /// non-empty `M_MAXGHOSTSHIPS` (all 53), and the only one with `laps == 0`:
+    /// the 40 instances named `"<Track> Speed Lap - <Class>"` have `M_NUMOFLAPS`
+    /// absent or zero; the other 13 are ordinary 2-3 lap `"20XX - Event N"`
+    /// nodes. See [`EventKind::Race`] and [`Event::laps`].
     pub const RACE_A: i64 = -1915183557;
-    /// The other "lap race" typedef - `GameMode_ArcadeRace`, per [`RACE_A`]'s
-    /// own doc comment. 52 instances, laps always >= 1 (never a Speed Lap
-    /// sentinel), no `M_MAXGHOSTSHIPS`. Its instance names include
+    /// `GameMode_ArcadeRace`, the other lap-race typedef (see [`RACE_A`]).
+    /// 52 instances, laps always >= 1, no `M_MAXGHOSTSHIPS`; includes
     /// `E3_Demo_*` builds, `MP_*_Race_flash` templates and ten-lap
-    /// `"* Ship Challenge"` events alongside ordinary numbered ones - the
-    /// generic race class's own shape, corroborating the hash match from the
-    /// data side.
+    /// `"* Ship Challenge"` events.
     ///
-    /// **`RACE_A` and `RACE_B` are two different concrete classes, but this
-    /// project still does not split them by game mode.** `M_PNEXTEVENT`
-    /// chains cross freely between them (`"2048 - Event 3"`, `RACE_A`, its
-    /// own `M_PNEXTEVENT` names `"2048 - Event 4"`, `RACE_B`) - resolving the
-    /// class names shows this was never evidence the two typedefs were the
-    /// *same* mode, only that the unlock graph chains across concrete
-    /// classes freely (an ordinary race unlocking a Speed Lap attraction is
-    /// unremarkable). [`EventKind::Race`] still does not distinguish them,
-    /// because `oag_2048::campaign::engine_mode` already derives
-    /// `"speed_lap"` vs `"single_race"` independently off the `laps ==
-    /// Some(0)` sentinel - the class name adds understanding, not a gate this
-    /// project's own mode resolution needs; [`Event::typedef_id`] keeps the
-    /// raw id for a caller that wants it.
+    /// **This project does not split `RACE_A`/`RACE_B` by mode.** `M_PNEXTEVENT`
+    /// chains cross between them (`"2048 - Event 3"` is `RACE_A`, its next
+    /// `"2048 - Event 4"` is `RACE_B`), which shows the unlock graph crosses
+    /// concrete classes, not that they are one mode.
+    /// `oag_2048::campaign::engine_mode` derives `"speed_lap"` vs
+    /// `"single_race"` off the `laps == Some(0)` sentinel; [`Event::typedef_id`]
+    /// keeps the raw id.
     ///
-    /// The remaining two `GameMode_*` names in `eboot.elf`'s string table,
-    /// `GameMode_CheckPointRace` (hash `375161732`) and `GameMode_ZombieRace`
-    /// (hash `-1251488984`), match **no** typedef id `SP.xml` carries - both
-    /// classes ship in the executable but no campaign event in this file
-    /// instantiates either.
+    /// `eboot.elf`'s other two `GameMode_*` names, `GameMode_CheckPointRace`
+    /// (hash `375161732`) and `GameMode_ZombieRace` (`-1251488984`), match no
+    /// typedef `SP.xml` carries.
     pub const RACE_B: i64 = -1353052320;
-    /// Elimination-shaped. 26 instances, the only typedef carrying
+    /// Elimination-shaped. 26 instances, the only typedef with
     /// `M_ELIMINATENUMOFOPPONENTS`/`M_SCORETARGET`/`M_SURVIVEFORNUMOFLAPS`/
-    /// `M_TIMELIMIT`/`M_BSEEKANDDESTROYTARGETID`/`M_BSOLOSCORING`, and
-    /// instance names spelling `"Elim"`/`"Eliminator"` explicitly
-    /// (`"MPElimination"`, `"MP_Arena_Eliminator_flash"`). **2026-09-28:
-    /// confirmed structurally, not just by instance-name resemblance** -
-    /// `hash_name("GameMode_EliminatorRace")` equals this id exactly, same
-    /// evidence as [`RACE_A`]/[`RACE_B`]'s own confirmation. Confidence
-    /// raised to 92.
+    /// `M_TIMELIMIT`/`M_BSEEKANDDESTROYTARGETID`/`M_BSOLOSCORING`, named
+    /// `"Elim"`/`"Eliminator"`. **Confidence 92 (2026-09-28)**:
+    /// `hash_name("GameMode_EliminatorRace")` equals this id, as for
+    /// [`RACE_A`].
     pub const ELIMINATION: i64 = 1311982788;
-    /// Zone-shaped. 10 instances, the only typedef carrying
-    /// `M_ZONETIMECOUNTER`/`M_ZONETOADDMINES`/`M_STARTZONENUMBER`/
-    /// `M_ENDZONENUMBER`/`M_NUMBEROFMINES`, and the only one whose
-    /// `M_SPEEDCLASS` is always empty (Zone has no speed class).
-    /// **2026-09-28: confirmed structurally** - `hash_name("GameMode_ZoneRace")`
-    /// equals this id exactly, same evidence as [`RACE_A`]/[`RACE_B`]'s own
-    /// confirmation. Confidence raised to 92.
+    /// Zone-shaped. 10 instances, the only typedef with `M_ZONETIMECOUNTER`/
+    /// `M_ZONETOADDMINES`/`M_STARTZONENUMBER`/`M_ENDZONENUMBER`/
+    /// `M_NUMBEROFMINES`, and the only one whose `M_SPEEDCLASS` is always empty.
+    /// **Confidence 92 (2026-09-28)**: `hash_name("GameMode_ZoneRace")` equals
+    /// this id.
     pub const ZONE: i64 = 1018671239;
 }
 
 /// Which of the four concrete event shapes an [`Event`] is.
 ///
-/// **Deliberately coarser than the four `GameMode_*` C++ classes `SP.xml`'s
-/// typedefs actually bind to**, now that binding is resolved (confidence 92 -
-/// see [`typedef::RACE_A`]'s own doc comment for the hash cross-reference):
-/// `GameMode_SpeedLapRace`, `GameMode_ArcadeRace`, `GameMode_EliminatorRace`
-/// and `GameMode_ZoneRace`. [`Self::Race`] still merges the first two, since
-/// nothing this project does needs them apart - `oag_2048::campaign::
-/// engine_mode` derives `"speed_lap"` vs `"single_race"` independently off
-/// [`Event::laps`]'s own sentinel, not off which class an event's typedef
-/// names.
+/// **Coarser than the four `GameMode_*` classes the typedefs bind to**
+/// (confidence 92, see [`typedef::RACE_A`]): [`Self::Race`] merges
+/// `GameMode_SpeedLapRace` and `GameMode_ArcadeRace`, since
+/// `oag_2048::campaign::engine_mode` tells them apart off [`Event::laps`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventKind {
-    /// [`typedef::RACE_A`] or [`typedef::RACE_B`]. A lap race, including the
-    /// `laps == 0` Speed Lap sentinel - see [`Event::laps`].
+    /// [`typedef::RACE_A`] or [`typedef::RACE_B`], including the `laps == 0`
+    /// Speed Lap sentinel ([`Event::laps`]).
     Race,
     /// [`typedef::ELIMINATION`].
     Elimination,
@@ -162,74 +115,56 @@ impl EventKind {
     }
 }
 
-/// One campaign event: a `RACE_A`/`RACE_B`/`ELIMINATION`/`ZONE` instance,
-/// with the fields a caller needs to launch it or walk the unlock graph.
+/// One campaign event: a `RACE_A`/`RACE_B`/`ELIMINATION`/`ZONE` instance with
+/// the fields needed to launch it or walk the unlock graph.
 ///
-/// Deliberately not every field the schema carries - AI tuning
-/// (`M_AIABSORBMULTIPLIER` and siblings), UI placement
-/// (`M_BUTTONSHAPE`/`M_CANVASTWEAK_X`/`M_CANVASTWEAK_Y`) and the explicit
-/// grid/player ship references are left on [`Instance::field`] for a caller
-/// that needs them rather than repeated here - see [`Event::instance_id`]
-/// and look them up on the [`Document`] this came from.
+/// Not every schema field: AI tuning (`M_AIABSORBMULTIPLIER` and siblings), UI
+/// placement (`M_BUTTONSHAPE`/`M_CANVASTWEAK_X`/`_Y`) and the grid/player ship
+/// references stay on [`Instance::field`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
     /// This event's own `instanceid`.
     pub instance_id: i64,
-    /// The raw `typedefid` - [`typedef::RACE_A`], [`typedef::RACE_B`],
-    /// [`typedef::ELIMINATION`] or [`typedef::ZONE`]. [`Event::kind`]
-    /// collapses the two race typedefs; this keeps them apart.
+    /// The raw `typedefid`; [`Event::kind`] collapses the two race typedefs, this
+    /// keeps them apart.
     pub typedef_id: i64,
     /// [`EventKind`] for `typedef_id`.
     pub kind: EventKind,
-    /// The instance's own `name=`, e.g. `"2048 - Event 3"`,
-    /// `"Altima Speed Lap - Flash"`, `"MPElimination"`.
+    /// The instance's `name=`, e.g. `"2048 - Event 3"`, `"MPElimination"`.
     pub name: String,
-    /// `M_DESCRIPTION`: an idstring like `"2048_EVENT_3"` - a language
-    /// table lookup key, not human text; this module does not resolve it.
+    /// `M_DESCRIPTION`: a language-table key like `"2048_EVENT_3"`, not text.
     pub description: Option<String>,
-    /// `M_TRACKDEF`, an instanceid reference into [`typedef::TRACK_DEFINITION`].
-    /// Resolve with [`Document::instance`] and [`Track::from_instance`], or
-    /// [`track_for`]. `None` on every `ZONE` event this pass measured (Zone
-    /// events author no track reference in `SP.xml` - the circuit a Zone run
-    /// uses is a title fact, not authored per event; see `oag_2048::campaign`).
+    /// `M_TRACKDEF`, a reference into [`typedef::TRACK_DEFINITION`]; resolve with
+    /// [`track_for`]. `None` on every `ZONE` event: the Zone circuit is a title
+    /// fact (`oag_2048::campaign`).
     pub track: Option<Reference>,
-    /// `M_SPEEDCLASS`'s raw `eClass` ordinal, `0`-`4`. **Not named here** -
-    /// see `oag_2048::campaign::EClass` for the five-class mapping, measured
-    /// against this title's own `handlingstats.xml` and campaign event
-    /// names. `None` on every `ZONE` event (no speed class authored).
+    /// `M_SPEEDCLASS`'s raw `eClass` ordinal, `0`-`4`; named in
+    /// `oag_2048::campaign::EClass`. `None` on every `ZONE` event.
     pub speed_class: Option<i64>,
-    /// `M_NUMOFLAPS`. **`Some(0)` is Speed Lap's own sentinel** - see
-    /// [`typedef::RACE_A`]'s own doc comment: all 40 `SP.xml` instances with
-    /// `laps == Some(0)` are named `"<Track> Speed Lap - <Class>"` and none
-    /// of the other 101 lap-race instances author it. `None` on every
-    /// `ELIMINATION`/`ZONE` event, which use their own completion fields
-    /// instead (`M_SURVIVEFORNUMOFLAPS`/`M_TIMELIMIT`/`M_ZONETIMECOUNTER`
-    /// and siblings - not carried on [`Event`], see the struct's own doc
-    /// comment).
+    /// `M_NUMOFLAPS`. **`Some(0)` is Speed Lap's sentinel**: all 40 `SP.xml`
+    /// instances with `laps == Some(0)` are `"<Track> Speed Lap - <Class>"` and
+    /// none of the other 101 lap races author it. `None` on `ELIMINATION`/`ZONE`,
+    /// which use their own completion fields (`M_SURVIVEFORNUMOFLAPS`/
+    /// `M_TIMELIMIT`/`M_ZONETIMECOUNTER`).
     pub laps: Option<u32>,
-    /// `M_WEAPONSET`, an instanceid reference into
-    /// [`typedef::WEAPON_SET_DEFINITION`]. Resolve with [`Document::instance`]
-    /// and [`WeaponSet::from_instance`], or [`weapon_set_for`].
+    /// `M_WEAPONSET`, a reference into [`typedef::WEAPON_SET_DEFINITION`];
+    /// resolve with [`weapon_set_for`].
     pub weapon_set: Option<Reference>,
-    /// `M_PNEXTEVENT`: the campaign chain's own "what comes after this".
+    /// `M_PNEXTEVENT`: what comes after this event.
     pub next_event: Option<Reference>,
-    /// `M_PBRANCHEVENT`: a second, sibling event off the same node -
-    /// `"2048 - Event 3"`'s own branch is `"2048 - Event 3-1"`, both
-    /// [`typedef::RACE_A`].
+    /// `M_PBRANCHEVENT`: a sibling event off the same node (`"2048 - Event 3"`
+    /// branches to `"2048 - Event 3-1"`).
     pub branch_event: Option<Reference>,
     /// `M_PEVENTREQUIRED`: a prerequisite outside the `next`/`branch` chain.
     pub required_event: Option<Reference>,
-    /// `M_PASSOBJECTIVE`, an instanceid reference into
-    /// [`typedef::GAME_MODE_OBJECTIVE`].
+    /// `M_PASSOBJECTIVE`, a reference into [`typedef::GAME_MODE_OBJECTIVE`].
     pub pass_objective: Option<Reference>,
-    /// `M_ELITEOBJECTIVE`, the same as [`Event::pass_objective`] for the
-    /// harder target.
+    /// `M_ELITEOBJECTIVE`, as [`Event::pass_objective`] for the harder target.
     pub elite_objective: Option<Reference>,
-    /// `M_X`/`M_Y`: the event's own map-grid position. **Not the campaign
-    /// map's own pixel projection** - `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`'s
-    /// scale/bias/offset tables are the DLC `HD CAMPAIGN`/`FURY CAMPAIGN`
-    /// tiers' own `FE3DCanvas` hotspots, a different node set from this
-    /// one; nothing in `SP.xml` itself authors how `(x, y)` here becomes a
+    /// `M_X`/`M_Y`: the event's map-grid position. **Not the campaign map's
+    /// pixel projection**: `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`'s
+    /// scale/bias/offset tables belong to the DLC tiers' `FE3DCanvas` hotspots,
+    /// a different node set. Nothing in `SP.xml` authors how `(x, y)` becomes a
     /// screen position, and this module does not guess one.
     pub x: Option<i32>,
     /// See [`Event::x`].
@@ -238,17 +173,13 @@ pub struct Event {
     pub rank_required: Option<i32>,
     /// `M_bForceAlwaysUnlocked`.
     pub force_always_unlocked: Option<bool>,
-    /// Whether `M_MAXGHOSTSHIPS` is present on this instance at all -
-    /// [`typedef::RACE_A`]'s own discriminator, true for every `RACE_A`
-    /// event and no other kind. Not the field's *value* (every instance
-    /// this pass measured leaves it empty even when present) - just whether
-    /// the schema offers it.
+    /// Whether `M_MAXGHOSTSHIPS` is present at all ([`typedef::RACE_A`]'s
+    /// discriminator). Not its value: every measured instance leaves it empty.
     pub has_ghost_capacity: bool,
 }
 
 impl Event {
-    /// Builds an [`Event`] from an [`Instance`] of one of the four event
-    /// typedefs. `None` for any other typedef.
+    /// Builds an [`Event`] from one of the four event typedefs; `None` otherwise.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {
         let kind = EventKind::from_typedef(instance.typedef_id)?;
@@ -309,13 +240,10 @@ impl Event {
     }
 }
 
-/// Every event in a [`Document`] - every instance of [`typedef::RACE_A`],
-/// [`typedef::RACE_B`], [`typedef::ELIMINATION`] and [`typedef::ZONE`], in
-/// document order. **Document order, not campaign order** - nothing in this
-/// schema authors a play sequence directly; walk [`Event::next_event`]/
-/// [`Event::branch_event`]/[`Event::required_event`] for that, starting from
-/// whichever event a caller already knows is first (this module does not
-/// pick one - `SP.xml` names no "root" event either).
+/// Every event in a [`Document`], in **document order, not campaign order**:
+/// the schema authors no play sequence and names no root event. Walk
+/// [`Event::next_event`]/[`Event::branch_event`]/[`Event::required_event`] from
+/// a known first event.
 #[must_use]
 pub fn events(document: &Document) -> Vec<Event> {
     document
@@ -328,23 +256,22 @@ pub fn events(document: &Document) -> Vec<Event> {
 /// One `TrackDefinition`: a circuit's campaign-facing name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {
-    /// This instance's own `instanceid` - what an [`Event::track`] reference
-    /// names.
+    /// This instance's `instanceid`, what an [`Event::track`] names.
     pub instance_id: i64,
     /// The instance's own `name=`, e.g. `"Bridge"`.
     pub name: String,
-    /// `M_TRACKNAME`, e.g. `"bridge"` - the lowercase stem
-    /// `data/plugins/tracks/Definition.xml`'s own `<PI_Track name="...">`
-    /// and `oag_title::Title::track_plugin_definition` both key on. See
-    /// `oag_2048::campaign` for the join.
+    /// `M_TRACKNAME`, e.g. `"bridge"`: the lowercase stem
+    /// `data/plugins/tracks/Definition.xml`'s `<PI_Track name="...">` and
+    /// `oag_title::Title::track_plugin_definition` key on; see
+    /// `oag_2048::campaign`.
     pub track_name: String,
-    /// `M_DISPLAYNAME`, e.g. `"CAPITAL REACH"` - the in-game circuit name.
+    /// `M_DISPLAYNAME`, e.g. `"CAPITAL REACH"`: the in-game circuit name.
     pub display_name: String,
 }
 
 impl Track {
-    /// Builds a [`Track`] from an [`Instance`] of [`typedef::TRACK_DEFINITION`].
-    /// `None` for any other typedef, or if either field is absent.
+    /// Builds a [`Track`] from a [`typedef::TRACK_DEFINITION`] instance; `None`
+    /// for any other typedef or an absent field.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {
         if instance.typedef_id != typedef::TRACK_DEFINITION {
@@ -373,8 +300,7 @@ pub fn tracks(document: &Document) -> Vec<Track> {
         .collect()
 }
 
-/// [`Event::track`] resolved against its own document - `None` if the
-/// reference is absent or dangling.
+/// [`Event::track`] resolved against its document; `None` if absent or dangling.
 #[must_use]
 pub fn track_for(document: &Document, reference: Reference) -> Option<Track> {
     Track::from_instance(document.instance(reference.instance_id)?)
@@ -388,16 +314,13 @@ pub struct WeaponSet {
     /// The instance's own `name=`, e.g. `"Rockets Only"`,
     /// `"Cannons, Missile, Plasma"`.
     pub name: String,
-    /// `M_WEAPONAVAILABLEBITS`'s raw value, undecoded. See
-    /// [`Self::allowed_weapons`] for the decode of the bits this project has
-    /// pinned, and `docs/formats/2048-campaign.md`'s "The weapon set gate"
-    /// section for the ones it has not.
+    /// `M_WEAPONAVAILABLEBITS`'s raw value; see [`Self::allowed_weapons`] and
+    /// `docs/formats/2048-campaign.md`'s "The weapon set gate".
     pub available_bits: Option<i64>,
 }
 
 impl WeaponSet {
-    /// Builds a [`WeaponSet`] from an [`Instance`] of
-    /// [`typedef::WEAPON_SET_DEFINITION`]. `None` for any other typedef.
+    /// Builds a [`WeaponSet`] from a [`typedef::WEAPON_SET_DEFINITION`] instance.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {
         if instance.typedef_id != typedef::WEAPON_SET_DEFINITION {
@@ -429,40 +352,27 @@ pub fn weapon_set_for(document: &Document, reference: Reference) -> Option<Weapo
     WeaponSet::from_instance(document.instance(reference.instance_id)?)
 }
 
-/// `(bit index, weapon)` for every `M_WEAPONAVAILABLEBITS` bit - all eleven
-/// of `WeaponType`'s own members, from `WeaponType`'s own enum declaration in
-/// `eboot.elf`. See
-/// `docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md` for the
-/// decompiled registration this reads, and `docs/formats/2048-campaign.md`'s
-/// "The weapon set gate" section for the full history, including the earlier,
-/// data-only pass this superseded.
+/// `(bit index, weapon)` for all eleven `M_WEAPONAVAILABLEBITS` bits, from
+/// `WeaponType`'s enum declaration in `eboot.elf`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md`; history in
+/// `docs/formats/2048-campaign.md`'s "The weapon set gate").
 ///
-/// **Confidence 95 for eight of these** (`Rocket`, `Missile`, `Quake`,
-/// `Turbo`, `Cannon`, `Autopilot`, `Plasma`, `LeachBeam`): each is the sole
-/// bit set on a `"<Weapon> Only"`-named `SP.xml` instance (`"Rockets Only"` =
-/// `1`, `"Missile Only"` = `2`, ... `"Leech Beam Only"` = `1024`), every
-/// multi-weapon instance's value is the sum of its members' bits with no
-/// residue across all 20 named instances, and `WeaponType`'s own ordinals
-/// match every one of those eight bit positions exactly - two independent
-/// sources agreeing is what licenses reading the enum directly for the rest.
+/// **Confidence 95 for eight** (`Rocket`, `Missile`, `Quake`, `Turbo`, `Cannon`,
+/// `Autopilot`, `Plasma`, `LeachBeam`): each is the sole bit on a
+/// `"<Weapon> Only"` `SP.xml` instance (`"Rockets Only"` = `1` ... `"Leech Beam
+/// Only"` = `1024`), every multi-weapon value is the sum of its bits with no
+/// residue across all 20 instances, and the enum ordinals match.
 ///
-/// **Confidence 95 for `Shield`** (bit 4): unpinned by `SP.xml`'s data alone
-/// (suggestive only - the one bit `SP.xml` sets that the other eight didn't
-/// account for), settled by `WeaponType`'s own declaration naming ordinal 4
-/// `SHIELD`.
+/// **Confidence 95 for `Shield`** (bit 4): the data only suggested it; the enum
+/// declaration names ordinal 4 `SHIELD`.
 ///
-/// **Confidence 90 for `Bomb` (bit 8) and `Mine` (bit 9) individually**: read
-/// directly off `WeaponType`'s own declaration (`BOMB` = 8, `MINE` = 9), one
-/// tier below the other nine because `SP.xml`'s 20 instances never set one of
-/// the pair without the other, so nothing in the shipped data has exercised
-/// the split independently. A prior pass read these two as one joint
-/// `Mine`+`Bomb` gate at confidence 75, unable to split them from data alone;
-/// superseded by this reading. Order here does **not** match
-/// `docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`'s
-/// `Hud_UpdatePickupIcon` *held-weapon id* table, where id 8 is `FE_MINES`
-/// and 9 is `FE_BOMB` - a different, unrelated 2048 enum whose ordering
-/// already disagreed with `WeaponType`'s from bit/id 5 onward (`WeaponType`
-/// bit 5 is `Cannon`, held-id 5 is `Shield`).
+/// **Confidence 90 for `Bomb` (bit 8) and `Mine` (bit 9)**: read off the enum
+/// (`BOMB` = 8, `MINE` = 9), one tier lower because no `SP.xml` instance sets
+/// one without the other. An earlier joint `Mine`+`Bomb` gate at confidence 75
+/// is superseded. This order does **not** match the `Hud_UpdatePickupIcon`
+/// held-weapon id table (`pickup-icon-uv-table.md`: id 8 `FE_MINES`, 9
+/// `FE_BOMB`), a different enum that disagrees from id 5 on (`WeaponType` bit 5
+/// is `Cannon`, held-id 5 is `Shield`).
 pub const WEAPON_BITS: &[(u32, crate::weapons::Weapon)] = &[
     (0, crate::weapons::Weapon::Rocket),
     (1, crate::weapons::Weapon::Missile),
@@ -478,10 +388,8 @@ pub const WEAPON_BITS: &[(u32, crate::weapons::Weapon)] = &[
 ];
 
 impl WeaponSet {
-    /// The weapons `M_WEAPONAVAILABLEBITS` allows, decoded from
-    /// [`WEAPON_BITS`] - all eleven of `WeaponType`'s own members. Empty when
-    /// [`Self::available_bits`] is `None`, or when the value sets none of the
-    /// bits above.
+    /// The weapons `M_WEAPONAVAILABLEBITS` allows, via [`WEAPON_BITS`]. Empty
+    /// when [`Self::available_bits`] is `None` or sets none of them.
     #[must_use]
     pub fn allowed_weapons(&self) -> Vec<crate::weapons::Weapon> {
         let Some(bits) = self.available_bits else {
@@ -498,31 +406,26 @@ impl WeaponSet {
 /// One `GameModeObjective`: what [`Event::pass_objective`]/
 /// [`Event::elite_objective`] point at.
 ///
-/// **Names only, no decoding of what the ordinal or the target mean** - per
-/// this module's own split with `oag_2048::campaign`, which is where
-/// `M_OBJECTIVETYPE`'s own `1`/`2`/`4`/`7` ordinals are given a meaning,
-/// against 2048's own measured `(pass, elite)` type pairs per
-/// [`EventKind`]. See `docs/formats/2048-campaign.md`'s "The objective law"
-/// section for the census this was read off.
+/// **Names only**: the meaning of the `M_OBJECTIVETYPE` ordinals (`1`/`2`/`4`/
+/// `7`) is `oag_2048::campaign`'s, read off the measured `(pass, elite)` type
+/// pairs per [`EventKind`]; see `docs/formats/2048-campaign.md`'s "The objective
+/// law".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Objective {
     /// This instance's own `instanceid`.
     pub instance_id: i64,
-    /// The instance's own `name=`, e.g. `"FinishRaceAnyPosition"`,
-    /// `"Top5"`, `"2048 - Event 3 Pass"`.
+    /// The instance's `name=`, e.g. `"FinishRaceAnyPosition"`, `"Top5"`.
     pub name: String,
-    /// `M_OBJECTIVETYPE`'s raw `ObjectiveValue` ordinal. `None` on the one
-    /// measured instance (`"MostDamage"`) that authors no type at all.
+    /// `M_OBJECTIVETYPE`'s raw `ObjectiveValue` ordinal; `None` on the one
+    /// instance (`"MostDamage"`) that authors none.
     pub objective_type: Option<i64>,
-    /// `M_OBJECTIVETARGET`. `None` both for a type that authors no target at
-    /// all (the `FINISH` type's own instances leave it empty) and for an
+    /// `M_OBJECTIVETARGET`; `None` for a type with no target (`FINISH`) or an
     /// absent field.
     pub target: Option<i64>,
 }
 
 impl Objective {
-    /// Builds an [`Objective`] from an [`Instance`] of
-    /// [`typedef::GAME_MODE_OBJECTIVE`]. `None` for any other typedef.
+    /// Builds an [`Objective`] from a [`typedef::GAME_MODE_OBJECTIVE`] instance.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {
         if instance.typedef_id != typedef::GAME_MODE_OBJECTIVE {
@@ -551,45 +454,37 @@ pub fn objectives(document: &Document) -> Vec<Objective> {
         .collect()
 }
 
-/// [`Event::pass_objective`]/[`Event::elite_objective`] resolved against
-/// their own document.
+/// [`Event::pass_objective`]/[`Event::elite_objective`] resolved against their
+/// document.
 #[must_use]
 pub fn objective_for(document: &Document, reference: Reference) -> Option<Objective> {
     Objective::from_instance(document.instance(reference.instance_id)?)
 }
 
-/// One `WOShipModelData`: a team+livery craft the roster screen offers, or
-/// what an event's own `M_PPLAYERSHIPMODELDATA`/`M_PGRIDSHIPMODELDATA`
-/// reference points at when authored - see `oag_2048::campaign` for what
-/// forcing a specific one onto an event means and how a `(team, livery)` pair
+/// One `WOShipModelData`: a team+livery craft the roster offers, or what an
+/// event's `M_PPLAYERSHIPMODELDATA`/`M_PGRIDSHIPMODELDATA` points at; see
+/// `oag_2048::campaign` for what forcing one means and how `(team, livery)`
 /// resolves onto `race::Options::team`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShipModel {
     /// This instance's own `instanceid`.
     pub instance_id: i64,
-    /// The instance's own `name=`, e.g. `"Feisar_Speed"`. `"WINGMAN"` is the
-    /// one instance with an empty [`Self::team`]/[`Self::livery`] - not part
-    /// of any of the five native teams' four-craft roster.
+    /// The instance's `name=`, e.g. `"Feisar_Speed"`. `"WINGMAN"` is the one
+    /// instance with an empty [`Self::team`]/[`Self::livery`].
     pub name: String,
-    /// `M_TEAM`, e.g. `"Feisar2048"` - matches `oag_2048::race::NATIVE_TEAMS`
-    /// exactly. Empty on `"WINGMAN"`.
+    /// `M_TEAM`, e.g. `"Feisar2048"`, matching `oag_2048::race::NATIVE_TEAMS`.
     pub team: String,
     /// `M_LIVERY`, e.g. `"speed"`, `"combat"`, `"agility"`, `"prototype"`.
-    /// Empty on `"WINGMAN"`.
     pub livery: String,
-    /// `M_PROTOTYPELIVERY` - authored only on the five `livery == "prototype"`
-    /// instances, one per team (`"Agility"`/`"Combat"`/`"Speed"`, title-cased
-    /// unlike [`Self::livery`]'s own lower-case spelling). Empty everywhere
-    /// else. See `oag_2048::campaign::craft`'s own doc comment for what this
-    /// is: the class a team's own prototype craft "counts as" wherever a
-    /// category restriction is checked against it, rather than a fifth,
-    /// independent axis.
+    /// `M_PROTOTYPELIVERY`, authored only on the five `livery == "prototype"`
+    /// instances (`"Agility"`/`"Combat"`/`"Speed"`, title-cased unlike
+    /// [`Self::livery`]). The class a team's prototype "counts as" for a category
+    /// restriction; see `oag_2048::campaign::craft`.
     pub prototype_livery: String,
 }
 
 impl ShipModel {
-    /// Builds a [`ShipModel`] from an [`Instance`] of
-    /// [`typedef::SHIP_MODEL_DATA`]. `None` for any other typedef.
+    /// Builds a [`ShipModel`] from a [`typedef::SHIP_MODEL_DATA`] instance.
     #[must_use]
     pub fn from_instance(instance: &Instance) -> Option<Self> {
         if instance.typedef_id != typedef::SHIP_MODEL_DATA {
@@ -627,8 +522,8 @@ pub fn ship_models(document: &Document) -> Vec<ShipModel> {
         .collect()
 }
 
-/// A [`ShipModel`] reference (an event's own `M_PPLAYERSHIPMODELDATA`, or one
-/// slot of `M_PGRIDSHIPMODELDATA`) resolved against its own document.
+/// A [`ShipModel`] reference (`M_PPLAYERSHIPMODELDATA`, or a slot of
+/// `M_PGRIDSHIPMODELDATA`) resolved against its document.
 #[must_use]
 pub fn ship_model_for(document: &Document, reference: Reference) -> Option<ShipModel> {
     ShipModel::from_instance(document.instance(reference.instance_id)?)
