@@ -1,7 +1,6 @@
 //! What projectile flight, impact and blast in [`super`] are asserted to do.
 //!
-//! Split out of `projectile.rs` under the 200-line cap on inline `#[cfg(test)]`
-//! modules; see `scripts/check-file-size.py`.
+//! Split from `projectile.rs` under the 200-line cap on inline test modules.
 
 use super::*;
 use oag_physics::params::Dimensions;
@@ -81,14 +80,9 @@ fn a_spawned_projectile_takes_the_first_free_slot_and_the_array_never_grows() {
     assert_eq!(projectiles.slots.len(), MAX_PROJECTILES);
 }
 
-/// Over nothing at all, a projectile holds its heading and falls.
-///
-/// **This test used to assert the opposite** - "nothing pulls a rocket
-/// down" - and it was pinning the bug rather than a behaviour. With no
-/// surface under it the original accelerates a projectile downward at
-/// [`FALL_ACCELERATION`], so an empty world is the *falling* case, not the
-/// straight-line one. The straight line is what a projectile does across
-/// the two axes it is not being pulled along.
+/// Over nothing at all, a projectile holds its heading and falls: with no surface
+/// the original accelerates it down at [`FALL_ACCELERATION`]. (This test once
+/// asserted "nothing pulls a rocket down" and pinned the bug.)
 #[test]
 fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
     let mut projectiles = Projectiles::new();
@@ -96,10 +90,8 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
     let world = empty_world();
     let dt = 1.0 / 60.0;
 
-    // From tick 2: `to` is computed from the velocity the *previous* tick
-    // left, so the first tick's gravity does not move it yet. That lag is
-    // the original's own ordering - it projects the position, then probes,
-    // then accelerates - and is kept rather than tidied.
+    // From tick 2: `to` uses the previous tick's velocity (the original projects,
+    // probes, then accelerates), so tick 1's gravity does not move it yet.
     let mut last_drop = 0.0;
     for tick in 1..=10 {
         let impacts = projectiles.advance(
@@ -130,13 +122,9 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
     }
 }
 
-/// A projectile fired flat over a floor rides it instead of hitting it.
-///
-/// The regression that matters: before the surface-following model, a
-/// volley fired on a real track died in the tick it was fired, because a
-/// projectile skimming the floor was detonating on it. Here the floor is
-/// directly below and the projectile must survive, settle to
-/// [`RIDE_HEIGHT`] above it, and keep its speed.
+/// A projectile fired flat over a floor rides it instead of hitting it. Before
+/// surface-following, a volley on a real track died in the tick it was fired. It
+/// must survive, settle to [`RIDE_HEIGHT`] and keep its speed.
 #[test]
 fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
     let mut projectiles = Projectiles::new();
@@ -175,16 +163,14 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
     assert!(p.position.z > 100.0, "it must have gone somewhere: {p:?}");
 }
 
-/// The swept test, and the reason it exists: at an authored class speed a
-/// rocket covers more than a tick's worth of wall in one step, so a point
-/// test would pass through.
+/// The swept test: at an authored class speed a rocket covers more than a tick of
+/// wall in one step, so a point test would pass through.
 #[test]
 fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
     let mut projectiles = Projectiles::new();
-    // Deliberately faster than any real rocket - the disc's quickest class
-    // authors `1100` km/h, or `306` units a second - because this is the
-    // tunnelling guard and it should hold with headroom. At 60 Hz, 800
-    // units a second is 13 units a tick against a wall of no thickness.
+    // Faster than any real rocket (the quickest class authors `1100` km/h, `306`
+    // units a second): 800 units a second is 13 a tick against a wall of no
+    // thickness, so the tunnelling guard holds with headroom.
     projectiles.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 800.0, 0);
     let world = wall_at_z(20.0);
     let dt = 1.0 / 60.0;
@@ -212,15 +198,13 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
     assert_eq!(projectiles.live(), 0, "an impact must free the slot");
 }
 
-/// A hull hit reports which slot it struck, and the owner's own hull is
-/// never it.
+/// A hull hit reports which slot it struck, never the owner's own.
 #[test]
 fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
     let mut projectiles = Projectiles::new();
     projectiles.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 600.0, 0);
-    // Slot 0 is the owner and sits directly on the flight path; slot 1 is
-    // further along it. A shot that could hit its own launcher would report
-    // slot 0 and stop at once.
+    // Slot 0 is the owner, on the flight path; a shot that could hit its launcher
+    // would report slot 0 and stop at once. Slot 1 is further along.
     let grid = ships(&[(true, Vec3::new(0.0, 0.0, 5.0)), (true, Vec3::Z * 30.0)]);
     let world = empty_world();
 
@@ -250,8 +234,8 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
     assert_eq!(impact.owner, 0);
 }
 
-/// An inactive slot is not a craft. Slots past `ship_count` hold whatever
-/// the last race left in them, and a rocket must not detonate on one.
+/// An inactive slot is not a craft: slots past `ship_count` hold what the last
+/// race left, and a rocket must not detonate on one.
 #[test]
 fn an_inactive_slot_is_not_a_target() {
     let mut projectiles = Projectiles::new();
@@ -277,8 +261,8 @@ fn an_inactive_slot_is_not_a_target() {
     }
 }
 
-/// The nearer of the two wins, which is what stops a rocket reaching a craft
-/// through a wall.
+/// The nearer of wall and hull wins, so a rocket cannot reach a craft through a
+/// wall.
 #[test]
 fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
     let mut projectiles = Projectiles::new();
@@ -315,9 +299,8 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
     assert!((impact.point.z - 20.0).abs() < 1e-3);
 }
 
-/// A rocket that hits nothing frees its slot instead of holding it forever,
-/// and it does so **without** reporting an impact - nothing was struck, so
-/// nothing takes a blast.
+/// A rocket that hits nothing frees its slot **without** an impact: nothing was
+/// struck, so nothing takes a blast.
 #[test]
 fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
     let mut projectiles = Projectiles::new();
@@ -345,9 +328,8 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
     assert_eq!(projectiles.live(), 0, "the slot leaked");
 }
 
-/// `CannonPool_Update` reaps a round at `1.0 < age`, not at the shared flight
-/// cap: a round is still in the air a tick short of one second, and gone with
-/// no impact a tick after it.
+/// `CannonPool_Update` reaps a round at `1.0 < age`, not the shared flight cap:
+/// still in the air a tick short of one second, gone with no impact a tick after.
 #[test]
 fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
     let mut projectiles = Projectiles::new();
@@ -381,8 +363,7 @@ fn a_cannon_round_that_hits_nothing_is_reaped_at_one_second() {
 }
 
 /// `Rocket_SweepProjectiles`: a rocket flying through a laid mine sets it off
-/// quietly - the mine shows its explosion and hurts nobody, and the rocket is
-/// spent without a detonation of its own.
+/// quietly (explosion shown, nobody hurt) and is spent without detonating.
 #[test]
 fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
     let mut projectiles = Projectiles::new();
@@ -413,9 +394,8 @@ fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
     );
 }
 
-/// The whole chain through [`step`]: fly, hit, blast. The one test that
-/// would catch the halves being wired to each other wrongly rather than each
-/// being right on its own.
+/// The whole chain through [`step`]: fly, hit, blast. Catches the halves being
+/// wired to each other wrongly.
 #[test]
 fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
     let stats = oag_tables::weapons::parse(
@@ -479,8 +459,8 @@ fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
     assert_eq!(world.projectiles.live(), 0, "the slot leaked");
 }
 
-/// A race whose weapon table did not load still flies and reaps rockets; it
-/// just cannot say what a hit is worth, so nothing takes damage.
+/// A race whose weapon table did not load still flies and reaps rockets, but
+/// nothing takes damage.
 #[test]
 fn without_rocket_stats_an_impact_only_frees_its_slot() {
     let mut world = crate::test_craft::World::new(1);
@@ -517,13 +497,10 @@ fn clearing_empties_every_slot() {
     assert_eq!(projectiles.live(), 0);
 }
 
-/// The volley: three rockets, together, fanned by `spread` - and the
-/// middle one dead ahead.
-///
-/// **This is the recovered shape**, so it is asserted as a shape rather
-/// than loosely: three shots, one origin, one speed, and the outer two
-/// symmetric about the craft's forward axis by the authored half-angle.
-/// A test that only counted three would pass with all three on the same ray.
+/// The volley: three rockets, together, fanned by `spread`, the middle one dead
+/// ahead. Asserted as a shape (one origin, one speed, the outer two symmetric
+/// about forward by the authored half-angle): counting three would pass with all
+/// on one ray.
 #[test]
 fn a_launch_fires_three_fanned_about_the_craft_forward() {
     let mut state = ShipState::default();
@@ -546,19 +523,15 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
 
     let forward = state.body.forward();
     for (origin, velocity) in shots {
-        // One origin, the craft's own position (measured 2026-10-01, not the
-        // nose), shared by all three - the original varies the matrix and not
-        // the pose.
+        // One origin, the craft's own position (measured 2026-10-01, not the nose).
         assert_eq!(origin, shots[0].0, "the three must share an origin");
         assert_eq!(
             origin, state.body.position,
             "a rocket is laid at the craft's position"
         );
         // One speed, unchanged by the fan: 0.75 x the class's alone (measured
-        // 2026-10-01; `launchSpeed="50"` plays no part), converted out of the
-        // km/h the file authors it in. Spelled as the arithmetic rather than
-        // as `125.0` so the unit is legible - this assertion is the guard
-        // against the 3.6x reappearing and against `launchSpeed` joining in.
+        // 2026-10-01; `launchSpeed="50"` plays no part), out of km/h. Spelled as
+        // arithmetic so it guards against the 3.6x and `launchSpeed` joining in.
         assert!(
             (velocity.length() - 600.0 * 0.75 / KMH_PER_UNIT_PER_SECOND).abs() < 1e-2,
             "expected 0.75 x 600 km/h as units per second, got {}",
@@ -580,9 +553,8 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
         "expected 0.25 rad, got {}",
         angle(shots[2].1)
     );
-    // ...and to *opposite* sides, which is what a fan is. Comparing against
-    // the craft's own right axis, because two shots at the same angle from
-    // forward could both be to the left.
+    // ...and to opposite sides: compared against the craft's right axis, as two
+    // shots at the same angle from forward could both be left.
     let right = state.body.right();
     assert!(
         shots[1].1.dot(right) * shots[2].1.dot(right) < 0.0,
@@ -590,8 +562,8 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
     );
 }
 
-/// A file that authors no fan is a file with three rockets on one ray, not
-/// an error - and not a crash from normalising a zero.
+/// A file that authors no fan is three rockets on one ray, not an error or a
+/// normalise-zero crash.
 #[test]
 fn a_zero_spread_still_fires_three() {
     let stats = oag_tables::weapons::parse(
@@ -631,12 +603,9 @@ fn missile_stats() -> oag_tables::weapons::MissileStats {
     .expect("a Missile")
 }
 
-/// **The Missile's sharpest departure from the Rocket**: it mirrors off a wall
-/// and carries on, where a rocket detonates on the first face-on hit.
-///
-/// The reflection is a perfect mirror with no restitution loss, so the speed out
-/// matches the speed in - asserted, because a reflection that quietly halved the
-/// speed would still look like a bounce.
+/// The Missile mirrors off a wall and carries on, where a rocket detonates on the
+/// first face-on hit. The reflection is lossless, so speed out matches speed in
+/// (asserted: a halving reflection would still look like a bounce).
 #[test]
 fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     let stats = missile_stats();
@@ -678,9 +647,8 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
         "it did not turn around: {:?}",
         after.velocity
     );
-    // The mirror itself is lossless, but the tick that contains it also contains
-    // one step of the fall term - there is no floor here, so nothing pins the
-    // speed - so the bound is one tick of gravity rather than zero.
+    // The mirror is lossless, but the tick also holds one step of the fall term
+    // (no floor pins the speed), so the bound is one tick of gravity.
     assert!(
         (after.velocity.length() - speed_in).abs() < FALL_ACCELERATION / 60.0 + 1e-3,
         "the mirror lost or gained more than gravity explains: {} out against \
@@ -710,23 +678,16 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     );
 }
 
-/// The bounce budget is finite: past `MAX_BOUNCES` a missile detonates like
-/// anything else. Without this a missile that found a corner could ricochet for
-/// its whole lifetime.
+/// The bounce budget is finite: past `MAX_BOUNCES` a missile detonates, rather
+/// than ricocheting in a corner for its whole lifetime.
 #[test]
 fn a_missile_gives_up_after_its_bounce_budget() {
     let stats = missile_stats();
-    // Two walls facing each other, so a missile between them keeps hitting one.
-    //
-    // **Both are built here rather than from `wall_at_z`**, for two reasons that
-    // each cost a run. The far one must be wound the *other* way: the raycaster is
-    // single-sided, so a copy of `wall_at_z` moved to the far end faces away from
-    // anything flying toward it and is simply not there - the symptom was one
-    // bounce and then a missile sailing off through the scenery. And both must be
-    // very tall: nothing pins a missile's speed with no floor under it, so the
-    // fall term runs for the whole flight, and at `wall_at_z`'s 100-unit
-    // half-height the missile drops out of the bottom of the corridor after three
-    // traverses.
+    // Two walls facing each other. Built here, not from `wall_at_z`: the raycaster
+    // is single-sided, so the far wall must be wound the other way (else one bounce
+    // and the missile sails off), and both must be very tall because no floor pins
+    // the speed and the fall term would drop the missile out of the bottom after
+    // three traverses.
     let mut world = CollisionWorld::new();
     let tall = 10_000.0;
     for (z, indices) in [
@@ -750,8 +711,8 @@ fn a_missile_gives_up_after_its_bounce_budget() {
     let ships: Vec<crate::test_craft::Ship> = Vec::new();
 
     let mut projectiles = Projectiles::new();
-    // Launch speed equal to the Venom class speed, so the one-second ramp is flat
-    // and the only thing that can change the magnitude is the mirror itself.
+    // Launch speed equal to the Venom class speed, so only the mirror can change
+    // the magnitude.
     projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
     let mut highest = 0;
     for _ in 0..600 {
@@ -781,12 +742,10 @@ fn a_missile_gives_up_after_its_bounce_budget() {
 
 /// A missile that locked nothing flies straight on and detonates on its own.
 ///
-/// **Recovered**, from the missile pool's second pass in `Projectiles_Update_q`
-/// (`0x08869588`): `3.0 < missile->age` sets the same destroy bit a wall or a
-/// craft sets. The target is `None` throughout, which is the original's null
-/// pointer - `Missile_Update` skips its whole guidance block on it.
-///
-/// Flown in an empty world so nothing but the timer can end it.
+/// **Recovered** from `Projectiles_Update_q` (`0x08869588`): `3.0 < missile->age`
+/// sets the destroy bit; the target is `None`, the original's null pointer, which
+/// `Missile_Update` skips guidance on. Flown in an empty world so only the timer
+/// can end it.
 #[test]
 fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
     let stats = missile_stats();
@@ -822,16 +781,11 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
         "the self-detonation spent a blast the original's teardown never reaches"
     );
 
-    // **Three seconds as a literal, deliberately, and not the constant.** An
-    // assertion computed from `SELF_DETONATE_SECONDS` passes whatever that
-    // constant is changed to, which makes it a test that the code spends the
-    // constant rather than a test that the recovered number is 3.0. The number
-    // is `MissilePool_Update`'s own `3.0 < age`; if it moves, this line is meant
-    // to fail and be re-read against the disassembly.
-    //
-    // Within two ticks rather than exact: the age is
-    // `MAX_FLIGHT_SECONDS - lifetime` and accumulates rounding over 180 ticks,
-    // so pinning the tick would assert `f32` addition instead of the rule.
+    // Three seconds as a literal, not the constant: an assertion computed from
+    // `SELF_DETONATE_SECONDS` passes whatever it is changed to. The number is
+    // `MissilePool_Update`'s own `3.0 < age`; if it moves, this should fail and be
+    // re-read against the disassembly. Within two ticks, not exact: the age is
+    // `MAX_FLIGHT_SECONDS - lifetime` and accumulates `f32` rounding over 180 ticks.
     let flown = ticks as f32 / 60.0;
     assert!(
         (flown - 3.0).abs() <= 2.0 / 60.0,
@@ -844,13 +798,10 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
     );
 }
 
-/// And the self-detonation hurts nobody, however close they are standing.
-///
-/// **The half of the rule that is easy to drop.** The original's damage
-/// (`FUN_08869054`) and blast force (`FUN_08868ea4`) have exactly two callers
-/// each and the pool's expiry teardown is neither of them; it reaches only the
-/// explosion spawner. So a craft parked where a missile runs out of time watches
-/// it go off and takes nothing. See [`Impact::blast`].
+/// And the self-detonation hurts nobody, however close they stand: the original's
+/// damage (`FUN_08869054`) and blast force (`FUN_08868ea4`) each have two callers
+/// and the expiry teardown is neither, reaching only the explosion spawner. See
+/// [`Impact::blast`].
 #[test]
 fn a_self_detonating_missile_damages_nobody_standing_in_it() {
     let mut world = crate::test_craft::World::new(1);
@@ -883,8 +834,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
     )
     .expect("the fixture parses");
 
-    // Fired from beside slot 1's line rather than at it, so the swept hull test
-    // cannot end the flight early - this is about the timer, not about a hit.
+    // Fired beside slot 1's line so the swept hull test cannot end the flight early.
     world.projectiles.spawn_guided(
         Weapon::Missile,
         Vec3::X * 40.0,
@@ -924,11 +874,9 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
     );
 }
 
-/// A blade whose fuse runs out reports where it ended, and spends no blast.
-///
-/// `ShurikenPool_Update`'s teardown plays `WO_SHURIKEN_EXPIRE` and starts a
-/// screen flash, and reaches nothing that spends damage. Before 2026-09-30 the
-/// blade was reaped silently, which is why nothing could show it.
+/// A blade whose fuse runs out reports where it ended and spends no blast:
+/// `ShurikenPool_Update`'s teardown plays `WO_SHURIKEN_EXPIRE` and a screen flash,
+/// spending no damage.
 #[test]
 fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
     let geometry = CollisionWorld::new();
