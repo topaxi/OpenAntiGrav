@@ -111,8 +111,11 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: &oag_title::weapons::WeaponModels {
-        // Ships it as `.gnf`; Pulse's law, chosen, not measured.
-        ghost_static: Some(r"Data\Tex\staticglow.mip"),
+        // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.
+        ghost_static: Some(oag_title::weapons::GhostStatic {
+            entry: r"Data\Tex\staticglow.mip",
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        }),
         ..oag_title::weapons::WeaponModels::EMPTY
     },
     // Omega's executable carries HD's weapon-spark and absorb strings, but its

@@ -393,7 +393,7 @@ pub(super) fn load_ghost_static(
 ) -> Option<FlareTexture> {
     load_flare_texture(
         archives,
-        wm.ghost_static?,
+        wm.ghost_static?.entry,
         "the ghost ship's static",
         report,
     )

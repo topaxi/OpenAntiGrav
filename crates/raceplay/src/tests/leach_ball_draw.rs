@@ -94,11 +94,7 @@ fn only_wipeout_hd_binds_no_ghost_static() {
         &oag_2048::TITLE,
         &oag_omega::TITLE,
     ] {
-        assert_eq!(
-            title.weapon_models.ghost_static,
-            Some(r"Data\Tex\staticglow.mip"),
-            "{}",
-            title.name
-        );
+        let entry = title.weapon_models.ghost_static.map(|g| g.entry);
+        assert_eq!(entry, Some(r"Data\Tex\staticglow.mip"), "{}", title.name);
     }
 }

@@ -201,8 +201,9 @@ matrix during a Time Trial would settle it.
 `/hdfury/EBOOT-ps3-hdfury-eu.elf` finds no `staticglow`, so HD never binds a ghost
 static (confidence 85: absence of a string, not of an indirect name). It is
 `WeaponModels::ghost_static = None` on HD, so HD no longer requests the entry or
-logs it absent. Pure, 2048 and Omega ship the file and keep Pulse's request
-(**ported**, chosen, not measured: neither executable names it).
+logs it absent. Pure's `BOOT.BIN` (both pressings) names it: **measured**. 2048 and
+Omega ship the file (`.gxt`, `.gnf`) and neither executable names it, so they run
+Pulse's law, `Origin::InheritedFrom`, **chosen, not measured**.
 
 ## The recorder
 

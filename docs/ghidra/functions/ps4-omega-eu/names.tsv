@@ -100,3 +100,6 @@
 0x0174ca60	function	Language_ChoosePluginName	90	language.md
 0x01947160	data	Language_PluginTable	90	language.md
 0x02037c98	data	Language_RegionMask	85	language.md
+0x01710730	function	Particle_RegisterShaders	70	heat-haze.md
+0x01711310	function	Particle_DrawBatchesForPass	65	heat-haze.md
+0x016d3bf0	function	ParticleRenderer_Construct	65	heat-haze.md
