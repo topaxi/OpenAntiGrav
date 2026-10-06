@@ -370,9 +370,15 @@ names `Data\art\published\hdships\Zone\Ship.vex` for game mode 6 without reading
 the craft; the player's pick selects a livery on it (`zoneship_zone` material
 key). `oag_title::ZoneCraft::OwnShipAt` carries it, and a Zone race loads that
 hull for a native craft (`feisar2048\3`) and a guest one (`Assegai`) - checked by
-`zone_craft_ground_truth` and a headless screenshot of each. Not wired: the
-per-team `Zoneship_<Team>` livery swap, so the hull draws in its default skin.
+`zone_craft_ground_truth` and a headless screenshot of each. **The per-team livery is wired
+(2026-10-06, `omega-2048-craft`)**: a guest craft's `PI_TeamModel name="zone"`
+`texturelocation` (`zoneship_quirex`) replaces the `zoneship_zone` path
+component on the hull's texture requests (9 requests, all present under
+`Zoneship_<Team>/`); 2048's five native teams author none, so they keep the
+default skin and the loader report says so. On the headless screenshots the
+hull is bloomed to white, so the paint difference is not visible on Vita.
 The 18 per-craft `ship_zone.vex` files are unreferenced as far as found (no
 `ship_zone` string). Omega: **ported**, see
-[omega-status.md](omega-status.md). Evidence:
+[omega-status.md](omega-status.md) (its Definition authors the same `zone`
+model per HD team; the key differs, `zoneship_team`). Evidence:
 [zone-craft.md](../ghidra/functions/vita-2048-eu-v104/zone-craft.md).

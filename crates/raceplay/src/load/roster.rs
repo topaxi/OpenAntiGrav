@@ -212,6 +212,7 @@ pub(super) fn grid(
         options.mode,
         report,
     );
+    let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
     let mut slot_teams =
         oag_livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS, seed);
@@ -234,6 +235,7 @@ pub(super) fn grid(
                     .hull_wreck
                     .applies(archives.layout.platform),
             absorb_shell: craft_title.looks.absorb_shell.applies_everywhere(),
+            zone_liveries: &zone_liveries,
         },
         hull_variant,
         skin.as_deref(),

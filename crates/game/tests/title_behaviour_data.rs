@@ -82,13 +82,21 @@ fn only_hd_has_a_fresh_profile_variant() {
 }
 
 /// 2048 reships HD's roster and names HD by its own name, which a title package
-/// cannot read from `oag-hd`.
+/// cannot read from `oag-hd`. Omega carries 2048's five teams the other way
+/// round, as its own re-textured 2048-era craft.
 #[test]
-fn only_2048_reships_a_roster_and_it_is_hds() {
+fn only_2048_and_omega_reship_a_roster() {
     for title in ALL {
+        let expected = if title.name == oag_2048::TITLE.name {
+            Some(oag_hd::TITLE.name)
+        } else if title.name == oag_omega::TITLE.name {
+            Some(oag_2048::TITLE.name)
+        } else {
+            None
+        };
         assert_eq!(
             title.race.guest_roster.map(|guest| guest.reships),
-            (title.name == oag_2048::TITLE.name).then_some(oag_hd::TITLE.name),
+            expected,
             "{}",
             title.name
         );

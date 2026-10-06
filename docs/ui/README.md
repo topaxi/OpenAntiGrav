@@ -13,6 +13,9 @@
 > three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
 > [endrace-screens.md](endrace-screens.md).
 
+Why the raster HUD text reads poorly, and which HUD skins the later titles
+ship, are in [hud-skins.md](hud-skins.md).
+
 The languages this build adds on top of the disc's own, and the `human`
 flag on every string, are in [project-languages.md](project-languages.md).
 

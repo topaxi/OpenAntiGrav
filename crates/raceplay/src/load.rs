@@ -30,6 +30,7 @@ mod surfaces;
 mod track_stats;
 mod variant;
 mod weapon_models;
+mod zone_livery;
 pub use campaign::load_event;
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 use oag_source::remix::craft_of;

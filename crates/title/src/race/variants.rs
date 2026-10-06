@@ -32,6 +32,12 @@ pub struct GuestRoster {
     /// directory, unlike [`RaceDefaults::ship_dir`]/[`RaceDefaults::handling_dir`],
     /// which can differ for a title's *own* roster.
     pub dir: &'static str,
+    /// Where the guest roster's **tuning** lives when it is not beside the
+    /// model: `None` for 2048's HD-derived twelve (one tree, [`Self::dir`]),
+    /// `Some` for the 2048-era craft Omega carries, whose
+    /// `handlingstats.xml` sit one tree away from their models, as 2048's own
+    /// five do ([`RaceDefaults::handling_dir`]).
+    pub handling_dir: Option<&'static str>,
     /// The team ids, their variant suffixes and how they join.
     pub variants: &'static TeamVariants,
     /// The title whose roster this reships, by [`crate::Title::name`]. A race
@@ -240,9 +246,9 @@ impl RaceDefaults {
     /// Which directory an **already-combined** team id's guest roster lives
     /// under, if it is one - the fact [`Self::ships_for`] and
     /// [`Self::handling_dir_for`] both key off.
-    fn guest_dir_for(&self, team: &str) -> Option<&'static str> {
-        let guest = self.guest_roster?;
-        guest.variants.recognizes(team).then_some(guest.dir)
+    fn guest_for(&self, team: &str) -> Option<&'static GuestRoster> {
+        self.guest_roster
+            .filter(|guest| guest.variants.recognizes(team))
     }
 
     /// Where an **already-combined** team id's ship model resolves - this
@@ -255,7 +261,9 @@ impl RaceDefaults {
     #[must_use]
     pub fn ships_for(&self, team: &str) -> ShipPaths {
         ShipPaths {
-            dir: self.guest_dir_for(team).unwrap_or(self.ship_dir),
+            dir: self
+                .guest_for(team)
+                .map_or(self.ship_dir, |guest| guest.dir),
             zone: self.zone_craft,
             boost: self.boost,
         }
@@ -264,6 +272,8 @@ impl RaceDefaults {
     /// [`Self::ships_for`]'s sibling for [`Self::handling_dir`].
     #[must_use]
     pub fn handling_dir_for(&self, team: &str) -> &'static str {
-        self.guest_dir_for(team).unwrap_or(self.handling_dir)
+        self.guest_for(team).map_or(self.handling_dir, |guest| {
+            guest.handling_dir.unwrap_or(guest.dir)
+        })
     }
 }
