@@ -184,7 +184,6 @@ pub(super) struct SfxVoices {
     rng: Rng,
 }
 
-/// Seconds in one simulation tick, the only clock this module has.
 const DT: f32 = 1.0 / TICK_HZ as f32;
 
 impl Audio {

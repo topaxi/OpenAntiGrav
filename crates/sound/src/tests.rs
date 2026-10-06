@@ -733,7 +733,6 @@ fn the_race_index_wraps_at_the_soundtracks_length() {
         "an unreadable soundtrack leaves the index where it was"
     );
 }
-/// Silence at `seconds` long, for tests that only care where the playhead gets to.
 fn silence(seconds: f64, channels: u16, rate: u32) -> Arc<Sound> {
     let frames = (seconds * f64::from(rate)) as usize;
     Arc::new(Sound::new(vec![0i16; frames * channels as usize], channels, rate).expect("a sound"))

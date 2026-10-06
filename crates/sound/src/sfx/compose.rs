@@ -125,14 +125,12 @@ pub(super) fn compose_sequence(
     }))
 }
 
-/// One grain, ready to lay down.
 struct Item<'a> {
     /// First output frame.
     start: usize,
     pcm: &'a [i16],
     /// [`Play::pan`](oag_audio::Play::pan) position.
     pan: f32,
-    /// The grain's own volume law.
     gain: f32,
 }
 

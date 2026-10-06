@@ -45,7 +45,6 @@ use super::{Banks, Cue};
 pub struct Engine {
     /// The per-craft random offset, in the same unit as `lag`.
     base: f32,
-    /// The lagged pitch the running engine chases its target with.
     lag: f32,
     /// What is actually written to the voice.
     /// What is written to the voice. Separate from [`Self::lag`] because the
@@ -57,7 +56,6 @@ pub struct Engine {
     doppler: oag_audio::Doppler,
     /// The intensity the volume is derived from, and which the visual shares.
     intensity: f32,
-    /// The held voice, while one is playing.
     voice: Option<VoiceId>,
     /// Whether the law has stepped once, so the first tick snaps (the original's
     /// rising-edge branch).

@@ -200,9 +200,7 @@ impl std::fmt::Display for MusicSource {
 /// disc in hand).
 #[derive(Debug, Clone)]
 pub struct MusicDiscs {
-    /// The booted title's PSP source, if one was found.
     psp: Option<String>,
-    /// The booted title's PS2 source, if one was found.
     ps2: Option<String>,
     /// The booted title's PS3 source, if one was found.
     ///
@@ -218,7 +216,6 @@ pub struct MusicDiscs {
     vita: Option<String>,
     /// The booted title's PS4 source, if one was found. Omega has one release.
     ps4: Option<String>,
-    /// Which release the game booted from, when it is one of the four.
     booted: Option<Platform>,
     /// How a source string becomes an opened title. See [`Library`].
     library: &'static dyn Library,
@@ -499,9 +496,7 @@ pub struct Loaded {
     /// Which release it came off, or `None` for music with no counterpart.
     /// Becomes [`Audio::music_from`].
     from: Option<Platform>,
-    /// The decoded samples.
     sound: Arc<Sound>,
-    /// One line naming it, for the load report on stdout.
     what: String,
 }
 
@@ -516,7 +511,6 @@ impl std::fmt::Debug for Loaded {
     }
 }
 
-/// The offline capture: a path and the samples destined for it.
 struct Dump {
     path: PathBuf,
     samples: Vec<f32>,
@@ -1133,7 +1127,6 @@ fn ps2_directory(archive: &mut MusicArchive) -> Result<ps2_music::Directory> {
 /// (`docs/formats/ps2-audio.md`), via [`Self::nearest`].
 #[derive(Debug, Clone)]
 struct Soundtrack {
-    /// The tracks, in the disc's own order.
     tracks: Vec<Track>,
 }
 

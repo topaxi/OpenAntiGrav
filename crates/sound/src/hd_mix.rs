@@ -55,21 +55,13 @@ const FRAMES_PER_TICK: f32 = 3.125;
 /// lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
-    /// The front end.
     FrontEnd,
-    /// The fly-over before the countdown.
     PreRace,
-    /// The grid, until the start.
     Countdown,
-    /// Racing.
     RaceNormal,
-    /// Racing with the energy critical.
     CriticalEnergy,
-    /// The player's craft is destroyed.
     PlayerDead,
-    /// After the finish.
     PostRace,
-    /// The results table.
     DisplayResults,
 }
 

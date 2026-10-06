@@ -14,7 +14,6 @@ const LISTENER: oag_audio::Listener = oag_audio::Listener {
 };
 const HEARD: [f32; 3] = [0.0; 3];
 
-/// A `Loaded` holding `count` distinguishable one-frame sounds.
 fn loaded(count: usize, looping: bool) -> Loaded {
     Loaded {
         waveforms: (0..count)

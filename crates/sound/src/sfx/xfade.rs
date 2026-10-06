@@ -118,7 +118,6 @@ const PEDAL_SCALE_2048: f32 = 0.75;
 /// stands at neutral. **Chosen, not measured.**
 const CLASS_FACTOR_2048: f32 = 1.0;
 
-/// A layer's gain at unity.
 const GAIN_UNITY: f32 = 1024.0;
 
 /// Where a layer's pitch curve is neutral.
@@ -558,11 +557,9 @@ pub struct Craft {
     modulation: Vec<(f32, i32)>,
     voices: Vec<Option<VoiceId>>,
     doppler: oag_audio::Doppler,
-    /// Milliseconds on the craft's own clock, for the smoother's step.
     clock_ms: i64,
     last_ms: Option<i64>,
     elapsed: f32,
-    /// Whether the smoothers have been seeded from the first inputs.
     started: bool,
     /// The authored volume group the layers play on, when the title has an
     /// authored mix (`user7`, [`crate::hd_mix`]). `None` plays on the

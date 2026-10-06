@@ -32,7 +32,6 @@ fn cone(position: [f32; 3], radius: f32, half_angle_degrees: f32) -> Authored {
     }
 }
 
-/// The decoded node an [`Authored`] wraps, facing `+Z`.
 fn node(position: [f32; 3], radius: f32) -> SoundEmitter {
     let mut to_world = [0.0; 16];
     to_world[0] = 1.0;
@@ -158,7 +157,6 @@ fn a_cone_outside_its_half_angle_is_silent_rather_than_dim() {
     assert_eq!(placed[0].1.gain, 0.0, "90 degrees off a 20-degree cone");
 }
 
-/// One decoded waveform, `frames` long, with the loop flag the caller wants.
 fn cue(frames: usize, looping: bool) -> Loaded {
     let sound = oag_audio::Sound::new(vec![8000; frames], 1, 8_000).expect("a sound");
     Loaded {

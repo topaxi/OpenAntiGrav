@@ -109,7 +109,6 @@ pub struct Held {
     lock: Option<Playing>,
 }
 
-/// One simulation tick, in seconds.
 const TICK_SECONDS: f64 = 1.0 / super::super::TICK_HZ as f64;
 
 impl Held {

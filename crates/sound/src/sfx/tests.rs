@@ -8,7 +8,6 @@ use oag_audio::Sound;
 
 use super::*;
 
-/// A `Loaded` holding `count` distinguishable one-frame sounds.
 fn loaded(count: usize, looping: bool) -> Loaded {
     Loaded {
         waveforms: (0..count)
