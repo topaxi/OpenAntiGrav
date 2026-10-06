@@ -13,7 +13,7 @@
 //! its own version-4 file - `Data\Defaults\Skycube.vex`, in an otherwise
 //! version-6 archive - and its class IDs are the *older* numbering, not
 //! Pulse's: `0x0ee` world, `0x373` texture, `0x378` shape, measured in
-//! `crates/formats/tests/skycube_ground_truth.rs`. Its `0x373` is exactly
+//! `crates/vex/tests/skycube_ground_truth.rs`. Its `0x373` is exactly
 //! the `Texture` ID `docs/formats/pure-status.md` measured across 156 Pure
 //! files. So a version-4 file uses version-4 numbering whichever disc it
 //! came from, which is the whole claim this module rests on, and it was

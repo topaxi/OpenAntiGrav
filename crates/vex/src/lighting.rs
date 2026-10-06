@@ -150,7 +150,7 @@ impl AmbientLight {
 /// direction the original draws with comes from this matrix's rotation basis
 /// or its translation is not settled here** - see `docs/formats/lighting.md`'s
 /// Open section and the direction-basis survey in
-/// `crates/formats/tests/lighting_ground_truth.rs`.
+/// `crates/vex/tests/lighting_ground_truth.rs`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DirectionalLight {
     /// Linear RGB, as authored. Not clamped to `0..=1` - see the module docs.

@@ -13,7 +13,7 @@ use crate::vex::*;
 ///
 /// Hand-built rather than captured, because a real batch is game data and
 /// cannot be committed. The shape is the one
-/// `crates/formats/tests/vex_ps2_ground_truth.rs` checks against every model
+/// `crates/vex/tests/vex_ps2_ground_truth.rs` checks against every model
 /// on the disc; this is what keeps the same paths covered in CI, where there
 /// is no disc.
 fn ps2_batch(

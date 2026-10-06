@@ -38,7 +38,7 @@
 //! 3. **An id can be authored more than once**, and the masks a mask names need
 //!    not all exist. Both are ordinary authoring slop rather than parse errors,
 //!    both were found by measurement rather than predicted, and both are
-//!    quantified in `crates/formats/tests/pvs_ground_truth.rs`: one bit in
+//!    quantified in `crates/vex/tests/pvs_ground_truth.rs`: one bit in
 //!    fifty names a section its own file does not declare, and one id on four
 //!    tracks is authored three times over with identical masks. Duplicates are
 //!    unioned here; a mask bit for a section that does not exist is inert,
@@ -255,7 +255,7 @@ impl TrackPvs {
             // the choice is moot: the only duplicate anywhere is one id
             // authored three times over, in 2 of 40 PSP tracks and 2 of 59 PS2
             // ones, with byte-identical masks every time. See
-            // `crates/formats/tests/pvs_ground_truth.rs`.
+            // `crates/vex/tests/pvs_ground_truth.rs`.
             pvs.masks[id] |= section.visible;
             pvs.bounds[id] = match (pvs.bounds[id], section.bounds) {
                 (Some(a), Some(b)) => Some(a.union(b)),

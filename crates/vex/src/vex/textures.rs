@@ -373,7 +373,7 @@ pub fn texture_row_bytes(width: u16, bits_per_pixel: u8) -> usize {
 /// stride over each texture's declared mip levels reproduces that number for
 /// **135 of 135** textures on `16_Track`. The unpadded formula reproduces
 /// **22** of them - it agrees only where the padding is a no-op. See
-/// `crates/formats/tests/texture_stride_ground_truth.rs`, which re-measures it
+/// `crates/vex/tests/texture_stride_ground_truth.rs`, which re-measures it
 /// across circuits and ships, and `docs/formats/vex.md`.
 ///
 /// What this is *not*: swizzling. A swizzled PSP texture is reordered into

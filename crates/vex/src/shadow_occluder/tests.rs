@@ -1,7 +1,7 @@
 //! What [`super::Occluder`] is asserted to do, on a payload built here.
 //!
 //! The disc-wide numbers this module's docs quote are pinned by
-//! `crates/formats/tests/shadow_occluder_ground_truth.rs`, which needs a disc
+//! `crates/vex/tests/shadow_occluder_ground_truth.rs`, which needs a disc
 //! image. What is here is the arithmetic that has to hold whatever the disc
 //! says: the strides, the sentinel, and the silhouette walk.
 

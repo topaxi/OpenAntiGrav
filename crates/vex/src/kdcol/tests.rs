@@ -173,7 +173,7 @@ fn a_node_is_a_split_or_a_run_of_triangles_and_never_both() {
         assert_eq!(leaf.triangle_count, 2);
     }
     // The runs tile the leaf array exactly, which is true of all 26 shipped
-    // files as well - see `crates/formats/tests/kdcol_ground_truth.rs`.
+    // files as well - see `crates/vex/tests/kdcol_ground_truth.rs`.
     assert_eq!(decoded.nodes[1].first_leaf, 0);
     assert_eq!(decoded.nodes[2].first_leaf, 2);
 }
