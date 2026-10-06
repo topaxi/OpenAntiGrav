@@ -28,7 +28,11 @@ fn main() {
         px[3] = 255;
     }
     for (i, ch) in chars.iter().enumerate() {
-        let Some(g) = font.glyphs.iter().find(|g| u32::from(g.codepoint) == *ch as u32) else {
+        let Some(g) = font
+            .glyphs
+            .iter()
+            .find(|g| u32::from(g.codepoint) == *ch as u32)
+        else {
             println!("{ch:?} U+{:04X}: absent", *ch as u32);
             continue;
         };

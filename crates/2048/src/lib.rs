@@ -105,6 +105,8 @@ pub const TITLE: &Title = &Title {
         // **Off, chosen, not measured.** See `Authored::engine_light`.
         engine_light: false,
     }),
+    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
+    prompts: &oag_title::prompts::Prompts::UNREAD,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,

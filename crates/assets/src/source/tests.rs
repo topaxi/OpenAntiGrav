@@ -154,6 +154,8 @@ const TITLE: &Title = &Title {
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing
     // this crate looks at.
+    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
+    prompts: &oag_title::prompts::Prompts::UNREAD,
     plugin_definition: r"Data\Plugins\PI000\Definition.xml",
     track_plugin_definition: None,
     // This crate opens archives; nothing here draws a loading screen.

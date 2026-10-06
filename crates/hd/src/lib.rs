@@ -61,6 +61,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod loyalty;
+pub mod prompts;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -117,6 +118,8 @@ pub const TITLE: &Title = &Title {
     // front-end plugin *is* the game plugin - it carries the `PI_Team` and
     // `PI_Track` nodes beside the `PI_Music` ones. See
     // [`names::FRONT_END_PLUGIN_DEFINITION`].
+    // Measured: `PS_BUTTONS.fnt`'s three face-button glyphs - see `prompts`.
+    prompts: prompts::PROMPTS,
     plugin_definition: names::FRONT_END_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

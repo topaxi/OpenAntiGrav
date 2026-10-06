@@ -47,6 +47,7 @@ pub mod language;
 pub mod loading;
 pub mod menu;
 pub mod pressing;
+pub mod prompts;
 pub mod race;
 pub mod speed;
 pub mod touch;
@@ -129,6 +130,9 @@ pub struct Title {
     /// [`flare::Flare`], and see that module for why the two are separate axes
     /// rather than variants of one.
     pub flare: &'static flare::Flare,
+    /// Which codepoints in this title's strings are controller-button glyphs,
+    /// and which control each depicts. See [`prompts::Prompts`].
+    pub prompts: &'static prompts::Prompts,
     /// The plugin definition declaring what this release carries to race with:
     /// one `PI_Team` node per team, one `PI_Track` per circuit, one `PI_Music`
     /// per soundtrack track.
