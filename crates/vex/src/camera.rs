@@ -34,6 +34,20 @@
 //! [`Camera::to_world`]. See `docs/ghidra/functions/psp-pulse-usa/camera.md`,
 //! "The destroy camera".
 //!
+//! # The field of view (2026-10-06, Pulse PSP)
+//!
+//! **`+0x00` is a key count, `+0x02` a flag byte (bit 0 set: orthographic), and
+//! `+0x04` / `+0x08` are offsets into the payload of the key times and the key
+//! values, both `u16`**; `VexCamera_BuildProjection` (`0x08901dc4`,
+//! `docs/ghidra/functions/psp-pulse-usa/billboards.md`) evaluates the curve
+//! and scales a value by `180 / 65535` to a **horizontal** field of view in
+//! degrees. Every shipped billboard-advert camera has one key (offsets `0x20`,
+//! `0x22`), so [`Camera::fov_degrees`] reads the value at the second offset and
+//! answers `None` for any curve it would have to interpolate. Confirmed against
+//! the GE projection matrix of the running original: `0x5080` gives 56.60
+//! degrees and an x scale of `1/tan(28.30 deg)` = 1.857, the matrix word the
+//! capture holds, with `+0x1c` = 2.0 as the y/x ratio (3.714).
+//!
 //! # What is read and what is not
 //!
 //! **Placement is the transform chain**, as in [`crate::lighting`]: the payload
@@ -79,6 +93,13 @@ pub struct Camera {
     pub value_1c: f32,
     /// The `u32` at `+0x20`. Not interpreted - see the module docs.
     pub value_20: u32,
+    /// The curve's key count, the `u16` at `+0x00`.
+    pub fov_keys: u16,
+    /// The curve's flag byte at `+0x02`; bit 0 selects the orthographic branch.
+    pub fov_flags: u8,
+    /// The single key's value, when the curve has exactly one: the `u16` at the
+    /// offset `+0x08` names. See the module docs.
+    pub fov_value: Option<u16>,
 }
 
 impl Camera {
@@ -94,7 +115,14 @@ impl Camera {
         if payload.len() < PAYLOAD_LEN {
             return None;
         }
+        let fov_keys = order.u16(payload, 0);
+        let values_at = order.u32(payload, 0x08) as usize;
+        let fov_value = (fov_keys == 1 && values_at + 2 <= payload.len())
+            .then(|| order.u16(payload, values_at));
         Some(Self {
+            fov_keys,
+            fov_flags: payload[2],
+            fov_value,
             name,
             to_world,
             aim: [
@@ -105,6 +133,23 @@ impl Camera {
             value_1c: f32::from_bits(order.u32(payload, 0x1c)),
             value_20: order.u32(payload, 0x20),
         })
+    }
+
+    /// The horizontal field of view in degrees, for a one-key perspective
+    /// curve; `None` for an orthographic camera or a curve with more than one
+    /// key, which this does not interpolate.
+    #[must_use]
+    pub fn fov_degrees(&self) -> Option<f32> {
+        if self.fov_flags & 1 != 0 {
+            return None;
+        }
+        self.fov_value.map(|v| f32::from(v) * 180.0 / 65535.0)
+    }
+
+    /// The frustum's width over its height, the `f32` at `+0x1c`.
+    #[must_use]
+    pub fn aspect(&self) -> f32 {
+        self.value_1c
     }
 
     /// Where the camera sits, `to_world`'s translation row.
@@ -178,6 +223,40 @@ mod tests {
         let camera = Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Little)
             .expect("a full payload");
         assert_eq!(camera.aim, [344.1187, -43.1941, -137.0839]);
+    }
+
+    /// The Auricom advert's camera as it ships on Pulse PSP: one key, value
+    /// `0x5080`, aspect 2.0 - the GE projection of the running original has an x
+    /// scale of 1.857 and a y scale of 3.714.
+    #[test]
+    fn a_one_key_curve_gives_the_horizontal_fov_the_projection_carries() {
+        let mut bytes = vec![0u8; PAYLOAD_LEN];
+        bytes[0..4].copy_from_slice(&1u32.to_le_bytes());
+        bytes[4..8].copy_from_slice(&0x20u32.to_le_bytes());
+        bytes[8..12].copy_from_slice(&0x22u32.to_le_bytes());
+        bytes[0x1c..0x20].copy_from_slice(&2.0f32.to_le_bytes());
+        bytes[0x22..0x24].copy_from_slice(&0x5080u16.to_le_bytes());
+        let camera = Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Little)
+            .expect("a full payload");
+        let fov = camera.fov_degrees().expect("one key");
+        assert!((fov - 56.60).abs() < 0.01, "{fov}");
+        let x_scale = 1.0 / (fov.to_radians() / 2.0).tan();
+        assert!((x_scale - 1.857).abs() < 0.001, "{x_scale}");
+        assert!((x_scale * camera.aspect() - 3.714).abs() < 0.002);
+    }
+
+    #[test]
+    fn an_orthographic_or_multi_key_curve_has_no_fov() {
+        let mut bytes = vec![0u8; PAYLOAD_LEN];
+        bytes[0..4].copy_from_slice(&1u32.to_le_bytes());
+        bytes[8..12].copy_from_slice(&0x22u32.to_le_bytes());
+        bytes[2] = 1;
+        let ortho = Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Little).unwrap();
+        assert_eq!(ortho.fov_degrees(), None);
+        bytes[2] = 0;
+        bytes[0..2].copy_from_slice(&2u16.to_le_bytes());
+        let two = Camera::parse(None, &bytes, vex::matrix::IDENTITY, ByteOrder::Little).unwrap();
+        assert_eq!(two.fov_degrees(), None);
     }
 
     #[test]

@@ -979,3 +979,6 @@ pub fn build_with(
 
 mod material_layout;
 pub use material_layout::material_bind_group_layout;
+
+mod albedo_bind;
+pub use albedo_bind::albedo_bind_group;

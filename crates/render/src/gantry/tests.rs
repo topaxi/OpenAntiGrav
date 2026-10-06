@@ -271,6 +271,25 @@ fn strip_slot_placeholders_is_case_insensitive_and_leaves_real_art_alone() {
     assert_eq!(untouched.draws.len(), 2);
 }
 
+/// A slot whose advert is drawn into the quad keeps its draw; every other
+/// placeholder is still dropped, and slot 8 can be dropped on its own where the
+/// gantry stands in for it.
+#[test]
+fn a_served_slot_keeps_its_placeholder_draw_and_the_rest_are_dropped() {
+    let mut served = textured_draws("billboard7.tga");
+    assert_eq!(strip_unserved_slot_placeholders(&mut served, &[7]), 0);
+    assert_eq!(served.draws.len(), 2);
+    assert_eq!(placeholder_texture_slots(&served), vec![(0, 7)]);
+
+    let mut unserved = textured_draws("billboard7.tga");
+    assert_eq!(strip_unserved_slot_placeholders(&mut unserved, &[1, 2]), 1);
+    assert_eq!(unserved.draws.len(), 1);
+
+    let mut eight = textured_draws("billboard8.tga");
+    assert_eq!(strip_slot_placeholder(&mut eight, 7), 0);
+    assert_eq!(strip_slot_placeholder(&mut eight, 8), 1);
+}
+
 #[test]
 fn strip_fx350_art_drops_only_the_borrowed_slot7_draw() {
     let mut model = textured_draws("data/billboards/hd_adverts/321go/fx350_nomip.gtf");
@@ -335,4 +354,17 @@ fn the_placement_matrix_never_mirrors_the_glyphs() {
             basis.determinant(),
         );
     }
+}
+
+#[test]
+fn a_placeholder_label_names_its_slot_on_either_titles_spelling() {
+    assert_eq!(slot_number("billboard7.tga"), Some(7));
+    assert_eq!(slot_number("BillBoard1.TGA"), Some(1));
+    assert_eq!(
+        slot_number("data/environments/talons_junction/textures/dds/billboard8.gtf"),
+        Some(8)
+    );
+    assert_eq!(slot_number("billboard9.tga"), None);
+    assert_eq!(slot_number("321backplate.tga"), None);
+    assert_eq!(slot_number("billboardwall.tga"), None);
 }
