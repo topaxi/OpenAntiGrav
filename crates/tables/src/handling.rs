@@ -80,13 +80,9 @@ pub use global::{
 /// the simulation's input, and `oag-physics` depends on `oag-core` alone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpeedClass {
-    /// Slowest.
     Venom,
-    /// Second.
     Flash,
-    /// Third.
     Rapier,
-    /// Fastest.
     Phantom,
 }
 
@@ -135,7 +131,6 @@ pub enum Error {
         element: &'static str,
         attribute: &'static str,
     },
-    /// An attribute is present but is not a finite number.
     /// An attribute is present but not a finite number (unparseable, or `NaN`/
     /// infinity, which the simulation must not see).
     NotANumber {
@@ -318,13 +313,9 @@ impl Zone {
 /// **Presentation only**: nothing in the simulation may read them.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Fe {
-    /// The speed bar.
     pub speed: f32,
-    /// The thrust bar.
     pub thrust: f32,
-    /// The handling bar.
     pub handling: f32,
-    /// The shield bar.
     pub shield: f32,
 }
 
@@ -578,7 +569,6 @@ pub struct Class {
     pub antigrav: Antigrav,
     /// `<Physical/>`.
     pub physical: Physical,
-    /// `<pitch/>`, when the file authors one.
     /// `<pitch/>`, when the file authors one.
     ///
     /// **`None` on Pure, which omits it from every `<Class>` on both pressings**

@@ -28,7 +28,6 @@ use super::{Error, Node, Result, number, optional};
 /// (`Disruptor_ApplyEffect`, `0x08850ec8`) switches on the *kind*.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Effect {
-    /// How long the victim stays disrupted, in seconds.
     /// How long the victim stays disrupted, in seconds. Written to the victim's
     /// `craft+0x13c`, counted down by `Ship_UpdateWeapons` (`0x0892935c`), which
     /// tears the effect down at zero.
