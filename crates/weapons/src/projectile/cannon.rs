@@ -1,45 +1,33 @@
 //! The Cannon: a round that fires itself, and hurts only what it hits.
 //!
-//! Everything about *when* a round leaves lives on
-//! [`crate::pickup::Held::advance_cannon_reload`] - it is per-craft state that
-//! spans ticks, the same shape a mine drop is - and everything about the
-//! flight itself is [`super::Projectiles::advance`]'s shared floor-follower,
-//! unmodified: the original's own per-round update, `Cannon_UpdateRound`
-//! (`0x0886593c`, EU `0x08865798`), is now read
-//! (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s "What
-//! draws a Cannon round" and the 2026-09-09 hit-path addition below it), but
-//! its own raycast against the track's collision mesh is not something this
-//! engine's shared floor-follower reproduces instruction-for-instruction -
-//! so a round here still rides the track and detonates on a wall or a craft
-//! exactly the way the Rocket, the Plasma and the Shuriken already do. What
-//! is genuinely this weapon's own is in [`launch`] and [`direct_hit`].
+//! When a round leaves is [`crate::pickup::Held::advance_cannon_reload`]'s
+//! (per-craft state across ticks, like a mine drop); the flight is
+//! [`super::Projectiles::advance`]'s shared floor-follower. The original's
+//! `Cannon_UpdateRound` (`0x0886593c`, EU `0x08865798`) is read
+//! (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "What draws a
+//! Cannon round" and the 2026-09-09 hit-path addition), but its own raycast
+//! against the collision mesh is not reproduced instruction for instruction: a
+//! round rides the track and detonates on a wall or craft as the Rocket, Plasma
+//! and Shuriken do. This weapon's own parts are [`launch`] and [`direct_hit`].
 //!
 //! # The wall hit spawns a spark effect; the craft hit does not
 //!
-//! **Recovered, confidence 85.** `Cannon_UpdateRound` raycasts each round
-//! from its previous position to its new one every tick
-//! (`FUN_0883198c`, the same track-collision query `Rocket_Update`,
-//! `Missile_Update`, `Plasma_Update`, `Shuriken_Update` and
-//! `Camera_UpdatePlayerView` all share) and spawns
-//! `Data\Psys\WO_CANNON_SPARKS.POB` - oriented to the hit basis, at the hit
-//! point - only when that raycast's own hit-type code is `0` or `4`, a
-//! *world/track* hit. A craft hit is a wholly separate test, run
-//! immediately after in `CannonPool_Update` (`0x088582b0`, EU `0x0885813c`):
-//! a per-craft cylinder-distance sweep (`FUN_088579a8`) that, within `6.0`
-//! units, calls `FUN_08857f2c`, which ORs the round's own `+0x3c` flags with
-//! `0x24` (the general-hit bit and the *ship* bit, the same bit
-//! `CannonPool_Update`'s own despawn pass reads to choose the
-//! `CANNONEXPLSHIP` cue over `CANNONEXPLWALL`) and, if the round had not
-//! already recorded a hit, calls `FUN_08857e90` - the damage handler [`direct_hit`]
-//! is now confirmed against. **Neither of those three functions calls
-//! `Psys_Spawn_q`.** So on the PSP, a round that hits a craft plays a sound
-//! and applies damage but the *round* throws no spark; only a round that
-//! hits the track does. The struck hull sparks from its own side: the damage
-//! this posts reaches `Ship_Damage`, whose weapon branch throws
-//! `WO_SHIP_COLL_SPARK_DAMAGE` off the victim's locators - see
-//! [`super::WeaponHit::landed`]. See `oag_raceplay::CANNON_SPARKS_EFFECT` for where this is wired
-//! and `crates/game/tests/psys_inventory_ground_truth.rs`'s
-//! `WO_CANNON_HIT_SHIP` entry for the PS2-only asset this does not settle.
+//! **Recovered, confidence 85.** `Cannon_UpdateRound` raycasts previous to new
+//! position each tick (`FUN_0883198c`, shared with the other weapons and
+//! `Camera_UpdatePlayerView`) and spawns `Data\Psys\WO_CANNON_SPARKS.POB`, at the
+//! hit point oriented to the hit basis, only for hit-type `0` or `4` (world/track).
+//! A craft hit is a separate test after it in `CannonPool_Update` (`0x088582b0`,
+//! EU `0x0885813c`): a per-craft cylinder sweep (`FUN_088579a8`) that within `6.0`
+//! units calls `FUN_08857f2c`, which ORs the round's `+0x3c` flags with `0x24`
+//! (general-hit and *ship* bits; the ship bit picks the `CANNONEXPLSHIP` cue over
+//! `CANNONEXPLWALL`) and, if no hit was recorded, calls `FUN_08857e90`, the damage
+//! handler [`direct_hit`] is confirmed against. None of the three calls
+//! `Psys_Spawn_q`: a craft-hitting round plays a sound and applies damage but
+//! throws no spark. The struck hull sparks from its side: `Ship_Damage`'s weapon
+//! branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (see [`super::WeaponHit::landed`]).
+//! Wired at `oag_raceplay::CANNON_SPARKS_EFFECT`;
+//! `crates/game/tests/psys_inventory_ground_truth.rs`'s `WO_CANNON_HIT_SHIP` entry
+//! is a PS2-only asset this does not settle.
 
 use crate::Craft;
 use oag_core::math::Vec3;
@@ -49,62 +37,45 @@ use oag_tables::weapons::CannonStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
-/// Added to the firing craft's own current speed to get a round's muzzle speed.
+/// Added to the firing craft's current speed to get a round's muzzle speed.
 ///
-/// **Recovered, confidence 90.** `func_0x00060af4` (`0x08864af4`, EU
-/// `0x08864950`) is three instructions on both pressings - `lui a0,0x43fa`;
-/// `mtc1 a0,f0`; `jr ra` - an unconditional `return 500.0f` that never
-/// touches its own argument. `Cannon_Init` (`0x088648ec`) calls it as
-/// `FUN_08864af4(param_2)` and adds the result to the caller's
-/// `speed_kmh`, so the value is real, but **the "per-class" premise this
-/// constant's name and this page's own earlier reading carried was wrong**:
-/// the function ignores the class pointer it is handed and returns the same
-/// constant regardless. The Cannon's own `<Stats>` still authors no speed at
-/// all (`absorb rounds rate damage_per_bullet slowdown_time`), so this base
-/// is baked into the executable rather than authored - just not per class.
+/// **Recovered, confidence 90.** `func_0x00060af4` (`0x08864af4`, EU `0x08864950`)
+/// is `lui a0,0x43fa; mtc1 a0,f0; jr ra`, an unconditional `return 500.0f`
+/// ignoring its argument; `Cannon_Init` (`0x088648ec`) adds it to the caller's
+/// `speed_kmh`. The earlier "per-class" reading was wrong. The Cannon's `<Stats>`
+/// authors no speed (`absorb rounds rate damage_per_bullet slowdown_time`), so
+/// the base is baked into the executable.
 pub const BASE_SPEED_KMH: f32 = 500.0;
 
-/// How long a Cannon round that hits nothing stays in the air before the pool
-/// reaps it, in seconds.
+/// How long a Cannon round that hits nothing stays in the air, in seconds.
 ///
-/// **Recovered, confidence 90.** `Cannon_Init` (`0x088648ec`) zeroes the
-/// round's age at `+0x48`, `Cannon_UpdateRound` (`0x0886593c`) adds `dt` to it
-/// at the top of every tick, and `CannonPool_Update` (`0x088582b0`) tests
-/// `1.0 < round+0x48` as the first half of the `||` that opens its teardown
-/// block. A round that timed out with no hit recorded sets neither the wall
-/// (`0x10`) nor the craft (`0x20`) bit, so the teardown plays no sound and
-/// there is no impact to report. Tested against the age at the end of the
-/// tick, strictly greater, the way the pool does; the Rocket's own is
-/// [`super::rocket::LIFETIME_SECONDS`].
+/// **Recovered, confidence 90.** `Cannon_Init` (`0x088648ec`) zeroes the age at
+/// `+0x48`, `Cannon_UpdateRound` (`0x0886593c`) adds `dt` each tick, and
+/// `CannonPool_Update` (`0x088582b0`) tests `1.0 < round+0x48` as the first half
+/// of the `||` opening its teardown. A timed-out round sets neither the wall
+/// (`0x10`) nor craft (`0x20`) bit: no sound, no impact. Tested after the tick,
+/// strictly greater; the Rocket's is [`super::rocket::LIFETIME_SECONDS`].
 pub const LIFETIME_SECONDS: f32 = 1.0;
 
 /// How far to each side of the nose the two muzzles sit, as a fraction of the
-/// hull's own width.
+/// hull's width.
 ///
-/// **Chosen, not measured; no confidence score.** `Weapon_FireCannon` reads
-/// two distinct anchors, `craft->entity->barrel[0]`/`barrel[1]`, off the
-/// craft's own model - a twin-barrel cannon. This engine has no
-/// mesh-attachment-point system at all - no weapon here reads one - so the
-/// two muzzles are placed a quarter of the hull's own width either side of
-/// the nose instead of at the model's real anchors.
+/// **Chosen, not measured; no confidence score.** `Weapon_FireCannon` reads two
+/// anchors, `craft->entity->barrel[0]`/`barrel[1]`, off the craft's model. This
+/// engine has no mesh attachment points, so the muzzles sit a quarter of the
+/// width either side of the nose.
 pub const MUZZLE_SPACING: f32 = 0.25;
 
 /// Where one round leaves from, and how fast.
 ///
-/// `left` picks the muzzle side, mirroring `Weapon_FireCannon`'s own
-/// `craft->shots & 1` test - the caller reads that bit off the **post-decrement**
-/// round count [`crate::pickup::Held::advance_cannon_reload`] returns, exactly
-/// as the original reads it after its own decrement.
+/// `left` picks the muzzle side, mirroring `Weapon_FireCannon`'s `craft->shots &
+/// 1`; the caller reads it off the post-decrement count
+/// [`crate::pickup::Held::advance_cannon_reload`] returns, as the original does.
 ///
-/// # The speed is the firing craft's own, not the class's
-///
-/// **Recovered.** `Weapon_FireCannon` reads
-/// `craft->entity->body->speed * 3.6` - the firing craft's *own* current
-/// speed, not a per-class figure the way every other weapon's launch is - and
-/// `Cannon_Init` adds [`BASE_SPEED_KMH`] to it. A stationary craft therefore
-/// fires a round that leaves at a fixed rate however fast the craft itself
-/// was going; one already at speed adds its own motion on top, the same
-/// "carry the shooter's own speed" shape the Shuriken's throw already has.
+/// **The speed is the firing craft's own, not the class's. Recovered.**
+/// `Weapon_FireCannon` reads `craft->entity->body->speed * 3.6` and `Cannon_Init`
+/// adds [`BASE_SPEED_KMH`]: a stationary craft's round leaves at a fixed rate and
+/// a moving one adds its motion, as the Shuriken's throw does.
 #[must_use]
 pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, Vec3) {
     let forward = state.body.forward();
@@ -119,27 +90,18 @@ pub fn launch(state: &ShipState, dimensions: &Dimensions, left: bool) -> (Vec3, 
 
 /// What one round costs the craft it struck, and nobody else.
 ///
-/// **Direct-hit only, and that shape is now confirmed against the original's
-/// own handler, not just the schema's.** `FUN_08857e90` - reached from the
-/// craft-proximity test `FUN_088579a8` through `FUN_08857f2c`'s `+0x24` flag
-/// set, see the module doc's "The wall hit spawns a spark effect; the craft
-/// hit does not" - reads exactly `stats+0x7c` (`damage_per_bullet`, per
-/// `WeaponStats_ParseCannon`, `0x0880c774`) into the struck craft's own
-/// damage accumulator and `stats+0x80` (`slowdown_time`) into a second one,
-/// unconditionally, both in the same call. That is [`CannonStats::damage_per_bullet`]
-/// and `slowdown_time` below, applied exactly as this function already did
-/// before the handler was read. A round that hits geometry
-/// (`struck.is_none()`) reaches no call to this at all; see [`apply_impact`],
-/// which is the only caller.
+/// Direct-hit only, confirmed against the original's handler: `FUN_08857e90`
+/// (reached via `FUN_088579a8` and `FUN_08857f2c`'s `+0x24`, see the module
+/// docs) reads `stats+0x7c` (`damage_per_bullet`, `WeaponStats_ParseCannon`
+/// `0x0880c774`) into the struck craft's damage accumulator and `stats+0x80`
+/// (`slowdown_time`) into a second, unconditionally. A geometry hit
+/// (`struck.is_none()`) never reaches this; [`apply_impact`] is the only caller.
 ///
-/// Damage goes through [`oag_physics::damage::apply_weapon`], the same
-/// recovered state gate, weapons-off halving and clamp every other weapon's
-/// hit spends - a second path that bypassed it would be a real bug, not a
-/// shortcut. `slowdown_time` is credited exactly as [`super::blast`] credits
-/// it: unconditionally, with the shield gate living at the drain rather than
-/// here. `hits` is threaded through for the same reason `blast` takes it: a
-/// shielded craft's shell still has to bulge, and an unshielded one throws
-/// its hull's damage sparks - see [`super::WeaponHit`].
+/// Damage goes through [`oag_physics::damage::apply_weapon`] (recovered state
+/// gate, weapons-off halving, clamp). `slowdown_time` is credited as
+/// [`super::blast`] credits it, the shield gate living at the drain. `hits` is
+/// threaded as `blast` does, so a shielded shell bulges and an unshielded hull
+/// sparks; see [`super::WeaponHit`].
 pub fn direct_hit<S: Craft>(
     ships: &mut [S],
     slot: usize,
@@ -162,13 +124,9 @@ pub fn direct_hit<S: Craft>(
 }
 
 /// What one Cannon round's impact does, called from
-/// `oag_weapons::projectile::blast::apply_impacts` - [`super::step`]'s own
-/// per-impact dispatcher - on the arm that would otherwise have to invent a
-/// blast radius for a weapon that authors none.
-///
-/// A direct hit if it struck a craft, and nothing at all if it struck
-/// geometry or the table carries no Cannon block - see [`direct_hit`] for why
-/// there is no radius to fall back to sweeping.
+/// `oag_weapons::projectile::blast::apply_impacts` on the arm that would
+/// otherwise invent a blast radius for a weapon that authors none. A direct hit if
+/// it struck a craft; nothing for geometry or a table with no Cannon block.
 pub fn apply_impact<S: Craft>(
     ships: &mut [S],
     weapons: Option<&oag_tables::weapons::WeaponStats>,

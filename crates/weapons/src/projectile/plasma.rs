@@ -1,16 +1,11 @@
 //! The Plasma: one bolt, out of the nose, at the class's own speed.
 //!
-//! The cheapest weapon this project has added since the Bomb, and for the same
-//! reason: it shares the whole flight model with [`super::rocket`]. What
-//! differs is the *count* - one where the Rocket fires three - and that is
-//! read rather than assumed. See
-//! `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
-//!
-//! The flight itself stays in [`super::Projectiles::advance`], which is where
-//! it belongs: `Plasma_Update` (`0x0885c6cc`) is the Rocket's own floor
-//! follower instruction for instruction - the same 12-unit probe along the
-//! carried surface normal, the same redirect that preserves speed, the same
-//! fall when the probe finds nothing, the same detonate on a wall.
+//! It shares the flight model with [`super::rocket`]; only the count differs (one
+//! where the Rocket fires three), and that is read, not assumed. See
+//! `docs/ghidra/functions/psp-pulse-usa/plasma.md`. The flight stays in
+//! [`super::Projectiles::advance`]: `Plasma_Update` (`0x0885c6cc`) is the Rocket's
+//! floor follower instruction for instruction (12-unit probe along the carried
+//! normal, speed-preserving redirect, fall, detonate on a wall).
 
 use oag_core::math::Vec3;
 use oag_physics::ShipState;
@@ -19,50 +14,30 @@ use oag_tables::weapons::PlasmaStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
-/// Where a craft launches its plasma bolt from, and how fast it holds while
+/// Where a craft launches its plasma bolt from, and the speed it holds while
 /// charging.
 ///
-/// **The returned speed is not the flight speed**, as of 2026-09-16 - see this
-/// module's own doc comment. It is spent once, as the magnitude
-/// [`super::Projectiles::charge_up`] reseats every tick of the wind-up, purely
-/// a hold-time visual; the moment the charge ends,
-/// [`super::Projectiles::advance`] replaces both the direction (the craft's
-/// heading *then*) and the magnitude (the craft's speed *then*, plus
-/// `launchSpeed`) with values read fresh at release, per `Plasma_Launch`
-/// (`0x0885bf84`).
+/// **The returned speed is not the flight speed**: it is the magnitude
+/// [`super::Projectiles::charge_up`] reseats each wind-up tick, a hold-time visual.
+/// When the charge ends, [`super::Projectiles::advance`] replaces direction and
+/// magnitude with values read at release (the craft's speed then plus
+/// `launchSpeed`, blending to the class speed over the first second), per
+/// `Plasma_Launch` (`0x0885bf84`). See [`super::missile::SPEED_RAMP_SECONDS`] and
+/// `Plasma_SpeedForClass` (`0x0885c5a4`, `plasma.md`, "the launch ramp"). Speeds
+/// are km/h, for the Rocket's measured reason.
 ///
-/// # One shot, and it is read twice over
+/// # One shot, read twice
 ///
-/// **The handler.** `Weapon_FirePlasma` (`0x0886a868`), the bit-`0x4` handler
-/// in `Weapons_DispatchFire`, takes one slot out of a 16-entry pool, calls
-/// `Plasma_Init` once, and clears its own request bit in the same breath. It
-/// has neither of the two shapes that make a weapon fire more than once: no
-/// three literal spawn calls (the Rocket's) and no reload timer with a round
-/// counter (the Mine's).
+/// **The handler.** `Weapon_FirePlasma` (`0x0886a868`), the bit-`0x4` handler in
+/// `Weapons_DispatchFire`, takes one slot of a 16-entry pool, calls `Plasma_Init`
+/// once and clears its request bit: no three spawn calls (Rocket), no reload
+/// timer and round counter (Mine). **The schema.** The `<Stats>` carries no
+/// `spread`, the same absence as on the one-shot Missile.
 ///
-/// **The schema.** The Plasma's `<Stats>` carries no `spread`, and `spread` is
-/// what the Rocket's fan is built from. The same absence reads the same way on
-/// the Missile, which also fires one.
+/// # Shared with the Rocket, so equally ours
 ///
-/// # What is shared with the Rocket, and is therefore equally ours
-///
-/// **Only the launch offset now** - pushing the origin forward by the hull's
-/// own extent so a bolt starts outside the craft that fired it. That is
-/// [`super::launch`]'s choice, taken here so the two weapons cannot drift
-/// apart on it, and flagged in that function's own doc comment rather than
-/// restated.
-///
-/// **The speed law is not shared, as of 2026-09-16.** [`launch`] below still
-/// returns a `class + launchSpeed` magnitude, but that value is spent only as
-/// a hold-time visual while the bolt charges - [`super::Projectiles::advance`]
-/// overwrites it the moment the countdown ends, with the bolt's actual flight
-/// speed: the firing craft's own speed plus `launchSpeed`, blending down to
-/// the class speed over its first second in the air. See
-/// [`CHARGE_SECONDS`]'s sibling constant, [`super::missile::SPEED_RAMP_SECONDS`],
-/// and `Plasma_SpeedForClass` (`0x0885c5a4`,
-/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the launch ramp"
-/// section) for the recovered law. The authored speeds are km/h for the
-/// Rocket's measured reason.
+/// Only the launch offset: the origin pushed forward by the hull's extent
+/// ([`super::launch`]'s choice, so the two cannot drift).
 #[must_use]
 pub fn launch(
     state: &ShipState,
@@ -75,13 +50,9 @@ pub fn launch(
     Some((nose, forward * speed))
 }
 
-/// Where a bolt sits on the craft, and which way it is pointing, right now.
-///
-/// Split out of [`launch`] because a charging bolt needs the same two values
-/// every tick of its wind-up and must not re-resolve a speed to get them - see
-/// [`CHARGE_SECONDS`] and [`super::Projectiles::advance`]'s charging branch.
-/// The offset is [`super::launch`]'s own choice, shared with the Rocket so the
-/// two weapons cannot drift apart.
+/// Where a bolt sits on the craft, and which way it points, right now. Split from
+/// [`launch`] because a charging bolt needs both every wind-up tick without
+/// re-resolving a speed (see [`CHARGE_SECONDS`]). The offset is [`super::launch`]'s.
 #[must_use]
 pub fn muzzle(state: &ShipState, dimensions: &Dimensions) -> (Vec3, Vec3) {
     let forward = state.body.forward();
@@ -92,45 +63,35 @@ pub fn muzzle(state: &ShipState, dimensions: &Dimensions) -> (Vec3, Vec3) {
 
 /// How long a plasma bolt winds up on the nose before it flies, in seconds.
 ///
-/// **Recovered, confidence 90, and it is a literal rather than an authored
-/// number.** `Plasma_Init` (`0x0885bd18`) marks the fresh pool entry charging
-/// and seeds its countdown in two adjacent stores:
+/// **Recovered, confidence 90, a literal.** `Plasma_Init` (`0x0885bd18`) marks the
+/// entry charging and seeds its countdown:
 ///
 /// ```text
 /// *(undefined1 *)(entity + 0x4c) = 1;              // charging
 /// *(undefined4 *)(entity + 0x50) = _DAT_08a7c098;  // 0x3f800000 == 1.0f
 /// ```
 ///
-/// `0x08a7c098` was read straight out of `.rodata` as `0x3f800000`. The
-/// consumer is the pool walker `Plasmas_Update` (`0x0886b490`), which for a
-/// charging entity calls `Plasma_UpdateCharge` (`0x0885c170`) - copying the
-/// firing craft's own weapon-node world matrix onto the bolt, so it rides the
-/// nose - subtracts `dt` from `+0x50`, and calls `Plasma_Launch`
-/// (`0x0885bf84`) the tick that reaches zero. `Plasma_Launch` clears `+0x4c`
-/// and builds the velocity from the craft's forward, which is why the shot
-/// leaves along the *current* heading.
+/// `0x08a7c098` was read from `.rodata` as `0x3f800000`. `Plasmas_Update`
+/// (`0x0886b490`) calls `Plasma_UpdateCharge` (`0x0885c170`) for a charging entity
+/// (copies the craft's weapon-node matrix onto the bolt), subtracts `dt` from
+/// `+0x50`, and calls `Plasma_Launch` (`0x0885bf84`) at zero, which clears `+0x4c`
+/// and builds the velocity from the current forward.
 ///
-/// **Wipeout Pure hard-codes the same second**, in the same two stores, from
-/// the file its own allocator names: `Plasma_Init` there is `FUN_0885df98` and
-/// it writes an immediate `0x3f800000`, with
-/// `c:/Work/Wipeout/Code/Backend/Weapons/Plasma.cpp` line 63 as its allocation
-/// tag. Two titles, one literal.
+/// **Wipeout Pure hard-codes the same second**: `Plasma_Init` there is
+/// `FUN_0885df98`, an immediate `0x3f800000`, allocation tag
+/// `c:/Work/Wipeout/Code/Backend/Weapons/Plasma.cpp` line 63.
 ///
-/// # This is **not** `<Plasma charge_time>`, and that is the finding
+/// # This is not `<Plasma charge_time>`
 ///
-/// The file authors `charge_time="3"` - on Pulse's `WeaponStats_Race.xml`, on
-/// its `WeaponStats_Elimination.xml` and on Pure's `weaponstats.xml`, the only
-/// weapon that authors it at all - and **nothing reads it in either
-/// executable**. `WeaponStats_ParsePlasma` (`0x0880cc2c`) stores it at
-/// `stats+0x9c` and that offset is never loaded again: across all 69 functions
-/// in `psp-pulse-usa` that reach the weapon-stats table
-/// (`*(int *)(&DAT_08b32420 + DAT_08b32428 * 4)`), a sweep of every load and
-/// store at `+0x9c` finds **zero**, while the same sweep at the `venomspeed`
-/// control offset `+0xac` finds fourteen including the known consumer
-/// `Plasma_SpeedForClass` (`0x0885c5a4`). The sweep works; the negative is
-/// real. So the wind-up is three times shorter than the authored attribute
-/// suggests, and this constant is the measured one rather than the plausible
-/// one. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+/// The file authors `charge_time="3"` (Pulse's `WeaponStats_Race.xml` and
+/// `WeaponStats_Elimination.xml`, Pure's `weaponstats.xml`; the only weapon to do
+/// so) and **nothing reads it in either executable**. `WeaponStats_ParsePlasma`
+/// (`0x0880cc2c`) stores it at `stats+0x9c`, never loaded again: across all 69
+/// functions in `psp-pulse-usa` reaching the weapon-stats table
+/// (`*(int *)(&DAT_08b32420 + DAT_08b32428 * 4)`), every load and store at `+0x9c`
+/// finds zero, while the same sweep at the `venomspeed` offset `+0xac` finds
+/// fourteen including `Plasma_SpeedForClass`. The wind-up is three times shorter
+/// than the attribute suggests. See `plasma.md`.
 pub const CHARGE_SECONDS: f32 = 1.0;
 
 #[cfg(test)]
