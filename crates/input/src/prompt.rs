@@ -131,6 +131,10 @@ pub struct PadCaps {
     pub face_buttons: u8,
     /// How many of the left stick's two axes the device really has.
     pub stick_axes: u8,
+    /// The device has a d-pad: all four direction buttons, or a hat / axis
+    /// pair for both directions. The PSP had no stick, so this stands in for
+    /// one.
+    pub dpad: bool,
 }
 
 /// Interfaces a keyboard, mouse or pad's sensors expose that an OS lists as
@@ -151,14 +155,14 @@ const NOT_A_PAD: [&str; 7] = [
 ///
 /// A device whose name is a known non-pad interface never is. Otherwise it is
 /// when the backend has an SDL mapping for it, or it really has face buttons
-/// and both axes of a stick.
+/// and either both axes of a stick or a d-pad.
 #[must_use]
 pub fn is_gamepad(info: &PadInfo, caps: PadCaps) -> bool {
     let name = info.name.to_ascii_lowercase();
     if NOT_A_PAD.iter().any(|needle| name.contains(needle)) {
         return false;
     }
-    caps.sdl_mapped || (caps.face_buttons >= 2 && caps.stick_axes >= 2)
+    caps.sdl_mapped || (caps.face_buttons >= 2 && (caps.stick_axes >= 2 || caps.dpad))
 }
 
 const VENDOR_SONY: u16 = 0x054c;
