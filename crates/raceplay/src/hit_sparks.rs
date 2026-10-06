@@ -53,7 +53,7 @@
 //!
 //! # Titles
 //!
-//! Pulse only. HD's Cannon throws its own weapon spark from the weapon's side,
+//! Pulse only here. HD's Cannon throws its own weapon spark from the weapon's side,
 //! a different mechanism (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`),
 //! and Pure's `Ship_Damage` is unread; both keep an empty anchor list and draw
 //! nothing here.
@@ -99,6 +99,41 @@ pub(super) fn anchors(
         .collect()
 }
 
+/// Each slot's locators for HD's Cannon craft-hit spark, or none on a title
+/// that does not throw one. Same ten-slot cap as [`anchors`]: HD's
+/// `Ship_DispatchCollisionFx` reads ten pointers at `craft + 0x79d0`.
+pub(super) fn weapon_anchors(
+    title: &oag_title::Title,
+    liveries: &[oag_livery::Livery],
+) -> Vec<Vec<SparkAnchor>> {
+    if title.name != oag_hd::TITLE.name {
+        return Vec::new();
+    }
+    liveries
+        .iter()
+        .map(|livery| {
+            livery
+                .collision_fx
+                .iter()
+                .take(MAX_NODES)
+                .copied()
+                .collect()
+        })
+        .collect()
+}
+
+/// The world position of the locator nearest `contact`, by squared distance -
+/// `Ship_DispatchCollisionFx`'s pick (`FUN_002d91e8` is the squared distance).
+pub(super) fn nearest_locator(anchors: &[SparkAnchor], model: Mat4, contact: Vec3) -> Option<Vec3> {
+    anchors
+        .iter()
+        .map(|anchor| model.transform_point3(anchor.position))
+        .min_by(|a, b| {
+            a.distance_squared(contact)
+                .total_cmp(&b.distance_squared(contact))
+        })
+}
+
 /// `Camera_ArmShake`'s magnitude argument on a weapon hit, as `Ship_Damage`
 /// passes it (`0x3f19999a`).
 const WEAPON_HIT_SHAKE_MAGNITUDE: f32 = 0.6;
@@ -117,23 +152,36 @@ struct Riding {
 pub(super) struct HitSparks {
     /// Model-space locators per slot - see [`anchors`].
     anchors: Vec<Vec<SparkAnchor>>,
+    /// HD's Cannon-hit locators per slot - see [`weapon_anchors`]. Empty on
+    /// every other title.
+    weapon_anchors: Vec<Vec<SparkAnchor>>,
     /// Seconds before each slot's locator may fire again.
     cooldown: [[f32; MAX_NODES]; MAX_SHIPS],
     riding: Vec<Riding>,
     rng: Rng,
     /// How many have started, ever - for tests.
     started: u32,
+    /// How many Cannon-hit bursts have started, ever - for tests.
+    weapon_started: u32,
 }
 
 impl HitSparks {
     pub(super) fn new(anchors: Vec<Vec<SparkAnchor>>) -> Self {
         Self {
             anchors,
+            weapon_anchors: Vec::new(),
             cooldown: [[0.0; MAX_NODES]; MAX_SHIPS],
             riding: Vec::new(),
             rng: Rng::new(HIT_SPARKS_SEED),
             started: 0,
+            weapon_started: 0,
         }
+    }
+
+    /// Adds HD's Cannon-hit locators.
+    pub(super) fn with_weapon_anchors(mut self, anchors: Vec<Vec<SparkAnchor>>) -> Self {
+        self.weapon_anchors = anchors;
+        self
     }
 
     /// How many sparks are still riding their locator.
@@ -177,6 +225,37 @@ impl Race {
             Side::Elsewhere,
             &mut self.view.shake_rng,
         );
+    }
+
+    /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls
+    /// `Ship_DispatchCollisionFx(craft, contact, 1)`, which picks the
+    /// `Ship Collision Fx` locator nearest the contact (squared distance, ten
+    /// at most) and has `ShipCollisionFx_Trigger` kind 1 spawn
+    /// [`WEAPON_SPARK_EFFECT`] there as a one-shot.
+    ///
+    /// **Chosen, not measured:** the burst's severity is `1.0` and it takes
+    /// the locator's own up axis. The original rolls the spawn matrix by two
+    /// random angles (`U(-pi/2, pi/2)` and `U(-pi, pi)`, constants at TOC
+    /// `0x008b3f58`) whose axes were not read, and applies no per-locator
+    /// cooldown (Pulse's `instance + 100` gate has no counterpart in that
+    /// branch). Nothing fires on a hull with no locators.
+    pub(super) fn throw_weapon_spark(&mut self, slot: usize, contact: Vec3) {
+        let Some(anchors) = self.view.hit_sparks.weapon_anchors.get(slot) else {
+            return;
+        };
+        let ship = &self.sim.world.ships[slot];
+        if anchors.is_empty() || !ship.active {
+            return;
+        }
+        let Some(effect) = self.view.effects.get(WEAPON_SPARK_EFFECT).cloned() else {
+            return;
+        };
+        let Some(at) = nearest_locator(anchors, model_matrix_of(ship), contact) else {
+            return;
+        };
+        if self.view.stage.play(&effect, at, 1.0).is_some() {
+            self.view.hit_sparks.weapon_started += 1;
+        }
     }
 
     fn throw_hit_spark(&mut self, slot: usize, leach: bool) {
@@ -252,6 +331,13 @@ impl Race {
             true
         });
         self.view.hit_sparks.riding = riding;
+    }
+
+    /// How many Cannon-hit bursts have ever started, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn weapon_sparks_started_for_tests(&self) -> u32 {
+        self.view.hit_sparks.weapon_started
     }
 
     /// How many hit sparks have ever started, for tests.

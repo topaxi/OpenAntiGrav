@@ -159,3 +159,61 @@ fn a_weapon_hit_shakes_the_players_camera_and_nobody_elses() {
     // Magnitude 0.6, as authored: the wall path's `severity * 0.3` at 2.0.
     assert!((race.view.shake.magnitude() - 0.6).abs() < 1e-5);
 }
+
+/// A Cannon round striking a second craft, ticked through `Race::tick`, with
+/// `weapon_anchors` as the title built them: HD's craft-hit spark count.
+fn cannon_strikes_a_craft(weapon_anchors: Vec<Vec<SparkAnchor>>) -> u32 {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_cannon_table());
+    let blob = super::respawn::one_emitter_pob(crate::WEAPON_SPARK_EFFECT, 0);
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
+        .expect("the hand-laid effect parses");
+    setup.effects.insert(crate::WEAPON_SPARK_EFFECT, effect);
+    setup.weapon_spark_anchors = weapon_anchors;
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
+    let mut buttons = Buttons::new();
+    for _ in 0..60 {
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        let snapshot = buttons.tick(SQUARE);
+        race.tick(&PlayerInputs::single(snapshot));
+    }
+    race.weapon_sparks_started_for_tests()
+}
+
+/// HD's Cannon throws `WO_SHIP_SPARK_DAMAGE_WEAPON` on the craft it strikes
+/// (`Cannon_ApplyCraftHit`, `Ship_DispatchCollisionFx` kind 1); a title that
+/// builds no weapon anchors - Pulse, whose Cannon spawns nothing on a craft -
+/// throws none.
+#[test]
+fn hds_cannon_sparks_the_struck_craft_and_pulses_does_not() {
+    // Two craft slots: the struck one is slot 1.
+    let locators = || vec![six_locators(), six_locators()];
+    assert!(
+        cannon_strikes_a_craft(locators()) > 0,
+        "an HD Cannon round struck a craft and threw no weapon spark"
+    );
+    assert_eq!(
+        cannon_strikes_a_craft(Vec::new()),
+        0,
+        "a title with no weapon anchors threw a weapon spark"
+    );
+}
+
+/// The burst sits on the locator nearest the contact, not on a random one.
+#[test]
+fn the_weapon_spark_picks_the_locator_nearest_the_contact() {
+    let model = Mat4::from_translation(Vec3::new(10.0, 0.0, 0.0));
+    let at = crate::hit_sparks::nearest_locator(&six_locators(), model, Vec3::new(11.4, 0.2, 0.0))
+        .expect("six locators");
+    // The locator at x = 1.5 (model space) is the nearest of the six to 1.4.
+    assert!(at.distance(Vec3::new(11.5, 0.0, 0.0)) < 1e-6, "{at:?}");
+    assert!(crate::hit_sparks::nearest_locator(&[], model, Vec3::ZERO).is_none());
+}

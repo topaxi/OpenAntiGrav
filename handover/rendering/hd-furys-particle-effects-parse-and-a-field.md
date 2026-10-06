@@ -4,7 +4,15 @@
 
 ## Open
 
-- Nothing else in HD is wired to fire any of the remaining parsed effects
+- **2026-10-06 (hd-particle-triggers):** the census and every HD function found are
+  in `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`. "Nothing else is
+  wired" was stale: 33 of 82 already fire, mostly Pulse-inherited. New: the Cannon's
+  craft-hit spark (`WO_SHIP_SPARK_DAMAGE_WEAPON`, HD only). The plain
+  `WO_SHIP_COLL_SPARK_DAMAGE` (and `_ZONE`) is created once per ship in the ship
+  constructor (`0x000ddd58`), attached - the "what names it" bullet below is closed.
+  Still open: Zone variants (need the mode-id map), `WO_DAMAGE_*` damage smoke
+  (`0x002a17e8`, thresholds unread), the LeachBeam launch/hit/break callers,
+  `WO_SHIP_COLL_SPARK_NODAMAGE`'s kind-2 caller, `WO_DEBRIS_FIRE`.
 - **2026-08-31: HD's own dispatch has now been read** (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`) -
   `Ship_DispatchCollisionFx_q` (nearest-of-ten locator pick, confirming
   `hd-status.md`'s own "ten" prediction from the executable side) calls
@@ -28,8 +36,7 @@
 ## Next Steps
 
 - Reverse-engineer the triggers for the remaining parsed HD particle effects (the parser itself is done)
-- Find what names `WO_SHIP_COLL_SPARK_DAMAGE` (plain) and
-  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` - `ship-collision-fx.md`'s
+- ~~Find what names `WO_SHIP_COLL_SPARK_DAMAGE` (plain)~~ (closed 2026-10-06, the ship constructor); still find `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`'s owner (slot loaded inside `0x002a06e0`, a conflict) and - `ship-collision-fx.md`'s
   `ShipCollisionFx_Trigger_q` does not, despite being read in full across all
   four of its `kind` values.
 - Identify what `0x00875800`'s reaction table is keyed by and what index 11
