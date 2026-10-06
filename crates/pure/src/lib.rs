@@ -564,29 +564,6 @@ pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Resul
     Archives::open_with_packs(source, TITLE, packs)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The deny-list rules out, never in - the same asymmetry `oag_pulse`'s has.
-    #[test]
-    fn pulses_serials_are_ruled_out_and_pures_own_get_no_verdict() {
-        assert_eq!(TITLE.foreign_title("UCUS-98712"), Some("Wipeout Pulse"));
-        assert_eq!(TITLE.foreign_title("UCES-00465"), Some("Wipeout Pulse"));
-        assert_eq!(TITLE.foreign_title("SCES-54748"), Some("Wipeout Pulse"));
-        assert_eq!(TITLE.foreign_title("UCUS-98612"), None);
-        assert_eq!(TITLE.foreign_title("UCES-00001"), None);
-    }
-
-    /// Pure and Pulse rule *each other* out, which is what stops name matching
-    /// opening one as the other.
-    #[test]
-    fn the_two_titles_are_mutually_exclusive() {
-        assert!(TITLE.foreign_title("UCUS-98712").is_some());
-        assert!(oag_pulse::TITLE.foreign_title("UCUS-98612").is_some());
-    }
-}
-
 /// Each Pure release's offered languages, read out of its own `BOOT.BIN`'s
 /// plugin manifest: a null-terminated pointer table at file offset `0x2abd98`
 /// (USA) and `0x2a5558` (EU), walked in order. Both discs carry the same nine
@@ -613,3 +590,26 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
         evidence: "pure-psp-eu BOOT.BIN plugin manifest",
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The deny-list rules out, never in - the same asymmetry `oag_pulse`'s has.
+    #[test]
+    fn pulses_serials_are_ruled_out_and_pures_own_get_no_verdict() {
+        assert_eq!(TITLE.foreign_title("UCUS-98712"), Some("Wipeout Pulse"));
+        assert_eq!(TITLE.foreign_title("UCES-00465"), Some("Wipeout Pulse"));
+        assert_eq!(TITLE.foreign_title("SCES-54748"), Some("Wipeout Pulse"));
+        assert_eq!(TITLE.foreign_title("UCUS-98612"), None);
+        assert_eq!(TITLE.foreign_title("UCES-00001"), None);
+    }
+
+    /// Pure and Pulse rule *each other* out, which is what stops name matching
+    /// opening one as the other.
+    #[test]
+    fn the_two_titles_are_mutually_exclusive() {
+        assert!(TITLE.foreign_title("UCUS-98712").is_some());
+        assert!(oag_pulse::TITLE.foreign_title("UCUS-98612").is_some());
+    }
+}
