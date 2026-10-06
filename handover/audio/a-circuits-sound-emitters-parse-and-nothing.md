@@ -212,9 +212,8 @@ It does not bind a waveform, so the **9** nodes carrying it (`moather~birds`,
 `dekonst~CRANE` and both `talonsj~SETREG` cues) are correctly silent, not
 blocked on a missing handler -
 [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
-corrects its prior confidence-88 hypothesis. **The other 29 (every `~SetReg*`
-cue, opcode `0x1e`) are unaffected by this and stay unread** - "set register"
-is still only a name-based guess, not a decoded handler. Nothing to wire
+corrects its prior confidence-88 hypothesis. ~~The other 29 (every `~SetReg*`
+cue, opcode `0x1e`) stay unread~~ **Superseded: `0x1e` is `Scream_OpSetRegister` (confidence 88, `sound.md`), a register write that starts no sound, and the cues are control-only.** Nothing to wire
 follows from `0x14` itself - there was no waveform to bind - so the former
 Next Step #1 is dropped rather than closed with an implementation. The
 discriminating check on this (do the table's neighbouring slots hold distinct
@@ -254,3 +253,5 @@ table read.
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 **both `sound` and `soundcone` are audible now, and both without an emulator.** `oag_sound::sfx::TrackEmitters` opens a held voice for every in-range `sound`/`soundcone` node, off `oag_audio::spatial::Emitter::cone`'s law. 2026-09-09 closed the two open reversals: `VexSoundCone_Init` (`0x08925ff4`, confidence 90) settles which of a cone's two authored angles is its half-angle, and tracing it found that `VexSound_Update`'s radius curve has exactly two static call sites, both gated on a byte that is `0` on all 1,298 authored nodes - so the curve never actually runs and `+0x10` is the one radius any node ever plays, which is also why a cone's own curve key reads `0` and is safe to ignore. Pure's own `woSound` class (`0x393`) was found the same pass, without the Ghidra bridge the thread expected it to need: a scene node's own class ID and name are enough, no exporter table required. Earlier finds still stand: PS2 shares Pulse's class IDs and counts exactly; a circuit's own sound bank is named by its `trackstartup.xml` and lives beside it in the circuit directory; opcode `0x14` is a decoded no-op, corroborated on `ps3-hdfury-eu`; the mix's clip rate is down sharply since `Scream_PanVolumePair` landed, and no limiter was invented to chase the rest. Open: a cone in radius but outside its angle still holds a silent voice rather than being budgeted away, unmeasured past two circuits; Pure's own payload field layout past the class ID.
+
+2026-10-06: a cue whose timeline walk is complete, starts no grain and passed at least one `0x14`/`0x1e` is now logged `control only` at debug, not `play nothing` at WARN (`sfx::banks::ControlOnlyCue`), so `talonsj~SETREG_01/_02` no longer warn on Pulse. Cues with an opcode the walk does not read still warn. See `docs/formats/pulse-absent-effects.md`.

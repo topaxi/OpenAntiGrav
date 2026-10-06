@@ -209,8 +209,8 @@ impl TrackEmitters {
         // Decoded once per distinct pair, with the failure reason cached: no bank
         // with that label, no such cue and no waveform are three findings, only
         // the middle one a dangling reference in `track-sound-emitters.md`.
-        let mut cache: BTreeMap<(String, String), Result<Loaded, String>> = BTreeMap::new();
-        let mut unplayed: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
+        let mut cache: BTreeMap<(String, String), Result<Loaded, (bool, String)>> = BTreeMap::new();
+        let mut unplayed: BTreeMap<(String, String), (usize, (bool, String))> = BTreeMap::new();
         // Both lists together: a cone names bank and cue as a plain `sound` does.
         for node in parsed.omni.iter_mut().chain(&mut parsed.directional) {
             let key = (node.emitter.bank.clone(), node.emitter.cue.clone());
@@ -218,14 +218,22 @@ impl TrackEmitters {
                 .entry(key.clone())
                 .or_insert_with(|| {
                     let Some(bank) = by_label.get(&node.emitter.bank) else {
-                        return Err(format!(
-                            "no bank this circuit loads is labelled {:?}",
-                            node.emitter.bank
+                        return Err((
+                            false,
+                            format!(
+                                "no bank this circuit loads is labelled {:?}",
+                                node.emitter.bank
+                            ),
                         ));
                     };
                     load_named_cue(bank, &node.emitter.cue)
                         .map(|(loaded, _)| loaded)
-                        .map_err(|e| e.to_string())
+                        .map_err(|e| {
+                            (
+                                e.downcast_ref::<super::banks::ControlOnlyCue>().is_some(),
+                                e.to_string(),
+                            )
+                        })
                 })
                 .clone();
             match loaded {
@@ -249,10 +257,12 @@ impl TrackEmitters {
         ));
         // Reported per reference, so a decode that broke a different reference
         // cannot hide behind fixing as many (`sound_emitter_ground_truth` pins a list).
-        for ((bank, cue), (nodes, why)) in &unplayed {
-            parsed.report.push(format!(
-                "track audio {bank}{cue}: {nodes} node(s) play nothing: {why}"
-            ));
+        for ((bank, cue), (nodes, (control, why))) in &unplayed {
+            parsed.report.push(if *control {
+                format!("track audio {bank}{cue}: {nodes} node(s) are control only: {why}")
+            } else {
+                format!("track audio {bank}{cue}: {nodes} node(s) play nothing: {why}")
+            });
         }
 
         parsed

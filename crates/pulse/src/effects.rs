@@ -23,6 +23,23 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
 /// Pulse's tables: the engine's own names, and the four triggers a title
 /// answers for itself. Measured; pages cited per entry.
 pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
+    // Names the shared engine table carries from HD and 2048 that no Pulse
+    // archive holds and no Pulse executable requests - the by-design absence is
+    // proven in `docs/formats/pulse-absent-effects.md`.
+    .without(Trigger::PlasmaLightningExpand)
+    .without(Trigger::PlasmaLightningCollapse)
+    .without(Trigger::TrailHitship)
+    .without(Trigger::TrailHitshipRed)
+    .without(Trigger::LeachbeamAbsorb)
+    .without(Trigger::MagstripSparks)
+    .without(Trigger::MagstripZone)
+    // The PS2 authors an engine flare as a particle effect; the PSP does not,
+    // and `oag_fx::exhaust` draws the PSP's from its locator instead.
+    .with(
+        Trigger::EngineFlare,
+        EffectSpec::new(engine_effects::ENGINE_FLARE_EFFECT, Origin::Measured)
+            .with_platforms(Platforms::Only(&[Platform::Ps2])),
+    )
     // `Ship_Damage` (`0x088439ac`) weapon branch; `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     // The names are `WO_SHIP_COLL_SPARK_DAMAGE` and the LeachBeam variant.
     .with(

@@ -377,6 +377,68 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
     );
 }
 
+/// The names a title asks for on a platform are all on that platform's disc.
+///
+/// The converse of the three buckets above: those say every authored effect is
+/// accounted for, this says nothing is *requested* that the disc does not
+/// author. It is what keeps the effect names HD and 2048 carry (`engine()`
+/// holds them for every title) out of Pulse's own table - re-adding one fails
+/// here by name instead of surfacing as a warning in a race's log.
+fn assert_requests_are_authored(
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    spec: &str,
+) {
+    let mut archive = Archive::open(spec).expect("open archive");
+    let mut on_disc = BTreeSet::new();
+    for index in 0..archive.directory().entries.len() {
+        let Ok(head) = archive.peek(index, 4) else {
+            continue;
+        };
+        if pob::looks_like_particle_system(&head) {
+            let blob = archive.read(index).expect("read blob");
+            on_disc.insert(ParticleSystem::parse(&blob).expect("parse").name);
+        }
+    }
+    let missing: Vec<&str> = title
+        .effects
+        .names_on(platform)
+        .into_iter()
+        .filter(|name| !on_disc.contains(*name))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "{} asks for {missing:?} on {platform:?}, which {spec} does not author",
+        title.name
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_asks_for_nothing_its_archive_lacks() {
+    let Some(image) = image_named("pulse-psp-eu.chd") else {
+        return;
+    };
+    assert_requests_are_authored(
+        oag_pulse::TITLE,
+        oag_disc::Platform::Psp,
+        &format!("{}:PSP_GAME/USRDIR/Data.wad", image.display()),
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_asks_for_nothing_its_archive_lacks() {
+    let Some(image) = image_named("pulse-ps2-eu.chd") else {
+        return;
+    };
+    assert_requests_are_authored(
+        oag_pulse::TITLE,
+        oag_disc::Platform::Ps2,
+        &format!("{}:54748/WADS2.WAD", image.display()),
+    );
+}
+
 /// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
 ///
 /// HD authors 82 distinct particle systems and 22 are wired (`RACE_EFFECTS`'

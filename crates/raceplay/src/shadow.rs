@@ -195,13 +195,14 @@ pub fn silhouettes(
             }
         }
     }
-    // The per-slot lines above are the report's, and the log carries them at
-    // `debug`: Pulse, Pure and 2048 author no silhouette at all, so eight
-    // identical warnings every race would say nothing the first does not.
+    // Said at `debug` here, and warned by `Scene::shadow_geometry` the first
+    // frame the `blob` tier is on. The tier is off by default, so a generated
+    // falloff nothing draws is not an invention in front of anyone; one a
+    // player has switched on is, and that is when the log names it.
     if fallbacks > 0 {
-        log::warn!(
-            "blob shadow: {fallbacks} of {} slot(s) use a generated falloff, which is this \
-             project's and not the disc's",
+        log::debug!(
+            "blob shadow: {fallbacks} of {} slot(s) have no silhouette on the disc; a \
+             generated falloff stands in only if the `blob` tier is chosen",
             teams.len()
         );
     }
@@ -230,6 +231,7 @@ fn decode_silhouette(blob: &[u8]) -> Option<shadow::Silhouette> {
         width,
         height,
         rgba: rgba.into_iter().flatten().collect(),
+        generated: false,
     })
 }
 

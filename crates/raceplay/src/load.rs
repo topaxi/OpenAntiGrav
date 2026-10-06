@@ -703,7 +703,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !extents {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
-    for name in craft_title.effects.names() {
+    for name in craft_title.effects.names_on(archives.layout.platform) {
         match particle_effect(&mut archives, title.race.effect_dir_for(&track), name) {
             Ok((mut effect, note)) => {
                 if !extents {

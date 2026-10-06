@@ -53,13 +53,60 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     }
 }
 
+/// The engine-table triggers whose effect no Pulse archive holds and no Pulse
+/// executable requests (`docs/formats/pulse-absent-effects.md`).
+const PULSE_ABSENT: [Trigger; 7] = [
+    Trigger::PlasmaLightningExpand,
+    Trigger::PlasmaLightningCollapse,
+    Trigger::TrailHitship,
+    Trigger::TrailHitshipRed,
+    Trigger::LeachbeamAbsorb,
+    Trigger::MagstripSparks,
+    Trigger::MagstripZone,
+];
+
+#[test]
+fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
+    for trigger in PULSE_ABSENT {
+        assert!(
+            oag_pulse::TITLE.effect_on(trigger).is_none(),
+            "Pulse names {trigger:?}"
+        );
+        for title in [oag_pure::TITLE, oag_hd::TITLE, oag_2048::TITLE] {
+            assert!(
+                title.effect_on(trigger).is_some(),
+                "{} {trigger:?}",
+                title.name
+            );
+        }
+    }
+    let flare = oag_pulse::TITLE
+        .effect_on(Trigger::EngineFlare)
+        .expect("the PS2 authors an engine flare");
+    assert!(flare.on.applies(Platform::Ps2));
+    assert!(!flare.on.applies(Platform::Psp));
+    assert!(
+        !oag_pulse::TITLE
+            .effects
+            .names_on(Platform::Psp)
+            .contains(&"WO_SHIP_ENGINEFLARE")
+    );
+    assert!(
+        oag_pulse::TITLE
+            .effects
+            .names_on(Platform::Ps2)
+            .contains(&"WO_SHIP_ENGINEFLARE")
+    );
+}
+
 #[test]
 fn every_title_tries_the_engines_own_effects_as_pulses() {
     for title in ALL {
-        for trigger in Trigger::ALL
-            .into_iter()
-            .filter(|t| !OWN.contains(t) && *t != Trigger::WreckExplosion)
-        {
+        for trigger in Trigger::ALL.into_iter().filter(|t| {
+            !OWN.contains(t)
+                && *t != Trigger::WreckExplosion
+                && !(title.name == oag_pulse::TITLE.name && PULSE_ABSENT.contains(t))
+        }) {
             let spec = title
                 .effect_on(trigger)
                 .unwrap_or_else(|| panic!("{} has no {trigger:?}", title.name));
