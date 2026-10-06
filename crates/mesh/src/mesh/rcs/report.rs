@@ -34,6 +34,14 @@ pub struct Report {
     pub no_stride: usize,
     /// Triangles emitted.
     pub triangles: usize,
+    /// Chunks on a pad material that no pad node of either class names, which
+    /// [`build_scene`]'s world-space pass draws: where the speed pads of the
+    /// four original circuits are, because their `Speedup Pad` nodes name a
+    /// hash no chunk carries. Only the pad passes count it - see
+    /// [`pads::world_pass_pad_chunks`].
+    pub routed_chunks: usize,
+    /// Triangles in [`Self::routed_chunks`].
+    pub routed_triangles: usize,
     /// Submeshes dropped because they do not share their mesh's vertex stride.
     pub strays: usize,
     /// Chunks no `.vex` node references, drawn in world space. On a circuit
@@ -231,15 +239,27 @@ impl Report {
     /// One line for a load report.
     #[must_use]
     pub fn describe(&self) -> String {
-        format!(
-            "{} of {} mesh node(s) drawn from the .rcsmodel ({} triangle(s)); \
-             {} addressed no chunk, {} had no recoverable vertex stride",
-            self.drawn,
-            self.nodes,
-            self.triangles,
-            self.nodes - self.addressed - self.world_baked,
-            self.no_stride,
-        ) + &match self.world_baked {
+        let lead = if self.drawn == 0 && self.routed_chunks > 0 {
+            format!(
+                "{} node(s) address no chunk, so the pad is the {} chunk(s) on a pad \
+                 material that no pad node names, drawn in the circuit's world-space \
+                 pass ({} triangle(s))",
+                self.nodes - self.addressed - self.world_baked,
+                self.routed_chunks,
+                self.routed_triangles,
+            )
+        } else {
+            format!(
+                "{} of {} mesh node(s) drawn from the .rcsmodel ({} triangle(s)); \
+                 {} addressed no chunk, {} had no recoverable vertex stride",
+                self.drawn,
+                self.nodes,
+                self.triangles,
+                self.nodes - self.addressed - self.world_baked,
+                self.no_stride,
+            )
+        };
+        lead + &match self.world_baked {
             0 => String::new(),
             n => format!(", {n} baked in world space despite a node naming them"),
         } + &match self.strays {

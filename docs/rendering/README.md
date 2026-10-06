@@ -22,8 +22,9 @@
   `ADD_SECOND` misclassification it exposed - is in
   [hd-ship-materials.md](hd-ship-materials.md). HD's two unlit weapon
   programs (the LeachBall and the Plasma bolt head) are read and have their
-  own path, with the LeachBall drawn and the Plasma head held off by a cull
-  question - see [hd-unlit-programs.md](hd-unlit-programs.md)
+  own path, the LeachBall drawn and the Plasma head too since 2026-10-06 (it
+  waited on the eye its drawable was never given, not on a cull) - see
+  [hd-unlit-programs.md](hd-unlit-programs.md)
 - Scenery **animation** - **done**, both mechanisms. `Anim Transform` `0x3c0`
   moves the geometry: 393 nodes over the twelve circuits with 474 meshes below
   them, decoded from the class's own binder and evaluators
