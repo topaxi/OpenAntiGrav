@@ -195,7 +195,8 @@ inferred** rather than seen. `soundregister="N"` in the track `Definition.xml`
 remains unexplained and is no longer needed to find a bank.
 
 `oag_sound::sfx::TrackEmitters::load` is what does this, and reaches the
-shared `generaltrack.bnk` through `oag_title::SoundBanks::track_general`.
+shared `generaltrack.bnk` through `oag_title::SoundBanks::track`'s `shared` list (2048's own
+location rule is in [2048-audio.md](2048-audio.md)).
 
 ### `speech_zone.bnk` names the zone announcer, one ladder per title
 

@@ -51,7 +51,7 @@ fraction of one tick.
 | Setting | What casts | What the shape comes from | What receives |
 | --- | --- | --- | --- |
 | `off` | nothing | - | - |
-| `blob` | each craft | HD: the disc's own `ambient_shadow.gtf`. Elsewhere: a generated radial falloff, **as a substitute for a missing asset only** | the track ribbon under the craft |
+| `blob` | each craft | HD: the disc's own `ambient_shadow.gtf`; 2048 and Omega: theirs for the Zone craft. Elsewhere: a generated radial falloff, **as a substitute for a missing asset only** | the track ribbon under the craft |
 | `original` | what the title itself authors | Pulse: `Dynamic Shadow Occluder` `0x3c3` hulls. HD: the disc's four shadow jobs and its `ShadowToAlpha`/`ShadowMap` material flags. Pure: **nothing, and it says so** | per title |
 | `mapped` | every mesh in the scene | a depth map rendered from the light | every mesh in the scene |
 
@@ -296,6 +296,50 @@ and the compiler that would bind `ambientShadowTex` is unreferenced dead
 code ([`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md)).
 The asset is the disc's; the decision to draw it is this project's. That is the narrow case the never-invent rule allows - a substitute
 for the missing asset alone, never an override of data we do have.
+
+### Which craft have a disc silhouette, per title (census, 2026-10-06)
+
+Searched every archive, patch and DLC pack each title holds, by name, for
+`ambient_shadow` and `shadow` in a texture directory, and the executables for a
+path that names one. A silhouette is found **beside the race's hull model**
+(`shadow::silhouette_entry`), so it follows whatever hull a mode flies.
+
+| Title | Silhouettes on the disc | Which craft | Wired |
+| --- | --- | --- | --- |
+| Pulse (PSP, PS2) | none: `blob` `0x3e0` and `textureBlob` `0x3df` authored 0 times in 415 `.vex` | none | labelled generated falloff, a stand-in |
+| HD / Fury | nine `/data/ships/<team>/textures/ambient_shadow.gtf`, 128x64 `B8` | ag_systems, assegai, egx, feisar, goteki, piranha, qirex, triakis, zone | drawn; **Icaras and Auricom ship none** |
+| 2048 | one: `hdships/Zone/Textures/Ambient_Shadow.gxt`, 128x64 | the Zone hull only | **drawn in Zone races** (every slot flies that hull) |
+| Omega | one: `hdships/zone/Textures/Ambient_Shadow.gnf`, 128x64 | the Zone hull only | **drawn in Zone races**; `Zone_VR/Textures/Ambient_Shadow.gnf` (patch `data08`, 128x64) is VR's hull, VR is not planned |
+
+- **2048 and Omega's native craft ship none** (2048's twenty `Ships\<team>2048\<n>`
+  and twelve HD-derived teams, Omega's roster), in any archive, patch (v1.04,
+  1.07) or DLC pack, under any `shadow`/`blob` name. Only environments
+  (`ds_stone_shadows`), crowds, particles (`dark_blob`) and a rocket-trail
+  material match, none of them a craft's. A non-Zone race on either title keeps
+  the generated falloff for every slot, and `Scene::shadow_geometry`'s WARN
+  fires, truthfully, when the player chooses the `blob` tier.
+- **HD's Icaras and Auricom** ship no `ambient_shadow` in `DATA02`/`DATA03` or any
+  other archive; the same WARN counts them.
+- **No executable names the file.** HD, 2048 v1.04 and Omega (base and patch)
+  carry no `ambient_shadow` path literal, and the models (`ship.vex`, 2048's
+  `ship.rcsmodel`) do not name it either; HD's engine has the strings
+  `AmbientShadow`, `ambientShadowTex`, `ambientShadowMatrix` and
+  `ambientShadowBlendFactor`, 2048's `AmbientShadow`, Omega's none. So the
+  path is the directory convention the nine HD files prove, not a recovered
+  name; whether 2048 and Omega's own code ever binds theirs is **unread**.
+  The disc's image is played regardless, as on HD.
+- **Same image three times.** The decoded Zone silhouette matches HD's `zone`
+  one in size, in the red channel `shadow.wgsl` reads, and in row order
+  (`crates/game/tests/shadow_ground_truth.rs`,
+  `zone_craft_blob_shadow_is_the_discs_own_on_2048_and_omega`): the row-sum
+  profile is within a tenth of HD's straight and ten times that reversed, so
+  Omega's `.gnf` needs **no** row flip, unlike its eight `bottom_up_gnf`
+  front-end images. A mode-aware path also means an HD Zone race now takes
+  `zone`'s silhouette rather than the player's team's, matching its hull.
+- **Cross-check 2048 vs Omega: ported.** One reader (`assets::decode_texture`)
+  and one lookup serve both; each title has its own disc-backed assertion in
+  the test above. What differs is only the container (`.gxt` Vita swizzle,
+  `.gnf` PS4) and the directory case (`Zone` against `zone`).
 
 ## What `mapped` actually changes, per title
 

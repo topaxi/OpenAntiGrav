@@ -1098,7 +1098,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   (2026-10-06, `pob.md`): the explosions play their other emitters, and the effects
   Omega never authors are left out of its table. The two HUD-atlas WARN lines are gone (2026-10-06, `omega-hud`: the atlases
   are `.gnf` and now resolve). Still silent: the
-  blob shadow is this project's generated falloff, not the disc's.
+  blob shadow is the disc's own `Ambient_Shadow.gnf` in a Zone race (2026-10-06, `zone-shadow`, `shadows.md`) and this project's generated falloff for every other craft, which ship none.
 - **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
   `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race
   loaded no collision at all. The reversed name is `track_col_reversed.col`

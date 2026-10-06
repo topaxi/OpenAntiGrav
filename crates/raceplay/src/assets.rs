@@ -415,7 +415,7 @@ pub(crate) fn decode_texture(
     }
 }
 
-/// Pulse's `.mip` entry `name` as this source ships the same texture: the
+/// Pulse's `.mip` (or HD's `.gtf`) entry `name` as this source ships the same texture: the
 /// same directory and stem with the platform's own extension, `.gxt` on the
 /// Vita and `.gnf` on the PS4. `None` on a platform whose textures keep the
 /// name as authored. 2048 and Omega ship `Cannon_bolt`, `cannon_muzzle_flash`
@@ -427,7 +427,9 @@ pub(crate) fn platform_sibling(archives: &oag_assets::Archives, name: &str) -> O
         oag_assets::Platform::Ps4 => "gnf",
         _ => return None,
     };
-    let stem = name.strip_suffix(".mip")?;
+    let stem = name
+        .strip_suffix(".mip")
+        .or_else(|| name.strip_suffix(".gtf"))?;
     Some(format!("{stem}.{ext}"))
 }
 

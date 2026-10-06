@@ -140,6 +140,7 @@ explains *why* the branch went unused.
 
 ## Open
 
+- **Whether 2048's and Omega's own code binds their one `Ambient_Shadow` (`zone-shadow`, 2026-10-06).** The Zone silhouette now draws on the `blob` tier on both (`.gxt`, `.gnf`, no row flip); no executable names an `ambient_shadow` path (2048 has the string `AmbientShadow`, Omega none), so whether the original draws it is unread. Every other 2048/Omega craft and HD's Icaras/Auricom ship none (census in `shadows.md`), so the `blob` WARN stays as it is.
 - **What 2048's `track_proximity_shadow_vp`/`_fp` pair actually does.** The name and the separate `Lighting.Debug.Draw Ship Shadows` / `Draw Ship Env Shadows` toggles are all the evidence there is; no function has been read. Same for the `PRECOMPUTED TRACK (SHIP ENV SHADOWS)` block - its budget line proves it is precomputed per circuit and sized in main and VRAM, and nothing says what it holds
 - **Where 2048's `Lighting.ShadowLight direction` is authored.** It is a key in the executable; `effectsettings.md` records that 2048's per-stage blocks author no `Lighting.*` keys at all, so it is likely `.envsettings` - unchecked
 - **Whether `mapped` is worth offering on HD or 2048 at all.** Both already draw authored shadows, so `mapped` buys receivers and cascades and *spends* art - HD's lightmap-alpha shadows, 2048's precomputed environment shadows. Nobody has put them side by side, and until someone does, "an improvement" is an assumption

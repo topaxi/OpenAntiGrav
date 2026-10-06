@@ -236,6 +236,10 @@ pub struct Bank<'a> {
     pub name_offset: u32,
     /// PS-ADPCM waveform data, a whole number of 16-byte blocks.
     pub waveforms: &'a [u8],
+    /// The waveform size the section table and descriptor claim, where the file
+    /// ships fewer bytes than that (see [`Bank::parse_as`]); [`None`] when they
+    /// agree, which is every bank but eight of 2048's `env_*`.
+    pub declared_waveform_len: Option<u32>,
     /// Which end of a multi-byte field comes first in this bank.
     /// Little on every PSP and PS2 disc; big on Wipeout HD (byte-swapped a
     /// `u32` at a time, hence `klBS`).
@@ -353,6 +357,20 @@ impl<'a> Bank<'a> {
         // the one check that the blob was read to its end. The exception is
         // 2048's `Ship_NGP.bnk`, 16 bytes (`00 07 00 00` then zeros) past
         // section 1, so up to one block is let through (`TAIL_SLACK`).
+        //
+        // **A waveform section may declare more than the file ships**: eight of
+        // 2048's `env_*.bnk` (`env_altima`, `env_arena`, `env_bridge`,
+        // `env_cathedral`, `env_subway`, `env_tower`, `env_sol`, `env_square`)
+        // carry the section table's size and the descriptor's `+0x28`/`+0x2c`
+        // in agreement, and all three are larger than the bytes behind them.
+        // Every waveform those banks bind ends inside what is shipped, the last
+        // at the file's end, so the size is a stale field and not a section the
+        // file lacks: the section is then what the file holds, and
+        // `declared_waveform_len` keeps the claim.
+        let shipped = data.len().saturating_sub(sections[1].0 as usize);
+        let overdeclared = sections[1].0 as usize <= data.len()
+            && sections[1].1 as usize > shipped
+            && shipped.is_multiple_of(ADPCM_BLOCK_LEN);
         let aligned_after = |from: usize, to: u32| {
             let to = to as usize;
             to >= from && to - from < ADPCM_BLOCK_LEN && to.is_multiple_of(SECTION_ALIGN)
@@ -362,13 +380,19 @@ impl<'a> Bank<'a> {
                 .0
                 .checked_add(sections[0].1)
                 .is_some_and(|end| aligned_after(end as usize, sections[1].0))
-            && sections[1].0.checked_add(sections[1].1).is_some_and(|end| {
-                (end as usize..=end as usize + TAIL_SLACK).contains(&data.len())
-            });
+            && (overdeclared
+                || sections[1].0.checked_add(sections[1].1).is_some_and(|end| {
+                    (end as usize..=end as usize + TAIL_SLACK).contains(&data.len())
+                }));
         if !spans {
             return Err(Error::BadSections);
         }
+        let declared_len = sections[1].1;
+        if overdeclared {
+            sections[1].1 = shipped as u32;
+        }
 
+        let declared_waveform_len = overdeclared.then_some(declared_len);
         let block = &data[sections[0].0 as usize..][..sections[0].1 as usize];
         let waveforms = &data[sections[1].0 as usize..][..sections[1].1 as usize];
 
@@ -376,10 +400,10 @@ impl<'a> Bank<'a> {
             return Err(Error::NotSblk);
         }
         let declared = order.u32(block, 0x28);
-        if declared != order.u32(block, 0x2c) || declared != sections[1].1 {
+        if declared != order.u32(block, 0x2c) || declared != declared_len {
             return Err(Error::SizeDisagreement {
                 declared,
-                section: sections[1].1,
+                section: declared_len,
             });
         }
         if !waveforms.len().is_multiple_of(ADPCM_BLOCK_LEN) {
@@ -419,7 +443,7 @@ impl<'a> Bank<'a> {
             })
             .unwrap_or_default();
 
-        Ok(Self {
+        let bank = Self {
             name,
             cue_count,
             command_count,
@@ -431,8 +455,20 @@ impl<'a> Bank<'a> {
             parameter_offset,
             name_offset,
             waveforms,
+            declared_waveform_len,
             order,
-        })
+        };
+        // A short file is only the stale size field this reads it as when no
+        // waveform it binds is cut off; a truncated download still is refused.
+        if bank.declared_waveform_len.is_some()
+            && bank
+                .sounds()
+                .iter()
+                .any(|s| u64::from(s.offset) + u64::from(s.length) > waveforms.len() as u64)
+        {
+            return Err(Error::BadSections);
+        }
+        Ok(bank)
     }
 
     /// PS-ADPCM blocks in the waveform section.

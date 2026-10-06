@@ -382,3 +382,30 @@ fn the_name_hash_is_fnv_one_seeded_with_zero() {
         b'9' as u32 ^ b'8' as u32
     );
 }
+
+/// 2048's `env_altima.bnk` and seven more: the section table and the
+/// descriptor agree on a waveform size larger than the bytes the file holds,
+/// and every waveform they bind ends inside what is there.
+#[test]
+fn a_waveform_size_larger_than_the_file_is_read_as_the_file_when_nothing_is_cut() {
+    let mut data = scored_bank(&[(0x01, 0, 16), (0x01, 16, 16)], &[]);
+    let shipped = u32::from_le_bytes(data[0x14..0x18].try_into().unwrap());
+    let stale = shipped + 4 * ADPCM_BLOCK_LEN as u32;
+    data[0x14..0x18].copy_from_slice(&stale.to_le_bytes());
+    let at = HEADER_LEN + 2 * SECTION_LEN;
+    data[at + 0x28..at + 0x2c].copy_from_slice(&stale.to_le_bytes());
+    data[at + 0x2c..at + 0x30].copy_from_slice(&stale.to_le_bytes());
+    let bank = Bank::parse(&data).expect("a stale size is not a missing section");
+    assert_eq!(bank.declared_waveform_len, Some(stale));
+    assert_eq!(bank.waveforms.len(), shipped as usize);
+
+    // The same claim with a waveform that reaches past the file is a cut file.
+    let mut cut = scored_bank(&[(0x01, 0, 16), (0x01, 16, 32)], &[]);
+    let shipped = u32::from_le_bytes(cut[0x14..0x18].try_into().unwrap());
+    let stale = shipped + 4 * ADPCM_BLOCK_LEN as u32;
+    cut[0x14..0x18].copy_from_slice(&stale.to_le_bytes());
+    cut[at + 0x28..at + 0x2c].copy_from_slice(&stale.to_le_bytes());
+    cut[at + 0x2c..at + 0x30].copy_from_slice(&stale.to_le_bytes());
+    cut.truncate(cut.len() - ADPCM_BLOCK_LEN);
+    assert_eq!(Bank::parse(&cut), Err(Error::BadSections));
+}

@@ -186,8 +186,18 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
-    // Not searched for this lane.
-    track_general: None,
+    // Wwise banks (`BKHD`), which `oag_formats::sblk` does not read, so
+    // nothing resolves yet. The directory is the thread's archive census
+    // (`env12_techdera.bnk` and `env9_talonsjunction.bnk` read under
+    // `Data\audio\sound\`, not beside the track): set so that the load report
+    // names the real cause, a format the reader does not know, and not a
+    // missing file. `shared` stays empty: which file carries `env_tec` and
+    // `techder` is unread. `docs/formats/2048-audio.md`.
+    track: oag_title::TrackBanks {
+        shared: &[],
+        circuit_directory: Some(r"Data\audio\sound"),
+        origin: oag_title::Origin::Measured,
+    },
     crossfade: None,
 };
 

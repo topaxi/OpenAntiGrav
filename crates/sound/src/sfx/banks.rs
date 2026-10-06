@@ -436,6 +436,21 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
     load_cue_record(bank, &record, name)
 }
 
+/// [`load_named_cue`] for a circuit's authored emitter, which on a hashed bank
+/// (2048's `SBlk` version 5) spells the cue and finds it by [`name_hash`].
+///
+/// Only the track emitters and the crossfade engine take the hashed path; the
+/// race's own cues keep [`load_named_cue`], whose 2048 triggers are unchecked
+/// (`sblk::Bank::cue_named`).
+///
+/// [`name_hash`]: oag_formats::sblk::cue::name_hash
+pub(super) fn load_track_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(Loaded, usize)> {
+    let record = bank
+        .cue_named_or_hashed(name)
+        .ok_or_else(|| anyhow::anyhow!("{name:?} names no cue in {}", bank.name))?;
+    load_cue_record(bank, &record, name)
+}
+
 /// [`load_named_cue`] for a cue reached by index: a crossfade layer whose name
 /// is empty addresses its bank by the cue number alone.
 pub(super) fn load_indexed_cue(

@@ -459,9 +459,19 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
-    // `None` for the reason HD's is, and 2048 follows HD everywhere in this
-    // table. See [`oag_hd::race::SOUND_BANKS`].
-    track_general: None,
+    // Measured by an archive census, not the executable's loader (the
+    // handover thread's 60): the circuit bank is not beside the track, and
+    // `Data\audio\sound\` holds `crowd_NGP.bnk` (label `crowd`) and
+    // `generaltrack.bnk` (`gentrak`), the two shared labels the nodes spell
+    // besides the circuit's own. `docs/formats/2048-audio.md`.
+    track: oag_title::TrackBanks {
+        shared: &[
+            r"Data\audio\sound\crowd_NGP.bnk",
+            r"Data\audio\sound\generaltrack.bnk",
+        ],
+        circuit_directory: Some(r"Data\audio\sound"),
+        origin: oag_title::Origin::Measured,
+    },
     // The engine does not play out of `shipHD.bnk`. The five `<team>2048`
     // tables name their layers by cue index, and `Ship_NGP.bnk` is the only
     // bank where those indices bind looping waveforms; Zone's three tables

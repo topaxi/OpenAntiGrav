@@ -363,7 +363,11 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // resolves to nothing on `hdfury-ps3-eu-dec.iso`. HD's circuits have not
     // been swept for the three `.vex` audio classes either, so this is an
     // absence twice over rather than an unfinished lookup.
-    track_general: None,
+    track: oag_title::TrackBanks {
+        shared: &[],
+        circuit_directory: None,
+        origin: oag_title::Origin::Measured,
+    },
     crossfade: None,
 };
 
