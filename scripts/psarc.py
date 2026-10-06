@@ -97,7 +97,7 @@ class Reader:
 
     def _read_manifest(self):
         text = self.read(0).decode("utf-8", "replace")
-        return [line for line in text.replace("\r", "").split("\n") if line.strip()]
+        return [line for line in text.replace("\r", "").replace("\0", "\n").split("\n") if line.strip()]
 
     def files(self):
         """(path, size, index) per real entry, the manifest excluded."""
