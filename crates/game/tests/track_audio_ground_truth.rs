@@ -201,12 +201,12 @@ fn the_loader_names_its_banks_and_every_dangling_reference() {
         return;
     };
     for (track, dangling) in [
-        (TRACK, &["basilic~groupcraft: 1 node(s) play nothing"][..]),
+        (TRACK, &["basilic~groupcraft: 1 node(s) dangle"][..]),
         (
             DENSEST,
             &[
-                "fortcle~blueflashlight: 7 node(s) play nothing",
-                "fortcle~RED_NEON_TUN: 1 node(s) play nothing",
+                "fortcle~blueflashlight: 7 node(s) dangle",
+                "fortcle~RED_NEON_TUN: 1 node(s) dangle",
             ][..],
         ),
     ] {
@@ -413,7 +413,7 @@ fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label()
             .filter(|node| node.sound.is_some())
             .count();
         println!("{bank}; {playing} of {} play", loaded.omni.len());
-        for line in loaded.report.iter().filter(|l| l.contains("play nothing")) {
+        for line in loaded.report.iter().filter(|l| l.contains("dangle")) {
             println!("  {line}");
         }
     }

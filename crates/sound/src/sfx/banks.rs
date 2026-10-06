@@ -445,11 +445,27 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
 ///
 /// [`name_hash`]: oag_formats::sblk::cue::name_hash
 pub(super) fn load_track_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(Loaded, usize)> {
-    let record = bank
-        .cue_named_or_hashed(name)
-        .ok_or_else(|| anyhow::anyhow!("{name:?} names no cue in {}", bank.name))?;
+    let record = bank.cue_named_or_hashed(name).ok_or_else(|| NoSuchCue {
+        name: name.to_string(),
+        bank: bank.name.clone(),
+    })?;
     load_cue_record(bank, &record, name)
 }
+
+/// A name a bank that did parse does not author: the reference dangles.
+#[derive(Debug)]
+pub struct NoSuchCue {
+    name: String,
+    bank: String,
+}
+
+impl std::fmt::Display for NoSuchCue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} names no cue in {}", self.name, self.bank)
+    }
+}
+
+impl std::error::Error for NoSuchCue {}
 
 /// [`load_named_cue`] for a cue reached by index: a crossfade layer whose name
 /// is empty addresses its bank by the cue number alone.

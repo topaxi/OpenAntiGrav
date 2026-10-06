@@ -87,7 +87,11 @@ fn altima_resolves_forty_of_its_forty_one_emitters_and_the_rest_match_the_table(
         let unplayed: Vec<&String> = loaded
             .report
             .iter()
-            .filter(|l| l.contains("play nothing") || l.contains("control only"))
+            .filter(|l| {
+                l.contains("node(s) dangle")
+                    || l.contains("node(s) play nothing")
+                    || l.contains("control only")
+            })
             .collect();
         assert_eq!(unplayed.len(), dangling.len(), "{circuit}: {unplayed:#?}");
         for reference in dangling {

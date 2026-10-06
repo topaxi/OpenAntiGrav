@@ -230,20 +230,33 @@ impl TrackEmitters {
             }
         }
 
-        // Decoded once per distinct pair, with the failure reason cached: no bank
-        // with that label, no such cue and no waveform are three findings, only
-        // the middle one a dangling reference in `track-sound-emitters.md`.
-        let mut cache: BTreeMap<(String, String), Result<Loaded, (bool, String)>> = BTreeMap::new();
-        let mut unplayed: BTreeMap<(String, String), (usize, (bool, String))> = BTreeMap::new();
+        // Decoded once per distinct pair, with the failure kind cached. A miss
+        // is only a *dangling reference* when every bank this circuit tried to
+        // load parsed: a Wwise bank that did not parse (Omega) makes every
+        // label look unmatched, and that is an absence, not the disc's bug.
+        let every_bank_read = !parsed
+            .report
+            .iter()
+            .any(|line| line.contains(" not read: ") || line.contains(" is not a sound bank: "));
+        let mut cache: BTreeMap<(String, String), Result<Loaded, (Miss, String)>> = BTreeMap::new();
+        let mut unplayed: BTreeMap<(String, String), (usize, (Miss, String))> = BTreeMap::new();
         // Both lists together: a cone names bank and cue as a plain `sound` does.
         for node in parsed.omni.iter_mut().chain(&mut parsed.directional) {
             let key = (node.emitter.bank.clone(), node.emitter.cue.clone());
             let loaded = cache
                 .entry(key.clone())
                 .or_insert_with(|| {
+                    if key.0.is_empty() && key.1.is_empty() {
+                        return Err((Miss::Unassigned, String::new()));
+                    }
                     let Some(bank) = by_label.get(&node.emitter.bank) else {
+                        let kind = if every_bank_read {
+                            Miss::Dangling
+                        } else {
+                            Miss::Absent
+                        };
                         return Err((
-                            false,
+                            kind,
                             format!(
                                 "no bank this circuit loads is labelled {:?}",
                                 node.emitter.bank
@@ -253,10 +266,15 @@ impl TrackEmitters {
                     load_track_cue(bank, &node.emitter.cue)
                         .map(|(loaded, _)| loaded)
                         .map_err(|e| {
-                            (
-                                e.downcast_ref::<super::banks::ControlOnlyCue>().is_some(),
-                                e.to_string(),
-                            )
+                            let kind = if e.downcast_ref::<super::banks::ControlOnlyCue>().is_some()
+                            {
+                                Miss::Control
+                            } else if e.downcast_ref::<super::banks::NoSuchCue>().is_some() {
+                                Miss::Dangling
+                            } else {
+                                Miss::Absent
+                            };
+                            (kind, e.to_string())
                         })
                 })
                 .clone();
@@ -281,12 +299,40 @@ impl TrackEmitters {
         ));
         // Reported per reference, so a decode that broke a different reference
         // cannot hide behind fixing as many (`sound_emitter_ground_truth` pins a list).
-        for ((bank, cue), (nodes, (control, why))) in &unplayed {
-            parsed.report.push(if *control {
-                format!("track audio {bank}{cue}: {nodes} node(s) are control only: {why}")
-            } else {
-                format!("track audio {bank}{cue}: {nodes} node(s) play nothing: {why}")
-            });
+        // Only an absence (a bank that would not read, a cue that decodes to
+        // nothing) says "play nothing" on its own line: a dangling reference is
+        // the disc's own authoring and gets one summary line instead.
+        let (mut dangling_cues, mut dangling_nodes) = (0, 0);
+        let mut unassigned = 0;
+        for ((bank, cue), (nodes, (miss, why))) in &unplayed {
+            match miss {
+                Miss::Control => parsed.report.push(format!(
+                    "track audio {bank}{cue}: {nodes} node(s) are control only: {why}"
+                )),
+                Miss::Absent => parsed.report.push(format!(
+                    "track audio {bank}{cue}: {nodes} node(s) play nothing: {why}"
+                )),
+                Miss::Dangling => {
+                    dangling_cues += 1;
+                    dangling_nodes += nodes;
+                    parsed.report.push(format!(
+                        "track audio {bank}{cue}: {nodes} node(s) dangle: {why}"
+                    ));
+                }
+                Miss::Unassigned => unassigned += nodes,
+            }
+        }
+        if unassigned > 0 {
+            parsed.report.push(format!(
+                "track audio: {unassigned} node(s) author no bank and no cue name, an exporter \
+                 default nothing was assigned to"
+            ));
+        }
+        if dangling_cues > 0 {
+            parsed.report.push(format!(
+                "track audio: {dangling_cues} cue(s) the circuit names and its banks do not \
+                 author ({dangling_nodes} node(s)) play nothing"
+            ));
         }
 
         parsed
@@ -318,6 +364,20 @@ impl TrackEmitters {
             Some((at, placed_emitter(&node.emitter).place(listener, 1.0)?))
         })
     }
+}
+
+/// Why one authored reference plays nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Miss {
+    /// The cue runs only no-ops and register writes: silent by design.
+    Control,
+    /// The bank parsed and spells no such cue, or every bank parsed and none
+    /// carries the label: the disc's own dangling reference.
+    Dangling,
+    /// No bank and no cue named at all: a node nothing was assigned to.
+    Unassigned,
+    /// A bank that would not read, or a cue that decodes to no waveform.
+    Absent,
 }
 
 /// Builds the `oag_audio::Emitter` a node's own decode specifies.
