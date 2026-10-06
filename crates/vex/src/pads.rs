@@ -1,35 +1,32 @@
 //! `Speedup Pad` `0x3bd` and `Weapon Pad` `0x3be`: the trigger volumes on the
 //! track surface.
 //!
-//! A pad is a [`Mesh`](vex::CLASS_MESH) subclass. Its bind handler
-//! (`Pad_Bind`, `0x089264f4`) calls the `Mesh` bind first and only then reads
-//! its own fields, so a pad carries its own geometry **and** its own trigger
-//! box, and the box is the mesh's own bounding-box pair:
+//! A pad is a [`Mesh`](vex::CLASS_MESH) subclass: `Pad_Bind` (`0x089264f4`) calls
+//! the `Mesh` bind first, so a pad carries its own geometry **and** its trigger
+//! box, which is the mesh's bounding-box pair:
 //!
 //! ```text
 //! payload +0x10  {x, y, z, _}  bounding-box minimum, pad-local space
 //! payload +0x20  {x, y, z, _}  bounding-box maximum, pad-local space
 //! ```
 //!
-//! The bind copies both into the object and then expands the box vertically -
-//! `min.y -= 2.0`, `max.y += 8.0` - which is what turns a flat plate into
-//! something a craft can be inside. The expansion is asymmetric in `+y`, and
-//! `+y` is world up (see [`vex::transform`]), so a pad is entered from above.
+//! The bind copies both into the object and expands the box vertically (`min.y
+//! -= 2.0`, `max.y += 8.0`), turning a flat plate into something a craft can be
+//! inside. The expansion is asymmetric in `+y`, world up (see
+//! [`vex::transform`]), so a pad is entered from above.
 //!
 //! # The box is local, the placement is the transform chain
 //!
-//! All nine of `01_Track`'s `Speedup Pad` nodes share one byte-identical
-//! payload under nine different [`Transform`](vex::CLASS_TRANSFORM) parents. So
-//! nothing about where a pad *is* lives in its payload, and the containment test
-//! has to run in pad-local space rather than against a world-space box - which
-//! is exactly what `Pad_ContainsPoint` (`0x088866bc`) does.
+//! All nine of `01_Track`'s `Speedup Pad` nodes share one byte-identical payload
+//! under nine different [`Transform`](vex::CLASS_TRANSFORM) parents, so nothing
+//! about where a pad *is* lives in its payload and the containment test runs in
+//! pad-local space, as `Pad_ContainsPoint` (`0x088866bc`) does.
 //!
 //! # What the pad pushes along
 //!
-//! Row 2 of the pad's world matrix - its local `+Z` axis. `Ship_ApplySpeedupPad`
-//! (`0x08848f9c`) copies `matrix+0x20`, and the matrix is the row-major,
-//! translation-in-row-3 layout every `.vex` uses, so `+0x20` is floats 8 to 10:
-//! row 2. See [`PadVolume::direction`].
+//! Row 2 of the pad's world matrix, its local `+Z` axis: `Ship_ApplySpeedupPad`
+//! (`0x08848f9c`) copies `matrix+0x20` (floats 8 to 10) of the row-major,
+//! translation-in-row-3 layout every `.vex` uses. See [`PadVolume::direction`].
 //!
 //! Evidence and confidence scores: `docs/formats/pads.md`.
 
@@ -47,10 +44,9 @@ const MIN_PAYLOAD: usize = 0x30;
 
 /// How far the bind lowers the box floor.
 ///
-/// A literal in `Pad_Bind`. It is in world units, which is only meaningful
-/// because a pad mesh's quantisation scale is `1.0` - asserted against the disc
-/// in `pads_ground_truth.rs`, because if it were not, these two literals would
-/// be the only thing in the layout that is not.
+/// A literal in `Pad_Bind`, in world units, meaningful only because a pad mesh's
+/// quantisation scale is `1.0` (asserted in `pads_ground_truth.rs`; otherwise
+/// these two literals would be the only thing in the layout that is not).
 const EXPAND_DOWN: f32 = 2.0;
 
 /// How far the bind raises the box ceiling.
@@ -59,40 +55,35 @@ const EXPAND_UP: f32 = 8.0;
 /// One authored pad: where it is, how big it is, and which way it pushes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PadVolume {
-    /// Pad-local to world. Row-major, row-vector convention, composed from the
-    /// node's [`Transform`](vex::CLASS_TRANSFORM) chain the way any mesh's is.
+    /// Pad-local to world: row-major, row-vector convention, composed from the
+    /// node's [`Transform`](vex::CLASS_TRANSFORM) chain like any mesh's.
     pub to_world: [f32; 16],
     /// Box minimum in pad-local space, with [`EXPAND_DOWN`] already applied.
     pub min: [f32; 3],
     /// Box maximum in pad-local space, with [`EXPAND_UP`] already applied.
     pub max: [f32; 3],
-    /// The original's own gate on a hit, at pad `+0x1a0`.
-    ///
-    /// `Pad_ContainsPoint` reports a hit only when this is `0.0`, so a non-zero
-    /// value disables the pad. **Nothing here ever writes it.** The writer is
-    /// identified now - `WeaponPads_TestCraft` stamps a `Weapon Pad`'s own
-    /// `<WeaponPad refresh_time>` (or `elimination_refresh_time` under a mode
-    /// this project reads as Eliminator) on pickup, and `Pad_UpdateRefreshTimer`
-    /// counts it back down - but there is still no pickup system to drive it
-    /// from, `Weapon Pad` included. See `pads.md` in `docs/ghidra/functions/`.
-    /// Carried inert rather than dropped: a term that is provably in the
-    /// condition should be visible in the reimplementation of that condition,
-    /// even at zero.
+    /// The original's own gate on a hit, at pad `+0x1a0`: `Pad_ContainsPoint`
+    /// reports a hit only when this is `0.0`, so non-zero disables the pad.
+    /// **Nothing here writes it.** The writer is identified (`WeaponPads_TestCraft`
+    /// stamps a `Weapon Pad`'s `<WeaponPad refresh_time>`, or
+    /// `elimination_refresh_time` under Eliminator, on pickup;
+    /// `Pad_UpdateRefreshTimer` counts it down; see `pads.md` under
+    /// `docs/ghidra/functions/`)
+    /// but there is no pickup system to drive it. Carried inert: a term provably
+    /// in the condition should be visible in its reimplementation, even at zero.
     pub disabled: f32,
 }
 
 impl PadVolume {
     /// Decodes one pad payload against a world matrix from its transform chain.
     ///
-    /// Returns `None` for a payload too short to hold the box pair, or one whose
-    /// box is not finite or is inverted on any axis. An inverted box would make
-    /// [`Self::distance`] report a positive distance from every point including
-    /// the ones inside it, which reads as "no pad here" rather than as a
-    /// failure.
-    /// `order` is the containing file's, from [`vex::byte_order`]. A mesh
-    /// payload carries no magic, so it cannot say which way round it is - and
-    /// this is the one HD `Mesh` field that is still *there*, the box pair
-    /// having survived the move of the geometry into `.rcsmodel`.
+    /// `None` for a payload too short for the box pair, or a box not finite or
+    /// inverted on any axis (an inverted box would make [`Self::distance`] report
+    /// a positive distance from every point, reading as "no pad here").
+    ///
+    /// `order` is the containing file's ([`vex::byte_order`]): a mesh payload has
+    /// no magic. This is the one HD `Mesh` field still *there*, the box pair
+    /// having survived the geometry's move into `.rcsmodel`.
     #[must_use]
     pub fn parse(payload: &[u8], to_world: [f32; 16], order: ByteOrder) -> Option<Self> {
         if payload.len() < MIN_PAYLOAD {
@@ -123,10 +114,9 @@ impl PadVolume {
         })
     }
 
-    /// The direction this pad pushes a craft, normalised.
-    ///
-    /// Row 2 of [`Self::to_world`]: the pad's local `+Z` in world space.
-    /// Returns `None` if the row is degenerate, which no shipped pad's is.
+    /// The direction this pad pushes a craft, normalised: row 2 of
+    /// [`Self::to_world`], the pad's local `+Z`. `None` if degenerate (no shipped
+    /// pad's is).
     #[must_use]
     pub fn direction(&self) -> Option<[f32; 3]> {
         let row = [self.to_world[8], self.to_world[9], self.to_world[10]];
@@ -148,12 +138,10 @@ impl PadVolume {
         vex::transform_point(&self.to_world, local)
     }
 
-    /// Transforms a world point into pad-local space.
-    ///
-    /// The inverse of [`vex::transform_point`] for this matrix. Rows 0 to 2 are
-    /// an orthonormal basis in every shipped transform, so the inverse rotation
-    /// is a dot against each row rather than a general inverse - which is what
-    /// `Pad_ContainsPoint` does with a single `vtfm3`.
+    /// Transforms a world point into pad-local space (the inverse of
+    /// [`vex::transform_point`]). Rows 0 to 2 are orthonormal in every shipped
+    /// transform, so the inverse rotation is a dot against each row, as
+    /// `Pad_ContainsPoint` does with one `vtfm3`.
     #[must_use]
     pub fn to_local(&self, world: [f32; 3]) -> [f32; 3] {
         let m = &self.to_world;
@@ -165,13 +153,11 @@ impl PadVolume {
         ]
     }
 
-    /// Distance from `world` to this pad's box, `0.0` inside it.
-    ///
-    /// Reimplements the body of `Pad_ContainsPoint`: per axis, how far outside
-    /// the slab the point is; then the length of that vector. The original
-    /// keeps this figure per racer per pad and decrements it by how far the
-    /// craft moved, so it only runs the real test once a craft could plausibly
-    /// have reached the pad - see `docs/formats/pads.md`.
+    /// Distance from `world` to this pad's box, `0.0` inside it: per axis, how far
+    /// outside the slab, then the vector's length, as `Pad_ContainsPoint` does. The
+    /// original keeps this per racer per pad and decrements it by the craft's
+    /// movement, running the real test only once a craft could have reached the
+    /// pad (`docs/formats/pads.md`).
     #[must_use]
     pub fn distance(&self, world: [f32; 3]) -> f32 {
         let local = self.to_local(world);
@@ -188,8 +174,8 @@ impl PadVolume {
 
     /// Whether `world` is inside this pad and this pad is armed.
     ///
-    /// Both halves of `Pad_ContainsPoint`'s return condition: the distance is
-    /// exactly zero **and** [`Self::disabled`] is exactly zero.
+    /// Both halves of `Pad_ContainsPoint`'s return condition: the distance and
+    /// [`Self::disabled`] are both exactly zero.
     #[must_use]
     pub fn contains(&self, world: [f32; 3]) -> bool {
         self.distance(world) == 0.0 && self.disabled == 0.0
@@ -198,13 +184,13 @@ impl PadVolume {
 
 /// Every pad of one class a `.vex` file authors, in node order.
 ///
-/// Pass [`vex::CLASS_SPEEDUP_PAD`] or [`vex::CLASS_WEAPON_PAD`]. An empty
-/// result is ordinary: a `.vex` that is not a track authors neither.
+/// Pass [`vex::CLASS_SPEEDUP_PAD`] or [`vex::CLASS_WEAPON_PAD`]. An empty result
+/// is ordinary (a non-track `.vex`).
 ///
-/// A pad's own payload is a mesh payload, **not** a matrix, so its placement
-/// comes from [`vex::world_transforms`] - the parent chain, with the pad itself
-/// contributing the identity. Using [`vex::class_world_transforms`] here would
-/// read the first 64 bytes of the mesh header as though they were a matrix.
+/// A pad's payload is a mesh payload, **not** a matrix, so placement comes from
+/// [`vex::world_transforms`] (the pad contributing the identity).
+/// [`vex::class_world_transforms`] would read the mesh header's first 64 bytes as
+/// a matrix.
 #[must_use]
 pub fn volumes(data: &[u8], nodes: &[Node], class_id: u32) -> Vec<PadVolume> {
     let chain = vex::world_transforms(data, nodes);
@@ -282,9 +268,10 @@ mod tests {
 
     /// A pad rotated a quarter turn about `+y` and moved 100 units along `+x`.
     ///
-    /// The point of the test is that containment is *not* a world-space box
-    /// test: a point that is inside the rotated pad is outside the same box
-    /// treated as axis-aligned in world space.
+    /// A pad rotated a quarter turn about `+y` and moved 100 units along `+x`.
+    ///
+    /// Containment is *not* a world-space box test: a point inside the rotated pad
+    /// is outside the same box treated as axis-aligned in world space.
     fn rotated() -> PadVolume {
         let m = [
             0.0, 0.0, -1.0, 0.0, //
@@ -304,9 +291,8 @@ mod tests {
         assert!(pad.contains([100.0, 0.0, -4.0]));
     }
 
-    /// The same box yawed 45 degrees about `+y`, so that it is genuinely not
-    /// axis-aligned - a quarter turn maps a box onto itself and cannot tell a
-    /// local-space test from a world-space one.
+    /// The same box yawed 45 degrees about `+y`: a quarter turn maps a box onto
+    /// itself and cannot tell a local-space test from a world-space one.
     #[test]
     fn a_rotated_pad_is_not_its_world_space_bounding_box() {
         const C: f32 = std::f32::consts::FRAC_1_SQRT_2;
@@ -318,14 +304,12 @@ mod tests {
         ];
         let pad = PadVolume::parse(&payload(), m, ByteOrder::Little).expect("parse");
 
-        // Local (4.7, 0, 4.9): inside, near the far corner. Its world x of
-        // 6.788 is well outside the box's own `max.x`, so an axis-aligned test
-        // against `min`/`max` in world space would miss it.
+        // Local (4.7, 0, 4.9): inside near the far corner; its world x of 6.788 is
+        // outside the box's `max.x`, so an axis-aligned world test would miss it.
         assert!(pad.contains([9.6 * C, 0.0, 0.2 * C]));
 
-        // Local (0, 0, 6.0): outside, past `max.z` of 4.968. Both its world
-        // coordinates are inside the box's extents, so the same axis-aligned
-        // test would report a hit.
+        // Local (0, 0, 6.0): outside, past `max.z` of 4.968, but both world
+        // coordinates are inside the box's extents, so an axis-aligned test would hit.
         assert!(!pad.contains([6.0 * C, 0.0, 6.0 * C]));
     }
 
