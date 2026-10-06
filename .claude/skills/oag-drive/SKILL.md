@@ -218,7 +218,7 @@ shared machine, the `flock -o` gate, commits and the report format.
 | `oag-format` | sonnet / xhigh | a file family to decode: census, reader, every-file ground truth, format page |
 | `oag-capture` | sonnet / high | a question only the running original can answer: PPSSPP, PCSX2 or RPCS3 measurement |
 | `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; spawn with `model: haiku` (0.5 slot) only for purely mechanical sweeps such as link fixes or index cleanup |
-| `oag-trim` | sonnet / high | the standing comment trim lane: one crate per member, sequential, comments only; the checker `strip_rs_comments.py` sits beside this skill and the lead runs it before every trim merge |
+| `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, sequential, comments only; the checker `strip_rs_comments.py` sits beside this skill and the lead runs it before every compact merge |
 
 Pick by the lane's **main output**, not by its subject. A lane that is mostly
 wiring with one small decompile is `oag-wire`, and the member reads the RE
