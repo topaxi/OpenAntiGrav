@@ -174,23 +174,46 @@ fn every_craft_visits_a_strip_and_its_edges_match_its_cues() {
 /// (`ships-effects.md`), so the `.POB` side (`WO_MAGSTRIP_SPARKS`/`_ZONE`) is
 /// the one 2048 reaches and the arc wake is the HD-lineage named-mode side.
 /// Putting the title's `magstrip_wake` entry back fails this.
+fn a_2048_mode_plays_the_pob_and_builds_no_arc_wake(mode: oag_race::Mode) {
+    let Some(race) = load_mode(mode) else { return };
+    assert!(!race.has_magstrip_wake(), "{mode:?}: no arc wake");
+    assert!(
+        race.magstrip_wake_vertices().0.is_empty(),
+        "{mode:?}: no arc geometry"
+    );
+}
+
+/// One test per mode, each a full race load: the five modes in one test was
+/// 144 s on one core under load on 2026-10-06. [`oag_race::Mode`] has these
+/// five variants for 2048; a sixth would be a sixth test here.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
-fn every_2048_mode_plays_the_pob_and_builds_no_arc_wake() {
-    for mode in [
-        oag_race::Mode::SingleRace,
-        oag_race::Mode::TimeTrial,
-        oag_race::Mode::SpeedLap,
-        oag_race::Mode::Eliminator,
-        oag_race::Mode::Zone,
-    ] {
-        let Some(race) = load_mode(mode) else { return };
-        assert!(!race.has_magstrip_wake(), "{mode:?}: no arc wake");
-        assert!(
-            race.magstrip_wake_vertices().0.is_empty(),
-            "{mode:?}: no arc geometry"
-        );
-    }
+fn every_2048_single_race_plays_the_pob_and_builds_no_arc_wake() {
+    a_2048_mode_plays_the_pob_and_builds_no_arc_wake(oag_race::Mode::SingleRace);
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn every_2048_time_trial_plays_the_pob_and_builds_no_arc_wake() {
+    a_2048_mode_plays_the_pob_and_builds_no_arc_wake(oag_race::Mode::TimeTrial);
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn every_2048_speed_lap_plays_the_pob_and_builds_no_arc_wake() {
+    a_2048_mode_plays_the_pob_and_builds_no_arc_wake(oag_race::Mode::SpeedLap);
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn every_2048_eliminator_plays_the_pob_and_builds_no_arc_wake() {
+    a_2048_mode_plays_the_pob_and_builds_no_arc_wake(oag_race::Mode::Eliminator);
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn every_2048_zone_plays_the_pob_and_builds_no_arc_wake() {
+    a_2048_mode_plays_the_pob_and_builds_no_arc_wake(oag_race::Mode::Zone);
 }
 
 /// The hum stays silent on 2048: `~magstrip01` is a cue in `shipHD.bnk`, the
@@ -233,7 +256,7 @@ fn a_race_load_gives_the_player_its_teams_crossfade_table_in_both_modes() {
 
 /// `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` ship in the base package's
 /// `Data/Particles2048` and parse. They are what a 2048 craft plays over a strip: no named mode reaches
-/// them (see [`every_2048_mode_plays_the_pob_and_builds_no_arc_wake`]).
+/// them (see [`a_2048_mode_plays_the_pob_and_builds_no_arc_wake`]).
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
 fn the_two_magstrip_pobs_ship_and_parse() {
