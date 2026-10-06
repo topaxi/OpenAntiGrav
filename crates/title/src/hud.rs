@@ -509,10 +509,13 @@ pub struct HudArt {
     /// them, so it stays off there rather than borrowing Pulse's answer.
     pub kill_column: bool,
     /// Whether the four `Info1`-`Info4` widgets are the HUD's message lines -
-    /// `oag_hud::messages`. **Pulse only**: `Hud_UpdateMessages`
-    /// (`0x0881f148`) is Pulse's own executable, and HD authors an `Info1` of its
-    /// own in `HUD_Elim_info_text.xml` for something else
-    /// (`docs/formats/hd-hud.md`), so it stays off there.
+    /// `oag_hud::messages`. **Measured on Pulse alone**: `Hud_UpdateMessages`
+    /// (`0x0881f148`) is Pulse's own executable. Pure and HD author the same four
+    /// widgets in every race layout (`InfoTextParent` on HD, the same `Info1`-`4`
+    /// at the same shape on Pure), and a title with no measured rule of its own
+    /// takes Pulse's, drawn with its own layout and strings - so both are on, and
+    /// neither's own message routine is read. 2048 and Omega are off: no
+    /// census of their layouts, and Omega's racing is out of scope.
     pub message_slots: bool,
     /// What this title's per-tick HUD update writes over its layout: the
     /// shield readout's runtime colours and fill, and which segments of the

@@ -88,7 +88,9 @@ cell on a PPSSPP profile (or write the cell record) and watch `hud+0xe0` and
 the four slot busy bytes across the threshold; the prediction is that none
 moves.
 
-Pure authors the same four `Info` widgets in all three layouts and ships
+HD composes the same four `Info` widgets into its Zone, Speed Lap and Time
+Trial layouts (`InfoTextParent`), checked 2026-10-06. Pure authors them in all
+three layouts and ships
 `HUD_Perfect Zone!` and `HUD_New Zone Record` strings beside them, so its
 message system is the same shape. Its `speech_zone.bnk` carries
 `zone_bronze`/`silver`/`gold` voice lines, which Pulse's bank lacks; that is

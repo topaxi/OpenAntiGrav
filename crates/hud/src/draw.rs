@@ -276,10 +276,11 @@ pub(super) fn text_for(
         "LapOf" => (readout.lap > 0 && readout.laps > 0).then(|| literal("/")),
         "PositionOf" => (readout.place > 0 && readout.ships > 0).then(|| literal("/")),
 
-        // The four message slots - see [`super::messages`].
+        // The four message slots - see [`super::messages`]. An id the table lacks
+        // draws nothing rather than itself: Pure's table has no `ER_GMA`.
         name if super::messages::slot_of(name).is_some() => super::messages::slot_of(name)
             .and_then(|slot| readout.messages[slot].as_ref())
-            .map(|line| strings.get_or_id(&line.text).to_string()),
+            .and_then(|line| strings.get(&line.text).map(str::to_string)),
 
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {

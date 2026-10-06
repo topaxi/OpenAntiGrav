@@ -1,5 +1,12 @@
 use super::*;
 
+/// A table that carries the one phrase the tests raise.
+fn table() -> oag_ui::language::StringTable {
+    let mut strings = oag_ui::language::StringTable::default();
+    strings.merge([("ER_GMA".to_string(), "Gold medal awarded".to_string())].into());
+    strings
+}
+
 fn run(board: &mut MessageBoard, ticks: u32) {
     for _ in 0..ticks {
         board.advance();
@@ -91,7 +98,7 @@ fn a_fifth_message_is_dropped_when_all_four_slots_are_busy() {
 /// Dropping the arm in `draw::text_for` or the colour override fails this.
 #[test]
 fn a_raised_message_is_drawn_in_its_info_slot() {
-    use crate::tests::{context, strings};
+    use crate::tests::context;
     use crate::{Draw, Layout, Readout};
 
     let layout = Layout::from_xml(
@@ -100,9 +107,9 @@ fn a_raised_message_is_drawn_in_its_info_slot() {
 <Text name="Info2"><Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="240" y="95"/></Text>
 </Screen></Screen>"#,
     );
-    let strings = strings();
+    let strings = table();
     let mut board = MessageBoard::default();
-    board.push("Gold medal awarded", true);
+    board.push("ER_GMA", true);
     board.advance();
     run(&mut board, 27);
     let readout = Readout {
@@ -131,7 +138,7 @@ fn a_raised_message_is_drawn_in_its_info_slot() {
 /// pushed: HD's own `Info1` is a different widget.
 #[test]
 fn a_title_without_message_slots_draws_none() {
-    use crate::tests::{context, strings};
+    use crate::tests::context;
     use crate::{Layout, Readout};
 
     let layout = Layout::from_xml(
@@ -139,9 +146,9 @@ fn a_title_without_message_slots_draws_none() {
 <Text name="Info1"><Values font="HUD" scale="0.6" x="240" y="80"/></Text>
 </Screen></Screen>"#,
     );
-    let strings = strings();
+    let strings = table();
     let mut board = MessageBoard::default();
-    board.push("Gold medal awarded", true);
+    board.push("ER_GMA", true);
     board.advance();
     run(&mut board, 27);
     let readout = Readout {
@@ -155,4 +162,31 @@ fn a_title_without_message_slots_draws_none() {
     let mut cx = context(&layout, &strings);
     cx.art = &art;
     assert!(crate::draw_list(&cx, &readout).hud_text.is_empty());
+}
+
+/// Pure's table has no `ER_GMA`: the line draws nothing, not the raw id.
+#[test]
+fn an_id_the_table_lacks_draws_nothing() {
+    use crate::tests::{context, strings};
+    use crate::{Layout, Readout};
+
+    let layout = Layout::from_xml(
+        r#"<Screen><Screen name="HUD">
+<Text name="Info1"><Values font="HUD" scale="0.6" x="240" y="80"/></Text>
+</Screen></Screen>"#,
+    );
+    let strings = strings();
+    let mut board = MessageBoard::default();
+    board.push("ER_GMA", true);
+    board.advance();
+    run(&mut board, 27);
+    let readout = Readout {
+        messages: board.lines(),
+        ..Readout::blank()
+    };
+    assert!(
+        crate::draw_list(&context(&layout, &strings), &readout)
+            .hud_text
+            .is_empty()
+    );
 }

@@ -84,8 +84,8 @@ const BAD: u32 = 0xFFFF_3030;
 /// One line, ready to draw.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MessageLine {
-    /// What it says: a language-table id, resolved when drawn (an id the table
-    /// lacks draws as itself, as every caption does).
+    /// What it says: a language-table id, resolved when drawn. An id the table
+    /// lacks draws nothing - a raw id on screen reads as a fault.
     pub text: String,
     /// Its colour, alpha included. The border takes the same alpha.
     pub color: [f32; 4],

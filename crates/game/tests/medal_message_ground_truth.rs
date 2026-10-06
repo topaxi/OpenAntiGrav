@@ -82,3 +82,61 @@ fn a_raised_medal_phrase_reads_as_the_disc_words_it_and_expires() {
         assert_eq!(line(&race), None, "gone after its four seconds ({mode:?})");
     }
 }
+
+/// HD authors the same four `Info` widgets in its Zone and Speed Lap layouts
+/// (`InfoTextParent`), and its own English table carries the three phrases: the
+/// line draws there in HD's own font and place, from HD's own strings.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings = oag_ui::language::StringTable::from_xml(
+        &oag_tables::fexml::text(&blob).expect("entries.xml is text"),
+    );
+    for id in ["ER_GMA", "ER_SMA", "ER_BMA"] {
+        assert!(strings.get(id).is_some(), "{id} is in HD's table");
+    }
+    for root in [oag_hd::hud::layouts::ZONE, oag_hd::hud::layouts::SPEED_LAP] {
+        let mut read = |path: &str| archives.read_name(path).ok();
+        let layout = oag_hud::compose(root, &mut read)
+            .unwrap_or_else(|| panic!("composing {root}"))
+            .layout;
+        for widget in oag_hud::messages::WIDGETS {
+            assert!(layout.label(widget).is_some(), "{root} authors {widget}");
+        }
+        let cx = oag_hud::Context {
+            layout: &layout,
+            strings: &strings,
+            sheet: &oag_hud::sprite::Sheet::build(&[], &mut Vec::new()),
+            art: oag_hd::hud::ART,
+            hud_line_height: 92.0,
+            small_line_height: 34.0,
+            default_line_height: 34.0,
+            default_border: layout.default_border(),
+        };
+        let mut board = oag_hud::messages::MessageBoard::default();
+        board.push("ER_GMA", true);
+        for _ in 0..30 {
+            board.advance();
+        }
+        let readout = oag_hud::Readout {
+            messages: board.lines(),
+            ..Default::default()
+        };
+        let frame = oag_hud::draw_list(&cx, &readout);
+        let phrase = strings.get("ER_GMA").expect("checked above");
+        let drawn = frame
+            .hud_text
+            .iter()
+            .chain(&frame.small_text)
+            .chain(&frame.default_text)
+            .any(|draw| matches!(draw, Draw::Text { text, .. } if text == phrase));
+        assert!(drawn, "{root} draws {phrase:?}: {frame:?}");
+    }
+}

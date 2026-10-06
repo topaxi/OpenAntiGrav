@@ -1099,10 +1099,22 @@ message lines `Info1` to `Info4` the layouts already author
 (`oag_hud::messages`), with the slot law decompiled from `Hud_UpdateMessages` -
 four seconds, the `sin(pi * (1 - (t/4)^6))` fade, green for a good message, one
 line per 0.8 s when several are raised together. That law is itself decompiled
-and not yet checked against a live frame. Pulse only
-(`oag_title::HudArt::message_slots`): HD's own `Info1` is an elimination text
-box, 2048 authors none, and Pure's layouts author the same four widgets but its
-executable was not read - **checked, applies, not wired** there.
+and not yet checked against a live frame.
+
+**Ported to HD and Pure on Pulse's law** (`oag_title::HudArt::message_slots`; a
+title with no measured rule of its own takes Pulse's). HD's Zone, Speed Lap and
+Time Trial layouts all compose the same `Info1`-`Info4` through
+`InfoTextParent` - checked 2026-10-06 on the composed layouts, so the earlier
+reading of HD's `Info1` as an elimination-only text box was wrong - and HD's own
+English table carries `ER_GMA`/`ER_SMA`/`ER_BMA`: the line draws in HD's font at
+the place its layout authors (`medal_message_ground_truth`, and
+`data/scratch/hud-medal/shots/hd-zone.png`; legibility on a bright backdrop is
+poor, HD authors no backing frame for it). **Pure's table has no `ER_GMA`**, so
+nothing draws there - an id a table lacks draws nothing, never the raw id; a
+Pure phrase (its `zone_gold`/`zone_silver`/`zone_bronze` voice lines suggest
+Pure does announce a Zone medal) is the open piece. 2048 (`RaceMedal` is never
+seen in any state reached) and Omega (racing out of scope): **checked, applies,
+not wired**.
 
 **Not done, and open:** the `MESSAGE` cue the original plays as a line appears,
 and the `gold_med`/`silver_med`/`bronze_med` jingles (unplayed even on the
