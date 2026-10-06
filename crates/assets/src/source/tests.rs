@@ -73,7 +73,7 @@ const TITLE: &Title = &Title {
             speech: r"Data\Sound\nowhere.bnk",
             track: oag_title::TrackBanks {
                 shared: &[r"Data\Sound\nowhere.bnk"],
-                circuit_directory: None,
+                circuit: oag_title::CircuitBanks::BesideTrack,
                 origin: oag_title::Origin::Chosen,
             },
             crossfade: None,

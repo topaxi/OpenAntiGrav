@@ -128,3 +128,4 @@
 0x811b6dae	function	Ship_LoadModelSet	75	zone-craft.md
 0x8122eac0	function	Language_ChoosePluginName	90	language.md
 0x81541318	data	Language_RegionMode	85	language.md
+0x8121b688	function	TrackStartup_Read	85	track-startup-sound-bank.md

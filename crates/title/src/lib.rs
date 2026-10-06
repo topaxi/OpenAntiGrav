@@ -68,8 +68,8 @@ pub use menu::{HelpText, ListBlocks, MenuBlocks, MenuList, MenuSkin, MenuStrip, 
 pub use oag_disc::Platform;
 pub use pressing::{Pressing, Pressings};
 pub use race::{
-    CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses,
-    TeamVariant, TeamVariants, TrackBanks, VariantJoin, ZoneAnnouncer, ZoneCircuit,
+    CircuitBanks, CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks,
+    SpeedClasses, TeamVariant, TeamVariants, TrackBanks, VariantJoin, ZoneAnnouncer, ZoneCircuit,
     ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};

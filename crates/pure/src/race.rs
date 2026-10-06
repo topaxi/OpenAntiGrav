@@ -312,7 +312,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // audio classes at all is unswept.
     track: oag_title::TrackBanks {
         shared: &[r"Data\Sound\generaltrack.bnk"],
-        circuit_directory: None,
+        circuit: oag_title::CircuitBanks::BesideTrack,
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,

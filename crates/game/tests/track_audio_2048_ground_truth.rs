@@ -5,7 +5,7 @@
 //! under `data/extracted/vita/`. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! Evidence: `docs/formats/2048-audio.md`. The bank location is
-//! `oag_title::TrackBanks::circuit_directory`, the shared labels its `shared`
+//! `oag_title::TrackBanks::circuit`, the shared labels its `shared`
 //! list, and the lookup is `sblk::Bank::cue_named_or_hashed`.
 
 use std::path::Path;
@@ -87,7 +87,11 @@ fn altima_resolves_forty_of_its_forty_one_emitters_and_the_rest_match_the_table(
         let unplayed: Vec<&String> = loaded
             .report
             .iter()
-            .filter(|l| l.contains("play nothing") || l.contains("control only"))
+            .filter(|l| {
+                l.contains("node(s) dangle")
+                    || l.contains("node(s) play nothing")
+                    || l.contains("control only")
+            })
             .collect();
         assert_eq!(unplayed.len(), dangling.len(), "{circuit}: {unplayed:#?}");
         for reference in dangling {
@@ -250,32 +254,35 @@ fn a_headless_lap_of_altima_hears_its_ambience_where_an_emitter_is_in_range() {
     );
 }
 
-/// `(circuit, emitters, resolved)` for the twelve downloadable circuits, whose
-/// bank sits **beside the track** and is read there, ahead of
-/// `Data\audio\sound\`. Only `amphiseum`'s is a hashed v5 bank; the other
-/// eleven parse as v3 banks with no name table, which is why they resolve few.
-/// The same circuits' banks under `Data\audio\DLC1\` are hashed with 20 to 63
-/// spelled cues, and which copy the original loads is unmeasured, so this
-/// records what the beside-the-track copy gives and no more.
-const DLC: [(&str, usize, usize); 12] = [
-    ("Metropia", 13, 1),
-    ("Sebenco_Climb", 37, 5),
-    ("Sol_2", 20, 0),
-    ("Ubermall", 131, 3),
-    ("amphiseum", 25, 25),
-    ("modesto_heights", 23, 5),
-    ("talons_junction", 57, 0),
-    ("tech_de_ra", 32, 2),
-    ("Vineta_K", 48, 0),
-    ("Anulpha_Pass", 52, 2),
-    ("Chenghou_Project", 13, 5),
-    ("Moa_Therma", 17, 1),
+/// `(circuit, emitters, resolved, directory its bank is read from)` for the
+/// twelve downloadable circuits.
+///
+/// The executable's loader (`FUN_8121b688`, `docs/formats/2048-audio.md`)
+/// formats `data/audio/sound/%s` and, if that file does not exist,
+/// `data/audio/DLC1/%s`: the copies shipped beside these circuits' `track.vex`
+/// are never read. Four of the twelve (`Vineta_K`, `Anulpha_Pass`,
+/// `Chenghou_Project`, `Moa_Therma`) have their bank under `sound`, so the
+/// base copy wins; the other eight read `DLC1`. `Vineta_K` spells the
+/// Pulse-era labels `VINETTA` and `GENTRAK` and resolves none.
+const DLC: [(&str, usize, usize, &str); 12] = [
+    ("Metropia", 13, 4, "DLC1"),
+    ("Sebenco_Climb", 37, 9, "DLC1"),
+    ("Sol_2", 20, 10, "DLC1"),
+    ("Ubermall", 131, 29, "DLC1"),
+    ("amphiseum", 25, 23, "DLC1"),
+    ("modesto_heights", 23, 19, "DLC1"),
+    ("talons_junction", 57, 54, "DLC1"),
+    ("tech_de_ra", 32, 29, "DLC1"),
+    ("Vineta_K", 48, 0, "sound"),
+    ("Anulpha_Pass", 52, 18, "sound"),
+    ("Chenghou_Project", 13, 12, "sound"),
+    ("Moa_Therma", 17, 5, "sound"),
 ];
 
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn the_downloadable_circuits_still_read_the_bank_beside_their_track() {
-    for (circuit, total, resolved) in DLC {
+fn the_downloadable_circuits_read_sound_first_then_dlc1_never_beside_the_track() {
+    for (circuit, total, resolved, directory) in DLC {
         let Some(loaded) = load(&format!(r"DLC1\environments\{circuit}")) else {
             return;
         };
@@ -291,10 +298,17 @@ fn the_downloadable_circuits_still_read_the_bank_beside_their_track() {
             "{circuit}"
         );
         assert!(
-            loaded.report.iter().any(|l| l.contains(&format!(
-                r"circuit Data\art\published\DLC1\environments\{circuit}\env"
-            ))),
-            "{circuit}: its own bank was not read beside it"
+            loaded
+                .report
+                .iter()
+                .any(|l| l.contains(&format!(r"circuit Data\audio\{directory}\env"))),
+            "{circuit}: its bank was not read from data/audio/{directory}"
+        );
+        assert!(
+            !loaded.report.iter().any(|l| l.contains(r"\environments\")
+                && l.contains("circuit ")
+                && l.contains(".bnk")),
+            "{circuit}: a bank was read beside the track, which the original never does"
         );
     }
 }

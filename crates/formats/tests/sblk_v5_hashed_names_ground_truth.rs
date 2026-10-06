@@ -33,10 +33,10 @@ fn banks(archive: &mut Archive) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
-/// The three banks the reader still refuses, and why: their section table
-/// declares a waveform length that is not a whole number of ADPCM blocks
-/// (915, 1,566 and 1,242,097 bytes). `speech_*_NGP`, a different matter from the
-/// `env_*` one below and not read here.
+/// The three banks the reader refuses, and why: their waveform area is a pool
+/// of NUL-terminated ATRAC9 stream file names (`WOVO_FE_01.at9`), not PS-ADPCM,
+/// so its length (915, 1,566 and 1,242,097 bytes) is no multiple of a block.
+/// See `a_speech_bank_refuses_as_a_pool_of_stream_names` below.
 const REFUSED: [&str; 3] = [
     "data/audio/sound/Speech_NGP.bnk",
     "data/audio/sound/speech_fe_NGP.bnk",
@@ -142,4 +142,30 @@ fn eight_env_banks_declare_more_waveform_than_they_ship_and_none_of_it_is_missin
     }
     let seen: Vec<&str> = seen.keys().map(String::as_str).collect();
     assert_eq!(seen, OVERDECLARED);
+}
+
+/// `Speech_NGP`, `speech_fe_NGP` and `speech_zone_NGP` carry `.at9` names in
+/// the waveform area, and the stream each names exists under
+/// `data/audio/sound/streams/atrac/english/`.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_speech_bank_refuses_as_a_pool_of_stream_names() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    for (path, size) in REFUSED.into_iter().zip([1_566, 915, 1_242_097]) {
+        let bytes = archive.read_path(path).expect("the bank reads");
+        match Bank::parse(&bytes) {
+            Err(oag_formats::sblk::Error::StreamNames { size: got, names }) => {
+                assert_eq!(got, size, "{path}");
+                assert!(names > 0, "{path}");
+                println!("{path}: {names} stream name(s) in {got} bytes");
+            }
+            other => panic!("{path}: {other:?}"),
+        }
+    }
+    assert!(
+        archive.contains("data/audio/sound/streams/atrac/english/WOVO_FE_01.at9"),
+        "the stream speech_fe_NGP names"
+    );
 }

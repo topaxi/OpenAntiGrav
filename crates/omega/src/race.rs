@@ -195,7 +195,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     // `techder` is unread. `docs/formats/2048-audio.md`.
     track: oag_title::TrackBanks {
         shared: &[],
-        circuit_directory: Some(r"Data\audio\sound"),
+        circuit: oag_title::CircuitBanks::Directories(&[r"Data\audio\sound"]),
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,

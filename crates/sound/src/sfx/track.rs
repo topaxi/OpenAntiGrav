@@ -161,6 +161,9 @@ impl TrackEmitters {
 
         // Read whole, parsed after: `sblk::Bank` borrows the blob.
         let mut blobs: Vec<(&str, String, Vec<u8>)> = Vec::new();
+        // Whether some bank this circuit should have loaded was not: a miss is
+        // only the disc's dangling reference when none was missing.
+        let mut a_bank_is_missing = false;
         if banks.track.shared.is_empty() {
             parsed.report.push(
                 "track audio: this title names no shared track bank, so only a circuit's own \
@@ -171,13 +174,17 @@ impl TrackEmitters {
         for entry in banks.track.shared {
             match archives.read_name(entry) {
                 Ok(bytes) => blobs.push(("shared", (*entry).to_string(), bytes)),
-                Err(e) => parsed.report.push(format!(
-                    "track audio: {entry} not read: {e}; every emitter naming its label plays nothing"
-                )),
+                Err(e) => {
+                    a_bank_is_missing = true;
+                    parsed.report.push(format!(
+                        "track audio: {entry} not read: {e}; every emitter naming its label plays nothing"
+                    ));
+                }
             }
         }
-        let candidates = circuit_bank_entries(archives, banks.track.circuit_directory, track);
+        let candidates = circuit_bank_entries(archives, banks.track.circuit, track);
         if candidates.is_empty() {
+            a_bank_is_missing = true;
             parsed.report.push(format!(
                 "track audio: no trackstartup.xml beside {track} names a sound bank, so only the \
                  shared bank(s) can resolve"
@@ -196,10 +203,13 @@ impl TrackEmitters {
             }
             match (found, last) {
                 (Some((entry, bytes)), _) => blobs.push(("circuit", entry, bytes)),
-                (None, Some(e)) => parsed.report.push(format!(
-                    "track audio: {} not read: {e}; every emitter naming its label plays nothing",
-                    candidates.join(" or ")
-                )),
+                (None, Some(e)) => {
+                    a_bank_is_missing = true;
+                    parsed.report.push(format!(
+                        "track audio: {} not read: {e}; every emitter naming its label plays nothing",
+                        candidates.join(" or ")
+                    ));
+                }
                 (None, None) => {}
             }
         }
@@ -223,27 +233,40 @@ impl TrackEmitters {
                     ));
                     by_label.insert(bank.name.clone(), bank);
                 }
-                Err(e) => parsed.report.push(format!(
-                    "track audio: {entry} is not a sound bank: {e}; every emitter naming its \
-                     label plays nothing"
-                )),
+                Err(e) => {
+                    a_bank_is_missing = true;
+                    parsed.report.push(format!(
+                        "track audio: {entry} is not a sound bank: {e}; every emitter naming its \
+                         label plays nothing"
+                    ));
+                }
             }
         }
 
-        // Decoded once per distinct pair, with the failure reason cached: no bank
-        // with that label, no such cue and no waveform are three findings, only
-        // the middle one a dangling reference in `track-sound-emitters.md`.
-        let mut cache: BTreeMap<(String, String), Result<Loaded, (bool, String)>> = BTreeMap::new();
-        let mut unplayed: BTreeMap<(String, String), (usize, (bool, String))> = BTreeMap::new();
+        // Decoded once per distinct pair, with the failure kind cached. A miss
+        // is only a *dangling reference* when every bank this circuit tried to
+        // load parsed: a Wwise bank that did not parse (Omega) makes every
+        // label look unmatched, and that is an absence, not the disc's bug.
+        let every_bank_read = !a_bank_is_missing;
+        let mut cache: BTreeMap<(String, String), Result<Loaded, (Miss, String)>> = BTreeMap::new();
+        let mut unplayed: BTreeMap<(String, String), (usize, (Miss, String))> = BTreeMap::new();
         // Both lists together: a cone names bank and cue as a plain `sound` does.
         for node in parsed.omni.iter_mut().chain(&mut parsed.directional) {
             let key = (node.emitter.bank.clone(), node.emitter.cue.clone());
             let loaded = cache
                 .entry(key.clone())
                 .or_insert_with(|| {
+                    if key.0.is_empty() && key.1.is_empty() {
+                        return Err((Miss::Unassigned, String::new()));
+                    }
                     let Some(bank) = by_label.get(&node.emitter.bank) else {
+                        let kind = if every_bank_read {
+                            Miss::Dangling
+                        } else {
+                            Miss::Absent
+                        };
                         return Err((
-                            false,
+                            kind,
                             format!(
                                 "no bank this circuit loads is labelled {:?}",
                                 node.emitter.bank
@@ -253,10 +276,15 @@ impl TrackEmitters {
                     load_track_cue(bank, &node.emitter.cue)
                         .map(|(loaded, _)| loaded)
                         .map_err(|e| {
-                            (
-                                e.downcast_ref::<super::banks::ControlOnlyCue>().is_some(),
-                                e.to_string(),
-                            )
+                            let kind = if e.downcast_ref::<super::banks::ControlOnlyCue>().is_some()
+                            {
+                                Miss::Control
+                            } else if e.downcast_ref::<super::banks::NoSuchCue>().is_some() {
+                                Miss::Dangling
+                            } else {
+                                Miss::Absent
+                            };
+                            (kind, e.to_string())
                         })
                 })
                 .clone();
@@ -281,12 +309,40 @@ impl TrackEmitters {
         ));
         // Reported per reference, so a decode that broke a different reference
         // cannot hide behind fixing as many (`sound_emitter_ground_truth` pins a list).
-        for ((bank, cue), (nodes, (control, why))) in &unplayed {
-            parsed.report.push(if *control {
-                format!("track audio {bank}{cue}: {nodes} node(s) are control only: {why}")
-            } else {
-                format!("track audio {bank}{cue}: {nodes} node(s) play nothing: {why}")
-            });
+        // Only an absence (a bank that would not read, a cue that decodes to
+        // nothing) says "play nothing" on its own line: a dangling reference is
+        // the disc's own authoring and gets one summary line instead.
+        let (mut dangling_cues, mut dangling_nodes) = (0, 0);
+        let mut unassigned = 0;
+        for ((bank, cue), (nodes, (miss, why))) in &unplayed {
+            match miss {
+                Miss::Control => parsed.report.push(format!(
+                    "track audio {bank}{cue}: {nodes} node(s) are control only: {why}"
+                )),
+                Miss::Absent => parsed.report.push(format!(
+                    "track audio {bank}{cue}: {nodes} node(s) play nothing: {why}"
+                )),
+                Miss::Dangling => {
+                    dangling_cues += 1;
+                    dangling_nodes += nodes;
+                    parsed.report.push(format!(
+                        "track audio {bank}{cue}: {nodes} node(s) dangle: {why}"
+                    ));
+                }
+                Miss::Unassigned => unassigned += nodes,
+            }
+        }
+        if unassigned > 0 {
+            parsed.report.push(format!(
+                "track audio: {unassigned} node(s) author no bank and no cue name, an exporter \
+                 default nothing was assigned to"
+            ));
+        }
+        if dangling_cues > 0 {
+            parsed.report.push(format!(
+                "track audio: {dangling_cues} cue(s) the circuit names and its banks do not \
+                 author ({dangling_nodes} node(s)) play nothing"
+            ));
         }
 
         parsed
@@ -320,6 +376,20 @@ impl TrackEmitters {
     }
 }
 
+/// Why one authored reference plays nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Miss {
+    /// The cue runs only no-ops and register writes: silent by design.
+    Control,
+    /// The bank parsed and spells no such cue, or every bank parsed and none
+    /// carries the label: the disc's own dangling reference.
+    Dangling,
+    /// No bank and no cue named at all: a node nothing was assigned to.
+    Unassigned,
+    /// A bank that would not read, or a cue that decodes to no waveform.
+    Absent,
+}
+
 /// Builds the `oag_audio::Emitter` a node's own decode specifies.
 ///
 /// The radius is [`SoundEmitter::radius`], not [`SoundEmitter::sample_radius`]
@@ -350,14 +420,13 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
 /// `Data\Environments\01_Track\BASILICO_ENV.bnk` is a 253,664-byte `SBlk`
 /// labelled `basilic`, which `01_Track`'s fifty non-`gentrak` emitters spell.
 ///
-/// 2048's base circuits have none beside them (`env_altima.bnk` is under
-/// `Data\audio\sound\`), but its downloadable circuits do
-/// (`DLC1\environments\Metropia\env2_metropia.bnk`), so beside the track is
-/// tried first and `directory`
-/// ([`oag_title::TrackBanks::circuit_directory`]) second.
+/// 2048 reads no bank beside the track at all: its loader formats
+/// `data/audio/sound/%s` and, when that file does not exist, `data/audio/DLC1/%s`
+/// ([`oag_title::CircuitBanks::Directories`]), so the copies shipped beside its
+/// downloadable circuits are never loaded.
 fn circuit_bank_entries(
     archives: &mut Archives,
-    directory: Option<&str>,
+    circuit: oag_title::CircuitBanks,
     track: &str,
 ) -> Vec<String> {
     let Some(at) = track.rfind(['/', '\\']) else {
@@ -366,10 +435,16 @@ fn circuit_bank_entries(
     let Some(file) = circuit_manifest(archives, track).and_then(|m| m.sound_bank) else {
         return Vec::new();
     };
-    let (beside, separator) = (&track[..at], &track[at..=at]);
-    let mut entries = vec![format!("{beside}{separator}{file}")];
-    entries.extend(directory.map(|d| format!("{d}\\{file}")));
-    entries
+    match circuit {
+        oag_title::CircuitBanks::BesideTrack => {
+            let (beside, separator) = (&track[..at], &track[at..=at]);
+            vec![format!("{beside}{separator}{file}")]
+        }
+        oag_title::CircuitBanks::Directories(directories) => directories
+            .iter()
+            .map(|directory| format!("{directory}\\{file}"))
+            .collect(),
+    }
 }
 
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:

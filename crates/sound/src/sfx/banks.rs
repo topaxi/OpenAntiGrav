@@ -445,11 +445,27 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
 ///
 /// [`name_hash`]: oag_formats::sblk::cue::name_hash
 pub(super) fn load_track_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(Loaded, usize)> {
-    let record = bank
-        .cue_named_or_hashed(name)
-        .ok_or_else(|| anyhow::anyhow!("{name:?} names no cue in {}", bank.name))?;
+    let record = bank.cue_named_or_hashed(name).ok_or_else(|| NoSuchCue {
+        name: name.to_string(),
+        bank: bank.name.clone(),
+    })?;
     load_cue_record(bank, &record, name)
 }
+
+/// A name a bank that did parse does not author: the reference dangles.
+#[derive(Debug)]
+pub struct NoSuchCue {
+    name: String,
+    bank: String,
+}
+
+impl std::fmt::Display for NoSuchCue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} names no cue in {}", self.name, self.bank)
+    }
+}
+
+impl std::error::Error for NoSuchCue {}
 
 /// [`load_named_cue`] for a cue reached by index: a crossfade layer whose name
 /// is empty addresses its bank by the cue number alone.
@@ -470,7 +486,9 @@ pub(super) fn load_indexed_cue(
 }
 
 /// A cue that binds no waveform because every command it runs is a no-op or a
-/// register write: it authors no sound, and nothing is missing.
+/// register write, or because it has no command at all (2048's `DLC1` banks
+/// carry six such cues in each of the 63-cue banks): it authors no sound, and
+/// nothing is missing.
 #[derive(Debug)]
 pub struct ControlOnlyCue {
     name: String,
@@ -479,6 +497,13 @@ pub struct ControlOnlyCue {
 
 impl std::fmt::Display for ControlOnlyCue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.opcodes.is_empty() {
+            return write!(
+                f,
+                "{} is an empty cue: it has no command, so it authors no sound",
+                self.name
+            );
+        }
         write!(
             f,
             "{} is a control cue: its commands run only {:02x?}, which do nothing or write \
@@ -505,6 +530,13 @@ pub(super) fn load_cue_record(
     // control cue, silent by design, not a decode gap: `0x14` is a bare no-op
     // and `0x1e` writes a register byte
     // (`docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`).
+    if sounds.is_empty() && record.commands == 0 {
+        return Err(ControlOnlyCue {
+            name: name.to_string(),
+            opcodes: Vec::new(),
+        }
+        .into());
+    }
     if sounds.is_empty() {
         let timeline = bank.cue_timeline(record);
         if timeline.is_complete() && timeline.grains.is_empty() && !timeline.passed.is_empty() {

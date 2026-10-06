@@ -201,12 +201,12 @@ fn the_loader_names_its_banks_and_every_dangling_reference() {
         return;
     };
     for (track, dangling) in [
-        (TRACK, &["basilic~groupcraft: 1 node(s) play nothing"][..]),
+        (TRACK, &["basilic~groupcraft: 1 node(s) dangle"][..]),
         (
             DENSEST,
             &[
-                "fortcle~blueflashlight: 7 node(s) play nothing",
-                "fortcle~RED_NEON_TUN: 1 node(s) play nothing",
+                "fortcle~blueflashlight: 7 node(s) dangle",
+                "fortcle~RED_NEON_TUN: 1 node(s) dangle",
             ][..],
         ),
     ] {
@@ -413,7 +413,7 @@ fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label()
             .filter(|node| node.sound.is_some())
             .count();
         println!("{bank}; {playing} of {} play", loaded.omni.len());
-        for line in loaded.report.iter().filter(|l| l.contains("play nothing")) {
+        for line in loaded.report.iter().filter(|l| l.contains("dangle")) {
             println!("  {line}");
         }
     }
@@ -421,7 +421,7 @@ fn every_race_circuit_names_a_bank_beside_itself_and_its_nodes_spell_its_label()
 }
 
 /// HD keeps resolving its circuit's bank beside the track, not under a
-/// directory: `TrackBanks::circuit_directory` is `None` there, and 2048's
+/// directory: `TrackBanks::circuit` is `BesideTrack` there, and 2048's
 /// `Data\audio\sound\` must not have reached it.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -432,7 +432,10 @@ fn hd_still_reads_its_circuit_bank_beside_the_track() {
     let opened =
         oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .expect("opening the source");
-    assert_eq!(opened.title.race.sounds.track.circuit_directory, None);
+    assert_eq!(
+        opened.title.race.sounds.track.circuit,
+        oag_title::CircuitBanks::BesideTrack
+    );
     let mut archives = opened.archives;
     let track = oag_hd::race::DEFAULT_TRACK;
     let blob = archives.read_name(track).expect("the circuit");
