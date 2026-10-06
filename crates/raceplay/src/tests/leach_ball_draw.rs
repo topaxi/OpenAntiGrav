@@ -81,3 +81,24 @@ fn only_wipeout_hd_authors_a_leachbeam_ball_model() {
     assert!(oag_pulse::TITLE.weapon_models.leachbeam_ball.is_none());
     assert!(oag_pure::TITLE.weapon_models.leachbeam_ball.is_none());
 }
+
+/// **Only Wipeout HD binds no ghost static.** Its executable has no
+/// `staticglow` string, so the loader never asks for the entry and HD's report
+/// carries no absence line for it; every other title keeps Pulse's request.
+#[test]
+fn only_wipeout_hd_binds_no_ghost_static() {
+    assert!(oag_hd::TITLE.weapon_models.ghost_static.is_none());
+    for title in [
+        &oag_pulse::TITLE,
+        &oag_pure::TITLE,
+        &oag_2048::TITLE,
+        &oag_omega::TITLE,
+    ] {
+        assert_eq!(
+            title.weapon_models.ghost_static,
+            Some(r"Data\Tex\staticglow.mip"),
+            "{}",
+            title.name
+        );
+    }
+}

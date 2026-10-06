@@ -111,6 +111,8 @@ pub const TITLE: &Title = &Title {
         leachbeam_ball: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,
+        // Pulse's law on a file Pure ships: chosen, not measured.
+        ghost_static: Some(r"Data\Tex\staticglow.mip"),
     },
     effects: effects::EFFECTS,
     looks: effects::LOOKS,

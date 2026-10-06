@@ -141,6 +141,8 @@ pub const TITLE: &Title = &Title {
     // `docs/ghidra/functions/vita-2048-eu-v104/ships-effects.md`.
     weapon_models: &oag_title::weapons::WeaponModels {
         magstrip_pob: true,
+        // Ships it as `.gxt`; Pulse's law, chosen, not measured.
+        ghost_static: Some(r"Data\Tex\staticglow.mip"),
         ..oag_title::weapons::WeaponModels::EMPTY
     },
     // The four triggers a title answers for itself are unread on 2048, so none

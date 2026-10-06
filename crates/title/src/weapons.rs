@@ -138,6 +138,18 @@ pub struct WeaponModels {
     /// title without its own reading keeps drawing on those terms, as it did
     /// before this field existed.
     pub cannon_look: Option<CannonLook>,
+    /// The texture the ghost ship's third pass stamps over the player's view,
+    /// an archive entry spelled as Pulse spells it (`.mip`; the loader swaps
+    /// the extension on a Vita or PS4 source), or `None` for a title that
+    /// binds no ghost static.
+    ///
+    /// **`None` is a measurement on HD only**: `MeshNode_Ghost_LoadStaticGlow`
+    /// (`0x08910ef8`) names `Data\Tex\staticglow.mip` in Pulse's `BOOT.BIN`,
+    /// and a string search of HD's `EBOOT.elf` finds no `staticglow` at all, so
+    /// HD never loads one. Pure, 2048 and Omega ship the file and take
+    /// Pulse's law (`Some`), **chosen, not measured**: neither executable
+    /// names it.
+    pub ghost_static: Option<&'static str>,
 }
 
 /// The two textures and the one sound cue `MagstripWake` is built from.
@@ -176,6 +188,7 @@ impl WeaponModels {
         magstrip_pob: false,
         leachbeam_ball: None,
         cannon_look: None,
+        ghost_static: None,
     };
 }
 

@@ -380,18 +380,20 @@ pub(super) fn load_bodies(
     )
 }
 
-/// The ghost ship's static texture, `oag_render::ghost::STATIC_TEXTURE_ENTRY`.
+/// The ghost ship's static texture, `WeaponModels::ghost_static`.
 ///
-/// Read on every title: Pulse's `Data.wad` carries it (entry 945 on the USA
-/// pressing, see `docs/ghidra/functions/psp-pulse-usa/ghost.md`), and a source
-/// without it is reported and drawn without the ghost's third pass.
+/// `None` on a title that binds none (HD): nothing is requested, so nothing is
+/// reported absent. Pulse's `Data.wad` carries it (entry 945 on the USA
+/// pressing, see `docs/ghidra/functions/psp-pulse-usa/ghost.md`); a source
+/// whose named entry is missing is reported and drawn without the third pass.
 pub(super) fn load_ghost_static(
     archives: &mut oag_assets::Archives,
+    wm: &oag_title::weapons::WeaponModels,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
     load_flare_texture(
         archives,
-        oag_render::ghost::STATIC_TEXTURE_ENTRY,
+        wm.ghost_static?,
         "the ghost ship's static",
         report,
     )

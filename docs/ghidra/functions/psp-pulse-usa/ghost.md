@@ -197,6 +197,13 @@ of the VFPU `vmmul` chain was read, not stepped, and a reversed order would
 put the offsets on clip `z` instead. A GE-state capture of the texture
 matrix during a Time Trial would settle it.
 
+**Cross-title (2026-10-06):** HD **checked, differs** - a string search of
+`/hdfury/EBOOT-ps3-hdfury-eu.elf` finds no `staticglow`, so HD never binds a ghost
+static (confidence 85: absence of a string, not of an indirect name). It is
+`WeaponModels::ghost_static = None` on HD, so HD no longer requests the entry or
+logs it absent. Pure, 2048 and Omega ship the file and keep Pulse's request
+(**ported**, chosen, not measured: neither executable names it).
+
 ## The recorder
 
 `Ghost_Create` is called from exactly two places: **`TimeTrial_Construct`**
