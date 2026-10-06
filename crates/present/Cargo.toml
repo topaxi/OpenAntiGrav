@@ -30,5 +30,8 @@ memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
 [dev-dependencies]
 pollster.workspace = true
 
+[build-dependencies]
+oag-shader-check.workspace = true
+
 [lints]
 workspace = true

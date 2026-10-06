@@ -23,7 +23,7 @@ log.workspace = true
 pollster.workspace = true
 
 [build-dependencies]
-wesl = "0.6"
+oag-shader-check.workspace = true
 
 [features]
 perf-probe = ["oag-gpu/perf-probe"]
