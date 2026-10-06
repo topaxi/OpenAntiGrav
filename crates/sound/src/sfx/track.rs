@@ -251,7 +251,7 @@ impl TrackEmitters {
         // cannot hide behind fixing as many (`sound_emitter_ground_truth` pins a list).
         for ((bank, cue), (nodes, why)) in &unplayed {
             parsed.report.push(format!(
-                "track audio: {nodes} node(s) name {bank}{cue} and play nothing: {why}"
+                "track audio {bank}{cue}: {nodes} node(s) play nothing: {why}"
             ));
         }
 

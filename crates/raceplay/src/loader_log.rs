@@ -125,7 +125,7 @@ mod tests {
         r"Data\Environments\x\cloud.mip: not found - 12 cloud sprite(s) decoded but not drawn",
         r"8 billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub",
         r"HD_plasma_ball loaded, not drawn: its program is routed (RIM_EDGE)",
-        r"track audio: 2 node(s) name talonsj~SETREG_02 and play nothing: binds no waveform",
+        r"track audio talonsj~SETREG_02: 2 node(s) play nothing: binds no waveform",
         r"Data\Weapons\Textures\x.mip: not in the archive set (no entry) - the LeachBeam draws without it",
         r"HUD atlas a.gtf did not decode; its sprites draw nothing",
         r"speedup pads: 0 of 18 mesh node(s) drawn from the .rcsmodel (0 triangle(s)); 18 addressed no chunk",

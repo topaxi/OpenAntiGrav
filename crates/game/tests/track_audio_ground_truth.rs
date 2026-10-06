@@ -201,15 +201,12 @@ fn the_loader_names_its_banks_and_every_dangling_reference() {
         return;
     };
     for (track, dangling) in [
-        (
-            TRACK,
-            &["1 node(s) name basilic~groupcraft and play nothing"][..],
-        ),
+        (TRACK, &["basilic~groupcraft: 1 node(s) play nothing"][..]),
         (
             DENSEST,
             &[
-                "7 node(s) name fortcle~blueflashlight and play nothing",
-                "1 node(s) name fortcle~RED_NEON_TUN and play nothing",
+                "fortcle~blueflashlight: 7 node(s) play nothing",
+                "fortcle~RED_NEON_TUN: 1 node(s) play nothing",
             ][..],
         ),
     ] {

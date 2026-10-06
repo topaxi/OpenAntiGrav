@@ -26,7 +26,6 @@ pub(super) fn banks_and_announcers(
         .zone_announcer
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
     let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
-    crate::loader_log::lines_at(log::Level::Trace, &sounds.report);
     // The start-of-race voice, from the speech bank this mode opened rather
     // than the title's: Zone and Eliminator each load their own. See
     // `oag_title::CountdownVoice`.
@@ -36,9 +35,7 @@ pub(super) fn banks_and_announcers(
             Mode::Eliminator => voice.eliminator_bank,
             _ => race.sounds.speech,
         };
-        let before = sounds.report.len();
         sounds.load_countdown(archives, entry, tick);
-        crate::loader_log::lines_at(log::Level::Trace, &sounds.report[before..]);
     }
     // The engine is a per-team crossfade table on HD and 2048, not a cue:
     // loaded only where the ship bank has no `~ENGINE`. 2048 addresses a bank
@@ -90,7 +87,6 @@ pub(super) fn track_emitters(
     report: &mut Vec<String>,
 ) -> oag_sound::sfx::TrackEmitters {
     let loaded = oag_sound::sfx::TrackEmitters::load(archives, banks, track, blob);
-    crate::loader_log::lines(&loaded.report);
     report.extend(loaded.report.iter().cloned());
     loaded
 }
