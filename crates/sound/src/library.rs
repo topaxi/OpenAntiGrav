@@ -1,15 +1,12 @@
 //! How a source string becomes an opened title, supplied by the host.
 //!
 //! Turning `"data/images/foo.chd"` into "this is Wipeout HD, and these are its
-//! archives" needs every title package in the workspace (`oag-pulse`,
-//! `oag-pure`, `oag-hd`, `oag-2048`, `oag-omega`) and the directories a player
-//! keeps disc images in. Neither belongs in the sound crate, so the host
-//! implements [`Library`] and the sound crate asks it, the way `oag_music`
-//! asks its caller to open the archives rather than opening them itself.
-//!
-//! The three functions below are the whole of what the music path does with an
+//! archives" needs every title package and the directories a player keeps disc
+//! images in, neither of which belongs in the sound crate. The host implements
+//! [`Library`] and this crate asks it, as `oag_music` asks its caller to open
+//! archives. The three functions below are all the music path does with an
 //! opened source: read its soundtrack listing, decode one entry, decode the
-//! front end's own loop.
+//! front end's loop.
 
 use std::path::{Path, PathBuf};
 
@@ -35,8 +32,7 @@ pub trait Library: std::fmt::Debug + Send + Sync {
     fn open(&self, source: &str) -> Option<Opened>;
 
     /// Every disc image the host would search for a counterpart release, in
-    /// search order, alphabetical within a directory so two runs pick the same
-    /// image.
+    /// search order (alphabetical within a directory, so two runs agree).
     fn containers(&self) -> Vec<PathBuf>;
 }
 

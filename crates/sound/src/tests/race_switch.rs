@@ -1,17 +1,11 @@
-//! Race-voice/menu-voice transitions: starting a race stops the menu voice
-//! and starts a race one, ending a race resumes the menu voice from where it
-//! was, and both survive `MUSIC SOURCE` changing while a race is live.
-//!
-//! Split out of [`super`] under the 1,000-line rule in
-//! `scripts/check-file-size.py`, the same seam [`super::source_switch`] and
-//! [`super::volumes`] were split on - grown past it by
-//! `vita_2048_music_ground_truth.rs`'s own sibling change teaching
-//! `MusicDiscs` a fourth release, which added one field to every fixture
-//! literal in [`super`] rather than to this file.
+//! Race-voice/menu-voice transitions: starting a race stops the menu voice and
+//! starts a race one, ending a race resumes the menu voice from where it was, and
+//! both survive `MUSIC SOURCE` changing mid-race. Split out of [`super`] under the
+//! 1,000-line rule, the seam of [`super::source_switch`] and [`super::volumes`].
 
 use super::*;
-/// Starting a race stops the menu voice - not just the field, the actual
-/// sounding one - and starts a race voice on the playlist instead.
+/// Starting a race stops the actual sounding menu voice, not just the field, and
+/// starts a race voice on the playlist.
 #[test]
 fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
@@ -44,9 +38,8 @@ fn starting_a_race_stops_the_menu_voice_and_starts_a_race_voice() {
     );
 }
 
-/// Ending a race saves the exact position it was cut off at, and the menu
-/// voice sounds again - a *new* voice, silent until this moment, not one
-/// that kept advancing somewhere unheard.
+/// Ending a race saves the exact cut-off position, and the menu voice sounds
+/// again as a new voice, silent until now.
 #[test]
 fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
@@ -82,10 +75,8 @@ fn ending_a_race_saves_the_position_and_the_menu_voice_sounds_again() {
     );
 }
 
-/// The direct analogue of
-/// [`changing_the_music_source_seeks_rather_than_restarting`], for the
-/// race path: leaving and re-entering a race resumes the same track close
-/// to where it was cut off, not from the start.
+/// The race analogue of [`changing_the_music_source_seeks_rather_than_restarting`]:
+/// leaving and re-entering a race resumes the same track near where it was cut off.
 #[test]
 fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
     let (mut audio, _menu_sound, _race_sound) = psp_boot_fixture();
@@ -114,10 +105,9 @@ fn a_second_race_resumes_within_a_sixtieth_of_a_second_of_the_saved_position() {
     );
 }
 
-/// `MUSIC SOURCE` moved while a race is live has to move the *race*
-/// voice, seek-preserving - not no-op (both its guard fields would still
-/// name the menu) and not silently desync `race_from` from what is
-/// actually sounding.
+/// `MUSIC SOURCE` moved mid-race must move the race voice, seek-preserving: not
+/// no-op (both guard fields would name the menu) and not desync `race_from` from
+/// what sounds.
 #[test]
 fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
     let discs = MusicDiscs {
@@ -147,9 +137,8 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         race_from: Some(Platform::Ps2),
         race_index: Some(0),
         race_position: 0.0,
-        // The *target* platform is already decoded - the same technique
-        // `held` uses for the menu row, avoiding a disc read this test
-        // has no fixture for. See `psp_boot_fixture`.
+        // The target platform is already decoded (as `held` for the menu row),
+        // avoiding a disc read with no fixture. See `psp_boot_fixture`.
         race_cache: Some((Platform::Psp, 0, Arc::clone(&psp_track))),
         menu_sound: None,
         race_context: None,
@@ -178,10 +167,8 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
     );
 }
 
-/// A source with no decodable race music still resumes the menu cleanly
-/// on pause - degrading the same way [`Audio::start_music`] does rather
-/// than leaving a dangling voice or panicking on a `None` where the race
-/// never actually started.
+/// A source with no decodable race music still resumes the menu cleanly on
+/// pause, with no dangling voice or `None` panic where the race never started.
 #[test]
 fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
     let discs = MusicDiscs {
@@ -209,9 +196,8 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
-        // Nothing cached and the fake PSP path carries no soundtrack, so
-        // `start_race_music` cannot decode anything - the source has no
-        // race music, only the menu's own loop.
+        // Nothing cached and the fake PSP path has no soundtrack, so
+        // `start_race_music` decodes nothing: only the menu's loop remains.
         race_cache: None,
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
@@ -224,8 +210,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
     audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
     assert!(audio.race_voice.is_none(), "nothing to decode");
 
-    // Never started, so nothing to pause - but it must still be safe to
-    // call, and the menu must still come back.
+    // Never started, so nothing to pause, but safe to call, and the menu returns.
     audio.pause_race_music();
     assert!(audio.music.is_some(), "the menu voice resumed");
     assert_eq!(audio.playhead(), Some(0.0));
