@@ -1,11 +1,10 @@
 //! Ship skin textures - `ship_alt.dat` and `ship_eliminator.dat`.
 //!
-//! **A skin is a texture swap on the same geometry, not a second model.**
-//! A file is a `0x20`-byte header (the team's own *display* name,
-//! NUL-terminated, `AG Systems` with a space rather than the `AG_Systems`
-//! directory name) followed by four palette-plus-pixels blocks, one per
-//! texture slot of the hull model, matched to the model's own texture names
-//! by [`ship-skin.md`](../../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s
+//! **A skin is a texture swap on the same geometry, not a second model.** A file
+//! is a `0x20`-byte header (the team's *display* name, NUL-terminated, `AG
+//! Systems` not the `AG_Systems` directory name) then four palette-plus-pixels
+//! blocks, one per texture slot of the hull model, matched by
+//! [`ship-skin.md`](../../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s
 //! `Skin_ApplyToModel`:
 //!
 //! ```text
@@ -24,34 +23,26 @@
 //! # There is no dimension field anywhere in the file
 //!
 //! `Texture_UploadPaletted` reads width, height and palette length from the
-//! **target texture's own descriptor**, never from the block. The `0x40`
-//! palette and `0x2000` pixel sizes above are what the hull's own textures
-//! happen to be, not something the file declares - so [`parse`] does not read
-//! a dimension out of the blob either. What it does instead is derive the
-//! four blocks' shape from the file's own total length: every one of the
-//! sixteen shipped `.dat` files is exactly 26,912 bytes, which is
-//! `HEADER_LEN + 3 * BLOCK_STRIDE + PALETTE_LEN + SMALL_PIXELS_LEN` with
-//! nothing left over, and that arithmetic is the closest thing to a
-//! dimension check this format has. A file of any other length is refused
-//! rather than guessed at.
+//! **target texture's own descriptor**, never from the block; the `0x40` and
+//! `0x2000` sizes above are what the hull's textures happen to be. So [`parse`]
+//! reads no dimension either and derives the shape from the file length: all
+//! sixteen shipped `.dat` files are exactly 26,912 bytes, which is
+//! `HEADER_LEN + 3 * BLOCK_STRIDE + PALETTE_LEN + SMALL_PIXELS_LEN` with nothing
+//! left over. Any other length is refused.
 //!
 //! # Mips are generated, never stored
 //!
-//! The original halves each block repeatedly in index space with a
-//! palette-aware 2x2 filter (`Texture_Downsample4bpp`). [`Block::indices`] is
-//! level 0 only, the same choice [`crate::texture::Texture`] makes for a
-//! `.mip`'s stored mip chain.
+//! The original halves each block in index space with a palette-aware 2x2 filter
+//! (`Texture_Downsample4bpp`). [`Block::indices`] is level 0 only, as in
+//! [`crate::texture::Texture`].
 //!
 //! # The fourth block's composite use is not decoded here
 //!
-//! When the applier's flag argument is zero, block 4 is not what gets
-//! uploaded to `\TEXTURE4.TGA` - a composite of quarter-scale downsamples of
-//! blocks 1-3 is, built by `Skin_ComposeQuarterAtlas`, and its top-right
-//! quadrant is left as uninitialised stack in the original. That composition
-//! is model-application logic, not part of this file's own byte layout, and
-//! is deliberately out of scope here; see
-//! [`ship-skin.md`](../../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md)'s
-//! own section on it.
+//! When the applier's flag argument is zero, `\TEXTURE4.TGA` gets not block 4 but
+//! a composite of quarter-scale downsamples of blocks 1-3, built by
+//! `Skin_ComposeQuarterAtlas` (its top-right quadrant is uninitialised stack in
+//! the original). That is model-application logic, out of scope here; see
+//! [`ship-skin.md`](../../../docs/ghidra/functions/psp-pulse-usa/ship-skin.md).
 //!
 //! Confidence 90 on the layout: the offsets and the 128x128 size are plain
 //! immediates in `Skin_ApplyToModel` / `Skin_ComposeQuarterAtlas`, and the
@@ -76,10 +67,8 @@ pub const BLOCK_STRIDE: usize = PALETTE_LEN + LARGE_SIDE * LARGE_SIDE / 2;
 /// Bytes block 4's packed pixels occupy: `SMALL_SIDE * SMALL_SIDE / 2`.
 pub const SMALL_PIXELS_LEN: usize = SMALL_SIDE * SMALL_SIDE / 2;
 
-/// Total bytes a skin file holds - fully determined by the layout above, and
-/// never read from the file itself. Every one of the sixteen shipped
-/// `ship_alt.dat` / `ship_eliminator.dat` files on `pulse-psp-usa.chd` is
-/// exactly this length.
+/// Total bytes a skin file holds, fixed by the layout above. All sixteen shipped
+/// `ship_alt.dat` / `ship_eliminator.dat` files on `pulse-psp-usa.chd` match.
 pub const FILE_LEN: usize = HEADER_LEN + 3 * BLOCK_STRIDE + PALETTE_LEN + SMALL_PIXELS_LEN;
 
 /// Something wrong with a skin blob.
@@ -87,8 +76,7 @@ pub const FILE_LEN: usize = HEADER_LEN + 3 * BLOCK_STRIDE + PALETTE_LEN + SMALL_
 pub enum Error {
     /// The blob is not [`FILE_LEN`] bytes.
     ///
-    /// The size is fully determined by the fixed layout, so a mismatch means
-    /// this is not a skin file rather than that it is a damaged one.
+    /// The layout fixes the size, so a mismatch means not a skin file.
     SizeMismatch {
         /// Bytes supplied.
         got: usize,
@@ -175,12 +163,10 @@ pub fn parse(data: &[u8]) -> Result<Skin> {
         return Err(Error::SizeMismatch { got: data.len() });
     }
 
-    // The header holds one NUL-terminated string and nothing else. Six of the
-    // eight base teams have zero bytes after the terminator; the two that
-    // don't (Assegai, Qirex) are residue from a shorter name overwriting a
-    // longer one in a reused export buffer, not a second field - see
-    // ship-skin.md's "`ms` tag does not exist" section. A parser must not
-    // read past the terminator.
+    // The header is one NUL-terminated string. Six of eight base teams have zero
+    // bytes after it; the two that don't (Assegai, Qirex) hold residue of a
+    // longer name in a reused buffer, not a field - see ship-skin.md's "`ms` tag
+    // does not exist". Do not read past the terminator.
     let header = &data[..HEADER_LEN];
     let name_end = header.iter().position(|&b| b == 0).unwrap_or(header.len());
     let team_name = String::from_utf8_lossy(&header[..name_end]).into_owned();

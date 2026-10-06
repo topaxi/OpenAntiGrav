@@ -1,19 +1,13 @@
 //! The S3TC/BC1-3 block math shared by every container that carries a DXT
 //! family texture: [`crate::gtf`] (PS3) and [`crate::gxt`] (Vita).
 //!
-//! The block layout itself is a hardware standard, not something either
-//! console's file format defines, so the bit-twiddling below is the same
-//! regardless of which container's header led here - only the surrounding
-//! endianness and pitch rules differ, and those stay in each format's own
-//! module. Moved out of `gtf::decode` on 2026-08-26 when `gxt` needed the
-//! same BC2 (`Dxt23`) math and duplicating forty-odd lines of bit arithmetic
-//! was the alternative.
+//! The block layout is a hardware standard, so the bit-twiddling is the same
+//! whichever container led here; endianness and pitch rules stay in each
+//! format's own module.
 //!
-//! [`bc7`] is BC7/BPTC, added for [`crate::gnf`] on 2026-09-21 - the only
-//! caller, since neither `.gtf` nor `.gxt` ships a BC7 surface. It lives
-//! here rather than inside `gnf` itself because the block format is the
-//! same hardware standard this module already holds the rest of, not
-//! something GNF's own container defines.
+//! [`bc7`] is BC7/BPTC, used only by [`crate::gnf`] (neither `.gtf` nor `.gxt`
+//! ships a BC7 surface), kept here because the block format is the same hardware
+//! standard.
 
 mod bc7;
 pub(crate) use bc7::bc7;
@@ -34,9 +28,8 @@ pub(crate) fn rgb565(value: u16) -> [u8; 3] {
 /// The four colours a BC1 colour block selects between, and their alphas.
 ///
 /// `c0 > c1` is the opaque four-colour mode; otherwise the fourth entry is
-/// transparent black and the third is a plain midpoint. BC2 and BC3 carry alpha
-/// of their own, so they always take the four-colour arithmetic - which is why
-/// `opaque` is a parameter rather than read from the comparison.
+/// transparent black and the third a plain midpoint. BC2 and BC3 carry their own
+/// alpha and always take the four-colour arithmetic, hence `opaque` as a parameter.
 pub(crate) fn palette(block: &[u8; 8], opaque: bool) -> [[u8; 4]; 4] {
     let c0 = u16::from_le_bytes([block[0], block[1]]);
     let c1 = u16::from_le_bytes([block[2], block[3]]);

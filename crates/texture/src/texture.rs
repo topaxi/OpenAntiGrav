@@ -14,31 +14,27 @@
 //!        then each further level, both dimensions halved (floored at 1)
 //! ```
 //!
-//! **`+0x06` is a mip count**, which this parser assumed was always 1 until
-//! `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` - 128x64 at 8bpp,
-//! `+0x06 == 4`, 11,920 bytes against the 9,232 one level implies - showed
-//! otherwise. `psp-texture.md` had predicted exactly that gap. Only level 0 is
-//! decoded; the rest of the chain is validated and skipped.
+//! **`+0x06` is a mip count.** `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip`
+//! is 128x64 at 8bpp with `+0x06 == 4` and 11,920 bytes against the 9,232 one
+//! level implies. Only level 0 is decoded; the rest of the chain is validated
+//! and skipped.
 //!
 //! See `docs/formats/psp-texture.md` for the evidence.
 //!
 //! # These are not swizzled
 //!
-//! The PSP GPU reads textures in a swizzled layout and games commonly store them
-//! pre-swizzled, which would make a literal decode come out recognisable but
-//! scrambled in 16-byte-wide blocks. Pulse's `.mip` blobs are **not**: every one
-//! decodes to a clean image, and `unk_0x07` and `unk_0x08` were ruled out as
-//! swizzle flags because they do not vary with anything that would matter.
-//! [`Texture::looks_swizzled`] stays as a triage heuristic for other archives,
-//! not because this question is open. See `docs/formats/psp-texture.md`.
+//! The PSP GPU reads swizzled textures and games commonly store them
+//! pre-swizzled, which decodes recognisable but scrambled in 16-byte-wide
+//! blocks. Most Pulse `.mip` blobs are not, but `+0x07` bit 0 marks the few
+//! that are (6 of `FE.wad`'s 13, [`Texture::parse`] unswizzles them).
+//! [`Texture::looks_swizzled`] is a triage heuristic for other archives. See
+//! `docs/formats/psp-texture.md`.
 //!
 //! # 4bpp needs an even pixel count
 //!
 //! Two pixels share a byte with no row padding, so `width * height` must be
-//! even for the packed data to describe whole pixels. Every real texture is
-//! power-of-two in both dimensions, so this never comes up in practice, and it
-//! is refused rather than guessed at: inventing a padding rule for a case the
-//! game cannot produce would be a decoder that lies about untrusted input.
+//! even. Every real texture is power-of-two, so this never comes up; it is
+//! refused rather than guessed at.
 
 use oag_formats::swizzle::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, unswizzle};
 
@@ -74,8 +70,7 @@ pub enum Error {
     },
     /// The blob is not the size the header implies.
     ///
-    /// The strongest signal that a blob is not a texture at all, since the
-    /// size is fully determined by the header.
+    /// The strongest signal a blob is not a texture.
     SizeMismatch {
         /// Size the header implies.
         expected: usize,
@@ -124,25 +119,22 @@ pub struct Texture {
     pub palette: Vec<[u8; 4]>,
     /// One palette index per pixel, unpacked from 4-bit pairs where needed.
     ///
-    /// Always exactly `width * height` long. Consumers rely on that: `to_rgba`
-    /// feeds [`crate::png::encode_rgba`], which asserts the buffer matches the
-    /// dimensions it is given.
+    /// Always exactly `width * height` long: `to_rgba` feeds
+    /// [`crate::png::encode_rgba`], which asserts it.
     pub indices: Vec<u8>,
     /// The header bytes whose meaning is not established, `+0x05` to `+0x08`.
     pub unknown: [u8; 4],
     /// Mip levels stored in the blob, from `+0x06`; at least 1.
     ///
-    /// Only level 0 is decoded - [`Texture::indices`] is always exactly
-    /// `width * height` - but the count has to be read to know how long the blob
-    /// should be. See [`Texture::parse`].
+    /// Only level 0 is decoded, but the count sets the expected blob length.
+    /// See [`Texture::parse`].
     pub mip_levels: u8,
 }
 
 /// Most mip levels a blob may declare.
 ///
-/// A 4-level chain is the largest seen. The cap exists so a garbage byte at
-/// `+0x06` cannot make the size arithmetic accept an arbitrary blob: without it,
-/// a large enough level count sums to almost any length.
+/// A 4-level chain is the largest seen. The cap stops a garbage `+0x06` making
+/// the size arithmetic accept an arbitrary blob.
 pub const MAX_MIP_LEVELS: u8 = 16;
 
 /// Bytes the whole mip chain occupies.
@@ -158,19 +150,14 @@ pub const MAX_MIP_LEVELS: u8 = 16;
 /// | `grabbedEngineFlare128x64x8` 128x64 | 4 | 11,920 | 11,920 | **11,920** |
 /// | `Engine_noise` 64x64 | 4 | 6,480 | **6,544** | **6,544** |
 ///
-/// The flare is unaffected because every one of its levels is already at least 16
-/// bytes wide; the noise texture's level 3 is 8x8, an 8-byte row padded to 16, and
-/// that single difference is the whole 64-byte discrepancy. `SWIZZLE_BLOCK_BYTES`
-/// is the same 16, which is not a coincidence: it is the GE's texture row
-/// alignment.
+/// The flare's levels are all at least 16 bytes wide; the noise texture's level 3
+/// is 8x8, an 8-byte row padded to 16, which is the whole 64-byte discrepancy.
+/// `SWIZZLE_BLOCK_BYTES` is the same 16, the GE's texture row alignment.
 ///
-/// **Level 0 is deliberately not padded**, and that asymmetry is a statement about
-/// the evidence rather than about the hardware. No observed texture has a level-0
-/// row under 16 bytes, so the question is untested there - and leaving it unpadded
-/// makes the single-level arithmetic byte-identical to what it was before mip
-/// support existed, which is what keeps the 346 already-decoding entries decoding.
-/// If a narrow single-level texture ever fails to identify, this is the first thing
-/// to try.
+/// **Level 0 is deliberately not padded**: no observed texture has a level-0 row
+/// under 16 bytes, so it is untested there, and leaving it unpadded keeps the 346
+/// single-level entries decoding. If a narrow single-level texture fails to
+/// identify, try this first.
 #[must_use]
 pub fn mip_chain_len(width: u16, height: u16, bits_per_pixel: u8, levels: u8) -> usize {
     let mut total = 0usize;
@@ -192,11 +179,9 @@ pub fn mip_chain_len(width: u16, height: u16, bits_per_pixel: u8, levels: u8) ->
 impl Texture {
     /// Whether `data` is a texture.
     ///
-    /// This is a full parse, not a header sniff, so it needs the whole blob and
-    /// it allocates. That makes it strong (the declared size must match the
-    /// blob exactly, so a false positive is very unlikely) and it makes it
-    /// expensive: running it over every entry of a 315 MiB archive reads and
-    /// decompresses all of it. Worth knowing before using it as a filter.
+    /// A full parse, not a header sniff: strong (the declared size must match the
+    /// blob exactly) but it needs the whole blob and allocates, so running it
+    /// over every entry of a 315 MiB archive decompresses all of it.
     #[must_use]
     pub fn looks_like_texture(data: &[u8]) -> bool {
         Self::parse(data).is_ok()
@@ -229,25 +214,17 @@ impl Texture {
         // Exact, not truncating: the odd 4bpp case is refused above.
         let pixel_len = pixels * bits_per_pixel as usize / 8;
 
-        // `+0x06` is a **mip count**, which this parser assumed was always 1
-        // until `Data.wad` produced a counter-example. `psp-texture.md` predicted
-        // exactly that ("the size arithmetic above holds for this corpus but
-        // would not for a mipmapped texture. Worth re-checking against
-        // `Data.wad`"), and the engine-flare sprite is the case:
-        // `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` is 128x64 at 8bpp
-        // with `+0x06 == 4`, and 11,920 bytes rather than the 9,232 a single
-        // level implies. The chain accounts for it exactly:
+        // `+0x06` is a mip count: the engine-flare sprite (128x64, 8bpp, `+0x06
+        // == 4`) is 11,920 bytes, which the chain accounts for exactly:
         //
         //     16 + 1024 + 8192 + 2048 + 512 + 128 = 11,920
         //
-        // A zero is read as one, since a blob with no pixels at all is not a
-        // texture worth accepting.
+        // A zero is read as one.
         let mip_levels = data[6].clamp(1, MAX_MIP_LEVELS);
         let expected =
             HEADER_LEN + palette_len + mip_chain_len(width, height, bits_per_pixel, mip_levels);
 
-        // The size is fully determined by the header, so a mismatch means this
-        // is not a texture rather than that it is a damaged one.
+        // The header fixes the size, so a mismatch means not a texture.
         if data.len() != expected {
             return Err(Error::SizeMismatch {
                 expected,
@@ -260,15 +237,13 @@ impl Texture {
             .0
             .to_vec();
 
-        // Level 0 only. Slicing to `pixel_len` rather than taking the rest of the
-        // blob is what keeps `indices` exactly `width * height` long on a
-        // mipmapped texture - `to_rgba` feeds `png::encode_rgba`, which asserts
-        // that.
+        // Level 0 only: slicing to `pixel_len` keeps `indices` exactly
+        // `width * height` long on a mipmapped texture.
         let stored = &data[HEADER_LEN + palette_len..HEADER_LEN + palette_len + pixel_len];
         // Bit 0 of `+0x07` says the pixels are stored in the GE's swizzled
-        // layout rather than raster order. Five of `FE.wad`'s thirteen textures
-        // set it, and reading those linearly gives noise: `00006_cee1c5a4`
-        // decodes to the Japanese Wipeout logotype only once unswizzled.
+        // layout rather than raster order. Six of `FE.wad`'s thirteen set it
+        // (five wide enough to matter); linearly they read as noise:
+        // `00006_cee1c5a4` is the Japanese Wipeout logotype only once unswizzled.
         let row_bytes = usize::from(width) * usize::from(bits_per_pixel) / 8;
         let swizzled = data[7] & FLAG_SWIZZLED != 0;
         let unswizzled;
@@ -281,9 +256,8 @@ impl Texture {
         let indices = if bits_per_pixel == 8 {
             packed.to_vec()
         } else {
-            // Low nibble first: pixel 0 is the low half of byte 0. Getting this
-            // backwards mirrors every pair of pixels, which is subtle enough to
-            // miss on a noisy texture and obvious on text.
+            // Low nibble first: pixel 0 is the low half of byte 0. Backwards
+            // mirrors every pixel pair, obvious on text only.
             let mut out = Vec::with_capacity(pixel_len * 2);
             for &byte in packed {
                 out.push(byte & 0x0f);
@@ -312,8 +286,8 @@ impl Texture {
                 .palette
                 .get(index as usize)
                 .copied()
-                // An out-of-range index cannot happen for 8bpp with a 256-entry
-                // palette, but magenta is a louder failure than a silent black.
+                // Out of range cannot happen for 8bpp with a 256-entry palette;
+                // magenta beats silent black.
                 .unwrap_or([255, 0, 255, 255]);
             out.extend_from_slice(&colour);
         }
@@ -322,14 +296,12 @@ impl Texture {
 
     /// Heuristic for whether the pixel data looks swizzled.
     ///
-    /// Swizzled data is stored in 16-byte-wide by 8-row blocks, so decoding it
-    /// linearly makes adjacent rows uncorrelated while adjacent *blocks* stay
-    /// correlated. This compares how similar vertically-adjacent pixels are
-    /// against horizontally-adjacent ones: natural images are similar in both
-    /// directions, and a linear read of swizzled data is not.
+    /// Swizzled data is stored in 16-byte-wide by 8-row blocks, so a linear read
+    /// makes adjacent rows uncorrelated. This compares vertically-adjacent
+    /// against horizontally-adjacent similarity; natural images are similar in
+    /// both.
     ///
-    /// **This is a hint, not a determination.** It is here to prioritise
-    /// investigation, not to drive decoding.
+    /// **A hint, not a determination**: for prioritising investigation only.
     #[must_use]
     pub fn looks_swizzled(&self) -> bool {
         let (w, h) = (self.width as usize, self.height as usize);
@@ -358,23 +330,18 @@ impl Texture {
 
 /// Byte coverage of one `.mip` blob.
 ///
-/// **Two gaps this module's own doc comments already name, made
-/// measurable.** `Texture::parse` validates the *length* of the whole mip
-/// chain against the file (so a truncated or overlong blob is refused) but
-/// only ever reads level 0's pixels into [`Texture::indices`] - "the rest of
-/// the chain is validated and skipped" - and the seven bytes at `+0x09` are
-/// never read at all, not even into [`Texture::unknown`], which stops at
-/// `+0x08`. Both show up here as reported gaps rather than as claims this
-/// module cannot honestly make.
+/// **Two gaps, made measurable.** `Texture::parse` validates the *length* of the
+/// whole mip chain but reads only level 0's pixels into [`Texture::indices`], and
+/// the seven bytes at `+0x09` are never read, not even into [`Texture::unknown`]
+/// (which stops at `+0x08`). Both show up here as reported gaps.
 #[must_use]
 pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
     let mut seen = oag_formats::coverage::Coverage::new(data.len());
     let Ok(texture) = Texture::parse(data) else {
         return seen;
     };
-    // `+0x00..+0x09`: width, height, bits_per_pixel and the four bytes this
-    // module keeps as `unknown`. `+0x09..+0x10`, seven bytes, is not claimed:
-    // nothing in this module reads it.
+    // `+0x00..+0x09`: width, height, bits_per_pixel and the four `unknown` bytes.
+    // `+0x09..+0x10` is not claimed: nothing reads it.
     seen.claim(0, 9, "the texture header");
     let colours = 1usize << texture.bits_per_pixel;
     let palette_len = colours * 4;
