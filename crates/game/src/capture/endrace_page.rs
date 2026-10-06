@@ -51,6 +51,10 @@ pub(super) enum EndRaceKind {
     /// `g_endrace_result` (2026-09-30), so the still can be laid beside the frame
     /// it was taken from; only the team ids are this project's own spelling.
     EliminationResults,
+    /// Wipeout HD/Fury's `EndRace Podium` - **a still only**, the live flow
+    /// never enters it (untraced entry). Synthetic three-craft top three;
+    /// the pilot names are this capture's own, not the disc's.
+    Podium,
     /// A Zone race's `EndRace Results` - `EndRaceResults_PopulateZoneTable`
     /// (`0x088db574`). **Chosen numbers**, not measured: no Zone frame is
     /// reachable, and two of the six statistics draw blank on purpose, as this
@@ -72,6 +76,7 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
         "endrace-rewards-bronze" => Some(EndRaceKind::Rewards {
             medal: Some(Medal::Bronze),
         }),
+        "endrace-podium" | "endrace_podium" => Some(EndRaceKind::Podium),
         "endrace-menu" | "endrace_menu" => Some(EndRaceKind::Menu {
             tournament_next_leg: false,
         }),
@@ -206,6 +211,7 @@ fn endrace_page(
             kind,
             &screens.results,
             screens.rewards.as_ref(),
+            screens.podium.as_ref(),
             &screens.menu,
             strings,
             skin,
@@ -368,6 +374,9 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
+        EndRaceKind::Podium => anyhow::bail!(
+            "EndRace Podium is Wipeout HD/Fury's only; this title's screen file has none"
+        ),
         EndRaceKind::ZoneResults => {
             let model = oag_ui_screens::endrace::ZoneResults {
                 zones_cleared: 7,
@@ -447,6 +456,7 @@ fn hd_endrace_page(
     kind: EndRaceKind,
     results: &oag_ui_screens::endrace::Layout,
     rewards: Option<&oag_ui_screens::endrace::Layout>,
+    podium: Option<&oag_ui_screens::endrace::Layout>,
     menu: &oag_ui_screens::endrace::Layout,
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
@@ -482,6 +492,36 @@ fn hd_endrace_page(
             oag_ui_screens::endrace::hd::hd_results_draw_list(
                 &model,
                 results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        EndRaceKind::Podium => {
+            let model = oag_ui_screens::endrace::hd::HdPodium {
+                places: [
+                    Some(oag_ui_screens::endrace::hd::PodiumSlot {
+                        name: "PILOT ONE".to_string(),
+                        player: true,
+                    }),
+                    Some(oag_ui_screens::endrace::hd::PodiumSlot {
+                        name: "PILOT TWO".to_string(),
+                        player: false,
+                    }),
+                    Some(oag_ui_screens::endrace::hd::PodiumSlot {
+                        name: "PILOT THREE".to_string(),
+                        player: false,
+                    }),
+                ],
+            };
+            let podium =
+                podium.context("no copy of this title's screen file authors an EndRace Podium")?;
+            oag_ui_screens::endrace::hd::hd_podium_draw_list(
+                &model,
+                podium,
                 skin,
                 frame,
                 strings,

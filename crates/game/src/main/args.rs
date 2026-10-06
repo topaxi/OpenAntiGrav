@@ -250,6 +250,29 @@ pub(crate) fn force_shield(texts: &[String]) -> Result<Vec<(u32, f32)>> {
         .collect()
 }
 
+/// Parses every `--force-medal TICK:TIER` into the tick and the language id of
+/// the end-of-race phrase for that tier.
+pub(crate) fn force_medal(texts: &[String]) -> Result<Vec<(u32, &'static str)>> {
+    texts
+        .iter()
+        .map(|text| {
+            let bad = || {
+                anyhow::anyhow!(
+                    "{text:?} is not a forced medal; write it as TICK:TIER, e.g. 10:gold"
+                )
+            };
+            let (tick, tier) = text.split_once(':').ok_or_else(bad)?;
+            let id = match tier.trim() {
+                "gold" => "ER_GMA",
+                "silver" => "ER_SMA",
+                "bronze" => "ER_BMA",
+                _ => return Err(bad()),
+            };
+            Ok((tick.trim().parse().map_err(|_| bad())?, id))
+        })
+        .collect()
+}
+
 /// Parses `--force-wreck`'s `TICK:SLOT`.
 pub(crate) fn force_wreck(text: Option<&str>) -> Result<Option<(u32, usize)>> {
     let Some(text) = text else { return Ok(None) };

@@ -469,6 +469,10 @@ pub struct Setup {
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
     pub hit_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
+    /// Each slot's `Ship Collision Fx` locators for the spark HD's Cannon
+    /// throws on the craft it hits, or none on every other title. See
+    /// `race::hit_sparks::throw_weapon_spark`.
+    pub weapon_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,

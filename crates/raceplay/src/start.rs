@@ -72,6 +72,7 @@ impl Race {
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
+            weapon_spark_anchors,
             wreck_anchors,
             magstrip_wake,
             magstrip_pob,
@@ -578,7 +579,8 @@ impl Race {
                 absorb_anchors,
                 absorb_bursts: Vec::new(),
                 absorb_started: 0,
-                hit_sparks: super::hit_sparks::HitSparks::new(hit_spark_anchors),
+                hit_sparks: super::hit_sparks::HitSparks::new(hit_spark_anchors)
+                    .with_weapon_anchors(weapon_spark_anchors),
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
@@ -599,6 +601,7 @@ impl Race {
                 // to whatever the first real tick measures.
                 shield_flash_prev: 0.0,
                 shield_flash_timer: 0.0,
+                messages: oag_hud::messages::MessageBoard::default(),
                 shield_blink_timer: 0.0,
                 shield_flash_prev_whole: 0.0,
                 shield_flash_timer_whole: 0.0,

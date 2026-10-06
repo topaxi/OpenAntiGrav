@@ -52,6 +52,14 @@ pub struct EndRaceScreens {
     /// builds no rewards model on HD and the layout is drawn only by
     /// `--menu-page endrace-rewards`.
     pub rewards: Option<Layout>,
+    /// `EndRace Podium`, read off the first archive whose copy of the screen
+    /// file authors it (`DATA05`/`DATA06`; the copy this build serves for the
+    /// other three screens, `DATA02`'s, has none). `None` on every other
+    /// title and when no copy has it. **Never entered by the live flow**:
+    /// the original's entry is untraced
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/endrace-podium.md`), so this is
+    /// drawn only by `--menu-page endrace-podium`.
+    pub podium: Option<Layout>,
     pub menu: Layout,
     /// `Race End Photo`, the state a Pulse race sits in between the flag and
     /// `EndRace Results` - read off `InGame_Definition.xml`, not
@@ -187,6 +195,7 @@ pub fn load(
     Ok(EndRaceScreens {
         results,
         rewards: Some(rewards),
+        podium: None,
         menu,
         photo,
         sprites,
@@ -241,7 +250,7 @@ fn load_photo(
 /// left `None` otherwise, never failing the other two. See
 /// `docs/formats/hd-endrace-screens.md` and [`oag_ui_screens::endrace::hd`]'s module
 /// doc for what does and does not draw and why. `EndRace Podium` (`DATA05`/
-/// `DATA06` only) is not read at all.
+/// `DATA06` only) is read by [`load_hd_podium`], off whichever copy has it.
 fn load_hd(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -281,6 +290,7 @@ fn load_hd(
         oag_hd::endrace::AUTHORED_GRID,
     )
     .context("EndRace Menu is not on this screen")?;
+    let podium = load_hd_podium(archives, strings, faces, grid, fallback_globals);
 
     let mut blobs = Vec::new();
     for src in oag_hd::endrace::EXTRA_TEXTURES {
@@ -296,9 +306,47 @@ fn load_hd(
     Ok(EndRaceScreens {
         results,
         rewards,
+        podium,
         menu,
         photo: None,
         sprites,
         trophies: Vec::new(),
     })
+}
+
+/// `EndRace Podium` off the first copy of the screen file that authors it.
+///
+/// `holder_of` serves `DATA02`, which has no Podium, so the other three
+/// screens' copy cannot hold it; this walks every copy
+/// (`Archives::read_every_name`) in mount order and takes the first that does.
+/// Scoped to this one screen on purpose: the other three keep `DATA02`'s.
+/// A copy that will not parse, or none that has the screen, leaves `None`
+/// and says so in the log - nothing is drawn in its place.
+fn load_hd_podium(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    fallback_globals: &[(&str, &str)],
+) -> Option<Layout> {
+    for (label, blob) in archives.read_every_name(oag_hd::endrace::SCREEN_ENTRY) {
+        let Ok(xml) = String::from_utf8(blob) else {
+            continue;
+        };
+        let screens =
+            oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+        if let Some(layout) = Layout::read_authored(
+            &screens,
+            "EndRace Podium",
+            strings,
+            faces,
+            grid,
+            oag_hd::endrace::AUTHORED_GRID,
+        ) {
+            log::info!("endrace podium: read from {label}");
+            return Some(layout);
+        }
+    }
+    log::warn!("no copy of EndRace_Definition.xml authors EndRace Podium - it draws nothing");
+    None
 }

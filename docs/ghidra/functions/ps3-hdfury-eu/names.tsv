@@ -536,3 +536,6 @@
 0x0092f180	data	MagStripArc_fp	90	magstrip-wake.md
 0x0092f400	data	MagStripArc_vp	90	magstrip-wake.md
 0x002bd750	function	MagstripArcs_InitClass	70	magstrip-wake.md
+0x000ddd58	function	Ship_Construct	80	particle-triggers.md
+0x000dfd90	function	Ship_ConstructAlt	65	particle-triggers.md
+0x002a17e8	function	ShipDamageFx_Update	60	particle-triggers.md

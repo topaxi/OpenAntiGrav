@@ -621,7 +621,8 @@ geometry - the geometry is 95 throughout.
 | Eliminator | kill counters | 50 | |
 | Tags | `PosTag0-7`, `HeadToHeadBar` | 95 anchor / 85 content | a fixed column (`405/460, 25..165`), not runtime-anchored; the rows are the Eliminator's kill column, blank in a solo race - see above |
 | Tags | `PlrTag0-7` | 50 | genuinely runtime-anchored, multiplayer only (`MPTag_HUD.xml`) |
-| Debug | `VersionTextOnHUD`, `Info1`-`Info4`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
+| Message lines | `Info1`-`Info4` | 80 | **the four message slots**, read 2026-10-06 (`Hud_UpdateMessages`, [hud-messages.md](../ghidra/functions/psp-pulse-usa/hud-messages.md)); drawn as of the same day - see "Medal messages" |
+| Debug | `VersionTextOnHUD`, `Info`, `Info2nd` | 40 | present in shipped layouts; purpose inferred from the names |
 
 ### The pickup icon is found by name, and there are thirteen of them
 
@@ -1064,6 +1065,67 @@ which `oag_game::records::Key` has no field for, so a run in one team's ship
 races the best of any team's. A track whose `stats.xml` does not read (any source but Pulse on a PSP disc; the load
 report says so) draws the plain elapsed clock in a plain race, as the original does when
 its track record is null; a campaign cell still races its own ladder.
+
+### Medal messages, 2026-10-06
+
+**The maintainer's report from play: a Zone run or a Speed Lap goes on after
+gold, and nothing on screen says a medal was earned.** The question was whether
+the original draws something there that this build lacks.
+
+**Measured negative, by static census (confidence 85): the original draws no
+mid-race medal.** `Cell_EvaluateMedal` is reached from the end-of-race record
+and two menus, never from the race HUD; the HUD's own message lines name eight
+events and a medal is none of them; Zone's layout has no medal or target widget.
+Evidence, addresses and the one-sided limit of it (no live frame of a campaign
+Zone or Speed Lap crossing a threshold was obtained - the fresh profile has
+those cells locked) are in
+[hud-messages.md](../ghidra/functions/psp-pulse-usa/hud-messages.md). What the
+original does show mid-race is the live target tier in `TotalTimeTxt`
+(`IG_HUD_GOLD`/`SILVER`/`BRONZE`, "Medal targets" above) - the tier the current
+lap is on pace for, which in Speed Lap resets every lap and so is not an award.
+
+**What ships, because the maintainer asked for it: chosen, not measured, no
+confidence score.** A campaign **Zone** or **Speed Lap** cell raises
+`Gold medal awarded` (`ER_GMA`, `ER_SMA`, `ER_BMA` - the end-of-race screen's own
+phrases, resolved from the disc's table) the tick the player's result first
+reaches a tier, and again on each better tier. The test is
+`RaceStage::campaign_medal` asked mid-race - the same `Cell_EvaluateMedal` law
+the results use, so it never promises a medal the results withhold. The race is
+**not** ended: the original ends none of these on a medal, and nothing here
+adds one.
+
+The presentation is the original's, not invented: the line goes into the
+message lines `Info1` to `Info4` the layouts already author
+(`oag_hud::messages`), with the slot law decompiled from `Hud_UpdateMessages` -
+four seconds, the `sin(pi * (1 - (t/4)^6))` fade, green for a good message, one
+line per 0.8 s when several are raised together. That law is itself decompiled
+and not yet checked against a live frame.
+
+**Ported to HD and Pure on Pulse's law** (`oag_title::HudArt::message_slots`; a
+title with no measured rule of its own takes Pulse's). HD's Zone, Speed Lap and
+Time Trial layouts all compose the same `Info1`-`Info4` through
+`InfoTextParent` - checked 2026-10-06 on the composed layouts, so the earlier
+reading of HD's `Info1` as an elimination-only text box was wrong - and HD's own
+English table carries `ER_GMA`/`ER_SMA`/`ER_BMA`: the line draws in HD's font at
+the place its layout authors (`medal_message_ground_truth`, and
+`data/scratch/hud-medal/shots/hd-zone.png`; legibility on a bright backdrop is
+poor, HD authors no backing frame for it). **Pure's table has no `ER_GMA`**, so
+nothing draws there - an id a table lacks draws nothing, never the raw id; a
+Pure phrase (its `zone_gold`/`zone_silver`/`zone_bronze` voice lines suggest
+Pure does announce a Zone medal) is the open piece. 2048 (`RaceMedal` is never
+seen in any state reached) and Omega (racing out of scope): **checked, applies,
+not wired**.
+
+**Not done, and open:** the `MESSAGE` cue the original plays as a line appears,
+and the `gold_med`/`silver_med`/`bronze_med` jingles (unplayed even on the
+end-of-race screen) - `MessageBoard::just_shown` is the hook for the first.
+Time Trial raises nothing mid-race: its medal is at the finish. Eliminator
+(kills against gold) would take the same hook and was not asked for. The
+other eight events the original raises in these lines (`IG_HUD_PLAP`,
+`NEWLAP_REC`, `FIN_LAP`, `PERF_ZONE`, `NEW_ZONE_RECORD`, ...) have no recovered
+trigger and stay unraised. A capture aid, `--force-medal TICK:TIER`, shows the
+line on any `--race` capture; the real trigger needs a campaign cell, which a
+headless run cannot reach.
 
 ## Lap counting was the one real blocker
 

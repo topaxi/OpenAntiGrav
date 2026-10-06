@@ -44,6 +44,11 @@ pub(super) fn advance_one_tick(
             ship.physics.shield = ship.handling.dimensions.shield * percent / 100.0;
         }
     }
+    for &(at, id) in &options.force_medal {
+        if at == tick {
+            race.raise_message(id, true);
+        }
+    }
     if let Some((at, slot)) = options.force_wreck
         && at == tick
     {

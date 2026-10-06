@@ -54,7 +54,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 38] = [
+pub const RACE_EFFECTS: [&str; 39] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
@@ -88,6 +88,8 @@ pub const RACE_EFFECTS: [&str; 38] = [
     // comment. Not on the PSP or PS2 disc, the same footing the two Plasma
     // lightning names above already have.
     LEACHBEAM_ABSORB_EFFECT,
+    // HD's Cannon craft-hit spark - see `race::hit_sparks::throw_weapon_spark`.
+    WEAPON_SPARK_EFFECT,
     // The absorb burst - see `race::absorb` for its trigger on each title.
     ABSORB_EFFECT,
     // A landed LeachBeam drain's hull sparks - see `race::hit_sparks`. The
