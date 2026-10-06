@@ -1,8 +1,7 @@
 //! The vocabulary the picture is configured in: which screen, what shape, how
 //! big, how bright.
 //!
-//! Every setting here is a separate question, which is why it is a separate
-//! type:
+//! Every setting here is a separate question, which is why it is a separate type:
 //!
 //! - [`Monitor`] is *which* screen, when there is more than one.
 //! - [`WindowMode`] is what the compositor is asked for.
