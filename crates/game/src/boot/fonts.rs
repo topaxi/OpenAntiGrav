@@ -152,10 +152,12 @@ pub(super) fn load_role_fonts(
     preferred: Option<&Language>,
     skin: &oag_title::MenuSkin,
     texel_scale: f32,
+    prompts: &oag_title::prompts::Prompts,
     report: &mut Vec<String>,
 ) -> RoleFonts {
-    let scaled =
-        |atlas: Option<oag_ui::font::Atlas>| atlas.map(|a| a.with_texel_scale(texel_scale));
+    let scaled = |atlas: Option<oag_ui::font::Atlas>| {
+        atlas.map(|a| a.with_prompts(prompts).with_texel_scale(texel_scale))
+    };
     (
         scaled(load_menu_font(archives, languages, preferred, skin, report)),
         scaled(load_title_font(

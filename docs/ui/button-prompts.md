@@ -1,0 +1,124 @@
+# Button prompts
+
+A prompt is a string with a button in it: Pulse's "Press ε to continue", HD's
+"ε CONFIRM  γ BACK". The disc's faces draw a PlayStation glyph for that
+codepoint. This build draws **the disc's glyph whenever the player holds a
+PlayStation pad** (or forces `original`), and a substitute for the controller
+they actually hold otherwise.
+
+Nothing here replaces the disc's art when it is the right art: with the style
+`original`, or `auto` and nothing but a PlayStation pad (or no input yet), the
+draw is byte-identical to before this feature (a `--menu-page` still is the
+same PNG with and without it).
+
+## Setting
+
+`[controls] prompt_style`, a token, config only - there is no menu row, and
+`--prompt-style <token>` overrides it for one run without writing it back:
+
+| Token | Draws |
+| --- | --- |
+| `auto` (default) | the family of the **last device used** |
+| `original` | the disc's own glyphs, whatever is held |
+| `playstation`, `xbox`, `nintendo`, `keyboard` | that family, forced |
+
+`auto` answers: a key was pressed last, so the keyboard; a pad was last, so its
+family; nothing touched yet, so the disc's own. A PlayStation pad under `auto`
+is the disc's own glyphs, not PromptFont's PlayStation set (`playstation`
+forced gives that). An unknown token is reported and `auto` used.
+
+## What is measured and what is chosen
+
+| Thing | Status | Evidence |
+| --- | --- | --- |
+| Pulse's `ε γ δ β Λ Ν` are cross, circle, square, triangle, L, R | **measured** | the rendered cells of `pulse_text.fnt`, `Pulse_14.fnt`, `Pulse_20.fnt` on the EU disc, read as pictures (`oag-tools --example prompt_glyph_probe`); pinned by hash in `crates/game/tests/prompt_glyphs_ground_truth.rs` |
+| HD's `ε γ δ` in `PS_BUTTONS.fnt` are cross, circle, square | **measured** | the same probe on the HD EU disc |
+| HD's `Δ Γ Β Α` | **left alone** | four arrow-like navigation marks; the action each stands for was not established, so they draw as the disc draws them |
+| Which PromptFont glyph stands for a control on a pad | **chosen, not measured** | `crates/game/src/prompts.rs`; PromptFont ships no Nintendo-coloured face glyphs, so lettered discs stand in |
+| Which family a pad is | **chosen** (see below) | `crates/input/src/prompt.rs` |
+
+The table is by **action**: a codepoint maps to the control it depicts
+(`oag_title::prompts::Prompt`), per title (`Title::prompts`, with `Scope`:
+Pulse's glyphs live in every text face, HD's only in its `Buttons` face).
+Nothing branches on a title's name. A region's confirm button is whatever its
+string table carries (a Japanese table writes `γ` for confirm); no JP disc is
+in this project to check, so that is a reading of the mechanism, not a
+measurement.
+
+The pad layer maps the **south** button to cross whatever the pad prints
+(`oag_input::pad::map_button`), so the substitute follows position: Xbox
+south is `A`, Nintendo south is `B` (and east `A`), PlayStation south is cross.
+The keyboard family shows the **key bound** to the control, read from the live
+bindings (`ENTER` for cross by default, `BACKSPACE` for circle).
+
+## How a glyph is swapped
+
+`oag_ui::prompt` adds to every loaded face that carries a stand-in one extra
+cell per substitute glyph, **scaled into the disc glyph's own box and advance**
+(PromptFont's alpha, area-averaged), under private-use codepoints. The
+renderer rewrites a string's stand-ins to those codepoints just before drawing
+(`Renderer::set_prompt_substitution`), so measurement, centring and word-wrap
+see the same advances as before. Switching family at run time is a string
+rewrite; no texture is re-uploaded. A wide key (the keyboard's backspace) is
+fitted into the box, so on a 12 px Pulse face it is legible as a key but its
+label is tiny: a known limit, see the handover thread.
+
+Art: **PromptFont** by Shinmera, SIL Open Font Licence 1.1
+([licence](../../licences/PromptFont-OFL.txt), no Reserved Font Name clause).
+`scripts/gen-prompt-glyphs.py` rasterises 59 glyphs from the pinned
+`promptfont.ttf` (SHA-256 in the script) into `assets/ui/prompts/`. Not game
+content.
+
+## How the device is told apart
+
+`oag_input::prompt`, plain functions over a descriptor, an environment lookup
+and an injected file reader, so tests need no device and no Steam.
+
+1. **Last used** (`Detector`): a key down switches to the keyboard; a pad press
+   or a stick past 0.5 switches to that pad's family. A resting stick does not
+   flip it. A pad attached and untouched seeds the family until something is
+   used.
+2. **Pad family** (`classify_pad`): USB vendor id (Sony `054c`, Nintendo
+   `057e`, Microsoft `045e`) from gilrs, then name keywords; anything else is
+   Xbox-shaped, SDL's "standard".
+3. **Under Steam**, a pad is usually a Steam Input *virtual* Xbox 360 pad, so
+   its own name and ids say Xbox. Steam names the real controller in a file
+   whose path is in the `SteamVirtualGamepadInfo` environment variable. SDL
+   parses it in
+   [`SDL_steam_virtual_gamepad.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/SDL_steam_virtual_gamepad.c):
+   `[slot N]` sections with `name=`, `VID=`, `PID=` and `type=`, where `type`
+   is an `SDL_GamepadType` string (`ps3 ps4 ps5 switchpro joyconleft joyconright
+   joyconpair gamecube xbox360 xboxone standard steam`, listed in
+   [`SDL_gamepad.c`](https://github.com/libsdl-org/SDL/blob/main/src/joystick/SDL_gamepad.c)).
+   `parse_virtual_info` reads the same file; the pad's slot is the trailing
+   number of its name (`Microsoft X-Box 360 pad 0`). **No Steamworks SDK is
+   needed**: `ISteamInput::GetInputTypeForHandle` would give the same answer
+   and cost a dependency.
+4. **The Deck's own controls**: `SteamDeck=1` (set by Steam for a game started
+   on a Deck) with a Steam or Microsoft vendor pad and no file is Xbox-shaped,
+   as is SDL's `steam` type.
+
+**Not verified here**: this sandbox has no Steam client, so the Steam path is
+tested against the file format SDL's source defines and a hand-written sample,
+not against a real launch. `SteamDeck`, `SteamAppId` and `SteamGameId` are the
+variables Steam is known to set for a launched game; their contents were not
+read from a live Steam. First check on a Deck: launch through Steam with
+`--prompt-style auto` and read the first line of the log, which names the family
+(see the handover thread).
+
+## Where it applies
+
+Every screen drawn through the front end's renderer: the menus, the campaign
+footers and the language picker (menu stage and boot sequence), and a finished
+race's EndRace screens. **Not yet**: the in-race HUD's own text, a race's pause
+overlay and the race-start prompts, which draw through other renderers.
+
+## Other titles
+
+- **Pure**: not read (`Prompts::UNREAD`); its glyphs draw as the disc draws
+  them. The table is the same shape as Pulse's and would be a probe run.
+- **Omega**: `PS_BUTTONS.fnt` is HD's at twice the pixel size
+  (`oag_ui::font::Atlas::with_texel_scale`), so HD's table likely applies;
+  *checked, applies, not wired*: the PS4 art was not rendered and read, and a
+  stand-in table must be measured before it is claimed.
+- **2048**: a touch front end with its own icons; out of scope, `UNREAD`.

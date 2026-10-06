@@ -470,6 +470,7 @@ pub fn load_shell(
     // `oag_display::space::Space::font_texel_scale`. `1.0` for every other source.
     let texel_scale = oag_display::space::Space::font_texel_scale(archives.layout.platform);
     let font = load_font(&mut archives, &languages, preferred_language, &mut report)
+        .with_prompts(title.prompts)
         .with_texel_scale(texel_scale);
     steps.lap("font");
     // **`TitleFrame` is appended here, not carried in `profile.fallback_images`
@@ -550,6 +551,7 @@ pub fn load_shell(
         preferred_language,
         menu_skin,
         texel_scale,
+        title.prompts,
         &mut report,
     );
     // A touch front end's screens author more than one role and this build

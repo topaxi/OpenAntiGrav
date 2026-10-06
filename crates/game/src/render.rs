@@ -149,6 +149,9 @@ pub struct Renderer {
     /// otherwise fall back to is a Greek letter, not a button glyph. See
     /// `render::text::atlas_for`.
     buttons_atlas: Option<Atlas>,
+    /// Which substitute glyph each of the title's button stand-ins draws as
+    /// right now; empty draws the disc's own. See [`oag_ui::prompt`].
+    prompt_substitution: oag_ui::prompt::Substitution,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -409,6 +412,7 @@ impl Renderer {
             face_role: None,
             buttons_view,
             buttons_atlas: None,
+            prompt_substitution: oag_ui::prompt::Substitution::none(),
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -966,6 +970,8 @@ pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32))
     (normalised_x * space.size.0, normalised_y * space.size.1)
 }
 
+#[cfg(test)]
+mod prompt_tests;
 #[cfg(test)]
 mod tests;
 

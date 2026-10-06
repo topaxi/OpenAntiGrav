@@ -56,6 +56,8 @@ pub(crate) struct App {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--prompt-style`, parsed. See `session::prompts`.
+    pub(crate) prompt_style: Option<oag_input::prompt::PromptStyle>,
     /// `--autopilot`: whether the player's craft is flown for them. A
     /// verification aid - see `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,
@@ -393,6 +395,10 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             no_intro: self.no_intro,
+            prompt: oag_game::prompts::PromptState {
+                style_override: self.prompt_style,
+                family_logged: None,
+            },
             autopilot: self.autopilot,
             autopilot_pilot: self.autopilot_pilot,
             autopilot_skill: self.autopilot_skill,

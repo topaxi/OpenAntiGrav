@@ -38,6 +38,8 @@ clap.workspace = true
 # `oag-tools` still may not depend on `oag-hd`/`oag-title` at build time, and
 # `just check-deps` only walks the non-dev graph.
 oag-hd.workspace = true
+# `examples/prompt_glyph_probe.rs` reads Pulse's faces the same way.
+oag-pulse.workspace = true
 
 [lints]
 workspace = true

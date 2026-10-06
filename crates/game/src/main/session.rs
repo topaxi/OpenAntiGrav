@@ -380,10 +380,9 @@ pub(crate) struct Session {
     pub(crate) zone_hold: oag_mesh::mesh_render::zone::Hold,
     /// Where every stage draws, before it is stretched onto the surface.
     ///
-    /// On the session rather than on a stage because it outlives them: a race
-    /// taking the window over does not want a fresh target, and the size it
-    /// should be is a property of the window and the settings rather than of
-    /// what happens to be on screen.
+    /// On the session rather than a stage because it outlives them: a race
+    /// taking the window over does not want a fresh target, and its size is a
+    /// property of the window and the settings, not of what is on screen.
     pub(crate) framebuffer: upscale::Framebuffer,
     /// How many races this run has launched, which is what varies the loading
     /// screen's feature draw.
@@ -396,6 +395,7 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    pub(crate) prompt: oag_game::prompts::PromptState,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a
     /// saved edit shows without a restart. See `oag_game::screen`.

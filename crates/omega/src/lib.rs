@@ -88,6 +88,8 @@ pub const TITLE: &Title = &Title {
     // `Data\Plugins\Frontend\Definition.xml`. `plugin_definition` names the
     // team one, the same reasoning `oag_2048::names::TEAM_PLUGIN_DEFINITION`
     // states: a race needs a roster before it needs a circuit list.
+    // No prompt glyph of this title's has been read; the disc's own draw unchanged.
+    prompts: &oag_title::prompts::Prompts::UNREAD,
     plugin_definition: names::TEAM_PLUGIN_DEFINITION,
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     // Not read: the loading-screen plugin XML was not opened. `None` is a gap,

@@ -24,6 +24,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod movies;
+pub mod prompts;
 pub mod race;
 pub mod shadow;
 pub mod tag_input;
@@ -56,6 +57,9 @@ pub const TITLE: &Title = &Title {
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
+    // Measured: the six stand-in codepoints and the glyph each draws, read off
+    // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
+    prompts: prompts::PROMPTS,
     plugin_definition: names::GAME_PLUGIN_DEFINITION,
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),

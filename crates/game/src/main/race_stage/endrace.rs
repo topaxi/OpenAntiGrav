@@ -89,6 +89,12 @@ impl std::fmt::Debug for EndRaceRuntime {
 }
 
 impl EndRaceRuntime {
+    /// Sets the button-prompt substitution on this flow's own renderer. See
+    /// `session::prompts`.
+    pub(crate) fn set_prompt_substitution(&mut self, substitution: oag_ui::prompt::Substitution) {
+        self.renderer.set_prompt_substitution(substitution);
+    }
+
     /// # Errors
     ///
     /// Propagates [`crate::render::Renderer::new`]'s own pipeline-build
