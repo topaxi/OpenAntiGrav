@@ -1,10 +1,7 @@
 //! The pre-race flyby, read off `start_grid.vex`, against the running original.
 //!
-//! **`#[ignore]`d and never run in CI.** Needs game content, which this project does not ship.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What the samples are
 //!

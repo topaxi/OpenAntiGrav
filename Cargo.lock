@@ -2183,6 +2183,7 @@ dependencies = [
  "oag-mesh",
  "oag-pob",
  "oag-pulse",
+ "oag-shader-check",
  "oag-testdata",
  "oag-texture",
  "oag-vex",
@@ -2233,6 +2234,7 @@ dependencies = [
  "oag-rcs",
  "oag-render",
  "oag-replay",
+ "oag-shader-check",
  "oag-sound",
  "oag-source",
  "oag-tables",
@@ -2351,11 +2353,11 @@ dependencies = [
  "oag-formats",
  "oag-gpu",
  "oag-rcs",
+ "oag-shader-check",
  "oag-texture",
  "oag-vex",
  "pollster",
  "serde",
- "wesl",
  "wgpu",
 ]
 
@@ -2411,10 +2413,10 @@ dependencies = [
  "bytemuck",
  "oag-core",
  "oag-gpu",
+ "oag-shader-check",
  "pollster",
  "serde",
  "toml",
- "wesl",
  "wgpu",
 ]
 
@@ -2429,6 +2431,7 @@ dependencies = [
  "oag-display",
  "oag-gpu",
  "oag-post",
+ "oag-shader-check",
  "oag-ui",
  "pollster",
  "serde",
@@ -2548,6 +2551,7 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-rcs",
+ "oag-shader-check",
  "oag-tables",
  "oag-testdata",
  "oag-texture",
@@ -2565,6 +2569,14 @@ dependencies = [
  "serde",
  "thiserror 2.0.19",
  "toml",
+]
+
+[[package]]
+name = "oag-shader-check"
+version = "0.1.0"
+dependencies = [
+ "naga",
+ "wesl",
 ]
 
 [[package]]
@@ -2755,6 +2767,7 @@ dependencies = [
  "oag-formats",
  "oag-mesh",
  "oag-render",
+ "oag-shader-check",
  "oag-texture",
  "oag-vex",
  "pollster",

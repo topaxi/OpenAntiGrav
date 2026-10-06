@@ -1,9 +1,8 @@
 //! Validates the [`quake`](oag_vex::quake) span table against every Pulse
 //! circuit on the disc.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. Run with `just test-data`; set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn a missing image into a failure.
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! # What this is for
 //!

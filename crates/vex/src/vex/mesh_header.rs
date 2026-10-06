@@ -1,10 +1,9 @@
 //! The mesh payload's own header: which materials a mesh carries, and which
 //! **render layer** it is drawn in.
 //!
-//! Split out of [`super`] because these are the fields
-//! `Mesh_InitFromPayload` (`0x0890e998`) reads at load, and because the layer
-//! derivation below is the first thing in this crate that answers a question
-//! about *ordering* rather than about geometry.
+//! Split out of [`super`]: these are the fields `Mesh_InitFromPayload`
+//! (`0x0890e998`) reads at load, and the layer derivation is the first thing in
+//! this crate answering a question about *ordering* rather than geometry.
 //!
 //! ```text
 //! +0x00  u16   mesh flags
@@ -21,42 +20,38 @@ use super::u32_at;
 pub struct Material {
     /// The `u16` at `+0x00`: render state, not an animation switch.
     ///
-    /// Surveyed across every material of all 12 PSP circuits. It is richly
-    /// varied (19 distinct values on `07_Track` alone) and correlates with the
-    /// artists' own naming, but it does **not** separate animated surfaces from
-    /// static ones - `flicker1nonalpha_GLOW` and the plainly static
-    /// `hub_banner_GLOW` both carry `0x91`. Two bits are legible:
+    /// Surveyed across every material of all 12 PSP circuits: richly varied (19
+    /// distinct values on `07_Track` alone), correlated with the artists' naming,
+    /// but it does **not** separate animated from static surfaces
+    /// (`flicker1nonalpha_GLOW` and the static `hub_banner_GLOW` both carry
+    /// `0x91`). Two bits are legible:
     ///
     /// - `0x0080` accompanies the `_GLOW`/additive naming convention.
-    /// - `0x2000` lands on exactly the `*_shinemap` textures, which is
-    ///   independent corroboration of the "extra pass" reading of the same bit
-    ///   in a batch's `pass_mask`, and of [`Material::second_texture`].
+    /// - `0x2000` lands on exactly the `*_shinemap` textures, corroborating the
+    ///   "extra pass" reading of the same bit in a batch's `pass_mask` and of
+    ///   [`Material::second_texture`].
     ///
-    /// Nothing consumes it yet. Recorded so the census is reproducible from the
-    /// parser rather than from a one-off script. See `docs/formats/vex.md`.
+    /// Nothing consumes it yet; recorded so the census is reproducible from the
+    /// parser. See `docs/formats/vex.md`.
     pub flags: u16,
     /// The `u32` at `+0x04`: an index into the model's texture array, from
     /// [`textures`].
     pub texture: u32,
-    /// The `u32` at `+0x08`: the second texture of the `0x2000` extra pass.
-    ///
-    /// Zero on every material of `07_Track`, so the pass it belongs to is not
-    /// exercised there. A Pulse hull's materials name `envtest4bit.tga` here
-    /// (or `envmap_stripe2.tga`), which `oag_render::shine` draws.
+    /// The `u32` at `+0x08`: the second texture of the `0x2000` extra pass. Zero
+    /// on every material of `07_Track`; a Pulse hull's materials name
+    /// `envtest4bit.tga` (or `envmap_stripe2.tga`) here, which `oag_render::shine`
+    /// draws.
     pub second_texture: u32,
 }
 
-/// Materials of one mesh payload.
+/// Materials of one mesh payload, stride 0x14 from `+0x30`.
 ///
-/// Stride 0x14, starting at `+0x30`.
+/// Positional as [`textures`] is: a batch selects a material by index, so one
+/// running past the payload comes back as `None` rather than renumbering the rest.
 ///
-/// Positional for the same reason as [`textures`]: a batch selects a material by
-/// index, so a material that runs past the payload has to come back as `None`
-/// rather than shorten the list and renumber the ones after it.
-///
-/// The remaining `+0x0c..0x14` is **proven zero** on every material of every
-/// PSP circuit, which is what rules out an authored per-surface UV scroll rate
-/// and forces texture-keyed animation instead.
+/// The remaining `+0x0c..0x14` is **proven zero** on every material of every PSP
+/// circuit, ruling out an authored per-surface UV scroll rate and forcing
+/// texture-keyed animation.
 #[must_use]
 pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
     if payload.len() < 0x30 {
@@ -75,41 +70,34 @@ pub fn mesh_materials(payload: &[u8]) -> Vec<Option<Material>> {
         .collect()
 }
 
-/// The ordinary scene layer, and the only model key the derivation acts on.
-///
-/// `Vex_LoadModel`'s third argument. A model loaded with this key has each of
-/// its meshes re-keyed by [`mesh_layer`]; a model loaded with any other key
-/// keeps it, which is how `<Team>boost.vex` stays wholly on
-/// [`LAYER_EXHAUST`].
+/// The ordinary scene layer, and the only model key the derivation acts on:
+/// `Vex_LoadModel`'s third argument. A model loaded with it has each mesh re-keyed
+/// by [`mesh_layer`]; any other key is kept (so `<Team>boost.vex` stays wholly on
+/// [`LAYER_EXHAUST`]).
 pub const LAYER_SCENE: u32 = 0x4500_0000;
 
-/// The layer a mesh gets when no other branch of the derivation claims it.
-///
-/// **The default, not a special case** - see [`mesh_layer`]. It sorts *after*
-/// [`LAYER_SCENE`], so a `0x45` mesh is drawn first.
+/// The layer a mesh gets when no other branch claims it. **The default, not a
+/// special case** (see [`mesh_layer`]); it sorts *after* [`LAYER_SCENE`], so a
+/// `0x45` mesh draws first.
 pub const LAYER_DEFAULT: u32 = 0x4a00_0000;
 
-/// The layer for a mesh whose payload `+0x0c` has `0x8` set.
-///
-/// The lowest of the three the derivation produces, so these draw first.
+/// The layer for a mesh whose payload `+0x0c` has `0x8` set: the lowest of the
+/// three the derivation produces, drawn first.
 pub const LAYER_EARLY: u32 = 0x3100_0000;
 
-/// The layer `ExhaustFlare_Submit` enqueues at, and the only one whose items
-/// carry a depth in the low twenty bits.
-///
-/// Nothing here derives it - it is the model key `<Team>boost.vex` is loaded
-/// with. Named so the ordering table has all of its rows.
+/// The layer `ExhaustFlare_Submit` enqueues at, the only one whose items carry a
+/// depth in the low twenty bits. Not derived: it is the model key
+/// `<Team>boost.vex` is loaded with, named so the ordering table has all rows.
 pub const LAYER_EXHAUST: u32 = 0x4d00_0000;
 
 /// First of the eight planar-reflection layers, `0x01500000`; each further one
 /// is `0x1000000` above the last.
 ///
-/// A mesh is diverted here when any of its materials has `(material+0x03) &
-/// 0xfc` non-zero, that field `>> 2` being the index. **Not derived by
-/// [`mesh_layer`]**: the byte it keys on is inside a *batch's* material
-/// reference rather than in the payload header, and no caller needs it yet.
-/// Named because these sort below every other layer and a reader of the table
-/// should not think `0x31` is the first thing drawn.
+/// A mesh is diverted here when any material has `(material+0x03) & 0xfc`
+/// non-zero, that field `>> 2` being the index. **Not derived by [`mesh_layer`]**:
+/// the byte is inside a *batch's* material reference, not the payload header, and
+/// no caller needs it yet. Named because these sort below every other layer (so
+/// `0x31` is not the first thing drawn).
 pub const LAYER_REFLECTION_FIRST: u32 = 0x0150_0000;
 
 /// Which render layer a mesh is drawn in, or `None` when `model_layer` is not
@@ -117,9 +105,9 @@ pub const LAYER_REFLECTION_FIRST: u32 = 0x0150_0000;
 ///
 /// # The rule, and it is a read rather than an inference
 ///
-/// `Mesh_InitFromPayload` (`0x0890e998`, confidence 85) re-derives the layer
-/// from two words of the payload header, and only when the model was loaded
-/// with [`LAYER_SCENE`]:
+/// `Mesh_InitFromPayload` (`0x0890e998`, confidence 85) re-derives the layer from
+/// two words of the payload header, only when the model was loaded with
+/// [`LAYER_SCENE`]:
 ///
 /// ```text
 /// payload[+0x0c] & 0x8                      -> 0x31000000
@@ -129,18 +117,16 @@ pub const LAYER_REFLECTION_FIRST: u32 = 0x0150_0000;
 /// else                                      -> 0x4a000000
 /// ```
 ///
-/// Three of the five branches land on [`LAYER_DEFAULT`], so **the narrow case
-/// is `0x45`**: a mesh reaches it only by having `0x1000` set and `0x0080`
-/// clear and not both of `0x2000` and `0x0040`.
+/// Three of the five branches land on [`LAYER_DEFAULT`], so **the narrow case is
+/// `0x45`**: `0x1000` set, `0x0080` clear, and not both `0x2000` and `0x0040`.
 ///
 /// # What the layer is for
 ///
-/// It is the top twelve bits of the sort key every drawable submits to the one
-/// render queue, which `Gfx_FlushRenderManager` (`0x0891e3c0`) sorts ascending
-/// before dispatch. **Lower draws first.** The low twenty bits are a
-/// back-to-front depth, and mesh geometry does not compute one - a batch set
-/// enqueues with its bare layer key, so within a layer the original's order is
-/// submission order. See
+/// The top twelve bits of the sort key every drawable submits to the one render
+/// queue, which `Gfx_FlushRenderManager` (`0x0891e3c0`) sorts ascending: **lower
+/// draws first.** The low twenty bits are a back-to-front depth that mesh
+/// geometry does not compute (a batch set enqueues with its bare layer key), so
+/// within a layer the order is submission order. See
 /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
 #[must_use]
 pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
@@ -169,14 +155,12 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
 /// The GU vertex type of a mesh payload's first batch, in either list.
 ///
 /// **`Some(0)` is the answer that matters**: a batch declaring no vertex format
-/// at all is a batch whose vertices are not in this file. Wipeout HD and
-/// Wipeout 2048 both export that way, having moved their geometry into a
-/// `.rcsmodel` beside the `.vex` and left the batch headers behind. See
+/// has its vertices elsewhere. Wipeout HD and 2048 export that way, geometry in a
+/// `.rcsmodel` beside the `.vex` and batch headers left behind. See
 /// `oag_mesh::mesh::geometry_is_external`.
 ///
-/// `None` when the payload is too short to hold a batch list, or when neither
-/// list has a batch in it - which says nothing either way and is deliberately
-/// not folded into `Some(0)`.
+/// `None` when the payload is too short for a batch list or neither list has a
+/// batch: says nothing either way, so not folded into `Some(0)`.
 #[must_use]
 pub fn mesh_first_vertex_type(payload: &[u8]) -> Option<u16> {
     if payload.len() < 0x30 {
@@ -205,13 +189,10 @@ mod tests {
         out
     }
 
-    /// The one mesh whose flag word is written down elsewhere in the tree:
+    /// The one mesh whose flag word is written down elsewhere:
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md` measures
     /// `bflare1Shape`/`bflare2Shape` at `mesh_flags = 0x1232` off
-    /// `Data\Ships\Assegai\shipboost.vex`.
-    ///
-    /// It exercises the narrow branch: `0x1000` set, `0x0080` clear, and not
-    /// both of `0x2000` and `0x0040`.
+    /// `Data\Ships\Assegai\shipboost.vex`. It exercises the narrow branch.
     const PLUME_FLAGS: u16 = 0x1232;
 
     #[test]
@@ -222,10 +203,9 @@ mod tests {
         );
     }
 
-    /// **And the plume is not actually drawn there**, because its model is
-    /// loaded with `0x4d000000` and the derivation only fires on
-    /// [`LAYER_SCENE`]. This is the half that stops a reader concluding the
-    /// exhaust sorts with the scenery.
+    /// **And the plume is not actually drawn there**: its model is loaded with
+    /// `0x4d000000` and the derivation only fires on [`LAYER_SCENE`], so the
+    /// exhaust does not sort with the scenery.
     #[test]
     fn a_model_outside_the_scene_layer_keeps_its_own_key() {
         assert_eq!(
@@ -245,8 +225,7 @@ mod tests {
         }
     }
 
-    /// Three of the five branches land here, which is what makes `0x45` the
-    /// narrow case rather than the common one.
+    /// Three of the five branches land here, which makes `0x45` the narrow case.
     #[test]
     fn the_default_branch_is_the_wide_one() {
         for flags in [0x0000, 0x0080, 0x1080, 0x2040, 0x3040] {
@@ -258,8 +237,8 @@ mod tests {
         }
     }
 
-    /// `0x2000` alone does not divert - it needs `0x0040` beside it, which is
-    /// the one branch of the rule a reader is most likely to simplify away.
+    /// `0x2000` alone does not divert; it needs `0x0040` beside it (the branch a
+    /// reader is most likely to simplify away).
     #[test]
     fn the_extra_pass_bit_needs_its_partner() {
         assert_eq!(
@@ -277,8 +256,8 @@ mod tests {
         assert_eq!(mesh_layer(&[0u8; 8], LAYER_SCENE), None);
     }
 
-    /// The layers are named in draw order, and that ordering is the whole point
-    /// of the constants - an ascending sort is what the original applies.
+    /// The layers are named in draw order; an ascending sort is what the original
+    /// applies.
     #[test]
     fn the_constants_are_in_draw_order() {
         let order = [

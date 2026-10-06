@@ -2,15 +2,8 @@
 //! the right stride, and that the GU vertex type at `+0x0a` means what it says -
 //! against every `.vex` file on the Pulse PSP disc.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
-//!     -E 'binary(vex_batch_layout_ground_truth)'
-//! ```
+//! **`#[ignore]`d, needs a disc image** (`just test-data`; ADR-0006). Skips when it
+//! is absent; `OAG_REQUIRE_GAME_DATA=1` makes absence a failure.
 //!
 //! The tests skip with a printed message when the disc image is absent. Set
 //! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a

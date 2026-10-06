@@ -1,9 +1,9 @@
 //! Compiles the WESL under `shaders/` to the plain WGSL `wgpu` is handed.
 //!
 //! Every artifact lands in `$OUT_DIR/<name>.wgsl` and is pulled in with
-//! `include_str!`, so nothing past this script knows WESL exists.
-
-use wesl::{CompileOptions, Compiler, ManglerKind, resolver::StandardResolver};
+//! `include_str!`, so nothing past this script knows WESL exists. Every artifact,
+//! and every plain `.wgsl` under `src/`, is validated with `naga` so a bad
+//! shader fails the build.
 
 /// `(artifact, module path, features switched on)`. One module may be built
 /// more than once, as `prepare_inputs` is for MSAA.
@@ -38,22 +38,12 @@ const ARTIFACTS: &[(&str, &str, &[&str])] = &[
 
 fn main() {
     for &(name, module, features) in ARTIFACTS {
-        let mut options = CompileOptions {
-            // The names a pipeline reads (`override` constants, entry points,
-            // bindings) must reach wgpu exactly as written.
-            mangler: ManglerKind::None,
-            ..Default::default()
-        };
-        for feature in features {
-            options.features.set(*feature, true);
-        }
-        let compiler = Compiler::new_with_resolver(options, StandardResolver::new("shaders"));
-        let compiled = compiler
-            .compile_module(&module.parse().expect("a module path"))
-            .inspect_err(|error| eprintln!("{error}"))
-            .unwrap_or_else(|_| panic!("{module} did not compile"));
-        compiled.emit_rerun_if_changed();
-        compiled.write_artifact(name);
+        oag_shader_check::link("shaders", name, module, features);
     }
+    // `screen.wgsl` is the prelude every screen-filter preset is compiled after:
+    // it calls the preset's `param_*()` functions, so it is no module alone.
+    // `Preset::new` validates it with each preset at runtime, and the presets
+    // are covered by `oag-game`'s tests.
+    oag_shader_check::check_dir("src", &["screen.wgsl"]);
     println!("cargo::rerun-if-changed=build.rs");
 }

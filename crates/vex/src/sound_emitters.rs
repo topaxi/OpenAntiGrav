@@ -1,11 +1,11 @@
 //! `sound` `0x3e1` and `soundcone` `0x3e9`: the sound sources a circuit
 //! authors, and where they are.
 //!
-//! One 80-byte payload serves both classes. `VexSound_Init` (`0x089259a4`)
-//! reads it, allocates a `0x70`-byte emitter, points the emitter at the node's
-//! own world matrix and hands `Sound_Play` (`0x089392b0`) two separate strings -
-//! a bank label and a cue name - so the emitter is live from construction and
-//! plays one authored cue at the place the transform chain puts it:
+//! One 80-byte payload serves both classes. `VexSound_Init` (`0x089259a4`) reads
+//! it, allocates a `0x70`-byte emitter, points it at the node's own world matrix
+//! and hands `Sound_Play` (`0x089392b0`) a bank label and a cue name, so the
+//! emitter is live from construction and plays one authored cue where the
+//! transform chain puts it:
 //!
 //! ```text
 //! payload +0x00  f32   cone angle, radians; -1.0 on a plain `sound`
@@ -23,20 +23,18 @@
 //!
 //! # The radius is a curve, and `+0x10` is only its first key
 //!
-//! `VexSound_Update` (`0x08925c4c`) does not read `+0x10` at all. It divides the
+//! `VexSound_Update` (`0x08925c4c`) does not read `+0x10`: it divides the
 //! instance's elapsed time by `+0x38` to get curve ticks and resamples
-//! [`RadiusCurve`] into the emitter's `+0x38` every frame. So the radius is
-//! animatable, and reading the `f32` alone would be reading the exporter's
-//! convenience copy rather than the thing the game plays. Pulse authors exactly
-//! one key on all 1,298 of its nodes, which is why the two agree to within the
-//! encoding's `0.075` units - see [`SoundEmitter::radius`].
+//! [`RadiusCurve`] into the emitter's `+0x38` every frame. The `f32` alone is the
+//! exporter's convenience copy, not what the game plays. Pulse authors exactly
+//! one key on all 1,298 nodes, so the two agree to within the encoding's `0.075`
+//! units; see [`SoundEmitter::radius`].
 //!
 //! # Placement is the transform chain
 //!
-//! Nothing about where an emitter *is* lives in its payload; `Init` copies the
-//! node's world matrix out of the scene graph. So placement comes from
-//! [`vex::world_transforms`], the same way a [`Speedup Pad`](crate::pads) is
-//! placed.
+//! Nothing about where an emitter *is* lives in its payload (`Init` copies the
+//! node's world matrix from the scene graph), so placement comes from
+//! [`vex::world_transforms`], as for a [`Speedup Pad`](crate::pads).
 //!
 //! Evidence and confidence scores:
 //! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`.
@@ -50,11 +48,8 @@ pub const CLASS_SOUND: u32 = 0x3e1;
 /// The `soundcone` class: the same payload with its cone fields filled in.
 pub const CLASS_SOUND_CONE: u32 = 0x3e9;
 
-/// The `speaker` class, which Pulse registers and never authors.
-///
-/// Kept as a named constant because "zero instances on the disc" is a finding
-/// worth being able to assert, and a test that spells `0x3cc` inline says
-/// nothing about what it swept for.
+/// The `speaker` class, which Pulse registers and never authors. A named
+/// constant because "zero instances on the disc" is a finding worth asserting.
 pub const CLASS_SPEAKER: u32 = 0x3cc;
 
 /// Smallest payload this module will read.
@@ -95,13 +90,11 @@ const CURVE_VALUES: usize = 0x34;
 /// Seconds per curve tick.
 const CURVE_TICK: usize = 0x38;
 
-/// World units a stored curve value of `u16::MAX` decodes to.
-///
-/// `0x459c4000` at `0x08925d0c`, paired with the divide by [`CURVE_FULL_SCALE`]
-/// at `0x08925e08`. Both are literals in `VexSound_SampleRadiusCurve`, and
-/// together they reproduce all 1,164 stored `sound` keys from the `f32` beside
-/// them. Fitting the ratio to the data instead gives `13.10` and misses two of
-/// them, so this pair is why the encoding is a reading and not a curve fit.
+/// World units a stored curve value of `u16::MAX` decodes to: `0x459c4000` at
+/// `0x08925d0c`, paired with the divide by [`CURVE_FULL_SCALE`] at `0x08925e08`,
+/// both literals in `VexSound_SampleRadiusCurve`. Together they reproduce all
+/// 1,164 stored `sound` keys; fitting the ratio to the data gives `13.10` and
+/// misses two, so the encoding is a reading, not a curve fit.
 const CURVE_RANGE: f32 = 5000.0;
 
 /// What a stored curve value is divided by after scaling to [`CURVE_RANGE`].
@@ -110,29 +103,25 @@ const CURVE_FULL_SCALE: f32 = 65535.0;
 /// One authored sound source, placed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SoundEmitter {
-    /// The bank the cue lives in, by the bank's own 7-character label -
-    /// `gentrak` for `Data\Sound\generaltrack.bnk`, `basilic` for `01_Track`'s.
+    /// The bank the cue lives in, by the bank's own 7-character label (`gentrak`
+    /// for `Data\Sound\generaltrack.bnk`, `basilic` for `01_Track`'s).
     ///
     /// **Not guaranteed to name a bank that exists.** The field is 8 bytes and
-    /// `07_Track` reversed fills all eight with `outpostf`, leaving no
-    /// terminator: the scene's own name was longer than the field. A bank label
-    /// tops out at 7 usable characters too, so nothing on the disc answers to
-    /// it.
+    /// `07_Track` reversed fills all eight with `outpostf`, no terminator (the
+    /// scene's name was longer than the field); a label tops out at 7 usable
+    /// characters, so nothing on the disc answers to it.
     pub bank: String,
     /// The cue, spelled the way the bank's name table spells it, `~` included.
     pub cue: String,
-    /// The radius as the `f32` at `+0x10`.
-    ///
-    /// What `Init` writes into the emitter before the first frame; from then on
-    /// [`SoundEmitter::sample_radius`] is what the game plays. Prefer the curve
-    /// where the two could differ.
+    /// The radius as the `f32` at `+0x10`, what `Init` writes into the emitter
+    /// before the first frame; afterwards [`SoundEmitter::sample_radius`] is what
+    /// the game plays. Prefer the curve where the two could differ.
     pub radius: f32,
     /// The `f32` at `+0x0c`, which `Init` copies to the emitter's `+0x3c`.
     ///
-    /// Deliberately unnamed beyond its destination: `positional-audio.md`'s
-    /// emitter table is pinned three ways and has no `+0x3c` row, so nothing
-    /// observed so far reads this back. It equals [`SoundEmitter::radius`] on
-    /// every `sound` node and is `25.0` on every `soundcone`.
+    /// Unnamed beyond its destination: `positional-audio.md`'s emitter table has
+    /// no `+0x3c` row and nothing observed reads it back. Equals
+    /// [`SoundEmitter::radius`] on every `sound` node, `25.0` on every `soundcone`.
     pub emitter_field_3c: f32,
     /// The cone, where the node authors one.
     pub cone: Option<Cone>,
@@ -149,11 +138,9 @@ impl SoundEmitter {
         [self.to_world[12], self.to_world[13], self.to_world[14]]
     }
 
-    /// The radius the game would use `frame` curve ticks into the node's life.
-    ///
-    /// Falls back to [`SoundEmitter::radius`] where the curve has no keys, which
-    /// is the one case `VexSound_SampleRadiusCurve` leaves the emitter's field
-    /// untouched rather than writing a value.
+    /// The radius the game would use `frame` curve ticks into the node's life;
+    /// [`SoundEmitter::radius`] where the curve has no keys (the one case
+    /// `VexSound_SampleRadiusCurve` leaves the emitter's field untouched).
     #[must_use]
     pub fn sample_radius(&self, frame: f32) -> f32 {
         self.radius_curve.sample(frame).unwrap_or(self.radius)
@@ -184,23 +171,19 @@ impl SoundEmitter {
 /// A `soundcone`'s two authored angles, in radians.
 ///
 /// **Which one reaches the emitter's `+0x40` half-angle is read.**
-/// `VexSoundCone_Init` (`0x08925ff4`, confidence 90 - see
-/// `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s own
-/// section) is the class's init: a four-line wrapper that calls
-/// `VexSound_Init` unchanged and then copies the node's own `+0x00` to the
-/// emitter's `+0x40` half-angle and `+0x08` to `+0x4c` (the enable byte,
-/// already known). So [`Cone::angle_a`] - `+0x00`, always the wider of the two
-/// on this disc - is the half-angle `oag_audio::spatial` now attenuates by,
-/// read off the decompile rather than inferred from the ordering. The two are
-/// still kept as the offsets they came from: on all 134 authored cones
-/// [`Cone::angle_b`] is `40` degrees and [`Cone::angle_a`] is one of eight
-/// whole-degree values from `40` to `120`, so [`Cone::wide`] and
-/// [`Cone::narrow`] are derived rather than stored, and `wide()` is exactly
-/// `angle_a` on every node this corpus authors.
+/// `VexSoundCone_Init` (`0x08925ff4`, confidence 90; see
+/// `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`) calls
+/// `VexSound_Init` unchanged, then copies the node's `+0x00` to the emitter's
+/// `+0x40` half-angle and `+0x08` to `+0x4c` (the enable byte). So
+/// [`Cone::angle_a`] (`+0x00`, always the wider here) is the half-angle
+/// `oag_audio::spatial` attenuates by, read off the decompile. Both are kept as
+/// the offsets they came from: on all 134 cones [`Cone::angle_b`] is `40` degrees
+/// and [`Cone::angle_a`] one of eight whole-degree values from `40` to `120`, so
+/// [`Cone::wide`] and [`Cone::narrow`] are derived, `wide()` being `angle_a` on
+/// every authored node.
 ///
-/// **`angle_b` (`+0x04`) also writes somewhere - the emitter's `+0x44`** - a
-/// field this project has not seen anything read back, the same standing as
-/// the already-documented `+0x3c`. Decoded and named, not used.
+/// **`angle_b` (`+0x04`) writes the emitter's `+0x44`**, which nothing observed
+/// reads back (as `+0x3c`). Decoded and named, not used.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cone {
     /// Payload `+0x00`, radians.
@@ -235,11 +218,10 @@ pub struct RadiusCurve {
 }
 
 impl RadiusCurve {
-    /// Reads the curve out of a payload whose two offsets are still file-form.
-    ///
-    /// `+0x30` and `+0x34` are relocated in place by the game - `node[0x34] +=
-    /// (int)node` - so on disc they are offsets from the payload's own start,
-    /// and a reader that takes them as values gets `64` and `66`.
+    /// Reads the curve out of a payload whose two offsets are still file-form:
+    /// the game relocates `+0x30` and `+0x34` in place (`node[0x34] += (int)node`),
+    /// so on disc they are payload-relative, and taking them as values gives `64`
+    /// and `66`.
     fn parse(payload: &[u8], order: ByteOrder) -> Self {
         let keys = order.u16(payload, CURVE_KEYS) as usize;
         let read = |at: usize| -> Vec<u16> {
@@ -253,8 +235,8 @@ impl RadiusCurve {
         let times = read(CURVE_TIMES);
         let values = read(CURVE_VALUES);
         Self {
-            // A truncated array is a payload that ended early; keep the pair
-            // the same length so `sample` never indexes past one of them.
+            // A truncated array means an early-ended payload; keep the pair the
+            // same length so `sample` never indexes past one.
             times: times[..times.len().min(values.len())].to_vec(),
             values: values[..times.len().min(values.len())].to_vec(),
             seconds_per_tick: order.f32(payload, CURVE_TICK),
@@ -263,9 +245,8 @@ impl RadiusCurve {
 
     /// The radius at `frame` curve ticks, in world units.
     ///
-    /// Clamped at both ends and linear between keys, which is what
-    /// `VexSound_SampleRadiusCurve` (`0x08925cf0`) does. `None` where there are
-    /// no keys at all - the one path that writes nothing.
+    /// Clamped at both ends, linear between keys, as `VexSound_SampleRadiusCurve`
+    /// (`0x08925cf0`) does; `None` with no keys (the one path that writes nothing).
     #[must_use]
     pub fn sample(&self, frame: f32) -> Option<f32> {
         let (&first, &last) = (self.times.first()?, self.times.last()?);
@@ -311,8 +292,8 @@ pub fn encode_radius(radius: f32) -> u16 {
 
 /// Every authored emitter in a `.vex`, `sound` and `soundcone` together.
 ///
-/// An empty result is ordinary: a `.vex` that is not a race circuit authors
-/// none, and neither does a Zone circuit.
+/// An empty result is ordinary: a non-circuit `.vex` and a Zone circuit author
+/// none.
 #[must_use]
 pub fn emitters(data: &[u8], nodes: &[Node]) -> Vec<SoundEmitter> {
     let chain = vex::world_transforms(data, nodes);
@@ -331,7 +312,7 @@ pub fn emitters(data: &[u8], nodes: &[Node]) -> Vec<SoundEmitter> {
 /// A fixed-width, NUL-terminated field, with everything past the NUL dropped.
 ///
 /// The exporter does not clear the bytes after a terminator, so a cue name is
-/// followed by whatever was in its buffer - `~AIR_CON_FAN\0ape` on one node.
+/// followed by whatever was in its buffer (`~AIR_CON_FAN\0ape` on one node).
 fn field_string(payload: &[u8], at: usize, len: usize) -> String {
     let field = payload.get(at..at + len).unwrap_or_default();
     let end = field.iter().position(|&b| b == 0).unwrap_or(field.len());

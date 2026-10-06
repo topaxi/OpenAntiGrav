@@ -1,23 +1,23 @@
 //! The `Anim Transform` node (class `0x3c0`): a keyframed local matrix.
 //!
 //! A scene-graph transform whose translation, rotation and scale are each an
-//! authored keyframe track rather than a constant. It is what makes trackside
-//! scenery *move*, as distinct from the per-material texture transform in
+//! authored keyframe track. It is what makes trackside scenery *move*, as
+//! distinct from the per-material texture transform in
 //! [`super::mesh_tex_transforms`] that makes a surface *scroll*.
 //!
-//! **Every Pulse circuit authors it** - 393 nodes over the twelve, with 474
-//! meshes below them - so a reader that treats the class as the identity, the
-//! way [`super::world_transforms`] used to, does not merely fail to animate:
-//! it drops the node's placement too, and 245 of those meshes composed to the
-//! world origin. See `docs/rendering/scenery-animation.md`.
+//! **Every Pulse circuit authors it** (393 nodes over the twelve, 474 meshes
+//! below them), so treating the class as the identity (as
+//! [`super::world_transforms`] once did) drops the node's placement too: 245 of
+//! those meshes composed to the world origin. See
+//! `docs/rendering/scenery-animation.md`.
 //!
 //! # Where the layout comes from
 //!
-//! Read at instruction level from the class's own binder and evaluators in
-//! `psp-pulse-usa/BOOT.BIN`, reached through the registration site
-//! `AnimTransform_Register` (`0x0890009c`), which is the call passing class id
-//! `0x3c0` to `Vex_RegisterClass`. Full evidence, including how each field was
-//! pinned, is in
+//! Read at instruction level from the class's binder and evaluators in
+//! `psp-pulse-usa/BOOT.BIN`, via the registration site
+//! `AnimTransform_Register` (`0x0890009c`), which is the call
+//! passing class id `0x3c0` to `Vex_RegisterClass`. Evidence, including how each
+//! field was pinned, is in
 //! `docs/ghidra/functions/psp-pulse-usa/anim-transform.md`.
 //!
 //! ```text
@@ -42,42 +42,38 @@
 //! The four pointers are byte offsets **relative to the payload**, which the
 //! binder (`0x088fe5a4`) turns into absolute pointers in place. A key count of
 //! `0` still stores one key, and the six arrays tile `[0x50, payload_len)`
-//! exactly on every one of the 393 - which is what pins the field map rather
-//! than making it plausible.
+//! exactly on all 393, which is what pins the field map.
 //!
 //! # Wipeout HD writes the same layout big-endian
 //!
 //! Field for field, with only the byte order changed: 5,518 nodes across all
-//! seven of its archives decode, their six arrays tile contiguously from
-//! `0x50` with at most 15 bytes of alignment padding after (Pulse leaves none),
-//! and `seconds_per_key` is `1/60` and `flags` `0` on every one - the two
-//! values the evaluators above were read against. That is why
-//! [`anim_transform`] takes the order rather than sniffing it: a payload has no
-//! magic. See `docs/formats/hd-status.md`.
+//! seven archives decode, their six arrays tile from `0x50` with at most 15
+//! bytes of alignment padding (Pulse leaves none), and `seconds_per_key` is
+//! `1/60` and `flags` `0` on every one. So [`anim_transform`] takes the order
+//! rather than sniffing it: a payload has no magic. See
+//! `docs/formats/hd-status.md`.
 
 use super::Node;
 
-/// One channel's authored keys: `u16` times in frames, and a value per key
-/// whose meaning and units are the channel's.
+/// One channel's authored keys: `u16` times in frames, and a value per key in the
+/// channel's own units.
 ///
-/// **Values are held widened to `f32` and otherwise unscaled** - an `s16` key
-/// of `256` is `256.0` here, not `1.0` - because the scaling is the channel's
-/// own (`1/32767` on a rotation, `1/256` on a scale, the node's per-axis
-/// quantum on a translation) and [`AnimTransform::sample`] is where it belongs.
-/// Widening rather than keeping the `s16` is what lets [`wide`](Self::wide)
-/// keys share every line of the evaluator; see the module doc.
+/// **Values are widened to `f32` and otherwise unscaled** (an `s16` key of `256`
+/// is `256.0`, not `1.0`): the scaling is the channel's (`1/32767` rotation,
+/// `1/256` scale, the node's per-axis quantum on translation) and belongs in
+/// [`AnimTransform::sample`]. Widening lets [`wide`](Self::wide) keys share every
+/// line of the evaluator.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AnimChannel {
     /// Key times, in key units (frames at 1/60 s).
     pub times: Vec<u16>,
     /// `(x, y, z)` at each key, raw.
     pub values: Vec<[f32; 3]>,
-    /// The `w` of each key, on a [`wide`](Self::wide) rotation channel that
-    /// stores a whole quaternion. Empty on every other channel, where `w` is
-    /// reconstructed from the other three instead.
+    /// The `w` of each key on a [`wide`](Self::wide) rotation channel storing a
+    /// whole quaternion; empty elsewhere, where `w` is reconstructed.
     pub w: Vec<f32>,
-    /// Whether the file stored `f32` keys rather than `s16` ones - the widened
-    /// form flagged by the node's `+0x34` word.
+    /// Whether the file stored `f32` keys rather than `s16` ones (the node's
+    /// `+0x34` flag).
     pub wide: bool,
 }
 
@@ -88,15 +84,11 @@ impl AnimChannel {
         self.times.is_empty() || self.values.is_empty()
     }
 
-    /// The pair of key indices and the blend factor at `t` frames, the way all
-    /// three evaluators pick one.
-    ///
-    /// They share the shape exactly: below the first key time, hold the first
-    /// key; at or past the last, hold the last; otherwise find the first key
-    /// whose time is above `t` and blend from the one before it. `step` is the
-    /// node's authored `FixedFrames` attribute, which snaps to the preceding
-    /// key instead of blending - the same choice the texture-transform block's
-    /// step flag makes.
+    /// The pair of key indices and the blend factor at `t` frames, as all three
+    /// evaluators pick one: hold the first key below the first time, the last at
+    /// or past the last, else blend from the key before the first one above `t`.
+    /// `step` is the node's `FixedFrames` attribute, which snaps to the preceding
+    /// key (as the texture-transform block's step flag does).
     fn at(&self, t: f32, step: bool) -> (usize, usize, f32) {
         let last = self.values.len() - 1;
         let hold = |i: usize| (i, i, 0.0);
@@ -151,71 +143,59 @@ pub struct AnimTransform {
     /// Rotation keys: the `(x, y, z)` of a **unit quaternion** in 1/32767
     /// units, `w` reconstructed as `sqrt(1 - x^2 - y^2 - z^2)`.
     pub rotation: AnimChannel,
-    /// Scale keys, in 1/256 units - `256` is `1.0`, the same fixed point the
-    /// texture-transform block uses.
+    /// Scale keys, in 1/256 units (`256` is `1.0`, as in the texture-transform
+    /// block).
     pub scale: AnimChannel,
-    /// Seconds per key-time unit, from `+0x3c`. `1/60` on every node read, so
-    /// key times are 60 Hz frames.
+    /// Seconds per key-time unit, from `+0x3c`; `1/60` on every node read.
     pub seconds_per_key: f32,
-    /// The word at `+0x34`: which key *width* each channel uses. See
+    /// The word at `+0x34`: which key *width* each channel uses; see
     /// [`TRANSLATION_IS_FLOAT`] and [`ROTATION_IS_QUATERNION`].
     ///
-    /// **Zero on all 393 of Pulse's nodes**, which is why the widened forms
-    /// were unknown until Wipeout HD was read: 97 of its 5,518 carry `0x5`,
-    /// and they are the grid-camera paths and one billboard's fish. Any bit
-    /// outside those two is still unaccounted for and appears nowhere on
-    /// either disc.
+    /// **Zero on all 393 of Pulse's nodes**, so the widened forms were unknown
+    /// until HD was read: 97 of its 5,518 carry `0x5` (the grid-camera paths and
+    /// one billboard's fish). Any other bit is unaccounted for and appears on
+    /// neither disc.
     pub flags: u32,
     /// The float at `+0x30`: the denominator of the rate multiplier
     /// `AnimTransform_Update` (`0x088fe0a8`) applies to its delta time,
     /// `max(1.0, node+0x5c / this)`.
     ///
-    /// **Inert on this disc.** The multiplier is guarded on both terms being
-    /// non-zero and nothing read writes `node+0x5c`, which is consistent with
-    /// this field being `0.0` on the median node. Carried so a later reader does
-    /// not re-derive that it exists; its *units* are still unknown, so do not
-    /// compute with it.
+    /// **Inert on this disc**: the multiplier is guarded on both terms being
+    /// non-zero and nothing read writes `node+0x5c`. Its *units* are unknown, so
+    /// do not compute with it.
     pub rate_denominator: f32,
-    /// The node's `LoopEnd` attribute, converted to seconds, or
-    /// [`DEFAULT_LOOP_SECONDS`] where the node authors none.
+    /// The node's `LoopEnd` attribute in seconds, or [`DEFAULT_LOOP_SECONDS`]
+    /// where none is authored.
     ///
-    /// The wrap is the engine's own: `AnimTransform_Update` (`0x088fe0a8`)
-    /// advances the node's clock and does `fmodf(t, LoopEnd)` once `t` reaches
-    /// it. [`AnimTransform::sample`] evaluates `seconds % loop` directly
-    /// instead of integrating a per-node clock; the two agree while a node
-    /// starts at zero and is never paused, which is every node on the disc.
+    /// The wrap is the engine's own (`AnimTransform_Update`, `0x088fe0a8`:
+    /// `fmodf(t, LoopEnd)`). [`AnimTransform::sample`] evaluates `seconds % loop`
+    /// instead of integrating a clock; they agree while a node starts at zero and
+    /// is never paused, every node on the disc.
     ///
-    /// **Not in the payload** - it is a node attribute, so
-    /// [`anim_transform`] cannot fill it and [`anim_transforms`] does.
+    /// **Not in the payload**: a node attribute, so [`anim_transform`] cannot fill
+    /// it and [`anim_transforms`] does.
     pub loop_seconds: f32,
     /// The node's `FixedFrames` attribute: snap to the preceding key instead of
-    /// blending toward the next.
-    ///
-    /// 16 nodes over the twelve circuits set it, and they are the ones authored
-    /// as key *pairs* one frame apart - a teleport, which blending would turn
-    /// into a smear. Same role as the texture-transform block's step flag.
+    /// blending. 16 nodes over the twelve circuits set it, the ones authored as
+    /// key *pairs* one frame apart (a teleport, which blending would smear).
     pub step: bool,
 }
 
-/// What `LoopEnd` defaults to when a node authors none: the binder's own
-/// `6000.0 / seconds_per_key` key units, which at 1/60 is 6,000 seconds.
-///
-/// Long enough that nothing on the disc reaches it, which is the point - a node
-/// with no `LoopEnd` is one the artists did not intend to loop.
+/// What `LoopEnd` defaults to when a node authors none: the binder's
+/// `6000.0 / seconds_per_key` key units, 6,000 seconds at 1/60. Long enough that
+/// nothing on the disc reaches it: a node with no `LoopEnd` is not meant to loop.
 pub const DEFAULT_LOOP_SECONDS: f32 = 6000.0;
 
 impl AnimTransform {
     /// The local matrix at `seconds`, in [`super::transform`]'s row-major
-    /// convention: rows 0 to 2 the basis, row 3 the translation.
+    /// convention (rows 0 to 2 the basis, row 3 the translation).
     ///
     /// Reproduces `AnimTransform_Evaluate` (`0x088fe400`): rotation writes the
-    /// basis, translation writes row 3, and scale then multiplies rows 0 to 2 -
-    /// so the composition is scale, then rotate, then translate.
-    ///
-    /// `seconds` wraps at [`loop_seconds`](Self::loop_seconds) first, and
-    /// [`step`](Self::step) decides whether a key blends or snaps - both read
-    /// off the node's attribute list rather than out of the payload, so a
-    /// transform built by hand gets the engine's own defaults for them.
+    /// basis, translation row 3, then scale multiplies rows 0 to 2, so scale,
+    /// then rotate, then translate. `seconds` wraps at
+    /// [`loop_seconds`](Self::loop_seconds) and [`step`](Self::step) picks blend
+    /// or snap, both node attributes, so a hand-built transform gets the engine's
+    /// defaults.
     #[must_use]
     pub fn sample(&self, seconds: f32) -> [f32; 16] {
         let unit = if self.seconds_per_key > 0.0 {
@@ -234,17 +214,16 @@ impl AnimTransform {
         let mut m = super::IDENTITY;
         if !self.rotation.is_empty() {
             let q = self.rotation.sample(t, step);
-            // The widened form stores the quaternion outright, in whatever
-            // units it is already a unit quaternion in; the `s16` form stores
-            // three components in 1/32767 and leaves `w` to be reconstructed.
+            // The widened form stores the quaternion outright; the `s16` form
+            // stores three components in 1/32767 and reconstructs `w`.
             let [x, y, z] = if self.rotation.wide {
                 q
             } else {
                 [q[0] / 32767.0, q[1] / 32767.0, q[2] / 32767.0]
             };
             let w = self.rotation.sample_w(t, step).unwrap_or_else(|| {
-                // The evaluator's own reconstruction. A blended pair can leave
-                // the sum a hair over 1, which would root a negative.
+                // The evaluator's own reconstruction (a blended pair can leave the
+                // sum a hair over 1, which would root a negative).
                 (1.0 - x * x - y * y - z * z).max(0.0).sqrt()
             });
             m = quaternion_matrix([x, y, z, w]);
@@ -297,18 +276,15 @@ fn quaternion_matrix([x, y, z, w]: [f32; 4]) -> [f32; 16] {
 
 /// Decodes one `Anim Transform` payload.
 ///
-/// Returns `None` for a payload too short to hold the header, or one whose key
-/// arrays run past its end - never a partly-filled transform, since a channel
-/// read off the end of the payload would place a mesh somewhere arbitrary
-/// rather than fail visibly.
+/// `None` for a payload too short for the header or whose key arrays run past
+/// its end, never a partly-filled transform: a channel read off the end would
+/// place a mesh somewhere arbitrary instead of failing visibly.
 ///
-/// `order` is the containing file's, from [`super::byte_order`], for the same
-/// reason [`super::transform`] has to be told: a payload carries no magic of
-/// its own. **Wipeout HD writes this class big-endian and authors 5,518 of
-/// them**, and reading those little-endian does not fail loudly - the counts
-/// come out in the tens of thousands, the key arrays then run past the payload,
-/// and every node decodes to `None` and falls back to the identity. That is the
-/// Pulse defect exactly: placement dropped along with the animation.
+/// `order` is the containing file's ([`super::byte_order`]): a payload carries no
+/// magic. **HD writes this class big-endian (5,518 nodes)**, and a little-endian
+/// read does not fail loudly: counts come out in the tens of thousands, the key
+/// arrays run past the payload, and every node decodes to `None` and falls back
+/// to the identity, the Pulse defect exactly.
 #[must_use]
 pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<AnimTransform> {
     if payload.len() < 0x50 {
@@ -321,15 +297,13 @@ pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<A
 
     let flags = u32_at(0x34);
 
-    // A count of zero still stores one key - the evaluators read `values[0]`
-    // through the "before the first key" branch whatever the count says - so a
-    // channel is empty only when the *evaluator* skips it, which it does on a
-    // count of zero. The stored key is still parsed, and `is_empty` is what
-    // decides, so the arrays tile whatever the counts are.
+    // A count of zero still stores one key (the evaluators read `values[0]`
+    // through the "before the first key" branch), so a channel is empty only
+    // when the *evaluator* skips it; the stored key is still parsed and the
+    // arrays tile whatever the counts.
     //
-    // `width` is the key's stride in bytes and is what the flag word selects:
-    // 6 for an `s16` triple, 12 for an `f32` triple, 16 for an `f32`
-    // quaternion. See [`Key`].
+    // `width` is the key's stride in bytes, selected by the flag word: 6 for an
+    // `s16` triple, 12 for an `f32` triple, 16 for an `f32` quaternion. See [`Key`].
     let channel = |count: usize, times_at: usize, values_at: usize, key: Key| {
         let stored = count.max(1);
         let times = u32_at(times_at) as usize;
@@ -389,8 +363,8 @@ pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<A
 enum Key {
     /// Three `s16`, the only form Pulse ships.
     Short,
-    /// Three `f32`: a translation in world units, with the node's quantum at
-    /// `1.0` and its base at the origin on all 21 nodes that use it.
+    /// Three `f32`: a translation in world units (quantum `1.0`, base at the
+    /// origin on all 21 nodes that use it).
     Float3,
     /// Four `f32`: a quaternion with its `w` stored rather than reconstructed.
     Float4,
@@ -408,30 +382,26 @@ impl Key {
 
 /// `+0x34` bit 0: translation keys are `f32` triples rather than `s16` ones.
 ///
-/// **Measured on the Wipeout HD disc by tiling, not read from an evaluator.**
-/// Under the `s16` reading, 97 of its 5,518 nodes leave gaps between their six
-/// key arrays; under this one all 5,518 tile contiguously from `0x50`. The
-/// widths and the counts are separate fields, so a wrong width shows up as a
-/// gap on the first file rather than as a plausible animation. Confidence 85.
+/// **Measured on HD by tiling, not read from an evaluator.** Under the `s16`
+/// reading 97 of 5,518 nodes leave gaps between their six key arrays; under this
+/// all tile contiguously from `0x50`. A wrong width shows as a gap on the first
+/// file, not a plausible animation. Confidence 85.
 pub const TRANSLATION_IS_FLOAT: u32 = 1;
 
 /// `+0x34` bit 2: rotation keys are whole `f32` quaternions.
 ///
-/// Measured the same way as [`TRANSLATION_IS_FLOAT`], and always set with it on
-/// this disc - every one of the 97 carries `0x5` - so **nothing here separates
-/// the two bits**, and a file setting only one would be the test that does.
-/// The component order is taken as `(x, y, z, w)`, continuing the `s16` form's
-/// own `(x, y, z)` with the `w` it reconstructs; that ordering is a choice at
-/// confidence 60, not a reading. Confidence 85 on the width.
+/// Measured as [`TRANSLATION_IS_FLOAT`] is, and always set with it on this disc
+/// (all 97 carry `0x5`), so **nothing separates the two bits**; a file setting
+/// only one would. The order `(x, y, z, w)` is a choice at confidence 60, not a
+/// reading; confidence 85 on the width.
 pub const ROTATION_IS_QUATERNION: u32 = 4;
 
 /// One node's `Anim Transform`, with its `LoopEnd` and `FixedFrames`
 /// attributes applied.
 ///
-/// [`anim_transform`] reads the payload and nothing else, so it cannot see
-/// either - they are node attributes. Prefer this wherever a `Node` is at hand;
-/// on the 178 nodes that author one, the payload-only form loops 6,000 seconds
-/// later than the artists asked for.
+/// [`anim_transform`] reads the payload only, so it cannot see these node
+/// attributes. Prefer this where a `Node` is at hand: on the 178 nodes that
+/// author one the payload-only form loops 6,000 seconds late.
 #[must_use]
 pub fn anim_transform_of(data: &[u8], node: &Node) -> Option<AnimTransform> {
     let mut out = anim_transform(data.get(node.payload())?, super::byte_order(data))?;
@@ -442,10 +412,9 @@ pub fn anim_transform_of(data: &[u8], node: &Node) -> Option<AnimTransform> {
             .find(|(name, _)| name == want)
             .map(|(_, value)| *value)
     };
-    // The engine's own lookup is a `strcmp`, so it is case sensitive, and three
-    // nodes author `Loopend`. Matching those would be a *departure*: the
-    // original does not loop them either. See
-    // `docs/rendering/scenery-animation.md`.
+    // The engine's lookup is a case-sensitive `strcmp`, and three nodes author
+    // `Loopend`: matching them would depart from the original, which does not loop
+    // them either. See `docs/rendering/scenery-animation.md`.
     if let Some(frames) = named("LoopEnd") {
         out.loop_seconds = frames * out.seconds_per_key;
     }
@@ -456,8 +425,8 @@ pub fn anim_transform_of(data: &[u8], node: &Node) -> Option<AnimTransform> {
 /// Every `Anim Transform` node's decoded payload, indexed the same way as
 /// `nodes`, with `None` for every other class.
 ///
-/// Kept beside [`anim_transform`] because [`super::world_transforms`] wants the
-/// whole vector and a caller that wants one node has the payload already.
+/// Beside [`anim_transform`] because [`super::world_transforms`] wants the whole
+/// vector and a caller wanting one node already has the payload.
 #[must_use]
 pub fn anim_transforms(data: &[u8], nodes: &[Node]) -> Vec<Option<AnimTransform>> {
     let class = super::classes_of(data)

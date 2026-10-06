@@ -1,11 +1,6 @@
 //! `Texture` and material nodes: the slots they keep when they cannot be
 //! decoded, where a texture's name comes from, and the fields a material
 //! carries.
-//!
-//! Split out of `vex.rs`'s `#[cfg(test)] mod tests`, which was 1,108
-//! lines - past the 200 an inline test module may hold, and past the 1,000
-//! a file may. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
 
 use crate::vex::*;
 
@@ -58,11 +53,10 @@ fn an_undecodable_texture_keeps_its_slot() {
     assert_eq!(first.palette[0], [0x11, 0, 0, 255]);
 }
 
-/// A track's `Texture` nodes use the short 32-byte header with the name
-/// field zeroed, so the node name is `None` and the only name the texture
-/// has is the runtime asset path at payload `+0x38`. Reading the header
-/// alone is why every track texture used to come back unnamed, and why the
-/// blink-light heuristic could never match track geometry.
+/// A track's `Texture` nodes use the short 32-byte header with the name zeroed,
+/// so the node name is `None` and the only name is the runtime asset path at
+/// payload `+0x38`. Reading the header alone left every track texture unnamed,
+/// so the blink-light heuristic never matched track geometry.
 #[test]
 fn a_texture_names_itself_from_the_payload_when_the_header_does_not() {
     let path = br"Data\Environments\07_Track\Textures\07_Pulse_light_BLEND_GLOW.TGA";
@@ -104,13 +98,11 @@ fn a_texture_names_itself_from_the_payload_when_the_header_does_not() {
     );
 }
 
-/// PS2's `.vex` scenes declare a zero-length texture block: `Texture`
-/// nodes carry real dimensions and non-zero `clut_size`/`texel_size`
-/// fields, but no palette or texel bytes follow the tree at all. Reading
-/// them as if the bytes were there walks past the end of the file, which
-/// is what broke on a real PS2 disc image (`Data\Ships\Feisar\Ship.vex`,
-/// see HANDOVER.md). The header's own declared texture length is the
-/// signal to trust instead of the node's.
+/// PS2's `.vex` scenes declare a zero-length texture block: `Texture` nodes carry
+/// real dimensions and non-zero `clut_size`/`texel_size` but no palette or texel
+/// bytes follow the tree. Reading them as if present walks past the end of the
+/// file (what broke on `Data\Ships\Feisar\Ship.vex` on a real PS2 image); the
+/// header's declared texture length is the signal to trust.
 #[test]
 fn a_zero_length_texture_block_returns_none_for_every_slot() {
     let mut tree: Vec<u8> = Vec::new();
@@ -217,9 +209,9 @@ fn flagged_file(version: u32, class: u32, texels: &[u8]) -> Vec<u8> {
     data
 }
 
-/// A flagged texture is unswizzled on every version, but only a version 5 and
-/// later one hands on its authored levels: version 4 (Pure, Pulse's wrecks)
-/// keeps its renderer-synthesised chain, as it did before 2026-10-01.
+/// A flagged texture is unswizzled on every version, but only version 5 and later
+/// hands on its authored levels: version 4 (Pure, Pulse's wrecks) keeps its
+/// renderer-synthesised chain.
 #[test]
 fn a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels() {
     // Level 0: 64x16 at stride 32 (2 block columns, 2 block rows), level 1:
