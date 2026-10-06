@@ -128,8 +128,7 @@ pub struct MissileStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
     /// Added to the *firing craft's own speed* at launch; see
     /// `oag_weapons::projectile::launch_missile`.
@@ -142,11 +141,9 @@ pub struct MissileStats {
     pub lock_min_dist: f32,
     /// The far end of that same longitudinal window.
     pub lock_max_dist: f32,
-    /// Per-class speeds in [`crate::handling::SpeedClass::ALL`]'s order; read
-    /// through [`MissileStats::speed_for`].
+    /// Per-class speeds, [`crate::handling::SpeedClass::ALL`] order.
     pub(super) speeds: [f32; 4],
-    /// One authored `speed` for every class; see
-    /// [`RocketStats::class_independent`].
+    /// One authored `speed` for every class; see [`RocketStats::class_independent`].
     pub(super) class_independent: bool,
 }
 
@@ -161,8 +158,7 @@ impl MissileStats {
         self.speeds[class as usize]
     }
 
-    /// The same, for a rung named the way the document spells it; `None` as in
-    /// [`RocketStats::speed_for_named`].
+    /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
         if let Some(class) = crate::handling::SpeedClass::from_name(name) {
@@ -214,16 +210,13 @@ pub struct PlasmaStats {
     ///
     /// The largest of any weapon on both shipped tables.
     pub damage: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
     /// Added to the class's own speed at launch.
     pub launch_speed: f32,
-    /// Per-class speeds in [`crate::handling::SpeedClass::ALL`]'s order; read
-    /// through [`PlasmaStats::speed_for`].
+    /// Per-class speeds, [`crate::handling::SpeedClass::ALL`] order.
     pub(super) speeds: [f32; 4],
-    /// One authored `speed` for every class; see
-    /// [`RocketStats::class_independent`].
+    /// One authored `speed` for every class; see [`RocketStats::class_independent`].
     pub(super) class_independent: bool,
 }
 
@@ -237,8 +230,7 @@ impl PlasmaStats {
         self.speeds[class as usize]
     }
 
-    /// The same, for a rung named the way the document spells it; `None` as in
-    /// [`RocketStats::speed_for_named`].
+    /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
         if let Some(class) = crate::handling::SpeedClass::from_name(name) {
@@ -279,18 +271,15 @@ pub struct ShurikenStats {
     ///
     /// `blastdamage`, **not** `rhicochetdamage`.
     pub blastdamage: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
     /// Added to the throwing craft's own speed at launch.
     pub launch_speed: f32,
     /// How long a blade lives, in seconds. Authored at `2` on both tables.
     pub fuse: f32,
-    /// Per-class speeds in [`crate::handling::SpeedClass::ALL`]'s order; read
-    /// through [`ShurikenStats::speed_for`].
+    /// Per-class speeds, [`crate::handling::SpeedClass::ALL`] order.
     pub(super) speeds: [f32; 4],
-    /// One authored `speed` for every class; see
-    /// [`RocketStats::class_independent`].
+    /// One authored `speed` for every class; see [`RocketStats::class_independent`].
     pub(super) class_independent: bool,
 }
 
@@ -308,8 +297,7 @@ impl ShurikenStats {
         self.speeds[class as usize]
     }
 
-    /// The same, for a rung named the way the document spells it; `None` as in
-    /// [`RocketStats::speed_for_named`].
+    /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
         if let Some(class) = crate::handling::SpeedClass::from_name(name) {
@@ -344,8 +332,7 @@ pub struct MineStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
     /// How long a dropped mine lives before it expires, in seconds.
     ///
@@ -389,8 +376,7 @@ pub struct CannonStats {
     /// Direct hit only: the block authors neither `blastforce` nor
     /// `blastradius`, so there is no splash.
     pub damage_per_bullet: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
 }
 
@@ -419,8 +405,7 @@ pub struct QuakeStats {
     /// this port spends `radius` as the proximity gate rather than inventing a
     /// second.
     pub radius: f32,
-    /// Seconds of slowdown charged to a craft it passes over; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown to a craft it passes over; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
 }
 
@@ -469,8 +454,7 @@ pub struct BombStats {
     pub blastradius: f32,
     /// Energy the blast costs a craft inside that radius.
     pub damage: f32,
-    /// Seconds of slowdown charged to a craft it hits; see
-    /// [`RocketStats::slowdown_time`].
+    /// Seconds of slowdown on a hit; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,
     /// How long a dropped bomb lives before it goes off on its own, in seconds.
     ///
