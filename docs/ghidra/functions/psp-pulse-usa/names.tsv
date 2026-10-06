@@ -1325,3 +1325,5 @@
 0x08852334	function	Ai_RandUnit	90	ai-branch-choice.md
 0x0881b52c	function	Hud_PushMessage	80	hud-messages.md
 0x0881f148	function	Hud_UpdateMessages	80	hud-messages.md
+0x089001a4	function	VexCamera_BuildViewMatrix	75	billboards.md
+0x089009a8	function	Billboard_UpdateViewMatrix	70	billboards.md
