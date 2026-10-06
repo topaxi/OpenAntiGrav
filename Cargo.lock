@@ -2464,6 +2464,7 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-formats",
+ "oag-hd",
  "oag-pulse",
  "oag-pure",
  "oag-testdata",
