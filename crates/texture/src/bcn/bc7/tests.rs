@@ -1,9 +1,7 @@
 use super::*;
 
-/// Writes bits LSB-first into a 16-byte block, the exact inverse of
-/// [`BitStream::read`] - used to build synthetic blocks with known field
-/// values so a decode can be checked against them without needing a real
-/// encoder or a captured reference block.
+/// Writes bits LSB-first into a 16-byte block, the inverse of
+/// [`BitStream::read`], to build synthetic blocks with known field values.
 struct BitWriter {
     data: [u8; 16],
     pos: u32,
@@ -57,17 +55,15 @@ fn lerp_at_the_index_extremes_returns_an_endpoint_exactly() {
     assert_eq!(lerp(10, 200, 64), 200);
 }
 
-/// Mode 6 is the simplest encoding to hand-build: one subset (so no
-/// partition table), no rotation, no index-selection bit, a per-endpoint
-/// P-bit and a single 4-bit index per texel - every field in the spec's own
-/// listed order, with no subset/partition lookup to get wrong.
+/// Mode 6 is the simplest to hand-build: one subset (no partition table), no
+/// rotation, no index-selection bit, a per-endpoint P-bit and a 4-bit index per
+/// texel.
 #[test]
 fn mode6_round_trips_known_endpoints_through_every_texel() {
     let mut w = BitWriter::new();
     w.write(0b1000000, 7); // mode 6: six zero bits then a one, LSB-first
-    // Endpoint 0: R=0x7f G=0x00 B=0x00 A=0x7f (7 bits each), pbit 0 -> widens
-    // to 0xfe/0x00/0x00/0xfe (a 7-bit field plus a zero pbit: value<<1|0,
-    // widened to 8 bits by replication).
+    // Endpoint 0: R=0x7f G=0x00 B=0x00 A=0x7f (7 bits each), pbit 0 -> widens to
+    // 0xfe/0x00/0x00/0xfe (value<<1|0).
     w.write(0x7f, 7); // r0
     w.write(0x7f, 7); // r1 (endpoint 1's red, read before g/b/a per spec order)
     w.write(0x00, 7); // g0
@@ -78,15 +74,14 @@ fn mode6_round_trips_known_endpoints_through_every_texel() {
     w.write(0x7f, 7); // a1
     w.write(0, 1); // pbit endpoint 0
     w.write(1, 1); // pbit endpoint 1
-    // 16 indices, 4 bits each except the anchor (texel 0) at 3 bits. All
-    // zero index -> every texel should decode to endpoint 0 exactly.
+    // 16 indices, 4 bits each except the anchor (texel 0) at 3. All zero ->
+    // every texel decodes to endpoint 0.
     for t in 0..16 {
         w.write(0, if t == 0 { 3 } else { 4 });
     }
 
     let decoded = bc7(&w.data);
-    // Endpoint 0: r/a value 0x7f with pbit 0 -> (0x7f<<1)|0 = 0xfe, widened
-    // (8-bit field, no further expansion needed since color_full_bits==8).
+    // Endpoint 0: r/a 0x7f with pbit 0 -> (0x7f<<1)|0 = 0xfe (color_full_bits==8).
     for texel in decoded {
         assert_eq!(texel, [0xfe, 0x00, 0x00, 0xfe]);
     }
@@ -107,13 +102,9 @@ fn mode6_max_index_reaches_endpoint_one_except_at_the_capped_anchor() {
     w.write(0, 1); // pbit endpoint 0
     w.write(1, 1); // pbit endpoint 1
     for t in 0..16 {
-        // Every stored index is all-ones, but the anchor texel (0) only
-        // stores 3 of the 4 index bits - its top bit is defined to be zero
-        // by the encoder's own choice of which endpoint is "first" (the
-        // spec's "ordering the endpoints such that the highest bit is
-        // guaranteed to be zero"), so its numeric index tops out at 7, not
-        // 15, and it does not reach endpoint 1 as fully as every other
-        // texel does.
+        // Every stored index is all-ones, but the anchor texel (0) stores only 3
+        // of 4 bits (its top bit is zero by the spec's endpoint ordering), so
+        // its index tops out at 7, not 15, and it falls short of endpoint 1.
         w.write(0b1111, if t == 0 { 3 } else { 4 });
     }
 
@@ -139,10 +130,8 @@ fn an_all_zero_block_is_the_reserved_encoding_and_does_not_panic() {
 
 #[test]
 fn every_mode_number_decodes_without_panicking() {
-    // Not a correctness check - a coverage sweep that every mode's field
-    // widths add up to something `BitStream::read` can service without
-    // running off the end of the 16-byte block, for a block that is
-    // otherwise all-ones (the densest bit pattern).
+    // Not a correctness check: a sweep that every mode's field widths fit the
+    // 16-byte block for an all-ones block (the densest pattern).
     for mode in 0..8u32 {
         let mut block = [0xffu8; 16];
         // Clear the low byte down to just this mode's own unary marker.

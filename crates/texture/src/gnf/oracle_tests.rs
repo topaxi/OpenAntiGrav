@@ -1,7 +1,6 @@
-//! Shared helpers for `search_tests.rs` and `micro_tile_tests.rs`: matching
-//! a `.gnf` to its HD `.gtf` twin by team/livery folder (not just basename -
-//! see `find_hd_twin`'s own doc for why that matters) and the pixel-index
-//! bit order every tiling hypothesis in both files decodes blocks with.
+//! Shared helpers for `search_tests.rs` and `micro_tile_tests.rs`: matching a
+//! `.gnf` to its HD `.gtf` twin by team/livery folder (see `find_hd_twin`) and
+//! the pixel-index bit order both files decode blocks with.
 
 use oag_assets::psarc::Archive;
 
@@ -96,11 +95,9 @@ pub(super) fn collect_oracle_pairs(max: usize) -> Vec<OraclePair> {
     out
 }
 
-/// The single `.gtf` this `.gnf` path's team (and livery slot, if it names
-/// one) most plausibly re-ships as, out of the HD archives - matching by
-/// basename alone can silently pair one ship's decal with a different
-/// ship's or a different livery's same-named-and-same-sized file, which is
-/// exactly the mistake an earlier pass over this data made.
+/// The single `.gtf` this `.gnf` path's team (and livery slot) most plausibly
+/// re-ships as. Matching by basename alone can pair one ship's decal with a
+/// different ship's or livery's same-named, same-sized file.
 pub(super) fn find_hd_twin(basename: &str, gnf_path: &str) -> Option<(u32, u32, Vec<[u8; 4]>)> {
     let want_team = team_token(gnf_path)?;
     let want_livery = livery_token(gnf_path);
@@ -135,8 +132,7 @@ pub(super) fn find_hd_twin(basename: &str, gnf_path: &str) -> Option<(u32, u32, 
 
 /// `ADDR_NON_DISPLAYABLE` ("Thin") micro tile type, `bpp == 128`:
 /// `pixelBit0..5 = x0,y0,x1,y1,x2,y2` (`Lib::ComputePixelIndexWithinMicroTile`,
-/// `addrlib1.cpp`) - the intra-tile pixel order both the macro-tiled and
-/// micro-tiled address formulas in this directory use.
+/// `addrlib1.cpp`), the intra-tile order both address formulas here use.
 pub(super) fn micro_tile_index(bx: u32, by: u32) -> u32 {
     let x0 = bx & 1;
     let x1 = (bx >> 1) & 1;
