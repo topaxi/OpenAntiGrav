@@ -23,7 +23,8 @@ same PNG with and without it).
 | `playstation`, `xbox`, `nintendo`, `keyboard` | that family, forced |
 
 `auto` answers: a key was pressed last, so the keyboard; a pad was last, so its
-family; nothing touched yet, so the disc's own. A PlayStation pad under `auto`
+family (the disc's own when the family is unknown); nothing touched yet, so the
+disc's own. A PlayStation pad under `auto`
 is the disc's own glyphs, not PromptFont's PlayStation set (`playstation`
 forced gives that). An unknown token is reported and `auto` used.
 
@@ -78,10 +79,26 @@ and an injected file reader, so tests need no device and no Steam.
    or a stick past 0.5 switches to that pad's family. A resting stick does not
    flip it. A pad attached and untouched seeds the family until something is
    used.
-2. **Pad family** (`classify_pad`): USB vendor id (Sony `054c`, Nintendo
-   `057e`, Microsoft `045e`) from gilrs, then name keywords; anything else is
-   Xbox-shaped, SDL's "standard".
-3. **Under Steam**, a pad is usually a Steam Input *virtual* Xbox 360 pad, so
+2. **Is it a pad at all** (`is_gamepad`, 2026-10-06): the OS lists a
+   keyboard's consumer-control / system-control HID interface as a joystick
+   (a Steam launch with no controller logged `Keychron Keychron K2 Pro System
+   Control`, UUID `03000000-3434-0000-2102-000011010000`, "No mapping found",
+   and the prompts flipped to Xbox). A device counts only with a known SDL
+   mapping, or at least two real face buttons plus both left-stick axes, and
+   never when its name is a known non-pad interface (`system control`,
+   `consumer control`, `keyboard`, `mouse`, `touchpad`, `motion sensors`,
+   `power button`). A device that is not a pad is skipped by `Pad::poll_players`
+   (so it neither drives a craft nor moves `last used`), by `names` and by
+   `first_family`; the game logs it once as `not a gamepad, ignored`.
+   Pure-function tests with the Keychron descriptor verbatim, an Xbox pad, a
+   DualSense, an unknown pad with real axes and the Steam virtual pad are in
+   `crates/input/src/prompt/tests.rs`; the gilrs read of the capabilities
+   (`pad_caps`) needs a device and is not covered by a test.
+3. **Pad family** (`classify_pad`): USB vendor id (Sony `054c`, Nintendo
+   `057e`, Microsoft `045e`, Valve `28de`) from gilrs, then name keywords. A
+   pad nothing recognises has **no family**, and `auto` draws the disc's own
+   glyphs for it rather than guessing Xbox (it was Xbox before 2026-10-06).
+4. **Under Steam**, a pad is usually a Steam Input *virtual* Xbox 360 pad, so
    its own name and ids say Xbox. Steam names the real controller in a file
    whose path is in the `SteamVirtualGamepadInfo` environment variable. SDL
    parses it in
@@ -97,9 +114,12 @@ and an injected file reader, so tests need no device and no Steam.
    A Steam launch hides stderr, so the game's log file records which of these
    variables it saw and whether the file exists: see
    [`logging.md`](../architecture/logging.md), "The log file".
-4. **The Deck's own controls**: `SteamDeck=1` (set by Steam for a game started
+5. **The Deck's own controls**: `SteamDeck=1` (set by Steam for a game started
    on a Deck) with a Steam or Microsoft vendor pad and no file is Xbox-shaped,
    as is SDL's `steam` type.
+
+**Deferred**: the live Steam Input pad check waits until the maintainer has a
+controller; the 2026-10-06 launch log had none.
 
 **Not verified here**: this sandbox has no Steam client, so the Steam path is
 tested against the file format SDL's source defines and a hand-written sample,

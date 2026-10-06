@@ -300,6 +300,9 @@ impl App {
         for name in controls.pad().names() {
             info!("gamepad: {name}");
         }
+        for name in controls.pad().ignored() {
+            info!("not a gamepad, ignored: {name}");
+        }
 
         // Built now rather than when the setting is first turned on, and from
         // **our own** 5x7 glyphs rather than the disc's font, for the same
