@@ -1227,6 +1227,38 @@ bursts on Assegai, the second starting a tenth of a second in. Pure's twin
 HD's is a different mechanism on a different node class; see
 [`ps3-hdfury-eu/absorb-feedback.md`](../ps3-hdfury-eu/absorb-feedback.md).
 
+## Contact damage is charged every tick of a sustained graze
+
+Moved from the `CONTACT_DAMAGE_SCALE` doc comment in `crates/physics/src/damage.rs`
+(checked 2026-09-06, prompted by `07_Track`'s Ace opponent ending at shield `0.00` at
+every `Tuning::look_speed` tried; `docs/gameplay/ai.md`).
+
+Charging `0.05 * 0.7` per `impulse_sum` on **every** tick of a scrape is what the original
+does: `FUN_088418e0`'s contact loop runs every tick the ring holds a record and gates
+nothing on contact duration (the `steer-left.inputs` leg above: 115 of ~200 ticks in wall
+contact, pool drained monotonically). `Body_RecordContact`'s third argument is `p`, the
+full normal-plus-tangential impulse that `wall::resolve` sums, so a tangential graze and a
+hard impact follow one rule.
+
+Two other candidates for an over-charge came back clean:
+
+- **The ring cap.** `Body_RecordContact` rejects an append past 8 entries a tick
+  (`body+0x370`, `n < 8`); this crate does not reproduce the cap. `resolved_count` never
+  exceeded 5 on `07_Track` and `13_Track` (lone Ace, 18,000 ticks each), so it would be a
+  no-op and was not implemented.
+- **Fixed 60 Hz against the original's variable step**
+  ([ADR-0007](../../../architecture/adr/0007-fixed-timestep-vs-original.md)).
+  `docs/psp/frame-pacing.md` puts racing `dt` at `0.016396`-`0.016973`; an overrunning
+  frame gives a larger `dt`, so *fewer* `Ship_Damage` calls per second, not more.
+
+What varies the per-tick charge is the contact law: a flat-wall probe at a fixed 28-degree
+approach with no thrust converges on **12.84 %** velocity loss a tick, 73 % the restitution
+bounce and 27 % the `0.035` friction floor. Across both circuits' scrape ticks the
+fractional loss has a **median of 3.55 %** (near-tangential, the friction floor) and a tail
+past 15 % on steeper-incidence ticks. A lap grinding at a steep angle is charged more per
+tick because the recovered law says so; the cadence and the constant stay, and `07_Track`'s
+destruction is a driving-line question (`docs/gameplay/ai.md`), not a damage-model one.
+
 ## What is not verified
 
 - **Whether `1` means "network human" and `3` is genuinely unused** is still
