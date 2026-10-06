@@ -645,6 +645,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
+    // A Zone race on a title whose zone effects bind one shared texture in place
+    // of the per-slot targets draws no advert: that texture is unread.
+    let adverts_spec = title.adverts.filter(|spec| {
+        let shared = spec.zone_shares_one_texture && options.mode == Mode::Zone;
+        if shared {
+            report.push(
+                "a Zone race binds one shared billboard texture to every slot but 8 on this \
+                 title and that texture is unread, so the adverts are not drawn"
+                    .to_string(),
+            );
+        }
+        !shared
+    });
     let (gantry, visibility, adverts) = gantry_visibility::build(
         &mut archives,
         &track,
@@ -654,6 +667,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ps3_geometry.as_deref(),
         geometry_name.as_deref(),
         vex_geometry,
+        adverts_spec,
         start_position.as_ref(),
         &mut report,
     );

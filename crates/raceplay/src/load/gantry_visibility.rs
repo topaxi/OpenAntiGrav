@@ -28,6 +28,7 @@ pub(super) fn build(
     ps3_geometry: Option<&[u8]>,
     geometry_name: Option<&str>,
     vex_geometry: bool,
+    adverts_spec: Option<&oag_title::adverts::Adverts>,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
 ) -> (
@@ -80,11 +81,13 @@ pub(super) fn build(
                 None => String::new(),
             },
         ));
-        // Pulse's adverts are drawn through their own cameras into a texture the
-        // track's placeholder quads show (`crate::adverts`). HD binds by name
-        // instead and has no card to draw.
-        if vex_geometry {
-            adverts = crate::adverts::load(archives, &manifest, track_model, report);
+        // An advert is drawn through its own camera into a texture the track's
+        // placeholder quads show (`crate::adverts`), on a title whose pass was
+        // measured. Which titles those are, and with what target, is
+        // `oag_title::Title::adverts`: not geometry kind, because a 2048-lineage
+        // model is PS3-shaped too and nothing of its pass is measured.
+        if let Some(spec) = adverts_spec {
+            adverts = crate::adverts::load(archives, &manifest, track_model, spec, report);
         }
         // The manifest's own spelling of the model, not a constant here:
         // every Pulse circuit names the same file, and a source that names

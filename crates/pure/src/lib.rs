@@ -133,6 +133,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: Some(frontend::PRESSINGS),
+    adverts: None,
 };
 
 /// Where Pure keeps its music.

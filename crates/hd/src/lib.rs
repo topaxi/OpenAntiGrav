@@ -158,6 +158,22 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
+    adverts: Some(&oag_title::adverts::Adverts {
+        // Read off RPCS3 (2026-10-06): the target object at the slot's
+        // `+0xf0` holds 0x200 x 0x100, and the projection matrices of all
+        // eight slots fit `x = 1 / tan(fov / 2)`, `y = aspect * x`, near 0.5
+        // exactly. The far plane only fits a range (5400 to 5700: the two
+        // clip terms are within one float step of each other there), so 5500
+        // is a value inside it, and a flat card does not depend on it. See
+        // `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`.
+        target: (512, 256),
+        near: 0.5,
+        far: 5500.0,
+        // `Billboard_CreateFromColour_q`'s pool order is not read on HD.
+        colour_pool: false,
+        zone_shares_one_texture: true,
+        origin: oag_title::Origin::Measured,
+    }),
 };
 
 /// Where Wipeout HD keeps its music.

@@ -26,7 +26,8 @@ fn auricom_camera() -> oag_vex::camera::Camera {
 /// aspect scales x instead of y, or if the view is not the camera's inverse.
 #[test]
 fn the_origin_lands_where_the_captured_matrices_put_it() {
-    let matrix = view_projection(&auricom_camera()).expect("a one-key perspective camera");
+    let matrix =
+        view_projection(&auricom_camera(), 1.2, 2017.7).expect("a one-key perspective camera");
     let clip = matrix * Vec3::ZERO.extend(1.0);
     let (x, y) = (clip.x / clip.w, clip.y / clip.w);
     assert!((x - (-0.028_32)).abs() < 2e-4, "x {x}");
@@ -39,7 +40,7 @@ fn the_origin_lands_where_the_captured_matrices_put_it() {
 /// scale)`).
 #[test]
 fn the_frustum_at_the_model_plane_is_two_to_one() {
-    let matrix = view_projection(&auricom_camera()).expect("camera");
+    let matrix = view_projection(&auricom_camera(), 1.2, 2017.7).expect("camera");
     let at = |x: f32, y: f32| {
         let clip = matrix * Vec3::new(x, y, 0.0).extend(1.0);
         (clip.x / clip.w, clip.y / clip.w)
@@ -54,28 +55,80 @@ fn the_frustum_at_the_model_plane_is_two_to_one() {
 fn an_orthographic_camera_gets_no_card() {
     let mut camera = auricom_camera();
     camera.fov_flags = 1;
-    assert!(view_projection(&camera).is_none());
+    assert!(view_projection(&camera, 1.2, 2017.7).is_none());
+}
+
+/// A camera at the origin looking down -z with the given authored field of view
+/// and aspect.
+fn camera_at_origin(fov_degrees: f32, aspect: f32) -> oag_vex::camera::Camera {
+    let mut payload = vec![0u8; oag_vex::camera::PAYLOAD_LEN];
+    payload[0..4].copy_from_slice(&1u32.to_le_bytes());
+    payload[4..8].copy_from_slice(&0x20u32.to_le_bytes());
+    payload[8..12].copy_from_slice(&0x22u32.to_le_bytes());
+    payload[0x1c..0x20].copy_from_slice(&aspect.to_le_bytes());
+    let raw = (fov_degrees * 65535.0 / 180.0).round() as u16;
+    payload[0x22..0x24].copy_from_slice(&raw.to_le_bytes());
+    oag_vex::camera::Camera::parse(
+        None,
+        &payload,
+        oag_vex::vex::matrix::IDENTITY,
+        ByteOrder::Little,
+    )
+    .expect("a full payload")
+}
+
+/// The projection matrices of Wipeout HD's eight billboard slots, read live off
+/// RPCS3 on Talon's Junction (2026-10-06, `g_BillboardSlots + 0x10 + k * 0x100 +
+/// 0xb0`): `(authored fov, aspect, matrix x scale, matrix y scale)`. The fov and
+/// aspect are the slot's own `.vex` camera, the scales the matrix the engine
+/// built from it, so this fails if the law is not `x = 1 / tan(fov / 2)`,
+/// `y = aspect * x` or the camera is read differently.
+const HD_LIVE: [(f32, f32, f32, f32); 6] = [
+    (14.474_709, 1.0, 7.8745, 7.8745),
+    (68.877_09, 2.0, 1.4584, 2.9167),
+    (58.321_81, 2.0, 1.7922, 3.5843),
+    (9.676_356, 2.0, 11.8143, 23.6285),
+    (18.039_825, 2.0, 6.2996, 12.5992),
+    (61.727_627, 4.0, 1.6733, 6.6931),
+];
+
+#[test]
+fn hd_projection_matches_the_matrices_read_live_off_rpcs3() {
+    for (fov, aspect, want_x, want_y) in HD_LIVE {
+        let camera = camera_at_origin(fov, aspect);
+        let matrix = view_projection(&camera, 0.5, 5500.0).expect("a perspective camera");
+        let (x, y) = (matrix.x_axis.x, matrix.y_axis.y);
+        assert!(
+            (x - want_x).abs() / want_x < 2e-3,
+            "fov {fov}: x scale {x}, want {want_x}"
+        );
+        assert!(
+            (y - want_y).abs() / want_y < 2e-3,
+            "fov {fov}: y scale {y}, want {want_y}"
+        );
+    }
 }
 
 impl Cards {
     /// Draws every card at `seconds` and reads each target back as RGBA8, in
-    /// card order, with its slot.
+    /// card order, with its slot and size.
     fn read_back(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         seconds: f32,
-    ) -> Vec<(u32, Vec<u8>)> {
-        let row = SIDE * 4;
+    ) -> Vec<(u32, (u32, u32), Vec<u8>)> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         self.render(queue, &mut encoder, seconds);
         let buffers: Vec<wgpu::Buffer> = self
             .cards
             .iter()
             .map(|card| {
+                let (width, height) = card.size;
+                let row = width * 4;
                 let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("advert readback"),
-                    size: u64::from(row * SIDE),
+                    size: u64::from(row * height),
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                     mapped_at_creation: false,
                 });
@@ -86,12 +139,12 @@ impl Cards {
                         layout: wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(row),
-                            rows_per_image: Some(SIDE),
+                            rows_per_image: Some(height),
                         },
                     },
                     wgpu::Extent3d {
-                        width: SIDE,
-                        height: SIDE,
+                        width,
+                        height,
                         depth_or_array_layers: 1,
                     },
                 );
@@ -114,7 +167,7 @@ impl Cards {
                     .get_mapped_range()
                     .expect("mapped")
                     .to_vec();
-                (card.slot, bytes)
+                (card.slot, card.size, bytes)
             })
             .collect()
     }
@@ -152,7 +205,7 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
         .map(|v| v.split(',').filter_map(|t| t.parse().ok()).collect())
         .unwrap_or_else(|_| vec![0.0, 2.5]);
     for &seconds in &times {
-        for (slot, pixels) in cards.read_back(&device, &queue, seconds) {
+        for (slot, (width, height), pixels) in cards.read_back(&device, &queue, seconds) {
             if let Ok(dir) = std::env::var("OAG_ADVERT_DUMP") {
                 let mut shown = pixels.clone();
                 shown
@@ -160,7 +213,7 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
                     .0
                     .iter_mut()
                     .for_each(|p| p[3] = 255);
-                let png = oag_texture::png::encode_rgba(SIDE, SIDE, &shown);
+                let png = oag_texture::png::encode_rgba(width, height, &shown);
                 std::fs::write(format!("{dir}/{tag}-slot{slot}-{seconds}.png"), png)
                     .expect("writing the dump");
             }
@@ -202,6 +255,17 @@ fn pulse_psp_cards_draw_something_into_their_targets() {
 #[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
 fn pulse_ps2_cards_draw_something_into_their_targets() {
     let Some(counts) = drawn_cards("data/images/pulse-ps2-eu.chd", "ps2") else {
+        return;
+    };
+    println!("{counts:?}");
+    assert!(!counts.is_empty(), "no card was built");
+    assert_every_slot_shows_a_picture(&counts);
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
+fn hd_cards_draw_something_into_their_targets() {
+    let Some(counts) = drawn_cards("data/images/hdfury-ps3-eu-dec.iso", "hd") else {
         return;
     };
     println!("{counts:?}");

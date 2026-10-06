@@ -174,6 +174,54 @@ pub fn strip_slot_placeholders(model: &mut Model) -> usize {
     strip_texture(model, is_slot_placeholder)
 }
 
+/// Negates the V coordinate of every vertex a draw bound to one of `served`'s
+/// placeholders uses, once per vertex, and says how many vertices moved.
+///
+/// **The original samples an advert's target with `TEXSCALE` V = -1.** The
+/// target holds the picture top row first (its viewport's y scale is
+/// negative, like the main pass) and a track's UVs run V up, so the engine
+/// flips V on exactly the draws that sample a target: a live PPSSPP dump of
+/// Talon's Junction shows `TEXSCALE (1, -1)` and `TEXOFFSET (0, 0)` on both
+/// prims that read the 128 x 128 buffer.
+pub fn flip_served_placeholder_v(model: &mut Model, served: &[u32]) -> usize {
+    let slots: Vec<usize> = model
+        .textures
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| {
+            t.as_ref()
+                .and_then(|t| slot_number(&t.label))
+                .is_some_and(|n| served.contains(&n))
+        })
+        .map(|(slot, _)| slot)
+        .collect();
+    if slots.is_empty() {
+        return 0;
+    }
+    let mut seen = vec![false; model.vertices.len()];
+    let mut moved = 0;
+    for draws in [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ] {
+        for draw in draws
+            .iter()
+            .filter(|d| d.texture.is_some_and(|t| slots.contains(&t)))
+        {
+            for i in draw.range.clone() {
+                let vertex = model.indices[i as usize] as usize;
+                if !seen[vertex] {
+                    seen[vertex] = true;
+                    model.vertices[vertex].texcoord[1] = -model.vertices[vertex].texcoord[1];
+                    moved += 1;
+                }
+            }
+        }
+    }
+    moved
+}
+
 /// The slot number a billboard placeholder texture names: `billboard7.tga` is
 /// 7, on either title's spelling. `None` for any other label.
 #[must_use]
