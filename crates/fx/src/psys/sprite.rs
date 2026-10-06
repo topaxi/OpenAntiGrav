@@ -49,10 +49,12 @@ use oag_pob::{self as pob, ParticleSystem};
 
 /// The sheet's width and height in texels.
 ///
-/// Chosen, not measured: a race loads a few dozen effects, and the whole PSP
-/// corpus embeds 76 sprites of at most 128x64 - about 300 K texels before
-/// sharing, under a third of this.
-pub const SHEET_SIZE: u32 = 1024;
+/// Chosen, not measured. 1024 held the whole PSP corpus (76 sprites of at
+/// most 128x64) but not Omega's: its explosion effects author 1024x1024 and
+/// 512x512 sprites, and at 1024 and 2048 some did not fit and drew the
+/// procedural white disc instead. A Tech De Ra race needs more than 2048
+/// (3 emitters unplaced) and fits all of its effects at 4096.
+pub const SHEET_SIZE: u32 = 4096;
 
 /// Empty texels between packed sprites, so bilinear filtering at one
 /// sprite's edge never reads its neighbour.

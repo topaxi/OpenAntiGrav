@@ -182,6 +182,19 @@ pub(super) fn particle_effect(
     Ok((effect, note))
 }
 
+/// The report line for an effect whose sprite loaded but did not fit the
+/// [`psys::Library`]'s sheet, so it draws the procedural profile.
+pub(super) fn sheet_note(name: &str, effects: &psys::Library) -> Option<String> {
+    let unplaced: Vec<&str> = effects.get(name)?.unplaced_sprites().collect();
+    (!unplaced.is_empty()).then(|| {
+        format!(
+            "{name}: sprite of {} did not fit the sprite sheet - drawn as the procedural \
+             profile (a stand-in), not the disc's picture",
+            unplaced.join(", ")
+        )
+    })
+}
+
 /// Decodes an exhaust texture out of the archive set, in whichever of the two
 /// formats this disc stores it.
 ///

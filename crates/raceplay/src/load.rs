@@ -712,6 +712,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 }
                 report.push(note);
                 effects.insert(name, effect);
+                report.extend(super::assets::sheet_note(name, &effects));
             }
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
