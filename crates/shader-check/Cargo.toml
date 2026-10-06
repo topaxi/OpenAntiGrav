@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-naga = { version = "30", default-features = false, features = ["wgsl-in"] }
+naga = { version = "30.0.1", default-features = false, features = ["wgsl-in"] }
 wesl = "0.6"
 
 [lints]
