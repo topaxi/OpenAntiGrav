@@ -401,6 +401,8 @@ pub(crate) struct Session {
     /// `--prompt-style`, which wins over `[controls] prompt_style` for this
     /// run. See `session::prompts`.
     pub(crate) prompt_style_override: Option<oag_input::prompt::PromptStyle>,
+    /// The family last logged, so a change is one line and a steady state none.
+    pub(crate) prompt_family_logged: Option<Option<oag_input::prompt::PromptFamily>>,
     /// Every screen filter this run can offer: the built-ins and the player's
     /// own `shaders/` directory, polled once a second by the frame loop so a
     /// saved edit shows without a restart. See `oag_game::screen`.

@@ -7,6 +7,7 @@
 
 use oag_game::prompts::substitution;
 
+use crate::race_stage::endrace_touch::EndRace;
 use crate::stage::Stage;
 
 use super::Session;
@@ -23,12 +24,26 @@ impl Session {
         let style = self.settings.controls.prompt_style_value();
         let style = self.prompt_style_override.unwrap_or(style);
         let family = self.controls.prompt_family(style);
+        if self.prompt_family_logged != Some(family) {
+            self.prompt_family_logged = Some(family);
+            log::info!(
+                "button prompts: {} (style {}, last used {:?})",
+                family.map_or("the disc's own", |family| family.name()),
+                style.name(),
+                self.controls.prompt_used(),
+            );
+        }
         let controls = &self.controls;
         let substitution =
             substitution(title.prompts, family, &|button| controls.bound_keys(button));
         match &mut self.stage {
             Stage::Frontend(stage) => stage.renderer.set_prompt_substitution(substitution),
             Stage::Menu(stage) => stage.renderer.set_prompt_substitution(substitution),
+            Stage::Race(stage) => {
+                if let Some(EndRace::Disc(runtime)) = &mut stage.endrace {
+                    runtime.set_prompt_substitution(substitution);
+                }
+            }
             _ => {}
         }
     }

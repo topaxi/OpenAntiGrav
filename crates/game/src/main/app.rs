@@ -396,6 +396,7 @@ impl App {
             give: self.give,
             no_intro: self.no_intro,
             prompt_style_override: self.prompt_style,
+            prompt_family_logged: None,
             autopilot: self.autopilot,
             autopilot_pilot: self.autopilot_pilot,
             autopilot_skill: self.autopilot_skill,

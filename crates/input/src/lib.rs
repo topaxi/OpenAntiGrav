@@ -278,6 +278,12 @@ impl Controls {
         self.keyboard.set_key(key, pressed);
     }
 
+    /// The device used last, for the log line that names the prompt family.
+    #[must_use]
+    pub fn prompt_used(&self) -> prompt::Used {
+        self.prompt.used()
+    }
+
     /// The glyph family a prompt draws in under `style`, or `None` for the
     /// disc's own glyphs. See [`prompt::Detector::family`].
     #[must_use]
