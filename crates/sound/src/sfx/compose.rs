@@ -1,23 +1,20 @@
 //! A cue that is a sequence, laid out once at load as the one line it plays.
 //!
-//! Pulse's Zone milestones (`zone_5` .. `zone_100`) are not takes of one word.
-//! Each is a timeline - the child `ZONE`, the number, the child `CLEAR` - with
-//! authored delays and every word keyed on twice at pan angles 30 and 330
-//! degrees. See `oag_formats::sblk::timeline` for what the command list does
-//! and `docs/formats/psp-audio.md` for the evidence. Playing one of the
-//! waveforms the cue reaches, chosen at random, is what a player heard as
-//! "clear", "zone" or "10" on its own.
+//! Pulse's Zone milestones (`zone_5` .. `zone_100`) are not takes of one word:
+//! each is a timeline (the child `ZONE`, the number, the child `CLEAR`) with
+//! authored delays, every word keyed on twice at pan angles 30 and 330 degrees
+//! (`oag_formats::sblk::timeline`, `docs/formats/psp-audio.md`). One waveform
+//! chosen at random is what a player heard as "clear", "zone" or "10" alone.
 //!
-//! Composing the timeline into a single stereo [`Sound`] keeps one voice on
-//! `Bus::Speech` per announcement, places every grain at a sample rather than
-//! a race tick, and leaves the mixer untouched.
+//! Composing it into one stereo [`Sound`] keeps one voice on `Bus::Speech` per
+//! announcement, places every grain at a sample rather than a race tick, and
+//! leaves the mixer untouched.
 //!
-//! **What is authored and what is chosen.** Authored: which waveform, when (in
-//! master ticks, converted at the build's [`SequenceTick::ticks_per_second`]),
-//! at which pan angle, at which volume terms. Chosen: a grain lands on the
-//! nearest sample of the composite, and the master tick's phase against the
-//! moment the cue was started is taken as zero (the original starts a cue
-//! between two ticks, up to one tick, 3.9 ms, either way).
+//! Authored: which waveform, when (master ticks at the build's
+//! [`SequenceTick::ticks_per_second`]), pan angle, volume terms. Chosen: a grain
+//! lands on the nearest sample, and the master tick's phase against the cue's
+//! start is taken as zero (the original starts a cue between ticks, up to one
+//! tick, 3.9 ms, either way).
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -40,14 +37,11 @@ pub(super) struct Sequence {
 
 /// Lays `name`'s timeline out as one stereo sound, when it is a real sequence.
 ///
-/// `Ok(None)` means "not this shape" and the caller keeps its flat pick: the
-/// cue is not a complete timeline (an opcode the walk does not model, an
-/// unresolved child), the title's tick is [unknown](SequenceTick::Unknown)
-/// (2048, Pure), the cue
-/// is a single grain (Pure's announcer lines, which keep the level they always
-/// played at), a grain loops, its angle is in the
-/// rear half the pan law here does not model, or its rate differs from the
-/// others'.
+/// `Ok(None)` keeps the caller's flat pick: the cue is not a complete timeline
+/// (an unmodelled opcode, an unresolved child), the tick is
+/// [unknown](SequenceTick::Unknown) (2048, Pure), the cue is a single grain
+/// (Pure's announcer lines, which keep their level), a grain loops, its angle is
+/// in the rear half the pan law does not model, or its rate differs.
 ///
 /// # Errors
 ///
@@ -71,10 +65,9 @@ pub(super) fn compose_sequence(
     if !timeline.is_complete() || timeline.grains.is_empty() {
         return Ok(None);
     }
-    // One grain is the whole line already (Pure's announcer lines), so a flat
-    // pick plays it at the level it always had. Two grains of *one* word are
-    // not: Wipeout HD's `zone_N` is the number keyed at +30 degrees and again at
-    // -30 degrees five ticks later, which a flat pick would collapse to one.
+    // One grain is the whole line (Pure's announcer lines): a flat pick plays it
+    // at its level. Two grains of one word are not: HD's `zone_N` is the number at
+    // +30 degrees and again at -30 five ticks later, which a flat pick collapses.
     if timeline.grains.len() < 2 {
         return Ok(None);
     }
@@ -97,10 +90,10 @@ pub(super) fn compose_sequence(
         }
     }
 
-    // Each grain's own volume law, `Scream_PanVolumePair`'s `2 * cue^2 *
-    // sound^2` behind the handler's scale. The composite carries the largest as
-    // its `pan_volume_gain` and every grain the ratio, so nothing here rounds
-    // a loud grain into the `i16` range before the mixer's own gain lands.
+    // Each grain's volume law, `Scream_PanVolumePair`'s `2 * cue^2 * sound^2`
+    // behind the handler's scale. The composite carries the largest as its
+    // `pan_volume_gain` and every grain the ratio, so no loud grain rounds into
+    // `i16` range before the mixer's gain lands.
     let gains: Vec<f32> = timeline
         .grains
         .iter()
@@ -143,13 +136,12 @@ struct Item<'a> {
     gain: f32,
 }
 
-/// Sums the grains into one interleaved stereo buffer, and returns it with the
-/// `pan_volume_gain` the finished sound should carry.
+/// Sums the grains into one interleaved stereo buffer, returning it with the
+/// `pan_volume_gain` the sound should carry.
 ///
 /// Each grain is scaled by `gain / reference` and the equal-power pan pair. When
-/// the sum would pass 16-bit full scale the buffer is scaled down to fit and the
-/// returned gain scaled up by the same factor - headroom, not a clamp, so the
-/// mixer's product `gain * sample` is unchanged and no sample is cut.
+/// the sum passes 16-bit full scale the buffer is scaled down and the gain up by
+/// the same factor: headroom, not a clamp, so `gain * sample` is unchanged.
 fn lay_out(items: &[Item], reference: f32) -> (Vec<i16>, f32) {
     let frames = items
         .iter()
