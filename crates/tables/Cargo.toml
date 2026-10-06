@@ -35,6 +35,7 @@ oag-disc.workspace = true
 oag-formats.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true
+oag-hd.workspace = true
 
 [lints]
 workspace = true

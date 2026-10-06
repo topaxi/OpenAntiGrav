@@ -346,6 +346,69 @@ on both titles. It stays undecoded here for the same reason it always has.
 `Some` on Pulse and HD, `None` on Pure, and a `None` fuse is a Bomb that
 never times out rather than one that goes off at once.
 
+## Wipeout HD and Fury: their own tables, and which copy a race reads
+
+**An HD race plays HD's own numbers, not Pulse's.** `oag_hd::TITLE.weapons`
+names `Data\XML\WeaponStats_Race.xml` and `..._Elimination.xml`; both resolve
+(the PSARC reader folds case and separators) and decode with the Pulse roster
+and no `skipped` entries. `crates/tables/tests/hd_weapons_ground_truth.rs`
+pins it against the disc (read on 2026-10-06): every shipped copy decodes, and
+an HD race's served bytes are `DATA00`'s copy.
+
+| Entry | `DATA00` (Fury) | `DATA02` (base HD) | `DATA05` (front-end patch) |
+| --- | --- | --- | --- |
+| `weaponstats_race.xml` | 13 weapons, 4 classes, plus a `LightBarrier` block | same roster, no `LightBarrier` | same roster |
+| `weaponstats_elimination.xml` | yes | yes (differs in Shield `time` and the LeachBeam) | no |
+| `weaponstats_detonator.xml` | Mine, Cannon, Bomb, `EMP` | no | yes, retuned |
+
+**The three race copies disagree on what a race spends.** The Rocket,
+Missile, Plasma, Quake, Repulser, Shuriken and every `<Pickupodds>` block are
+equal across them; the LeachBeam (`repair`, `damage`, `slowShipFactor`,
+`energy_multiplier`) is not: all three differ on it, and `DATA05` also lacks
+the Bomb's `number_of_shots_to_destroy`. A race
+reads **`DATA00`'s**, because `oag_assets::Archives` serves the first archive
+that has a name and `DATA00` is the data archive. **That is this project's
+mount order, not a measured PS3 one** - the same open question as
+`skin.xml`'s six copies in [hd-status.md](hd-status.md). Fury is the later
+build and `DATA00` is the fuller copy, which makes it the likelier winner; it
+is not a measurement.
+
+### Per field
+
+- **HD authors it and a race spends it** (through Pulse's code): every
+  `<Stats>` block that decodes - Rocket, Missile, Quake, Plasma, Mine, Bomb,
+  Cannon, LeachBeam, Repulser, Shuriken, Turbo/Shield/Autopilot `absorb` and
+  `time`, `<Pickupodds>`, the `Global` `slowdown_limit`. The **numbers** are
+  HD's, measured. The **behaviour** around them is Pulse's law, inherited and
+  unmeasured on HD (HD's own constructors are read, not ported; see
+  `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`).
+- **HD authors it and nothing reads it:** the Cannon's `recharge_time`
+  (race, elimination) and `round_recharge_time`/`recharge_pause`/`num_rebounds`
+  (detonator); the Bomb's `number_of_shots_to_destroy`; the `LightBarrier`
+  block (`Weapon::from_type` drops an unknown `type` without a `skipped`
+  entry, so no loader line says so); the whole `weaponstats_detonator.xml`
+  except as a table that parses; the `EMP` block; `energy_recharge_per_stage`
+  and the Detonator Mine's `points_per_metre`/`max_distance`/
+  `velocity_reduction`. These are HD-only mechanics with no Pulse law to
+  inherit; wiring them is open work, not a gap in the reader.
+- **HD authors no value:** a speed per class for the Cannon, as on Pulse;
+  everything Pulse's measured law supplies stands.
+- **Per mode:** the race table zeroes the Repulser and Shuriken out of all four
+  classes and the Eliminator table does not - the same per-mode gating
+  Pulse has, held by the ground-truth test.
+
+### Omega checks against HD: checked, applies, not wired
+
+`omega-ps4-eu`'s `data00.psarc` ships `weaponstats_race/_elimination/
+_detonator.xml` under HD's names, plus `weaponstats_Race_2048.xml`,
+`weaponstats_Elimination_2048.xml` and `WeaponAIStats2048.xml`. The reader
+decodes all of them. Omega's three HD-named files are **not byte-identical**
+to Fury's - each adds a fifth `<Pickupodds class="SuperPhantom">` block - and
+every decoded weapon block (Rocket through Shuriken, `slowdown_limit`) and the
+first four classes are equal to `DATA00`'s. The fifth class is unread: the
+handling reader's class list stops at four. Omega racing is out of scope, so
+nothing is wired. The two `_2048` files decode with all 13 weapons.
+
 ## What this does not answer
 
 - **What the original does on a pickup.** The *trigger* is recovered -
