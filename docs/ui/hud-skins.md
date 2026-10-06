@@ -34,36 +34,42 @@ PPSSPP 1.20.4, software renderer, Time Trial, VENOM, Talon's Junction, craft on
 the start line (0.08 units from the recorded line); ours: `oag-game --race
 --ticks 300`, same circuit, class and start pose (6.1, -50.1, -195.9 against
 6.08, -50.07, -196.02). PPSSPP frames are the 960x544 viewport halved back to
-480x272. Two PPSSPP captures were taken; they differ from each other by a mean
-absolute error of 19-26 grey levels over the text regions, because the camera
-bobs, so **a region MAE against the original (30-37 for ours) is
-background-dominated and is not used as evidence below**. Glyph pixel profiles
-are.
+480x272. **One PPSSPP capture of this state, seen once** (a second capture
+later is a different moment, timer 7.17 and the craft moved, so it is not a
+repeat). The camera and track differ by a few levels between the two sides, so
+a region MAE against the original (30-37 for ours) is background-dominated and
+is **not used as evidence**; glyph pixel profiles are, and the halo row below is
+qualitative for that reason.
 
 | Factor | Measurement | Result |
 | --- | --- | --- |
 | Scale 1.0 text (`CurrentTime`, captions) | stroke peak along one row through a '0': original 246, ours 234; fall-off 228/181/103 against 197/130/76; counter darkening 52 against 64 outside (original), 71 against 87 (ours) | **Ours matches the original within about 5 %.** The font is the same ink at the same size. Confidence 80 |
+| **Halo clipped to the glyph box** (`borderExtendPixels`) | Pulse's own language definition declares `HUD ... borderExtendPixels="5"` and `HUDSmall ... "3"` (Data.wad entries 1132-1140, every language; HD's copy says the same). **Nothing in `crates/` reads it** (`rg` finds it only in docs), and `render/text.rs` draws each glyph as a quad of exactly the metric box (`cell.width x cell.height`). The atlas dump of the '0' shows 2 px of dark outline (alpha 170-216) *left* of the box edge `u0`, more on the right, and glow below `v1`. Experiment (env-gated, reverted): extend rect and UV by 2 and by 5 texels | Original: a dark halo outside the strokes (3 px left at -5 %, 8 px below at -25 to -45 %). Ours as shipped: **none** (87 87 87 87 then the stroke). With the quad extended, ours grows the same shadow (87 87 77 73 70 then the stroke), and the zoomed glyphs (`shots/cmp-ext.png`) look like the original's soft-edged ones. Backgrounds differ slightly, so the depth is not matched, only the presence. **The most likely cause of "less legible than the original at the same size". Confidence 75** (presence of the halo and of the clip are certain; that this is the *whole* gap is not) |
 | Outline alpha (`BorderColor` 0x40, 25 %) | experiment: outline forced opaque (alpha = atlas coverage, the straight modulate a GE would do) | **Worse, not better**: digits fill with black halos the original does not show. The 25 % model is closer than the straight one; the original's exact blend of the glow is still not derived. Confidence 60 that 25 % is the right order of magnitude |
-| Text drawn at scale 0.6 (`BestTime`) | body peak of the `0.00.00` digits: original 195 over a 105 background, ours 140 over 110, **the separating dots lost**; with nearest sampling ours is complete but 255 (over-bright) | **Our linear, mip-less sample of a 25 px atlas at 0.6 scale loses ink; this is the one place ours is measurably worse than the original at 1x.** The original's sampling rule at fractional scale is not read. Confidence 70 for "ours loses ink", 30 for any single fix |
+| Text drawn at scale 0.6 (`BestTime`) | at **480x272**: body peak of the `0.00.00` digits original 195 over a 105 background, ours 140 over 110, separating dots lost; nearest sampling is complete but 255. At **960x544**: original 230, ours 255, dots present | A **minification** artefact: it appears only below about 800x450, where a 0.6-scale glyph is smaller than its atlas. At any window a player runs (1440x816 and up) it is magnified and intact (`c-ours-1440.png`). Real at 1x, irrelevant at the default. Confidence 70 |
 | Bloom composite over the HUD | three moving frames on this circuit, readout region, bloom on against off: mean change 0-1.5 levels, maximum 29 of 255 | The composite lands over the HUD in the original too (`Bloom_Draw` key 0x70 over HUD keys 0x52-0x6d, [bloom](../rendering/glow-mask.md)), so this is faithful, and small here. It cannot explain a washed-out readout on a dark-backed frame; on a bright boost-pad backdrop it adds to scene light that is already there. The lead's bright frame (`data/scratch/ptbr-a/shots/ptbr-race-hud-400.png`) was **not reproduced** - open. Confidence 65 |
 | Scale up and filter | default `--presented` is 1440x816, a 3x linear stretch of a 480x272 design; PPSSPP's own window is a 2x bilinear stretch of the same raster. 4K is about 8x | Every raster HUD edge is a 3 px ramp at 3x. Same family of softness as PPSSPP's own window, but three times larger on screen than the PSP's 4.3 inch panel, where the baked glow was tuned. Confidence 75 as a contributor, no measurement against a sharper alternative yet |
 
-Reading the rows together: **the glyph ink is faithful. What differs from a
-PSP screen is that the same 480x272 raster is magnified 3-8x with linear
-filtering, the font's contrast comes from a 7 px baked halo that is meant to be
-read at 1x, and the 0.6-scale readouts lose ink in our sampler.** There is no
-alpha-channel bug in the ordinary text: the palette-alpha and body/outline
-split is honoured, and the experiment that "fixes" the outline makes the frame
-worse.
+Reading the rows together: **the glyph body is faithful, the glyph's outer halo
+is not.** Our quad stops at the metric box, so the baked glow and the outer
+outline texels that the font spends most of its contrast on are cut off on the
+left, right and bottom, and the authored `borderExtendPixels` (5 for `HUD`, 3
+for `HUDSmall`) that says how far to extend is read by nothing. On top of that
+the same 480x272 raster is magnified 3-8x with linear filtering. There is no
+alpha-channel bug: the palette-alpha and body/outline split is honoured, and
+making the outline opaque makes the frame worse. This is also a candidate for
+`hud.md`'s long-open "the original's outline reads crisper and darker than 25 %
+alpha produces" - the missing darkness is outside the box, not in the alpha.
 
 ### Pure, briefly
 
-Pure's two HUD fonts are the same technology: of its 10 `.fnt` entries, two
-carry the outlined marker (`unknown` = 4, as Pulse's two HUD fonts do) at 27 px
-and 12 px line heights, 124 and 137 glyphs, against Pulse's 25 and 10. Pure's
-layouts are authored at 480x272 too. Read off headers only - no Pure frame was
-captured, so the factor table above is **Pulse only**; the same halo and scale
-factors should apply (confidence 60). Pure's FE.wad entry names for them are not
+Pure's two HUD-sized fonts (27 px and 12 px line heights, 124 and 137 glyphs,
+against Pulse's 25 and 10) share the header word `unknown` = 4 with Pulse's two
+outlined fonts and no other of its 10 `.fnt` entries does; that word is
+undecoded ([fnt.md](../formats/fnt.md)), so "same pre-outlined technology" is
+an inference from the header and the sizes. No Pure frame was attempted, so the
+factor table above is **Pulse only**; the halo clip and the scale factors
+should apply (confidence 55). Pure's FE.wad entry names for them are not
 recovered (they sit in `Data.wad` and `FE.wad` unnamed).
 
 ## B. HUD variants per title
@@ -137,14 +143,19 @@ the union of base and patch archives. HD has `detonator_hud`, `duel_hud` and
 
 ### Unlock and reachability
 
-- **HD / Fury: reachable.** A front-end list `HUD Style` (`global="HUD Style"`
+- **HD / Fury: reachable.** The list and the unlock rows ship only in the
+  Fury layer (`DATA03`, `DATA05`, `DATA06`), not in the original `DATA02`. A
+  front-end list `HUD Style` (`global="HUD Style"`
   `save="true"` `default="HD"`, entries `HD`, `2097`, `WIP3OUT`) sits in
   `additional_definition.xml`; the executable branches four race managers
   (`SPEliminationRaceManager_Construct`, `SPZoneRaceManager_Construct`,
   `SPTimeTrialRaceManager_Construct`, `MPEliminationRaceManager_Construct`) on
   the strings `WIP3OUT` and `2097`, and a `HUD Style P2` gives split-screen
-  player 2 its own ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)
-  for Omega's copy of the branch). The unlock rows are in
+  player 2 its own. The branch was read in Omega's executable
+  ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)); HD's own race
+  managers are in [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md)
+  (path literals per call, not re-read for the `HUD Style` strings here). The
+  unlock rows are in
   `plugins/frontend/definition.xml`:
 
   ```xml
@@ -184,7 +195,7 @@ size. That second table is keyed to the skin's own assets, which matters below.
 
 ## C. Design note: forcing another title's HUD skin
 
-Doc only. Nothing here is built.
+**Chosen, not measured**: a design, no score. Doc only; nothing here is built.
 
 **Shape.** A skin is the pair (layout set, art rules), the same two things
 `Title::hud` and `Title::hud_art` already carry, plus a font slot. Today a
@@ -245,8 +256,11 @@ and independent of the skin design.
 
 - The bright-backdrop frame behind the washed-out readouts was not reproduced;
   a boost-pad frame on both sides is needed to size the bloom term.
-- The original's sampling rule for text at fractional scale (0.6) is not read.
-  `Gfx_` text draw state on the PSP build would settle it.
+- The size of the halo the original draws (`borderExtendPixels` 5 and 3 read as
+  texels) and its exact blend over the extended area are not measured; only its
+  presence is. A frame with a bright, flat backdrop would give the depth.
+- The original's sampling rule for text at fractional scale (0.6) is not read;
+  it only matters below about 800x450.
 - Pure was measured at header level only; no Pure frame was captured.
 - Whether `arcade_hud_old.xml`/`hud_timers.xml` are drawn anywhere in HD's,
   Omega's or 2048's executable is unchecked; they are unreferenced from data.
