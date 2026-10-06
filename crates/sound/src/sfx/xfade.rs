@@ -1,56 +1,53 @@
 //! HD's engine note: a per-team crossfade of looping layers, driven by four
 //! numbers the craft writes every tick.
 //!
-//! Wipeout HD has no `~ENGINE` cue and no held pitch law. What it has is
-//! `xfship_<team>.xfx` ([`oag_formats::xfx`], `docs/formats/hd-xfx.md`): four
-//! input channels, each smoothed by `XFadeSystem_UpdateChannels`, and nine
-//! looping layers that each read one channel through a gain curve and a pitch
-//! curve. Every layer names a cue in `shiphd.bnk`.
+//! HD has no `~ENGINE` cue or held pitch law, but `xfship_<team>.xfx`
+//! ([`oag_formats::xfx`], `docs/formats/hd-xfx.md`): four input channels, each
+//! smoothed by `XFadeSystem_UpdateChannels`, and nine looping layers that each
+//! read one channel through a gain curve and a pitch curve. Every layer names a
+//! cue in `shiphd.bnk`.
 //!
 //! # What is read and what is chosen
 //!
 //! **Read off the binary and the file** (`docs/ghidra/functions/ps3-hdfury-eu/xfade.md`):
 //!
-//! - the four channel inputs, `Ship_UpdateEngineCrossfade` (`0x000d5968`):
-//!   channel 0 is `trunc(0.5 * speed_field + 5.0 * X)`, channel 3 is
-//!   `5.12 * throttle` for the local player, all clamped to `0..=511`;
+//! - the channel inputs, `Ship_UpdateEngineCrossfade` (`0x000d5968`): channel 0
+//!   is `trunc(0.5 * speed_field + 5.0 * X)`, channel 3 is `5.12 * throttle`
+//!   for the local player, all clamped to `0..=511`;
 //! - the smoother, `XFadeSystem_UpdateChannels` (`0x00313d10`): the band is
-//!   picked by the current value, the rate by the band and the direction, a
-//!   rate of zero snaps, the step is `rate * milliseconds` (at most 5,000);
+//!   picked by the current value, the rate by band and direction, a rate of
+//!   zero snaps, the step is `rate * milliseconds` (at most 5,000);
 //! - the layer update, `XFadeSystem_UpdateLayers` (`0x00314b00`): gain is
 //!   `curve[x] / 0x400`, the bend is `((curve[x] - 0x200) * 0x7fff) >> 9`
-//!   clamped to `+-0x8000`, and the bend reaches the note through the cue
-//!   descriptor's own bend range in semitones
-//!   (`Scream_ComputeVoiceNote`, `0x0062e998`, the same law
-//!   `super::layers` already plays on Pulse).
+//!   clamped to `+-0x8000`, reaching the note through the cue descriptor's bend
+//!   range in semitones (`Scream_ComputeVoiceNote`, `0x0062e998`, the law
+//!   `super::layers` plays on Pulse).
 //!
-//! **Measured live on RPCS3, 2026-10-05** (two boots, 126 hardware voices
-//! read over the GDB stub, `docs/formats/hd-xfx.md` "Level"): the layer's
-//! volume word is `curve[x] * craft_factor / 1024` and the voice's final
-//! gain is `K * level * (word / 1024)^2` - **squared** - with `K = 0.295` on
-//! every engine layer voice and `level` the cue-times-waveform volume
-//! product [`Sound`] already carries. So `0x400` is unity, and a layer at
-//! half volume is a quarter as loud, which is not Pulse's x^0.59 curve
-//! ([`oag_audio::spatial::volume_curve`]) that this module used to apply.
-//! [`ENGINE_BUS_RATIO`] carries the absolute scale against this port's other
-//! cues; [`distance_factor`] is the per-craft factor.
+//! **Measured live on RPCS3, 2026-10-05** (two boots, 126 hardware voices over
+//! the GDB stub, `docs/formats/hd-xfx.md` "Level"): the layer's volume word is
+//! `curve[x] * craft_factor / 1024` and the voice's final gain is
+//! `K * level * (word / 1024)^2`, **squared**, with `K = 0.295` on every engine
+//! layer voice and `level` the cue-times-waveform volume product [`Sound`]
+//! carries. So `0x400` is unity and half volume is a quarter as loud, not
+//! Pulse's x^0.59 curve ([`oag_audio::spatial::volume_curve`]). [`ENGINE_BUS_RATIO`]
+//! carries the absolute scale against this port's other cues;
+//! [`distance_factor`] is the per-craft factor.
 //!
 //! **Chosen, not measured**, no confidence attached:
 //!
-//! - `X` is held at [`X_REST`], the value both boots read on the grid.
-//!   Live it ran 2.17 to 4.49 and tracked the mean hover-probe gap plus about
-//!   1.12 (see the evidence page); this simulation does not keep a per-probe
-//!   gap, so the live term is not reproduced. It moves channel 0 by at most
-//!   about 12 of 511.
-//! - Channels 1 and 2 are held at zero: they read zero in every live sample.
-//! - [`distance_factor`] is a straight line fitted to eight readings, not the
-//!   traced law (the writer of the slot word it is read from was not found).
-//! - Channel 3 is written in every mode; the original skips it in the modes
-//!   whose id is bit 6, 13, 14 or 21 of `0x206040` (Zone is 6) and this port has
-//!   no map from those ids to its own modes.
-//! - Opponents open a layer's voice only while it is audible. The original
-//!   keeps every layer resident (62 hardware voices of 128 in one scan), so a
-//!   race with an engine grows the mixer's pool to [`oag_audio::mixer::HD_VOICES`].
+//! - `X` is held at [`X_REST`], the value both boots read on the grid. Live it
+//!   ran 2.17 to 4.49, tracking the mean hover-probe gap plus about 1.12; this
+//!   simulation keeps no per-probe gap. It moves channel 0 by at most about 12
+//!   of 511.
+//! - Channels 1 and 2 are held at zero: zero in every live sample.
+//! - [`distance_factor`] is a line fitted to eight readings, not the traced law
+//!   (the writer of its slot word was not found).
+//! - Channel 3 is written in every mode; the original skips it in modes whose
+//!   id is bit 6, 13, 14 or 21 of `0x206040` (Zone is 6), and this port has no
+//!   map from those ids to its modes.
+//! - Opponents open a layer's voice only while audible. The original keeps
+//!   every layer resident (62 hardware voices of 128 in one scan), so a race
+//!   with an engine grows the pool to [`oag_audio::mixer::HD_VOICES`].
 //! - A finished race releases every layer, as [`super::Engine`] does.
 
 use std::collections::BTreeMap;
@@ -69,32 +66,29 @@ use super::banks::{load_cue_record, load_indexed_cue};
 /// see the module documentation.
 pub const X_REST: f32 = 2.164;
 
-/// How loud an engine layer plays against the same cue played as an ordinary
-/// SCREAM voice: `0.2945 / 0.6377 = 0.462`.
+/// How loud an engine layer plays against the same cue as an ordinary SCREAM
+/// voice: `0.2945 / 0.6377 = 0.462`.
 ///
 /// Measured live on RPCS3 (`docs/formats/hd-xfx.md`, "Level"): every engine
-/// layer voice's final hardware gain is `0.2945 * level * (v86 / 1024)^2`
-/// (the same on two boots), and the nearest ordinary voices read in the first
-/// boot's scan (four voices of two cues) are `0.6377 * level * (v86 / 1024)^2`,
-/// where `level` is the cue/waveform volume product this port already folds
-/// into [`Sound`]. Ordinary voices read `0.31`, `0.41` and `0.79` elsewhere, so
-/// the denominator is the nearest reading and not a platform constant.
+/// layer voice's final hardware gain is `0.2945 * level * (v86 / 1024)^2` (same
+/// on two boots); the nearest ordinary voices in the first boot's scan (four
+/// voices of two cues) are `0.6377 * level * (v86 / 1024)^2`. Ordinary voices
+/// read `0.31`, `0.41` and `0.79` elsewhere, so the denominator is the nearest
+/// reading, not a platform constant.
 ///
-/// **It is `0.68^2`**: the player's `user7` group (`0.68` in the racing state)
-/// squared against an ordinary voice at group `1.0` (`GlobalAudioConfig.xml`,
-/// `hd-xfx.md` "The authored mix"). A title with that mix plays the engine on
-/// its own group bus and the group's law replaces this ratio; it stays for a
-/// title without one.
+/// It is `0.68^2`: the player's `user7` group (`0.68` racing) squared against an
+/// ordinary voice at group `1.0` (`GlobalAudioConfig.xml`, `hd-xfx.md` "The
+/// authored mix"). A title with that mix plays the engine on its own group bus
+/// and the group's law replaces this ratio; it stays for a title without one.
 pub const ENGINE_BUS_RATIO: f32 = 0.2945 / 0.6377;
 
 /// The per-craft distance factor, `slot+4 / 1024` of the layer slots.
 ///
-/// **Fitted, not traced**: the writer of that word was not found. Eight
-/// craft read on the grid at 8.7 to 148 units from the listener gave 0.991,
-/// 0.971, 0.938, 0.876, 0.831, 0.771, 0.720, 0.660; a straight line
-/// `1.0626 - 0.0027 d` passes every point past 34 units within 0.006, and the
-/// near craft reads 0.991 to 0.994 rather than 1. Assumes the camera and the
-/// grid of this port's own spawn stand where the original's did.
+/// **Fitted, not traced**: the writer of that word was not found. Eight craft
+/// on the grid at 8.7 to 148 units from the listener gave 0.991, 0.971, 0.938,
+/// 0.876, 0.831, 0.771, 0.720, 0.660; the line `1.0626 - 0.0027 d` passes every
+/// point past 34 units within 0.006, and the near craft read 0.991 to 0.994, not
+/// 1. Assumes this port's camera and spawn grid stand where the original's did.
 #[must_use]
 pub fn distance_factor(distance: f32) -> f32 {
     (1.0626 - 0.0027 * distance).clamp(0.0, 0.992)
@@ -314,12 +308,10 @@ struct LayerSound {
     up: i8,
 }
 
-/// Which ship class writes a table's channels.
-///
-/// The tables do not say: HD's four-channel law and the Vita's five-channel
-/// law are different code on different ship classes, and a Vita `HD`-era table
-/// (`xfship_assegai.xfx`) is read by the one class and a `<team>2048` table by
-/// the other.
+/// Which ship class writes a table's channels. The tables do not say: HD's
+/// four-channel law and the Vita's five-channel law are different code on
+/// different classes, and a Vita `HD`-era table (`xfship_assegai.xfx`) is read
+/// by one and a `<team>2048` table by the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Law {
     /// `Ship_UpdateEngineCrossfade`, HD's, four channels written.
@@ -362,10 +354,9 @@ fn dir_of(entry: &str) -> &str {
 /// The disc's name for the team a grid slot flies.
 ///
 /// Slot teams carry a Fury reskin suffix on some grids (`goteki_c1`) and, on
-/// Wipeout 2048's, the livery directory the hull is read from
-/// (`Feisar2048\3`); the table is per team and not per reskin or livery, so
-/// both are dropped (`FUN_81263f6c` builds the file name from the team record's
-/// own name). The Detonator mode ship has its own table, `det`.
+/// Wipeout 2048's, the livery directory (`Feisar2048\3`); the table is per team,
+/// so both are dropped (`FUN_81263f6c` builds the file name from the team
+/// record's name). The Detonator mode ship has its own table, `det`.
 #[must_use]
 pub fn table_name(slot_team: &str) -> String {
     let lower = slot_team.to_lowercase();
@@ -380,11 +371,9 @@ pub fn table_name(slot_team: &str) -> String {
     }
 }
 
-/// The ship class a team's craft are, which is what picks the channel law.
-///
-/// The five Wipeout 2048 hulls are the classes that write channel 4
-/// ([`Law::Vita2048`]); every other table, HD's or an HD-era hull flown on a
-/// Vita grid, is written by the four-channel class.
+/// The ship class a team's craft are, which picks the channel law: the five
+/// Wipeout 2048 hulls write channel 4 ([`Law::Vita2048`]); every other table
+/// (HD's, or an HD-era hull on a Vita grid) is written by the four-channel class.
 fn law_of(name: &str) -> Law {
     if name.ends_with("2048") {
         Law::Vita2048
@@ -408,9 +397,9 @@ pub struct Source<'a> {
 
 /// Every team table a grid needs, loaded once per distinct team.
 ///
-/// **Never fails**: a table that will not read, parse or resolve is a report
-/// line and silence for that team, on [`super::Banks::load`]'s own terms. A team
-/// whose file is not on the disc plays `xfship_feisar.xfx`, as the original does.
+/// Never fails: a table that will not read, parse or resolve is a report line
+/// and silence for that team ([`super::Banks::load`]). A team whose file is not
+/// on the disc plays `xfship_feisar.xfx`, as the original does.
 pub(super) fn load(
     archives: &mut Archives,
     source: Source<'_>,
@@ -609,19 +598,19 @@ impl Craft {
         self
     }
 
-    /// The channel inputs for `inputs` under `law`, in channel order, `None`
-    /// for a channel this craft does not write.
+    /// The channel inputs for `inputs` under `law`, in channel order, `None` for
+    /// a channel this craft does not write.
     ///
     /// [`Law::Hd`], `Ship_UpdateEngineCrossfade`: `trunc(0.5 * speed_field + 5 *
     /// X)` and `trunc(5.12 * throttle)`, each clamped to `0..=511`; channels 1
-    /// and 2 held at zero (chosen, not measured); channel 4 does not exist.
+    /// and 2 held at zero (chosen, not measured); no channel 4.
     ///
     /// [`Law::Vita2048`], `FUN_812cd154`: `trunc(0.5 * speed_field * class)`
-    /// clamped to `0..=510` on channel 0 and zero on channels 1 to 3, as read.
-    /// Channel 4 is `70 * pedal / 0.75` in the original, where `pedal` is a ship
-    /// field (`+0x6098`) whose writer was not found; **this port feeds it the
-    /// throttle, `0.7 * throttle / 0.75` of `0..=100`, and nothing for an
-    /// opponent: chosen, not measured.**
+    /// clamped to `0..=510` on channel 0, zero on channels 1 to 3, as read.
+    /// Channel 4 is `70 * pedal / 0.75` in the original, `pedal` being a ship
+    /// field (`+0x6098`) whose writer was not found; this port feeds it the
+    /// throttle (`0.7 * throttle / 0.75` of `0..=100`) and nothing for an
+    /// opponent: chosen, not measured.
     #[must_use]
     pub fn channel_inputs(inputs: Inputs, law: Law) -> [Option<i32>; CHANNELS] {
         match law {
@@ -772,13 +761,12 @@ impl Craft {
     }
 
     /// Layer `n`'s level at its channel's smoothed value, with what a modulator
-    /// last wrote into it: gain times the modulator's, bend plus the
-    /// modulator's, clamped as the layer's own is.
+    /// last wrote into it: gain times the modulator's, bend plus the modulator's,
+    /// clamped as the layer's own is.
     ///
-    /// **The product is chosen, not measured.** `FUN_8125d61e` writes the
-    /// modulator's own gain (itself a product with the modulator's two slot
-    /// floats) into the target's gain slot, and this takes that to be the
-    /// curve value alone.
+    /// The product is chosen, not measured: `FUN_8125d61e` writes the
+    /// modulator's gain (itself a product with its two slot floats) into the
+    /// target's gain slot, and this takes that to be the curve value alone.
     fn level_of(&self, n: usize) -> Level {
         let layer = &self.team.table.layers[n];
         let base = level_at(layer, self.smoothers[layer.channel.min(CHANNELS - 1)].value);
