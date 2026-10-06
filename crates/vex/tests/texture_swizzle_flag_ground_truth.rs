@@ -1,108 +1,70 @@
 //! Measures the byte at `Texture` node payload `+0x06` across every `.vex` file
 //! Pulse ships, on both of its pressings, and pins what bit 0 of it does.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
-//!
-//! The tests skip with a printed message when the disc image is absent. Set
-//! `OAG_REQUIRE_GAME_DATA=1` to turn absence into a failure, which is what a
-//! release check wants: a skipped ground-truth test is green and proves nothing.
+//! **`#[ignore]`d and never run in CI**: it needs game content (see
+//! `docs/architecture/adr/0006-no-copyrighted-content.md`). Run with `just
+//! test-data`; the tests skip with a message when the disc image is absent, and
+//! `OAG_REQUIRE_GAME_DATA=1` turns absence into a failure (a skipped
+//! ground-truth test is green and proves nothing).
 //!
 //! **Settled 2026-10-01**: bit 0 is the pre-swizzle flag on Pulse too, and
-//! `vex::textures` acts on it on every version - see
-//! `shield_texture_swizzle_ground_truth.rs` and
-//! `docs/formats/pure-status.md`. The text below is the question as it stood
-//! when this sweep was written; the distribution it pins is unchanged.
+//! `vex::textures` acts on it on every version (see
+//! `shield_texture_swizzle_ground_truth.rs` and `docs/formats/pure-status.md`).
+//! The sweep's distribution is unchanged and pinned here.
 //!
-//! # The question this exists to answer
+//! # The question
 //!
-//! `docs/formats/pure-status.md` records, at confidence 88, that
-//!
-//! > The `Texture` node payload has a flags byte at `+0x06` whose bit 0 means
-//! > *the texels are already in the GE's 16-byte by 8-row block order*. On Pulse
-//! > this bit is set only on font atlases.
-//!
-//! [`vex::textures`] never reads that byte. Making it read it is the fix Pure
-//! needs - and it is only free for Pulse if the bit is clear on **every** Pulse
-//! `Texture` node. If it is set anywhere, an unswizzling decoder returns
-//! different texels for a Pulse asset, and a ground-truth screenshot of a
-//! circuit need not cover the one model that changed, so `just test-data` would
-//! stay green over the regression. Hence: measure first, then pin.
+//! `docs/formats/pure-status.md` records (confidence 88) that the `Texture`
+//! payload's flags byte at `+0x06` has bit 0 = "texels already in the GE's
+//! 16-byte by 8-row block order", "set only on font atlases" on Pulse. Acting on
+//! it is free for Pulse only if the bit is clear on **every** Pulse `Texture`
+//! node; otherwise a decoder returns different texels for a Pulse asset and a
+//! circuit screenshot need not cover the model that changed. Hence: measure, then
+//! pin.
 //!
 //! # What the sweep found: bit 0 **is** set on Pulse
 //!
-//! It is set on **88 of 5,375** `Texture` nodes on the PSP pressing and **120 of
-//! 8,972** on the PS2 one, and the nodes carrying it are not font atlases. They
-//! are ship models and weapon effects: every livery, glass, engine and
-//! environment-map texture of the EGX, Feisar, Goteki, Piranha, Triakis and Zone
-//! ships, the mine, bomb and shuriken effects, and the Zone shipwreck set.
+//! On **88 of 5,375** `Texture` nodes on the PSP pressing and **120 of 8,972** on
+//! the PS2 one, none font atlases: every livery, glass, engine and environment-map
+//! texture of the EGX, Feisar, Goteki, Piranha, Triakis and Zone ships, the mine,
+//! bomb and shuriken effects, and the Zone shipwreck set.
 //!
-//! **Only the byte is measured here, never its meaning.** So this is a
-//! disagreement with `pure-status.md`, and deliberately not a verdict on it:
-//! either the claim about Pulse is wrong, or bit 0 is not the bit that claim
-//! thinks it is. Nothing in a histogram can separate those two - decoding one
-//! flagged texture both ways and looking at the result can, and that is a
-//! different piece of work.
+//! **Only the byte is measured, never its meaning**, so this disagrees with
+//! `pure-status.md` without ruling on it. Pulse's Feisar model has eight `Texture`
+//! nodes reading **`0xe5`** where `pure-status.md` records `0xe4`: one bit apart,
+//! the bit the claim turns on (a measured discrepancy, not a correction).
 //!
-//! The same care applies to the one place the two readings can be put side by
-//! side. `pure-status.md` records Pulse's Feisar as eight textures reading
-//! `0xe4` where Pure's five read `0x61`. Pulse's Feisar ship model here has
-//! exactly eight `Texture` nodes and they read **`0xe5`**: the same byte, one
-//! bit apart, and that bit is the one the claim turns on. Recorded as a
-//! measured discrepancy for someone to settle, not as a correction.
-//!
-//! **What does not depend on settling it** is the answer the sweep was run for:
-//! a build that starts reading `+0x06` and acting on bit 0 decodes 88 Pulse PSP
-//! textures differently than it does today. That is a Pulse behaviour change,
-//! not a Pure-only fix, on either reading. Nor can it be gated away by version:
-//! the bit is set on version-6 files (74 + 1 nodes) *and* version-4 ones (13),
-//! so `version <= 4` would still let 75 of the 88 through.
+//! Independent of that: acting on bit 0 decodes 88 Pulse PSP textures differently,
+//! a Pulse behaviour change on either reading, and a version gate cannot avoid it
+//! (set on version-6 files, 74 + 1 nodes, *and* version-4 ones, 13).
 //!
 //! # What the payload byte is, and what it is not
 //!
 //! The full per-version distribution is pinned in [`PSP_FLAGS`] and [`PS2_FLAGS`]
-//! rather than the single bit, because the byte takes eight distinct values on
-//! the PSP pressing and eleven on the PS2 one, and a bare "bit 0 clear" pin
-//! would hide a change in any of the others. **Only bit 0 has a documented
-//! meaning and only bit 0 is interpreted here**; the rest is measured and left
-//! open.
+//! (eight distinct values on the PSP, eleven on the PS2) so a change in any bit
+//! shows. **Only bit 0 has a documented meaning and is interpreted.**
 //!
-//! Three things fall out of the distribution that are worth recording:
-//!
-//! - **The flag is whole-file.** Every file that sets bit 0 sets it on *all* of
-//!   its `Texture` nodes - 3 of 3, 8 of 8, 90 of 90 - and no file on either
-//!   pressing mixes flagged and unflagged textures. That reads as an
-//!   export-time setting rather than a per-asset one. Asserted, not observed in
-//!   passing.
-//! - **The 33 version-4 files are identical in this respect on both
-//!   pressings**: `0x22` x22, `0x60` x20, `0x61` x13 on each. The same legacy
-//!   assets shipped twice, which is a small independent check that the sweep
-//!   reads the same field on both.
-//! - **The PS2 pressing's dominant value is `0x64`**, where the PSP's are `0x80`
-//!   and `0xc2`. The PS2 `.vex` texture block is empty (see [`vex::textures`]),
-//!   so whatever these bytes select there, it is not a layout for texels the
-//!   file does not carry.
+//! - **The flag is whole-file**: every file that sets bit 0 sets it on *all* its
+//!   `Texture` nodes (3 of 3, 8 of 8, 90 of 90), an export-time setting rather
+//!   than a per-asset one. Asserted.
+//! - **The 33 version-4 files read identically on both pressings** (`0x22` x22,
+//!   `0x60` x20, `0x61` x13): the same legacy assets shipped twice.
+//! - **The PS2 pressing's dominant value is `0x64`** (PSP: `0x80`, `0xc2`). Its
+//!   `.vex` texture block is empty ([`vex::textures`]), so these bytes do not
+//!   select a layout for texels the file does not carry.
 //!
 //! # Why the class ID comes from the file
 //!
-//! [`vex::classes_of`] picks the table from each file's own version word.
-//! Sweeping on [`vex::CLASS_TEXTURE`] instead - version 6's `0x3c1` - would
-//! silently miss every version-4 file's textures, and those are the ones
-//! numbered `0x373` exactly as Pure's 156 files are. Thirteen of the 88 flagged
-//! PSP nodes live in those files, so a v6-only sweep would have answered "88
-//! minus 13" without ever saying it had narrowed the question.
+//! [`vex::classes_of`] picks the table from each file's version word. Sweeping on
+//! [`vex::CLASS_TEXTURE`] (version 6's `0x3c1`) would silently miss version-4
+//! files' `0x373` textures, 13 of the 88 flagged PSP nodes.
 //!
 //! # Coverage
 //!
 //! All four PSP archives, not just the two a title package names: `FEData.wad`
-//! and `BEData.wad` hold 70 version-6 `.vex` files between them and four of the
-//! flagged nodes. On the PS2 pressing, `WADS2.WAD` and `WADSP.WAD`.
-//! `PS2MUSIC.WAD` and `PRERACE.WAD` are not swept - neither is a container this
-//! project parses (see `oag_pulse::archives::ps2`).
+//! and `BEData.wad` hold 70 version-6 `.vex` files and four flagged nodes. On PS2,
+//! `WADS2.WAD` and `WADSP.WAD`; `PS2MUSIC.WAD` and `PRERACE.WAD` are not
+//! containers this project parses (`oag_pulse::archives::ps2`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -117,18 +79,14 @@ const FLAGS_AT: usize = 0x06;
 /// The bit `pure-status.md` reads as "these texels are already swizzled".
 const PRE_SWIZZLED: u8 = 0x01;
 
-/// Largest texture dimension either corpus declares.
-///
-/// Used only to corroborate that a payload really is a `Texture` payload before
-/// `+0x06` is read out of it; see [`assert_texture_shaped`].
+/// Largest texture dimension either corpus declares; used only to corroborate a
+/// `Texture` payload before `+0x06` is read (see [`assert_texture_shaped`]).
 const MAX_DIMENSION: u16 = 1024;
 
-/// The PSP-only archives no title package names, because they are not one of
-/// the two archive *roles* `oag_pulse::TITLE` describes.
-///
-/// Swept anyway, and not as belt-and-braces: between them they hold 70
-/// version-6 `.vex` files and four flagged nodes, so a corpus-wide claim
-/// measured without them would be a claim about part of the corpus.
+/// The PSP-only archives no title package names (not one of the two archive
+/// *roles* `oag_pulse::TITLE` describes). Swept anyway: they hold 70 version-6
+/// `.vex` files and four flagged nodes, so a corpus-wide claim without them is a
+/// claim about part of it.
 const PSP_EXTRA_ARCHIVES: &[&str] = &[oag_pulse::archives::FEDATA, oag_pulse::archives::BEDATA];
 
 /// `.vex` files on the PSP pressing, per format version word.
@@ -139,9 +97,9 @@ const PSP_TEXTURE_NODES: usize = 5375;
 
 /// Every `(version, +0x06, count)` measured on the PSP pressing.
 ///
-/// Pinned whole rather than reduced to "bit 0 is never set", so that a change in
-/// any of the other seven bits shows up as a diff instead of passing silently.
-/// `0x61`, `0xe1` and `0xe5` are the values with bit 0 set: 13 + 1 + 74 = 88.
+/// Pinned whole rather than reduced to "bit 0 is never set", so a change in any of
+/// the other seven bits shows as a diff. `0x61`, `0xe1` and `0xe5` have bit 0 set:
+/// 13 + 1 + 74 = 88.
 const PSP_FLAGS: &[(u32, u8, usize)] = &[
     (4, 0x22, 22),
     (4, 0x60, 20),
@@ -202,9 +160,8 @@ struct Sweep {
     /// `.vex` files per format version word.
     versions: BTreeMap<u32, usize>,
     /// Files whose version has no class table at all
-    /// ([`vex::Error::UnknownVersion`]). Counted rather than skipped silently: a
-    /// whole format generation contributing nothing should show up as a number,
-    /// not as an absence that reads like a clean sweep.
+    /// ([`vex::Error::UnknownVersion`]), counted so a whole format generation
+    /// contributing nothing shows as a number, not a clean-looking sweep.
     unknown_version: usize,
     /// Files whose version has a table, but whose `Texture` ID is unrecovered.
     no_texture_id: usize,
@@ -218,9 +175,8 @@ struct Sweep {
     flags: BTreeMap<(u32, u8), usize>,
     /// Every node with bit 0 set.
     pre_swizzled: Vec<Flagged>,
-    /// Per file: `Texture` nodes, of which flagged. Only files with at least one
-    /// flagged node are recorded, which is what makes "all eight of Feisar's"
-    /// checkable rather than asserted from a partial listing.
+    /// Per file: `Texture` nodes, of which flagged; only files with a flagged node
+    /// are recorded, making "all eight of Feisar's" checkable.
     per_file: BTreeMap<String, (usize, usize)>,
 }
 
@@ -269,8 +225,8 @@ impl Sweep {
         }
     }
 
-    /// Names of the flagged nodes, deduplicated - the same texture is embedded
-    /// in several models, so the raw list is longer than the set of assets.
+    /// Names of the flagged nodes, deduplicated (one texture is embedded in several
+    /// models).
     fn flagged_names(&self) -> BTreeSet<&str> {
         self.pre_swizzled
             .iter()
@@ -287,11 +243,11 @@ impl Sweep {
 /// Corroborates that `payload` really is a `Texture` payload before `+0x06` is
 /// believed.
 ///
-/// The whole measurement rests on the payload base being right, and a node walk
-/// that was off by any amount would put `+0x06` inside some other structure and
-/// produce a distribution that still *looks* like flags. The dimensions and
-/// `bits_per_pixel` at `+0x00..+0x05` are the cheap check: a wrong base gives
-/// non-power-of-two sizes and nonsense bit depths at once.
+/// Corroborates that `payload` really is a `Texture` payload before `+0x06` is
+/// believed: a node walk off by any amount would put `+0x06` inside another
+/// structure and give a distribution that still *looks* like flags. The
+/// dimensions and `bits_per_pixel` at `+0x00..+0x05` are the cheap check (a wrong
+/// base gives non-power-of-two sizes and nonsense bit depths).
 fn assert_texture_shaped(label: &str, payload: &[u8]) {
     let width = u16::from_le_bytes([payload[0], payload[1]]);
     let height = u16::from_le_bytes([payload[2], payload[3]]);
@@ -327,12 +283,10 @@ fn sweep_archive(archive: &mut Archive, sweep: &mut Sweep) {
         if size == 0 {
             continue;
         }
-        // A stored blob's magic is readable without decompressing it, and every
-        // PSP archive is stored. That turns a full read of 315 MiB of `Data.wad`
-        // into a 16-byte peek for the entries that are not `.vex`. A compressed
-        // entry - which is every entry on the PS2 pressing - has to be
-        // decompressed either way, so the peek is skipped for those rather than
-        // doubling the work.
+        // A stored blob's magic is readable without decompressing (every PSP
+        // archive is stored), turning a read of 315 MiB of `Data.wad` into a 16-byte
+        // peek for non-`.vex` entries. Compressed entries (every PS2 entry) are
+        // decompressed anyway, so the peek is skipped for them.
         if compression == Compression::None {
             let Ok(head) = archive.peek(index, vex::FILE_HEADER_LEN as u64) else {
                 continue;
@@ -353,10 +307,9 @@ fn sweep_archive(archive: &mut Archive, sweep: &mut Sweep) {
             *sweep.versions.entry(version).or_default() += 1;
         }
 
-        // The class ID comes from the file's own version word.
-        // `Data\Defaults\Skycube.vex` is a version-4 file on a version-6 disc
-        // and its `Texture` ID is `0x373`, so a sweep keyed on
-        // `vex::CLASS_TEXTURE` would walk straight past it.
+        // The class ID comes from the file's version word: `Data\Defaults\Skycube.vex`
+        // is version 4 on a version-6 disc with `Texture` `0x373`, which a sweep on
+        // `vex::CLASS_TEXTURE` would walk past.
         let classes = match vex::classes_of(&bytes) {
             Ok(classes) => classes,
             Err(vex::Error::UnknownVersion { .. }) => {
@@ -409,18 +362,16 @@ fn sweep_archive(archive: &mut Archive, sweep: &mut Sweep) {
 
 /// Opens every archive on `source` that this project parses, as Pulse.
 ///
-/// The two archive *roles* come from `oag_pulse::open`, which is what makes this
-/// work unchanged on the PS2 pressing, where the same two are called
-/// `WADS2.WAD` and `WADSP.WAD` and live under a serial-derived directory.
-/// [`PSP_EXTRA_ARCHIVES`] are then tried by name and simply fail to open on a
-/// PS2 source, so no platform test is needed.
+/// The two archive *roles* come from `oag_pulse::open`, so this works unchanged on
+/// the PS2 pressing (`WADS2.WAD`, `WADSP.WAD` under a serial-derived directory).
+/// [`PSP_EXTRA_ARCHIVES`] are tried by name and fail to open on a PS2 source, so
+/// no platform test is needed.
 fn sweep_source(path: &Path) -> Sweep {
     let source = path.to_str().expect("image path is utf-8");
     let mut archives = oag_pulse::open(source).expect("open as Pulse");
     let mut sweep = Sweep::default();
 
-    // Both Pulse sources are WADs, so unwrapping the container here is a
-    // statement of that rather than an assumption about archives in general.
+    // Both Pulse sources are WADs, so unwrapping here states that.
     sweep_archive(
         archives
             .data
@@ -448,10 +399,9 @@ fn assert_sweep_covered(sweep: &Sweep, label: &str) {
         !sweep.archives.is_empty(),
         "{label}: no archive opened, so the sweep measured nothing"
     );
-    // An empty node set is a finding, not a pass. PS2 `.vex` scenes carry
-    // `Texture` nodes with real dimensions and an empty texel block - see
-    // `vex::textures` - so zero nodes would mean the sweep stopped working, not
-    // that the pressing has no textures.
+    // An empty node set is a finding, not a pass: PS2 `.vex` scenes carry `Texture`
+    // nodes with real dimensions and an empty texel block (`vex::textures`), so
+    // zero nodes would mean the sweep stopped working.
     assert!(
         sweep.texture_nodes > 0,
         "{label}: no Texture nodes found; an empty sweep is not a clean one"
@@ -471,11 +421,9 @@ fn assert_sweep_covered(sweep: &Sweep, label: &str) {
         "{label}: the histogram does not account for every node"
     );
 
-    // The flag is a property of the *file*, not of a texture inside it: on both
-    // pressings, every file that sets bit 0 anywhere sets it on all of its
-    // `Texture` nodes - 3 of 3, 8 of 8, 90 of 90. No file mixes the two. That
-    // makes it look like an export-time setting rather than a per-asset one,
-    // which is worth knowing before a decoder decides where to branch on it.
+    // The flag is a property of the *file*: on both pressings every file that sets
+    // bit 0 sets it on all of its `Texture` nodes (3 of 3, 8 of 8, 90 of 90), an
+    // export-time setting, worth knowing before a decoder decides where to branch.
     for (file, &(total, flagged)) in &sweep.per_file {
         assert_eq!(
             total, flagged,
@@ -503,9 +451,8 @@ fn pulse_psp_sets_bit_zero_of_the_texture_flags_byte_on_ship_models() {
         "the +0x{FLAGS_AT:02x} distribution moved; the pinned reading is stale"
     );
 
-    // The headline: the bit is *not* clear across Pulse, so reading it and
-    // acting on it is a Pulse behaviour change, not a Pure-only fix. What the
-    // bit means is not decided here.
+    // The headline: the bit is *not* clear across Pulse, so acting on it is a Pulse
+    // behaviour change, not a Pure-only fix. Its meaning is not decided here.
     assert_eq!(
         sweep.pre_swizzled.len(),
         PSP_PRE_SWIZZLED,
@@ -520,9 +467,8 @@ fn pulse_psp_sets_bit_zero_of_the_texture_flags_byte_on_ship_models() {
          `version <= 4` gate insufficient"
     );
 
-    // Not font atlases. Ship liveries and weapon effects, which is what makes
-    // this a disagreement with the recorded claim rather than an extension of
-    // it.
+    // Not font atlases but ship liveries and weapon effects: a disagreement with
+    // the recorded claim, not an extension of it.
     let names = sweep.flagged_names();
     for expected in [
         "Z:/WipeoutPSP/X2/Data/Ships/Feisar/Textures/liveryFeisar1_leftwing.tga",
@@ -538,11 +484,9 @@ fn pulse_psp_sets_bit_zero_of_the_texture_flags_byte_on_ship_models() {
         "a font atlas turned up among the flagged nodes; these are .vex textures"
     );
 
-    // The one asset the two readings can be compared on. `pure-status.md`
-    // records Pulse's Feisar as eight textures reading `0xe4`; there are eight,
-    // and they read `0xe5`. Pinned as a measurement, so that whoever settles
-    // which value is right has the disagreement in front of them rather than
-    // having to rediscover it.
+    // The one asset the two readings compare on: `pure-status.md` records Pulse's
+    // Feisar as eight textures reading `0xe4`; there are eight and they read
+    // `0xe5`. Pinned as a measurement so whoever settles it has it in front of them.
     let feisar = sweep
         .pre_swizzled
         .iter()
@@ -591,9 +535,8 @@ fn pulse_ps2_sets_bit_zero_too_on_a_pressing_that_embeds_no_texels() {
         "the number of pre-swizzle-flagged Pulse PS2 textures moved"
     );
 
-    // The 33 version-4 files are the same assets the PSP pressing carries, and
-    // their flag distribution is identical. Two pressings reading the same field
-    // the same way is the independent check that the field is being read at all.
+    // The 33 version-4 files are the PSP pressing's assets with an identical flag
+    // distribution: two pressings reading one field the same way shows it is read.
     let v4: Vec<(u32, u8, usize)> = sweep
         .histogram()
         .into_iter()
