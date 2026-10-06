@@ -238,6 +238,12 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with_all = ["dump_audio", "tap_audio"])]
     pub(crate) no_audio: bool,
 
+    /// Write this run's log to FILE instead of the settings file's `[log] file`
+    /// or the default (`$XDG_STATE_HOME/oag/logs/oag-game.log`). An empty
+    /// value (`--log-file ''`) writes no file. The terminal output is unchanged.
+    #[arg(long, value_name = "FILE")]
+    pub(crate) log_file: Option<String>,
+
     /// Ours: offer every circuit in the Race Box, whatever is cleared (`oag_game::unlock`).
     #[arg(long)]
     pub(crate) unlock_all: bool,

@@ -11,13 +11,48 @@ simulation crates log nothing - see the diagnostics note in the workspace
 `warn` globally, our own crates (`oag*`) at `info`, `calloop` at `error`. A
 launch to a race prints the disc it found, the renderer it chose, the race it
 started and anything degraded or missing, and nothing else. The format is the
-level and the message, with no timestamp and no module path.
+level and the message, with no timestamp and no module path. That is the
+terminal; the log file below is a second sink with its own filter.
 
 `warn` stays the floor for everything that is not ours, because at `info` the
 graphics stack narrates every adapter, shader module and pipeline it builds.
 Those lines are not this project's to classify: a Vulkan layer failing to load
 on the player's machine, or a validation `PERFORMANCE` warning in a debug build,
 arrives through `wgpu` at whatever level the stack chose.
+
+## The log file
+
+Every `oag-game` run also appends to one log file, **in addition to** the
+terminal, which is unchanged. It exists because a launcher that swallows stderr
+(Steam, a desktop shortcut) leaves nothing to read.
+
+- **Where.** Linux `$XDG_STATE_HOME/oag/logs/oag-game.log` (`~/.local/state/...`
+  when unset), macOS `~/Library/Logs/oag/oag-game.log`, Windows the local
+  application data directory's `oag\logs\oag-game.log`.
+- **Which path.** `--log-file <path>` for one run, else `[log] file = "<path>"`
+  in `settings.toml`, else the default. **An empty value at either level
+  (`--log-file ''`, `file = ""`) writes no file**; there is no separate toggle.
+  The key is absent from a fresh settings file on purpose, so the default keeps
+  following `$XDG_STATE_HOME`.
+- **What.** Its own filter, default `warn,oag=debug,calloop=error` (the
+  terminal's, with our crates at `debug`), replaced by `[log] filter = "..."` in
+  `RUST_LOG` syntax. `RUST_LOG` does not touch it. Each line is
+  `2026-10-06T12:34:56.789Z LEVEL module::path: message`, UTC, so the text
+  sorts; a message over several lines keeps its later lines unstamped.
+- **One file, appended.** No rotation, no per-run file. Each run begins with a
+  `===== oag run start (pid N) =====` line, then the build (debug or release,
+  git hash), the source named on the command line or in settings, and the Steam
+  variables seen (`SteamDeck`, `SteamAppId`, `SteamGameId`,
+  `SteamVirtualGamepadInfo` and whether that file exists), written to the file
+  only. At startup entries older than seven days are dropped: the rest is
+  written beside the file and renamed over it. A line starting with no stamp
+  stays with the entry above it.
+- **Never in the frame's way.** A line is formatted and queued to a writer thread
+  that does one `write_all` per line on an append handle, so two processes
+  appending interleave whole lines. A full queue drops a line and says so in the
+  file; a panic is logged at `error` and flushed first.
+- **The code.** `crates/log` (`oag-log`); `oag-game` wires it in `main.rs`.
+  `oag-view` and `oag-trace` keep their own `env_logger` setup for now.
 
 ## Which level
 

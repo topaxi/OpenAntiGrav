@@ -1,0 +1,18 @@
+[package]
+name = "oag-log"
+description = "The binaries' log sink: the terminal as it always was, plus an appended, timestamped, pruned file with its own filter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+dirs = "7"
+env_filter = "2"
+env_logger.workspace = true
+log.workspace = true
+
+
+[lints]
+workspace = true

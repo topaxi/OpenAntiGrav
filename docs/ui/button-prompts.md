@@ -94,6 +94,9 @@ and an injected file reader, so tests need no device and no Steam.
    number of its name (`Microsoft X-Box 360 pad 0`). **No Steamworks SDK is
    needed**: `ISteamInput::GetInputTypeForHandle` would give the same answer
    and cost a dependency.
+   A Steam launch hides stderr, so the game's log file records which of these
+   variables it saw and whether the file exists: see
+   [`logging.md`](../architecture/logging.md), "The log file".
 4. **The Deck's own controls**: `SteamDeck=1` (set by Steam for a game started
    on a Deck) with a Steam or Microsoft vendor pad and no file is Xbox-shaped,
    as is SDL's `steam` type.

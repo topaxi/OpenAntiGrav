@@ -80,7 +80,7 @@ oag-ui-screens.workspace = true
 oag-trace.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-env_logger.workspace = true
+oag-log.workspace = true
 log.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 # Rasterises the SVGs under `assets/icons/` into the window/taskbar icon - see
