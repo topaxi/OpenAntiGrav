@@ -14,6 +14,7 @@
 pub mod bindings;
 pub mod keys;
 pub mod pad;
+pub mod prompt;
 
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::{Button, Input};
