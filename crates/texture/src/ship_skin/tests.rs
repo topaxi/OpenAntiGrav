@@ -35,9 +35,8 @@ fn build(team_name: &str) -> Vec<u8> {
     out
 }
 
-/// The exact byte count every one of the sixteen shipped files has, arrived
-/// at independently from `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`'s
-/// own arithmetic.
+/// The byte count of all sixteen shipped files, matching
+/// `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`'s arithmetic.
 #[test]
 fn file_len_is_the_disc_measured_26912_bytes() {
     assert_eq!(FILE_LEN, 26_912);
@@ -85,9 +84,7 @@ fn a_ten_byte_name_fills_the_header_with_no_room_for_residue() {
     assert_eq!(skin.team_name, "AG Systems");
 }
 
-/// Low nibble first: pixel 0 is the low half of byte 0, the same convention
-/// `texture::Texture` uses. Getting this backwards mirrors every pair of
-/// pixels.
+/// Low nibble first: pixel 0 is the low half of byte 0, as in `texture::Texture`.
 #[test]
 fn nibbles_unpack_low_half_first() {
     let blob = build("Test");
@@ -108,9 +105,8 @@ fn to_rgba_reads_the_palette_through_the_indices() {
     assert_eq!(&rgba[4..8], &[0, 1, 1, 255]);
 }
 
-/// The size is fully determined by the fixed layout: a truncated or padded
-/// blob is refused rather than read as a differently-shaped skin, since
-/// nothing in the file itself says otherwise.
+/// The layout fixes the size: a truncated or padded blob is refused, since
+/// nothing in the file says otherwise.
 #[test]
 fn a_blob_of_the_wrong_length_is_refused() {
     let mut blob = build("Test");

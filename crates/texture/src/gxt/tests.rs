@@ -41,11 +41,9 @@ fn descriptor_mips(
     out
 }
 
-/// A BC2 block: 4 bits alpha per texel, then a BC1 colour block. Texel 0
-/// opaque, texel 1 clear, the rest at whatever the nibble byte leaves them -
-/// same block `gtf`'s own `a_dxt23_block_takes_four_bits_of_alpha_per_texel`
-/// test uses, since the block layout is the same hardware standard either
-/// console reads.
+/// A BC2 block: 4 bits alpha per texel, then a BC1 colour block. Texel 0 opaque,
+/// texel 1 clear. Same block as `gtf`'s
+/// `a_dxt23_block_takes_four_bits_of_alpha_per_texel`.
 const RED_BLUE_DXT1: [u8; 8] = [
     0x00,
     0xf8, // 0xf800, pure red
@@ -81,10 +79,9 @@ fn a_one_block_ubc2_texture_decodes_to_its_two_endpoints_and_alpha_nibbles() {
     );
 }
 
-/// A 2x2 `Argb8888` texture, one distinct texel per storage slot, so the
-/// twiddle mapping and the `A, R, G, B` channel order can both be checked at
-/// once against `twiddle`'s own hand-verified 2x2 answer
-/// (`twiddle_over_a_square_grid_is_a_plain_bit_interleave`): storage index 0
+/// A 2x2 `Argb8888` texture, one distinct texel per storage slot, checking the
+/// twiddle mapping and `A, R, G, B` order against `twiddle`'s hand-verified 2x2
+/// answer (`twiddle_over_a_square_grid_is_a_plain_bit_interleave`): storage 0
 /// lands at `(0, 0)`, 1 at `(0, 1)`, 2 at `(1, 0)`, 3 at `(1, 1)`.
 #[test]
 fn a_two_by_two_argb8888_texture_twiddles_and_reorders_channels() {
@@ -109,10 +106,8 @@ fn a_two_by_two_argb8888_texture_twiddles_and_reorders_channels() {
     assert_eq!(rgba[3], [10, 20, 30, 0], "(1, 1): transparent, RGB kept");
 }
 
-/// No `MIN_LEVEL_LEN` floor applies to `Argb8888` - unlike `PVRTII4BPP`'s
-/// single-word minimum, there is no evidence one is needed (see
-/// `Texture::level_len`), so a mip chain down to a single texel is expected
-/// to close on the plain `width * height * 4` arithmetic with nothing added.
+/// No `MIN_LEVEL_LEN` floor applies to `Argb8888` (see `Texture::level_len`), so a
+/// chain down to a single texel closes on plain `width * height * 4`.
 #[test]
 fn an_argb8888_mip_chain_closes_on_the_plain_arithmetic_with_no_floor() {
     // 4x4 down to 1x1: three levels, 16 + 4 + 1 texels, 4 bytes each.
@@ -155,14 +150,9 @@ fn a_declared_length_that_disagrees_with_ubc2s_own_arithmetic_is_refused() {
 
 #[test]
 fn an_unsupported_format_parses_but_refuses_to_decode() {
-    // 0x02 is U4U4U4U4 - a real SceGxm base format (see the module doc's
-    // corroboration of 0x0c against the same public enum ordering), not
-    // observed on this title's disc and not decoded here. UBC1 (0x85) used
-    // to be this test's example until it was decoded on 2026-09-16 - see
-    // `docs/formats/gxt.md`'s "UBC1/UBC3 decode too" section. The declared
-    // length is trusted rather than checked, since the block size for a
-    // format this module does not know is not knowable; the length here is
-    // deliberately not any formula's answer, to show that it passes anyway.
+    // 0x02 is U4U4U4U4, a real SceGxm base format not observed on this title's
+    // disc and not decoded here. The declared length is trusted (the block size
+    // is unknowable); it is deliberately no formula's answer, to show it passes.
     let data = blob(&descriptor(0x02, 256, 256, 1234), &[0u8; 1234]);
     let gxt = Gxt::parse(&data).expect("parses");
     let texture = gxt.only().expect("one");
@@ -175,16 +165,13 @@ fn an_unsupported_format_parses_but_refuses_to_decode() {
     );
 }
 
-/// A `PVRTII4BPP` texture, which this module decoded nothing of until
-/// 2026-08-27, now goes through the same length check `UBC2` always did - see
-/// [`super::MIN_LEVEL_LEN`], whose 16-byte floor is what makes a real mip
-/// chain close.
+/// A `PVRTII4BPP` texture goes through the same length check as `UBC2`; see
+/// [`super::MIN_LEVEL_LEN`], whose 16-byte floor makes a real mip chain close.
 #[test]
 fn a_pvrtc_mip_chain_closes_only_with_the_sixteen_byte_level_floor() {
-    // 32x32 with four levels: 512 + 128 + 32 + 8 on the plain arithmetic, and
-    // the last level is one 4x4 word, which is stored in 16 bytes rather than
-    // 8. Every shipped file agrees with the floored figure and none with the
-    // plain one.
+    // 32x32 with four levels: 512 + 128 + 32 + 8 on the plain arithmetic, but the
+    // last level, one 4x4 word, is stored in 16 bytes. Shipped files agree with the
+    // floored figure.
     let floored = 512 + 128 + 32 + 16;
     let data = blob(
         &descriptor_mips(0x83, 32, 32, floored, 4),
@@ -224,11 +211,9 @@ fn an_odd_sized_texture_keeps_only_the_texels_it_has() {
 
 #[test]
 fn a_header_that_disagrees_with_its_own_dataoffset_and_datasize_is_refused() {
-    // `blob` writes a header whose dataOffset/dataSize agree with the
-    // descriptor table and the file length; corrupt just the header's
-    // dataSize field (byte 0x10) and leave the descriptor's own copy alone,
-    // so the failure is unambiguously the header-extent check rather than
-    // the per-descriptor `ChainLengthMismatch` this file already covers.
+    // Corrupt only the header's dataSize (byte 0x10), leaving the descriptor's
+    // copy alone, so the failure is the header-extent check, not the
+    // per-descriptor `ChainLengthMismatch`.
     let mut data = blob(&descriptor(0x86, 4, 4, 16), &[0u8; 16]);
     data[0x10..0x14].copy_from_slice(&999u32.to_le_bytes());
     assert_eq!(
@@ -242,20 +227,17 @@ fn a_header_that_disagrees_with_its_own_dataoffset_and_datasize_is_refused() {
 
 #[test]
 fn twiddle_degenerates_to_raster_order_on_a_single_row() {
-    // h == 1 from the start, so every step takes the "w > 1" branch and
-    // never interleaves - the same answer raster order gives.
+    // h == 1 from the start: never interleaves, the same as raster order.
     assert_eq!(twiddle(0, 0, 2, 1), 0);
     assert_eq!(twiddle(1, 0, 2, 1), 1);
 }
 
 #[test]
 fn twiddle_over_a_4x2_grid_groups_each_column_s_two_rows_together() {
-    // Measured shape: `hud_2048.gxt` is 1024x512 (256x128 blocks), so the
-    // taller dimension - here the columns, `across` - runs out of bits to
-    // interleave against `down` long before `down` does, and the tail
-    // becomes a linear run rather than more interleaving. This is the
-    // smallest grid that exhibits it: `down` (2) contributes exactly one
-    // interleaved bit before `across` (4) needs a second, linear one.
+    // `hud_2048.gxt` is 1024x512 (256x128 blocks): `down` runs out of bits to
+    // interleave against `across`, and the tail is a linear run. The smallest grid
+    // that shows it: `down` (2) gives one interleaved bit before `across` (4)
+    // needs a second, linear one.
     let order: Vec<(u32, u32)> = (0..4)
         .flat_map(|bx| (0..2).map(move |by| (bx, by)))
         .collect();
@@ -283,9 +265,8 @@ fn twiddle_over_a_4x2_grid_groups_each_column_s_two_rows_together() {
 
 #[test]
 fn twiddle_over_a_square_grid_is_a_plain_bit_interleave() {
-    // Cross-checked by hand against `missile_reticule.gxt`'s 64x64 block
-    // grid, the case that first showed the block order was not raster - see
-    // `blocks`'s own doc comment. `bx` odd bits, `by` even bits.
+    // Cross-checked by hand against `missile_reticule.gxt`'s 64x64 block grid (see
+    // `blocks`). `bx` odd bits, `by` even bits.
     assert_eq!(twiddle(0, 0, 2, 2), 0b00);
     assert_eq!(twiddle(1, 0, 2, 2), 0b10);
     assert_eq!(twiddle(0, 1, 2, 2), 0b01);
