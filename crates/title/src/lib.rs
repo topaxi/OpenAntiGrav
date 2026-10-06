@@ -36,6 +36,7 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod boot;
+pub mod effects;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
@@ -48,6 +49,10 @@ pub mod touch;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
+pub use effects::{
+    Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
+    Trigger,
+};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
@@ -182,6 +187,13 @@ pub struct Title {
     /// caller never has to ask "does this title even have a table" before
     /// asking a field of it.
     pub weapon_models: &'static weapons::WeaponModels,
+    /// What this title throws on each race [`effects::Trigger`], with where each
+    /// answer came from. `None` on a trigger means draw nothing. See
+    /// [`effects`] and ADR-0058.
+    pub effects: &'static effects::Effects,
+    /// What this title draws or does in a race beyond its effect triggers, as
+    /// per-platform rules with their origin. See [`effects::Looks`].
+    pub looks: &'static effects::Looks,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
     /// **Ours, not the disc's, on every title.** Nothing in this lineage was
@@ -621,6 +633,16 @@ pub struct ForeignSerial {
 }
 
 impl Title {
+    /// What this title throws on `trigger`, or `None` when it draws nothing
+    /// there (it does not do it, or it is unread).
+    #[must_use]
+    pub const fn effect_on(
+        &self,
+        trigger: effects::Trigger,
+    ) -> Option<&'static effects::EffectSpec> {
+        self.effects.on(trigger)
+    }
+
     /// What `serial` really belongs to, if this title knows it belongs to
     /// something else.
     #[must_use]

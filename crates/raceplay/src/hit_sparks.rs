@@ -83,7 +83,7 @@ pub(super) fn anchors(
     title: &oag_title::Title,
     liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
-    if title.name != oag_pulse::TITLE.name {
+    if title.effect_on(oag_title::Trigger::HitSpark).is_none() {
         return Vec::new();
     }
     liveries
@@ -123,11 +123,11 @@ pub(super) fn weapon_anchors(
 }
 
 /// Whether `title`'s Cannon throws [`WEAPON_SPARK_EFFECT`] on the craft it
-/// hits: Wipeout HD / Fury, whose `Cannon_ApplyCraftHit` was read. Omega
-/// carries the same strings in its executable but its wiring is unread, so it
-/// does not.
+/// hits: its [`oag_title::Trigger::WeaponSpark`] entry. Wipeout HD / Fury's
+/// `Cannon_ApplyCraftHit` was read; Omega carries the same strings in its
+/// executable but its wiring is unread, so it has no entry.
 pub(super) fn throws_weapon_spark(title: &oag_title::Title) -> bool {
-    title.name == oag_hd::TITLE.name
+    title.effect_on(oag_title::Trigger::WeaponSpark).is_some()
 }
 
 /// The world position of the locator nearest `contact`, by squared distance -

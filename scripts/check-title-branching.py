@@ -71,13 +71,6 @@ BASELINE: dict[str, int] = {
     "crates/game/src/main/session/remix.rs": 6,
     "crates/game/src/settings/race.rs": 1,
     "crates/game/src/unlock.rs": 2,
-    "crates/raceplay/src/absorb.rs": 3,
-    "crates/raceplay/src/hit_sparks.rs": 2,
-    "crates/raceplay/src/load.rs": 2,
-    "crates/raceplay/src/load/pulse_ps2.rs": 1,
-    "crates/raceplay/src/load/pulse_psp.rs": 1,
-    "crates/raceplay/src/load/roster.rs": 4,
-    "crates/raceplay/src/wreck_fx.rs": 1,
     "crates/source/src/title.rs": 1,
     "crates/ui/src/frontend.rs": 1,
 }

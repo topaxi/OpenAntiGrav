@@ -218,8 +218,9 @@ fn the_weapon_spark_picks_the_locator_nearest_the_contact() {
     assert!(crate::hit_sparks::nearest_locator(&[], model, Vec3::ZERO).is_none());
 }
 
-/// The title gate is the only thing keeping the other titles from firing HD's
-/// Cannon spark: true for HD and for no other title this workspace ships.
+/// The title's `WeaponSpark` entry is the only thing keeping the other titles
+/// from firing HD's Cannon spark: present for HD and for no other title this
+/// workspace ships.
 #[test]
 fn only_hd_throws_the_cannon_craft_hit_spark() {
     use crate::hit_sparks::throws_weapon_spark;

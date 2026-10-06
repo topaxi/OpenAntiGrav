@@ -36,105 +36,34 @@
 //! zero-speed ring, neither of which reads the frame.
 
 use super::*;
+use oag_title::Burst;
 
 /// The effect every absorb plays - `Data\Psys\WO_WEAPON_ABSORB.POB` on every
 /// title that has one.
 pub const ABSORB_EFFECT: &str = "WO_WEAPON_ABSORB";
 
-/// How one title staggers its absorb burst over a hull's locators.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AbsorbBurst {
-    /// Node `i` of at most `cap`, `i * stagger` seconds late - Pulse and Pure.
-    Sequential {
-        /// The loop bound: `10` on Pulse, `8` on Pure.
-        cap: usize,
-        /// `DAT_08abf564 = (float)i * 0.1` on Pulse.
-        stagger: f32,
-    },
-    /// Six nodes in three mirrored pairs, `stagger` seconds apart - HD.
-    MirroredPairs {
-        /// The settings block's `+0x54`, `0.2` in `.data`.
-        stagger: f32,
-    },
-}
-
-/// Pulse, PSP and PS2 alike - the PS2 port's own absorb path is unread, and
-/// the PSP is the reference this engine implements.
-pub const PULSE_ABSORB_BURST: AbsorbBurst = AbsorbBurst::Sequential {
-    cap: 10,
-    stagger: 0.1,
-};
-
-/// Pure's loop bound is eight, read off its own disassembly.
-pub const PURE_ABSORB_BURST: AbsorbBurst = AbsorbBurst::Sequential {
-    cap: 8,
-    stagger: 0.1,
-};
-
-/// Wipeout HD, off `absorb` locators rather than `Ship Collision Fx` ones.
-pub const HD_ABSORB_BURST: AbsorbBurst = AbsorbBurst::MirroredPairs { stagger: 0.2 };
-
-impl AbsorbBurst {
-    /// `(locator index, delay in seconds)` for a hull that carries `nodes`
-    /// locators of this title's class, in the order the original spawns them.
-    ///
-    /// Empty when the hull carries none - and on HD when it carries fewer than
-    /// six, since `FUN_000d9398` tests the outer pair's two slots before it
-    /// spawns anything. The original's own gate on an empty list is the same
-    /// silence (`Ship_PlayAbsorbFeedback` tests the node count first), so this
-    /// never falls back to the craft's centre.
-    #[must_use]
-    pub fn schedule(self, nodes: usize) -> Vec<(usize, f32)> {
-        match self {
-            Self::Sequential { cap, stagger } => (0..nodes.min(cap))
-                .map(|i| (i, i as f32 * stagger))
-                .collect(),
-            Self::MirroredPairs { stagger } if nodes >= 6 => {
-                let late = stagger + stagger;
-                vec![
-                    (0, 0.0),
-                    (5, 0.0),
-                    (1, stagger),
-                    (4, stagger),
-                    (2, late),
-                    (3, late),
-                ]
-            }
-            Self::MirroredPairs { .. } => Vec::new(),
-        }
-    }
-}
-
-/// The burst a title plays, keyed on the title the craft come from - the same
-/// footing `Setup::shield_palette` is chosen on. `None` for a title whose
-/// absorb path is unread (2048, Omega), which then plays nothing.
+/// The burst `title` plays on an absorb, off its [`oag_title::Effects`] table:
+/// `None` for a title whose absorb path is unread (2048, Omega), which then
+/// plays nothing. Keyed on the title the craft comes from - the same footing
+/// `Setup::shield_palette` is chosen on.
 #[must_use]
-pub fn absorb_burst_for(title: &oag_title::Title) -> Option<AbsorbBurst> {
-    if title.name == oag_pulse::TITLE.name {
-        Some(PULSE_ABSORB_BURST)
-    } else if title.name == oag_pure::TITLE.name {
-        Some(PURE_ABSORB_BURST)
-    } else if title.name == oag_hd::TITLE.name {
-        Some(HD_ABSORB_BURST)
-    } else {
-        None
-    }
+pub fn absorb_burst_for(title: &oag_title::Title) -> Option<Burst> {
+    title
+        .effect_on(oag_title::Trigger::ShieldAbsorb)
+        .and_then(|spec| spec.burst)
 }
 
 /// Each slot's locators for `burst`, model space: the `Ship Collision Fx` set
-/// for a [`AbsorbBurst::Sequential`] title, the `absorb` set for HD's
-/// [`AbsorbBurst::MirroredPairs`], and nothing for a title with no burst.
-pub(super) fn anchors(
-    burst: Option<AbsorbBurst>,
-    liveries: &[oag_livery::Livery],
-) -> Vec<Vec<Vec3>> {
+/// for a [`Burst::Sequential`] title, the `absorb` set for HD's
+/// [`Burst::MirroredPairs`], and nothing for a title with no burst.
+pub(super) fn anchors(burst: Option<Burst>, liveries: &[oag_livery::Livery]) -> Vec<Vec<Vec3>> {
     liveries
         .iter()
         .map(|livery| match burst {
-            Some(AbsorbBurst::Sequential { .. }) => {
+            Some(Burst::Sequential { .. }) => {
                 livery.collision_fx.iter().map(|a| a.position).collect()
             }
-            Some(AbsorbBurst::MirroredPairs { .. }) => livery.absorb.clone(),
+            Some(Burst::MirroredPairs { .. }) => livery.absorb.clone(),
             None => Vec::new(),
         })
         .collect()
@@ -323,40 +252,5 @@ impl Race {
             .filter_map(|burst| burst.playing)
             .filter(|playing| self.view.stage.is_emitting(*playing))
             .count()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pulse_staggers_every_node_a_tenth_apart_up_to_ten() {
-        let schedule = PULSE_ABSORB_BURST.schedule(12);
-        assert_eq!(schedule.len(), 10);
-        assert_eq!(schedule[0], (0, 0.0));
-        assert_eq!(schedule[9], (9, 9.0 * 0.1));
-        assert_eq!(PULSE_ABSORB_BURST.schedule(6).len(), 6);
-    }
-
-    #[test]
-    fn pure_stops_at_eight() {
-        assert_eq!(PURE_ABSORB_BURST.schedule(10).len(), 8);
-    }
-
-    #[test]
-    fn hd_fires_three_mirrored_pairs_and_nothing_short_of_six() {
-        let schedule = HD_ABSORB_BURST.schedule(6);
-        assert_eq!(
-            schedule,
-            vec![(0, 0.0), (5, 0.0), (1, 0.2), (4, 0.2), (2, 0.4), (3, 0.4)]
-        );
-        assert!(HD_ABSORB_BURST.schedule(5).is_empty());
-    }
-
-    #[test]
-    fn a_hull_with_no_locators_plays_nothing() {
-        assert!(PULSE_ABSORB_BURST.schedule(0).is_empty());
-        assert!(HD_ABSORB_BURST.schedule(0).is_empty());
     }
 }

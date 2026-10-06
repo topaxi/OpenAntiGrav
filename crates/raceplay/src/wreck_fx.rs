@@ -72,7 +72,7 @@ pub(super) fn anchors(
     title: &oag_title::Title,
     liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
-    if title.name != oag_pulse::TITLE.name {
+    if title.effect_on(oag_title::Trigger::Wreck).is_none() {
         return Vec::new();
     }
     liveries
