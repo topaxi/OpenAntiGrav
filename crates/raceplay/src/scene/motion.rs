@@ -44,6 +44,8 @@ pub(super) struct Snapshot {
     /// A live Plasma bolt's own head, same terms - HD only, empty on every
     /// other source. See `Loaded::plasma_ball_model`.
     pub(super) plasma_balls: Vec<Mat4>,
+    /// A live Shuriken blade's own, same terms.
+    pub(super) shurikens: Vec<Mat4>,
     /// The Mine's own, same terms as [`Self::rockets`].
     pub(super) mines: Vec<Mat4>,
     /// The Bomb's own, same terms.
@@ -63,6 +65,7 @@ impl Snapshot {
                 .collect(),
             rockets: race.rocket_model_matrices(),
             plasma_balls: race.plasma_ball_model_matrices(),
+            shurikens: race.shuriken_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
             cannon_rounds: race.cannon_model_matrices(cannon),

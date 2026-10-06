@@ -505,7 +505,7 @@ forward wave only. The fork is
 hashed only while live, so every committed reference reproduced unchanged.
 `~REPULSORTRAVEL` stays unwired (see the live section). The blast's own
 playback (flag `0x200000` and the selector-5 record, `docs/formats/pob.md`) and
-the wave-start whiteout are the open picture gaps.
+the wave-start whiteout were the open picture gaps (the whiteout closed 2026-10-06, see [particle-system.md](particle-system.md), "the guard band is the law").
 
 **2026-10-04, pulse-psys-ring: the blast's ring matches.** Four interpreter laws were
 missing and are now played:
@@ -519,10 +519,8 @@ The blast also rides `+0x1a0`: `Repulser_SpawnBlastEffect` hands `Psys_Spawn_q` 
 matrix by pointer (`param_5 = 1`), and the emitter's flag `0x2` draws the pool through
 it live. With these, the ring is wide at update 10, compact at 20 and 30, a white puff
 at 40, and gone at 47, as on the PSP. See `particle-system.md`, "The emitter's clock
-and the burst laws". **The wave-start whiteout is `WO_REPULSER`, not the flash.** Its
-`shazzam` template is a full-screen white bar at update 49, and its class-6 root emitter
-is a white blob at 52. With both withheld, the frame is the original's blue tint. The
-next step is a live read of those instances. The spin's sense is still unmeasured, and
+and the burst laws". **The wave-start whiteout is `WO_REPULSER`, not the flash** (closed 2026-10-06: the GE
+drops the out-of-range `shazzam` quad). The spin's sense is still unmeasured, and
 it shows now that the beads ride the spin.
 
 **HD now hands it out on this law.** HD's `weaponstats_elimination.xml`
@@ -564,4 +562,4 @@ Played since this change: `race::weapons::repulser` hands every wave
 `stretch(width / 100, -across)` (forward and fork) or `stretch(width / 100, across)`
 (backward). Shape 8 and the class-6 bar are in
 [particle-system.md](particle-system.md), "Shape 8, the class-6 bar and the wave's
-width", with the GE evidence for the wave-start `shazzam` bar that ours still draws.
+width", with the GE evidence for the wave-start `shazzam` bar, which ours now drops as the GE does (2026-10-06).

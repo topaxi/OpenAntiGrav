@@ -8,6 +8,17 @@ checked), and this page covers the physical gantry, which arrives through
 `TrackStartup.xml`'s **billboard slot 8** ([`formats/README.md`](../formats/README.md)'s
 Track startup row).
 
+> **2026-10-06, billboards lane: the original draws this model to a texture.**
+> A live PPSSPP GE dump of Talon's Junction shows the gantry (pass B: 8 prims, the
+> model's own camera at aspect 4.0 and 61.93 degrees, a 128 x 128 target) and the
+> circuit's slot-7 advert (pass A) rendered offscreen and **sampled on the quads the
+> track textures `billboard8.tga` and `billboard7.tga`**
+> ([billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md), 2026-10-06). So
+> the mount this page measures is the quad the original samples the gantry on, and
+> `oag_raceplay::gantry` still stands the model on it directly - a placement measured
+> against the original and kept; the render-to-texture path the other six slots now use
+> (`oag_raceplay::adverts`) was not applied to slot 8. Checked, applies, not wired.
+
 **Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`; and
 `pulse-ps2-eu.chd`, `SCES-54748`), Wipeout Pure (`pure-psp-usa.chd`,
 `UCUS-98612`), Wipeout HD/Fury (`hdfury-ps3-eu-dec.iso`) and Wipeout 2048

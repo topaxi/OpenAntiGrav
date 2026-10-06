@@ -44,11 +44,13 @@
 //! - the `FINAL LAP` and chequered boards, whose triggers are unrecovered -
 //!   `oag_render::gantry::clip_to_panel` drops them and the report gives the
 //!   count;
-//! - billboard slots 1-7, whose mounting surfaces are still unrecovered.
+//! - billboard slots whose advert is a colour, which `Billboard_CreateFromColour`
+//!   picks out of a per-track pool this project has not read. Talon's Junction
+//!   authors none of those on a quad it draws; `billboard_adverts_ground_truth.rs`
+//!   covers the slots that do name a model, which are drawn since 2026-10-06.
 //!
-//! So this asserts the positive claim *and* both remaining absences. A report
-//! that started drawing the lap board on a guess, or quietly stopped mentioning
-//! the seven unplaced hoardings, fails here.
+//! So this asserts the positive claim *and* the remaining absence. A report
+//! that started drawing the lap board on a guess fails here.
 
 use std::path::PathBuf;
 
@@ -127,9 +129,10 @@ fn the_report_still_names_everything_about_the_gantry_that_is_not_drawn() {
         report.contains("Pulse's race manager (0x08829778) plays the Board, FINAL LAP"),
         "the report does not say what triggers the later states: {report}"
     );
-    // The other seven slots, which the placement did not touch.
+    // Slot 8's placeholder quad is the gantry's, and the report says the gantry
+    // stands where it was rather than dropping it unmentioned.
     assert!(
-        report.contains("slots 1-7 unplaced"),
-        "the report no longer states that the hoarding slots are unplaced: {report}"
+        report.contains("billboard8 placeholder draw(s) replaced by the start gantry"),
+        "the report does not say slot 8's placeholder is replaced by the gantry: {report}"
     );
 }

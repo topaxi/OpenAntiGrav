@@ -50,6 +50,7 @@ mod emitter_state;
 mod error;
 pub mod field;
 pub mod frames;
+pub mod guard;
 mod library;
 mod path;
 pub mod playback;
@@ -1064,23 +1065,17 @@ impl System {
         self.particles.iter().any(|p| p.alive()) || self.emitters.iter().any(|state| state.active)
     }
 
-    /// How many times [`System::ignite`] has fired, ever.
-    ///
-    /// For a caller's trigger-discipline tests: particle counts cannot tell
-    /// "one burst trickling" from "a burst per tick" once a burst spans tens
-    /// of ticks.
+    /// How many times [`System::ignite`] has fired, ever - for trigger-discipline
+    /// tests, which particle counts cannot serve once a burst spans tens of ticks.
     #[must_use]
     pub fn ignitions(&self) -> u32 {
         self.ignitions
     }
 
-    /// This frame's geometry, split by blend class: `(additive,
-    /// alpha_over)` - the two GE configurations the original's state
-    /// selector switches between.
-    ///
-    /// `right` and `up` come from the camera. Billboards face the viewer;
-    /// streaks span their two stored points with a camera-perpendicular
-    /// width, following the streak-quad builder at `0x08916820`.
+    /// This frame's geometry, split by blend class: `(additive, alpha_over)`,
+    /// the two GE configurations the original's state selector switches
+    /// between. `right` and `up` come from the camera; streaks follow the
+    /// streak-quad builder at `0x08916820`.
     #[must_use]
     pub fn vertices(
         &self,
@@ -1090,16 +1085,14 @@ impl System {
     ) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up);
+        self.extend_vertices(&mut additive, &mut alpha_over, effect, right, up, None);
         (additive, alpha_over)
     }
 
-    /// [`Self::vertices`], appended to two lists the caller owns.
-    ///
-    /// The form the renderer uses. A busy frame plays several effects at once
-    /// and each returned its own growing pair, which the stage then appended
-    /// into a third: measured with rockets in the air, gathering the particles
-    /// allocated 1.99 MB in one frame.
+    /// [`Self::vertices`], appended to two lists the caller owns - the
+    /// renderer's form (a returned pair per effect allocated 1.99 MB a frame
+    /// with rockets in the air). `guard` is the GE's screen-range cull, or
+    /// `None` for a source it was not measured on.
     pub fn extend_vertices(
         &self,
         additive: &mut Vec<GpuVertex>,
@@ -1107,6 +1100,7 @@ impl System {
         effect: &Effect,
         right: Vec3,
         up: Vec3,
+        guard: Option<&guard::GuardBand>,
     ) {
         for particle in &self.particles {
             if !particle.alive() {
@@ -1149,6 +1143,9 @@ impl System {
             };
             if let Some(rect) = spec.sheet_rect {
                 sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
+            }
+            if guard::drops(guard, &effect.name, spec.template, &corners) {
+                continue;
             }
             out.extend_from_slice(&corners);
         }
@@ -1388,7 +1385,7 @@ impl Stage {
     pub fn vertices(&self, right: Vec3, up: Vec3) -> (Vec<GpuVertex>, Vec<GpuVertex>) {
         let mut additive = Vec::new();
         let mut alpha_over = Vec::new();
-        self.extend_vertices(&mut additive, &mut alpha_over, right, up);
+        self.extend_vertices(&mut additive, &mut alpha_over, right, up, None);
         (additive, alpha_over)
     }
 
@@ -1400,6 +1397,7 @@ impl Stage {
         alpha_over: &mut Vec<GpuVertex>,
         right: Vec3,
         up: Vec3,
+        guard: Option<&guard::GuardBand>,
     ) {
         for instance in &self.instances {
             let Some(effect) = instance.effect.as_deref() else {
@@ -1407,7 +1405,7 @@ impl Stage {
             };
             instance
                 .system
-                .extend_vertices(additive, alpha_over, effect, right, up);
+                .extend_vertices(additive, alpha_over, effect, right, up, guard);
         }
     }
 

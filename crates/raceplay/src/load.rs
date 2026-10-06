@@ -645,7 +645,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
-    let (gantry, visibility) = gantry_visibility::build(
+    let (gantry, visibility, adverts) = gantry_visibility::build(
         &mut archives,
         &track,
         &mut track_model,
@@ -948,7 +948,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
         track_stats,
         track_model,
-        gantry,
+        billboards: crate::adverts::Billboards { gantry, adverts },
         collision_model,
         sky_model,
         pad_model,

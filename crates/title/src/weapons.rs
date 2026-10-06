@@ -129,6 +129,9 @@ pub struct WeaponModels {
     /// read this session - see `oag_raceplay::load::weapon_models`'s own
     /// doc comment for where that stopped.
     pub leachbeam_ball: Option<&'static str>,
+    /// The Shuriken's own blade, drawn on the same basis the Rocket's dart
+    /// is. `None` on a title whose blade model is not recovered.
+    pub shuriken: Option<&'static str>,
     /// How the Cannon's two hand-built quads and its [`Self::cannon`] model
     /// are drawn, where a title's own executable says so.
     ///
@@ -194,6 +197,7 @@ impl WeaponModels {
         magstrip_wake: None,
         magstrip_pob: false,
         leachbeam_ball: None,
+        shuriken: None,
         cannon_look: None,
         ghost_static: None,
     };

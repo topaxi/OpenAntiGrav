@@ -383,6 +383,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     magstrip_wake: None,
     magstrip_pob: false,
     leachbeam_ball: None,
+    // `Shuriken_Init`'s model string `0x08a7cd74`.
+    shuriken: Some(r"Data\Weapons\pulse_shuriken.vex"),
     // `None` is this title's own reading - see the field's doc comment.
     cannon_look: None,
     // `MeshNode_Ghost_LoadStaticGlow` (`0x08910ef8`) names it.

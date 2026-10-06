@@ -127,6 +127,7 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
     assert!(line.contains("0x0005e948"), "{line}");
 
     let placed = loaded
+        .billboards
         .gantry
         .as_ref()
         .expect("Talon's Junction stands a gantry");

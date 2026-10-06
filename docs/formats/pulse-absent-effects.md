@@ -136,19 +136,18 @@ stand-in becomes visible to a player, so it is the moment it is named. The other
   `hdships/zone/Textures/Ambient_Shadow.gnf` and `HDShips/Zone_VR/...`, the Zone
   craft alone, as `.gnf`. Same status as 2048.
 
-## Billboard slots: not closed
+## Billboard slots: closed for model slots (2026-10-06, billboards lane)
 
-Rendered with `oag-view --mesh` (screenshots in the lane's scratch directory, not
-committed): `Data\Billboards\Pulse_Adverts\goteki\GOTEKI_LANDSCAPE_01.vex` is a
-self-contained scene of flat panels plus **logo and lettering as geometry** (a
-"GOTEKI" wordmark, a yellow emblem, a "45"), and `auricom\AURICOM_LANDSCAPE_01.vex`
-is two overlapping panels with the Auricom wordmark. Their materials reference only
-generic textures (`white_nonalpha`, `justwhite`, `fadeup001`), the same way the start
-gantry's lettering is geometry ([start-gantry.md](../rendering/start-gantry.md)). So
-there is an authored advert to play, and it is **not** a texture to bind onto the
-track's placeholder quad (the HD shape): it is a model that needs a transform. The
-constructor writes the identity matrix and the writer that moves it to its hoarding
-is not found
-([billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md)). The placeholder
-draws stay suppressed and the WARN stays: placement is unrecovered, and putting the
-model where a placeholder quad sits would be a guess, not a reading.
+Rendered with `oag-view --mesh`: `Data\Billboards\Pulse_Adverts\goteki\GOTEKI_LANDSCAPE_01.vex` is a
+self-contained scene of flat panels plus **logo and lettering as geometry**, with only
+generic textures, like the start gantry's lettering
+([start-gantry.md](../rendering/start-gantry.md)). The earlier reading here - "a model
+that needs a transform, the constructor writes the identity matrix" - is retired: **the
+model is drawn through its own camera into a 128 x 128 texture and the circuit's
+`billboardN.tga` quad shows that texture**, read off a live PPSSPP GE dump
+([billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md), 2026-10-06 section).
+Pulse PSP and PS2 now draw it (`oag_raceplay::adverts`), and the load report's
+`N billboard-slot placeholder draw(s) suppressed` WARN no longer fires on a circuit whose
+slots all name a model (Talon's Junction). It still fires, honestly, on a circuit with a
+**colour** slot and a quad for it (`05_Track`: three), because which advert a colour picks
+is a pool walk this project has not read. HD is not wired.

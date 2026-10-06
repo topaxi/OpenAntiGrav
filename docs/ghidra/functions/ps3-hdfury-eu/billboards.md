@@ -1178,3 +1178,31 @@ node's own `+0xc0` animation time, and HD's race manager holds that time in a
 per-lap window (`[3.83, 5.25)` s before the first line crossing). The full
 chain, the window table and the identity argument for slot 8's node are on
 [gantry-clock.md](gantry-clock.md).
+
+## 2026-10-06 (billboards lane): the Pulse render-to-texture finding, checked against `Billboard_LoadModelAndBind` - applies, not wired
+
+A live PPSSPP frame of Pulse shows each advert drawn through its own `Camera`
+node into a 128 x 128 offscreen buffer that the circuit's `billboardN` quad then
+samples ([psp-pulse-usa/billboards.md](../psp-pulse-usa/billboards.md), 2026-10-06
+section). Re-reading `Billboard_LoadModelAndBind` (`0x003a4da0`, 80) with that in
+hand, **it is the same shape** (static reading only, no RPCS3 capture, so 60):
+
+- the slot's `.rcsmodel` loads into `g_BillboardSlots + (num - 1) * 0x100`, and the
+  function collects the model's nodes of one class (the loop filling
+  `piVar29[4]`/`piVar29[5]`; the class tag is read through a TOC pointer and not
+  identified here - Pulse's analogue is `Camera`, `0xf7`) and gives each a matrix block;
+- `FUN_005e5858(*g_BillboardSlots, slot + 0xf4)` and `FUN_005ea2d0(..., 0xffffffff)`
+  then build a render target for the slot and set it up with a set of matrices and a
+  clear colour - the object a render pass draws into;
+- the materials named `"billboard" + num` get their texture pointer set to
+  `*(slot + 0xf4) + 0x20`, **the target's own colour texture**, which is what "binds
+  by material name" meant.
+
+So on HD too the advert is drawn to a texture and the placeholder quad's material is
+pointed at it, and the placeholder-draw WARN (32 on HD) is the same absence. **Not
+wired here, deliberately**: the HD pass's projection law, target size and clear are
+unmeasured (the Pulse law is the `.vex` camera's u16 curve; HD's `.rcsmodel` adverts
+and its own `VexCamera`-class equivalents were not read), and a Zone race takes the
+other branch of the function (the `else` that binds one shared `"billboard"` texture to
+every slot but 8). Status: **checked, applies, not wired**; the next step is an RPCS3
+capture of one advert pass, then `oag_raceplay::adverts::load` with HD's model reader.

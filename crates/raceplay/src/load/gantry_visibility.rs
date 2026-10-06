@@ -30,16 +30,20 @@ pub(super) fn build(
     vex_geometry: bool,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
-) -> (Option<gantry::Placed>, Option<TrackVisibility>) {
+) -> (
+    Option<gantry::Placed>,
+    Option<TrackVisibility>,
+    Vec<crate::adverts::Card>,
+) {
     // The authored PVS. Skipped for a ribbon build, whose geometry is generated
     // from the spline rather than authored, so the section boxes have nothing
     // to say about it.
     // **What the circuit asks to be loaded with it, and what of that this
     // project does.** `trackstartup.xml` names up to eight billboard slots and
-    // a sound bank; every model it names is on the disc. Seven of the eight are
-    // still unplaced - where a hoarding attaches is unrecovered, so they stay
-    // unwired rather than put somewhere plausible. **Slot 8 is not a hoarding
-    // and is no longer among them**: it is the start gantry, and the circuit's
+    // a sound bank; every model it names is on the disc. **Slots 1-7 are drawn
+    // through their own camera into the texture the circuit's `billboardN`
+    // quads show** (`crate::adverts`), where the circuit authors such a quad.
+    // **Slot 8 is not a hoarding**: it is the start gantry, and the circuit's
     // own track geometry authors the surface it stands on. See
     // `oag_tables::trackstartup` and `docs/rendering/start-gantry.md`.
     //
@@ -49,6 +53,7 @@ pub(super) fn build(
     // where HD's are `/`-joined; `rfind('/')` alone found nothing on Pulse.
     let has_ps3_geometry = ps3_geometry.is_some();
     let mut gantry = None;
+    let mut adverts = Vec::new();
     // Whether anything named a slot 8 at all, which is what separates "the gantry
     // did not load" (`place` says so itself) from "nothing asked for one", which
     // otherwise reports nothing at all - see the block after this one.
@@ -67,8 +72,7 @@ pub(super) fn build(
             .filter(|b| b.location().is_some())
             .count();
         report.push(format!(
-            "{name}: {} billboard slot(s), {models} naming a model and {} a colour - \
-             slots 1-7 unplaced, because what a hoarding attaches to is unrecovered{}",
+            "{name}: {} billboard slot(s), {models} naming a model and {} a colour{}",
             manifest.billboards.len(),
             manifest.billboards.len() - models,
             match &manifest.sound_bank {
@@ -76,6 +80,12 @@ pub(super) fn build(
                 None => String::new(),
             },
         ));
+        // Pulse's adverts are drawn through their own cameras into a texture the
+        // track's placeholder quads show (`crate::adverts`). HD binds by name
+        // instead and has no card to draw.
+        if vex_geometry {
+            adverts = crate::adverts::load(archives, &manifest, track_model, report);
+        }
         // The manifest's own spelling of the model, not a constant here:
         // every Pulse circuit names the same file, and a source that names
         // another gets that one drawn rather than Pulse's substituted for it.
@@ -112,8 +122,19 @@ pub(super) fn build(
             mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
         ));
     }
-    // The billboard slots are never artwork - see `strip_slot_placeholders`'s own doc.
-    let stripped = oag_render::gantry::strip_slot_placeholders(track_model);
+    // A slot is never artwork - see `strip_slot_placeholders`'s own doc. Slot 8's
+    // quad is the start gantry's, and the slots with a card keep their draws:
+    // `Scene::new` points those at the card's target.
+    if gantry.is_some() {
+        let replaced = oag_render::gantry::strip_slot_placeholder(track_model, 8);
+        if replaced > 0 {
+            report.push(format!(
+                "{replaced} billboard8 placeholder draw(s) replaced by the start gantry"
+            ));
+        }
+    }
+    let served: Vec<u32> = adverts.iter().map(|card| card.slot).collect();
+    let stripped = oag_render::gantry::strip_unserved_slot_placeholders(track_model, &served);
     if stripped > 0 {
         report.push(format!("{stripped} billboard-slot placeholder draw(s) suppressed: drawn nothing rather than the stub"));
     }
@@ -147,5 +168,5 @@ pub(super) fn build(
         ),
         _ => {}
     }
-    (gantry, visibility)
+    (gantry, visibility, adverts)
 }

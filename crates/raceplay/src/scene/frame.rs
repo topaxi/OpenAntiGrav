@@ -302,6 +302,7 @@ impl Scene {
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
+        crate::adverts::render(&self.adverts, queue, encoder, seconds);
         oag_gpu::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
@@ -648,16 +649,15 @@ impl Scene {
                 exhaust.extend_trail_vertices(trail, right, up);
             }
         }
-        // Only the billboard *fallback*, per kind: a Rocket, Mine, Bomb or
-        // Cannon round whose own model did not load, or a Missile, Plasma or
-        // Shuriken, which has none at all - the flare around a modelled kind is
-        // an asset now, through the particle pipeline below with everything else.
+        // Only the billboard *fallback*, per kind: a body whose own model did
+        // not load, or a Missile or Plasma, which has none at all.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
             oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
             oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
+            oag_tables::weapons::Weapon::Shuriken => !self.plasma_blast.shuriken.is_empty(),
             _ => false,
         }));
         self.gather_cannon_quads(race, right, up, cannon_bolt, cannon_flash);
@@ -836,6 +836,7 @@ impl Scene {
         for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
+        self.draw_shurikens(race.shuriken_model_matrices().len(), &mut pass, &mut stats);
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
         self.draw_bomb_blasts(&blasts_active, &mut pass, &mut stats);
         self.draw_leach_ball(leach_ball_active, &mut pass, &mut stats);

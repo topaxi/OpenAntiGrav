@@ -161,16 +161,59 @@ pub fn is_slot_placeholder(label: &str) -> bool {
 ///
 /// **Not gated on whether a slot's own replacement was found.** Slot 8 gets
 /// one - `oag_raceplay::gantry` stands `321Go_StartFinish.vex` on the mount
-/// this module measures - but slots 1-7
-/// stay unwired (`docs/formats/README.md`'s Track startup row: what a hoarding
-/// attaches to is unrecovered) and this drops their placeholder draws all the
-/// same. HD's own mechanism has no "leave the stub showing" case either: a
+/// this module measures - and on Pulse a slot with a model is drawn into the
+/// placeholder's own quad (`oag_raceplay::adverts`, which calls
+/// [`strip_unserved_slot_placeholders`] instead). This one drops every slot's
+/// placeholder draws, for the titles that draw no advert. HD's own mechanism
+/// has no "leave the stub showing" case either: a
 /// slot with nothing to bind "simply binds nothing", per
 /// `docs/rendering/start-gantry.md`'s reading of `amphiseum`'s own five-of-eight
 /// placeholder count - the count mismatch refutes "every slot binds", not
 /// "the raw stub is never shown".
 pub fn strip_slot_placeholders(model: &mut Model) -> usize {
     strip_texture(model, is_slot_placeholder)
+}
+
+/// The slot number a billboard placeholder texture names: `billboard7.tga` is
+/// 7, on either title's spelling. `None` for any other label.
+#[must_use]
+pub fn slot_number(label: &str) -> Option<u32> {
+    if !is_slot_placeholder(label) {
+        return None;
+    }
+    // `billboard` is nine bytes and the digit follows it.
+    let digit = *basename(label).as_bytes().get(9)?;
+    digit.is_ascii_digit().then(|| u32::from(digit - b'0'))
+}
+
+/// Every texture slot of `model` that is a billboard placeholder, with the
+/// billboard slot number its label names, in texture-slot order.
+#[must_use]
+pub fn placeholder_texture_slots(model: &Model) -> Vec<(usize, u32)> {
+    model
+        .textures
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, t)| {
+            let number = slot_number(&t.as_ref()?.label)?;
+            Some((slot, number))
+        })
+        .collect()
+}
+
+/// Drops every draw bound to slot `number`'s placeholder, and says how many:
+/// what stands where it was, the start gantry for slot 8.
+pub fn strip_slot_placeholder(model: &mut Model, number: u32) -> usize {
+    strip_texture(model, |label| slot_number(label) == Some(number))
+}
+
+/// [`strip_slot_placeholders`] for every slot number not in `served`: a slot
+/// whose advert the caller draws into the placeholder keeps its draws, and the
+/// rest are dropped as before. Says how many were dropped.
+pub fn strip_unserved_slot_placeholders(model: &mut Model, served: &[u32]) -> usize {
+    strip_texture(model, |label| {
+        is_slot_placeholder(label) && !slot_number(label).is_some_and(|n| served.contains(&n))
+    })
 }
 
 /// Slot 7's own placeholder art, `fx350_nomip.gtf` - HD's

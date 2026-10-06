@@ -557,3 +557,139 @@ crate).
   stopping; nothing was left running. Given the static reading above
   already explains the write this read would have checked, this was not
   retried a fifth time - see the Verdict.
+
+## 2026-10-06 (billboards lane): the adverts are drawn through their own camera into a 128 x 128 texture - there is no placement transform to find
+
+This closes the thread's top open item by retiring its question. **Nothing
+places an advert in the world.** The object `Billboard_ConstructResource`
+(`0x08900220`) builds is a *card*: the advert model, its own `Camera` node and a
+128 x 128 render target. The model is drawn through that camera into the target
+each frame, and the track's `billboardN.tga` quads show the target. The "identity
+matrix the constructor writes" was never a transform of the advert - it is the
+camera's cached view matrix, filled in on the first update. Evidence is a live
+GE dump plus the instructions below; the earlier pages' confidence scores stand
+for what they measured.
+
+### 1. A live frame renders into an offscreen buffer and then samples it (92)
+
+PPSSPP v1.20.4, Talon's Junction, Time Trial at the start line, own Xvfb and
+port. `scripts/psp-ge-dump.py dump` gives 4,718 GE commands for one frame; a
+scan of `FBPTR` (`0x9c`) and `FBW` (`0x9d`) shows the frame buffer moving from the
+display buffer (`0x04088000`, width `0x200`) to **`0x04154000`, width `0x80`**
+twice, back to the display buffer after each, and three main-pass prims
+sampling `0x04154000` as their texture.
+
+- **Pass A**: 13 prims (a clear sprite plus the 12 meshes of
+  `AURICOM_LANDSCAPE_01.vex`). Viewport scale `+-64`, offset 2048: the whole 128 x 128.
+  Clear colour `0x00000000` (the sprite's vertex colour), lighting off, fog on.
+- **Pass B**: 8 prims, the 321Go gantry model. The same viewport.
+- The two main-pass prims that sample the buffer have vertex-buffer boxes
+  `x -254.5..-243.4, y -15.3..-0.3, z -270.6..-233.7` and
+  `x 34.24, y -41.2..-30.6, z -208.2..-162.8`. Against `16_Track`'s `track.vex`
+  these are **node 453, texture `billboard7.tga`** and **node 74, texture
+  `billboard8.tga`** (`crates/render/tests/billboard_slots_ground_truth.rs`,
+  within 1.0 on every bound), and the manifest's slot 7 is Auricom's model and slot
+  8 the gantry. Slot N's advert is on the quad textured `billboardN`.
+  The third sampling prim is a 2-vertex sprite, not a quad.
+- The same view in the original's own pixels (`start.png`, scratch) shows a black
+  panel with a white "m" glow at that quad; this project's render at the same
+  tick (Time Trial, tick 300) draws the same panel and glyph.
+
+### 2. The matrices of those passes are the advert's own camera (90)
+
+| | pass A (Auricom) | pass B (321Go) |
+| --- | --- | --- |
+| view | pure translation `(-0.48542, -0.47794, -31.832)` | `-(0, 0, 30)`-shaped |
+| projection x scale | 1.857 | 1.667 |
+| projection y scale | 3.714 | 6.667 |
+| `camera1` translation in the `.vex` | `(0.48542, 0.47794, 31.832)` | `z` 30.0 |
+| camera payload `+0x22` (u16) | `0x5080` | `0x5812` |
+| camera payload `+0x1c` (f32) | 2.0 | 4.0 |
+
+`VexCamera_BuildProjection` (`0x08901dc4`, [camera.md](camera.md)) reads the field
+of view off a u16 key/value curve at the camera payload (`+0x00` key count,
+`+0x02` flag byte, `+0x04`/`+0x08` offsets of times and values) and scales a value
+by `180/65535`; **that is a horizontal angle**: `0x5080` -> 56.60 deg, x scale
+`1/tan(28.30 deg)` = 1.857, y scale `aspect` x that = 3.714; `0x5812` -> 61.93
+deg -> 1.667 and, at aspect 4.0, 6.667. All four captured numbers fit with no
+free parameter. The near plane is the literal `1.2` and the captured depth words
+imply a far plane of 2017.7 on this frame (`g_display + 0x1698`; [exhaust.md](exhaust.md)
+read 2000.0 on another). **The projection's 2:1 aspect is drawn into a square
+target**, so the picture is squashed into the buffer and sampled back out across
+a quad - the authors framed the advert for the quad, not for the buffer. The
+view matrix is the rigid inverse of `camera1`'s world transform:
+`VexCamera_BuildViewMatrix` (`0x089001a4`) transposes the camera's 3 x 3 rows at
+`+0x60..+0x88` and negates the translation through them (`vmmov_t`,
+`vtfm3_t` with a negating prefix).
+
+Every advert a Pulse manifest names carries exactly one camera with a one-key
+perspective curve: 19 distinct models over the 11 circuits that author a
+manifest, `(fov, aspect)` in `{(45.00, 0.5), (56.60, 2.0), (68.88, 2.0)}`
+(`crates/game/tests/billboard_adverts_ground_truth.rs`). The aspect-0.5 ones are
+the portrait adverts.
+
+### 3. The constructor's `.vex` arm builds exactly that (85, decompile)
+
+`Billboard_ConstructResource`, the branch on a trailing `VEX`:
+
+- `FUN_0891fe14(obj + 0x98, 0x80, 0x80)` - the render target, **128 x 128**.
+  (The `MIP` arm calls `FUN_0891fcd0` with no size: a flat texture, no camera;
+  no manifest on the disc uses it.)
+- `Vex_LoadModel(child, name, tag, 0xfdb2, 0x3e9, 8)` loads the advert as a child
+  at `obj + 0x3c`, and **every `Mesh` node of it gets `+0x4c` = the slot's tag**
+  `(num - 1) * 0x1000000 + 0x1200000` (`obj + 0x9c` and `+ 0xa0` hold the same
+  family at `0x110000` and `0x140000`: the three `Gfx_Enqueue` sort keys a
+  `VexCamera_Submit` queues - begin, the meshes, end).
+- `FUN_089000f8` finds the model's `Camera` child (`Camera_GetTypeId_q`), kept at
+  `obj + 0x40`.
+- Four vec4 constants are copied into `obj + 0x50..0x8f`: the identity, and
+  `obj + 0x88 = -10.0`: a default view matrix with its translation at `z = -10`.
+  The earlier live read of "a literal identity" was this matrix before its first
+  update; either way it is overwritten from the camera, below.
+- `Billboard_UpdateViewMatrix` (`0x089009a8`, the vtable slot after the
+  constructor's) fills `obj + 0x50` from `VexCamera_BuildViewMatrix(camera)` when
+  the camera is present and the mode word `obj + 0xa8` is in range.
+  `VexCamera_Submit` (`0x08900884`) then installs it into the display's view stack,
+  calls `VexCamera_BuildProjection(camera, 1)` and enqueues the two keys, and
+  `VexCamera_Draw` (`0x08900a9c`) sets the GE state for the begin key (depth
+  mask 0, fog, the same view/projection again). [exhaust.md](exhaust.md) named
+  those two from the exhaust flare's use of the same camera type; **the billboard
+  card is the other user of the one class**.
+
+What was **not** caught: the instruction that makes the track quad's texture the
+card's target. The register-by-name step is the registry the 2026-08-28 section
+found (three tags per slot), and HD's `Billboard_LoadModelAndBind` does it by
+building `"billboard" + num`; the two live samples above agree with that reading
+but are two instances, not the code. Scored 85 for the binding, not 90.
+
+### What this closes and what it leaves
+
+- **Closed**: where the transform comes from (there is none), how a slot's
+  advert reaches the quad (named by the slot number on the placeholder quad's
+  texture), and the framing (the model's own camera). Slot 8's gantry is the same
+  mechanism: pass B is the 321Go gantry, aspect 4.0, 61.93 deg.
+  `oag_raceplay::gantry` still stands the model on the measured mount rather than
+  drawing it to a texture (a placement that was measured against the original and
+  accepted); this lane did not touch it.
+- **Still open**: the advert's animation clock. The card's `Anim Transform`
+  nodes match an authored rest pose at the captured instant, a pose the authored
+  10.0 s loop (600 frames, found by scanning the model's node tracks) visits
+  several times, so one dump does not pin the clock. Two attempts to fit the
+  clock from further dumps (nine in all, 0.3 to 25 s apart in emulated time) were
+  inconclusive: the letters sit at rest for most of the loop and the star nodes' poses
+  did not match the sampled matrices. The project drives the cards off the scenery
+  clock, **chosen, not measured**. And a **colour slot**:
+  `Billboard_CreateFromColour` walks a per-track pool of `PI004`-shaped entries
+  (type hash at `+0xa0`, colour mask at `+0xa4`, model name at `+0x94`) and swaps
+  the match to the end of the list - first match in pool order, no random draw in
+  the code read. The pool's *filling order* is not read, so a colour slot is
+  still drawn nothing (on Talon's Junction: slot 3, which has no quad).
+- **PS2** (`SCES_547.48`): not captured. The same advert files carry the same camera
+  nodes and the same placeholder quads, the loader draws them, and a pixel diff of
+  an autopilot frame shows the advert on the right wall; the mechanism is carried over
+  by analogy, not measured on PCSX2.
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x089001a4` | function | `VexCamera_BuildViewMatrix` | 75 |
+| `0x089009a8` | function | `Billboard_UpdateViewMatrix` | 70 |
