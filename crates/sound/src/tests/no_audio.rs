@@ -1,8 +1,6 @@
-//! `--no-audio`: the same forced-null backend `--dump-audio` uses, without a
-//! sample buffer collected to write.
-//!
-//! Split out under the same 200-line-per-module rule [`super::volumes`]
-//! documents its own split against - see `scripts/check-file-size.py`.
+//! `--no-audio`: the forced-null backend `--dump-audio` uses, without a sample
+//! buffer to write. Split out under the 200-line module rule
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -23,13 +21,11 @@ fn no_audio_forces_the_null_backend() {
 
 #[test]
 fn no_audio_and_no_dump_leaves_no_playhead_to_pace_a_movie_against() {
-    // The exact clock rule `a_mixer_that_is_never_advanced_offers_no_clock`
-    // documents, reached through `--no-audio` rather than a hand-built
-    // `Audio`: with nothing streaming and nothing dumped, a movie's own sound
-    // is never a clock, so `Frontend::advance_movie` falls back to the fixed
-    // timestep - the one path that finishes a movie leg at the same tick
-    // count on every machine, with or without a sound card. See
-    // `Audio::movie_playhead` and ADR-0019.
+    // The clock rule of `a_mixer_that_is_never_advanced_offers_no_clock`, reached
+    // through `--no-audio`: with nothing streaming or dumped, a movie's sound is
+    // never a clock, so `Frontend::advance_movie` uses the fixed timestep, the
+    // path that finishes a movie leg at the same tick on every machine (see
+    // `Audio::movie_playhead` and ADR-0019).
     let mut audio = Audio::open(
         &crate::settings::Settings::default(),
         None,
