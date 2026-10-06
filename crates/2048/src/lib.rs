@@ -141,6 +141,14 @@ pub const TITLE: &Title = &Title {
         magstrip_pob: true,
         ..oag_title::weapons::WeaponModels::EMPTY
     },
+    // No trigger is read on 2048, so none draws (ADR-0058). The shield tint is
+    // Pulse's, by the rule that an unmeasured title runs Pulse's.
+    effects: &oag_title::Effects::NONE,
+    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
+        ps2: oag_title::ShieldPalette::Ps2Pulse,
+        elsewhere: oag_title::ShieldPalette::Pulse,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+    }),
 };
 
 /// 2048's music: the front end's loop and the eleven race tracks.

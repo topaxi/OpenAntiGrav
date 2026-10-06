@@ -109,6 +109,16 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
+    // Omega's executable carries HD's weapon-spark and absorb strings, but its
+    // wiring is unread, so no trigger draws anything (ADR-0058: `None` is the
+    // visible absence). The shield tint is Pulse's, by the rule that an
+    // unmeasured title runs Pulse's.
+    effects: &oag_title::Effects::NONE,
+    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
+        ps2: oag_title::ShieldPalette::Ps2Pulse,
+        elsewhere: oag_title::ShieldPalette::Pulse,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+    }),
 };
 
 /// Omega's music: no standalone files, a playlist in plugin XML and the audio

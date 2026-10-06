@@ -110,6 +110,8 @@ pub const TITLE: &Title = &Title {
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.
         cannon_look: None,
     },
+    effects: effects::EFFECTS,
+    looks: effects::LOOKS,
 };
 
 /// Where Pure keeps its music.
@@ -207,6 +209,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_entry: None,
 };
 
+pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod race;

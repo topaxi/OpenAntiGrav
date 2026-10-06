@@ -443,7 +443,7 @@ pub struct Setup {
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:
-    /// `craft_title.name == oag_pulse::TITLE.name`. See
+    /// `craft_title.looks.laid_pose`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
     /// Whether the grid is laid out the way Pulse PSP's `Race_ComputeGridLayout` does: a walk
@@ -460,7 +460,7 @@ pub struct Setup {
     pub screen_flash: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
-    pub absorb_burst: Option<super::absorb::AbsorbBurst>,
+    pub absorb_burst: Option<oag_title::Burst>,
     /// Each slot's absorb locators in its hull's model space, in the order
     /// the original collects them: the `Ship Collision Fx` set on Pulse and
     /// Pure, the `absorb` set on HD.

@@ -19,6 +19,7 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 pub mod campaign;
+pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod loading;
@@ -70,6 +71,8 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: race::WEAPON_MODELS,
+    effects: effects::EFFECTS,
+    looks: effects::LOOKS,
 };
 
 /// Where Pulse keeps its music.

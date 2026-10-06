@@ -871,20 +871,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             course,
             start_position,
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
-            shield_palette: if craft_title.name == oag_hd::TITLE.name {
-                oag_render::shield::HD_PALETTE
-            } else if craft_of(&mut craft, &mut archives).layout.platform
-                == oag_assets::Platform::Ps2
-            {
-                // The craft's source, not the track's: the shell is loaded from
-                // the craft's archives (`livery::shield::shell`), so a Race Remix
-                // with a PSP craft on a PS2 circuit must still tint.
-                oag_render::shield::PS2_PULSE_PALETTE
-            } else {
-                oag_render::shield::PULSE_PALETTE
-            },
+            shield_palette: roster::shield_palette(
+                craft_title,
+                craft_of(&mut craft, &mut archives).layout.platform,
+            ),
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
-            pulse_laid_pose: craft_title.name == oag_pulse::TITLE.name,
+            pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
             grid_frame_from_sample: extents,
             screen_flash: extents,
             absorb_burst,
