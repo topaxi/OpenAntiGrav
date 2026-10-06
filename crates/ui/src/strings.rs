@@ -113,6 +113,8 @@ fn built_in(language: &str) -> Option<&'static str> {
         Some(include_str!("../../../assets/ui/strings/english.toml"))
     } else if language.eq_ignore_ascii_case("French") {
         Some(include_str!("../../../assets/ui/strings/french.toml"))
+    } else if language.eq_ignore_ascii_case("German") {
+        Some(include_str!("../../../assets/ui/strings/german.toml"))
     } else if language.eq_ignore_ascii_case("PortugueseBR") {
         Some(include_str!("../../../assets/ui/strings/portuguesebr.toml"))
     } else {
@@ -123,12 +125,18 @@ fn built_in(language: &str) -> Option<&'static str> {
 /// The embedded per-title file of disc-keyed translations, for a `namespace`
 /// a title's front end names and a `language`.
 fn built_in_disc(namespace: &str, language: &str) -> Option<&'static str> {
-    if namespace == "pulse" && language.eq_ignore_ascii_case("PortugueseBR") {
-        Some(include_str!(
+    let is = |name: &str| language.eq_ignore_ascii_case(name);
+    match namespace {
+        "pulse" if is("PortugueseBR") => Some(include_str!(
             "../../../assets/ui/strings/disc/pulse/portuguesebr.toml"
-        ))
-    } else {
-        None
+        )),
+        "pulse" if is("German") => Some(include_str!(
+            "../../../assets/ui/strings/disc/pulse/german.toml"
+        )),
+        "2048" if is("German") => Some(include_str!(
+            "../../../assets/ui/strings/disc/2048/german.toml"
+        )),
+        _ => None,
     }
 }
 
@@ -160,7 +168,9 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
 }
 
 /// Merges the title's own disc-keyed translations into `table`, before the
-/// project's `OAG_` file so that one still wins. Silent for a namespace or
+/// project's `OAG_` file so that one still wins. A *project* language is
+/// overlaid; a language the disc ships itself only has its gaps filled
+/// ([`StringTable::fill`]), so the disc's own words are never replaced. Silent for a namespace or
 /// language that has no file.
 pub fn overlay_disc(
     table: &mut StringTable,
@@ -178,7 +188,14 @@ pub fn overlay_disc(
                 language.to_lowercase(),
                 file.strings.len()
             ));
-            table.merge(file.texts());
+            if PROJECT_LANGUAGES
+                .iter()
+                .any(|project| project.name.eq_ignore_ascii_case(language))
+            {
+                table.merge(file.texts());
+            } else {
+                table.fill(file.texts());
+            }
         }
         Err(e) => report.push(format!(
             "assets/ui/strings/disc/{namespace}/{}.toml: {e}",

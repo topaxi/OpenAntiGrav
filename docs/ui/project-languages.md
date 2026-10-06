@@ -71,6 +71,38 @@ Chosen, not measured: "Preta"/"Branca" for a track's black and white runs
 (Omega has no such table), "Outdoor" for a billboard, and every word Omega's
 table does not carry.
 
+## German (disc language, fills only)
+
+German is a disc language on every title, so it is not a project language: the
+disc's own table is the base and **only gaps are filled**.
+
+- `assets/ui/strings/german.toml`: all 128 `OAG_` ids (Race Remix, controls,
+  graphics and display settings, loading wording, pilot editor). Matched to the
+  discs' own German words (RENNKAMPAGNE, RENNBOX, REKORDE, TEMPOKLASSE, WAFFEN,
+  STRECKE, SCHIFF, OBJEKT, LUFTBREMSE, SCHUB, EMPFINDLICHKEIT, SEITLICHE BEWEGUNG
+  for a sideshift, KI). `human = false` throughout.
+- `assets/ui/strings/disc/<namespace>/german.toml`: disc ids the title's own German
+  table leaves empty or lacks, read through `StringTable::fill` (never replaces a
+  non-empty disc entry, so Pulse PS2's own ghost words stand while PSP EU, which
+  shares the `pulse` namespace, is filled). Disc languages are stamped with the
+  title's `disc_strings` in `load_languages`; before 2026-10-06 only a project
+  language was, so a disc-language file would never have loaded.
+
+Gaps measured 2026-10-06 (the disc's English id set against its German table):
+
+| Title | Gap ids filled | Left, and why |
+| --- | ---: | --- |
+| Pulse PSP EU | 2 (`M_SAVE_GHOST`, `HM_SAVE_GHOST`) | `MSC_QUICKBROWNFOX` (font pangram) |
+| Pulse PS2 EU | 0 | - |
+| Pure PSP EU | 0 | 32 ids: track/music/ship proper names, two glyph ids, and key-spelling siblings (`Awarded`/`awarded`, `Staus`, a doubled `Option->`) the front end never asks for |
+| HD | 0 | `MISSING_JAPANESE_CHARS` (font test string) |
+| 2048 | 4 (`3D_STRENGTH`, `FE_CAMPSEL_MODES`, `FE_PERCENT_COMPLETE`, `STATS_ONLINE_RACES_LOST`) | other-region legal notices, `fe_hd_livery_normal`, `test_test` |
+| Omega | 0 | `MT_01` (a music title, proper name) |
+
+2048 and Omega check: checked, differs in outcome. Omega's German carries the four
+2048 ids, so Omega needs no namespace; 2048's wording matches Omega's.
+Ground truth: `crates/game/tests/german_ground_truth.rs`.
+
 ## Glyph coverage (measured 2026-10-06)
 
 Every face of every title's English plugin was read and checked for

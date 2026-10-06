@@ -1,0 +1,149 @@
+# German: this project's own UI strings. Same id space and shape as
+# `english.toml` - see its header and `crates/ui/src/strings.rs`. Only this
+# project's invented `OAG_` ids live here: the disc's own German table is read
+# as the disc ships it, and `assets/ui/strings/disc/<namespace>/german.toml`
+# only fills the few disc ids that table leaves empty.
+#
+# **Every entry is `human = false`**: machine-written, not reviewed by a native
+# speaker. The wording is matched to the terms the discs' own German tables use
+# (RENNKAMPAGNE, RENNBOX, REKORDE, OPTIONEN, STEUERUNG, TEMPOKLASSE, WAFFEN, OBJEKT,
+# STRECKE, SCHIFF, ABSCHÜSSE, LUFTBREMSE, SCHUB, BEWEGUNGSUNSCHÄRFE,
+# EMPFINDLICHKEIT (...), SEITLICHE BEWEGUNG for a sideshift); the sentences are
+# this project's own. Capitals use SS for a sharp s, as the title text is
+# upper-case and the discs' faces have no capital sharp s. "Sie/du": the discs
+# address the player as "du".
+#
+# Every id of `english.toml` is translated, so there is no `[untranslated]`
+# table. `%s`, `{done}`, `{total}`, `{cached}` and `{failed}` are substitution
+# slots and stay as written.
+
+[strings]
+
+OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
+OAG_MENU_RACE_CAMPAIGN = { text = "RENNKAMPAGNE", human = false }
+OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "Der Story-Modus: Arbeite dich im Turnierraster nach oben", human = false }
+OAG_MENU_RACEBOX = { text = "RENNBOX", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Stelle dein eigenes Rennen zusammen, auch im Splitscreen", human = false }
+OAG_MENU_REMIX = { text = "REMIX", human = false }
+OAG_MENU_REMIX_SUBTITLE = { text = "Kombiniere Strecken und Schiffe aus allen Titeln, die du besitzt", human = false }
+OAG_MENU_RECORDS = { text = "REKORDE", human = false }
+OAG_MENU_RECORDS_SUBTITLE = { text = "Deine Bestzeiten und Punktestände nach Strecke und Tempoklasse", human = false }
+OAG_MENU_OPTIONS = { text = "OPTIONEN", human = false }
+OAG_MENU_OPTIONS_SUBTITLE = { text = "Anzeige-, Audio- und Steuerungseinstellungen", human = false }
+OAG_MENU_QUIT = { text = "BEENDEN", human = false }
+OAG_MENU_QUIT_SUBTITLE = { text = "Zurück zum Desktop", human = false }
+OAG_RACE_PAGE_TITLE = { text = "RENNEN", human = false }
+OAG_RACE_MODE = { text = "MODUS", human = false }
+OAG_RACE_SPEED_CLASS = { text = "TEMPOKLASSE", human = false }
+OAG_RACE_WEAPONS = { text = "WAFFEN", human = false }
+OAG_RACE_AI_DIFFICULTY = { text = "KI-SCHWIERIGKEIT", human = false }
+OAG_RACE_KILLS = { text = "ABSCHÜSSE", human = false }
+OAG_RACE_TEAM = { text = "TEAM", human = false }
+OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
+OAG_RACE_TRACK = { text = "STRECKE", human = false }
+OAG_RACE_START = { text = "START", human = false }
+OAG_REMIX_PAGE_TITLE = { text = "RENN-REMIX", human = false }
+OAG_REMIX_TRACK_TITLE = { text = "STRECKENTITEL", human = false }
+OAG_REMIX_CRAFT_TITLE = { text = "SCHIFFSTITEL", human = false }
+OAG_RECORDS_PAGE_TITLE = { text = "RENNREKORDE", human = false }
+OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONEN", human = false }
+OAG_OPTIONS_DISPLAY = { text = "ANZEIGE", human = false }
+OAG_OPTIONS_GRAPHICS = { text = "GRAFIK", human = false }
+OAG_OPTIONS_AUDIO = { text = "AUDIO", human = false }
+OAG_OPTIONS_CONTROLS = { text = "STEUERUNG", human = false }
+OAG_OPTIONS_LANGUAGE = { text = "SPRACHE", human = false }
+OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
+OAG_DISPLAY_WINDOW_MODE = { text = "FENSTERMODUS", human = false }
+OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
+OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
+OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }
+OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
+OAG_DISPLAY_FRAME_LIMIT = { text = "BILDRATENLIMIT", human = false }
+OAG_DISPLAY_BRIGHTNESS = { text = "HELLIGKEIT", human = false }
+OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
+OAG_GRAPHICS_RENDERER = { text = "RENDERER", human = false }
+OAG_GRAPHICS_RENDER_SCALE = { text = "RENDERSKALIERUNG", human = false }
+OAG_GRAPHICS_TARGET_FPS = { text = "ZIEL-BILDRATE", human = false }
+OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "MINDESTAUFLÖSUNG", human = false }
+OAG_GRAPHICS_RECONSTRUCTION = { text = "REKONSTRUKTION", human = false }
+OAG_GRAPHICS_UPSCALER_SHARPNESS = { text = "UPSCALER-SCHÄRFE", human = false }
+OAG_GRAPHICS_MSAA = { text = "MSAA", human = false }
+OAG_GRAPHICS_MOTION_BLUR = { text = "BEWEGUNGSUNSCHÄRFE", human = false }
+OAG_GRAPHICS_MOTION_BLUR_RESOLUTION = { text = "UNSCHÄRFEAUFLÖSUNG", human = false }
+OAG_GRAPHICS_SHADOWS = { text = "SCHATTEN", human = false }
+OAG_GRAPHICS_MODEL_DETAIL = { text = "MODELLDETAILS", human = false }
+OAG_GRAPHICS_TEXTURE_DETAIL = { text = "TEXTURDETAILS", human = false }
+OAG_GRAPHICS_SCREEN_FILTER = { text = "BILDSCHIRMFILTER", human = false }
+OAG_GRAPHICS_SCREEN_FILTER_STRENGTH = { text = "FILTERSTÄRKE", human = false }
+OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "ANISOTROPE FILTERUNG", human = false }
+OAG_GRAPHICS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
+OAG_GRAPHICS_FIELD_OF_VIEW = { text = "SICHTFELD", human = false }
+OAG_GRAPHICS_BOOST_FOV_KICK = { text = "SICHTFELD-RUCK BEI BOOST", human = false }
+OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "LEISTUNGSANZEIGE", human = false }
+OAG_AUDIO_MUSIC_VOLUME = { text = "MUSIKLAUTSTÄRKE", human = false }
+OAG_AUDIO_SFX_VOLUME = { text = "SFX-LAUTSTÄRKE", human = false }
+OAG_AUDIO_ANNOUNCER_VOLUME = { text = "ANSAGERLAUTSTÄRKE", human = false }
+OAG_AUDIO_MASTER_VOLUME = { text = "GESAMTLAUTSTÄRKE", human = false }
+OAG_AUDIO_MUSIC_SOURCE = { text = "MUSIKQUELLE", human = false }
+OAG_CONTROLS_THRUST = { text = "SCHUB", human = false }
+OAG_CONTROLS_STEER_LEFT = { text = "NACH LINKS LENKEN", human = false }
+OAG_CONTROLS_STEER_RIGHT = { text = "NACH RECHTS LENKEN", human = false }
+OAG_CONTROLS_PITCH_UP = { text = "NASE HOCH", human = false }
+OAG_CONTROLS_PITCH_DOWN = { text = "NASE RUNTER", human = false }
+OAG_CONTROLS_AIRBRAKE_LEFT = { text = "LUFTBREMSE LINKS", human = false }
+OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "LUFTBREMSE RECHTS", human = false }
+OAG_CONTROLS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
+OAG_CONTROLS_SIDESHIFT = { text = "SEITLICHE BEWEGUNG", human = false }
+OAG_CONTROLS_TRIGGERS = { text = "TRIGGER", human = false }
+OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "EMPFINDLICHKEIT (TRIGGER)", human = false }
+OAG_PILOT_PAGE_TITLE = { text = "KI-PILOTEN", human = false }
+OAG_PILOT_PILOT = { text = "PILOT", human = false }
+OAG_PILOT_AXIS = { text = "ACHSE", human = false }
+OAG_PILOT_LOW = { text = "NIEDRIG", human = false }
+OAG_PILOT_HIGH = { text = "HOCH", human = false }
+OAG_PILOT_SAVE = { text = "SPEICHERN", human = false }
+OAG_PILOT_NEW = { text = "NEU AUS PILOT", human = false }
+OAG_PILOT_RENAME = { text = "UMBENENNEN", human = false }
+OAG_PILOT_DELETE = { text = "LÖSCHEN", human = false }
+OAG_PILOT_BUILT_IN_SUFFIX = { text = " (integriert)", human = false }
+OAG_MENU_BACK = { text = "ZURÜCK", human = false }
+OAG_BINDING_CAPTURE_PROMPT = { text = "TASTE FÜR %s DRÜCKEN - MIT ESC ABBRECHEN", human = false }
+OAG_CONTROLS_FIRE_PICKUP = { text = "OBJEKT BENUTZEN", human = false }
+OAG_CONTROLS_ABSORB_PICKUP = { text = "OBJEKT ABSORB.", human = false }
+OAG_KEYBOARD_DELETE = { text = "ENTF", human = false }
+OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
+OAG_KEYBOARD_HINT = { text = "KREUZ TIPPEN   QUADRAT LÖSCHEN   START ÜBERNEHMEN   KREIS ABBRECHEN", human = false }
+OAG_TAG_ENTRY_HINT = { text = "LINKS/RECHTS ZELLE   HOCH/RUNTER ZEICHEN   KREUZ/START ÜBERNEHMEN   KREIS ABBRECHEN", human = false }
+OAG_PILOT_RENAME_TITLE = { text = "PILOT UMBENENNEN", human = false }
+OAG_PILOT_NAME_TAKEN = { text = "ES GIBT BEREITS EINEN PILOTEN NAMENS %s", human = false }
+OAG_PILOT_RENAME_SHADOWS = { text = "%s IST INTEGRIERT: EINE DATEI MIT DIESEM NAMEN ERSETZT IHN", human = false }
+OAG_PILOT_DELETE_TITLE = { text = "PILOT LÖSCHEN", human = false }
+OAG_PILOT_DELETE_ASK = { text = "%s LÖSCHEN? DAS KANN NICHT RÜCKGÄNGIG GEMACHT WERDEN.", human = false }
+OAG_PILOT_DELETE_BUILT_IN = { text = "%s IST INTEGRIERT UND DEINE DATEI ERSETZT IHN. DAS LÖSCHEN DER DATEI STELLT DEN INTEGRIERTEN PILOTEN WIEDER HER, STATT %s ZU ENTFERNEN.", human = false }
+OAG_PILOT_DELETE_YES = { text = "LÖSCHEN", human = false }
+OAG_PILOT_DELETE_NO = { text = "BEHALTEN", human = false }
+OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
+OAG_HINTS_MENU_KEYS = { text = "Pfeiltasten oder linker Stick bewegen, Eingabe, X oder Kreuz wählt aus, Leertaste oder Start überspringt, Esc beendet", human = false }
+OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - Menü", human = false }
+OAG_HINTS_SHELL_KEYS = { text = "Hoch und Runter bewegen, Links und Rechts ändern eine Einstellung, Eingabe, X oder Kreuz wählt aus, Rücktaste, Kreis oder Esc geht zurück", human = false }
+OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - Rennen", human = false }
+OAG_HINTS_RACE_KEYS = { text = "Pfeiltasten oder linker Stick lenken, X, Eingabe oder R2 gibt Schub, Q und E oder die Schultertasten sind die Luftbremsen, L2 betätigt beide, C benutzt ein Objekt und Z absorbiert es, Leertaste oder Start pausiert", human = false }
+OAG_HINTS_ESC_TO_MENU = { text = ", Esc führt zurück ins Menü", human = false }
+OAG_HINTS_ESC_QUITS = { text = ", Esc beendet", human = false }
+OAG_LOADING_READING_ARCHIVES = { text = "ARCHIVE WERDEN GELESEN", human = false }
+OAG_LOADING_GENERIC = { text = "LÄDT", human = false }
+OAG_LOADING_READY = { text = "FERTIG", human = false }
+OAG_LOADING_TRANSCODING_MOVIES = { text = "VIDEOS WERDEN UMGEWANDELT", human = false }
+OAG_LOADING_LOADING_MOVIES = { text = "VIDEOS WERDEN GELADEN", human = false }
+OAG_LOADING_CONVERTING_ASSETS = { text = "ASSETS WERDEN KONVERTIERT", human = false }
+OAG_LOADING_STEP_CACHED = { text = "bereits konvertiert, der Cache wird gelesen", human = false }
+OAG_LOADING_STEP_DECODING = { text = "Dekodierung", human = false }
+OAG_LOADING_STEP_TRANSCODING_TOTAL = { text = "Umwandlung - Bild {done} von {total}", human = false }
+OAG_LOADING_STEP_TRANSCODING = { text = "Umwandlung - Bild {done}", human = false }
+OAG_LOADING_COUNTING = { text = "es wird gezählt, was konvertiert werden muss", human = false }
+OAG_LOADING_COUNTS_LOADED = { text = "{done} / {total} geladen", human = false }
+OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} konvertiert", human = false }
+OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} bereits im Cache", human = false }
+OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} fehlgeschlagen", human = false }
+OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "DER MODUS DIESES EVENTS KANN IN DIESER VERSION NOCH NICHT GEFAHREN WERDEN", human = false }
+OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "DIE STRECKE DIESES EVENTS IST NICHT AUF DIESER DISC", human = false }
