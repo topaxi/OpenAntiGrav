@@ -1098,6 +1098,45 @@ Compared byte-for-byte against `pulse-psp-usa.chd`'s `Data.wad`, per
   of a rendered picker was captured this session - the state never stayed up
   long enough to reach one.
 
+### The offered languages are each executable's plugin manifest
+
+A disc carries a superset of what its release offers, so the language list is
+not "whichever plugins resolve" and not one constant per title. Each PSP/PS2
+executable holds a null-terminated pointer table to `Data\Plugins\PI0NN`
+strings that the boot walks in order; the language entries of it are the list.
+Read 2026-10-06 from the ELF program headers (table address is the pseudo-address
+used elsewhere on this page; the strings sit 20 bytes apart):
+
+| Release (serial) | Table | Languages, in manifest order | Not offered although on the disc |
+| --- | --- | --- | --- |
+| Pulse PSP EU (`UCES-00465`) | `0x2ac88c` | `PI000` English, `PI008` French, `PI009` German, `PI010` Spanish, `PI011` Italian | none |
+| Pulse PSP USA (`UCUS-98712`) | `0x2ad10c` | `PI012` English, `PI010`, `PI008`, `PI009`, `PI011` | `PI003`, `PI005` |
+| Pulse PS2 EU (`SCES-54748`) | string run at file offset `0x1ab4b0` | as USA | not probed |
+| Pure PSP USA (`UCUS-98612`) | `0x2abd18` | `PI000` English, `PI010` Spanish, `PI008` French | `PI009`, `PI011` (German, Italian), `PI003`, `PI005` |
+| Pure PSP EU (`UCES-00001`) | `0x2a54d8` | `PI000`, `PI010`, `PI008`, `PI009`, `PI011` | `PI003`, `PI005`, `PI012` |
+
+Pure USA's manifest also loads `PI012`, a US-spelling overlay on `PI000` with no
+`<Font>`: not a language, so it is not in the offered list (applying its
+spellings is open fidelity work). The three offered languages and their order
+match the USA picker observed in `pure-boot.md`, and the EU five match too, which
+is what makes manifest order the picker order on Pure (confidence 85). Pulse's
+picker exits in under a frame and was never captured, so its order is Pure's rule
+carried over (confidence 70); Pulse's old constant (French first, English last)
+had no source. Neither Pure manifest names `PI003` or `PI005`: the Japanese
+plugin is never loaded, which closes the question `pure-status.md` left open.
+
+**Why it mattered:** the Pulse PSP EU disc has no `PI012`, so a list ending in
+`PI012` loaded no English on this project's default image. Now
+`oag_title::FrontEnd::offered_languages(serial)` returns the release's own list
+(`oag_pulse::LANGUAGE_MANIFESTS`, `oag_pure::LANGUAGE_MANIFESTS`), and the title's
+`language_plugins` stays the superset default for a caller with no serial.
+Pinned per image by `language_offered_ground_truth`.
+
+HD, 2048 and Omega: every plugin on the disc still loads (16, 17 and 23). Whether
+their executables narrow it the way Pure's does is **not read**; Omega's store
+listing offers 12 screen languages of its 23 plugins, which suggests it does.
+Open, named in the language thread.
+
 **This screen was very likely carried over from Wipeout Pure with only its
 `FEGlobals` retuned.** Pure's own `Skin.xml` (`data/images/pure-psp-usa.chd`)
 has the same `Language Selection` screen: the same widget names

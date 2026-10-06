@@ -36,12 +36,14 @@
 //! page's own live switch, are in
 //! `data/scratch/drive-2026-09-27/live-language/`.
 //!
-//! **The chain default matters here.** The PSP EU pressing ships no English
-//! plugin, so `chosen_language`'s own English-then-first fallback lands on
-//! French - the exact trap the maintainer's report named. Every assertion
-//! below compares two languages that are each other's non-default: German and
-//! Italian, neither of them French, so a passing run proves the preference is
-//! honoured rather than merely coinciding with the chain's own answer.
+//! **The chain default matters here.** The PSP EU pressing's English is `PI000`
+//! (it has no `PI012`). `oag_pulse::LANGUAGE_PLUGINS` once ended in `PI012`, so
+//! this pressing loaded no English and `chosen_language`'s fallback landed on
+//! French - the trap the maintainer's report named; the release's manifest
+//! (`oag_pulse::LANGUAGE_MANIFESTS`) fixed that. Every assertion below compares
+//! two languages that are each other's non-default: German and Italian, neither
+//! of them English, so a passing run proves the preference is honoured rather
+//! than merely coinciding with the chain's own answer.
 
 use oag_game::boot;
 
@@ -69,7 +71,7 @@ fn shell_for(image: &std::path::Path, language: &str) -> boot::Shell {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_chain_default_on_pulse_psp_eu_is_french_not_english() {
+fn the_chain_default_on_pulse_psp_eu_is_english() {
     // The falsification this whole file exists to guard: every assertion
     // below picks two *non-default* languages on purpose, and this is the
     // measurement that says why. If this ever starts asserting "English",
@@ -100,10 +102,10 @@ fn the_chain_default_on_pulse_psp_eu_is_french_not_english() {
     let (shell, _archives, _title) = boot::load_shell(&options).expect("opening the EU pressing");
     assert_eq!(
         shell.entries.as_deref(),
-        Some("Data\\Plugins\\PI008\\entries.xml"),
-        "the EU pressing's chain default moved off PI008 (French) - re-read \
+        Some("Data\\Plugins\\PI000\\entries.xml"),
+        "the EU pressing's chain default moved off PI000 (English) - re-read \
          this file's own module doc before trusting any assertion below that \
-         assumes French is not the default"
+         assumes English is the default"
     );
 }
 

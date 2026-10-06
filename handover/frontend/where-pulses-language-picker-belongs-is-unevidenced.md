@@ -8,6 +8,10 @@ A cold boot of `pulse-psp-eu.chd` (2026-08-10, frames under `data/shots/pulse-co
 - What the disc does with no language saved has not been observed.
 - `Skin.xml` declares the picker first but the observed runtime does not match that declaration.
 
+- HD, 2048 and Omega load every language plugin on the disc; whether their executables narrow the offered list (Omega's store lists 12 of 23) is unread.
+- Pure USA's `PI012` US-spelling overlay is loaded by the original and not applied here.
+- Pulse's picker order is carried over from Pure's measured manifest order, not seen on Pulse.
+
 ## Next Steps
 
 - Re-check the cold boot with `UCES00465P0000` moved aside to observe the no-saved-language case, the way [pure-boot.md](../../docs/architecture/pure-boot.md) records for Pure.

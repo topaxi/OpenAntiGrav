@@ -112,6 +112,12 @@ const TITLE: &Title = &Title {
     // Unread on the same terms as `weapons` above: this fixture is about
     // archive discovery, not about any weapon's own model.
     weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
+    effects: &oag_title::Effects::NONE,
+    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
+        ps2: oag_title::ShieldPalette::Pulse,
+        elsewhere: oag_title::ShieldPalette::Pulse,
+        origin: oag_title::Origin::Chosen,
+    }),
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

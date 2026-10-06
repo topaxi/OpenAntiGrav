@@ -37,9 +37,11 @@
 
 pub mod boot;
 pub mod endrace;
+pub mod effects;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
+pub mod language;
 pub mod loading;
 pub mod menu;
 pub mod race;
@@ -49,7 +51,12 @@ pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use endrace::{EndRaceDialect, EndRaceStyle, StyleProvenance};
+pub use effects::{
+    Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
+    Trigger,
+};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
+pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use menu::{HelpText, ListBlocks, MenuBlocks, MenuList, MenuSkin, MenuStrip, StripBlocks};
 pub use oag_disc::Platform;
@@ -182,6 +189,13 @@ pub struct Title {
     /// caller never has to ask "does this title even have a table" before
     /// asking a field of it.
     pub weapon_models: &'static weapons::WeaponModels,
+    /// What this title throws on each race [`effects::Trigger`], with where each
+    /// answer came from. `None` on a trigger means draw nothing. See
+    /// [`effects`] and ADR-0058.
+    pub effects: &'static effects::Effects,
+    /// What this title draws or does in a race beyond its effect triggers, as
+    /// per-platform rules with their origin. See [`effects::Looks`].
+    pub looks: &'static effects::Looks,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
     /// **Ours, not the disc's, on every title.** Nothing in this lineage was
@@ -338,6 +352,14 @@ pub struct FrontEnd {
     /// inside its definition, not in its path, so this list is what is read back
     /// from the archive rather than trusted.
     pub language_plugins: &'static [&'static str],
+    /// What each release of this title offers, keyed by disc serial, read off
+    /// the executable's own plugin manifest. Empty where no manifest has been
+    /// read; [`Self::language_plugins`] is then the whole answer.
+    ///
+    /// [`Self::language_plugins`] stays the default for a caller with no serial
+    /// in hand and for a release not listed here, so it is the *superset* a
+    /// disc may carry, not an offered list. See [`Self::offered_languages`].
+    pub language_manifests: &'static [language::LanguageManifest],
     /// How this title lays menus out, for a title that authors the
     /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
     /// describes. See that type.
@@ -529,6 +551,17 @@ pub struct FrontEnd {
     pub endrace_style: Option<EndRaceStyle>,
 }
 
+impl FrontEnd {
+    /// The language plugins a source with this `serial` offers, in picker order.
+    ///
+    /// The release's own manifest when one is recorded, otherwise
+    /// [`Self::language_plugins`].
+    #[must_use]
+    pub fn offered_languages(&self, serial: Option<&str>) -> &'static [&'static str] {
+        language::offered(self.language_manifests, self.language_plugins, serial)
+    }
+}
+
 /// The archive names a title's releases carry, in the order they are tried.
 ///
 /// **Names, not paths, and found rather than derived.** The candidates are
@@ -607,6 +640,16 @@ pub struct ForeignSerial {
 }
 
 impl Title {
+    /// What this title throws on `trigger`, or `None` when it draws nothing
+    /// there (it does not do it, or it is unread).
+    #[must_use]
+    pub const fn effect_on(
+        &self,
+        trigger: effects::Trigger,
+    ) -> Option<&'static effects::EffectSpec> {
+        self.effects.on(trigger)
+    }
+
     /// What `serial` really belongs to, if this title knows it belongs to
     /// something else.
     #[must_use]

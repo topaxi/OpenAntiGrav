@@ -204,13 +204,13 @@ fn the_disc_offers_five_languages_each_naming_itself() {
     assert_eq!(
         found,
         [
+            ("PI012", "English", "English"),
+            ("PI010", "Spanish", "Español"),
             ("PI008", "French", "Français"),
             ("PI009", "German", "Deutsch"),
-            ("PI010", "Spanish", "Español"),
             ("PI011", "Italian", "Italiano"),
-            ("PI012", "English", "English"),
         ],
-        "the USA disc's language plugins"
+        "the USA disc's language plugins, in its executable's manifest order"
     );
 
     for language in languages {
@@ -290,14 +290,8 @@ fn the_sequence_runs_from_boot_to_launch_game() {
          which the disc's own boot never enters"
     );
 
-    // Move to English, the last of the five, and pick it.
-    for _ in 0..4 {
-        input.begin_frame(Button::Down.bit());
-        frontend.update(dt, &mut input, None);
-        input.begin_frame(0);
-        frontend.update(dt, &mut input, None);
-    }
-    assert_eq!(frontend.selected(), 4);
+    // English is the manifest's first entry, so it is already selected.
+    assert_eq!(frontend.selected(), 0);
 
     input.begin_frame(Button::Cross.bit());
     frontend.update(dt, &mut input, None);

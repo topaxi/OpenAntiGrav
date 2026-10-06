@@ -55,6 +55,7 @@ use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
 pub mod campaign;
+pub mod effects;
 pub mod endrace;
 pub mod frontend;
 pub mod hud;
@@ -139,6 +140,8 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
     weapon_models: race::WEAPON_MODELS,
+    effects: effects::EFFECTS,
+    looks: effects::LOOKS,
 };
 
 /// Where Wipeout HD keeps its music.

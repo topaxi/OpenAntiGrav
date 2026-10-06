@@ -87,9 +87,9 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
         plugin_xml(&mut archives, source, track_definition)?
     };
 
-    let language_plugins = title
-        .front_end
-        .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
+    let language_plugins = title.front_end.map_or::<&[&str], _>(&[], |front_end| {
+        front_end.offered_languages(archives.layout.serial.as_deref())
+    });
     let languages =
         oag_ui::language::load::load_languages(&mut archives, language_plugins, &mut report);
     let language = oag_ui::language::load::chosen_language(&languages, None);

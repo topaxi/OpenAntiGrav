@@ -1,23 +1,17 @@
-# Title behaviour as data: the 37 comparisons still to migrate
+# Title behaviour as data: the 23 comparisons still to migrate
 
 2026-10-06. [ADR-0058](../../docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md)
 decides that per-title behaviour is `Title` data with a provenance tag and that a
 generic crate never compares a title's identity. `just check-title-branching`
 (`scripts/check-title-branching.py`) freezes the sites below at the counts in its
-`BASELINE`; nothing was migrated. Each migration lowers the row it touches in the
+`BASELINE`; `oag-raceplay`'s 14 are migrated (2026-10-06), 23 remain. Each migration lowers the row it touches in the
 same change. Sites are `file:line` at main b115ec3ef - `python3
 scripts/check-title-branching.py --list` prints the current ones.
 
 ## Open
 
-1. **Prove the shape on `oag-raceplay` effects**: `hit_sparks.rs` (HD Cannon
-   spark, Pulse hit sparks), `absorb.rs` (three bursts), `wreck_fx.rs`, then
-   `load.rs` / `load/roster.rs` flags. Add `Trigger` / `EffectSpec` /
-   `Provenance` to `oag-title`, fill them in `oag-pulse`, `oag-pure`, `oag-hd`,
-   give 2048 and Omega `None` with a loader-report line, and check 2048 against
-   Omega as CLAUDE.md asks.
-2. **`oag-raceplay`'s other flags** (`pulse_ps2.rs`, `pulse_psp.rs`,
-   `pulse_laid_pose`): a title-and-platform predicate wants to be a title field.
+1. ~~**Prove the shape on `oag-raceplay` effects**~~ - done, see the raceplay section below. Still open from it: a loader-report line for a title whose triggers are all `None` (2048, Omega) - no line is written today, as none was before.
+2. ~~**`oag-raceplay`'s other flags**~~ - done.
 3. **`oag-game`, `oag-ui`, `oag-source`**: the front-end quirks. Least uniform;
    shape them from what step 1 proved. Race Remix's HD/2048 rules in `remix.rs`
    are ADR-0035's fallback and become a `Title` field naming the title that
@@ -28,22 +22,36 @@ scripts/check-title-branching.py --list` prints the current ones.
 
 ## The sites, by crate
 
-### oag-raceplay (migration step 1 and 2) - 14
+### oag-raceplay (migration steps 1 and 2) - done, 0 left
 
-- `crates/raceplay/src/absorb.rs:113`: `if title.name == oag_pulse::TITLE.name {`
-- `crates/raceplay/src/absorb.rs:115`: `} else if title.name == oag_pure::TITLE.name {`
-- `crates/raceplay/src/absorb.rs:117`: `} else if title.name == oag_hd::TITLE.name {`
-- `crates/raceplay/src/hit_sparks.rs:86`: `if title.name != oag_pulse::TITLE.name {`
-- `crates/raceplay/src/hit_sparks.rs:130`: `title.name == oag_hd::TITLE.name`
-- `crates/raceplay/src/load/pulse_ps2.rs:9`: `title.name == oag_pulse::TITLE.name && archives.layout.platform == oag_assets::Platform::Ps2`
-- `crates/raceplay/src/load/pulse_psp.rs:16`: `title.name == oag_pulse::TITLE.name && archives.layout.platform == oag_assets::Platform::Psp`
-- `crates/raceplay/src/load/roster.rs:211`: `hull_overlay: oag_fx::hull_overlay::DRAWN && craft_title.name == oag_pulse::TITLE.name,`
-- `crates/raceplay/src/load/roster.rs:214`: `&& craft_title.name == oag_pulse::TITLE.name,`
-- `crates/raceplay/src/load/roster.rs:216`: `&& craft_title.name == oag_pulse::TITLE.name`
-- `crates/raceplay/src/load/roster.rs:218`: `absorb_shell: craft_title.name == oag_hd::TITLE.name,`
-- `crates/raceplay/src/load.rs:874`: `shield_palette: if craft_title.name == oag_hd::TITLE.name {`
-- `crates/raceplay/src/load.rs:887`: `pulse_laid_pose: craft_title.name == oag_pulse::TITLE.name,`
-- `crates/raceplay/src/wreck_fx.rs:75`: `if title.name != oag_pulse::TITLE.name {`
+All 14 sites are gone (2026-10-06, `raceplay-title-data`) and `oag-raceplay` has no
+row in the script's `BASELINE`. Where each went:
+
+- `absorb.rs`, `hit_sparks.rs`, `wreck_fx.rs`: `Title::effect_on(Trigger)` over
+  `oag_title::Effects`, filled in `oag-pulse`, `oag-pure`, `oag-hd` (`effects.rs`
+  in each); 2048 and Omega carry `Effects::NONE`.
+- `load/roster.rs`, `load.rs` (`shield_palette`, `pulse_laid_pose`),
+  `load/pulse_psp.rs`, `load/pulse_ps2.rs`: `Title::looks` (`oag_title::Looks`),
+  per-platform `Rule`s and a `ShieldPalettes` selector keyed on the craft's archive
+  platform.
+
+**Where the shape differs from ADR-0058's sketch** (ADRs are immutable; the same
+note is in `crates/title/src/effects.rs`'s module doc):
+
+- `Origin`, not `Provenance`: `oag_title::Provenance` is already the boot chain's
+  `Measured`/`Declared` tag, re-exported at the root and matched in `oag-game`.
+- `Effects` is a struct of `Option<EffectSpec>` per trigger, not a `&[(Trigger,
+  EffectSpec)]`: a const slice cannot be struct-updated, which ADR item 4 wants.
+- `EffectSpec::effects` is a list of `Data\Psys` names (a wreck throws three).
+- `Burst` moved from `oag_raceplay::AbsorbBurst` into `oag-title`; its three
+  constants live in `oag-pulse`, `oag-pure` and `oag-hd`.
+- Pure, 2048 and Omega's shield tint is Pulse's by fall through today. It is kept
+  and labelled `InheritedFrom("Wipeout Pulse")`; restated in each title package
+  because a title package does not depend on another outside dev-dependencies.
+
+**What is still `Chosen`**: every `Rule::UNREAD` (a look a title does not draw
+because nothing of it is read). The effect `None`s carry no tag at all, being
+absences.
 
 ### oag-game (step 3) - 21
 

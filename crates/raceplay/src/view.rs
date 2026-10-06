@@ -126,7 +126,7 @@ pub struct RaceView {
     /// `race::destroy_camera`.
     pub(super) destroy_camera: super::destroy_camera::DestroyCamera,
     /// See `Setup::absorb_burst`.
-    pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
+    pub(super) absorb_burst: Option<oag_title::Burst>,
     /// See `Setup::absorb_anchors`.
     pub(super) absorb_anchors: Vec<Vec<Vec3>>,
     /// Every absorb burst scheduled or still playing - see

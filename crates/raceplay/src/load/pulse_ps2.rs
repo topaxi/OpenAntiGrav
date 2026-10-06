@@ -6,7 +6,7 @@ use super::Loaded;
 
 /// Whether this race is Pulse off a PS2 disc.
 pub(super) fn is_pulse_ps2(title: &oag_title::Title, archives: &oag_assets::Archives) -> bool {
-    title.name == oag_pulse::TITLE.name && archives.layout.platform == oag_assets::Platform::Ps2
+    title.looks.ps2_glow_mask.applies(archives.layout.platform)
 }
 
 /// Marks every `.vex` model the race draws as stamping the mask by the PS2's

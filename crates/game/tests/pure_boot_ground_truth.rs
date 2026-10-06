@@ -461,7 +461,7 @@ fn the_whole_chain_is_walked_and_nothing_in_it_is_skipped() {
 /// `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pures_picker_offers_its_own_five_languages_english_included() {
+fn pures_picker_offers_its_own_manifest_english_included() {
     for (label, image) in images() {
         let loaded = load(&image);
         let languages = loaded.frontend.languages();
@@ -470,15 +470,25 @@ fn pures_picker_offers_its_own_five_languages_english_included() {
             .iter()
             .map(|l| (l.plugin.as_str(), l.name.as_str()))
             .collect();
-        assert_eq!(
-            found,
-            [
+        // Each pressing's own executable manifest, in order: the USA one
+        // offers three of the five plugins its disc carries.
+        let expected: &[(&str, &str)] = if label == "pure-psp-usa" {
+            &[
                 ("PI000", "English"),
+                ("PI010", "Spanish"),
+                ("PI008", "French"),
+            ]
+        } else {
+            &[
+                ("PI000", "English"),
+                ("PI010", "Spanish"),
                 ("PI008", "French"),
                 ("PI009", "German"),
-                ("PI010", "Spanish"),
                 ("PI011", "Italian"),
-            ],
+            ]
+        };
+        assert_eq!(
+            found, expected,
             "{label}: Pure's own plugin ids, not Pulse's"
         );
 

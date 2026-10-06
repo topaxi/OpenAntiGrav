@@ -208,10 +208,7 @@ pub(crate) use weapons::{CannonAssets, CannonDraw};
 mod worker;
 pub mod zone_grade;
 
-pub use absorb::{
-    ABSORB_EFFECT, AbsorbBurst, HD_ABSORB_BURST, PULSE_ABSORB_BURST, PURE_ABSORB_BURST,
-    absorb_burst_for,
-};
+pub use absorb::{ABSORB_EFFECT, absorb_burst_for};
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
 pub use effect_names::*;

@@ -13,7 +13,7 @@ use super::Loaded;
 
 /// Whether this race is Pulse off a PSP disc.
 pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Archives) -> bool {
-    title.name == oag_pulse::TITLE.name && archives.layout.platform == oag_assets::Platform::Psp
+    title.looks.measured_draws.applies(archives.layout.platform)
 }
 
 /// Lights the hulls with the circuit's own `AmbientLight`/`DirectionalLight`
