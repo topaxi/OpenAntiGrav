@@ -2,9 +2,9 @@
 
 Functions in `eboot.bin` (WipEout: Omega Collection, PS4, `CUSA05670`, EU), image
 base `0x01000000`, Ghidra program `/omega/eboot-ps4-omega-eu.bin`. Read
-2026-10-06 for the `omega-hud` lane. No names are applied (`names.tsv` is the
-Pulse database's): the race-manager names below are the ones the Ghidra
-database already carries, and the others stay `FUN_`.
+2026-10-06 for the `omega-hud` lane. No names are applied (no row added to this
+directory's `names.tsv`): the race-manager names below are the ones that file and
+the Ghidra database already carry, and the others stay `FUN_`.
 
 ## The literals and who reads them
 
