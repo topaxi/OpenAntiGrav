@@ -555,7 +555,11 @@ pub(crate) fn run_race(
                 autopilot_skill: cli.autopilot_skill,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
-                force_wreck: crate::args::force_wreck(cli.wreck.force_wreck.as_deref())?,
+                force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
+                force_leach_lock: crate::args::force_at_slot(
+                    cli.wreck.force_leach_lock.as_deref(),
+                    "LeachBeam lock",
+                )?,
                 force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
                 medals: oag_game::race_capture::tick::Medals {
                     forced: crate::args::force_medal(&cli.wreck.force_medal)?,

@@ -214,3 +214,11 @@ The executable's own load-path strings name every model above
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 every weapon model entry is a Pulse PSP name; HD authors its own `.rcsmodel` set per weapon, Plasma's triggers already read; 2026-09-24: placement a rotation, HD bodies culled as authored, HD's own placements unread
+
+## 2026-10-06 (hd-weapons): re-check
+
+Every HD weapon that has a model draws it now and takes the circuit's scene
+block (`docs/rendering/hd-unlit-programs.md`, "Weapon scene blocks"). Still
+undrawn: the Missile's pair, the Bomb's five (blast pair unwritten), the
+beam's strips (`hds-bomb-blast-scene-block-and-leach-strips.md`). No trigger
+was found for the effects listed above.

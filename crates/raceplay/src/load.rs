@@ -780,8 +780,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     // The LeachBeam ribbon's own texture - see `assets::leach_beam_texture`.
-    let leach_beam_texture =
-        assets::leach_beam_texture(craft_of(&mut craft, &mut archives), &mut report);
+    let leach_beam_texture = assets::leach_beam_texture(
+        craft_of(&mut craft, &mut archives),
+        wm.leachbeam_ball.is_some(),
+        &mut report,
+    );
 
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),

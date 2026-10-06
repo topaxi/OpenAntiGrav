@@ -18,9 +18,14 @@ impl Race {
     }
 
     /// Puts a locked LeachBeam from `owner` on `target` into the world, off the
-    /// race's own weapon table, for tests. `false` when the title authors none.
-    #[doc(hidden)]
-    pub fn lock_leach_beam_for_tests(&mut self, owner: u8, target: u8) -> bool {
+    /// race's own weapon table: a verification aid (`--force-leach-lock`, and
+    /// the disc-backed tests), and nothing the game itself calls. A slot that
+    /// is not racing is left alone, as [`Race::force_destroy`] leaves one, and
+    /// so is a title that authors no LeachBeam; both answer `false`.
+    pub fn force_leach_lock(&mut self, owner: u8, target: u8) -> bool {
+        if !self.ship_active(usize::from(owner)) || !self.ship_active(usize::from(target)) {
+            return false;
+        }
         let Some(stats) = self
             .sim
             .weapons
