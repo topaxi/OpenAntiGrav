@@ -175,3 +175,36 @@ fn the_explosions_play_with_only_their_distortion_emitter_undrawn() {
         );
     }
 }
+
+/// The explosions' 1024x1024 and 512x512 sprites all fit one sheet: at 1024
+/// the fireball and smoke emitters did not place and drew a white disc.
+#[test]
+#[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
+fn the_explosions_sprites_all_fit_the_sheet() {
+    let Some(mut archive) = open(ARCHIVES[0]) else {
+        return;
+    };
+    let mut library = oag_fx::psys::Library::new();
+    for name in [
+        "WO_ROCKET_EXPLO",
+        "WO_ROCKET_EXPLO_TRACK",
+        "WO_MISSILE_EXPLO",
+        "WO_MINE_EXPLO",
+    ] {
+        let blob = archive
+            .read_path(&format!("Data/particles/{name}.pob"))
+            .expect("the effect ships");
+        let effect = Effect::parse_with(&blob, ColourScale::Full, &mut |authored| {
+            let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
+            let blob = archive
+                .read_path(&format!("Data/particles/Tex/{stem}.gnf"))
+                .ok()?;
+            Sprite::from_gnf(&blob)
+        })
+        .expect("it parses");
+        library.insert(name, effect);
+        let placed = library.get(name).expect("inserted");
+        let unplaced: Vec<&str> = placed.unplaced_sprites().collect();
+        assert!(unplaced.is_empty(), "{name}: {unplaced:?} did not fit");
+    }
+}

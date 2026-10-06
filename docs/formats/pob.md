@@ -1489,3 +1489,21 @@ now swaps the extension on the Vita and PS4. Both executables name `Cannon_bolt`
 bolt and flash textures are the engine's own, the leech ribbon and ghost static are
 Pulse's law applied to an asset the title happens to ship (unmeasured title inherits
 Pulse's rule, **chosen, not measured**).
+
+### Omega's explosions were white because their sprites did not fit - 2026-10-06
+
+`oag_fx::psys::Sheet` packs every loaded effect's sprite into one square texture; a sprite
+that does not fit leaves its emitter on the procedural (white, radial) profile. Omega's
+`WO_ROCKET_EXPLO` authors `explosion_BURN_L_8x8`, `explosion_tumult_8x8` and
+`rb_WispySmoke01_8x8` at 1024x1024 (`.gnf`, mean colour warm orange, R 27-57 > G > B),
+and the whole Tech De Ra effect set needs more than 2048: at the old 1024 the fireball,
+tumult and smoke emitters drew the white disc (the first explosion frame was a flat
+whiteout), at 2048 three emitters still did. `SHEET_SIZE` is now 4096 (**chosen, not
+measured**; 64 MiB) and an emitter whose sprite still does not fit is a WARN report line
+("did not fit the sprite sheet"), not a silent substitution. The authored palettes of these
+emitters are plain white (`pal0 = pal128 = [1,1,1]`), so all of the colour is the sprite's.
+Frames: `data/scratch/logwarn-2048/shots/ex/omega4096-strip.png` (ticks 90 to 240, orange
+fireball, debris and sparks) against `omega-strip.png` (before). Pulse's own rocket blast
+(`pulse-150.png`) is orange the same way. Effect on other titles: a sheet that held their
+sprites at 1024 places them identically (rects scale with the size); a title whose sprites
+did not fit now places them (not measured per title).
