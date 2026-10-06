@@ -176,7 +176,7 @@ impl TrackEmitters {
                 )),
             }
         }
-        let candidates = circuit_bank_entries(archives, banks.track.circuit_directory, track);
+        let candidates = circuit_bank_entries(archives, banks.track.circuit, track);
         if candidates.is_empty() {
             parsed.report.push(format!(
                 "track audio: no trackstartup.xml beside {track} names a sound bank, so only the \
@@ -410,14 +410,13 @@ fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
 /// `Data\Environments\01_Track\BASILICO_ENV.bnk` is a 253,664-byte `SBlk`
 /// labelled `basilic`, which `01_Track`'s fifty non-`gentrak` emitters spell.
 ///
-/// 2048's base circuits have none beside them (`env_altima.bnk` is under
-/// `Data\audio\sound\`), but its downloadable circuits do
-/// (`DLC1\environments\Metropia\env2_metropia.bnk`), so beside the track is
-/// tried first and `directory`
-/// ([`oag_title::TrackBanks::circuit_directory`]) second.
+/// 2048 reads no bank beside the track at all: its loader formats
+/// `data/audio/sound/%s` and, when that file does not exist, `data/audio/DLC1/%s`
+/// ([`oag_title::CircuitBanks::Directories`]), so the copies shipped beside its
+/// downloadable circuits are never loaded.
 fn circuit_bank_entries(
     archives: &mut Archives,
-    directory: Option<&str>,
+    circuit: oag_title::CircuitBanks,
     track: &str,
 ) -> Vec<String> {
     let Some(at) = track.rfind(['/', '\\']) else {
@@ -426,10 +425,16 @@ fn circuit_bank_entries(
     let Some(file) = circuit_manifest(archives, track).and_then(|m| m.sound_bank) else {
         return Vec::new();
     };
-    let (beside, separator) = (&track[..at], &track[at..=at]);
-    let mut entries = vec![format!("{beside}{separator}{file}")];
-    entries.extend(directory.map(|d| format!("{d}\\{file}")));
-    entries
+    match circuit {
+        oag_title::CircuitBanks::BesideTrack => {
+            let (beside, separator) = (&track[..at], &track[at..=at]);
+            vec![format!("{beside}{separator}{file}")]
+        }
+        oag_title::CircuitBanks::Directories(directories) => directories
+            .iter()
+            .map(|directory| format!("{directory}\\{file}"))
+            .collect(),
+    }
 }
 
 /// The circuit's own `trackstartup.xml`, parsed, or `None` where it ships none:

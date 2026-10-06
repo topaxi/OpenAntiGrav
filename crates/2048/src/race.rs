@@ -469,7 +469,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
             r"Data\audio\sound\crowd_NGP.bnk",
             r"Data\audio\sound\generaltrack.bnk",
         ],
-        circuit_directory: Some(r"Data\audio\sound"),
+        circuit: oag_title::CircuitBanks::Directories(&[r"Data\audio\sound", r"Data\audio\DLC1"]),
         origin: oag_title::Origin::Measured,
     },
     // The engine does not play out of `shipHD.bnk`. The five `<team>2048`

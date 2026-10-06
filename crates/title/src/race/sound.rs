@@ -66,6 +66,22 @@ pub struct SoundBanks {
     pub crossfade: Option<Crossfade>,
 }
 
+/// Where a circuit's own sound bank is looked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CircuitBanks {
+    /// In the circuit's own directory, beside its `trackstartup.xml`: Pulse,
+    /// Pure and HD.
+    BesideTrack,
+    /// In these archive directories, first one that holds the file, and never
+    /// beside the track.
+    ///
+    /// 2048's loader formats `data/audio/sound/%s` and, when that file does not
+    /// exist, `data/audio/DLC1/%s`; it has no beside-the-track read at all, so
+    /// the copies shipped beside the downloadable circuits are never loaded
+    /// (`docs/formats/2048-audio.md`).
+    Directories(&'static [&'static str]),
+}
+
 /// Which banks a circuit's authored `sound` nodes can resolve against.
 ///
 /// A node spells its bank by the bank's own label, so the loader opens every
@@ -79,17 +95,9 @@ pub struct TrackBanks {
     /// Pulse and Pure: `generaltrack.bnk`. 2048: `crowd_NGP.bnk` (label
     /// `crowd`) and `generaltrack.bnk` (`gentrak`).
     pub shared: &'static [&'static str],
-    /// The archive directory a circuit's own bank is read from when it is not
-    /// beside the track (tried first, named by the `trackstartup.xml`
-    /// `<LoadSoundBank>` filename), or [`None`] where it always is: Pulse, Pure
-    /// and HD.
-    ///
-    /// 2048's base circuits keep their bank in `Data\audio\sound\` instead:
-    /// `env_altima.bnk` reads there and
-    /// `Data\art\published\environments\altima\env_altima.bnk` does not
-    /// exist. Its downloadable circuits do sit beside their track
-    /// (`DLC1\environments\Metropia\env2_metropia.bnk`).
-    pub circuit_directory: Option<&'static str>,
+    /// Where a circuit's own bank, the `trackstartup.xml` `<LoadSoundBank>`
+    /// filename, is read from.
+    pub circuit: CircuitBanks,
     /// Where this came from: ADR-0058's per-entry provenance.
     pub origin: crate::Origin,
 }

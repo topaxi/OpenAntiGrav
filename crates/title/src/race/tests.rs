@@ -327,7 +327,7 @@ const SOUNDS: SoundBanks = SoundBanks {
     speech: "speech.bnk",
     track: TrackBanks {
         shared: &["generaltrack.bnk"],
-        circuit_directory: None,
+        circuit: crate::CircuitBanks::BesideTrack,
         origin: crate::Origin::Chosen,
     },
     crossfade: None,

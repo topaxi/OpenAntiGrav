@@ -373,7 +373,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
             r"Data\Sound\speech_preracechatter.bnk",
             r"Data\Sound\shiphd.bnk",
         ],
-        circuit_directory: None,
+        circuit: oag_title::CircuitBanks::BesideTrack,
         origin: oag_title::Origin::Measured,
     },
     crossfade: None,

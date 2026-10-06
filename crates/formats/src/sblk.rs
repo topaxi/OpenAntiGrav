@@ -137,6 +137,10 @@ pub const HAS_NAME_TABLE: u32 = 0x100;
 /// `Scream_OpKeyOn`. Any difference between them is in the command word.
 pub const KEY_ON_OPCODES: [u8; 2] = [0x01, 0x09];
 
+/// How a streamed speech bank's file name ends in its waveform area: the
+/// extension and the NUL after it.
+const STREAM_NAME_END: &[u8] = b".at9\0";
+
 /// Something wrong with a sound bank.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -166,6 +170,15 @@ pub enum Error {
     PartialAdpcmBlock {
         size: usize,
     },
+    /// The waveform section is not PS-ADPCM at all: it carries a pool of
+    /// NUL-terminated ATRAC9 stream file names, as 2048's three
+    /// `speech_*_NGP.bnk` do (`docs/formats/2048-audio.md`). Their speech is
+    /// played from `data/audio/sound/streams/atrac/<language>/<name>.at9`.
+    StreamNames {
+        size: usize,
+        /// How many `.at9` names the pool holds.
+        names: usize,
+    },
     /// A table declared in the header does not fit the descriptor section.
     TableOutOfRange {
         name: &'static str,
@@ -188,6 +201,11 @@ impl std::fmt::Display for Error {
             Self::SizeDisagreement { declared, section } => write!(
                 f,
                 "the SBlk header declares {declared} waveform bytes, the section table {section}"
+            ),
+            Self::StreamNames { size, names } => write!(
+                f,
+                "the {size}-byte waveform area holds {names} ATRAC9 stream file name(s) \
+                 (.at9), not PS-ADPCM: the bank cues streamed speech"
             ),
             Self::PartialAdpcmBlock { size } => write!(
                 f,
@@ -407,6 +425,16 @@ impl<'a> Bank<'a> {
             });
         }
         if !waveforms.len().is_multiple_of(ADPCM_BLOCK_LEN) {
+            let names = waveforms
+                .windows(STREAM_NAME_END.len())
+                .filter(|w| *w == STREAM_NAME_END)
+                .count();
+            if names > 0 {
+                return Err(Error::StreamNames {
+                    size: waveforms.len(),
+                    names,
+                });
+            }
             return Err(Error::PartialAdpcmBlock {
                 size: waveforms.len(),
             });
