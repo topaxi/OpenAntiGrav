@@ -378,3 +378,114 @@ fn the_shadow_hull_is_the_shape_of_the_ship_it_belongs_to() {
         "the hull spills {spilled:.0}% beyond the ship it belongs to"
     );
 }
+
+/// The silhouettes a race load on `source` hands the `blob` tier, and the
+/// load report's lines about them.
+fn silhouettes(source: &std::path::Path, mode: oag_race::Mode) -> Silhouettes {
+    let loaded = race::load(&race::Options {
+        source: source.display().to_string(),
+        mode,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let report = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("shadow silhouette") || line.contains("generated"))
+        .cloned()
+        .collect();
+    Silhouettes {
+        images: loaded.shadows,
+        report,
+    }
+}
+
+struct Silhouettes {
+    images: Vec<oag_render::shadow::Silhouette>,
+    report: Vec<String>,
+}
+
+/// Row sums of the red channel, the coverage `shadow.wgsl` reads, over every
+/// eighth row. A ship's shadow is far from symmetric front to back (about 1,000
+/// at the first and last rows against 13,000 in the middle, in a
+/// 1,000/1,800/10,000/12,800/9,600/13,100/9,000/1,300 profile), so the order
+/// of this vector is the image's row order.
+fn row_profile(s: &oag_render::shadow::Silhouette) -> Vec<u32> {
+    let (w, h) = (s.width as usize, s.height as usize);
+    (0..h)
+        .step_by(h / 8)
+        .map(|y| (0..w).map(|x| u32::from(s.rgba[(y * w + x) * 4])).sum())
+        .collect()
+}
+
+fn l1(a: &[u32], b: impl Iterator<Item = u32>) -> u32 {
+    a.iter().zip(b).map(|(x, y)| x.abs_diff(y)).sum()
+}
+
+/// A Zone race on Wipeout 2048 and the Omega Collection gives every slot the
+/// Zone craft's own `Ambient_Shadow` - the one silhouette either title ships -
+/// and it is the image HD ships for the same craft: the same size, coverage in
+/// the red channel, and the same row order, so no flip is needed (unlike
+/// Omega's front-end `.gnf`, see `FrontEnd::bottom_up_gnf`).
+///
+/// Fails if `shadow::silhouettes` goes back to composing `<ship_dir>\<team>`
+/// (2048's native `Ships` tree has no Zone directory), stops swapping the
+/// `.gtf` for the platform's `.gxt`/`.gnf`, or stops reaching the Zone hull's
+/// directory in Zone mode.
+#[test]
+#[ignore = "needs HD's disc plus the decrypted Vita and PS4 packages"]
+fn zone_craft_blob_shadow_is_the_discs_own_on_2048_and_omega() {
+    let Some(hd) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let hd_zone = silhouettes(&hd, oag_race::Mode::Zone);
+    let reference = &hd_zone.images[0];
+    assert!(!reference.generated, "HD's zone craft ships its own");
+    let profile = row_profile(reference);
+
+    let titles = [
+        (
+            "data/extracted/vita/PCSF00007",
+            "Zone\\textures\\ambient_shadow.gxt",
+        ),
+        ("data/extracted/ps4", "Zone\\textures\\ambient_shadow.gnf"),
+    ];
+    for (source, entry) in titles {
+        let Some(path) = oag_testdata::exact(source) else {
+            continue;
+        };
+        let zone = silhouettes(&path, oag_race::Mode::Zone);
+        assert!(!zone.images.is_empty(), "{source}: a grid");
+        for (slot, image) in zone.images.iter().enumerate() {
+            assert!(!image.generated, "{source} slot {slot}: the disc's own");
+            assert_eq!(
+                (image.width, image.height),
+                (reference.width, reference.height),
+                "{source} slot {slot}"
+            );
+            assert!(
+                image.rgba.as_chunks::<4>().0.iter().any(|px| px[0] > 200),
+                "{source} slot {slot}: coverage must arrive in the red channel"
+            );
+            let own = row_profile(image);
+            let straight = l1(&own, profile.iter().copied());
+            let flipped = l1(&own, profile.iter().rev().copied());
+            assert!(
+                straight * 10 < flipped,
+                "{source} slot {slot}: rows are HD's order, not reversed ({straight} vs {flipped})"
+            );
+        }
+        assert!(
+            zone.report.iter().all(|line| line.contains(entry)),
+            "{source}: {:?}",
+            zone.report
+        );
+
+        // Outside Zone mode these titles' own craft ship none.
+        let race = silhouettes(&path, oag_race::Mode::SingleRace);
+        assert!(
+            race.images.iter().all(|image| image.generated),
+            "{source}: no native craft has a silhouette on the disc"
+        );
+    }
+}
