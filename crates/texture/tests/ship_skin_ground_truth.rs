@@ -15,14 +15,13 @@
 //!
 //! # What this is for
 //!
-//! `docs/ghidra/functions/psp-pulse-usa/ship-skin.md` claims a `.dat` skin is
-//! four fixed-shape palette-plus-pixels blocks behind a NUL-terminated header,
-//! with no dimension field anywhere in the file - confidence 90, on the
-//! strength of the arithmetic closing exactly against all sixteen shipped
-//! files. This is that claim checked against the one file the page itself
-//! cites: `Data\Ships\Assegai\ship_alt.dat`, entry 632 of
-//! `pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad`, 26,912 bytes, header
-//! `Assegai\0` then the `ms` residue the page's own investigation explains.
+//! `docs/ghidra/functions/psp-pulse-usa/ship-skin.md` claims a `.dat` skin is four
+//! fixed-shape palette-plus-pixels blocks behind a NUL-terminated header, with no
+//! dimension field (confidence 90: the arithmetic closes against all sixteen
+//! shipped files). This checks that against the file the page cites:
+//! `Data\Ships\Assegai\ship_alt.dat`, entry 632 of
+//! `pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad`, 26,912 bytes, header `Assegai\0`
+//! then the `ms` residue the page explains.
 
 use std::path::PathBuf;
 
@@ -59,10 +58,9 @@ fn assegais_skin_is_exactly_the_disc_measured_length() {
     );
 }
 
-/// The header, the four blocks, and the residue `ship-skin.md` explains by
-/// name: Assegai is the one team whose header cannot distinguish a
-/// fixed-width field from a terminated one, because `Assegai\0` leaves `ms`
-/// from a reused `AG Systems\0` export buffer sitting right after it.
+/// The header, the four blocks, and the residue `ship-skin.md` explains: Assegai's
+/// `Assegai\0` is followed by `ms` from a reused `AG Systems\0` export buffer, so
+/// it cannot tell a fixed-width field from a terminated one.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn assegais_skin_parses_into_its_display_name_and_four_blocks() {
@@ -91,10 +89,8 @@ fn assegais_skin_parses_into_its_display_name_and_four_blocks() {
     }
 }
 
-/// A palette entry decodes to a plausible opaque or transparent colour on
-/// real data - the weakest sanity check that would catch the unpacking being
-/// off by a nibble or a byte, which would still "parse" but scramble every
-/// pixel.
+/// A palette entry decodes to a plausible colour on real data: the weakest check
+/// that catches unpacking off by a nibble or byte, which would still "parse".
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn every_palette_entry_is_a_valid_rgba_alpha() {
@@ -109,8 +105,7 @@ fn every_palette_entry_is_a_valid_rgba_alpha() {
                 entry[3]
             );
         }
-        // Real texture data is not all one index; a constant block would mean
-        // the byte offsets landed on padding rather than pixels.
+        // Real data is not all one index; a constant block means the offsets hit padding.
         assert!(
             block.indices.iter().any(|&i| i != block.indices[0]),
             "block {index}: every index is the same value, which real ship \

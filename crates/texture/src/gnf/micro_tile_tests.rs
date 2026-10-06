@@ -1,13 +1,10 @@
-//! The micro-tile (`Thin_1DThin`, `TileMode(13)`) address formula - see
-//! `docs/formats/gnf.md`'s "Tiling" section for the full evidence trail
-//! this probe produced: strong partial confirmation (an exact match on an
-//! isolated single-tile oracle pair, many consecutive correctly-decoded
-//! tiles on two larger ones) and a still-unexplained periodic corruption
-//! past that point, confirmed by the content-diff dump below to be a
-//! tiling bug rather than a remaster content change. `#[ignore]`d, needs
-//! real game data, kept in-crate for the same reason `search_tests.rs` is
-//! (needs `crate::bcn::bc7`, `pub(crate)` and invisible outside this
-//! crate).
+//! The micro-tile (`Thin_1DThin`, `TileMode(13)`) address formula probe: an exact
+//! match on an isolated single-tile oracle pair and many consecutive tiles on
+//! larger ones. The corruption past that point was later explained as
+//! missing/garbage BC7 blocks, not a tiling bug (the exploratory hypotheses
+//! below predate that; `docs/formats/gnf.md`'s "Tiling" section has the
+//! evidence). `#[ignore]`d, needs real game data, in-crate because it needs
+//! `pub(crate)` `crate::bcn::bc7`.
 
 use crate::bcn::bc7;
 use crate::gnf::Texture;
@@ -26,9 +23,8 @@ fn micro_tile_index_displayable(bx: u32, by: u32) -> u32 {
     y0 | (x0 << 1) | (x1 << 2) | (x2 << 3) | (y1 << 4) | (y2 << 5)
 }
 
-/// Micro-tile traversal order across the surface - the one axis this
-/// project's own copy of the address formula assumed (row-major) without
-/// measuring, unlike every bit-level formula above which is a direct port.
+/// Micro-tile traversal order across the surface: the one axis assumed
+/// (row-major) without measuring; the bit-level formulas above are direct ports.
 #[derive(Clone, Copy, Debug)]
 enum TileOrder {
     RowMajor,
@@ -36,10 +32,9 @@ enum TileOrder {
     Morton,
 }
 
-/// Interleaves the low bits of `x` and `y` (x in odd positions, y in even),
-/// the same general Z-order this project's own `oag_texture::gxt::twiddle`
-/// uses for the Vita's GXM block grid - a candidate for how micro *tiles*
-/// (not texels) might be arranged across a `1D_TILED_THIN1` surface.
+/// Interleaves the low bits of `x` and `y` (x odd, y even), the Z-order of
+/// `oag_texture::gxt::twiddle`; a candidate arrangement of micro *tiles* across a
+/// `1D_TILED_THIN1` surface.
 fn morton(x: u32, y: u32) -> u64 {
     fn spread(v: u32) -> u64 {
         let mut v = u64::from(v);
@@ -103,13 +98,10 @@ fn decode_micro_tiled(
     out
 }
 
-/// Tests the hypothesis that `TileMode(13)` is `Thin_1DThin` (micro-tiled
-/// only - GFD-Studio's own `TileMode.cs` enum, fetched directly and
-/// re-checked against this project's own prior "Thin_2DThin" label, names
-/// index 13 `Thin_1DThin` and index **14** `Thin_2DThin`; every real `.gnf`
-/// this project has found declares 13, not 14), against the same
-/// bounded-search's oracle pairs - a completely different, much simpler
-/// address formula with no bank/pipe/row-size unknowns at all.
+/// Tests that `TileMode(13)` is `Thin_1DThin` (micro-tiled only; GFD-Studio's
+/// `TileMode.cs` has 13 `Thin_1DThin` and **14** `Thin_2DThin`, and every real
+/// `.gnf` declares 13) against the bounded search's oracle pairs, with a much
+/// simpler address formula and no bank/pipe/row-size unknowns.
 #[test]
 #[ignore]
 fn micro_tiled_address_against_the_oracle_pairs() {
@@ -148,10 +140,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
                     let mad = mean_abs_diff(&decoded, truth);
                     total += mad;
                     if texture.width == 32 {
-                        // The single-micro-tile sample only tests the
-                        // intra-tile bit order, not tile traversal or flip -
-                        // skip it from this per-combination print to keep
-                        // the interesting (multi-tile) rows visible.
+                        // The single-tile sample tests only intra-tile bit order;
+                        // skip it to keep the multi-tile rows visible.
                         continue;
                     }
                     println!("  {index_name}/{order_name}/flip_y={flip_y} vs {path}: MAD {mad:.2}");
@@ -164,10 +154,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         }
     }
 
-    // Diagnostic: is the FIRST micro tile of a multi-tile image byte-exact
-    // (proving the corruption starts at tile 1, an inter-tile problem), or
-    // is tile 0 itself already wrong for a multi-mip-level file (pointing
-    // at data_offset/mip-chain layout instead)?
+    // Is the FIRST micro tile of a multi-tile image byte-exact (corruption starts
+    // at tile 1) or already wrong (pointing at data_offset/mip-chain layout)?
     for (path, texture, blob, truth) in &pairs {
         if texture.width == 32 {
             continue;
@@ -193,11 +181,9 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         );
     }
 
-    // Where does the SECOND on-disk 1024-byte *micro tile* (64 blocks, one
-    // full 32x32-texel tile, using the already-validated intra-tile pixel
-    // order) actually belong spatially? Decode it once and score it - full
-    // 32x32 MAD, not one block - against every candidate tile slot in the
-    // 128x64 image (tiles_x=4, tiles_y=2, 8 tiles total).
+    // Where does the SECOND on-disk 1024-byte *micro tile* (one 32x32-texel tile)
+    // belong? Score its 32x32 MAD against every candidate slot in the 128x64
+    // image (tiles_x=4, tiles_y=2).
     if let Some((path, texture, blob, truth)) = pairs
         .iter()
         .find(|(p, ..)| p.contains("Holographic_02_GLOW") && p.contains("icaras"))
@@ -262,17 +248,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
             );
         }
 
-        // Full matrix for row 1's four disk tiles (4..8) against row 1's
-        // four spatial slots - is it a different permutation (serpentine,
-        // transposed) rather than row 0's straightforward identity?
-        // Hypothesis: mip levels interleave by TILE-ROW rather than being
-        // fully sequential - "row 0 of every mip level, then row 1 of
-        // level 0" - which would put level 0's second tile row much later
-        // in the file than a naive sequential-mip-chain read assumes.
-        // Level 0 row 0 = 4 tiles; level 1 (64x32 = 2x1 tiles) has one row
-        // of 2 tiles; levels 2-7 (<=32x16, all <=1 tile each) contribute
-        // one tile each = 6 tiles. "Every level's row 0" = 4+2+6 = 12
-        // tiles = 12288 bytes, where level 0's row 1 would start instead.
+        // Hypothesis: mip levels interleave by TILE-ROW, putting level 0's second
+        // tile row after every level's row 0: 4 + 2 + 6 = 12 tiles = 12288 bytes.
         for disk_index in [12u64, 13, 14, 15] {
             let tile_texels = decode_tile(disk_index);
             let mut best = (f64::MAX, 0u32, 0u32);
@@ -299,16 +276,14 @@ fn micro_tiled_address_against_the_oracle_pairs() {
             println!("  disk tile {disk_index}: [{}]", row.join(", "));
         }
 
-        // word6 (min_lod_warning / mip stats / DCC flags) and the metadata
-        // offset dword - not decoded by `Texture::parse` - dumped raw here
-        // to check whether DCC metadata sits between tile rows.
+        // word6 and the metadata offset dword, not decoded by `Texture::parse`,
+        // dumped raw to check for DCC metadata between tile rows.
         let at = 16 + 0x18;
         let word6 = u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
         let meta_offset = u32::from_le_bytes(blob[at + 4..at + 8].try_into().unwrap());
         println!("word6=0x{word6:08x} meta_offset=0x{meta_offset:08x}");
-        // Try shifting the assumed per-row byte stride by small deltas, in
-        // case a metadata/padding region of a few hundred bytes sits
-        // between the first and second tile row.
+        // Shift the per-row byte stride by small deltas in case metadata/padding
+        // sits between the first and second tile row.
         for extra in [0i64, 8, 16, 32, 64, 128, 256, 512] {
             for sign in [1i64, -1] {
                 let shift = extra * sign;
@@ -346,10 +321,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         }
     }
 
-    // Content-diff visualization for harimau_c1: write decoded and oracle
-    // PNGs so a human (Read tool) can tell tiling noise (stripes/blocks)
-    // apart from a content difference (a logo-shaped, spatially coherent
-    // blob - exactly what a remaster would touch).
+    // harimau_c1: write decoded and oracle PNGs to tell tiling noise (stripes,
+    // blocks) from a content difference (a spatially coherent blob).
     if let Some((_, texture, blob, truth)) = pairs.iter().find(|(p, ..)| p.contains("harimau_c1")) {
         let decoded =
             decode_micro_tiled(blob, texture, micro_tile_index, TileOrder::RowMajor, false);
@@ -367,9 +340,7 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         .unwrap();
         println!("wrote /tmp/gnf_harimau_decoded.png and _truth.png");
 
-        // Hypothesis: the real tile-row stride is HALF of pitch_blocks/8
-        // (16, not 32) - test directly by re-decoding with that stride and
-        // comparing MAD against the full oracle.
+        // Hypothesis: the tile-row stride is HALF of pitch_blocks/8 (16, not 32).
         {
             let width_blocks = texture.width.div_ceil(4);
             let height_blocks = texture.height.div_ceil(4);
@@ -403,9 +374,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
             println!("half-stride hypothesis (tiles_x={tiles_x_half}): whole-image MAD {mad:.2}");
         }
 
-        // Hypothesis: even tile-rows and odd tile-rows are deinterlaced -
-        // all even rows first (tile_y/2 * tiles_x + tile_x), then all odd
-        // rows starting at total_tiles/2.
+        // Hypothesis: even and odd tile-rows are deinterlaced (even rows first,
+        // odd from total_tiles/2).
         {
             let width_blocks = texture.width.div_ceil(4);
             let height_blocks = texture.height.div_ceil(4);
@@ -445,8 +415,7 @@ fn micro_tiled_address_against_the_oracle_pairs() {
             println!("deinterlace hypothesis: whole-image MAD {mad:.2}");
         }
 
-        // Per-tile-row mean brightness, to nail the periodicity of the
-        // black/content banding visible in the PNG.
+        // Per-tile-row mean brightness, for the periodicity of the banding.
         for tile_row in 0..32usize {
             let y0 = tile_row * 32;
             let mut sum = 0u64;
@@ -461,8 +430,8 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         }
     }
 
-    // Same row-boundary check on the single-mip-level 1024x1024 image -
-    // isolates the question from any mip-chain confound entirely.
+    // Same row-boundary check on the single-mip 1024x1024 image, free of any
+    // mip-chain confound.
     if let Some((_, texture, blob, truth)) = pairs.iter().find(|(p, ..)| p.contains("harimau_c1")) {
         let tiles_x = (texture.width / 4).div_ceil(8);
         let decode_tile = |disk_tile_index: u64| -> [[u8; 4]; 32 * 32] {

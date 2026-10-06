@@ -2,43 +2,29 @@
 //! (`TileMode(13)`, `Thin_1DThin`) BC7 one whose base level carries no
 //! invalid-mode block.
 //!
-//! Every real `.gnf` this project has sampled declares `TileMode(13)` -
-//! `Thin_1DThin` (GFD-Studio's own `TileMode.cs` enum), micro-tiled, not the
-//! macro-tiled `Thin_2DThin` (14) an earlier pass here mislabeled it as.
-//! AMD's much simpler micro-tile-only address formula
-//! (`EgBasedLib::ComputeSurfaceAddrFromCoordMicroTiled`, Mesa's MIT
-//! `addrlib`) gets strong confirmation against real oracle-paired textures -
-//! an exact match on an isolated single-tile image, many consecutive
-//! correctly-decoded tiles on larger ones - and `docs/formats/gnf.md`'s
-//! "Tiling" section closes the remaining open question: a byte-level check
-//! on the ship-livery oracle pair that first found the periodic corruption
-//! shows the "bad" regions are not a wrong tile order at all, they are the
-//! same PSARC-level missing/garbage-content population
-//! `docs/formats/psarc.md`'s "Block data location" section already
-//! documents family-wide, on this specific file's own copy.
+//! Every sampled `.gnf` declares `TileMode(13)`, `Thin_1DThin` (GFD-Studio's
+//! `TileMode.cs`), micro-tiled. AMD's micro-tile-only address formula
+//! (`EgBasedLib::ComputeSurfaceAddrFromCoordMicroTiled`, Mesa's MIT `addrlib`)
+//! matches oracle-paired textures exactly on an isolated single-tile image and
+//! over many consecutive tiles on larger ones. `docs/formats/gnf.md`'s "Tiling"
+//! section closes the open question: the "bad" regions of the ship-livery oracle
+//! pair are not a wrong tile order but the PSARC-level missing/garbage-content
+//! population `docs/formats/psarc.md`'s "Block data location" documents
+//! family-wide.
 //!
-//! **What this still refuses, by design, not by gap.** This project's own
-//! rule against inventing what the assets already author reads a
-//! partially-corrupt block the same way it reads a byte range that will not
-//! parse at all: draw nothing rather than a picture with silent garbage
-//! patches standing in for missing content. So [`decode`] scans the *base
-//! level's own* block grid - `width`/`height` in the descriptor are always
-//! the base (largest, first-in-file) level's own, so this already excludes
-//! every smaller mip level's own tile-alignment padding without needing to
-//! know how many follow - for any block whose byte 0 carries no valid BC7
-//! mode (a real encoder never emits an all-zero mode field), and refuses the
-//! whole surface with [`Error::CorruptBlocks`] the moment it finds one,
-//! rather than decoding around it. A whole-file census
-//! (`crates/texture/examples/gnf_frontend_census.rs`) over-counts this,
-//! since it walks every byte sequentially including every later mip's own
-//! padding tiles; measured at the base level alone, most of the front end's
-//! own sprite sheet is clean - see `docs/formats/gnf.md`'s "Tiling" section
-//! for the corrected count and the worked padding arithmetic.
+//! **What this still refuses, by design.** Per the rule against inventing what
+//! the assets author: draw nothing rather than a picture with silent garbage
+//! patches. [`decode`] scans the *base level's* block grid (the descriptor's
+//! `width`/`height` are the base level's, so smaller mips' tile padding is
+//! excluded) for any block whose byte 0 carries no valid BC7 mode (a real
+//! encoder never emits an all-zero mode field) and refuses the whole surface
+//! with [`Error::CorruptBlocks`]. A whole-file census
+//! (`crates/texture/examples/gnf_frontend_census.rs`) over-counts, since it walks
+//! every later mip's padding too; at the base level alone most of the front
+//! end's sprite sheet is clean - see `docs/formats/gnf.md`'s "Tiling" section.
 //!
-//! A genuinely `Display_LinearAligned`/`Display_LinearGeneral` surface -
-//! none has been found among the corpus so far - still decodes through the
-//! plain row-major path below unconditionally, since a linear surface has
-//! no tile order to get wrong in the first place.
+//! A `Display_LinearAligned`/`Display_LinearGeneral` surface (none found in the
+//! corpus) decodes through the plain row-major path below unconditionally.
 
 use super::{Error, Result, SurfaceFormat, Texture};
 
@@ -78,11 +64,10 @@ fn decode_linear(texture: &Texture, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
 
 /// `Lib::ComputePixelIndexWithinMicroTile`, `addrlib1.cpp`, the
 /// `ADDR_NON_DISPLAYABLE` ("Thin") ordering for a 128-bit element:
-/// `pixelBit0..5 = x0,y0,x1,y1,x2,y2`. Verified against a real oracle pair -
-/// see `docs/formats/gnf.md`'s "Tiling" section and
-/// `crates/texture/src/gnf/oracle_tests.rs::micro_tile_index`, which this
-/// mirrors rather than imports (that copy stays `pub(super)` to
-/// `oracle_tests`/`micro_tile_tests`'s own test-only tree).
+/// `pixelBit0..5 = x0,y0,x1,y1,x2,y2`. Verified against a real oracle pair - see
+/// `docs/formats/gnf.md`'s "Tiling" section. Mirrors
+/// `crates/texture/src/gnf/oracle_tests.rs::micro_tile_index` rather than
+/// importing it (test-only tree).
 fn micro_tile_pixel_index(bx: u32, by: u32) -> u32 {
     let x0 = bx & 1;
     let x1 = (bx >> 1) & 1;
@@ -106,11 +91,10 @@ fn micro_tiled_block_offset(bx: u32, by: u32, tiles_x: u32) -> u64 {
     tile_index * MICRO_TILE_BYTES + element_offset
 }
 
-/// The base (largest, first-in-file) mip level's own block grid: `width` x
-/// `height` in the descriptor is always the base level's, and GNM lays a
-/// mip chain out largest-first, each level tile-aligned, so the base level
-/// occupies exactly `tiles_x * tiles_y` tiles starting at
-/// [`Texture::data_offset`] regardless of how many smaller levels follow it.
+/// The base mip level's block grid: the descriptor's `width` x `height` are the
+/// base level's and GNM lays a chain out largest-first, tile-aligned, so the base
+/// occupies `tiles_x * tiles_y` tiles from [`Texture::data_offset`] whatever
+/// follows.
 fn base_level_tile_grid(texture: &Texture) -> (u32, u32, u32, u32) {
     let width_blocks = texture.width.div_ceil(4);
     let height_blocks = texture.height.div_ceil(4);
@@ -120,11 +104,9 @@ fn base_level_tile_grid(texture: &Texture) -> (u32, u32, u32, u32) {
     (width_blocks, height_blocks, tiles_x, tiles_y)
 }
 
-/// A BC7 block's mode field is unary (`N` zero bits then a one bit) over its
-/// first byte for every mode 0-7; byte `0x00` has no such bit and is not a
-/// pattern a real encoder emits - see this module's own doc comment and
-/// `docs/formats/gnf.md`'s "Tiling" section for why that is the corruption
-/// check rather than a spatial one.
+/// A BC7 mode field is unary (`N` zero bits then a one bit) over the first byte
+/// for modes 0-7; byte `0x00` has no such bit and no real encoder emits it. See
+/// `docs/formats/gnf.md`'s "Tiling" for why this is the corruption check.
 fn has_valid_bc7_mode(byte0: u8) -> bool {
     byte0 != 0x00
 }
@@ -132,9 +114,8 @@ fn has_valid_bc7_mode(byte0: u8) -> bool {
 /// One level's blocks, untiled into plain row-major order.
 ///
 /// `offset` is the level's first byte from [`Texture::data_offset`]. Counts
-/// every block whose byte 0 carries no valid mode bit while it goes, and
-/// reports the count beside the bytes so a caller can refuse a level without
-/// a second pass.
+/// blocks with no valid mode bit and reports the count beside the bytes, so a
+/// caller can refuse a level without a second pass.
 fn untile_level(
     texture: &Texture,
     blob: &[u8],
@@ -190,10 +171,10 @@ pub(super) fn bc7_level(blocks: &[u8], width: u32, height: u32) -> Option<Vec<[u
 
 /// Every mip level's BC7 blocks, untiled and row-major, base level first.
 ///
-/// Levels follow one another in the file, each padded to whole 8x8-block
-/// micro tiles: `ceil(wb/8) * ceil(hb/8) * 1024` bytes for a level `wb` x
-/// `hb` blocks wide. That accounts for every byte past the header of 15,413 of
-/// the 15,4xx BC7 `.gnf` files on the disc - see `docs/formats/gnf.md`.
+/// Levels follow one another, each padded to whole 8x8-block micro tiles:
+/// `ceil(wb/8) * ceil(hb/8) * 1024` bytes for a level `wb` x `hb` blocks. That
+/// accounts for every byte past the header of 15,413 of the 15,4xx BC7 `.gnf`
+/// files on disc - see `docs/formats/gnf.md`.
 pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>>> {
     require_micro_tiled_bc7(texture)?;
     if texture.tile_mode.0 != super::TileMode::THIN_1D_THIN {
@@ -221,9 +202,8 @@ pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>
         .iter()
         .map(|(_, _, tx, ty)| (tx * ty) as usize * MICRO_TILE_BYTES as usize)
         .sum();
-    // Exact, not "at least": a cubemap or an array carries more than one
-    // surface's chain, and reading its first as if it were the only one would
-    // hand the GPU a picture that is not the file's.
+    // Exact, not "at least": a cubemap or array carries more than one chain, and
+    // reading its first as the only one would be a wrong picture.
     let found = blob.len().saturating_sub(texture.data_offset);
     if found != expected {
         return Err(Error::ChainLayout { expected, found });
@@ -244,11 +224,9 @@ pub(super) fn block_levels(texture: &Texture, blob: &[u8]) -> Result<Vec<Vec<u8>
     Ok(levels)
 }
 
-/// Walks a row-major grid of 4x4 blocks, `unit_len` bytes each, decoding
-/// every block with `decode_block` and writing its 16 texels into an
-/// RGBA8 raster of `width` x `height`. Only reached for a linear surface,
-/// so "block index `by * blocks_x + bx`" is already the byte order - no
-/// untiling step sits between this and the file.
+/// Walks a row-major grid of 4x4 blocks, `unit_len` bytes each, decoding each
+/// with `decode_block` into an RGBA8 raster of `width` x `height`. Only reached
+/// for a linear surface, so block index `by * blocks_x + bx` is the byte order.
 fn row_major_blocks(
     data: &[u8],
     width: u32,

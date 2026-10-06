@@ -129,15 +129,11 @@ fn a_linear_a8r8g8b8_texture_reads_alpha_first() {
 
 #[test]
 fn a_swizzled_texture_reads_the_rsx_z_order_not_raster_order() {
-    // 4x4, so both dimensions carry two bits each and the Z-order genuinely
-    // departs from raster order past the second texel - a 2x2 texture's
-    // Z-order and raster order coincide, which would pass with the addressing
-    // simply not implemented. Sixteen texels, each `[index*0x10, 0, 0, 0xff]`
-    // in *raster* position, then permuted into `.gtf`'s own on-disk Z-order so
-    // decoding and re-flattening to raster order recovers `index*0x10` in R.
-    //
-    // The permutation (raster index -> Z-order index) is the textbook
-    // sequence for a 4x4 tile: 0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15.
+    // 4x4, because a 2x2 Z-order coincides with raster order and would pass
+    // with no addressing at all. Sixteen texels `[index*0x10, 0, 0, 0xff]` in
+    // raster position, permuted into Z-order; decoding must recover
+    // `index*0x10` in R. The permutation is the textbook 4x4 sequence
+    // 0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15.
     const Z_ORDER: [usize; 16] = [0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15];
     let mut texels = [[0u8; 4]; 16];
     for (raster, &z) in Z_ORDER.iter().enumerate() {
@@ -213,7 +209,7 @@ fn a_blob_that_is_not_a_gtf_fails_a_check_rather_than_decoding() {
 
 #[test]
 fn an_odd_sized_texture_keeps_only_the_texels_it_has() {
-    // 3x2 DXT1 is one block, twelve of whose sixteen texels are off the image.
+    // 3x2 DXT1 is one block with twelve texels off the image.
     let data = blob(&descriptor(0x86, 3, 2, 8), &RED_BLUE_DXT1);
     let texture = Gtf::parse(&data).expect("parses");
     let rgba = texture
@@ -249,9 +245,9 @@ fn a_remap_word_decomposes_into_the_three_the_disc_carries() {
     );
 }
 
-/// The disc's own `B8` shape: one byte per texel, swizzled, and **not
-/// square** - all 9 are 128x64, where every other swizzled file on the disc is
-/// square and so never reaches `decode::morton_index`'s second phase.
+/// The disc's own `B8` shape: one byte per texel, swizzled, 128x64 (the only
+/// non-square swizzled files, so the only ones reaching
+/// `decode::morton_index`'s second phase).
 #[test]
 fn a_single_channel_texture_is_broadcast_by_its_own_remap() {
     // 4x2. `morton_index` interleaves one bit each way, then lets x's
@@ -263,8 +259,7 @@ fn a_single_channel_texture_is_broadcast_by_its_own_remap() {
         texels[z] = (raster * 0x10) as u8;
     }
 
-    // With the identity remap the byte lands in blue and stays there, which is
-    // all the decoder alone does.
+    // With the identity remap the byte stays in blue; that is all the decoder does.
     let plain = blob(&descriptor(0x01, 4, 2, 8), &texels);
     let gtf = Gtf::parse(&plain).expect("parses");
     let rgba = gtf.only().expect("one").to_rgba(&plain).expect("decodes");

@@ -13,8 +13,8 @@
 //!
 //! # What this is for
 //!
-//! A PS2 texture blob is a GS upload packet, so almost every field in it is
-//! declared twice and the two declarations have to agree:
+//! A PS2 texture blob is a GS upload packet, so almost every field is declared
+//! twice and the declarations must agree:
 //!
 //! - The **packed log2 byte** at `+0x00` and the dimension words at `+0x04` say
 //!   the same thing in two encodings.
@@ -22,24 +22,21 @@
 //!   to be exactly the texel and palette byte counts the dimensions imply.
 //! - The **total size closes**: header, setup, texels, setup, palette, with each
 //!   transfer block padded to 256 bytes, must be the blob's actual length.
-//! - **`TRXREG`** has to name one of three transfer rectangles, each a fixed
-//!   function of the dimensions. It is what identifies the pixel layout, and it
-//!   is also what caught the dimension pair being stored height-first: a
-//!   width-first reading makes `TRXREG` nonsense on every non-square texture.
+//! - **`TRXREG`** must name one of three transfer rectangles, each a fixed
+//!   function of the dimensions. It identifies the pixel layout and caught the
+//!   dimension pair being height-first: a width-first reading makes `TRXREG`
+//!   nonsense on every non-square texture.
 //!
-//! None of those come out even on a blob that is not a texture, or on a texture
-//! read with the fields in the wrong order.
+//! None of those hold on a non-texture or on fields read in the wrong order.
 //!
 //! # None of that evidences the *permutation*
 //!
 //! Framing arithmetic says where the texels are, not that they were unpicked
-//! correctly, and plenty of wrong permutations are bijections. So the test also
-//! scores every decoded texture's **total variation** against the same texels
-//! read under the opposite layout, which is the check that discriminates: a
-//! wrong permutation scatters pixels that belong together and raises local
-//! discontinuity. Decoding is smoother on 4,856 of 4,956 swizzled textures and
-//! 185 of 185 linear ones, and the hundred exceptions are flat or noise-like
-//! blobs with almost no variation either way.
+//! correctly, and plenty of wrong permutations are bijections. So the test scores
+//! every decoded texture's **total variation** against the same texels under the
+//! opposite layout: a wrong permutation scatters pixels that belong together.
+//! Decoding is smoother on 4,856 of 4,956 swizzled textures and 185 of 185 linear
+//! ones; the hundred exceptions are flat or noise-like blobs.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -149,9 +146,8 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
             1usize << texture.bits_per_pixel,
             "{archive_path} entry {index}: wrong palette length"
         );
-        // Every index has to name a real palette entry. It always does for a
-        // 256-entry palette, so this only bites if the palette is short, which
-        // is exactly the failure a mis-sized CLUT block would produce.
+        // Every index must name a real palette entry; this bites only if the
+        // palette is short, as a mis-sized CLUT block would make it.
         assert!(
             texture
                 .indices
@@ -159,19 +155,16 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 .all(|&i| usize::from(i) < texture.palette.len()),
             "{archive_path} entry {index}: index out of palette"
         );
-        // Alpha is on the GS's 0-128 scale; anything above that would mean the
-        // palette block starts in the wrong place.
+        // Alpha is on the GS's 0-128 scale; above that, the palette block starts
+        // in the wrong place.
         assert!(
             texture.palette.iter().all(|c| c[3] <= 128),
             "{archive_path} entry {index}: palette alpha above the GS maximum of 128"
         );
 
-        // The size arithmetic says the blob *is* a texture and where its parts
-        // are; it says nothing about whether the permutation that unpicked the
-        // texels is the right one, and plenty of wrong permutations are
-        // bijections. Scoring the same texels under the *opposite* reading is
-        // what discriminates: any wrong permutation scatters pixels that belong
-        // together and raises local discontinuity.
+        // The size arithmetic does not say the permutation is right (many wrong
+        // ones are bijections). Scoring the texels under the *opposite* reading
+        // does: a wrong permutation raises local discontinuity.
         if texture.width >= 32 && texture.height >= 16 {
             let name = layout_name(head.layout);
             let (w, h) = (usize::from(texture.width), usize::from(texture.height));
@@ -184,8 +177,8 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
                 Layout::Linear => (0..w * h)
                     .map(|i| texels[ps2_texture::psmt8_offset(i % w, i / w, w)])
                     .collect(),
-                // The nibbles read straight off the blob, which is what a
-                // reader that missed the swizzle entirely would draw.
+                // The nibbles straight off the blob: what a reader that missed the
+                // swizzle would draw.
                 Layout::Psmt4 => (0..w * h)
                     .map(|i| (texels[i / 2] >> ((i & 1) * 4)) & 0x0f)
                     .collect(),
@@ -247,19 +240,17 @@ fn every_ps2_texture_blob_decodes_and_its_declared_sizes_close() {
         "nothing on this disc is refused any more: the five PSMT4 blobs are the \
          font atlases and they decode"
     );
-    // All three transfer shapes are in use; if one vanished the classifier
-    // would be silently collapsing them.
+    // All three transfer shapes are in use; if one vanished the classifier would
+    // be collapsing them.
     assert!(survey.layouts.contains_key("psmt8"));
     assert!(survey.layouts.contains_key("linear"));
     assert!(survey.layouts.contains_key("psmt4"));
-    // The permutation check. Reading the texels the other way round has to be
-    // measurably rougher, on essentially every texture, or the layout
-    // classifier and the unswizzle are not earning their place.
+    // The permutation check: the other reading must be measurably rougher on
+    // essentially every texture.
     for layout in ["psmt8", "linear", "psmt4"] {
         let testable = survey.testable.get(layout).copied().unwrap_or(0);
         let smoother = survey.smoother.get(layout).copied().unwrap_or(0);
-        // There are only five PSMT4 blobs on the disc, so that one gets its own
-        // floor rather than being excused.
+        // Only five PSMT4 blobs exist, so that layout gets its own floor.
         let floor = if layout == "psmt4" { 5 } else { 100 };
         assert!(
             testable >= floor,

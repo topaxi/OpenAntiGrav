@@ -1,10 +1,8 @@
 //! What the PS2 texture-upload reader in [`super`] is asserted to do: the GIF
 //! packets it walks, the GS layout it unswizzles, and the blobs it refuses.
 //!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `ps2_texture.rs`: the tests are 206 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! Its own file: the tests pass the 200-line inline limit
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
@@ -44,11 +42,9 @@ fn blob(width: u16, height: u16, bits_per_pixel: u8, rrw: u32, rrh: u32) -> Vec<
     out.extend_from_slice(&[0u8; 8]);
 
     out.extend((0..palette_bytes).map(|i| (i % 253) as u8));
-    // Both transfers' padding lands at the end of the file rather than after
-    // its own block - the layout `super::header` documents. Every shape the
-    // disc ships has a texel block at or above the 256-byte minimum, so this
-    // second term is zero for all of them; it is here so a *small* blob can be
-    // built at all, which is what finding F1's 8x8 repro needs.
+    // Both transfers' padding lands at the end of the file (see `super::header`).
+    // Every disc shape has a texel block at or above the 256-byte minimum, so this
+    // term is zero for them; it lets a *small* blob be built, as the 8x8 repro needs.
     out.extend(std::iter::repeat_n(
         0u8,
         (padded(palette_bytes) - palette_bytes) + (padded(texel_bytes) - texel_bytes),
@@ -124,11 +120,10 @@ fn a_four_bit_blob_decodes() {
     assert!(texture.indices.iter().all(|&i| i < 16));
 }
 
-/// Finding F1's repro, from the 2026-08-18 review: an 8x8 `PSMT8` blob whose
-/// `GIFtag`s and `TRXREG` all agree with each other, so nothing before the
-/// unswizzle can reject it. `psmt8_offset(4, 6, 8)` is 77 and the texel buffer
-/// is 64 bytes, so this panicked the parser - reachable from
-/// `Archives::read_font` and from browsing any hostile archive.
+/// An 8x8 `PSMT8` blob whose `GIFtag`s and `TRXREG` all agree, so nothing before
+/// the unswizzle rejects it. `psmt8_offset(4, 6, 8)` is 77 against a 64-byte
+/// texel buffer, which once panicked the parser (reachable from
+/// `Archives::read_font` and archive browsing).
 #[test]
 fn an_eight_bit_blob_too_small_for_its_permutation_is_refused() {
     let data = blob(8, 8, 8, 4, 4);
@@ -138,16 +133,14 @@ fn an_eight_bit_blob_too_small_for_its_permutation_is_refused() {
         "the shape is recognised"
     );
     assert_eq!(parse(&data), Err(Error::UnsupportedLayout(Layout::Psmt8)));
-    // 8 wide is the panicking half; 4 tall is the other, and a 16x2 blob is
-    // the one a guard on width alone would still let through.
+    // 8 wide is the panicking half; 4 tall the other (a 16x2 blob passes a width-only guard).
     let short = blob(16, 2, 8, 8, 1);
     assert_eq!(
         parse(&short),
         Err(Error::UnsupportedLayout(Layout::Psmt8)),
         "a two-row blob is under the permutation's floor too"
     );
-    // And the first shape either side of the bound still parses, so the guard
-    // refuses the broken ones rather than the small ones.
+    // The first shapes either side of the bound still parse.
     assert!(parse(&blob(16, 4, 8, 8, 2)).is_ok(), "16x4 is valid PSMT8");
 }
 
@@ -167,9 +160,8 @@ fn a_four_bit_blob_smaller_than_a_page_is_refused() {
 #[test]
 fn psmt4_offsets_are_a_permutation_for_every_shipped_shape() {
     // The five font atlases are 256x128, 512x256 and 512x512; the rest is
-    // headroom. A PSMT4 page is 128x128 and `parse` refuses anything
-    // smaller, which `a_four_bit_blob_smaller_than_a_page_is_refused`
-    // covers.
+    // headroom. `parse` refuses anything under a 128x128 PSMT4 page
+    // (`a_four_bit_blob_smaller_than_a_page_is_refused`).
     for width in [128usize, 256, 512] {
         for height in [128usize, 256, 512] {
             let mut seen = vec![false; width * height];
