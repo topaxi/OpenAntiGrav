@@ -1,18 +1,13 @@
 //! What the `WeaponStats_*.xml` reader in [`super`] is asserted to do: the
-//! weapon table, the pickup odds, and the shapes a malformed file must not
-//! produce.
-//!
-//! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `weapons.rs`: the tests are 213 lines, well past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! weapon table, pickup odds, and the shapes a malformed file must not produce.
+//! Its own file because the tests exceed the 200-line inline limit
+//! (`scripts/check-file-size.py`).
 
 use super::*;
 
-/// Every number here is **invented** - a plain 1, 2, 3 in document order.
-/// Per `docs/architecture/adr/0006-no-copyrighted-content.md` no shipped
-/// value is reproduced in this repository, and a fixture that copied one
-/// would also stop testing the parser and start testing the disc.
+/// Every number is **invented** (1, 2, 3 in document order): no shipped value
+/// may be reproduced (`docs/architecture/adr/0006-no-copyrighted-content.md`),
+/// and a copied one would test the disc, not the parser.
 const FIXTURE: &str = r#"<WeaponStats>
 <Weapon type="Global"><Stats slowdown_limit="1"/></Weapon>
 <Weapon type="Rocket"><Stats absorb="2" blastforce="3" blastradius="4" damage="5" slowdown_time="6" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.25"/></Weapon>
@@ -60,16 +55,15 @@ fn the_three_simple_weapons_read_their_pair() {
     );
 }
 
-/// Asking a rocket for a simple pair is a caller error, and answering with a
-/// defaulted zero would hide it.
+/// Asking a rocket for a simple pair is a caller error; a defaulted zero would
+/// hide it.
 #[test]
 fn a_weapon_that_is_not_simple_has_no_simple_stats() {
     let stats = parse(FIXTURE).expect("the fixture parses");
     assert_eq!(stats.simple(Weapon::Rocket), None);
 }
 
-/// `absorb` is on every weapon, simple or not - it is what the absorb branch
-/// spends whatever was absorbed.
+/// `absorb` is on every weapon, simple or not.
 #[test]
 fn every_weapon_carries_absorb() {
     let stats = parse(FIXTURE).expect("the fixture parses");
@@ -101,9 +95,8 @@ fn the_rocket_reads_the_five_things_a_projectile_needs() {
     );
 }
 
-/// The four class speeds are read positionally, so a test that only checked
-/// one of them would pass with the array in any order. Each fixture value is
-/// distinct, and the class is the index.
+/// The four class speeds are read positionally, so each fixture value is
+/// distinct and the class is the index.
 #[test]
 fn each_speed_class_reads_its_own_projectile_speed() {
     use crate::handling::SpeedClass;
@@ -114,9 +107,8 @@ fn each_speed_class_reads_its_own_projectile_speed() {
     assert_eq!(rocket.speed_for(SpeedClass::Phantom), 400.0);
 }
 
-/// A file with no Rocket is not an error, the same way one with no Turbo is
-/// not: the two shipped tables need not carry the same set, and a caller
-/// with no stats hands out no rocket.
+/// A file with no Rocket is not an error: the two shipped tables need not carry
+/// the same set.
 #[test]
 fn a_file_without_a_rocket_has_no_rocket_stats() {
     let no_rocket =
@@ -124,11 +116,8 @@ fn a_file_without_a_rocket_has_no_rocket_stats() {
     assert_eq!(parse(no_rocket).expect("parses").rocket(), None);
 }
 
-/// And a Rocket missing one of the five is an error rather than a zero -
-/// a zero `blastradius` is a rocket that hits nobody, which reads as a
-/// gameplay bug rather than as a parse failure.
-/// `spread` is the fan angle and has to survive the parse, because three
-/// rockets at zero degrees apart is one rocket wearing a disguise.
+/// A Rocket missing one of the five is an error, not a zero. `spread` must
+/// survive the parse: three rockets at zero degrees apart is one rocket.
 #[test]
 fn the_rocket_reads_its_fan_angle() {
     let rocket = parse(FIXTURE).expect("parses").rocket().expect("a Rocket");
@@ -158,13 +147,9 @@ fn the_missile_reads_its_blast_its_speeds_and_its_lock() {
     );
 }
 
-/// The same positional argument [`each_speed_class_reads_its_own_projectile_speed`]
-/// makes for the Rocket, and it needs making twice: the two structs fill their
-/// arrays in two separate places, so one being right says nothing about the other.
-///
-/// The fixture's missile speeds are deliberately **different numbers from the
-/// rocket's**, so a parser that filled the missile's array from the rocket's block
-/// - the copy-paste this arm was written by - fails here rather than passing.
+/// The positional argument again for the Missile, since the two structs fill
+/// their arrays separately. Its fixture speeds differ from the rocket's so a
+/// copy-pasted arm fails.
 #[test]
 fn each_speed_class_reads_its_own_missile_speed() {
     use crate::handling::SpeedClass;
@@ -178,8 +163,7 @@ fn each_speed_class_reads_its_own_missile_speed() {
     assert_eq!(missile.speed_for(SpeedClass::Phantom), 800.0);
 }
 
-/// The two lock distances are what make the Missile a Missile rather than a
-/// Rocket that costs more, so losing one has to fail loudly.
+/// The lock distances make a Missile a Missile; losing one must fail loudly.
 #[test]
 fn a_missile_missing_a_lock_distance_is_an_error() {
     let broken = FIXTURE.replace(r#" lock_max_dist="29""#, "");
@@ -192,7 +176,7 @@ fn a_missile_missing_a_lock_distance_is_an_error() {
     );
 }
 
-/// The Mine's seven, and the two that make it a mine rather than a small rocket.
+/// The Mine's seven.
 #[test]
 fn the_mine_reads_its_blast_its_fuse_and_its_trigger() {
     let mine = parse(FIXTURE)
@@ -213,28 +197,20 @@ fn the_mine_reads_its_blast_its_fuse_and_its_trigger() {
     );
 }
 
-/// `trigger_radius` and `blastradius` are two different distances and the
-/// fixture gives them two different numbers, so a parser that read one into
-/// both fails here. They are also the pair a caller is most likely to conflate:
-/// a mine is *tripped* inside one and *hurts* inside the other.
+/// `trigger_radius` and `blastradius` get different fixture numbers so a parser
+/// reading one into both fails: a mine is *tripped* inside one and *hurts*
+/// inside the other.
 #[test]
 fn a_mines_trigger_radius_is_not_its_blast_radius() {
     let mine = parse(FIXTURE).expect("parses").mine().expect("a Mine");
     assert_ne!(mine.trigger_radius, mine.blastradius);
 }
 
-/// A mine with no fuse never expires, so the field cannot quietly default - and
-/// it does not: the Mine comes back absent, and *recorded*.
-///
-/// **This asserted a whole-file error until 2026-08-26**, and the reasoning was
-/// right while the mechanism was too blunt. Wipeout Pure authors a Bomb with
-/// `damageradius` and no `timetodie` - a charge with no fuse, which sits until
-/// something trips it - and failing the file for it cost Pure its Missile, its
-/// Rocket and its pickup odds too. A block this build cannot decode now costs
-/// that weapon alone.
-///
-/// The rule the old test was defending survives intact, and this pins both
-/// halves of it: nothing defaults, and nothing is silent.
+/// A mine with no fuse comes back absent and *recorded* (in `skipped`), not
+/// defaulted. This asserted a whole-file error until 2026-08-26; Pure's Bomb
+/// (`damageradius`, no `timetodie`) showed that cost Pure its Missile, Rocket
+/// and pickup odds too. A block this build cannot decode now costs that weapon
+/// alone: nothing defaults, nothing is silent.
 #[test]
 fn a_mine_missing_its_fuse_is_absent_rather_than_defaulted() {
     let broken = FIXTURE.replace(r#" timetodie="35""#, "");
@@ -254,11 +230,8 @@ fn a_mine_missing_its_fuse_is_absent_rather_than_defaulted() {
     assert!(stats.rocket().is_some(), "the Rocket went with it");
 }
 
-/// A *present* attribute that will not parse still fails the whole file.
-///
-/// The other side of the line above: a file that does not carry a field is a
-/// dialect, and one with rubbish in a field is broken. Nothing about tolerating
-/// the first should tolerate the second.
+/// A *present* attribute that will not parse still fails the whole file: a
+/// missing field is a dialect, rubbish in one is broken.
 #[test]
 fn a_mine_whose_fuse_is_not_a_number_is_still_an_error() {
     let broken = FIXTURE.replace(r#"timetodie="35""#, r#"timetodie="soon""#);
@@ -268,8 +241,8 @@ fn a_mine_whose_fuse_is_not_a_number_is_still_an_error() {
     );
 }
 
-/// A file with no Mine is not an error, for
-/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+/// A file with no Mine is not an error; see
+/// [`a_file_without_a_rocket_has_no_rocket_stats`].
 #[test]
 fn a_file_without_a_mine_has_no_mine_stats() {
     let none =
@@ -277,13 +250,9 @@ fn a_file_without_a_mine_has_no_mine_stats() {
     assert_eq!(parse(none).expect("parses").mine(), None);
 }
 
-/// The Bomb's six decoded attributes, and the two the fixture authors that it
-/// must **not** pick up.
-///
-/// `damageradius` and `slowdown_time` are both in the fixture and both absent
-/// from [`BombStats`], deliberately - see that struct. A parser that started
-/// reading either would have to change this test, which is the point: the
-/// omission is a decision and a decision should be hard to undo by accident.
+/// The Bomb's six decoded attributes. `damageradius` and `slowdown_time` are in
+/// the fixture and absent from [`BombStats`] on purpose; changing that should
+/// mean changing this test.
 #[test]
 fn the_bomb_reads_six_of_its_eight() {
     let bomb = parse(FIXTURE)
@@ -304,11 +273,8 @@ fn the_bomb_reads_six_of_its_eight() {
     );
 }
 
-/// The Bomb's block is not the Mine's, and the fixture gives them disjoint
-/// numbers so a parser that matched the wrong `<Weapon type>` fails here.
-///
-/// The two share six attribute names out of seven and eight, which is exactly
-/// the shape a copy-pasted parse arm gets wrong silently.
+/// The Bomb's block is not the Mine's: disjoint fixture numbers catch a
+/// copy-pasted parse arm (six shared attribute names).
 #[test]
 fn the_bomb_and_the_mine_read_their_own_blocks() {
     let stats = parse(FIXTURE).expect("parses");
@@ -319,8 +285,8 @@ fn the_bomb_and_the_mine_read_their_own_blocks() {
     assert_ne!(bomb.trigger_radius, mine.trigger_radius);
 }
 
-/// A file with no Bomb is not an error, for
-/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+/// A file with no Bomb is not an error; see
+/// [`a_file_without_a_rocket_has_no_rocket_stats`].
 #[test]
 fn a_file_without_a_bomb_has_no_bomb_stats() {
     let none =
@@ -328,8 +294,8 @@ fn a_file_without_a_bomb_has_no_bomb_stats() {
     assert_eq!(parse(none).expect("parses").bomb(), None);
 }
 
-/// A file with no Missile is not an error, for [`a_file_without_a_rocket_has_no_rocket_stats`]'s
-/// reason - and asking a Missile for a simple pair is still a caller error.
+/// A file with no Missile is not an error, and asking a Missile for a simple
+/// pair is still a caller error.
 #[test]
 fn a_file_without_a_missile_has_no_missile_stats() {
     let none =
@@ -341,10 +307,8 @@ fn a_file_without_a_missile_has_no_missile_stats() {
     );
 }
 
-/// The Missile authors no `spread` and the Rocket no lock, which is the whole
-/// reason the two are separate structs. Pinned because a later widening that
-/// merged them would have to answer this test rather than quietly default a
-/// field to zero.
+/// The Missile has no `spread` and the Rocket no lock: the reason they are
+/// separate structs. A merge would have to answer this test.
 #[test]
 fn the_missile_and_the_rocket_do_not_share_a_schema() {
     let stats = parse(FIXTURE).expect("parses");
@@ -377,8 +341,8 @@ fn the_global_block_is_read() {
     assert_eq!(parse(FIXTURE).expect("parses").slowdown_limit, 1.0);
 }
 
-/// The four weights are kept apart and in the right order. Reading them
-/// positionally would be silently wrong, since all four are plain numbers.
+/// The four weights keep their order; reading positionally would be silently
+/// wrong.
 #[test]
 fn the_pickup_weights_keep_their_four_meanings() {
     let stats = parse(FIXTURE).expect("the fixture parses");
@@ -394,8 +358,8 @@ fn the_pickup_weights_keep_their_four_meanings() {
     );
 }
 
-/// One table per class, and a class the file omits is absent rather than
-/// empty - a caller must be able to tell "no odds authored" from "zero odds".
+/// One table per class; an omitted class is absent, not empty ("no odds" vs
+/// "zero odds").
 #[test]
 fn each_class_gets_its_own_table() {
     let stats = parse(FIXTURE).expect("the fixture parses");
@@ -432,10 +396,9 @@ fn a_document_that_is_not_this_one_is_refused() {
     );
 }
 
-/// The three that damage nobody are exactly the three with a simple schema.
-/// If that ever stops holding, the reason this module singles them out has
-/// gone with it. The Disruptor is the fourth harmless weapon and the one that
-/// is not simple: a projectile with no `damage` - see `Weapon::damages`.
+/// The three that damage nobody are the three with a simple schema. The
+/// Disruptor is the fourth harmless weapon and not simple (a projectile with no
+/// `damage`); see `Weapon::damages`.
 #[test]
 fn the_simple_weapons_are_the_harmless_ones() {
     for weapon in Weapon::ALL {
@@ -449,9 +412,8 @@ fn the_simple_weapons_are_the_harmless_ones() {
     }
 }
 
-/// Pure's Bomb: `damageradius` and no `timetodie`, and it parses to a Bomb
-/// with no fuse rather than to a skipped weapon. Shape only - the numbers are
-/// the fixture's.
+/// Pure's Bomb (`damageradius`, no `timetodie`) parses to a Bomb with no fuse,
+/// not a skipped weapon. Shape only.
 #[test]
 fn a_bomb_without_a_fuse_is_a_bomb_that_never_times_out() {
     let pure = FIXTURE.replace(r#" timetodie="46""#, "");
@@ -501,10 +463,8 @@ fn the_plasma_reads_the_rockets_schema_without_the_fan() {
     );
 }
 
-/// The Plasma's own block, not the Rocket's, and the fixture gives them
-/// disjoint numbers so a parse arm that read the wrong `<Weapon type>` fails
-/// here. Their schemas differ by exactly one attribute each way - `spread`
-/// against `charge_time` - which is the shape a copy-paste gets wrong quietly.
+/// The Plasma's own block, not the Rocket's: their schemas differ by `spread`
+/// against `charge_time`, so disjoint numbers catch a copy-pasted arm.
 #[test]
 fn the_plasma_and_the_rocket_read_their_own_blocks() {
     let stats = parse(FIXTURE).expect("parses");
@@ -518,9 +478,9 @@ fn the_plasma_and_the_rocket_read_their_own_blocks() {
     );
 }
 
-/// Pure's dialect: one `speed` for every class and no `launchSpeed`, which is
-/// what `Data\XML\weaponstats.xml` authors. Measured 2026-09-02 on
-/// `pure-psp-usa.chd`; the *shape* is reproduced here, not its values.
+/// Pure's dialect: one `speed` for every class and no `launchSpeed`, as
+/// `Data\XML\weaponstats.xml` authors (measured 2026-09-02 on
+/// `pure-psp-usa.chd`). Shape only.
 #[test]
 fn a_plasma_authored_with_one_speed_reads_it_for_every_class() {
     let one = concat!(
@@ -538,8 +498,8 @@ fn a_plasma_authored_with_one_speed_reads_it_for_every_class() {
     );
 }
 
-/// A file with no Plasma is not an error, for
-/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+/// A file with no Plasma is not an error; see
+/// [`a_file_without_a_rocket_has_no_rocket_stats`].
 #[test]
 fn a_file_without_a_plasma_has_no_plasma_stats() {
     let none =
@@ -547,12 +507,10 @@ fn a_file_without_a_plasma_has_no_plasma_stats() {
     assert_eq!(parse(none).expect("parses").plasma(), None);
 }
 
-/// The Shuriken reads ten of its thirteen, and reads the **blast** pair rather
-/// than the ricochet pair.
-///
-/// The fixture gives the two pairs adjacent, distinct numbers on purpose: a
-/// parser that grabbed `rhicochetdamage` where it meant `blastdamage` would
-/// produce a perfectly plausible struct, and only disjoint values catch it.
+/// The Shuriken reads ten of its thirteen, the **blast** pair and not the
+/// ricochet pair. The pairs have adjacent distinct numbers: a parser grabbing
+/// `rhicochetdamage` for `blastdamage` yields a plausible struct that only
+/// disjoint values catch.
 #[test]
 fn the_shuriken_reads_its_blast_pair_and_not_its_ricochet_pair() {
     let shuriken = parse(FIXTURE)
@@ -579,8 +537,8 @@ fn the_shuriken_reads_its_blast_pair_and_not_its_ricochet_pair() {
     assert_ne!(shuriken.blastforce, 61.0, "that is `rhicochetForce`");
 }
 
-/// A file with no Shuriken is not an error, for
-/// [`a_file_without_a_rocket_has_no_rocket_stats`]'s reason.
+/// A file with no Shuriken is not an error; see
+/// [`a_file_without_a_rocket_has_no_rocket_stats`].
 #[test]
 fn a_file_without_a_shuriken_has_no_shuriken_stats() {
     let none =
@@ -588,8 +546,8 @@ fn a_file_without_a_shuriken_has_no_shuriken_stats() {
     assert_eq!(parse(none).expect("parses").shuriken(), None);
 }
 
-/// A Shuriken missing its fuse is absent rather than defaulted to zero, which
-/// would be a blade reaped on the tick it was thrown.
+/// A Shuriken missing its fuse is absent, not zero (a blade reaped on the tick
+/// it was thrown).
 #[test]
 fn a_shuriken_missing_its_fuse_is_absent_rather_than_defaulted() {
     let no_fuse = FIXTURE.replace(" fuse=\"68\"", "");
@@ -630,12 +588,9 @@ fn the_leachbeam_reads_its_whole_block() {
     );
 }
 
-/// The block authors no `slowdown_time` on any shipped table, so the parser
-/// must not ask for one - and the fixture mirrors that absence deliberately.
-///
-/// Without this the failure is quiet and wide: `optional_block` would put the
-/// LeachBeam in `skipped` and every Pulse race would lose its reticle with
-/// nothing but a loader line to say why.
+/// The block authors no `slowdown_time` on any shipped table, so the parser must
+/// not ask for one. Otherwise `optional_block` would put the LeachBeam in
+/// `skipped` and every Pulse race would lose its reticle with only a loader line.
 #[test]
 fn the_leachbeam_is_not_skipped_for_want_of_a_slowdown_time() {
     assert!(
