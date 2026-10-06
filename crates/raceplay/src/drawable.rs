@@ -311,6 +311,29 @@ impl Drawable {
         })
     }
 
+    /// Replaces the albedo of texture slot `texture_slot` with `view`: the
+    /// billboard placeholders' own picture, drawn each frame by
+    /// [`crate::adverts`]. A slot this model has no material for is left alone.
+    pub(super) fn set_albedo(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_slot: usize,
+        view: &wgpu::TextureView,
+    ) {
+        // Slot 0 is the white fallback, so a texture slot n binds group n + 1.
+        let Some(bind) = self.textures.get_mut(texture_slot + 1) else {
+            return;
+        };
+        *bind = mesh_render::albedo_bind_group(
+            device,
+            queue,
+            &self.pipeline.get_bind_group_layout(1),
+            view,
+            "advert albedo",
+        );
+    }
+
     /// Binds this drawable's vertex buffer - and its streamed coordinates,
     /// when it has them - for the pipelines it built.
     pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) {

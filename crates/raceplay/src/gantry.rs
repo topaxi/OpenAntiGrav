@@ -472,11 +472,24 @@ fn load(
     name: &str,
     report: &mut Vec<String>,
 ) -> Result<Model> {
+    load_with_blob(archives, name, report).map(|(model, _)| model)
+}
+
+/// [`load`], with the file's own bytes beside the model, for a caller that
+/// reads a node the model does not carry - the billboard adverts' camera.
+pub(super) fn load_with_blob(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    report: &mut Vec<String>,
+) -> Result<(Model, Vec<u8>)> {
     let trimmed = name.trim_start_matches(['/', '\\']);
     let mut error = None;
     for candidate in [name, &trimmed.replace('/', "\\"), trimmed] {
         match archives.read_name(candidate) {
-            Ok(blob) => return build(archives, name, candidate, &blob, report),
+            Ok(blob) => {
+                let model = build(archives, name, candidate, &blob, report)?;
+                return Ok((model, blob));
+            }
             Err(e) => error = error.or(Some(e)),
         }
     }

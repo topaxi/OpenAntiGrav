@@ -102,6 +102,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         None,
         None,
         None,
+        Vec::new(),
         true,
         Some(triangle()),
         Some(triangle()),

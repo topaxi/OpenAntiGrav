@@ -47,15 +47,20 @@
 //! gate model at runtime**, whatever the manifest says; slot 8 keeps its
 //! authored `321Go_StartFinish.vex`.
 //!
-//! **Nothing is placed yet, and where the transform comes from is
-//! unrecovered.** An advert's chunks are node-local with a bias near the origin.
-//! HD's circuits use 30 node classes, all already named by `oag_vex::vex`, so
-//! there is no dedicated slot class; only `02_track` and `05_ubermall` carry a
-//! node named `Billboard<digits>`, so the artists' names are not the convention.
-//! Next lead, same page: `GetBillboardMeshIdFromName`, a name-hash lookup
-//! against a per-track list that resets a 4x4 matrix on every (re)bind; read, not
-//! chased. Per `CLAUDE.md` an asset whose trigger is unrecovered stays unwired:
-//! this module parses and reports.
+//! **Nothing is placed, and nothing needs to be (Pulse, 2026-10-06).** An
+//! advert's chunks are node-local with a bias near the origin because the
+//! model is not drawn into the world: the original draws it through the model's
+//! own `Camera` node into a 128 x 128 texture, and the circuit's quad textured
+//! `billboard<num>.tga` shows that texture
+//! (`docs/ghidra/functions/psp-pulse-usa/billboards.md`,
+//! `oag_raceplay::adverts`). HD's circuits use 30 node classes, all already named
+//! by `oag_vex::vex`, so there is no dedicated slot class; only `02_track` and
+//! `05_ubermall` carry a node named `Billboard<digits>`, so the artists' names are
+//! not the convention. HD's `Billboard_LoadModelAndBind` builds the same
+//! `"billboard" + num` name and builds a render target for the slot, so the
+//! mechanism very likely carries over; HD's projection and target size are
+//! unmeasured and nothing is drawn there. A slot that names a **colour** is
+//! drawn nothing: which advert it picks is a pool walk this project has not read.
 //!
 //! # Cross-title: Pulse has the same slots; slot 7 is not reserved there
 //!

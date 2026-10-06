@@ -147,6 +147,7 @@ use oag_vex::vex;
 
 mod absorb;
 mod access;
+pub mod adverts;
 mod assets;
 mod blast_models;
 mod bomb_blast;

@@ -86,6 +86,9 @@ pub struct Scene {
     /// geometry authors - see `race::gantry`. `None` on a circuit that
     /// authors no mount, which draws no gantry rather than a placed guess.
     gantry: Option<gantry::Gantry>,
+    /// The billboard adverts, drawn once a frame into the targets the track's
+    /// placeholder quads show - see [`crate::adverts`]. `None` with no card.
+    adverts: Option<crate::adverts::Cards>,
     /// The track's authored visibility partition, when it decoded. `None`
     /// for a track with no `section` nodes - every Pure track - and the
     /// first tier is then skipped entirely rather than approximated.
@@ -423,6 +426,7 @@ impl Scene {
         pad_model: Option<Model>,
         weapon_pad_model: Option<Model>,
         gantry: Option<gantry::Placed>,
+        adverts: Vec<crate::adverts::Card>,
         weapons_on: bool,
         rocket_model: Option<Model>,
         mine_model: Option<Model>,
@@ -543,7 +547,8 @@ impl Scene {
             zone_art,
             shadow_maps,
         )?;
-        let track = Drawable::new_with(
+        let placeholders = oag_render::gantry::placeholder_texture_slots(&track_model);
+        let mut track = Drawable::new_with(
             device,
             queue,
             track_model,
@@ -565,6 +570,13 @@ impl Scene {
             // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
             hd.is_some(),
         )?;
+        let adverts = if adverts.is_empty() {
+            None
+        } else {
+            let cards = crate::adverts::Cards::new(device, queue, adverts, anisotropy)?;
+            cards.bind_into(device, queue, &mut track, &placeholders);
+            Some(cards)
+        };
         // One per grid slot, each drawing **its own team's hull**. Built up
         // front rather than on demand, because a `Drawable` needs the device
         // and the pass does not have it. A grid shorter than `GRID_SLOTS`
@@ -937,6 +949,7 @@ impl Scene {
             pads,
             weapon_pads,
             gantry,
+            adverts,
             fog_volumes,
             light,
             authored_fog,
