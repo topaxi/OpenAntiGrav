@@ -639,7 +639,7 @@
 0x0892d9fc	function	Airbrake_Update	90	ship-parts.md
 0x08884ac4	function	TrackStartup_Parse	78	billboards.md
 0x089012d4	function	Billboard_CreateFromLocation	65	billboards.md
-0x08901004	function	Billboard_CreateFromColour	60	billboards.md
+0x08901004	function	Billboard_CreateFromColour	85	billboards.md
 0x08900220	function	Billboard_ConstructResource	75	billboards.md
 0x0880cc2c	function	WeaponStats_ParsePlasma	92	plasma.md
 0x0886a868	function	Weapon_FirePlasma	88	plasma.md
@@ -1327,3 +1327,6 @@
 0x0881f148	function	Hud_UpdateMessages	80	hud-messages.md
 0x089001a4	function	VexCamera_BuildViewMatrix	75	billboards.md
 0x089009a8	function	Billboard_UpdateViewMatrix	70	billboards.md
+0x08900e90	function	BillboardManager_BuildPool	88	billboards.md
+0x08900db4	function	BillboardManager_Construct	78	billboards.md
+0x08900fa0	function	BillboardManager_FreePool	80	billboards.md

@@ -70,10 +70,10 @@ manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 
 ## Open
 
-- **Colour slots.** `Billboard_CreateFromColour` (`0x08901004`) walks a per-track pool (`+0x3c` list, count `+0x40`; entry `+0xa0` type hash, `+0xa4` colour mask, `+0x94` model name), takes the first match and swaps it to the end of the list - no random draw in the code read. The pool's *filling* order is unread, so a colour slot is drawn nothing and the WARN stays for it.
+- ~~**Colour slots.**~~ **Closed 2026-10-06 (Pulse)**: the pool is `PI004`'s 35 entries in file order through a fixed swap loop (`BillboardManager_BuildPool`, `0x08900e90`), read live and matched entry for entry; `oag_tables::billboard_pool` draws it and `adverts::load` wires every colour slot (including those with no quad, which still take their entry). Not seen: the rotation over several draws on one circuit. Pure ships `PI004` too and was left alone; HD's `Billboard_CreateFromColour_q` (`0x0029af88`) is checked, applies, not wired.
 - **The advert's animation clock** is the scenery clock (`world.tick / 60`), chosen, not measured. The captured pass shows every letter at its rest pose, which the authored loop (600 frames, 10.0 s) visits several times, so the dump does not pin it. A fit from further dumps taken at known emulated times was tried and was inconclusive (the star nodes' poses did not match the sampled matrices); the letters-only fit needs the transit windows (about 2.0-3.0 s of each loop) to be caught.
 - **HD** (see above) and **slot 8 as a texture**: pass B is the gantry model through its own camera, aspect 4.0, 61.93 degrees; `oag_raceplay::gantry` still stands the model on the measured mount (a measured, accepted placement), so slot 8 does not use the card path.
-- **PS2** is carried over by analogy (same camera nodes, same quads); no PCSX2 capture.
+- ~~**PS2** is carried over by analogy~~ **Captured 2026-10-06** (PCSX2 GS dumps): the original renders the slot 7 advert and the gantry into a 128x128 target and samples it on a 31-prim group (`ps2-pulse-eu/billboards.md`, 88). Slots 1, 2 and 6 not captured separately.
 - The instruction that makes the quad's texture the card's target was not caught (two live instances agree with the by-name reading; HD builds `"billboard" + num`).
 - The mode-descriptor pointer replacing `Num==7`'s mesh was not traced all the way to one of the four `321Go_*.vex` race-gate shapes (HD).
 - `GetBillboardMeshIdFromName` still has no found caller (re-run 2026-09-15 after the lvlx reimport: three routes, positive control on each).
@@ -85,10 +85,11 @@ manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 - ~~The final texture bind is untraced~~ **Superseded 2026-10-06**: the bind is the card's target replacing the quad's material texture; the live frame shows the sampling prim, the binding instruction is still uncaught (above).
 - ~~The material object's live fields and the four `+0x88/+0x90/+0x98/+0xa0` sub-objects~~ **Explained, not re-read**: on the card object those offsets are the camera-matrix row, slot number and parameter, the render target and the `Gfx_Enqueue` sort keys (`+0x9c`/`+0xa0`); the competing "four state groups" candidate in `start-gantry.md`'s 55-scored claim is therefore weakened, not settled - the gantry's own material is a separate object.
 - ~~`0x0890cf34` has no function boundary~~ **Left as it was**: not needed by the card path.
-- **PS2**: the loader keeps and rebinds six placeholder draws on `16_Track`, but they are authored back-face-culled there and no tested frame shows the quad; only an autopilot frame differs (a red mark on the right wall). Not verified at the quad.
+- ~~**PS2**: the loader keeps and rebinds six placeholder draws~~ **Explained 2026-10-06**: those frames showed none of the six quads; `--camera-pose` on slots 1, 2 and 7 renders each card whole. The original gates the card pass on something unmodelled (no 128-wide target in a dump far from every quad).
 
 ## Next Steps
 
-- Read the colour pool's filling order (breakpoint inside `Billboard_CreateFromColour_q` at `0x08901004`, dump the list at `*(_DAT_002ae2b4 + 0x3c)`), then draw colour slots from the `PI004` catalogue.
-- Two PPSSPP GE dumps at known game times, to pin the advert clock.
+- **Orientation on the slot 1 and 2 hoardings**: this project draws their lettering upside down from the front; the original's is unmeasured. Capture a quad in view on PCSX2 (`craft` teleport recipe in `ps2-pulse-eu/billboards.md`) or PPSSPP and compare.
+- **The card clock and the frame gate**: the original's cards were blank for 11 s at a quad's front and are only drawn when a quad is near. Sample several quads at known emulated times; the PPSSPP software renderer (not OpenGL) is the reference for the picture.
+- A circuit with several colour slots on a live original (De Konstruct, `05_Track`, blue/blue/grey/yellow) to see the pool rotation over more than one draw.
 - Capture HD's advert pass on RPCS3 (projection, target size, the Zone-race `billboard` fallback in `Billboard_LoadModelAndBind`) and wire it through `oag_raceplay::adverts` if the law is the same.

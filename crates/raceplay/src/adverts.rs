@@ -84,13 +84,18 @@ pub fn view_projection(camera: &oag_vex::camera::Camera) -> Option<Mat4> {
     Some(oag_core::math::camera::perspective(fov_y, aspect, NEAR, FAR) * view)
 }
 
-/// Loads the advert every `Location` slot of `manifest` names, for the slots
-/// whose placeholder this circuit's track authors.
+/// The catalogue a colour fill draws from, on a title that ships one.
+const CATALOGUE: &str = r"Data\Plugins\PI004\Definition.xml";
+
+/// Loads the advert every slot of `manifest` names, for the slots whose
+/// placeholder this circuit's track authors.
 ///
-/// Slot 8 is the start gantry and is left to [`crate::gantry`]. A slot that
-/// names a colour is left unfilled: which advert a colour picks is
-/// `Billboard_CreateFromColour`'s walk of a per-track pool, unrecovered. Every
-/// refusal is a line in `report`.
+/// Slot 8 is the start gantry and is left to [`crate::gantry`]. **A slot that
+/// names a colour draws its advert from the engine's pool**
+/// ([`oag_tables::billboard_pool`]), and the draws are made for every colour slot
+/// in manifest order, including those without a quad, because each takes its
+/// entry out of the pool. A colour no catalogue entry answers is reported and
+/// left undrawn. Every refusal is a line in `report`.
 pub(super) fn load(
     archives: &mut oag_assets::Archives,
     manifest: &oag_tables::trackstartup::TrackStartup,
@@ -98,20 +103,37 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Vec<Card> {
     let placeholders = oag_render::gantry::placeholder_texture_slots(track_model);
+    let catalogue = archives
+        .read_name(CATALOGUE)
+        .map(|blob| oag_tables::billboard_pool::parse(&blob))
+        .unwrap_or_default();
+    let fills = oag_tables::billboard_pool::colour_fills(manifest, catalogue);
     let mut cards = Vec::new();
     for billboard in &manifest.billboards {
         if billboard.num == 8 || !placeholders.iter().any(|&(_, n)| n == billboard.num) {
             continue;
         }
-        let Some(name) = billboard.location() else {
-            report.push(format!(
-                "billboard slot {} names a colour ({:?}): which advert a colour picks is \
-                 unrecovered, so its placeholder draws nothing",
-                billboard.num, billboard.fill
-            ));
-            continue;
+        let name = match billboard.location() {
+            Some(name) => name.to_string(),
+            None => match fills.iter().find(|(num, _)| *num == billboard.num) {
+                Some((_, Some(entry))) => {
+                    report.push(format!(
+                        "billboard slot {}: the colour {:?} draws {} from the engine's advert pool",
+                        billboard.num, billboard.fill, entry.name
+                    ));
+                    entry.location.clone()
+                }
+                _ => {
+                    report.push(format!(
+                        "billboard slot {} names a colour ({:?}) and the advert catalogue \
+                         holds no entry for it, so its placeholder draws nothing",
+                        billboard.num, billboard.fill
+                    ));
+                    continue;
+                }
+            },
         };
-        match load_card(archives, billboard.num, name, report) {
+        match load_card(archives, billboard.num, &name, report) {
             Ok(card) => {
                 report.push(format!(
                     "billboard slot {}: {name} drawn through its own camera into a {SIDE}x{SIDE} \
