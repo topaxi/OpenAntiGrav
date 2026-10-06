@@ -145,7 +145,7 @@ BASELINE = {
     # when the streak strips moved into `psys/streak.rs`; to 1,740 when
     # `Particle` moved into `psys/particle.rs` to make room for the rotating
     # template sprite's roll.
-    "crates/fx/src/psys.rs": 1549,
+    "crates/fx/src/psys.rs": 1501,
     "crates/sound/src/lib.rs": 1408,
     "crates/trace/src/main.rs": 1543,
     # Ratcheted down from 1,506 when `FlareTexture` moved out into

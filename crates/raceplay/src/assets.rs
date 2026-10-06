@@ -149,8 +149,18 @@ pub(super) fn particle_effect(
     } else {
         String::new()
     };
+    let undrawn: Vec<&str> = effect.undrawn_emitters().collect();
+    let undrawn_note = if undrawn.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; {} will not be drawn (blend class 8, a distortion the heat-haze shader draws, \
+             unrecovered): the other emitters play",
+            undrawn.join(", ")
+        )
+    };
     let note = format!(
-        "{name}: {} emitter(s) - {}{sprite_note}",
+        "{name}: {} emitter(s) - {}{sprite_note}{undrawn_note}",
         effect.emitters.len(),
         effect
             .emitters
