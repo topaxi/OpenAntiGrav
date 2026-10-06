@@ -179,6 +179,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // The EU manifest's languages, which is also what an unlisted serial gets;
     // `language_manifests` carries each release's own list.
     language_plugins: &["PI000", "PI010", "PI008", "PI009", "PI011"],
+    disc_strings: None,
     language_manifests: LANGUAGE_MANIFESTS,
     menu: Some(frontend::MENU_SKIN),
     menu_ps2: None,

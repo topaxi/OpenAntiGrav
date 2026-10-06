@@ -90,8 +90,12 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
     let language_plugins = title.front_end.map_or::<&[&str], _>(&[], |front_end| {
         front_end.offered_languages(archives.layout.serial.as_deref())
     });
-    let languages =
-        oag_ui::language::load::load_languages(&mut archives, language_plugins, &mut report);
+    let languages = oag_ui::language::load::load_languages(
+        &mut archives,
+        language_plugins,
+        title.front_end.and_then(|front_end| front_end.disc_strings),
+        &mut report,
+    );
     let language = oag_ui::language::load::chosen_language(&languages, None);
     let strings =
         oag_ui::language::load::load_strings(&mut archives, &languages, None, &mut report);

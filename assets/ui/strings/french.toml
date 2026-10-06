@@ -10,6 +10,14 @@
 # `[untranslated]` - never both, and never omitted. `just check-strings`
 # (`scripts/check-strings.py`) enforces both halves of that.
 #
+# **Machine translation is allowed, and marked.** Every entry is
+# `ID = { text = "...", human = false }`; `human` is `true` only when a human
+# wrote or approved the text, and none of this file's have been (each was added
+# in a commit with a Claude `Co-Authored-By` trailer). The deferrals below were
+# a 2026-09 choice to prefer an honest gap over an unreviewed guess; the
+# 2026-10-06 rule lets a model fill them, flagged, and they stay open only
+# because nobody has done it yet.
+#
 # # What is translated and what is deferred, and why
 #
 # Every id here was translated with real confidence: menu nouns and short
@@ -53,128 +61,128 @@
 # `docs/architecture/menus.md#a-per-row-subtitle` - and its translation
 # carries over since the row is the same page under a new label. The row
 # subtitles are new text with no translation pass yet; see [untranslated].
-OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
-OAG_MENU_RACEBOX = "COURSE"
-OAG_MENU_REMIX = "REMIX"
-OAG_MENU_OPTIONS = "OPTIONS"
-OAG_MENU_QUIT = "QUITTER"
+OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
+OAG_MENU_RACEBOX = { text = "COURSE", human = false }
+OAG_MENU_REMIX = { text = "REMIX", human = false }
+OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
+OAG_MENU_QUIT = { text = "QUITTER", human = false }
 
 # RACE / RACE REMIX shared rows.
-OAG_RACE_PAGE_TITLE = "COURSE"
-OAG_RACE_MODE = "MODE"
-OAG_RACE_SPEED_CLASS = "CLASSE DE VITESSE"
-OAG_RACE_AI_DIFFICULTY = "DIFFICULTÉ DE L'IA"
-OAG_RACE_TEAM = "ÉQUIPE"
-OAG_RACE_VARIANT = "VARIANTE"
-OAG_RACE_TRACK = "CIRCUIT"
-OAG_RACE_START = "DÉPART"
+OAG_RACE_PAGE_TITLE = { text = "COURSE", human = false }
+OAG_RACE_MODE = { text = "MODE", human = false }
+OAG_RACE_SPEED_CLASS = { text = "CLASSE DE VITESSE", human = false }
+OAG_RACE_AI_DIFFICULTY = { text = "DIFFICULTÉ DE L'IA", human = false }
+OAG_RACE_TEAM = { text = "ÉQUIPE", human = false }
+OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
+OAG_RACE_TRACK = { text = "CIRCUIT", human = false }
+OAG_RACE_START = { text = "DÉPART", human = false }
 
 # RACE REMIX's own rows.
-OAG_REMIX_PAGE_TITLE = "COURSE REMIX"
-OAG_REMIX_TRACK_TITLE = "TITRE DU CIRCUIT"
-OAG_REMIX_CRAFT_TITLE = "TITRE DU VAISSEAU"
+OAG_REMIX_PAGE_TITLE = { text = "COURSE REMIX", human = false }
+OAG_REMIX_TRACK_TITLE = { text = "TITRE DU CIRCUIT", human = false }
+OAG_REMIX_CRAFT_TITLE = { text = "TITRE DU VAISSEAU", human = false }
 
 # OPTIONS and its submenu rows.
-OAG_OPTIONS_PAGE_TITLE = "OPTIONS"
-OAG_OPTIONS_DISPLAY = "AFFICHAGE"
-OAG_OPTIONS_GRAPHICS = "GRAPHISMES"
-OAG_OPTIONS_AUDIO = "AUDIO"
-OAG_OPTIONS_CONTROLS = "COMMANDES"
-OAG_OPTIONS_LANGUAGE = "LANGUE"
+OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONS", human = false }
+OAG_OPTIONS_DISPLAY = { text = "AFFICHAGE", human = false }
+OAG_OPTIONS_GRAPHICS = { text = "GRAPHISMES", human = false }
+OAG_OPTIONS_AUDIO = { text = "AUDIO", human = false }
+OAG_OPTIONS_CONTROLS = { text = "COMMANDES", human = false }
+OAG_OPTIONS_LANGUAGE = { text = "LANGUE", human = false }
 
 # DISPLAY's own rows. `FRONT_END_STYLE`/`VSYNC`/`FRAME_LIMIT` are under
 # [untranslated] - see this file's own header.
-OAG_DISPLAY_MONITOR = "MONITEUR"
-OAG_DISPLAY_WINDOW_MODE = "MODE FENÊTRE"
-OAG_DISPLAY_WINDOW_SIZE = "TAILLE DE LA FENÊTRE"
-OAG_DISPLAY_ASPECT_RATIO = "FORMAT D'IMAGE"
-OAG_DISPLAY_BRIGHTNESS = "LUMINOSITÉ"
-OAG_DISPLAY_GAMMA = "GAMMA"
+OAG_DISPLAY_MONITOR = { text = "MONITEUR", human = false }
+OAG_DISPLAY_WINDOW_MODE = { text = "MODE FENÊTRE", human = false }
+OAG_DISPLAY_WINDOW_SIZE = { text = "TAILLE DE LA FENÊTRE", human = false }
+OAG_DISPLAY_ASPECT_RATIO = { text = "FORMAT D'IMAGE", human = false }
+OAG_DISPLAY_BRIGHTNESS = { text = "LUMINOSITÉ", human = false }
+OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 
 # GRAPHICS's own rows. The PC-rendering jargon block (`RENDERER`,
 # `RENDER_SCALE`, `TARGET_FPS`, `RECONSTRUCTION`, `UPSCALER_SHARPNESS`,
 # `MSAA`, `BOOST_FOV_KICK`, `PERFORMANCE_OVERLAY`) is under [untranslated].
-OAG_GRAPHICS_MINIMUM_RESOLUTION = "RÉSOLUTION MINIMALE"
-OAG_GRAPHICS_MOTION_BLUR = "FLOU DE MOUVEMENT"
-OAG_GRAPHICS_SHADOWS = "OMBRES"
-OAG_GRAPHICS_ANISOTROPIC_FILTERING = "FILTRAGE ANISOTROPE"
-OAG_GRAPHICS_CAMERA_VIEW = "VUE DE LA CAMÉRA"
-OAG_GRAPHICS_FIELD_OF_VIEW = "CHAMP DE VISION"
+OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "RÉSOLUTION MINIMALE", human = false }
+OAG_GRAPHICS_MOTION_BLUR = { text = "FLOU DE MOUVEMENT", human = false }
+OAG_GRAPHICS_SHADOWS = { text = "OMBRES", human = false }
+OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "FILTRAGE ANISOTROPE", human = false }
+OAG_GRAPHICS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
+OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CHAMP DE VISION", human = false }
 
 # AUDIO's own rows.
-OAG_AUDIO_MUSIC_VOLUME = "VOLUME DE LA MUSIQUE"
-OAG_AUDIO_SFX_VOLUME = "VOLUME DES EFFETS"
-OAG_AUDIO_ANNOUNCER_VOLUME = "VOLUME DU COMMENTATEUR"
-OAG_AUDIO_MASTER_VOLUME = "VOLUME GÉNÉRAL"
-OAG_AUDIO_MUSIC_SOURCE = "SOURCE MUSICALE"
+OAG_AUDIO_MUSIC_VOLUME = { text = "VOLUME DE LA MUSIQUE", human = false }
+OAG_AUDIO_SFX_VOLUME = { text = "VOLUME DES EFFETS", human = false }
+OAG_AUDIO_ANNOUNCER_VOLUME = { text = "VOLUME DU COMMENTATEUR", human = false }
+OAG_AUDIO_MASTER_VOLUME = { text = "VOLUME GÉNÉRAL", human = false }
+OAG_AUDIO_MUSIC_SOURCE = { text = "SOURCE MUSICALE", human = false }
 
 # CONTROLS's own rows. `SIDESHIFT` is under [untranslated] - see this file's
 # own header.
-OAG_CONTROLS_THRUST = "POUSSÉE"
-OAG_CONTROLS_STEER_LEFT = "TOURNER À GAUCHE"
-OAG_CONTROLS_STEER_RIGHT = "TOURNER À DROITE"
-OAG_CONTROLS_PITCH_UP = "TANGAGE HAUT"
-OAG_CONTROLS_PITCH_DOWN = "TANGAGE BAS"
-OAG_CONTROLS_AIRBRAKE_LEFT = "AÉROFREIN GAUCHE"
-OAG_CONTROLS_AIRBRAKE_RIGHT = "AÉROFREIN DROIT"
-OAG_CONTROLS_CAMERA_VIEW = "VUE DE LA CAMÉRA"
-OAG_CONTROLS_TRIGGERS = "GÂCHETTES"
-OAG_CONTROLS_TRIGGER_SENSITIVITY = "SENSIBILITÉ DES GÂCHETTES"
-OAG_CONTROLS_FIRE_PICKUP = "TIRER L'ARME"
-OAG_CONTROLS_ABSORB_PICKUP = "ABSORBER L'ARME"
+OAG_CONTROLS_THRUST = { text = "POUSSÉE", human = false }
+OAG_CONTROLS_STEER_LEFT = { text = "TOURNER À GAUCHE", human = false }
+OAG_CONTROLS_STEER_RIGHT = { text = "TOURNER À DROITE", human = false }
+OAG_CONTROLS_PITCH_UP = { text = "TANGAGE HAUT", human = false }
+OAG_CONTROLS_PITCH_DOWN = { text = "TANGAGE BAS", human = false }
+OAG_CONTROLS_AIRBRAKE_LEFT = { text = "AÉROFREIN GAUCHE", human = false }
+OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "AÉROFREIN DROIT", human = false }
+OAG_CONTROLS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
+OAG_CONTROLS_TRIGGERS = { text = "GÂCHETTES", human = false }
+OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILITÉ DES GÂCHETTES", human = false }
+OAG_CONTROLS_FIRE_PICKUP = { text = "TIRER L'ARME", human = false }
+OAG_CONTROLS_ABSORB_PICKUP = { text = "ABSORBER L'ARME", human = false }
 
 # The AI PILOTS page.
-OAG_PILOT_PAGE_TITLE = "PILOTES IA"
-OAG_PILOT_PILOT = "PILOTE"
-OAG_PILOT_AXIS = "AXE"
-OAG_PILOT_LOW = "BAS"
-OAG_PILOT_HIGH = "HAUT"
-OAG_PILOT_SAVE = "ENREGISTRER"
-OAG_PILOT_NEW = "NOUVEAU DEPUIS UN PILOTE"
-OAG_PILOT_RENAME = "RENOMMER"
-OAG_PILOT_DELETE = "SUPPRIMER"
-OAG_PILOT_BUILT_IN_SUFFIX = " (intégré)"
+OAG_PILOT_PAGE_TITLE = { text = "PILOTES IA", human = false }
+OAG_PILOT_PILOT = { text = "PILOTE", human = false }
+OAG_PILOT_AXIS = { text = "AXE", human = false }
+OAG_PILOT_LOW = { text = "BAS", human = false }
+OAG_PILOT_HIGH = { text = "HAUT", human = false }
+OAG_PILOT_SAVE = { text = "ENREGISTRER", human = false }
+OAG_PILOT_NEW = { text = "NOUVEAU DEPUIS UN PILOTE", human = false }
+OAG_PILOT_RENAME = { text = "RENOMMER", human = false }
+OAG_PILOT_DELETE = { text = "SUPPRIMER", human = false }
+OAG_PILOT_BUILT_IN_SUFFIX = { text = " (intégré)", human = false }
 
 # Shared BACK row.
-OAG_MENU_BACK = "RETOUR"
+OAG_MENU_BACK = { text = "RETOUR", human = false }
 
 # The on-screen keyboard's two action keys. `OAG_KEYBOARD_HINT` (the button
 # line under the grid) is under [untranslated] - see this file's own header.
-OAG_KEYBOARD_DELETE = "SUPPR"
-OAG_KEYBOARD_ACCEPT = "OK"
+OAG_KEYBOARD_DELETE = { text = "SUPPR", human = false }
+OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
 
 # Pilot rename/delete dialog titles and the two delete-confirm buttons. The
 # `%s`-substituted prose lines are under [untranslated] - see this file's
 # own header.
-OAG_PILOT_RENAME_TITLE = "RENOMMER LE PILOTE"
-OAG_PILOT_DELETE_TITLE = "SUPPRIMER LE PILOTE"
-OAG_PILOT_DELETE_YES = "SUPPRIMER"
-OAG_PILOT_DELETE_NO = "CONSERVER"
+OAG_PILOT_RENAME_TITLE = { text = "RENOMMER LE PILOTE", human = false }
+OAG_PILOT_DELETE_TITLE = { text = "SUPPRIMER LE PILOTE", human = false }
+OAG_PILOT_DELETE_YES = { text = "SUPPRIMER", human = false }
+OAG_PILOT_DELETE_NO = { text = "CONSERVER", human = false }
 
 # Window titles. The three key-hint sentences that go with them are under
 # [untranslated] - see this file's own header.
-OAG_HINTS_TITLE = "OpenAntiGrav"
-OAG_HINTS_SHELL_TITLE = "OpenAntiGrav - menu"
-OAG_HINTS_RACE_TITLE = "OpenAntiGrav - course"
+OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
+OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - menu", human = false }
+OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - course", human = false }
 
 # The loading screen's prose. `{done}`, `{total}`, `{cached}` and `{failed}`
 # are placeholders `wording::resolved` substitutes after the lookup - see
 # `assets/ui/strings/english.toml`'s own comment on the same ids.
-OAG_LOADING_READING_ARCHIVES = "LECTURE DES ARCHIVES"
-OAG_LOADING_GENERIC = "CHARGEMENT"
-OAG_LOADING_READY = "PRÊT"
-OAG_LOADING_TRANSCODING_MOVIES = "CONVERSION DES VIDÉOS"
-OAG_LOADING_LOADING_MOVIES = "CHARGEMENT DES VIDÉOS"
-OAG_LOADING_CONVERTING_ASSETS = "CONVERSION DES RESSOURCES"
-OAG_LOADING_STEP_CACHED = "déjà converti, lecture du cache"
-OAG_LOADING_STEP_DECODING = "décodage"
-OAG_LOADING_STEP_TRANSCODING_TOTAL = "conversion - image {done} sur {total}"
-OAG_LOADING_STEP_TRANSCODING = "conversion - image {done}"
-OAG_LOADING_COUNTING = "calcul de ce qui doit être converti"
-OAG_LOADING_COUNTS_LOADED = "{done} / {total} chargés"
-OAG_LOADING_COUNTS_CONVERTED = "{done} / {total} convertis"
-OAG_LOADING_COUNTS_CACHED_SUFFIX = ", {cached} déjà en cache"
-OAG_LOADING_COUNTS_FAILED_SUFFIX = ", {failed} échoué(s)"
+OAG_LOADING_READING_ARCHIVES = { text = "LECTURE DES ARCHIVES", human = false }
+OAG_LOADING_GENERIC = { text = "CHARGEMENT", human = false }
+OAG_LOADING_READY = { text = "PRÊT", human = false }
+OAG_LOADING_TRANSCODING_MOVIES = { text = "CONVERSION DES VIDÉOS", human = false }
+OAG_LOADING_LOADING_MOVIES = { text = "CHARGEMENT DES VIDÉOS", human = false }
+OAG_LOADING_CONVERTING_ASSETS = { text = "CONVERSION DES RESSOURCES", human = false }
+OAG_LOADING_STEP_CACHED = { text = "déjà converti, lecture du cache", human = false }
+OAG_LOADING_STEP_DECODING = { text = "décodage", human = false }
+OAG_LOADING_STEP_TRANSCODING_TOTAL = { text = "conversion - image {done} sur {total}", human = false }
+OAG_LOADING_STEP_TRANSCODING = { text = "conversion - image {done}", human = false }
+OAG_LOADING_COUNTING = { text = "calcul de ce qui doit être converti", human = false }
+OAG_LOADING_COUNTS_LOADED = { text = "{done} / {total} chargés", human = false }
+OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} convertis", human = false }
+OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} déjà en cache", human = false }
+OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} échoué(s)", human = false }
 
 [untranslated]
 ids = [

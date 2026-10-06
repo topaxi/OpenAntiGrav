@@ -255,8 +255,9 @@ its English text in `assets/ui/strings/english.toml`, in the same change** -
 ratchet shape `check-size` above already is: pre-existing debt is frozen in that
 script's own `BASELINE_LABELS`/`BASELINE_TITLES`, but nothing *new* may join it. A
 second language's file may lag a translation, but only by naming the gap under its own
-`[untranslated]` table - never by omitting the id, and never by machine-translating to
-clear it. See `assets/ui/strings/english.toml`'s own doc comment for the convention.
+`[untranslated]` table - never by omitting the id. A machine translation may fill a gap
+(2026-10-06), but every entry is `ID = { text = "...", human = false }` and `human` is
+`true` only when a human wrote or approved the text. See `assets/ui/strings/english.toml`'s own doc comment for the convention.
 
 ### Determinism
 

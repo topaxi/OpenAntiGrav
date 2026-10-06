@@ -109,7 +109,8 @@ fn languages_of(image: &Path) -> (oag_assets::Archives, Vec<Language>) {
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
     let mut archives = opened.archives;
-    let languages = oag_ui::language::load::load_languages(&mut archives, plugins, &mut report);
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
     (archives, languages)
 }
 

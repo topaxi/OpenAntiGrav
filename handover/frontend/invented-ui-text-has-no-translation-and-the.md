@@ -92,8 +92,8 @@ order:
   check`.
 - **The maintainer's own call, since it bears on the second bullet below**:
   a language is allowed to lag a translation, but only by naming the gap
-  under its own `[untranslated]` table, never by omitting the id or by a
-  machine translation - see `english.toml`'s own doc comment for the worked
+  under its own `[untranslated]` table, never by omitting the id (a
+  machine translation may fill a row since 2026-10-06, marked `human = false`) - see `english.toml`'s own doc comment for the worked
   example. No second language file exists yet to prove this against, so the
   rule is written ahead of a caller rather than proven by one.
 

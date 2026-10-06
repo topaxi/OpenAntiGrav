@@ -6,6 +6,7 @@
 use oag_pulse as pulse;
 
 use super::{Language, StringTable};
+use crate::strings::PROJECT_LANGUAGES;
 
 use crate::xml::expand;
 
@@ -17,6 +18,7 @@ use crate::xml::expand;
 pub fn load_languages(
     archives: &mut oag_assets::Archives,
     plugins: &[&str],
+    disc_strings: Option<&'static str>,
     report: &mut Vec<String>,
 ) -> Vec<Language> {
     let mut out = Vec::new();
@@ -51,6 +53,8 @@ pub fn load_languages(
         }
     }
 
+    add_project_languages(&mut out, disc_strings);
+
     if out.is_empty() {
         report.push("no language plugins resolved; the picker will be empty".to_string());
     } else {
@@ -64,6 +68,34 @@ pub fn load_languages(
         ));
     }
     out
+}
+
+/// Appends [`PROJECT_LANGUAGES`] after the disc's own, so a picker lists them
+/// last and every caller of [`load_languages`] sees the same list.
+///
+/// A project language is the disc's English with this project's translation
+/// laid over it, so it needs an English to stand on and borrows that
+/// language's table source and font slots. A disc that already ships a language
+/// of the same name (Omega's own `portuguesebr`) keeps its own plugin as the
+/// base, and nothing is added. `disc_strings` is [`oag_title::FrontEnd::disc_strings`].
+fn add_project_languages(out: &mut Vec<Language>, disc_strings: Option<&'static str>) {
+    let Some(base) = out.iter().find(|l| l.name == "English").cloned() else {
+        return;
+    };
+    for project in PROJECT_LANGUAGES {
+        if out
+            .iter()
+            .any(|l| l.name.eq_ignore_ascii_case(project.name))
+        {
+            continue;
+        }
+        out.push(Language {
+            name: project.name.to_string(),
+            native_name: project.native_name.to_string(),
+            disc_strings,
+            ..base.clone()
+        });
+    }
 }
 
 /// Which language a boot reads its text in.
@@ -119,6 +151,9 @@ pub fn load_strings(
     {
         Ok(xml) => {
             let mut table = StringTable::from_xml(&xml);
+            if let Some(namespace) = language.disc_strings {
+                crate::strings::overlay_disc(&mut table, namespace, &language.name, report);
+            }
             crate::strings::overlay(&mut table, &language.name, report);
             if table.is_empty() {
                 report.push(format!("{} names no string table", language.name));
