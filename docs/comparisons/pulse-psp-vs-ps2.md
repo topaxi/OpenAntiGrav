@@ -65,6 +65,39 @@ looping menu backdrop having no picture (the intro itself now does).
 
 Whether these are new formats or the same data reorganised is unknown.
 
+### Does the PS2 port show anything of Wipeout HD? (2026-10-06)
+
+PS2 Pulse (volume date 2009-05-15) shipped after Wipeout HD (2008), so the
+question is whether HD-era code or data reached it. A string census of four
+executables says **no HD format reached the PS2 disc, and the code the two
+share is not yet attributable**. Raw tables, commands and string lists:
+`data/scratch/ps2-lineage/` (a scripted `strings`/`comm` sweep, not a code
+read).
+
+- **No HD asset format on the PS2.** No PSARC, `.gtf` or `.rcsmodel` on its
+  disc or in its executable's strings; it ships WADs, `.vex` and `PI_` plugin
+  XML like the PSP (both executables carry `PI_` plugin strings: PSP 35, PS2
+  21, Pure 20, HD 52).
+- **Unique strings (length 8 or more) shared:** PS2 and PSP 2,438; PS2 and HD
+  2,152. **95 are in PS2 and HD but not in the PSP executable**, 22 of them
+  also in Pure. They are almost all engine log lines (`Entering main game
+  loop`, `Create plugins`, the particle affectors' `PATurbulence ...`, the
+  AI's `Network has %d neurons and %d connections`), mode names
+  (`Multiplayer_Head2Head`, `Time_Trial`) and string ids (`IG_HUD_3RD`).
+- **HD itself carries the PSP project's path**:
+  `Z:\WipeoutPSP\Art_Resources\Psys\Tex\psysed_default_glow.tga` is in both
+  the PS2 and the HD executable (not in the PSP one's strings). HD was built
+  from the PSP Pulse source tree, so a string shared by PS2 and HD alone does
+  not show the PS2 took it from HD.
+- **The two readings the census cannot separate:** (a) the PS2 port was cut
+  from the shared tree after HD's changes landed in it, or (b) the PSP
+  release build compiled its logging out and the PS2 and HD builds did not,
+  so the 95 lines were in the PSP's source all along. The log-line character
+  of most of them leans towards (b). **Confidence 40** that the PS2 port
+  carries no HD-era code beyond what the shared tree already had; settling it
+  needs a function-level comparison in Ghidra (one shared subsystem, such as
+  the particle affectors, read on all three executables).
+
 ## Questions to resolve
 
 | Question | Why it matters |
