@@ -10,14 +10,12 @@
 /// What a file appears to be, judged from its leading bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Signature {
-    /// A recognised format.
     Known {
         /// Short label, for example `PSP EBOOT (PBP)`.
         label: &'static str,
         /// The magic that matched, rendered for display.
         magic: String,
     },
-    /// Nothing in the table matched.
     Unknown {
         /// The first bytes, so a listing can show what was actually there.
         leading: String,

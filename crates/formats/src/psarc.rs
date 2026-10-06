@@ -74,10 +74,8 @@ pub use md5::digest as md5_digest;
 /// The four bytes an archive starts with.
 pub const MAGIC: [u8; 4] = *b"PSAR";
 
-/// Bytes before the entry table.
 pub const HEADER_LEN: usize = 32;
 
-/// Bytes per entry, and the only stride seen.
 pub const ENTRY_LEN: usize = 30;
 
 /// Widths tried for a block-table element, narrowest first.
@@ -103,11 +101,8 @@ const ZLIB_CMF: u8 = 0x78;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
-    /// Fewer bytes than the structure being read needs.
     TooShort {
-        /// Bytes required.
         need: usize,
-        /// Bytes supplied.
         got: usize,
     },
     /// The first four bytes are not `PSAR`.
@@ -115,42 +110,32 @@ pub enum Error {
     /// A `.psarc` inside an *encrypted* PS3 image reads as noise, so a missing
     /// decryption step produces this. See `docs/formats/ps3-disc.md`.
     BadMagic {
-        /// The four bytes found.
         found: [u8; 4],
     },
     /// The entry stride is not [`ENTRY_LEN`].
     UnknownEntryLen {
-        /// The value found.
         entry_len: u32,
     },
     /// The declared table of contents does not fit around its own header.
     ImplausibleTocLen {
-        /// The value found.
         toc_len: u32,
         /// Bytes the entry table alone would need.
         entries_need: usize,
     },
     /// No block-size width divides the block table and covers every entry.
     NoBlockWidth {
-        /// Bytes left for the block table.
         table_len: usize,
-        /// Highest block index any entry names.
         highest_block: u32,
     },
     /// An entry names a block outside the block table.
     BlockOutOfRange {
-        /// Index of the offending entry.
         index: usize,
-        /// The block it named.
         block: u32,
-        /// Blocks the table holds.
         blocks: usize,
     },
     /// An entry index past the end of the entry table.
     NoSuchEntry {
-        /// The index asked for.
         index: usize,
-        /// Entries the archive declares.
         entries: usize,
     },
     /// A block inflated to something other than the block size, and it was not
@@ -160,13 +145,9 @@ pub enum Error {
     /// block but the last is full. Checked, because a short block in the middle
     /// would silently shift everything after it.
     ShortBlock {
-        /// Index of the entry being read.
         index: usize,
-        /// Position of the block within the table.
         block: u32,
-        /// Bytes it produced.
         got: usize,
-        /// Bytes a full block holds.
         want: u32,
     },
 }
@@ -223,21 +204,17 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Shorthand for this module's results.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// The fixed header, as declared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
-    /// Major version. 1 on every archive seen.
     pub version_major: u16,
-    /// Minor version. 3 on every archive seen.
     pub version_minor: u16,
     /// The codec's four-character name, `zlib` on every archive seen.
     pub compression: [u8; 4],
     /// Total length of header, entry table and block table.
     pub toc_len: u32,
-    /// Bytes per entry, checked against [`ENTRY_LEN`].
     pub entry_len: u32,
     /// Entries the archive declares, the manifest included.
     pub entry_count: u32,
@@ -294,7 +271,6 @@ pub struct Entry {
     pub digest: [u8; 16],
     /// Position of this entry's first block within the block table.
     pub first_block: u32,
-    /// Uncompressed length.
     pub size: u64,
     /// Byte offset of the first block, from the archive's start.
     pub offset: u64,
@@ -303,13 +279,10 @@ pub struct Entry {
 /// An archive's table of contents, parsed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directory {
-    /// The fixed header.
     pub header: Header,
-    /// Every entry, the manifest first.
     pub entries: Vec<Entry>,
     /// Stored length of each block, `0` meaning a full stored block.
     pub blocks: Vec<u32>,
-    /// Bytes per block-table element, as probed. See [`BLOCK_WIDTHS`].
     pub block_width: usize,
 }
 
@@ -551,7 +524,6 @@ pub fn parse_manifest(data: &[u8]) -> Vec<String> {
 /// See [`match_paths_to_entries`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathEntry {
-    /// Index into [`Directory::entries`].
     pub index: usize,
     /// The path this entry stores, exactly as the manifest spells it.
     pub path: String,

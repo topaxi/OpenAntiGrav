@@ -30,13 +30,10 @@
 //! swap) gives +0.98. `docs/formats/ps2-audio.md` has both tables.
 //! `docs/formats/ps2-audio.md` has both tables.
 
-/// Bytes before the first entry.
 pub const HEADER_LEN: usize = 4;
 
-/// Bytes per directory entry.
 pub const ENTRY_LEN: usize = 12;
 
-/// Bytes per sample frame: 16-bit, two channels.
 pub const FRAME_LEN: usize = 4;
 
 /// Sample rate of the PCM payload, in hertz.
@@ -53,30 +50,22 @@ const MAX_ENTRIES: u32 = 4096;
 /// Something wrong with a music archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes supplied.
         got: usize,
     },
     /// The entry count is missing or implausible.
     BadEntryCount {
-        /// The value found.
         count: u32,
     },
     /// An entry runs past the end of the archive.
     OutOfRange {
-        /// Which entry.
         index: usize,
-        /// Where it claims to start.
         offset: u32,
-        /// How long it claims to be.
         size: u32,
     },
     /// An entry's size is not a whole number of sample frames.
     PartialFrame {
-        /// Which entry.
         index: usize,
-        /// How long it claims to be.
         size: u32,
     },
 }
@@ -104,7 +93,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// One track.
@@ -140,7 +128,6 @@ impl Entry {
 /// The archive directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directory {
-    /// Tracks, in stored order.
     pub entries: Vec<Entry>,
 }
 

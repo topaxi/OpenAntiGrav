@@ -33,10 +33,8 @@
 
 use std::fmt;
 
-/// Bytes before the first entry.
 pub const HEADER_LEN: usize = 8;
 
-/// Bytes per directory entry.
 pub const ENTRY_LEN: usize = 16;
 
 /// Observed alignment of the blob region and of each blob within it.
@@ -44,7 +42,6 @@ pub const ENTRY_LEN: usize = 16;
 /// Not enforced: a deviation is a finding, not a reason to reject the file.
 pub const BLOB_ALIGNMENT: u32 = 64;
 
-/// The only version seen.
 pub const KNOWN_VERSION: u32 = 1;
 
 /// Bit 31 of the uncompressed-size field selects zlib over LZSS.
@@ -102,7 +99,6 @@ pub struct Entry {
     pub size_uncompressed: u32,
     /// Bytes occupied in the archive; the offset chain advances by it.
     pub size: u32,
-    /// How the blob is stored.
     pub compression: Compression,
 }
 
@@ -134,48 +130,35 @@ impl Entry {
 pub struct Directory {
     /// Format version. Expected to be [`KNOWN_VERSION`].
     pub version: u32,
-    /// The entries, in the order they appear in the file.
     pub entries: Vec<Entry>,
 }
 
 /// Something wrong with an archive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes required.
         need: usize,
-        /// Bytes supplied.
         got: usize,
     },
     /// The version field is not one we recognise.
     UnknownVersion {
-        /// The value found.
         version: u32,
     },
     /// The entry count is implausible for the archive's size.
     ImplausibleEntryCount {
-        /// The value found.
         entry_count: u32,
-        /// Size of the archive, when known.
         archive_len: Option<u64>,
     },
     /// An entry points outside the archive.
     EntryOutOfBounds {
-        /// Index of the offending entry.
         index: usize,
-        /// Where its data would end.
         end: u64,
-        /// Size of the archive.
         archive_len: u64,
     },
     /// An entry's data would overlap the directory.
     EntryOverlapsDirectory {
-        /// Index of the offending entry.
         index: usize,
-        /// The entry's offset.
         offset: u32,
-        /// Where the directory ends.
         directory_end: u64,
     },
 }
@@ -231,7 +214,6 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Directory {

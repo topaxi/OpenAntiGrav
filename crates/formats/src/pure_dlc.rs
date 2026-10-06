@@ -16,7 +16,6 @@
 //! file's format; nothing here or in its tests embeds a real key. See
 //! `data/keys/README.md`.
 
-/// Bytes of the per-region trailer after the encrypted payload. Never read.
 pub const SIGNATURE_LEN: usize = 256;
 
 const DELTA: u32 = 0x9e37_79b9;

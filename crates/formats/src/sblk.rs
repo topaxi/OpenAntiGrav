@@ -86,22 +86,16 @@
 //! 37 of the 45 command opcodes, and the header's `+0x24`. See the format
 //! page's open questions.
 
-/// Bytes before the section table.
 pub const HEADER_LEN: usize = 8;
 
-/// Bytes per section-table entry.
 pub const SECTION_LEN: usize = 8;
 
-/// Bytes of `SBlk` header before the first table.
 pub const SBLK_HEADER_LEN: usize = 64;
 
-/// The `SBlk` magic.
 pub const MAGIC: &[u8; 4] = b"SBlk";
 
-/// The only container version seen.
 pub const VERSION: u32 = 3;
 
-/// Bytes per PS-ADPCM block.
 pub const ADPCM_BLOCK_LEN: usize = 16;
 
 /// Bytes a bank may carry past the end of its waveform section: none anywhere
@@ -117,25 +111,18 @@ pub const TAIL_SLACK: usize = ADPCM_BLOCK_LEN;
 /// would sit with no padding.**
 pub const SECTION_ALIGN: usize = 4;
 
-/// Samples a PS-ADPCM block expands to.
 pub const ADPCM_BLOCK_SAMPLES: usize = 28;
 
-/// Bytes per cue-table entry.
 pub const CUE_LEN: usize = 12;
 
-/// Bytes per command-table entry.
 pub const COMMAND_LEN: usize = 8;
 
-/// Bytes per voice-state entry.
 pub const VOICE_LEN: usize = 16;
 
-/// Bytes per waveform descriptor in the parameter block.
 pub const DESCRIPTOR_LEN: usize = 24;
 
-/// Bytes per name-table entry: a 16-byte name and a `u16` cue index.
 pub const NAME_ENTRY_LEN: usize = 0x14;
 
-/// Bytes of name block before the hash buckets.
 pub const NAME_BUCKETS_AT: usize = 0x18;
 
 /// The bit of the header word at `+0x08` that says a name table is present.
@@ -153,19 +140,15 @@ pub const KEY_ON_OPCODES: [u8; 2] = [0x01, 0x09];
 /// Something wrong with a sound bank.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes supplied.
         got: usize,
     },
     /// The container version was not [`VERSION`].
     UnsupportedVersion {
-        /// The value found.
         version: u32,
     },
     /// The section count was not 2.
     UnexpectedSectionCount {
-        /// The value found.
         count: u32,
     },
     /// A section runs past the end of the blob, or the sections do not abut.
@@ -181,14 +164,11 @@ pub enum Error {
     },
     /// The waveform section is not a whole number of PS-ADPCM blocks.
     PartialAdpcmBlock {
-        /// Bytes in the section.
         size: usize,
     },
     /// A table declared in the header does not fit the descriptor section.
     TableOutOfRange {
-        /// Which table.
         name: &'static str,
-        /// Where it claims to start.
         offset: u32,
     },
 }
@@ -222,7 +202,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// A parsed sound bank.
@@ -570,7 +549,6 @@ impl<'a> Bank<'a> {
 pub struct Sound {
     /// Index of the binding command in the command table.
     pub command: usize,
-    /// The opcode that bound it, one of [`KEY_ON_OPCODES`].
     pub opcode: u8,
     /// Offset of the 24-byte descriptor within the descriptor section.
     pub descriptor: u32,
@@ -611,7 +589,6 @@ pub struct Sound {
     pub mode: u16,
     /// Byte offset of the waveform within [`Bank::waveforms`].
     pub offset: u32,
-    /// Length of the waveform in bytes.
     pub length: u32,
     /// The bank's byte order. [`Sound::pitch`] and [`Sound::sample_rate`] switch
     /// on it: HD's `Scream_KeyOnVoice` uses a different scale and base rate
@@ -804,7 +781,6 @@ pub fn decode_adpcm(data: &[u8]) -> Vec<i16> {
     out
 }
 
-/// Bytes of header at the front of a [`NOT_ADPCM_FLAG`] span.
 pub const PCM16_HEADER_LEN: usize = 16;
 
 /// Decodes Wipeout HD's second waveform codec: 16-bit PCM, big-endian, behind

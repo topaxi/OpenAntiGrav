@@ -30,7 +30,6 @@
 use crate::byte_order::ByteOrder;
 use crate::coverage::Coverage;
 
-/// The first four bytes: `XFDX`.
 pub const MAGIC: [u8; 4] = *b"XFDX";
 
 /// The second word of a PS3 file, big-endian: target platform `2`, then file
@@ -48,13 +47,10 @@ pub const VERSION_WORD_VITA: u32 = 0x0006_0000;
 /// Bytes in the fixed header.
 pub const HEADER_LEN: usize = 0x1c;
 
-/// Bytes in one channel record.
 pub const CHANNEL_LEN: usize = 0x60;
 
-/// Bytes in one trigger record.
 pub const TRIGGER_LEN: usize = 0x40;
 
-/// Bytes in one layer record: a `0x30` head and two curves.
 pub const LAYER_LEN: usize = 0x830;
 
 /// Entries in each of a layer's two curves. A channel's smoothed value is
@@ -68,44 +64,35 @@ const NAME_LEN: usize = 15;
 /// Something wrong with a `.xfx` table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Fewer bytes than the header needs.
     TooShort {
-        /// Bytes supplied.
         got: usize,
     },
     /// The first four bytes were not `XFDX`.
     NotXfdx,
     /// The version word was not [`VERSION_WORD`].
     UnsupportedVersion {
-        /// The word found.
         word: u32,
     },
     /// The relocation flag was set, so the offsets are already pointers.
     AlreadyRelocated,
     /// The channel array did not sit at `0x1c`.
     ChannelsMisplaced {
-        /// The offset found.
         at: u32,
     },
     /// A record, array or curve runs past the end of the file.
     Truncated {
-        /// What was being read.
         what: &'static str,
     },
     /// A layer's type byte (`+0x17`) was not the curve-pair type `0`. The
     /// loader's type `1` (a piecewise-linear pair via `+0x28`/`+0x2c`) is on no
     /// disc file, so it is refused rather than guessed at.
     UnsupportedLayerType {
-        /// Index of the layer.
         layer: usize,
-        /// The type byte found.
         kind: u8,
     },
     /// A layer named a channel the table does not have.
     ChannelOutOfRange {
-        /// Index of the layer.
         layer: usize,
-        /// The channel byte found.
         channel: u8,
     },
 }

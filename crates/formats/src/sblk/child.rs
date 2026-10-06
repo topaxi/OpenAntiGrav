@@ -63,7 +63,6 @@ use super::{Bank, COMMAND_LEN, Cue, Sound};
 /// not located. `0x08` is the one HD's `.COLLISIONS` uses.
 pub const CHILD_OPCODES: [u8; 2] = [0x05, 0x08];
 
-/// Bytes per child record in the parameter block.
 pub const CHILD_RECORD_LEN: usize = 32;
 
 /// Offset of the child's cue index within its record.
@@ -83,9 +82,7 @@ pub const MAX_CHILD_DEPTH: usize = 8;
 /// One grain that plays another cue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Child {
-    /// Index of the grain in the command table.
     pub command: usize,
-    /// The opcode that named it, one of [`CHILD_OPCODES`].
     pub opcode: u8,
     /// Offset of the 32-byte record within the descriptor section.
     pub record: u32,

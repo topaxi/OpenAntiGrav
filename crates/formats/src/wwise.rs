@@ -107,13 +107,10 @@ pub fn name_hash(name: &str) -> u32 {
     })
 }
 
-/// Bytes of a chunk header: a tag and a size.
 const CHUNK_HEADER: usize = 8;
 
-/// Bytes of the fields a `BKHD` chunk must hold; the rest is padding.
 const HEADER_FIELDS: usize = 20;
 
-/// Bytes of a `DIDX` record.
 const MEDIA_RECORD: usize = 12;
 
 /// Why a bank could not be read.

@@ -37,9 +37,7 @@
 /// A run of bytes no claim covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Gap {
-    /// Byte offset of the first unclaimed byte.
     pub at: usize,
-    /// How many bytes.
     pub len: usize,
     /// What the parser read immediately before it, or `"start of file"`.
     /// What the parser read immediately before it, or `"start of file"`. The two

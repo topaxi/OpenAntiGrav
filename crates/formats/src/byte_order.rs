@@ -29,7 +29,6 @@ pub enum ByteOrder {
     /// PSP and PS2: least significant byte first.
     #[default]
     Little,
-    /// PS3: most significant byte first.
     Big,
 }
 

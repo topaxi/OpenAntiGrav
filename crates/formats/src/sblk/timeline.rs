@@ -106,7 +106,6 @@ pub struct WalkModel {
 /// One waveform started at one moment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Grain {
-    /// Master ticks after the cue was started.
     pub tick: u32,
     /// The waveform, as [`Bank::sounds`](super::Bank::sounds) yields it.
     pub sound: Sound,

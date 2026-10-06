@@ -50,7 +50,6 @@ const HASHED_VERSION: u32 = 5;
 /// Where a hashed name table's first record sits in the name block.
 const HASHED_FIRST: usize = 0x14;
 
-/// Bytes in one hashed name record.
 const HASHED_ENTRY_LEN: usize = 16;
 
 /// The hash a Vita bank's name table is keyed by: FNV-1, **seeded with zero**.

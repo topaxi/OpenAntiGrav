@@ -1,30 +1,24 @@
 //! Validates the cue-to-waveform rule against every sound bank on both Pulse
 //! discs, and the claim that the PS2 ships the PSP's container unchanged.
 //!
-//! **`#[ignore]`d and never run in CI.** They need game content, which this
-//! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
-//!
-//! ```sh
-//! just test-data
-//! ```
+//! **`#[ignore]`d, never run in CI**: needs game content (`just test-data`);
+//! see `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! # What these are for
 //!
-//! `docs/formats/psp-audio.md` could split a bank into waveforms and read its
-//! name table, but had no rule joining the two: a name resolved to a *cue* and
-//! a cue's `+0x08` was "the third word indexes the command table", tried once
-//! as a descriptor-section offset and recorded as not resolving on every bank.
+//! `docs/formats/psp-audio.md` split a bank into waveforms and read its name
+//! table but had no rule joining them: a name resolved to a *cue*, whose `+0x08`
+//! had been tried as a descriptor-section offset and failed on every bank.
 //!
-//! The rule is `first_command = *(u32 *)(cue + 0x08) / 8`, and the evidence is
-//! that each bank's cues then **partition its command table exactly** - no gap,
-//! no overlap, ending on the last command. Nothing in the format states that,
-//! and it is not something a wrong base produces: the same test run over seven
-//! candidate readings picks this one and only this one.
+//! The rule is `first_command = *(u32 *)(cue + 0x08) / 8`; the evidence is that
+//! each bank's cues then **partition its command table exactly** (no gap, no
+//! overlap, ending on the last command), which a wrong base does not produce:
+//! run over seven candidate readings, only this one passes.
 //!
 //! The second test is the independent half. A cue's name and its waveforms'
-//! `+0x0e` flag word are written by different parts of the tool that built the
-//! bank and neither points at the other, so `~`-named cues looping and plainly
-//! named ones not is a fact the arithmetic could not have manufactured.
+//! `+0x0e` flag word are written by different parts of the bank tool and
+//! neither points at the other, so `~`-named cues looping and plain ones not is
+//! a fact the arithmetic could not manufacture.
 
 use std::path::PathBuf;
 
@@ -54,11 +48,9 @@ const PSP_BANKS: usize = 39;
 /// Banks the PS2 disc carries.
 const PS2_BANKS: usize = 44;
 
-/// The candidate readings of a cue's `+0x08` as a command index.
-///
-/// Kept in the test rather than in the module because the *rejected* ones are
-/// the evidence: a rule that is one of seven tried and the only one that holds
-/// is a different claim from a rule that was guessed and then checked.
+/// The candidate readings of a cue's `+0x08` as a command index. Kept in the
+/// test because the *rejected* ones are the evidence: one of seven tried and the
+/// only one that holds differs from a rule guessed and then checked.
 type Base = fn(u32, u32, u32) -> Option<u32>;
 const BASES: [(&str, Base); 7] = [
     ("raw index", |v, _cmd, _par| Some(v)),
@@ -148,8 +140,8 @@ fn every_bank() -> Vec<(&'static str, u32, Vec<u8>)> {
     out
 }
 
-/// The command table offset, header `+0x20`. `Bank` does not keep it, because
-/// the cue rule does not need it - but the rejected candidates below do.
+/// The command table offset, header `+0x20`. `Bank` does not keep it; the
+/// rejected candidates below need it.
 fn command_offset(bank: &Bank<'_>) -> u32 {
     u32::from_le_bytes(bank.block[0x20..0x24].try_into().expect("in the header"))
 }
@@ -163,12 +155,10 @@ fn every_cue_owns_a_run_of_its_bank_command_table() {
     }
     println!("banks          {}", blobs.len());
 
-    // Leg one: of seven readings of `+0x08`, how many put every cue's run
-    // inside the command table on every bank?
-    //
-    // The cues the runtime refuses to play are out of scope for all seven
-    // equally - `Scream_StartSound` never reads their `+0x08` - so excluding
-    // them here does not favour any candidate.
+    // Leg one: of seven readings of `+0x08`, how many put every cue's run inside
+    // the command table on every bank? Cues the runtime refuses to play are out
+    // of scope for all seven equally (`Scream_StartSound` never reads their
+    // `+0x08`), so excluding them favours none.
     let mut survivors = Vec::new();
     for (label, base) in BASES {
         let mut banks_ok = 0;
@@ -199,9 +189,9 @@ fn every_cue_owns_a_run_of_its_bank_command_table() {
         }
     }
 
-    // Leg two, the sharp one: do the runs *tile* the table? The runtime's own
-    // gate - `Scream_StartSound` refuses a cue whose `+0x04` is zero - is what
-    // excludes the empty cues, not a threshold chosen to make this pass.
+    // Leg two: do the runs *tile* the table? The runtime's own gate
+    // (`Scream_StartSound` refuses `+0x04 == 0`) excludes the empty cues, not a
+    // threshold chosen to make this pass.
     let mut tiled = 0;
     let mut empty = 0;
     let mut empty_raw = Vec::new();
@@ -243,8 +233,8 @@ fn every_cue_owns_a_run_of_its_bank_command_table() {
         "only {} banks found, expected at least {PSP_BANKS}",
         blobs.len()
     );
-    // Six of the seven readings have to die, or "the rule is the only one that
-    // works" is not a claim this test supports.
+    // Six of the seven readings have to die, or "the only one that works" is
+    // not a claim this test supports.
     assert_eq!(
         survivors,
         vec!["v / 8", "(v & 0xffffff) / 8"],
@@ -257,9 +247,8 @@ fn every_cue_owns_a_run_of_its_bank_command_table() {
         blobs.len(),
         "the cue runs do not tile the command table on {failures:?}"
     );
-    // A cue that does not play is the runtime's own category, and every one of
-    // them stores the same sentinel. If a bank ever carried a zero-count cue
-    // with a real offset, the rule above would be hiding something.
+    // Every non-playing cue stores the same sentinel; a zero-count cue with a
+    // real offset would mean the rule above hides something.
     assert_eq!(empty_raw, vec![0xffff_fff8], "an unexpected empty cue");
 }
 
@@ -341,11 +330,11 @@ fn a_cue_name_agrees_with_the_flags_of_the_waveforms_it_reaches() {
         println!("  {line}");
     }
 
-    // The asymmetry is the finding, and it is one-way: a `~` name means the
-    // caller is handed a voice handle (ADR-0018), which a one-shot like
-    // `~SPARKS` also wants, so `~` does not *imply* looping. A plain name
-    // essentially never loops, and that is what a wrong cue-to-command mapping
-    // could not produce - it would scatter the flag at the `~` rate everywhere.
+    // The asymmetry is one-way: a `~` name hands the caller a voice handle
+    // (ADR-0018), which a one-shot like `~SPARKS` also wants, so `~` does not
+    // *imply* looping. A plain name essentially never loops, which a wrong
+    // cue-to-command mapping could not produce (it would scatter the flag at
+    // the `~` rate everywhere).
     assert!(
         plain_loop * 100 < plain,
         "{plain_loop} of {plain} plainly named waveforms loop, which is not the shape expected"
@@ -354,11 +343,10 @@ fn a_cue_name_agrees_with_the_flags_of_the_waveforms_it_reaches() {
         tilde_loop * 4 > tilde,
         "only {tilde_loop} of {tilde} `~`-named waveforms loop"
     );
-    // Asserted as the whole list rather than as a count, because the *widths*
-    // are the finding: `SPEEDUPPAD` is one sample, `.COLLISIONS` is fifteen
-    // alternates, and Zone's engine is nine where the ordinary one is a single
-    // loop. `HUD` appears twice on the PSP - `FE.wad` and `Data.wad` both ship
-    // it, and the format page's table gives them the same entry hash.
+    // The whole list, not a count, because the *widths* are the finding:
+    // `SPEEDUPPAD` is one sample, `.COLLISIONS` fifteen alternates, Zone's
+    // engine nine where the ordinary one is a single loop. `HUD` appears twice
+    // on the PSP (`FE.wad` and `Data.wad`, same entry hash).
     assert_eq!(
         found,
         [
@@ -375,21 +363,19 @@ fn a_cue_name_agrees_with_the_flags_of_the_waveforms_it_reaches() {
     );
 }
 
-/// Wipeout Pure carries `SBlk` banks, and this project said for months that it
+/// Wipeout Pure carries `SBlk` banks, which this project said for months it
 /// did not.
 ///
 /// # The claim that was wrong, and why it looked right
 ///
-/// `pure-status.md` and `psp-audio.md` both recorded, at confidence 85, that
-/// *"not one entry in any of Pure's three archives begins with that magic"*.
-/// That sentence is **true**. It is also true of Wipeout Pulse, whose banks
-/// this project had already decoded 39 of: the magic sits at offset `0x18`,
-/// behind the container header and the section table, so a scan at offset 0
+/// `pure-status.md` and `psp-audio.md` recorded, at confidence 85, that *"not
+/// one entry in any of Pure's three archives begins with that magic"*. **True**,
+/// and also of Pulse, whose 39 banks were already decoded: the magic sits at
+/// `0x18` behind the container header and section table, so an offset-0 scan
 /// finds nothing anywhere.
 ///
-/// The first assertion below is therefore the *control* the original probe
-/// lacked - it shows the offset-0 scan failing on a disc full of banks - and
-/// the rest is the correction.
+/// The first assertion is the *control* the original probe lacked (the offset-0
+/// scan fails on a disc full of banks); the rest is the correction.
 #[test]
 #[ignore = "needs a disc image"]
 fn wipeout_pure_carries_sblk_banks_after_all() {
@@ -425,9 +411,8 @@ fn wipeout_pure_carries_sblk_banks_after_all() {
         }
         println!("{disc}: {banks} banks, {names} names, {spans} spans");
 
-        // The control. Every one of these banks was just parsed, and not one
-        // of them starts with the magic - which is the whole of what the old
-        // probe measured.
+        // The control: every bank just parsed, and none starts with the magic,
+        // which is all the old probe measured.
         assert_eq!(
             at_offset_zero, 0,
             "a bank now begins with the magic, so the trap this records is gone"
@@ -440,10 +425,8 @@ fn wipeout_pure_carries_sblk_banks_after_all() {
 }
 
 /// `+0x0e`'s `0x80` marks a waveform that is **not** PS-ADPCM, so a PSP or PS2
-/// build - which refuses one - can ship none.
-///
-/// The polarity was documented backwards until 2026-08-23. See
-/// `docs/formats/psp-audio.md`.
+/// build, which refuses one, ships none. The polarity was documented backwards
+/// until 2026-08-23; see `docs/formats/psp-audio.md`.
 #[test]
 #[ignore = "needs a disc image"]
 fn no_psp_or_ps2_waveform_is_marked_as_not_adpcm() {
@@ -494,9 +477,9 @@ fn the_ps2_disc_carries_the_same_container_unchanged() {
     let mut tiles = 0;
     for archive in PS2_ARCHIVES {
         for (_, blob) in banks_in(&mut disc, archive) {
-            // Byte-for-byte the PSP reader: no endian switch, no relaxed
-            // framing. That is the claim - `Bank::parse` refuses anything whose
-            // sections do not close exactly, so parsing at all is the result.
+            // Byte-for-byte the PSP reader (no endian switch, no relaxed
+            // framing): `Bank::parse` refuses anything whose sections do not
+            // close exactly, so parsing at all is the result.
             let bank = Bank::parse(&blob).expect("a PS2 bank parses as a PSP one");
             banks += 1;
             blocks += bank.adpcm_blocks();
@@ -515,9 +498,8 @@ fn the_ps2_disc_carries_the_same_container_unchanged() {
                 bank.cue_count
             );
 
-            // The waveform spans still tile the waveform section, which is the
-            // check that says the PS2 payload is the same data and not merely
-            // the same framing.
+            // The spans still tile the waveform section: the PS2 payload is the
+            // same data, not merely the same framing.
             let mut spans: Vec<(u32, u32)> =
                 bank.sounds().iter().map(|s| (s.offset, s.length)).collect();
             spans.sort_unstable();

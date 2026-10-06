@@ -47,10 +47,8 @@ const RING_MASK: usize = RING_SIZE - 1;
 /// Initial write cursor. Not zero, and not the Okumura `N - F` convention.
 const RING_START: usize = 1;
 
-/// Bits in an encoded ring position. Addresses all of `RING_SIZE`.
 const POSITION_BITS: u32 = 13;
 
-/// Bits in an encoded match length.
 const LENGTH_BITS: u32 = 4;
 
 /// Added to every encoded length, so matches are 3..=18 bytes.
@@ -64,7 +62,6 @@ pub enum Error {
     UnexpectedEnd {
         /// Bytes produced before the input ran out.
         produced: usize,
-        /// Bytes the caller asked for.
         expected: usize,
     },
 }
@@ -82,7 +79,6 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Decompresses `input` into exactly `expected_len` bytes.
@@ -182,7 +178,6 @@ pub fn decompress_reporting(input: &[u8], expected_len: usize) -> Result<Decoded
 /// A decompressed blob, with what it cost to read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decoded {
-    /// The decompressed bytes.
     pub bytes: Vec<u8>,
     /// Input bytes the reader touched, including a partially used final byte.
     pub consumed: usize,
