@@ -112,6 +112,9 @@ native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]
 
+[build-dependencies]
+oag-shader-check.workspace = true
+
 [lints]
 workspace = true
 

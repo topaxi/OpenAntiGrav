@@ -27,5 +27,8 @@ winit.workspace = true
 pollster.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 
+[build-dependencies]
+oag-shader-check.workspace = true
+
 [lints]
 workspace = true

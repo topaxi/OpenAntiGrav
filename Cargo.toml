@@ -30,6 +30,7 @@ members = [
   "crates/rcs",
   "crates/render",
   "crates/replay",
+  "crates/shader-check",
   "crates/sound",
   "crates/source",
   "crates/tables",
@@ -64,6 +65,7 @@ oag-formats = { path = "crates/formats" }
 oag-fx = { path = "crates/fx" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-gpu = { path = "crates/gpu" }
+oag-shader-check = { path = "crates/shader-check" }
 oag-hd = { path = "crates/hd" }
 oag-hud = { path = "crates/hud" }
 oag-input = { path = "crates/input" }
