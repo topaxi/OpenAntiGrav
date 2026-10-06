@@ -64,18 +64,13 @@ pub enum Error {
     MissingRoot,
     /// A required attribute is absent.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute.
         attribute: &'static str,
     },
     /// An attribute is present and is not a finite number.
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute.
         attribute: &'static str,
-        /// What the document actually said.
         value: String,
     },
 }

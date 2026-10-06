@@ -235,9 +235,7 @@ pub struct EnvSettings {
 /// A line that is neither blank nor `key=value`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
-    /// The 1-based line number.
     pub line: usize,
-    /// The line, trimmed.
     pub text: String,
 }
 

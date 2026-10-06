@@ -170,31 +170,23 @@ pub enum Error {
     MissingGrid,
     /// A required element is absent on the element named.
     MissingElement {
-        /// The element it should have been a child of.
         parent: &'static str,
-        /// The element that was looked for.
         element: &'static str,
     },
     /// A required attribute is absent. Never defaulted - see the module docs.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute that was looked for.
         attribute: &'static str,
     },
     /// An attribute is present but does not parse as the type it should.
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute it was on.
         attribute: &'static str,
-        /// What was found, so the error names the offending text.
         value: String,
     },
     /// **No longer produced.** A `mode=` outside the nine is [`Mode::Other`];
     /// kept for API stability.
     UnknownMode {
-        /// What was found.
         name: String,
     },
 }
@@ -235,7 +227,6 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// One `PI_Grid`: a tier of the campaign, 8-16 cells.

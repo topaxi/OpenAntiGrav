@@ -128,50 +128,39 @@ pub enum Error {
     Expand(fexml::Error),
     /// A required element is absent.
     MissingElement {
-        /// The element that was looked for.
         element: &'static str,
     },
     /// A required attribute is absent. Never defaulted: see the module docs.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute that was looked for.
         attribute: &'static str,
     },
     /// An attribute is present but is not a finite number.
     /// An attribute is present but not a finite number (unparseable, or `NaN`/
     /// infinity, which the simulation must not see).
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute it was on.
         attribute: &'static str,
-        /// What was found, so the error names the offending text.
         value: String,
     },
     /// A `<Class name>` that is not one of the four speed classes.
     UnknownClass {
-        /// What was found.
         name: String,
     },
     /// Two `<Class>` blocks claim the same speed class.
     DuplicateClass {
-        /// The class named twice.
         class: SpeedClass,
     },
     /// One of the four speed classes has no `<Class>` block.
     MissingClass {
-        /// The class with no block.
         class: SpeedClass,
     },
     /// Two `<GlobalClass>` blocks claim the same speed class.
     DuplicateGlobalClass {
-        /// The class named twice.
         class: SpeedClass,
     },
     /// One of the four speed classes has no `<GlobalClass>` block.
     MissingGlobalClass {
-        /// The class with no block.
         class: SpeedClass,
     },
 }
@@ -218,7 +207,6 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 mod cameras;

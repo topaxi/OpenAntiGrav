@@ -111,31 +111,23 @@ pub enum Error {
     Expand(fexml::Error),
     /// A required element is absent.
     MissingElement {
-        /// The element that was looked for.
         element: &'static str,
     },
     /// A required attribute is absent.
     MissingAttribute {
-        /// The element it should have been on.
         element: &'static str,
-        /// The attribute that was looked for.
         attribute: &'static str,
     },
     /// An attribute is present but does not parse as the type it should.
     NotANumber {
-        /// The element it was on.
         element: &'static str,
-        /// The attribute it was on.
         attribute: &'static str,
-        /// What was found, so the error names the offending text.
         value: String,
     },
     /// `<SkillLevels>` lacks an `<Entry>` for one of the twelve `{Easy,Medium,Hard}
     /// x {Venom,Flash,Rapier,Phantom}` combinations all 24 shipped files carry.
     MissingSkillEntry {
-        /// The difficulty the missing row was for.
         difficulty: &'static str,
-        /// The class the missing row was for.
         class: &'static str,
     },
 }
@@ -175,7 +167,6 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Reads an **already expanded** `stats.xml`; see [`from_blob`] for raw bytes.

@@ -104,14 +104,11 @@ pub enum Error {
     Expand(fexml::Error),
     /// A required element is absent.
     MissingElement {
-        /// The element that was looked for.
         element: String,
     },
     /// A required attribute is absent or not a finite number.
     BadAttribute {
-        /// The element it belongs to.
         element: String,
-        /// The attribute.
         attribute: &'static str,
     },
 }
@@ -136,7 +133,6 @@ impl From<fexml::Error> for Error {
     }
 }
 
-/// Result alias for this module.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// The archive entry name of `class`'s file.
