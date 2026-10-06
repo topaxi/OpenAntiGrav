@@ -102,11 +102,11 @@ const PS2: &str = "data/images/pulse-ps2-eu.chd";
 /// MPTag        Image=0                 Text=8   Model=0
 /// ```
 const EXPECTED: &[(&str, usize, usize, usize, usize)] = &[
-    (hud::layouts::ARCADE, 34, 1, 35, 11),
-    (hud::layouts::ELIMINATION, 33, 0, 35, 11),
-    (hud::layouts::TIME_TRIAL, 10, 0, 25, 2),
-    (hud::layouts::ZONE, 7, 0, 24, 2),
-    (hud::layouts::MP_TAG, 0, 0, 8, 0),
+    (oag_pulse::hud::layouts::ARCADE, 34, 1, 35, 11),
+    (oag_pulse::hud::layouts::ELIMINATION, 33, 0, 35, 11),
+    (oag_pulse::hud::layouts::TIME_TRIAL, 10, 0, 25, 2),
+    (oag_pulse::hud::layouts::ZONE, 7, 0, 24, 2),
+    (oag_pulse::hud::layouts::MP_TAG, 0, 0, 8, 0),
 ];
 
 fn open() -> Option<oag_assets::Archives> {
@@ -219,12 +219,12 @@ fn postag_is_a_fixed_column_not_a_runtime_anchor() {
         return;
     };
 
-    let arcade = layout_of(&mut archives, hud::layouts::ARCADE);
+    let arcade = layout_of(&mut archives, oag_pulse::hud::layouts::ARCADE);
     for row in 0..8u32 {
         let name = format!("PosTag{row}");
         let label = arcade
             .label(&name)
-            .unwrap_or_else(|| panic!("{name} missing from {}", hud::layouts::ARCADE));
+            .unwrap_or_else(|| panic!("{name} missing from {}", oag_pulse::hud::layouts::ARCADE));
         assert!(
             (label.x - 405.0).abs() < f32::EPSILON,
             "{name}: x={}, expected 405 (the composed column, not -40 read alone)",
@@ -237,12 +237,15 @@ fn postag_is_a_fixed_column_not_a_runtime_anchor() {
         );
     }
 
-    let elimination = layout_of(&mut archives, hud::layouts::ELIMINATION);
+    let elimination = layout_of(&mut archives, oag_pulse::hud::layouts::ELIMINATION);
     for row in 0..8u32 {
         let name = format!("PosTag{row}");
-        let label = elimination
-            .label(&name)
-            .unwrap_or_else(|| panic!("{name} missing from {}", hud::layouts::ELIMINATION));
+        let label = elimination.label(&name).unwrap_or_else(|| {
+            panic!(
+                "{name} missing from {}",
+                oag_pulse::hud::layouts::ELIMINATION
+            )
+        });
         assert!(
             (label.x - 460.0).abs() < f32::EPSILON,
             "{name}: x={}, expected 460",
@@ -257,7 +260,7 @@ fn postag_is_a_fixed_column_not_a_runtime_anchor() {
 
     // The multiplayer sibling, for contrast: no authored position at all,
     // which is the genuine runtime-anchor case `PosTag` was believed to be.
-    let mp_tag = layout_of(&mut archives, hud::layouts::MP_TAG);
+    let mp_tag = layout_of(&mut archives, oag_pulse::hud::layouts::MP_TAG);
     let plr_tag0 = mp_tag
         .label("PlrTag0")
         .expect("PlrTag0 missing from MPTag_HUD.xml");
@@ -401,7 +404,7 @@ fn the_speed_and_shield_bars_sit_in_the_bottom_right() {
         return;
     };
 
-    let layout = layout_of(&mut archives, hud::layouts::TIME_TRIAL);
+    let layout = layout_of(&mut archives, oag_pulse::hud::layouts::TIME_TRIAL);
     for name in ["SpeedBarBg", "SpeedBar", "ShieldBarBg", "ShieldBar"] {
         let sprite = layout
             .sprite(name)
@@ -433,7 +436,7 @@ fn each_bar_exactly_overlays_its_own_background() {
         return;
     };
 
-    let layout = layout_of(&mut archives, hud::layouts::TIME_TRIAL);
+    let layout = layout_of(&mut archives, oag_pulse::hud::layouts::TIME_TRIAL);
     for (fill, background) in [("SpeedBar", "SpeedBarBg"), ("ShieldBar", "ShieldBarBg")] {
         let fill = layout.sprite(fill).unwrap_or_else(|| panic!("{fill}"));
         let background = layout
@@ -678,7 +681,10 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
     // fourteenth `Weapon`, the Disruptor, is Pure's alone and Pulse's layouts
     // author no `DisruptorIcon` - see `Weapon`'s own doc on why it is
     // appended rather than absent.
-    for entry in [hud::layouts::ARCADE, hud::layouts::ELIMINATION] {
+    for entry in [
+        oag_pulse::hud::layouts::ARCADE,
+        oag_pulse::hud::layouts::ELIMINATION,
+    ] {
         let layout = layout_of(&mut archives, entry);
         assert!(
             layout.sprite("PickupBackground").is_some(),
@@ -725,7 +731,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
 
     // The time trial's single icon, and it must stay single: a second one
     // appearing here would mean the free-turbo reading is too narrow.
-    let time_trial = layout_of(&mut archives, hud::layouts::TIME_TRIAL);
+    let time_trial = layout_of(&mut archives, oag_pulse::hud::layouts::TIME_TRIAL);
     let present: Vec<Weapon> = Weapon::ALL
         .into_iter()
         .filter(|&weapon| time_trial.sprite(&hud::pickup_icon_name(weapon)).is_some())
@@ -735,7 +741,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
         vec![Weapon::Turbo],
         "{} authors {present:?}; the disc's own event text says a time trial gets \
          a free turbo and nothing else",
-        hud::layouts::TIME_TRIAL
+        oag_pulse::hud::layouts::TIME_TRIAL
     );
     assert!(
         time_trial.sprite("PickupBackground").is_some(),
@@ -744,7 +750,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
 
     // Zone authors nothing, which is the one mode where "weapons off" really is
     // the whole story.
-    let zone = layout_of(&mut archives, hud::layouts::ZONE);
+    let zone = layout_of(&mut archives, oag_pulse::hud::layouts::ZONE);
     let zone_icons: Vec<Weapon> = Weapon::ALL
         .into_iter()
         .filter(|&weapon| zone.sprite(&hud::pickup_icon_name(weapon)).is_some())
@@ -752,7 +758,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
     assert!(
         zone_icons.is_empty() && zone.sprite("PickupBackground").is_none(),
         "{} authors pickup widgets {zone_icons:?}",
-        hud::layouts::ZONE
+        oag_pulse::hud::layouts::ZONE
     );
 }
 

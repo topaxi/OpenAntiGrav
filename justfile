@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -1029,6 +1029,12 @@ check-size:
 # drop, never rise, and a new file may have none
 check-title-branching:
     python3 scripts/check-title-branching.py
+
+# A ratchet on generic crates naming a title package by path (`oag_hd::hud::ART`):
+# they end up depending on `oag-title` only, ADR-0058. A file may drop, never
+# rise, and a new file may have none
+check-title-reach:
+    python3 scripts/check-title-reach.py
 
 # The names.tsv checks `just apply-names` already makes, minus the Ghidra bridge
 # it needs to make them. CI has no Ghidra, so without this nothing reads the file

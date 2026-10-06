@@ -9,9 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 oag-display.workspace = true
-oag-hd.workspace = true
 oag-physics.workspace = true
-oag-pulse.workspace = true
 oag-race.workspace = true
 oag-tables.workspace = true
 oag-texture.workspace = true
@@ -24,4 +22,6 @@ workspace = true
 
 [dev-dependencies]
 oag-2048.workspace = true
+oag-hd.workspace = true
+oag-pulse.workspace = true
 oag-pure.workspace = true
