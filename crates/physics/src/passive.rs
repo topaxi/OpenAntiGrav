@@ -233,8 +233,10 @@ pub fn angular_damping(handling: &Handling, local_angular_momentum: Vec3) -> Vec
 ///
 /// ```text
 /// 08849c60  lwc1   f12,0x2b0(s0)     ; craft+0x2b0 == the 0/0.5/1 grounded fraction
-/// 08849c6c  sub.s  f12,f13,f12       ; 1 - grounded   (f13 = 1.0f)
-/// 08849c78  mul.s  f12,f12,f14       ; * -0.25f (0xbe800000)
+/// 08849c68  mtc1   a0,f13            ; 1.0f  (0x3f800000)
+/// 08849c6c  sub.s  f12,f13,f12       ; 1 - grounded
+/// 08849c74  mtc1   a0,f14            ; -0.25f (0xbe800000)
+/// 08849c78  mul.s  f12,f12,f14
 /// 08849ca0  vdot.t S601,C110,C200    ; dot(up, velocity); C110 == craft+0x90 == up
 /// 08849ca8  vscl.t C610,C610,S600    ; * -0.25 * (1 - grounded)
 /// 08849cac  vadd.t C300,C300,C610    ; craft+0x330, the world force accumulator

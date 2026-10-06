@@ -78,7 +78,7 @@ pub fn lateral_grip_coefficient(handling: &Handling, left: f32, right: f32) -> f
 /// speed (`0x0884ccb4`, skipping the block when `<= 0`), the ramped `L`/`R`
 /// (`craft+0x2c4`/`+0x2c8`), the **input snapshot's** `steerX` (`*(craft+0x78)`), and
 /// `Airbrake.drag` (class `+0xe8`), multiplies by `0.01` (`0x3c23d70a`), scales `forward`
-/// (`craft+0x180`) by speed, slide and `0.001` (`0x3a83126f`), and `vadd.t`s into
+/// (`lv.q C500,0x0(a0)` at `0x0884cd18`, `craft+0x180`) by speed, slide and `0.001` (`0x3a83126f`), and `vadd.t`s into
 /// `craft+0x330` at `0x0884cf88`.
 ///
 /// - **The scale is `1e-5`**: two literals, `0.01` and `0.001`, on the same vector (an

@@ -452,7 +452,7 @@ not divergent - see `craft-update.md` for where that question currently stands.
 
 Moved here from the `ALIGNMENT_GAIN` doc comment in `crates/physics/src/hover.rs`.
 
-**Stability arithmetic.** One frame of the scheme `integrate` runs (`a` fixed from the
+**Stability arithmetic (the superseded bare-acceleration arrangement).** One frame of the scheme `integrate` runs (`a` fixed from the
 frame's starting state, three sub-steps of `h = H/3`):
 
 ```text
@@ -466,9 +466,10 @@ Stable when `c >= (2/3) * k * H`, i.e. `H <= 3c / (2k) = 0.0075 s`. At `k = 400`
 `det = 1.040741`, and roll grows by `sqrt(det) = 1.020167` per tick. Measured in this
 crate: a ship at rest on a flat floor with 0.01 rad of roll grew its peaks 1.018 to
 1.022 per tick over 200 ticks, period 19 ticks against the predicted
-`sqrt(400) = 20 rad/s`. The growth matches the undivided `k = 400` (a roll inertia of
-about 3.1 would have given `k_eff = 129`), which confirms the torque reaches the body as
-an angular acceleration.
+`sqrt(400) = 20 rad/s`. That growth matched the undivided `k = 400` (a roll inertia of about 3.1 would have given
+`k_eff = 129`), which confirmed the torque then reached the body as an angular
+acceleration. The torque is now divided by the recovered tensor (`15.6` on roll), so this
+describes the superseded arrangement; see "That guess was right" above.
 
 **The original at rest** (Pulse in PPSSPP, Time Trial, 150 ticks, no input, via
 `scripts/psp-trace.py`): `grounded` 1.0 on every tick, distance travelled 0.0087 units,

@@ -51,14 +51,15 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 /// only the rows that reach it. **Check the cause directly before pasting new constants**: remove
 /// only the new `hash_state` write(s), keep every other change, and the previous constants must
 /// reproduce bit for bit (hash-input), or removing the one suspect call must reproduce the old
-/// row (behaviour). Each entry below was checked this way unless noted.
+/// row (behaviour). Entries marked *argued* were reasoned from which rows moved and not isolated;
+/// the rest were checked this way.
 ///
 /// - **2026-07-29**, first recorded. No earlier reference: no gate covered the simulation.
-/// - **2026-07-30, behaviour.** `hull_sample_points`/`hull_extent` scale `<Misc>` dimensions by
+/// - **2026-07-30, behaviour (argued).** `hull_sample_points`/`hull_extent` scale `<Misc>` dimensions by
 ///   `hover::TARGET_GLOBAL_SCALE` (`0.75`), as `Ship_InitCraft`'s box-collider setup does
 ///   (`collision.md`). Only the two 3,600-tick rows moved; 600-tick `Corridor` never reaches a
 ///   wall.
-/// - **2026-08-03, hash input.** `pad_timer`, `pad_direction` added (`engine.rs`,
+/// - **2026-08-03, hash input (argued).** `pad_timer`, `pad_direction` added (`engine.rs`,
 ///   `speedup_pad`). `Environment::default()` has no `pad_hit`, so the fields stay at defaults
 ///   for every tick and add a constant run of bytes. All three rows moved (the tell).
 /// - **2026-08-04, hash input.** `shift_tap_windows`, `shift_armed`, `shift_lockout` for the
@@ -88,19 +89,19 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   while it runs: with only the write removed and the `apply_contact` guard,
 ///   `advance_shield_pickup` call and `damage::reset` clearing all in place, the earlier three
 ///   constants reproduced, so the new branch is never taken.
-/// - **2026-08-12, behaviour.** `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0`; above
-///   it one ray is cast and the rear probe's hit record is manufactured from the front's
-///   ([`hover::FAST_PROBE_SPEED`]). This crate cast two rays at every speed and shed half its
-///   suspension over a lip. No field added. On the disc's twelve circuits a lone craft went from
-///   seven clean laps to nine, `05_Track` from never completing a second lap to a clean one, and
-///   `09_Track` from six recoveries to three.
-/// - **2026-08-12 (second), behaviour.** `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne
+/// - **2026-08-12, behaviour.** `Ship_UpdateCraft` (`0x08849df0`) keeps an airborne
 ///   clock at `craft+0x284` and `Ship_HoverTwoPoint` zeroes the landing clock **while airborne**
 ///   once it passes `Antigrav::rebound_jump_time`; a shorter hop never arms `landing_rebound`.
 ///   `ShipState` gains `time_airborne`, and `time_since_landing` starts at the recovered `10.0`
 ///   (was an invented `1.0`; both sit outside the 0.2 s window). Isolated by removing only
 ///   `write_f32(time_airborne)`: all three rows still moved, since every script leaves the
 ///   ground and the landing response fires on fewer ticks.
+/// - **2026-08-12 (second), behaviour (nothing to isolate: no field added).** `Ship_CastHoverProbes` branches on `craft+0x2ec <= 50.0`; above
+///   it one ray is cast and the rear probe's hit record is manufactured from the front's
+///   ([`hover::FAST_PROBE_SPEED`]). This crate cast two rays at every speed and shed half its
+///   suspension over a lip. No field added. On the disc's twelve circuits a lone craft went from
+///   seven clean laps to nine, `05_Track` from never completing a second lap to a clean one, and
+///   `09_Track` from six recoveries to three.
 /// - **2026-08-19, hash input.** `pending_impulse` (`entity->0x4c + 0x110`), consumed by
 ///   `wall::apply_pending_impulse` (`Ship_ApplyCollisionImpulse`) every tick from `step`. No
 ///   producer is ported (`contact-response.md`), so the field is `Vec3::ZERO` on every entry and

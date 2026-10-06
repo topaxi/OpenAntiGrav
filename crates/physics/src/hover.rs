@@ -141,11 +141,13 @@ pub const PENETRATION_LIMIT: f32 = 1.0;
 /// - **Magnitude: `400` is the original's literal.** The PS2 build materialises
 ///   `0xC3C80000` (`-400.0f`) in `Ship_HoverFourCorner` (`0x0015a940`) and
 ///   `Ship_HoverTwoPoint` (`0x0015b978`), same sign and operand order as PSP.
-/// - **Stability: this gain is unstable under this integrator, and that is not a typo.**
-///   With the angular acceleration held across the three sub-steps, the frame `H = 1/60`
-///   is 2.22x too large for `k = 400`, `c = 2` ([`crate::passive::ROLL_DAMPING`]): roll
-///   grows `1.020167` per tick, measured at 1.018 to 1.022.
-/// - **The original does not do this.** A 150-tick no-input trace holds its up axis
+/// - **Stability, as a bare angular acceleration (before the inertia divide): unstable, and
+///   not a typo.** With the acceleration held across the three sub-steps the frame
+///   `H = 1/60` was 2.22x too large for `k = 400`, `c = 2` ([`crate::passive::ROLL_DAMPING`]):
+///   roll grew `1.020167` per tick, measured at 1.018 to 1.022. The torque is now divided by
+///   the recovered tensor (`15.6` on roll), which makes the oscillator stable at about 13 %
+///   above the measured stiffness (`hover::tests::the_roll_oscillator_is_stable_by_the_margin_that_was_measured`).
+/// - **The original never showed that growth.** A 150-tick no-input trace holds its up axis
 ///   within 0.000476 rad with no oscillation, and a 0.25 rad roll step response gives a
 ///   closed-loop stiffness of about **20.2** (not 400) and damping about 1.6. Confidence
 ///   **80** (one ship, one track, hand-fitted). Nothing here is tuned to hide the gap;
