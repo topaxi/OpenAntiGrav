@@ -154,7 +154,7 @@ use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
 /// player watching a terminal, not shipped to a collector, and a timestamp and
 /// a module path on each would be wider than most of the messages.
 fn init_logging() {
-    oag_log::install("warn,oag=info,calloop=error", settings::DEFAULT_LOG_FILTER);
+    oag_log::install("warn,oag=info,calloop=error", oag_log::tool::FILE_FILTER);
     oag_log::install_panic_hook();
 }
 

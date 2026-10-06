@@ -42,14 +42,11 @@ use oag_trace::{Script, Trace, compare, plan, replay};
 use oag_vex::{track, vex};
 
 /// The track a recording is assumed to have been taken on unless another is
-/// named. The same default `oag-game` races on, and the directory the reference
-/// scenario's Talon's Junction actually lives in - see `oag_pulse::race::DEFAULT_TRACK`
-/// for the measurement that settled it against the previously assumed `01_Track`.
+/// named: the one `oag-game` races on, measured in `oag_pulse::race::DEFAULT_TRACK`.
 const DEFAULT_TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
-/// The team whose `handlingstats.xml` is read unless another is named. The
-/// same default `oag-game` races on, and the team the reference scenario in
-/// `docs/reverse-engineering/ppsspp-debugger.md` uses.
+/// The team whose `handlingstats.xml` is read unless another is named: the
+/// `oag-game` default, and the reference scenario's in `docs/reverse-engineering/ppsspp-debugger.md`.
 const DEFAULT_TEAM: &str = "Assegai";
 
 /// Our own fixed timestep, for `--fixed-dt`. ADR-0007.
@@ -62,6 +59,8 @@ const FIXED_DT: f32 = 1.0 / 60.0;
     long_about = None
 )]
 struct Cli {
+    #[command(flatten)]
+    log: oag_log::tool::LogArgs,
     #[command(subcommand)]
     command: Command,
 }
@@ -543,8 +542,9 @@ impl From<ToleranceArgs> for Tolerances {
 }
 
 fn main() -> Result<()> {
-    logging::init();
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    logging::start(&cli.log);
+    match cli.command {
         Command::Show { trace } => show(&trace),
         Command::Script { script, expand } => {
             let parsed = read_script(&script)?;

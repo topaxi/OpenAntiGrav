@@ -996,5 +996,5 @@ pub(crate) struct Cli {
     #[command(flatten)]
     pub(crate) intro: extra::IntroArgs,
     #[command(flatten)]
-    pub(crate) log: extra::LogArgs,
+    pub(crate) log: oag_log::tool::LogArgs,
 }

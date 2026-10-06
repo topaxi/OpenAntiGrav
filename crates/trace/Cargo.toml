@@ -36,7 +36,7 @@ oag-race.workspace = true
 oag-title.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-env_logger.workspace = true
+oag-log.workspace = true
 log.workspace = true
 thiserror.workspace = true
 

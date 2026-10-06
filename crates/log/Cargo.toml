@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+clap.workspace = true
 dirs = "7"
 env_filter = "2"
 env_logger.workspace = true
