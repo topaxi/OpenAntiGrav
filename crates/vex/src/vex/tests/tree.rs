@@ -57,8 +57,6 @@ fn build_tree(nodes: &[(u32, usize, usize)]) -> Vec<u8> {
 
 /// The same file, written the way the console `order` names would write it.
 ///
-/// The same file, written the way the console `order` names would write it.
-///
 /// The PS3 export is the same layout with a different byte order and a reversed
 /// magic, which `docs/formats/hd-status.md` measures over 40 shipped files.
 fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
@@ -101,8 +99,6 @@ fn build_tree_in(nodes: &[(u32, usize, usize)], order: ByteOrder) -> Vec<u8> {
     out
 }
 
-/// The same tree, written both ways round, walks to the same nodes.
-///
 /// The same tree, written both ways round, walks to the same nodes.
 ///
 /// A file declares its order in its own magic (`oag_formats::byte_order`). The
@@ -155,8 +151,6 @@ fn walks_a_flat_tree() {
     assert_eq!(nodes[1].payload().len(), 16);
 }
 
-/// A parent whose subtree is finished must stop counting as an ancestor.
-///
 /// A parent whose subtree is finished must stop counting as an ancestor.
 ///
 /// `root -> a -> b`, then a sibling of `root` at depth 0 (not 2, as results if

@@ -10,9 +10,6 @@
 //! This is the general walker: it knows nothing about `.vex`, and what the
 //! unpacked arrays mean is [`crate::vex`]'s business.
 //!
-//! This module is the general walker. It knows nothing about `.vex`; what the
-//! unpacked arrays mean is [`crate::vex`]'s business.
-//!
 //! ```text
 //! VIFcode:
 //!   bits 31      interrupt

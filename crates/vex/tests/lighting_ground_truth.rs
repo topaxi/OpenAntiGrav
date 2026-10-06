@@ -98,8 +98,6 @@ struct VexFile {
     tree: Vec<vex::Node>,
 }
 
-/// Finds an archive by its full path, not by suffix.
-///
 /// Finds an archive by its full path, not by suffix: `ends_with("Data.wad")` also
 /// matches `BEData.wad` and `FEData.wad`, the first of which in disc order holds
 /// no tracks.

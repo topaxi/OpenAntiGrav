@@ -356,13 +356,6 @@ impl TrackPvs {
 /// spatial rule places it with the craft; the authored rule hides it. See
 /// `docs/formats/track.md` and
 /// `crates/render/tests/pvs_placement_ground_truth.rs`.
-/// what makes a far-LOD copy of the track disappear while racing on the real
-/// one: the copy's group carries a section only a handful of distant vantage
-/// sections list in their masks, even though its *geometry* occupies the same
-/// world-space boxes as the sections the craft is in. A spatial rule places it
-/// with the craft; the authored rule hides it. See
-/// `docs/formats/track.md` and
-/// `crates/render/tests/pvs_placement_ground_truth.rs`.
 ///
 /// A node above every section group answers `None`, which callers must treat as
 /// "always visible". If several sections share one parent the lowest node index

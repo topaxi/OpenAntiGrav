@@ -1,7 +1,5 @@
 use super::*;
 
-/// `01_Track`'s `basilic~OH_CARGO` node, byte for byte off the disc.
-///
 /// `01_Track`'s `basilic~OH_CARGO` node, byte for byte off the disc: the first
 /// `sound` node on the first circuit, its radius `100.0` encoding to a round
 /// `1310`, so a wrong scale by a percent still looks plausible here and must be

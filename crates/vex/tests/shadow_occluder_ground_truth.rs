@@ -259,8 +259,6 @@ fn vex_files(disc: &mut DiscImage, versions: &[u32]) -> Vec<VexFile> {
 
 /// The vertex array's own component-wise extent, and its declared face count.
 ///
-/// The vertex array's own component-wise extent, and its declared face count.
-///
 /// A vertex record is `(w, x, y, z)` with **`w` first** (`1.0` on every record,
 /// position at `+0x04`), as the closure below proves. **`m` counts slots, not
 /// vertices**: a hull may end in `(1, 0, 0, 0)` records (Pulse's bomb declares
@@ -517,8 +515,6 @@ fn wipeout_pure_authors_no_shadow_class_at_all() {
     }
 }
 
-/// The three PSARC packages an EU 2048 install carries, base first.
-///
 /// The three PSARC packages an EU 2048 install carries, base first (under
 /// `data/extracted/`: 2048 arrives as an encrypted `.pkg`, decrypted in four
 /// steps, see `data/README.md`).
@@ -556,8 +552,6 @@ const VITA_OCCLUDERS: usize = 6;
 
 /// The six, by archive path and node name, with the `(n, m)` each declares.
 ///
-/// The six, by archive path and node name, with the `(n, m)` each declares.
-///
 /// **Three weapons, shipped twice** (under `data/Weapons/` and
 /// `data/Weapons2048/`), their `(n, m, len)` triples the same as Pulse's
 /// `BEData.wad` carries for them: the format did not change between a 2007 PSP
@@ -589,9 +583,6 @@ const VITA_OCCLUDER_ROWS: [(&str, &str, usize, usize, usize); 6] = [
     ),
 ];
 
-/// 2048 authors the occluder for **three weapons and no craft**, and the
-/// payload closes by Pulse's own formula.
-///
 /// 2048 authors the occluder for **three weapons and no craft**, and the payload
 /// closes by Pulse's own formula.
 ///

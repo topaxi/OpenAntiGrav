@@ -268,8 +268,6 @@ mod tests {
 
     /// A pad rotated a quarter turn about `+y` and moved 100 units along `+x`.
     ///
-    /// A pad rotated a quarter turn about `+y` and moved 100 units along `+x`.
-    ///
     /// Containment is *not* a world-space box test: a point inside the rotated pad
     /// is outside the same box treated as axis-aligned in world space.
     fn rotated() -> PadVolume {

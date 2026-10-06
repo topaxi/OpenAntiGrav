@@ -238,9 +238,6 @@ impl Sweep {
 }
 
 /// Corroborates that `payload` really is a `Texture` payload before `+0x06` is
-/// believed.
-///
-/// Corroborates that `payload` really is a `Texture` payload before `+0x06` is
 /// believed: a node walk off by any amount would put `+0x06` inside another
 /// structure and give a distribution that still *looks* like flags. The
 /// dimensions and `bits_per_pixel` at `+0x00..+0x05` are the cheap check (a wrong
