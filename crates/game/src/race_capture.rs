@@ -1,9 +1,8 @@
 //! The headless capture path: advance a race a fixed number of ticks, draw one
 //! frame without a window, and write it out.
 //!
-//! Lives in the composition root rather than in `oag_raceplay` because it drives the
-//! front end's own overlays (scoreboard, HUD, countdown, track panel) over the race's
-//! scene, and those draw through `crate::render::Renderer`.
+//! Lives in the composition root, not `oag_raceplay`: it drives the front end's overlays
+//! (scoreboard, HUD, countdown, track panel), which draw through `crate::render::Renderer`.
 
 use anyhow::{Context, Result};
 use log::warn;
@@ -48,18 +47,19 @@ pub struct CaptureOptions {
     /// `--autopilot-skill`: fly at a stated AI skill instead of the race's
     /// own. See [`Race::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
-    /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit of
-    /// that severity would, at the end of that tick (zero-based). See
-    /// [`Race::force_shake`].
+    /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
+    /// See [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
-    /// Play this many ticks of the pre-race flyby first, held to the grid's first tick: a
-    /// picture of the flyby at a given tick. See `race::intro_camera`.
+    /// Play this many ticks of the pre-race flyby first, held to the grid's first
+    /// tick. See `race::intro_camera`.
     pub intro_ticks: u32,
-    /// `--force-wreck TICK:SLOT`: put that slot's craft into the destroyed
-    /// sequence at the end of that tick (zero-based), as its shield running out
-    /// would - state 4, then state 5 half a second later. See
+    /// `--force-wreck TICK:SLOT`: that slot's craft enters the destroyed
+    /// sequence at the end of that tick, as shield depletion would. See
     /// [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
+    /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
+    /// that slot at the end of that tick. See [`Race::force_leach_lock`].
+    pub force_leach_lock: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,

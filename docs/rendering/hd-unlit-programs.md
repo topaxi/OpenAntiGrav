@@ -218,16 +218,42 @@ programs, the evidence and the frames are in
   against Omega: not checkable** - Omega's bolt model is not built (its race
   is incomplete, `omega-status.md`).
 
+## Weapon scene blocks (2026-10-06, hd-weapons)
+
+`Scene::write_weapon_scenes` writes the circuit's own scene block (fog, light
+rig, **eye**), Zone half off, onto every weapon drawable whose model a PS3
+program shades (`Drawable::is_ps3_shaded`: some material resolved to an
+`.rcsmaterial` variant; a Pulse or Pure body answers no, and a Pulse
+`--give rocket/mine/bomb/plasma/cannon` frame is pixel-identical either side).
+Zone is off because the disc's 39 weapon materials carry no Zone variant.
+Pinned by `hd_weapon_scene_ground_truth.rs`, `hd_leach_ball_ground_truth.rs`
+and `hd_plasma_ball_ground_truth.rs`, each written / write dropped, and all
+seven fail with the write dropped:
+
+| Drawable | Metric | Written | Dropped |
+| --- | --- | ---: | ---: |
+| LeachBall (`RIM_GLOW`) | near-white in the ball's box, close camera | 1,186 | 369 |
+| Plasma head | dark core pixels | 387 | 0 |
+| Plasma explosion shells | violet pixels | 10,521 | 38 |
+| Mine halo spikes | green pixels | 5,751 | 115 |
+| Rocket body | near-black in its box | 57 | 1,675 |
+| Bomb body | near-black in its box | 1,463 | 2,297 |
+| Cannon muzzle flash | near-white in its box | 2,916 | 2,849 |
+
+The LeachBall, Plasma and Mine rows are programs that read the eye. The
+Rocket, Bomb and Cannon rows rest on the engine's globals alone:
+`material-state.md` names no program for them, so this is **chosen, not
+measured** against an original capture (none exists); the Rocket's body is flat
+black without the rig, which is the visible defect. The Cannon's margin is 67
+pixels. **Checked against Omega: checked, applies, not wired** - Omega's
+`WeaponModels` is `EMPTY`, so it builds no weapon drawable; once named through
+`mesh::rcs` they take the write by the same predicate.
+
 ## Open
 
-- **Every other weapon drawable still holds `Scene::off`** (the Rocket, Mine,
-  Bomb, Cannon round, the blast trio, the LeachBall): no fog, no light rig and
-  an eye at the origin. Only the Plasma head was written, because it is the
-  one whose program reads the eye and whose picture was measured. The
-  LeachBall's `RIM_GLOW` reads the same eye, so its face-on brightness is
-  suspect; `frame.rs` already says the original shades rockets with the
-  circuit's rig. Not changed here: each needs its own frame against the
-  program, not a blanket write.
+- **Not written:** the Bomb's blast pair, its Repulser field and mag floor. A
+  detonation needs a rival to run onto the bomb (lap 2 with `--opponents`), so
+  no AI-independent frame was kept.
 - Which archive's `hd_leachbeam_ball_glow` the original serves; the two copies
   differ by the vertex alpha only.
 - No capture of the original's LeachBall or Plasma head exists under
