@@ -118,7 +118,17 @@ pub(super) fn material_setup(
     // Every material's own animated curve, if it carries one - generic across
     // every `.rcsmodel` this crate builds, not gantry-specific. See
     // `curve_track`'s own module doc for why this is not fitted to one file.
-    let (material_anim, anim_tracks) = curve_track::material_anim_tracks(model, model_blob);
+    let (mut material_anim, mut anim_tracks) = curve_track::material_anim_tracks(model, model_blob);
+    // After the curves: a material that authors one keeps it, and the vertex
+    // scroll takes only the slots nothing else animates.
+    super::vertex_scroll::vertex_scroll(
+        model,
+        &material_variants,
+        textures,
+        &mut material_anim,
+        &mut anim_tracks,
+        report,
+    );
     MaterialSetup {
         textures: skins,
         lightmaps: seconds,

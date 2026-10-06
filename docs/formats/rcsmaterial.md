@@ -1611,6 +1611,85 @@ previously said "the surfaces carrying one would tile wrongly first", and
 `crates/render/examples/hd_uv_transform_census.rs` is what withdrew it: reading
 these would move about fifty billboard surfaces, not a circuit.
 
+## HD's vertex programs scroll the texture coordinate (2026-10-06, `hd-anim-textures`)
+
+**The second place HD animates a texture, besides the fragment `time` of the
+section above.** A material's lit vertex block copies the coordinate attribute
+to the interpolator its fragment program samples with a multiply-add between
+(`scripts/ps3-microcode.py vp-file`, `basic_uv_scroll` block 2 onwards; every
+block that declares `time` was swept):
+
+```text
+MOV R0.w, c[207]                      ; one factor
+MAD o[TC3].x, R0.w, c[208], v[2].x    ; other factor, plus the coordinate
+MAD o[TC3].y, R0.w, c[206], v[2].y
+```
+
+One factor is `time` (`0x906b67ba`, register 463 in `basic_uv_scroll`), the
+other a parameter the **material record authors** - `USpeed` `0x1abbe1f7` and
+`VSpeed` `0x9c2f9359` there, so the law is `uv + time * rate` per axis and the
+rate is the disc's own, not chosen. The fragment block samples its one material
+texture at `f[TC3]` (`TC4`/`TC5` in the other variants, the same law) and the
+lightmap at a different, packed interpolator, so the surface scrolls and its
+bake does not. `basic_uv_scroll` on Tech de Ra authors `USpeed` 0.45, `VSpeed`
+0: the orange emissive strips slide at 0.45 tiles a second.
+
+**Census** (`crates/render/examples/hd_anim_family_census.rs`, 16 circuits, a
+material counted once per circuit it appears on). The earlier `hd_uv_time_census`
+looked at the fragment block only and so read `Speed`/`VSpeed`/`speed` materials
+as time-less: **50 shaders declare `time` in a vertex block** (22 only there, 28
+in both stages), and 32 of the 50 feed it through a multiply-add into an output
+coordinate.
+
+| Law | Shaders (materials on circuits) | Rate hash(es) |
+| --- | --- | --- |
+| `uv + time * (u, v)`, **wired** | `basic_uv_scroll` (3), `cf_uvanim_emssive` (17), `hologram` (11), `emissive_bloom` (11), `emissive_lights` (7), `uv_anim_diffuse_alpha` (3) | `USpeed`/`VSpeed`; `0x87d769dc`/`0x2481ef75`; `Speed`; `0x68292521` (v); `0x33d51367` |
+
+**Admitted only on what was read**: the rate hash set above, a lit vertex block
+that declares `time` and the hash, and a record that names exactly one texture
+besides the lightmap. **76 materials across 12 circuits** (Tech de Ra 5,
+Amphiseum 15, Modesto Heights 7, Talon's Junction 2, Vineta K 7, `02_track` 1,
+`03_track` 7, Chenghou 2, Ubermall 11, Sebenco 1, Sol 2 1, Anulpha Pass 17; the
+four Zone circuits 0), pinned per circuit by
+`crates/render/tests/hd_vertex_scroll_ground_truth.rs`. They reach the renderer
+as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
+`mesh::rcs::vertex_scroll`. A rate of zero authors no track.
+
+**Read, and still drawn still, each named**:
+
+- `animlights`, `animhexlights`, `dc_hologramwithstatic2`: the scroll is on the
+  second UV set (`v[8]`) or the material has a second texture the scroll may or
+  may not reach. Not measured.
+- `cf_uvanim_emssive_glowtint*`, `cf_uvanim_emssivealpha`, `jd_uvanim_*`,
+  `mr_uvanim_em_*`, `mr_waterfall`, `cf_waterfall`: two material textures.
+- `nr_twinblend`, `reflectplane_dc_seawater`, `cf_chenghou_sign`,
+  `sign_emissive_glow2uv`: the rate is a **literal in the shader**, not a
+  record parameter. Readable, not read here.
+- `loopmaterial`, `cf_startbeam_glow`, `cf_constantcolourglow_ramp_*`,
+  `jd_landinglights`, `cf_laserrail_cap`, `dc_flashingglow`: `time` is declared
+  by the vertex block but never added to a coordinate by a multiply-add this
+  sweep matched (colour or intensity drive).
+- Fragment-only `time`: `nr_crowd_bustle` (33), `nr_billboardholographicscanlines`
+  (35), `scanlinebillboard*`, `uvdistortion_*`, `water`, `pipefx_v2`, the
+  holograms: unread laws.
+- `weapon_pads` `W_Cycle` (231) is the pads' own thing; `scrollingalpha`
+  `V_Offset` is on no circuit material (weapons and muzzle flash only).
+
+**Pixels are small and that is the truth of the content, not of the wiring.**
+At the whole-circuit camera of the ground-truth test the scroll paints 25
+(Tech de Ra) and 13 (Anulpha Pass) pixels against the same model with the
+tracks cleared; `orange_emissive` is a smooth strip texture, so a slide along
+its length barely changes it. Amphiseum's 15 materials are hologram boards that
+sit off the whole-circuit view (0 pixels there). A matched race camera on one
+of them was tried and not framed (`--camera-pose` from the placed vertices put
+the eye inside a wall); no frame of a scrolled hologram is in the evidence.
+
+**Omega: checked, applies in name, not wired.** Omega carries `basic_uv_scroll`
+and `scrollingalpha` with HD's `VSpeed`/`V_Offset` names
+([omega-status.md](omega-status.md)), but its programs are GCN and unread, so
+whether Omega's vertex stage computes `uv + time * rate` is not established.
+2048 animates through its own skeleton and glow path and is out of scope.
+
 ## The ship hull's dark materials: a wrong colour-set match, not a wrong vertex class (2026-09-13)
 
 **The diagnosed lead - `skin::variants()` always asking for `Class::Static`
