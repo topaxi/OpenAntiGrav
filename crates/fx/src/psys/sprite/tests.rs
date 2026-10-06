@@ -14,9 +14,12 @@ fn a_placed_sprite_lands_on_the_sheet_where_its_rect_says() {
     assert!(sheet.pixels().is_none());
     let first = sheet.place(&sprite(64, 64, 7)).expect("fits");
     let second = sheet.place(&sprite(32, 32, 9)).expect("fits");
-    assert_eq!(first, [0.0, 0.0, 64.0 / 1024.0, 64.0 / 1024.0]);
+    assert_eq!(
+        first,
+        [0.0, 0.0, 64.0 / SHEET_SIZE as f32, 64.0 / SHEET_SIZE as f32]
+    );
     // Same shelf, `PAD` texels to the right.
-    assert_eq!(second[0], (64 + PAD) as f32 / 1024.0);
+    assert_eq!(second[0], (64 + PAD) as f32 / SHEET_SIZE as f32);
     let pixels = sheet.pixels().expect("allocated");
     assert_eq!(pixels[0], 7);
     assert_eq!(pixels[(64 + PAD) as usize * 4], 9);
@@ -41,9 +44,9 @@ fn a_full_sheet_refuses_rather_than_overlapping() {
     while sheet.place(&sprite(256, 256, placed)).is_some() {
         placed += 1;
     }
-    // 1024 across holds three 256s once `PAD` is counted, and so does
-    // 1024 down.
-    assert_eq!(placed, 9);
+    // As many 256s fit across as `PAD` leaves room for, and as many down.
+    let per_side = (SHEET_SIZE + PAD) / (256 + PAD);
+    assert_eq!(u32::from(placed), per_side * per_side);
 }
 
 #[test]

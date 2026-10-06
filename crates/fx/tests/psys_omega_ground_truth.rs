@@ -12,16 +12,17 @@
 //! carry the same 97 `Data/particles` effects and 112 `Data/particles2048`
 //! effects; the base alone adds 2 in each `Get` subdirectory, whose `Get\Tex`
 //! sprites ship nowhere, and nothing loads them. The existing reader takes the PS4
-//! dialect unchanged; what it refuses, it refuses by name, and all but two
-//! refusals are one thing Omega adds: blend class 8, the heat-haze and
-//! shock-distortion effects whose `psys_normal_heathaze` shader this build
-//! does not draw.
+//! dialect unchanged; what it refuses, it refuses by name: `WO_NITRO_SHIP_DEATH`
+//! (blend class 4) and `WO_BARRIER_COLLISION` (render mode 3), in each directory.
+//! The one thing Omega adds, blend class 8 (the heat-haze and shock-distortion
+//! emitters its `psys_normal_heathaze` shader draws), is read as
+//! [`Blend::Distort`]: simulated and named, not drawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use oag_assets::psarc::Archive;
 use oag_fx::psys::sprite::Sprite;
-use oag_fx::psys::{ColourScale, Effect};
+use oag_fx::psys::{Blend, ColourScale, Effect};
 use oag_pob as pob;
 
 const ARCHIVES: [&str; 2] = [
@@ -31,7 +32,7 @@ const ARCHIVES: [&str; 2] = [
 
 /// Each directory with its file count and how many parse, in both archives.
 const DIRECTORIES: [(&str, usize, usize); 2] =
-    [("Data/particles", 97, 80), ("Data/particles2048", 112, 96)];
+    [("Data/particles", 97, 95), ("Data/particles2048", 112, 110)];
 
 /// The `Get` subdirectories only the base archive has: 2 effects each, both parse.
 const GET: [&str; 2] = ["Data/particles/Get", "Data/particles2048/Get"];
@@ -70,9 +71,7 @@ fn every_omega_effect_parses_or_is_refused_by_name() {
                 Err(error) => {
                     let why = error.to_string();
                     assert!(
-                        why.contains("blend class 8")
-                            || (entry.contains("WO_NITRO_SHIP_DEATH")
-                                && why.contains("blend class 4"))
+                        (entry.contains("WO_NITRO_SHIP_DEATH") && why.contains("blend class 4"))
                             || (entry.contains("WO_BARRIER_COLLISION")
                                 && why.contains("render mode 3")),
                         "{rel}: {entry}: an unknown refusal: {why}"
@@ -139,4 +138,73 @@ fn every_emitter_names_a_gnf_that_ships_and_decodes() {
         "of {} sprites",
         sprites.len()
     );
+}
+
+/// The five explosions the player sees parse, their `shockdistort` emitter is
+/// the one that draws nothing, and every other emitter keeps a drawn blend.
+#[test]
+#[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
+fn the_explosions_play_with_only_their_distortion_emitter_undrawn() {
+    let Some(mut archive) = open(ARCHIVES[1]) else {
+        return;
+    };
+    for name in [
+        "WO_ROCKET_EXPLO",
+        "WO_ROCKET_EXPLO_TRACK",
+        "WO_MISSILE_EXPLO",
+        "WO_BOMB_SMOKERING",
+        "WO_PLASMA_LIGHTNING_EXPAND",
+    ] {
+        let blob = archive
+            .read_path(&format!("Data/particles/{name}.pob"))
+            .expect("the effect ships");
+        let effect = Effect::parse(&blob, ColourScale::Full).expect("it parses");
+        assert_eq!(
+            effect.undrawn_emitters().collect::<Vec<_>>(),
+            ["shockdistort"],
+            "{name}"
+        );
+        assert!(
+            effect
+                .emitters
+                .iter()
+                .filter(|spec| spec.blend != Blend::Distort)
+                .count()
+                >= 1,
+            "{name}: the effect has a drawn emitter besides the distortion"
+        );
+    }
+}
+
+/// The explosions' 1024x1024 and 512x512 sprites all fit one sheet: at 1024
+/// the fireball and smoke emitters did not place and drew a white disc.
+#[test]
+#[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
+fn the_explosions_sprites_all_fit_the_sheet() {
+    let Some(mut archive) = open(ARCHIVES[0]) else {
+        return;
+    };
+    let mut library = oag_fx::psys::Library::new();
+    for name in [
+        "WO_ROCKET_EXPLO",
+        "WO_ROCKET_EXPLO_TRACK",
+        "WO_MISSILE_EXPLO",
+        "WO_MINE_EXPLO",
+    ] {
+        let blob = archive
+            .read_path(&format!("Data/particles/{name}.pob"))
+            .expect("the effect ships");
+        let effect = Effect::parse_with(&blob, ColourScale::Full, &mut |authored| {
+            let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
+            let blob = archive
+                .read_path(&format!("Data/particles/Tex/{stem}.gnf"))
+                .ok()?;
+            Sprite::from_gnf(&blob)
+        })
+        .expect("it parses");
+        library.insert(name, effect);
+        let placed = library.get(name).expect("inserted");
+        let unplaced: Vec<&str> = placed.unplaced_sprites().collect();
+        assert!(unplaced.is_empty(), "{name}: {unplaced:?} did not fit");
+    }
 }

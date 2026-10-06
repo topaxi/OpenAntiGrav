@@ -116,7 +116,7 @@ pub const TITLE: &Title = &Title {
     // visible absence). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's, and the loader reports each
     // its disc lacks. The shield tint likewise.
-    effects: &oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse")),
+    effects: &EFFECTS,
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,
@@ -136,6 +136,33 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,
+};
+
+/// The effects Omega plays: the engine's own names, tried as Pulse's, minus
+/// the ones **Omega never authors**.
+///
+/// `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`,
+/// `WO_BLUE_WELDER`, `WO_RAIN`, `WO_RAIN_LENS` and `WO_SNOW` are in no archive
+/// of this title (every `.pob` of `data00.psarc` and the patch's `data05.psarc` listed, 2026-10-06) and no string of
+/// its executable names them (`grep -a` over `eboot.bin`: 0 hits each, against 2
+/// for `WO_ROCKET_FLARE`). They are Pulse's, so each loads as a report line
+/// and nothing else; leaving them out is the title's own effect set, not a
+/// hidden absence. See `docs/formats/pob.md`, "Effects Pulse names that
+/// Omega never authors".
+///
+/// The magstrip triggers are left out too: Omega's `WO_MAGSTRIP_*` ships only under
+/// `Data/particles2048/`, and nothing here fires them (`weapon_models` has no
+/// `magstrip_pob`, the arc wake being HD's mechanism). Unread, not absent.
+const EFFECTS: oag_title::Effects = {
+    use oag_title::Trigger;
+    let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        .without(Trigger::PlasmaBlast)
+        .without(Trigger::EngineFlare)
+        .without(Trigger::LeachbeamEnergy)
+        .without(Trigger::MagstripSparks)
+        .without(Trigger::MagstripZone);
+    effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
+    effects
 };
 
 /// Omega's music: no standalone files, a playlist in plugin XML and the audio
