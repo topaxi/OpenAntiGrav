@@ -464,7 +464,7 @@ fn zone_craft_blob_shadow_is_the_discs_own_on_2048_and_omega() {
                 "{source} slot {slot}"
             );
             assert!(
-                image.rgba.chunks_exact(4).any(|px| px[0] > 200),
+                image.rgba.as_chunks::<4>().0.iter().any(|px| px[0] > 200),
                 "{source} slot {slot}: coverage must arrive in the red channel"
             );
             let own = row_profile(image);
