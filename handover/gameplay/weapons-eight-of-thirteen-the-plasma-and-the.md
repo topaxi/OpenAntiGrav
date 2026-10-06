@@ -621,10 +621,7 @@ still open, most player-visible first:
   are spent - a glancing hit off a craft is the obvious guess. There is
   currently no moment in this engine where they *could* be spent: a hull hit
   ends a blade and only geometry bounces it.
-- **`WO_SHURIKEN_TRAIL` is authored and unwired.** It hangs off a *second*
-  anchor whose basis the constructor rotates by -pi/2 and the update rebuilds
-  every tick; a `Projectile` here carries a position and a velocity and no roll,
-  so there is nowhere to put it.
+- ~~**`WO_SHURIKEN_TRAIL` is authored and unwired.**~~ Wired 2026-10-06 with the blade's own model: see shuriken.md's 2026-10-06 section.
 - ~~**The Repulser's handler is read and it is not an instantaneous blast.**
   ... "the field is a state the craft is in".~~ **Wrong, and closed
   2026-10-04**: the four copies are never read; the weapon is a blast, then two

@@ -648,8 +648,8 @@ impl Scene {
             }
         }
         // Only the billboard *fallback*, per kind: a Rocket, Mine, Bomb or
-        // Cannon round whose own model did not load, or a Missile, Plasma or
-        // Shuriken, which has none at all - the flare around a modelled kind is
+        // Cannon round whose own model did not load, or a Missile or
+        // Plasma, which has none at all - the flare around a modelled kind is
         // an asset now, through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
             oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),

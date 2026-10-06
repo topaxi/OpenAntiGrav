@@ -35,7 +35,7 @@ unaccounted for; the table below is its reading on 2026-10-02.
 | Rank | Effect | State | Best lead |
 | ---: | --- | --- | --- |
 | 3 | `WO_SHIP_COLL_SPARK_NODAMAGE` | trigger read, not seen live | `Ship_DispatchCollisionFx` `0x0883df38`: a contact with non-positive friction (floor, magstrip) |
-| 4 | `WO_SHURIKEN_TRAIL` | trigger read, unwired | `Shuriken_Init` `0x08877280`: a second anchor rotated -pi/2 about the blade; a `Projectile` here has no roll |
+| 4 | ~~`WO_SHURIKEN_TRAIL`~~ | wired 2026-10-06 | `Shuriken_Init` `0x08877280`: a second anchor rotated -pi/2 about the blade; played on `Stage::orient` to the velocity |
 | 5 | `WO_SHIP_COLL_SPARK_TRAIL_SMOKE` | unread | no string in the executable; a sibling of the embedded `_TRAIL`, nothing found referencing it |
 
 Evidence for the new rows and the weather:

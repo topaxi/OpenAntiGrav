@@ -198,7 +198,9 @@ impl super::Scene {
             queue,
             view_projection,
             prev_vp,
-            Some(seconds),
+            // `Shuriken_Init` pins the node's anim time to 0 and nothing
+            // advances it: the blade does not spin.
+            None,
         );
         write_one_kind(
             &self.mines,

@@ -772,7 +772,7 @@ impl Race {
     /// [`Trigger::RocketFlare`], played off the disc through [`RaceView::stage`],
     /// and a billboard on top of it would be a second invented one. What is
     /// left here is the case where a kind's own model did not load, or a kind
-    /// (the Missile, the Plasma, the Shuriken) has no model at all, and a
+    /// (the Missile, the Plasma) has no model at all, and a
     /// projectile would otherwise be invisible - see
     /// [`PROJECTILE_SPRITE_HALF_SIZE`].
     ///
@@ -780,7 +780,7 @@ impl Race {
     /// [`Self::projectile_model_matrices`]'s own kind filter.** A single
     /// `bool` gated *all* projectiles on whether the Rocket's model happened
     /// to load, so on a real disc (where it does) a live Missile, Plasma or
-    /// Shuriken drew nothing at all: no mesh, because it authors none, and no
+    /// Shuriken (before its own model was drawn) drew nothing at all: no mesh, and no
     /// billboard, because the flag said "modelled" for a kind it was never
     /// about. `modelled` is now asked once per live projectile's own kind.
     #[must_use]
@@ -835,8 +835,9 @@ impl Race {
     /// # Checking a frame with a rocket in it
     ///
     /// `--race` gives a craft that holds the throttle and never reaches a
-    /// pad, so a rocket needs the AI or a replayed input script
-    /// (`oag-trace run --script`). Track scenery can read as a volley: compare
+    /// pad, so a rocket needs `--give rocket` (`--mode eliminator` for a
+    /// Shuriken, with the other grid slots off - a grid-mate takes the blade
+    /// on its first tick) or a replayed input script (`--input-script`). Track scenery can read as a volley: compare
     /// against `--mode time_trial`, where no rocket can exist.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
@@ -870,10 +871,11 @@ impl Race {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
     }
 
-    /// Where each live Shuriken blade is: the Rocket's basis, which
-    /// `Shuriken_Update` (`0x08877bdc`) builds the same way - `n x f`, `n`,
-    /// `f`, position - and hands the model node unrotated. It writes no spin
-    /// of its own, so any tumble is the model's own node animation.
+    /// Where each live Shuriken blade is: `Shuriken_Update`'s (`0x08877bdc`)
+    /// basis - `n x f`, `n`, `f`, position - handed to the model node
+    /// unrotated, with `n` the exact surface normal and `f` the velocity
+    /// flattened against it (the Rocket's does the reverse). The update
+    /// writes no spin of its own.
     #[must_use]
     pub fn shuriken_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Shuriken)
@@ -970,6 +972,23 @@ impl Race {
                 // original's own `n` (`rocket+0x100`), seeded to world up at
                 // spawn. It, then world up, then any perpendicular, so a
                 // projectile flying along one of them still gets a basis.
+                if kind == oag_tables::weapons::Weapon::Shuriken {
+                    // `Shuriken_Update` (`0x08877bdc`) keeps the carried
+                    // normal exact as row 1 and flattens the velocity
+                    // against it (`vdot`/`vscl`/`vsub`, `0x08877f6c`), so a
+                    // blade lies in its surface even when it flies off it.
+                    let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
+                    let flat = forward - up * forward.dot(up);
+                    if let Some(front) = flat.try_normalize() {
+                        let side = up.cross(front);
+                        return Mat4::from_cols(
+                            side.extend(0.0),
+                            up.extend(0.0),
+                            front.extend(0.0),
+                            projectile.position.extend(1.0),
+                        );
+                    }
+                }
                 let reference = [projectile.surface, Vec3::Y]
                     .into_iter()
                     .find(|axis| forward.dot(*axis).abs() < 0.999)

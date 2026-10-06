@@ -303,7 +303,7 @@ fn a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose() {
     let Some(loaded) = eliminator_race() else {
         return;
     };
-    let (mut race, throttle) = moving(loaded);
+    let (mut race, _) = moving(loaded);
     for ship in &mut race.sim.world.ships[1..] {
         ship.active = false;
     }
