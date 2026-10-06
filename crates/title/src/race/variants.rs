@@ -261,7 +261,9 @@ impl RaceDefaults {
     #[must_use]
     pub fn ships_for(&self, team: &str) -> ShipPaths {
         ShipPaths {
-            dir: self.guest_for(team).map_or(self.ship_dir, |guest| guest.dir),
+            dir: self
+                .guest_for(team)
+                .map_or(self.ship_dir, |guest| guest.dir),
             zone: self.zone_craft,
             boost: self.boost,
         }
@@ -270,7 +272,8 @@ impl RaceDefaults {
     /// [`Self::ships_for`]'s sibling for [`Self::handling_dir`].
     #[must_use]
     pub fn handling_dir_for(&self, team: &str) -> &'static str {
-        self.guest_for(team)
-            .map_or(self.handling_dir, |guest| guest.handling_dir.unwrap_or(guest.dir))
+        self.guest_for(team).map_or(self.handling_dir, |guest| {
+            guest.handling_dir.unwrap_or(guest.dir)
+        })
     }
 }

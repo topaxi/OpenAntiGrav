@@ -45,10 +45,17 @@ fn every_craft_on_omegas_team_list_resolves_its_model_hull_and_tuning() {
     let mut era_2048 = 0;
     for team in &teams {
         // The disc names each team's own directory; the table must agree.
-        let declared = team.location.rsplit_once(['\\', '/']).expect("a location").0;
+        let declared = team
+            .location
+            .rsplit_once(['\\', '/'])
+            .expect("a location")
+            .0;
         let first = craft_ids(&team.id).remove(0);
         assert!(
-            defaults.ships_for(&first).dir.eq_ignore_ascii_case(declared),
+            defaults
+                .ships_for(&first)
+                .dir
+                .eq_ignore_ascii_case(declared),
             "{}: the disc declares {declared}, the title says {}",
             team.id,
             defaults.ships_for(&first).dir
