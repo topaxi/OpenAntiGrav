@@ -212,9 +212,8 @@ It does not bind a waveform, so the **9** nodes carrying it (`moather~birds`,
 `dekonst~CRANE` and both `talonsj~SETREG` cues) are correctly silent, not
 blocked on a missing handler -
 [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits)
-corrects its prior confidence-88 hypothesis. **The other 29 (every `~SetReg*`
-cue, opcode `0x1e`) are unaffected by this and stay unread** - "set register"
-is still only a name-based guess, not a decoded handler. Nothing to wire
+corrects its prior confidence-88 hypothesis. ~~The other 29 (every `~SetReg*`
+cue, opcode `0x1e`) stay unread~~ **Superseded: `0x1e` is `Scream_OpSetRegister` (confidence 88, `sound.md`), a register write that starts no sound, and the cues are control-only.** Nothing to wire
 follows from `0x14` itself - there was no waveform to bind - so the former
 Next Step #1 is dropped rather than closed with an implementation. The
 discriminating check on this (do the table's neighbouring slots hold distinct

@@ -43,8 +43,7 @@ How "absent" was established, and how "never requested" was:
    `WO_SHIP_ENGINEFLARE.POB`.
 3. **By request.** Neither `BOOT.BIN` (PSP, USA and EU) nor `SCES_547.48` (PS2)
    contains any of the eight strings, nor any of the eight hashes as a 32-bit value
-   in either byte order. The `WO_*` names Pulse's executables do carry are the set the
-   35- and 41-blob inventory wires. This is the weaker
+   in either byte order. None of the eight appears there. This is the weaker
    leg on its own: [pob.md](pob.md) records that a continuous effect such as the
    engine flare is absent from its executable's string table as well and is
    triggered anyway. It is sufficient here because legs 1 and 2 show the file does
@@ -78,7 +77,8 @@ for them; that is Pure's table to correct, and was not touched.
 ## The cannon bolt, muzzle flash and ghost static on the PS2 were a name-lookup gap
 
 `Data\Weapons\Textures\Cannon_bolt.mip`, `Cannon_muzzle_flash.mip` and
-`Data\Tex\staticglow.mip` were reported absent on the PS2. They are on the disc as
+`Data\Tex\staticglow.mip` were reported absent on the PS2. `SCES_547.48` itself contains all three `.mip` strings, so the PS2 requests them
+and finds them under `.pct`. They are on the disc as
 `.pct` (`077abc83`, `fe1eb1c7`, `fd15c258`), the rewrite
 [`ps2_texture_name`](../../crates/formats/src/wad.rs) already documents. The two
 loaders read through `Archives::read_name` and so never applied it. They now go
@@ -97,7 +97,10 @@ starts no grain and passed at least one such opcode is now reported as
 `control only: ... authors no sound` at debug, not `play nothing` at WARN. A cue with
 an opcode the walk does not read still takes the old WARN. The same reclassification
 applies to every title that reaches `load_cue_record` (HD, 2048, Omega), by the same
-walk; no cue there starts or stops playing because of it.
+walk. Run once each (HD `talons_junction`, 2048 `altima`, Omega `tech_de_ra`) and
+diffed against the reference: no `play nothing` line moved on any of them (none of
+their cues is control-only on those circuits), so this lane changed no 2048 or Omega
+log line.
 
 ## The blob shadow is only a stand-in when the tier is on
 
@@ -115,16 +118,37 @@ race that a falloff would be used, although nothing draws it unless the player
 selects `blob`. `oag_render::shadow::Silhouette` now records `generated`, the load
 logs the census at debug, and `Scene::shadow_geometry` warns once, the first frame
 the `blob` tier is on and a generated silhouette is in use. That is the moment the
-stand-in becomes visible to a player, so it is the moment it is named. HD, 2048 and
-Omega take the same path (HD's `2 of 8` and 2048/Omega's `8 of 8` lines go the same
-way); 2048 and Omega's own silhouette census (whether either ships
-`ambient_shadow` under a different name) was not run here.
+stand-in becomes visible to a player, so it is the moment it is named. The other titles take the same path, each with its census:
+
+- **HD: proven absent for the two slots.** HD ships nine `ambient_shadow.gtf`
+  (`ag_systems`, `assegai`, `egx`, `feisar`, `goteki`, `piranha`, `qirex`,
+  `triakis`, `zone`; `scripts/psarc.py list` over all seven archives). The two
+  slots that fell back on the reference run are `Icaras` and `Auricom`, which have
+  none under any directory. Checked, differs: HD is the one title whose disc ships
+  the silhouette, for nine teams.
+- **2048: absent for every race team.** The only `Ambient_Shadow` in the Vita
+  archives is `data/art/published/hdships/Zone/Textures/Ambient_Shadow.gxt`, a
+  `.gxt` and for the Zone craft alone; the loader asks `.gtf` names for
+  `feisar2048`, `Piranha2048` and the rest. Checked, applies, not wired: the Zone
+  craft's `.gxt` silhouette could be read through `oag_texture`'s GXT decoder.
+- **Omega: absent for every race team.** 46,005 names over the nine `.psarc` files
+  of the base and patch trees; the only `Ambient_Shadow` are
+  `hdships/zone/Textures/Ambient_Shadow.gnf` and `HDShips/Zone_VR/...`, the Zone
+  craft alone, as `.gnf`. Same status as 2048.
 
 ## Billboard slots: not closed
 
-The open question is where a hoarding attaches and what tints it, in [billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md) and [start-gantry.md](../rendering/start-gantry.md). Added here: Pulse's advert
-models (`Data\Billboards\Pulse_Adverts\*`) carry only generic textures
-(`white_nonalpha`, `justwhite`, `fadeup001`), so there is no authored advert picture
-in them to bind, and what a slot is *tinted* by is the unread colour pool of
-`Billboard_CreateFromColour_q`. The placeholder draws stay suppressed and the WARN
-stays, because the placement and the tint are both unrecovered.
+Rendered with `oag-view --mesh` (screenshots in the lane's scratch directory, not
+committed): `Data\Billboards\Pulse_Adverts\goteki\GOTEKI_LANDSCAPE_01.vex` is a
+self-contained scene of flat panels plus **logo and lettering as geometry** (a
+"GOTEKI" wordmark, a yellow emblem, a "45"), and `auricom\AURICOM_LANDSCAPE_01.vex`
+is two overlapping panels with the Auricom wordmark. Their materials reference only
+generic textures (`white_nonalpha`, `justwhite`, `fadeup001`), the same way the start
+gantry's lettering is geometry ([start-gantry.md](../rendering/start-gantry.md)). So
+there is an authored advert to play, and it is **not** a texture to bind onto the
+track's placeholder quad (the HD shape): it is a model that needs a transform. The
+constructor writes the identity matrix and the writer that moves it to its hoarding
+is not found
+([billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md)). The placeholder
+draws stay suppressed and the WARN stays: placement is unrecovered, and putting the
+model where a placeholder quad sits would be a guess, not a reading.

@@ -80,7 +80,7 @@ impl super::super::Scene {
         {
             log::warn!(
                 "blob shadow: {} of {} slot(s) draw a generated falloff, which is this \
-                 project's and not the disc's - this title ships no silhouette",
+                 project's and not the disc's - the disc ships no silhouette for those craft",
                 self.generated_silhouettes,
                 self.shadow_silhouette_count
             );
