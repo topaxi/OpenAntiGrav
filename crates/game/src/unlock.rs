@@ -129,11 +129,15 @@ impl Gate {
     /// grids will not read is logged and left open - there is nothing to gate
     /// against - rather than locking every circuit away.
     #[must_use]
-    pub fn read(title: &str, archives: &mut oag_assets::Archives) -> Self {
-        if title != oag_pulse::TITLE.name {
+    pub fn read(title: &oag_title::Title, archives: &mut oag_assets::Archives) -> Self {
+        let campaign = title.campaign;
+        let Some(entry) = campaign
+            .definition_entry
+            .filter(|_| campaign.circuit_unlocks)
+        else {
             return Self::open();
-        }
-        match crate::campaign::read_grids(archives, oag_pulse::campaign::DEFINITION_ENTRY) {
+        };
+        match crate::campaign::read_grids(archives, entry) {
             Ok(grids) => Self::on_grids(grids),
             Err(error) => {
                 log::warn!("{error:#} - no campaign grids, so no circuit is locked");
@@ -183,10 +187,11 @@ pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &str) -> bo
 }
 
 /// Whether `title` gates its craft variants at all: Pulse authors the
-/// loyalty rows, and no other title's definition here carries them.
+/// loyalty rows, and no other title's definition here carries them
+/// ([`oag_title::Campaign::loyalty_unlocks`]).
 #[must_use]
-pub fn gates_variants(title: &str) -> bool {
-    title == oag_pulse::TITLE.name
+pub fn gates_variants(title: &oag_title::Title) -> bool {
+    title.campaign.loyalty_unlocks
 }
 
 /// `tracks` as Track Select lists them from `archives`: gated when `kind` is Track
@@ -196,12 +201,12 @@ pub fn gates_variants(title: &str) -> bool {
 pub fn offered_on(
     kind: oag_ui_screens::picker::Kind,
     archives: Option<&mut oag_assets::Archives>,
-    title: &str,
+    title: &oag_title::Title,
     tracks: &[Track],
 ) -> Vec<Track> {
     match archives {
         Some(archives) if kind == oag_ui_screens::picker::Kind::Track => {
-            Gate::read(title, archives).offered(tracks, &records::load(), title)
+            Gate::read(title, archives).offered(tracks, &records::load(), title.name)
         }
         _ => tracks.to_vec(),
     }

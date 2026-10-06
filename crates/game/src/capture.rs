@@ -585,8 +585,7 @@ pub fn run(
                     None => None,
                 };
                 // The live screen's list: locked circuits are absent.
-                let tracks =
-                    crate::unlock::offered_on(kind, archives.as_mut(), title.name, &tracks);
+                let tracks = crate::unlock::offered_on(kind, archives.as_mut(), title, &tracks);
                 let selected = tracks
                     .iter()
                     .find(|track| track.id == options.settings.race.track);

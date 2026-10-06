@@ -1,44 +1,30 @@
 //! Detecting contact with `Reset Collision` geometry.
 //!
-//! `docs/ghidra/functions/psp-pulse-usa/collision.md` records two facts about the
-//! `Reset` class at confidence **86**: it is excluded from ordinary raycasts, and
-//! **a contact with it triggers a respawn**. This module is the first half of
-//! that - the detection. It deliberately does nothing about the respawn, because
-//! respawning needs a track spline and this crate does not know one exists.
+//! `docs/ghidra/functions/psp-pulse-usa/collision.md` records, at confidence **86**, that the
+//! `Reset` class is excluded from ordinary raycasts and **a contact with it triggers a respawn**.
+//! This module is the detection only: a respawn needs a track spline this crate does not know.
 //!
-//! # What is not recovered, and is therefore not here
+//! # Not recovered, so not here
 //!
-//! **Where the ship goes.** The evidence says a respawn happens; nothing found
-//! says where to. That decision lives in `crates/raceplay/src/lib.rs`, which owns
-//! the spline, and is scored there as the low-confidence guess it is. Keeping the
-//! split here rather than passing a recovery pose down means this module cannot
-//! quietly acquire an invented constant.
+//! **Where the ship goes.** Nothing found says where; that decision lives in
+//! `crates/raceplay/src/lib.rs`, which owns the spline, scored there as the low-confidence guess
+//! it is. Keeping the split here means this module cannot quietly acquire an invented constant.
 //!
 //! # Why this does not go through [`Raycaster`]
 //!
-//! [`Raycaster::raycast`] returns the **nearest** hit across every collider, and
-//! `include_reset` only decides whether `Reset` is a *candidate*. A reset volume
-//! is almost always below or outside the track, so a probe aimed at one passes
-//! through the floor first and the floor wins. Asking through the trait would
-//! produce a trigger that essentially never fires.
+//! [`Raycaster::raycast`] returns the **nearest** hit across every collider, and `include_reset`
+//! only makes `Reset` a *candidate*. A reset volume is usually below or outside the track, so a
+//! probe at one passes through the floor first and the floor wins: a trigger that essentially
+//! never fires. So this walks [`CollisionWorld::colliders`] and queries only the `Reset` ones
+//! (each [`TriangleSoup`] is a [`Raycaster`], so the narrowphase is shared), in an ordered `Vec`
+//! as `docs/architecture/determinism.md` requires.
 //!
-//! So this walks [`CollisionWorld::colliders`] itself and queries only the
-//! `Reset` ones - each [`TriangleSoup`] is a [`Raycaster`] in its own right, so
-//! no new query code exists here and the narrowphase is the same one everything
-//! else uses. Iteration is over an ordered `Vec`, which is what
-//! `docs/architecture/determinism.md` requires of anything feeding simulation
-//! state.
+//! # The probes are the hull's
 //!
-//! # The probes are the hull's, not a new set
-//!
-//! Detection uses [`crate::wall::hull_probes`] plus one swept ray along the
-//! frame's displacement, exactly as [`crate::wall`] does. Two probe sets would
-//! drift, and the drift would show as a trigger that fires for one side of the
-//! hull and not the other.
-//!
-//! Unlike a wall contact, **no penetration depth is required**: a reset volume is
-//! a trigger, not a surface, so touching it at all is the event. Nothing here
-//! reads friction, and `Surface::Reset`'s is the frictionless sentinel anyway.
+//! [`crate::wall::hull_probes`] plus one swept ray along the frame's displacement, as
+//! [`crate::wall`] does: two probe sets would drift, showing as a trigger that fires for one side
+//! of the hull only. Unlike a wall contact **no penetration depth is required**: a reset volume
+//! is a trigger, so touching it is the event. Nothing here reads friction.
 
 use oag_core::math::Vec3;
 
@@ -53,26 +39,21 @@ use crate::wall::{self, MIN_HULL_EXTENT};
 pub struct ResetContact {
     /// Where the probe met the triangle, in world space.
     pub point: Vec3,
-    /// The triangle's normal, flipped to face the probe it came back along.
-    ///
-    /// Carried for a debug view rather than for the response: nothing about a
-    /// respawn depends on which way the trigger's surface faces.
+    /// The triangle's normal, flipped to face the probe it came back along. Carried for a debug
+    /// view: a respawn does not depend on which way the trigger's surface faces.
     pub normal: Vec3,
     /// Index of the reset collider that was touched.
     pub collider: u32,
-    /// Set when the swept ray, rather than a hull probe, found it.
-    ///
-    /// A ship falling off the track crosses a reset volume's top face at speed,
-    /// which is precisely the case a probe from the end position cannot see.
+    /// Set when the swept ray, not a hull probe, found it: a ship falling off the track crosses
+    /// a reset volume's top face at speed, which a probe from the end position cannot see.
     pub swept: bool,
 }
 
 /// Whether the ship touched any `Reset` geometry this frame.
 ///
-/// `previous_position` is where the body was before this frame moved it. Passing
-/// the position from before force evaluation rather than before integration
-/// sweeps slightly further, which for a trigger volume is the safe direction: a
-/// missed reset strands a ship, a marginally early one costs nothing.
+/// `previous_position` is where the body was before this frame moved it. Passing the position
+/// from before force evaluation rather than before integration sweeps slightly further, the safe
+/// direction for a trigger: a missed reset strands a ship, a marginally early one costs nothing.
 #[must_use]
 pub fn contact(
     state: &ShipState,
@@ -83,8 +64,7 @@ pub fn contact(
 ) -> Option<ResetContact> {
     let body = &state.body;
 
-    // The swept ray first: it is the one that catches a ship dropping through a
-    // volume's face between two frames.
+    // The swept ray first: it catches a ship dropping through a volume's face between frames.
     let displacement = body.position - previous_position;
     let travelled = displacement.length();
     let moved = travelled > MIN_HULL_EXTENT;
@@ -134,8 +114,7 @@ fn nearest_reset(
         if collider.surface() != Surface::Reset {
             continue;
         }
-        // `include_reset` is set because the collider would otherwise skip
-        // itself; this is the "explicitly requested" case the evidence names.
+        // `include_reset` is set because the collider would otherwise skip itself.
         let Some(hit) = collider.raycast(ray, skip, true) else {
             continue;
         };

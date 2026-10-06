@@ -313,6 +313,8 @@ const GUEST: TeamVariants = TeamVariants {
 const GUEST_ROSTER: GuestRoster = GuestRoster {
     dir: r"Data\art\published\hdships",
     variants: &GUEST,
+    reships: "A Fixture Title",
+    origin: crate::effects::Origin::Chosen,
 };
 
 const SOUNDS: SoundBanks = SoundBanks {
@@ -354,6 +356,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     hull_variants: None,
     // A fixture, not a measurement: this crate holds no title's data, so the
     // ladder here is only shaped like one.
+    fresh_variant: None,
     speed_classes: None,
 };
 

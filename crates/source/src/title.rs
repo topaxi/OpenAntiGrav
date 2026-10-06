@@ -103,18 +103,44 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
     }
 
     match oag_pulse::open_with_packs(source, packs) {
-        Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => {
-            oag_pure::open_with_packs(source, pure_packs).map(|archives| Opened {
-                archives,
-                title: oag_pure::TITLE,
-            })
-        }
-        other => other.map(|archives| Opened {
+        Ok(archives) => Ok(Opened {
             archives,
             title: oag_pulse::TITLE,
         }),
+        Err(error) => match deny_list_opener(&error) {
+            Some(opener) => (opener.open)(source, pure_packs).map(|archives| Opened {
+                archives,
+                title: opener.target,
+            }),
+            None => Err(error),
+        },
     }
 }
+
+/// The opener for the title `error` says the source belongs to, when Pulse's
+/// deny-list named one this build can open.
+fn deny_list_opener(error: &Error) -> Option<&'static DenyListOpener> {
+    let Error::WrongTitle { title: named, .. } = error else {
+        return None;
+    };
+    PULSE_DENY_LIST_OPENERS
+        .iter()
+        .find(|opener| opener.target.name == named)
+}
+
+/// A title Pulse's deny-list can hand a source over to, and how to open it.
+struct DenyListOpener {
+    target: &'static Title,
+    open: fn(&str, Vec<Pack>) -> Result<Archives>,
+}
+
+/// The titles whose serials Pulse's own deny-list names (it rules them out by
+/// the name of the title they belong to), each with its opener. A source Pulse
+/// refuses as a title not listed here is still reported as Pulse's error.
+const PULSE_DENY_LIST_OPENERS: &[DenyListOpener] = &[DenyListOpener {
+    target: oag_pure::TITLE,
+    open: oag_pure::open_with_packs,
+}];
 
 /// Which title a source is, for a caller that needs the answer before it has
 /// any other reason to open the archives.

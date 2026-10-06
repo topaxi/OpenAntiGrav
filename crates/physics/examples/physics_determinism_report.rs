@@ -1,14 +1,9 @@
-//! Prints the simulation determinism hashes for this machine.
+//! Prints the simulation determinism hashes for this machine: the twin of `oag-core`'s
+//! `core_determinism_report` over the real force law. CI runs it on every supported platform, so
+//! when `tests/determinism.rs` fails each platform's log already carries this output.
 //!
-//! The twin of `oag-core`'s `core_determinism_report`, over the real force law
-//! rather than over the math probe. CI runs it on every supported platform, so
-//! when `tests/determinism.rs` fails the log for each platform already carries
-//! this output and the divergent target is visible without re-running anything.
-//!
-//! It prints a **row every hundred ticks** as well as the totals, which is what
-//! makes a cross-platform failure localisable: diffing two CI logs dates the
-//! divergence to a hundred-tick window instead of saying only that the run ended
-//! differently.
+//! It prints a **row every hundred ticks** as well as the totals, so a cross-platform failure is
+//! localised: diffing two CI logs dates the divergence to a hundred-tick window.
 //!
 //! ```sh
 //! cargo run -q -p oag-physics --example physics_determinism_report

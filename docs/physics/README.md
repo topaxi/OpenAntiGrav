@@ -448,6 +448,62 @@ operand-convention misreading against the vendor VU manual). Whatever compensate
 not this section's concern, since the measured behaviour above is convergent (aligning),
 not divergent - see `craft-update.md` for where that question currently stands.
 
+### Alignment gain: the measurements behind the numbers
+
+Moved here from the `ALIGNMENT_GAIN` doc comment in `crates/physics/src/hover.rs`.
+
+**Stability arithmetic (the superseded bare-acceleration arrangement).** One frame of the scheme `integrate` runs (`a` fixed from the
+frame's starting state, three sub-steps of `h = H/3`):
+
+```text
+theta'  = theta + H*theta_dot + (H^2/3)*a
+dtheta' = theta_dot + H*a                       a = -k*theta - c*theta_dot
+det = (1 - k*H^2/3)(1 - c*H) + k*H^2 - c*k*H^3/3
+```
+
+Stable when `c >= (2/3) * k * H`, i.e. `H <= 3c / (2k) = 0.0075 s`. At `k = 400`,
+`c = 2`, `H = 1/60` the needed `c` is 4.444, so the frame is 2.22x too large,
+`det = 1.040741`, and roll grows by `sqrt(det) = 1.020167` per tick. Measured in this
+crate: a ship at rest on a flat floor with 0.01 rad of roll grew its peaks 1.018 to
+1.022 per tick over 200 ticks, period 19 ticks against the predicted
+`sqrt(400) = 20 rad/s`. That growth matched the undivided `k = 400` (a roll inertia of about 3.1 would have given
+`k_eff = 129`), which confirmed the torque then reached the body as an angular
+acceleration. The torque is now divided by the recovered tensor (`15.6` on roll), so this
+describes the superseded arrangement; see "That guess was right" above.
+
+**The original at rest** (Pulse in PPSSPP, Time Trial, 150 ticks, no input, via
+`scripts/psp-trace.py`): `grounded` 1.0 on every tick, distance travelled 0.0087 units,
+`pos_y` range 0.00019, up-axis deviation from its own mean at most 0.000476 rad
+(0.027 deg), no oscillation. So the crate's growth is an artefact of the reading, not a
+property of the game. The hover constant pool around `0x08ab0e00` holds
+`TARGET_GLOBAL_SCALE`, `HOVER_K` and `BANK_TO_YAW_GAIN` (`0x08ab1098` reads `30.0`) but
+no `400.0` and no `-2.0`/`-5.0` pair.
+
+**Step response** (Pulse, Time Trial, breakpoint in `Ship_UpdateCraft`, basis rows
+rewritten through `memory.write_u32` to roll the ship 0.25 rad about its forward axis;
+the breakpoint fires about eight times a frame on a full grid, so distinct values are the
+frames). Roll in rad, one value per frame:
+
+```text
+0.2500 0.2493 0.2466 0.2424 0.2367 0.2295 0.2210 0.2113 0.2004 0.1886
+0.1758 0.1621 0.1476 0.1329 0.1175 0.1014 0.0855 0.0693 0.0531 0.0369
+0.0210 0.0055 -0.0097 -0.0244 -0.0384 -0.0518 -0.0646 -0.0762 ...
+```
+
+A clean damped cosine crossing zero at frame 21: quarter period 21 frames, `T = 1.4 s`,
+`omega = 4.49 rad/s`, stiffness `omega^2 ~= 20.2`, `zeta ~= 0.18` over 0.583 s,
+damping `2*zeta*omega ~= 1.6` (against the transcribed 2.0, itself confirmed at `-2.0`
+in the PS2 `Ship_ApplyAngularDamping`, `0x0015c1b0`). At `20.2` the oscillator runs at
+4.49 rad/s with `det = 0.9704` and roll decays about 1.5 % a tick. Confidence **80**:
+one ship, one track, hand-fitted from a quarter period and one overshoot.
+
+**Sign.** With `omega = up x n`, `d(up)/dt = omega x up = n - up*(n . up)`, the component
+of `n` perpendicular to `up`, so `+k * cross(up, n)` aligns and the page's literal
+`-400` diverges. A simulation with the literal `-400` and a 0.02 rad roll tumbled within
+a second. The magnitude is confirmed in the PS2 build, which materialises `0xC3C80000`
+(`-400.0f`) in both `Ship_HoverFourCorner` (`0x0015a940`) and `Ship_HoverTwoPoint`
+(`0x0015b978`) with the same sign and operand order. Confidence **84** on the direction.
+
 ## Airbrakes
 
 Each side ramps toward its analog input at `gain` upward and `falloff` downward,

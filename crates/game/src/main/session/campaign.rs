@@ -70,7 +70,7 @@ impl Session {
         // `crate::capture::campaign_page`'s own `--menu-page
         // campaign-select` path through `oag_game::campaign::hd_selection_string_overlay`
         // so the two cannot resolve these ids differently.
-        if shell.title.name == oag_hd::TITLE.name
+        if shell.title.campaign.selection_strings
             && let Some(entries_path) = shell.entries.as_deref()
         {
             let overlay =
@@ -83,7 +83,6 @@ impl Session {
         // itself cannot survive `self.renderer_set_sprites`, the same reason
         // `strings` above is already a clone rather than a borrow.
         let title_ref = shell.title;
-        let title = shell.title.name.to_string();
         let circuit_names = shell.circuit_names.clone();
         let records = self.records.clone();
         let globals: Vec<(&str, &str)> = shell
@@ -122,7 +121,7 @@ impl Session {
                         campaign.ticker,
                         strings,
                         campaign.sprites,
-                        title,
+                        title_ref,
                         circuit_names,
                         records,
                         campaign.flyers,

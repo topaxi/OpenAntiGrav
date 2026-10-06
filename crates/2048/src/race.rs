@@ -95,6 +95,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // evidence for this one: it maps a zone count onto `MX_CLASS`/`A_CLASS`
     // and friends for the Zone HUD, which is a per-zone escalation rather
     // than the speed class a race is started in.
+    fresh_variant: None,
     speed_classes: None,
 };
 
@@ -385,6 +386,11 @@ pub const GUEST_TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants
 pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     dir: HD_SHIP_DIR,
     variants: &GUEST_TEAM_VARIANTS,
+    // `docs/formats/2048-status.md`: 2048 reships HD/Fury's twelve teams under
+    // a tree of its own. Spelled out rather than read from `oag-hd`, which a
+    // title package does not depend on (a test pins it to `oag_hd::TITLE.name`).
+    reships: "Wipeout HD",
+    origin: oag_title::Origin::Measured,
 };
 
 /// The circuit a race loads when the caller names none.

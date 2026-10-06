@@ -180,17 +180,12 @@ fn a_ship_that_never_armed_reports_no_completion() {
     assert_eq!(state.roll_target, 0.0);
 }
 
-/// Closes the gap the unit tests above leave: every one of them drives
-/// [`ShipState`] fields directly and none exercises the three *consumers* of
-/// [`ShipState::roll_payout_timer`] at all. Wired through a completed gesture
-/// end to end - `arm`, then `advance_phase` to completion, then `release` on a
-/// simulated landing - and then checks the two consumers this module can see
-/// without reaching into `crate::engine` (whose gate is `crate::forces`'
-/// business, not tested here).
-///
-/// **Does not touch the input layer.** Nothing here claims a real race can
-/// reach this path - see [`arm`]'s caller in `crate::forces::evaluate`, which
-/// has no producer of a tap event yet.
+/// Closes the gap the unit tests above leave: they drive [`ShipState`] fields directly and none
+/// exercises the three *consumers* of [`ShipState::roll_payout_timer`]. Wired through a completed
+/// gesture end to end (`arm`, `advance_phase` to completion, `release` on a simulated landing),
+/// then checks the two consumers this module can see without `crate::engine`. **Does not touch
+/// the input layer**: nothing claims a real race reaches this path ([`arm`]'s caller in
+/// `crate::forces::evaluate` has no tap-event producer yet).
 #[test]
 fn a_completed_roll_arms_the_payout_and_the_payout_drives_both_consumers() {
     let dimensions = Dimensions {
@@ -293,13 +288,10 @@ fn three_taps(roll_shield_floor: f32, shield: f32) -> (bool, ShipState) {
     (armed, state)
 }
 
-/// The floor an AI carries and a pad does not: the same gesture on the same
-/// shield arms for a pad and refuses for a driver keeping a fifth back.
-///
-/// **This pins a choice, not a finding** - see [`within_budget`]'s own doc
-/// comment. The asymmetry is the whole point: the floor is a field on the
-/// controls, so if a change ever fills it in on the human path, the second half
-/// fails.
+/// The floor an AI carries and a pad does not: the same gesture on the same shield arms for a pad
+/// and refuses for a driver keeping a fifth back. **Pins a choice, not a finding**
+/// ([`within_budget`]): the floor is a controls field, so if a change fills it in on the human
+/// path the second half fails.
 #[test]
 fn the_invented_floor_refuses_where_a_pad_arms() {
     // The pool is 100.0 in `armable`, the cost 8.0, so a fifth kept back needs
@@ -318,9 +310,8 @@ fn the_invented_floor_refuses_where_a_pad_arms() {
     assert!(state.shield < under, "and the pad paid the recovered cost");
 }
 
-/// **The floor is hard: what it compares is the pool the roll would leave.**
-/// The other reading lets a craft sitting exactly on its floor spend anyway and
-/// land underneath it, which is the shape of an opponent rolling itself down to
+/// **The floor is hard: it compares the pool the roll would leave.** The other reading lets a
+/// craft exactly on its floor spend anyway and land under it, an opponent rolling itself down to
 /// nothing.
 #[test]
 fn the_floor_is_measured_after_the_cost_not_before_it() {
@@ -354,11 +345,9 @@ fn above_the_budget_a_floored_craft_arms_like_an_unfloored_one() {
     assert_eq!(floored_state.shield, pad_state.shield);
 }
 
-/// The direct request arms the same roll the gesture does, without a tap.
-///
-/// **The deviation's own entry point**, and what makes it legible: no tap
-/// history is touched, `oag_ai::Driver` is the only thing that sets it, and it
-/// still pays the recovered cost.
+/// The direct request arms the same roll the gesture does, without a tap: **the deviation's own
+/// entry point**. No tap history is touched, `oag_ai::Driver` is the only setter, and it still
+/// pays the recovered cost.
 #[test]
 fn a_direct_request_arms_a_roll_with_no_taps_at_all() {
     let (mut state, dimensions) = armable();
@@ -403,11 +392,9 @@ fn a_direct_request_on_an_empty_shield_arms_nothing() {
     assert_eq!(state.shield, 4.0);
 }
 
-/// A second roll requested after a completed one starts from level.
-///
-/// **The bug this is the regression for**: `roll_phase` is left at `+-1.0` by a
-/// completed roll, so a request that armed without levelling would reach its
-/// target on the tick it was made and collect the landing payout for nothing.
+/// A second roll requested after a completed one starts from level. **Regression**: `roll_phase`
+/// stays at `+-1.0` after a completed roll, so a request that armed without levelling would reach
+/// its target the tick it was made and collect the landing payout for nothing.
 #[test]
 fn a_requested_roll_after_a_completed_one_starts_from_level() {
     let (mut state, dimensions) = armable();
@@ -479,13 +466,10 @@ fn three_axis_crossings_arm_a_roll_with_no_button_at_all() {
     assert_eq!(state.roll_target, 1.0);
 }
 
-/// The d-pad and the axis are one signal, not two.
-///
-/// This project's input layer drives the analog axis from the d-pad as well
-/// (`oag_input::pad::larger`), so a real d-pad press arrives as a button edge
-/// *and* an axis crossing on the same tick. Recording both would shift the
-/// history twice and leave a doubled direction in it that can never match an
-/// alternation - which would make the d-pad leg silently unreachable.
+/// The d-pad and the axis are one signal, not two. The input layer drives the analog axis from
+/// the d-pad too (`oag_input::pad::larger`), so a d-pad press is a button edge *and* an axis
+/// crossing on one tick; recording both would shift the history twice and leave a doubled
+/// direction that can never match an alternation, making the d-pad leg silently unreachable.
 #[test]
 fn a_press_that_is_also_a_crossing_records_one_tap() {
     let (mut state, dimensions) = armable();
@@ -512,10 +496,8 @@ fn a_held_axis_does_not_repeat() {
     assert_eq!(state.roll_taps, [0, 0, 2], "one entry for ten held ticks");
 }
 
-/// Ordinary cornering is under the threshold and records nothing.
-///
-/// [`crate::probe`]'s slalom holds the axis at `+-0.8` for exactly this reason,
-/// which is what keeps the committed determinism hashes free of armed rolls.
+/// Ordinary cornering is under the threshold and records nothing. [`crate::probe`]'s slalom holds
+/// the axis at `+-0.8` for this reason, keeping the committed determinism hashes free of rolls.
 #[test]
 fn steering_short_of_the_threshold_is_not_a_tap() {
     let (mut state, dimensions) = armable();
@@ -527,10 +509,9 @@ fn steering_short_of_the_threshold_is_not_a_tap() {
     assert_eq!(state.shield, 100.0, "and so nothing was ever charged");
 }
 
-/// The gesture advances the inter-tap timer exactly once a tick.
-///
-/// Calling [`advance_tap_timer`] beside [`advance_gesture`] would double it and
-/// halve [`INTER_TAP_TIMEOUT`] without failing anything else.
+/// The gesture advances the inter-tap timer exactly once a tick: calling [`advance_tap_timer`]
+/// beside [`advance_gesture`] would double it and halve [`INTER_TAP_TIMEOUT`] without failing
+/// anything else.
 #[test]
 fn the_gesture_advances_the_tap_timer_once_per_tick() {
     let (mut state, dimensions) = armable();
@@ -566,11 +547,9 @@ fn grounded_tick(
     advance_gesture(state, &input, dimensions, 8.0, true, 1.0 / 60.0)
 }
 
-/// The gate that makes an AI craft affordable: a craft on the ground cannot
-/// arm, and pays nothing for trying.
-///
-/// The original zeroes the whole tap history every grounded tick rather than
-/// refusing at the arm - see [`advance_gesture`].
+/// The gate that makes an AI craft affordable: a craft on the ground cannot arm and pays nothing
+/// for trying. The original zeroes the whole tap history every grounded tick rather than refusing
+/// at the arm ([`advance_gesture`]).
 #[test]
 fn a_grounded_craft_cannot_arm_and_is_not_charged() {
     let (mut state, dimensions) = armable();
@@ -638,22 +617,15 @@ fn a_completed_pattern_levels_the_phase_even_when_the_arm_is_refused() {
     assert_eq!(state.roll_target, 0.0);
 }
 
-/// **Two rolls in opposite directions are two rotations, not one and then
-/// two.**
+/// **Two rolls in opposite directions are two rotations, not one and then two.**
 ///
-/// The bug this pins was reported from play on 2026-09-06 - "the roll rotates
-/// twice where the original rotates once" - and it was invisible to every
-/// other test here, because the phase is correct at every single tick in
-/// isolation. [`release`] leaves [`ShipState::roll_target`] at `+-1.0` on a
-/// completed roll and [`advance_phase`] parks the phase there, which is level
-/// on screen (`ease(1.0) = 1.0`, and one turn is one turn). The next roll the
-/// *other* way then ramps `+1.0 -> -1.0`, a traversal of `2.0` and so two full
-/// turns.
-///
-/// What fixes it is the original's own `swc1 f22, 0x87c` at `0x08846e5c` /
-/// `0x08846f54`: a completed alternation levels the phase before the ramp
-/// starts. So the assertion is on the *traversal*, which is what a viewer
-/// sees, rather than on the endpoint, which was always right.
+/// Reported from play on 2026-09-06 ("the roll rotates twice where the original rotates once"),
+/// and invisible to every other test because the phase is correct at every tick in isolation.
+/// [`release`] leaves [`ShipState::roll_target`] at `+-1.0` on a completed roll and
+/// [`advance_phase`] parks the phase there, level on screen (`ease(1.0) = 1.0`). The next roll
+/// the *other* way then ramps `+1.0 -> -1.0`, a traversal of `2.0`: two full turns. The fix is
+/// the original's own `swc1 f22, 0x87c` at `0x08846e5c` / `0x08846f54`, a completed alternation
+/// levelling the phase before the ramp, so the assertion is on the *traversal*, not the endpoint.
 #[test]
 fn a_second_roll_the_other_way_travels_one_turn_and_not_two() {
     let (mut state, dimensions) = armable();
@@ -700,11 +672,10 @@ fn a_second_roll_the_other_way_travels_one_turn_and_not_two() {
     );
 }
 
-/// The maintainer's report from play: a roll pays out on its landing, and then
-/// again on every later airborne-to-grounded transition, because `release` left
-/// `roll_target` and `roll_phase` at `+-1.0` with nothing to say the roll was
-/// spent. The original gates the payout on the arm bit, which its landing
-/// clears. One roll, one payout, however many landings follow.
+/// The maintainer's report from play: a roll pays out on its landing and again on every later
+/// airborne-to-grounded transition, because `release` left `roll_target` and `roll_phase` at
+/// `+-1.0` with nothing saying the roll was spent. The original gates the payout on the arm bit,
+/// which its landing clears: one roll, one payout.
 #[test]
 fn a_roll_pays_out_once_however_many_landings_follow() {
     let (mut state, dimensions) = armable();

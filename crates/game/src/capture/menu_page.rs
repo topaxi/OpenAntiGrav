@@ -674,7 +674,7 @@ pub(super) fn picker_page(
             (entries, previews)
         }
         Kind::Ship => {
-            let gates = crate::unlock::gates_variants(title.name);
+            let gates = crate::unlock::gates_variants(title);
             let saved = if gates {
                 crate::records::load()
             } else {
