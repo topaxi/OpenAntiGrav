@@ -45,7 +45,7 @@ fn shell(source: &std::path::Path) -> oag_game::boot::Shell {
 /// Every texel's alpha of `name` in `shell`'s sheet, row by row.
 fn alphas(shell: &oag_game::boot::Shell, name: &str) -> Vec<u8> {
     let placed = shell.sprites.get(name).expect("in the sheet");
-    let (w, h) = (u32::from(placed.width), u32::from(placed.height));
+    let (w, h) = (placed.width, placed.height);
     let mut out = Vec::new();
     for y in 0..h {
         for x in 0..w {
@@ -68,9 +68,10 @@ fn alphas(shell: &oag_game::boot::Shell, name: &str) -> Vec<u8> {
 fn omegas_menu_blocks_draw_with_the_swatch_fill_the_executable_samples() {
     let Some(source) = omega() else { return };
     let shell = shell(&source);
-    let blocks = oag_omega::frontend::MENU_SKIN
-        .blocks
-        .expect("Omega's skin carries blocks");
+    assert!(
+        oag_omega::frontend::MENU_SKIN.blocks.is_some(),
+        "Omega's skin carries blocks"
+    );
     assert!(
         oag_omega::frontend::FRONT_END
             .bottom_up_gnf
