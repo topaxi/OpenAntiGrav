@@ -1,12 +1,14 @@
 //! Walking a PlayStation 2 VIF1 packet.
 //!
-//! The PS2 has no equivalent of the PSP's interleaved vertex arrays. Geometry
-//! reaches the GS through **VIF**, the VPU interface: a stream of 32-bit
-//! command words, each optionally followed by data, which unpack attribute
-//! arrays into VU1's memory and then run a microprogram over them. So where a
-//! PSP `.vex` batch holds one array of interleaved vertices, its PS2 counterpart
-//! holds one of these packets, with each attribute in its **own** unpack at its
-//! own VU address.
+//! The PS2 has no interleaved vertex arrays. Geometry reaches the GS through
+//! **VIF**, the VPU interface: a stream of 32-bit command words, each optionally
+//! followed by data, which unpack attribute arrays into VU1 memory and run a
+//! microprogram over them. Where a PSP `.vex` batch holds one interleaved
+//! vertex array, its PS2 counterpart holds one of these packets, each attribute
+//! in its **own** unpack at its own VU address.
+//!
+//! This is the general walker: it knows nothing about `.vex`, and what the
+//! unpacked arrays mean is [`crate::vex`]'s business.
 //!
 //! This module is the general walker. It knows nothing about `.vex`; what the
 //! unpacked arrays mean is [`crate::vex`]'s business.
@@ -21,15 +23,14 @@
 //!
 //! # Only what the data contains
 //!
-//! Commands that Pulse's model packets do not use are still decoded where their
-//! length is fixed and unambiguous, because skipping a command whose data length
-//! is wrong desynchronises everything after it. Anything genuinely unknown is an
-//! [`Error::UnknownCommand`] rather than a guess: a mis-stepped walk would
-//! otherwise produce plausible garbage vertices.
+//! Commands Pulse's packets do not use are still decoded where their length is
+//! fixed and unambiguous, since skipping one with the wrong data length
+//! desynchronises everything after it. Anything genuinely unknown is an
+//! [`Error::UnknownCommand`], not a guess: a mis-stepped walk would produce
+//! plausible garbage vertices.
 //!
-//! Evidence for the decode is in `docs/formats/vex.md`; the packets are
-//! self-describing enough that a wrong reading fails to reach the end of the
-//! packet exactly, which is what the ground-truth tests assert.
+//! Evidence is in `docs/formats/vex.md`; a wrong reading fails to end the packet
+//! exactly, which the ground-truth tests assert.
 
 use std::fmt;
 use std::ops::Range;
@@ -67,8 +68,8 @@ pub enum Code {
     Mscal(u16),
     /// `MSCNT`: continue the microprogram where it left off.
     ///
-    /// This is what ends a batch of unpacks in Pulse's packets, so it is the
-    /// boundary a caller groups attribute arrays on.
+    /// What ends a batch of unpacks in Pulse's packets, so the boundary a caller
+    /// groups attribute arrays on.
     Mscnt,
     /// `UNPACK`: an attribute array written into VU memory.
     Unpack(Unpack),
@@ -117,8 +118,7 @@ impl Format {
             Self::Bits32 => 4 * components,
             Self::Bits16 => 2 * components,
             Self::Bits8 => components,
-            // Four components in one 16-bit word, so the component count does
-            // not enter into it.
+            // Four components in one 16-bit word: the count does not enter in.
             Self::V4_5 => 2,
         }
     }
@@ -165,14 +165,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Walks a whole VIF packet.
 ///
-/// `data` is the command stream and nothing else: no DMA tag, no framing. The
-/// ranges in [`Unpack::data`] index it.
-///
-/// # Errors
-///
-/// [`Error::UnknownCommand`] for a command this module does not decode, and
-/// [`Error::Truncated`] when a command's data runs off the end. Both mean the
-/// walk desynchronised, so decoding stops rather than continuing at a guess.
+/// `data` is the command stream only (no DMA tag, no framing); the ranges in
+/// [`Unpack::data`] index it.
 pub fn walk(data: &[u8]) -> Result<Vec<Code>> {
     let mut out = Vec::new();
     let mut at = 0usize;
@@ -245,8 +239,8 @@ pub fn walk(data: &[u8]) -> Result<Vec<Code>> {
                     unsigned: immediate & 0x4000 != 0,
                     data: at..end,
                 };
-                // Command words are word-aligned, so a byte-sized unpack of an
-                // odd length pads before the next one.
+                // Command words are word-aligned: a byte-sized unpack of an odd
+                // length pads before the next.
                 at = end.next_multiple_of(4);
                 Code::Unpack(unpack)
             }

@@ -2,10 +2,10 @@
 //! along the track each one sits.
 //!
 //! The original does not find the road it deforms at runtime. Every circuit
-//! file authors one `Quake` node whose payload is a ready-made table of **road
-//! spans**, and the loader (`QuakeNode_Load`, `0x0891beac`) points
-//! `g_quake_span_table` straight at it and fixes up three self-relative offsets
-//! per record (`Quake_FixupSpan`, `0x0891b67c`). Nothing else builds it.
+//! authors one `Quake` node whose payload is a ready-made table of **road
+//! spans**; the loader (`QuakeNode_Load`, `0x0891beac`) points
+//! `g_quake_span_table` at it and fixes up three self-relative offsets per record
+//! (`Quake_FixupSpan`, `0x0891b67c`). Nothing else builds it.
 //!
 //! ```text
 //! payload +0x00  u32  record count
@@ -38,9 +38,9 @@
 //!
 //! Measured on all 24 Pulse circuit files (9,226 records): `+0x4c` lands on a
 //! batch header of a `Mesh`, `Speedup Pad` or `Weapon Pad` payload, `+0x44` on
-//! that batch's first vertex's position field, and `+0x50` equals the batch's
-//! own vertex count, every time. So a span needs no vertex range of its own -
-//! [`Span::batch`] names the batch and the whole batch is the span.
+//! that batch's first vertex position, and `+0x50` equals its vertex count, every
+//! time. A span needs no vertex range of its own: [`Span::batch`] names the batch
+//! and the whole batch is the span.
 //!
 //! # A parameter is where along the span a vertex is
 //!
@@ -57,9 +57,9 @@ use oag_formats::ByteOrder;
 
 /// Class ID of a `Quake` node, in version 6.
 ///
-/// From the exporter's own class table (`docs/formats/vex.md`), and confirmed by
-/// the node's use: `QuakeNode_Load` sits in the class's vtable and nothing else
-/// writes the table it loads.
+/// From the exporter's class table (`docs/formats/vex.md`), confirmed by use:
+/// `QuakeNode_Load` is in the class's vtable and nothing else writes the table it
+/// loads.
 pub const CLASS_QUAKE: u32 = 0x3c7;
 
 /// Bytes of payload header before the first record.
@@ -93,8 +93,8 @@ pub struct Span {
     pub batch: usize,
     /// File offset of the first vertex's position field.
     ///
-    /// Kept so a reader can check it against the batch's own layout, which is
-    /// what says [`Self::batch`] was resolved right.
+    /// Kept so a reader can check it against the batch's layout, which says
+    /// [`Self::batch`] was resolved right.
     pub first_position: usize,
     /// The AiTrack path the span lies along.
     pub path: i16,
@@ -109,16 +109,10 @@ pub struct Span {
 
 /// Every span of a file's `Quake` node, in table order.
 ///
-/// `file` is the whole `.vex`; `node` its `Quake` node. The three offsets are
-/// resolved to file offsets the way `Quake_FixupSpan` resolves them to
-/// pointers, which is only meaningful because the loader keeps a file in one
-/// piece. Little-endian: only the PSP authors geometry for a span to move.
-///
-/// # Errors
-///
-/// [`Error::TooShort`] for a payload shorter than its own header, and
-/// [`Error::OutOfBounds`] for a record, or a parameter array, running past the
-/// file.
+/// `file` is the whole `.vex`; `node` its `Quake` node. The three offsets resolve
+/// to file offsets as `Quake_FixupSpan` resolves them to pointers (meaningful
+/// because the loader keeps a file in one piece). Little-endian: only the PSP
+/// authors geometry for a span to move.
 pub fn spans(file: &[u8], node: &Node) -> Result<Vec<Span>> {
     let payload = node.payload();
     if payload.end > file.len() || payload.len() < HEADER {
@@ -188,10 +182,10 @@ pub fn spans(file: &[u8], node: &Node) -> Result<Vec<Span>> {
 /// The offset of every batch header in one mesh payload's list, in the order
 /// [`crate::vex::mesh_batches`] decodes them.
 ///
-/// **The same walk, repeated** - `mesh_batches` does not hand its offsets out,
-/// and a span names its batch by offset. `batch_offsets_match_mesh_batches` in
-/// `tests/quake_ground_truth.rs` holds the two to the same count on every mesh
-/// of every circuit, which is what keeps them from drifting apart.
+/// **The same walk, repeated**: `mesh_batches` does not hand its offsets out and
+/// a span names its batch by offset. `batch_offsets_match_mesh_batches` in
+/// `tests/quake_ground_truth.rs` holds the two to the same count on every mesh of
+/// every circuit.
 #[must_use]
 pub fn batch_offsets(payload: &[u8], batch_list: u8) -> Vec<usize> {
     let le = ByteOrder::Little;
