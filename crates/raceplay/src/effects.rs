@@ -7,6 +7,7 @@
 use super::*;
 
 mod cues;
+mod vertices;
 
 /// Where a trail-hit burst sits on a struck craft: on its hull, facing the
 /// contact.
@@ -772,54 +773,6 @@ impl Race {
         }
     }
 
-    /// The collision sparks' geometry this frame, split by blend class.
-    ///
-    /// The pool and the effect it plays are handed out together because
-    /// neither means anything alone - a particle carries an index into the
-    /// effect's emitters rather than a copy of their parameters. Empty when
-    /// the disc's own effect did not load.
-    pub fn extend_spark_vertices(
-        &self,
-        additive: &mut Vec<oag_mesh::mesh::GpuVertex>,
-        alpha_over: &mut Vec<oag_mesh::mesh::GpuVertex>,
-        right: Vec3,
-        up: Vec3,
-    ) {
-        let Some(effect) = self.view.handles.get(Trigger::CollisionSpark) else {
-            return;
-        };
-        self.view
-            .sparks
-            .extend_vertices(additive, alpha_over, effect, right, up);
-    }
-
-    /// Everything the [`psys::Stage`] is playing this frame, split by blend
-    /// class the same way [`Self::spark_vertices`] is.
-    ///
-    /// The rocket flares and the detonations today. Uploaded through the same
-    /// [`oag_fx::psys::Pipeline`] as the sparks - one pass, two buffers,
-    /// no third pipeline per effect.
-    pub fn extend_stage_vertices(
-        &self,
-        additive: &mut Vec<oag_mesh::mesh::GpuVertex>,
-        alpha_over: &mut Vec<oag_mesh::mesh::GpuVertex>,
-        right: Vec3,
-        up: Vec3,
-    ) {
-        self.view
-            .stage
-            .extend_vertices(additive, alpha_over, right, up);
-        self.view
-            .scenery_fx
-            .stage()
-            .extend_vertices(additive, alpha_over, right, up);
-        let camera = self.camera_frame();
-        self.view
-            .scenery_fx
-            .weather()
-            .extend_vertices(additive, alpha_over, camera, right, up);
-    }
-
     /// Runs the circuit's placed effects one step on the scenery clock - see
     /// `race::scenery_fx`.
     pub(super) fn advance_scenery_fx(&mut self, dt: f32) {
@@ -906,6 +859,12 @@ impl Race {
     #[must_use]
     pub fn quake_point(&self) -> Option<oag_core::math::Vec3> {
         self.view.quake_point
+    }
+
+    /// The `+Y` of the Quake wave's effect frame, while one travels.
+    #[must_use]
+    pub fn quake_frame_up(&self) -> Option<oag_core::math::Vec3> {
+        self.stage().up_of(self.view.quake_effect?)
     }
 
     /// Whether the player's shield pickup is currently up.

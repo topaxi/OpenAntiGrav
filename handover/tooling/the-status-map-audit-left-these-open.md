@@ -94,10 +94,7 @@ Checked still stale at the time of writing unless marked:
   emulator settled" says RPCS3 disproved that.
 - `crates/sound/src/sfx/announcer.rs` about 20-23: says 2048 has no zone
   announcer.
-- `docs/ghidra/functions/psp-pulse-usa/shuriken.md` about 112 (the blade loads
-  `pulse_shuriken.vex`) against the `projectile_sprites` doc comment in
-  `crates/raceplay/src/weapons/visuals.rs` ("has no model at all"). One of
-  the two is wrong.
+- ~~`shuriken.md` about 112 against the `projectile_sprites` doc comment~~ the comment was stale; fixed 2026-10-06 when the blade's model was drawn.
 - `handover/rendering/m6-authored-lighting-no-hardware-light-slot-found.md`
   still calls `DirectionalLight`'s consumer unfound; `scene-light.md`
   (2026-09-23) found it.

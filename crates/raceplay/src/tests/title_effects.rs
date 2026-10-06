@@ -256,7 +256,7 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
             .count(),
         1
     );
-    assert_eq!(crate::RACE_EFFECTS.len(), 39);
+    assert_eq!(crate::RACE_EFFECTS.len(), 40);
 }
 
 #[test]

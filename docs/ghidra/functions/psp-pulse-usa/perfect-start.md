@@ -61,8 +61,14 @@ becomes `Perfect`. `TURBO` resolves on Pulse (3 waveforms) and HD (15) through
 the loader. Tests: `launch_boost_ground_truth::only_a_perfect_start_fires_the_flare_and_turbo`
 (disc), `race::tests::perfect_start`.
 
-**Our fired Turbo plays no `TURBO` yet.** `Turbo_Fire` (`0x088614fc`) was not
-read; whether the weapon plays the same cue is open.
+**Our fired Turbo plays `TURBO`, wired 2026-10-06.** `Turbo_Fire` (`0x088614c4`) sets
+craft bit `0x200`, `craft+0x14c = <Turbo time>`, clears the held id and, when the
+craft has an exhaust flare (`craft->0xf0->0x78`), calls `FUN_0890514c`: `flare+0xb8 =
+0.8f` and `Sound_Play(TURBO)`. That is `ExhaustFlare_OnSpeedupPad`'s body with the
+other cue, and `Ship_UpdateSideshiftInput_q` (`0x08846b60`) calls it too - on the
+side-shift roll turbo (`+0x898 = g_roll_turbotime`, read from the call site's listing),
+not the perfect start, which arms the flare by the pad's routine. Confidence 88. So the plume a fired Turbo draws is the pad's, by the
+original's own path - the `weapons.rs` note calling it chosen is retired.
 
 ## The AI's grade 3, confirmed from both ends
 
@@ -90,3 +96,7 @@ player's physics: a grade without a thrust edge and a multiplier no player can
 earn are both outside it. What this project's AI may do is earn grade 2 the
 player's way, by timing its first thrust into the perfect window; see
 [launch-boost.md](../../../physics/launch-boost.md).
+
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x0890514c` | `ExhaustFlare_OnTurbo` | 85 |

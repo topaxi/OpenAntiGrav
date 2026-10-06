@@ -292,3 +292,41 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
         alive_ticks.saturating_sub(fuse_ticks)
     );
 }
+
+/// A thrown blade rides **two** effects, `WO_SHURIKEN_HEAD` and
+/// `WO_SHURIKEN_TRAIL` (`Shuriken_Init` spawns both), and is drawn as a
+/// rotation-basis model at its own position. Dropping either effect's wiring
+/// or the model matrix takes this to zero or one.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose() {
+    let Some(loaded) = eliminator_race() else {
+        return;
+    };
+    let (mut race, _) = moving(loaded);
+    for ship in &mut race.sim.world.ships[1..] {
+        ship.active = false;
+    }
+    let before = race.stage().playing_count();
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
+    let mut buttons = Input::new();
+    buttons.begin_frame(0);
+    let mut fire = oag_gameplay::InputSnapshot::new();
+    fire.buttons = buttons;
+    fire.buttons
+        .begin_frame(Button::Square.bit() | Button::Cross.bit());
+    race.tick(&PlayerInputs::single(fire));
+    let blade = blades(&race)[0];
+    assert!(
+        race.stage().playing_count() >= before + 2,
+        "head and trail should both ride the blade: {before} -> {}",
+        race.stage().playing_count()
+    );
+    let poses = race.shuriken_model_matrices();
+    assert_eq!(poses.len(), 1);
+    assert!((poses[0].w_axis.truncate() - blade.position).length() < 1e-3);
+    assert!(
+        (poses[0].determinant() - 1.0).abs() < 1e-3,
+        "not a rotation"
+    );
+}

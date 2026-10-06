@@ -188,8 +188,18 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         Some(oag_tables::weapons::Weapon::Turbo)
     );
 
+    let _ = fired.drain_cues();
     let boosted = fired.tick(&PlayerInputs::single(fired_buttons.tick(CROSS | SQUARE)));
     let ordinary = plain.tick(&PlayerInputs::single(plain_buttons.tick(CROSS)));
+    // `Turbo_Fire` plays `TURBO` through the flare's boost call, as a pad does
+    // `SPEEDUPPAD`.
+    assert!(
+        fired
+            .drain_cues()
+            .iter()
+            .any(|event| event.cue == oag_sound::sfx::Cue::Turbo),
+        "a fired Turbo raised no TURBO cue"
+    );
 
     assert!(
         fired.ship().physics.turbo_timer > 0.0,

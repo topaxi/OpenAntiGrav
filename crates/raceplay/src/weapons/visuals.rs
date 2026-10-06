@@ -12,6 +12,7 @@ mod flares;
 mod flash;
 mod hooks;
 mod laid;
+mod quake;
 pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(crate) use flares::*;
 pub(crate) use flash::flash_for;
@@ -274,108 +275,6 @@ impl Race {
         oag_fx::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
-    /// Keeps [`Trigger::Quake`] and its own transform riding the travelling
-    /// wave, one instance for the whole race.
-    ///
-    /// Needs `self.sim.course` (to place the wave along the ring) and
-    /// `self.sim.spline` (to read the track's own width there), which is why this
-    /// cannot live in `oag_weapons::projectile::quake` at all - see that
-    /// module's own doc comment on the split.
-    ///
-    /// **Recovered position and scale, chosen orientation.** `Quake_Update`
-    /// builds its transform from two edge points sampled across the track at
-    /// the wave's own position: position is their midpoint, scale is their
-    /// separation divided by `50.0` -
-    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s "What
-    /// `Quake_Update` builds from those two points" section. This engine has
-    /// no per-progress edge-point record of its own the way the original's
-    /// `SplinePt` does; it recovers the same two points from
-    /// [`Spline`]'s own sample at the ring point nearest the wave's own
-    /// progress - `pos`/`lateral`/`half_width_left`/`half_width_right`, the
-    /// same fields [`oag_render::track::build_model`] already draws the
-    /// ribbon's own edges from.
-    ///
-    /// **What the `/ 50` scales, read 2026-09-24:** the instance's extent
-    /// co-factor (`+0x2c`) and nothing else, so `WO_QUAKE`'s line emitters
-    /// spread their fire edge to edge while each fireball keeps its authored
-    /// size - see `oag_fx::psys::spawn`. Until then this fed the value
-    /// in as severity, which made every fireball `width / 50` too big and
-    /// stacked all of them on the midpoint. **Pulse on the PSP only**: every
-    /// other source still feeds it in as severity, by choice, until its own
-    /// executable is read (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
-    /// `normalize(B - A)`; its `Y` stays world up, which is **chosen, not
-    /// measured** - the row `Quake_Update` builds from its
-    /// `AiTrack_LocatePosition` struct is not read.
-    ///
-    /// Releases the instance the tick the wave goes away
-    /// (`self.sim.world.quake` becomes `None`), as `Quake_Update` does
-    /// (`Psys_ReleaseHandle`, `now != 0`): the same "hand the slot back, free
-    /// the templates, let the particles fade" shape
-    /// [`Race::advance_projectile_flares`] takes.
-    pub(crate) fn advance_quake_visual(&mut self) {
-        let Some(wave) = self.sim.world.quake else {
-            self.view.quake_point = None;
-            if let Some(playing) = self.view.quake_effect.take() {
-                self.view.stage.release(playing);
-            }
-            return;
-        };
-        let Some(course) = self.sim.course.as_ref() else {
-            return;
-        };
-        let Some(index) = course_index_near_progress(course, wave.progress) else {
-            return;
-        };
-        let Some(position) = course.position(index) else {
-            return;
-        };
-        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
-            return;
-        };
-        let lateral = Vec3::from_array(sample.lateral);
-        let centre = Vec3::from_array(sample.pos);
-        let left = centre - lateral * sample.half_width_left;
-        let right = centre + lateral * sample.half_width_right;
-        let midpoint = (left + right) * 0.5;
-        self.view.quake_point = Some(midpoint);
-        let scale = (right - left).length() / 50.0;
-        // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
-        // from `normalize(B - A)` as its first row (`0x0891da08`, read
-        // 2026-09-24).
-        let across = right - left;
-
-        let Some(effect) = self.view.handles.get(Trigger::Quake).cloned() else {
-            return;
-        };
-        // Where the extent law is on (Pulse on the PSP), severity stays
-        // `1.0` and the `/ 50` lands on the instance's extent co-factor, not
-        // on size or speed - see `oag_fx::psys::spawn`. Everywhere else
-        // the effect keeps what it did before that law was read: the `/ 50`
-        // as severity, by the lead's choice until those executables are read
-        // (`psys::Effect::without_extents`).
-        let stretches = effect.has_extents();
-        let severity = if stretches { 1.0 } else { scale };
-        let playing = match self.view.quake_effect {
-            None => {
-                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, severity);
-                self.view.quake_effect
-            }
-            Some(playing) => {
-                self.view.stage.follow(playing, midpoint);
-                self.view.stage.rescale(playing, severity);
-                Some(playing)
-            }
-        };
-        if let (true, Some(playing)) = (stretches, playing) {
-            self.view.stage.stretch(playing, scale, across);
-        }
-        // Every frame the wave's instance lives, at the span's first edge
-        // point - `left` here, the same reading `across` makes (chosen: which
-        // of `Quake_SampleSpan`'s two points is `A` is not read).
-        if let (Some(_), Some(flash)) = (playing, &mut self.view.screen_flash) {
-            flash.start(oag_fx::flash::QUAKE, left);
-        }
-    }
     /// Plays the explosion a weapon that just went off authored - its own,
     /// not another weapon's.
     ///
@@ -672,14 +571,24 @@ impl Race {
     pub(crate) fn advance_projectile_flares(&mut self) {
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
-            let (primary, orbiting) = if projectile.kind
-                == Some(oag_tables::weapons::Weapon::Missile)
-            {
-                let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
-                let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
-                (a, Some(b))
+            let (primary, orbiting) = match projectile.kind {
+                Some(oag_tables::weapons::Weapon::Missile) => {
+                    let age = oag_weapons::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+                    let (a, b) =
+                        missile_flare_anchors(projectile.position, projectile.velocity, age);
+                    (a, Some(b))
+                }
+                // The blade's trail rides the same point as its head, on its
+                // own quarter-turned frame - see `Trigger::ShurikenTrail`.
+                Some(oag_tables::weapons::Weapon::Shuriken) => {
+                    (projectile.position, Some(projectile.position))
+                }
+                _ => (projectile.position, None),
+            };
+            let second = if projectile.kind == Some(oag_tables::weapons::Weapon::Shuriken) {
+                Some(Trigger::ShurikenTrail)
             } else {
-                (projectile.position, None)
+                name
             };
             // Only the primary anchor ever carries a non-neutral scale - see
             // `plasma_flare_scale`. The Missile's orbiting anchor rides at
@@ -717,18 +626,36 @@ impl Race {
                 let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
                 self.view.stage.orient(instance, up);
             }
-            // The Missile's second, orbiting anchor - see `missile_flare_anchors`.
-            // `orbiting` is `None` for every other kind, so this rides nothing
-            // and only ever tears down a leftover instance from a slot that
-            // was a Missile last tick.
+            // The blade's head frame is its basis unrotated, so the emitter's
+            // `+Y` is the surface normal it rides; its trail frame is turned
+            // `-pi/2` about row 0, which puts `+Y` along the velocity, the
+            // Rocket's measured case. `Shuriken_Update` `0x08877bdc`.
+            if let (Some(oag_tables::weapons::Weapon::Shuriken), Some(instance)) =
+                (projectile.kind, self.view.projectile_flare[slot])
+            {
+                self.view.stage.orient(
+                    instance,
+                    projectile.surface.try_normalize().unwrap_or(Vec3::Y),
+                );
+            }
+            // The second anchor: the Missile's orbiting one (see
+            // `missile_flare_anchors`) or the Shuriken's trail. `orbiting` is
+            // `None` for every other kind, so this rides nothing and only ever
+            // tears down a leftover instance from a slot that held one.
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.handles,
-                orbiting.and(name),
+                orbiting.and(second),
                 orbiting.unwrap_or(primary),
                 1.0,
                 &mut self.view.projectile_flare_orbit[slot],
             );
+            if let (Some(oag_tables::weapons::Weapon::Shuriken), Some(instance)) =
+                (projectile.kind, self.view.projectile_flare_orbit[slot])
+            {
+                let up = projectile.velocity.try_normalize().unwrap_or(Vec3::Y);
+                self.view.stage.orient(instance, up);
+            }
         }
     }
 
@@ -744,7 +671,7 @@ impl Race {
     /// [`Trigger::RocketFlare`], played off the disc through [`RaceView::stage`],
     /// and a billboard on top of it would be a second invented one. What is
     /// left here is the case where a kind's own model did not load, or a kind
-    /// (the Missile, the Plasma, the Shuriken) has no model at all, and a
+    /// (the Missile, the Plasma) has no model at all, and a
     /// projectile would otherwise be invisible - see
     /// [`PROJECTILE_SPRITE_HALF_SIZE`].
     ///
@@ -752,7 +679,7 @@ impl Race {
     /// [`Self::projectile_model_matrices`]'s own kind filter.** A single
     /// `bool` gated *all* projectiles on whether the Rocket's model happened
     /// to load, so on a real disc (where it does) a live Missile, Plasma or
-    /// Shuriken drew nothing at all: no mesh, because it authors none, and no
+    /// Shuriken (before its own model was drawn) drew nothing at all: no mesh, and no
     /// billboard, because the flag said "modelled" for a kind it was never
     /// about. `modelled` is now asked once per live projectile's own kind.
     #[must_use]
@@ -804,34 +731,13 @@ impl Race {
     /// One entry per live rocket, in slot order, so the caller can zip it
     /// against its drawables.
     ///
-    /// # No rendered frame has yet contained a rocket
+    /// # Checking a frame with a rocket in it
     ///
-    /// Worth stating rather than leaving to be discovered. What *is* checked:
-    /// the model loads off a real disc and its long axis is the one aimed down
-    /// the velocity here
-    /// (`the_rocket_model_is_longest_along_the_axis_it_is_flown_down`), the
-    /// bases below are orthonormal and velocity-aligned including the
-    /// straight-up degenerate case, and the draw is wired exactly as the ships'
-    /// and plumes' are. What is **not**: a captured frame with a rocket in it.
-    ///
-    /// The headless capture path cannot produce one. `--race` gives a craft that
-    /// holds the throttle and does not steer, so over 2400 ticks it never
-    /// reaches a `Weapon Pad`, never gets a pickup, and the telemetry line never
-    /// reports one held. A first attempt at this misread three pieces of
-    /// **track scenery** as a fanned volley - they render identically in
-    /// `time_trial`, where no rocket can exist, which is the check that settles
-    /// it and the one to repeat before believing any future frame:
-    ///
-    /// ```sh
-    /// cargo run -p oag-game -- --race --mode single_race --hold cross \
-    ///     --press square --ticks 900 --screenshot /tmp/on.png
-    /// cargo run -p oag-game -- --race --mode time_trial  --hold cross \
-    ///     --press square --ticks 900 --screenshot /tmp/off.png
-    /// magick compare -metric AE /tmp/on.png /tmp/off.png null:
-    /// ```
-    ///
-    /// Closing it wants a craft that can drive to a pad - the AI, or an input
-    /// script replayed through `oag-trace run --script`.
+    /// `--race` gives a craft that holds the throttle and never reaches a
+    /// pad, so a rocket needs `--give rocket` (`--mode eliminator` for a
+    /// Shuriken, with the other grid slots off - a grid-mate takes the blade
+    /// on its first tick) or a replayed input script (`--input-script`). Track scenery can read as a volley: compare
+    /// against `--mode time_trial`, where no rocket can exist.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Rocket)
@@ -862,6 +768,16 @@ impl Race {
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
+    }
+
+    /// Where each live Shuriken blade is: `Shuriken_Update`'s (`0x08877bdc`)
+    /// basis - `n x f`, `n`, `f`, position - handed to the model node
+    /// unrotated, with `n` the exact surface normal and `f` the velocity
+    /// flattened against it (the Rocket's does the reverse). The update
+    /// writes no spin of its own.
+    #[must_use]
+    pub fn shuriken_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Shuriken)
     }
 
     /// Where each live Plasma bolt's own head is, for the model draw.
@@ -955,6 +871,23 @@ impl Race {
                 // original's own `n` (`rocket+0x100`), seeded to world up at
                 // spawn. It, then world up, then any perpendicular, so a
                 // projectile flying along one of them still gets a basis.
+                if kind == oag_tables::weapons::Weapon::Shuriken {
+                    // `Shuriken_Update` (`0x08877bdc`) keeps the carried
+                    // normal exact as row 1 and flattens the velocity
+                    // against it (`vdot`/`vscl`/`vsub`, `0x08877f6c`), so a
+                    // blade lies in its surface even when it flies off it.
+                    let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
+                    let flat = forward - up * forward.dot(up);
+                    if let Some(front) = flat.try_normalize() {
+                        let side = up.cross(front);
+                        return Mat4::from_cols(
+                            side.extend(0.0),
+                            up.extend(0.0),
+                            front.extend(0.0),
+                            projectile.position.extend(1.0),
+                        );
+                    }
+                }
                 let reference = [projectile.surface, Vec3::Y]
                     .into_iter()
                     .find(|axis| forward.dot(*axis).abs() < 0.999)
