@@ -28,50 +28,40 @@
 //!
 //! # The two index arrays are what a silhouette needs, and they close exactly
 //!
-//! The 16 bytes at `+0x10` were the last unread field, and reading them is
-//! what unblocks drawing an occluder at all. Measured across all 129 nodes and
+//! The 16 bytes at `+0x10` were the last unread field. Across all 129 nodes and
 //! 4,381 faces on `pulse-psp-usa.chd`:
 //!
-//! - **Every vertex index is in range**: 4,381 of 4,381 faces.
-//! - **Adjacency is reciprocal on 14,328 of 14,328 edges** - the face named
-//!   across an edge owns that same edge, in either direction. A wrong stride or
-//!   a wrong field offset does not produce a consistent edge graph on fourteen
-//!   thousand edges; this is the closure argument, the same shape the payload
-//!   length's own is.
-//! - **Every `NO_NEIGHBOUR` edge is owned by no other face**, 4,381 of 4,381:
-//!   the sentinel means what it says. On 4,377 of those the only such edge is a
-//!   triangle's degenerate fourth (`v0`->`v0`); the remaining four faces are
-//!   two flat two-face hulls (`Data.wad#242` and `#244`) whose quads genuinely
-//!   have open boundary edges, which is the same rule exercised where the
-//!   others do not exercise it.
-//! - **Every triangle is coplanar with its own declared plane**, 3,184 of
-//!   3,184, and its declared normal matches the normal of the three vertices it
-//!   indexes to within **0.028 degrees**.
+//! - **Every vertex index is in range** (4,381 of 4,381).
+//! - **Adjacency is reciprocal on 14,328 of 14,328 edges**: the face named
+//!   across an edge owns that same edge. A wrong stride or field offset does not
+//!   give a consistent edge graph on fourteen thousand edges.
+//! - **Every `NO_NEIGHBOUR` edge is owned by no other face** (4,381 of 4,381).
+//!   On 4,377 the only such edge is a triangle's degenerate fourth (`v0`->`v0`);
+//!   the remaining four faces are two flat two-face hulls (`Data.wad#242`,
+//!   `#244`) whose quads have genuinely open boundary edges.
+//! - **Every triangle is coplanar with its declared plane** (3,184 of 3,184),
+//!   its declared normal matching the normal of its vertices to within
+//!   **0.028 degrees**.
 //!
-//! **Quads are not planar and that is authored, not a decode error.** 300 of
-//! the 1,197 quads spread further than `1e-4` of their hull's own scale from
-//! their declared plane, the worst at `5.3e-2` - bilinear quads out of an
-//! exporter. A sliver quad's first three vertices can even describe a normal
-//! 180 degrees from the declared one, which is why the normal check above is
-//! stated over triangles: that is the population where it means anything. The
-//! record's declared normal is what the runtime tests against, so nothing here
-//! needs the quad to be flat.
+//! **Quads are not planar, and that is authored**: 300 of 1,197 spread past
+//! `1e-4` of the hull's scale from their declared plane (worst `5.3e-2`),
+//! bilinear quads out of an exporter. A sliver quad's first three vertices can
+//! describe a normal 180 degrees from the declared one, so the normal check is
+//! stated over triangles. The runtime tests against the declared normal, so
+//! nothing here needs a flat quad.
 //!
-//! Confidence **92**: an exact reciprocal-adjacency closure over 14,328 edges
-//! and an independent 0.028-degree agreement between two separately stored
-//! quantities, on one disc. Two things keep it out of the 95-100 band - no
-//! runtime trace of the reader exists, and the second title's six hulls
-//! re-prove the *payload* closure rather than this indexing.
+//! Confidence **92**: exact reciprocal-adjacency closure over 14,328 edges plus
+//! an independent 0.028-degree agreement between two stored quantities, on one
+//! disc. Not 95-100: no runtime trace of the reader exists, and the second
+//! title's six hulls re-prove the *payload* closure rather than this indexing.
 //!
 //! # Two faces this parser carries rather than rejects
 //!
-//! Of 4,381 faces, one winds the other way about its own declared normal
+//! Of 4,381 faces, one winds the other way about its declared normal
 //! (`Data.wad#840` `shadowShape`, face 13 of 110) and one is degenerate
 //! (`Data.wad#744` `shadowShape`, face 9 of 18). **Both are carried as
-//! authored**: a parser that refused them would refuse two whole hulls over
-//! two faces, and the caller is the side that can decide what a shadow volume
-//! does with a reversed or zero-area face. [`Face::winding`] is how a caller
-//! asks.
+//! authored**: refusing them would refuse two whole hulls over two faces, and
+//! the caller decides what a volume does with them ([`Face::winding`]).
 
 use oag_formats::ByteOrder;
 
@@ -86,8 +76,8 @@ pub const VERTEX_LEN: usize = 16;
 
 /// The value an edge carries where no face lies across it.
 ///
-/// A triangle's fourth edge always, since that edge is `v0`->`v0`; a boundary
-/// edge on an open hull, of which the Pulse disc has twelve.
+/// A triangle's fourth edge always (`v0`->`v0`); a boundary edge on an open hull,
+/// of which the Pulse disc has twelve.
 pub const NO_NEIGHBOUR: u16 = 0xffff;
 
 /// The greatest number of vertices one face record can name.
@@ -97,28 +87,23 @@ pub const MAX_FACE_VERTICES: usize = 4;
 /// face across each of its edges.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Face {
-    /// The plane normal, a unit vector on 129/129 nodes.
-    ///
-    /// **The record's own, not one derived from the vertices.** On a triangle
-    /// the two agree to 0.028 degrees; on a quad, which is not planar, only
-    /// this one is meaningful.
+    /// The plane normal, a unit vector on 129/129 nodes. **The record's own, not
+    /// derived from the vertices**: on a triangle they agree to 0.028 degrees; on
+    /// a non-planar quad only this one is meaningful.
     pub normal: [f32; 3],
     /// How many of [`Self::vertices`] and [`Self::neighbours`] are used: 3 or
     /// 4 on every shipped face.
     pub count: u8,
-    /// Vertex indices into [`Occluder::vertices`], wound counter-clockwise
-    /// about [`Self::normal`].
-    ///
-    /// A triangle's fourth slot repeats the first, on 3,184 of 3,184 - so the
-    /// array is a closed loop whatever the count, which is why the runtime can
-    /// walk four edges unconditionally.
+    /// Vertex indices into [`Occluder::vertices`], wound counter-clockwise about
+    /// [`Self::normal`]. A triangle's fourth slot repeats the first (3,184 of
+    /// 3,184), so the array is a closed loop and the runtime walks four edges
+    /// unconditionally.
     pub vertices: [u16; MAX_FACE_VERTICES],
     /// The face across each edge: edge `s` runs from `vertices[s]` to
-    /// `vertices[s + 1]`, wrapping. [`NO_NEIGHBOUR`] where there is none.
+    /// `vertices[s + 1]`, wrapping; [`NO_NEIGHBOUR`] where none.
     ///
-    /// **This is the field a silhouette is built from**: an edge is on the
-    /// silhouette when exactly one of the two faces meeting there faces the
-    /// projection direction, which is a question this array answers in one
+    /// **The field a silhouette is built from**: an edge is on the silhouette
+    /// when exactly one of its two faces faces the projection direction, one
     /// lookup instead of a search.
     pub neighbours: [u16; MAX_FACE_VERTICES],
 }
@@ -130,10 +115,8 @@ impl Face {
         &self.vertices[..(self.count as usize).min(MAX_FACE_VERTICES)]
     }
 
-    /// The face across edge `edge`, or `None` where there is none.
-    ///
-    /// `edge` is taken modulo the face's own vertex count, matching the closed
-    /// loop [`Self::vertices`] holds.
+    /// The face across edge `edge`, or `None` where there is none; `edge` is taken
+    /// modulo the face's vertex count (the closed loop [`Self::vertices`] holds).
     #[must_use]
     pub fn neighbour(&self, edge: usize) -> Option<u16> {
         let used = (self.count as usize).min(MAX_FACE_VERTICES);
@@ -141,12 +124,9 @@ impl Face {
         (slot != NO_NEIGHBOUR).then_some(slot)
     }
 
-    /// `dot(cross(v1 - v0, v2 - v0), normal)`: positive where the winding
-    /// agrees with the declared normal.
-    ///
-    /// Positive on 4,379 of the Pulse disc's 4,381 faces, negative on one and
-    /// zero on one - both named in this module's docs and both carried rather
-    /// than rejected. A caller building a shadow volume wants to know.
+    /// `dot(cross(v1 - v0, v2 - v0), normal)`: positive where the winding agrees
+    /// with the declared normal. Positive on 4,379 of the Pulse disc's 4,381
+    /// faces, negative on one, zero on one (see the module docs).
     #[must_use]
     pub fn winding(&self, vertices: &[[f32; 3]]) -> f32 {
         let point = |slot: usize| {
@@ -170,41 +150,33 @@ impl Face {
 /// One `Dynamic Shadow Occluder` payload, decoded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Occluder {
-    /// The authored bounding box at `+0x0c`, min then max.
-    ///
-    /// **Authored rather than derived**: `BEData.wad#20` declares a `y`
-    /// maximum of the denormal `0x00800000`, which no extent computation
-    /// produces. Carried as read.
+    /// The authored bounding box at `+0x0c`, min then max. **Authored, not
+    /// derived**: `BEData.wad#20` declares a `y` maximum of the denormal
+    /// `0x00800000`, which no extent computation produces.
     pub bounds: ([f32; 3], [f32; 3]),
-    /// The hull's faces, in file order - which is the order
-    /// [`Face::neighbours`] indexes.
+    /// The hull's faces, in file order (the order [`Face::neighbours`] indexes).
     pub faces: Vec<Face>,
-    /// The vertex slots, in file order. `w` is dropped: it is `1.0` on every
-    /// record on both discs, so the record is a homogeneous point and this is
-    /// the point.
+    /// The vertex slots, in file order. `w` is dropped (`1.0` on every record on
+    /// both discs).
     ///
-    /// **Slots, not vertices.** 150 of them across the Pulse disc sit at the
-    /// origin, unused; they are kept so an index means the same thing here as
-    /// in the file.
+    /// **Slots, not vertices.** 150 across the Pulse disc sit unused at the
+    /// origin; kept so an index means the same as in the file.
     pub vertices: Vec<[f32; 3]>,
 }
 
 impl Occluder {
-    /// Decodes a payload, or `None` if it does not close at
-    /// `0x50 + 32n + 16m`.
+    /// Decodes a payload, or `None` if it does not close at `0x50 + 32n + 16m`.
     ///
-    /// The length check is the whole validation, deliberately: it is the same
-    /// closure that identified the format, and every field inside it is then
-    /// carried as authored rather than second-guessed - see this module's own
-    /// note on the two odd faces.
+    /// The length check is the whole validation: it is the closure that
+    /// identified the format, and every field inside is then carried as authored
+    /// (see the two odd faces in the module docs).
     #[must_use]
     pub fn parse(payload: &[u8], order: ByteOrder) -> Option<Self> {
         if payload.len() < HEADER_LEN {
             return None;
         }
-        // Every read below is inside a payload whose length the closure check
-        // has already pinned exactly, which is what makes the panicking
-        // `ByteOrder` accessors safe here.
+        // The closure check pinned the length exactly, so the panicking
+        // `ByteOrder` accessors are safe below.
         let n = usize::from(order.u16(payload, 0));
         let m = usize::from(order.u16(payload, 2));
         if payload.len() != HEADER_LEN + n * FACE_LEN + m * VERTEX_LEN {
@@ -232,9 +204,8 @@ impl Occluder {
                     order.f32(payload, at + 4),
                     order.f32(payload, at + 8),
                 ],
-                // Clamped rather than refused: the count is 3 or 4 on every
-                // shipped face, and a caller reading `indices()` on something
-                // else should get a slice it can walk, not a panic.
+                // Clamped, not refused: 3 or 4 on every shipped face, and a caller
+                // reading `indices()` on anything else gets a walkable slice.
                 count: order.u32(payload, at + 0x0c).min(MAX_FACE_VERTICES as u32) as u8,
                 vertices,
                 neighbours,
@@ -259,20 +230,15 @@ impl Occluder {
         })
     }
 
-    /// The edges on the silhouette against `direction`: those where exactly
-    /// one of the two faces meeting there faces it.
+    /// The edges on the silhouette against `direction`: those where exactly one of
+    /// the two faces meeting there faces it.
     ///
-    /// Each is `(from, to)` as the *front* face winds it, so a caller extruding
-    /// a stencil volume gets a consistently wound loop. An edge with no face
-    /// across it belongs to the silhouette whenever its own face is front-
-    /// facing - an open hull has nothing on the other side to cancel it.
-    ///
-    /// **The test is against the record's own declared normal**, which is what
-    /// `Shadow_RenderOccluderVolume` does, and it is why a non-planar quad
-    /// costs nothing here.
-    ///
-    /// Each edge is emitted once: the pair is only considered from the front
-    /// face's side.
+    /// Each is `(from, to)` as the *front* face winds it, so an extruded stencil
+    /// volume is consistently wound. An edge with no face across it belongs
+    /// whenever its own face is front-facing (an open hull has nothing to cancel
+    /// it). **The test is against the record's declared normal**, as
+    /// `Shadow_RenderOccluderVolume` does, so a non-planar quad costs nothing.
+    /// Each edge is emitted once, from the front face's side.
     #[must_use]
     pub fn silhouette(&self, direction: [f32; 3]) -> Vec<(u16, u16)> {
         let faces_it = |face: &Face| {
@@ -307,39 +273,29 @@ impl Occluder {
     }
 }
 
-/// One closed ring of the silhouette, as vertex indices in winding order.
-///
-/// A convex hull viewed from any direction has exactly one; the two open hulls
-/// on the Pulse disc are what [`Loop::closed`] exists for.
+/// One closed ring of the silhouette, as vertex indices in winding order. A
+/// convex hull viewed from any direction has exactly one; the two open hulls on
+/// the Pulse disc are why [`Loop::closed`] exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Loop {
-    /// The ring's vertices, first to last. The closing edge from the last back
-    /// to the first is implicit, and present only when [`Self::closed`].
+    /// The ring's vertices, first to last; the closing edge back to the first is
+    /// implicit, present only when [`Self::closed`].
     pub vertices: Vec<u16>,
-    /// Whether the walk returned to where it started.
-    ///
-    /// **Reported rather than hidden.** An open chain drawn as though it were
-    /// a ring is a plausible-looking wrong shape, which is the failure mode
-    /// this whole module is written against.
+    /// Whether the walk returned to where it started. **Reported, not hidden**: an
+    /// open chain drawn as a ring is a plausible-looking wrong shape.
     pub closed: bool,
 }
 
 impl Occluder {
-    /// [`Self::silhouette`]'s edges, chained into rings.
-    ///
-    /// Each edge is walked from its `from` vertex to its `to`, so a ring comes
-    /// out in the winding order the front faces gave it - which is what makes
-    /// it directly fannable into triangles.
-    ///
-    /// **Not a triangulation and not a projection**: what is returned is the
-    /// hull's own outline in its own space, and the caller is the side that
-    /// knows where to project it.
+    /// [`Self::silhouette`]'s edges, chained into rings, each walked `from` to `to`
+    /// so it comes out in the front faces' winding, directly fannable into
+    /// triangles. **Not a triangulation and not a projection**: the hull's own
+    /// outline in its own space.
     #[must_use]
     pub fn silhouette_loops(&self, direction: [f32; 3]) -> Vec<Loop> {
         let edges = self.silhouette(direction);
-        // Successors by `from` vertex. A vertex on a convex hull's silhouette
-        // has exactly one outgoing edge; a `Vec` rather than a single slot so
-        // a hull that does not behave that way produces short rings instead of
+        // Successors by `from` vertex: one outgoing edge on a convex hull's
+        // silhouette, a `Vec` so a misbehaving hull gives short rings instead of
         // losing edges silently.
         let mut next: Vec<(u16, u16, bool)> =
             edges.iter().map(|(from, to)| (*from, *to, false)).collect();
@@ -377,19 +333,16 @@ impl Occluder {
 impl Occluder {
     /// This hull with a 4x4 (row-major, as `vex` stores them) baked into it.
     ///
-    /// **A `.vex` node's payload is in the space of whatever `Transform` nodes
-    /// enclose it**, not in the model's own - on Pulse's craft a
-    /// `Dynamic Shadow Occluder` sits under that chain like every other node,
-    /// and `vex::world_transforms` is what resolves it. A hull drawn without
-    /// this is the right shape in the wrong frame, which is the one failure
-    /// that still *looks* like a shadow.
+    /// **A `.vex` node's payload is in the space of the enclosing `Transform`
+    /// nodes**, not the model's own (`vex::world_transforms` resolves it); a hull
+    /// drawn without this is the right shape in the wrong frame, the failure that
+    /// still *looks* like a shadow.
     ///
-    /// Normals are carried through the matrix's rotation and renormalised.
-    /// That is exact for the rigid and uniformly-scaled placements a `.vex`
-    /// chain produces and wrong under non-uniform scale, where the
-    /// inverse-transpose is what a plane needs; nothing on either disc places
-    /// an occluder that way, and a caller that finds one gets a normal that
-    /// tilts rather than a panic.
+    /// Normals go through the matrix's rotation and are renormalised: exact for
+    /// rigid and uniformly-scaled placements, wrong under non-uniform scale
+    /// (where a plane needs the inverse-transpose). Nothing on either disc places
+    /// an occluder that way; a caller that finds one gets a tilted normal, not a
+    /// panic.
     #[must_use]
     pub fn placed(&self, matrix: &[f32; 16]) -> Self {
         let rotate = |v: [f32; 3]| {
@@ -422,9 +375,8 @@ impl Occluder {
                     ..*face
                 })
                 .collect(),
-            // An unused slot stays at the origin rather than being carried to
-            // the placement's own: `m` counts slots, and moving the padding
-            // would put stray vertices inside the hull's box.
+            // An unused slot stays at the origin: `m` counts slots, and moving
+            // padding would put stray vertices inside the hull's box.
             vertices: self
                 .vertices
                 .iter()
@@ -433,32 +385,20 @@ impl Occluder {
         }
     }
 
-    /// The hull's outline against `direction`: [`Self::silhouette_loops`]'
-    /// closed rings, with a ring that is another traversed the other way
-    /// dropped.
+    /// The hull's outline against `direction`: [`Self::silhouette_loops`]' closed
+    /// rings, a ring that is another traversed the other way dropped.
     ///
-    /// **The dedup is not tidying, it is a property of the data.** Two of the
-    /// Pulse disc's hulls carry a doubled shell - every face has a twin with
-    /// the opposite normal - so their silhouette comes back as the same ring
-    /// twice, once each way round. Filling both would darken the same ground
-    /// twice under an alpha-over blend. Measured against the authored axis,
-    /// across the 119 local-space hulls: 117 give one ring, `Data.wad#840`
-    /// `shadowShape` gives that doubled pair, and `Data.wad#597`
-    /// `shadow_lodShape` gives two rings that are genuinely different lobes
-    /// and are both kept.
+    /// **The dedup is a property of the data.** Two Pulse hulls carry a doubled
+    /// shell (every face has an opposite-normal twin), so the silhouette is the
+    /// same ring twice; filling both darkens the ground twice under alpha-over.
+    /// Across the 119 local-space hulls, 117 give one ring, `Data.wad#840`
+    /// `shadowShape` the doubled pair, and `Data.wad#597` `shadow_lodShape` two
+    /// genuinely different lobes, both kept.
     ///
-    /// An **open** chain is dropped outright rather than closed by force: a
-    /// ring that did not close is not an outline, and inventing its closing
-    /// edge is exactly the plausible-looking wrong shape this module is
-    /// written against.
-    ///
-    /// **That branch is a guard with no known input, and saying so is the
-    /// point.** Every face contributes a closed cycle of edges by
-    /// construction, so a silhouette is a union of cycles unless the payload
-    /// is malformed in a way nothing on either disc is: 0 open chains over 774
-    /// walks (129 hulls, six directions), and no hand-built fixture here
-    /// produces one either. It is kept because the alternative to dropping an
-    /// open chain is drawing it.
+    /// An **open** chain is dropped rather than closed by force: inventing its
+    /// closing edge is the plausible-looking wrong shape this module is written
+    /// against. **That branch is a guard with no known input**: 0 open chains over
+    /// 774 walks (129 hulls, six directions), and no fixture produces one.
     #[must_use]
     pub fn outline(&self, direction: [f32; 3]) -> Vec<Vec<u16>> {
         let mut out: Vec<Vec<u16>> = Vec::new();
