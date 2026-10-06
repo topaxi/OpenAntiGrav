@@ -105,19 +105,69 @@ copy `tech_de_ra\track.vex` has 278 nodes and no `WO Track`, on the corrected
 one 458 nodes and one (60,151 of its 133,888 bytes differ, 110,298 of them
 zero against 50,172).
 
-**The in-race HUD has no per-mode composition this lane found.** No
-`arcade_hud.xml`/`timetrial_hud.xml`/`speedlap_hud.xml`/`zone_hud.xml` at
-HD's root paths; instead `Data\xml\` carries loose fragments
-(`hud_damage_indicator.xml`, `hud_pickups.xml`, `hud_proximity.xml`,
-`hud_sights.xml`, `hud_ready_go.xml`, `hud_elim_lap_counters.xml`,
-`hud_elim_positions.xml`, `hud_detonatorweapons.xml`) plus `2048_hud\`/
-`2097_hud\`/`wo3_hud\`/`splitscreen_hud\`/`splitscreenzone_hud\`/`duel_hud\`
-subtrees. Working out which fragments compose which mode is real
-reverse-engineering, not attempted here - `crates/omega/src/hud.rs` fills
-`Title::hud`/`hud_art` with a single real, unread placeholder entry, verified
-provably inert for this lane (the only reader is
-`crates/raceplay/src/hud.rs`, reached only once a race has already started
-loading).
+**The in-race HUD is HD's, and it draws (`omega-hud`, 2026-10-06).** An earlier
+revision of this page said Omega ships no per-mode composition. **That was a
+truncated census, not a finding**: `scripts/psarc.py` split a PS4 manifest on
+`\n`, and a PS4 `.psarc` separates paths with NUL, so the whole listing came back
+as one entry and a search for `arcade_hud.xml` found nothing. Re-counted through
+the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
+`data01` 4,641, `data02` 5,611, `data03` 661, `data04` 4,569, `data05` 8,205,
+`data07` 6, `data08` 11,266, `data09` 120).
+
+- **Five roots at HD's own paths** in `data00`: `Data\XML\Arcade_HUD.xml`,
+  `Elimination_HUD.xml`, `TimeTrial_HUD.xml`, `SpeedLap_HUD.xml`, `Zone_HUD.xml`,
+  composing to 17/15/14/15/5 files (HD's counts) with nothing missing and nothing
+  skipped, and 148/132/52/51/36 sprites (HD's Arcade is 138: Omega's XML is its
+  own). `crates/omega/src/hud.rs` names them; the executable names them too, from
+  the single-player race managers (`docs/ghidra/functions/ps4-omega-eu/race-hud-selection.md`,
+  measured), the bare root being the default of its "HUD Style" check.
+- **Three more skins and a fourth set**: `wo3_hud\`, `2097_hud\` (the "HUD Style"
+  values), split-screen families, `duel_hud\`, and a **`2048_hud\` set** (the
+  Vita's 26 file names plus `_HD` variants and `_VR` ones in `data08`) reached only
+  through virtual dispatch. It composes whole on Omega and every atlas it names
+  resolves (`the_2048_hud_set_omega_also_ships_composes_whole`); **which race
+  selects it is not read**, so `Title::hud` stays one set per title (open).
+- **Nine atlases, all `.gnf`, all BC7**, under `Data\HUD\Textures\` (and
+  `Data\FE\Images\voiceCom.gnf`). The XML names them `.gtf`/`.mip` (HD's spelling),
+  so `HudArt::texture_extension` is `.gnf` - none resolves under its authored
+  name. `fury_hud` is 2048 square on Omega against HD's 1024 and its layout UVs
+  reach 2010 against HD's 1005: the XML is authored for the atlas it ships.
+  The rest are HD's sizes.
+- **Row order: top-down, no reversal.** Unlike the eight front-end `.gnf` of
+  `FrontEnd::bottom_up_gnf`, a HUD atlas decoded straight out of
+  `gnf::Texture::decode` equals HD's `.gtf` as `oag_hud::sprite` draws it
+  (reversed from the file): mean absolute difference 0.33 (`HUD_Components`),
+  0.70 (`_01`), 0.19 (`missile_reticule`), 0.33 (`nitro_hud`) against 9-91 as
+  filed. `hdHUD` is 17.06 against 80.59: the same order, art partly redrawn. So
+  no `HudArt` field for row order was needed.
+- **Base versus patch**: `data00` and `data08` both ship every atlas (the patch
+  copy with a mip chain); the base level is identical for seven of eight and
+  `HUD_Components_01` was repainted by the patch. `Archives` serves the patch
+  copy (`the_patch_and_base_copies_of_each_atlas_agree_at_the_base_level`).
+- **Text is laid out at half its texels.** Omega's `PulseHud.fnt` and `small.fnt`
+  are HD's at exactly twice the size (line height 184/68 against 92/34, advance
+  median 2.0) under layouts authoring HD's numbers; drawn unscaled the lap time
+  was twice HD's size. `hud_font` now applies `Space::font_texel_scale`, the
+  scale the front end already uses (confidence 60, an inference, see that
+  function). 
+- **Chosen, not measured**: `always_on`, the lock-on sight names, `RUNTIME`
+  (shield bar colours, arcs), `shield_percent`, `message_slots` are HD's
+  readings; every name they carry is authored by Omega's layouts
+  (`the_widget_names_title_data_inherits_are_authored_by_omegas_layouts`), which
+  proves the names match, not the values. `zone_speed_classes` is `None`: the
+  Zone ladder draws no class text.
+
+Frames, 1920x1080, `--race --ticks 700/900/1500` on `data/extracted/ps4`:
+`data/scratch/omega-hud/hud-b700.png` and `hud-b1500.png` (time trial, two
+moments: the timers move), `hud-single_race.png` (Arcade), `hud-zone.png`;
+compared with HD's `hud-hd.png` and 2048's `hud-2048.png` in the same directory.
+Omega's time trial is HD's frame element for element; 2048 draws its own
+skin.
+
+**Cross-check against 2048: checked, differs.** 2048's race reads its
+`2048_hud` skin off `.gxt` atlases; Omega's played skin is the bare root HD
+set off `.gnf`. Omega also ships the `2048_hud` XML and it composes, so wiring
+it per circuit lineage is *checked, applies, not wired* (open, above).
 
 ## The menu backdrop (2026-09-30, `omega-menu-backdrop`)
 
@@ -200,7 +250,7 @@ shared with HD:
   Selection` also authors a `RecordsButton` (`FE_RECORDS`) at exactly
   `DifficultyButton`'s `x=944 y=994`; it is suppressed (no leaderboard behind it,
   as HD's endrace drops `RecordsCycle`) - **chosen, not measured**.
-- `--race` still shows no HUD at tick 120 on Omega; untouched.
+- The HUD draws on an Omega race now (`omega-hud`, 2026-10-06, above).
 
 Still visible on Omega: circuit names read as ids (`01_Track`: the German
 `entries.xml` names only the four Zone circuits, `25_Track`..`28_Track`, the rest
@@ -411,8 +461,8 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
 - **Omega has no `Campaign Selection` screen and no flyer cards in this build** (`load_omega` passes `selection_layout:
   None, grid_layout_fury: None, flyers: None`; `RACE CAMPAIGN` opens `Grid
   Selection` directly, `Event 01/16`); the flyer-card work drew them for HD only.
-- **Not Omega's to fix here, seen on the walk:** the HUD is absent in the race
-  (`HUD_Components.gtf`/`hdHUD.mip` are not in the archives), 793 of the
+- **Not Omega's to fix here, seen on the walk:** (the HUD absence seen here was
+  fixed 2026-10-06, `omega-hud`), 793 of the
   circuit's materials are unresolved (white surfaces on `08_Track`), and the
   menu backdrop is white.
 
@@ -1046,10 +1096,8 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   `particles` elsewhere (chosen, not measured - `docs/ghidra/functions/ps4-omega-eu/particle-paths.md`).
   The blend-class-8 distortion emitter (`shockdistort`) is read and not drawn (its program's arithmetic is read, `ghidra/functions/ps4-omega-eu/heat-haze.md`; the strength scalar and target format are not)
   (2026-10-06, `pob.md`): the explosions play their other emitters, and the effects
-  Omega never authors are left out of its table. Still logged at WARN on a race: the two
-  HUD atlases (`HUD_Components.gtf`, `hdHUD.mip`) are HD's names asked of an Omega
-  archive that has no such entry, because Omega's HUD is unread (`crates/omega/src/hud.rs`:
-  fragment XML under `Data\xml\` with no per-mode composition), and the blob shadow. Still silent: the
+  Omega never authors are left out of its table. The two HUD-atlas WARN lines are gone (2026-10-06, `omega-hud`: the atlases
+  are `.gnf` and now resolve). Still silent: the
   blob shadow is this project's generated falloff, not the disc's.
 - **Reversed circuits get their collision** (`omega-catchup`, 2026-09-30).
   `kdcol::sibling_name` used to pair only `track.vex`, so a reversed race

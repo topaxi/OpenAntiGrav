@@ -564,9 +564,17 @@ pub(super) fn hud_font(
                 font.glyphs.len(),
                 font.line_height
             ));
-            oag_ui::font::Atlas::from_font(&font).with_border_extend(
-                oag_ui::language::load::role_border(languages, preferred, role),
-            )
+            // Omega's HUD faces are HD's at twice the pixel size under layouts that
+            // author HD's numbers; the front end already lays its text out through
+            // this scale (`1.0` on every other source), see
+            // `oag_display::space::Space::font_texel_scale`.
+            oag_ui::font::Atlas::from_font(&font)
+                .with_border_extend(oag_ui::language::load::role_border(
+                    languages, preferred, role,
+                ))
+                .with_texel_scale(oag_display::space::Space::font_texel_scale(
+                    archives.layout.platform,
+                ))
         }
         Err(why) => {
             report.push(format!(
