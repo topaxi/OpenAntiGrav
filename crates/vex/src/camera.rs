@@ -1,10 +1,10 @@
 //! `Camera` `0xf7`: the camera an artist left in a scene.
 //!
 //! Every Wipeout HD front-end flyer (`Data/FE/Flyers/<name>/flyer.vex` and
-//! its `flyer_back.vex`) carries one, a `Transform` named `camera1` parenting a
-//! `Camera` named `cameraShape1`, exported straight out of Maya. Billboards, a
-//! few ships, the front-end scene and the circuits' own `track.vex` author some
-//! too (121 of the disc's `.vex` files in all); only the flyers' are read.
+//! `flyer_back.vex`) carries one: a `Transform` named `camera1` parenting a
+//! `Camera` named `cameraShape1`, exported out of Maya. Billboards, a few ships,
+//! the front-end scene and circuits' `track.vex` author some too (121 of the
+//! disc's `.vex` files); only the flyers' are read.
 //!
 //! ```text
 //! Camera, 48 bytes, big-endian on a PS3 file:
@@ -22,42 +22,38 @@
 //!
 //! # The aim point
 //!
-//! **On a Wipeout Pulse circuit's `track.vex` the three floats at `+0x10` are
-//! not zero: they are a world-space point the artist aimed the camera at**
-//! ([`Camera::aim`]), and the position beside it is the node's own transform
-//! translation. Read 2026-10-01 off Talon's Junction (`16_Track`, ten cameras)
-//! and checked against the running original: the camera the game fixes on a
-//! wrecked player craft (`FUN_0887fedc`) keeps its eye at the node's world
-//! translation (`468.3436, -22.8052, -39.8696`, exactly) and picks, among the
-//! ten, the one whose **aim point** is nearest the craft, which is the `+0xa0`
-//! of its runtime object and is this payload's `+0x10..+0x1c`
-//! (`344.1187, -43.1941, -137.0839`, exactly). The aim is already in world
-//! space - it is not run through [`Camera::to_world`]. See
-//! `docs/ghidra/functions/psp-pulse-usa/camera.md`, "The destroy camera".
+//! **On a Wipeout Pulse circuit's `track.vex` the three floats at `+0x10` are a
+//! world-space point the artist aimed the camera at** ([`Camera::aim`]); the
+//! position beside it is the node's own transform translation. Read off Talon's
+//! Junction (`16_Track`, ten cameras) and checked against the running original:
+//! the camera fixed on a wrecked player craft (`FUN_0887fedc`) keeps its eye at
+//! the node's world translation (`468.3436, -22.8052, -39.8696`, exactly) and
+//! picks the one whose **aim point** is nearest the craft, the `+0xa0` of its
+//! runtime object and this payload's `+0x10..+0x1c` (`344.1187, -43.1941,
+//! -137.0839`, exactly). The aim is already in world space, not run through
+//! [`Camera::to_world`]. See `docs/ghidra/functions/psp-pulse-usa/camera.md`,
+//! "The destroy camera".
 //!
 //! # What is read and what is not
 //!
-//! **Placement is the transform chain**, the way [`crate::lighting`]'s is: the
-//! payload carries no matrix, so [`Camera::to_world`] is the node's entry of
+//! **Placement is the transform chain**, as in [`crate::lighting`]: the payload
+//! has no matrix, so [`Camera::to_world`] is the node's entry of
 //! [`vex::world_transforms`]. On the 18 flyers' front files it is a pure
-//! translation `(0, 0, z)` with `z` `92.4957` on the eight base grids and
-//! `12.0` on the other ten, and that translation is what this module is for:
-//! it is the distance the artist framed the card from. (A `flyer_back.vex`
-//! frames itself from a slightly different distance, 97.15 on `01_uplift`.)
+//! translation `(0, 0, z)`, `z` `92.4957` on the eight base grids and `12.0` on
+//! the other ten: the distance the artist framed the card from (a
+//! `flyer_back.vex` frames from a slightly different one, 97.15 on `01_uplift`).
 //!
-//! **`+0x1c` and `+0x20` are not decoded.** `+0x1c` equals each card's own
-//! width over its height to four digits (the base body is 115 by 74.8 units,
-//! 1.5374; the campaign cards 22.1 by 20.4, 1.083), which reads as an aspect
-//! ratio. Read as a horizontal field of view at 16:9 it also comes out at
-//! 0.997 rad, within 0.3% of the vertical field of view of 1.0 rad
-//! `Flyer_Item`'s render function hard-codes (`tanf(0.5)`) - a coincidence, or
-//! a second meaning: the reading holds on the base and Fury grids and not on
-//! the campaign cards (0.653 rad against the same constant). `+0x20` moves with
-//! how much of the camera's image a flyer's card shows: the two windows fitted
-//! on the base and Fury grids are in the ratio 1.081, the two words in the
-//! ratio 1.066. Both are carried ([`Camera::value_1c`], [`Camera::value_20`])
-//! and neither is interpreted. `docs/ui/campaign-screens.md`, "The flyer
-//! behind `Grid Selection`".
+//! **`+0x1c` and `+0x20` are not decoded.** `+0x1c` equals each card's width over
+//! height to four digits (base body 115 by 74.8, 1.5374; campaign cards 22.1 by
+//! 20.4, 1.083), reading as an aspect ratio. Read as a horizontal field of view
+//! at 16:9 it is 0.997 rad, within 0.3% of the 1.0 rad vertical field of view
+//! `Flyer_Item`'s render function hard-codes (`tanf(0.5)`): a coincidence or a
+//! second meaning, holding on the base and Fury grids but not the campaign cards
+//! (0.653 rad). `+0x20` moves with how much of the camera's image a card shows
+//! (windows fitted on the base and Fury grids are in ratio 1.081, the two words
+//! 1.066). Both are carried ([`Camera::value_1c`], [`Camera::value_20`]) and
+//! neither interpreted; see `docs/ui/campaign-screens.md`, "The flyer behind
+//! `Grid Selection`".
 
 use crate::vex::{self, Node};
 use oag_formats::ByteOrder;
@@ -86,8 +82,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    /// Decodes one payload against a world matrix from its transform chain.
-    ///
+    /// Decodes one payload against a world matrix from its transform chain;
     /// `None` for a payload shorter than [`PAYLOAD_LEN`].
     #[must_use]
     pub fn parse(
