@@ -12,8 +12,8 @@
 //!   (`oag_hud::messages`) saying the disc's own end-of-race phrase
 //!   (`ER_GMA`/`ER_SMA`/`ER_BMA`);
 //! - a **standing** line in the last of those slots, which stays for the rest
-//!   of the race, in the swatch colour the campaign screens already use for
-//!   the tier.
+//!   of the race in the layout's own text colour: the words name the tier, so
+//!   no colour of this build's own is added to them.
 //!
 //! The test is the same `Cell_EvaluateMedal` law the results use
 //! ([`oag_tables::race_campaign::Cell::evaluate_medal_for_difficulty`]) over
@@ -83,11 +83,7 @@ pub fn tick(
     let better = improvement(*earned, now)?;
     *earned = Some(better);
     race.raise_message(phrase(better), true);
-    let [_, r, g, b] = oag_ui_screens::campaign::draw::medal_argb(better).to_be_bytes();
-    race.set_standing_message(
-        phrase(better),
-        [r, g, b].map(|channel| f32::from(channel) / 255.0),
-    );
+    race.set_standing_message(phrase(better));
     Some(better)
 }
 

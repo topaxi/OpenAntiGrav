@@ -63,6 +63,7 @@ pub fn slot_of(name: &str) -> Option<usize> {
 pub(super) fn colour(readout: &super::Readout, name: &str) -> Option<[f32; 4]> {
     readout.messages[slot_of(name)?]
         .as_ref()
+        .filter(|line| !line.authored)
         .map(|line| line.color)
 }
 
@@ -89,6 +90,10 @@ pub struct MessageLine {
     pub text: String,
     /// Its colour, alpha included. The border takes the same alpha.
     pub color: [f32; 4],
+    /// Drawn in the widget's own authored colour and outline instead of
+    /// [`Self::color`] - the standing line, which says its tier in words and
+    /// needs no colour of its own.
+    pub authored: bool,
 }
 
 /// What the HUD shows of the board this frame: one entry per slot.
@@ -122,8 +127,6 @@ pub struct MessageBoard {
 #[derive(Debug, Clone, PartialEq)]
 struct Standing {
     text: String,
-    /// Opaque RGB; the line is drawn at full alpha.
-    rgb: [f32; 3],
 }
 
 impl Default for MessageBoard {
@@ -159,12 +162,10 @@ impl MessageBoard {
     }
 
     /// Sets the line that stays up for the rest of the race, replacing any
-    /// earlier one: `id` is a language-table id and `rgb` its colour.
-    pub fn set_standing(&mut self, id: impl Into<String>, rgb: [f32; 3]) {
-        self.standing = Some(Standing {
-            text: id.into(),
-            rgb,
-        });
+    /// earlier one: `id` is a language-table id. It draws in the layout's own
+    /// colour for the widget, not the green of a banner.
+    pub fn set_standing(&mut self, id: impl Into<String>) {
+        self.standing = Some(Standing { text: id.into() });
     }
 
     /// Whether a message started showing on the last [`Self::advance`] - the
@@ -215,6 +216,7 @@ impl MessageBoard {
             *line = Some(MessageLine {
                 text: held.text.clone(),
                 color,
+                authored: false,
             });
         }
         // Not while the same words are already up as a banner: the line would
@@ -225,7 +227,8 @@ impl MessageBoard {
         {
             *last = Some(MessageLine {
                 text: standing.text.clone(),
-                color: [standing.rgb[0], standing.rgb[1], standing.rgb[2], 1.0],
+                color: [1.0; 4],
+                authored: true,
             });
         }
         out

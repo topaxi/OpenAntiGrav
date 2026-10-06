@@ -49,6 +49,12 @@ impl Race {
         // `oag_render::camera::shake`.
         self.view.shake.advance(self.sim.dt);
         self.view.messages.advance();
+        if self.view.messages.just_shown() {
+            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                oag_sound::sfx::Cue::Message,
+                0,
+            ));
+        }
         // Before anything steps, so the perfect start's edge is a change
         // across this tick - see `race::perfect_start`.
         let launch_grades = self.launch_grades();

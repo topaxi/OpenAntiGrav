@@ -1116,9 +1116,56 @@ Pure does announce a Zone medal) is the open piece. 2048 (`RaceMedal` is never
 seen in any state reached) and Omega (racing out of scope): **checked, applies,
 not wired**.
 
-**Not done, and open:** the `MESSAGE` cue the original plays as a line appears,
-and the `gold_med`/`silver_med`/`bronze_med` jingles (unplayed even on the
-end-of-race screen) - `MessageBoard::just_shown` is the hook for the first.
+**A standing line, added the same day (chosen, not measured).** The banner is
+four seconds and then the player cannot tell which medal is already safe, so the
+last of the four slots (`Info4`) now keeps the best medal earned so far for the
+rest of the race, in the same disc phrase (`Gold medal awarded`) and in the
+widget's own authored colour and outline - the words name the tier, so no
+colour of this build's own is added (a first version tinted it with the campaign
+screens' medal swatches; on HD's orange sky the tint disappeared and the
+authored white read). It reuses `Info4`, so it lands where no other widget of
+any layout does: Pulse's Zone and Speed Lap layouts author `Info1`-`Info4` at
+`(240, 80/95/110/125)`, centred and 0.6 scale, with nothing else within
+that band (dumped from the composed layouts 2026-10-06); HD's author them at
+`(600, 280/365/450/535)` in a 1920x1080 space in both layouts. While a banner
+holds that slot the standing line yields, and it is not drawn while a banner
+with the same words is up. `RaceStage` raises both through one function,
+`oag_game::medal_watch::tick`, which the headless capture calls too, so a
+capture of a real run shows exactly what the window would:
+`--campaign-cell grid8_3_2` (Pulse Speed Lap, silver at 44 s) or
+`--campaign-cell grid0_4_2` (Pulse Zone, or HD's own `grid0_4_2`). Seen on live
+frames: Pulse Speed Lap silver at the lap that earned it and still up ten
+seconds on, Pulse Zone silver at zone 19, HD Zone bronze at zone 14
+(`data/scratch/hud-medal-2/shots/`). On a very bright backdrop (Pulse's cyan
+Zone circuit) the line is as hard to read as every other authored Pulse HUD
+label there; nothing here adds a backing the layout does not author.
+
+**HD legibility, checked.** HD authors `Info1`-`Info4` as white `Small` text with
+a `0,0,0,0.25` border and no backing, in both Zone and Speed Lap, the same
+style as every other HD label (`TimeDiffText`, `ZonePlus*`; the ladder tabs are
+the only HD text with a backing). So the washed-out banner on a bright backdrop
+is HD's own text style over an overbright sky, not a defect of the line, and
+nothing was added. The banner's green is Pulse's runtime colour (`0x30ff30`),
+which HD inherits under "unmeasured titles take Pulse's law"; HD's own colour
+for these lines is unread.
+
+**`MESSAGE` cue, wired.** `Cue::Message` (`"MESSAGE"`, `hud.bnk`, 0.34 s) plays
+dry the tick a slot starts showing (`MessageBoard::just_shown`, from
+`Race::tick`), as `Hud_UpdateMessages` does. It resolves on every PSP and PS2 disc
+and on HD's `weapons.bnk` (6 waveforms; bank presence only, HD's dispatch is
+unread). Checked headlessly: two `--dump-audio` runs of the same Zone race, one
+with `--force-medal 400:gold`, differ for exactly 0.34 s from the tick the line
+shows. Decompiled, not heard against a live original.
+
+**Title status.** 2048: **checked, applies, not wired** - its campaign events
+earn `Pass`/`Elite` (`oag_2048::campaign::Tier`), not gold/silver/bronze, its
+HUD dialect carries `message_slots: false` and no `Info1`-`Info4`, and
+`RaceMedal` was never seen; a medal line there would need its own phrase and
+widget first. Omega: **not checkable** (racing out of scope, no HUD to draw
+into). Pure: unchanged - no `ER_GMA` in its table, so neither line draws.
+
+**Not done, and open:** the `gold_med`/`silver_med`/`bronze_med` jingles have no
+recovered trigger (unplayed even on the end-of-race screen) and stay silent.
 Time Trial raises nothing mid-race: its medal is at the finish. Eliminator
 (kills against gold) would take the same hook and was not asked for. The
 other eight events the original raises in these lines (`IG_HUD_PLAP`,

@@ -702,6 +702,14 @@ pub enum Cue {
     /// speech bank, so it loads beside [`Self::Ready`] and [`Self::Go`]. Raised
     /// by `Race::tick_destroyed_craft`.
     ContElim,
+    /// The HUD's message line sounding: `"MESSAGE"` in the HUD bank
+    /// (`hud.bnk`, 0.34 s), played dry (`Sound_PlayNamedInSlot`, `0x400`) by
+    /// `Hud_UpdateMessages` (`0x0881f148`) the tick a slot starts showing.
+    /// Decompiled, **not yet heard against a live frame**: see
+    /// `docs/ghidra/functions/psp-pulse-usa/hud-messages.md`. Raised by
+    /// `Race::tick` off [`oag_hud::messages::MessageBoard::just_shown`], so it
+    /// sounds for the chosen medal line and for any later event raised there.
+    Message,
     /// The HD-lineage magstrip hum, started once as a craft comes onto a strip.
     ///
     /// `Ship_StartMagstripSound` (`0x012f8c70`, Omega) starts `_magstrip01` -
