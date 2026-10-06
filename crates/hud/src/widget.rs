@@ -12,7 +12,7 @@ use oag_ui::frontend::Align;
 ///
 /// The role names are the language plugin's, and the mapping to `.fnt` files is
 /// in [`oag_ui::frontend`]'s line-height table and
-/// [`oag_pulse::names::fonts`]: `HUD` is `PulseHud.fnt` at 25 px,
+/// `oag_pulse::names::fonts`: `HUD` is `PulseHud.fnt` at 25 px,
 /// `HUDSmall` is `small.fnt` at 10 px, `Default` is `pulse_text.fnt` at 13 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Font {
