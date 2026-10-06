@@ -42,6 +42,13 @@
 //!   the curve.
 //! - **Brightness** stays at the executable's middle setting, 1.0; this port
 //!   grades brightness after the frame.
+//!
+//! The curve resamples the scene at an **offset** when a frame's heat-haze and
+//! shock-ring particles drew one: the executable's composite reads its
+//! `DistortionTexture` and moves every scene sample by
+//! `0.0100021 * (16/9 * d.x, d.y)` ([`DISTORT_SCALE`], [`DISTORT_ASPECT`];
+//! `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`, confidence 80). Frames
+//! that drew none sample a zero texture and are byte-identical to before.
 
 pub mod law;
 
@@ -49,10 +56,20 @@ pub use law::{Curve, Params};
 
 use anyhow::Result;
 
-use oag_gpu::formats::SCENE_FORMAT;
+use oag_gpu::formats::{DISTORTION_FORMAT, SCENE_FORMAT};
 
 /// The luma image's side, the executable's own `0x100` (format `R16F`).
 pub const LADDER_SIZE: u32 = 256;
+
+/// The composite's offset scale: the immediate `0x3c23e000` every
+/// `wo_composite*` shader multiplies the distortion texture's `rg` by.
+pub const DISTORT_SCALE: f32 = 0.010_002_1;
+
+/// The horizontal factor on that offset: `ScreenTint_Aspect.w`, which
+/// `FUN_01625750` writes as `0x3fe38e39` (16/9) whenever its mode byte is not
+/// 2. The other mode was not read, and the value is **not** the window's
+/// aspect: it is the constant the original wrote.
+pub const DISTORT_ASPECT: f32 = 16.0 / 9.0;
 
 /// The luma ladder's format.
 pub const LADDER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
@@ -75,6 +92,8 @@ struct Uniform {
     brightness: f32,
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
+    distortion: [f32; 2],
+    padding: [f32; 2],
 }
 
 impl Uniform {
@@ -94,6 +113,8 @@ impl Uniform {
             brightness: law::BRIGHTNESS,
             uv_scale,
             uv_max,
+            distortion: [DISTORT_SCALE * DISTORT_ASPECT, DISTORT_SCALE],
+            padding: [0.0; 2],
         }
     }
 }
@@ -104,7 +125,10 @@ const STATE_SIZE: u64 = 16 + 16 + 16 + 256 * 4;
 /// One colour texture and its view.
 #[derive(Debug)]
 struct Target {
-    #[expect(dead_code, reason = "held so the view stays valid")]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "held so the view stays valid; the tests read it")
+    )]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
@@ -127,7 +151,10 @@ impl Target {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            // `COPY_DST` so a test can lay known pixels into the scene.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -162,6 +189,10 @@ pub struct Chain {
     halve_groups: Vec<wgpu::BindGroup>,
     coefficient_groups: [wgpu::BindGroup; 2],
     curve_group: wgpu::BindGroup,
+    /// The composite's `DistortionTexture` slot, and the zero texture that
+    /// fills it on a frame that drew no distortion.
+    distortion_layout: wgpu::BindGroupLayout,
+    no_distortion: wgpu::BindGroup,
     sized: Sized,
     written: std::cell::Cell<Option<(u32, u32)>>,
 }
@@ -253,8 +284,22 @@ impl Chain {
                 immediate_size: 0,
             })
         };
+        let distortion_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("omega tonemap distortion"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        });
         let plain = pipeline_layout(&[Some(&layout)]);
-        let with_curve = pipeline_layout(&[Some(&layout), Some(&state_ro)]);
+        let with_curve =
+            pipeline_layout(&[Some(&layout), Some(&state_ro), Some(&distortion_layout)]);
         let with_state = pipeline_layout(&[Some(&layout), Some(&state_rw)]);
         let render = |label: &str,
                       entry: &str,
@@ -381,6 +426,8 @@ impl Chain {
         ];
         let curve_group = state_group(&state_ro);
         let sized = Self::sized(device, &layout, &sampler, &uniform, size);
+        let zero = Target::new(device, "omega no distortion", DISTORTION_FORMAT, (1, 1));
+        let no_distortion = Self::distortion_group(device, &distortion_layout, &zero.view);
         Ok(Self {
             params,
             luma,
@@ -394,8 +441,25 @@ impl Chain {
             halve_groups,
             coefficient_groups,
             curve_group,
+            distortion_layout,
+            no_distortion,
             sized,
             written: std::cell::Cell::new(None),
+        })
+    }
+
+    fn distortion_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("omega tonemap distortion"),
+            layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            }],
         })
     }
 
@@ -450,6 +514,12 @@ impl Chain {
         &self.sized.scene.view
     }
 
+    /// The scene target's texture, for a test that writes pixels into it.
+    #[cfg(test)]
+    fn scene_texture(&self) -> &wgpu::Texture {
+        &self.sized.scene.texture
+    }
+
     /// Rebuilds the scene target for a new viewport size. The adaptation
     /// state carries over: the luminance it tracks is the picture's, not the
     /// target's.
@@ -461,13 +531,20 @@ impl Chain {
     /// Measures the frame, steps the adaptation and writes the curved,
     /// encoded frame into `view` at `origin`, over `viewport` - the rectangle
     /// the race pass drew, exactly as `hd_bloom::Chain::run` takes it.
+    ///
+    /// `distortion` is the frame's offset texture, laid out like the scene
+    /// target ([`DISTORTION_FORMAT`], the pixels the race pass drew), or
+    /// `None` for a frame that drew none.
+    #[allow(clippy::too_many_arguments)]
     pub fn run(
         &self,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         origin: (f32, f32),
         viewport: (u32, u32),
+        distortion: Option<&wgpu::TextureView>,
     ) {
         let scene = self.sized.size;
         let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
@@ -510,11 +587,17 @@ impl Chain {
             pass.set_bind_group(1, &self.coefficient_groups[1], &[]);
             pass.dispatch_workgroups(1, 1, 1);
         }
+        let drawn =
+            distortion.map(|view| Self::distortion_group(device, &self.distortion_layout, view));
         draw(
             encoder,
             "omega tonemap apply",
             &self.apply,
-            &[&self.sized.apply_group, &self.curve_group],
+            &[
+                &self.sized.apply_group,
+                &self.curve_group,
+                drawn.as_ref().unwrap_or(&self.no_distortion),
+            ],
             view,
             origin,
             viewport,

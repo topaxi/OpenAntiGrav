@@ -134,6 +134,7 @@ const TITLE: &Title = &Title {
         origin: oag_title::Origin::Chosen,
     },
     pressings: None,
+    adverts: None,
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

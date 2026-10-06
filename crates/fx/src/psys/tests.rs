@@ -45,6 +45,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             render: Render::Billboard,
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,
+            distort_strength: 0.0,
             particle_child: None,
             death_child: None,
             spawn_probability: 1.0,

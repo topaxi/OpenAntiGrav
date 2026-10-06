@@ -90,6 +90,17 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
+    adverts: Some(&oag_title::adverts::Adverts {
+        // Measured on PSP (a live GE dump) and PS2 (a live GS dump): see
+        // `docs/ghidra/functions/psp-pulse-usa/billboards.md`.
+        target: (128, 128),
+        near: 1.2,
+        far: 2017.7,
+        colour_pool: true,
+        flip_v: true,
+        zone_shares_one_texture: false,
+        origin: oag_title::Origin::Measured,
+    }),
 };
 
 /// Where Pulse keeps its music.

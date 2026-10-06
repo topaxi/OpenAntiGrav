@@ -63,4 +63,20 @@ impl Race {
             .weather()
             .extend_vertices(additive, alpha_over, camera, right, up);
     }
+
+    /// The blend class 8 quads (heat haze, shock rings) everything the stage
+    /// plays has this frame: the geometry of the offset pass, not of either of
+    /// [`Self::extend_stage_vertices`]'s lists. See `oag_fx::psys::Blend::Distort`.
+    pub fn extend_distort_vertices(
+        &self,
+        out: &mut Vec<oag_mesh::mesh::GpuVertex>,
+        right: Vec3,
+        up: Vec3,
+    ) {
+        self.view.stage.extend_distort_vertices(out, right, up);
+        self.view
+            .scenery_fx
+            .stage()
+            .extend_distort_vertices(out, right, up);
+    }
 }

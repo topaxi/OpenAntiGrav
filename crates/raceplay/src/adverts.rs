@@ -16,25 +16,19 @@
 //! `billboardN.tga` for slot N - the same quad `oag_render::gantry` measures
 //! for slot 8's mount.
 //!
+//! **The target size and the clip planes are the title's**
+//! ([`oag_title::adverts::Adverts`]): Pulse draws into 128 x 128 with near 1.2
+//! (`FUN_0891fe14(object + 0x98, 0x80, 0x80)`, `VexCamera_BuildProjection`) and a
+//! far plane solved from the captured matrix; Wipeout HD into 512 x 256 with near
+//! 0.5, read live off RPCS3 (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`).
+//! The projection law itself - `x = 1 / tan(fov / 2)`, `y = aspect * x` - is the
+//! same on both, checked against all eight HD slots.
+//!
 //! This module is the load half ([`load`]: model and camera per slot) and the GPU
 //! half ([`Cards`]: the targets, the per-frame pass and the rebinding of the
 //! track's own placeholder materials).
 
 use super::*;
-
-/// The side of a card's target, in pixels: `FUN_0891fe14(object + 0x98, 0x80,
-/// 0x80)` in `Billboard_ConstructResource`, and the `0x80` buffer width and
-/// 64.0 viewport scale of the captured pass.
-pub(super) const SIDE: u32 = 128;
-
-/// The near plane of every `.vex` camera projection: the literal `1.2` in
-/// `VexCamera_BuildProjection`.
-const NEAR: f32 = 1.2;
-
-/// The far plane the captured matrices imply: solving `-2fn/(f-n)` =
-/// -2.40143 for `n` = 1.2. The engine reads it from the display's own state
-/// (`g_display + 0x1698`); a flat card does not depend on it.
-const FAR: f32 = 2017.7;
 
 /// What a circuit's billboard slots become: the start gantry on slot 8's quad,
 /// and an advert drawn into each of the other slots' quads that has a model.
@@ -54,6 +48,8 @@ pub struct Card {
     pub model: Model,
     /// The projection times the inverse of the camera's world transform.
     pub view_projection: Mat4,
+    /// The target's size in pixels, the title's [`oag_title::adverts::Adverts::target`].
+    pub size: (u32, u32),
 }
 
 impl std::fmt::Debug for Card {
@@ -71,7 +67,7 @@ impl std::fmt::Debug for Card {
 /// more than one key: nothing here interpolates one, and a card that cannot be
 /// framed is drawn nothing rather than framed by a guess.
 #[must_use]
-pub fn view_projection(camera: &oag_vex::camera::Camera) -> Option<Mat4> {
+pub fn view_projection(camera: &oag_vex::camera::Camera, near: f32, far: f32) -> Option<Mat4> {
     let aspect = camera.aspect();
     if !(aspect.is_finite() && aspect > 0.0) {
         return None;
@@ -81,14 +77,14 @@ pub fn view_projection(camera: &oag_vex::camera::Camera) -> Option<Mat4> {
     // `aspect` times that; `perspective` takes the vertical field of view.
     let fov_y = 2.0 * (tan_half / aspect).atan();
     let view = Mat4::from_cols_array(&camera.to_world).inverse();
-    Some(oag_core::math::camera::perspective(fov_y, aspect, NEAR, FAR) * view)
+    Some(oag_core::math::camera::perspective(fov_y, aspect, near, far) * view)
 }
 
 /// The catalogue a colour fill draws from, on a title that ships one.
 const CATALOGUE: &str = r"Data\Plugins\PI004\Definition.xml";
 
 /// Loads the advert every slot of `manifest` names, for the slots whose
-/// placeholder this circuit's track authors.
+/// placeholder this circuit's track authors, drawn as `spec` says.
 ///
 /// Slot 8 is the start gantry and is left to [`crate::gantry`]. **A slot that
 /// names a colour draws its advert from the engine's pool**
@@ -100,6 +96,7 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     manifest: &oag_tables::trackstartup::TrackStartup,
     track_model: &Model,
+    spec: &oag_title::adverts::Adverts,
     report: &mut Vec<String>,
 ) -> Vec<Card> {
     let placeholders = oag_render::gantry::placeholder_texture_slots(track_model);
@@ -107,7 +104,11 @@ pub(super) fn load(
         .read_name(CATALOGUE)
         .map(|blob| oag_tables::billboard_pool::parse(&blob))
         .unwrap_or_default();
-    let fills = oag_tables::billboard_pool::colour_fills(manifest, catalogue);
+    let fills = if spec.colour_pool {
+        oag_tables::billboard_pool::colour_fills(manifest, catalogue)
+    } else {
+        Vec::new()
+    };
     let mut cards = Vec::new();
     for billboard in &manifest.billboards {
         if billboard.num == 8 || !placeholders.iter().any(|&(_, n)| n == billboard.num) {
@@ -123,6 +124,14 @@ pub(super) fn load(
                     ));
                     entry.location.clone()
                 }
+                _ if !spec.colour_pool => {
+                    report.push(format!(
+                        "billboard slot {} names a colour ({:?}) and this title's advert pool \
+                         order is not measured, so its placeholder draws nothing",
+                        billboard.num, billboard.fill
+                    ));
+                    continue;
+                }
                 _ => {
                     report.push(format!(
                         "billboard slot {} names a colour ({:?}) and the advert catalogue \
@@ -133,12 +142,12 @@ pub(super) fn load(
                 }
             },
         };
-        match load_card(archives, billboard.num, &name, report) {
+        match load_card(archives, billboard.num, &name, spec, report) {
             Ok(card) => {
                 report.push(format!(
-                    "billboard slot {}: {name} drawn through its own camera into a {SIDE}x{SIDE} \
+                    "billboard slot {}: {name} drawn through its own camera into a {}x{} \
                      target shown on the circuit's billboard{}.tga quad(s)",
-                    card.slot, card.slot
+                    card.slot, spec.target.0, spec.target.1, card.slot
                 ));
                 cards.push(card);
             }
@@ -155,6 +164,7 @@ fn load_card(
     archives: &mut oag_assets::Archives,
     slot: u32,
     name: &str,
+    spec: &oag_title::adverts::Adverts,
     report: &mut Vec<String>,
 ) -> Result<Card> {
     let (model, blob) = super::gantry::load_with_blob(archives, name, report)?;
@@ -163,12 +173,13 @@ fn load_card(
         [one] => one,
         other => anyhow::bail!("{} cameras, expected one", other.len()),
     };
-    let view_projection =
-        view_projection(camera).context("its camera is orthographic or has a multi-key curve")?;
+    let view_projection = view_projection(camera, spec.near, spec.far)
+        .context("its camera is orthographic or has a multi-key curve")?;
     Ok(Card {
         slot,
         model,
         view_projection,
+        size: spec.target,
     })
 }
 
@@ -179,6 +190,8 @@ struct CardGpu {
     colour: wgpu::TextureView,
     #[cfg(test)]
     target: wgpu::Texture,
+    #[cfg(test)]
+    size: (u32, u32),
 }
 
 /// The cards on the GPU: one target each, drawn once a frame ahead of the
@@ -234,9 +247,13 @@ impl Cards {
         cards: Vec<Card>,
         anisotropy: Anisotropy,
     ) -> Result<Self> {
+        // One title draws every card at one size, which is what lets the depth
+        // and velocity attachments below be shared.
+        let (width, height) = cards.first().map_or((1, 1), |card| card.size);
+        debug_assert!(cards.iter().all(|card| card.size == (width, height)));
         let size = wgpu::Extent3d {
-            width: SIDE,
-            height: SIDE,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
         let texture = |label: &str, format, usage| {
@@ -294,6 +311,8 @@ impl Cards {
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
                 #[cfg(test)]
                 target,
+                #[cfg(test)]
+                size: card.size,
             });
         }
         Ok(Self {

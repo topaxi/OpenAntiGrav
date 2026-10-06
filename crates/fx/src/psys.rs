@@ -46,6 +46,7 @@ use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
 use oag_mesh::mesh::GpuVertex;
 
+mod distort;
 mod emitter_state;
 mod error;
 pub mod field;
@@ -166,11 +167,11 @@ pub enum Blend {
     /// here as alpha-over, which is the closer of the two available
     /// pipelines. No corpus emitter uses it.
     AlphaOver,
-    /// Class 8: the shock-distortion and heat-haze emitters Omega authors,
-    /// which its `psys_normal_heathaze` shader draws by sampling the scene
-    /// behind the sprite. **Simulated and not drawn**: what that shader reads
-    /// and writes is unrecovered, and a guessed blend would be an invention.
-    /// [`Effect::undrawn_emitters`] names these so the loader can say so.
+    /// Class 8: the shock-distortion and heat-haze emitters Omega authors.
+    /// Their `psys_normal_heathaze` program writes a signed screen-space
+    /// **offset** that the final composite moves the scene by, not a colour:
+    /// see [`distort`] and `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`.
+    /// Not in either of [`System::extend_vertices`]'s lists.
     Distort,
 }
 
@@ -303,6 +304,8 @@ pub struct EmitterSpec {
     pub streak: StreakDraw,
     /// Blend class.
     pub blend: Blend,
+    /// A [`Blend::Distort`] emitter's strength, [`pob::Emitter::distort_strength`].
+    pub distort_strength: f32,
     /// A system attached to each particle this emitter spawns, as an index
     /// into [`Effect::emitters`].
     pub particle_child: Option<usize>,
@@ -436,12 +439,13 @@ impl Effect {
         Ok(effect)
     }
 
-    /// The names of the emitters that play but draw nothing, because their
-    /// blend class is [`Blend::Distort`].
+    /// The names of the emitters that play but draw nothing: a
+    /// [`Blend::Distort`] emitter whose sprite did not read, since the
+    /// program displaces by the sprite and a procedural one would invent it.
     pub fn undrawn_emitters(&self) -> impl Iterator<Item = &str> {
         self.emitters
             .iter()
-            .filter(|spec| spec.blend == Blend::Distort)
+            .filter(|spec| spec.blend == Blend::Distort && spec.sprite.is_none())
             .map(|spec| spec.name.as_str())
     }
 
@@ -572,6 +576,7 @@ impl EmitterSpec {
             render,
             streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,
+            distort_strength: record.distort_strength,
             particle_child: record.particle_child,
             death_child: record.death_child,
             spawn_probability: record.child_spawn_probability.clamp(0.0, 1.0),
@@ -1135,15 +1140,7 @@ impl System {
                 );
                 continue;
             }
-            // `cap = 0.5` collapses the shader's cap/cross profile to the
-            // plain radial falloff a round sprite wants.
-            let mut corners = match &spec.rotation {
-                Some(rotation) => rotation.quad(particle, age, half, right, up, rgb, alpha),
-                None => quad(particle.position, right * half, up * half, 0.5, rgb, alpha),
-            };
-            if let Some(rect) = spec.sheet_rect {
-                sprite::map_to_cell(&mut corners, spec.atlas.cell(rect, particle.frame));
-            }
+            let corners = billboard(spec, particle, age, half, right, up, rgb, alpha);
             if guard::drops(guard, &effect.name, spec.template, &corners) {
                 continue;
             }
@@ -1488,7 +1485,7 @@ mod riding;
 mod particle;
 use particle::{Particle, expendable_slot};
 mod quad;
-use quad::quad;
+use quad::{billboard, quad};
 
 mod roll;
 mod template;

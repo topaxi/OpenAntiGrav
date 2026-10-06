@@ -74,18 +74,16 @@ circuit, **chosen, not measured** - the eboot's flag at `0x01f99bc0` decides
 and which circuit sets it is unread (`ps4-omega-eu/particle-paths.md`). 80/97
 and 110/112 (95/97) parse since 2026-10-06 (logwarn-2048): blend class 8 (distortion and
 heat haze: rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) is read as
-`Blend::Distort`, simulated and **not drawn**, and the loader names each such emitter at
-WARN. Seen: wall sparks, rocket flare (`data/scratch/omega-particles/shots/`), the rocket
-explosion's fireball (`data/scratch/logwarn-2048/shots/omega-rocket.png`). Open: **draw
-the distortion** - the program's arithmetic is READ (2026-10-06,
-`ps4-omega-eu/heat-haze.md`: signed offset buffer, composite resamples at
-`uv + 0.0100021 * (16/9 * d.x, d.y)`), but it stays undrawn. `kColourScale` is now READ
-(emitter `+0xc84`, an authored float: 2.0 on the patch's explosions), the target is
-`R8G8_SNORM` with an additive One/One blend, the depth is `R16F` 960 by 540
-(`heat-haze.md`, `heat-haze-2` section). Still unread: the target's clear value, which pass
-attaches it in pass 9, and the pass that writes the `R16F` depth (and its encoding); then
-the work is a distortion input on `oag-post`'s composite, not a scene grab (Omega
-only, no 2048 `.pob` uses class 8); read the flag's writers to make the per-circuit
+`Blend::Distort` and **drawn** (2026-10-06, `heat-haze-3`: an offset pass in `oag_fx::psys`, composited by
+`oag_post::omega_tonemap`; strength the emitter's `+0xc84` float; see `pob.md` and
+`ps4-omega-eu/heat-haze.md`, `heat-haze-3` section). Seen: wall sparks, rocket flare
+(`data/scratch/omega-particles/shots/`), the rocket explosion with and without the distortion
+(`data/scratch/heat-haze-3/shots/`). Open on the distortion: the heat-haze set (`WO_RB_HEAT*`,
+`WO_ENV_*`) has no recovered trigger; the offset target is half floats where the original is
+`R8G8_SNORM`; the depth gate is our own depth buffer, planar, where the original reads an `R16F`
+its scene shaders fill (planar `w` or radial unread); all 80 Omega circuit `.envsettings` author the `Tonemap` block the composite hangs off (census
+`crates/fx/examples/omega_tonemap_census.rs`); a back-port to other titles is the maintainer's call (the
+pass is title-agnostic, no setting exists). Other open: read the flag's writers to make the per-circuit
 directory choice measured; the 2048 leftovers (rocket flare, Zone spark swap).
 Pulse's `WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`,
 `WO_RAIN*` and `WO_SNOW` are authored by neither 2048 nor Omega (`pob.md`, "Effects Pulse

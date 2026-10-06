@@ -475,6 +475,8 @@ pub mod field;
 /// constants put together.
 pub mod flags;
 mod initial;
+mod placeholder;
+use placeholder::emitter_placeholder;
 
 /// An emitter's own embedded sprite texture, addressed positionally rather
 /// than through the slot table - see the module's own doc comment for the
@@ -675,6 +677,15 @@ pub struct Emitter {
     /// on an emitter record only; a template's is [`Emitter::stretch`], and
     /// holds `1.0` here.
     pub aspect: f32,
+    /// `+0xc84`, blend class 8 only: the heat-haze program's `kColourScale`,
+    /// the strength every one of the emitter's particles displaces the frame
+    /// by. A file field of the emitter record (the executable copies the
+    /// qword at emitter `+0xc84` into each batch it pushes), read by
+    /// `crates/fx/examples/emitter_words.rs` on all 31 class 8 emitters of
+    /// the base and patch archives. `0.0` for every other class, where the
+    /// word is not this field, and for a record too short to hold it. See
+    /// `docs/ghidra/functions/ps4-omega-eu/heat-haze.md`.
+    pub distort_strength: f32,
     /// `+0x778`: how fast the sprite-atlas frame advances, frames per tick.
     /// The fourth channel the load-time baker `FUN_088f9024` merges, after
     /// alpha, size and roll; see `docs/formats/pob.md`, "The frame-rate
@@ -796,61 +807,6 @@ fn walk_emitters(
     Ok(index)
 }
 
-/// An emitter's slot in the output before its children have been walked.
-/// Never observable: every placeholder is overwritten by the record it
-/// stands in for.
-fn emitter_placeholder() -> Emitter {
-    let channel = || Channel {
-        period: 0.0,
-        mode: ChannelMode::Constant,
-        lo: 0.0,
-        hi: 0.0,
-        keys: Vec::new(),
-    };
-    Emitter {
-        name: String::new(),
-        offset: 0,
-        flags: 0,
-        duration_ticks: 0.0,
-        shape: 0,
-        extent: 0.0,
-        extent_unread: [0.0; 2],
-        radius_mode: 0,
-        velocity_mode: 0,
-        speed_per_tick: (0.0, 0.0),
-        elevation: 0.0,
-        azimuth: 0.0,
-        cone_degrees: 0.0,
-        lifetime_ticks: (0, 0),
-        interval_ticks: (0, 0),
-        per_emission: (0, 0),
-        gravity_per_tick2: 0.0,
-        live_cap: 0,
-        render_mode: 0,
-        colour_mode: 0,
-        blend_class: 0,
-        colours: Box::new([[0; 4]; 256]),
-        size: channel(),
-        alpha: channel(),
-        rotation_speed: channel(),
-        stretch: None,
-        aspect: 1.0,
-        frame_rate: channel(),
-        emission_scale: channel(),
-        playback_rate: 0.0,
-        child_velocity_inherit: 0.0,
-        child_spawn_probability: 0.0,
-        animated_attributes: 0,
-        attribute_animations: Vec::new(),
-        atlas_grid: (0, 0),
-        atlas_frames: 0,
-        modifiers: Vec::new(),
-        death_child: None,
-        particle_child: None,
-        initial_particles: Vec::new(),
-    }
-}
-
 /// One emitter record, plus the three raw tree offsets its caller resolves.
 #[expect(clippy::type_complexity, reason = "one call site, unpacked at once")]
 fn parse_emitter(
@@ -916,6 +872,11 @@ fn parse_emitter(
         rotation_speed: parse_channel(record, order, 0x698)?,
         stretch: None,
         aspect: float(0x4c8),
+        distort_strength: if word(0xc0) == 8 && record.len() >= 0xc88 {
+            float(0xc84)
+        } else {
+            0.0
+        },
         frame_rate: parse_channel(record, order, 0x778)?,
         emission_scale: parse_channel(record, order, 0x858)?,
         playback_rate: float(0x4cc),
