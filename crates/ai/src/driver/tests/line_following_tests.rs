@@ -1,11 +1,9 @@
 //! Following the line: thrust, steering lock, the corner-speed brake and the
 //! braking differential.
 //!
-//! One theme of `driver.rs`'s tests. They were an inline `#[cfg(test)]`
-//! module of 1,185 lines, which is over both caps in
-//! `scripts/check-file-size.py` at once - 200 inline, 1,000 in a file - so
-//! they are split by subject, and the fixtures they share stay in
-//! [`super`].
+//! One theme of `driver.rs`'s tests, split by subject (an inline module of 1,185
+//! lines broke both caps in `scripts/check-file-size.py`); shared fixtures stay
+//! in [`super`].
 
 use super::*;
 
@@ -33,9 +31,9 @@ fn a_craft_on_a_straight_holds_full_thrust_and_no_steering() {
 }
 
 /// The sign is the whole thing: a craft to the *right* of its line must steer
-/// *left*, and getting it backwards drives the field into the outside wall on
-/// the first corner - which is exactly the trap the grid's lateral offset
-/// already sprung once. See `docs/ghidra/functions/psp-pulse-usa/grid.md`.
+/// *left*, and backwards drives the field into the outside wall on the first
+/// corner, the trap the grid's lateral offset sprang once. See
+/// `docs/ghidra/functions/psp-pulse-usa/grid.md`.
 #[test]
 fn a_craft_beside_the_line_steers_back_toward_it() {
     let tuning = Tuning::default();
@@ -101,10 +99,9 @@ fn braking_is_symmetric_until_the_steering_loop_saturates() {
             .collect(),
     );
     // Well over the corner's target, so the brakes are on throughout; the
-    // craft's own turn rate is swept to find the one that leaves the
-    // steering loop short of lock. `actual` is `-angular_velocity.y` while
-    // the orientation is the identity, so this is sweeping the rate error
-    // through zero.
+    // craft's turn rate is swept to find the one leaving the steering loop short
+    // of lock (`actual` is `-angular_velocity.y` with identity orientation, so
+    // this sweeps the rate error through zero).
     let mut unsaturated = 0;
     for step in -200..=200 {
         let mut state = craft(line.point(0), 200.0);
@@ -161,15 +158,15 @@ fn a_saturated_driver_over_its_corner_speed_brakes_asymmetrically() {
     }
 }
 
-/// A curvature that reads as a real corner under `Tuning::default`'s
-/// [`Tuning::trail_curvature_floor`] - well clear of it, the way Talon's
-/// Junction's own bends measured. Used with itself as the peak, so the
-/// exit gate reads "still at the tightest point", not "opening up".
+/// A curvature that reads as a real corner against
+/// [`Tuning::trail_curvature_floor`], well clear of it as Talon's Junction's
+/// bends measured. Used as its own peak, so the exit gate reads "at the
+/// tightest point", not "opening up".
 const CORNER_CURVATURE: f32 = 0.02;
 
-/// [`track_peak_curvature`] holds the high-water mark through a dip - the
-/// chord estimate's own tick-to-tick noise, measured at ~5e-5 mid-corner on
-/// Talon's Junction - and only resets once the line actually goes straight.
+/// [`track_peak_curvature`] holds the high-water mark through a dip (the chord
+/// estimate's ~5e-5 tick-to-tick noise mid-corner on Talon's Junction) and
+/// resets only once the line goes straight.
 #[test]
 fn the_peak_curvature_holds_through_a_dip_and_resets_on_a_straight() {
     let tuning = Tuning::default();
@@ -278,9 +275,8 @@ fn the_differential_waits_for_the_steering_loop_to_run_out_of_lock() {
     );
 }
 
-/// Curvature at or below [`Tuning::trail_curvature_floor`] is a straight,
-/// whatever the steering loop happens to be doing - see [`trail`]'s own doc
-/// for why `target` cannot tell a straight from a corner on real geometry.
+/// Curvature at or below [`Tuning::trail_curvature_floor`] is a straight
+/// whatever the steering loop does; see [`trail`] for why `target` cannot say.
 #[test]
 fn the_differential_never_acts_on_a_straight() {
     let tuning = Tuning::default();
@@ -305,9 +301,8 @@ fn the_differential_never_acts_on_a_straight() {
     );
 }
 
-/// Curvature that has fallen well below its own recent peak is corner exit,
-/// where the grip is wanted for accelerating - see [`trail`]'s own doc for
-/// the real-track measurement this replaced `speed < target` with.
+/// Curvature fallen well below its recent peak is corner exit, where grip is
+/// wanted for accelerating; see [`trail`] for the real-track measurement.
 #[test]
 fn the_differential_never_acts_on_corner_exit() {
     let tuning = Tuning::default();
@@ -351,11 +346,10 @@ fn the_differential_never_acts_while_recovering_from_a_hit() {
     );
 }
 
-/// The bug this crate was rewritten to fix: a craft still measurably below
-/// the corner's modelled target speed, mid-entry, used to get no assistance
-/// at all. Reproduces the shape measured on Talon's Junction - saturated,
-/// past the deadband, curvature flat rather than falling - without a target
-/// or a speed anywhere in sight.
+/// The bug this crate was rewritten to fix: a craft below the corner's modelled
+/// target speed, mid-entry, got no assistance. Reproduces Talon's Junction's
+/// shape (saturated, past the deadband, curvature flat) with no target or speed
+/// in sight.
 #[test]
 fn the_differential_acts_on_corner_entry_even_though_speed_is_still_below_target() {
     let tuning = Tuning::default();
@@ -423,12 +417,10 @@ fn a_straight_has_no_speed_limit() {
     assert_eq!(throttle(500.0, target, &tuning), (1.0, 0.0));
 }
 
-/// A corner tight enough that the hull cannot rotate through it is limited by
-/// the rotation, not by the grip.
-///
-/// `07_Track`'s tightest arc, curvature 0.047: the grip term says
-/// `sqrt(260 / 0.047)` = 74.4 and the yaw term says `1.8 / 0.047` = 38.3. A
-/// craft that took the first shed 34-35 shield a lap on the wall outside it.
+/// A corner too tight for the hull to rotate through is limited by the rotation,
+/// not the grip. `07_Track`'s tightest arc, curvature 0.047: grip says
+/// `sqrt(260 / 0.047)` = 74.4, yaw says `1.8 / 0.047` = 38.3; a craft taking the
+/// first shed 34-35 shield a lap on the outside wall.
 #[test]
 fn a_corner_tighter_than_the_hull_can_rotate_is_limited_by_the_yaw_rate() {
     let tuning = Tuning::default();
@@ -442,8 +434,8 @@ fn a_corner_tighter_than_the_hull_can_rotate_is_limited_by_the_yaw_rate() {
     assert!((target - yaw).abs() < 1.0e-3, "{target} against {yaw}");
 }
 
-/// And an open corner is still limited by the grip, so the term added above is
-/// a second ceiling rather than a replacement for the first.
+/// And an open corner is still limited by the grip: the yaw term is a second
+/// ceiling, not a replacement.
 #[test]
 fn an_open_corner_is_still_limited_by_the_grip() {
     let tuning = Tuning::default();
@@ -461,8 +453,7 @@ fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
     assert_eq!(throttle(target * 2.0, target, &tuning), (0.0, 1.0));
 }
 
-/// The finding that makes a proportional brake worth having: the command
-/// level is not a deceleration, it is how much cornering grip the
+/// The command level is not a deceleration, it is how much cornering grip the
 /// deceleration is bought with. See [`Tuning::brake_floor`].
 #[test]
 fn a_brake_climbs_with_the_overspeed_and_never_starts_below_the_floor() {
@@ -521,15 +512,13 @@ fn the_requested_turn_rate_is_clamped() {
     assert!(controls.steer_x.abs() <= tuning.max_turn_rate * tuning.rate_gain + 1e-3);
 }
 
-/// A craft mid-flight holds full thrust and never brakes for a corner ahead,
-/// however tight - there is no lateral grip off the ground to spend a
-/// symmetric brake on, and it is a pure loss of the forward speed a landing
-/// needs. Found chasing `13_Track`'s Novice jump pathology: before this
-/// fix, this exact fixture (a 60-unit circle at 200, tight enough to
-/// saturate the steering loop and brake hard on the ground) produced
-/// **identical** controls whether `time_airborne` was zero or not - the
-/// state existed and was read nowhere in `Driver::drive`. See
-/// `docs/gameplay/ai.md#the-13_track-novice-pathology-chased`.
+/// A craft mid-flight holds full thrust and never brakes for a corner: there is
+/// no lateral grip off the ground, so a symmetric brake is pure loss of the
+/// speed a landing needs. Found chasing `13_Track`'s Novice jump pathology:
+/// before the fix this fixture (a 60-unit circle at 200, tight enough to
+/// saturate the loop and brake hard) produced **identical** controls whether
+/// `time_airborne` was zero or not, the state read nowhere in `Driver::drive`.
+/// See `docs/gameplay/ai.md#the-13_track-novice-pathology-chased`.
 #[test]
 fn a_craft_mid_flight_never_brakes_for_the_corner_ahead() {
     let tuning = Tuning::default();
@@ -541,9 +530,9 @@ fn a_craft_mid_flight_never_brakes_for_the_corner_ahead() {
             })
             .collect(),
     );
-    // On the ground, this fixture is exactly
-    // `a_saturated_driver_over_its_corner_speed_brakes_asymmetrically`'s -
-    // over the corner's target speed, with the brakes on.
+    // On the ground this is
+    // `a_saturated_driver_over_its_corner_speed_brakes_asymmetrically`'s
+    // fixture: over the target speed, brakes on.
     let grounded = craft(line.point(0), 200.0);
     let controls_grounded = Driver::default().drive(&grounded, &Context::new(&line, &tuning));
     assert_eq!(controls_grounded.thrust, 0.0, "grounded should still brake");
@@ -556,12 +545,9 @@ fn a_craft_mid_flight_never_brakes_for_the_corner_ahead() {
     airborne.time_airborne = 0.3;
     let controls_airborne = Driver::default().drive(&airborne, &Context::new(&line, &tuning));
     assert_eq!(controls_airborne.thrust, 1.0, "airborne should hold thrust");
-    // The low side of the two airbrakes is the symmetric brake `airbrakes`
-    // slid the differential atop - see that function's own doc. Zero there
-    // means no deceleration is being bought, even though the steering loop
-    // is still allowed to spend a **differential** airbrake for yaw
-    // authority (one side alone, which decelerates nothing - the same
-    // "brake off" case `airbrakes`'s own doc describes).
+    // The low airbrake side is the symmetric brake `airbrakes` slid the
+    // differential atop. Zero means no deceleration is bought, though the loop
+    // may still spend a **differential** (one side alone decelerates nothing).
     assert_eq!(
         controls_airborne
             .airbrake_left
