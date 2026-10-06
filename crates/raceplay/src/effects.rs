@@ -908,6 +908,12 @@ impl Race {
         self.view.quake_point
     }
 
+    /// The `+Y` of the Quake wave's effect frame, while one travels.
+    #[must_use]
+    pub fn quake_frame_up(&self) -> Option<oag_core::math::Vec3> {
+        self.stage().up_of(self.view.quake_effect?)
+    }
+
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:

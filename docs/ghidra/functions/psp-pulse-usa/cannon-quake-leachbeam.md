@@ -3301,3 +3301,28 @@ it is an inference, confidence 70.
   (`0x0886593c`) adds `dt` to it, and `CannonPool_Update` (`0x088582b0`) tests
   `1.0 < round+0x48` first in its teardown gate. This port let a round fly to the
   shared 10 s cap, about 9 s too long; it now takes the 1.0 s branch, silently.
+
+### 2026-10-06: the `WO_QUAKE` frame is established (weapon-visuals lane)
+
+**This corrects the two "orientation remains unestablished" notes above**, which
+said the `AiTrack_LocatePosition` result feeds nothing. It does, and the earlier
+reading missed it because the struct is read back through a stack slot, not the
+call's return. Re-read at instruction level, `Quake_Update` (`0x0891d268`),
+confidence 85:
+
+- Row 3 (position) is `(A + B) * 0.5`, the two `Quake_SampleSpan` points
+  (`0x0891d970`..`0x0891d9c8`).
+- `u = normalize(B - A)` goes to `sp+0xa0`; the output record at `sp+0xb0` is passed
+  to `AiTrack_LocatePosition(track, &record, &midpoint, 100.0)` (`0x0891da90`).
+  `FUN_0887cf88` -> `FUN_0887c7e8` fills it with a cubic B-spline blend of four
+  `SplinePt` records, so it is `SplinePt`-shaped: `+0x20` is the interpolated `down`.
+- `Y' = vneg(record+0x20)` (`0x0891daac`), i.e. the track's **up** at the midpoint.
+- Row 2 = `normalize(u x Y')`, row 1 = `Y'` re-orthogonalised against row 2 (a no-op
+  here), row 0 = `row1 x row2` (`0x0891dae8`..`0x0891dbb0`).
+
+That is the frame `oag_fx::psys::spawn::frame_x`/`across.cross(up)` already builds from
+`(across, up)`; the engine passed world up. It now passes `-sample.down`.
+The frame is handed to `Psys_Spawn_q` as a flag-1 pointer (`0x0891d88c`, `t0 = 1`).
+Test: `quake_orientation_ground_truth::the_quake_frame_leans_with_the_banked_track`.
+Cross-title: **not checkable** - `WO_QUAKE` frames on HD/2048/Omega were not read, and
+the extent law is Pulse-only, so those sources keep their previous frame.
