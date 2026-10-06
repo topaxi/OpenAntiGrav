@@ -392,6 +392,7 @@ pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     // a tree of its own. Spelled out rather than read from `oag-hd`, which a
     // title package does not depend on (a test pins it to `oag_hd::TITLE.name`).
     reships: "Wipeout HD",
+    alongside_label: None,
     origin: oag_title::Origin::Measured,
 };
 

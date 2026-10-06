@@ -315,6 +315,7 @@ const GUEST_ROSTER: GuestRoster = GuestRoster {
     handling_dir: None,
     variants: &GUEST,
     reships: "A Fixture Title",
+    alongside_label: None,
     origin: crate::effects::Origin::Chosen,
 };
 

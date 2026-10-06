@@ -1106,6 +1106,32 @@ present, and its own list drops the 2048-era teams to that row.
 **2048 vs Omega: checked, differs** - 2048 keeps these craft as its own roster
 (`team_variants`), Omega as a guest of its HD-era one.
 
+### Vita 2048 against Omega's 2048-era craft: census (2026-10-06, `remix-labels`)
+
+`crates/game/tests/remix_2048_sources_ground_truth.rs` reads all twenty craft
+(five teams, four each) off `data/extracted/vita/PCSF00007` and
+`data/extracted/ps4`:
+
+- **Roster**: identical ids on both, `AG_Systems2048`, `Auricom2048`,
+  `Feisar2048`, `Piranha2048`, `Qirex2048`, `\1`..`\4` each.
+- **`handlingstats.xml`**: all twenty parse to equal `Stats` (every field).
+  Omega kept 2048's tuning unchanged, so a race cannot tell the sources apart
+  by handling.
+- **Models**: `ship.rcsmodel` differs in size for every craft (for example
+  `Feisar2048\3` is 476,012 bytes on the Vita disc, 489,720 on Omega; Qirex
+  craft are smaller on Omega, the rest larger). Textures are `.gxt` against
+  `.gnf`. Not decoded to a per-vertex or LOD comparison here.
+
+**Race Remix offers both** (maintainer, 2026-10-06): with only Omega mounted,
+CRAFT TITLE offers the plain "Wipeout 2048", backed by Omega; with only the
+Vita disc, unchanged; with both, "Wipeout 2048" is the Vita disc's and
+"Wipeout 2048 (Omega)" Omega's, each loading its own source.
+`oag_title::GuestRoster::alongside_label` carries the second name (`Some` for
+Omega's roster, `None` for 2048's HD twelve, where a real HD disc still wins).
+Title names are plain values in this menu, so the label needs no `string_id`.
+2048 vs Omega: **checked, differs** (models and textures), **checked, same**
+(tuning).
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's

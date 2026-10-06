@@ -169,6 +169,7 @@ pub const ERA_2048_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     handling_dir: Some(ERA_2048_HANDLING_DIR),
     variants: &ERA_2048_VARIANTS,
     reships: "Wipeout 2048",
+    alongside_label: Some("Wipeout 2048 (Omega)"),
     origin: oag_title::Origin::Measured,
 };
 

@@ -44,6 +44,13 @@ pub struct GuestRoster {
     /// remix that wants that title's craft and has no source for it falls back
     /// to a title carrying this roster.
     pub reships: &'static str,
+    /// The CRAFT TITLE entry's own name when [`Self::reships`] is *also*
+    /// mounted as a title of its own: `Some` for a roster that is a distinct
+    /// copy (Omega's re-textured 2048 craft, with their own models and
+    /// tuning) so both entries are offered and each loads its own source;
+    /// `None` for a roster that is the very same data (2048's HD twelve),
+    /// where a real source of the reshipped title simply wins.
+    pub alongside_label: Option<&'static str>,
     /// Where the claim came from.
     pub origin: crate::effects::Origin,
 }

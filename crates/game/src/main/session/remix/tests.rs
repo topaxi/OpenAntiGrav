@@ -135,6 +135,55 @@ fn omegas_2048_era_craft_are_reachable_without_a_2048_disc_and_never_twice() {
     );
 }
 
+fn craft_names(titles: &[oag_game::launcher::Candidate]) -> Vec<String> {
+    craft_title_choices(titles)
+        .into_iter()
+        .map(|choice| choice.value)
+        .collect()
+}
+
+/// The three mount combinations of the maintainer's rule (2026-10-06): with
+/// only Omega the plain "Wipeout 2048" entry, with only the Vita disc the
+/// same entry unchanged, and with both a second entry naming Omega's.
+#[test]
+fn omegas_2048_entry_is_told_apart_only_when_the_vita_disc_is_mounted_too() {
+    let omega_label = oag_omega::race::ERA_2048_ROSTER.alongside_label.unwrap();
+    let only_omega = craft_names(&[candidate(oag_omega::TITLE)]);
+    assert!(only_omega.iter().any(|n| n == oag_2048::TITLE.name));
+    assert!(
+        !only_omega.iter().any(|n| n == omega_label),
+        "{only_omega:?}"
+    );
+
+    let only_vita = craft_names(&[candidate(oag_2048::TITLE)]);
+    assert!(!only_vita.iter().any(|n| n == omega_label), "{only_vita:?}");
+
+    let both = [candidate(oag_omega::TITLE), candidate(oag_2048::TITLE)];
+    let names = craft_names(&both);
+    let count = |wanted: &str| names.iter().filter(|n| *n == wanted).count();
+    assert_eq!(count(oag_2048::TITLE.name), 1, "{names:?}");
+    assert_eq!(count(omega_label), 1, "{names:?}");
+}
+
+/// Each of the two entries loads its own source and never the other's.
+#[test]
+fn with_both_mounted_each_2048_entry_backs_onto_its_own_source() {
+    let omega_label = oag_omega::race::ERA_2048_ROSTER.alongside_label.unwrap();
+    let both = [candidate(oag_omega::TITLE), candidate(oag_2048::TITLE)];
+    assert_eq!(
+        resolve_craft_backing(&both, oag_2048::TITLE.name)
+            .unwrap()
+            .title(),
+        oag_2048::TITLE.name
+    );
+    assert_eq!(
+        resolve_craft_backing(&both, omega_label).unwrap().title(),
+        oag_omega::TITLE.name
+    );
+    let only_vita = [candidate(oag_2048::TITLE)];
+    assert!(resolve_craft_backing(&only_vita, omega_label).is_none());
+}
+
 /// `settle` keeps a stored value the list still offers - a saved pick
 /// survives a menu reopen, which is the whole reason the section is
 /// persisted.
@@ -365,5 +414,41 @@ fn an_unavailable_source_contributes_no_classes() {
     assert_eq!(
         oag_title::SpeedClasses::union(ladders),
         union_over(&[oag_pulse::TITLE])
+    );
+}
+
+/// Both 2048 entries, over the real sources: each opens its own and the craft
+/// model it reads is that source's (the two differ in size for every craft).
+#[test]
+#[ignore = "needs the Vita 2048 and Omega extractions"]
+fn each_2048_entry_reads_its_own_sources_craft() {
+    let (Some(vita), Some(omega)) = (
+        oag_testdata::exact("data/extracted/vita/PCSF00007"),
+        oag_testdata::exact("data/extracted/ps4"),
+    ) else {
+        return;
+    };
+    let titles = oag_game::launcher::survey(&[omega, vita]);
+    let names = craft_names(&titles);
+    let omega_label = oag_omega::race::ERA_2048_ROSTER.alongside_label.unwrap();
+    for wanted in [oag_2048::TITLE.name, omega_label] {
+        assert!(names.iter().any(|n| n == wanted), "{wanted}: {names:?}");
+    }
+    let model = |entry: &str| {
+        let backing = resolve_craft_backing(&titles, entry).expect("a source for the entry");
+        let title = backing.playable().unwrap();
+        let mut archives = oag_assets::Archives::open(&backing.source, title).expect("opens");
+        let id = r"Feisar2048\3";
+        let dir = title.race.ships_for(id).dir;
+        archives
+            .read_name(&format!(r"{dir}\{id}\ship.rcsmodel"))
+            .expect("the craft model")
+            .len()
+    };
+    assert_eq!(model(oag_2048::TITLE.name), 476_012, "the Vita disc's own");
+    assert_eq!(
+        model(omega_label),
+        489_720,
+        "Omega's own, not the Vita disc's"
     );
 }
