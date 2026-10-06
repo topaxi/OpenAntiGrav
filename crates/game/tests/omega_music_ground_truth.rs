@@ -74,16 +74,30 @@ fn the_listing_and_a_song_load_through_the_engines_path() {
     assert!((seconds - listing[0].seconds).abs() < 0.001, "{seconds}");
 }
 
-/// Every one of the 17 songs mixes: its stems agree on rate, the mix is the
+/// Every multi-stem song mixes: its stems agree on rate, the mix is the
 /// segment's length to the frame, and it is audible.
-#[test]
-#[ignore = "needs data/extracted/ps4"]
-fn every_song_mixes_to_its_segment_length() {
+///
+/// # Four slices, one test each
+///
+/// The claim is per song, so any partition of the multi-stem songs asserts the
+/// same things as the one loop did. Song `i` (in plan order, multi-stem songs
+/// only) belongs to slice `i % SLICES`, which covers every song with no
+/// leftover whatever the count. The reason to split is wall clock: one test is
+/// one process on one core, and the whole loop was 166 s under load.
+const SLICES: usize = 4;
+
+fn every_song_in_a_slice_mixes_to_its_segment_length(slice: usize) {
     let Some(source) = source() else { return };
     let mut archives = oag_omega::open(&source).expect("opens");
     let st = oag_omega::MUSIC.state_tracks.expect("state tracks");
     let plan = omega::plan(&mut archives, &st, false).expect("plan");
-    for song in plan.songs.iter().filter(|s| s.stems.len() > 1) {
+    let songs: Vec<_> = plan.songs.iter().filter(|s| s.stems.len() > 1).collect();
+    assert!(
+        songs.len() >= SLICES,
+        "{} multi-stem songs leave a slice empty",
+        songs.len()
+    );
+    for song in songs.into_iter().skip(slice).step_by(SLICES) {
         let pcm = omega::mix(&mut archives, &st, song).expect("mix");
         assert_eq!(
             (pcm.channels, pcm.sample_rate),
@@ -102,6 +116,30 @@ fn every_song_mixes_to_its_segment_length() {
             .unwrap();
         assert!(peak > 1000, "{} is silent", song.title);
     }
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn songs_slice_0_mix_to_their_segment_length() {
+    every_song_in_a_slice_mixes_to_its_segment_length(0);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn songs_slice_1_mix_to_their_segment_length() {
+    every_song_in_a_slice_mixes_to_its_segment_length(1);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn songs_slice_2_mix_to_their_segment_length() {
+    every_song_in_a_slice_mixes_to_its_segment_length(2);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn songs_slice_3_mix_to_their_segment_length() {
+    every_song_in_a_slice_mixes_to_its_segment_length(3);
 }
 
 /// The menus' `Game_FLOW` state selects one stereo loop; it is not one of the

@@ -124,7 +124,17 @@ fn decode_all(
     (decoded, corrupt, other, unparsed)
 }
 
-fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
+/// `slice` of `slices`: entry `i` of the archive's `.gnf` list belongs to slice
+/// `i % slices`, so the slices cover it with nothing left over. The sweep's
+/// claim is per entry, so any partition asserts the same things; the one
+/// whole-archive guard (some entry reached `decode`) now holds per slice,
+/// which is stricter, and the three biggest archives were 153 s, 134 s and
+/// 124 s on one core under load on 2026-10-06.
+fn check_archive(
+    open: impl FnOnce() -> Option<Archive>,
+    name: &str,
+    (slice, slices): (usize, usize),
+) {
     let Some(mut archive) = open() else {
         return;
     };
@@ -132,6 +142,8 @@ fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
         .paths()
         .iter()
         .filter(|p| p.to_ascii_lowercase().ends_with(".gnf"))
+        .skip(slice)
+        .step_by(slices)
         .cloned()
         .collect();
     if paths.is_empty() {
@@ -151,50 +163,68 @@ fn check_archive(open: impl FnOnce() -> Option<Archive>, name: &str) {
 
 #[test]
 #[ignore]
-fn data00_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_base(BASE_ARCHIVES[0]), BASE_ARCHIVES[0]);
+fn data00_slice_0_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[0]), BASE_ARCHIVES[0], (0, 2));
 }
 
 #[test]
 #[ignore]
-fn data01_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_base(BASE_ARCHIVES[1]), BASE_ARCHIVES[1]);
+fn data00_slice_1_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[0]), BASE_ARCHIVES[0], (1, 2));
 }
 
 #[test]
 #[ignore]
-fn data02_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_base(BASE_ARCHIVES[2]), BASE_ARCHIVES[2]);
+fn data01_slice_0_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[1]), BASE_ARCHIVES[1], (0, 2));
+}
+
+#[test]
+#[ignore]
+fn data01_slice_1_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[1]), BASE_ARCHIVES[1], (1, 2));
+}
+
+#[test]
+#[ignore]
+fn data02_slice_0_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[2]), BASE_ARCHIVES[2], (0, 2));
+}
+
+#[test]
+#[ignore]
+fn data02_slice_1_gnf_entries_decode_or_refuse_by_name() {
+    check_archive(|| open_base(BASE_ARCHIVES[2]), BASE_ARCHIVES[2], (1, 2));
 }
 
 #[test]
 #[ignore]
 fn data03_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_base(BASE_ARCHIVES[3]), BASE_ARCHIVES[3]);
+    check_archive(|| open_base(BASE_ARCHIVES[3]), BASE_ARCHIVES[3], (0, 1));
 }
 
 #[test]
 #[ignore]
 fn data04_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_base(BASE_ARCHIVES[4]), BASE_ARCHIVES[4]);
+    check_archive(|| open_base(BASE_ARCHIVES[4]), BASE_ARCHIVES[4], (0, 1));
 }
 
 #[test]
 #[ignore]
 fn patch_data05_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_patch(PATCH_ARCHIVES[0]), PATCH_ARCHIVES[0]);
+    check_archive(|| open_patch(PATCH_ARCHIVES[0]), PATCH_ARCHIVES[0], (0, 1));
 }
 
 #[test]
 #[ignore]
 fn patch_data07_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_patch(PATCH_ARCHIVES[1]), PATCH_ARCHIVES[1]);
+    check_archive(|| open_patch(PATCH_ARCHIVES[1]), PATCH_ARCHIVES[1], (0, 1));
 }
 
 #[test]
 #[ignore]
 fn patch_data09_gnf_entries_decode_or_refuse_by_name() {
-    check_archive(|| open_patch(PATCH_ARCHIVES[3]), PATCH_ARCHIVES[3]);
+    check_archive(|| open_patch(PATCH_ARCHIVES[3]), PATCH_ARCHIVES[3], (0, 1));
 }
 
 /// `data08.psarc`'s `Data/fe/` subtree specifically - the front-end images

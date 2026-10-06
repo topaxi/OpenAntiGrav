@@ -738,10 +738,18 @@ fn an_uncapped_transcode_still_reports_a_total_to_divide_by() {
         panic!("the PS2 disc's loose INTRO512.PSS was not found");
     };
 
+    // **A prefix of the reel, not the whole of it.** An MPEG-2 program stream is
+    // decodable from any pack boundary onward and ends cleanly where it is cut,
+    // so the first quarter (in whole 2048-byte sectors) is a real, shorter
+    // movie that still takes the uncapped `Extent::Whole` path - the one that
+    // was broken. The whole reel was 81 s alone and 206 s under load; a quarter
+    // is a fifth of that, and the assertions below are unchanged.
+    let blob = &blob[..blob.len() / 4 / 2048 * 2048];
+
     let seen = std::sync::Mutex::new(Vec::new());
     let watch = |step: oag_game::movie::Step| seen.lock().expect("the watch's lock").push(step);
     let movie = oag_game::movie::open(
-        &blob,
+        blob,
         &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
         &transcode_scratch("an_uncapped_transcode_still_reports_a_total_to_divide_by"),
         // The whole reel: the case that was broken.

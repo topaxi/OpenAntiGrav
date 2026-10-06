@@ -434,14 +434,26 @@ fn a_ship_thrown_at_hds_barrier_does_not_pass_through_it() {
 /// across tests, one process each, so all 28 circuits ran on a single core:
 /// **155 s** on 2026-09-09, in a suite whose whole wall clock was 587 s. Twelve
 /// circuits is about 66 s and the three run side by side, at the same total CPU.
-fn every_grid_in_archive_lands_on_the_track(archive: &str) {
+///
+/// Each archive is then two slices: circuit `i` of the archive's own list (file
+/// order) belongs to slice `i % SLICES`, so the slices cover it with nothing
+/// left over and a test is a third to a half of what it was (**120 s**,
+/// **103 s** and **89 s** under load on 2026-10-06).
+const SLICES: usize = 2;
+
+fn every_grid_in_archive_lands_on_the_track(archive: &str, slice: usize) {
     let Some(image) = image() else { return };
 
     /// `(circuit, file, allowed slots with no collision under them)`.
     const KNOWN_SHORT: &[(&str, &str, usize)] = &[];
 
     let mut seen = 0usize;
-    for (_, circuit, file) in CIRCUITS.iter().filter(|(a, _, _)| *a == archive) {
+    for (_, circuit, file) in CIRCUITS
+        .iter()
+        .filter(|(a, _, _)| *a == archive)
+        .skip(slice)
+        .step_by(SLICES)
+    {
         seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
         let loaded = race::load(&race::Options {
@@ -495,26 +507,50 @@ fn every_grid_in_archive_lands_on_the_track(archive: &str) {
     );
 }
 
-/// The twelve circuits `DATA00.PSARC` holds - see
+/// Slice 0 of the twelve circuits `DATA00.PSARC` holds - see
 /// [`every_grid_in_archive_lands_on_the_track`].
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_hd_grid_in_data00_lands_on_the_track() {
-    every_grid_in_archive_lands_on_the_track("DATA00.PSARC");
+fn every_hd_grid_in_data00_slice_0_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA00.PSARC", 0);
 }
 
-/// The eight forward circuits `DATA02.PSARC` holds - see
+/// Slice 1 of the twelve circuits `DATA00.PSARC` holds - see
 /// [`every_grid_in_archive_lands_on_the_track`].
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_hd_grid_in_data02_lands_on_the_track() {
-    every_grid_in_archive_lands_on_the_track("DATA02.PSARC");
+fn every_hd_grid_in_data00_slice_1_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA00.PSARC", 1);
 }
 
-/// The eight reversed twins of `DATA02`'s circuits, which `DATA03.PSARC` holds
-/// instead - see [`every_grid_in_archive_lands_on_the_track`].
+/// Slice 0 of the eight forward circuits `DATA02.PSARC` holds - see
+/// [`every_grid_in_archive_lands_on_the_track`].
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn every_hd_grid_in_data03_lands_on_the_track() {
-    every_grid_in_archive_lands_on_the_track("DATA03.PSARC");
+fn every_hd_grid_in_data02_slice_0_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA02.PSARC", 0);
+}
+
+/// Slice 1 of the eight forward circuits `DATA02.PSARC` holds - see
+/// [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data02_slice_1_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA02.PSARC", 1);
+}
+
+/// Slice 0 of the eight reversed twins of `DATA02`'s circuits, which `DATA03.PSARC` holds instead - see
+/// [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data03_slice_0_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA03.PSARC", 0);
+}
+
+/// Slice 1 of the eight reversed twins of `DATA02`'s circuits, which `DATA03.PSARC` holds instead - see
+/// [`every_grid_in_archive_lands_on_the_track`].
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_hd_grid_in_data03_slice_1_lands_on_the_track() {
+    every_grid_in_archive_lands_on_the_track("DATA03.PSARC", 1);
 }
