@@ -449,7 +449,8 @@ pub fn load_shell(
     // **Languages before fonts**, because every face this source draws with is
     // named by a language plugin's `<Font>` slots - see [`load_font`], which
     // used to reach for a constant here and so did not need them.
-    let languages = load_languages(&mut archives, front_end.language_plugins, &mut report);
+    let offered_plugins = front_end.offered_languages(archives.layout.serial.as_deref());
+    let languages = load_languages(&mut archives, offered_plugins, &mut report);
     let offered = languages.clone();
     steps.lap("languages");
     // Resolved once and threaded through every font/table read below rather

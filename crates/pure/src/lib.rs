@@ -161,7 +161,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `<Entry ID="English" String="English">`. See
     // `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
     // Confidence 90.
-    language_plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
+    // The EU manifest's languages, which is also what an unlisted serial gets;
+    // `language_manifests` carries each release's own list.
+    language_plugins: &["PI000", "PI010", "PI008", "PI009", "PI011"],
+    language_manifests: LANGUAGE_MANIFESTS,
     menu: Some(frontend::MENU_SKIN),
     menu_ps2: None,
     // Pure authors the same `FEGlobals`/`<Menu>` vocabulary Pulse does, not
@@ -560,6 +563,33 @@ pub fn open(source: &str) -> Result<Archives> {
 pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Result<Archives> {
     Archives::open_with_packs(source, TITLE, packs)
 }
+
+/// Each Pure release's offered languages, read out of its own `BOOT.BIN`'s
+/// plugin manifest: a null-terminated pointer table at file offset `0x2abd98`
+/// (USA) and `0x2a5558` (EU), walked in order. Both discs carry the same nine
+/// plugins; the executables load different subsets.
+///
+/// USA loads `PI000 PI010 PI008 PI012 PI001 PI004`: English, Spanish, French -
+/// the three languages the USA picker was observed to offer, in the order it
+/// offered them - then `PI012` (a US-spelling overlay on `PI000`, no `<Font>`,
+/// not a language and so left out here), the skin and the billboards. EU loads
+/// `PI000 PI010 PI008 PI009 PI011 PI001 PI004`: those three plus German and
+/// Italian. Neither manifest names `PI003` or `PI005`, so the Japanese plugin
+/// is never loaded on either pressing. Confidence 85: the tables are read
+/// directly; that picker order *is* manifest order rests on the USA and EU
+/// pickers' observed orders matching it.
+pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
+    oag_title::LanguageManifest {
+        serial: "UCUS-98612",
+        plugins: &["PI000", "PI010", "PI008"],
+        evidence: "pure-psp-usa BOOT.BIN plugin manifest, PI012 overlay not offered",
+    },
+    oag_title::LanguageManifest {
+        serial: "UCES-00001",
+        plugins: &["PI000", "PI010", "PI008", "PI009", "PI011"],
+        evidence: "pure-psp-eu BOOT.BIN plugin manifest",
+    },
+];
 
 #[cfg(test)]
 mod tests {

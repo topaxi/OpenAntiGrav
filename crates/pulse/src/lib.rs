@@ -98,6 +98,7 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
+    language_manifests: LANGUAGE_MANIFESTS,
     menu: Some(frontend::MENU_SKIN),
     // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,
     // not scaled from the PSP's - see `frontend::PS2_MENU_SKIN`'s own doc.
@@ -513,12 +514,43 @@ pub fn ps2_image_hash(name: &str) -> Option<u32> {
         .map(|(_, hash)| *hash)
 }
 
-/// The plugins that carry a language, in the order the disc lists them.
+/// Every plugin that may carry a language on any Pulse release, English first.
 ///
-/// The plugin id is the only stable handle: the language's own name is inside
-/// the plugin, not in its path. A PAL disc has a different set, so this is read
-/// back from the archive rather than trusted.
-pub const LANGUAGE_PLUGINS: &[&str] = &["PI008", "PI009", "PI010", "PI011", "PI012"];
+/// A **superset**, for a caller with no serial in hand (the race's HUD strings)
+/// and a release [`LANGUAGE_MANIFESTS`] does not list: a plugin a disc lacks is
+/// skipped, so the EU's `PI000` and the USA's `PI012` can share one list. What a
+/// release actually *offers* is [`LANGUAGE_MANIFESTS`]. The plugin id is the
+/// only stable handle: the language's own name is inside the plugin, not in its
+/// path.
+pub const LANGUAGE_PLUGINS: &[&str] = &["PI000", "PI012", "PI010", "PI008", "PI009", "PI011"];
+
+/// Each Pulse release's offered languages, read out of its executable's
+/// `Plugin_LoadManifest` table (`docs/architecture/frontend-boot.md`): USA PSP
+/// at pseudo-address `0x2ad10c`, EU PSP `0x2ac88c`, PS2 EU `SCES_547.48` (string run at file offset `0x1ab4b0`)
+/// English is `PI012` on USA and the PS2 pressing and `PI000` on
+/// the PSP EU disc, which has no `PI012`; the order is the manifest's own.
+///
+/// **That the picker follows manifest order is measured on Pure only** (its
+/// USA and EU pickers were observed in manifest order); Pulse's picker exits
+/// in under a frame on a cold boot and was never captured, so this carries
+/// Pure's rule across. Confidence 70 for the order, 85 for the membership.
+pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
+    oag_title::LanguageManifest {
+        serial: "UCES-00465",
+        plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
+        evidence: "pulse-psp-eu BOOT.BIN manifest; English is PI000, no PI012 on the disc",
+    },
+    oag_title::LanguageManifest {
+        serial: "UCUS-98712",
+        plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        evidence: "pulse-psp-usa BOOT.BIN manifest (0x08ab110c)",
+    },
+    oag_title::LanguageManifest {
+        serial: "SCES-54748",
+        plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        evidence: "pulse-ps2-eu SCES_547.48 manifest string run",
+    },
+];
 
 #[cfg(test)]
 mod tests {

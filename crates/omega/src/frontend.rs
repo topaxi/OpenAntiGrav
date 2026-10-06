@@ -157,6 +157,7 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
+    language_manifests: &[],
     menu: Some(MENU_SKIN),
     menu_ps2: None,
     // Omega authors HD's `FEGlobals`/`<HorizMenu>` vocabulary, not 2048's

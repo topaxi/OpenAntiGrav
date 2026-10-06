@@ -39,6 +39,7 @@ pub mod boot;
 pub mod exhaust;
 pub mod flare;
 pub mod hud;
+pub mod language;
 pub mod loading;
 pub mod menu;
 pub mod race;
@@ -48,6 +49,7 @@ pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
+pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use menu::{HelpText, ListBlocks, MenuBlocks, MenuList, MenuSkin, MenuStrip, StripBlocks};
 pub use oag_disc::Platform;
@@ -336,6 +338,14 @@ pub struct FrontEnd {
     /// inside its definition, not in its path, so this list is what is read back
     /// from the archive rather than trusted.
     pub language_plugins: &'static [&'static str],
+    /// What each release of this title offers, keyed by disc serial, read off
+    /// the executable's own plugin manifest. Empty where no manifest has been
+    /// read; [`Self::language_plugins`] is then the whole answer.
+    ///
+    /// [`Self::language_plugins`] stays the default for a caller with no serial
+    /// in hand and for a release not listed here, so it is the *superset* a
+    /// disc may carry, not an offered list. See [`Self::offered_languages`].
+    pub language_manifests: &'static [language::LanguageManifest],
     /// How this title lays menus out, for a title that authors the
     /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
     /// describes. See that type.
@@ -520,6 +530,17 @@ pub struct FrontEnd {
     /// one is absent - the same distinction [`Self::race_box`]'s own doc
     /// draws for the titles it is `None` on.
     pub endrace_entry: Option<&'static str>,
+}
+
+impl FrontEnd {
+    /// The language plugins a source with this `serial` offers, in picker order.
+    ///
+    /// The release's own manifest when one is recorded, otherwise
+    /// [`Self::language_plugins`].
+    #[must_use]
+    pub fn offered_languages(&self, serial: Option<&str>) -> &'static [&'static str] {
+        language::offered(self.language_manifests, self.language_plugins, serial)
+    }
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

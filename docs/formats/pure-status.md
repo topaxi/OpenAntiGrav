@@ -1295,15 +1295,19 @@ mechanism replaced used to print.
 
 Confidence **90**: every plugin id, its `Language`/`Entry` shape and its font
 and string content are read directly off both pressings and asserted in
-[`pures_picker_offers_its_own_five_languages_english_included`]. The one
+[`pures_picker_offers_its_own_manifest_english_included`]. The one
 unmeasured claim - whether `PI005` is ever offered in Pure's own picker - is
 carried at no confidence score, per the RE workflow's rule for an unread
 question rather than a guess; it is out of scope rather than open, per the
 note above.
 
+**Settled 2026-10-06:** neither Pure manifest names `PI005` (or `PI003`), so the
+Japanese plugin is never loaded, and Pure USA's picker offers three of the five
+languages on its disc. See [the offered languages](../architecture/frontend-boot.md#the-offered-languages-are-each-executables-plugin-manifest).
+
 [`Language::from_definition`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/language.rs
 [`load_strings`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/boot.rs
-[`pures_picker_offers_its_own_five_languages_english_included`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/tests/pure_boot_ground_truth.rs
+[`pures_picker_offers_its_own_manifest_english_included`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/tests/pure_boot_ground_truth.rs
 
 See [front-end menu definitions](fe-menu-definitions.md) and
 [the original's menus](../ui/menus-original.md).
