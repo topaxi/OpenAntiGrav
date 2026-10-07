@@ -88,6 +88,7 @@ pub const TITLE: &Title = &Title {
         loyalty_unlocks: true,
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
+        screen_archive: None,
         origin: oag_title::Origin::Measured,
     },
     pressings: None,

@@ -27,7 +27,11 @@ pub(super) enum CampaignKind {
         hd_base: bool,
         tier: usize,
     },
-    Cell,
+    /// `hd_base` as on `Grid`: `cell-select-hd` draws the base campaign's first
+    /// grid, `cell-select` Fury's.
+    Cell {
+        hd_base: bool,
+    },
 }
 
 #[must_use]
@@ -46,7 +50,8 @@ pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
             hd_base: true,
             tier,
         }),
-        "cell-select" | "cell_select" => Some(CampaignKind::Cell),
+        "cell-select" | "cell_select" => Some(CampaignKind::Cell { hd_base: false }),
+        "cell-select-hd" | "cell_select_hd" => Some(CampaignKind::Cell { hd_base: true }),
         _ => None,
     }
 }
@@ -245,7 +250,10 @@ pub(super) fn campaign_page(
     // `Wipeout HD` campaign only when a source's `DATA06` copy is missing or
     // incomplete and `grid_layout_fury` is `None` (`Campaign::selection_layout`'s
     // own doc: the two are `Some`/`None` together).
-    let base_hd = matches!(kind, CampaignKind::Grid { hd_base: true, .. });
+    let base_hd = matches!(
+        kind,
+        CampaignKind::Grid { hd_base: true, .. } | CampaignKind::Cell { hd_base: true }
+    );
     let (hd_grids, hd_grid_layout) = match campaign.grid_layout_fury.as_ref().filter(|_| !base_hd) {
         Some(layout) => (
             campaign
@@ -340,7 +348,7 @@ pub(super) fn campaign_page(
                     &footer_overlay,
                 )
             }
-            CampaignKind::Cell => {
+            CampaignKind::Cell { .. } => {
                 // `crate::campaign::load` already refuses an empty grid
                 // list (`"no grid in ... parsed"`), so `first()` is `None`
                 // only if that changes; the fallback below is a zeroed
@@ -411,7 +419,7 @@ pub(super) fn campaign_page(
                     &footer_overlay,
                 )
             }
-            CampaignKind::Cell => {
+            CampaignKind::Cell { .. } => {
                 // The first grid `Definition.xml` lists - `--menu-page` has
                 // no way to name a tier, and a still needs something to
                 // show.

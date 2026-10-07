@@ -13,6 +13,7 @@
 //! | circuits gated by `<Unlock Grid>` ([`Campaign::circuit_unlocks`]) | yes | no | no | no | no |
 //! | variants gated by loyalty rows ([`Campaign::loyalty_unlocks`]) | yes | no | no | no | no |
 //! | `Campaign Selection` ids overlaid ([`Campaign::selection_strings`]) | no | no | yes | no | no |
+//! | archive the screen file is read from ([`Campaign::screen_archive`]) | precedence | precedence | `DATA06` | precedence | precedence |
 //!
 //! Pure and 2048 read through Pulse's reader today because nothing else
 //! exists to read them with; their [`Campaign::dialect`] is
@@ -74,6 +75,12 @@ pub struct Campaign {
     /// table the front end carries and have to be overlaid from the archive
     /// that has them (HD/Fury only).
     pub selection_strings: bool,
+    /// The archive label whose copy of the campaign screen file
+    /// (`CellMode_Definition.xml`) is the one to read, where a title ships
+    /// several that disagree and the front end's own precedence lands on the
+    /// wrong one (Wipeout HD/Fury: `DATA06`'s later build, not `DATA02`'s).
+    /// `None` reads the copy the source's ordinary precedence serves.
+    pub screen_archive: Option<&'static str>,
     /// Where the dialect, grids file and selection flag came from.
     pub origin: Origin,
 }

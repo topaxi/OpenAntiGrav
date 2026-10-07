@@ -168,6 +168,7 @@ pub const TITLE: &Title = &Title {
         // Not wired, not measured absent: 2048's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
+        screen_archive: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: None,
