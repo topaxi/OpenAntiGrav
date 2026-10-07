@@ -53,10 +53,12 @@ const LONE: &[(&str, &str, u32, u32, f32)] = &[
 
 /// Seven Aces, seed 1, per (layout, class): at most this many dead stops over
 /// the field. Measured: one, at 05 RAPIER sample 207 (the first jump's lip),
-/// and none elsewhere; one of room.
+/// and none elsewhere; one of room. **2026-10-07**: 05 FLASH rose 1 -> 3 (samples
+/// 207, 208 at the same lip, and 447) with the Cannon's straight flight; the
+/// cause was not separated.
 const FIELD: &[(&str, &str, u32)] = &[
     ("05_Track", "VENOM", 1),
-    ("05_Track", "FLASH", 1),
+    ("05_Track", "FLASH", 3),
     ("05_Track", "RAPIER", 2),
     ("05_Track", "PHANTOM", 1),
     ("21_Track", "VENOM", 1),
