@@ -87,13 +87,23 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   unfinished `oag-post` test once reached 51 GB resident; the kernel's OOM
   pressure killed two members and the lead's own session before the test
   itself died. A capped run fails alone instead.
-- Gate before reporting, always through the shared lock:
+- Gate before reporting, always through the shared lock, with the
+  **affected** gate:
 
   ```sh
-  flock -o "$HOME/.cache/oag/gate.lock" just
-  flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data 2>&1 \
+  flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
+  flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected 2>&1 \
     | tee /home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/test-data.log
   ```
+
+  Both run every check in full and the tests of the packages your branch
+  changed plus everything depending on them. They print what they selected
+  and why (`affected:` lines): **quote that selection in your report.** A
+  change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the
+  `justfile`, `.config/` or a `build.rs` makes them run the full suite on
+  their own; that is expected, not a bug. The lead runs the full `just` and
+  `test-data` once per merge batch. Run the full pair yourself only when your
+  brief says so.
 
   Then check the exit status (`${pipestatus[1]}` in zsh, `${PIPESTATUS[0]}`
   in bash) **in the same Bash call as the pipeline**: each tool call is a
@@ -102,19 +112,22 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   command itself. Never pipe `test-data` into `tail`: it masks the exit code.
   **The gate may sit for several minutes before it starts** because another
   member holds the lock. That is correct, not a hang. Wait it out and never
-  fall back to a bare `just`.
+  fall back to running the gate outside the lock.
 - **Run `git merge main` right before your final gate**, and again if the
   lead tells you main moved. A gate on a stale base proves nothing about the
   merge; a lane once gated without the engine-sound change that
   touched the same `race::load`, and the lead had to re-gate the combination.
 - A lane that changed only docs, `handover/` or `HANDOVER.md` runs
   `just check-docs` (plus `check-names`, `check-handover` or `check-status`
-  when those files moved) instead of the full gate.
-- **A commit after your last full gate that touches any `.rs` file, even one
-  test line or a doc comment, needs `just` re-run before you report.** A
+  when those files moved) instead of the gate (`gate-affected` would select
+  no tests for it anyway).
+- **A commit after your last gate that touches any `.rs` file, even one
+  test line or a doc comment, needs `just gate-affected` re-run before you
+  report.** A
   "docs plus one test line" final commit once pushed
   `race_ground_truth.rs` 5 lines over `check-size`'s ceiling, and `main` went
-  red. `just` (without `test-data`) is enough when no logic changed.
+  red. `just gate-affected` (without `test-data-affected`) is enough when no
+  logic changed.
 - The brief states the baseline failure count. Anything red beyond it is
   yours.
 - **Never end a turn waiting for a background job to notify you.** No member

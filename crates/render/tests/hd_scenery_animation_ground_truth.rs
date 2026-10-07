@@ -41,6 +41,8 @@
 //!    GPU draws at the anchor's origin - worse than the defect this fixed.
 //!    Only two frames of pixels answer it.
 
+mod archive_cache;
+
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh;
@@ -216,7 +218,7 @@ fn a_circuits_anchored_scenery_is_placed_and_moves() {
     let Some(image) = image() else { return };
     let (archive, path) = CIRCUIT;
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("the .rcsmodel is there");
 
     let nodes = vex::nodes(&data).expect("the tree walks");
@@ -245,7 +247,7 @@ fn a_circuits_anchored_scenery_is_placed_and_moves() {
 
     // Claim 4, end to end through the builder the race uses.
     let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("the scene builds");
     println!("{report:?}");
@@ -360,12 +362,12 @@ fn build_anywhere(image: &Path, path: &str) -> Option<(oag_mesh::mesh::Model, St
     for n in 0..ARCHIVES {
         let archive = format!("PS3_GAME/USRDIR/DATA0{n}.PSARC");
         let spec = format!("{}:{archive}", image.display());
-        let Ok(data) = mesh::read_blob(&spec, path) else {
+        let Some(data) = archive_cache::read(&spec, path) else {
             continue;
         };
         let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
         let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-            mesh::read_blob(&spec, name).ok()
+            archive_cache::read(&spec, name)
         })
         .expect("the scene builds");
         return Some((model, format!("DATA0{n} ")));

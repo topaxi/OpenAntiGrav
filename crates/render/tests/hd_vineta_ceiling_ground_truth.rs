@@ -14,17 +14,19 @@
 //! behind a write to `H2.w`, which `Program::accumulates` used to read as
 //! taking the sample away, so the arch strips drew the honeycomb alone.
 
+mod archive_cache;
+
 use oag_mesh::mesh::{self, slots};
 
 fn vineta() -> (mesh::Model, mesh::rcs::Report, oag_rcs::rcsmodel::Model) {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso").expect("the PS3 image");
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let path = "/data/environments/01_vineta_k/track.vex";
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
     let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("Vineta K builds");
     (model, report, rcs)

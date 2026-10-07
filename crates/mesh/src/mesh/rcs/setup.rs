@@ -144,6 +144,8 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The glass sheen's `c` rides in the table too.
+    super::glass_sheen::bias(model, &mut material_slots, &mut emissive);
     // The Sebenco ice pool writes three entries into the table and binds its
     // pond mask third, beside what the magstrips and pads bind there.
     let ice_masks = super::ice::ice(

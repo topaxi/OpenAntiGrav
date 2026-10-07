@@ -61,7 +61,7 @@ is always safe**. It is rebuilt from your disc image on demand.
 
 ## Image naming
 
-Tooling looks for these names. Copy your own images here and rename:
+The tooling looks for these names **first**; any other `.chd`, `.iso` or `.vpk` name works too (the game reads the real title out of the file), and the Omega `.pkg` pair is paired by its game ID. Copy your own images here, renaming is optional:
 
 | Name | Title | Console | Region |
 | --- | --- | --- | --- |
@@ -77,7 +77,7 @@ Tooling looks for these names. Copy your own images here and rename:
 | `omega-ps4-eu.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), base v1.00 |
 | `omega-ps4-eu-patch.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), v1.07 patch |
 
-`.iso` works anywhere `.chd` does; the tools sniff the container. **When a title has both a Europe and a USA image, `oag-game` opens the Europe one**; name the USA one to play it.
+`.iso` works anywhere `.chd` does; the tools sniff the container. **The two Omega `.pkg` files are read in place** as one title when they sit in the same folder (`data/images/`): no extraction needed, see [ps4-package.md](../docs/formats/ps4-package.md). An unpacked `data/extracted/ps4` folder, when present, is still what the chooser lists and boots by default. **When a title has both a Europe and a USA image, `oag-game` opens the Europe one**; name the USA one to play it.
 
 ### The PS3 image is encrypted, and is read that way
 
@@ -207,6 +207,8 @@ message about another game
 ([installing](../docs/overview/installing.md)).
 
 ### The Omega Collection PKG decrypts on a PC; the archives are plain, the executable isn't yet
+
+**Since 2026-10-07 no extraction is needed to play**: both `.pkg` files in `data/images/` are read directly ([ps4-package.md](../docs/formats/ps4-package.md)). The extraction below is still how `data/extracted/ps4` (the ground truth the reader is compared with, and the input of the RE tools) is made.
 
 `omega-ps4-eu.pkg` and its `-patch.pkg` are a scene "fake PKG" (fPKG) rip
 meant for installation on a jailbroken PS4 via HEN, not a retail PSN download

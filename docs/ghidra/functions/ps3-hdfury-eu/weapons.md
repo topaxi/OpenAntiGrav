@@ -795,3 +795,195 @@ executable's own output is a camera-facing frame); the bomb entity's own up row
 materials**, and its executable names `NormalBomb.cpp`: *checked, applies, not
 wired* - Omega's `WeaponModels` is `EMPTY`, its blast code and its materials'
 programs are unread.
+
+## 2026-10-07: the Bomb against the running original, and `HD_bomb_halo` (`hd-weapon-ref`)
+
+The first RPCS3 reference for the detonation (recipe and the weapon-state table:
+[rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), "Giving the player a
+weapon"; frames `data/scratch/hd-weapon-ref/pair_bomb_stationary.png`, ours on the
+right). Held state **9 is the Bomb**.
+
+**What the original shows that this build does not.** The laid Bomb carries a pink ring and a
+pulse (`e12/ring.png`); this build draws neither. Ours at ticks 402..418 shows the bomb
+body alone. `HD_bomb_halo` is `NormalBomb`'s second model (`[0x2e]`, flag `0x400`), a
+382-vertex, 760-triangle sphere shell of radius 0.60 with `hd_bomb_halo.rcsmaterial`
+(state `0x79`, **SrcAlpha / One**, `pulse_bombflash_glow.gtf`); `hd_bomb.vex` carries
+the same material on its sixth chunk. Both are additive and neither is drawn by `scene/
+weapon_models.rs`.
+
+**The scale law, read from `0x001443f8`** (confidence **45**: the instructions are
+read, but the pulse it gives does not match the film, see below). While `age < the class's
+fuse` (`*(class + 0x104)`, `timetodie` 20 s) and the bomb is not yet done, the update takes
+`w = tab[0x10]` (`2.0`, or `tab[0]` = `6.0` once `age > tab[0x14]` = `18.0`), and
+`s = fmodf(w * age, tab[4]) * tab[8] + tab[0xc]` with the table at `0x008c1a84`:
+`{6.0, 1.0, 13.0, 3.0, 2.0, 18.0, 0.4, 0.35}`, so `s = 3 + 13 * frac(2 age)`: **a sawtooth
+from 3 to 16 every 0.5 s**, applied to the bomb's rows `+0x70..+0xa0` (then selected by
+the AltiVec mask `lis/lwz` from `-0x27b8(TOC)`, which was not decoded) and handed to the
+halo's set-matrix call `0x00327500`. At 0.6 units of shell radius that is a ring 3.6 to
+19 units across, which agrees with the ring's size in `e12` (about 18 units by angular
+size), **and the film shows a steady outer ring as well as the growing one, and a flash
+about every 0.3 s, not 0.5 s**. Whether the second ring is the `hd_bomb.vex` chunk or
+the mask's other lanes, and whether alpha follows `s`, is unread. Not wired: a draw built
+on a law that disagrees with the picture in period would be the plausible stand-in the
+project rule forbids.
+
+**The owner trips its own bomb.** The standing player's Bomb detonated 0.35 game seconds
+after it was laid, from 0 km/h. The decompile has the ship loop (`0x002d64d0` per viewpoint)
+with no owner test, and this build's `force_bomb_trip` skips the owner by design. **The
+simulation is not this lane's**; the thread names it.
+
+*Update 2026-10-07 (bomb-owner lane):* re-read statically, `NormalBomb_Update`
+(`0x001443f8`) holds no trigger or owner test at all - the ship loop runs only once the
+fuse or flag `0x80` of `+0x40` says the bomb is going off, so the writer of that flag is
+the trip and is not found. The sim now exempts the owner for Pulse's `0.5 s` and trips on
+it after, which the film's `0.6 s` supports (confidence 70). See the last section of
+[mine.md](../psp-pulse-usa/mine.md).
+
+**The first fireball frames do not match, and nothing was tuned.** The original is whited-out
+yellow-white marbling filling the frame for 0.9 s with the camera 7 units behind a craft
+that is itself shoved to 155 km/h; ours at +0.2 s has the craft shoved to 180 km/h within two
+ticks and the camera outside the sphere, with a brown haze and an orange rim the original does
+not show. The two runs differ in hull, camera distance and the bomb's own position (ours is
+thrown ahead of the craft, the original's is under it), so **the size, brightness and
+burn-away timing are not settled either way**; what is settled is the absence of the halo and
+of the owner trip. Fixing the scenario (a pinned `--camera-pose` taken from the original's
+chase camera, the bomb laid at the craft's own position) is the next step.
+
+**Lineage (Omega):** not checked for `HD_bomb_halo` (the entry above counted four blast
+models, not the halo); the RPCS3 recipe is HD-only, no PS4 emulator exists here.
+
+## 2026-10-07: the Bomb matched against the film, in video time (`hd-bomb-match`)
+
+**The film's clock is the bomb's age** (four timings, `rpcs3-capture.md`, "Video time is the
+bomb's age"). The previous section's "0.35 game s" owner trip, the 0.9 s whiteout and the 0.3 s
+halo period were HUD-clock readings; in recorder time they are 0.6 s, 1.63 s and 0.496 s, which
+is `Bomb_InArmingDelay`'s 0.5 s, the fireball phase's 1.5 s, and the halo law's 0.5 s. **The halo
+law `s = 3 + 13 frac(2 age)` is raised from 45 to 80 for its period**; the AltiVec mask that selects
+which rows are scaled stays undecoded (the shell is a sphere, so the choice cannot show).
+
+**Matched pairs.** Same circuit (Talon's Junction), craft (`feisar_c1`, `--variant concept1`), the
+standing player's bomb laid at the craft, `--size 1280x720`, our eye pinned (`--camera-pose
+-143.08,-46.6,-175.2,1,-0.05,0,0,1,0`, the far camera: 3 up and 11.25 back of the hull per the
+`ExternalCameraFar` load line, checked against the original's pre-lay frame, `pre_cmp3.png`), the
+rival put on the bomb to trip it (`--force-bomb-trip`; the sim's owner exclusion was a permanent one when these were taken and is a 0.5 s window since 2026-10-07). Frames at
+age 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.6 s, original left:
+`data/scratch/hd-bomb-match/frames/pairA.png`, `pairB.png`.
+
+Read as a player would:
+
+- **Fill (the falsifier): passes.** At age 0.2 s the frame is a marbled pale-yellow-white fireball
+  filling about nine tenths of the picture, as the film's; the marbling, the colour and the HUD on
+  top agree. The fireball radius is `size` times a unit sphere (`hd_bomb_sphere` radius 1.011), 8.3
+  at 0.2 s and 11.9 at 1.1 s, against an eye 11.64 away, so the eye is just outside the sphere
+  until about age 0.5 s and just inside after.
+- **The white core is the visible difference (age 0.5 to 1.1 s).** With the eye between the
+  core (0.99 R, `ColourAnim` 0.9, x10) and the fireball, ours shows a hard-edged pure-white
+  wedge and then a white-out the film does not (`pairA.png` rows 3-4); with the core not drawn the
+  same frames are marbled yellow like the film (`nc_sheet.png`). Not changed: the core's draw
+  condition is unread, and removing it would be an invention. Open question, with the
+  experiment above: does the original draw the core at all while the eye is inside it?
+- **After age 0.5 s the frames are not like for like**: the original's owner is flung to about
+  125 km/h within 0.2 s and its chase camera follows through the fireball, so the eye stays
+  inside it to 1.4 s with the hull visible; ours is shoved to 50 km/h and the pinned eye stays put.
+  The sim's blast impulse on the owner differs from the original's (queued with the trip window).
+- **The late rings differ**: at 1.7 s ours is an orange ellipse and horizon haze (shockwave
+  rings seen from a static eye), the film's is a white ball at the right edge with a yellow band.
+  Same cause, not separable until the camera follows.
+
+**`HD_bomb_halo`'s program, read** (`scripts/ps3-microcode.py fp-file`, block `@0x19c0`, the
+lit-race variant with fog; `hd_bomb_programs.rs` now lists it):
+
+```text
+a = TC0 . TC1 / sqrt(|TC0|^2 |TC1|^2)           rim = sat(1 - a)
+ramp = tex(TC0.w, TC1.w)                         4x16, pulse_bombflash_glow.gtf
+alpha = ramp.a * 50 * rim^(10 - 10 ramp.a) * ramp.a * 0.1
+rgb = ramp.rgb ; then the circuit's fog
+```
+
+A Fresnel shell: bright at the silhouette, the ramp's alpha choosing the exponent. Confidence 75
+(instruction by instruction, the vertex program's `TC0.w`/`TC1.w` unread). With the law above and the
+pool already shaped (`halo-wiring-unfinished.patch`), drawing it needs the `rim_glow.rs` shape
+and a `shade.wesl` branch. Not drawn: the generic lit program shows nothing.
+
+**Omega:** the four blast models are checked, applies, not wired (above); `HD_bomb_halo` itself
+was not looked up in Omega's archive this lane (no PS4 emulator for the film), so: not checked.
+
+## 2026-10-07 (`hd-weapon-fx`): the Missile's explosion pool, read statically and live
+
+The pool is `MissileManager + 0xcc + 4 i` (16 pointers to objects of vtable `0x00864b38`, stride
+`0x2760` in the 2026-10-07 boots), the count at `+0x10c`. Method and the live numbers:
+`docs/reverse-engineering/rpcs3-capture.md`, "Polling guest memory live". Confidences below are
+per claim; no name is applied (nothing here is above 70 that was not already named).
+
+- **Who enters the pool.** `0x00141288` (`pool_take`: `if count < 16 { Start(pool[count], matrix); count += 1 }`)
+  is a thin entry; `Start` (`0x00155568`) is called from three places only: `0x001412c0` (that
+  entry), `0x00142704` inside `0x001423a8` and `0x00143c28` inside `0x00143580`. `0x001423a8`
+  walks the missile list (`this + 0x84`, count `+0xc4`) and, for each missile where the
+  hit test `0x00126b78(arg, missile)` is true, sets the missile's flags (`|= 4`, or `0x24`
+  with a velocity-scaled position bump) and then, for each of `GameState + 0xe4` viewports
+  where the point is visible (`0x002d64d0`), takes a pool entry. **It is the craft-hit branch;
+  a missile that dies on a wall never reaches `Start`.** Live: a state 1 missile (5 bounces,
+  gone at 5.5 s) left the count at 0 and all 16 objects byte-identical. Confidence 70.
+- **What retires an entry, and the law, measured on two boots.** On `m5` (the player put 12 units behind
+  the nearest rival and state 1 fired, `scripts/rpcs3-mem-poll.py --behind-rival 12`) the missile list count
+  `manager + 0xc4` fell 1 to 0 at host 4.47 s and the pool count `+0x10c` rose 0 to 1 in the same 10 ms
+  sample; one pool object (index 0) filled in: `+0x34` flag word, `+0xd0/+0xd4/+0xd8` the hit position
+  (`-268.5, 41.5, 110.7`, the rival's own place), the matrix at `+0xf0..+0x12f` (rotation rows and that
+  position with `w = 1`, the rows `Start` copied from its argument), copies at `+0x130`/`+0x170` of the
+  basis, `+0xe0 = 0x01000000` (the flag `Start` writes at `0x001558f4`) and then three floats that run
+  with the object's age `p`:
+  `+0x170 = p` (`0 -> 0.967`, linear, about `1.0 / s`: `0.0334, 0.0673, 0.1172, ... 0.9667` at 40 ms
+  steps), `+0x17c = (1 - p)^2` and `+0x180 = 2 (1 - p)` (`0.9344 = 0.9666^2`, `1.9333 = 2 x 0.9667`,
+  checked at all 25 samples to the fourth decimal). `+0x174 = 5.0` while alive and `-1.0` when free.
+  `Draw` reads `+0x17c` as the point light's intensity and `+0x17c * c` as its radius
+  (`0x006778c8(slot, 0x17c * k1 + k2, 0x17c * k3)`), so the light dies quadratically. **The entry
+  retires when `p` reaches 1: the count fell back to 0 at 5.45 s, 0.98 s after it rose** (`m3`: 0.96 s,
+  the same boot's first observation), and every field is rewritten to its free value in one step.
+  `HD_missile_explosion.vex`'s keyed `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`)
+  end at key 60 (`60 / 60 Hz = 1.0 s`; scale `256 -> 4608`, 1x to 18x, ease-out: `779, 1250, 1671,
+  2045, 2375, 2663, ...`, `hd_weapon_anim_keys`). **Lifetime 1.0 s, confidence 80** (two boots, the age
+  field linear to 1, the keys ending together). Which function advances `p` and frees the entry was
+  not found: no `stw ...,0x10c` decrements (the five stores to a `+0x10c` offset are `0x001412d0`, the
+  increment in `pool_take`; `0x00141d7c`/`0x00142164`, zeroing in the twin `MissileManager`
+  constructors `0x00141a88`/`0x00141e70`; and `0x00155024`/`0x001553bc`, the explosion class's own field
+  init), so it runs through a computed store.
+- **`Draw` (`0x00155420`, vtable slot 5) is also the per-frame body**: it draws the model at
+  `this + 0xf0 + viewport * 0x40`, writes a point light `0x006778c8(light_slot, 1/f, radius)` whose
+  size comes from a float at `this + 0x17c` (a per-object value never stored by this class's
+  own functions: it is zero unless `Start`'s ranged randoms or the base class set it), and returns
+  `1`. There is no age clock in the object: `Start` ends with `SetTime(model, 0)` (`0x002c1b30`)
+  and the node clock runs on the render tree's own tick. Confidence 70.
+- **The 16 entries at `this + 0x190`** (stride `0x50`, a matrix copy then `ranged_random` rotations
+  `0x28c660` about the three axes, `0x677688`) are written by `Start` and **read by nothing in
+  `0x154000-0x156000`** other than `Start` itself: they look like the rays' random orientations,
+  which the `rays` node's mesh would take. Confidence 45; unresolved.
+- **State identity** (`rpcs3-capture.md`): state 1 is the Missile (the list count `manager + 0xc4`
+  is 1 while it flies and 0 when it ends; a counter in the block after the manager, `manager + 0x198`,
+  reads 1, 2, 3, 4 at the bounces and 5 as it ends, against the Missile's `MAX_BOUNCES = 5`; confidence 70); state 2 is a different projectile with a large yellow-white
+  burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
+  state 10 does nothing at the grid.
+- **The picture, original only.** `m5` (known firer, rival 12 units ahead, `data/scratch/hd-weapon-fx/runs/m5`,
+  contact sheet `burst.png`, 30 fps frames `f/h_*.png`): the count rose at host 4.47 s, which is video
+  9.6 s (offset +5.1 s), and the frame's mean luma goes 135 (9.60 s) to 218 (9.67), 246 (9.80), 241
+  (9.93), 209 (10.00), 162 (10.13), 150 (10.20). So the white-out starts within 0.1 s of the rise, is
+  white to the frame edge for about 0.3 s with the struck rival's red-and-black hull in the middle of it
+  and curved yellow-orange arcs (the rays and the shockwave rings) at the top corners, and is gone by
+  0.55 s while the entry lives to 1.0 s (the additive shells thin out as the keyed scale decelerates and
+  the colour term fades; the light falls as `(1 - p)^2`). `m3`'s earlier white-out (player in the pack,
+  13 frames above luma 225 from video 48.57 s) is the same effect, its start again at the count's rise.
+  Our side is **not drawn**. The trigger (a craft hit, visible in the viewport) and the clock (the
+  model's own keys, `p` over 1.0 s) are known, and a keyed node clock exists
+  (`Drawable::write_node_anims(seconds)`, used by the gantry and the adverts). Each of the three
+  materials is **not** the generic glow, so wiring needs a program per node, read this lane
+  (`scripts/ps3-microcode.py fp-file`, the first fogless variant of each):
+  `core_glow` is `tex(TC) x vertex colour` with the alpha from `TC.z` (block 1); `lightrays_glow` is a
+  Fresnel shell, `sat(1 - dot(TC0, TC1) / sqrt(|TC0|^2 |TC1|^2))` raised to 5, then `1 - 0.9 x`
+  raised to 5 (the halo's shape with other exponents); `shockwaves_glow` is a two-tap ramp lookup that
+  adds `Shockwave_scalar * 0.45` to a `0.01`-scaled `v` and a `0.05`-scaled first tap (so the clock
+  enters through `Shockwave_scalar` and `UV_offset`, both the entry's age). Confidence 70 for those
+  reads (instruction listings, the vertex programs' `TC` outputs unread). Open: the three programs
+  in `shade.wesl`, one drawable per live instance, and the matched pair.
+
+**Omega:** `HD_missile_explosion.vex`/`.rcsmodel` ships in Omega's archives (see
+`ps4-omega-eu/weapons.md`); the pool, trigger and lifetime above were not looked up in Omega's
+executable: not checkable here (no PS4 emulator).

@@ -25,6 +25,8 @@ pub enum Container {
     RawIso,
     /// A ZIP of a game's folder: a Vita `.vpk`, read in place.
     Vpk,
+    /// A PS4 fake package (`\x7fCNT`), with its patch beside it, read in place.
+    Ps4Pkg,
 }
 
 impl std::fmt::Display for Container {
@@ -33,6 +35,7 @@ impl std::fmt::Display for Container {
             Self::Chd => "CHD",
             Self::RawIso => "raw ISO",
             Self::Vpk => "VPK",
+            Self::Ps4Pkg => "PS4 PKG",
         })
     }
 }
@@ -111,6 +114,10 @@ impl DiscImage {
         let (source, ps3): (Box<dyn SectorSource>, Ps3State) = match container {
             Container::Vpk => {
                 package = Some(Box::new(crate::vpk::VpkSet::open(&path)?));
+                (Box::new(NoSectors), Ps3State::NotEncrypted)
+            }
+            Container::Ps4Pkg => {
+                package = Some(Box::new(crate::ps4_pkg::Ps4Set::open(&path)?));
                 (Box::new(NoSectors), Ps3State::NotEncrypted)
             }
             Container::Chd => (Box::new(ChdSource::open(&path)?), Ps3State::NotEncrypted),
@@ -210,10 +217,14 @@ impl DiscImage {
             .find(|e| e.path.to_ascii_lowercase().ends_with("sce_sys/param.sfo"));
         let serial = match sfo {
             Some(entry) => crate::sfo::title_id(&self.read_entry(entry)?),
-            None => None,
+            None => self.package.as_mut().and_then(|p| p.title_id()),
         };
+        let platform = self
+            .package
+            .as_ref()
+            .map_or(Platform::Vita, |p| p.platform());
         Ok(TitleInfo {
-            platform: Platform::Vita,
+            platform,
             serial,
             boot_path: None,
             raw: None,
@@ -338,13 +349,8 @@ fn sniff_container(path: &Path) -> Result<Container> {
                 .to_string(),
         });
     }
-    if magic[..4] == *b"\x7fCNT" {
-        return Err(Error::Package {
-            path: path.to_path_buf(),
-            reason: "this is a PS4 .pkg. Reading one in place is not implemented yet; extract it \
-                     into a folder first (docs/overview/installing.md, \"Omega Collection\")"
-                .to_string(),
-        });
+    if magic[..4] == *crate::ps4_pkg::MAGIC {
+        return Ok(Container::Ps4Pkg);
     }
 
     // Anything else is assumed to be a raw ISO. The assumption is verified
@@ -391,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn a_vita_or_ps4_pkg_is_refused_by_name_not_read_as_an_iso() {
+    fn a_vita_pkg_is_refused_by_name_and_a_ps4_pkg_is_sniffed() {
         let vita = temp_file("vita.pkg", b"\x7fPKG\x80\x00\x00\x01 more header");
         let error = sniff_container(&vita).unwrap_err().to_string();
         assert!(
@@ -399,8 +405,7 @@ mod tests {
             "{error}"
         );
         let ps4 = temp_file("ps4.pkg", b"\x7fCNT\x00\x00\x00\x01 more header");
-        let error = sniff_container(&ps4).unwrap_err().to_string();
-        assert!(error.contains("PS4 .pkg"), "{error}");
+        assert_eq!(sniff_container(&ps4).unwrap(), Container::Ps4Pkg);
         std::fs::remove_file(vita).ok();
         std::fs::remove_file(ps4).ok();
     }

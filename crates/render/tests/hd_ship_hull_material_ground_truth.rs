@@ -32,6 +32,8 @@
 //! pins that every drawn material resolves and every drawn chunk is covered,
 //! so the regression this fixed cannot silently return.
 
+mod archive_cache;
+
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh;
@@ -56,13 +58,13 @@ fn image() -> Option<PathBuf> {
 
 fn build(image: &Path, archive: &str, path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     mesh::rcs::build(
         path,
         &data,
         &geometry,
-        &mut |name| mesh::read_blob(&spec, name).ok(),
+        &mut |name| archive_cache::read(&spec, name),
         |c| c.mesh,
     )
     .ok()

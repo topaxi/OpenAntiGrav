@@ -224,7 +224,7 @@ dotnet bin/Release/netcoreapp3.0/PkgTool.Core.dll pkg_extract \
   data/images/omega-ps4-eu.pkg data/extracted/ps4/omega-eu
 ```
 
-[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)'s `PkgTool.Core` (MIT,
+[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)'s `PkgTool.Core` (LGPL-3.0, not MIT as this page said until 2026-10-07,
 built against `netcoreapp3.0`, needs `<RollForward>LatestMajor</RollForward>`
 added to its `.csproj` to run on a newer-only-installed SDK - reconfirmed
 2026-09-15 against a fresh clone and dotnet 10) produced a full `uroot/`
@@ -291,6 +291,8 @@ the four) actually holds is not yet surveyed.
 "Block data location" section has the full account of why this closes the
 extraction-provenance question for the base archives' still-open real/zero
 split, rather than answering it.
+
+**Read in place since 2026-10-07**: `oag_disc::ps4_pkg` reads both packages without this extraction, and its output equals the corrected `data/extracted/ps4` byte for byte ([ps4-package.md](../formats/ps4-package.md)). The extraction stays the way to make that folder.
 
 **The executable is an RE target as of 2026-09-15** - see
 [`docs/ghidra/functions/ps4-omega-eu/README.md`](../ghidra/functions/ps4-omega-eu/README.md)

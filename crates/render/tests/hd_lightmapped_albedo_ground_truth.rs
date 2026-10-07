@@ -14,6 +14,8 @@
 //! entry 1. Binding entry 0 drew the floor black with the reflection map's
 //! pattern. Dropping the declared-sampler filter in `skin::picks` fails this.
 
+mod archive_cache;
+
 use oag_mesh::mesh;
 
 #[test]
@@ -24,11 +26,11 @@ fn vinetas_wet_floor_binds_its_floor_texture_not_the_paraboloid() {
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let path = "/data/environments/01_vineta_k/track.vex";
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
     let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("Vineta K builds");
 
@@ -64,7 +66,7 @@ fn sebenco_slots(material: &str, ok: impl Fn(&str) -> bool, why: &str) {
         let path = format!("/data/environments/10_sebenco_climb/{track}");
         let Some((spec, data)) = (0..4).find_map(|n| {
             let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
-            mesh::read_blob(&spec, &path).ok().map(|d| (spec, d))
+            archive_cache::read(&spec, &path).map(|d| (spec, d))
         }) else {
             continue;
         };
@@ -72,7 +74,7 @@ fn sebenco_slots(material: &str, ok: impl Fn(&str) -> bool, why: &str) {
             mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
         let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
         let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            mesh::read_blob(&spec, name).ok()
+            archive_cache::read(&spec, name)
         })
         .expect("Sebenco Climb builds");
         for (slot, m) in rcs.materials.iter().enumerate() {
@@ -123,7 +125,7 @@ fn sebencos_solar_wall_binds_its_picture_not_its_normal_map() {
         let path = format!("/data/environments/10_sebenco_climb/{track}");
         let Some((spec, data)) = (0..4).find_map(|n| {
             let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
-            mesh::read_blob(&spec, &path).ok().map(|d| (spec, d))
+            archive_cache::read(&spec, &path).map(|d| (spec, d))
         }) else {
             continue;
         };
@@ -131,7 +133,7 @@ fn sebencos_solar_wall_binds_its_picture_not_its_normal_map() {
             mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
         let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
         let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            mesh::read_blob(&spec, name).ok()
+            archive_cache::read(&spec, name)
         })
         .expect("Sebenco Climb builds");
         for (slot, material) in rcs.materials.iter().enumerate() {
@@ -171,11 +173,11 @@ fn vinetas_backdrop_terrain_binds_sand_and_rock_not_its_blend_mask() {
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
     let path = "/data/environments/01_vineta_k/track.vex";
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
     let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("Vineta K builds");
     let mut checked = 0;

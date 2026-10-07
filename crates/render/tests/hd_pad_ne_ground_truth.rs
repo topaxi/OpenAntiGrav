@@ -23,6 +23,8 @@
 //!   vertex normal alone draw - which is what dropping the lightmap, or
 //!   mis-decoding the normal, does and a pixel count does not show.
 
+mod archive_cache;
+
 use std::path::Path;
 
 use oag_mesh::mesh::{self, Model, slots};
@@ -56,9 +58,9 @@ fn image() -> Option<String> {
 fn pads(image: &str, archive: &str, track: &str) -> (Vec<(&'static str, Model)>, Vec<u8>) {
     let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
     let name = format!("/data/environments/{track}/track.vex");
-    let data = mesh::read_blob(&spec, &name).expect("reading the track");
+    let data = archive_cache::read(&spec, &name).expect("reading the track");
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data).expect("a .rcsmodel beside it");
-    let mut read = |path: &str| mesh::read_blob(&spec, path).ok();
+    let mut read = |path: &str| archive_cache::read(&spec, path);
     let (speedup, _) = mesh::rcs::build_pads(&name, &data, &geometry, &mut read).expect("speedup");
     let (weapon, _) =
         mesh::rcs::build_weapon_pads(&name, &data, &geometry, &mut read).expect("weapon");

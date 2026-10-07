@@ -35,7 +35,8 @@
 //! - That a mine does not move. See [`at_rest`].
 //! - That entering `trigger_radius` sets it off: the attribute is the disc's, the
 //!   code that spends it was not found. See [`triggered_by`].
-//! - That the layer never trips its own mine, at any range. See [`triggered_by`].
+//! - The owner's exemption is a window, not permanent: [`OWNER_EXEMPT_SECONDS`],
+//!   recovered for both weapons. See [`triggered_by`].
 
 use super::{Impact, Projectile};
 use crate::Craft;
@@ -215,26 +216,45 @@ pub const fn frozen_pose(orientation: Quat) -> Quat {
     orientation
 }
 
+/// How long after laying the owner is exempt from its own Mine or Bomb, seconds.
+///
+/// **Recovered, confidence 85 on Pulse, a code literal**, the same `0x3f000000`
+/// (`0.5`) read twice. `Bomb_UpdateTrigger` (`0x08863d7c`) skips the owner
+/// (`bomb+0x48 == i`) while `Bomb_InArmingDelay` (`0x08863440`) says `age < 0.5`;
+/// `Mine_SweepCraftTrigger` (`0x08867b50`) does the same through `FUN_08859f04`
+/// (`mine+0xd4 < 0x08ab0efc`, whose word is `0.5`), and `Mine_Update` is what
+/// adds `dt` to `+0xd4`. After the window the layer trips its own charge like
+/// any craft.
+///
+/// HD: its trip was filmed on RPCS3 and the owner's own bomb goes off about
+/// `0.6 s` after laying in bomb age (`0.5 s` plus a frame or two), so the same
+/// constant is used. The trigger itself is not in `NormalBomb_Update`
+/// (`0x001443f8`); see `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`. Applied to
+/// Pure and the other titles on the "unmeasured titles inherit Pulse" rule.
+pub const OWNER_EXEMPT_SECONDS: f32 = 0.5;
+
 /// Whether a craft at `position` is close enough to set this mine off.
 ///
-/// **Ours, with the disc's number in it.** `trigger_radius` is authored but what
-/// spends it was not found: the fuse sweep that was read range-checks candidates
-/// only after the fuse expires, which is the blast, not the trip. It is the
-/// smallest rule that makes a mine a weapon rather than a timer.
+/// **Ours, with the disc's number in it.** `trigger_radius` is authored; the
+/// original tests a cube and then a sphere of it (`Mine_SweepCraftTrigger`,
+/// `Bomb_UpdateTrigger`), which for a sphere test is the sphere alone.
 ///
-/// **The laying craft never trips it**, at any range: a cluster leaves from the
-/// tail of a craft standing right there. Same as [`super::nearest_hit`]'s
-/// rocket-owner exclusion. For the Bomb the original is narrower:
-/// `Bomb_UpdateTrigger` (`0x08863d7c`) skips the owner only while age is under
-/// `0.5 s` (`Bomb_InArmingDelay`, `0x08863440`). The Mine's sweep
-/// (`Mine_SweepCraftTrigger`) is unread on this point, so the permanent
-/// exclusion stays ours for both; see `mine.md`, 2026-09-15 Bomb section.
+/// **The laying craft is exempt only while the charge is younger than
+/// [`OWNER_EXEMPT_SECONDS`]**: a cluster leaves from the tail of a craft standing
+/// right there. After that it trips its own charge like any craft.
 ///
 /// Takes the radius, as the two weapons' come from different structs. This is the
 /// trip only: the following blast excludes nobody.
 #[must_use]
-pub fn triggered_by(mine: Vec3, owner: u8, slot: u8, position: Vec3, trigger_radius: f32) -> bool {
-    slot != owner && (position - mine).length() <= trigger_radius
+pub fn triggered_by(
+    mine: Vec3,
+    owner: u8,
+    age: f32,
+    slot: u8,
+    position: Vec3,
+    trigger_radius: f32,
+) -> bool {
+    (slot != owner || age >= OWNER_EXEMPT_SECONDS) && (position - mine).length() <= trigger_radius
 }
 
 /// The trip radius of each weapon that has one, so [`super::Projectiles::advance`]
@@ -290,6 +310,12 @@ pub(super) fn advance_laid<S: Craft>(
 ) -> Option<Impact> {
     let here = projectile.position;
     let owner = projectile.owner;
+    // Age first for a Mine (`Mine_Update` runs before its sweep), after the trip
+    // for a Bomb (`BombPool_Update` triggers, then `Bomb_AdvanceFuse` ages).
+    if kind == Weapon::Mine {
+        projectile.age += dt;
+    }
+    let age = projectile.age;
 
     if let Some(trigger_radius) = trigger_radii.get(kind) {
         // Slot order only: the first close craft trips it, so which is credited
@@ -304,6 +330,7 @@ pub(super) fn advance_laid<S: Craft>(
             if triggered_by(
                 here,
                 owner,
+                age,
                 slot,
                 ship.physics().body.position,
                 trigger_radius,
@@ -320,6 +347,9 @@ pub(super) fn advance_laid<S: Craft>(
         }
     }
 
+    if kind == Weapon::Bomb {
+        projectile.age += dt;
+    }
     projectile.lifetime -= dt;
     if projectile.lifetime > 0.0 {
         return None;

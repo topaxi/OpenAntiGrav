@@ -869,8 +869,152 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
   exit or kill the PID. A private instance needs its own `XDG_*` copy of `~/.config/rpcs3`, `OAG_RPCS3_DISPLAY`,
   `OAG_RPCS3_GDB`, `OAG_RPCS3_PAD_NAME`, `OAG_RPCS3_SCRATCH_CONFIG`, and `~/.cache/rpcs3` created (`TTY.log`'s directory).
 
+## Giving the player a weapon and filming its effect (2026-10-07, `hd-weapon-ref`)
+
+Nobody had a held weapon on RPCS3 before this. It needs no pad pickup and no
+Ghidra call: **the held weapon is a state word in the craft's pickup slot.**
+
+| Cell | Meaning | How read |
+| --- | --- | --- |
+| `*(ship + 0x5edc)` | the craft's pickup-slot object (`0x230` bytes apart in one pool, craft 0..7) | eight slots read on one boot, all `-1` at the grid |
+| `slot + 0x204`, `+0x208` | the held weapon (`-1` empty); **write both** | a write of `+0x204` alone with `+0x208 = -1` never fired; writing the pair did |
+| `slot + 0x210`, `+0x218` | an index that counts up per craft (`0..7`, `1..8`), not touched | AI slots, one boot |
+
+Confidence 85: 12 states written on the player on four boots, each changing the HUD
+icon, and the AI craft's own slots carried the same pairs when they held a weapon
+(`ai*_state*.bin` in `data/scratch/hd-weapon-ref/e6/`).
+
+**Buttons** (the virtual pad, measured on the player): **triangle fires**, **circle
+absorbs** (state goes back to `-1` and the blue absorb glow plays), square, r1, l1, r2
+and l2 do nothing with a weapon held. **States 11 and above crash the game** ("The PS3
+application has likely crashed"): the fire and update jump tables have 0..10.
+
+**Which state is which weapon** (the HUD's damage readout beside the pickup hex against
+`WeaponStats_Race.xml`'s `damage`, plus what fired). Only the rows with evidence are
+named, and a row below 80 says why:
+
+| State | Reading | Evidence | Conf |
+| --- | --- | --- | ---: |
+| 0 | Rocket | readout 10 = Rocket's `damage`; two trails | 80 |
+| 4 | Turbo | readout 0; the boost carried the craft away | 85 |
+| 5 | Shield | readout 0; absorb-style blue glow, state spent | 70 |
+| 7 | Plasma | readout 60 = Plasma's `damage`; fire handler sets bit `0x4`, the id `Weapon_FirePlasma` uses | 80 |
+| 8 | Cannon | the HUD announces **"Machine Gun"**; readout 5 | 90 |
+| **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
+| 1, 2 | Missile, Quake | readouts 15 and 15 (both tables say 15), not told apart | 50 |
+| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired | - |
+
+The state is **not** Pulse's craft id: Pulse's Mine is 8 and Bomb 9 by id and 8 and 9 by
+bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets `0x2`, state 8
+`0x100`: `0x0012d970`'s sixteen handlers at `0x0012da48..`), and the readout and the
+picture say state 9 is the Bomb.
+
+### The recorder is the clock
+
+`pause`/`resume` plus `screenshot` costs about a second a frame and has no clock.
+RPCS3's own recorder (`Session.toggle_recording`, 30 fps, 1280x720, under
+`$XDG_CONFIG_HOME/rpcs3/recordings/BCES00664/`) does, and the **HUD's race clock is the
+game's own**: on this host the game ran at **0.59x** real time (HUD 20.2 s to 23.0 s over
+144 video frames, three boots' worth of frames agreeing within a frame), so one video frame is
+0.0197 game seconds. A mid-recording frame is only decodable from its keyframe: start
+`ffmpeg -ss` a second before the event and drop the first frames.
+
+`scripts/rpcs3-hd-weapon.py --state N [--teleport-back D]` is the recipe: boot, walk to
+the race, tap START RACE and wait out the countdown, start the recorder, write the state,
+press triangle. `--teleport-back` puts the craft D units behind the shot after it, so a
+laid Bomb or Mine stays in front of the camera instead of under the craft.
+
+### What a Bomb does in the original (Talon's Junction, the player standing, 0 km/h)
+
+Measured by `data/scratch/hd-weapon-ref/e11` (bomb under the craft) and `e12` (craft put 30
+units behind it):
+
+- **The bomb tripped on its own owner**, 17 video frames (0.57 s of video time) after it was laid,
+  with the player at rest on top of it: a pink dome with a white core, then the blast. (**Read in
+  video time since 2026-10-07**: this page first read the film on the HUD clock, 0.35 s; see "Video
+  time is the bomb's age" below.)
+  `NormalBomb_Update` (`0x001443f8`) loops over every craft in `trigger_radius` (6 in
+  `WeaponStats_Race.xml`) with no owner test in the decompile. This engine's trip excludes
+  the owner (`force_bomb_trip`'s own comment); **not changed here, the simulation is
+  not this lane's**: the difference is in the handover thread.
+- **A laid Bomb is drawn as a small red-and-white bomb with a pink ring about three bomb
+  widths across, with a second ring that grows outward into it** and a white flash at the
+  centre, repeating about every 16 video frames (about 0.3 game seconds, read off 97 frames
+  of one boot; `e12/ring.png`). This build draws none of it: **`HD_bomb_halo` is not drawn at all**.
+- **The detonation, in the standing case**, camera 7 units behind the craft: the fireball
+  fills the screen **pale yellow-white with a marbled texture** for the first 0.9 s (the HUD
+  stays on top), recedes to the right of the frame by 1.2 s with the craft flung ahead at
+  155 km/h, and leaves white haze by 1.8 s. No brown haze and no orange rim. Frames:
+  `data/scratch/hd-weapon-ref/pair_bomb_stationary.png` (left original, right ours;
+  rows: the armed bomb, then +0.2, +0.67, +1.17, +1.8 s).
+
+### Video time is the bomb's age, not the HUD clock (`hd-bomb-match`, 2026-10-07)
+
+The HUD race clock ran 0.59x of the recorder's time in these boots, and the entity ages follow
+the recorder. Measured on `e11`/`e12` with `ffmpeg signalstats` per frame (`data/scratch/hd-bomb-match/yavg.clean`,
+`e12c.clean`), in recorder seconds:
+
+| Event | Film | Law (bomb age) |
+| --- | --- | --- |
+| lay to whiteout (trip) | 6.1 to 6.7 s = 0.6 s | owner exempt until `0.5` (Pulse's `Bomb_InArmingDelay`), plus a frame or two |
+| fireball fills the frame | 6.7 to 8.33 s = 1.63 s | fireball phase `0 .. 1.5` |
+| white haze ends | 9.7 s = 3.0 s after the trip | `NormalBombBlast` lifetime `3.0` |
+| halo flash period (e12 centre crop) | 0.496 s over five periods | `3 + 13 frac(2 age)`: `0.5` |
+
+Every one agrees to a frame in recorder time and none does on the HUD clock, so read a frame
+of this capture as `age = (t - t_trip)` seconds and drive our side by `ticks = 60 age`. The cause
+of the HUD's 0.59x (a clamped step, or the recorder's own rate) is not established; the
+agreement is the finding. Confidence 80 that entity age is recorder time in these boots (four
+independent timings), 50 for any reading of why.
+
+### Polling guest memory live, without pausing (2026-10-07, `hd-weapon-fx`)
+
+`scripts/rpcs3-mem-poll.py`. RPCS3 maps the PS3 address space at host `0x300000000`:
+`/proc/<emulator pid>/mem` at `0x300000000 + A` is guest address `A`, readable by an
+ancestor process under `ptrace_scope 1` (the driver is one). Checked by reading the
+instruction word at `0x00155568` (`0x39400010`, `li r10,0x10`) and a slot word that the
+GDB stub also returned. A sample costs microseconds and the game never stops, so one
+second of effect is sampled a hundred times; the pause-per-read method of the sections
+above manages one a second.
+
+- **Find an object class by vtable**: scan `0x30000000-0x40000000` for the vtable word.
+  `0x00864b38` (the Missile explosion's) finds exactly **16 objects, stride `0x2760`**
+  (`0x34432920 ...`, differing per boot), the pool `MissileManager+0xcc` points at. The
+  manager itself is `hit - 0xcc` of a scan for the first two pool pointers
+  (`0x30966c80`, `0x3095f4f0`: the heap moves between boots, so rescan each boot).
+- **Host time to video time**: a one-second `gdb.pause()` before the first shot freezes the
+  recording. Found by mean frame difference (`< 0.02` for 5 frames at 30 fps), the freeze
+  sat at video 5.2-6.2 s for host 0.0-1.0 s, so **video = host + about 5 s** in `m4`
+  (confidence 60: one boot, the recorder's start latency varies).
+
+Measured with it (`data/scratch/hd-weapon-fx/runs/m1..m4`, Talon's Junction, the player
+standing on the grid):
+
+| Fired state | What the memory and film show | Conf |
+| --- | --- | ---: |
+| 1 | a projectile flies for 5.5 s; a counter in the block after the manager (`manager + 0x198`, outside its `0x118` bytes) reads 1, 2, 3, 4 at the bounces and 5 as it ends, at host 2.1, 3.2, 4.2, 4.8, 5.5 s, and the projectile is gone at 5.5 s (the list count `manager + 0xc4` is 1 while it flies, 0 after). The Pulse Missile's bounce budget is 5 (`oag_weapons::projectile::missile::MAX_BOUNCES`). The end is a small orange-red burst in the film; **the explosion pool is untouched** (`+0x10c` stays 0, all 16 pool objects byte-identical over 40 s) | 70 that state 1 is the Missile |
+| 2 | a projectile that ends 3.4 s later in a large yellow-white burst with orange streaks, filling the left half of the frame (`m1`, `m2`); **the explosion pool is untouched** | state 2 unresolved |
+| 3, 6 | nothing drawn at the grid within 10 s (3); the craft is flung ahead (6) | - |
+| 10 | on the grid alone (`m4`): no byte of the manager or the pool changes in 14 s | - |
+| (m5: player 12 units behind the nearest rival, state 1 fired) | **a hit**: list count 1 to 0 and pool count 0 to 1 in the same 10 ms sample, 0.12 s after the press; the count back to 0 0.98 s later; the object's age field `+0x170` ran 0 to 0.967 linearly; film: full-frame white-out at video 9.67-10.0 s with the rival's hull in it, gone by 10.2 s | 80 |
+| (m3, state 10 fired after 6) | `manager + 0x10c` goes 0 to 1 at host 43.44 s and back to 0 at 44.4 s: **one pool entry in use for 1.0 s**; the film's luma `> 225` for 13 frames at video 48.57-48.97 s, i.e. the white-out starts at the count's rise (offset +5.13 s), then yellow and orange ring discs | 70 attribution, 55 lifetime |
+
+So `HD_missile_explosion`'s pool is not entered by the Missile ending on a wall (state 1,
+5 bounces) and is entered for 1.0 s when a missile reaches a craft: once with a known firer
+(`m5`, `--behind-rival 12`) and once with an unknown one (`m3`). `0x001423a8` reads the same way: it runs the pool's `Start` (`0x00155568`) only from
+the missile list's *hit-test* branch (`0x00126b78`), a craft hit, and never from the wall
+branch.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
 - [rcsmaterial.md](../formats/rcsmaterial.md) - what the shader tables hold.
 - [methodology.md](methodology.md) - observe, hypothesise, verify, document.
+
+### Trap: copying another member's RPCS3 config (2026-10-07)
+
+A scratch `xdg/config/rpcs3` copied from another lane carries that lane's
+`input_configs/global/oag.yml` `Device: OAG Pad <lane>` and its `GDB Server`
+port. With a different `OAG_RPCS3_PAD_NAME` every press is silently dropped
+(the walk stalls at Main Menu or wanders into "Manual Part 1"); fix the device
+name and the port in your copy before the first boot.

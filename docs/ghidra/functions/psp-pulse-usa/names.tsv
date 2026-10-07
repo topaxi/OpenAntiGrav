@@ -870,6 +870,7 @@
 0x08863d7c	function	Bomb_UpdateTrigger	85	mine.md
 0x088633d0	function	Bomb_AdvanceFuse	85	mine.md
 0x08863440	function	Bomb_InArmingDelay	75	mine.md
+0x08859f04	function	Mine_InArmingDelay	75	mine.md
 0x088643d0	function	Bomb_ApplyBlast	85	mine.md
 0x088640c8	function	Bomb_Detonate	88	mine.md
 0x08872078	function	BombBlast_Construct	90	mine.md

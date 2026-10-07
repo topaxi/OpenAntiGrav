@@ -28,6 +28,40 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
   and HD draws `MagstripWake` instead. The Pulse pair's `Scene::off` note is
   moot on HD: `write_fog` is gated on `Drawable::is_ps3_shaded`.
 
+## 2026-10-07 (`hd-weapon-ref`): the first original-side reference
+
+Recipe in `docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon" (`scripts/rpcs3-hd-weapon.py`),
+findings in `weapons.md` last section. Open from it:
+
+- **`HD_bomb_halo` is not drawn; its law now agrees with the film (2026-10-07, `hd-bomb-match`).** The
+  period was read on the HUD clock; in recorder time it is 0.496 s against the law's 0.5 s (conf 80 for
+  the period). What is missing is the **fragment program**, not the law: `hd_bomb_halo.rcsmaterial`'s
+  lit-race block `@0x19c0` is a Fresnel shell, `rim = sat(1 - N.V)`, a 4x16 ramp texture
+  (`pulse_bombflash_glow`) sampled at the vertex program's `(TC0.w, TC1.w)`, alpha
+  `5 ta^2 rim^(10 - 10 ta)` (`ta` the ramp's alpha), then fogged; it needs a `Shape` in
+  `mesh/rcs/rim_glow.rs`, a `shade.wesl` branch and the vertex program's UV read, as `BOMB_FIRE` had.
+  The pool, the law (`halo_scale(age)`), the per-bomb matrix and the draw call are written and
+  tested against the generic lit program, which draws nothing visible: saved as
+  `data/scratch/hd-bomb-match/halo-wiring-unfinished.patch` (also carries two debug lines to drop).
+  The steady outer ring in the film is probably the sawtooth's end of cycle plus `hd_bomb.vex`'s own sixth
+  chunk (same material), unconfirmed.
+- **The owner's trip window** is Pulse's 0.5 s (see the capture page), not 0.35 s; our trip excludes the owner
+  for ever. Simulation, queued.
+- **The matched detonation, done as far as a pinned camera goes** (`weapons.md`, `hd-bomb-match`
+  section). Open: the original's owner is flung to about 125 km/h within 0.2 s and the camera
+  follows, ours is shoved to 50 km/h and the sim carries no further impulse, so frames after age
+  0.5 s need the owner's own motion (the camera pose is fixed per run).
+
+## 2026-10-07 (`hd-weapon-fx`): LeachBeam strips, one more read
+
+`0x00153218` is not a draw: it is the beam's reset (`strip_init(+0x6420); strip_init(+0x50); balls
+(+0xc820); +0xc938 = 0`). The strip class initialises through `0x002a4d58(this, 300, 3)`: 300 samples
+times 3 (a three-fin tube like the engine trail's, 72-byte records, buffers allocated in the SPU-visible
+heap, `+0x70/+0x74/+0x80/+0x84` double-buffered), so the geometry is **SPU-extruded** like the engine
+trail, and a faithful strip needs the same treatment `engine-trail.md` had: dump the buffers of a live beam
+and fit. A beam needs a LeachBeam held and a rival in range, which this lane did not obtain
+(states 3 and 10 gave nothing at the grid). Not started past that read.
+
 ## Next Steps
 
 1. Read what `0x00153218`'s strips are drawn with, then build them beside the

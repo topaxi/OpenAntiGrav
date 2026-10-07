@@ -71,13 +71,18 @@ Constants shipped so far, each checked against a local copy of the precedent on
 | --- | --- | --- |
 | PS3 `data1` secret (16 bytes) and its IV | `crates/disc/src/ps3_crypt.rs`, `scripts/ps3iso.py`, `docs/formats/ps3-disc.md` | RPCS3, `rpcs3/Loader/ISO.cpp`, `iso_file_decryption::set_key_from_d1` (`key_d1`, `iv_d1`), GPL-2.0 |
 
-Precedents for the package keys this decision would let a later reader ship,
-**none of which is shipped yet** because nothing here needs one:
+Precedents for the package keys this decision lets a reader ship. **The PS4
+fake-package pair is shipped (2026-10-07, `ps4-pkg`)**; the Vita keys are not,
+because nothing here needs one:
 
 | Constants | Precedent |
 | --- | --- |
 | Vita PKG keys `pkg_vita_2`, `pkg_vita_3`, `pkg_vita_4`, and the PSP/PS3 package keys | `pkg2zip`, `pkg2zip.c`, public domain (Unlicense text in its `LICENSE`); Vita3K and `psvpfstools` carry the same family |
-| PS4 fake-package keys | `LibOrbisPkg` (MIT), whose `PkgTool.Core` decrypts the Omega package on a PC with no console key, per `docs/reverse-engineering/source-images.md` |
+| PS4 fake-package keys: the entry-key-3 and fake-package RSA-2048 private exponents and moduli (4 x 256 bytes), **shipped** in `crates/disc/src/ps4_pkg/keys.rs` | `LibOrbisPkg`, `LibOrbisPkg/Util/Keys.cs` (`RSAKeyset.FakeKeyset`, `RSAKeyset.PkgDerivedKey3Keyset`), checked against a local clone on 2026-10-07. **Licence: GNU LGPL-3.0** (its README and `LICENSE.txt`), *not* MIT as this table said until now. The values are numeric constants of a scheme any fake package opens with, transcribed by script; no `LibOrbisPkg` code is copied or translated, the reader being written from the layout in [ps4-package.md](../formats/ps4-package.md) |
+
+The PS4 row was re-confirmed by the maintainer on 2026-10-07 **after** being told the
+precedent's licence is LGPL-3.0, not MIT: the criterion was that other public
+projects ship these constants, which holds independently of their licence.
 
 A Vita PFS file key is **not** in that second table: it is derived by the
 console, see [Vita packages](../formats/vita-package.md).

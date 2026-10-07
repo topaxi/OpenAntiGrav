@@ -155,9 +155,10 @@ the eye.
 **The Mine and the Bomb tripped on the stationary craft that laid them, 29 and
 30 frames later.** That is `Bomb_InArmingDelay`'s 0.5 s, read for the Bomb in
 [mine.md](mine.md) and now seen for the Mine as well: the original has no
-permanent owner exclusion. This port does (`oag_weapons::projectile::mine::triggered_by`,
-labelled chosen). A gameplay change with the racing gate behind it, so it is
-recorded here and not made.
+permanent owner exclusion. This port had one and retired it on 2026-10-07:
+`oag_weapons::projectile::mine::triggered_by` now exempts the owner for
+`OWNER_EXEMPT_SECONDS` (0.5) only; see the bomb-owner section of
+[mine.md](mine.md).
 
 **The player's own state-5 wash is measured faint, and this port leaves it out.**
 The flash's falloff reads `DAT_08ab10b0`, the *active* camera (`ScreenFlash_DistanceFalloff`,

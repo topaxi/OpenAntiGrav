@@ -41,6 +41,8 @@
 //! test forced off. A cutout that keeps every fragment is the regression, and
 //! only the comparison sees it.
 
+mod archive_cache;
+
 use std::path::Path;
 
 use oag_assets::Archive;
@@ -198,11 +200,11 @@ fn an_hd_speedup_pad_draws_visible_pixels() {
     }
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", path.display());
     let name = "/data/environments/12_sol_2/track.vex";
-    let data = mesh::read_blob(&spec, name).expect("reading 12_sol_2's track.vex");
+    let data = archive_cache::read(&spec, name).expect("reading 12_sol_2's track.vex");
     let geometry = mesh::rcs::sibling_geometry(&spec, name, &data)
         .expect("12_sol_2 ships a .rcsmodel beside its .vex");
     let (model, report) = mesh::rcs::build_pads(name, &data, &geometry, &mut |path| {
-        mesh::read_blob(&spec, path).ok()
+        archive_cache::read(&spec, path)
     })
     .expect("building 12_sol_2's Speedup Pad geometry");
     println!("{}", report.describe());

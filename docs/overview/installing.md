@@ -1,25 +1,295 @@
-# Installing and running OpenAntiGrav with your own game files
+# Play OpenAntiGrav with your own game files
 
-This page is for someone who wants to play, not to contribute. It was written
-by following it literally on 2026-10-07 on Linux, with a release build of the
-commit it ships in. Every command and every message quoted here was run.
+This page is for someone who wants to play, not to contribute. It has two
+halves. **Steps 1 to 5 are the guide**: short steps, one thing each. **"For the
+curious"** at the end keeps the technical detail: building from source, the
+exact file layouts, every error message.
 
-**What is verified and what is not.**
+**You need your own copy of the game.** No game content ships with this
+project, and none ever will. This page does not say where to get game files,
+disc keys or licences. See [legal](legal.md).
 
-- Linux is the only OS this was tried on. Windows and macOS are goals
-  ([goals](goals.md)) but nothing here was run on them.
-- The build was done on a machine that already had the system libraries. The
-  package names below come from the project's own AppImage build recipe
-  (`packaging/appimage/Containerfile`) and were not installed on a clean
-  machine.
-- Nothing here was listened to. Every run used `--no-audio` and read the
-  picture and the log only.
+**What was tried, and what was not** (checked 2026-10-07):
 
-**No game content ships with this project, and none ever will.** You supply
-files from discs and downloads you own. This page does not say where to get
-them and does not cover per-game or per-disc keys. See [legal](legal.md).
+- **Linux**: every folder, file name and message below was run on this
+  machine with the real binary, using `--dry-run` (it starts the game's data
+  without opening a window) and a real window under a software-rendered X
+  session. Nothing was listened to: every run used `--no-audio`.
+- **Windows**: the folders come from the code and the Windows folder lookup
+  library's source. The program itself ran under Wine
+  ([Wine and Proton](../tools/wine.md)), **not on a real Windows PC**.
+- **macOS**: there is **no download** for it. It builds from source on paper
+  only; nobody has run it. The folder is read from the same library.
+- **Steam Deck** and **Android**: the Deck steps use the Linux program; the
+  Android steps are from [Android](../tools/android.md), tried on an emulator
+  (Waydroid) and not on a phone yet.
 
-## 1. Build it
+## 1. Pick your computer and get the program
+
+| You have | Download this from the project's GitHub Releases page | Then |
+| --- | --- | --- |
+| **Windows 10 or 11, 64-bit** | `OpenAntiGrav-<version>-windows-x86_64.zip` | Right-click the zip, "Extract All". Open the new folder. The program is `oag-game.exe`. |
+| **Linux PC** | `OpenAntiGrav-<version>-linux-x86_64.AppImage` | Make it runnable: right-click, Properties, tick "Is executable" (or `chmod +x` the file). Needs a Vulkan graphics driver. No FUSE? Use the `.tar.gz` of the same name. |
+| **Steam Deck** | `OpenAntiGrav-<version>-steamdeck-x86_64.AppImage` | Switch to Desktop Mode, save it in a folder, make it runnable as above. |
+| **Android phone** (64-bit, Android 8 or newer) | `OpenAntiGrav-<version>-android-arm64.apk` | Copy it to the phone and open it (allow "install unknown apps" for your file manager), or `adb install -r` it. |
+| **Mac** | nothing yet | There is no Mac download. A source build is possible ("Build it yourself" below) but has never been run. |
+| **Arch Linux** | the AUR packages `openantigrav-bin` or `openantigrav-git` | Install like any AUR package, once they are published. |
+
+**As of 2026-10-07 only a "nightly" pre-release is published** (a build made every
+day from the latest code); a proper numbered release has not been published yet.
+The file names below carry the nightly's date and commit instead of a version.
+If the page has no download for your system, build from source ("Build it
+yourself" below).
+
+Optional, any desktop: install **`ffmpeg`**. Without it the game skips each
+title's intro movie and goes straight to the menu. Everything else works.
+
+## 2. Make the "images" folder and put your files in it
+
+The game looks in a few folders for your files, and uses the first one that has
+something in it. Pick **one** folder from your system's row and use it every
+time. All paths are real: they are the ones in `crates/source/src/source.rs`.
+
+### Windows
+
+The easiest folder is **next to the program**: open the folder that holds
+`oag-game.exe`, make a new folder called `images`, and put your files in it.
+The path is `...\OpenAntiGrav-<version>-windows-x86_64\images\`. (Tried on
+Linux with a copy of the program in its own folder.)
+
+The other folder that always works, wherever the program is kept:
+
+1. Press the Windows key and R together.
+2. Type `%APPDATA%\oag\images` and press Enter. If Windows says the folder
+   does not exist, type `%APPDATA%`, press Enter, make a folder `oag` in it,
+   then a folder `images` in that, and put your files in it.
+
+That is `C:\Users\<your name>\AppData\Roaming\oag\images`. Your **disc key**
+folder, if a game needs one, is `%APPDATA%\oag\keys`.
+
+**Three likely problems (Windows)**
+
+1. *A "Windows protected your PC" box appears.* The program is not signed by a
+   publisher, which is expected for a hobby project; this was not seen on a
+   real PC. Choose "More info", then "Run anyway", only if you downloaded it
+   from the project's own Releases page.
+2. *A black text window opens beside the game.* Leave it open. It prints
+   messages, and the project sends its log to a file as well. (Expected from
+   how the program is built, a console program; not seen on a real PC.)
+3. *A window says "NO DISC IMAGE FOUND".* Your files are not in a folder the
+   window lists. It names the exact folder to use, written with `/` instead of
+   `\` (the screen's letters have no backslash). Fix it, then start the game
+   again.
+
+### macOS
+
+No download exists, so a Mac player must build from source ("Build it
+yourself" in the curious part). If you do: the folder is
+`~/Library/Application Support/oag/images`. In Finder choose Go, then "Go to
+Folder...", paste that path, and make the folders if they are missing. A folder
+called `images` next to the program also works. **None of this has been run on a
+Mac.**
+
+### Linux
+
+Pick one:
+
+- `~/.local/share/oag/images/` works everywhere. Open it in your file manager
+  with Ctrl+L and paste the path. Make the folders if they are missing.
+- With the **AppImage**, put the files in the **same folder as the AppImage**,
+  or in a folder called `images` beside it. Nothing to configure.
+- Running from a checkout of the source: `data/images/` in the folder you start
+  the game from.
+
+Your disc key folder, if a game needs one, is `~/.config/oag/keys/`.
+
+**Three likely problems (Linux)**
+
+1. *The AppImage does nothing.* It is not marked runnable, or the machine has
+   no FUSE. Mark it runnable, or use the `.tar.gz`.
+2. *A window opens black, or no window.* No working Vulkan graphics driver.
+   Install your distribution's Vulkan driver (for example
+   `mesa-vulkan-drivers`).
+3. *"NO DISC IMAGE FOUND" window, or the terminal prints "no disc image found".*
+   The files are in a folder that is not searched. The window and the message
+   both list the folders. Move the files into the first one listed.
+
+### Steam Deck
+
+Use Desktop Mode (hold the power button, choose it). Then follow Linux above:
+the simplest is to save the AppImage in a folder and put your files **in the
+same folder**. A file manager (Dolphin) is the "Files" icon. A gamepad works
+with no setup. To start it from Game Mode, add the AppImage as a non-Steam
+game. (Not tried on a Deck by this guide.)
+
+**Three likely problems (Steam Deck)**: the same three as Linux, plus: *the
+Deck AppImage will not start on a different PC.* It is built for the Deck's own
+processor, so a normal PC needs the plain `linux-x86_64` AppImage.
+
+### Android
+
+Android 11 and newer keep an app's files where a phone's file manager cannot
+see them, so the files go in from a computer with a USB cable and `adb`
+(Android's own tool):
+
+1. On the phone, open Settings, About phone, tap "Build number" seven times.
+   Then open the new Developer options and turn on USB debugging.
+2. Plug the phone in. Accept "Allow USB debugging" on its screen.
+3. Install the app (step 1), and start it once, so it makes its folders.
+4. On the computer, run this once per game file (change the file name):
+
+   ```sh
+   adb push "Wipeout Pulse.chd" /sdcard/Android/data/org.openantigrav.game/files/data/images/
+   ```
+
+   A big file takes minutes. The folder name is `data/images` inside the app's
+   own files folder; it is the same `images` folder as on a computer.
+5. Start the app again.
+
+If you have the project's source, `just push-data android` does step 4 with a
+picker. See [Android](../tools/android.md).
+
+**Three likely problems (Android)**
+
+1. *The app shows "NO DISC IMAGE FOUND".* The screen prints the exact `adb
+   push` line and folder. Push again to that folder.
+2. *"INSTALL_FAILED_UPDATE_INCOMPATIBLE" when updating.* The new APK was
+   signed with another key. Uninstalling the old app deletes its files,
+   including your game files, so push them again afterwards.
+3. *An encrypted PS3 disc needs a key.* There is no paste on Android in this
+   build. Type it on the keypad, or push a `.dkey` file next to the image (see
+   "Wipeout HD / Fury" below).
+
+## 3. What to put in the folder, per game
+
+**Do the file names matter? No.** Name the file anything you like, spaces and
+brackets included. The game finds a file by its **ending** (`.chd`, `.iso`,
+`.vpk`, `.pkg`) and then reads the game's own ID out of the file to know which
+game it is. The ending's capital letters do not matter either (`.CHD` works).
+Checked 2026-10-07: `Wipeout Pulse (Europe) (En,Fr,De).chd`, `Wipeout Pure
+USA.CHD`, `Wipeout HD Fury (Europe).iso` and `Wipeout Omega Collection.pkg` all
+opened by their title. The exact names listed in the curious part are only the
+ones tried **first**.
+
+Put in **as many games as you like**. With more than one, the game opens a list
+(the "chooser") so you pick. With one, it opens that. If you have the same game
+from Europe and the USA, it opens the Europe one first; start the USA one by
+giving its name on the command line.
+
+### Wipeout Pulse and Wipeout Pure (PSP, or PS2 for Pulse)
+
+Put the disc image, a `.chd` or `.iso` file, in the folder. Nothing else.
+
+### Wipeout HD / Fury (PS3 disc)
+
+Put the disc image (`.iso`) in the folder. **You do not decrypt it.** The game
+reads the encrypted file as it is and decrypts each piece in memory, so no
+decrypted copy is ever written. It needs the **disc key**, a 32-digit code
+(letters A to F and numbers) that your own disc dump tool recorded for your own
+disc. It is often saved as a `.dkey` file. This guide does not say where to get
+one. Give the game the key one of three ways:
+
+1. **A file beside the image** with the **same name and a `.dkey` ending**:
+   `Wipeout HD Fury (Europe).iso` and `Wipeout HD Fury (Europe).dkey`. If you
+   rename the image, rename the key file the same way (checked: a key with
+   the old name beside a renamed image is not found).
+2. **A key file in the keys folder** (Windows `%APPDATA%\oag\keys`, Linux
+   `~/.config/oag/keys/`, macOS `~/Library/Application Support/oag/keys`). Any
+   name ending `.dkey` or `.key` works there (checked), and it is tried on every
+   encrypted disc.
+3. **Typed in the game.** The list shows the disc as `NEEDS DISC KEY`. Select
+   it, press Enter, and a keypad opens. Type the 32 digits, or paste them with
+   Ctrl+V. The game checks the key against the disc and saves it only when it
+   opens the disc. Wrong key: `THAT KEY DOES NOT OPEN THIS DISC`, nothing saved.
+
+### Wipeout HD, the PlayStation Store version (no Fury)
+
+This one is not a disc image. It is the folder the PlayStation installed
+(`PARAM.SFO` beside a `USRDIR` folder), copied into a folder called
+`extracted/ps3/<any name>` next to your `images` folder: `~/.local/share/oag/extracted/ps3/`
+on Linux, `%APPDATA%\oag\extracted\ps3\` on Windows. The steps use an
+emulator's installer and your own licence file, so they are in the curious
+part: [Wipeout HD from the PSN download](#wipeout-hd-from-the-psn-download).
+
+### Wipeout 2048 (Vita)
+
+Put a **`.vpk` file** in the folder. A `.vpk` is a zip of the game's installed
+folder. A patch `.vpk` or add-on (DLC) `.vpk` of the same game next to it is
+added automatically and is not listed as a game of its own. You can also use
+the unpacked folder instead (see "For the curious").
+
+**A raw Vita `.pkg` file does not work yet.** Its files are locked with a key
+that only the Vita itself can make, and this project cannot carry that. If you
+give the game one by name on the command line it says so; dropped in a folder it is simply not listed. What works today: a `.vpk` made from the
+game installed on **your own** Vita (the tool for that is a Vita-side homebrew
+plugin called NoNpDrm; this guide does not cover it, and no real NoNpDrm
+`.vpk` was available to test, only a stand-in zip made from unpacked files).
+Unpacking a `.pkg` on a PC is possible with several tools and your game's
+licence code, and the steps are written down for the curious in
+[data/README.md](../../data/README.md) and
+[Vita packages](../formats/vita-package.md). Those steps were not re-run for
+this page.
+
+### Wipeout Omega Collection (PS4)
+
+Put **both** `.pkg` files in the **same folder**: the base game and the update
+(patch). The game pairs them by the game ID inside, **not by the file names**,
+puts the update in front and reads both in place. There is nothing to unpack.
+The base alone is not found at all (checked): the update holds the front end,
+so a missing update looks like "NO DISC IMAGE FOUND". This works for
+the kind of `.pkg` that was made for a jailbroken PS4, whose keys are public. An
+ordinary Store `.pkg` is tied to a console and is refused with a message saying
+so. If you already unpacked folders into `extracted/ps4`, they win over the
+`.pkg` files in the list ([PS4 packages](../formats/ps4-package.md)).
+
+### Downloadable extras (Pulse DLC)
+
+Pulse's add-on zips go in a folder called `dlc` next to `images` (for example
+`~/.local/share/oag/dlc`, or `dlc` beside the AppImage). Not re-verified for this page. See
+[DLC packs](../formats/dlc-pack.md).
+
+## 4. Start it, and what you should see
+
+Start the program: double-click `oag-game.exe` (Windows), the AppImage (Linux,
+Deck), or the app icon (Android). A window opens.
+
+- **One game found**: it starts that game: a short intro (when `ffmpeg` is
+  installed, and after about 80 seconds of converting the very first time),
+  then the menu.
+- **More than one found**: a list titled `SELECT A DISC IMAGE`. Each row shows
+  the game, the console and the game's ID, then the file name. Move with the
+  arrow keys, press Enter, or click or tap a row. A row that cannot open is
+  shown dim, with a sentence at the bottom saying why (an `ENCRYPTED` disc says
+  "PRESS X TO ENTER THE DISC KEY").
+- **Nothing found**: a dark screen headed `NO DISC IMAGE FOUND`. It says "put
+  your own game files in this folder", spells out the folder for your computer,
+  and lists the file endings that work. Press Escape to quit. (Seen 2026-10-07 on Linux
+  in a 1280x720 window. On Android the same screen shows the `adb push` line.)
+
+Controls: arrow keys or WASD steer, X or Return thrust, Q and E are the air
+brakes, Escape goes back. A gamepad works with no setup.
+
+### What you can play today
+
+Pulse plays from the menus into a race. The other games start and race on
+their own data, but only Pulse is close to finished: see [status](status.md).
+
+## 5. When something does not work
+
+| You see | Do this |
+| --- | --- |
+| `NO DISC IMAGE FOUND` | Put the file in the folder the screen names (section 2). Check the ending: `.chd`, `.iso`, `.vpk`, or two `.pkg`. |
+| The game list has your file dim, `NEEDS DISC KEY` | An encrypted PS3 disc. Give it the key (section 3). |
+| Your Omega `.pkg` is not listed | You need **both** the base and the update in the same folder. |
+| `NO DISC IMAGE FOUND`, but a `.pkg` is in the folder | Either a Vita `.pkg` (not supported yet: use a `.vpk` or unpacked folder) or an Omega base `.pkg` without its update `.pkg`. Neither is ever listed. |
+| No sound / no intro | No `ffmpeg`: the intro is skipped, the game still plays. |
+| Anything else | The log file has the detail: see "Where things are kept" below. Include it when you report a problem. |
+
+## For the curious
+
+Everything from here down is the technical detail the steps above stand on.
+
+## Build it yourself
 
 You need a Rust toolchain. The repository pins one in `rust-toolchain.toml`
 (1.99.0 on 2026-10-07), and `rustup` fetches it on the first build by itself.
@@ -61,12 +331,15 @@ Optional:
 
 You do not need `cargo-nextest`, Ghidra or any emulator to play.
 
-## 2. What each title needs
+## The files in detail
 
-Put your files in `data/images/` next to where you run the program. The names
-below are the ones the program recognises first. Any other `.chd` or `.iso` in
-that folder is also found, in alphabetical order (checked with a Pulse image
-named `wipeout.chd`).
+The names below are the ones the program looks for first, in `data/images/`. **Any
+other file name works as well**: every `.chd`, `.iso` and `.vpk` in a searched
+folder is found, in alphabetical order, and an Omega `.pkg` is found with its
+patch by the game ID inside the files, not by name (checked 2026-10-07 with names
+like `Wipeout Pulse (Europe) (En,Fr,De).chd`, `Wipeout Pure USA.CHD` and
+`Wipeout Omega Collection update.pkg`, one run each). Where the folders are on
+each OS is in the player's guide above.
 
 | Title | Platform | What to supply | File or folder name |
 | --- | --- | --- | --- |
@@ -76,7 +349,7 @@ named `wipeout.chd`).
 | Wipeout HD / Fury | PS3 | disc image, Europe, **encrypted as dumped** with your disc key beside it (a `.dkey`), or an already decrypted image | `hdfury-ps3-eu.iso` + `hdfury-ps3-eu.dkey`, or `hdfury-ps3-eu-dec.iso` |
 | Wipeout HD (no Fury) | PS3 | the **installed** PSN download, Europe | `data/extracted/ps3/hd-psn-eu` |
 | Wipeout 2048 | Vita | a **`.vpk`** (a NoNpDrm dump; a patch or DLC `.vpk` beside it is mounted too), or an **unpacked** package folder | `data/images/2048-eu.vpk` (any name), or `data/extracted/vita/PCSF00007` (Europe) / `PCSA00015` (USA) |
-| Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
+| Omega Collection | PS4 | the base **`.pkg` and its patch `.pkg`** (a fake package, read in place), or **unpacked** base and patch folders | `data/images/omega-ps4-eu.pkg` + `omega-ps4-eu-patch.pkg` in one folder, or `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
 
 The first three rows are the easy ones: a normal dump of your own disc is
 read as it is, CHD (single-track, either `createdvd` or `createcd`) or ISO.
@@ -179,8 +452,15 @@ from them (no real NoNpDrm dump was available): [Vita packages](../formats/vita-
 
 ### Omega, and a 2048 folder: unpack the package into a folder
 
-Omega ships as a console download package. The program does not read a `.pkg`
-file yet. It reads a folder you unpacked and decrypted from a package you own.
+**Omega: put both `.pkg` files in the same folder** (`data/images/`) and the
+program reads them in place, patch mounted ahead of the base; nothing to unpack
+([PS4 packages](../formats/ps4-package.md)). This works for a **fake package**
+(the HEN/jailbreak rip), whose keys are public; a retail PSN package is keyed to
+a console and is refused with a message saying so. If you also have an unpacked
+`data/extracted/ps4` folder, that folder is the one listed and booted by default;
+name a `.pkg` to use it instead.
+
+A 2048 Vita `.pkg` is not read: the program reads a `.vpk` or a folder you unpacked.
 The licence for a package is part of your own copy, and this project does not
 say where one comes from. The project may ship fixed public package keys that
 other open-source tools already ship, never a per-game licence
@@ -225,7 +505,7 @@ whichever Pulse disc is open, region does not matter
 ([DLC packs](../formats/dlc-pack.md)). The dry run above did not print a line
 that proves a pack was mounted, so treat this as not re-verified here.
 
-## 3. Run it and check it was found
+## Run it from a terminal and check what was found
 
 From the folder that holds `data/`:
 
@@ -287,7 +567,9 @@ you give it.
 | Images, if not in `data/images/` | `~/.local/share/oag/images/` |
 | 2048 and Omega folders, if not in `data/extracted/` | `~/.local/share/oag/extracted/vita/` and `.../extracted/ps4/` |
 
-Deleting the cache is always safe. Other ways to name a source, in the order
+On Windows the settings, records, ghosts and `keys/` live under
+`%APPDATA%\oag`, and on macOS under `~/Library/Application Support/oag` (read from
+the folder library's source, not run there). Deleting the cache is always safe. Other ways to name a source, in the order
 the program tries them: the command line, `$OAG_IMAGE`, then `[source] image`
 in `settings.toml`, then the folders above
 ([packaging](../tools/packaging.md#where-the-disc-image-comes-from)).
@@ -297,7 +579,7 @@ Omega folder (or the folder holding one).
 `RUST_LOG=debug` raises the terminal's detail, and `--log-file FILE` moves the
 log file (an empty value writes none).
 
-## 4. What you can do today
+## What you can do today
 
 One line each; the full per-subsystem picture is [status](status.md).
 
@@ -315,13 +597,13 @@ One line each; the full per-subsystem picture is [status](status.md).
 with its HUD. How far each title plays beyond that is in [status](status.md);
 do not expect a finished game outside Pulse.
 
-## 5. When it goes wrong
+## Error messages
 
 | What you see | Cause and fix |
 | --- | --- |
-| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
+| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A Vita `.pkg` is never read: use a `.vpk` or unpack it (see "The files in detail"); an Omega `.pkg` pair is read in place from `data/images/` |
 | `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
-| `... is an encrypted PS3 disc image and no disc key opens it` | No key beside the image or in the keys folder passed the check, or the one there belongs to another disc. Put the right `.dkey` beside the image, or enter it in the chooser (section 2). With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
+| `... is an encrypted PS3 disc image and no disc key opens it` | No key beside the image or in the keys folder passed the check, or the one there belongs to another disc. Put the right `.dkey` beside the image, or enter it in the chooser (see "The files in detail"). With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
 | The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |

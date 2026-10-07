@@ -15,6 +15,9 @@
 //! `sebenco_ice` (Sebenco Climb, both directions) is the only one that patches
 //! the three authored water colours.
 
+mod archive_cache;
+
+use archive_cache::Reads;
 use oag_assets::Container;
 use oag_mesh::mesh::{self, slots};
 use oag_rcs::rcsmaterial::{self, fragment::Program};
@@ -25,14 +28,16 @@ fn archive(image: &std::path::Path, n: u32) -> String {
     format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display())
 }
 
-fn build(image: &std::path::Path, path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
-    let (spec, data) = (0..4).find_map(|n| {
-        let spec = archive(image, n);
-        mesh::read_blob(&spec, path).ok().map(|d| (spec, d))
-    })?;
-    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
+fn build(
+    reads: &Reads,
+    image: &std::path::Path,
+    path: &str,
+) -> Option<(mesh::Model, mesh::rcs::Report)> {
+    let specs: Vec<String> = (0..4).map(|n| archive(image, n)).collect();
+    let (spec, data) = reads.read_any(&specs, path)?;
+    let geometry = mesh::rcs::sibling_geometry(spec, path, &data)?;
     mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        (0..4).find_map(|n| mesh::read_blob(&archive(image, n), name).ok())
+        reads.read_any(&specs, name).map(|(_, bytes)| bytes)
     })
     .ok()
 }
@@ -43,10 +48,11 @@ fn reach(circuit: &str) -> (usize, usize, usize) {
     let Some(image) = oag_testdata::image(IMAGE) else {
         return (usize::MAX, 0, 0);
     };
+    let reads = Reads::new();
     let (mut lit, mut glint, mut ice) = (0, 0, 0);
     for track in ["track.vex", "track_reversed.vex"] {
         let path = format!("/data/environments/{circuit}/{track}");
-        let Some((model, report)) = build(&image, &path) else {
+        let Some((model, report)) = build(&reads, &image, &path) else {
             continue;
         };
         assert_eq!(report.ice_unread, 0, "{path}");

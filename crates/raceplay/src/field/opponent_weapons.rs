@@ -579,9 +579,10 @@ impl Race {
     /// 1. **It is a laid charge**, not something in flight. A rocket cannot be
     ///    steered around - by the time a driver could react it has arrived - and
     ///    pretending otherwise would be a dodge that never works.
-    /// 2. **It is not this craft's own.** `projectile::mine::triggered_by`
-    ///    excludes the owner outright, so a craft's own cluster is harmless to
-    ///    it and swerving round one would be a driver frightened of nothing.
+    /// 2. **It is not this craft's own, or is its own and past the exemption.**
+    ///    `projectile::mine::triggered_by` exempts the owner only for
+    ///    `OWNER_EXEMPT_SECONDS`, so a craft's own cluster is harmless to it
+    ///    for that half second and a hazard like anyone's after it.
     /// 3. **It is ahead**, along this craft's own forward axis, inside
     ///    `oag_ai::avoidance::LOOKAHEAD`.
     /// 4. **It is close enough across to be tripped**: within the charge's own
@@ -613,7 +614,9 @@ impl Race {
         let mut best: Option<oag_ai::Hazard> = None;
         for charge in &self.sim.world.projectiles.slots {
             let Some(kind) = charge.kind else { continue };
-            if charge.owner as usize == slot {
+            if charge.owner as usize == slot
+                && charge.age < oag_weapons::projectile::mine::OWNER_EXEMPT_SECONDS
+            {
                 continue;
             }
             let Some(trigger_radius) = radii.get(kind) else {

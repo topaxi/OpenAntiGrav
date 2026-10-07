@@ -369,36 +369,19 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
-    // **The combine itself**, `vertexLight * ramp + ramp`, plus the grid's
-    // red as an additive term and as the output alpha - block #7's own
-    // `ADD H4.xyz, H6.xxxx, H4` and `MOV H0.w, H6.xxxx END`. Two omissions,
-    // both named rather than guessed shut:
+    // **The glass sheen's combine**, block #7 of `etched_glass_tech`
+    // (`rcsmaterial.md`, "The glass floor's gamma, curve and sun weight"):
     //
-    // - **The per-material constant `c`** (`ADD H4.xyz, H2, {c}` -
-    //   parameter `0x512f8e65`, measured `0.26562` on `etched_glass_tech`,
-    //   not zero) is left out of `ramp + c` - `glass_sheen`'s own doc names
-    //   the plumbing this needs and why it did not land in this change.
-    // - **`paraboloidReflectionTex`'s reflection tint**, weighted by the same
-    //   grid red, is left out entirely: this renderer has no dual-paraboloid
-    //   probe and does not invent one, per `CLAUDE.md`.
+    //     light = pow(vertexColour, power) * scale + sunMask * sun * sat(N.L)
+    //     rgb   = light * (ramp + c) + ramp + grid.r,   alpha = grid.r
     //
-    // `vertexLight` is `f[TC0] + f[TC1] + f[TC5].x * (sun.colour * N.L)` in
-    // the traced microcode (`@0x02`/`@0x05`: `DP3_SAT` against the sun
-    // direction, `MUL` by the sun colour - exactly `scene.light.sun * ndl`
-    // this file already computes as `sun_diffuse` without the mask, since
-    // this program declares no lightmap to mask by). `f[TC5].x` is
-    // `in.texcoord`'s own first component (line 830 of `rcsmaterial.md`
-    // reads `f[TC5].zw` as this file's `in.texcoord`). `f[TC0]` and `f[TC1]`
-    // are a stated approximation, not a reading: both stand in as
-    // `in.colour.rgb`, the one per-vertex light term this project already
-    // decodes for every HD material, on the same terms this file's own
-    // second-texture coordinate above is already a stated approximation
-    // rather than a reading.
-    let ramp_sun = scene.light.sun * ndl;
-    let vertex_light_sheen = in.colour.rgb + in.texcoord.x * ramp_sun;
-    let sheen_rgb = vertex_light_sheen * first.rgb + first.rgb + vec3<f32>(second.r);
-    let sheen = vec4<f32>(sheen_rgb, second.r * in.colour.a);
-
+    // with `ramp` and `grid` sRGB-decoded (the captured draw's texture address
+    // words carry gamma bits `0x7` on both) and `c` the material's
+    // `0x512f8e65`, carried in the glow-table entry `glass_sheen::bias` writes.
+    // The sun weight is the colour set's fourth byte (`o[TC5].x = v[3].w` in
+    // the paired vertex program), `in.sun_mask`, not the UV's `u`. Left out,
+    // named: `paraboloidReflectionTex`'s tint (weighted by the grid red),
+    // which needs a dual-paraboloid probe this renderer does not have.
     // **Wipeout HD's additive glow.** Its emissive family samples unit 1 at
     // `(u, (v + a) * b + time)`, multiplies by a tint and adds the result to
     // the albedo gated by the diffuse alpha:
@@ -420,6 +403,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let glow_slot = in.slots >> 23u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
+    let ramp_sun = scene.light.sun * ndl;
+    let sheen_prelit = scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power);
+    let vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
+    // **Both taps are sRGB-decoded**, as the RSX does: the capture of this
+    // material's draw on RPCS3 has `SET_TEXTURE_ADDRESS` bits 20-23 (the
+    // gamma field) at `0x7` on the ramp (unit 2) and the grid (unit 0) and
+    // `0x0` on the normal maps, so the arithmetic below runs on linear values
+    // and so does the output alpha (`MOV H0.w, H6.x`).
+    let ramp_linear = pow(first.rgb, vec3<f32>(2.2));
+    let grid_linear = pow(second.r, 2.2);
+    let sheen_linear = vertex_light_sheen * (ramp_linear + vec3<f32>(glow_tint_offset.w))
+        + ramp_linear
+        + vec3<f32>(grid_linear);
+    // Unclamped on the linear target, whose bloom gate reads values above 1;
+    // clamped and encoded on a gamma one, as the authored path does.
+    let sheen_rgb = mix(
+        pow(clamp(sheen_linear, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2)),
+        sheen_linear,
+        linear_out,
+    );
+    let sheen = vec4<f32>(sheen_rgb, grid_linear);
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
     // that adds its second texture is not necessarily one that scrolls it:
     // some read `time` while keeping their coordinate constants as the

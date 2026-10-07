@@ -28,6 +28,8 @@
 //! counts move, that is either a resolver regression or a genuine change to
 //! chase, and this is where it would show first.
 
+mod archive_cache;
+
 use std::path::PathBuf;
 
 use oag_mesh::mesh::{self, slots};
@@ -46,7 +48,7 @@ fn image() -> Option<PathBuf> {
 fn amphiseums_no_ambient_slots_split_from_emissive_the_way_the_shader_assumes() {
     let Some(image) = image() else { return };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
-    let Ok(data) = mesh::read_blob(&spec, TRACK) else {
+    let Some(data) = archive_cache::read(&spec, TRACK) else {
         return;
     };
     let Some((model, _report)) =

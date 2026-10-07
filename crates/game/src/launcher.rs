@@ -557,7 +557,45 @@ pub fn not_found_notice(images: &str) -> Vec<String> {
         format!("adb push {} \\", oag_source::source::IMAGE_NAMES[0]),
         format!("  {images}/"),
         String::new(),
-        "Any .chd or .iso name works for Pulse, Pure and HD.".to_string(),
+        "Any .chd or .iso name works; a 2048 .vpk or Omega .pkg too.".to_string(),
+    ]
+}
+
+/// The lines for a desktop build started with nothing to play: a double-click
+/// has no terminal to print `resolve`'s message to, so the window says it.
+///
+/// `folder` is the per-user images folder for this OS, spelled out; a path too
+/// long for the 480-unit screen keeps its tail, the part a player must open.
+#[must_use]
+pub fn not_found_notice_desktop(folder: &str) -> Vec<String> {
+    const FIT: usize = 56;
+    // The screen's face has no backslash glyph (it draws nothing, so a Windows
+    // path would read as one run-together word). Explorer takes `/` as well.
+    let folder = folder.replace('\\', "/");
+    let folder = folder.as_str();
+    let shown = if folder.chars().count() > FIT {
+        let tail: String = folder
+            .chars()
+            .rev()
+            .take(FIT - 3)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        format!("...{tail}")
+    } else {
+        folder.to_string()
+    };
+    vec![
+        "OpenAntiGrav ships no game content.".to_string(),
+        "Put your own game files in this folder, then start again:".to_string(),
+        format!("  {shown}"),
+        "A folder called images next to the game program works too.".to_string(),
+        String::new(),
+        "Pulse, Pure, HD: a .chd or .iso disc image.".to_string(),
+        "2048: a .vpk file.   Omega: both of its .pkg files.".to_string(),
+        "File names do not matter. Press Escape to quit.".to_string(),
+        "Full guide: docs/overview/installing.md".to_string(),
     ]
 }
 

@@ -168,6 +168,19 @@ The executable's own load-path strings name every model above
   `HD_Mine_halo`/`HD_bomb_*` have neither a load order nor a placement read.
   Next: the manager's per-tick walker on the hit path.
 
+## 2026-10-07 (`hd-weapon-fx`): the Missile's pool measured on two boots, not wired
+
+`weapons.md` last section and `rpcs3-capture.md`, "Polling guest memory live". The pool is entered
+only when a missile reaches a craft (never on a wall), lives 1.0 s (age field `p` linear 0 to 1, point
+light `(1 - p)^2`, conf 80), and plays the model's own keys. Original film with a known firer
+(`m5`): white-out at 9.67-10.0 s of video, the rival's hull inside it. The three material programs
+are read (core: texture times vertex colour; rays: Fresnel shell; shockwave: ramp lookup on
+`Shockwave_scalar`). **Not wired**; remaining: the rays and shockwave programs in `shade.wesl`/
+`rim_glow.rs` (the shape `BOMB_FIRE`/`BOMB_SHOCK` took), one drawable per live blast with its own
+`write_node_anims` clock, a render-side hook at `ignite_blast` for `Missile` with `struck.is_some()`
+on HD (`struck` already is the craft), then a pair against `m5`'s frames with the camera pinned
+as `hd-bomb-match` did. `scripts/rpcs3-mem-poll.py --behind-rival` reproduces the hit.
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
@@ -237,3 +250,33 @@ block (`docs/rendering/hd-unlit-programs.md`, "Weapon scene blocks"). Still
 undrawn: the Missile's pair, the Bomb's five (blast pair unwritten), the
 beam's strips (`hds-bomb-blast-scene-block-and-leach-strips.md`). No trigger
 was found for the effects listed above.
+
+## 2026-10-07 (`hd-weapon-ref`): a held weapon now exists on RPCS3
+
+`scripts/rpcs3-hd-weapon.py --state N` gives the player any weapon and films the
+shot (`docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon").
+State 9 is the Bomb, 7 the Plasma, 8 the Cannon ("Machine Gun"), 0 the Rocket,
+4 the Turbo. Not done from it, in order of ready-ness:
+
+- **Plasma ring reference.** State 7 was fired twice on one boot (`data/scratch/hd-weapon-ref/e11/s3.png`):
+  a white flash and violet sparks at the craft within 0.3 game seconds, **no growing violet
+  shell** in the 5 fps contact sheet. That is not the "violet shell around the track" this
+  build draws; the shot hit something at the craft's nose, so it may be the bolt's own
+  impact rather than the ring. Re-film at 30 fps down an open straight with `--teleport-back` and
+  compare frame by frame before judging the ring.
+- **Missile** (state 1 or 2, readouts 15 and 15 do not tell them apart), **LeachBeam** (state 3
+  or 10, readout 1; state 3 never fired) and **Cannon's side sense**: one boot each with the
+  recipe; none was filmed this pass.
+- **Absorb shell colour**: circle with a held state spends it and plays the shell; a clean
+  frame was not taken.
+
+## 2026-10-07 (`hd-rocket`): Rocket filmed against ours; the smoke ribbon and launch light are what differ
+
+Two RPCS3 boots agree (fire on video frame 173): thick white smoke ribbons ahead of the craft for
+~0.8 s and a yellow-white scene flash for ~2 frames at launch; ours draws neither. The ribbon is
+`rockettrail_triangle` of `ribboneffects/` (see `docs/rendering/trail-ribbon.md`, 2026-10-07), built
+by a `WakeTrail`-style manager whose law is unread. The flash is probably a point light (`0x006778c8`,
+unread). Our sim fires 3 rockets per press; the film shows at least two ribbons, count not settled.
+Pitfall: our rocket's fire button is `square` in `--input-script`; `triangle` does nothing.
+Next: read the `0x00ad81f0` job's extrusion (width, taper, life) and what pushes samples for a rocket,
+then draw `rockettrail_triangle` through the engine-trail ribbon path. Omega's rocket model: not checked.

@@ -27,4 +27,16 @@ pub trait PackageSource: std::fmt::Debug + Send {
     /// Reads up to `len` bytes of file `index` from `offset`. Fewer come back
     /// only at the end of the file.
     fn read(&mut self, index: usize, offset: u64, len: u64) -> Result<Vec<u8>>;
+
+    /// The console the package is for. A Vita `.vpk` is the default.
+    fn platform(&self) -> crate::Platform {
+        crate::Platform::Vita
+    }
+
+    /// The release's `TITLE_ID`, for a package whose file tree does not keep a
+    /// `param.sfo` of its own (a PS4 package holds it as an entry beside the
+    /// file system).
+    fn title_id(&mut self) -> Option<String> {
+        None
+    }
 }

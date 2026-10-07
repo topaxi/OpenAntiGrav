@@ -46,6 +46,13 @@ Anything before Pure is out of scope.
 assets, no executables, no extracted data. You supply your own legally obtained
 copies. See [`docs/overview/legal.md`](docs/overview/legal.md).
 
+## How to play
+
+**New here? Start with the step-by-step guide:
+[`docs/overview/installing.md`](docs/overview/installing.md).** It covers
+Windows, Mac, Linux, Steam Deck and Android: where the game files go, what
+the file names can be, and what to do when it says "no disc image found".
+
 ## Play it
 
 You need your own copy of the game. Nothing is bundled, and this project
@@ -59,20 +66,22 @@ Or build from source:
 ```sh
 cargo build --release -p oag-game
 mkdir -p data/images
-cp /path/to/your/pulse-psp-eu.chd data/images/      # a disc image you dumped
+cp /path/to/your/pulse.chd data/images/             # a disc image you dumped, any name
 target/release/oag-game                             # boots what it finds there
 ```
 
-| Title | What to put where |
+| Title | What to put in the folder |
 | --- | --- |
-| Pulse (PSP, PS2) and Pure (PSP) | the disc image, `.chd` or `.iso`, in `data/images/` |
-| Wipeout HD / Fury (PS3) | the **decrypted** disc image in `data/images/` |
-| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/` |
-| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/` |
+| Pulse (PSP, PS2) and Pure (PSP) | the disc image, `.chd` or `.iso` |
+| Wipeout HD / Fury (PS3) | the **encrypted** disc image, `.iso`, with your disc key beside it (`.dkey`) or typed in the game. Nothing to decrypt |
+| Wipeout 2048 (Vita) | a `.vpk` (a Vita `.pkg` is not read yet) |
+| Omega Collection (PS4) | the base `.pkg` **and** its update `.pkg`, in the same folder |
+
+File names do not matter. Unpacked folders still work too; see the guide.
 
 Check what was found without opening a window:
-`target/release/oag-game --dry-run --no-audio --no-video <source>`. Linux is the only OS tried so
-far. The whole walk-through, the system libraries, where settings and logs are
+`target/release/oag-game --dry-run --no-audio --no-video <source>`. Linux is the only OS the program was run on
+natively (Windows was run under Wine). The whole walk-through, the system libraries, where settings and logs are
 kept and the error messages you may meet are in
 [`docs/overview/installing.md`](docs/overview/installing.md).
 

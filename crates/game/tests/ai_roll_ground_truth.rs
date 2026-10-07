@@ -34,6 +34,8 @@
 //! ignored tests, and a run of that length in that suite is how a suite stops
 //! being run.
 
+mod in_parallel;
+
 use std::path::PathBuf;
 
 use oag_gameplay::PlayerInputs;
@@ -511,25 +513,33 @@ fn grid_armed_over_every_circuit(
     seed: u64,
     circuits: &[(String, String)],
 ) -> Option<u32> {
+    use std::fmt::Write as _;
     let mut armed = 0u32;
     let mut spent = 0.0f32;
-    println!("=== full grid, {}, seed {seed:#010x} ===", level.name());
-    for (id, entry) in circuits {
-        let rolls = grid_rolls_on(level, entry, seed)?;
+    // One `println!` at the end, so two tiers raced at once print two whole
+    // tables rather than interleaved lines.
+    let mut table = format!("=== full grid, {}, seed {seed:#010x} ===\n", level.name());
+    let raced = in_parallel::map(circuits, circuits.len(), |(_, entry)| {
+        grid_rolls_on(level, entry, seed)
+    });
+    for ((id, _), rolls) in circuits.iter().zip(raced) {
+        let rolls = rolls?;
         let race_armed: u32 = rolls.iter().map(|r| r.armed).sum();
         let race_spent: f32 = rolls.iter().map(|r| r.spent).sum();
         let windows: u32 = rolls.iter().map(|r| r.airborne_windows).sum();
         let aloft: u64 = rolls.iter().map(|r| r.airborne_ticks).sum();
-        println!(
+        writeln!(
+            table,
             "  {id:<10} armed {race_armed:<3} spent {race_spent:>5.1} \
              airborne windows {windows:<4} ticks aloft {aloft}/{}",
             TICKS * rolls.len() as u64
-        );
+        )
+        .expect("writing to a String");
         armed += race_armed;
         spent += race_spent;
     }
     println!(
-        "  TOTAL over {} grid races: armed {armed} spent {spent:.1}",
+        "{table}  TOTAL over {} grid races: armed {armed} spent {spent:.1}",
         circuits.len()
     );
     Some(armed)
@@ -596,6 +606,12 @@ fn grid_armed_over_every_circuit(
 /// side by side. Each interior tier is measured twice, so the CPU cost rises
 /// about 50% - which is the trade, and a good one on an otherwise idle machine.
 ///
+/// **The 24 races of one test also run side by side** (`in_parallel::map`,
+/// 2026-10-07): they share nothing, and the totals and the printed table come
+/// back in circuit order, so every number is the serial loop's. One test was
+/// still 170-180 s under a member's load, and the tail of any `oag-game`
+/// selection in `just test-data-affected`.
+///
 /// **Still asserted loosely.** Non-decreasing tier to tier, not a strict `>`,
 /// and on the twelve-circuit total rather than any single slot's count. Read
 /// the printed table for the ordering a run actually produced, and
@@ -605,10 +621,12 @@ fn a_higher_tier_rolls_no_less(seed: u64, lower: oag_ai::Difficulty, higher: oag
     if circuits.is_empty() {
         return;
     }
-    let (Some(easier), Some(harder)) = (
-        grid_armed_over_every_circuit(lower, seed, &circuits),
-        grid_armed_over_every_circuit(higher, seed, &circuits),
-    ) else {
+    let [easier, harder] =
+        <[Option<u32>; 2]>::try_from(in_parallel::map(&[lower, higher], 2, |&level| {
+            grid_armed_over_every_circuit(level, seed, &circuits)
+        }))
+        .expect("two tiers in, two totals out");
+    let (Some(easier), Some(harder)) = (easier, harder) else {
         return;
     };
     assert!(

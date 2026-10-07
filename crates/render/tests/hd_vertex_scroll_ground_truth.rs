@@ -11,6 +11,8 @@
 //! the texture coordinate". The reach below is pinned per circuit so a change
 //! that switched on a family nobody read, or dropped the wiring, moves a number.
 
+mod archive_cache;
+
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::{self, AnimTrack};
@@ -25,12 +27,12 @@ fn build(image: &Path, archive: &str, circuit: &str) -> Option<(mesh::Model, usi
     let path = format!("/data/environments/{circuit}/track.vex");
     for a in [archive, "DATA02.PSARC"] {
         let spec = format!("{}:PS3_GAME/USRDIR/{a}", image.display());
-        let Ok(data) = mesh::read_blob(&spec, &path) else {
+        let Some(data) = archive_cache::read(&spec, &path) else {
             continue;
         };
         let geometry = mesh::rcs::sibling_geometry(&spec, &path, &data)?;
         let (model, report) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
-            mesh::read_blob(&spec, name).ok()
+            archive_cache::read(&spec, name)
         })
         .expect("the scene builds");
         return Some((model, report.vertex_scrolls));
