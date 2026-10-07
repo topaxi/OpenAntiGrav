@@ -28,6 +28,21 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
   and HD draws `MagstripWake` instead. The Pulse pair's `Scene::off` note is
   moot on HD: `write_fog` is gated on `Drawable::is_ps3_shaded`.
 
+## 2026-10-07 (`hd-weapon-ref`): the first original-side reference
+
+Recipe in `docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon" (`scripts/rpcs3-hd-weapon.py`),
+findings in `weapons.md` last section. Open from it:
+
+- **`HD_bomb_halo` is not drawn.** The original's laid Bomb has a pink ring and a pulse; the law read
+  (`s = 3 + 13 frac(2 age)`, conf 45) gives a 0.5 s period against about 0.3 s on film, and a second, steady
+  ring is unexplained. Decode the AltiVec mask at `0x001443f8` (the `vectorConditionalSelect` against
+  `-0x27b8(TOC)`) with the scratch interpreter before wiring.
+- **The owner trips its own bomb** in the original (standing, 0.35 s after laying); `force_bomb_trip` and the
+  sim's trip skip the owner. A rules question for the simulation, not for this lane.
+- **Re-shoot the detonation matched**: lay the bomb at the craft's own position and pin `--camera-pose` to the
+  original's chase camera; the first pair differed in hull, camera and bomb position, so size, brightness and
+  burn-away are unsettled.
+
 ## Next Steps
 
 1. Read what `0x00153218`'s strips are drawn with, then build them beside the

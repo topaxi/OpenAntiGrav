@@ -795,3 +795,52 @@ executable's own output is a camera-facing frame); the bomb entity's own up row
 materials**, and its executable names `NormalBomb.cpp`: *checked, applies, not
 wired* - Omega's `WeaponModels` is `EMPTY`, its blast code and its materials'
 programs are unread.
+
+## 2026-10-07: the Bomb against the running original, and `HD_bomb_halo` (`hd-weapon-ref`)
+
+The first RPCS3 reference for the detonation (recipe and the weapon-state table:
+[rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), "Giving the player a
+weapon"; frames `data/scratch/hd-weapon-ref/pair_bomb_stationary.png`, ours on the
+right). Held state **9 is the Bomb**.
+
+**What the original shows that this build does not.** The laid Bomb carries a pink ring and a
+pulse (`e12/ring.png`); this build draws neither. Ours at ticks 402..418 shows the bomb
+body alone. `HD_bomb_halo` is `NormalBomb`'s second model (`[0x2e]`, flag `0x400`), a
+382-vertex, 760-triangle sphere shell of radius 0.60 with `hd_bomb_halo.rcsmaterial`
+(state `0x79`, **SrcAlpha / One**, `pulse_bombflash_glow.gtf`); `hd_bomb.vex` carries
+the same material on its sixth chunk. Both are additive and neither is drawn by `scene/
+weapon_models.rs`.
+
+**The scale law, read from `0x001443f8`** (confidence **45**: the instructions are
+read, but the pulse it gives does not match the film, see below). While `age < the class's
+fuse` (`*(class + 0x104)`, `timetodie` 20 s) and the bomb is not yet done, the update takes
+`w = tab[0x10]` (`2.0`, or `tab[0]` = `6.0` once `age > tab[0x14]` = `18.0`), and
+`s = fmodf(w * age, tab[4]) * tab[8] + tab[0xc]` with the table at `0x008c1a84`:
+`{6.0, 1.0, 13.0, 3.0, 2.0, 18.0, 0.4, 0.35}`, so `s = 3 + 13 * frac(2 age)`: **a sawtooth
+from 3 to 16 every 0.5 s**, applied to the bomb's rows `+0x70..+0xa0` (then selected by
+the AltiVec mask `lis/lwz` from `-0x27b8(TOC)`, which was not decoded) and handed to the
+halo's set-matrix call `0x00327500`. At 0.6 units of shell radius that is a ring 3.6 to
+19 units across, which agrees with the ring's size in `e12` (about 18 units by angular
+size), **and the film shows a steady outer ring as well as the growing one, and a flash
+about every 0.3 s, not 0.5 s**. Whether the second ring is the `hd_bomb.vex` chunk or
+the mask's other lanes, and whether alpha follows `s`, is unread. Not wired: a draw built
+on a law that disagrees with the picture in period would be the plausible stand-in the
+project rule forbids.
+
+**The owner trips its own bomb.** The standing player's Bomb detonated 0.35 game seconds
+after it was laid, from 0 km/h. The decompile has the ship loop (`0x002d64d0` per viewpoint)
+with no owner test, and this build's `force_bomb_trip` skips the owner by design. **The
+simulation is not this lane's**; the thread names it.
+
+**The first fireball frames do not match, and nothing was tuned.** The original is whited-out
+yellow-white marbling filling the frame for 0.9 s with the camera 7 units behind a craft
+that is itself shoved to 155 km/h; ours at +0.2 s has the craft shoved to 180 km/h within two
+ticks and the camera outside the sphere, with a brown haze and an orange rim the original does
+not show. The two runs differ in hull, camera distance and the bomb's own position (ours is
+thrown ahead of the craft, the original's is under it), so **the size, brightness and
+burn-away timing are not settled either way**; what is settled is the absence of the halo and
+of the owner trip. Fixing the scenario (a pinned `--camera-pose` taken from the original's
+chase camera, the bomb laid at the craft's own position) is the next step.
+
+**Lineage (Omega):** not checked for `HD_bomb_halo` (the entry above counted four blast
+models, not the halo); the RPCS3 recipe is HD-only, no PS4 emulator exists here.
