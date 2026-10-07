@@ -343,11 +343,21 @@ geometry below them author a translation `quantum` of `1.0` and a `base` at the
 origin, which is what `base + value * quantum` wants when the value is already
 in world units.
 
-Two things deliberately not claimed. The quaternion's component order is taken
-as `(x, y, z, w)`, continuing the `s16` form's own `(x, y, z)` plus the `w` it
-reconstructs - **confidence 60, a choice rather than a reading**. And bits 0
-and 2 are always set together on this disc, so nothing here separates them; a
-file setting one alone is the test that would.
+**The quaternion's four floats run `(w, x, y, z)`** - measured 2026-10-07, not read from an
+evaluator. First taken as `(x, y, z, w)` at confidence 60, a choice, which drew the eight
+numbered circuits' flybys upside down. Each `gridCamera` leaf stores the point the camera looks
+at (`+0x10`); with `w` first the first key's view axis points at it on all eight (dot `1.000`,
+`0.999` on two) and the up row points up, and no other order of the four floats, with or without
+a conjugate, does that on all eight (`xyzw` gives `0.38` to `0.96` and an inverted up).
+`crates/vex/tests/grid_camera_ground_truth.rs`
+(`every_hd_flyby_looks_at_its_aim_point_with_the_sky_up`) sweeps every `start_grid*.vex` on the
+disc. **Confidence 90** for the order on a camera's keys (eight of eight files at dot `1.000`,
+the alternatives off by a wide margin); the same flag and reader serve the one billboard shoal
+that uses wide keys, so its fish turn by the corrected rotation too, not checked. Omega:
+**not checkable** here - the `start_grid*.vex` blobs in the scratch extraction do not open as
+`.vex` (leading bytes `ed ad 5c ca` and `GNF `, zero nodes), so whether its HD circuits carry
+the same keys is unread. 2048 was not checked. Bits 0 and 2 are always set together
+on this disc, so nothing separates them; a file setting one alone is the test that would.
 
 The 97 are the grid-camera paths in the `start_grid*.vex` family and one
 billboard's shoal of fish (`piranha_landscape.vex`).

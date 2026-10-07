@@ -31,6 +31,42 @@ pub(crate) struct Shown {
 }
 
 impl Drawable {
+    /// Appends one line per submitted draw to the file `OAG_DRAW_DUMP` names:
+    /// the list, the diffuse texture's label, the index count and the draw's
+    /// bounds. A diagnostic for comparing a frame's draw list against a
+    /// capture of the original (`docs/reverse-engineering/rpcs3-capture.md`);
+    /// off, it is one environment read per draw.
+    fn trace_draw(&self, list: &str, draw: &DrawCall) {
+        use std::io::Write;
+        static PATH: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+        let Some(path) = PATH.get_or_init(|| std::env::var_os("OAG_DRAW_DUMP").map(Into::into))
+        else {
+            return;
+        };
+        let label = draw
+            .texture
+            .and_then(|t| self.model.textures.get(t))
+            .and_then(Option::as_ref)
+            .map_or("-", |t| t.label.as_str());
+        let c = draw.bounds.centre;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(
+                file,
+                "{list}\t{label}\t{}\t{:.1}\t{:.1}\t{:.1}\t{:.0}\t{}",
+                draw.range.end - draw.range.start,
+                c[0],
+                c[1],
+                c[2],
+                draw.bounds.radius,
+                draw.chunk.map_or(-1, i64::from)
+            );
+        }
+    }
+
     /// Draws every list, in pipeline order, and reports what it submitted.
     ///
     /// `frustum` is `None` for the ship and the collision overlay: both draw a
@@ -117,6 +153,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
+            self.trace_draw("opaque", draw);
             shown.push(index as u32);
         }
         // The prepass's own order: `order` where given, filtered to what is
@@ -246,6 +283,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
+            self.trace_draw("cutout", draw);
             // Switched only when the reference changes, so a model naming one
             // (or none) still pays for a single `set_pipeline`.
             let cutout = cutouts.select(draw);
@@ -312,6 +350,7 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
+            self.trace_draw("blended", draw);
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)

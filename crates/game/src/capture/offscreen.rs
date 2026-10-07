@@ -106,3 +106,24 @@ pub(super) fn write_png(
     println!("wrote {} ({width}x{height})", path.display());
     Ok(())
 }
+
+/// The TOUCH CONTROLS page's preview over the finished frame, when that is
+/// the page being captured; the window draws it in its overlay pass.
+pub(super) fn touch_preview(
+    options: &super::Options,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    encoder: &mut wgpu::CommandEncoder,
+    target: &wgpu::Texture,
+) -> Result<()> {
+    if options.menu_page.as_deref() != Some(crate::touch_controls::preview::PAGE) {
+        return Ok(());
+    }
+    crate::touch_controls::draw_preview(
+        &options.settings.controls,
+        (device, queue, target.format()),
+        encoder,
+        &target.create_view(&wgpu::TextureViewDescriptor::default()),
+        (target.width(), target.height()),
+    )
+}

@@ -20,6 +20,7 @@
 //! is fixed, so `scale` is grid units per window pixel.
 
 pub mod art;
+pub mod preview;
 mod shape;
 
 use oag_input::touch::{self, Control, GoZone, Scheme, Setup, Touches};
@@ -56,6 +57,15 @@ const LABEL_HEIGHT: f32 = 8.0;
 const GO_ROUND: f32 = 0.30;
 /// A quarter turn, for the side arrows.
 const QUARTER: f32 = std::f32::consts::FRAC_PI_2;
+
+/// Whether this machine has a touchscreen to need the overlay: Android, or
+/// any platform with `OAG_TOUCH_CONTROLS` set, which is how a desktop run
+/// shows it (chosen, not measured: a desktop with no touchscreen gains
+/// nothing from the page, so it is offered only on request).
+#[must_use]
+pub fn available() -> bool {
+    cfg!(target_os = "android") || std::env::var_os("OAG_TOUCH_CONTROLS").is_some()
+}
 
 fn scaled(mut color: [f32; 4], opacity: f32) -> [f32; 4] {
     color[3] *= opacity;
@@ -420,10 +430,57 @@ impl Demo {
 /// When the overlay's pipelines will not build.
 pub fn draw_pose(
     demo: Demo,
+    gpu: (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    size: (u32, u32),
+) -> anyhow::Result<()> {
+    let px = (size.0 as f32, size.1 as f32);
+    overlay_pass(gpu, encoder, view, size, |art, space| {
+        draw(
+            art,
+            &demo.touches(px),
+            px,
+            space.size.1 / px.1.max(1.0),
+            false,
+            demo.setup(),
+            1.0,
+        )
+    })
+}
+
+/// The TOUCH CONTROLS page's preview over what `view` already holds: the
+/// capture-side twin of the window's overlay pass, which draws the same
+/// [`preview::for_page`] list.
+///
+/// # Errors
+/// When the overlay's pipelines will not build.
+pub fn draw_preview(
+    controls: &crate::settings::Controls,
+    gpu: (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    size: (u32, u32),
+) -> anyhow::Result<()> {
+    overlay_pass(gpu, encoder, view, size, |art, space| {
+        preview::draw(
+            art,
+            space,
+            controls.touch_setup(),
+            controls.touch_alpha(),
+            0.0,
+        )
+    })
+}
+
+/// One overlay-renderer pass of whatever `build` makes from the touch art
+/// and the window's grid.
+fn overlay_pass(
     (device, queue, format): (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
     encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
     size: (u32, u32),
+    build: impl FnOnce(&Art, oag_display::space::Space) -> Vec<Draw>,
 ) -> anyhow::Result<()> {
     let px = (size.0 as f32, size.1 as f32);
     let space = oag_present::perf::grid(size);
@@ -437,17 +494,7 @@ pub fn draw_pose(
         &sheet,
     )?;
     renderer.set_space(space);
-    let list = Art::from_sheet(&sheet).map_or_else(Vec::new, |art| {
-        draw(
-            &art,
-            &demo.touches(px),
-            px,
-            space.size.1 / px.1.max(1.0),
-            false,
-            demo.setup(),
-            1.0,
-        )
-    });
+    let list = Art::from_sheet(&sheet).map_or_else(Vec::new, |art| build(&art, space));
     renderer.overlay(device, queue, encoder, view, &list, (0.0, 0.0, px.0, px.1));
     Ok(())
 }

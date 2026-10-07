@@ -19,6 +19,9 @@ use oag_rcs::{rcsmaterial, rcsmodel};
 use crate::mesh::{ModelTexture, Texels};
 
 use super::{Report, TextureSlots, Textures};
+use crate::mesh::{Emissive, slots};
+
+use super::emissive::EMISSIVE_LIMIT;
 
 /// `~crc32("paraboloidReflectionTex")`.
 pub(super) const PARABOLOID: u32 = 0x9edd_3243;
@@ -62,6 +65,10 @@ pub(super) fn is_water(declared: &rcsmaterial::Declared, program: &Program) -> b
 /// declares.
 const CONSTANT_AMBIENT: u32 = rcsmaterial::CONSTANT_AMBIENT;
 
+/// The `rate` that marks a glow-table entry as `water_test_2`'s rather than the
+/// ice pool's: no glow entry scrolls at 2.0 (`mesh::Emissive::rate` is 0 or 1).
+pub(crate) const WATER_FLAG: f32 = 2.0;
+
 /// Takes the normal map out of every water material's albedo.
 ///
 /// Two programs share the shape and differ in what is left once the
@@ -81,6 +88,8 @@ pub(super) fn water(
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
     skins: &mut TextureSlots,
+    packed: &mut [u32],
+    table: &mut Vec<Emissive>,
     report: &mut Report,
 ) {
     if super::isolate::water_off() {
@@ -125,6 +134,33 @@ pub(super) fn water(
             )
         };
         if lit_vertex_colour {
+            // The program's own light is `ambient + sun * sat(N.L)` times the
+            // vertex colour (`rcsmaterial.md`, "Water family"), where the
+            // generic reading adds the vertex colour to the light and
+            // multiplies a white picture by the sum: a pale sheet in place of
+            // the authored teal. The ambient is the scene's own (`0.4` in the
+            // capture, the circuit's `Constant ambient colour`): the material
+            // authors no `constantAmbientColour`. The shader branch is
+            // `slots::ICE` with [`WATER_FLAG`] in the entry's rate.
+            if let Some(word) = packed.get_mut(slot) {
+                let layer = Emissive {
+                    tint: [0.0; 3],
+                    offset: 0.0,
+                    scale: 0.0,
+                    rate: WATER_FLAG,
+                };
+                let index = table.iter().position(|seen| *seen == layer).or_else(|| {
+                    (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
+                        table.push(layer);
+                        table.len() - 1
+                    })
+                });
+                if let Some(index) = index {
+                    *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
+                    *word |= slots::ICE;
+                    *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+                }
+            }
             report.water_lit_colour += 1;
         } else {
             report.water_glint_only += 1;

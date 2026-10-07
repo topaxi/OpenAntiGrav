@@ -29,7 +29,7 @@ use menu_page::{
     PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
     picker_stills,
 };
-use offscreen::{offscreen, read_back, write_png};
+use offscreen::{offscreen, read_back, touch_preview, write_png};
 
 /// What to capture.
 #[derive(Debug, Clone)]
@@ -979,6 +979,7 @@ pub fn run(
     if let Some(presented) = presented {
         presented.composite(&device, &queue, &mut encoder, &view);
     }
+    touch_preview(options, &device, &queue, &mut encoder, &target)?;
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
 }

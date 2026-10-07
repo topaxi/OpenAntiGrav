@@ -241,8 +241,23 @@ pass.
 | BRAKE (bar half) | **only Easy with the zones off**: the left half of the bar under GO | the airbrake axes, no button |
 | PAUSE, VIEW | top-left corner (0.13), beside BRAKE L in Standard with the zones off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
 
+**TOUCH CONTROLS page (2026-10-07, touch-submenu lane, chosen, not measured).** The three touch
+rows (TOUCH SCHEME, GO BRAKE ZONES, CONTROLS OPACITY) sit on their own page, `touch_controls` in
+`assets/ui/menu.toml`, reached from a TOUCH CONTROLS row at the end of CONTROLS (they were loose
+rows on GRAPHICS). Under the rows a **live preview** draws the real overlay: `touch_controls::draw`
+for a 2340x1080 phone, in the grid a race draws it in, then `Draw::zoom`ed into a phone-shaped
+panel (`touch_controls::preview`). It reads `[controls]` every frame, so a row change shows at
+once (Standard/Easy, zones on/off, opacity), and it cycles the same `--touch-overlay` poses for
+the chosen setup, 1.6 s each, idle first. The picture behind the panel is the front end's own
+backdrop; no art is added. It draws in the overlay pass (the cursor sheet carries the touch art,
+the menu's sheet does not). **Visibility:** the row leading to the page is dropped
+(`Definition::drop_touch_controls`) unless `touch_controls::available()`: Android, or
+`OAG_TOUCH_CONTROLS` set. Chosen: a desktop with no touchscreen has nothing to set, and the env var
+is the existing switch. `--menu-page touch_controls` reaches the page on any platform and draws the
+idle pose. The rows are ordinary rows, so mouse and touch work as on every page.
+
 **Schemes (2026-10-07, touch-schemes lane, chosen, not measured).** `[controls] touch_scheme`
-(CONTROLS page, TOUCH SCHEME, `standard`/`easy`, default `standard`; an unrecognised token is
+(CONTROLS > TOUCH CONTROLS, TOUCH SCHEME, `standard`/`easy`, default `standard`; an unrecognised token is
 standard) picks how the overlay reads. The simulation is untouched: both feed the existing
 analogue `airbrake_left`/`right` axes.
 
@@ -295,7 +310,7 @@ position *within* GO, tracked while it is held, adds an airbrake: the bottom hal
 GO is split into a left corner (42% of its width, `L`), a dead centre column and a
 right corner (42%, `R`; see Schemes below for the 2026-10-07 sizes); the centre and everything above is thrust alone. Sliding
 between zones needs no lift, and a thumb in the slop below GO still reads the corner.
-It is on by default behind `[controls] touch_go_zones` (CONTROLS page, GO BRAKE ZONES,
+It is on by default behind `[controls] touch_go_zones` (CONTROLS > TOUCH CONTROLS, GO BRAKE ZONES,
 `on`/`off`); off makes GO thrust alone. The separate BRAKE L/R buttons are dropped while the zones are on (the maintainer: "L/R are not necessary when they are embedded in the go button itself") and come back with the setting off, as does pause/view's old place beside BRAKE L. GO draws
 the two corners with `L` and `R` and thin dividers, and the corner under a finger lights
 amber. **The brake is analogue** (`GoZone::strength`, chosen, not measured): 0 on the zone's inner edge
@@ -333,7 +348,7 @@ Glyphs are plain shapes from the same textures (double
 chevron, crosshair, shield, side arrows, pause bars, a camera body with a lens); the
 disc-style prompt glyphs (`oag_ui::prompt`) are a pad's face buttons and none of them
 says thrust, shield or pause. The only words are GO and the L and R of the airbrakes.
-`[controls] touch_opacity` (CONTROLS page, CONTROLS OPACITY, 40/60/80/100) scales every
+`[controls] touch_opacity` (CONTROLS > TOUCH CONTROLS, CONTROLS OPACITY, 40/60/80/100) scales every
 alpha. The overlay draws only while the race is on the glass (`hud_shown`, so not
 through the intro flyby; the loading screen is a different stage and never draws it).
 `oag-game --race --screenshot out.png --size 2340x1080 --touch-overlay

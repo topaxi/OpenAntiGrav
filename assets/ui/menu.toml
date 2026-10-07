@@ -681,35 +681,6 @@ string_id = "OAG_GRAPHICS_RENDER_SCALE"
 setting = "graphics.render_scale"
 values = ["50", "75", "100", "125", "150", "200"]
 
-# On by default (chosen, not measured): the on-screen GO button adds the left
-# or right airbrake in its bottom corners. Off makes GO thrust alone, for a
-# phone where the separate BRAKE buttons suit the hands better.
-[[page.entry]]
-kind = "choice"
-label = "GO BRAKE ZONES"
-string_id = "OAG_CONTROLS_TOUCH_GO_ZONES"
-setting = "controls.touch_go_zones"
-values = ["on", "off"]
-
-# Which on-screen scheme a touchscreen shows (chosen, not measured): standard
-# is the stick plus GO with L/R brake corners; easy blends the stick's rim into
-# the airbrake and gives GO one BRAKE zone that picks its side off the steering.
-[[page.entry]]
-kind = "choice"
-label = "TOUCH SCHEME"
-string_id = "OAG_CONTROLS_TOUCH_SCHEME"
-setting = "controls.touch_scheme"
-values = ["standard", "easy"]
-
-# How strongly the on-screen racing controls draw, in percent of the design's
-# own translucency (chosen, not measured). Only a touchscreen shows them.
-[[page.entry]]
-kind = "choice"
-label = "CONTROLS OPACITY"
-string_id = "OAG_CONTROLS_TOUCH_OPACITY"
-setting = "controls.touch_opacity"
-values = ["40", "60", "80", "100"]
-
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
 # keys that can disagree is a state somebody has to define behaviour for.
@@ -1374,6 +1345,55 @@ label = "TRIGGER SENSITIVITY"
 string_id = "OAG_CONTROLS_TRIGGER_SENSITIVITY"
 setting = "controls.trigger_sensitivity"
 values = ["50", "75", "100", "125", "150", "200"]
+
+# A page of its own, with a live picture of the overlay beside the rows
+# (`oag_game::touch_controls::preview`). Only a touchscreen has an overlay to
+# set, so `Definition::drop_touch_controls` takes this row away off Android
+# unless `OAG_TOUCH_CONTROLS` is set (chosen, not measured).
+[[page.entry]]
+kind = "submenu"
+label = "TOUCH CONTROLS"
+string_id = "OAG_CONTROLS_TOUCH_PAGE"
+target = "touch_controls"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+[[page]]
+id = "touch_controls"
+title = "TOUCH CONTROLS"
+title_string_id = "OAG_CONTROLS_TOUCH_PAGE"
+
+# On by default (chosen, not measured): the on-screen GO button adds the left
+# or right airbrake in its bottom corners. Off makes GO thrust alone, for a
+# phone where the separate BRAKE buttons suit the hands better.
+[[page.entry]]
+kind = "choice"
+label = "GO BRAKE ZONES"
+string_id = "OAG_CONTROLS_TOUCH_GO_ZONES"
+setting = "controls.touch_go_zones"
+values = ["on", "off"]
+
+# Which on-screen scheme a touchscreen shows (chosen, not measured): standard
+# is the stick plus GO with L/R brake corners; easy blends the stick's rim into
+# the airbrake and gives GO one BRAKE zone that picks its side off the steering.
+[[page.entry]]
+kind = "choice"
+label = "TOUCH SCHEME"
+string_id = "OAG_CONTROLS_TOUCH_SCHEME"
+setting = "controls.touch_scheme"
+values = ["standard", "easy"]
+
+# How strongly the on-screen racing controls draw, in percent of the design's
+# own translucency (chosen, not measured). Only a touchscreen shows them.
+[[page.entry]]
+kind = "choice"
+label = "CONTROLS OPACITY"
+string_id = "OAG_CONTROLS_TOUCH_OPACITY"
+setting = "controls.touch_opacity"
+values = ["40", "60", "80", "100"]
 
 [[page.entry]]
 kind = "back"

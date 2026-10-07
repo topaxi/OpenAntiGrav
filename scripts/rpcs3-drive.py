@@ -1065,6 +1065,56 @@ def cmd_place(args):
                 gdb.pause()
                 kept = rpcs3_place.read_pose(gdb, body)
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
+                for attempt in range(args.dump_attempts):
+                    for text_region in args.dump:
+                        chain, size = parse_region(text_region)
+                        at = resolve_chain(gdb, chain)
+                        if at:
+                            try:
+                                blob = gdb.read(at, size)
+                            except Exception as error:
+                                print("  %s: dump %#x+%#x failed: %s"
+                                      % (stem, at, size, error), flush=True)
+                                continue
+                            (out / ("%s-%08x.bin" % (stem, at))
+                             ).write_bytes(blob)
+                            print("  %s: dumped %#x+%#x" % (stem, at, size),
+                                  flush=True)
+                    if not args.hook:
+                        break
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(
+                        "place_hook", args.hook)
+                    hook = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(hook)
+                    retry = False
+                    for round_no in range(24):
+                        extra = hook.regions(out, stem, round_no)
+                        if extra is None:
+                            retry = True
+                            break
+                        if not extra:
+                            break
+                        for addr, size in extra:
+                            try:
+                                blob = gdb.read(addr, size)
+                            except Exception as error:
+                                print("  %s: hook dump %#x+%#x failed: %s"
+                                      % (stem, addr, size, error), flush=True)
+                                continue
+                            (out / ("%s-%08x.bin" % (stem, addr))
+                             ).write_bytes(blob)
+                        print("  %s: hook round %d dumped %d span(s)"
+                              % (stem, round_no, len(extra)), flush=True)
+                    if not retry:
+                        break
+                    print("  %s: hook asked for a retry (attempt %d)"
+                          % (stem, attempt), flush=True)
+                    for old in out.glob("%s-*.bin" % stem):
+                        old.unlink()
+                    gdb.resume()
+                    time.sleep(args.dump_gap)
+                    gdb.pause()
                 candidate_sets = []
                 for k in range(args.camera_shots):
                     if k:
@@ -1663,6 +1713,19 @@ def main(argv=None):
                        help="read the RSX pushbuffer this many times per pose "
                             "(~20 s each) and pick the camera across them")
     place.add_argument("--camera-gap", type=float, default=1.0)
+    place.add_argument("--dump-attempts", type=int, default=1)
+    place.add_argument("--dump-gap", type=float, default=0.7)
+    place.add_argument("--hook", default=None, metavar="PY",
+                       help="a module with regions(out, stem, round) -> "
+                            "[(addr, size)], called after the --dump files "
+                            "are written while the target is still paused; "
+                            "its spans are dumped, and it is called again "
+                            "until it returns nothing")
+    place.add_argument("--dump", action="append", default=[],
+                       metavar="CHAIN:LEN",
+                       help="write guest memory (same chain syntax as "
+                            "capture --region) beside each shot as "
+                            "NN-<addr>.bin, read while the target is paused")
     place.add_argument("--speed", type=float, default=0.0,
                        help="velocity along the new forward")
     place.add_argument("--settle", type=float, default=8.0,

@@ -253,8 +253,13 @@ do with a circuit.
   **Still open**: whether `fogColour.w` is `Fog.Fog Density` unscaled - the
   race passes it through unscaled and says so - and what selects the
   `Alternate` pair.
-- **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit, with
-  nothing read about what selects them.
+- **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit. **Measured
+  2026-10-07 (`vineta-k-fidelity`)**: the pair is patched into the fragment programs of one
+  contiguous group of draws in a frame (Vineta K's scenery beyond the tunnel glass, 36 of 273
+  draws at the tunnel pose, a few runs on the start straight), the rest using the primary pair
+  - `Alternate Fog Color` `0 0.031373 0.031373` and `Density` `0.0045` exactly. What selects the
+  group is **open**: not position, not material family, not the PVS; see
+  [rcsmaterial.md](rcsmaterial.md#vineta-k-against-a-draw-capture-the-start-lines-light-bars-the-seas-real-inputs-and-the-alternate-fog-2026-10-07-vineta-k-fidelity).
 
 ## Wipeout 2048 authors the same shape under different key names
 

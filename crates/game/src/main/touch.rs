@@ -39,7 +39,7 @@ impl Default for Overlay {
         Self {
             touches: Touches::default(),
             screens: Vec::new(),
-            enabled: cfg!(target_os = "android") || std::env::var_os("OAG_TOUCH_CONTROLS").is_some(),
+            enabled: oag_game::touch_controls::available(),
             shown: true,
         }
     }
@@ -176,20 +176,15 @@ impl Session {
                 scale,
                 self.paused,
                 Self::touch_setup(&self.settings),
-                f32::from(self.settings.controls.touch_opacity) / 100.0,
+                self.settings.controls.touch_alpha(),
             )
         } else {
             Vec::new()
         }
     }
 
-    /// The scheme and zone setting `[controls]` names; an unrecognised scheme
-    /// token is standard.
     fn touch_setup(settings: &crate::settings::Settings) -> oag_input::touch::Setup {
-        oag_input::touch::Setup::new(
-            oag_input::touch::Scheme::parse(&settings.controls.touch_scheme).unwrap_or_default(),
-            settings.controls.touch_go_zones,
-        )
+        settings.controls.touch_setup()
     }
 
     /// Whether the race is on the glass: not through the flyby, which draws

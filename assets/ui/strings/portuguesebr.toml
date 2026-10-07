@@ -98,6 +98,7 @@ OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILIDADE DOS GATILHOS", human 
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "ZONAS DE FREIO DO GO", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "ESQUEMA DE TOQUE", human = false }
 OAG_CONTROLS_TOUCH_OPACITY = { text = "OPACIDADE DOS CONTROLES", human = false }
+OAG_CONTROLS_TOUCH_PAGE = { text = "CONTROLES DE TOQUE", human = false }
 OAG_PILOT_PAGE_TITLE = { text = "PILOTOS DA IA", human = false }
 OAG_PILOT_PILOT = { text = "PILOTO", human = false }
 OAG_PILOT_AXIS = { text = "EIXO", human = false }

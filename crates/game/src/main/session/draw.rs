@@ -794,6 +794,18 @@ impl Session {
             (surface.0 as f32, surface.1 as f32),
             overlay_space.size.1 / surface.1.max(1) as f32,
         ));
+        // The TOUCH CONTROLS page's picture of the overlay, over its rows.
+        if let Stage::Menu(stage) = &self.stage
+            && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)
+        {
+            list.extend(oag_game::touch_controls::preview::for_page(
+                &stage.menu.page().id,
+                &art,
+                overlay_space,
+                &self.settings.controls,
+                stage.ticker_elapsed,
+            ));
+        }
         // The pointer, last of all, so it is over the overlay's own text
         // too. Only where a pointer means something - see
         // `Session::shows_cursor` - and only while there is a mouse over

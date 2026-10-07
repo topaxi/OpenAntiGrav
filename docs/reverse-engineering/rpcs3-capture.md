@@ -824,6 +824,51 @@ static reading. **2048:** the Vita3K path is a separate lane. **No `just`
 recipe**: every other `rpcs3-drive.py` subcommand is called directly, and the
 command needs a per-lane environment a recipe would hide.
 
+## Capturing one frame's draws (2026-10-07, `vineta-k-fidelity`)
+
+What the pushbuffer holds besides the camera: **every draw of the frame with the state it was issued under** - the fragment
+program, the textures on every unit, blend, depth, cull, fog registers, the vertex-constant block, the index and vertex
+ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hook PY` runs a module
+(`scripts/rpcs3_draw_hook.py`) that decides further spans from what was read, while the target is still paused;
+`--dump-attempts N` makes the hook ask for a retry when the paused frame is incomplete. `scripts/rsx_fifo.py` walks the stream,
+`scripts/ps3-fp-live.py` disassembles a program read out of RAM.
+
+    HOOK_LIGHT=1 uv run --with evdev python3 scripts/rpcs3-drive.py --image <abs>/hdfury-ps3-eu-dec.iso --log-dir <dir> place \
+        --track 'Data\Environments\01_Vineta_K\track.vex' --nav "Main Menu=right" --nav "Track Creation=right,right,right,right,right,right,right,right,right,right,right,right" \
+        --oag-game <abs>/target/release/oag-game --out <dir> --pose=-839.8,-146.6,215.0 --countdown 35 \
+        --dump 0x40000000:0x20000 --dump-attempts 12 --hook scripts/rpcs3_draw_hook.py
+
+**What measured here (confidence 90 unless stated):**
+
+- **The guest address of IO offset `X` is `0x40000000 + X`** for the command stream, index arrays and main-memory vertex
+  arrays; **VRAM is `0xC0000000 + offset`** and the stub reads it (fragment programs, textures, local vertex arrays). A texture
+  format word's low two bits are the location (1 local, 2 main); `SET_SHADER_PROGRAM`'s too. An array offset's bit 31 is the
+  location (1 main).
+- **The ring is a chain of JUMPs through 4 KiB aux contexts, and the frame is written into whichever buffer the frame
+  uses** (`0x74100..0x12d000` and `0x496100..` alternate between frames): follow the jumps and dump the targets you have not
+  got. A zero word is a NOP, not the end. 273 to 287 draws and 12,000 packets for Vineta K.
+- **A paused frame can be the wrong half of one**: 66 draws, or none, on a pause that caught the main thread mid-write. Resume
+  for 0.4-0.7 s and pause again; the hook returns `None` under 200 draws. Two of ten boots were wasted before this.
+- **A hook stage that returns nothing ends the loop** (`if not extra: break`): a stage with no spans must fall through to the
+  next one in the same call. Two boots were wasted on this.
+- **A render target reads as stale noise unless `Write Color Buffers` is on** (`config.yml`, `Video`). The sea's
+  paraboloid probe at `0xc4065380` was a dither of DXT-looking blocks until it was turned on, then a smooth image
+  (roughness 5.7 against 112). It costs nothing visible here.
+- **Naming a bound texture:** DXT and linear `A8R8G8B8` textures sit in VRAM byte for byte as in the `.gtf` (little-endian
+  texels), so five 64-byte samples (at 0, 0x400, 0x1000, 0x4000, 0x10000) plus width, height, format and mips identify one of
+  the disc's 6,347 `.gtf` in this circuit's four archives. Use only the samples the `.gtf` has bytes for; a flat first block alone
+  matched 50 files. Runtime targets (2048x2048, 1280x720 and 640x360 grabs, 32x32 glow cells) match nothing, as they should.
+- **The fog pair is in the program.** The patched constant `{0, 0.031373, 0.031373, 0.0045}` is `Fog.Alternate Fog Color` and
+  `Density`, `{0.039216, 0.086275, 0.070588, 0.00025}` the primary pair: the engine fills `fogColour` per draw group.
+- **What did not work, so as not to repeat it:** projecting every draw into a screen id-buffer. Position is `s16 x scale + bias`
+  (`c[466]`, `c[467]`) times the matrix in `c[256..259]` for the draws that use that vertex format and that matrix, and it
+  reproduced the sea sheet's outline on the frame; most draws use another format, another projection layer (`c[256]` takes
+  six distinct values) or a world matrix, so the buffer is dominated by two sky-layer draws. 32-bit indices
+  (`0x1820` bit 4 clear) and triangle strips (`BEGIN` value 6, 64 draws) also need handling.
+- **Booting: `rpcs3-drive.py stop` is `pkill -x rpcs3`**: never use it beside another member; end a run with the driver's own
+  exit or kill the PID. A private instance needs its own `XDG_*` copy of `~/.config/rpcs3`, `OAG_RPCS3_DISPLAY`,
+  `OAG_RPCS3_GDB`, `OAG_RPCS3_PAD_NAME`, `OAG_RPCS3_SCRATCH_CONFIG`, and `~/.cache/rpcs3` created (`TTY.log`'s directory).
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

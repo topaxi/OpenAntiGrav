@@ -913,3 +913,52 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
         );
     }
 }
+
+/// The three touch rows live on their own page under CONTROLS, and a machine
+/// with no touchscreen loses only the way in.
+#[test]
+fn the_touch_rows_sit_on_their_own_page_and_desktop_drops_the_way_in() {
+    let settings = |definition: &Definition, id: &str| -> Vec<String> {
+        definition
+            .pages
+            .iter()
+            .find(|page| page.id == id)
+            .unwrap_or_else(|| panic!("no page {id}"))
+            .entries
+            .iter()
+            .filter_map(|entry| entry.setting().map(str::to_string))
+            .collect()
+    };
+    let full = built_in();
+    for key in [
+        "controls.touch_scheme",
+        "controls.touch_go_zones",
+        "controls.touch_opacity",
+    ] {
+        assert!(settings(&full, "touch_controls").iter().any(|s| s == key));
+        for other in ["graphics", "controls"] {
+            assert!(
+                !settings(&full, other).iter().any(|s| s == key),
+                "{key} on {other}"
+            );
+        }
+    }
+    let way_in = |definition: &Definition| {
+        let touch = definition
+            .pages
+            .iter()
+            .position(|page| page.id == "touch_controls")
+            .expect("the page");
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| matches!(entry, Entry::Submenu { target, .. } if *target == touch))
+            .count()
+    };
+    assert_eq!(way_in(&full), 1);
+    let mut desktop = built_in();
+    desktop.drop_touch_controls();
+    assert_eq!(way_in(&desktop), 0);
+    assert!(desktop.pages.iter().any(|page| page.id == "touch_controls"));
+}
