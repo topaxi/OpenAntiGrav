@@ -29,6 +29,8 @@ just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
 just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
+just gate-affected # `just` with every check in full but only the tests a branch can reach (scripts/affected.py) - a drive member's gate
+just test-data-affected # `just test-data` narrowed the same way; the per-test ceiling holds, the suite ceiling is the full run's
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
 just check-deps   # asserts the three dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
@@ -85,6 +87,19 @@ independently read a contended run as a regression on the same afternoon. The tw
 grid tests that trip it measure 76-79 s in isolation, against the 95-114 s recorded when
 the ceiling was set - they got faster, and the full-run number is telling you about the
 machine.
+
+**Affected-only gating (2026-10-07).** `just gate-affected` and `just test-data-affected`
+run every check in full and only the tests of the packages a branch changed since its
+merge base with `main`, plus everything that depends on them - `scripts/affected.py`
+prints the selection and the reason for each file. A change to `oag-core`, a simulation
+crate, `Cargo.toml`/`Cargo.lock`, the toolchain, the `justfile`, `.config/` or a `build.rs`
+selects the full suite by itself; a docs-only change selects no tests. `/oag-drive`
+members gate with these, and the lead runs the full `just` and `test-data` once per merge
+batch - the only place the whole disc-backed suite runs, since CI has no images (see
+`.claude/skills/oag-drive/SKILL.md`, "Who runs which gate"). The selection is per
+package, and every `oag-game` test binary links the whole of `oag-game`, so a lane in
+`oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time: the savings
+land on lanes in the format, texture, UI and title crates.
 
 **The full `just` gate is not required for a change that touches only `docs/`, `handover/`,
 `HANDOVER.md`, `.claude/`, or doc comments inside a `.rs` file (no code logic changed).**

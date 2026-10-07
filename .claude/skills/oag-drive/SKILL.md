@@ -69,13 +69,12 @@ the work in isolated worktrees.
 - **Run the right gate**, and run it *separately* from the merge - chaining a
   sub-second merge to a multi-minute gate makes the merge look hung and has
   caused the user to abort a healthy run:
-  - any `.rs` logic changed -> full `just`, plus
-    `OAG_REQUIRE_GAME_DATA=1 just test-data` when behaviour could move
+  - any `.rs` logic changed -> the full `just` plus
+    `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch** rather
+    than once per merge, and at once after any merge whose `scripts/affected.py`
+    selection is `FULL` (see "Who runs which gate")
   - docs/handover only -> `just check-docs`, `check-names` if `names.tsv` moved,
     `check-handover`, `check-captures` if captures moved
-- **But do not re-run a gate the member already ran on identical content.**
-  See "Who runs which gate" below - this is the single largest source of wasted
-  CPU on this skill.
 - **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`.
   Only after the work is merged.
 - **Never reap a worktree whose agent may still resume.** A `completed`
@@ -88,26 +87,43 @@ the work in isolated worktrees.
 
 ## Who runs which gate
 
-**The gate is the most expensive thing this skill does, and it was running
-twice for every merge.** One session produced two merges and *four* full
-`test-data` runs - each member gated its own tree, then the lead re-gated the
-merge on content that had not changed. `test-data` is minutes of 16-core work
-each time.
+**The gate is the most expensive thing this skill does.** Until 2026-10-07
+every member ran the full `just` and the full `test-data` (7,270 tests,
+350-560 s under load) through one shared lock, so the lock waits stacked and the
+lead re-ran both after merges. The split now is:
 
-The split is asymmetric, and both halves matter:
+- **A member runs the affected gate on its own tree**, before reporting:
 
-- **The member always runs the full gate on its own tree**, before reporting.
-  Do not move this to the lead. A member that does not gate reports untested
-  work, and the breakage then surfaces *after* it is in `main` - which is
-  strictly worse than finding it in a worktree that can be fixed without
-  touching the mainline.
-- **The lead re-gates after merge only when the merge actually combined
-  behaviour.** Check `git log --oneline <branch-point>..main` first. If `main`
-  has not moved since the member branched, the merge is content-identical to
-  the tree the member already gated green and re-running proves nothing - say
-  so in the report instead of burning the cycles. If `main` *has* moved and the
-  two changes touch crates that interact, re-gate: that combination has been
-  tested nowhere.
+  ```sh
+  flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
+  flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected
+  ```
+
+  `scripts/affected.py` selects the packages the branch changed since its merge
+  base with `main`, plus every package that depends on them, and prints what it
+  chose and why. Every `check-*` script, `fmt-check` and `lint` still run in
+  full. A change to `oag-core`, a simulation crate (`oag-physics`,
+  `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`), `Cargo.toml`,
+  `Cargo.lock`, the toolchain, the `justfile`, `.config/` or any `build.rs`
+  selects **the full suite by itself**, so such a member is running the full gate
+  without being told to. A docs-only change selects no tests. The member still
+  gates: a member that does not reports untested work.
+- **The lead runs the full gate once per merge batch** - after merging the
+  members that finished together, on the merged `main`, in the `lead-gate`
+  worktree (below): `flock -o ... just` and
+  `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. This is now the only
+  place the whole suite runs with the disc images, so it is not skippable on
+  the grounds that each member was green: each member was green **on its
+  selection**. The same goes at once, without waiting for a batch, after
+  merging a branch whose affected selection was `FULL`.
+- **A red batch gate is bisected by branch**, not by commit: re-gate `main` at
+  the merge before the newest member's, and the failure names its lane. Send it
+  back to that member (or a fresh one) as a fix lane.
+- **CI** (`.github/workflows/ci.yml`) runs `fmt`, `clippy` and the whole
+  non-disc `cargo nextest run --workspace` on every push to `main` and every
+  pull request; `nightly.yml` builds and publishes binaries and runs no tests.
+  **No CI job can run `test-data`**: the images are not in the repository and
+  never will be. The lead's batch gate is the only full `test-data` there is.
 
 **Never merge into the main checkout while the lead's own gate is running
 on it.** The gate compiles the working tree as it finds it, so a merge
@@ -125,10 +141,13 @@ never on the critical path - members are the ones blocked on their own results.
 
 Four members each running `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`
 put a 16-core machine at load average 40 with six concurrent `nextest`
-processes. Wrap every gate invocation in a shared lock:
+processes. Wrap every gate invocation in a shared lock, the affected gate a
+member runs and the full gate the lead runs alike:
 
 ```sh
-flock -o "$HOME/.cache/oag/gate.lock" just
+flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
+flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected
+flock -o "$HOME/.cache/oag/gate.lock" just                     # lead, per batch
 flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
 ```
 
