@@ -15,6 +15,8 @@
 //! `ds_pit`/`ds_wall`, the azure panels of the original's start line). The
 //! scene bound none of it, so those panels drew dark.
 
+mod archive_cache;
+
 use oag_mesh::mesh::{self, slots};
 
 const IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -27,11 +29,11 @@ fn build(path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let image = oag_testdata::image(IMAGE)?;
     let (spec, data) = (0..4).find_map(|n| {
         let spec = archive(&image, n);
-        mesh::read_blob(&spec, path).ok().map(|d| (spec, d))
+        archive_cache::read(&spec, path).map(|d| (spec, d))
     })?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        (0..4).find_map(|n| mesh::read_blob(&archive(&image, n), name).ok())
+        (0..4).find_map(|n| archive_cache::read(&archive(&image, n), name))
     })
     .ok()
 }

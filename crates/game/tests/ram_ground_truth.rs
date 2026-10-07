@@ -39,6 +39,8 @@
 //! counts: the field shoves about a fifth as often as it did, and the sample
 //! behind the bound below is correspondingly thinner.
 
+mod in_parallel;
+
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::PlayerInputs;
@@ -82,6 +84,10 @@ const WATCH: usize = 60;
 /// room a shift actually had, so a mismatch shows up as a failure and not as a
 /// test that stopped asking.
 const CLEARANCE: f32 = 12.0;
+
+/// How many of the [`RACES`] run at once: two rounds of twenty, so the sweep
+/// costs two races' wall clock on an idle machine rather than forty.
+const PARALLEL_RACES: usize = 20;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-eu.chd")
@@ -206,10 +212,15 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
 
 fn watch_the_field() -> Option<Vec<Shift>> {
     let image = image()?;
-    let mut all = Vec::new();
-    for seed in 0..RACES {
-        all.extend(watch_one_race(&image, seed));
-    }
+    // The forty races share nothing, so they race side by side and come back
+    // in seed order: every shift, and so the ratio below, is the serial
+    // loop's. See `in_parallel`'s module docs.
+    let seeds: Vec<u64> = (0..RACES).collect();
+    let all: Vec<Shift> =
+        in_parallel::map(&seeds, PARALLEL_RACES, |&seed| watch_one_race(&image, seed))
+            .into_iter()
+            .flatten()
+            .collect();
     println!("{} shifts over {RACES} races", all.len());
     Some(all)
 }
@@ -251,6 +262,11 @@ fn watch_the_field() -> Option<Vec<Shift>> {
 /// exactly the small-denominator flake that was just removed. The clearance
 /// reading alone would slice cleanly - it is a `min` - but there is nothing to
 /// gain by slicing half of a sweep the other half still needs whole.
+///
+/// **What is done instead is racing the forty side by side inside this one
+/// test** (2026-10-07, [`PARALLEL_RACES`]): the sample stays whole and every
+/// race is the one the serial loop ran, and the test stops being one core's
+/// worth of `just test-data`'s tail.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_ram_fires_only_where_there_is_room_and_rarely_throws_the_rammer_out() {

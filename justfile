@@ -143,6 +143,49 @@ test-data:
     [ "$tests" -ne 0 ] && exit "$tests"
     exit "$budget"
 
+# A member lane's gate: every check in `check` in full, but only the tests of
+# the packages this branch changed and everything that depends on them.
+# `scripts/affected.py` says what it selected and why; a change to `oag-core`,
+# a simulation crate or a build input (`Cargo.lock`, the toolchain, this file,
+# `.config/`, a `build.rs`) selects the whole workspace, and a docs-only change
+# selects nothing. The lead still runs the full `just` and `just test-data` once
+# per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
+[parallel]
+gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+
+# `just test`, narrowed to what `scripts/affected.py` selects.
+test-affected:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    selection=$(python3 scripts/affected.py)
+    case "$selection" in
+        none) echo "test-affected: no package selected, nothing to run" ;;
+        full) cargo nextest run --workspace ;;
+        *) cargo nextest run $selection ;;
+    esac
+
+# `just test-data`, narrowed the same way. A full selection is `just test-data`
+# itself, suite ceiling included. A partial one runs only the `#[ignore]`d tests
+# (`gate-affected` already ran the rest) into `target/test-data-affected.log`,
+# and the budget check holds every test to its own ceiling but not the suite's
+# total, which only means something for a whole run.
+test-data-affected:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    selection=$(python3 scripts/affected.py) || exit $?
+    case "$selection" in
+        none) echo "test-data-affected: no package selected, nothing to run"; exit 0 ;;
+        full) exec just test-data ;;
+    esac
+    mkdir -p target
+    cargo nextest run $selection --run-ignored only --no-fail-fast 2>&1 \
+        | tee target/test-data-affected.log
+    tests=${PIPESTATUS[0]}
+    budget=0
+    python3 scripts/check-test-budget.py --partial target/test-data-affected.log || budget=$?
+    [ "$tests" -ne 0 ] && exit "$tests"
+    exit "$budget"
+
 # The ratchet on how long `just test-data` takes, per test and in total.
 #
 # Not in the default `just` gate: that runs `test`, which skips every

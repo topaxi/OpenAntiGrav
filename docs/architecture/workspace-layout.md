@@ -579,6 +579,76 @@ matrices, not the disc readers. The load-time lane that took this run
 ([Load time](load-time.md)) added one disc-backed test per change; none is in
 the slowest twenty.
 
+### Reopened archives, serial sweeps and an affected gate (2026-10-07, later)
+
+With four members gating beside each other, the lead's full `test-data` run
+(7,180 tests) measured **465 s**, over the 450 s suite ceiling. Its nextest
+durations summed to **10,521 s**, which over 24 hardware threads is 438 s and
+looks like a saturated machine. **It is not evidence of one.** A duration is
+wall time under contention: two tests measured 8.6 s and 6.3 s alone and 26 s
+and 29 s in that run. The CPU that run used was not recorded. The run after
+the changes below used 85 min of user CPU over 328 s, about 0.7 of the machine.
+Both kinds of fix paid off. Removing work (the HD reopen) shrank the sum, and
+shortening the tail (the parallel sweeps) took the 178 s `ai_roll` tests out of
+every `oag-game` selection. Three changes, none to an assertion:
+
+- **The HD render ground truths reopened the disc per texture.** Their texture
+  closure was `mesh::read_blob(spec, name)`, which opens the image and parses
+  the PSARC table of contents on every call: one circuit in
+  `hd_water_ground_truth` opened `hdfury-ps3-eu-dec.iso` **153,293 times**
+  (`strace -e openat`, 76 s user and 63 s system time). The race never does
+  this; its loader reads through `oag_assets::Archives`. A test-side cache,
+  `crates/render/tests/archive_cache/`, keeps each `Container` and each entry
+  read for the life of the test. The 20 HD render binaries went from **2,389 s
+  of test time to 126 s** (`hd_water` alone 932 s to 15 s).
+- **`ai_roll`'s six full-grid tests and `ram` raced their races in series.**
+  Each grid test is 24 independent 18,000-tick races and `ram` is 40, and
+  neither can be split further without changing what it asserts (a two-tier
+  total, a ratio). `crates/game/tests/in_parallel/` races them on scoped
+  threads and returns results in input order; the printed tables were diffed
+  identical to the serial loop's. Isolated, at load 7-10: a grid test **68 s to
+  7 s**, `ram` **89 s to 9 s**. This is the tail of every `oag-game` selection.
+- **Members stopped running the whole suite.** `just gate-affected` and
+  `just test-data-affected` (`scripts/affected.py`) test the packages a branch
+  changed plus their reverse dependencies, and run every check in full. The
+  selection is exactly nextest's `rdeps()` (2,904 tests for an `oag-mesh`
+  change either way). `oag-core`, the simulation crates and the build inputs
+  select the full suite. The lead runs the full gate once per merge batch.
+
+| run | tests | suite | slowest | test-time sum | load |
+| --- | --- | --- | --- | --- | --- |
+| lead's full `test-data`, before | 7,180 | 465 s | 221 s (`ram`) | 10,521 s | members gating |
+| full `test-data`, after | 7,271 | 326 s | 133 s (`ai_fork_split`) | 7,167 s | 20-38 |
+| `test-data-affected`, `oag-mesh` change, before the `ai_roll`/`ram` change | 1,187 | 271 s | 178 s (`ai_roll`) | 5,365 s | 40-70 |
+| `test-data-affected`, `oag-mesh` change, after it | 1,187 | 213 s | 125 s (`ai_fork_split`) | | 25-36 |
+| `gate-affected`, same change (clippy + build + 1,717 tests) | 1,717 | 3 s run, 57-109 s total | | | 11-36 |
+| member gate for that change, before: full `just` + full `test-data` | 12,783 | about 65 s + 465 s | | | |
+| member gate for that change, after: both affected recipes | 2,904 | 57 s + 214 s | | | 25-36 |
+| docs-only change, either recipe | 0 | 0 s | | | |
+
+Every number here is under load and is an upper bound; the isolated figures
+above are the ones to compare. `.config/nextest.toml` sets no thread count,
+retries or slow-timeout, so all three are nextest's defaults. A release-profile
+test build was not tried, because every crate on these tests' hot path has
+been at `opt-level = 2` in the dev profile since 2026-10-01.
+
+**Why the affected gate helps a render lane less than its test count says.**
+Selection is per package, and every `oag-game` test binary links all of
+`oag-game`, so a change in `oag-mesh`, `oag-render` or `oag-fx` selects
+`oag-game`, which with `oag-render` was 78% of `test-data`'s test time. The
+saving is largest for lanes in the format, texture, UI and title crates. For
+render lanes it is the HD reopen fix and the parallel sweeps that matter.
+
+**What is left, and whose it is.** The tail is now real decode and simulation
+work: ATRAC9 (`omega_wem`, 118-128 s under load), BC7 (`omega_gnf_pixels`,
+85-97 s, 87% of its CPU in `oag_texture::bcn::bc7`), and the 2048 race sweeps
+(`ai_fork_split`, `magstrip_wire_2048`, `zone_airbrake_flaps`, `fire_law_inherit`).
+In every simulation test the brute-force `TriangleSoup::raycast_all` and
+`raycast` are still the largest cost (53% of an `ai_roll` grid race); a spatial
+index that returns hits in the same order is a physics lane, recommended
+again, not done. `in_parallel::map` applies to any of those sweeps whose races
+are independent.
+
 ## Dependency graph clean-up (2026-10-05)
 
 `cargo shear` found 29 unused or misplaced dependencies; they were removed and

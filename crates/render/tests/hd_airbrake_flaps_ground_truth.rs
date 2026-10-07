@@ -21,6 +21,8 @@
 //! a positive deflection about the hinge's local X raises the flap and flares
 //! it outward, on both sides of every team, in world space.
 
+mod archive_cache;
+
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh;
 use oag_vex::vex;
@@ -45,13 +47,13 @@ const TEAMS: [&str; 13] = [
 
 /// The hull, and the world matrix of its `Airbrake_L` and `Airbrake_R` hinges.
 fn build(spec: &str, path: &str) -> Option<(mesh::Model, [Mat4; 2])> {
-    let data = mesh::read_blob(spec, path).ok()?;
+    let data = archive_cache::read(spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(spec, path, &data)?;
     let (model, _) = mesh::rcs::build(
         path,
         &data,
         &geometry,
-        &mut |name| mesh::read_blob(spec, name).ok(),
+        &mut |name| archive_cache::read(spec, name),
         |c| c.mesh,
     )
     .ok()?;

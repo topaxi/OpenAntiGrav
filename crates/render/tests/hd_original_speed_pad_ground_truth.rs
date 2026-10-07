@@ -12,6 +12,8 @@
 //! `#[ignore]`d: needs the PS3 disc image.
 //! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all -E 'binary(hd_original_speed_pad_ground_truth)'`
 
+mod archive_cache;
+
 use std::path::Path;
 
 use oag_mesh::mesh::{self, slots};
@@ -44,9 +46,9 @@ fn scene(archive: &str, track: &str) -> Option<mesh::Model> {
     }
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", path.display());
     let name = format!("/data/environments/{track}/track.vex");
-    let data = mesh::read_blob(&spec, &name).expect("reading the track");
+    let data = archive_cache::read(&spec, &name).expect("reading the track");
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data).expect("a .rcsmodel beside it");
-    let mut read = |p: &str| mesh::read_blob(&spec, p).ok();
+    let mut read = |p: &str| archive_cache::read(&spec, p);
     Some(
         mesh::rcs::build_scene(&name, &data, &geometry, &mut read)
             .expect("the scene builds")

@@ -42,6 +42,8 @@
 //!    first (`aux_traced`) attempt regressed; all three still carry
 //!    `ADD_SECOND` on Talon's Junction after this fix.
 
+mod archive_cache;
+
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh;
@@ -55,13 +57,13 @@ fn image() -> Option<PathBuf> {
 
 fn build_ship(image: &Path, archive: &str, path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     mesh::rcs::build(
         path,
         &data,
         &geometry,
-        &mut |name| mesh::read_blob(&spec, name).ok(),
+        &mut |name| archive_cache::read(&spec, name),
         |c| c.mesh,
     )
     .ok()
@@ -73,11 +75,11 @@ fn build_circuit(
     path: &str,
 ) -> Option<(mesh::Model, oag_rcs::rcsmodel::Model, mesh::rcs::Report)> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     let geometry_model = oag_rcs::rcsmodel::Model::parse(&geometry).ok()?;
     let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .ok()?;
     Some((model, geometry_model, report))
@@ -118,7 +120,7 @@ fn a_ship_hulls_own_normal_map_no_longer_glows_but_an_unsettled_role_still_does(
     };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA06.PSARC", image.display());
     let path = "/data/ships/feisar_c1/ship.vex";
-    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
     let geometry_model = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
 

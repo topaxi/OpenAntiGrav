@@ -36,6 +36,8 @@
 //! authors and what the shader table should hold - it does not, and was
 //! never meant to, assert that all four are visible.
 
+mod archive_cache;
+
 use std::path::PathBuf;
 
 use oag_mesh::mesh::{self, AnimTrack};
@@ -59,7 +61,7 @@ fn image() -> Option<PathBuf> {
 fn the_digit_boards_curves_reach_the_shaders_table_and_replay() {
     let Some(image) = image() else { return };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
-    let data = mesh::read_blob(&spec, GANTRY_VEX).expect("the .vex reads");
+    let data = archive_cache::read(&spec, GANTRY_VEX).expect("the .vex reads");
     let geometry =
         mesh::rcs::sibling_geometry(&spec, GANTRY_VEX, &data).expect("the .rcsmodel is there");
 
@@ -67,7 +69,7 @@ fn the_digit_boards_curves_reach_the_shaders_table_and_replay() {
         GANTRY_VEX,
         &data,
         &geometry,
-        &mut |name| mesh::read_blob(&spec, name).ok(),
+        &mut |name| archive_cache::read(&spec, name),
         |c| c.mesh,
     )
     .expect("the gantry model builds");

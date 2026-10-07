@@ -33,6 +33,8 @@
 //! hulls), and that every drawn `track_wall.rcsmaterial` slot's own bound
 //! albedo texture is *not* the `EmissiveTexture` entry.
 
+mod archive_cache;
+
 use std::path::PathBuf;
 
 use oag_mesh::mesh;
@@ -51,7 +53,7 @@ fn image() -> Option<PathBuf> {
 fn every_track_wall_slot_binds_its_own_diffuse_not_its_glow_decal() {
     let Some(image) = image() else { return };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
-    let Ok(data) = mesh::read_blob(&spec, TRACK) else {
+    let Some(data) = archive_cache::read(&spec, TRACK) else {
         return;
     };
     let Some((model, report)) =
