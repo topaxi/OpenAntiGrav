@@ -19,6 +19,7 @@ pkgbase = openantigrav-git
 	optdepends = ffmpeg: converts each game intro movie on first boot (without it the intro is a black screen)
 	provides = openantigrav
 	conflicts = openantigrav
+	options = !lto
 	source = git+https://github.com/topaxi/OpenAntiGrav.git
 	sha256sums = SKIP
 

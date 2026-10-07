@@ -516,7 +516,7 @@ reproducibility, but a package builds with the packaged toolchain and Arch's
 `rust` is newer than the 1.97.1 MSRV (`Cargo.toml` `rust-version`). `rustup`
 conflicts with `rust` in a chroot, so `makedepends` names `cargo`;
 `RUSTUP_TOOLCHAIN=stable` keeps a build on a machine that has rustup working.
-`clang` is for `libspa-sys`' bindgen. No `options=(!lto)`: the build was run without it and needed none. `libpipewire` is a hard dependency (see [what is bundled](#what-is-bundled)); the
+`clang` is for `libspa-sys`' bindgen. `options=(!lto)` is required: with makepkg's default `-flto` the link fails with `undefined symbol: spa_format_parse_libspa_rs`, because `libspa-sys`'s C shim becomes LTO bitcode that `rust-lld` cannot link (observed 2026-10-07). `libpipewire` is a hard dependency (see [what is bundled](#what-is-bundled)); the
 Vulkan driver is optional, since lavapipe gives a CPU adapter.
 
 **Verified 2026-10-07** (local, nothing published): `openantigrav-git` built with
