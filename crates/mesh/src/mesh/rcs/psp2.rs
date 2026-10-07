@@ -37,7 +37,7 @@ use oag_rcs::rcsmodel::psp2;
 use oag_texture::gxt;
 
 use super::Textures;
-use crate::mesh::{Bounds, DrawCall, Flap, GpuVertex, Model, ModelTexture};
+use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
 
 mod glow;
 pub mod placement;
@@ -346,16 +346,26 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 /// **Offered to the texture sink** ([`crate::mesh_render::TextureSinkScope`]),
 /// so a load that has a device uploads each texture as it is decoded.
 fn decode_material_texture(path: &str, blob: &[u8], report: &mut Report) -> Option<ModelTexture> {
-    let decoded = if path.to_ascii_lowercase().ends_with(".gnf") {
-        ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| {
-            report.gnf.record(form);
-            texture
-        })
-    } else {
-        decode_gxt_texture(path, blob)
-    };
-    decoded.map(crate::mesh_render::offer_to_texture_sink)
+    let (texture, form) = decode_texture_form(path, blob)?;
+    if let Some(form) = form {
+        report.gnf.record(form);
+    }
+    Some(crate::mesh_render::offer_to_texture_sink(texture))
 }
+
+/// [`decode_material_texture`]'s decode alone: the texture, and the form a
+/// `.gnf` took for the report's counts.
+fn decode_texture_form(path: &str, blob: &[u8]) -> Option<(ModelTexture, Option<GnfForm>)> {
+    if path.to_ascii_lowercase().ends_with(".gnf") {
+        ModelTexture::from_gnf_form(path, blob).map(|(texture, form)| (texture, Some(form)))
+    } else {
+        decode_gxt_texture(path, blob).map(|texture| (texture, None))
+    }
+}
+
+/// A diffuse decoded once per path, and the form to count again on each
+/// material that shares it, so the report reads as it did per material.
+type Decoded = Option<(std::sync::Arc<ModelTexture>, Option<GnfForm>)>;
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
 ///
@@ -687,6 +697,10 @@ fn bind_textures(
     // 2,048-square atlas is 16 MiB decoded, so decode each path once.
     let mut atlases: std::collections::HashMap<&str, Option<std::sync::Arc<ModelTexture>>> =
         std::collections::HashMap::new();
+    // Materials share a `.gxt` between them as well: Altima's 527 read 239
+    // distinct textures 621 times. Each slot still gets its own entry, so a
+    // lightmap stays positionally beside its diffuse.
+    let mut diffuses: std::collections::HashMap<&str, Decoded> = std::collections::HashMap::new();
     for (draw, submesh) in model.draws.iter_mut().zip(&decoded.submeshes) {
         let Some(index) = submesh.material else {
             continue;
@@ -700,10 +714,20 @@ fn bind_textures(
                 Some(layer) => layer.diffuse.as_str(),
                 None => decoded.materials[index].diffuse_texture()?,
             };
-            let blob = textures(path)?;
-            let texture = decode_material_texture(path, &blob, report)?;
+            let (texture, form) = diffuses
+                .entry(path)
+                .or_insert_with(|| {
+                    let blob = textures(path)?;
+                    let (texture, form) = decode_texture_form(path, &blob)?;
+                    let texture = crate::mesh_render::offer_to_texture_sink(texture);
+                    Some((std::sync::Arc::new(texture), form))
+                })
+                .clone()?;
+            if let Some(form) = form {
+                report.gnf.record(form);
+            }
             let at = model.textures.len();
-            model.textures.push(Some(std::sync::Arc::new(texture)));
+            model.textures.push(Some(texture));
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
