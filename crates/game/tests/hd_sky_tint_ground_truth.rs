@@ -9,13 +9,16 @@
 //!     --run-ignored all -E 'binary(hd_sky_tint_ground_truth)'
 //! ```
 //!
-//! The original's sky draw passes `Lighting.Sky colour` as the cube's vertex
-//! colour (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "HD's sky is
-//! tinted by Sky colour"). Sol 2 authors 255 and Talon's Junction 128, and the
-//! matched captures put Sol 2's sky at twice ours with zero offset while
-//! Talon's already matched, so 128 is the neutral byte
-//! ([`oag_mesh::mesh::sky_cube::SKY_COLOUR_NEUTRAL`]). Dropping the tint from
-//! the loader leaves both circuits at 1.0 and fails the Sol 2 assertion.
+//! The original's sky draw carries `Lighting.Sky colour` as the cube's vertex
+//! colour, byte for byte: read live off RPCS3 draw captures as
+//! `(255, 255, 255, 0)` on Sol 2 and Sebenco Climb, `(128, 128, 128, 0)` on
+//! Talon's Junction and `(140, 140, 140, 0)` on The Amphiseum, with a fragment
+//! program that is `tex * COL0` and nothing else (`renderer.md`, "The sky law,
+//! read off live draws"). So the tint is `byte / 255`
+//! ([`oag_mesh::mesh::sky_cube::SKY_COLOUR_FULL`]): 255 leaves the texture
+//! alone and 128 halves it in linear light. The `byte / 128` fit this replaced
+//! doubled Sol 2's sky and Sebenco's; dropping the tint from the loader leaves
+//! every circuit at 1.0 and fails the Talon's and Amphiseum assertions.
 
 use oag_raceplay as race;
 
@@ -40,21 +43,18 @@ fn sky_tint(track: &str, mode: oag_race::Mode) -> Option<[f32; 3]> {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn sol_2_doubles_its_sky_and_talons_junction_leaves_it() {
-    let (Some(sol), Some(talons)) = (
-        sky_tint(
-            r"Data\Environments\12_sol_2\track.vex",
-            oag_race::Mode::SingleRace,
-        ),
-        sky_tint(
-            r"Data\Environments\talons_junction\track.vex",
-            oag_race::Mode::SingleRace,
-        ),
-    ) else {
-        return;
-    };
-    assert_eq!(sol, [255.0 / 128.0; 3], "Sol 2 authors Sky colour 255");
-    assert_eq!(talons, [1.0; 3], "Talon's Junction authors Sky colour 128");
+fn the_sky_tint_is_the_authored_byte_over_255() {
+    for (track, byte) in [
+        (r"Data\Environments\12_sol_2\track.vex", 255.0),
+        (r"Data\Environments\10_sebenco_climb\track.vex", 255.0),
+        (r"Data\Environments\talons_junction\track.vex", 128.0),
+        (r"Data\Environments\amphiseum\track.vex", 140.0),
+    ] {
+        let Some(tint) = sky_tint(track, oag_race::Mode::SingleRace) else {
+            return;
+        };
+        assert_eq!(tint, [byte / 255.0; 3], "{track} authors Sky colour {byte}");
+    }
 }
 
 /// The Zone branch of the original's sky draw does not take the circuit's

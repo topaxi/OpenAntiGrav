@@ -7375,8 +7375,10 @@ matching fragment programs are `TEX R0; MUL H0, COL0, R0` with instruction
 scale 0 (checked: the scale field of every such program is 0). **What is not
 read: where the factor of two comes from.** A byte of 255 as a normalised
 vertex colour is 1.0, and the matched frame wants 2.0; Talon's (128) wants 1.0.
-So the port uses `tint = byte / 128` - **chosen as a fit through two circuit
-values, not measured as a law** (no confidence score on the 128). The low byte
+So the port used `tint = byte / 128` - **chosen as a fit through two circuit
+values, not measured as a law** (no confidence score on the 128). **Superseded
+2026-10-08: the law is `byte / 255` and the factor of two was the race-start
+exposure, see "The sky law, read off live draws" below.** The low byte
 (0 to 122 on the Fury circuits, 16 on Vineta K) is a separate slot whose
 consumer is unread and is not used.
 
@@ -7417,3 +7419,51 @@ that is not read directly.
 **Sebenco, re-read.** The earlier "75 % clipped vs 100 %" number is not clean: `data/scratch/hd-sebenco/runs/fw_1_on.png` against `ref2/01.png` differ in camera height and ship placement (the cube mask is a corner patch behind buildings), and the mask comes from our render, so reference pixels under it can be non-sky. At untinted 0.79 a 1.6x and a 2.0x tint both clip, so the frame cannot tell them apart. Not a measurement against the law; a matched frame on a darker 255 sky is still needed. Nothing was fitted per circuit.
 
 **Other titles.** 2048 and Omega: **checked, differs in key** (`Sky brightness`, no `Sky colour`); the draw path above is HD's `Scene_PrepareFrame`, so it says nothing about the 2048 dome: **not checkable** without a 2048 capture.
+
+### The sky law, read off live draws: `byte / 255` in linear light, the factor of two was not the sky's (2026-10-08, `hd-sky-law`)
+
+**Question.** The port tinted the sky `byte / 128`, a fit through two circuits (Sol 2 wants x2, Talon's x1) with the divisor unread; Sebenco Climb (also 255) read about x1.2 against it. Which constants make the sky, and how?
+
+**Method.** `scripts/rpcs3-drive.py place --dump/--hook` (a copy of `scripts/rpcs3_draw_hook.py` with a stage that also dumps the vertex ranges of the sky draws; scratch `hd-sky-law/hook_sky.py`) on four circuits at a stationary craft: Sebenco Climb, Sol 2, Talon's Junction, The Amphiseum. Each capture holds the whole frame's draws with their state, the six sky face textures read out of VRAM (`--dump 0xC...`), and the resolved scene target (`--dump 0x40cc0000:0x384000`, a 1280x720 `A8R8G8B8` linear surface in main memory, the picture before the HUD and the screenshot's own scaling). Reading the sky draws' state beats fitting pixels: the sky's pixel is then *predicted* from the live face texels and the live sky matrix and compared with the live scene target.
+
+**The draw, live (confidence 95).**
+
+| Item | Read | Where |
+| --- | --- | --- |
+| Draws | six per frame, triangle strip, 7 indices each, one face texture each; issued twice per frame: into a 640x360 `R5G6B5` target (draws 91-96 on Sebenco, nothing samples it on that circuit) and into the 1280x720 main target after the opaque geometry (draws 483-488 on Sebenco, depth test and write both on) | draw lists, `data/scratch/hd-sky-law/seb*/` |
+| Vertex program | `MOV o[COL0], v[3]`; `POS = v0 * c0..c3` with no scale | `vp_seb_91.bin` disassembled with `ps3-microcode.vp_render` |
+| Fragment program | `TEX R0, f[TC0] unit0; MUL H0, R0, f[COL0] END` - no scale, no constant | `00-c0744180.bin`, `scripts/ps3-fp-live.py` |
+| Vertex colour word | `(255,255,255,0)` Sebenco Climb and Sol 2, `(128,128,128,0)` Talon's Junction, `(140,140,140,0)` The Amphiseum: **the authored `Sky colour` bytes, exactly**; the fourth byte is 0 on all four (alpha 0 in the scene) | array `v[3]` of the six draws, type `u8x4` normalised |
+| Face textures | six 2048x2048 (Sebenco, 1 mip; Sol 2, 12 mips) or 1024x1024 (Talon's, Amphiseum) `DXT1` faces in VRAM, in the `.gtf` face order `+X,-X,+Y,-Y,+Z,-Z`; the live bytes decode to the same means as `oag-texture`'s decode of the disc file (Sebenco `0.683 0.780 0.863` live against `0.682 0.779 0.862` ours) | `SET_TEXTURE_OFFSET` of the six draws |
+| Sampler | texture address word `0x60730303`, **gamma nibble 7** on all four circuits: R, G and B are sRGB-decoded on fetch (a mesh draw's diffuse unit reads `0x60710101`, the same nibble) | `0x1a08` |
+| Quad geometry | axis-aligned `+-3000` cube, uv per corner the OpenGL cubemap convention (`+Y`: `u = (x+3000)/6000, v = (z+3000)/6000`; `+X`: `u = (3000-z)/6000, v = (3000-y)/6000`); the circuit's `Sky rotation` is in the camera matrix (`c0..c2`), not in the vertices | vertex arrays |
+
+**The pixel, against the live scene target (confidence 90).** Ray of each scene pixel through the sky draw's own `c0..c2` (rows give `right*fx`, `up*fy`, `fwd` in `c[..][3]`: fov 60 degrees vertical, 16:9), cube lookup in the OpenGL face convention, bilinear-free point sample of the live face texels, compared with the scene target on sky pixels (a mask of blue-dominant pixels in the top rows; HUD is not in this target):
+
+| Circuit | Authored byte | Sky pixels | Scene sky / live texel (median) | `(byte/255)^(1/2.2)` predicted |
+| --- | ---: | ---: | ---: | ---: |
+| Sebenco Climb | 255 | 62,399 | 0.999 / 1.000 / 1.001 (R/G/B) | 1.000 |
+| Sol 2 | 255 | 63,806 | 0.996 / 0.997 / 1.000 | 1.000 |
+| Talon's Junction | 128 | 4,181 (a gap in the tunnel; the buildings line up pixel for pixel) | 0.736 (ratio of means, G) | 0.730 |
+| The Amphiseum | 140 | 183,918 (night; ratio histogram peak 0.665, per-channel slopes 0.71/0.77/0.76) | 0.765 (green/blue slope) | 0.761 |
+
+So the displayed sky is `texel * (byte / 255) ^ (1 / 2.2)`: the colour is a **linear-light multiplier** (the faces are sRGB-decoded on fetch, the target is encoded on write) and 255 is the full-strength byte. **The encode-on-write is inferred (85), not read from a register**: it is what makes 255 give exactly x1.00 after an sRGB-decoded fetch, and what the 128 and 140 circuits then follow to within 1%. This engine's HD scene is already linear and decodes its sky textures as sRGB ([ADR-0026](../../../architecture/adr/0026-hd-authored-lighting-is-linear.md)), so the port's law is simply the vertex colour `byte / 255`.
+
+**What the factor of two was (confidence 85, inferred; not measured with a scene dump at that moment).** The matched Sol 2 frames the `byte / 128` fit was drawn from were race-start frames (HUD clock `0.00.3`, 70 km/h) and show the whole picture bright - floor and walls clipped white, not only the sky. A draw whose output is `texel * (255/255)` cannot exceed the texel, so the x1.83 on those frames (0.479 texel against 0.876 displayed) is applied **after** the sky draw, to everything: it is the resolve-time exposure ([the exposure section](#the-exposure-is-read-scale-on-the-resolve-not-a-tone-curve-2026-08-19)) before the adaptation has settled, not a property of `Sky colour`. At 36 to 37 s into the same races the scene target and the screenshot agree (final over scene on sky patches `0.99 - 1.00` on Sol 2 and `0.88 - 1.00` on Sebenco), and the sky sits at the texel. Talon's and Amphiseum looked "already matched" untinted for the opposite reason: their tint is below 1 (0.50, 0.55), the gamma curve lifts it to 0.73 and 0.76, and a race-start exposure of about x1.4 on top of that read as unity. The port's sky is now the draw's own value; the start-up exposure transient belongs to the exposure model (open, below).
+
+**Port: before and after, our renders against the law (pitched-up camera so the cube fills the frame, the circuit's own `Sky rotation`; `data/scratch/hd-sky-law/ba_*.png`, left reference law, middle before, right after).** Median of our pixel over the law's prediction on the sky pixels, and mean absolute error:
+
+| Circuit | Byte | Before (`/128`) | After (`/255`) |
+| --- | ---: | --- | --- |
+| Sebenco Climb | 255 | x1.78, error 0.342 | **x1.02, error 0.015** |
+| Sol 2 | 255 | x1.64, error 0.348, 15.5 % clipped | **x1.02, error 0.041** |
+| Talon's Junction | 128 | x1.38, error 0.178 | **x0.93, error 0.034** |
+| The Amphiseum | 140 | x2.59, error 0.171 | x1.33, error 0.037 (night: ours 0.077 against 0.057 at the dark end) |
+
+**Gamma is in the ADDRESS word, and the older "settled negative" looked in `FILTER`.** The live `0x1a08` word of the sky faces is `0x60730303` and of a mesh's diffuse unit `0x60710101` (bits 20-22 = 7: R, G, B gamma), while that mesh's units 1 and 2 read `0x60010101` (nibble 0): the decode is a per-unit choice. `Texture_BuildGcmRegisters` (`0x005a9998`, decompiled again here) writes `+0x28` as `0x60030303` (or `0x60031303`) - nibble 0 - so the `0x700000` is ORed on after the builder, by code not located (the sky binder `0x005e5858` is the first place to look). This is the *input* end the 2026-09-06 entry ("Per-texture sRGB/`GAMMA` decode: settled negative", which searched `FILTER`'s top nibble only) could not see; it is consistent with ADR-0026's linear scene. Confidence 90 that the live word carries the bits on these draws, 0 on who sets them.
+
+**Open, in order.** (1) The race-start exposure transient: a scene-target dump at `0.00.3` on Sol 2 would turn the inference above into a measurement and give the adaptation's start value for `oag-post`. (2) Amphiseum's dark end is 0.02 high in ours (sRGB near black, or the ambient on the unlit cube); Talon's is 7 % low, Sebenco and Sol 2 2 % high: all inside this project's exposure model, not the sky. (3) The six 7-index draws are issued twice a frame, the first into the 640x360 `R5G6B5` target; nothing reads it on Sebenco, and `hd-behind-glass` found the glass circuits read it: untouched here.
+
+**Other titles (lineage).** Wipeout 2048 and Omega: **checked, differs in key** - an authored dome mesh with `Sky brightness`, no `Sky colour`; this is HD's `Scene_PrepareFrame` word and says nothing about them (**not checkable** without a Vita or PS4 capture of the dome's draw). The same live-texel method applies when one exists.
+
+**Confidences.** Vertex colour word = authored byte (live, four circuits): 95. Fragment program `tex * COL0`, no scale: 95. Face textures sRGB-decoded (gamma nibble 7): 95. Scene sky = `texel * (byte/255)^(1/2.2)`: 90 at 255 (two circuits, 62k and 64k pixels), 80 at 128 and 140 (one frame each, small patch and a dark sky). The race-start exposure explanation: 85. Names `Sky_DrawCube` (`0x005ecc28`) and `Sky_SetCubeFaces` (`0x005ec3e0`) are unchanged (65); the live draw read here confirms what they emit and raises neither.
