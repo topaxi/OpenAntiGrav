@@ -52,6 +52,9 @@ Runs 37595443950, 37599197810 and 37599357599, after the fixes above:
 
 - `check` died during `cargo nextest run --workspace`, 24 minutes into the job, with the
   runner's own `No space left on device` (an annotation on the job, no step log).
+  Run 37599197810's `check` failed the same way with a log this time: the
+  runner warned "Free space left: 29 MB" and `ld` died with a bus error
+  linking `oag-trace`, while the build was still at `oag-game`/`oag-view`.
   The job now frees the runner's unused toolchains first and builds with
   `CARGO_PROFILE_DEV_DEBUG=0`/`CARGO_PROFILE_TEST_DEBUG=0`. The steps after
   nextest (dependency rules, transcendentals, size, names, captures, handover,
