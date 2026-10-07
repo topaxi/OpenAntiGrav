@@ -27,8 +27,9 @@
 # Android answers INSTALL_FAILED_UPDATE_INCOMPATIBLE. The script then offers to
 # reinstall, keeping the app's data: everything the app writes (images, caches,
 # settings, saves, logs) lives under its external files dir, which is moved
-# aside on the phone, the old app uninstalled, the new one installed, and the
-# directory moved back. Asked first in a terminal; --reinstall skips the
+# aside on the phone, the old app uninstalled, the new one installed and
+# started once, and the kept files copied back in (a moved-back directory stays
+# unreadable to the new install). Asked first in a terminal; --reinstall skips the
 # question; without a terminal and without --reinstall it stops.
 
 set -euo pipefail
@@ -83,21 +84,36 @@ fi
 app_dir="/sdcard/Android/data/$package"
 keep="/sdcard/oag-reinstall-keep"
 
-# Moves a kept data dir back, unless the app has written data of its own since
-# (then the kept copy stays where it is and the user is told).
+# Copies a kept data dir back into the freshly installed app's own dir.
+#
+# Copied, never moved: measured on the S24, a directory carried over from the
+# previous install (moved aside and back) stays unreadable to the new one -
+# `settings.toml: Permission denied`, no image found - while files copied into
+# directories the new install created itself read and write fine. So the app is
+# started once to create its dir, stopped, and the kept files are copied in on
+# top; the keep dir is deleted only after the copy succeeded.
 restore_kept_data() {
-    [[ -n "$(adb shell "[ -d '$keep' ] && echo yes" | tr -d '\r')" ]] || return 0
-    if [[ -n "$(adb shell "[ -d '$app_dir/files' ] && echo yes" | tr -d '\r')" ]]; then
-        echo "note: $keep holds data kept from an earlier reinstall, but the app already has its own; left both as they are" >&2
-        return 0
+    [[ -n "$(adb shell "[ -d '$keep/files' ] && echo yes" | tr -d '\r')" ]] || return 0
+    step "Restoring the app's data kept from the reinstall"
+    if [[ -z "$(adb shell "[ -d '$app_dir/files' ] && echo yes" | tr -d '\r')" ]]; then
+        adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+        local i
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+            [[ -n "$(adb shell "[ -d '$app_dir/files' ] && echo yes" | tr -d '\r')" ]] && break
+            sleep 1
+        done
+        adb shell am force-stop "$package"
     fi
-    adb shell "rm -rf '$app_dir' && mv '$keep' '$app_dir'" \
-        || die "could not move $keep back to $app_dir; move it by hand"
-    echo "moved the app's kept data back from $keep"
+    [[ -n "$(adb shell "[ -d '$app_dir/files' ] && echo yes" | tr -d '\r')" ]] \
+        || die "the app did not create $app_dir/files; the kept data is still in $keep"
+    adb shell "cp -r '$keep/files/.' '$app_dir/files/'" \
+        || die "copying $keep back failed; the kept data is still in $keep"
+    adb shell "rm -rf '$keep'"
+    echo "copied the app's kept data back from $keep"
 }
 
-# Uninstalls a differently-signed app and installs $apk, keeping its data by
-# moving the app's external dir aside on the device and back afterwards.
+# Uninstalls a differently-signed app and installs $apk, moving the app's
+# external dir aside first; restore_kept_data copies it back afterwards.
 reinstall_keeping_data() {
     if [[ -n "$(adb shell "[ -d '$app_dir' ] && echo yes" | tr -d '\r')" ]]; then
         [[ -z "$(adb shell "[ -e '$keep' ] && echo yes" | tr -d '\r')" ]] \
@@ -107,7 +123,7 @@ reinstall_keeping_data() {
         echo "moved the app's data to $keep"
     fi
     adb uninstall "$package" >/dev/null || die "adb uninstall failed; the app's data is in $keep on the device"
-    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device - re-run 'just deploy-android --skip-build' and it is moved back"
+    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device - re-run 'just deploy-android --skip-build' and it is copied back"
 }
 
 step "Installing ${apk:-the APK}"

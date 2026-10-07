@@ -71,7 +71,9 @@ offered.
 
 `just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
 
-All three recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with
+`just logcat-android` follows the same log without launching anything (`--clear`, `--dump` to print and exit, `-- ARGS` for another filter).
+
+All four recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with
 neither, a single authorised device is used as is, and with more than one (the
 phone and Waydroid, say) they ask which - an fzf pick, or a numbered prompt without
 fzf - and refuse with the list of serials when not run from a terminal
@@ -82,7 +84,11 @@ out of `target/`) cannot be updated in place: `adb install -r` fails with
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `just deploy-android` then offers to
 reinstall, keeping the app's data: everything the app writes lives under
 `/sdcard/Android/data/org.openantigrav.game`, which it moves aside on the device,
-uninstalls, installs, and moves back. It asks in a terminal; `--reinstall` skips the
+then uninstalls, installs, starts the app once and copies the kept files back in.
+Copied, not moved: a directory carried over from the previous install stays
+unreadable to the new one (`Permission denied` on `settings.toml`, no image found,
+measured on the S24), while files copied into directories the new install created
+work. It asks in a terminal; `--reinstall` skips the
 question.
 
 ## How it is wired
