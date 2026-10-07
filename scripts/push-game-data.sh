@@ -24,6 +24,15 @@
 #   PATTERN...    Skip the picker and copy every row whose name matches one of
 #                 these globs, e.g. 'images/pulse-psp-*' or 'dlc/*'.
 #
+# **Pre-converted caches.** A phone or a Deck has no `ffmpeg`, so it has no movie
+# picture and no ATRAC3+ sound unless the converted files come with it. Each
+# Pulse PSP image gets a second row, `cache/<image>`: its movies (AV1) and sounds
+# (PCM), listed by the manifest `oag-game --dry-run --prefetch` writes beside the
+# local cache (`data/cache/manifests/<image>.txt`). Selecting a row whose manifest
+# is missing runs that prefetch first (about 10 minutes and 0.7 GB the first time)
+# and then copies. They land in the device's cache directory, not its data one:
+# `<cache dir>/oag` on the Deck, the app's `files/cache/oag` on Android.
+#
 # Only files that are missing or differ in size are copied. Nothing on the
 # device is deleted. Left out on purpose, as deploy-to-deck.sh always did: the
 # still-encrypted HD image and its .dkey (only -dec.iso opens), every .pkg and
@@ -81,13 +90,38 @@ else
         || die "no device (or more than one: pass --serial). USB debugging must be on and the host authorised."
     remote_root="/sdcard/Android/data/$package/files/data/oag"
 fi
-echo "$target: $remote_root" >&2
+if [[ $target == deck ]]; then
+    cache_root="$(ssh "$host" 'echo "${XDG_CACHE_HOME:-$HOME/.cache}"')/oag"
+else
+    cache_root="/sdcard/Android/data/$package/files/cache/oag"
+fi
+echo "$target: $remote_root (caches: $cache_root)" >&2
 
 # Every file already on the device, as "<size> <path relative to remote_root>".
 declare -A remote_size=()
 while IFS=' ' read -r size path; do
     [[ -n $path ]] && remote_size["${path#./}"]="$size"
 done < <(remote "cd '$remote_root' 2>/dev/null && find . -type f -exec stat -c '%s %n' {} + 2>/dev/null" || true)
+# The same for the cache directory, keyed "@cache/<path>" like a cache row's files.
+while IFS=' ' read -r size path; do
+    [[ -n $path ]] && remote_size["@cache/${path#./}"]="$size"
+done < <(remote "cd '$cache_root' 2>/dev/null && find . -type f -exec stat -c '%s %n' {} + 2>/dev/null" || true)
+
+# A row's file as it is named locally and on the device. Plain names are relative
+# to data/ and remote_root; "@cache/..." ones to data/cache/ and cache_root.
+local_of()  { case "$1" in @cache/*) echo "$data/cache/${1#@cache/}" ;; *) echo "$data/$1" ;; esac; }
+remote_of() { case "$1" in @cache/*) echo "$cache_root/${1#@cache/}" ;; *) echo "$remote_root/$1" ;; esac; }
+
+# The files a cache row names, from the manifest of one image. Empty when there
+# is no manifest yet.
+cache_manifest_files() {
+    local manifest="$data/cache/manifests/$1.txt" line
+    [[ -f $manifest ]] || return 0
+    while IFS= read -r line; do
+        [[ -z $line || $line == \#* ]] && continue
+        [[ -f $data/cache/$line ]] && echo "@cache/$line"
+    done < "$manifest"
+}
 
 # Rows: a name, and the local files that make it up, relative to data/ -
 # remote_root has data/'s own layout, so the same path is the remote one.
@@ -114,6 +148,17 @@ for f in "$data"/images/*; do
     name="$(basename "$f")"
     excluded_image "$name" && continue
     add_row "images/$name" "images/$name"
+    # Only Pulse PSP images have a prefetch: see `oag_game::prefetch`.
+    case "$name" in
+        pulse-psp-*.chd|pulse-psp-*.iso)
+            mapfile -t cache_files < <(cache_manifest_files "$name")
+            if [[ ${#cache_files[@]} -gt 0 ]]; then
+                add_row "cache/$name" "${cache_files[@]}"
+            else
+                # Listed anyway: selecting it runs the prefetch that makes the manifest.
+                add_row "cache/$name" "@nocache/$name"
+            fi ;;
+    esac
 done
 for f in "$data"/dlc/*; do
     [[ -f $f ]] || continue
@@ -139,8 +184,12 @@ shopt -u nullglob
 # Prints "<bytes> <status>" for a row.
 row_state() {
     local name="$1" file total=0 present=0 count=0 local_size
+    if [[ ${row_files[$name]} == @nocache/* ]]; then
+        echo "0 no local cache"
+        return
+    fi
     while IFS= read -r file; do
-        local_size="$(stat -c %s "$data/$file")"
+        local_size="$(stat -c %s "$(local_of "$file")")"
         total=$((total + local_size))
         count=$((count + 1))
         [[ ${remote_size["$file"]:-} == "$local_size" ]] && present=$((present + 1))
@@ -157,6 +206,7 @@ row_state() {
 table=""
 for name in "${row_names[@]}"; do
     read -r bytes status < <(row_state "$name")
+    status="${status/no local cache/no cache}"
     table+="$(printf '%s\t%-10s %8s  %s' "$name" "$status" "$(numfmt --to=iec "$bytes")" "$name")"$'\n'
 done
 
@@ -179,11 +229,39 @@ fi
 
 [[ ${#selected[@]} -gt 0 ]] || { echo "nothing selected" >&2; exit 0; }
 
+# A cache row with no manifest yet: convert the disc's movies and sounds here
+# first, which also writes the manifest. `--dry-run --prefetch` is the headless
+# run that does only that.
+prefetch_for() {
+    local image="$1" game=""
+    for candidate in "$project_root/target/release/oag-game" "$project_root/target/debug/oag-game"; do
+        [[ -x $candidate ]] && { game="$candidate"; break; }
+    done
+    step "Converting $image's movies and sounds (about 10 minutes and 0.7 GB the first time)"
+    if (( dry_run )); then
+        echo "(--dry-run: would run ${game:-cargo run -p oag-game --} --no-audio --dry-run --prefetch data/images/$image)" >&2
+        return 0
+    fi
+    if [[ -n $game ]]; then
+        (cd "$project_root" && "$game" --no-audio --dry-run --prefetch "data/images/$image")
+    else
+        (cd "$project_root" && cargo run -q --release -p oag-game -- --no-audio --dry-run --prefetch "data/images/$image")
+    fi
+}
+
 # The files of the selected rows that are missing or differ.
 to_copy=()
 for name in "${selected[@]}"; do
+    if [[ ${row_files[$name]} == @nocache/* ]]; then
+        image="${name#cache/}"
+        prefetch_for "$image"
+        mapfile -t made < <(cache_manifest_files "$image")
+        (( dry_run )) && continue
+        [[ ${#made[@]} -gt 0 ]] || { echo "no cache made for $image; skipping" >&2; continue; }
+        row_files["$name"]="$(printf '%s\n' "${made[@]}")"
+    fi
     while IFS= read -r file; do
-        [[ ${remote_size["$file"]:-} == "$(stat -c %s "$data/$file")" ]] && continue
+        [[ ${remote_size["$file"]:-} == "$(stat -c %s "$(local_of "$file")")" ]] && continue
         to_copy+=("$file")
     done <<< "${row_files[$name]}"
 done
@@ -194,31 +272,30 @@ if [[ ${#to_copy[@]} -eq 0 ]]; then
 fi
 
 bytes=0
-for file in "${to_copy[@]}"; do bytes=$((bytes + $(stat -c %s "$data/$file"))); done
-step "Copying ${#to_copy[@]} file(s), $(numfmt --to=iec "$bytes"), to $remote_root"
+for file in "${to_copy[@]}"; do bytes=$((bytes + $(stat -c %s "$(local_of "$file")"))); done
+step "Copying ${#to_copy[@]} file(s), $(numfmt --to=iec "$bytes"), to $remote_root (caches to $cache_root)"
 
 if (( dry_run )); then
-    printf '  %s\n' "${to_copy[@]}" >&2
+    printf '  %s\n' "${to_copy[@]}" | head -40 >&2
     echo "(--dry-run: nothing copied)" >&2
     exit 0
 fi
 
 if [[ $target == deck ]]; then
-    if ssh "$host" 'command -v rsync' >/dev/null 2>&1; then
-        # -R keeps each path relative to data/, which is the remote layout.
-        # No -z: images and .psarc archives are already compressed.
-        ssh "$host" mkdir -p "'$remote_root'"
-        (cd "$data" && rsync -Rtv --progress "${to_copy[@]}" "$host:$remote_root/")
-    else
-        for file in "${to_copy[@]}"; do
-            ssh "$host" mkdir -p "'$remote_root/$(dirname "$file")'"
-            scp "$data/$file" "$host:$remote_root/$file"
-        done
-    fi
+    for file in "${to_copy[@]}"; do
+        dest="$(remote_of "$file")"
+        ssh "$host" mkdir -p "'$(dirname "$dest")'"
+        if ssh "$host" 'command -v rsync' >/dev/null 2>&1; then
+            rsync -t --progress "$(local_of "$file")" "$host:$dest"
+        else
+            scp "$(local_of "$file")" "$host:$dest"
+        fi
+    done
 else
     for file in "${to_copy[@]}"; do
-        adb shell mkdir -p "'$remote_root/$(dirname "$file")'"
-        adb push "$data/$file" "$remote_root/$file"
+        dest="$(remote_of "$file")"
+        adb shell mkdir -p "'$(dirname "$dest")'"
+        adb push "$(local_of "$file")" "$dest"
     done
 fi
 

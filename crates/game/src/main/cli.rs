@@ -152,7 +152,7 @@ pub(crate) struct Cli {
     ///
     /// The game boots and runs normally while it happens, and progress goes to
     /// stdout. Interrupting is safe: both caches are keyed by content, so the
-    /// next run picks up whatever finished. See `oag_game::prefetch`.
+    /// next run picks up whatever finished. With `--dry-run` it is the whole run, no window: `oag_game::prefetch`.
     #[arg(long)]
     pub(crate) prefetch: bool,
 
@@ -414,7 +414,7 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trace: bool,
 
-    /// Report what was loaded and exit, without rendering anything.
+    /// Report what was loaded and exit, without rendering. With `--prefetch`: convert everything, write the cache manifest, then exit.
     #[arg(long)]
     pub(crate) dry_run: bool,
 

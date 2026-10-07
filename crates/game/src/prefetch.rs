@@ -80,6 +80,9 @@ use oag_pulse as pulse;
 
 use crate::movie::{self, Extent};
 
+mod manifest;
+use manifest::Owned;
+
 /// Where to read from and where the two caches are.
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -362,6 +365,11 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
         "prefetch: {done} converted, {cached} already cached, {failed} failed, in {:.1} s",
         started.elapsed().as_secs_f32()
     );
+    match manifest::write(&options.movies, &options.source, &planned.owned) {
+        Ok(Some(path)) => info!("prefetch: wrote the cache manifest {}", path.display()),
+        Ok(None) => {}
+        Err(e) => warn!("prefetch: could not write the cache manifest ({e})"),
+    }
     finish(progress);
 }
 
@@ -469,6 +477,8 @@ struct Plan {
     /// Lines worth printing about what was deliberately not listed, or about an
     /// archive that would not open.
     notes: Vec<String>,
+    /// Every cache file this source owns, for [`manifest`].
+    owned: Owned,
 }
 
 /// Walks the source and works out what is left to do.
@@ -492,6 +502,7 @@ fn plan(options: &Options) -> Result<Plan> {
     let cached_movies = existing(&options.movies);
     let mut tasks = Vec::new();
     let mut cached = 0usize;
+    let mut owned = Owned::default();
 
     for (at, archive) in archives.iter_mut().enumerate() {
         let short = short_label(archive.label()).to_string();
@@ -515,6 +526,7 @@ fn plan(options: &Options) -> Result<Plan> {
 
             if head.starts_with(oag_video::pmf::MAGIC) {
                 let key = format!("{hash:08x}-{size}");
+                owned.movie_keys.push(key.clone());
                 // The question is not asked at all under `--refresh-video`: the
                 // point of that flag is to convert the ones that *are* cached,
                 // so counting them as `cached` and skipping them would leave it
@@ -538,6 +550,9 @@ fn plan(options: &Options) -> Result<Plan> {
                 let Ok(blob) = archive.read(index) else {
                     continue;
                 };
+                owned
+                    .sound_files
+                    .extend(oag_music::at3::cache_file(&blob, &options.audio));
                 if oag_music::at3::is_cached(&blob, &options.audio) {
                     cached += 1;
                     continue;
@@ -574,6 +589,7 @@ fn plan(options: &Options) -> Result<Plan> {
         tasks,
         cached,
         notes,
+        owned,
     })
 }
 
