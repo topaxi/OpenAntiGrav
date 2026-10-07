@@ -145,6 +145,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,
+    pre_race: None,
     adverts: None,
 };
 

@@ -39,19 +39,14 @@
 //! - **The field of view.** The leaf's payload is byte-identical on all twelve
 //!   circuits but for its aim point (`+0x10`, as a `Camera`'s), and the original's
 //!   field was `54.309` vertical degrees on both circuits captured. Nothing in
-//!   the payload derives it, so [`FOV_DEGREES`] is a measured constant, not a
-//!   reading.
+//!   the payload derives it, so each title's `oag_title::pre_race::PreRace` carries
+//!   it, Pulse's as a measured constant and not a reading.
 //! - `GridPosition` and `Relative`, the two other attributes on `grid_camera1`.
 
 use crate::vex::{self, Node};
 
 /// Class ID of a `gridCamera` node.
 pub const CLASS_GRID_CAMERA: u32 = 0x3dd;
-
-/// The vertical field of view, degrees: the original's render view carried
-/// through every frame of the flyby (`0x42593c69` as an `f32`). Measured on
-/// `16_Track` and `03_Track`; **not** derived from the file (see the module docs).
-pub const FOV_DEGREES: f32 = 54.308_994;
 
 /// A circuit's flyby: the `start_grid.vex` scene, ready to be sampled.
 #[derive(Debug, Clone)]
