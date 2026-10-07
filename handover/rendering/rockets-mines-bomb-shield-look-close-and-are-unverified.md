@@ -65,7 +65,7 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   at the same place, which alone moves a detonation by 30 ticks (spawn/handling, not this
   thread's).
 - *Pulse Mine's explosion, 2026-10-01 (pulse-fx-3)* - **first picture of the original's**: a stationary craft trips its own Mine at fire+30
-  (the arming delay; ours keeps its chosen owner exclusion), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
+  (the arming delay; ours now exempts the owner for the same 0.5 s, 2026-10-07), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
   where ours' lasts sixteen and leans green. The `ring` and `BANG` templates were drawn with the wrong sprite and are fixed
   (`particle-system.md`); the pools agree at first order. Open: the hue (red `215` against `194`), the debris colour and size, the flash's duration
   and whether the original's Mine cluster (several charges) is why the original's wash has three bumps. `mine.md`'s 2026-10-01 pulse-fx-3 section.
@@ -140,6 +140,7 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
 - *Missile* - nothing to pose: neither title draws a Missile model.
 - *HD, every weapon* - no RPCS3 capture: firing on the emulator needs the
   held-weapon slot, which is unread.
+- *Owner exemption, 2026-10-07 (bomb-owner)*: **landed.** The owner is exempt from its own Mine or Bomb for 0.5 s (`OWNER_EXEMPT_SECONDS`), then trips it; a stationary craft's own charge now goes off at about fire+30 frames as the original's does. HD's trip writer (flag `0x80` of `NormalBomb+0x40`) is not found, the 0.5 s rests on the film. The ground-truth ignition hook for a Pulse Mine comparison is no longer needed.
 
 ## Next Steps
 

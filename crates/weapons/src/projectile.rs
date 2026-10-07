@@ -143,6 +143,10 @@ pub struct Projectile {
     pub owner: u8,
     /// Seconds left before [`MAX_FLIGHT_SECONDS`] reaps it.
     pub lifetime: f32,
+    /// Seconds a laid Mine or Bomb has sat since it was laid; `0.0` for every other
+    /// weapon, which never raise it. [`mine::triggered_by`] reads it for the owner's
+    /// exemption window ([`mine::OWNER_EXEMPT_SECONDS`]).
+    pub age: f32,
     /// The ship slot a guided projectile is chasing, or `None`.
     ///
     /// A slot index where the original keeps a pointer (`Missile_Init` copies it to
@@ -277,6 +281,7 @@ impl Projectiles {
                 velocity: Vec3::ZERO,
                 owner: 0,
                 lifetime: 0.0,
+                age: 0.0,
                 surface: Vec3::Y,
                 target: None,
                 bounces: 0,
@@ -466,6 +471,7 @@ impl Projectiles {
             velocity,
             owner,
             lifetime,
+            age: 0.0,
             orientation: Quat::IDENTITY,
             surface: Vec3::Y,
             target,

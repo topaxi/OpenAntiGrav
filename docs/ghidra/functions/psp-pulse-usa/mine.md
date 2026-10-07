@@ -31,6 +31,7 @@ because they are one weapon in two sizes. See
 | `0x08863d7c` | `Bomb_UpdateTrigger` | 85 (new 2026-09-15) |
 | `0x088633d0` | `Bomb_AdvanceFuse` | 85 (new 2026-09-15) |
 | `0x08863440` | `Bomb_InArmingDelay` | 75 (new 2026-09-15) |
+| `0x08859f04` | `Mine_InArmingDelay` | 75 (new 2026-10-07) |
 | `0x088643d0` | `Bomb_ApplyBlast` | 85 (new 2026-09-15) |
 | `0x088640c8` | `Bomb_Detonate` | 88 (new 2026-09-15) |
 | `0x08872078` | `BombBlast_Construct` | 90 (new 2026-09-15) |
@@ -823,7 +824,7 @@ Mine's: `damageradius` is second and `timetodie` last.
 **owner** (`bomb->+0x48 == i`) while `Bomb_InArmingDelay(bomb)`
 (`0x08863440`, 75: `age < 0.5`, the literal at `0x08ab1054`) - so **the layer
 is exempt from its own bomb for half a second and no longer**, which this
-engine's "never tripped by the craft that laid it" does not match; if the bomb
+engine's former "never tripped by the craft that laid it" did not match (fixed 2026-10-07, see the last section); if the bomb
 is armed (`+0x3c` bit `8`), take `craft->+0x90 - bomb_position`, reject
 outside a `±trigger_radius` box on each axis, then `|d| < trigger_radius`
 sets destroy bit `4` and calls `Bomb_ApplyBlast(subsystem, slot, i)`.
@@ -1381,7 +1382,7 @@ Method: a stationary craft in a Single Race on Talon's Junction fires a Mine at 
 a GE dump at fire+31 and +33 in `mineGE31`, `mineGE33`, the pool probes `mineP_rolled`).
 
 - **A stationary craft trips its own Mine at once**: the explosion starts at fire+30/31 (the arming delay, `screen-flash-callers.md`'s
-  29 frames), not at the 7 s fuse. Ours keeps its chosen owner exclusion, so a Mine laid by a craft that stands still waits out its fuse. The
+  29 frames), not at the 7 s fuse. Ours kept a permanent owner exclusion until 2026-10-07 (retired, see the bomb-owner section below). The
   comparison below ignites ours at the craft's position 29 ticks after the press with a scratch-only hook (`OAG_SCRATCH_IGNITE`, not committed).
 - The original's picture, fire+31 to +60: a yellow-white wash from +31, radial rays and orange burning debris across the screen to
   about +50 (the mean brightness of the playfield rows holds at 175-215 for twenty frames, then falls to 96 at +60), the player's shield bar goes red
@@ -1402,3 +1403,46 @@ a GE dump at fire+31 and +33 in `mineGE31`, `mineGE33`, the pool probes `mineP_r
   (a candidate, not confirmed). The position row is **unverified**: a live mine read `(566, -18.7, 5.8)` at `+0x90` with 0.6 s of fuse, which may simply be another
   craft's mine elsewhere on the track; a detonation-by-write for the Mine needs that settled first.
 
+
+## Bomb and Mine owner exemption is a 0.5 s window (bomb-owner lane, 2026-10-07)
+
+**Law (Pulse, confidence 85).** Both laid weapons skip the laying craft in their
+trip sweep only while the charge is younger than `0.5 s`, then trip on it like any
+craft:
+
+| Weapon | Function | Test | Age field |
+| --- | --- | --- | --- |
+| Bomb | `Bomb_UpdateTrigger` (`0x08863d7c`) | `i == bomb+0x48` and `Bomb_InArmingDelay` skips | `bomb+0xc0`, added by `Bomb_AdvanceFuse` after the trigger pass |
+| Mine | `Mine_SweepCraftTrigger` (`0x08867b50`) | `i == mine+0x40` and `Mine_InArmingDelay` (`0x08859f04`) skips | `mine+0xd4`, added by `Mine_Update` before the sweep |
+
+`0x08859f04` decompiles to `return *(float *)(mine + 0xd4) < DAT_08ab0efc;` and
+`DAT_08ab0efc` reads `00 00 00 3f` = `0.5` (read with `read_memory` 2026-10-07).
+`Bomb_InArmingDelay`'s literal at `0x08ab1054` reads the same word. Two sites, one
+literal, plus the live Pulse Mine run above (a stationary craft trips its own Mine at
+fire+30 frames, `0.5 s`): the Mine's `0x08859f04` is named `Mine_InArmingDelay`
+at 75 (the sibling's confidence; the age field's role rests on `Mine_Update` adding
+`dt` to `+0xd4`).
+
+**HD (confidence 70).** `NormalBomb_Update` (`0x001443f8`) contains **no trigger or
+owner test**, a clean negative: it does `age (+0xe8) += dt`, and when the age reaches
+`stats+0x104` (`timetodie`) or flag `0x80` of `+0x40` is already set it runs the
+ship-in-radius loop over `0x002d64d0` (a track/AI query at `-1`, not an owner test),
+`NormalBomb_Detonate` and the blast. So the bomb's trip (the writer of flag `0x80`)
+is elsewhere, not found; next address to try is the HD pool update that owns the
+`NormalBomb` instances (the OPD at `0x00877238` is the update's vtable slot, so its
+owner is the vtable's constructor, `NormalBomb_Construct` `0x00144a48`). The window
+therefore rests on the film, not on code: the owner's own bomb trips about `0.6 s`
+after laying in bomb age (`rpcs3-capture.md`, "Video time is the bomb's age"), which
+is Pulse's `0.5 s` plus a frame or two. One shared constant, no per-title field.
+
+**Ported.** `oag_weapons::projectile::mine::OWNER_EXEMPT_SECONDS = 0.5` and
+`triggered_by(mine, owner, age, slot, position, radius)`; `Projectile::age` (hashed)
+is raised by `advance_laid` (Mine before the trip test, Bomb after, as the two
+originals order it). Tests: `projectile::tests::owner_exempt`. The AI's hazard
+scan (`Race::hazard_for`) skips its own charge only while it is exempt, so it
+steers round its own old mine like anyone's.
+
+**Not modelled.** The cube-then-sphere test is the sphere alone here; the
+"armed" bit `8`; `FUN_08862d4c`'s targetable gate. 2048/Omega: *not checkable*,
+neither title's bomb trigger is located, and the weapon table has no equivalent
+(`checked, differs` is not claimable either).
