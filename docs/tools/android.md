@@ -69,7 +69,9 @@ skip the picker (`just push-data android 'images/pulse-psp-*'`). See
 [packaging.md](packaging.md#running-it-on-a-steam-deck) for what is and is not
 offered.
 
-Both recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with
+`just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
+
+All three recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with
 neither, a single authorised device is used as is, and with more than one (the
 phone and Waydroid, say) they ask which - an fzf pick, or a numbered prompt without
 fzf - and refuse with the list of serials when not run from a terminal
