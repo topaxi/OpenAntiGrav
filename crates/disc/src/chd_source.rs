@@ -14,7 +14,7 @@ use chd::Chd;
 use chd::metadata::Metadata;
 
 use crate::error::{Error, Result};
-use crate::source::{SECTOR_SIZE, SectorSource};
+use crate::source::{SECTOR_SIZE, SectorSource, check_range};
 
 /// Container-level facts about a CHD.
 ///
@@ -343,6 +343,66 @@ impl SectorSource for ChdSource {
 
         self.ensure_hunk(hunk)?;
         buf.copy_from_slice(&self.hunk_buf[start..start + SECTOR_SIZE]);
+        Ok(())
+    }
+
+    /// As the trait's own, and **split across threads when the range spans
+    /// [`PARALLEL_HUNKS`] hunks or more**: every hunk decompresses on its own,
+    /// so each worker opens the file again and reads a run of whole hunks into
+    /// its own slice of the result. The bytes are the serial read's. A Pulse
+    /// PS2 race track is one 40 MiB read of LZMA hunks, and it was over half
+    /// that race's load (`docs/architecture/load-time.md`).
+    fn read_sectors(&mut self, lba: u32, count: u32) -> Result<Vec<u8>> {
+        check_range(self.sector_count, lba, count)?;
+        let mut out = vec![0u8; count as usize * SECTOR_SIZE];
+        let per_hunk = self.sectors_per_hunk;
+        let hunks = (lba + count).div_ceil(per_hunk) - lba / per_hunk;
+        let workers = std::thread::available_parallelism()
+            .map_or(1, std::num::NonZero::get)
+            .min(MAX_WORKERS)
+            .min((hunks / PARALLEL_HUNKS) as usize);
+        if workers < 2 {
+            self.read_into(lba, &mut out)?;
+            return Ok(out);
+        }
+        // Whole hunks per worker, so no two decompress the same one.
+        let run = hunks.div_ceil(workers as u32) * per_hunk;
+        let first_hunk_start = lba / per_hunk * per_hunk;
+        let path = &self.path;
+        std::thread::scope(|scope| {
+            let mut rest = out.as_mut_slice();
+            let mut at = lba;
+            let mut handles = Vec::with_capacity(workers);
+            while at < lba + count {
+                let end =
+                    (first_hunk_start + (at - first_hunk_start) / run * run + run).min(lba + count);
+                let (mine, tail) = rest.split_at_mut((end - at) as usize * SECTOR_SIZE);
+                rest = tail;
+                let start = at;
+                handles.push(scope.spawn(move || ChdSource::open(path)?.read_into(start, mine)));
+                at = end;
+            }
+            handles
+                .into_iter()
+                .try_for_each(|handle| handle.join().expect("a CHD read worker panicked"))
+        })?;
+        Ok(out)
+    }
+}
+
+/// The fewest hunks a read must span per worker before it is split at all.
+/// A file walk's directory reads stay on one thread.
+const PARALLEL_HUNKS: u32 = 64;
+
+/// The most threads one read is split across.
+const MAX_WORKERS: usize = 8;
+
+impl ChdSource {
+    /// Reads whole sectors from `lba` on into `out`, one at a time.
+    fn read_into(&mut self, lba: u32, out: &mut [u8]) -> Result<()> {
+        for (i, sector) in (lba..).zip(out.as_chunks_mut::<SECTOR_SIZE>().0) {
+            self.read_sector(i, sector)?;
+        }
         Ok(())
     }
 }
