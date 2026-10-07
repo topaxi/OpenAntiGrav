@@ -995,8 +995,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
     );
-    loaded
-        .report
-        .extend(archives.read_memo.as_ref().map(|m| m.summary()));
+    loaded.report.extend(archives.read_memo_summary());
     Ok(loaded)
 }

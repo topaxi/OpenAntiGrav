@@ -380,11 +380,15 @@ pub fn go_edge(model: &Model) -> Result<GoEdge, String> {
         return Err("the board's texels are not readable on the CPU".to_string());
     }
 
+    // One table per frame, not per frame and vertex: sampling it was a third
+    // of an HD race load (`docs/architecture/load-time.md`).
+    let tables: Vec<TexAnims> = (0..=SEARCH_FRAMES)
+        .map(|frame| TexAnims::sample(model, frame as f32 / 60.0))
+        .collect();
     let texel =
         |frame: u32, (track, uv, _): &(usize, [f32; 2], usize), at: usize| -> Option<[u8; 4]> {
             let (width, height, rgba) = textures[at].as_ref()?;
-            let table = TexAnims::sample(model, frame as f32 / 60.0);
-            let [su, sv, ou, ov] = table.transform[*track];
+            let [su, sv, ou, ov] = tables[frame as usize].transform[*track];
             let u = (uv[0] * su + ou).rem_euclid(1.0);
             let v = (uv[1] * sv + ov).rem_euclid(1.0);
             let x = ((u * *width as f32) as usize).min(width - 1);

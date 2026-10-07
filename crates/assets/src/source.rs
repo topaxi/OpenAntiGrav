@@ -357,6 +357,14 @@ impl Archives {
         self
     }
 
+    /// [`crate::read_memo::ReadMemo::summary`], when reads are memoised.
+    #[must_use]
+    pub fn read_memo_summary(&self) -> Option<String> {
+        self.read_memo
+            .as_ref()
+            .map(crate::read_memo::ReadMemo::summary)
+    }
+
     /// Which mounted archive holds this name, if any.
     ///
     /// The one place the search order lives. Returning a position rather than a
