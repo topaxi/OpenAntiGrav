@@ -233,7 +233,15 @@ pub fn load(
 ) -> Result<Campaign> {
     match title.campaign.dialect {
         oag_title::CampaignDialect::Hd => {
-            return load_hd(archives, strings, faces, grid, base, fallback_globals);
+            return load_hd(
+                title,
+                archives,
+                strings,
+                faces,
+                grid,
+                base,
+                fallback_globals,
+            );
         }
         oag_title::CampaignDialect::Omega => {
             return load_omega(archives, strings, faces, grid, base, fallback_globals);
@@ -324,11 +332,19 @@ fn read_hd_texture(
         && let Some((_, blob)) = archives
             .read_every_name(path)
             .into_iter()
-            .find(|(label, _)| label.ends_with(oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
+            .find(|(label, _)| same_archive(label, oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
     {
         return Ok(blob);
     }
     archives.read_name(path)
+}
+
+/// Whether `label` names the archive `wanted` does, by file name and ignoring
+/// case: a disc labels its archives `PS3_GAME/USRDIR/DATA04.PSARC`, the PSN
+/// install `.../USRDIR/data04.psarc`.
+fn same_archive(label: &str, wanted: &str) -> bool {
+    let name = |path: &str| path.rsplit('/').next().unwrap_or(path).to_ascii_uppercase();
+    name(label) == name(wanted)
 }
 
 /// [`load`]'s Wipeout HD/Fury branch - the same shape, off
@@ -339,6 +355,7 @@ fn read_hd_texture(
 /// Pulse's dictionary-shortened copy. See `oag_ui_screens::campaign::hd`'s own
 /// module doc for what the two screens draw once resolved this way.
 fn load_hd(
+    title: &oag_title::Title,
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
     faces: FaceScales,
@@ -356,16 +373,21 @@ fn load_hd(
     // plus `Campaign Selection`/`Grid Selection Fury` via
     // [`hd_selection_screens`] - where a separate `load_hd_campaign_selection`
     // used to re-read and re-parse the same file a second time.
-    let copies = archives.read_every_name(oag_hd::campaign::SCREEN_ENTRY);
-    let Some((_, blob)) = copies
-        .into_iter()
-        .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
-    else {
-        anyhow::bail!(
-            "no {} copy of {} - Wipeout HD/Fury's own Cell Selection cannot draw",
-            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
-            oag_hd::campaign::SCREEN_ENTRY,
-        );
+    let blob = match title.campaign.screen_archive {
+        Some(label) => archives
+            .read_every_name(oag_hd::campaign::SCREEN_ENTRY)
+            .into_iter()
+            .find(|(copy, _)| copy.ends_with(label))
+            .map(|(_, blob)| blob)
+            .with_context(|| {
+                format!(
+                    "no {label} copy of {} - Wipeout HD/Fury's own Cell Selection cannot draw",
+                    oag_hd::campaign::SCREEN_ENTRY,
+                )
+            })?,
+        None => archives
+            .read_name(oag_hd::campaign::SCREEN_ENTRY)
+            .with_context(|| format!("reading {}", oag_hd::campaign::SCREEN_ENTRY))?,
     };
     let xml = String::from_utf8(blob).context("CellMode_Definition.xml is not UTF-8")?;
     let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
@@ -389,7 +411,8 @@ fn load_hd(
     .context("Cell Selection is not on this screen")?;
 
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
-    let (selection_layout, grid_layout_fury) = hd_selection_screens(&screens, strings, faces, grid);
+    let (selection_layout, grid_layout_fury) =
+        hd_selection_screens(title, &screens, strings, faces, grid);
     let flyer_names: Vec<String> = grids
         .iter()
         .filter_map(|grid| grid.flyer_name.clone())
@@ -418,7 +441,11 @@ fn load_hd(
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
     });
-    let cards: Vec<crate::flyer::CardSpec> = grid_cards.chain(campaign_cards).collect();
+    // The two `Campaign Selection` cards exist only where that screen does.
+    let campaign_cards = selection_layout.is_some().then_some(campaign_cards);
+    let cards: Vec<crate::flyer::CardSpec> = grid_cards
+        .chain(campaign_cards.into_iter().flatten())
+        .collect();
     let widgets = oag_ui_screens::campaign::flyer::read(&xml, &screens);
     let flyers = widgets
         .iter()
@@ -601,6 +628,7 @@ pub fn hd_data06_strings(
 /// straight on `Grid Selection`, the pre-`Campaign Selection` behaviour,
 /// rather than refusing the whole campaign over one missing screen.
 fn hd_selection_screens(
+    title: &oag_title::Title,
     screens: &oag_ui::screen::Screens,
     strings: &StringTable,
     faces: FaceScales,
@@ -625,13 +653,16 @@ fn hd_selection_screens(
     match (selection, fury) {
         (Some(selection), Some(fury)) => (Some(selection), Some(fury)),
         _ => {
-            log::warn!(
-                "{}'s own copy of {} is missing {} or {} - Campaign Selection stays unmodelled",
-                oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
-                oag_hd::campaign::SCREEN_ENTRY,
-                oag_hd::campaign::SELECTION_SCREEN,
-                oag_hd::campaign::FURY_GRID_SCREEN,
-            );
+            // A title with no `screen_archive` has no chooser to find, which is
+            // how its campaign is authored, not a gap worth a warning.
+            if let Some(label) = title.campaign.screen_archive {
+                log::warn!(
+                    "{label}'s own copy of {} is missing {} or {} - Campaign Selection stays unmodelled",
+                    oag_hd::campaign::SCREEN_ENTRY,
+                    oag_hd::campaign::SELECTION_SCREEN,
+                    oag_hd::campaign::FURY_GRID_SCREEN,
+                );
+            }
             (None, None)
         }
     }
@@ -821,7 +852,7 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
 
 #[cfg(test)]
 mod tests {
-    use super::race_mode_for_cell;
+    use super::{race_mode_for_cell, same_archive};
     use oag_tables::race_campaign::Mode as CampaignMode;
 
     #[test]
@@ -865,5 +896,13 @@ mod tests {
                 "{mode} should not launch"
             );
         }
+    }
+
+    #[test]
+    fn an_archive_is_named_by_file_name_whatever_the_case_or_folder() {
+        let wanted = "PS3_GAME/USRDIR/DATA04.PSARC";
+        assert!(same_archive("img.iso:PS3_GAME/USRDIR/DATA04.PSARC", wanted));
+        assert!(same_archive("/x/USRDIR/data04.psarc", wanted));
+        assert!(!same_archive("/x/USRDIR/data02.psarc", wanted));
     }
 }

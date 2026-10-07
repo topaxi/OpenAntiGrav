@@ -131,6 +131,7 @@ pub const TITLE: &Title = &Title {
         // Pure authors no circuit or variant `<Unlock>` (`docs/formats/pure-status.md`).
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
+        screen_archive: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: Some(frontend::PRESSINGS),

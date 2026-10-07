@@ -1,4 +1,4 @@
-# The PSN Wipeout HD download opens and races; its campaign and backdrop are Fury's and absent
+# The PSN Wipeout HD download opens, races and opens its campaign; its backdrop is absent
 
 2026-10-07. `NPEA00057` v3.00 (plain HD, no Fury), installed with RPCS3 and copied to
 `data/extracted/ps3/hd-psn-eu/`, is a source: found by shape (`PARAM.SFO` beside
@@ -10,11 +10,14 @@ tests: `crates/hd/tests/hd_psn_ground_truth.rs` (5), `crates/source/tests/psn_so
 
 ## Open
 
-- RACE CAMPAIGN opens nothing on PSN (refused by name: `DATA06`'s `CellMode_Definition.xml`);
-  the package carries eight grids and an older `cellmode_definition.xml` dialect no reader reads.
+- RACE CAMPAIGN opening nothing on PSN: closed 2026-10-07: it opens the base campaign
+  directly (no HD/Fury chooser), same screens and grids as the disc's HD branch; measured on
+  RPCS3. Left open from it: `Cell Selection` art against RPCS3 (emblems and value colours,
+  shared with the disc; the `TARGET (NOVICE)` header, PSN only), and the grid source
+  (`data02` flat is read on both sources, the PS3's overlay would read `data04`'s per-difficulty).
 - No menu backdrop (the Fury point clouds are `DATA06`'s and the executable names none).
 - The race box has plain TRACK and TEAM rows, not the pickers: the package's older
-  `Selection_Definition.xml` is a different dialect no picker reads.
+  `Selection_Definition.xml` is a different reader no picker uses.
 - `SameCircuit` Zone, `DATA03`-before-`DATA02` mount order (72 shared files differ) and the
   default circuit are chosen, not measured. Exhaust and menu frame are read off the decrypted
   PSN executable's literals (85); the pointer table was not walked.
@@ -25,5 +28,5 @@ tests: `crates/hd/tests/hd_psn_ground_truth.rs` (5), `crates/source/tests/psn_so
 
 - Boot the install under RPCS3 (own config, muted) and capture the main menu, to confirm the
   frame, palette and Zone behaviour.
-- Read the older campaign and `Selection_Definition.xml` dialects so PSN gets real screens.
+- Read `Selection_Definition.xml` (`data03`'s 62,322-byte copy is the one served; `data02`'s is the disc's `DATA02` copy) so PSN gets its race box pickers.
 - Try the install without the licence file and say so in `installing.md`.
