@@ -3000,3 +3000,19 @@ draws a separate behind-glass pass is not checkable (no PS4 capture path).
 - [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) - the `SHO` block
   framed, and the executable's own 124 shader programs
 - [gtf](gtf.md) - the textures both slots name
+
+## The glass floor's gamma, curve and sun weight (2026-10-07, `talons-glass`)
+
+**Report:** on Talon's Junction the glass floor's rainbow reads far stronger than the original's. **Method:** RPCS3 teleport (`scripts/rpcs3-drive.py place`) to `327,-42,-158` and `76.9,-46,148`, a draw hook that disassembles every draw's fragment program and keeps the one whose code is block #7 (`etched_glass_tech`, `fp 0x7777c0` in the first boot), its vertex constants, texture registers and, for one blended glass chunk, its vertices. Raw captures: `data/scratch/talons-glass/capA`, `capC`.
+
+**Falsifier written first:** if the original's glass draw is block #7 with a 0..1 sun weight, our floor-region chroma stays above the reference after the fix. It is block #7 (constants below), so the arithmetic is the original's and the gap had to be in inputs. Findings:
+
+1. **Sun weight (confidence 90, instruction-level).** The paired vertex program (`Static`/`StaticQuake` `etched_glass_tech`, blocks 7 and 35) writes `o[TC5].x = v[3].w`, the colour set's fourth byte. Ours used the UV's `u` (range -3.6..5.7). Now `in.sun_mask`. Vertex inputs of one captured chunk match ours: normals within 5e-4, colours exact, UV exact.
+2. **The vertex light is curved (90).** `o[TC0].xyz = v[3].xyz ^ c[207] * c[208]` with the captured constants `[2,2,2]` and `[4,4,4]`, which are `Lighting.Prelit ambient colour power/scale`. Ours used the raw colour.
+3. **Texture gamma is set on colour textures (75).** `SET_TEXTURE_ADDRESS` bits 20-23 are `0x7` on the ramp, the grid and the probe, `0x0` on normal maps (draw 258: units 0-2 `0x60710101`/`0x60730303`). Read as R, G, B decode, alpha not (the bit-to-channel order is from RPCS3's field, not measured here). The same applies to the output alpha, `MOV H0.w, H6.x`. This **reopens** renderer.md's "Per-texture sRGB/GAMMA decode: settled negative", which looked at `FILTER`'s top nibble and not at `ADDRESS`.
+4. **`c` (90).** `ADD H4.xyz, H2, {0.26562 x3}` inside `light * (ramp + c)`; wired through `glass_sheen::bias`.
+5. **Captured engine constants, matching `track.envsettings`:** sun `{2, 1.82745, 0.886275}`, direction `{-0.7776, 0.58152, -0.23911}`, fog colour `{0.2627, 0.2157, 0.3804}` density `0.001`, reflection weight `1`, tint `{1,1,1,0}`. Sampler for the ramp: repeat/repeat, 512x16 DXT1, view coordinate `V.N` with `V` toward the eye (`c[209]` = the camera, equal to the camera matrix's eye to 1e-4).
+
+**Result, matched camera (hook-time matrix) against `01.png`, mean luma of two floor boxes (`py/stats.py`, ours before / after, reference):** right box 190 / 109 / 79, left box 217 / 188 / 143. Chroma (max-min) right 20 / 28 / 27. The rainbow is still visibly stronger than the original's in the far floor; the clamp to 8 bits was tried and changed nothing measurable (left out).
+
+**Open:** the `paraboloidReflectionTex` term (unit 1, 512x256 A8R8G8B8 render target at VRAM `0x04065380`, clamp, gamma `0x7`) adds `probe * grid.r` and is not drawn; the original frame was a few units off the hook-time camera (the craft slides 1-3 units after the shot), so no per-pixel diff exists. Which of the probe, the gamma bit order or a post stage closes the rest is unmeasured. `mag_effect_loop` has the same `in.texcoord.x` sun weight (`light`/`loop_light`) and was **not** changed: no reference. Circuits sharing the classifier: Talon's Junction, `tech_de_ra`, Modesto Heights (`etched_glass`); none has a reference frame. Omega lineage: not checked (a `just unpack list` of the Omega package shows no `etched_glass` entry; its archives were not opened).
