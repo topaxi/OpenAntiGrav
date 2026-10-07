@@ -237,3 +237,22 @@ block (`docs/rendering/hd-unlit-programs.md`, "Weapon scene blocks"). Still
 undrawn: the Missile's pair, the Bomb's five (blast pair unwritten), the
 beam's strips (`hds-bomb-blast-scene-block-and-leach-strips.md`). No trigger
 was found for the effects listed above.
+
+## 2026-10-07 (`hd-weapon-ref`): a held weapon now exists on RPCS3
+
+`scripts/rpcs3-hd-weapon.py --state N` gives the player any weapon and films the
+shot (`docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon").
+State 9 is the Bomb, 7 the Plasma, 8 the Cannon ("Machine Gun"), 0 the Rocket,
+4 the Turbo. Not done from it, in order of ready-ness:
+
+- **Plasma ring reference.** State 7 was fired twice on one boot (`data/scratch/hd-weapon-ref/e11/s3.png`):
+  a white flash and violet sparks at the craft within 0.3 game seconds, **no growing violet
+  shell** in the 5 fps contact sheet. That is not the "violet shell around the track" this
+  build draws; the shot hit something at the craft's nose, so it may be the bolt's own
+  impact rather than the ring. Re-film at 30 fps down an open straight with `--teleport-back` and
+  compare frame by frame before judging the ring.
+- **Missile** (state 1 or 2, readouts 15 and 15 do not tell them apart), **LeachBeam** (state 3
+  or 10, readout 1; state 3 never fired) and **Cannon's side sense**: one boot each with the
+  recipe; none was filmed this pass.
+- **Absorb shell colour**: circle with a held state spends it and plays the shell; a clean
+  frame was not taken.
