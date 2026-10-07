@@ -869,6 +869,83 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
   exit or kill the PID. A private instance needs its own `XDG_*` copy of `~/.config/rpcs3`, `OAG_RPCS3_DISPLAY`,
   `OAG_RPCS3_GDB`, `OAG_RPCS3_PAD_NAME`, `OAG_RPCS3_SCRATCH_CONFIG`, and `~/.cache/rpcs3` created (`TTY.log`'s directory).
 
+## Giving the player a weapon and filming its effect (2026-10-07, `hd-weapon-ref`)
+
+Nobody had a held weapon on RPCS3 before this. It needs no pad pickup and no
+Ghidra call: **the held weapon is a state word in the craft's pickup slot.**
+
+| Cell | Meaning | How read |
+| --- | --- | --- |
+| `*(ship + 0x5edc)` | the craft's pickup-slot object (`0x230` bytes apart in one pool, craft 0..7) | eight slots read on one boot, all `-1` at the grid |
+| `slot + 0x204`, `+0x208` | the held weapon (`-1` empty); **write both** | a write of `+0x204` alone with `+0x208 = -1` never fired; writing the pair did |
+| `slot + 0x210`, `+0x218` | an index that counts up per craft (`0..7`, `1..8`), not touched | AI slots, one boot |
+
+Confidence 85: 12 states written on the player on four boots, each changing the HUD
+icon, and the AI craft's own slots carried the same pairs when they held a weapon
+(`ai*_state*.bin` in `data/scratch/hd-weapon-ref/e6/`).
+
+**Buttons** (the virtual pad, measured on the player): **triangle fires**, **circle
+absorbs** (state goes back to `-1` and the blue absorb glow plays), square, r1, l1, r2
+and l2 do nothing with a weapon held. **States 11 and above crash the game** ("The PS3
+application has likely crashed"): the fire and update jump tables have 0..10.
+
+**Which state is which weapon** (the HUD's damage readout beside the pickup hex against
+`WeaponStats_Race.xml`'s `damage`, plus what fired). Only the rows with evidence are
+named, and a row below 80 says why:
+
+| State | Reading | Evidence | Conf |
+| --- | --- | --- | ---: |
+| 0 | Rocket | readout 10 = Rocket's `damage`; two trails | 80 |
+| 4 | Turbo | readout 0; the boost carried the craft away | 85 |
+| 5 | Shield | readout 0; absorb-style blue glow, state spent | 70 |
+| 7 | Plasma | readout 60 = Plasma's `damage`; fire handler sets bit `0x4`, the id `Weapon_FirePlasma` uses | 80 |
+| 8 | Cannon | the HUD announces **"Machine Gun"**; readout 5 | 90 |
+| **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
+| 1, 2 | Missile, Quake | readouts 15 and 15 (both tables say 15), not told apart | 50 |
+| 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired | - |
+
+The state is **not** Pulse's craft id: Pulse's Mine is 8 and Bomb 9 by id and 8 and 9 by
+bit (`0x2`, `0x100`); here the same bits sit on the other numbers (state 9 sets `0x2`, state 8
+`0x100`: `0x0012d970`'s sixteen handlers at `0x0012da48..`), and the readout and the
+picture say state 9 is the Bomb.
+
+### The recorder is the clock
+
+`pause`/`resume` plus `screenshot` costs about a second a frame and has no clock.
+RPCS3's own recorder (`Session.toggle_recording`, 30 fps, 1280x720, under
+`$XDG_CONFIG_HOME/rpcs3/recordings/BCES00664/`) does, and the **HUD's race clock is the
+game's own**: on this host the game ran at **0.59x** real time (HUD 20.2 s to 23.0 s over
+144 video frames, three boots' worth of frames agreeing within a frame), so one video frame is
+0.0197 game seconds. A mid-recording frame is only decodable from its keyframe: start
+`ffmpeg -ss` a second before the event and drop the first frames.
+
+`scripts/rpcs3-hd-weapon.py --state N [--teleport-back D]` is the recipe: boot, walk to
+the race, tap START RACE and wait out the countdown, start the recorder, write the state,
+press triangle. `--teleport-back` puts the craft D units behind the shot after it, so a
+laid Bomb or Mine stays in front of the camera instead of under the craft.
+
+### What a Bomb does in the original (Talon's Junction, the player standing, 0 km/h)
+
+Measured by `data/scratch/hd-weapon-ref/e11` (bomb under the craft) and `e12` (craft put 30
+units behind it):
+
+- **The bomb tripped on its own owner**, 0.35 game seconds after it was laid, with the player at
+  rest on top of it: a pink dome with a white core for 17 video frames, then the blast.
+  `NormalBomb_Update` (`0x001443f8`) loops over every craft in `trigger_radius` (6 in
+  `WeaponStats_Race.xml`) with no owner test in the decompile. This engine's trip excludes
+  the owner (`force_bomb_trip`'s own comment); **not changed here, the simulation is
+  not this lane's**: the difference is in the handover thread.
+- **A laid Bomb is drawn as a small red-and-white bomb with a pink ring about three bomb
+  widths across, with a second ring that grows outward into it** and a white flash at the
+  centre, repeating about every 16 video frames (about 0.3 game seconds, read off 97 frames
+  of one boot; `e12/ring.png`). This build draws none of it: **`HD_bomb_halo` is not drawn at all**.
+- **The detonation, in the standing case**, camera 7 units behind the craft: the fireball
+  fills the screen **pale yellow-white with a marbled texture** for the first 0.9 s (the HUD
+  stays on top), recedes to the right of the frame by 1.2 s with the craft flung ahead at
+  155 km/h, and leaves white haze by 1.8 s. No brown haze and no orange rim. Frames:
+  `data/scratch/hd-weapon-ref/pair_bomb_stationary.png` (left original, right ours;
+  rows: the armed bomb, then +0.2, +0.67, +1.17, +1.8 s).
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
