@@ -3,8 +3,9 @@
 `docs/overview/installing.md` was written by following it literally on Linux
 (2026-10-07). Pulse (PSP and PS2) and Pure work as dropped in. The rest of
 the title list does not, and the program's own messages do not say why.
-Ranked by how badly each stops a player; the detail is the lane's
-`friction.md`, summarised here.
+Ranked by how badly each stops a player; the full list is the
+lane's scratch file `data/scratch/readme-setup/friction.md` in the main
+checkout (gitignored), summarised here.
 
 ## Open
 
@@ -31,10 +32,12 @@ Ranked by how badly each stops a player; the detail is the lane's
 6. **The intro is a black `INTRO FRAME n / N (NO PICTURE)` without ffmpeg**, so
    a first screenshot looks broken. `oag-game --help` still opens with "Run
    Wipeout Pulse from a disc image".
-7. **Stale lines elsewhere:** `data/README.md` calls Pure and HD "read-only
+7. **2048's 1.04 patch is not mounted** (`crates/2048/src/lib.rs`), so a
+   player who unpacks it gains nothing and nothing says so.
+8. **Stale lines elsewhere:** `data/README.md` calls Pure and HD "read-only
    format targets, not playable" and says `Error::WrongTitle` for Pure;
    `docs/tools/packaging.md` says "five normalised names" (there are six).
-8. **Not walked:** Windows and macOS, a clean machine with no system
+9. **Not walked:** Windows and macOS, a clean machine with no system
    libraries, the 2048 and Omega unpack chains, Pulse DLC mounting (the dry
    run prints no pack line), and audio.
 
@@ -50,4 +53,4 @@ Ranked by how badly each stops a player; the detail is the lane's
    `scripts/ps3iso.py`.
 5. Decide whether a player-facing unpack command for 2048 and Omega is wanted
    at all, given that it needs a license key from the player's own copy.
-6. Fix the stale lines in item 7.
+6. Fix the stale lines in item 8.

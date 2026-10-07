@@ -66,7 +66,7 @@ target/release/oag-game                             # boots what it finds there
 | Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/`, named on the command line |
 
 Check what was found without opening a window:
-`target/release/oag-game --dry-run --no-audio`. Linux is the only OS tried so
+`target/release/oag-game --dry-run --no-audio --no-video <source>`. Linux is the only OS tried so
 far. The whole walk-through, the system libraries, where settings and logs are
 kept and the error messages you may meet are in
 [`docs/overview/installing.md`](docs/overview/installing.md).

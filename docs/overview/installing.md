@@ -123,15 +123,22 @@ The tools the project used and the exact steps are in
 ```
 data/extracted/vita/PCSF00007/        2048, Europe (PCSA00015 for USA)
     base/PSP2/data.psarc              required: this file is what marks a usable copy
-    patch-v104/                       the 1.04 patch, next to base/
-    dlc1/  dlc2/                      the DLC packs, next to base/
+    dlc1/PSP2/dlc1.psarc              DLC pack 1, mounted behind base/ when present
+    dlc2/PSP2/dlc2.psarc              DLC pack 2, the same
+    patch-v104/                       the 1.04 patch: NOT read, see below
 
 data/extracted/ps4/
     omega-eu/uroot/data00..04.psarc   base package
     omega-eu-patch/uroot/data09.psarc the day-one patch: required
 ```
 
-2048 starts with `base/` alone. Omega needs the patch: only the patch's
+2048 starts with `base/` alone (checked: a folder holding only
+`base/PSP2/data.psarc` opens as `Wipeout 2048`). The DLC packs are mounted
+when their folders are there. The 1.04 patch's archives are deliberately not
+mounted yet, because they would be searched behind the entries they replace
+(`crates/2048/src/lib.rs`, `EXTRA_CANDIDATES`), so unpacking it changes
+nothing today. A `base/` folder that is itself a symlink was not found, so use
+real folders. Omega needs the patch: only the patch's
 `data09.psarc` carries the front end, so a base-only folder is not offered.
 Omega's layout was checked from one package form only, the one the project's
 maintainer holds, so a differently packaged copy may unpack to a different
@@ -155,17 +162,23 @@ target/release/oag-game data/extracted/vita/PCSF00007
 target/release/oag-game data/extracted/ps4
 ```
 
-Name the source for 2048 and Omega. With nothing named, the program looks
-only for disc images, so a folder-only setup ends in the "no disc image found"
-error. `target/release/oag-game --launcher` is the other route: it opens a
-window listing every image and every unpacked folder it can find, and you pick
-with the arrow keys and Enter.
+Name the source for 2048 and Omega. `--dry-run`, `--screenshot` and `--race`
+with nothing named look only for disc images, so on a folder-only setup they
+end in the "no disc image found" error. A plain windowed `oag-game` with
+nothing named, and `oag-game --launcher`, open a chooser that lists every
+image and every unpacked folder found under `data/`, with the platform shown
+as `unknown` for a folder; pick with the arrow keys and Enter. (Seen with
+several folders present. A lone folder in a window was not re-run cleanly, so
+name it to be sure.)
 
 To check a setup without opening a window:
 
 ```sh
-target/release/oag-game --dry-run --no-audio data/images/pulse-psp-eu.chd
+target/release/oag-game --dry-run --no-audio --no-video data/images/pulse-psp-eu.chd
 ```
+
+Leave `--no-video` out and the first run also converts the intro movie, which
+takes about 80 seconds once.
 
 A good result is one line naming the title and the source:
 
@@ -178,7 +191,8 @@ The other titles print `Wipeout Pure`, `Wipeout HD`, `Wipeout 2048` and
 window, write one frame to a file:
 
 ```sh
-target/release/oag-game --no-audio --screenshot /tmp/menu.png --ticks 300 data/images/pulse-psp-eu.chd
+# the first menu the disc shows (Language Selection); the default 300 ticks only reaches the intro
+target/release/oag-game --no-audio --no-video --screenshot /tmp/menu.png --until "Language Selection" --hold start data/images/pulse-psp-eu.chd
 target/release/oag-game --no-audio --race --no-intro --screenshot /tmp/race.png --ticks 120 data/images/pulse-psp-eu.chd
 ```
 
@@ -215,8 +229,8 @@ log file (an empty value writes none).
 
 One line each; the full per-subsystem picture is [status](status.md).
 
-- **Pulse (PSP, PS2):** intro, menus, a race with eight ships and AI from the
-  disc's own data. The reference title. Physics is implemented from the
+- **Pulse (PSP, PS2):** intro, menus and a race on the disc's own data, with
+  an eight-craft grid and AI built (see status). The reference title. Physics is implemented from the
   original's code but not yet checked tick for tick.
 - **Pure:** boots to its menus and a race loads on its own data.
 - **HD / Fury:** boots, and a race loads on the disc's own circuits with
