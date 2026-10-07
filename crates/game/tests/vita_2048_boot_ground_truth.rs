@@ -231,8 +231,8 @@ fn the_parsed_touch_grids_match_the_title_table() {
     }
 }
 
-/// From `Boot Connect` to the campaign shell on the pad alone: cross through
-/// the movie and the title screen, two crosses on the mode grid.
+/// From `Boot Connect` to the campaign shell on the pad alone: the movie is
+/// skipped (no picture), cross through the title screen, two crosses on the mode grid.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
@@ -243,17 +243,13 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
 
     // Nothing pressed: the network check and the card's own delay.
     assert!(drive_until(&mut frontend, &[], w2048::BOOT_INTRO_MOVIE));
-    // The intro is 99.57 s (`docs/formats/mp4.md`), longer than the 60 s
-    // `drive_until` allows, so with nothing pressed it is still playing.
+    // The intro is 99.57 s (`docs/formats/mp4.md`) and this run decodes no
+    // picture, so the screen leaves by itself the way a Start press would
+    // rather than sitting black for the length of the film.
     assert!(
-        !drive_until(&mut frontend, &[], w2048::TITLE_SCREEN),
-        "with no button the intro screen has not run out inside 60 s"
+        drive_until(&mut frontend, &[], w2048::TITLE_SCREEN),
+        "an intro with no picture is skipped with no button"
     );
-    assert!(drive_until(
-        &mut frontend,
-        &[Button::Cross],
-        w2048::TITLE_SCREEN
-    ));
     assert!(drive_until(
         &mut frontend,
         &[Button::Cross],

@@ -187,8 +187,7 @@ impl Output {
 
         let mixer = Arc::new(Mutex::new(Mixer::new(sample_rate)));
         let health = Arc::new(Health::default());
-        let (producer, consumer) =
-            rtrb::RingBuffer::new(render::ring_capacity(sample_rate, buffer.max(MIN_BUFFER)));
+        let ring_capacity = render::ring_capacity(sample_rate, buffer.max(MIN_BUFFER));
         if let Some(spec) = tap {
             log::info!(
                 "audio: recording {:.0} s of output to {}",
@@ -217,85 +216,15 @@ impl Output {
         // `open_or_null`, left the whole session silent on a working card. The
         // mixer still renders `f32` and the conversion happens on the way out;
         // `spread` is generic over the destination for that reason.
-        let format = supported.sample_format();
-        let stream = match format {
-            cpal::SampleFormat::F32 => build::<f32>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::F64 => build::<f64>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::I8 => build::<i8>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::I16 => build::<i16>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::I32 => build::<i32>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::I64 => build::<i64>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::U8 => build::<u8>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::U16 => build::<u16>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::U32 => build::<u32>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            cpal::SampleFormat::U64 => build::<u64>(
-                &device,
-                config,
-                consumer,
-                &health,
-                recording.as_ref().map(|(t, _)| t),
-            ),
-            // `SampleFormat` is `#[non_exhaustive]`, and the packed 24-bit and
-            // DSD formats have no `FromSample<f32>` to convert through. Named
-            // rather than silently silent, which is the failure this arm's
-            // siblings exist to end.
-            other => Err(anyhow::anyhow!("unsupported sample format {other}")),
-        }
-        .with_context(|| format!("building a {format} output stream on {name}"))?;
+        let (stream, producer) = build_stream(
+            &device,
+            config,
+            supported.sample_format(),
+            ring_capacity,
+            &health,
+            recording.as_ref().map(|(t, _)| t),
+        )
+        .with_context(|| format!("building an output stream on {name}"))?;
 
         let spectrum = Arc::new(Spectrum::new());
         // After the stream, so a device that refuses to open does not leave a
@@ -445,6 +374,70 @@ impl Output {
         }
         self.with_mixer(|mixer| mixer.render_tick(tick_hz, out))
     }
+}
+
+/// The formats to try, the device's own default first, then `i16` and `f32`.
+fn formats_to_try(default: cpal::SampleFormat) -> Vec<cpal::SampleFormat> {
+    let mut formats = vec![default];
+    for fallback in [cpal::SampleFormat::I16, cpal::SampleFormat::F32] {
+        if !formats.contains(&fallback) {
+            formats.push(fallback);
+        }
+    }
+    formats
+}
+
+/// Builds the stream in the device's own default sample format and, when that
+/// is refused, in the other formats a mixer can convert to.
+///
+/// **Some drivers advertise a default they then refuse.** Android's AAudio on a
+/// Galaxy S24 reports `f32` and fails `build_output_stream` with
+/// `IllegalArgument`, where the same device takes `i16`. The ring's consumer is
+/// moved into the callback and lost when a build fails, so each attempt gets
+/// a ring of its own and the producer of the one that worked is returned.
+fn build_stream(
+    device: &cpal::Device,
+    config: cpal::StreamConfig,
+    default: cpal::SampleFormat,
+    ring_capacity: usize,
+    health: &Arc<Health>,
+    tap: Option<&Arc<Tap>>,
+) -> Result<(cpal::Stream, rtrb::Producer<f32>)> {
+    let mut first_error = None;
+    for format in formats_to_try(default) {
+        let (producer, consumer) = rtrb::RingBuffer::new(ring_capacity);
+        let built = match format {
+            cpal::SampleFormat::F32 => build::<f32>(device, config, consumer, health, tap),
+            cpal::SampleFormat::F64 => build::<f64>(device, config, consumer, health, tap),
+            cpal::SampleFormat::I8 => build::<i8>(device, config, consumer, health, tap),
+            cpal::SampleFormat::I16 => build::<i16>(device, config, consumer, health, tap),
+            cpal::SampleFormat::I32 => build::<i32>(device, config, consumer, health, tap),
+            cpal::SampleFormat::I64 => build::<i64>(device, config, consumer, health, tap),
+            cpal::SampleFormat::U8 => build::<u8>(device, config, consumer, health, tap),
+            cpal::SampleFormat::U16 => build::<u16>(device, config, consumer, health, tap),
+            cpal::SampleFormat::U32 => build::<u32>(device, config, consumer, health, tap),
+            cpal::SampleFormat::U64 => build::<u64>(device, config, consumer, health, tap),
+            // `SampleFormat` is `#[non_exhaustive]`, and the packed 24-bit and
+            // DSD formats have no `FromSample<f32>` to convert through. Named
+            // rather than silently silent.
+            other => Err(anyhow::anyhow!("unsupported sample format {other}")),
+        };
+        match built {
+            Ok(stream) => {
+                if first_error.is_some() {
+                    warn!("audio: the default {default} stream was refused; using {format}");
+                }
+                return Ok((stream, producer));
+            }
+            Err(error) => {
+                let error = error.context(format!("building a {format} output stream"));
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+    Err(first_error.unwrap_or_else(|| anyhow::anyhow!("no sample format to try")))
 }
 
 fn build<T>(

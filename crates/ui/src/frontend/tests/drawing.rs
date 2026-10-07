@@ -513,7 +513,7 @@ fn input_down(frontend: &mut Frontend) {
 
 #[test]
 fn the_intro_draws_no_video_quad_without_a_picture() {
-    let frontend = frontend(300);
+    let frontend = frontend(0);
     let draws = frontend.draw_list();
     assert!(!draws.iter().any(|d| matches!(d, Draw::Video { .. })));
 }

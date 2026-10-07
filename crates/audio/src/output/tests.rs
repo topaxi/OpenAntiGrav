@@ -325,3 +325,14 @@ fn a_tap_fills_to_its_capacity_and_is_taken_exactly_once() {
     assert!(tap.take().is_none(), "a recording is written once");
     assert!(!tap.is_full());
 }
+
+/// A device that advertises `f32` and refuses it (AAudio on a Galaxy S24) must
+/// get `i16` tried next, and a device whose default is `i16` must not be asked
+/// for it twice.
+#[test]
+fn a_refused_default_format_falls_back_to_i16_then_f32() {
+    use cpal::SampleFormat::{F32, I16, U16};
+    assert_eq!(formats_to_try(F32), vec![F32, I16]);
+    assert_eq!(formats_to_try(I16), vec![I16, F32]);
+    assert_eq!(formats_to_try(U16), vec![U16, I16, F32]);
+}

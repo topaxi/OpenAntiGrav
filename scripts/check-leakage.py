@@ -52,13 +52,19 @@ ALLOWED_TRACKED = {
 }
 
 # Files a release artifact (tarball, zip, AppDir) may carry despite a forbidden
-# extension, by path relative to the artifact root. The only one is the window
+# extension, by path relative to the artifact root. The only ones are the window
 # icon `oag-game --write-icon` rasterises from the project's own vector art -
 # a `.png`, but not a reproduction of anything on a disc. Allowed by path, not by
 # extension, so a stray screenshot in a package still fails.
 ARTIFACT_ALLOWED = {
     "oag-game.png",
     "usr/share/icons/hicolor/256x256/apps/oag-game.png",
+    # The same rasteriser at the Android launcher's five densities
+    # (`scripts/build-apk.sh`), which aapt2 files under `-v4` directories.
+    *(
+        f"res/mipmap-{density}-v4/ic_launcher.png"
+        for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi")
+    ),
 }
 
 ROOT = Path(__file__).resolve().parent.parent

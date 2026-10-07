@@ -179,6 +179,18 @@ pub fn ensure_cached(at3: &[u8], cache_dir: &Path) -> Result<PathBuf> {
     Ok(out)
 }
 
+/// Where this stream's samples are (or would be) in the cache, or `None` for a
+/// blob that is not a readable RIFF.
+///
+/// What a manifest of which cache files belong to which disc is built from:
+/// the name is the content key, so it is the same file [`ensure_cached`] writes.
+#[must_use]
+pub fn cache_file(at3: &[u8], cache_dir: &Path) -> Option<PathBuf> {
+    read_format(at3)
+        .ok()
+        .map(|format| cache_path(at3, format, cache_dir))
+}
+
 /// Whether this stream's samples are already in the cache.
 ///
 /// The question `oag_game::prefetch` asks while planning, so that the total it

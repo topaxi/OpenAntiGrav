@@ -120,6 +120,28 @@ impl Frontend {
         }
     }
 
+    /// Whether the current screen is a movie leg that has frames but no picture to
+    /// show for them.
+    ///
+    /// Such a leg is a black screen for as long as the movie would have run (forty
+    /// seconds for the disc's own intro), so it is left at once, the way a player's
+    /// Start press leaves it. A leg that plays no movie by design is not this: its
+    /// plan has no frames.
+    pub(super) fn leg_has_no_picture(&self) -> bool {
+        if !self.is_playing_movie() {
+            return false;
+        }
+        let Some(current) = self.machine.current() else {
+            return false;
+        };
+        let plan = self
+            .steps
+            .iter()
+            .find(|step| step.state == current)
+            .map_or(self.first, |step| step.movie);
+        !plan.has_picture
+    }
+
     pub(super) fn begin_hold(&mut self, finish: bool) {
         self.hold = Hold::Held { finish };
         self.held_for = 0.0;

@@ -56,6 +56,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use oag_mesh::mesh_render::Anisotropy;
@@ -547,15 +548,28 @@ fn migrate(table: &mut toml::Table) {
 /// A malformed value is an error rather than a silently discarded default: a
 /// typo should be visible, not swallowed. Absence is not malformed, so a
 /// missing file or config directory is created rather than reported.
+///
+/// A file or directory the process may not read or write (an Android
+/// reinstall can restore the app's files under another owner) is not a reason
+/// to refuse to boot: it logs a warning and runs on defaults, writing nothing.
 pub fn load() -> Result<Settings> {
     let Some(path) = path() else {
         return Ok(Settings::default());
     };
+    load_from(&path)
+}
 
-    let on_disk = match std::fs::read_to_string(&path) {
+fn load_from(path: &std::path::Path) -> Result<Settings> {
+    let on_disk = match std::fs::read_to_string(path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+        Err(e) => {
+            warn!(
+                "could not read {}: {e}; running on default settings, nothing is written back",
+                path.display()
+            );
+            return Ok(Settings::default());
+        }
     };
 
     let mut settings: Settings = match &on_disk {
@@ -585,11 +599,16 @@ pub fn load() -> Result<Settings> {
         toml::to_string_pretty(&settings).context("serialising settings")?
     );
     if on_disk.as_deref() != Some(canonical.as_str()) {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(path, &canonical));
+        if let Err(e) = written {
+            warn!(
+                "could not write {}: {e}; running on the settings read, nothing persists",
+                path.display()
+            );
         }
-        std::fs::write(&path, &canonical).with_context(|| format!("writing {}", path.display()))?;
     }
 
     Ok(settings)

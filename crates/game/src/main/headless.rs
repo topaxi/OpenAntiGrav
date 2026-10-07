@@ -102,7 +102,10 @@ pub(crate) fn run_windowless(
             combine_variant(loaded.title, &settings.race.team, &settings.race.variant).0
         }));
 
-    if cli.dry_run {
+    // `--dry-run --prefetch` is the headless "convert everything and exit" run
+    // that fills a cache to copy to a device with no `ffmpeg`; a bare
+    // `--dry-run` still leaves before anything is converted.
+    if cli.dry_run && !cli.prefetch {
         return Ok(());
     }
 
@@ -126,6 +129,13 @@ pub(crate) fn run_windowless(
             refresh_video: cli.refresh_video,
         })
     });
+
+    if cli.dry_run {
+        if let Some(prefetch) = &mut prefetch {
+            prefetch.join();
+        }
+        return Ok(());
+    }
 
     let scheme = resolve_scheme(cli, settings);
 
