@@ -3,8 +3,9 @@
 //! (`docs/gameplay/race-intro.md`, "Other titles").
 //!
 //! What was watched on RPCS3 (2026-10-07, Talons Junction): the fly-over plays after the
-//! load, cuts between shots, shows no HUD and waits on the prompt. The camera file, the timing
-//! and the field of view were not measured, so each says so.
+//! load, cuts between shots, shows no HUD, waits on the prompt and loops at the file's length
+//! until cross is tapped. The camera file's mode choice, the hold and lock, the HUD delay and
+//! the field of view were not measured, so each says so.
 
 use oag_title::pre_race::{Ending, PreRace, Skip, Sourced};
 use oag_title::{Platform, Platforms};
@@ -22,9 +23,9 @@ pub const PRE_RACE: PreRace = PreRace {
     hold_ticks: Sourced::chosen(0),
     lock_ticks: Sourced::chosen(0),
     hud_delay_ticks: Sourced::chosen(0),
-    // The files author `LoopEnd == AnimEnd` (173.33 s on Vineta K), and the prompt waits for the
-    // player; what happens at the end of a 190 s watch was not seen.
-    ending: Sourced::chosen(Ending::OnlyBySkip),
+    // Watched through a 230 s hold on RPCS3 (2026-10-07, Talons Junction): shot 19 repeats shot 1
+    // after 187 s, the file's 188.33 s, and the prompt never leaves; nothing ended it.
+    ending: Sourced::measured(Ending::OnlyBySkip),
     // `docs/rendering/start-gantry.md`: the harness "taps cross once to skip the track fly-over".
     skip: Sourced::measured(Skip::Press),
     panel: false,
