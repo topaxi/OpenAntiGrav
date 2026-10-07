@@ -81,6 +81,8 @@ full comparison.
 - [zone-audio.md](zone-audio.md) - Zone's sound banks: the bank-path gate is
   read, the announcer's own trigger is still not (all below the 70 naming
   threshold, cited by address only).
+- [archive-mount.md](archive-mount.md) - the five PSARCs, their mount order, and
+  which copy answers a path the base and the patch both carry.
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's

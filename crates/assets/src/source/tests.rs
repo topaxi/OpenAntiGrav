@@ -18,6 +18,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial};
 const TITLE: &Title = &Title {
     name: "Wipeout Pulse",
     archives: ArchiveCandidates {
+        patch: &[],
         data: &[
             ("PSP_GAME/USRDIR/Data.wad", Platform::Psp),
             ("WADS2.WAD", Platform::Ps2),
@@ -198,11 +199,13 @@ fn mounted(
         layout: Layout {
             platform: Platform::Psp,
             data: spec.clone(),
+            patch: Vec::new(),
             fe: None,
             extra: Vec::new(),
             serial: None,
         },
         data: Container::open(&spec).expect("the test archive"),
+        patch: Vec::new(),
         fe: None,
         extra: Vec::new(),
         packs: mounted,
@@ -245,6 +248,59 @@ fn a_pack_answers_for_a_name_the_source_does_not_have() {
         archives.locate("extra.bin"),
         Some(archives.packs[0].label()),
         "and it reports which archive answered"
+    );
+}
+
+/// The rule from [`ArchiveCandidates::patch`](oag_title::ArchiveCandidates::patch):
+/// an update archive is searched before the bulk archive, in the order the
+/// layout lists them, so a replaced entry reads as its newer copy while an
+/// entry only the base holds is still the base's.
+#[test]
+fn a_patch_archive_shadows_the_source_and_the_first_listed_patch_wins() {
+    let dir = testing::temp_dir("mount-patch-first");
+    let mut archives = mounted(
+        &dir,
+        &[
+            ("shared.bin", b"base"),
+            ("both_patches.bin", b"base"),
+            ("untouched.bin", b"base"),
+        ],
+        Vec::new(),
+    );
+    for (name, entries) in [
+        (
+            "newer",
+            &[
+                ("shared.bin", &b"newer"[..]),
+                ("both_patches.bin", b"newer"),
+            ][..],
+        ),
+        ("older", &[("both_patches.bin", &b"older"[..])][..]),
+    ] {
+        let sub = dir.join(name);
+        std::fs::create_dir_all(&sub).expect("a patch directory");
+        let spec = testing::write_wad(&sub, "Data.wad", entries);
+        archives
+            .patch
+            .push(Container::open(&spec).expect("a patch archive"));
+    }
+
+    assert_eq!(archives.read_name("shared.bin").unwrap(), b"newer");
+    assert_eq!(archives.read_name("both_patches.bin").unwrap(), b"newer");
+    assert_eq!(archives.read_name("untouched.bin").unwrap(), b"base");
+    assert_eq!(
+        archives.locate("shared.bin"),
+        Some(archives.patch[0].label()),
+        "and it reports the patch as the archive that answered"
+    );
+    assert_eq!(
+        archives.locations("both_patches.bin"),
+        [
+            archives.patch[0].label(),
+            archives.patch[1].label(),
+            archives.data.label()
+        ],
+        "locations lists the same order locate searches"
     );
 }
 
@@ -373,6 +429,7 @@ fn a_psp_extract_resolves_to_the_psp_archives() {
 fn every_extra_archive_present_resolves_and_a_missing_one_is_skipped() {
     const SEVEN: &Title = &Title {
         archives: ArchiveCandidates {
+            patch: &[],
             data: &[("USRDIR/DATA00.PSARC", Platform::Ps3)],
             fe: &[("USRDIR/DATA02.PSARC", Platform::Ps3)],
             extra: &[

@@ -267,3 +267,12 @@ Searched 2026-10-05; nothing was downloaded. Confidence is in the source, not in
 - 2048 DLC3 pack: existence; HD 1.xx/2.xx between 2.10 and 2.51.
 - The game opens only `PSP2/data.psarc`: none of the 2048 patch is read by the engine here (see
   [2048-status.md](2048-status.md)); the patch's `hdships`, `SP.xml` and grid revisions are unused.
+
+## What each title mounts (2026-10-07, `title-patches` lane)
+
+| Title | Update content in `data/` | Mounted | Order and evidence |
+| --- | --- | --- | --- |
+| 2048 EU / USA | `patch-v104/PSP2/data1.psarc`, `data2.psarc` (identical in both regions) | **yes**, as `ArchiveCandidates::patch` | `data2`, `data1`, `data`, then `dlc1`, `dlc2`. The v1.04 executable mounts `data`, `data1`, `data2`, `dlc1`, `dlc2` at one FIOS2 mount point ([archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md), confidence 80); the base is shadowed by the patch (Vita3K, confidence 85); `data2` over `data1` and DLC against patch are **chosen, not measured** |
+| Omega EU | patch v1.07: `data05`, `07`, `08`, `09` | yes, all four | `data09` (bulk), then `data08`, `data07`, `data05`, then base `data00` to `data04`; patch ahead of base is **chosen, not measured** (no PS4 observed). None of the 19,597 patch paths is hidden behind a base copy by this order; order among the four patch archives is unmeasured |
+| HD / Fury EU | none: `PS3_UPDATE/PS3UPDAT.PUP` on the disc is system firmware | n/a | not checkable (no game update held, disc is 1.03) |
+| Pulse (PSP, PS2), Pure | none exist | n/a | not checkable; their DLC zips are mounted as packs, see [dlc-pack.md](dlc-pack.md) |

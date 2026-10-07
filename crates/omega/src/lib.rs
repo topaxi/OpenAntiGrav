@@ -57,6 +57,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout: Omega Collection",
     archives: ArchiveCandidates {
+        patch: &[],
         data: DATA_CANDIDATES,
         // **No companion archive - the "bulk" slot already does the job a
         // companion would.** See [`archives`] for why `data09` sits there
