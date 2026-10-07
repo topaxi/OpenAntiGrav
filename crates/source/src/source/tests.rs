@@ -378,8 +378,18 @@ fn the_package_search_path_mirrors_the_image_search_path_root_for_root() {
         return;
     }
 
-    let images = search_path();
-    let packages = package_search_path();
+    // The portable folder (the executable's own, when there is no AppImage) is
+    // searched for an image directly in it as well, so it is not one-to-one:
+    // drop what lives under it and compare the rest.
+    let portable = portable_directory().expect("a test binary has a folder");
+    let images: Vec<PathBuf> = search_path()
+        .into_iter()
+        .filter(|path| !path.starts_with(&portable))
+        .collect();
+    let packages: Vec<PathBuf> = package_search_path()
+        .into_iter()
+        .filter(|path| !path.starts_with(&portable))
+        .collect();
     assert_eq!(
         images.len(),
         packages.len(),
