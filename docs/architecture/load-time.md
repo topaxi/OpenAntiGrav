@@ -38,8 +38,9 @@ the load average was 5 to 12 throughout (a desktop in use, no other builds).
 | 2048 (`PCSF00007`) | Altima | 2.945 s | **1.695 s** | 339 / 382 MiB |
 | Omega (`data/extracted/ps4`) | Tech De Ra | 4.116 s | **2.111 s** | 988 / 1,032 MiB |
 
-Spread within each triple was under 5% except where a run caught the desktop
-(the worst: HD PSN after, 1.518-1.737 s).
+Spread within each triple was under 5% except where a run caught the desktop:
+Pulse PS2 before (2.246-2.577 s), 2048's boot before (0.478-0.749 s) and HD
+PSN after (1.518-1.737 s).
 
 ### Boot to first frame
 
@@ -55,8 +56,9 @@ Spread within each triple was under 5% except where a run caught the desktop
 
 Boot was never the problem: every title but the PS2 reaches its first frame in
 well under a second, and the PSP and Pure rows moved by the machine's own
-noise (the "after" set ran at a load average of 11). The PS2 row is the CHD
-split below; 2048's and Omega's are the PSARC path index.
+noise (the "after" set ran at a load average of 11; the CHD split's own A/B
+below puts the PSP boot cost under its spread). The PS2 row is the CHD split
+below; 2048's and Omega's are the PSARC path index.
 
 ### Proof that nothing changed
 
@@ -160,10 +162,17 @@ above; the path index and the read memo apply to every PSARC title.
 The Pulse PS2 disc keeps its music as raw PCM in `54748/PS2MUSIC.WAD`, and a
 race reads one track whole: about 40 MiB of LZMA hunks, decompressed one at a
 time on the caller's thread, which was over half that race's load and most of
-its boot. `ChdSource::read_sectors` now splits a read spanning 64 hunks or
-more per worker into runs of whole hunks, each read by its own `ChdSource` on
-the same file, at most 8 threads (both chosen, not measured); an ISO 9660 walk's
-small reads stay on one thread. `a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one`
+its boot. `ChdSource::read_sectors` now splits a read that gives each worker
+4 MiB or more into runs of whole hunks, each read by its own `ChdSource` on the
+same file, at most 8 threads (both chosen); smaller reads stay on one thread.
+
+The first threshold was 64 hunks per worker, and an interleaved A/B (five runs
+each, the split forced off against on) showed it cost a PSP boot 0.301 to
+0.320 s: every worker reopens the file and decodes its hunk map, which a
+medium read did not repay. At 4 MiB per worker the same A/B reads: Pulse PSP
+boot 0.305 against 0.312 s and Pure 0.407 against 0.410 s (spreads overlap),
+Pulse PS2 boot 1.299 to 0.666 s, PS2 race 2.240 to 1.130 s, PSP race 0.904 to
+0.890 s. `a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one`
 reads 20,011 sectors of the music archive, starting and ending mid-hunk, both
 ways. Pulse PS2 race 2.28 to 1.13 s, boot 1.32 to 0.63 s; Pulse PSP race 0.88
 to 0.82 s.

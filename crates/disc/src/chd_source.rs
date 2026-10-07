@@ -347,7 +347,7 @@ impl SectorSource for ChdSource {
     }
 
     /// As the trait's own, and **split across threads when the range spans
-    /// [`PARALLEL_HUNKS`] hunks or more**: every hunk decompresses on its own,
+    /// [`PARALLEL_BYTES`] per worker or more**: every hunk decompresses on its own,
     /// so each worker opens the file again and reads a run of whole hunks into
     /// its own slice of the result. The bytes are the serial read's. A Pulse
     /// PS2 race track is one 40 MiB read of LZMA hunks, and it was over half
@@ -360,7 +360,7 @@ impl SectorSource for ChdSource {
         let workers = std::thread::available_parallelism()
             .map_or(1, std::num::NonZero::get)
             .min(MAX_WORKERS)
-            .min((hunks / PARALLEL_HUNKS) as usize);
+            .min(count as usize * SECTOR_SIZE / PARALLEL_BYTES);
         if workers < 2 {
             self.read_into(lba, &mut out)?;
             return Ok(out);
@@ -390,9 +390,11 @@ impl SectorSource for ChdSource {
     }
 }
 
-/// The fewest hunks a read must span per worker before it is split at all.
-/// A file walk's directory reads stay on one thread.
-const PARALLEL_HUNKS: u32 = 64;
+/// The fewest bytes a read must give each worker before it is split at all:
+/// every worker opens the file again and decodes its hunk map, which a
+/// split at 64 hunks per worker paid for on a PSP boot's medium reads (0.301
+/// to 0.320 s, five interleaved runs). Chosen, not measured beyond that.
+const PARALLEL_BYTES: usize = 4 << 20;
 
 /// The most threads one read is split across.
 const MAX_WORKERS: usize = 8;
