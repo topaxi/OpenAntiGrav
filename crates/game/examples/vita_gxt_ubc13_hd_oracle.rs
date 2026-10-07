@@ -78,7 +78,7 @@ fn twiddle(x: u32, y: u32, across: u32, down: u32) -> u32 {
 fn scatter(value: u32, mask: u32) -> u32 {
     let (mut out, mut remaining, mut source) = (0u32, mask, value);
     while remaining != 0 {
-        let lowest = remaining & remaining.wrapping_neg();
+        let lowest = remaining.isolate_lowest_one();
         if source & 1 != 0 {
             out |= lowest;
         }

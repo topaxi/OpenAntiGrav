@@ -32,6 +32,8 @@ baseline x86-64 build, for an older Linux machine that may not have AVX2. That i
 [the glibc floor](#glibc), the one real portability constraint here, and the only
 reason there are two recipes rather than one.
 
+[Releases and CI](releases.md) is what builds these in GitHub Actions and names the downloads.
+
 The work happens in [`scripts/build-appimage.sh`](../../scripts/build-appimage.sh),
 which assembles an AppDir from [`packaging/appimage/`](../../packaging/appimage/)
 and hands it to `appimagetool`. `appimagetool` is downloaded into `data/tools/`
