@@ -130,6 +130,78 @@ CARGO_TARGET_AARCH64_LINUX_ANDROID_RUNNER=cargo-ndk-runner \
 must match the committed hashes; if it does not, find the bug and never update the
 constants (CLAUDE.md, "Determinism").
 
+## Startup on a phone
+
+What a first launch does, as opposed to a desktop run (2026-10-07):
+
+- **A movie with no picture is skipped at once, on every platform.** A phone has
+  no `ffmpeg`, so the intro would otherwise be a black screen for the forty
+  seconds its 1200 frames take. `Frontend::update` presses Start for a movie leg
+  whose plan has no picture (`Input::inject_press`), so the leg leaves through
+  the same handler a real press uses; a tap skips it too, as a real intro's does
+  (the composition root turns an unhandled click into Start and Cross). The
+  `INTRO FRAME n / m` counter is now `--overlay` only, everywhere.
+- **No ffmpeg also means no ATRAC3+ sound**, so the front end is silent as well
+  as pictureless. The fix is not to need ffmpeg on the device: convert on the
+  computer and push the result. See "Pre-converted caches".
+- **No disc image: the chooser's own screen says so.** With nothing under the
+  search path a phone cannot print `resolve`'s message anywhere, so
+  `launcher::Launcher::not_found` draws it: "NO DISC IMAGE FOUND" and the
+  `adb push <image> /sdcard/Android/data/org.openantigrav.game/files/data/images/`
+  line, built from the real files directory. Android only; desktop still exits
+  with the terminal message.
+- **Audio.** cpal's AAudio on the S24 reports `f32` as the default and then
+  refuses it (`IllegalArgument`), which used to leave the whole session silent.
+  `oag-audio`'s `build_stream` now tries the device's default and then `i16` and
+  `f32`, logging which one worked (`audio: the default f32 stream was refused;
+  using i16`). The fallback is a pure ordering (`formats_to_try`) with a test; the
+  refusal itself only reproduces on the phone.
+- **Launcher icon.** `scripts/build-apk.sh` rasterises `assets/icons` through the
+  host's `oag-game --write-icon` (the AppImage's own path) at 48, 72, 96, 144 and
+  192 px into `res/mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher.png`, compiles them with
+  `aapt2` and names them in the manifest (`android:icon`, `roundIcon`). The
+  leakage audit allows exactly those five paths. **Not an adaptive icon**: that
+  wants a foreground layer drawn into the 66% safe zone and a background colour,
+  and the legacy icon is what Android 8+ shows in a plain mask.
+
+## Pre-converted caches
+
+`oag-game --no-audio --dry-run --prefetch <image>` is the headless
+convert-everything-and-exit run (the intro is about 57 s of it, every PSP movie
+about 10 minutes, the sounds 5.5 s and 0.7 GB of PCM). It writes
+`data/cache/manifests/<image file>.txt`: one cache-root-relative path per line,
+`movies/...` and `audio/...`, for exactly the files that image owns (the caches are
+content-keyed and shared by every disc). `just push-data android` (and `deck`)
+shows a `cache/<image>` row beside each Pulse PSP image: `on device`, `partial`,
+`-`, or `no cache`. Selecting a `no cache` row runs the prefetch first, then copies
+into the device's cache directory (`files/cache/oag/{movies,audio}` on Android,
+`$XDG_CACHE_HOME/oag` on the Deck). Prefetch only knows Pulse's archives today, so
+Pure, HD, 2048 and Omega have no cache row; a PS2 image's four loose movies are not
+in the manifest.
+
+## Testing without a phone (Waydroid)
+
+The APK also carries an `x86_64` library whenever the `x86_64-linux-android` rust
+target is installed (`rustup target add x86_64-linux-android`; `--arm64-only` skips
+it), which is what lets it run in Waydroid on the build machine. The phone ignores
+that library. One container exists system-wide, so use your own compositor and stop
+it afterwards:
+
+```sh
+weston --backend=headless --renderer=gl --width=1280 --height=720 \
+    --socket=oag-android-startup --idle-time=0 --debug &       # note the PID
+WAYLAND_DISPLAY=oag-android-startup waydroid session start &   # note the PID
+WAYLAND_DISPLAY=oag-android-startup waydroid app install target/apk/*.apk
+WAYLAND_DISPLAY=oag-android-startup waydroid app launch org.openantigrav.game
+WAYLAND_DISPLAY=oag-android-startup weston-screenshooter       # writes a PNG in $PWD
+waydroid session stop; kill <weston PID>
+```
+
+`--debug` is what authorises `weston-screenshooter`; `grim` does not work on weston.
+A container that has no visible window freezes itself, so `waydroid app launch`
+before looking for a device. `adb connect <IP from waydroid status>:5555` needs the
+RSA prompt accepted inside Android (or the host key in the container's `adb_keys`).
+
 ## Known gaps
 
 - **A race cannot be driven.** The menus answer touch through the pointer layer, but
@@ -142,7 +214,7 @@ constants (CLAUDE.md, "Determinism").
   a rotation or a multi-window resize is untested.
 - **ELF alignment.** NDK 27 links with 4 KB pages; a 16 KB-page device wants
   `-Wl,-z,max-page-size=16384`. `zipalign -P 16` is already applied to the archive.
-- **No app icon, no `MANAGE_EXTERNAL_STORAGE` flow**, so images must be pushed with
-  `adb`; a launcher-side picker is future work.
+- **No `MANAGE_EXTERNAL_STORAGE` flow**, so images must be pushed with `adb`; a
+  launcher-side picker is future work. The icon is the legacy one, not adaptive.
 - **The front end draws at a desktop window size** (`settings.window_size`); the
   phone's aspect ratio goes through the same fit as a desktop window resize.
