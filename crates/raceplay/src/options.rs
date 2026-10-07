@@ -731,8 +731,7 @@ pub struct Loaded {
     pub track_stats: Option<oag_tables::track_stats::TrackStats>,
     /// What to draw for the track.
     pub track_model: Model,
-    /// What Vineta K's glass shows: the chunks drawn only into the
-    /// behind-the-glass target, and their fog. Empty on every other circuit.
+    /// Vineta K's behind-the-glass chunks and their fog; empty elsewhere.
     pub behind_glass: crate::BehindGlassModels,
     /// The start gantry and where it stands, when this circuit authors a mount
     /// for one and the model loads.
