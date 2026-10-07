@@ -20,8 +20,9 @@ New to the project? Read these in order:
 3. [Status map](overview/status.md) - the cross-title matrix: what is built, read, or verified, per weapon/mode/subsystem/title
 4. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
 5. [Legal](overview/legal.md) - the no-copyrighted-content policy
-6. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
-7. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
+6. [Installing and running](overview/installing.md) - for a player: build, which original files each title needs, where they go, what goes wrong
+7. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
+8. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
 
 Then, depending on what you are here to do:
 
@@ -44,7 +45,7 @@ Then, depending on what you are here to do:
 ## Tree
 
 ```
-overview/               goals, roadmap, glossary, legal
+overview/               goals, roadmap, glossary, legal, installing (player setup)
 architecture/           how the engine is put together
   adr/                  architecture decision records
 reverse-engineering/    methodology, verification, confidence, source images
