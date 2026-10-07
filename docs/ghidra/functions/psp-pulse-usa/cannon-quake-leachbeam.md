@@ -245,10 +245,10 @@ is the class's per-frame update:
 
 | Record | Controller | Written from |
 | --- | --- | --- |
-| `+0x00` | `+0x44` | analog X, `0.25` deadzone, scaled to +/-100 |
+| `+0x00` | `+0x44` | analog X, `0.2` deadzone (`0x08a7b698`, corrected 2026-10-07 from `0.25`; live read), gain `125`, an S-curve, scaled to +/-100; see [input-bindings.md](input-bindings.md#novice-r-picks-its-airbrake-off-the-steering) |
 | `+0x04` | `+0x48` | `Input_IsHeld(Options_ButtonForAction(0 = OPT_CTRL_ACC))`, as `0`/`100` |
-| `+0x08` | `+0x4c` | left airbrake (`OPT_CTRL_LAB`, or the novice combo) |
-| `+0x0c` | `+0x50` | right airbrake (`OPT_CTRL_RAB`) |
+| `+0x08` | `+0x4c` | left airbrake (`OPT_CTRL_LAB`, or novice `OPT_CTRL_AIRBRAKES` with the steer `<= 10`) |
+| `+0x0c` | `+0x50` | right airbrake (`OPT_CTRL_RAB`, or novice `OPT_CTRL_AIRBRAKES` with the steer `>= -10`) |
 | `+0x10` | `+0x54` | analog Y, same deadzone and gain |
 | `+0x15` | `+0x59` | `Input_IsPressed(Options_ButtonForAction(1 = OPT_CTRL_FIRE))` - **fire, rising edge** |
 | `+0x16` | `+0x5a` | `Input_IsHeld(Options_ButtonForAction(1 = OPT_CTRL_FIRE))` - **fire, held** |
