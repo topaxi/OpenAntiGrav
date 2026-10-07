@@ -704,3 +704,94 @@ fn a_second_roll_pays_out_again_after_the_first() {
         assert!(!release(&mut state));
     }
 }
+
+fn alternation(state: &mut ShipState, dimensions: &Dimensions, first: TapDirection) -> bool {
+    let second = match first {
+        TapDirection::Left => TapDirection::Right,
+        TapDirection::Right => TapDirection::Left,
+    };
+    let mut armed = false;
+    for dir in [first, second, first] {
+        armed = gesture_tick(state, dimensions, 0.0, Some(dir));
+    }
+    armed
+}
+
+/// The maintainer's report: a barrel roll could be triggered during a barrel roll. The original
+/// branches past both pattern compares while an arm bit is set (`0x08846d14`), so a second
+/// alternation mid-roll charges nothing, levels nothing and does not restart the ramp.
+#[test]
+fn an_alternation_during_a_roll_is_refused_and_does_not_restart_it() {
+    let (mut state, dimensions) = armable();
+    assert!(alternation(&mut state, &dimensions, TapDirection::Right));
+    let shield = state.shield;
+    for _ in 0..20 {
+        advance_phase(&mut state, 1.5, 1.0 / 60.0);
+    }
+    let mid = state.roll_phase;
+    assert!(mid > 0.0 && mid < 1.0);
+
+    assert!(!alternation(&mut state, &dimensions, TapDirection::Left));
+    assert_eq!(state.shield, shield, "no second charge");
+    assert_eq!(state.roll_phase, mid, "the phase was not levelled");
+    assert_eq!(state.roll_target, 1.0, "the target was not flipped");
+}
+
+/// A finished roll keeps its arm bit until the next ground/air transition, so a second roll in
+/// the same flight is refused after the first completes too: one roll per flight.
+#[test]
+fn a_finished_roll_still_refuses_another_until_the_craft_lands() {
+    let (mut state, dimensions) = armable();
+    assert!(alternation(&mut state, &dimensions, TapDirection::Right));
+    for _ in 0..120 {
+        advance_phase(&mut state, 1.5, 1.0 / 60.0);
+    }
+    assert_eq!(state.roll_phase, 1.0);
+    let shield = state.shield;
+
+    assert!(!alternation(&mut state, &dimensions, TapDirection::Left));
+    assert!(!alternation(&mut state, &dimensions, TapDirection::Right));
+    assert_eq!(state.shield, shield);
+    assert_eq!(state.roll_phase, 1.0);
+
+    assert!(release(&mut state), "the landing pays out the one roll");
+    // The grounded ticks of the landing zero the history (`advance_gesture`, contact).
+    state.roll_taps = [0, 0, 0];
+    assert!(
+        alternation(&mut state, &dimensions, TapDirection::Left),
+        "the next flight rolls again"
+    );
+    assert!(state.shield < shield);
+}
+
+/// The direct request (the AI's route) obeys the same bit.
+#[test]
+fn a_direct_request_during_a_roll_is_refused() {
+    let (mut state, dimensions) = armable();
+    assert!(arm(&mut state, &dimensions, 8.0, 1.0));
+    let shield = state.shield;
+    let input = ShipControls {
+        roll_request: Some(TapDirection::Left),
+        ..ShipControls::default()
+    };
+    assert!(!advance_gesture(
+        &mut state,
+        &input,
+        &dimensions,
+        8.0,
+        false,
+        1.0 / 60.0
+    ));
+    assert_eq!(state.shield, shield);
+    assert_eq!(state.roll_target, 1.0);
+}
+
+/// Taps made during a roll still shift into the history, as in the original, where the shift
+/// runs before the gate.
+#[test]
+fn taps_made_during_a_roll_still_enter_the_history() {
+    let (mut state, dimensions) = armable();
+    assert!(arm(&mut state, &dimensions, 8.0, 1.0));
+    gesture_tick(&mut state, &dimensions, 0.0, Some(TapDirection::Left));
+    assert_eq!(state.roll_taps[2], TapDirection::Left as u8);
+}

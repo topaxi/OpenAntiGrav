@@ -775,9 +775,10 @@ written at `0x08847220`-`0x08847240` at the tail. So the release is the
 rather than on the payout's gate being the simplest explanation.
 
 One more difference the port did not have: `swc1 f22, 0x87c(s0)` at `0x08846e5c`
-and `0x08846f54` writes `0.0` to the roll phase on **any** completed
-alternation, on the far side of the `cost < shield` test, so a refused gesture
-levels the ship exactly as an accepted one does.
+and `0x08846f54` writes `0.0` to the roll phase on a completed
+alternation **while unarmed** (see "One roll per flight" below), on the far side of
+the `cost < shield` test, so a refused gesture levels the ship exactly as an
+accepted one does.
 
 **And the gesture is the human player's alone.** Two independent legs, both from
 this function, confidence **85**:
@@ -823,6 +824,47 @@ with `get_xrefs_to`, which returns nothing on any PSP database here
 leaves the gesture reachable by every craft rather than gating it on a pad. The
 grounded gate above is what makes that affordable, and it is a port; the AI's
 access to the gesture is not.
+
+### One roll per flight: an armed craft skips the pattern match (2026-10-07, confidence 95)
+
+Reported from play: "a barrel roll can be triggered during a barrel roll; in the
+original this is not possible". Answers, each with its evidence:
+
+| Question | Answer | Evidence |
+| --- | --- | --- |
+| Refused while one is in progress? | **Yes.** `0x08846d14`-`0x08846d30` test `craft+0x860 & 0x100` then `& 0x80` and branch to `0x08846f58` when either is set, skipping both pattern compares, `Ship_BarrelRollCost`, the charge and the phase-levelling stores. | static, plus the live run below (95) |
+| A flag or a timer? | The two arm bits themselves. No timer, no cooldown, no height or airtime test: the only inputs to the gate are `+0x860` and the contact bit. | complete read of the function (90) |
+| Per-flight limit? | **One roll per flight.** The bits are not cleared when the phase finishes (`+0x87c` parks at `+-1.0` with the bit still set); they clear only on the grounded/airborne transitions (`0x08846ab4`, `0x08846b98`) and two cancel paths (`Ship_SetState` `0x088442e8`, `Ship_UpdateRespawn` `0x08847a54`, both reset). A second roll after the first *completes*, still airborne, is refused too. | live run (95) |
+| Does landing reset it? | **Yes.** A flight after a landing arms again, either direction. | live run (95) |
+| Shield cost or reward change with repeats? | No. `Ship_BarrelRollCost` (`0x08840770`) is `g_roll_cost * 0.01 * stats[skill]` with no repeat counter. A refused match charges nothing. | decompile (90) |
+| Do taps still count while armed? | Yes: the history shift (`0x08846c94`-`0x08846d10`) runs before the gate, so the history keeps updating; only the match is skipped. | live run (95) |
+| The original never clears the history on a match. | Checked, harmless: it is zeroed on every grounded tick (`0x08847018`), and an armed craft cannot match. This port clears on a match. | read (85) |
+
+**Live run** (PPSSPP v1.20.4, software renderer, `pulse-psp-usa.chd`, Time Trial on
+Talon's Junction, `scripts/psp-roll-gate.py`): breakpoint at `0x08846a54` each tick
+for the player entity, `craft+0x1c0` bit 0 forced to script a flight, real d-pad
+presses, entity fields read each tick. The craft sat on the start line, so the
+flight is scripted by the contact bit; the gate does not depend on real height.
+
+| Tick | Input | `+0x860 & 0x380` | `+0x87c` | History `+0x88c/890/894` | arm counter `settings+0x23c` |
+| --- | --- | --- | --- | --- | --- |
+| 5, 20, 35 | right, left, right | `0` -> `0x100` by 38 | ramps 0.025 a tick from 38 | `2,1,2` | 0 -> 1 |
+| 50, 60, 70 | left, right, left (mid-roll) | `0x100` | **keeps ramping, not levelled** | `1,2,1` at 53, `2,1,2` at 63, `1,2,1` at 73 | stays 1 |
+| 78 | none | `0x100` | reaches `1.0` and parks | | 1 |
+| 100, 110, 120 | right, left, right (after completion) | `0x100` | `1.0` | `2,1,2`, `1,2,1`, `2,1,2` | stays 1 |
+| 140-141 | contact forced on | `0x100` -> `0x200` -> `0` | `1.0` | zeroed | payout timer `0.483`, payout counter `settings+0x238` 0 -> 1 |
+| 155, 170, 185 | left, right, left (next flight) | `0x80` from 188 | ramps to `-1.0` | `1,2,1` | stays 1 (see below) |
+
+The second arm did not move `settings+0x23c`. That store (`0x08846e50`) sits behind
+`+0x368 == 0` and a call to `0x08809b38`; what the counter counts was not resolved,
+so it is recorded, not explained.
+
+The port had no such gate: `advance_gesture` matched and re-armed on every
+alternation, flipping `roll_target` and levelling the phase mid-roll. Ported
+2026-10-07 as `ShipState::roll_armed` gating the match and the direct request.
+
+Lineage: HD and 2048 not checked (no cheap capture path this session); Omega not
+checked for the same reason.
 
 ### The roll is drawn: `+0x87c` eases into `+0x880`, which rolls the ship about its nose
 
