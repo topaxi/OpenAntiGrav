@@ -832,6 +832,13 @@ after it was laid, from 0 km/h. The decompile has the ship loop (`0x002d64d0` pe
 with no owner test, and this build's `force_bomb_trip` skips the owner by design. **The
 simulation is not this lane's**; the thread names it.
 
+*Update 2026-10-07 (bomb-owner lane):* re-read statically, `NormalBomb_Update`
+(`0x001443f8`) holds no trigger or owner test at all - the ship loop runs only once the
+fuse or flag `0x80` of `+0x40` says the bomb is going off, so the writer of that flag is
+the trip and is not found. The sim now exempts the owner for Pulse's `0.5 s` and trips on
+it after, which the film's `0.6 s` supports (confidence 70). See the last section of
+[mine.md](../psp-pulse-usa/mine.md).
+
 **The first fireball frames do not match, and nothing was tuned.** The original is whited-out
 yellow-white marbling filling the frame for 0.9 s with the camera 7 units behind a craft
 that is itself shoved to 155 km/h; ours at +0.2 s has the craft shoved to 180 km/h within two
@@ -858,7 +865,7 @@ which rows are scaled stays undecoded (the shell is a sphere, so the choice cann
 standing player's bomb laid at the craft, `--size 1280x720`, our eye pinned (`--camera-pose
 -143.08,-46.6,-175.2,1,-0.05,0,0,1,0`, the far camera: 3 up and 11.25 back of the hull per the
 `ExternalCameraFar` load line, checked against the original's pre-lay frame, `pre_cmp3.png`), the
-rival put on the bomb to trip it (`--force-bomb-trip`, the sim's owner exclusion stays). Frames at
+rival put on the bomb to trip it (`--force-bomb-trip`; the sim's owner exclusion was a permanent one when these were taken and is a 0.5 s window since 2026-10-07). Frames at
 age 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.6 s, original left:
 `data/scratch/hd-bomb-match/frames/pairA.png`, `pairB.png`.
 
