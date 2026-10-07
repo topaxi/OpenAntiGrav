@@ -35,6 +35,7 @@ Then, depending on what you are here to do:
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
+| Build or sideload the Android APK | [Android](tools/android.md) |
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Add or change a menu | [Menus](architecture/menus.md) |

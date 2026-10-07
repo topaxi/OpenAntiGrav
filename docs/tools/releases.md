@@ -59,7 +59,7 @@ GitHub Release; the maintainer publishes it by hand.
 
 Names are stable: `OpenAntiGrav-<version>-<platform>.<ext>`, where `<version>` is
 the tag without its `v` (a manual run uses `dev-<sha7>`). A consumer (an AUR
-`-bin` PKGBUILD, a future Android job) builds its download URL from these.
+`-bin` PKGBUILD) builds its download URL from these.
 
 | File | Contents | For |
 | --- | --- | --- |
@@ -67,6 +67,7 @@ the tag without its `v` (a manual run uses `dev-<sha7>`). A consumer (an AUR
 | `OpenAntiGrav-<v>-linux-x86_64.tar.gz` | the same binary, both licences, `licences/`, desktop entry, icon | distribution packages, machines without FUSE |
 | `OpenAntiGrav-<v>-steamdeck-x86_64.AppImage` | `oag-game` compiled for Zen 2 (`-C target-cpu=znver2`) | Steam Deck; refuses to start on a CPU without AVX2/FMA/BMI2 |
 | `OpenAntiGrav-<v>-windows-x86_64.zip` | `oag-game.exe`, both licences, `licences/` | Windows 10+ x64 (MSVC target) |
+| `OpenAntiGrav-<v>-android-arm64.apk` | `oag-game` as a NativeActivity cdylib, stripped, debug-signed, no game content | arm64 phones, Android 8+ with a Vulkan driver ([android.md](android.md)) |
 | `SHA256SUMS` | checksums of every file above | verification, AUR `sha256sums` |
 
 Only `oag-game` ships. `oag-unpack`, `oag-wad`, `oag-trace`, `oag-view` and
@@ -83,8 +84,7 @@ nothing in the package.
 
 **Adding an artifact later.** Another job that uploads into the same
 `dist/`-style artifact name pattern and is added to the `release` job's `needs:`
-is enough: `release` downloads every artifact and checksums `OpenAntiGrav-*`. An
-Android APK would be `OpenAntiGrav-<v>-android-arm64.apk`.
+is enough: `release` downloads every artifact and checksums `OpenAntiGrav-*`. The `android` job is the worked example: it runs `scripts/build-apk.sh`.
 
 ### Zero game content
 
@@ -101,7 +101,7 @@ same mode on its AppDir (it used to keep a shorter hand-copied list that lacked
 1. Merge to `main` and wait for `ci.yml` to be green.
 2. Set `version` in `Cargo.toml`'s `[workspace.package]` if it should change.
 3. `git tag v0.2.0 && git push origin v0.2.0`.
-4. Watch the `Release` run. It ends with a draft release holding the five files.
+4. Watch the `Release` run. It ends with a draft release holding the six files.
 5. Read the draft, edit the notes, publish.
 
 To try the build without a tag: Actions tab, `Release`, "Run workflow" on a

@@ -16,7 +16,9 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::hints;
-use crate::window::{APP_ID, centred_on, choose_monitor, fullscreen, present_modes, window_icon};
+#[cfg(target_os = "linux")]
+use crate::window::APP_ID;
+use crate::window::{centred_on, choose_monitor, fullscreen, present_modes, window_icon};
 
 /// The window and the GPU objects, which both stages draw through.
 ///
@@ -24,6 +26,10 @@ use crate::window::{APP_ID, centred_on, choose_monitor, fullscreen, present_mode
 /// `Launch Game` swaps what is drawn, not what it is drawn with.
 pub(crate) struct Gpu {
     pub(crate) window: Arc<Window>,
+    /// The instance the surface came from: a surface is only valid with the
+    /// adapter and device of its own instance, so [`Gpu::recreate_surface`]
+    /// needs this one and not a fresh `adapter::instance()`.
+    instance: wgpu::Instance,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) surface: wgpu::Surface<'static>,
@@ -262,6 +268,7 @@ impl Gpu {
         let mut gpu = Self {
             temporal,
             window,
+            instance,
             device,
             queue,
             surface,
@@ -273,6 +280,33 @@ impl Gpu {
         gpu.config.present_mode = gpu.present_mode(settings.vsync);
         gpu.surface.configure(&gpu.device, &gpu.config);
         Ok(gpu)
+    }
+
+    /// A new window and surface on the same device, after the platform took
+    /// the old ones away.
+    ///
+    /// Android destroys the native window on every `Suspended` (the app left
+    /// the foreground, or the screen turned off) and hands out a new one on
+    /// the next `Resumed`; a surface over the old one is dead. Desktop never
+    /// calls this: winit only raises those events on mobile and the web.
+    pub(crate) fn recreate_surface(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes())
+                .context("recreating the window")?,
+        );
+        window.set_cursor_visible(false);
+        let surface = self
+            .instance
+            .create_surface(window.clone())
+            .context("recreating the surface")?;
+        let size = window.inner_size();
+        self.window = window;
+        self.surface = surface;
+        self.config.width = size.width.max(1);
+        self.config.height = size.height.max(1);
+        self.surface.configure(&self.device, &self.config);
+        Ok(())
     }
 
     /// The best present mode this surface offers for a vsync setting.
