@@ -24,11 +24,14 @@ use std::collections::HashMap;
 
 use oag_assets::Container;
 
+/// An entry's bytes, or `None` when it did not read, keyed by `(spec, name)`.
+type Entries = HashMap<(String, String), Option<Vec<u8>>>;
+
 /// Open archives and the entries already read out of them, by spec.
 #[derive(Default)]
 pub struct Reads {
     open: RefCell<HashMap<String, Option<Container>>>,
-    read: RefCell<HashMap<(String, String), Option<Vec<u8>>>>,
+    read: RefCell<Entries>,
 }
 
 impl Reads {
