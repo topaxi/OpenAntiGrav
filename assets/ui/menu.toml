@@ -681,6 +681,16 @@ string_id = "OAG_GRAPHICS_RENDER_SCALE"
 setting = "graphics.render_scale"
 values = ["50", "75", "100", "125", "150", "200"]
 
+# On by default (chosen, not measured): the on-screen GO button adds the left
+# or right airbrake in its bottom corners. Off makes GO thrust alone, for a
+# phone where the separate BRAKE buttons suit the hands better.
+[[page.entry]]
+kind = "choice"
+label = "GO BRAKE ZONES"
+string_id = "OAG_CONTROLS_TOUCH_GO_ZONES"
+setting = "controls.touch_go_zones"
+values = ["on", "off"]
+
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
 # keys that can disagree is a state somebody has to define behaviour for.

@@ -113,3 +113,18 @@ fn only_pure_carries_pressings() {
         );
     }
 }
+
+/// Only the Fury disc's HD reads its screen file from `DATA06`; the PSN
+/// download has no such archive and reads the copy its mounts serve.
+#[test]
+fn only_the_hd_disc_names_a_screen_archive() {
+    for title in ALL {
+        assert_eq!(
+            title.campaign.screen_archive,
+            (title.name == "Wipeout HD").then_some(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE),
+            "{}",
+            title.name
+        );
+    }
+    assert_eq!(oag_hd::psn::PSN.campaign.screen_archive, None);
+}

@@ -28,13 +28,24 @@ fn both_psp_titles_are_ruled_out_and_hds_own_serial_gets_no_verdict() {
 #[test]
 fn all_seven_archives_are_mounted_and_none_twice() {
     let mut named = TITLE.archive_names();
-    assert_eq!(named.len(), 7, "{named:?}");
+    // Eight names, seven archives: `DATA03` is also the bulk fallback a PSN
+    // install (which has no `DATA00`) resolves to, and the asset layer mounts it
+    // once. Exactly one archive is named twice, and it is that one.
+    assert_eq!(named.len(), 8, "{named:?}");
     named.sort();
     named.dedup();
-    assert_eq!(named.len(), 7, "one archive is named in two roles");
+    assert_eq!(named.len(), 7, "{named:?}");
+    assert_eq!(
+        TITLE
+            .archive_names()
+            .iter()
+            .filter(|n| n.ends_with("DATA03.PSARC"))
+            .count(),
+        2
+    );
     for name in &named {
         assert!(
-            name.starts_with("PS3_GAME/USRDIR/DATA") && name.ends_with(".PSARC"),
+            name.starts_with("USRDIR/DATA") && name.ends_with(".PSARC"),
             "{name}"
         );
     }

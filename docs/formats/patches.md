@@ -20,6 +20,7 @@ matches the figure `psarc.md` already records.
 | 2048 EU `PCSF00007` | base, patch, DLC1, DLC2 | base `APP_VER` 01.00 (build 2011-12-06), patch 01.04 (build 2012-06-06), DLC1 01.01, DLC2 01.00 | `param.sfo` of each package |
 | 2048 USA `PCSA00015` | base, patch, DLC1 | base 01.00, patch 01.04, DLC1 01.00 | same |
 | Omega EU `CUSA05670` | base, patch | base 01.00 (`c_date` 2017-12-24), **patch 01.07** | `param.sfo` and `changeinfo.xml` read out of `omega-ps4-eu-patch.pkg` (confidence 95) |
+| HD EU `NPEA00057` (PSN, no Fury) | one full package | `VERSION` 03.00, `APP_VER` 01.25 | installed `PARAM.SFO`; **not an update** - see [hd-psn.md](hd-psn.md), nothing to mount ahead of a base |
 | HD/Fury EU `BCES00664` | disc only | disc `APP_VER` 02.00, `VERSION` 01.03 | `PS3_GAME/PARAM.SFO` |
 | Pulse, Pure | UMDs, DLC zips | no patches exist | see [dlc-pack.md](dlc-pack.md) |
 

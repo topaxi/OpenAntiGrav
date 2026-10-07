@@ -62,6 +62,7 @@ pub mod hud;
 pub mod loading;
 pub mod loyalty;
 pub mod prompts;
+pub mod psn;
 pub mod race;
 
 /// Wipeout HD / Fury, as the asset layer needs to know it.
@@ -156,6 +157,7 @@ pub const TITLE: &Title = &Title {
         // Not wired, not measured absent: HD's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
+        screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
@@ -455,11 +457,18 @@ pub mod names {
 
 /// The bulk archive's candidates.
 ///
-/// One entry: HD is PS3-only, and `DATA00` is the archive carrying the default
-/// circuit. Nothing branches on the [`Platform`] - see
-/// [`ArchiveCandidates`]'s own docs - but a PS3 disc identifies itself out of
-/// `PS3_DISC.SFB`, so this is only consulted for an extracted directory.
-const DATA_CANDIDATES: &[(&str, Platform)] = &[(archives::DATA00, Platform::Ps3)];
+/// **Matched by tail, `USRDIR/DATAnn.PSARC`**, so one list reads the disc
+/// (`PS3_GAME/USRDIR/...`) and a PSN install (`USRDIR/data0n.psarc`, lowercase,
+/// no `PS3_GAME` level) alike; the match is case-insensitive. The disc's `DATA00`
+/// carries the default circuit and comes first, so the disc resolves exactly as it
+/// did. **A PSN download has no `DATA00`**: it ships four archives, `data01` to
+/// `data04`, and the fallback is `DATA03`, chosen so that its
+/// `frontend/definition.xml` (12 teams, 16 circuits) is served ahead of
+/// `DATA02`'s older 8-team copy. See `docs/formats/hd-psn.md`.
+const DATA_CANDIDATES: &[(&str, Platform)] = &[
+    ("USRDIR/DATA00.PSARC", Platform::Ps3),
+    ("USRDIR/DATA03.PSARC", Platform::Ps3),
+];
 
 /// The companion archive's candidates.
 ///
@@ -467,15 +476,19 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[(archives::DATA00, Platform::Ps3)
 /// `handlingstats.xml` and ten of the twelve teams - so a source that somehow
 /// mounted only two archives would still race. The other five are
 /// [`EXTRA_CANDIDATES`] and all of them mount.
-const FE_CANDIDATES: &[(&str, Platform)] = &[(archives::DATA02, Platform::Ps3)];
+const FE_CANDIDATES: &[(&str, Platform)] = &[("USRDIR/DATA02.PSARC", Platform::Ps3)];
 
-/// The remaining five, all mounted.
+/// The remaining archives, all mounted.
+///
+/// `DATA03` is here for the disc and is also [`DATA_CANDIDATES`]' fallback for a
+/// PSN install; the asset layer drops an archive already mounted in another role,
+/// so neither source mounts it twice.
 const EXTRA_CANDIDATES: &[(&str, Platform)] = &[
-    (archives::DATA01, Platform::Ps3),
-    (archives::DATA03, Platform::Ps3),
-    (archives::DATA04, Platform::Ps3),
-    (archives::DATA05, Platform::Ps3),
-    (archives::DATA06, Platform::Ps3),
+    ("USRDIR/DATA01.PSARC", Platform::Ps3),
+    ("USRDIR/DATA03.PSARC", Platform::Ps3),
+    ("USRDIR/DATA04.PSARC", Platform::Ps3),
+    ("USRDIR/DATA05.PSARC", Platform::Ps3),
+    ("USRDIR/DATA06.PSARC", Platform::Ps3),
 ];
 
 /// Serials positively identified as a Studio Liverpool title other than HD.
@@ -521,6 +534,26 @@ const FOREIGN_SERIALS: &[ForeignSerial] = &[
 /// Propagates [`Archives::open`].
 pub fn open(source: &str) -> Result<Archives> {
     Archives::open(source, TITLE)
+}
+
+/// Which of the two HD [`Title`]s `archives` is: [`psn::PSN`] when the bulk
+/// archive is not `DATA00`, [`TITLE`] otherwise.
+///
+/// `DATA00` is the archive Fury's circuits live in, and the only one the disc's
+/// own bulk role resolves to first; a source that fell through to the second
+/// candidate is the PSN download.
+#[must_use]
+pub fn title_of(archives: &Archives) -> &'static Title {
+    if archives
+        .layout
+        .data
+        .to_ascii_uppercase()
+        .ends_with("DATA00.PSARC")
+    {
+        TITLE
+    } else {
+        psn::PSN
+    }
 }
 
 #[cfg(test)]

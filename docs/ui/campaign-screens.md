@@ -3927,3 +3927,19 @@ Two smaller mouse dead ends on the same screens, fixed together:
   disc lacks) a row above the footer, in the legend's own word face
   (`NavigationLegend::notice`), until the next input. The wording and the row are ours. A
   locked cell still shows nothing beyond its padlock.
+
+## Wipeout HD PSN: the campaign with no chooser, 2026-10-07
+
+Wipeout HD's PSN download (`NPEA00057` v3.00, no Fury) carries no `DATA06`, so it
+has no `Campaign Selection` and no `Grid Selection Fury`: RACE CAMPAIGN opens
+`Grid Selection` over its eight grids directly. Measured on RPCS3 (main menu,
+`EVENT 01/08`, `CHOOSE RACE`), and the same screen, grids and cell layout as the
+disc's HD branch: the package's `data02` screen file and grids are the disc's
+`DATA02` ones byte for byte, and its `data04` grids are `DATA06`'s HD grids bar the
+`Campaign="HD"` attribute. The wiring is `oag_title::Campaign::screen_archive`
+(`Some(DATA06)` on the disc, `None` on PSN) and `load_hd` skipping the selection
+pair when it is absent; no new reader. Evidence, frames and the art differences
+from RPCS3's `Cell Selection` are in `docs/formats/hd-psn.md`, "The campaign".
+Lineage check (2048 / Omega): **checked, differs** - Omega's front end is HD's
+`PI001` plugin carried forward and reads its screens through its
+own `load_omega` branch off `data09`, which `screen_archive` does not touch; 2048 has no `CellMode_Definition.xml`.

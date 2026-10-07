@@ -229,11 +229,35 @@ pass.
 | Control | Where | Button |
 | --- | --- | --- |
 | steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock; X steers, Y pitches | stick axes |
-| GO | bottom right, largest | `Cross` (thrust) |
-| FIRE | left of GO | `Square` |
-| ABSORB | above GO | `Circle` |
-| BRAKE L, BRAKE R | top corners | `L`, `R` (airbrakes) |
-| PAUSE, VIEW | top centre | `Start` (pause), `Select` (camera cycle) |
+| GO | right edge, mid-height, largest (0.36 of the height) | `Cross` (thrust), plus `L`/`R` in its brake corners |
+| FIRE | left of GO, in the thumb's arc | `Square` |
+| ABSORB | upper right, left of BRAKE R | `Circle` |
+| BRAKE L, BRAKE R | upper corners, below the lap and record readouts | `L`, `R` (airbrakes) |
+| PAUSE, VIEW | right of BRAKE L | `Start` (pause), `Select` (camera cycle) |
+
+**Dynamic GO (2026-10-07, touch-go lane, chosen, not measured).** The finger's
+position *within* GO, tracked while it is held, adds an airbrake: the bottom 34% of
+GO is split into a left corner (34% of its width, `L`), a dead centre column and a
+right corner (34%, `R`); the centre and everything above is thrust alone. Sliding
+between zones needs no lift, and a thumb in the slop below GO still reads the corner.
+It is on by default behind `[controls] touch_go_zones` (CONTROLS page, GO BRAKE ZONES,
+`on`/`off`); off makes GO thrust alone. The separate BRAKE L/R buttons stay. GO draws
+the two corners with `L` and `R` and thin dividers, and the corner under a finger lights
+amber. Zones add to the reading only: they latch no tap. A stick-zone finger that lands
+on a control is that control's finger (controls win over the floating stick, which
+the upper-left brake buttons need).
+
+**Design pass (chosen, not measured).** Sizes are fractions of the window's height
+(GO 0.36, about 24 mm on a 6.2 in phone; the small buttons 0.16 to 0.22, 11 to 15 mm),
+so a button is one physical size on every phone. Everything stays 0.05h in from the
+left and right and 0.03h from the top and bottom for rounded corners and a camera
+cutout; the cutout itself is **not queried** (winit 0.30 has no insets API). Idle
+fills are 7% white with a 45% outline; a held control turns cyan with a near-opaque
+outline. The first version's BRAKE buttons sat on Pulse's lap and record readouts
+and GO on speed and shield; checked against Pulse and HD (Waydroid and a desktop
+window, 16:9 to 2.17:1) the controls now keep to the free mid-height of each side.
+PAUSE and VIEW moved off the top centre because HD draws its shield meter there.
+No controls-opacity setting was added.
 
 Multi-touch is the point: every finger is tracked, a stick finger is sticky and a
 button finger re-reads what is under it as it slides (a thumb can roll from GO onto
@@ -372,8 +396,9 @@ another owner leaves it) logs one warning and runs on defaults.
 
 ## Known gaps
 
-- **Touch controls are a first version.** Sizes and positions are chosen and untested
-  on a real phone; the overlay covers part of the HUD; no haptics, no
+- **Touch controls are a second version.** Sizes and positions are chosen and untested
+  on a real phone (the S24 is the check); the cutout inset is a constant; the overlay
+  also draws over the race's loading screen; no haptics, no
   user-adjustable layout, no per-player scheme (a stick or zones, left- or
   right-handed). A gamepad's analog triggers, right stick and hat are not reachable
   through winit (see "Bluetooth and USB gamepads").

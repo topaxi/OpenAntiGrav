@@ -50,6 +50,15 @@ pub struct Controls {
     /// than a control discovered by feel to do nothing.
     #[serde(default)]
     pub trigger_sensitivity: TriggerSensitivity,
+    /// Whether the on-screen GO button adds an airbrake in its bottom-left
+    /// and bottom-right corners (`true`), or is thrust alone (`false`). Only a
+    /// touchscreen's overlay reads it.
+    ///
+    /// **On by default - chosen, not measured**, at the maintainer's request;
+    /// off for a phone whose screen or hands suit the separate BRAKE buttons
+    /// better. See `oag_input::touch::GoZone`.
+    #[serde(default = "default_touch_go_zones")]
+    pub touch_go_zones: bool,
     /// Which key produces each abstract button, when a player has moved one
     /// off `oag_input::keys::candidates`'s built-in layout.
     ///
@@ -237,12 +246,17 @@ fn default_triggers() -> String {
     TriggerMode::default().name().to_string()
 }
 
+fn default_touch_go_zones() -> bool {
+    true
+}
+
 impl Default for Controls {
     fn default() -> Self {
         Self {
             scheme: default_scheme(),
             triggers: default_triggers(),
             trigger_sensitivity: TriggerSensitivity::default(),
+            touch_go_zones: default_touch_go_zones(),
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
         }

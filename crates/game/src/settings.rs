@@ -693,6 +693,14 @@ pub fn menu_seeds(
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),
         (
+            "controls.touch_go_zones",
+            text(if settings.controls.touch_go_zones {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
             "controls.trigger_sensitivity",
             text(&settings.controls.trigger_sensitivity.to_string()),
         ),

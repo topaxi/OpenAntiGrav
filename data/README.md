@@ -71,6 +71,7 @@ Tooling looks for these names. Copy your own images here and rename:
 | `pure-psp-eu.chd` | Wipeout Pure | PSP | Europe |
 | `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
+| `data/extracted/ps3/hd-psn-eu/` | WipEout HD (no Fury) | PS3 | Europe (`NPEA00057`, v3.00), the **installed** PSN download folder (not an image) |
 | `2048-vita-eu.pkg` | WipEout 2048 | Vita | Europe (`PCSF00007`) |
 | `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
 | `omega-ps4-eu.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), base v1.00 |
@@ -88,6 +89,15 @@ AES-encrypted under the disc key. Decrypting needs this pressing's redump
 `.dkey`, then `PS3Dec`; the SELF then needs `scetool` before Ghidra, with
 [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
 PPC64/PRX side.
+
+### The PSN Wipeout HD download is read from its installed folder
+
+`data/extracted/ps3/hd-psn-eu/` holds what RPCS3's package installer wrote for
+`NPEA00057` (v3.00): `PARAM.SFO` and `USRDIR/data01.psarc`..`data04.psarc`, plain
+archives. Steps, and what that copy lacks against the Fury disc, are in
+[`docs/overview/installing.md`](../docs/overview/installing.md#wipeout-hd-from-the-psn-download)
+and [`docs/formats/hd-psn.md`](../docs/formats/hd-psn.md). The licence file the
+download comes with is yours and is never committed.
 
 ### Vita PKGs decrypt in four steps; `data/extracted/vita/` holds the result
 
