@@ -12,11 +12,18 @@ and `check-leakage.py --dir`.
 
 ## Open
 
-- **The first green `ci.yml` run is the first cross-platform determinism check
-  since 2026-09-11.** The `determinism` job died at its first step on all three
-  OSes once the examples were renamed (`a53cddc18`), so Windows and macOS have not
-  compared a hash with the committed reference for about 26 days. A mismatch there
-  is a finding to report, never a constant to update.
+- **Maintainer decision: `oag-core`'s probe reference bakes glibc's `sinf`.**
+  The first runs to reach it (37595443950 and on) fail it on macOS and Windows,
+  for the reason in [determinism.md](../../docs/architecture/determinism.md#2026-10-07-the-core-probes-own-sin-is-the-first-cross-platform-failure).
+  Either keep the probe as a libm canary and accept it fails off glibc, or switch
+  it to `oag_core::math` and regenerate the three trajectory constants (a drafted
+  patch was handed to the lead with the ci-watch report). Until then the macOS
+  and Windows determinism jobs stay red.
+- **Physics, race-level and driver determinism have never been compared on macOS
+  or Windows.** The job now runs every stage after a red one; read the next run's
+  logs for those three before calling the probe the only divergence.
+- The `check` job ran out of runner disk in nextest; freed disk and dropped
+  debuginfo in that job (unverified on GitHub until the next push).
 - Not provable locally: the MSVC link and `7z` on `windows-latest`, `upload-artifact`
   and `gh release create` on GitHub, and `libpipewire-0.3-dev` plus the other apt
   packages on the real runner image (the Ubuntu 24.04 container matches it closely,

@@ -46,6 +46,22 @@ independent causes, none a real regression in the simulation:
    - Raising `rust-version` to 1.97.1 turns on clippy's `manual_isolate_lowest_one`;
      `gxt.rs` and four examples now use `isolate_lowest_one()`.
 
+### What the first repaired runs found (2026-10-07)
+
+Runs 37595443950, 37599197810 and 37599357599, after the fixes above:
+
+- `check` died twenty minutes into `cargo nextest run --workspace` with the
+  runner's own `No space left on device` (an annotation on the job, no step log).
+  The job now frees the runner's unused toolchains first and builds with
+  `CARGO_PROFILE_DEV_DEBUG=0`/`CARGO_PROFILE_TEST_DEBUG=0`. The steps after
+  nextest (dependency rules, transcendentals, size, names, captures, handover,
+  strings) have still never run on GitHub; they pass locally under `just`.
+- `determinism` failed `oag-core`'s reference on macOS and Windows: the probe's
+  deliberate platform `sin`, see
+  [determinism.md](../architecture/determinism.md#2026-10-07-the-core-probes-own-sin-is-the-first-cross-platform-failure).
+  Every later determinism step now runs even after a red one (`if: !cancelled()`),
+  so one push shows every stage on every OS.
+
 `ci.yml` also pinned 1.98.0 against `rust-toolchain.toml`'s 1.99.0; rustup's override
 meant it only cost a second download, but both say 1.99.0 now.
 
