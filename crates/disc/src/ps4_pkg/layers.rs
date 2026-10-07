@@ -16,7 +16,7 @@ use super::crypto::Xts;
 use crate::error::{Error, Result};
 
 /// Anything a range can be read out of.
-pub trait Source: Send {
+pub trait Source: Send + std::fmt::Debug {
     /// Fills `buf` from `offset`; a read past the end is an error, never short.
     fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> Result<()>;
 }
@@ -29,6 +29,7 @@ pub fn bad(path: &std::path::Path, reason: impl Into<String>) -> Error {
 }
 
 /// The package file itself.
+#[derive(Debug)]
 pub struct FileSource {
     pub path: PathBuf,
     pub file: File,
@@ -44,7 +45,7 @@ impl Source for FileSource {
 }
 
 /// A layer many readers share.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Shared(pub Arc<Mutex<Box<dyn Source>>>);
 
 impl Shared {
@@ -67,6 +68,7 @@ pub const XTS_SECTOR: usize = 0x1000;
 
 /// AES-XTS over an image that starts at `base` in the layer below. Sectors before
 /// `plain_sectors` (the superblock) are stored in the clear.
+#[derive(Debug)]
 pub struct XtsSource<S: Source> {
     pub inner: S,
     pub base: u64,
@@ -131,6 +133,7 @@ impl<S: Source> Source for XtsSource<S> {
 }
 
 /// A file's blocks as one range: contiguous from `start`, or a block list.
+#[derive(Debug)]
 pub struct Extents<S: Source> {
     pub inner: S,
     pub block_size: u64,
@@ -177,6 +180,7 @@ pub const PFSC_MAGIC: [u8; 4] = *b"PFSC";
 
 /// A PFSC compressed file: 64 KiB sectors each stored, inflated, or (when the
 /// map says it spans more than a sector) all zero.
+#[derive(Debug)]
 pub struct PfscSource<S: Source> {
     inner: S,
     block: u64,
@@ -224,8 +228,10 @@ impl<S: Source> PfscSource<S> {
         let mut raw = vec![0u8; (count + 1) * 8];
         inner.read_at(map_at, &mut raw)?;
         let offsets: Vec<u64> = raw
-            .chunks_exact(8)
-            .map(|c| u64::from_le_bytes(c.try_into().expect("8 bytes")))
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|c| u64::from_le_bytes(*c))
             .collect();
         if offsets.windows(2).any(|w| w[1] < w[0]) || offsets[count] > file_len {
             return Err(refuse(
@@ -314,3 +320,6 @@ impl<S: Source> Source for PfscSource<S> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -31,10 +31,10 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
         msg.push(0);
     }
     msg.extend_from_slice(&((data.len() as u64) * 8).to_be_bytes());
-    for block in msg.chunks_exact(64) {
+    for block in msg.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
-        for (i, word) in block.chunks_exact(4).enumerate() {
-            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        for (i, word) in block.as_chunks::<4>().0.iter().enumerate() {
+            w[i] = u32::from_be_bytes(*word);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -72,8 +72,8 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
         }
     }
     let mut out = [0u8; 32];
-    for (chunk, word) in out.chunks_exact_mut(4).zip(h) {
-        chunk.copy_from_slice(&word.to_be_bytes());
+    for (chunk, word) in out.as_chunks_mut::<4>().0.iter_mut().zip(h) {
+        *chunk = word.to_be_bytes();
     }
     out
 }
@@ -127,9 +127,9 @@ pub fn rsa_public(m: &[u8], n: &[u8]) -> Vec<u8> {
 pub fn aes_cbc_decrypt(data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
     let cipher = Aes128::new(GenericArray::from_slice(key));
     let mut prev = *iv;
-    for block in data.chunks_exact_mut(16) {
-        let cipher_block: [u8; 16] = block.try_into().expect("16-byte chunk");
-        cipher.decrypt_block(GenericArray::from_mut_slice(block));
+    for block in data.as_chunks_mut::<16>().0 {
+        let cipher_block = *block;
+        cipher.decrypt_block(GenericArray::from_mut_slice(&mut block[..]));
         for (b, p) in block.iter_mut().zip(prev) {
             *b ^= p;
         }
@@ -141,6 +141,12 @@ pub fn aes_cbc_decrypt(data: &mut [u8], key: &[u8; 16], iv: &[u8; 16]) {
 pub struct Xts {
     data: Aes128,
     tweak: Aes128,
+}
+
+impl std::fmt::Debug for Xts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Xts(keys redacted)")
+    }
 }
 
 impl Xts {
@@ -158,11 +164,12 @@ impl Xts {
         t[..8].copy_from_slice(&number.to_le_bytes());
         self.tweak
             .encrypt_block(GenericArray::from_mut_slice(&mut t));
-        for block in sector.chunks_exact_mut(16) {
+        for block in sector.as_chunks_mut::<16>().0 {
             for (b, x) in block.iter_mut().zip(t) {
                 *b ^= x;
             }
-            self.data.decrypt_block(GenericArray::from_mut_slice(block));
+            self.data
+                .decrypt_block(GenericArray::from_mut_slice(&mut block[..]));
             for (b, x) in block.iter_mut().zip(t) {
                 *b ^= x;
             }

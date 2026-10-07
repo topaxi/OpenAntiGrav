@@ -76,7 +76,7 @@ named `wipeout.chd`).
 | Wipeout HD / Fury | PS3 | disc image, Europe, **encrypted as dumped** with your disc key beside it (a `.dkey`), or an already decrypted image | `hdfury-ps3-eu.iso` + `hdfury-ps3-eu.dkey`, or `hdfury-ps3-eu-dec.iso` |
 | Wipeout HD (no Fury) | PS3 | the **installed** PSN download, Europe | `data/extracted/ps3/hd-psn-eu` |
 | Wipeout 2048 | Vita | a **`.vpk`** (a NoNpDrm dump; a patch or DLC `.vpk` beside it is mounted too), or an **unpacked** package folder | `data/images/2048-eu.vpk` (any name), or `data/extracted/vita/PCSF00007` (Europe) / `PCSA00015` (USA) |
-| Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
+| Omega Collection | PS4 | the base **`.pkg` and its patch `.pkg`** (a fake package, read in place), or **unpacked** base and patch folders | `data/images/omega-ps4-eu.pkg` + `omega-ps4-eu-patch.pkg` in one folder, or `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
 
 The first three rows are the easy ones: a normal dump of your own disc is
 read as it is, CHD (single-track, either `createdvd` or `createcd`) or ISO.
@@ -179,8 +179,15 @@ from them (no real NoNpDrm dump was available): [Vita packages](../formats/vita-
 
 ### Omega, and a 2048 folder: unpack the package into a folder
 
-Omega ships as a console download package. The program does not read a `.pkg`
-file yet. It reads a folder you unpacked and decrypted from a package you own.
+**Omega: put both `.pkg` files in the same folder** (`data/images/`) and the
+program reads them in place, patch mounted ahead of the base; nothing to unpack
+([PS4 packages](../formats/ps4-package.md)). This works for a **fake package**
+(the HEN/jailbreak rip), whose keys are public; a retail PSN package is keyed to
+a console and is refused with a message saying so. If you also have an unpacked
+`data/extracted/ps4` folder, that folder is the one listed and booted by default;
+name a `.pkg` to use it instead.
+
+A 2048 Vita `.pkg` is not read: the program reads a `.vpk` or a folder you unpacked.
 The licence for a package is part of your own copy, and this project does not
 say where one comes from. The project may ship fixed public package keys that
 other open-source tools already ship, never a per-game licence
@@ -319,7 +326,7 @@ do not expect a finished game outside Pulse.
 
 | What you see | Cause and fix |
 | --- | --- |
-| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
+| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A Vita `.pkg` is never read: use a `.vpk` or unpack it (section 2); an Omega `.pkg` pair is read in place from `data/images/` |
 | `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
 | `... is an encrypted PS3 disc image and no disc key opens it` | No key beside the image or in the keys folder passed the check, or the one there belongs to another disc. Put the right `.dkey` beside the image, or enter it in the chooser (section 2). With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
 | The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |

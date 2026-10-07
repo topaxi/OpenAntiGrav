@@ -64,12 +64,14 @@ impl Header {
         let mut raw = vec![0u8; count * 32];
         src.read_at(table, &mut raw)?;
         let entries = raw
-            .chunks_exact(32)
+            .as_chunks::<32>()
+            .0
+            .iter()
             .map(|r| Entry {
                 id: be32(r, 0),
                 data_offset: be32(r, 16),
                 data_size: be32(r, 20),
-                raw: r.try_into().expect("32 bytes"),
+                raw: *r,
             })
             .collect();
         let content_id = String::from_utf8_lossy(&head[0x40..0x64])
