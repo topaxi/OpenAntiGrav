@@ -28,8 +28,14 @@ manifest and `cache/<image>` rows in `just push-data`.
   front end's Back and never quits; an on-screen stick and buttons for a running race,
   hidden when a pad speaks; Android pad buttons and the left stick through the desktop
   pad table. All chosen, not measured, driven on Waydroid with one finger only.
-  Still open: **tune the layout on the S24** (sizes, HUD overlap, left-handed
-  mirror, a zones scheme as an alternative to the floating stick); **pad triggers,
+  **Touch-go lane, 2026-10-07:** GO carries airbrake corners (bottom-left L,
+  bottom-right R, dead centre column; `[controls] touch_go_zones`, default on, menu row
+  GO BRAKE ZONES), the overlay was re-laid out clear of Pulse's and HD's HUD
+  readouts with safe margins and height-scaled targets. Driven on Waydroid with one
+  finger. Still open: **tune the layout on the S24** (real thumb reach, whether
+  0.05h is enough for its cutout - the real cutout is not queried, left-handed
+  mirror, a controls-opacity setting); the overlay also shows on the race's loading
+  screen (`racing()` is true while the stage loads); **pad triggers,
   right stick and hat** are not delivered by winit 0.30 (read `MotionEvent` axes via
   `android-activity` or move to GameActivity); no haptics.
 - **AArch64 determinism.** `oag-core`'s determinism test builds for the target; run it

@@ -97,6 +97,7 @@ OAG_CONTROLS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "SEITLICHE BEWEGUNG", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "TRIGGER", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "EMPFINDLICHKEIT (TRIGGER)", human = false }
+OAG_CONTROLS_TOUCH_GO_ZONES = { text = "GO-BREMSZONEN", human = false }
 OAG_PILOT_PAGE_TITLE = { text = "KI-PILOTEN", human = false }
 OAG_PILOT_PILOT = { text = "PILOT", human = false }
 OAG_PILOT_AXIS = { text = "ACHSE", human = false }
