@@ -2687,15 +2687,28 @@ way (`mesh::rcs::water`, report "water material(s) whose picture is a normal map
   **reverted**: on a flat sea `d.y` is 0, so `v` is 0.5 and the lookup lands on the dark horizon strip.
 - `0x7480de6d`, the engine tint that scales `R`, has no preimage and no authored value.
 
-### Vineta K: measured, and the water is not the cause (confidence 75)
+### Vineta K: measured; the windows are not the water, the sea beside them got paler (confidence 75)
 
-Hex-window pixel means at the capture's pose (x scaled by 1882/1600), reference / before / after:
-`(33,147,147)` / `(47,117,159)` / `(52,116,153)`; `(16,145,146)` / `(43,94,147)` / `(48,96,141)`. The change moves the
-region by 2 to 6 levels and the residual (green 30 low, red 15 to 20 high) is unchanged. `OAG_ONLY_SLOT` isolation:
-`water_test_2` and `water_noref` draw the sea and a horizon band, the panes see the **sky cube** behind them (sky-only
-frame mean `(234,228,182)` against the reference's cyan), and the glass multiplies by `[0.2,0.6,0.6]` only where the
-refraction material is. So the teal is the backdrop (sky tint, `hd-sky-luma`'s open item) times the glass, and
-`paraboloidReflectionTex` for the sea. Open.
+Window pixel means at the capture's pose (x scaled by 1882/1600), reference / before / after / water skipped
+(`OAG_SKIP_MATERIAL=water_noref,water_test_2`, after the change):
+
+| Window | Reference | Before | After | After, water skipped |
+| --- | --- | --- | --- | --- |
+| right pane `(1250,330,1330,420)` | `(33,147,147)` | `(47,117,159)` | `(52,116,153)` | `(50,117,156)` |
+| middle pane `(900,400,1000,470)` | `(16,145,146)` | `(43,94,147)` | `(48,96,141)` | `(46,97,143)` |
+| sea band, left `(600,400,700,450)` | `(15,145,145)` | `(127,178,220)` | `(176,217,219)` | `(132,196,160)` |
+
+- **The two panes do not show the water**: skipping both programs moves them by 1 to 4 levels, and the change moves them
+  by 2 to 6. Their residual (green about 30 low, red 15 to 20 high) is the backdrop behind the glass; a sky-only frame has
+  mean `(234,228,182)` there, so the sky tint (`hd-sky-luma`'s open item) and the glass multiply decide it.
+- **The sea band beside them did move, and away from the reference**: it was blue (the normal map painted as a picture)
+  and is now pale `(176,217,219)` against the reference's teal. A program with no picture is lit vertex colour, which is
+  pale here; the reference's teal is therefore carried by the term this lane leaves out, the reflection times the engine
+  tint `0x7480de6d`. Drawing the program's colour minus its one unknown term is the honest reading and is also further
+  from the capture in this window. If the maintainer prefers the old blue, dropping the `water::water` call in
+  `rcs/setup.rs` restores it, and `OAG_WATER_OFF=1` shows it.
+- `OAG_ONLY_SLOT` isolation: `water_test_2` draws the sea plane (teal when seen alone, `iso_test2.png`) and `water_noref`
+  a horizon band.
 
 ### Sebenco ice: closes entirely from data (confidence 85 for the program, 60 for the picture)
 
