@@ -844,3 +844,59 @@ chase camera, the bomb laid at the craft's own position) is the next step.
 
 **Lineage (Omega):** not checked for `HD_bomb_halo` (the entry above counted four blast
 models, not the halo); the RPCS3 recipe is HD-only, no PS4 emulator exists here.
+
+## 2026-10-07: the Bomb matched against the film, in video time (`hd-bomb-match`)
+
+**The film's clock is the bomb's age** (four timings, `rpcs3-capture.md`, "Video time is the
+bomb's age"). The previous section's "0.35 game s" owner trip, the 0.9 s whiteout and the 0.3 s
+halo period were HUD-clock readings; in recorder time they are 0.6 s, 1.63 s and 0.496 s, which
+is `Bomb_InArmingDelay`'s 0.5 s, the fireball phase's 1.5 s, and the halo law's 0.5 s. **The halo
+law `s = 3 + 13 frac(2 age)` is raised from 45 to 80 for its period**; the AltiVec mask that selects
+which rows are scaled stays undecoded (the shell is a sphere, so the choice cannot show).
+
+**Matched pairs.** Same circuit (Talon's Junction), craft (`feisar_c1`, `--variant concept1`), the
+standing player's bomb laid at the craft, `--size 1280x720`, our eye pinned (`--camera-pose
+-143.08,-46.6,-175.2,1,-0.05,0,0,1,0`, the far camera: 3 up and 11.25 back of the hull per the
+`ExternalCameraFar` load line, checked against the original's pre-lay frame, `pre_cmp3.png`), the
+rival put on the bomb to trip it (`--force-bomb-trip`, the sim's owner exclusion stays). Frames at
+age 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.6 s, original left:
+`data/scratch/hd-bomb-match/frames/pairA.png`, `pairB.png`.
+
+Read as a player would:
+
+- **Fill (the falsifier): passes.** At age 0.2 s the frame is a marbled pale-yellow-white fireball
+  filling about nine tenths of the picture, as the film's; the marbling, the colour and the HUD on
+  top agree. The fireball radius is `size` times a unit sphere (`hd_bomb_sphere` radius 1.011), 8.3
+  at 0.2 s and 11.9 at 1.1 s, against an eye 11.64 away, so the eye is just outside the sphere
+  until about age 0.5 s and just inside after.
+- **The white core is the visible difference (age 0.5 to 1.1 s).** With the eye between the
+  core (0.99 R, `ColourAnim` 0.9, x10) and the fireball, ours shows a hard-edged pure-white
+  wedge and then a white-out the film does not (`pairA.png` rows 3-4); with the core not drawn the
+  same frames are marbled yellow like the film (`nc_sheet.png`). Not changed: the core's draw
+  condition is unread, and removing it would be an invention. Open question, with the
+  experiment above: does the original draw the core at all while the eye is inside it?
+- **After age 0.5 s the frames are not like for like**: the original's owner is flung to about
+  125 km/h within 0.2 s and its chase camera follows through the fireball, so the eye stays
+  inside it to 1.4 s with the hull visible; ours is shoved to 50 km/h and the pinned eye stays put.
+  The sim's blast impulse on the owner differs from the original's (queued with the trip window).
+- **The late rings differ**: at 1.7 s ours is an orange ellipse and horizon haze (shockwave
+  rings seen from a static eye), the film's is a white ball at the right edge with a yellow band.
+  Same cause, not separable until the camera follows.
+
+**`HD_bomb_halo`'s program, read** (`scripts/ps3-microcode.py fp-file`, block `@0x19c0`, the
+lit-race variant with fog; `hd_bomb_programs.rs` now lists it):
+
+```text
+a = TC0 . TC1 / sqrt(|TC0|^2 |TC1|^2)           rim = sat(1 - a)
+ramp = tex(TC0.w, TC1.w)                         4x16, pulse_bombflash_glow.gtf
+alpha = ramp.a * 50 * rim^(10 - 10 ramp.a) * ramp.a * 0.1
+rgb = ramp.rgb ; then the circuit's fog
+```
+
+A Fresnel shell: bright at the silhouette, the ramp's alpha choosing the exponent. Confidence 75
+(instruction by instruction, the vertex program's `TC0.w`/`TC1.w` unread). With the law above and the
+pool already shaped (`halo-wiring-unfinished.patch`), drawing it needs the `rim_glow.rs` shape
+and a `shade.wesl` branch. Not drawn: the generic lit program shows nothing.
+
+**Omega:** the four blast models are checked, applies, not wired (above); `HD_bomb_halo` itself
+was not looked up in Omega's archive this lane (no PS4 emulator for the film), so: not checked.

@@ -18,6 +18,8 @@ fn main() -> anyhow::Result<()> {
         "hd_bomb_sphere_white",
         "hd_bomb_sphere_bloomring",
         "hd_bomb_shockwaves",
+        "hd_bomb_halo",
+        "hd_bomb",
     ];
     for name in models {
         let blob = mesh::read_blob(SPEC, &format!("/data/weapons/{name}.rcsmodel"))?;
