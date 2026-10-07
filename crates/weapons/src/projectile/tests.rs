@@ -6,6 +6,7 @@ use super::*;
 use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
+mod owner_exempt;
 mod seed;
 
 pub(super) fn ships(entries: &[(bool, Vec3)]) -> Vec<crate::test_craft::Ship> {

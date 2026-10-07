@@ -650,6 +650,7 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         velocity,
         owner,
         lifetime,
+        age,
         surface,
         target,
         bounces,
@@ -675,6 +676,13 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     hasher.write_vec3(*velocity);
     hasher.write_u8(*owner);
     hasher.write_f32(*lifetime);
+    // A laid charge's age decides the tick its owner stops being exempt from it,
+    // so it is simulation state. It is `0.0` for every weapon that is not a laid
+    // Mine or Bomb and for a free slot, and written only when raised, so the
+    // committed references of races that lay nothing do not move.
+    if *age != 0.0 {
+        hasher.write_f32(*age);
+    }
     // A plasma bolt's wind-up decides the tick it starts flying on and
     // therefore where it is on every tick after that, so it is simulation
     // state - unlike `orientation` below. `0.0` for every other weapon and for
