@@ -839,7 +839,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
 
     let pose_override = pose::resolve(options.pose, &spline, &mut report);
-
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
