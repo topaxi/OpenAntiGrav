@@ -182,6 +182,7 @@ pub mod psp2;
 mod rim_glow;
 mod skin;
 mod vertex_scroll;
+mod water;
 
 mod emissive;
 pub use emissive::EMISSIVE_LIMIT;

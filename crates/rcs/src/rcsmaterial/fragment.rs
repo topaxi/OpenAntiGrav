@@ -22,6 +22,7 @@
 use super::Declared;
 
 mod alpha_gate;
+mod normal_read;
 mod opcode;
 
 /// One fragment-program dword, whose 16-bit halves are stored swapped.

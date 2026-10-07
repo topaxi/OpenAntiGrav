@@ -122,6 +122,8 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // Water reads its picture as a normal map and has none to paint.
+    super::water::water(model, &material_variants, textures, &mut skins, report);
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.
