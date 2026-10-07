@@ -87,3 +87,22 @@ pub fn launch(
     let direction = oag_core::math::quat_from_axis_angle(up, angle) * forward;
     Some((nose, direction * speed))
 }
+
+/// Throws one blade: [`launch`], then the slot, carrying the craft's up as its
+/// ridden normal (`Shuriken_Init` stores `-craft+0xb10` at `+0x150`).
+///
+/// One entry point for both halves, as [`super::rocket::fire`] is, so dropping
+/// the seed fails a test. `None` is [`launch`]'s: the table authors no speed for
+/// this class. `Some(false)` is a full array, after the coin was already drawn.
+pub fn fire(
+    projectiles: &mut super::Projectiles,
+    state: &ShipState,
+    dimensions: &Dimensions,
+    stats: &ShurikenStats,
+    class: &str,
+    rng: &mut Rng,
+    owner: u8,
+) -> Option<bool> {
+    let (position, velocity) = launch(state, dimensions, stats, class, rng)?;
+    Some(projectiles.throw(position, velocity, owner, stats.fuse, state.body.up()))
+}

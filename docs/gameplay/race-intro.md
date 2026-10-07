@@ -144,6 +144,16 @@ the original at matched circuit position and found to frame the same buildings),
 (0 ticks), the HUD delay (0), and plain `start_grid.vex` (the executable builds `start_grid_de` and
 `start_grid_ta` too; which mode takes which was not watched).
 
+**HD's eight numbered circuits were upside down until 2026-10-07**, and Talons Junction was not.
+Those eight (the Pulse lineage: Vineta K, 02, 03, Chenghou, Ubermall, Sebenco, Sol 2, Anulpha)
+author the camera's rotation as whole `f32` quaternions, the four HD-original circuits as `s16`
+keys. The reader took the four floats as `(x, y, z, w)`; they are `(w, x, y, z)` (measured against
+each `gridCamera` leaf's own aim point, `docs/rendering/scenery-animation.md`). The earlier
+comparison framed only "the same corridor" on Talons Junction, which is why it passed. Pulse's
+`s16` path is untouched: four frames of `03_Track` (ticks 100, 400, 900, 1200) are
+byte-identical before and after. Omega: **not checkable** (the extracted `start_grid*.vex` blobs do not open as `.vex`); 2048 not checked. Open: HD's `zone_N` flyby has no
+`grid_camera1` at all.
+
 **HD's prompt is open.** `InGame` in `ingame_definition.xml` authors it: two 3 px rules (`y 970`,
 `1030`, alpha `0x7f`, slid in from `1.0 s` and `0.5 s`), `FE_CONFIRM_BUTTON` in the `buttons` face
 at `(80, 1000)` and `FE_START_RACE` at `(130, 997)` from `1.0 s`, and the `demo_logo_HD` mark at

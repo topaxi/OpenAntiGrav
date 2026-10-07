@@ -321,21 +321,18 @@ impl Race {
                     // **One blade, twenty degrees off the nose, side chosen by
                     // a coin.** See `oag_weapons::projectile::shuriken::launch`
                     // and `docs/ghidra/functions/psp-pulse-usa/shuriken.md`.
-                    let Some((position, velocity)) = oag_weapons::projectile::shuriken::launch(
+                    let Some(thrown) = oag_weapons::projectile::shuriken::fire(
+                        &mut self.sim.world.projectiles,
                         &physics,
                         &dimensions,
                         &stats,
                         &self.sim.class,
                         &mut self.sim.world.rng,
+                        0,
                     ) else {
                         return;
                     };
-                    if !self
-                        .sim
-                        .world
-                        .projectiles
-                        .throw(position, velocity, 0, stats.fuse)
-                    {
+                    if !thrown {
                         // Unreachable given the check above, and kept as the
                         // same "keep the pickup rather than spend it on nothing"
                         // rule the Rocket's and the Plasma's arms follow -
@@ -903,6 +900,7 @@ impl Race {
             slot as u8,
             target,
             launch_kmh,
+            self.sim.world.ships[slot].physics.body.up(),
         );
         // Both `Race::spend_pickup`'s player press and
         // `Race::fire_opponent_missile` reach here, so pushing the cue in

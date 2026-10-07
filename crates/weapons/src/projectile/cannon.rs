@@ -57,6 +57,13 @@ pub const BASE_SPEED_KMH: f32 = 500.0;
 /// strictly greater; the Rocket's is [`super::rocket::LIFETIME_SECONDS`].
 pub const LIFETIME_SECONDS: f32 = 1.0;
 
+/// How far a round is pushed off a floor it glances, along the surface normal.
+///
+/// **Recovered, confidence 82.** `Cannon_UpdateRound`'s third arm reflects the
+/// velocity about the normal and moves the round to `hit + normal * 3.0`
+/// (`local_2b0 = 0x40400000`).
+pub const BOUNCE_PUSH_OFF: f32 = 3.0;
+
 /// How far to each side of the nose the two muzzles sit, as a fraction of the
 /// hull's width.
 ///
@@ -142,3 +149,6 @@ pub fn apply_impact<S: Craft>(
     };
     direct_hit(ships, struck as usize, &cannon, rules, hits);
 }
+
+#[cfg(test)]
+mod tests;

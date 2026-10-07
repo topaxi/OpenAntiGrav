@@ -87,9 +87,12 @@ for density in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
     "$host_game" --write-icon "$res/mipmap-${density%%:*}/ic_launcher.png" --icon-size "${density##*:}" >/dev/null
 done
 
-# versionCode: 0.1.0 -> 100, so a later tag always installs over an earlier one.
-IFS=. read -r major minor patch <<<"${version%%-*}"
-code=$(( ${major:-0} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} + 1 ))
+# versionCode: the build's UTC time as yydddHH (2628017 = 2026, day 280, 17h).
+# Local builds, nightlies and tags share the phone, so the code has to rise with
+# time across all three, or Android refuses the newer APK as a downgrade (an
+# x.y.z code put every local build and nightly at the same number).
+# $OAG_APK_VERSION_CODE overrides it.
+code="${OAG_APK_VERSION_CODE:-$(date -u +%y%j%H | sed 's/^0*//')}"
 
 cat > "$stage/AndroidManifest.xml" <<MANIFEST
 <?xml version="1.0" encoding="utf-8"?>
@@ -132,14 +135,17 @@ rm -f "$aligned"
 "$build_tools/zipalign" -f -P 16 4 "$base" "$aligned"
 
 key="${OAG_APK_KEYSTORE:-$HOME/.android/oag-debug.keystore}"
+# A CI build passes a stored key and its password (repository secrets); a
+# local one generates its own once, with the sideload password `android`.
+pass="${OAG_APK_KEYSTORE_PASS:-android}"
 if [ ! -f "$key" ]; then
     mkdir -p "$(dirname "$key")"
-    keytool -genkeypair -keystore "$key" -storepass android -keypass android \
+    keytool -genkeypair -keystore "$key" -storepass "$pass" -keypass "$pass" \
         -alias oag -keyalg RSA -keysize 2048 -validity 10000 \
         -dname "CN=OpenAntiGrav sideload,O=OpenAntiGrav" >/dev/null 2>&1
 fi
 apk="$out/OpenAntiGrav-$version-android-arm64.apk"
-"$build_tools/apksigner" sign --ks "$key" --ks-pass pass:android --key-pass pass:android \
+OAG_APK_PASS="$pass" "$build_tools/apksigner" sign --ks "$key" --ks-pass env:OAG_APK_PASS --key-pass env:OAG_APK_PASS \
     --ks-key-alias oag --out "$apk" "$aligned"
 "$build_tools/apksigner" verify "$apk"
 
