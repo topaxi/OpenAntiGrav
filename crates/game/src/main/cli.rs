@@ -32,10 +32,9 @@ pub(crate) struct Cli {
     /// `data/images/pulse-psp-eu.chd`. See `oag_assets::Layout`.
     ///
     /// Left out, it is searched for: `data/images/` in the current directory,
-    /// then beside the program (the AppImage's folder, else the executable's, and
-    /// an `images/` folder in it), then `<data dir>/oag/images`. Where a title
-    /// has both a Europe and a USA image, Europe is opened; name the USA one
-    /// here to play it. `$OAG_IMAGE` short-circuits the search, and finding
+    /// then beside the program (AppImage or executable), then
+    /// `<data dir>/oag/images`. Europe is opened before the USA; name the USA
+    /// one here to play it. `$OAG_IMAGE` short-circuits the search, and finding
     /// more than one title opens the chooser - see `--launcher`.
     pub(crate) source: Option<String>,
 
