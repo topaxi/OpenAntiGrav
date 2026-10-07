@@ -163,6 +163,24 @@ jobs:
         if: ${{ !cancelled() }}
         run: cargo test -p oag-ai --test determinism -- --nocapture
 
+  # The Windows build under Wine: the MinGW cross-build's determinism tests and
+  # reports must print the committed hashes, on a runner that needs no Windows.
+  determinism-wine:
+    name: determinism (MinGW build under wine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+      - name: Install MinGW-w64 and wine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64 wine64 jq
+      - name: Run the determinism tests and reports as Windows binaries
+        run: RELEASE=1 ./scripts/wine-run.sh determinism
+
   leakage:
     name: no game content committed
     runs-on: ubuntu-latest

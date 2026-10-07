@@ -1102,3 +1102,18 @@ capture-ghidra-state raw *ARGS:
 # before anything measured it - see docs/ghidra/workflow.md
 check-ghidra-import *ARGS:
     python3 scripts/check-ghidra-import.py "$@"
+
+# Cross-build the Windows oag-game (MinGW, else zig) for wine, without running it:
+# RELEASE=1 for a release build. See docs/tools/wine.md
+wine-build:
+    ./scripts/wine-run.sh build
+
+# Build it, then start it under wine in its own prefix (a window on $DISPLAY):
+# `just wine-run --dry-run ...`. See docs/tools/wine.md
+wine-run *ARGS:
+    ./scripts/wine-run.sh run {{ARGS}}
+
+# The determinism tests and reports as Windows binaries under wine; every hash
+# must equal the committed reference. See docs/tools/wine.md
+wine-check:
+    ./scripts/wine-run.sh determinism
