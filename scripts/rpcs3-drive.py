@@ -76,6 +76,7 @@ Needs `evdev` for anything that presses a button; run those through
 import argparse
 import json
 import glob
+import math
 import os
 import re
 import shutil
@@ -1002,6 +1003,129 @@ def cmd_capture(args):
     return 0
 
 
+def cmd_place(args):
+    """One boot, many placements: teleport the craft, settle, photograph.
+
+    Each `--pose x,y,z[,yaw]` writes the player's rigid body while the target
+    is paused, resumes for `--settle` seconds, then pauses and records the
+    pose the game kept next to the screenshot. See `rpcs3_place`.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ps3_pose
+    import rpcs3_place
+    from rpcs3_debugger import Debugger
+
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    oag_game = Path(args.oag_game).resolve()
+    attitudes = []
+    for text in args.pose:
+        pose = rpcs3_place.parse_pose(text)
+        forward, up = rpcs3_place.our_attitude(
+            oag_game, Path(args.image).resolve(), args.track, pose, out)
+        attitudes.append((text, pose, rpcs3_place.basis_rows(forward, up)))
+
+    with open_session(args) as session:
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+            print("never reached the Main Menu (last screen: %s)"
+                  % current_screen(), file=sys.stderr)
+            return 1
+        time.sleep(args.settle_menu)
+        plan = {}
+        for item in args.nav:
+            screen, _, buttons = item.partition("=")
+            plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
+            print("ended on %r rather than in a race" % current_screen(),
+                  file=sys.stderr)
+            return 1
+        print("in a race; waiting %g s for the track to load" % args.load,
+              flush=True)
+        time.sleep(args.load)
+        print("track: %s" % (track_name() or "<not logged>"), flush=True)
+        # The race opens on a fly-over with a `START RACE` prompt, and the
+        # craft is pinned to its grid slot until the countdown ends: a write
+        # before then is overwritten every tick.
+        session.tap("cross", settle=args.countdown)
+
+        with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
+                      else Debugger.__init__.__defaults__[0]) as gdb:
+            gdb.pause()
+            ship, body = rpcs3_place.find_player(gdb)
+            print("player ship %#x body %#x" % (ship, body), flush=True)
+            gdb.resume()
+            for n, (text, pose, rows) in enumerate(attitudes):
+                stem = "%02d" % n
+                gdb.pause()
+                before = rpcs3_place.read_pose(gdb, body)
+                rpcs3_place.write_pose(gdb, body, pose[:3], rows, args.speed)
+                gdb.resume()
+                time.sleep(args.settle)
+                gdb.pause()
+                kept = rpcs3_place.read_pose(gdb, body)
+                shot = screenshot(out / ("%s.png" % stem), trim=True)
+                candidate_sets = []
+                for k in range(args.camera_shots):
+                    if k:
+                        gdb.resume()
+                        time.sleep(args.camera_gap)
+                        gdb.pause()
+                    blobs = []
+                    for chain, size in PUSHBUFFER_REGIONS:
+                        at = resolve_chain(gdb, chain)
+                        if at:
+                            blobs.append((at, gdb.read(at, size)))
+                    candidate_sets.append([
+                        c for at, blob in blobs
+                        for c in ps3_pose.packet_candidates(blob, base=at)])
+                    print("  %s: camera read %d, %d candidate(s)"
+                          % (stem, k, len(candidate_sets[-1])), flush=True)
+                gdb.resume()
+                time.sleep(args.recheck)
+                gdb.pause()
+                later = rpcs3_place.read_pose(gdb, body)
+                gdb.resume()
+                drift = math.dist(kept["pos"], pose[:3])
+                moved = math.dist(later["pos"], kept["pos"])
+                print("  %s: asked %s, kept %s (drift %.1f), %.1f s later "
+                      "moved %.1f"
+                      % (stem, text, ["%.1f" % v for v in kept["pos"]], drift,
+                         args.recheck, moved), flush=True)
+                kept_text = ",".join(
+                    ["%.2f" % v for v in kept["pos"]]
+                    + ["%g" % v for v in pose[3:]])
+                render = ("target/release/oag-game <image> --race --track %s "
+                          "--team %s --variant %s --pose=%s --ticks 30 "
+                          "--screenshot ours.png"
+                          % (args.track, args.team, args.variant, kept_text))
+                camera = None
+                if candidate_sets:
+                    pick = ps3_pose.pick_camera(candidate_sets)[-1]
+                    camera, reason, _ = pick
+                    if camera and ps3_pose.decompose(camera["view_proj"]):
+                        found = ps3_pose.decompose(camera["view_proj"])
+                        camera = dict(camera, **found)
+                        camera["render_with"] = ps3_pose.command_line(
+                            found, args.track)
+                    print("  %s: camera %s (%s)"
+                          % (stem, "found" if camera else "null", reason),
+                          flush=True)
+                record = {
+                    "track": track_name(), "team": args.team,
+                    "hull_variant": args.variant, "asked": text,
+                    "start_pose": before["pos"], "settled": kept,
+                    "later": later, "settle_s": args.settle,
+                    "drift": drift, "moved_after_recheck": moved,
+                    "screenshot": str(shot) if shot else None,
+                    "render_with": render, "camera": camera,
+                }
+                (out / ("%s.json" % stem)).write_text(
+                    json.dumps(record, indent=2) + "\n")
+    print("done; %d placement(s) in %s" % (len(attitudes), out), flush=True)
+    return 0
+
+
 def cmd_browse(args):
     """Screenshot a carousel screen at every step, without ever racing it.
 
@@ -1515,6 +1639,43 @@ def main(argv=None):
     cap.add_argument("--keep-dumps", action="store_true",
                      help="also write the raw memory, which is game data and "
                           "stays under data/")
+
+    place = sub.add_parser("place",
+                           help="teleport the player's craft to a world "
+                                "position and photograph it settled")
+    place.add_argument("--pose", action="append", required=True,
+                       metavar="X,Y,Z[,YAW]",
+                       help="a world position as oag-game's --pose reads it; "
+                            "repeatable, one boot for all of them")
+    place.add_argument("--track", default=r"Data\Environments\Talons_Junction\track.vex",
+                       help="oag-game's name for the circuit being raced, used "
+                            "to take the attitude from `oag-game --pose`")
+    place.add_argument("--out", required=True)
+    place.add_argument("--nav", action="append", default=[],
+                       help="SCREEN=BUTTONS, as in `capture`")
+    place.add_argument("--oag-game", default="target/release/oag-game")
+    place.add_argument("--team", default="feisar_c1",
+                       help="recorded beside the shot and used in the render "
+                            "command; the default walks race the feisar_c1 "
+                            "concept1 hull, see `Racebox races the same hull`")
+    place.add_argument("--variant", default="concept1")
+    place.add_argument("--camera-shots", type=int, default=0,
+                       help="read the RSX pushbuffer this many times per pose "
+                            "(~20 s each) and pick the camera across them")
+    place.add_argument("--camera-gap", type=float, default=1.0)
+    place.add_argument("--speed", type=float, default=0.0,
+                       help="velocity along the new forward")
+    place.add_argument("--settle", type=float, default=8.0,
+                       help="seconds of emulation between the write and the shot")
+    place.add_argument("--recheck", type=float, default=3.0,
+                       help="seconds after the shot before the second pose read")
+    place.add_argument("--settle-menu", type=float, default=20.0)
+    place.add_argument("--load", type=float, default=70.0)
+    place.add_argument("--countdown", type=float, default=25.0,
+                       help="seconds after the START RACE tap before the "
+                            "first write, so the grid is released")
+    place.add_argument("--timeout", type=float, default=240.0)
+    place.set_defaults(run=cmd_place)
 
     browse = sub.add_parser("browse",
                             help="screenshot a carousel screen at every step, "

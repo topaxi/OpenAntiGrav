@@ -170,10 +170,17 @@ pub fn mark(label: &str) {
     use std::sync::atomic::AtomicU64;
     static LAST_ALLOCS: AtomicU64 = AtomicU64::new(0);
     static LAST_BYTES: AtomicU64 = AtomicU64::new(0);
+    static LAST_TIME: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
     let allocs = ALLOCS.load(Relaxed);
     let bytes = ALLOC_BYTES.load(Relaxed);
+    let now = std::time::Instant::now();
+    let micros = LAST_TIME
+        .lock()
+        .ok()
+        .and_then(|mut last| last.replace(now))
+        .map_or(0, |last| now.duration_since(last).as_micros());
     println!(
-        "  perf mark {label}: +{} allocs, +{} bytes",
+        "  perf mark {label}: +{micros} us, +{} allocs, +{} bytes",
         allocs.saturating_sub(LAST_ALLOCS.swap(allocs, Relaxed)),
         bytes.saturating_sub(LAST_BYTES.swap(bytes, Relaxed)),
     );

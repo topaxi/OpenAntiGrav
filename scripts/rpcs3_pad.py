@@ -64,7 +64,10 @@ UDEV_RULE_PATH = "/etc/udev/rules.d/99-uinput.rules"
 # untested.
 VENDOR = 0x054C
 PRODUCT = 0x0268
-DEVICE_NAME = "OpenAntiGrav Virtual Pad"
+#: `OAG_RPCS3_PAD_NAME` gives a member's virtual pad its own name, so two members'
+#: RPCS3 instances (each with its own input profile naming its own pad) never
+#: bind each other's device.
+DEVICE_NAME = os.environ.get("OAG_RPCS3_PAD_NAME", "OpenAntiGrav Virtual Pad")
 
 BUTTONS = {
     "cross": "BTN_SOUTH",

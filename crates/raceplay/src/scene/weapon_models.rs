@@ -159,6 +159,7 @@ impl super::Scene {
     /// drift for one frame when a mid-list projectile despawns - bounded by
     /// the pass's own reach cap and accepted, same as the Rocket's own
     /// [ADR-0030](../../../../../docs/architecture/adr/0030-a-bounded-drift-in-motion-vectors-is-accepted.md).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_weapon_models(
         &self,
         race: &Race,
@@ -167,6 +168,7 @@ impl super::Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
         seconds: f32,
+        weapon_scene: &mesh_render::Scene,
     ) -> WeaponMatrices {
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
@@ -175,6 +177,7 @@ impl super::Scene {
         let cannon_matrices = race.cannon_model_matrices(&self.weapon_quads.draw);
         write_one_kind(
             &self.rockets,
+            weapon_scene,
             &rocket_matrices,
             &prev.rockets,
             queue,
@@ -184,6 +187,7 @@ impl super::Scene {
         );
         write_one_kind(
             &self.plasma_blast.ball,
+            weapon_scene,
             &plasma_ball_matrices,
             &prev.plasma_balls,
             queue,
@@ -193,6 +197,7 @@ impl super::Scene {
         );
         write_one_kind(
             &self.plasma_blast.shuriken,
+            weapon_scene,
             &race.shuriken_model_matrices(),
             &prev.shurikens,
             queue,
@@ -204,6 +209,7 @@ impl super::Scene {
         );
         write_one_kind(
             &self.mines,
+            weapon_scene,
             &mine_matrices,
             &prev.mines,
             queue,
@@ -213,6 +219,7 @@ impl super::Scene {
         );
         write_one_kind(
             &self.bombs,
+            weapon_scene,
             &bomb_matrices,
             &prev.bombs,
             queue,
@@ -222,6 +229,7 @@ impl super::Scene {
         );
         write_one_kind(
             &self.cannon_rounds,
+            weapon_scene,
             &cannon_matrices,
             &prev.cannon_rounds,
             queue,
@@ -280,6 +288,7 @@ impl super::Scene {
         race: &Race,
         queue: &wgpu::Queue,
         view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
         let draws = race.plasma_blast_draws(race.camera_position());
         let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
@@ -306,6 +315,7 @@ impl super::Scene {
                     None => draw.matrix,
                 };
                 let mvp = view_projection * matrix;
+                write_fog(drawable, queue, weapon_scene);
                 if draw.hd_scale.is_some() {
                     drawable.write_clocked(queue, view_projection, matrix, mvp, draw.hd_clock);
                 } else {
@@ -532,8 +542,10 @@ impl super::Scene {
 /// and its `bomb` body about `Y`; neither was ever written before, so both drew
 /// at their time-zero pose. Their texture-offset tracks ride the same clock
 /// (`Drawable::write_anims`, 2026-10-05).
+#[allow(clippy::too_many_arguments)]
 fn write_one_kind(
     drawables: &[Drawable],
+    weapon_scene: &mesh_render::Scene,
     matrices: &[Mat4],
     previous: &[Mat4],
     queue: &wgpu::Queue,
@@ -544,6 +556,7 @@ fn write_one_kind(
     for (index, (drawable, matrix)) in drawables.iter().zip(matrices).enumerate() {
         let previous = previous.get(index).copied().unwrap_or(*matrix);
         drawable.write(queue, view_projection, *matrix, prev_vp * previous);
+        write_fog(drawable, queue, weapon_scene);
         if let Some(seconds) = anim_seconds {
             drawable.write_node_anims(queue, seconds);
             drawable.write_anims(queue, seconds);
@@ -551,9 +564,19 @@ fn write_one_kind(
     }
 }
 
+/// Puts the circuit's scene block on a weapon drawable a PS3 program shades.
+pub(super) fn write_fog(drawable: &Drawable, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+    if drawable.is_ps3_shaded() {
+        queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
+    }
+}
+
 impl super::Scene {
-    /// Writes `scene` - the circuit's fog, light rig and eye, with the Zone half
-    /// switched off here - onto every weapon drawable a PS3 program shades.
+    /// `scene` - the circuit's fog, light rig and eye - with the Zone half
+    /// switched off, which [`write_fog`] puts on every *live* weapon drawable a
+    /// PS3 program shades. Each weapon's own writer calls it, so a pool slot
+    /// nothing draws this frame costs no write: on HD that was some 600 writes
+    /// and 4,200 allocations a frame, 1.6 ms of a 2.0 ms `Scene::render`.
     ///
     /// **A drawable nothing writes holds `Scene::off`**: fog off, the stand-in
     /// light and `Fog::camera = (0, 0, 0)`. Every HD weapon program reads
@@ -565,35 +588,17 @@ impl super::Scene {
     /// is off because the disc's 39 weapon materials carry no Zone variant, as
     /// the craft's twelve do not (see the call site).
     ///
-    /// **Gated on [`Drawable::is_ps3_shaded`], not on a title**: a Pulse
+    /// **Gated on [`Drawable::is_ps3_shaded`] in [`write_fog`], not on a title**: a Pulse
     /// weapon's materials are the GE's fixed pipeline, its stand-in light was
     /// never measured against a scene block, and that is another lane's.
     ///
     /// **Not written, and open**: the Bomb's blast pair and its Repulser field
     /// and mag floor. No frame of them was kept (a detonation needs a rival to
     /// run onto the bomb), so nothing says writing them is right.
-    pub(super) fn write_weapon_scenes(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
-        let scene = &mesh_render::Scene {
+    pub(super) fn weapon_scene(scene: &mesh_render::Scene) -> mesh_render::Scene {
+        mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             ..*scene
-        };
-        let pools = [
-            self.plasma_blast.ball.iter(),
-            self.plasma_blast.halo.iter(),
-            self.plasma_blast.hemisphere1.iter(),
-            self.plasma_blast.hemisphere2.iter(),
-            self.rockets.iter(),
-            self.mines.iter(),
-            self.bombs.iter(),
-            self.cannon_rounds.iter(),
-        ];
-        for drawable in pools
-            .into_iter()
-            .flatten()
-            .chain(self.leach_ball.as_ref())
-            .filter(|drawable| drawable.is_ps3_shaded())
-        {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
         }
     }
 }
