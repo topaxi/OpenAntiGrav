@@ -698,4 +698,100 @@ lights.
 (`+0`), `+0x64 = 1.5`, `+0x68 = 0.6`, `+0xa4 = 3.0`, `+0xa8 = 0.1`, and three
 curve lists at `+0x08`, `+0x24`, `+0x40`.
 
-Per-tick law (`0x001503d8`): to be filled in below as it is read.
+### The per-tick law, and how it was checked
+
+`NormalBombBlast_Update` (`0x001503d8`, with `0x0014fff0` for the ripple rings
+and `0x0014fa08` building the curves) runs for `age` seconds, `age > 3.0`
+returning false (the table's `+0`). It sets each model's clock with
+`AnimNode_UpdateTransformTree` and places two groups of matrices; the table at
+`0x008c1aa4` is initialised data and nothing found writes it (confidence 85).
+
+| Age (s) | Fireball + core (`+0x2e4`, `+0x2e8`) | Bloom disc (`+0x2ec`) | First ring (`+0x2f0`) | Ripple rings (`+0x2f4..+0x30c`) |
+| --- | --- | --- | --- | --- |
+| `0 ..= 0.75` | clock `1.0` | clock `0.625 age` | clock `min(age / 0.6, 1)`, size `0.1 -> 53.33` over 0.6 | hidden |
+| `0.5` | `WO_BOMB_RAYS` once (`0x150fc8`, tag `'BORS'`, at the blast's matrix) | | | |
+| `0.75 .. 1.5` | clock `1 - (age - 0.75)^2` | clock `((age - 0.8) / 0.7 * 0.5)^2 + 0.5` once past 0.8 | held at 1 | |
+| `1.2 .. 1.5` | rows squash: sideways `x (1 + 0.2 t^2)`, up `x (1 - t^2)`, `t = (age - 1.2) / 0.3` | same | | |
+| `1.4 .. 2.3` | hidden from 1.5 | hidden from 1.5 | hidden from 1.5 | seven windows `[start, start + window]`, below |
+| `3.0` | the object retires | | | |
+
+- **Size** of the fireball, core and bloom: `curve(age) + cur`, `curve` linear
+  through `(0, 2.0)`, `(0.1, 6.66)`, `(1.5, 10.0)` (`0x14fa08`: TOC floats
+  `-0x23d4`, `-0x23e4`, `10.0`) and `cur` easing `cur += (3.33 - cur) * 0.05`
+  once a tick from `0.1` (`+0x60`, `+0x5c`, `-0x23e8`; the loop runs
+  `trunc(dt * 59.999996)` times, one at 60 Hz). The core is the fireball's
+  matrix times `0.99` (`-0x2360`); its `ColourAnim` is the constant `+0xac = 0.9`.
+- **`ColourAnim` of the fireball** is blast `+0x2dc`: `1.0` until 0.1 s, then
+  `|x|` for `x < 0` and `x^(1/4)` (`0x677868`, the executable's `pow`) for
+  `x >= 0`, `x = 2 (age - 0.1) / 1.4 - 1`; `(1 - ColourAnim)^-1` multiplies the
+  fireball's colour in the shader, so it starts white-hot, cools to its texture
+  at 0.8 s and flashes white again as it fades.
+- **The fireball's frame.** `0x00151538` writes the base frame per viewport:
+  `z` the third *column* of the camera table `0x00987780`, `y` the bomb matrix's
+  up row with `z` removed, `x = y x z`. `0x001503d8` then tilts it by
+  `-pi/2 (1 - age / 3) + pi/4` about the **unnormalised** `y x d`
+  (`d = normalize(position + camera row 3)`) through `0x006ca6b0`
+  (`0x006ca538` builds the rows `(x^2 k + c, xy k - z s, xz k + y s)`, ...,
+  `k = 1 - c`, from the raw components, so a non-unit axis shears). The bloom
+  disc's frame is `(-(y x d), y - d (y . d), -d)`: facing the viewer.
+- **Ripple rings** `k = 0..7` (lists at `+0x24` start, `+0x88` window, `+0x08`
+  and `+0x40` radius from and to, `+0x6c` offset): start `1.4, 1.42, 1.43, 1.45,
+  1.43, 1.42, 1.4`; window `0.6, 0.7, 0.8, 0.9, 0.8, 0.7, 0.6`; radius `1.33 ->
+  2.0, 3.33 -> 5.33, 5.33 -> 8.66, 8.0 -> 10.66, ...` linear in
+  `(age - start) / start`; offsets along up `-5.33, -4, -2, 0, 2, 4, 5.33`
+  (the position is `base - offset up`); the up row is further scaled by
+  `3 - 25 (1 - u)^4`, `u = (age - start) / window`, which is **negative** for
+  the first 0.41 of the window (an inside-out ring); clock `u`.
+- **Draw** (`0x001512f8`): the fireball with the matrix at `+0x150`, the core,
+  the bloom disc with `+0x1d0`, then two point lights at the blast's centre
+  three units up (`0x006778c8`, ranges 40 and 100, colour `500, 200 -> 50...`,
+  `5, 0.5`). The lights are **not played**: this engine has no weapon point
+  light.
+
+**How it was checked.** Ghidra stops at the AltiVec in these functions and marks
+`0x00327500` no-return, so a decompile of the start and the update is
+truncated. A scratch interpreter over the raw bytes (capstone, `ppc64`
+AltiVec, the Cell's `lvlx`/`lvrx`/`stvlx`/`stvrx` decoded by hand) ran
+`0x00151538`, `0x001503d8` and `0x001512f8` with stubs for the draw and
+set-time calls over random cameras, positions and orientations. The
+arithmetic above reproduces its matrices to 4e-3 on rows of about ten units
+(the executable's own polynomial `sin`/`cos`) and its clocks, windows and
+`ColourAnim` to 2e-4, for every tick of the run. Scratch:
+`data/scratch/hd-weapon-blasts/` (`emu.py`, `runblast.py`, `spec.py`; not
+committed - the oracle numbers that matter are in `bomb_blast::hd::tests`).
+
+**Materials.** `hd_bombfire_glow` (`@0x1d90`, fireball and core, cut-out),
+`hd_bombfire_bloomring` (`@0x16a0`, texture-only, `slots::EMISSIVE`) and
+`hd_bombfire_shockwaves_glow` (`@0x1950`): read in
+[hd-unlit-programs.md](../../../rendering/hd-unlit-programs.md), "The Bomb's
+fireball and shockwaves". The shockwave's vertices carry **two colours** after
+the coordinate (stride 22, `ff 9f 00 4c` twice); `oag_rcs::rcsmodel` read the
+coordinate out of them as `NaN` until the same day.
+
+**Not read / chosen.** What the camera table holds at run time (confidence 65:
+read as `-eye` in row 3 and the back axis in column 2, under which the
+executable's own output is a camera-facing frame); the bomb entity's own up row
+(this engine's frozen-pose substitute, as for Pulse); the Missile's pair
+(next, below). **Confidence 85** for the law, 65 for the camera reading.
+
+### Names recovered
+
+| Address | Name | Confidence | Basis |
+| --- | --- | --- | --- |
+| `0x00144a48` | `NormalBomb_Construct` | 80 | writes `"NormalBomb.cpp"` (TOC `0x008aad60`) at `+0x30`, loads `HD_Bomb` and `HD_bomb_halo`, builds the blast |
+| `0x001443f8` | `NormalBomb_Update` | 80 | `age (+0xe8) += dt`, the ship-in-radius loop, calls `NormalBombBlast_Update` |
+| `0x00144040` | `NormalBomb_Detonate` | 80 | builds the matrix at `+0xf0`, `NormalBombBlast_Start`, `BOMBEXPL` |
+| `0x00151ad8` | `NormalBombBlast_Construct` | 80 | loads the four models (eleven instances), binds the four material parameters |
+| `0x00151538` | `NormalBombBlast_Start` | 85 | copies the matrix to `+0x290`, `+0x490 = 1`, frames, `WO_BOMB_SMOKERING`; run in the interpreter |
+| `0x001503d8` | `NormalBombBlast_Update` | 85 | the per-tick law above; run in the interpreter |
+| `0x0014fff0` | `NormalBombBlast_UpdateRipples` | 85 | the seven ripple rings; run in the interpreter |
+| `0x0014fa08` | `NormalBombBlast_Reset` | 80 | zeroes age and `+0x2dc`, builds the curves from the table |
+| `0x001512f8` | `NormalBombBlast_Draw` | 80 | the fireball, the core and the bloom disc, two lights |
+| `0x006ca6b0` | `Matrix_RotateRowsByAxisAngle` | 75 | rows `x R(axis, angle)`, the axis taken raw |
+
+**Lineage.** Omega's `data00.psarc` ships the same four `.vex`/`.rcsmodel` names
+(`HD_bomb_sphere`, `HD_bomb_sphere_white`, `hd_bomb_sphere_bloomring`,
+`hd_bomb_shockwaves`) beside `BombFire*.rcsmaterial` files, **different
+materials**, and its executable names `NormalBomb.cpp`: *checked, applies, not
+wired* - Omega's `WeaponModels` is `EMPTY`, its blast code and its materials'
+programs are unread.

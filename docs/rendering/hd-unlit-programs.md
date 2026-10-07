@@ -249,11 +249,95 @@ pixels. **Checked against Omega: checked, applies, not wired** - Omega's
 `WeaponModels` is `EMPTY`, so it builds no weapon drawable; once named through
 `mesh::rcs` they take the write by the same predicate.
 
+## The Bomb's fireball and shockwaves
+
+2026-10-07. The three materials of HD's Bomb detonation
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md), 2026-10-07), read
+off their resolved fragment programs with `scripts/ps3-microcode.py` and the
+vertex programs beside them. Probes: `hd_bomb_programs.rs` (which block each
+model resolves to), `hd_unlit_probe.rs --program`.
+
+**Four material parameters are bound by pointer** (`FUN_00677018`): `AlphaAnim`,
+`V_Anim` and `Shockwave_scalar` to the model's own clock (`node + 0xc0`, what
+`AnimNode_UpdateTransformTree` sets), `ColourAnim` to a float of the blast
+object. The blast sets the clock from its own arithmetic and the models carry
+no moving `Anim Transform` key, so each is a number the blast writes
+(`bomb_blast::hd`).
+
+| Material | Block | Models | State | Bit |
+| --- | --- | --- | --- | --- |
+| `hd_bombfire_glow` | `@0x1d90` (vertex `@0x1c20`) | `HD_bomb_sphere`, `HD_bomb_sphere_white` | `0x6e`, cut-out, no cull | `BOMB_FIRE` |
+| `hd_bombfire_bloomring` | `@0x16a0` | `hd_bomb_sphere_bloomring` | `0x29`, `SrcAlpha`/`One` | `EMISSIVE` (existing) |
+| `hd_bombfire_shockwaves_glow` | `@0x1950` (vertex `@0x17c0`) | `hd_bomb_shockwaves` (x8) | `0x29`, `SrcAlpha`/`One` | `BOMB_SHOCK` |
+
+**Both new bits are pairs of existing ones** (`BOMB_FIRE = RIM_GLOW | RIM_EDGE`,
+`BOMB_SHOCK = CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO`): the role word keeps
+`MATERIAL_SHIFT = 23`, because bits 23 and up are the material index and a
+circuit needs hundreds of those. No material earns both single bits, and every
+test of one of them alone now excludes its pair. The mesh uniform's second pad
+becomes `model_colour` (`ColourAnim`).
+
+**`hd_bombfire_glow` `@0x1d90`** (vertex: `TC0 = (eye - P, u)`, `TC1 = (N, v)`,
+`TC2.w = u`, `TC3 = (v, clip w)`). The LeachBall's skeleton with the blast's two
+scalars in it; `DIV` takes its numerator from the destination component of its
+first source (`.w` here) and its divisor from the second source's `.x`, while
+`RCP` and the transcendentals read `.x` - so `RCP H0.w, H3` is `1 / (1 -
+ColourAnim)` and the alpha's numerator is `H3.w`:
+
+```text
+nA   = tex(u, 0.3 t + v).a                              @0x0d
+B    = tex(u, nA + v + 0.04 t)                          @0x33
+c    = tex(6u, 6 (0.3 t + v)).rgb                       @0x1b
+rim  = sat(1 - N.V);  h = sat(0.86 - 0.86 rim^5)^50     @0x26-0x2e
+rgb  = (B.r + 100 h, B.g + 100 h, B.b) / (1 - c) / (1 - ColourAnim)
+a    = sat((0.5 B.a + 0.5 - AlphaAnim) / (1 - AlphaAnim))   then * gas.y + gas.x
+```
+
+`AlphaAnim = 1` (the first 0.75 s) divides by zero: a negative numerator
+saturates to nothing, and the `0 / 0` of an opaque texel is **chosen, not
+measured** to be nothing too. `(1 - c)^-1` and `(1 - ColourAnim)^-1` are held at
+the largest finite half, `65504`, as the LeachBall's is. The white core is the
+same program with `ColourAnim = 0.9` (`x 10`).
+
+**`hd_bombfire_shockwaves_glow` `@0x1950`** (vertex: `TC3 = (Uv, VertexColour2.w,
+clip w)`, `TC0.xyz = VertexColour1.xyz`; the chunk is an inline stride-22 one,
+see below):
+
+```text
+n   = tex(u, v + 0.01 S).a                              @0x08
+c   = v + 0.05 n + 0.45 S                               @0x0d
+rgb = tex(u + n, c).rgb * VertexColour1.rgb             @0x14, @0x19
+a   = VertexColour2.a * sum(tex(c, c).rgb)              @0x11-@0x16
+```
+
+`TEX H0.xyz, R1.xxxx` samples at `(c, c)`, the diagonal; the colour tap is the
+2D one. `S` is `Shockwave_scalar`, the model's clock (0 to 1 over each ring's
+window).
+
+**The coordinate of an inline stride-22 chunk** that ends in two colours reads
+`NaN` out of its last four bytes (`ff 9f 00 4c` twice on
+`hd_bomb_shockwaves`). `oag_rcs::rcsmodel` now reads it at `+0x0a`, as it
+already did for stride 18: `hd_unlit_probe --undeclared` finds exactly four such
+stride-22 chunks (`hd_bomb_shockwaves`, both of `hd_plasma_ring`'s and
+`hd_missile_explosion`'s), eleven others keep their tail. **This moves the
+Plasma explosion's ring** (its coordinate was `NaN`, zeroed): the same program
+shape, `(u, v) = TC3.xy`, so the texture it samples now varies across the disc.
+The two colour fields fold into the vertex's `colour` and `sun_mask`
+(`Mesh::inline_two_colours`), only for a surface that earned `BOMB_SHOCK`.
+Confidence 85 on the arithmetic of both programs, instruction by instruction;
+what is chosen is named above.
+
+**What the picture shows** (Talon's Junction, a laid Bomb tripped by a rival,
+camera posed from the far side; `--force-bomb-trip`): a white-hot textured
+fireball and a flat orange disc at 0.2 s, the cooled fireball with brown smoke
+puffs at 0.67 s, the fireball whited out at 1.17 s, then the seven rings as a
+stacked glow at 1.45 s. **No capture of the original exists to compare with.**
+Pinned by `hd_bomb_blast_ground_truth.rs`.
+
 ## Open
 
-- **Not written:** the Bomb's blast pair, its Repulser field and mag floor. A
-  detonation needs a rival to run onto the bomb (lap 2 with `--opponents`), so
-  no AI-independent frame was kept.
+- **Not written:** the Repulser field and mag floor. (The Bomb's blast is
+  written since 2026-10-07 and framed with `--force-bomb-trip`; see above.)
 - Which archive's `hd_leachbeam_ball_glow` the original serves; the two copies
   differ by the vertex alpha only.
 - No capture of the original's LeachBall or Plasma head exists under
