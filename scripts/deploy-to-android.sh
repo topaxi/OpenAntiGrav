@@ -137,5 +137,4 @@ fi
 
 step "Done"
 echo "Game data: just push-data android"
-echo "Launch:    adb shell monkey -p $package -c android.intent.category.LAUNCHER 1"
-echo "Logs:      adb logcat -s oag"
+echo "Launch:    just launch-android   (follows the log too; --stop for a cold start)"
