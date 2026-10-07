@@ -31,8 +31,7 @@ the work in isolated worktrees.
 
 3. **Set up the recurring check.** Invoke the `loop` skill with an interval of
    one hour and a prompt that re-enters this one, so the loop survives you
-   stopping. It used to be 30 minutes; raised to an hour on 2026-09-21 by the
-   user because iterations have become slower and longer, and a tick that
+   stopping. It used to be 30 minutes; the user raised it to an hour because iterations have become slower and longer, and a tick that
    finds nothing finished is pure overhead - a member's own report wakes the
    lead immediately regardless of the tick, so nothing waits on it:
 
@@ -112,7 +111,7 @@ The split is asymmetric, and both halves matter:
 
 **Never merge into the main checkout while the lead's own gate is running
 on it.** The gate compiles the working tree as it finds it, so a merge
-landing mid-run produces a half-old, half-new tree. On 2026-09-30 that read
+landing mid-run produces a half-old, half-new tree. That once read
 as six `E0425`/`E0599` compile errors against code that was fine. Either
 hold the next merge until the gate finishes, or gate a detached worktree
 (`git worktree add --detach ../OpenAntiGrav-worktrees/lead-gate <sha>`, then
@@ -153,13 +152,13 @@ Four things about this that are easy to get wrong:
   for several minutes before it starts, and that this is correct.
 
 **`sccache` inherits the lock and holds it after the gate exits.** Found
-2026-09-14 with two members' gates both "waiting for the lock" and no gate
+with two members' gates both "waiting for the lock" and no gate
 running: `cargo` under a `flock`-wrapped `just` spawns the `sccache` server
 with the lock's file descriptor open, and that server outlives the `just`
 by its idle timeout (ten minutes by default), holding the lock the whole
 time. `lsof "$HOME/.cache/oag/gate.lock"` shows it - a line for `sccache`
 beside the waiting `flock`s. This is most of the "the gate may sit for
-minutes" folklore above. **The fix is `flock -o`**, adopted 2026-09-23 after
+minutes" folklore above. **The fix is `flock -o`**, adopted after
 it recurred: the old fix - start the server outside any lock before the
 first gate - only lasts until that server idles out and the next gate
 spawns a fresh one inside the lock, which is what happened. If a stale
@@ -181,7 +180,7 @@ touching the tail that actually sets the wall clock.
 - **Pre-draw them. Never let members pick at random** - two members picking
   independently land in the same crate and collide at merge.
 - **Lanes disjoint by function set first, crate second - a binary may be
-  shared.** Relaxed 2026-09-16 by the user: two members may work the *same*
+  shared.** Relaxed by the user: two members may work the *same*
   Ghidra program at once, as long as their briefs name disjoint sets of
   functions/addresses so no two renames land on one function, and each
   appends its own dated section and its own `names.tsv` rows rather than
@@ -189,7 +188,7 @@ touching the tail that actually sets the wall clock.
   merge. Every brief still repeats the rule from `docs/ghidra/workflow.md`'s
   "Bridge quirks" section: pass `program=` explicitly on every call (by path
   when names collide, e.g. `/psp-pulse-usa/BOOT.BIN`), never call
-  `switch_program`. Skipping that is what caused the 2026-09-03 incident in
+  `switch_program`. Skipping that once caused the incident in
   `HANDOVER.md` where one member's rename landed on another's active binary.
   Emulators are not shared either way: **each member spawns its own
   instance** (PPSSPP with its own `HOME`/`XDG_CONFIG_HOME`, debugger port and
@@ -225,7 +224,7 @@ wiring with one small decompile is `oag-wire`, and the member reads the RE
 rules in `oag-re`'s file if it needs them. Overriding `model` at spawn time
 works (a hard RE lane on sonnet to save a slot, say); say so in the report.
 Sonnet at xhigh is the default workhorse. The maintainer found xhigh a
-significant improvement for Sonnet 5.5 on 2026-09-30.
+significant improvement for Sonnet 5.5.
 
 ## The brief
 
@@ -250,7 +249,7 @@ once, then add it to `member-rules.md` so the next spawn inherits it. Don't
 bury it in one brief.
 
 **Do not widen a running lane by message.** A scope extension sent mid-lane
-was dropped twice on 2026-10-05: Omega particles and Omega music each went to
+was dropped twice: Omega particles and Omega music each went to
 a member already deep in its brief, and each report came back without a word
 about Omega. Put the extra scope in a fresh member's brief instead, or in the
 original brief if it is known at spawn time. Short corrections, such as "main

@@ -61,7 +61,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 
 /// The default the repository checkout has, and the documented example.
-pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
+pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-eu.chd";
 
 /// Names a disc image is looked for under, in order.
 ///
@@ -74,24 +74,18 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// see roadmap M8. Pure's EU image is listed before its USA one so a directory
 /// holding both auto-detects as EU, matching the default region elsewhere.
 ///
-/// **`pulse-psp-eu.chd` joined this list on 2026-09-07** - it used to be
-/// absent on purpose, back when it was read-only-for-Ghidra reference material
-/// and not a played-from source at all. That framing no longer holds: EU is
-/// now Pulse PSP's more complete disc (its DLC never shipped on USA, see
-/// `data/README.md`) as well as the Ghidra target of record
-/// ([ADR-0048](../../../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)),
-/// so a player whose only disc is the EU one deserves the same "known name"
-/// fast path Pure's EU image already gets, not just the generic
-/// any-other-`.chd` fallback [`images_in`] also matches on. **Left at index 1,
-/// after `pulse-psp-usa.chd` rather than before it** - unlike Pure, a real
-/// player with *both* Pulse discs today still gets the USA one they have
-/// always gotten; [`IMAGE_NAMES`]`[0]`'s own pinned test
-/// (`image_names_starts_with_pulse_psp_matching_the_hint_text`) and the
-/// not-found hint text both depend on that position, and reordering was not
-/// this pass's ask - only recognising the EU disc by name was.
+/// **Europe before the USA, for every title that has both** (maintainer
+/// decision, 2026-10-07; standing project policy): EU is Pulse PSP's more
+/// complete disc (its DLC never shipped on USA, see `data/README.md`) and the
+/// Ghidra target of record
+/// ([ADR-0048](../../../docs/architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)).
+/// A directory holding both opens the EU one; the USA one is reachable by
+/// naming it on the command line, in `$OAG_IMAGE` or in settings. Pulse PSP
+/// still leads the list as the platform the implementation follows, and
+/// [`IMAGE_NAMES`]`[0]` is the name the not-found hint suggests.
 pub const IMAGE_NAMES: [&str; 7] = [
-    "pulse-psp-usa.chd",
     "pulse-psp-eu.chd",
+    "pulse-psp-usa.chd",
     "pulse-ps2-eu.chd",
     "pure-psp-eu.chd",
     "pure-psp-usa.chd",
@@ -386,8 +380,8 @@ fn package_directories() -> Vec<PathBuf> {
     found
 }
 
-/// Every 2048 package extract directly under `root`, alphabetical for the
-/// same reason [`images_in`]'s `containers` is.
+/// Every 2048 package extract directly under `root`: European serials first,
+/// then alphabetical for the same reason [`images_in`]'s `containers` is.
 ///
 /// **Cheap and title-blind, the same way [`is_container`] is**: this only asks
 /// whether `<candidate>/base/PSP2/data.psarc` exists, which is what tells an
@@ -403,8 +397,18 @@ fn package_directories_in(root: &Path) -> Vec<PathBuf> {
         .map(|entry| entry.path())
         .filter(|path| path.join("base/PSP2/data.psarc").is_file())
         .collect();
-    found.sort();
+    found.sort_by_key(|path| (!is_european_serial(path), path.clone()));
     found
+}
+
+/// Whether a Vita package folder is named for a European serial (`PCSB`,
+/// `PCSF`), which sorts ahead of the American `PCSA`/`PCSE` ones: the same
+/// Europe-first policy [`IMAGE_NAMES`] follows. A folder named anything else
+/// is not European as far as this can tell, and keeps its alphabetical place.
+fn is_european_serial(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("PCSB") || name.starts_with("PCSF"))
 }
 
 /// Where Wipeout: Omega Collection's own PS4 extract lives, unlike 2048's

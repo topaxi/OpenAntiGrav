@@ -1,7 +1,7 @@
 //! Runs Wipeout Pulse from the user's own disc image.
 //!
 //! ```sh
-//! oag-game data/images/pulse-psp-usa.chd
+//! oag-game data/images/pulse-psp-eu.chd
 //! ```
 //!
 //! Boots into `LogoFMV`, the screen the disc's own boot reaches: it plays
@@ -13,7 +13,7 @@
 //!
 //! ```sh
 //! # No display needed. Runs the sequence headless and writes one frame.
-//! oag-game data/images/pulse-psp-usa.chd --screenshot /tmp/menu.png \
+//! oag-game data/images/pulse-psp-eu.chd --screenshot /tmp/menu.png \
 //!     --until "Language Selection" --hold start
 //! ```
 //!
