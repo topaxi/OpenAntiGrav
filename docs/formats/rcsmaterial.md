@@ -2496,6 +2496,43 @@ Implemented in `mesh::rcs::light_cone` (`slots::LIGHT_CONE`, bit 19, which
 moved `MATERIAL_SHIFT` from 19 to 20) and `mesh.wgsl`; pinned by
 `hd_light_cone_lit_path` (fixture) and `hd_light_cone_ground_truth` (disc).
 
+## A lightmapped material's picture must be a sampler its variant declares (2026-10-07, `hd-vineta-floor`)
+
+**The report** was the maintainer's, from play on Vineta K (tick 2820, world `[-839.8, -146.6, 215.0]`): "the floor
+texture seems off compared to the original". **Reference:** an RPCS3 capture of the same circuit, eight shots, under
+`data/reference/hd-capture/vineta-floor/` (shot `03`, eye `[-861.6, -145.6, 179.0]`, looks at the reported spot;
+untracked, `data/` is gitignored). It shows a grey road with a blue stripe and drain grates across the whole width.
+Ours drew the **left third as black glass with cyan ripple rings**.
+
+**Cause (measured).** The road tile, chunk 1051 of `01_vineta_k/track.rcsmodel` (DATA02), has six surfaces, each its
+own material. Surface 5 is `d_s_n_customr` with, in file order: `ds_dualparaboloid_c` (512x256 reflection map,
+sampler `0x8365b1f3`), `ds_floorplain_wet_cs` (2048x512, `0x3bdc0403`), `ds_floorplain_waterleadin_n` (`0xa2d555b9`
+normal) and the lightmap. Its resolved variant declares `{0x37b5db58: unit 2, 0x3bdc0403: unit 0, 0x9edd3243: unit 3,
+0xa2d555b9: unit 1}` - **`0x8365b1f3` is declared by no sampler**, the engine binds that slot itself. A lightmapped
+material skipped the microcode read in `skin::picks` and took "the first entry that is not a lookup", which is the
+reflection map. Skipping chunk 1051 removes the black; drawing the reflection map as albedo is the black-and-ripples.
+This is the `Pick` collision of the glass-floor case (a), not a UV, decode or combine fault. Its colour lane is
+`Texel::Mixed`, so the unit trace cannot name the picture either; the declared-sampler filter does.
+
+**Fix.** `skin::lightmapped_albedo`: the first non-lookup entry **among those the resolved variant declares**, the old
+rule where no variant resolves. Before/after at the capture's own camera (`hd-frame-compare`'s comparison setting):
+`data/scratch/hd-vineta-floor/before_03.png` / `after_03.png` beside `pair/03.png`.
+Pinned by `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
+
+**Disc-wide census** (`crates/render/examples/hd_lightmap_albedo_census.rs`, all 28 circuit models, 8,129 lightmapped
+materials with a resolved declaration): the albedo entry changes on **14** slots, three distinct materials:
+`d_s_n_customr` (`ds_floorplain_wet_cs`, `ds_floorchevron_wet_cs`; Vineta K both directions) and
+`sebenco_ice` (`and_ice2` -> `and_ice1`; Sebenco Climb reversed, a DLC material, **same undeclared `0x8365b1f3` at
+entry 0, no reference frame taken**). Nothing else on the disc is touched.
+
+**Still open on this frame** (not this lane): the hex windows show teal sea in the original and black in ours (sky
+lane); the wet floor's reflection (`ds_dualparaboloid_c`, an engine-bound slot) is not drawn, so the floor is the
+albedo and lightmap only, which matches the capture to the eye.
+
+**2048 / Omega check: not checkable.** The rule reads a PS3 `Declared` sampler table out of an NV40 microcode block;
+2048's Vita and Omega's PS4 shader containers are unread here (see the two sections above), so whether they carry an
+engine-bound slot like `0x8365b1f3` cannot be asked.
+
 ## See also
 
 - [rcsmodel](rcsmodel.md) - the material record, and the two texture paths
