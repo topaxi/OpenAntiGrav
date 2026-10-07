@@ -18,7 +18,7 @@
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input, InputSnapshot};
 use oag_raceplay as race;
-use oag_raceplay::{Race, intro_camera};
+use oag_raceplay::Race;
 
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";
 
@@ -76,11 +76,14 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
         assert!(ticks < 3000, "the flyby never ended");
     }
     // The tick that ends it is the one that already shows the chase camera.
-    assert_eq!(ticks, intro_camera::HOLD_TICKS + 1500 + 1);
+    assert_eq!(
+        ticks,
+        oag_pulse::pre_race::PRE_RACE.hold_ticks.value + 1500 + 1
+    );
     assert_eq!(race.sim.state_hash(), before, "the flyby stepped the world");
     assert_eq!(race.sim.world.tick, 0);
     assert!(!race.hud_shown(), "the HUD waits out the fade");
-    for _ in 0..intro_camera::HUD_DELAY_TICKS {
+    for _ in 0..u64::from(oag_pulse::pre_race::PRE_RACE.hud_delay_ticks.value) {
         assert!(!race.hud_shown());
         race.tick(&PlayerInputs::none());
     }
@@ -102,5 +105,5 @@ fn a_held_cross_ends_it_when_the_lock_lifts_and_not_before() {
         ticks += 1;
         assert!(ticks < 3000, "a held cross did not end the flyby");
     }
-    assert_eq!(ticks, intro_camera::LOCK_TICKS + 1);
+    assert_eq!(ticks, oag_pulse::pre_race::PRE_RACE.lock_ticks.value + 1);
 }

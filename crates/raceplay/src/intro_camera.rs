@@ -1,6 +1,8 @@
 //! The pre-race flyby: the circuit's own camera animation, played before the countdown.
 //!
-//! **Pulse off a PSP disc only**, the one executable it is read off. Before a race the
+//! **Pulse off a PSP disc, and Wipeout HD with most of its numbers chosen** (see
+//! [`oag_title::pre_race`] for which numbers are which): the rules below are Pulse's measured
+//! ones, and each title's own are its `PreRace` data. Before a race the
 //! original's `RaceMode_UpdateIntro` (`0x08829e6c`) runs a substate machine whose first
 //! working substate is a *camera pass*: the render view is the `gridCamera` in the circuit's
 //! `start_grid.vex`, and `grid_camera1`'s keyed animation flies it round the circuit for
@@ -15,13 +17,13 @@
 //!
 //! | Rule | Source |
 //! | --- | --- |
-//! | the camera is `grid_camera1`'s world pose, vertical field [`FOV_DEGREES`] | measured, two circuits, to `3e-4` |
+//! | the camera is `grid_camera1`'s world pose, vertical field the title's `fov_degrees` | measured, two circuits, to `3e-4` |
 //! | the pose is the animation's as of the **previous** tick | measured: against the same tick the median error is `0.74` units, one tick back `5e-5` |
-//! | the animation holds its first frame for [`HOLD_TICKS`] ticks, then plays at the tick rate | measured on three runs (the animation clock first non-zero at tick 29 each time), and read: the camera node waits `1.0` s of its own clock, which runs two `dt` a tick |
+//! | the animation holds its first frame for the title's hold ticks, then plays at the tick rate | measured on three runs (the animation clock first non-zero at tick 29 each time), and read: the camera node waits `1.0` s of its own clock, which runs two `dt` a tick |
 //! | the flyby ends when the animation reaches `AnimEnd`, or when [`Button::Cross`] is **held** | read (`GridCamera_Progress`, the `Input_IsHeld(5)` test) and measured: the animation ended at `24.99` s of `25.0`, and a held cross ended it as soon as the lock lifted |
-//! | neither can end it before [`LOCK_TICKS`] ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
+//! | neither can end it before the title's lock ticks have passed | read (`+0x1a04`, a counter from 60) and measured (it reads `57` at the third tick and `0` from the sixtieth) |
 //! | the world does not tick meanwhile: the countdown's 272 ticks start when the flyby ends | measured: the race clock reads zero and the mode state `0` throughout, and the first state after the flyby is the one a skip always reached |
-//! | the HUD is hidden through the flyby and for [`HUD_DELAY_TICKS`] ticks after it | read (`g_hud+0x2c` flags, cleared at the intro's start and set when its `0.5` s fade-out substate ends) and seen: no HUD at tick 30, HUD at tick 60 |
+//! | the HUD is hidden through the flyby and for the title's HUD delay ticks after it | read (`g_hud+0x2c` flags, cleared at the intro's start and set when its `0.5` s fade-out substate ends) and seen: no HUD at tick 30, HUD at tick 60 |
 //!
 //! # What is chosen, not measured
 //!
@@ -47,21 +49,8 @@ use log::debug;
 use oag_core::math::Mat3;
 use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
-use oag_vex::grid_camera::{FOV_DEGREES, GridCamera};
-
-/// Ticks before the animation starts moving: the camera node waits `1.0` s of its own clock,
-/// which advances two `dt` per tick, so it is read as 30. **Measured as 28** on three runs (the
-/// animation's clock first read non-zero at tick 29 each time, ticks counted off the intro's
-/// counter), and 28 is what is used.
-pub const HOLD_TICKS: u32 = 28;
-
-/// Ticks before the flyby may end: the intro's frame counter (`mode+0x1a04`) starts at 60 and
-/// must read zero. Measured: `57` on the third tick, `0` by the sixtieth.
-pub const LOCK_TICKS: u32 = 60;
-
-/// Ticks after the flyby ends that the HUD stays hidden: the fade-out substate (`RaceMode_
-/// UpdateIntro`'s substate 2) waits `0.5` s, and the HUD flags are set when it ends.
-pub const HUD_DELAY_TICKS: u64 = 30;
+use oag_title::pre_race::{Ending, PreRace, Skip};
+use oag_vex::grid_camera::GridCamera;
 
 /// Where the flyby is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,18 +79,35 @@ pub struct Timeline {
     length: f32,
     /// Ticks run.
     tick: u32,
+    /// The title's hold, lock and ending.
+    rule: &'static PreRace,
 }
 
 impl Timeline {
-    /// A clock for a flyby `length` seconds long.
+    /// A clock for a flyby `length` seconds long under `rule`.
     #[must_use]
-    pub fn new(length: f32) -> Self {
-        Self { length, tick: 0 }
+    pub fn new(length: f32, rule: &'static PreRace) -> Self {
+        Self {
+            length,
+            tick: 0,
+            rule,
+        }
     }
 
-    /// The animation's clock at tick `k`, seconds: zero for the hold, then one `dt` a tick.
-    fn animation_seconds(k: u32, dt: f32) -> f32 {
-        k.saturating_sub(HOLD_TICKS) as f32 * dt
+    /// The animation's clock at tick `k`, seconds: zero for the hold, then one `dt` a tick,
+    /// wrapping at `AnimEnd` for a flyby only a skip ends.
+    fn animation_seconds(&self, k: u32, dt: f32) -> f32 {
+        let seconds = k.saturating_sub(self.rule.hold_ticks.value) as f32 * dt;
+        match self.rule.ending.value {
+            Ending::AtAnimationEnd => seconds,
+            Ending::OnlyBySkip => seconds % self.length,
+        }
+    }
+
+    /// Ticks the HUD stays hidden once it is over.
+    #[must_use]
+    pub fn hud_delay(&self) -> u64 {
+        u64::from(self.rule.hud_delay_ticks.value)
     }
 
     /// Ticks run so far.
@@ -112,17 +118,19 @@ impl Timeline {
 
     /// One tick: whether to show a pose, and as of when, or that the flyby ends.
     ///
-    /// It ends once [`LOCK_TICKS`] ticks have passed and the animation has reached its end, or
-    /// has started and `skip_held` is true. The pose is the animation's as of the tick before.
-    pub fn step(&mut self, skip_held: bool, dt: f32) -> Beat {
+    /// It ends once the lock has passed and the animation has reached its end (where the title
+    /// ends that way), or has started and `skip` is true. The pose is the animation's as of the
+    /// tick before.
+    pub fn step(&mut self, skip: bool, dt: f32) -> Beat {
         let k = self.tick;
         self.tick += 1;
-        let seconds = Self::animation_seconds(k, dt);
-        let progress = seconds / self.length;
-        if k >= LOCK_TICKS && (progress >= 1.0 || (seconds > 0.0 && skip_held)) {
+        let seconds = self.animation_seconds(k, dt);
+        let ran_out = self.rule.ending.value == Ending::AtAnimationEnd && seconds >= self.length;
+        let started = k >= self.rule.hold_ticks.value;
+        if k >= self.rule.lock_ticks.value && (ran_out || (started && skip)) {
             return Beat::Over;
         }
-        Beat::Show(Self::animation_seconds(k.saturating_sub(1), dt))
+        Beat::Show(self.animation_seconds(k.saturating_sub(1), dt))
     }
 }
 
@@ -130,6 +138,9 @@ impl Timeline {
 #[derive(Debug, Clone)]
 pub struct IntroCamera {
     grid: GridCamera,
+    rule: &'static PreRace,
+    /// Whether the skip button was down on the previous tick, for a title that skips on a press.
+    held_before: bool,
     phase: Phase,
     timeline: Timeline,
     /// How many times the picture has jumped: each key-pair cut, and the flyby ending.
@@ -144,10 +155,12 @@ pub struct IntroCamera {
 impl IntroCamera {
     /// A dormant flyby over `grid`.
     #[must_use]
-    pub fn new(grid: GridCamera) -> Self {
-        let timeline = Timeline::new(grid.length());
+    pub fn new(grid: GridCamera, rule: &'static PreRace) -> Self {
+        let timeline = Timeline::new(grid.length(), rule);
         Self {
             grid,
+            rule,
+            held_before: true,
             phase: Phase::Dormant,
             timeline,
             cuts: 0,
@@ -180,6 +193,12 @@ impl IntroCamera {
         self.timeline.ticks()
     }
 
+    /// Ticks the HUD stays hidden after the flyby: the title's own.
+    #[must_use]
+    pub fn hud_delay(&self) -> u64 {
+        self.timeline.hud_delay()
+    }
+
     /// A pointer press: skip as a held Cross would, as soon as the lock allows.
     pub fn request_skip(&mut self) {
         self.skip_requested = true;
@@ -189,7 +208,7 @@ impl IntroCamera {
     pub fn begin(&mut self) {
         if self.phase == Phase::Dormant {
             self.phase = Phase::Playing;
-            self.timeline = Timeline::new(self.grid.length());
+            self.timeline = Timeline::new(self.grid.length(), self.rule);
         }
     }
 
@@ -199,7 +218,13 @@ impl IntroCamera {
         if self.phase != Phase::Playing {
             return None;
         }
-        let shown = match self.timeline.step(skip_held || self.skip_requested, dt) {
+        let pressed = skip_held && !self.held_before;
+        self.held_before = skip_held;
+        let skip = match self.rule.skip.value {
+            Skip::Held => skip_held,
+            Skip::Press => pressed,
+        };
+        let shown = match self.timeline.step(skip || self.skip_requested, dt) {
             Beat::Over => {
                 self.phase = Phase::Finished;
                 self.cuts = self.cuts.wrapping_add(1);
@@ -218,7 +243,7 @@ impl IntroCamera {
         Some(CameraOverride {
             eye: Vec3::from_array(pose.eye),
             orientation: Quat::from_mat3(&Mat3::from_cols(right, up, back)),
-            fov_deg: Some(FOV_DEGREES),
+            fov_deg: Some(self.rule.fov_degrees.value),
         })
     }
 }
@@ -317,13 +342,13 @@ impl Race {
         progress.visible().then_some(progress)
     }
 
-    /// Whether the HUD is drawn: not through the flyby, and not for [`HUD_DELAY_TICKS`] ticks of
+    /// Whether the HUD is drawn: not through the flyby, and not for [`IntroCamera::hud_delay`] ticks of
     /// the race after it.
     #[must_use]
     pub fn hud_shown(&self) -> bool {
         match &self.view.intro {
             Some(intro) if intro.playing() => false,
-            Some(intro) if intro.finished() => self.sim.world.tick >= HUD_DELAY_TICKS,
+            Some(intro) if intro.finished() => self.sim.world.tick >= intro.hud_delay(),
             _ => true,
         }
     }

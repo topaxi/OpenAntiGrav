@@ -182,7 +182,7 @@ fn a_pointer_press_skips_the_flyby_when_the_lock_lifts_and_not_before() {
         ticks += 1;
         assert!(ticks < 3000, "a press did not end the flyby");
     }
-    assert_eq!(ticks, race::intro_camera::LOCK_TICKS + 1);
+    assert_eq!(ticks, oag_pulse::pre_race::PRE_RACE.lock_ticks.value + 1);
 }
 
 /// What `progress` draws over a flat mid-grey 480x272 target: RGBA, or `None` with no adapter.

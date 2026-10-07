@@ -498,7 +498,7 @@ impl Race {
                 shake_rng: Rng::new(SHAKE_SEED),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())
-                    .map(super::intro_camera::IntroCamera::new),
+                    .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
                 camera_override,
                 wreck_ended_tick: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
