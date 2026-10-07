@@ -20,7 +20,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 
 - **Display.** Run `oag-game` headless (`--screenshot`, `--dry-run`,
   `--trace-out`) whenever you can. The same goes for `oag-view`: a probe flag
-  such as `--draws` without `--screenshot` still opens a window (2026-10-01, on
+  such as `--draws` without `--screenshot` still opens a window (once on
   the maintainer's display for two minutes). Any windowed launch, emulators included,
   uses this literal prefix inside your own Xvfb:
   `env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:9N`.
@@ -30,9 +30,11 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   `oag-game` there also needs software Vulkan:
   `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`. Expect 5-7 fps.
   Before starting a display server on `:9N`, check it is free
-  (`test -e /tmp/.X11-unix/X9N || test -e /tmp/.X9N-lock` means taken): `:95` is
-  the maintainer's own xwayland-satellite (2026-10-07). If your assigned number
-  is taken, pick the next free one and tell the lead.
+  (`test -e /tmp/.X11-unix/X9N || test -e /tmp/.X9N-lock` means taken): a
+  finished member's Xvfb has been left running before. If
+  your assigned number is taken, pick the next free one and tell the lead.
+  The maintainer's own session is `:0` (xwayland-satellite); never touch it.
+  Stop the Xvfb you started, by its PID, before you report.
 - **`--race` skips the front end.** Anything built by the front-end flow
   (the EndRace screens, campaign state) never exists in a `--race` run. Walk
   the menus instead, or use `--menu-page` for a still.
@@ -44,8 +46,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   `XDG_CONFIG_HOME` (and `XDG_DATA_HOME`/`XDG_STATE_HOME`) to a directory
   under your scratch dir. Progress, records, ghosts and settings persist
   automatically, so a run on the default `~/.config/oag` writes into the
-  maintainer's own saves. Found 2026-09-30 when a member's windowed walk
-  shared it.
+  maintainer's own saves; a member's windowed walk once shared it.
 - **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
   sound by writing WAV and inspecting it, never through the speakers.
 - **Processes.** Record the PID of everything you start, and kill only by
@@ -67,8 +68,8 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   **stop and report**: these are not flaky errors, so don't retry.
 - **Run a new or changed test under a memory cap first**, before it goes
   near the gate: `systemd-run --user --scope -q -p MemoryMax=8G -p
-  MemorySwapMax=0 cargo nextest run -p <crate> <test>`. On 2026-10-05 an
-  unfinished `oag-post` test reached 51 GB resident; the kernel's OOM
+  MemorySwapMax=0 cargo nextest run -p <crate> <test>`. An
+  unfinished `oag-post` test once reached 51 GB resident; the kernel's OOM
   pressure killed two members and the lead's own session before the test
   itself died. A capped run fails alone instead.
 - Gate before reporting, always through the shared lock:
@@ -81,7 +82,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 
   Then check the exit status (`${pipestatus[1]}` in zsh, `${PIPESTATUS[0]}`
   in bash) **in the same Bash call as the pipeline**: each tool call is a
-  fresh shell, so a separate `echo` prints blank (two members on 2026-10-05
+  fresh shell, so a separate `echo` prints blank (two members
   could not read theirs). Append `; echo "rc=${pipestatus[1]}"` to the gate
   command itself. Never pipe `test-data` into `tail`: it masks the exit code.
   **The gate may sit for several minutes before it starts** because another
@@ -89,14 +90,14 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   fall back to a bare `just`.
 - **Run `git merge main` right before your final gate**, and again if the
   lead tells you main moved. A gate on a stale base proves nothing about the
-  merge; on 2026-10-05 a lane gated without the engine-sound change that
+  merge; a lane once gated without the engine-sound change that
   touched the same `race::load`, and the lead had to re-gate the combination.
 - A lane that changed only docs, `handover/` or `HANDOVER.md` runs
   `just check-docs` (plus `check-names`, `check-handover` or `check-status`
   when those files moved) instead of the full gate.
 - **A commit after your last full gate that touches any `.rs` file, even one
-  test line or a doc comment, needs `just` re-run before you report.** On
-  2026-10-03 a "docs plus one test line" final commit pushed
+  test line or a doc comment, needs `just` re-run before you report.** A
+  "docs plus one test line" final commit once pushed
   `race_ground_truth.rs` 5 lines over `check-size`'s ceiling, and `main` went
   red. `just` (without `test-data`) is enough when no logic changed.
 - The brief states the baseline failure count. Anything red beyond it is
@@ -108,7 +109,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 ## Commits
 
 - **Read `git diff --cached --stat` before every commit** and unstage
-  anything you did not mean to change. On 2026-10-05 a member's commit
+  anything you did not mean to change. A member's commit once
   silently deleted six committed examples that docs cite as reproducers.
 - Commit early and often. If pinentry blocks, use `git commit --no-gpg-sign`.
   End every message with a `Co-Authored-By:` trailer naming your own model.
@@ -122,7 +123,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 - **No compatibility re-exports.** None of this workspace's crates is
   published, so when you move an item, update every call site in the same
   change instead of leaving a `pub use old::path` behind. A re-export is
-  indirection with no consumer to protect (maintainer, 2026-10-06).
+  indirection with no consumer to protect (maintainer's decision).
 - **The maintainer may type into your pane directly.** Act on it like the
   brief, and name it as the maintainer's instruction in your report.
 - **Never invent what the assets author.** Parse it and play it. If it won't
@@ -137,8 +138,8 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 - **Keep a reader change from switching on what your lane did not measure.**
   If a fix to a shared lookup (a bank's names, a table, an effect list)
   suddenly makes cues, effects or draws resolve beyond your lane, scope the
-  change to your lane's caller and leave the rest as they were. On
-  2026-10-05 a hashed bank-name lookup turned on every 2048 sound cue: the
+  change to your lane's caller and leave the rest as they were. A
+  hashed bank-name lookup once turned on every 2048 sound cue: the
   engine was right, but the player heard noise and a perfect-lap
   announcement mid-lap. "Load report went from 42 missing to 6" is a warning,
   not a win.
@@ -167,6 +168,6 @@ outcome, and "I could not determine X, here is its address" is a result.
 **Your report is the end of the lane.** After you send it, do not commit,
 merge main into your branch, or edit your worktree unless the lead sends you
 back. The lead merges and removes your worktree as soon as the report arrives.
-On 2026-10-02 a member kept committing after its report and was mid-way
+A member once kept committing after its report and was mid-way
 through merging main when its worktree was removed. Finish everything first,
 then report.
