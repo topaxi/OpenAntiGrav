@@ -254,7 +254,10 @@ those two calls for `oag_core::math`'s (the `libm` crate):
 | `math::sin_cos` for `sin`, glam's `from_axis_angle` kept | macOS' `ticks=100000` final `0x1877155ea261a7ba` exactly |
 | unchanged | the committed reference (glibc's own bits) |
 
-Both swaps matter: each alone moves the Linux trajectory hashes. Confidence the
+Both swaps matter: each alone moves the Linux trajectory hashes. That all three
+platforms agree once the probe takes `oag_core::math` is expected (the `libm`
+crate is pure Rust) but unverified: Windows' 10,000- and 100,000-tick
+trajectories match none of the Linux variants, and confirming takes one push. Confidence the
 divergence is libm alone: 90 (two cross-platform hashes reproduced bit for bit;
 the other stages, physics, race-level and driver, never ran on macOS or Windows
 because the job stopped at the first assert, so whether *they* hold is unknown).

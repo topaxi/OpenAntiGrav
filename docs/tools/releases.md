@@ -50,7 +50,7 @@ independent causes, none a real regression in the simulation:
 
 Runs 37595443950, 37599197810 and 37599357599, after the fixes above:
 
-- `check` died twenty minutes into `cargo nextest run --workspace` with the
+- `check` died during `cargo nextest run --workspace`, 24 minutes into the job, with the
   runner's own `No space left on device` (an annotation on the job, no step log).
   The job now frees the runner's unused toolchains first and builds with
   `CARGO_PROFILE_DEV_DEBUG=0`/`CARGO_PROFILE_TEST_DEBUG=0`. The steps after

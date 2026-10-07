@@ -13,17 +13,17 @@ jobs:
   check:
     name: fmt / clippy / test / dependency rules
     runs-on: ubuntu-latest
-    # The 2026-10-07 run (37595443950) filled the runner's disk twenty minutes
-    # into `cargo nextest run --workspace`: `oag-game` alone has 80-odd
+    # The 2026-10-07 run (37595443950) filled the runner's disk during
+    # `cargo nextest run --workspace`, 24 minutes into the job: `oag-game` alone has 80-odd
     # integration-test binaries, each statically linking wgpu and cpal. Line
     # tables are no use to anyone reading a CI log, so they go first.
     env:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
-      # ubuntu-latest ships ~30 GB of toolchains this job never uses; the
-      # workspace's debug build plus the clippy artefacts beside it need more
-      # than the ~14 GB left free by default.
+      # ubuntu-latest ships toolchains this job never uses; the workspace's
+      # debug build plus the clippy artefacts beside it outgrew the free space
+      # left by default. The two `df` lines measure the headroom gained.
       - name: Free runner disk space
         run: |
           df -h /
