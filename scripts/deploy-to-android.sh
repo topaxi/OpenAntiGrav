@@ -80,24 +80,34 @@ else
     [[ -f $apk ]] || die "build-apk.sh did not produce an APK - see the output above."
 fi
 
+app_dir="/sdcard/Android/data/$package"
+keep="/sdcard/oag-reinstall-keep"
+
+# Moves a kept data dir back, unless the app has written data of its own since
+# (then the kept copy stays where it is and the user is told).
+restore_kept_data() {
+    [[ -n "$(adb shell "[ -d '$keep' ] && echo yes" | tr -d '\r')" ]] || return 0
+    if [[ -n "$(adb shell "[ -d '$app_dir/files' ] && echo yes" | tr -d '\r')" ]]; then
+        echo "note: $keep holds data kept from an earlier reinstall, but the app already has its own; left both as they are" >&2
+        return 0
+    fi
+    adb shell "rm -rf '$app_dir' && mv '$keep' '$app_dir'" \
+        || die "could not move $keep back to $app_dir; move it by hand"
+    echo "moved the app's kept data back from $keep"
+}
+
 # Uninstalls a differently-signed app and installs $apk, keeping its data by
 # moving the app's external dir aside on the device and back afterwards.
 reinstall_keeping_data() {
-    local app_dir="/sdcard/Android/data/$package" keep="/sdcard/oag-reinstall-keep"
-    local kept=0
     if [[ -n "$(adb shell "[ -d '$app_dir' ] && echo yes" | tr -d '\r')" ]]; then
-        adb shell "rm -rf '$keep' && mv '$app_dir' '$keep'" \
+        [[ -z "$(adb shell "[ -e '$keep' ] && echo yes" | tr -d '\r')" ]] \
+            || die "$keep already exists on the device (an earlier reinstall's data); move or delete it first"
+        adb shell "mv '$app_dir' '$keep'" \
             || die "could not move $app_dir aside; nothing was uninstalled"
-        kept=1
         echo "moved the app's data to $keep"
     fi
     adb uninstall "$package" >/dev/null || die "adb uninstall failed; the app's data is in $keep on the device"
-    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device"
-    if (( kept )); then
-        adb shell "rm -rf '$app_dir' && mv '$keep' '$app_dir'" \
-            || die "installed, but could not move $keep back to $app_dir; move it by hand"
-        echo "moved the app's data back"
-    fi
+    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device - re-run 'just deploy-android --skip-build' and it is moved back"
 }
 
 step "Installing ${apk:-the APK}"
@@ -117,6 +127,12 @@ elif ! out="$(adb install -r "$apk" 2>&1)"; then
     reinstall_keeping_data
 else
     echo "$out" | grep -v -e 'absl::InitializeLog' -e '^I0000'
+fi
+
+# A reinstall interrupted after the uninstall (the phone dropped off USB, say)
+# leaves the app's data in the keep dir; finish it now that an install worked.
+if (( ! dry_run )); then
+    restore_kept_data
 fi
 
 step "Done"
