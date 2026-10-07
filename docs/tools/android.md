@@ -71,15 +71,18 @@ offered.
 
 ## How it is wired
 
-- **Entry.** `crates/game/src/main.rs` carries `android_main`, and Cargo builds the
-  same file a second time as the `oag_android` example with `crate-type = ["cdylib"]`
-  and `required-features = ["android"]`, which `build-apk.sh` turns on. That is the
-  cost of the windowed `App` living in the binary's own modules: a bin cannot be a
-  cdylib, `cargo rustc` refuses to mix the two crate types, and nothing may depend on
-  `oag-game`, so the second crate root is `main.rs` itself. **Cargo prints "file
-  found to be present in multiple build targets" on every invocation in the
-  workspace because of it.** Moving the `App` into the lib would remove the warning
-  and the example; that is the real fix and is open (handover thread).
+- **Entry.** `crates/game/src/main_body.rs` carries `android_main`. Two crate roots
+  `include!` it: `main.rs` (the desktop binary, which also keeps the crate's rustdoc
+  header - an included file may not carry inner attributes) and `android.rs`, the
+  `oag_android` example with `crate-type = ["cdylib"]` and
+  `required-features = ["android"]`, which `build-apk.sh` turns on. That is the cost
+  of the windowed `App` living in the binary's own modules: a bin cannot be a cdylib,
+  `cargo rustc` refuses to mix the two crate types, and nothing may depend on
+  `oag-game`. Both roots sit in `src/`, so the body's `#[path = "main/..."]` module
+  paths resolve the same from either. Until 2026-10-07 both targets pointed at
+  `main.rs` itself and Cargo warned "found to be present in multiple build targets"
+  on every invocation. Moving the `App` into the lib would remove the example
+  altogether; that is still open (handover thread).
 - **NativeActivity rather than GameActivity.** No Java: the APK is a manifest and one
   `.so` (`android:hasCode="false"`), buildable with `aapt2`, `zipalign` and
   `apksigner` alone. GameActivity wants the AndroidX games-activity AAR, Gradle and a
