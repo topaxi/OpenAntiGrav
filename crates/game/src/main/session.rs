@@ -287,6 +287,10 @@ pub(crate) struct Session {
     /// [`Session::schedule_next_frame`], which is where the difference between
     /// asking for 240 and getting it lives.
     pub(crate) next_frame: std::time::Instant,
+    /// The limit [`Session::schedule_next_frame`] last logged, so a switch
+    /// between the front end's cap and the race's is one line in the log and a
+    /// steady run is none.
+    pub(crate) logged_limit: Option<perf::FrameLimit>,
     /// What `Launch Game` starts, kept because the front end is loaded long
     /// before anyone knows whether a race will be asked for.
     ///
@@ -920,7 +924,25 @@ impl Session {
         if self.settings.display.vsync.paces_itself() {
             return None;
         }
-        self.settings.display.frame_limit.period()
+        self.active_limit().period()
+    }
+
+    /// The limit in force for what is on screen: the configured one in a race,
+    /// [`perf::FrameLimit::front_end`] everywhere else.
+    ///
+    /// The launcher, the boot reel, the loading wave, the menus and the pause
+    /// menu all count as front end. The pause menu is a `Stage::Menu` over a
+    /// held backdrop picture with the race parked in `suspended_race`, so no
+    /// race scene is being drawn behind it (**chosen, not measured**). A race
+    /// that is still building is already `Stage::Race` and keeps the race limit.
+    /// Under `Vsync::On` [`Session::frame_period`] returns before this is read,
+    /// so the cap is inert there.
+    fn active_limit(&self) -> perf::FrameLimit {
+        let limit = self.settings.display.frame_limit;
+        match self.stage {
+            Stage::Race(_) => limit,
+            _ => limit.front_end(),
+        }
     }
 
     /// The earliest the next frame may start, or `None` for as soon as
@@ -944,7 +966,9 @@ impl Session {
     /// still measured, only the graph's scale is off - and getting it right
     /// needs a refresh rate off the monitor, which is work of its own.
     fn presentation_hz(&self) -> u32 {
-        self.limiter_hz().unwrap_or_else(|| self.clock.rate().hz())
+        self.frame_period()
+            .and_then(|_| self.active_limit().hz())
+            .unwrap_or_else(|| self.clock.rate().hz())
     }
 
     /// The rate the frame limiter is actually holding the loop to, or `None`
@@ -957,6 +981,8 @@ impl Session {
     /// a bad one for a clamp, because a 144 Hz panel would silently have its
     /// `target_fps` capped at 60. See [`oag_present::drs::Target::at_most`].
     fn limiter_hz(&self) -> Option<u32> {
+        // The race's own limit, not `active_limit`: this feeds dynamic
+        // resolution's clamp, which is a race concern.
         self.frame_period()
             .and_then(|_| self.settings.display.frame_limit.hz())
     }
@@ -979,6 +1005,14 @@ impl Session {
     /// and must not pay it back as a burst of frames, ahead means the limit
     /// itself just changed and the old period is still on the clock.
     fn schedule_next_frame(&mut self, now: std::time::Instant) {
+        let limit = self.active_limit();
+        if self.logged_limit != Some(limit) {
+            self.logged_limit = Some(limit);
+            log::info!(
+                "frame limit in force: {limit} (configured {})",
+                self.settings.display.frame_limit
+            );
+        }
         let Some(period) = self.frame_period() else {
             self.next_frame = now;
             return;

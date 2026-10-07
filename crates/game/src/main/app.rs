@@ -392,6 +392,7 @@ impl App {
             stalled: true,
             paused: false,
             next_frame: std::time::Instant::now(),
+            logged_limit: None,
             race_options: self.race_options.clone(),
             pending: self.pending.take(),
             trace: self.trace,
