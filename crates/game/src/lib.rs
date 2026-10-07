@@ -66,6 +66,17 @@ pub mod sound;
 pub mod track_panel;
 pub mod unlock;
 
+/// The version a build reports: the crate version, `OAG_VERSION_SUFFIX` if the
+/// build was given one (the nightly workflow passes `-nightly`), and the commit.
+/// A tagged release leaves the suffix empty.
+pub const BUILD_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    env!("OAG_VERSION_SUFFIX"),
+    " (",
+    env!("OAG_GIT_HASH"),
+    ")"
+);
+
 /// Frames of the reel `Intro Screen->IntroMovie1` can possibly show, plus one.
 ///
 /// That state stops at frame 260 whatever the movie's length, so the reel leg
@@ -92,5 +103,22 @@ pub fn report(events: &[oag_ui::state_machine::Event], trace: bool) {
             oag_ui::state_machine::Event::Exit(name) if trace => log::log!(level, "<- {name}"),
             oag_ui::state_machine::Event::Exit(_) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod build_version_tests {
+    use super::BUILD_VERSION;
+
+    #[test]
+    fn the_build_version_carries_suffix_and_commit() {
+        let suffix = env!("OAG_VERSION_SUFFIX");
+        let expected = format!(
+            "{}{suffix} ({})",
+            env!("CARGO_PKG_VERSION"),
+            env!("OAG_GIT_HASH")
+        );
+        assert_eq!(BUILD_VERSION, expected);
+        assert!(BUILD_VERSION.contains(suffix));
     }
 }

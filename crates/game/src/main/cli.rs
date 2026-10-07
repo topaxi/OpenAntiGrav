@@ -24,7 +24,7 @@ mod render_overrides;
     name = "oag-game",
     about = "Run a Wipeout game (Pulse, Pure, HD/Fury, 2048 or Omega) from your own copy",
     // The commit too, so a deployed build can be told from the last one.
-    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("OAG_GIT_HASH"), ")")
+    version = oag_game::BUILD_VERSION
 )]
 pub(crate) struct Cli {
     /// Your game: a disc image (`.chd` or `.iso`, for Pulse, Pure or HD/Fury),

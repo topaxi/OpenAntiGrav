@@ -134,6 +134,7 @@ Build natively instead and mind the glibc floor this script prints."
     # mount, so build.rs is handed the hash `oag-game --version` prints.
     git_hash="$(git -C "$project_root" rev-parse --short=7 HEAD 2>/dev/null || true)"
     [[ -n $git_hash ]] && engine_args+=(-e "OAG_GIT_HASH=$git_hash")
+    [[ -n ${OAG_VERSION_SUFFIX:-} ]] && engine_args+=(-e "OAG_VERSION_SUFFIX=$OAG_VERSION_SUFFIX")
     # Only when set, so a baseline build's environment is the one it always had.
     [[ -n $rustflags ]] && engine_args+=(-e "RUSTFLAGS=$rustflags")
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
