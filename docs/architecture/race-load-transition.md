@@ -45,6 +45,9 @@ window's whole `Gpu`, which also owns the window and the surface.
 
 ## Measurements
 
+Where `race::load` itself spends its time, title by title, is
+[Load time](load-time.md); this section is about the frame thread.
+
 Release build, this project's development desktop (Linux, Vulkan; frame
 intervals of about 10 ms suggest a 100 Hz panel, not checked), `--no-audio`, the default circuit and settings. "Worst work" is the
 longest single frame of main-thread work: the stage update, the ticks and the

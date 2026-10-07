@@ -232,6 +232,9 @@ pub struct Archives {
     /// that mounts packs also needs to know what they added, and threading two
     /// values through the same six call sites is two chances to thread one.
     pub manifests: Vec<String>,
+    /// What [`Self::read_name`] has already read, once
+    /// [`Self::memoising_reads`] asked for it. `None` reads every time.
+    pub read_memo: Option<crate::read_memo::ReadMemo>,
 }
 
 impl Archives {
@@ -341,7 +344,25 @@ impl Archives {
             extra,
             packs: mounted,
             manifests,
+            read_memo: None,
         })
+    }
+
+    /// These archives, with [`Self::read_name`] answering a name it has read
+    /// before from memory - see [`crate::read_memo`] for what is kept. For a
+    /// load that drops the archives when it is done, so the memo goes with them.
+    #[must_use]
+    pub fn memoising_reads(mut self) -> Self {
+        self.read_memo = Some(crate::read_memo::ReadMemo::default());
+        self
+    }
+
+    /// [`crate::read_memo::ReadMemo::summary`], when reads are memoised.
+    #[must_use]
+    pub fn read_memo_summary(&self) -> Option<String> {
+        self.read_memo
+            .as_ref()
+            .map(crate::read_memo::ReadMemo::summary)
     }
 
     /// Which mounted archive holds this name, if any.
@@ -503,10 +524,17 @@ impl Archives {
     /// [`Error::NoSuchEntry`] against the bulk archive when nothing has it, so
     /// the message names the archive a reader would look in first.
     pub fn read_name(&mut self, name: &str) -> Result<Vec<u8>> {
-        match self.holder_of(name) {
+        if let Some(blob) = self.read_memo.as_mut().and_then(|memo| memo.get(name)) {
+            return Ok(blob);
+        }
+        let blob = match self.holder_of(name) {
             Some(at) => self.held(at).read_entry(name),
             None => self.data.read_entry(name),
+        }?;
+        if let Some(memo) = self.read_memo.as_mut() {
+            memo.keep(name, &blob);
         }
+        Ok(blob)
     }
 
     /// Reads **every** archive's copy of `name`, labelled with the archive it

@@ -565,6 +565,20 @@ would speed every sim test and the game itself, but it must return hits in the
 same order to keep the state hashes, so it belongs to a physics lane and is
 recommended, not done.
 
+### A quiet-machine run (2026-10-07)
+
+One `OAG_REQUIRE_GAME_DATA=1 just test-data` with no other member building,
+for the record: **7,126 tests, all passed, suite 373 s, slowest test 180 s**
+(`ram_ground_truth`, then the `ai_roll` full-grid tests at 143-147 s), wall
+376 s including the build. The load average was 34 at the start, the tail of
+the `just` gate run straight before it, and 25-28 during the run, which is the
+suite's own parallelism on 24 hardware threads rather than anyone else's work;
+the desktop was in use. Against the 230-280 s recorded above for 5,831 tests,
+the suite has grown by 1,295 tests and its tail is still the simulation
+matrices, not the disc readers. The load-time lane that took this run
+([Load time](load-time.md)) added one disc-backed test per change; none is in
+the slowest twenty.
+
 ## Dependency graph clean-up (2026-10-05)
 
 `cargo shear` found 29 unused or misplaced dependencies; they were removed and

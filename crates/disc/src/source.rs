@@ -48,20 +48,7 @@ pub trait SectorSource: std::fmt::Debug + Send {
     /// decompressed hunk, so a run of sectors within one hunk decompresses
     /// once.
     fn read_sectors(&mut self, lba: u32, count: u32) -> Result<Vec<u8>> {
-        // Refuse the range before allocating for it. `count` derives from a
-        // directory record's size field, so a hostile image can ask for 4 GiB
-        // and get it committed before the first out-of-range read fails.
-        let end = lba.checked_add(count).ok_or(Error::SectorOutOfRange {
-            sector: lba,
-            total: self.sector_count(),
-        })?;
-        if end > self.sector_count() {
-            return Err(Error::SectorOutOfRange {
-                sector: end.saturating_sub(1),
-                total: self.sector_count(),
-            });
-        }
-
+        check_range(self.sector_count(), lba, count)?;
         let mut out = vec![0u8; count as usize * SECTOR_SIZE];
         for i in 0..count {
             let start = i as usize * SECTOR_SIZE;
@@ -95,4 +82,20 @@ pub trait SectorSource: std::fmt::Debug + Send {
         data.truncate(len as usize);
         Ok(data)
     }
+}
+
+/// Refuses a range that runs past the image, before anything allocates for it.
+/// `count` derives from a directory record's size field, so a hostile image can
+/// ask for 4 GiB and get it committed before the first out-of-range read fails.
+pub(crate) fn check_range(total: u32, lba: u32, count: u32) -> Result<()> {
+    let end = lba
+        .checked_add(count)
+        .ok_or(Error::SectorOutOfRange { sector: lba, total })?;
+    if end > total {
+        return Err(Error::SectorOutOfRange {
+            sector: end.saturating_sub(1),
+            total,
+        });
+    }
+    Ok(())
 }

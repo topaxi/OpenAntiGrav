@@ -197,3 +197,37 @@ fn listing_matches_chdman_and_the_reference_iso() {
 
     std::fs::remove_file(&iso).ok();
 }
+
+/// `ChdSource::read_sectors` splits a long read across threads; the bytes must
+/// be exactly what reading the same sectors one at a time gives, including a
+/// range that starts and ends inside a hunk. 40 MiB of the PS2 disc's music
+/// archive, raw PCM in LZMA hunks, is the read a race track makes.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one() {
+    use oag_disc::chd_source::ChdSource;
+    use oag_disc::{SECTOR_SIZE, SectorSource};
+    let Some(path) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let music = DiscImage::open(&path)
+        .expect("open")
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == "54748/PS2MUSIC.WAD")
+        .expect("the music archive")
+        .lba;
+    let mut source = ChdSource::open(&path).expect("open");
+    let (lba, count) = (music + 3, 20_011);
+    let split = source.read_sectors(lba, count).expect("split read");
+    let mut serial = vec![0u8; count as usize * SECTOR_SIZE];
+    for (at, sector) in (lba..).zip(serial.as_chunks_mut::<SECTOR_SIZE>().0) {
+        source.read_sector(at, sector).expect("sector read");
+    }
+    assert!(
+        split == serial,
+        "the split read differs from the serial one"
+    );
+    assert!(source.read_sectors(source.sector_count() - 1, 2).is_err());
+}

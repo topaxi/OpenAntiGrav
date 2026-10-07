@@ -211,6 +211,7 @@ fn mounted(
         extra: Vec::new(),
         packs: mounted,
         manifests,
+        read_memo: None,
     }
 }
 
@@ -602,4 +603,19 @@ fn an_archive_name_is_matched_on_a_component_boundary() {
     // The PSP candidate is a path, so a bare file of the same name in some
     // other directory does not answer for it.
     assert!(!names("elsewhere/Data.wad", PSP_DATA));
+}
+
+/// [`Archives::memoising_reads`]: the second read of a name is answered from
+/// memory with the same bytes, and a name that does not read is never kept.
+#[test]
+fn a_memoised_read_answers_the_second_ask_with_the_same_bytes() {
+    let dir = testing::temp_dir("mount-read-memo");
+    let mut archives = mounted(&dir, &[("a.bin", b"disc bytes")], Vec::new()).memoising_reads();
+
+    assert_eq!(archives.read_name("a.bin").unwrap(), b"disc bytes");
+    assert_eq!(archives.read_name("a.bin").unwrap(), b"disc bytes");
+    assert!(archives.read_name("missing.bin").is_err());
+    assert!(archives.read_name("missing.bin").is_err());
+    let memo = archives.read_memo.as_ref().expect("asked for");
+    assert_eq!((memo.hits, memo.misses), (1, 3));
 }
