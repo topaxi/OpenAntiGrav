@@ -451,5 +451,7 @@ pub(crate) fn bomb_blast_basis(position: Vec3, dir: Vec3) -> Mat4 {
     )
 }
 
+mod hd;
+
 #[cfg(test)]
 mod tests;
