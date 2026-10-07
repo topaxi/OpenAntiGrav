@@ -607,13 +607,13 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
          image, from your own copy of the game.\n\nSearched (relative paths are \
          relative to {}):\n{}\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
          HD) is found by extension. A 2048 .vpk is read in place (a NoNpDrm dump, \
-         or an unpacked folder). A Vita or PS4 .pkg is NOT read: unpack and decrypt it \
-         into a folder first (`docs/overview/installing.md`, \"Wipeout 2048\" and \
-         \"Omega Collection\"). An encrypted HD .iso is read \
+         or an unpacked folder). A PS4 Omega .pkg is read in place, with its patch .pkg \
+         beside it. A Vita .pkg is NOT read: unpack and decrypt it into a folder first \
+         (`docs/overview/installing.md`, \"Wipeout 2048\"). An encrypted HD .iso is read \
          in place with the disc key from a .dkey beside it, or one entered in the chooser.\n\nName a source directly \
          (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
         std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
-        list(searched, ".chd / .iso / .vpk"),
+        list(searched, ".chd / .iso / .vpk / Omega .pkg + patch"),
         list(
             &package_search_path(),
             "unpacked 2048 folder, base/PSP2/data.psarc"
@@ -694,6 +694,20 @@ fn images_in(directory: &Path) -> Vec<PathBuf> {
         .map(|entry| entry.path())
         .filter(|path| path.is_file() && is_container(path) && is_listed(path))
         .collect();
+    // A PS4 base package is a row only when no unpacked Omega folder already is
+    // one: the folder is something the player prepared and stays the default
+    // where both exist, so a machine that has both lists, and boots, what it
+    // always did. Naming the `.pkg` opens it either way.
+    if ps4_package_directories().is_empty() {
+        containers.extend(
+            std::fs::read_dir(directory)
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file() && is_listed_ps4_package(path)),
+        );
+    }
     containers.sort();
 
     for path in containers {
@@ -713,6 +727,20 @@ fn is_listed(path: &Path) -> bool {
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("vpk"));
     !is_vpk || oag_disc::vpk::category(path).is_none_or(|category| category == "gd")
+}
+
+/// Whether `path` is a PS4 base package with a patch beside it: the pair
+/// Omega opens (`oag_disc::ps4_pkg::Ps4Set`). A base package alone has no
+/// front end to boot, so it is not offered; a patch package is mounted with
+/// its base and never a row of its own; a Vita `.pkg` is not read at all.
+///
+/// Not part of [`is_container`], which `oag_sound`'s music-disc scan also
+/// uses and which must keep answering for discs and `.vpk` files alone.
+fn is_listed_ps4_package(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pkg"))
+        && oag_disc::ps4_pkg::category(path).is_some_and(|category| category == "gd")
+        && oag_disc::ps4_pkg::set::siblings(path).len() > 1
 }
 
 /// Whether a path looks like a disc image this engine can open.
