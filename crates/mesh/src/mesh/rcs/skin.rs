@@ -4,6 +4,8 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+mod lightmapped;
+
 use std::sync::Arc;
 
 use oag_rcs::{rcsmaterial, rcsmodel};
@@ -265,11 +267,17 @@ pub(super) fn picks(
                     })
                     .unwrap_or(1);
                 return Pick {
-                    albedo: material
-                        .samplers
-                        .iter()
-                        .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash))
-                        .unwrap_or(default.albedo),
+                    albedo: lightmapped::albedo(
+                        material,
+                        variants.get(slot).copied().flatten(),
+                        |name| {
+                            cache
+                                .entry(name.to_string())
+                                .or_insert_with(|| textures(&format!("/{name}")))
+                                .clone()
+                        },
+                    )
+                    .unwrap_or(default.albedo),
                     aux: Some(at),
                 };
             }
