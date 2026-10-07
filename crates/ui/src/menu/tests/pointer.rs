@@ -291,7 +291,7 @@ fn an_arrow_inside_a_block_wins_the_hit() {
 }
 
 #[test]
-fn the_wheel_walks_the_cursor_and_stops_at_the_ends() {
+fn on_a_page_that_fits_the_wheel_walks_the_cursor_and_stops_at_the_ends() {
     let mut menu = Menu::new(fixture());
     assert!(menu.open("options"));
     let regions = pointer::regions(&menu, &skin(), &Frame::default(), &measure);
@@ -470,4 +470,37 @@ fn a_page_that_fits_ignores_a_drag() {
     let regions = pointer::regions(&menu, &skin(), &Frame::default(), &measure);
     menu.pointer(&drag(-500.0), &regions);
     assert_eq!((menu.scroll(), menu.selected()), (0, 0));
+}
+
+fn wheel(scroll: i32) -> Pointer {
+    Pointer {
+        scroll,
+        ..Pointer::default()
+    }
+}
+
+/// The maintainer's report: on a long page the wheel moved the selection
+/// down a list that stayed put. It moves the list now, as a drag does.
+#[test]
+fn on_a_long_page_the_wheel_scrolls_the_view_and_keeps_the_cursor_inside_it() {
+    let (mut menu, regions, _) = long_page();
+    let last = menu.page().entries.len() - visible();
+    let inside =
+        |menu: &Menu| (menu.scroll()..menu.scroll() + visible()).contains(&menu.selected());
+
+    assert!(menu.pointer(&wheel(3), &regions).is_empty());
+    assert_eq!(menu.scroll(), 3, "a detent down reveals a row below");
+    assert_eq!(menu.selected(), 4, "pushed inside, not walked by the wheel");
+    assert!(inside(&menu));
+
+    menu.pointer(&wheel(-1), &regions);
+    assert_eq!(menu.scroll(), 2);
+    assert_eq!(menu.selected(), 4, "still inside, so the cursor stays put");
+
+    menu.pointer(&wheel(100), &regions);
+    assert_eq!(menu.scroll(), last, "stops at the end");
+    assert!(inside(&menu));
+    menu.pointer(&wheel(-100), &regions);
+    assert_eq!(menu.scroll(), 0, "stops at the top");
+    assert!(inside(&menu));
 }
