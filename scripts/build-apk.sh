@@ -7,8 +7,11 @@
 # Needs: the aarch64-linux-android rust target, cargo-ndk, and an Android SDK
 # (ANDROID_HOME) with build-tools and one platform, plus an NDK (ANDROID_NDK_HOME,
 # or the newest under $ANDROID_HOME/ndk). docs/tools/android.md has the install
-# commands. The APK is signed with a throwaway key kept under target/apk/, never
-# committed: it is a sideload build, not a store build.
+# commands. The APK is signed with a sideload key, never committed: it is a
+# sideload build, not a store build. The key lives outside the checkout
+# ($OAG_APK_KEYSTORE, default ~/.android/oag-debug.keystore) so every checkout
+# and worktree signs alike - Android refuses `adb install -r` over an APK
+# signed with a different key, and a key under target/ died with its worktree.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -95,8 +98,9 @@ aligned="$out/aligned.apk"
 rm -f "$aligned"
 "$build_tools/zipalign" -f -P 16 4 "$base" "$aligned"
 
-key="$out/debug.keystore"
+key="${OAG_APK_KEYSTORE:-$HOME/.android/oag-debug.keystore}"
 if [ ! -f "$key" ]; then
+    mkdir -p "$(dirname "$key")"
     keytool -genkeypair -keystore "$key" -storepass android -keypass android \
         -alias oag -keyalg RSA -keysize 2048 -validity 10000 \
         -dname "CN=OpenAntiGrav sideload,O=OpenAntiGrav" >/dev/null 2>&1

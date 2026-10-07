@@ -23,9 +23,14 @@ Output: `target/apk/OpenAntiGrav-<version>-android-arm64.apk` (about 9 MB; the
 stripped library is 22 MB, deflated). The script needs `ANDROID_HOME` with
 build-tools and one platform (it takes the newest of each), and finds the newest NDK
 under `$ANDROID_HOME/ndk` unless `ANDROID_NDK_HOME` names one. It signs with a
-throwaway key it generates under `target/apk/` (never committed): a sideload build,
-not a store build, and every build machine's key differs, so an APK from another
-machine will not install over this one without uninstalling first.
+sideload key it generates once at `~/.android/oag-debug.keystore` (or
+`$OAG_APK_KEYSTORE`; never committed): a sideload build, not a store build. The key
+sits outside the checkout so every checkout and worktree on one machine signs alike;
+until 2026-10-07 it lived under `target/apk/`, so an APK built in a worktree could
+not be updated from the main checkout once the worktree was gone. Every build
+machine's key still differs (a GitHub release's APK included), so an APK from another
+machine will not install over this one without uninstalling first - and
+uninstalling deletes the app's files directory, game data included.
 
 The script ends by unpacking the APK and running `scripts/check-leakage.py --dir`
 over it, the same audit every other release artifact gets. The APK holds a
