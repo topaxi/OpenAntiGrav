@@ -31,7 +31,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 | --- | --- | --- |
 | ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, its program routed to `RIM_EDGE` 2026-09-25, still not drawn - `HD_PLASMA_BALL_DRAWN`, held off by the cull thread below), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
 | ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
-| ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
+| ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; **the Bomb's detonation drawn 2026-10-07** (`HD_bomb_sphere`, `_white`, `hd_bomb_sphere_bloomring`, `hd_bomb_shockwaves` x8 - four models, not five; `HD_bomb_halo` is the armed bomb's, `HD_Mine_halo` the Mine's); `HD_Mine_halo` still open | `WO_BOMB_RAYS` **wired 2026-10-07** (0.5 s in); `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` are the Detonator mode's |
 | ~~Cannon~~ **done 2026-09-25** | `hd_muzzleflash` **is a muzzle flash, not a round body**: drawn at the craft's `cannon_flash` locator for the round's first 0.1 s; HD's own `.gtf` bolt/flash quads drawn; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`: **no trigger exists** (named by nothing but their own files); `WO_CANNON_SPARKS_DETONATOR` Detonator-only |
 | LeachBeam | `hd_leachbeam_ball_bloomring` **drawn 2026-09-25** through its own program (`RIM_GLOW`, [hd-unlit-programs.md](../../docs/rendering/hd-unlit-programs.md)) | `WO_LEACHBEAM_ABSORB` **wired 2026-09-25** (fires each drain trip); `_LAUNCH`/`_BREAK`/`_HIT_TARGET` confirmed to have no discoverable trigger in the retail EBOOT (same shape as the Cannon's two); `_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` still unread |
 
@@ -141,9 +141,9 @@ The executable's own load-path strings name every model above
   `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
   grows by its own keyed `Anim Transform` (1 -> 18x). What starts it is
   unread - see weapons.md's 2026-09-23 section for every address.
-- The Bomb's five-model detonation (`HD_Mine_halo`, `HD_bomb_*`) is named
-  on the executable's own strings but neither its load order nor its
-  per-tick placement was read.
+- ~~The Bomb's five-model detonation~~ **Done 2026-10-07**: four models, eleven
+  instances, one blast object (`NormalBombBlast_*`, weapons.md), checked by
+  running the executable's own instructions; `--force-bomb-trip` frames it.
 - `0x00121418` (`Plasma_PostUpdate`'s visual placement) suggests a
   velocity-plus-carried-normal basis for the bolt, not velocity alone, but
   is not resolved past confidence ~55 - stays unrenamed per `CLAUDE.md`'s
@@ -187,9 +187,24 @@ The executable's own load-path strings name every model above
    retail executable never names it is still unfixed. A live RPCS3 look at
    one Cannon shot would settle the Cannon's own open points (side sense,
    spawn point, blend).
-3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
-   detonation models (Missile's pair, the Bomb's five) and effects remain,
-   by the same per-title path, only as their triggers are read.
+3. Rocket/Missile/Mine/Bomb **bodies** are wired; the Bomb's detonation is
+   drawn (2026-10-07). **The Missile's explosion is the next one; it is read
+   this far** (all with Ghidra truncated at AltiVec, so use capstone over the
+   raw bytes): a pool of 16 objects at the manager's `+0xc0`, count at `+0x10c`,
+   entered through `0x00141288` (also `0x001423a8`, `0x00143580`). **Start**
+   `0x00155568` copies the matrix to `+0xf0`, builds **16 randomly rotated
+   entries at `+0x190` (stride `0x50`, `0x28c660` = a ranged random)** of
+   unknown purpose, writes the per-viewport frame like the Bomb's, calls
+   `AnimNode_UpdateTransformTree(model, 0)`, spawns `WO_MISSILE_EXPLO` (tag
+   `'MIEX'`) and lights a point light. **Draw** `0x00155420` (vtable slot 5)
+   draws the one model (`+0x184`) at `+0xf0 + viewport * 0x40`. **No per-tick
+   update was found**: the model animates by its own keys (`sphere` and `bloom`
+   scale 1 to 18 over 60 frames) on the node clock, `UV_offset` and
+   `Shockwave_scalar` its age. **Open:** the lifetime (what retires it), the
+   16 entries, and the four-plus materials' programs (`sphere`, `bloom`,
+   `rays`, `shockwave` nodes). The harness is
+   `data/scratch/hd-weapon-blasts/{ppcdis,emu,runblast,spec}.py`; the camera
+   table's lane masks at `0xc47730` are runtime-initialised and must be seeded.
 4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**. ~~Read what
    `node + 0xc0` is on the `PTR_PTR_008b3988` node class~~ **Done
    2026-09-25 at the mechanism level**: it is a generic Anim-Transform

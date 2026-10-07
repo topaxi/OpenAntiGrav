@@ -116,6 +116,11 @@ fn yellow([r, g, b]: [u8; 3]) -> bool {
     r > 230 && g > 190 && b < 170
 }
 
+/// Near-white: the white-hot fireball and the sky behind it.
+fn white([r, g, b]: [u8; 3]) -> bool {
+    r > 245 && g > 245 && b > 235
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_detonating_bomb_draws_its_fireball_and_then_its_ripple_rings() {
@@ -126,6 +131,14 @@ fn a_detonating_bomb_draws_its_fireball_and_then_its_ripple_rings() {
     let at = |ticks| count(&frame_of(ticks).expect("image"), yellow);
     let (before, ball, rings) = (at(420), at(460), at(528));
     println!("yellow pixels: before {before}, fireball {ball}, ripple rings {rings}");
+    // Age 1.32 s: the fireball is white-hot and burning away. Its alpha test is
+    // `GL_LESS` 0.5, so as `AlphaAnim` falls the texels with the most alpha go;
+    // near-white pixels of the frame: 55,217 with the test, 67,264 with the
+    // discard dropped (a solid ball), 52,661 and 65,326 either side of it at
+    // ticks 440 and 480, where nothing has gone yet.
+    let burnt = count(&frame_of(500).expect("image"), white);
+    println!("near-white pixels at 1.32 s: {burnt}");
+    assert!(burnt < 62_000, "the fireball is not burning away: {burnt}");
     assert!(before < 1_000, "the control already glows: {before}");
     assert!(ball > 5_000, "the fireball is missing: {ball}");
     assert!(rings > 1_500, "the ripple rings are missing: {rings}");
