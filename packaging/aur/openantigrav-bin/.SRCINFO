@@ -1,0 +1,22 @@
+pkgbase = openantigrav-bin
+	pkgdesc = Clean-room Rust reimplementation of the Studio Liverpool anti-gravity racing engine (Wipeout Pulse, Pure, HD, 2048, Omega); prebuilt engine, bring your own disc
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/topaxi/OpenAntiGrav
+	arch = x86_64
+	license = MIT
+	license = Apache-2.0
+	depends = alsa-lib
+	depends = glibc
+	depends = libpipewire
+	depends = systemd-libs
+	depends = vulkan-icd-loader
+	optdepends = vulkan-driver: a GPU driver (vulkan-radeon, vulkan-intel, nvidia-utils); vulkan-swrast gives a CPU adapter
+	optdepends = ffmpeg: converts each game intro movie on first boot (without it the intro is a black screen)
+	provides = openantigrav
+	conflicts = openantigrav
+	options = !debug
+	source = OpenAntiGrav-0.1.0-linux-x86_64.tar.gz::https://github.com/topaxi/OpenAntiGrav/releases/download/v0.1.0/OpenAntiGrav-0.1.0-linux-x86_64.tar.gz
+	sha256sums = SKIP
+
+pkgname = openantigrav-bin

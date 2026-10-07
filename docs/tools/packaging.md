@@ -498,3 +498,45 @@ To launch it from Game Mode, add it through Steam's "Add a Non-Steam Game". That
 route has not been tried either, and Steam Input will present its own
 configuration as an ordinary gamepad rather than needing anything from the
 engine.
+
+## AUR packages
+
+Two PKGBUILDs live in [`packaging/aur/`](../../packaging/aur/), each with its
+generated `.SRCINFO`. Both install only the engine (`/usr/bin/oag-game`, the
+desktop entry, the generated icon, both licences and `licences/`); no game
+content, and both `provide`/`conflict` with `openantigrav`.
+
+| Package | Builds | Notes |
+| --- | --- | --- |
+| `openantigrav-bin` | nothing: repackages `OpenAntiGrav-<pkgver>-linux-x86_64.tar.gz` from the GitHub Release ([releases](releases.md)) | `pkgver` is the tag without `v`. `sha256sums` is `SKIP` until a release exists: copy the tarball's line from the release's `SHA256SUMS` or run `updpkgsums`. |
+| `openantigrav-git` | `cargo build --frozen --release -p oag-game` from `main` | `pkgver()` is `git describe --long --tags --match 'v*'`, falling back to `r<count>.<hash>` while no tag exists. `.SRCINFO` carries a placeholder `pkgver`; regenerate it. |
+
+**Why distro `cargo`, not rustup.** `rust-toolchain.toml` pins 1.99.0 for CI
+reproducibility, but a package builds with the packaged toolchain and Arch's
+`rust` is newer than the 1.97.1 MSRV (`Cargo.toml` `rust-version`). `rustup`
+conflicts with `rust` in a chroot, so `makedepends` names `cargo`;
+`RUSTUP_TOOLCHAIN=stable` keeps a build on a machine that has rustup working.
+`clang` is for `libspa-sys`' bindgen. No `options=(!lto)`: the build was run without it and needed none. `libpipewire` is a hard dependency (see [what is bundled](#what-is-bundled)); the
+Vulkan driver is optional, since lavapipe gives a CPU adapter.
+
+**Verified 2026-10-07** (local, nothing published): `openantigrav-git` built with
+`makepkg` in a clean directory (`devtools` is not installed here, so no chroot
+build; the build ran against this machine's rustup 1.99.0 `stable`, not Arch's
+`rust`). `openantigrav-bin` built against a tarball cut with the same
+`scripts/build-appimage.sh --container` binary and staging commands `release.yml`
+uses. `namcap` on both PKGBUILDs and packages is clean apart from advisory
+warnings (see the lane report). Both packages unpacked into a scratch root and
+ran `oag-game --dry-run` against a Pulse image. `pacman -U` was not run.
+
+### Publishing (the maintainer's steps)
+
+Nothing here is automated, and nobody but the maintainer pushes to the AUR.
+
+1. After the draft Release is published, in `openantigrav-bin/`: set `pkgver`,
+   `updpkgsums`, `makepkg --printsrcinfo > .SRCINFO`, test with
+   `makepkg -f` (or `extra-x86_64-build` from `devtools`).
+2. `git clone ssh://aur@aur.archlinux.org/openantigrav-bin.git aur-bin`, copy
+   `PKGBUILD` and `.SRCINFO` in, `git add`, `git commit`, `git push`.
+3. For `openantigrav-git`, the same with `ssh://aur@aur.archlinux.org/openantigrav-git.git`;
+   run `makepkg --printsrcinfo > .SRCINFO` after a build so `pkgver` is current.
+   It needs no update per release.
