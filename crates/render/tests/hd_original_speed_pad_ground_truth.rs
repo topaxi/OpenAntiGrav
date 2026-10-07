@@ -2,9 +2,12 @@
 //!
 //! Their `Speedup Pad` nodes name a hash no chunk carries, so the pads draw
 //! through `build_scene`'s unreferenced-chunk pass; the pad materials there
-//! must bind `slots::PAD_NE` with the material's authored colour, and no
-//! other circuit's scene may bind it at all (rails and start lines sample the
-//! same `_ne` hash through a program the pad path does not read).
+//! must bind `slots::PAD_NE` with the material's authored colour. The rails and
+//! start lines (`diffuse_normal_specular_emmissive`) sample the same `_ne` hash
+//! through a program of the same shape and bind it too since 2026-10-07
+//! (`vineta-k-fidelity`, `rcsmaterial.md`), each in its own authored colour; so
+//! on a circuit with no speed-pad chunk the scene's glow must **not** be the
+//! pads' cyan.
 //!
 //! `#[ignore]`d: needs the PS3 disc image.
 //! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all -E 'binary(hd_original_speed_pad_ground_truth)'`
@@ -63,19 +66,21 @@ fn the_scene_glows_only_where_a_speed_pad_chunk_is_unreferenced() {
             .iter()
             .filter(|v| v.slots & slots::PAD_NE != 0)
             .collect();
+        let cyan = |v: &&mesh::GpuVertex| {
+            let index = slots::material_index(v.slots) as usize;
+            model.emissive[index - 1].tint == CYAN
+        };
         if !glows {
-            assert!(lit.is_empty(), "{track}: {} scene vertices glow", lit.len());
+            assert!(
+                !lit.iter().any(cyan),
+                "{track}: a scene vertex glows the speed pads' cyan"
+            );
             continue;
         }
-        assert!(!lit.is_empty(), "{track}: its speed pads do not glow");
-        for v in lit {
-            let index = slots::material_index(v.slots) as usize;
-            assert_eq!(
-                model.emissive[index - 1].tint,
-                CYAN,
-                "{track}: speed pad glow colour"
-            );
-        }
+        assert!(
+            lit.iter().any(cyan),
+            "{track}: its speed pads do not glow cyan"
+        );
         assert!(
             model.pad_masks.iter().any(Option::is_some),
             "{track}: no _ne mask bound in the scene"
