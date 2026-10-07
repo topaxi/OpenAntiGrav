@@ -2845,20 +2845,31 @@ tunnel glass: `j_arch_support`, `and_metal_struts`, `j_arch_lights`, `and_rock4`
 `exp(-(0.0045 d)^2)` is 0.9 at 70 units, 0.56 at 170, 0.16 at 300 and 0.0006 at 600: **it darkens the near struts and takes the
 far scenery to dark teal; it does not remove what is within 170 units.** The group is **not** spatial (members 23 to 930
 units from the camera, `y` -158 to +9), **not** a material family (`ds_concrete_band_cs` is in it, `ds_wall_cs` is not) and
-`render_flags & 0x30` is on 70 of the 163 chunks of the group's textures and 3 of 48 of the other side's: **what selects the
-group is open.** The group's submission is contiguous with three `tunnlelightstrip` exceptions (draws 41, 42, 70).
+**The selector is the chunk's own render flag `0x20` (confidence 88; 2026-10-07, `hd-glass-opus`).** Both fog
+publishers, B4 (`FUN_00400a00`, `0x00400c38`) and B5 (`FUN_003ff860`, `0x003ffa90`), pick the draw's `fogColour`
+buffer from the record's flag halfword (`block->0x06`, `Mesh::render_flags`): bit `0x20` set reads
+`Scene_GetAlternateFog` (`0x00c49120`, which `Scene_PrepareFrame` fills from `+0x4f0`/`+0x504` at `0x003acb88`),
+clear reads `Scene_GetPrimaryFog` (`0x00c49110`); a track chunk (bit 0) in Zone reads `0x00c49130` instead. Checked
+draw by draw on the pose-A capture, each draw tied to its chunk by vertex offset: **all 35 alternate-fog draws are
+`0x20` chunks and all 76 primary-fog draws are not.** An earlier reading matched by texture, which mixes chunks
+of both kinds, and could not see it. Not wired. See
+[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07.
 
-**(b) Meshes ours draws near the tunnel are absent from the original's frame (confidence 80).** Textures were named by five
-64-byte samples against the disc's 6,347 `.gtf` (all samples the `.gtf` has bytes for must agree, with width, height, format
-and mips). Ours, PVS on, at the same pose, draws materials whose textures the original's frame does not bind:
-`and_girder3` (chunk 1320, 120 units ahead), `and_metalstruts_pt2` (1305), `and_dome_vent` (1286), `and_darkstrip` (1311),
-`j_strip_lights` (1315); the copper struts and boxes at the top left of ours (`pairA.png`) are these. **`and_metalstruts_pt2`
-is not `and_metal_struts`**: the latter is in the original's frame, under the alternate fog. All five chunks are allowed by the
-nearest cell's bitmap and by both neighbours (`pvsfit.py`), so **the original's cull of them is unexplained**: not the PVS
-bitmap, not our 24-unit padding (using exactly the nearest cell of the craft or of the camera moved 1 of 463 draws;
-`OAG_PVS_EXACT`, a temporary switch, removed), and not a frustum test (`FUN_003fada8` only clears bits by
-`Render_ClassifyAgainstPlanes` on chunk bounds). Chunks 1286 and 1305 have bounds centred at the origin, which says
-node-placed geometry; whether their `.vex` nodes sit under an LOD, switch or animation parent is the next thing to read.
+**(b) The meshes ours draws on the tunnel ceiling are culled by the original's frustum, which is narrower than
+its picture (confidence 85; 2026-10-07, `hd-glass-opus`; supersedes the "unexplained" reading).** Tied draw by draw
+to chunks, the original submits **51 track chunks** at pose A and this project 255. The kind-1 chunks it skips
+(16-18, 55, 1315 and 1317-1321: `and_metalstruts_pt2`, `and_metal_struts`, `and_metalshine2`, `and_bubbles`,
+`mar_col_rim3`, `and_girder3`, one column of struts and girders at `(-695..-728, y -112..-152, z 282..314)`)
+pass the PVS and lie inside the drawn picture. The engine's cull planes are built from the authored
+`<ExternalCameraFar fov="60">` (live: 30 degrees vertical, 45.7 horizontal half-angles), and the picture is drawn
+4/3 wider in tangent (75.2 degrees vertical). The column sits in the ring between the two, at the left edge, so the
+original never submits it. Rendering ours from the original's exact eye at 75.2 degrees shows the column through
+the upper-left glass where the original shows teal (`data/scratch/hd-glass-opus/cmp_camA.png`). **They are not
+light helpers**: ordinary main-list materials (`lambertzeroalpha`, `jd_simplespecular`, `lambert_simple`). Chunks
+1305 and 1286, named here before by texture, are node-placed and sit at the origin in both games (the original's
+live world sphere and ours agree); they were never the ones on screen. Ours also draws all 197 node-placed chunks
+the PVS allows with no frustum test, against the original's 5 or 6. The law, the live read and the score are on
+[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07.
 
 ### 4. Lineage
 

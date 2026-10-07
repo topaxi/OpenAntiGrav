@@ -547,3 +547,12 @@
 0x005ec3e0	function	Sky_SetCubeFaces	65	renderer.md
 # 2026-10-07 stick-curve lane (player-input.md)
 0x000cd548	function	PlayerInput_Update	80	player-input.md
+# 2026-10-07 hd-glass-opus: main-view frustum cull and fog getters (visibility.md, live RPCS3 read)
+0x0040aba0	function	Scene_CullAndSortViewChunks	75	visibility.md
+0x003fada8	function	Visibility_FrustumCullChunks	85	visibility.md
+0x005bcf48	function	Render_ClassifyBoxAgainstPlanes	80	visibility.md
+0x005bc608	function	Render_BuildFrustumPlanes	85	visibility.md
+0x00987888	data	g_CameraFovDegrees	80	visibility.md
+0x003aa2e8	function	Scene_GetPrimaryFog	85	visibility.md
+0x003aa2f8	function	Scene_GetAlternateFog	85	visibility.md
+0x003aa308	function	Scene_GetZoneTrackFog	70	visibility.md

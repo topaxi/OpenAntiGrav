@@ -405,14 +405,87 @@ surface is submitted to.
 reading a field. Confidence 85, and it closes `rcsmodel`'s old note that the
 byte counts chunks.
 
+## 2026-10-07, `hd-glass-opus`: the main view culls at the authored fov and draws wider
+
+Run against a live RPCS3 frame at the Vineta K tunnel pose (`place --pose=-839.8,-146.6,215.0`, kept
+`-840.6,-146.7,214.2`), with guest memory read while the target was paused
+(`data/scratch/hd-glass-opus/out/boot1`), and against the earlier capture of the same pose
+(`data/scratch/vineta-k-fidelity/out/boot6`). Every draw of the track model was tied to its chunk by its vertex
+array's IO offset: the scene object **is** the loaded file (`*0x00d42c68 = 0x418d6080`), so a draw's vertex
+offset minus `0x018d6080` is a file offset, and exactly one surface descriptor names it (125 of 125 track draws
+mapped, none ambiguous; `py/draw2chunk.py`).
+
+### The pipeline, end to end
+
+| Address | Name | Confidence | What it does |
+| --- | --- | ---: | --- |
+| `0x0040aba0` | `Scene_CullAndSortViewChunks` | 75 | per view: (debug byte `+0x598`) two frustum jobs over the two halves of the chunk list, a fence (`frustumTrackFence`, `After FrustumTestTrack Fence`), then the submit job |
+| `0x003fada8` | `Visibility_FrustumCullChunks` | 85 | the frustum job: for each chunk still set in `g_ChunkVisibilityMask`, clear it when the test returns 1 (outside) |
+| `0x005bcf48` | `Render_ClassifyBoxAgainstPlanes` | 80 | centre/half-extent box against planes `n..5`: 1 outside, 2 straddling, 0 inside |
+| `0x005bc608` | `Render_BuildFrustumPlanes` | 85 | `(planes, fov, aspect, near, far)`; top/bottom at half-angle `fov * 0.5`, sides at `atan(tan(half) * aspect)` |
+| `0x00987888` | `g_CameraFovDegrees` | 80 | the fov the cull planes are built from |
+| `0x003aa2e8` | `Scene_GetPrimaryFog` | 85 | returns `0x00c49110` |
+| `0x003aa2f8` | `Scene_GetAlternateFog` | 85 | returns `0x00c49120` |
+| `0x003aa308` | `Scene_GetZoneTrackFog` | 70 | returns `0x00c49130` |
+
+`Scene_PrepareFrame` builds the six planes into `0x00c49000 + 0x7cb0` (`bl 0x005bc608` at `0x003aad8c`: `f1` =
+`g_CameraFovDegrees * 0.0174533`, `f3 = 0.1`, `f4 = 10000`) and copies them, with the position at `+0x100`, into the
+job object at `+0x240..+0x2a0` (vtable `0x0086c850`, `0x003abbc4`). The job's run (`0x006cde00`) passes `job+0x40`
+(the planes) and `job+0xa0` (the position) to `Scene_CullAndSortViewChunks`.
+
+**Who gets which test.** `Scene_BuildStaticChunkMask` fills an 8-byte entry per chunk at `g+0x211c`: the chunk's
+render-record pointer, and a word whose sign bit is `chunk[7] == 2`. The frustum job sends a kind-1 chunk to the box
+test on the record's `+0x20` centre and `+0x30` half extent, and a kind-2 (node-placed) chunk to
+`Render_ClassifyAgainstPlanes` (`0x005bd0d8`, a sphere) with the chunk's entry of the scene's **bounds block**.
+**The engine rewrites that block for node-placed chunks at runtime**: 197 of 1,811 entries differ from the file in
+the live read, and chunk 1316's live sphere sits at its node (`(-694.8, -127.6, 304.0)` against draw 57's node
+translation `(-694.8, -97.2, 304.0)` applied to the file's `(0, -32.6, 0)`). The writer is not located.
+Confidence 85 on the routing (both branches read in the disassembly), 80 on the rewrite (live read only).
+
+### Three measured facts
+
+1. **The PVS position `+0x100` is the camera** (it settles the 55 under "Open" below). Live: `0x00c49100` =
+   `(-841.71, -143.81, 202.96)`, which is the eye solved from the frame's own projection, not the craft
+   (`-840.6, -146.7, 214.2`). Confidence 90.
+2. **The cull planes are built from the authored chase fov.** `g_CameraFovDegrees` reads `59.99`, and the live
+   planes are 30.0 degrees vertical and 45.7 horizontal half-angles (`tan 45.7 = tan 30 * 16/9`); Feisar's
+   `handlingstats.xml` authors `<ExternalCameraFar fov="60">`. Confidence 90 on the planes (read, not derived).
+   The builder's aspect argument is a TOC float picked by the byte at `0x00938998` (`8/9` when set, `32/9` when
+   clear); the byte read `0` and the planes are 16/9, so how that argument becomes the planes' aspect is **not
+   understood**.
+3. **The picture is drawn about 4/3 wider in tangent than the cull.** The frame's vertex constants
+   `c[256..259]` give `sy = 1.29923` and `sx = 0.73082` (`sx/sy = 9/16`): a vertical half-tangent of `0.7697`,
+   that is `4/3 * tan 30` (`1.29923 = 0.75 * cot 29.996`). Both axes carry the same 4/3. Two captures at the same
+   pose and near-zero speed; whether the ratio holds at speed, where the fov widens, is **not measured**. Where
+   the 4/3 enters the projection is not located. Confidence 80 for this pose.
+
+### What it predicts, and the score
+
+The rule "nearest-cell PVS of the camera, then the live planes, kind-1 by record box, kind-2 by live sphere"
+against the chunks the captured frame draws (`py/predict.py`, `py/fit.py`):
+
+- **Kind-1, boot 6:** 44 of 44 drawn chunks kept, and every culled chunk culled but one. Scaling the frame's
+  own projection horizontally, the fit is exact between 1.36 and 1.38 times; with the live planes the culled set
+  is chunks 16, 17, 18, 55, 1315, 1317-1321 (the copper strut and girder column at `(-695..-728, -112..-152,
+  282..314)`) plus speed pad 1749. They sit in the ring between the cull frustum and the drawn picture: NDC x
+  `-0.75..-1.0` at the left edge. The one residual is pad 1749, inside the planes by 0.3 (sphere) to 3.3 units (box) in boot 1's
+  dumps, whose draw stream is a later frame than the planes; not scored.
+- **Kind-2:** the original draws 5 or 6 node-placed chunks at this pose (818, 1316, blimps 1738-1743); this
+  project draws every node-placed chunk the PVS allows (197) without a frustum test, because each one's
+  `DrawCall::moving` turns the test off.
+- Chunk 76 (`and_sand_sand`, drawn in boot 6, not in boot 1) is allowed by no cell near the camera: unexplained.
+
+### Correction to the line above
+
+"A reimplementation that gates every chunk on the cell's bitmap and stops there draws **more** than the original"
+is now measured: at this pose the original submits 51 track chunks, this project 255.
+
 ## Open
 
 - **What opcodes `0x12`, `0x16` and `0x03` are**, and what the third
   (neither-1-nor-2) chunk kind would do. No chunk on the disc takes it.
-- Whether `r31+0x100` is the craft or the camera (55). One new data point for
-  camera: `0x003fdae8` uses a vec4 at `taskCtx+0x40` as the reference for a
-  front-to-back sort, which is a camera-space operation - but that is a
-  different parameter, so it is suggestive rather than evidence.
+- ~~Whether `r31+0x100` is the craft or the camera (55).~~ The camera, measured live 2026-10-07 (above).
+- Where the drawn projection's 4/3 enters, whether it holds at speed, and who rewrites the kind-2 spheres.
 - The five other callers of `Pvs_NearestCellCached`: `0x003e63c0`, `0x003e9660`,
   `0x00401ba8`, `0x00402a88`, `0x004053e0`.
 - The `.probes` loader at `0x003c4d78`, unexamined.
