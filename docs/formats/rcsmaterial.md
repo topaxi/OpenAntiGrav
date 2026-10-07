@@ -2793,6 +2793,13 @@ changes from blue-violet dashes to the reference's red line (`talons`/`sol2` mat
 `reach_sol2-matched_00.png`); Talon's Junction changes 662 px; Amphiseum's and every other matched reference frame
 are bit-identical (`reach/`). Pinned by `hd_light_bar_ground_truth`.
 
+**Reach census** (`hd_light_bar_census`, every `track.vex` of the disc, `light_bar_census.tsv`): the family has 3 to 26
+slots on each of the 24 circuit models of the 12 circuits and none in the four Zone models, and `pad_ne` binds every one of
+them (unread 0): Vineta K 13/14, `02_track` 26/24, `03_track` 4, Chenghou 4, Ubermall 4, Sebenco Climb 11/8, Sol 2 5/7, Anulpha Pass 6,
+Talon's, Amphiseum, Modesto and Tech De Ra 3 each (beside their pads). **Judged against a reference: Vineta K (start slot and
+the tunnel pose) and Sol 2 (matched frame 00); not judged: the direction of Talon's 662 px (matched 00), and every other circuit
+with no reference frame.** It is a global change on a program-match, as the pads' was.
+
 ### 2. The sea: what the original's `water_test_2` draw reads (measured, confidence 90 unless noted)
 
 Draw 66 of the pose-A frame is `water_test_2`: **one opaque draw, 186 indices**, blend off, depth `LEQUAL` with write on, back-face
