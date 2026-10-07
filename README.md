@@ -67,8 +67,8 @@ target/release/oag-game                             # boots what it finds there
 | --- | --- |
 | Pulse (PSP, PS2) and Pure (PSP) | the disc image, `.chd` or `.iso`, in `data/images/` |
 | Wipeout HD / Fury (PS3) | the **decrypted** disc image in `data/images/` |
-| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/`, named on the command line |
-| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/`, named on the command line |
+| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/` |
+| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/` |
 
 Check what was found without opening a window:
 `target/release/oag-game --dry-run --no-audio --no-video <source>`. Linux is the only OS tried so

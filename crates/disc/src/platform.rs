@@ -191,6 +191,29 @@ fn identify_ps3(source: &mut dyn SectorSource, entries: &[Entry]) -> Result<Opti
     }))
 }
 
+/// Whether sector 0 of a PS3 image declares an encrypted region.
+///
+/// The table lists the **plain** spans as `first, last` pairs; every gap
+/// between one pair and the next is encrypted (`docs/formats/ps3-disc.md`). A
+/// decrypted image keeps the table unchanged, so this says "the disc declares
+/// encrypted regions", not "this copy is still encrypted" - ask it only after
+/// a read of the archives has already failed.
+#[must_use]
+pub fn ps3_declares_encrypted_regions(sector0: &[u8], sector_count: u32) -> bool {
+    let Some(head) = sector0.get(..8) else {
+        return false;
+    };
+    let plain = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as usize;
+    if plain == 0 || plain > 64 {
+        return false;
+    }
+    let Some(last) = sector0.get(8 + 4 * (plain * 2 - 1)..8 + 4 * plain * 2) else {
+        return false;
+    };
+    let last = u32::from_be_bytes([last[0], last[1], last[2], last[3]]);
+    plain > 1 || last.saturating_add(1) < sector_count
+}
+
 /// Reads one field out of a `PS3_DISC.SFB` table.
 ///
 /// The file is magic `.SFB`, a version word, then 32-byte entries from `0x20`:
@@ -276,6 +299,27 @@ pub(crate) fn normalise_serial(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Sector 0 with `bounds` as the plain-region table.
+    fn region_sector(bounds: &[u32]) -> Vec<u8> {
+        let mut sector = vec![0u8; 2048];
+        sector[0..4].copy_from_slice(&((bounds.len() / 2) as u32).to_be_bytes());
+        for (i, bound) in bounds.iter().enumerate() {
+            sector[8 + 4 * i..12 + 4 * i].copy_from_slice(&bound.to_be_bytes());
+        }
+        sector
+    }
+
+    #[test]
+    fn a_gap_in_the_plain_regions_is_an_encrypted_region() {
+        // Three plain spans with gaps between them, as the shipped HD disc has.
+        let table = region_sector(&[0, 0x75f, 0xecac0, 0xecb00, 0xed040, 0xed4df]);
+        assert!(ps3_declares_encrypted_regions(&table, 0x113000));
+        // One plain span covering the whole disc declares nothing encrypted.
+        let plain = region_sector(&[0, 99]);
+        assert!(!ps3_declares_encrypted_regions(&plain, 100));
+        assert!(!ps3_declares_encrypted_regions(&[], 100));
+    }
 
     #[test]
     fn normalises_a_ps2_boot_path() {

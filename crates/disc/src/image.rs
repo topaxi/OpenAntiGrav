@@ -105,6 +105,17 @@ impl DiscImage {
         platform::identify(self.source.as_mut(), &entries)
     }
 
+    /// Whether this image's sector 0 declares PS3 encrypted regions; see
+    /// [`platform::ps3_declares_encrypted_regions`].
+    pub fn ps3_declares_encrypted_regions(&mut self) -> Result<bool> {
+        let mut sector = vec![0u8; crate::source::SECTOR_SIZE];
+        self.source.read_sector(0, &mut sector)?;
+        Ok(platform::ps3_declares_encrypted_regions(
+            &sector,
+            self.source.sector_count(),
+        ))
+    }
+
     /// Reads one file by path, case-insensitively.
     pub fn read_file(&mut self, path: &str) -> Result<Vec<u8>> {
         let entry = self
