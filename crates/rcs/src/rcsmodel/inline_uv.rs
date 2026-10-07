@@ -1,18 +1,27 @@
-//! Where an inline stride-18 chunk keeps its `Uv1` when its last four bytes
-//! are a colour - split out of [`super`] under the 1,000-line rule, as
+//! Where an inline stride-18 or stride-22 chunk keeps its `Uv1` when its last
+//! four bytes are a colour - split out of [`super`] under the 1,000-line rule, as
 //! [`super::stride`] is: one `impl Mesh` block about one question.
 
 use super::{Error, Mesh, NORMAL_OFFSET, Result, SubMesh, TexcoordFormat};
 
-/// The one inline stride whose tail may be a colour rather than a coordinate
-/// - see [`Mesh::texcoords`].
-pub(super) const STRIDE: usize = 18;
+/// The inline strides whose tail may be a colour rather than a coordinate
+/// - see [`Mesh::texcoords`]. Stride 22 joined 18 on 2026-10-07: a stride-22
+/// vertex that ends in **two** colours (`ff 9f 00 4c` twice on
+/// `hd_bomb_shockwaves`) keeps `Uv1` at `+0x0a` all the same, which the
+/// material's vertex program confirms (`o[TC3].xy = v[2].xy`, `v[3]` and
+/// `v[4]` the two colours).
+pub(super) const STRIDES: [usize; 2] = [18, 22];
+
+/// The stride [`Mesh::inline_colours`] reads, which only the stride-18 flyer
+/// needs.
+const STRIDE: usize = 18;
 
 /// Where `Uv1` sits when it does: right after the packed normal.
 const OFFSET: usize = NORMAL_OFFSET + 4;
 
 impl Mesh {
-    /// An inline stride-18 chunk whose last four bytes are **not** two halves
+    /// An inline stride-18 (or, since 2026-10-07, stride-22) chunk whose last
+    /// four bytes are **not** two halves
     /// (`ff ff ff cc` on the LeachBall's sphere, which is `NaN` twice) reads
     /// its `Uv1` from `+0x0a` instead, right after the normal.
     ///
@@ -31,6 +40,11 @@ impl Mesh {
     /// 12 more read non-finite in both places and keep the tail read, and
     /// the 118 whose tail is finite everywhere are untouched. See
     /// `docs/rendering/hd-unlit-programs.md`.
+    ///
+    /// **Stride 22, same census**: 4 inline chunks read non-finite in the tail
+    /// and finite at `+0x0a` (`hd_bomb_shockwaves`, both of `hd_plasma_ring`'s
+    /// and `hd_missile_explosion`'s), 1 more is finite in both and 10 are
+    /// finite in neither - those 11 keep the tail read.
     pub(super) fn inline_uv_before_colour(
         &self,
         data: &[u8],
@@ -84,6 +98,54 @@ impl Mesh {
             .map(|k| {
                 let at = submesh.vertex_offset + k * STRIDE + STRIDE - 4;
                 [data[at], data[at + 1], data[at + 2], data[at + 3]]
+            })
+            .collect())
+    }
+}
+
+impl Mesh {
+    /// The two colour fields an inline stride-22 vertex ends in, folded the way
+    /// `hd_bombfire_shockwaves_glow`'s vertex program reads them: the first
+    /// field's `R G B` (`o[TC0].xyz = v[3].xyz`) and the second field's `A`
+    /// (`o[TC3].z = v[4].w`), each over 255, as `[r, g, b, a]`.
+    ///
+    /// The fields sit at `+0x0e` and `+0x12`, after the normal and the `Uv1`
+    /// [`Self::inline_uv_before_colour`] finds at `+0x0a`. **Only for a chunk
+    /// whose tail cannot be a coordinate** - the same test that moves its
+    /// `Uv1` - so a stride-22 chunk carrying a real tail keeps its meaning;
+    /// that is `hd_bomb_shockwaves` and nothing else a caller routes here.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnknownChunkLayout`] for a described chunk or another stride,
+    /// [`Error::NoTexcoord`] when the tail is a coordinate after all, and
+    /// [`Error::OutOfBounds`] when the buffer leaves the file.
+    pub fn inline_two_colours(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<[f32; 4]>> {
+        if self.decl.is_some() || stride != 22 {
+            return Err(Error::UnknownChunkLayout { got: 0x05, at: 0 });
+        }
+        let end = submesh.vertex_offset + stride * submesh.vertex_count;
+        if end > data.len() {
+            return Err(Error::OutOfBounds {
+                what: "a vertex buffer",
+                end,
+                len: data.len(),
+            });
+        }
+        let tail = self.coords_at(data, submesh, stride, stride - 4, TexcoordFormat::Half)?;
+        if tail.iter().all(|c| c[0].is_finite() && c[1].is_finite()) {
+            return Err(Error::NoTexcoord);
+        }
+        Ok((0..submesh.vertex_count)
+            .map(|k| {
+                let at = submesh.vertex_offset + k * stride;
+                let byte = |o: usize| f32::from(data[at + o]) / 255.0;
+                [byte(14), byte(15), byte(16), byte(21)]
             })
             .collect())
     }
