@@ -106,11 +106,6 @@ ALLOWED = {
         "the wrappers themselves - `acos` here is our own libm, which is what "
         "every simulation caller is required to use instead of the platform's"
     ),
-    "crates/core/src/probe.rs": (
-        "the determinism probe calls `sin` deliberately, so a platform whose "
-        "libm differs shows up as a failing gate rather than as a mystery "
-        "desync - see determinism.md"
-    ),
     "crates/display/src/display.rs": (
         "`Fov::apply` scales the tangent of the half-angle, because the "
         "tangent is what a projection matrix is built from - the setting has "
