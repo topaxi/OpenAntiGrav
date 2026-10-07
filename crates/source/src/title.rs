@@ -82,10 +82,8 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
     // to name; falling through to Pulse would report it as a missing `Data.wad`.
     let hd_encrypted = match oag_hd::open(source) {
         Ok(archives) => {
-            return Ok(Opened {
-                archives,
-                title: oag_hd::TITLE,
-            });
+            let title = oag_hd::title_of(&archives);
+            return Ok(Opened { archives, title });
         }
         Err(error @ Error::EncryptedDisc { .. }) => Some(error),
         Err(_) => None,

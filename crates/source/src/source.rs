@@ -47,6 +47,12 @@
 //! under it. [`oag_omega::open`]'s own doc names that same parent as its
 //! template source.
 //!
+//! A Wipeout HD copy installed from the PSN download is a directory as well:
+//! `PARAM.SFO` beside `USRDIR/`, under `extracted/ps3` ([`ps3_search_path`]).
+//! It is found by that shape alone, European `TITLE_ID`s first, so an unpacked
+//! disc folder or a raw zip extract beside it is not offered. See
+//! `docs/formats/hd-psn.md`.
+//!
 //! # The first three are a decision; the last three are a guess
 //!
 //! Steps 1 to 3 are a player *stating* which source they want, and [`explicit`]
@@ -185,7 +191,11 @@ pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<Strin
 
     // The unpacked 2048 and Omega folders: the same scan `candidates` ends
     // with, so a no-argument boot and the chooser find the same things.
-    if let Some(found) = first_package(&package_search_path(), &ps4_search_path()) {
+    if let Some(found) = first_package(
+        &package_search_path(),
+        &ps4_search_path(),
+        &ps3_search_path(),
+    ) {
         return Ok(display(&found));
     }
 
@@ -193,12 +203,21 @@ pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<Strin
 }
 
 /// The first unpacked 2048 folder under `vita_roots`, else the first Omega
-/// root among `ps4_roots`.
-fn first_package(vita_roots: &[PathBuf], ps4_roots: &[PathBuf]) -> Option<PathBuf> {
+/// root among `ps4_roots`, else the first PSN HD install under `ps3_roots`.
+fn first_package(
+    vita_roots: &[PathBuf],
+    ps4_roots: &[PathBuf],
+    ps3_roots: &[PathBuf],
+) -> Option<PathBuf> {
     vita_roots
         .iter()
         .flat_map(|root| package_directories_in(root))
         .chain(ps4_package_directories_in(ps4_roots))
+        .chain(
+            ps3_roots
+                .iter()
+                .flat_map(|root| ps3_package_directories_in(root)),
+        )
         .next()
 }
 
@@ -208,9 +227,13 @@ fn package_at(path: &Path) -> Option<PathBuf> {
     if path.join("base/PSP2/data.psarc").is_file() {
         return Some(path.to_path_buf());
     }
+    if is_ps3_install(path) {
+        return Some(path.to_path_buf());
+    }
     ps4_package_directories_in(&[path.to_path_buf()])
         .into_iter()
         .chain(package_directories_in(path))
+        .chain(ps3_package_directories_in(path))
         .next()
 }
 
@@ -312,6 +335,7 @@ pub fn candidates() -> Vec<PathBuf> {
 
     found.extend(package_directories());
     found.extend(ps4_package_directories());
+    found.extend(ps3_package_directories());
     found
 }
 
@@ -478,6 +502,88 @@ fn ps4_package_directories_in(roots: &[PathBuf]) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Where a Wipeout HD PSN install is looked for: the folder RPCS3 (or a
+/// PS3) installed the package into, copied under `data/extracted/ps3/`. See
+/// `docs/overview/installing.md`, "Wipeout HD from the PSN download".
+const PS3_PACKAGE_ROOT: &str = "data/extracted/ps3";
+
+/// Every root [`ps3_package_directories`] scans: the same three places as
+/// [`ps4_search_path`], with `extracted/ps3` standing in for `extracted/ps4`.
+#[must_use]
+pub fn ps3_search_path() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut push = |path: PathBuf| {
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    };
+
+    push(PathBuf::from(PS3_PACKAGE_ROOT));
+
+    if let Some(appimage) = std::env::var_os("APPIMAGE")
+        && let Some(directory) = Path::new(&appimage).parent()
+    {
+        push(directory.join("extracted").join("ps3"));
+    }
+
+    if let Some(data) = dirs::data_dir() {
+        push(data.join("oag").join("extracted").join("ps3"));
+    }
+
+    paths
+}
+
+/// Every PSN install on [`ps3_search_path`].
+fn ps3_package_directories() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
+
+    for root in ps3_search_path() {
+        let key = root.canonicalize().unwrap_or_else(|_| root.clone());
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        found.extend(ps3_package_directories_in(&root));
+    }
+
+    found
+}
+
+/// Whether `path` is a PS3 HDD install: a `PARAM.SFO` at its root beside a
+/// `USRDIR`. **That shape only.** A decrypted disc extract keeps these under
+/// `PS3_GAME/` and is not offered, nor is a raw zip extract or the unlock
+/// key's folder; the disc image is the source for a disc.
+fn is_ps3_install(path: &Path) -> bool {
+    path.join("PARAM.SFO").is_file() && path.join("USRDIR").is_dir()
+}
+
+/// Every PSN HD install directly under `root`, European serials (`NPEA`,
+/// `BCES`) first and then alphabetical: the Europe-first policy again, read
+/// off the package's own `TITLE_ID` and not off what the player named the
+/// folder.
+fn ps3_package_directories_in(root: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| is_ps3_install(path))
+        .collect();
+    found.sort_by_key(|path| (!has_european_title_id(path), path.clone()));
+    found
+}
+
+/// Whether an install's `PARAM.SFO` names a European `TITLE_ID`.
+fn has_european_title_id(path: &Path) -> bool {
+    std::fs::read(path.join("PARAM.SFO"))
+        .ok()
+        .and_then(|bytes| oag_disc::sfo::title_id(&bytes))
+        .is_some_and(|id| {
+            id.starts_with("NPEA") || id.starts_with("NPEB") || id.starts_with("BCES")
+        })
+}
+
 /// The not-found message, which for a packaged build is the entire interface.
 fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
     let list = |paths: &[PathBuf], what: &str| {
@@ -498,7 +604,7 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
     anyhow!(
         "no disc image found. OpenAntiGrav ships no game content: supply your own \
          image, from your own copy of the game.\n\nSearched (relative paths are \
-         relative to {}):\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
+         relative to {}):\n{}\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
          HD) is found by extension. A 2048 or Omega .pkg is NOT read: unpack and \
          decrypt it into a folder first (`docs/overview/installing.md`, \
          \"Wipeout 2048\" and \"Omega Collection\"). An encrypted HD .iso must be \
@@ -511,6 +617,10 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
             "unpacked 2048 folder, base/PSP2/data.psarc"
         ),
         list(&ps4_search_path(), "unpacked Omega folder, omega-eu-patch/"),
+        list(
+            &ps3_search_path(),
+            "installed Wipeout HD PSN folder, PARAM.SFO and USRDIR/"
+        ),
         IMAGE_NAMES[0],
     )
 }
