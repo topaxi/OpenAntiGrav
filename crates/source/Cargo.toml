@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 oag-2048.workspace = true
 oag-assets.workspace = true
+oag-disc.workspace = true
 oag-formats.workspace = true
 oag-hd.workspace = true
 oag-omega.workspace = true
@@ -24,6 +25,9 @@ dirs = "7"
 # crate acquires a decompressor. Deflate only - the packs are torrentzipped, and
 # bzip2/zstd/aes would be dependencies for formats that cannot appear here.
 zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+oag-testdata.workspace = true
 
 [lints]
 workspace = true

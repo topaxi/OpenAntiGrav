@@ -74,6 +74,7 @@ named `wipeout.chd`).
 | Wipeout Pulse | PS2 | disc image, Europe | `pulse-ps2-eu.chd` |
 | Wipeout Pure | PSP | disc image, Europe or USA | `pure-psp-eu.chd`, `pure-psp-usa.chd` |
 | Wipeout HD / Fury | PS3 | **decrypted** disc image, Europe | `hdfury-ps3-eu-dec.iso` |
+| Wipeout HD (no Fury) | PS3 | the **installed** PSN download, Europe | `data/extracted/ps3/hd-psn-eu` |
 | Wipeout 2048 | Vita | **unpacked** package folder | `data/extracted/vita/PCSF00007` (Europe) or `PCSA00015` (USA) |
 | Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
 
@@ -108,6 +109,52 @@ program then opened as `Wipeout HD`. The format is described in
 [PS3 disc encryption](../formats/ps3-disc.md). See
 [troubleshooting](#5-when-it-goes-wrong) for what happens with both files in
 one folder (the decrypted `hdfury-ps3-eu-dec.iso` is tried first).
+
+### Wipeout HD from the PSN download
+
+The Store version (`NPEA00057`, v3.00) is Wipeout HD **without Fury**: no Talon's
+Junction, Zone circuits or Detonator, eight circuits and twelve teams. It is read
+from the folder the PlayStation installs it into, copied under `data/extracted/ps3/`.
+Census and what differs from the disc: [hd-psn](../formats/hd-psn.md).
+
+1. Extract the download zip into a new empty folder. The package inside is a `.pkg`.
+   Never run anything from it.
+2. Install it with RPCS3's own installer into a **private** RPCS3 profile, so your
+   main one is untouched, and keep that profile under `data/` (it holds Sony firmware,
+   your licence file and 1 GB of game data, and `data/` is not committed). The package
+   needs your own licence file for the game (a `.rap`); it is part of your copy of the
+   game, and this project supplies none and does not say where one comes from. Put it
+   where RPCS3 looks for licences (`dev_hdd0/home/00000001/exdata/` of that profile), then:
+
+   ```sh
+   P=$PWD/data/scratch/hd-psn-profile
+   mkdir -p $P/rpcs3 && cp -r ~/.config/rpcs3/dev_flash* $P/rpcs3/   # the firmware folders the check used
+   XDG_CONFIG_HOME=$P rpcs3 --headless --installpkg path/to/package.pkg
+   ```
+
+   Use `--headless`: `--no-gui` with the same arguments sat idle and installed nothing
+   (checked 2026-10-07, RPCS3 0.0.42). It installed 1 GB in a few seconds. Add
+   `XDG_CACHE_HOME` and `XDG_DATA_HOME` under the same folder if you want its log out of
+   `~/.cache` (that log prints a package key; do not paste it anywhere).
+3. Copy the install folder into place:
+
+   ```sh
+   cp -r $P/rpcs3/dev_hdd0/game/NPEA00057 data/extracted/ps3/hd-psn-eu
+   ```
+
+   The result is `PARAM.SFO` and `USRDIR/data01.psarc` to `data04.psarc` side by
+   side. **Leave out any `.EDAT` file** (the licence stub): this project does not read
+   it. The program recognises the folder by `PARAM.SFO` beside `USRDIR/`.
+4. Run it. With nothing else on the search path the folder is found by itself
+   (Europe first); or name it: `oag-game data/extracted/ps3/hd-psn-eu`.
+
+What the PSN copy lacks is simply not offered: the race page's TRACK and TEAM rows
+list the eight circuits and twelve teams the package ships, a bare `--race` opens
+Vineta K, and the loader report names each absent effect. The race
+campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
+"What draws differently"); the menu boxes draw from the file this build's own executable
+names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
+tick for tick like the disc, and its menu rows drew.
 
 ### 2048 and Omega: unpack the package into a folder
 

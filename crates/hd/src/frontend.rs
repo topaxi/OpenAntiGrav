@@ -579,6 +579,12 @@ pub mod names {
     /// about it. See `docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`.
     pub const MENU_BLOCK_FRAME: &str = r"Data\FE\Images\file2.gtf";
 
+    /// The same nine-patch on the PSN download's executable, which names
+    /// `Data\FE\Images\file.gtf` where the Fury disc's names `file2.gtf`
+    /// (`strings` over each decrypted `EBOOT`, 2026-10-07). 64x64 `DXT3`, 4,224
+    /// bytes, in `DATA02` on both sources. See [`crate::psn`].
+    pub const MENU_BLOCK_FRAME_PSN: &str = r"Data\FE\Images\file.gtf";
+
     /// The strip's underline mark: a white 21x8 bar at texel `(1, 1)` of a
     /// 32x16 DXT texture in `DATA02`. `HorizMenu_Construct` loads it as
     /// `cursor.mip`, the PSP-era spelling the loader maps to `.gtf`.
