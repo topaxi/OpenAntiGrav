@@ -121,7 +121,7 @@ fn a_ps3_disc_identifies_itself_even_while_encrypted() {
     let mut disc = DiscImage::open(&path).expect("open");
 
     // `PS3_DISC.SFB` is in a plain region, so this holds for the encrypted
-    // image as shipped - nothing here needs the disc key, and nothing here
+    // image as shipped - identification needs no disc key, and nothing here
     // should ever start needing it.
     let title = disc.identify().expect("identify");
     assert_eq!(title.platform, Platform::Ps3);
@@ -131,8 +131,9 @@ fn a_ps3_disc_identifies_itself_even_while_encrypted() {
         Some("PS3_GAME/USRDIR/EBOOT.BIN")
     );
 
-    // The archives are encrypted and stay that way; what this asserts is that
-    // the filesystem walk reaches them, which is what identification rests on.
+    // With the disc key beside the image the archives read in place (see
+    // `ps3_crypt_ground_truth`); without it they stay noise. Either way the
+    // filesystem walk reaches them, which is what identification rests on.
     let paths: Vec<_> = disc
         .entries()
         .expect("entries")

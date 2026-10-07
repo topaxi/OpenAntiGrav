@@ -58,6 +58,7 @@ fn each_pressing_identifies_as_its_own_title() {
 /// `PS3_DISC.SFB` that answers it is outside the encrypted region - so nothing
 /// short of trying to open the archives can tell them apart, and a chooser that
 /// filtered on identity alone would offer the wrong one.
+#[cfg(unix)]
 #[test]
 #[ignore = "needs a disc image under data/images/"]
 fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {

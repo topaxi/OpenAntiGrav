@@ -59,6 +59,7 @@ fn every_file_on_the_disc_reads_byte_identical_to_the_decrypted_copy() {
         }
     }
     assert!(encrypted_files > 0);
+    println!("compared {compared} bytes");
     assert!(compared > 1 << 30, "compared {compared} bytes");
 }
 

@@ -5,12 +5,13 @@
 //! a printed message when the image is absent; `OAG_REQUIRE_GAME_DATA=1` turns
 //! that into a failure, since a skipped ground-truth test proves nothing.
 //!
-//! # The image has to be decrypted first
+//! # Which image
 //!
-//! `hdfury-ps3-eu.iso` is per-sector AES-128-CBC, so a `.psarc` inside reads as
-//! noise. These tests want `hdfury-ps3-eu-dec.iso`, written by
-//! `scripts/ps3iso.py decrypt` from the maintainer's own `.dkey` (see
-//! `docs/formats/ps3-disc.md`); neither key nor image is committed.
+//! `hdfury-ps3-eu.iso` is per-sector AES-128-CBC; `oag_disc` reads it in place
+//! when the disc key sits beside it, and `ps3_crypt_ground_truth` proves that
+//! byte-identical. These tests keep reading `hdfury-ps3-eu-dec.iso` (made by
+//! `scripts/ps3iso.py decrypt`) so a machine without the key still runs them
+//! (see `docs/formats/ps3-disc.md`); neither key nor image is committed.
 //!
 //! # What these are for
 //!

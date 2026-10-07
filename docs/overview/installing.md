@@ -105,6 +105,13 @@ The program never ships a key and never prints yours. A decrypted image
 (`hdfury-ps3-eu-dec.iso`, made by any tool) still works and is tried first.
 The format is described in [PS3 disc encryption](../formats/ps3-disc.md).
 
+Seen working on 2026-10-07 under a software-rendered X session: with the image
+alone in its folder the chooser lists `NEEDS DISC KEY`; Enter opens the keypad;
+typing, and Ctrl+V of a spaced key, fill the buffer; a wrong key reports
+`THAT KEY DOES NOT OPEN THIS DISC` and stores nothing; the right one is saved to
+the keys folder, the row becomes `WIPEOUT HD` and boots to the front end. Wayland
+paste is unverified (the clipboard crate is built with its Wayland support).
+
 Measured on 2026-10-07 (release build, the same race, three runs each at a
 load average of 13): the encrypted image reaches the first race frame in
 1.87-1.96 s and the decrypted one in 1.85-1.88 s, and the two PNGs are

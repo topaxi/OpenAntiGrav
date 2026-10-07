@@ -148,12 +148,13 @@ prompt writes there. See [installing](../overview/installing.md#hd--fury-the-dis
   `Decrypting`, `Locked`. `Locked` leaves the plain regions readable, which is why
   the chooser still identifies the disc from `PS3_DISC.SFB`.
 
-**Measured on the maintainer's HD image (confidence 97, the byte-identity against
-the independently decrypted copy):**
+**Measured on the maintainer's HD image.** This is engineering verification of the
+reader (byte-identity against the independently decrypted copy), not new
+evidence about the format, so the page's confidence of 94 stands:
 
 | Check | Result |
 | --- | --- |
-| All 22 files, read through `DiscImage` from the encrypted image vs the decrypted copy (PUP: first MiB) | byte-identical, 1.2 GiB compared |
+| All 22 files, read through `DiscImage` from the encrypted image vs the decrypted copy (PUP: first MiB) | byte-identical, 1,990,646,154 bytes (1.85 GiB) compared |
 | A strided 4 KiB sample through every file over 16 KiB, so the second encrypted region's absolute-LBA IV is exercised | identical |
 | Race frame (`--race --ticks 1 --screenshot`, Talon's Junction) from each image | PNGs byte-identical |
 | Race load, release build, three runs at load average ~13 | encrypted 1.96 / 1.87 / 1.88 s, decrypted 1.85 / 1.86 / 1.88 s |

@@ -508,7 +508,13 @@ fn run(cli: Cli) -> Result<()> {
     // would be a step added to the common case for nothing.
     let chosen = source::explicit(cli.source.as_deref(), settings.source.image.as_deref())?;
     let launcher = match &chosen {
-        Some(_) if !cli.launcher => None,
+        // A stated source that is an encrypted image with no key is the one
+        // stated source that still gets the screen: the prompt is the fix.
+        Some(source) if !cli.launcher && !launcher::needs_key(source) => None,
+        Some(source) if !cli.launcher => {
+            let rows = launcher::survey(&[std::path::PathBuf::from(source)]);
+            Some(launcher::Launcher::new(rows).with_paste(crate::clipboard::AVAILABLE))
+        }
         _ => {
             let paths = source::candidates();
             // Silent on an empty search path: there is nothing to read, and
@@ -534,12 +540,16 @@ fn run(cli: Cli) -> Result<()> {
                     println!("    {advice}");
                 }
             }
-            // One image is no choice, and **none at all is never a screen, not
+            // One image is no choice - unless it is locked, when the screen is
+            // how its key is asked for - and **none at all is never a screen, not
             // even under `--launcher`**: an empty list offers nothing but
             // escape, where falling through reaches either the stated source or
             // `resolve`'s message naming every directory it looked in - which
             // for a packaged build with no image is the entire user interface.
-            if rows.len() > 1 || (cli.launcher && !rows.is_empty()) {
+            let locked = rows
+                .iter()
+                .any(|row| matches!(row.state, launcher::State::NeedsKey));
+            if rows.len() > 1 || (cli.launcher && !rows.is_empty()) || locked {
                 Some(launcher::Launcher::new(rows).with_paste(crate::clipboard::AVAILABLE))
             } else if rows.is_empty() && cfg!(target_os = "android") {
                 // A phone has no terminal for `resolve`'s message and its

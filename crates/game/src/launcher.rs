@@ -164,6 +164,16 @@ pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
         .collect()
 }
 
+/// Whether `source` is an encrypted PS3 image no key opens, which a stated
+/// source gets the chooser's key prompt for instead of a bare error.
+///
+/// Cheap by design: one open, which reads sector 0 and, only for an image that
+/// declares encrypted regions, checks the oracle.
+#[must_use]
+pub fn needs_key(source: &str) -> bool {
+    DiscImage::open(source).is_ok_and(|disc| disc.ps3_state() == Ps3State::Locked)
+}
+
 /// One candidate, opened.
 fn examine(path: &Path) -> Candidate {
     let source = path.to_string_lossy().into_owned();
