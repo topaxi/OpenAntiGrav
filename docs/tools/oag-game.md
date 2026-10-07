@@ -50,7 +50,8 @@ one button state before any edge is computed, so a press on either is one press.
 
 The positional argument is optional. Left out, the image is searched for:
 `data/images/` under the current directory first, which is what a checkout has,
-then beside the executable if it is an AppImage, then
+then beside the program (the AppImage's folder, else the executable's folder,
+and an `images/` folder in either), then
 `~/.local/share/oag/images/`; `$OAG_IMAGE` short-circuits the lot. The full order
 is in [packaging](packaging.md#where-the-disc-image-comes-from), and
 `crates/source/src/source.rs` is the code. **No image ships with the engine** and

@@ -541,11 +541,12 @@ fn run(cli: Cli) -> Result<()> {
                 }
             }
             // One image is no choice - unless it is locked, when the screen is
-            // how its key is asked for - and **none at all is never a screen, not
-            // even under `--launcher`**: an empty list offers nothing but
-            // escape, where falling through reaches either the stated source or
-            // `resolve`'s message naming every directory it looked in - which
-            // for a packaged build with no image is the entire user interface.
+            // how its key is asked for. **None at all is never a chooser**, not
+            // even under `--launcher`: an empty list offers nothing but escape.
+            // It is the not-found screen below instead (it was the terminal
+            // message from `resolve` alone until 2026-10-07, which a
+            // double-click never shows), and the same message still goes to the
+            // log.
             let locked = rows
                 .iter()
                 .any(|row| matches!(row.state, launcher::State::NeedsKey));

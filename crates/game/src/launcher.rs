@@ -569,6 +569,10 @@ pub fn not_found_notice(images: &str) -> Vec<String> {
 #[must_use]
 pub fn not_found_notice_desktop(folder: &str) -> Vec<String> {
     const FIT: usize = 56;
+    // The screen's face has no backslash glyph (it draws nothing, so a Windows
+    // path would read as one run-together word). Explorer takes `/` as well.
+    let folder = folder.replace('\\', "/");
+    let folder = folder.as_str();
     let shown = if folder.chars().count() > FIT {
         let tail: String = folder
             .chars()

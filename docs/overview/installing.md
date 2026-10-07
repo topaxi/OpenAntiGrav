@@ -26,7 +26,7 @@ disc keys or licences. See [legal](legal.md).
 
 ## 1. Pick your computer and get the program
 
-| You have | Download this from the GitHub Releases page | Then |
+| You have | Download this from the project's GitHub Releases page | Then |
 | --- | --- | --- |
 | **Windows 10 or 11, 64-bit** | `OpenAntiGrav-<version>-windows-x86_64.zip` | Right-click the zip, "Extract All". Open the new folder. The program is `oag-game.exe`. |
 | **Linux PC** | `OpenAntiGrav-<version>-linux-x86_64.AppImage` | Make it runnable: right-click, Properties, tick "Is executable" (or `chmod +x` the file). Needs a Vulkan graphics driver. No FUSE? Use the `.tar.gz` of the same name. |
@@ -34,6 +34,12 @@ disc keys or licences. See [legal](legal.md).
 | **Android phone** (64-bit, Android 8 or newer) | `OpenAntiGrav-<version>-android-arm64.apk` | Copy it to the phone and open it (allow "install unknown apps" for your file manager), or `adb install -r` it. |
 | **Mac** | nothing yet | There is no Mac download. A source build is possible ("Build it yourself" below) but has never been run. |
 | **Arch Linux** | the AUR packages `openantigrav-bin` or `openantigrav-git` | Install like any AUR package, once they are published. |
+
+**As of 2026-10-07 only a "nightly" pre-release is published** (a build made every
+day from the latest code); a proper numbered release has not been published yet.
+The file names below carry the nightly's date and commit instead of a version.
+If the page has no download for your system, build from source ("Build it
+yourself" below).
 
 Optional, any desktop: install **`ffmpeg`**. Without it the game skips each
 title's intro movie and goes straight to the menu. Everything else works.
@@ -68,9 +74,11 @@ folder, if a game needs one, is `%APPDATA%\oag\keys`.
    real PC. Choose "More info", then "Run anyway", only if you downloaded it
    from the project's own Releases page.
 2. *A black text window opens beside the game.* Leave it open. It prints
-   messages, and the project sends its log to a file as well.
+   messages, and the project sends its log to a file as well. (Expected from
+   how the program is built, a console program; not seen on a real PC.)
 3. *A window says "NO DISC IMAGE FOUND".* Your files are not in a folder the
-   window lists. It names the exact folder to use. Fix it, then start the game
+   window lists. It names the exact folder to use, written with `/` instead of
+   `\` (the screen's letters have no backslash). Fix it, then start the game
    again.
 
 ### macOS
@@ -212,7 +220,7 @@ the unpacked folder instead (see "For the curious").
 
 **A raw Vita `.pkg` file does not work yet.** Its files are locked with a key
 that only the Vita itself can make, and this project cannot carry that. If you
-give the game one it says so by name. What works today: a `.vpk` made from the
+give the game one by name on the command line it says so; dropped in a folder it is simply not listed. What works today: a `.vpk` made from the
 game installed on **your own** Vita (the tool for that is a Vita-side homebrew
 plugin called NoNpDrm; this guide does not cover it, and no real NoNpDrm
 `.vpk` was available to test, only a stand-in zip made from unpacked files).
@@ -273,7 +281,7 @@ their own data, but only Pulse is close to finished: see [status](status.md).
 | `NO DISC IMAGE FOUND` | Put the file in the folder the screen names (section 2). Check the ending: `.chd`, `.iso`, `.vpk`, or two `.pkg`. |
 | The game list has your file dim, `NEEDS DISC KEY` | An encrypted PS3 disc. Give it the key (section 3). |
 | Your Omega `.pkg` is not listed | You need **both** the base and the update in the same folder. |
-| A Vita `.pkg` | Not supported yet. Use a `.vpk` or unpacked folder. |
+| `NO DISC IMAGE FOUND`, but a `.pkg` is in the folder | Either a Vita `.pkg` (not supported yet: use a `.vpk` or unpacked folder) or an Omega base `.pkg` without its update `.pkg`. Neither is ever listed. |
 | No sound / no intro | No `ffmpeg`: the intro is skipped, the game still plays. |
 | Anything else | The log file has the detail: see "Where things are kept" below. Include it when you report a problem. |
 

@@ -502,6 +502,8 @@ fn the_desktop_not_found_screen_names_its_folder_and_fits() {
     for folder in ["/home/kid/.local/share/oag/images", long.as_str()] {
         let launcher = Launcher::not_found(not_found_notice_desktop(folder));
         assert!(launcher.pick().is_none());
+        let folder = folder.replace('\\', "/");
+        let folder = folder.as_str();
         let mut named = false;
         for draw in draw_list(&launcher) {
             if let Draw::Text { x, text, .. } = draw {
