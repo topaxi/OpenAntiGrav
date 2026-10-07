@@ -243,6 +243,40 @@ fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
     );
 }
 
+/// Android drops QUIT (a phone app is left, not quit); every other row stays.
+#[test]
+fn drop_quit_removes_only_the_quit_rows() {
+    let quits = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    Entry::Run {
+                        action: Action::Quit,
+                        ..
+                    }
+                )
+            })
+            .count()
+    };
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .map(|page| page.entries.len())
+            .sum::<usize>()
+    };
+    let full = built_in();
+    let mut android = built_in();
+    android.drop_quit();
+    assert!(quits(&full) > 0, "the built-in menu offers QUIT");
+    assert_eq!(quits(&android), 0);
+    assert_eq!(rows(&full) - rows(&android), quits(&full));
+}
+
 /// The mode row is supplied rather than spelled, so what it must agree with
 /// is `mode_choices`, not a list in the definition file.
 #[test]

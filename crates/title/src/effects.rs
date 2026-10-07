@@ -618,7 +618,7 @@ pub struct Looks {
     /// A launched weapon's laid-down pose, Pulse's own.
     pub laid_pose: Rule,
     /// The draws measured live on the PSP only: the hull's GE lights, the
-    /// bloom's glow mask, the quake, weather, track stats and intro camera.
+    /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
     pub measured_draws: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.

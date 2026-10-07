@@ -15,15 +15,31 @@ So a half-deflected stick (`0.5` as the game reads it) steers `18.75` on the ori
 affects every player's steering feel, and novice's airbrake threshold sits on
 the shaped value (`0.36` raw on the original, `0.1` of the port's shaped stick).
 
+2026-10-07, stick-curve lane: the modern titles' law is recovered (static).
+Omega, HD and 2048 all shape the stick per axis as zero below 0.1, then
+`(|v| - 0.1) * 100 / 0.9` linearly onto +/-100, no S-curve, pitch identical,
+and there is no stick sensitivity setting (only thrust, airbrake and motion).
+Evidence and the 0..1 table against Pulse and ours:
+[player-input.md](../../docs/ghidra/functions/ps4-omega-eu/player-input.md).
+Ours (0.15, rescaled, linear) already has that shape.
+
 ## Open
 
-- Whether to adopt the original's curve for the stick, as a default or an
-  `original` setting value (maintainer's call; it changes how every pad feels).
-- The pitch axis shaping, read but not measured.
+- **Decided 2026-10-07:** `STICK_DEADZONE` is now `0.1`, the modern titles' law
+  (our shape was already theirs). Still open: Pulse's curve as an `original`
+  value on Pulse only, if the maintainer ever wants it.
+- HD live check not done: the byte-to-float stage upstream of `PlayerInput`
+  (does HD zero a byte window like Omega's `Pad` layer, `/128` or `/127.5`)
+  needs the RPCS3 sweep written in
+  [the HD page](../../docs/ghidra/functions/ps3-hdfury-eu/player-input.md).
+- The Omega `Pad_Open` dead-zone bytes (`+0x10fc`) read as the controller's own
+  reported dead zones, confidence 60; the DS4 runtime value is unmeasured.
+- Pulse's pitch shaping is read, not measured.
 
 ## Next Steps
 
-1. Ask the maintainer whether the curve is wanted, and as what setting.
-2. If yes: apply it in `oag_input::pad` (the device layer), not in
+1. Ask the maintainer which of the three options above.
+2. If a change: apply it in `oag_input::pad` (the device layer), not in
    `oag_gameplay::ship_controls`, so keyboards and the touch stick choose for
-   themselves; test with the measured rows on the page above.
+   themselves; test with the table's rows.
+3. Optional: the RPCS3 HD sweep, to lift the Omega/HD reading past 84.

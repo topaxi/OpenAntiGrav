@@ -59,7 +59,7 @@ manifest, one library and the signature, nothing else.
 4. Launch "OpenAntiGrav". Logs: `adb logcat -s oag`, and the same lines with
    timestamps in `files/state/oag/logs/oag-game.log` (`adb pull`).
 
-From a checkout, `just deploy-android` does step 2 (it builds the APK first;
+From a checkout, `just deploy-android` does step 2 (it builds the APK first, arm64 only when the picked device is arm64 - the x86_64 library is for Waydroid alone;
 `--skip-build`, `--serial S`, `--dry-run`), and `just push-data android` does
 step 3: an fzf multiselect over every disc image, DLC zip, unpacked 2048 or
 Omega package and Pure's DLC key table, each row marked `on device`, `partial`
@@ -215,6 +215,11 @@ CONTROLS page treats Back as cancel, like Escape.
 Verified on Waydroid (`adb shell input keyevent 4`): from the RACE page Back went to
 the root (log line `system back`), at the root and at the Language Selection the
 process stayed alive, and in a race it opened the root menu over the parked race.
+
+There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
+the system's home or app switcher, not quit from inside, and the app is suspended
+(race paused) rather than ended. `menu::Definition::drop_quit` removes the row at
+boot (`main/prepare.rs`, `cfg!(target_os = "android")`); desktop keeps it.
 
 ### On-screen racing controls
 

@@ -101,12 +101,7 @@ const LEFT_RIGHT_LEFT: [u8; 3] = [1, 2, 1];
 /// The caller must have advanced [`ShipState::roll_tap_timer`] by this tick's `dt`
 /// ([`advance_tap_timer`]), so the timeout is measured from the *previous* tap to this one.
 pub fn record_tap(state: &mut ShipState, direction: TapDirection) -> Option<f32> {
-    if state.roll_tap_timer < INTER_TAP_TIMEOUT {
-        state.roll_taps[0] = state.roll_taps[1];
-        state.roll_taps[1] = state.roll_taps[2];
-    }
-    state.roll_taps[2] = direction as u8;
-    state.roll_tap_timer = 0.0;
+    shift_tap(state, direction);
 
     let matched = if state.roll_taps == RIGHT_LEFT_RIGHT {
         Some(1.0)
@@ -120,6 +115,18 @@ pub fn record_tap(state: &mut ShipState, direction: TapDirection) -> Option<f32>
         state.roll_taps = [0, 0, 0];
     }
     matched
+}
+
+/// Shifts one tap into [`ShipState::roll_taps`] and restarts the inter-tap timer, with no
+/// pattern test. What the original does for a tap while a roll is already armed
+/// ([`advance_gesture`], "One roll per flight").
+fn shift_tap(state: &mut ShipState, direction: TapDirection) {
+    if state.roll_tap_timer < INTER_TAP_TIMEOUT {
+        state.roll_taps[0] = state.roll_taps[1];
+        state.roll_taps[1] = state.roll_taps[2];
+    }
+    state.roll_taps[2] = direction as u8;
+    state.roll_tap_timer = 0.0;
 }
 
 /// Advances [`ShipState::roll_tap_timer`] by one tick. Call exactly once a tick, tap or not:
@@ -273,15 +280,22 @@ fn axis_zone(steer_x: f32) -> Option<TapDirection> {
 /// shield, and on `07_Track` and `16_Track` (never airborne) every charge bought nothing since
 /// [`release`] never ran.
 ///
+/// # One roll per flight
+///
+/// While either arm bit (`craft+0x860 & 0x100`/`& 0x80`, [`ShipState::roll_armed`]) is set the
+/// original branches past both pattern compares (`0x08846d14`-`0x08846d30` to `0x08846f58`):
+/// no match, no cost, no charge, no phase levelling. Taps still shift into the history, because
+/// that block runs before the branch. The bits clear only on the ground/air transitions
+/// ([`release`]) and not when the phase finishes, so a roll in progress and a *finished* roll
+/// in the same flight both refuse a new one. Confidence 95; `input-bindings.md`, "One roll per
+/// flight". The direct request obeys the same gate.
+///
 /// # A completed pattern levels the phase
 ///
-/// The original writes `0.0` to `+0x87c` on **any** completed alternation (`0x08846e5c`,
-/// `0x08846f54`), past the `cost < shield` test, so a refused gesture levels the ship as an
-/// accepted one does and a new roll starts level.
-/// The original writes `0.0` to `+0x87c` on **any** completed alternation
-/// (`0x08846e5c`, `0x08846f54`), on the far side of the `cost < shield` test,
-/// so a refused gesture levels the ship just as an accepted one does and a new
-/// roll always starts from level rather than from a previous roll's residue.
+/// The original writes `0.0` to `+0x87c` on a completed alternation **while unarmed**
+/// (`0x08846e5c`, `0x08846f54`), on the far side of the `cost < shield` test, so a refused
+/// gesture levels the ship just as an accepted one does and a new roll starts from level
+/// rather than from a previous roll's residue.
 pub fn advance_gesture(
     state: &mut ShipState,
     input: &ShipControls,
@@ -316,6 +330,13 @@ pub fn advance_gesture(
     } else {
         None
     };
+
+    if state.roll_armed {
+        if let Some(direction) = direction {
+            shift_tap(state, direction);
+        }
+        return false;
+    }
 
     if let Some(direction) = direction
         && let Some(sign) = record_tap(state, direction)

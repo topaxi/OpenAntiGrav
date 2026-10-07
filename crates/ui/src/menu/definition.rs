@@ -396,6 +396,24 @@ impl Definition {
         }
     }
 
+    /// Drops every QUIT row, for a platform whose apps are not quit from
+    /// inside (Android: the player leaves with the system's home or app
+    /// switcher, and the app is suspended, not ended). Same once-before-read
+    /// timing as [`Self::drop_unavailable_race_variant`].
+    pub fn drop_quit(&mut self) {
+        for page in &mut self.pages {
+            page.retain_rows(|entry| {
+                !matches!(
+                    entry,
+                    Entry::Run {
+                        action: Action::Quit,
+                        ..
+                    }
+                )
+            });
+        }
+    }
+
     /// Drops the RACE page's TEAM, VARIANT and TRACK rows on a title whose
     /// front end authors its own selection screens
     /// ([`oag_title::FrontEnd::race_box`]) - Wipeout Pulse, on both
