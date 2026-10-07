@@ -374,9 +374,9 @@ guessed locations as steps 4-6 above with `extracted/vita` standing in for
 `images`: `data/extracted/vita` under the current directory; beside the
 AppImage, both the directory itself (a package dropped straight in) and its
 own `extracted/vita` subdirectory; and `~/.local/share/oag/extracted/vita`.
-[`scripts/deploy-to-deck.sh`](../../scripts/deploy-to-deck.sh) syncs a
-checkout's `data/extracted/vita` to the last of those on the remote, so a Deck
-deploy finds it the same way it finds `data/images`.
+[`scripts/push-game-data.sh`](../../scripts/push-game-data.sh) (`just push-data deck`)
+copies a checkout's `data/extracted/vita` packages to the last of those on the
+remote, so a Deck finds them the same way it finds `data/images`.
 
 Wipeout Pure's PSN DLC packs need a key table to decrypt (see
 [ADR-0033](../architecture/adr/0033-external-key-material-for-decryption.md)),
@@ -387,9 +387,9 @@ directory beside whichever of `dlc_search_path()`'s locations holds the
 candidate - `data/keys/pure-dlc-keys.txt` under the current directory, beside
 the AppImage, or `~/.local/share/oag/keys/pure-dlc-keys.txt`. A missing file
 is not an error; Pure's packs are found and simply fail to decrypt, reported
-the same way an unrelated zip is. `scripts/deploy-to-deck.sh` syncs the one
+the same way an unrelated zip is. `scripts/push-game-data.sh` offers the one
 file (not the whole `data/keys/` directory, which also holds the unrelated
-Vita zRIF table) to the last of those three on the remote.
+Vita zRIF table) and copies it to the last of those three on the remote.
 
 The movie cache follows the same reasoning: `data/cache/movies` in a checkout
 (recognised by a `data/` directory existing), and `~/.cache/oag/movies`
@@ -442,35 +442,40 @@ Two structural points, because both are easy to get wrong later:
 
 ## Running it on a Steam Deck
 
-`just deploy-deck` (`scripts/deploy-to-deck.sh`) automates the copy: it builds
-`just appimage-portable`, then rsyncs (falling back to `scp` if the remote has
-no rsync) the AppImage onto the Deck's `~/Desktop`, whatever's under
-`data/images/`/`data/dlc/`/`data/extracted/vita/` onto
-`<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita}` there, the `.psarc` archives
-under `data/extracted/ps4/` (Wipeout: Omega Collection's extract, about 48 GB)
-onto `<XDG_DATA_HOME>/oag/extracted/ps4`, and, if present,
-`data/keys/pure-dlc-keys.txt` onto `<XDG_DATA_HOME>/oag/keys/pure-dlc-keys.txt`
-- the same places
-[`crates/source/src/source.rs`](../../crates/source/src/source.rs) and
-[`crates/source/src/dlc.rs`](../../crates/source/src/dlc.rs) already search, so
-nothing needs setting on the Deck side to find them.
+`just deploy-deck` (`scripts/deploy-to-deck.sh`) builds
+`just appimage-portable` and rsyncs (falling back to `scp` if the remote has no
+rsync) the AppImage onto the Deck's `~/Desktop`. It copies no game data.
 
-It copies only what `oag-game` reads, because a Deck's disk is small. Raw
-packages (`*.pkg`, and their `*.sha256`) stay behind in both `data/images/` and
-`data/dlc/`, since the game reads the extracts and never a package; so do the
-encrypted `hdfury-ps3-eu.iso` and its `.dkey`. From the Omega extract only the
-nine `.psarc` archives `oag_omega` mounts go over, not `eboot.bin`,
-`sce_sys/`, `sce_module/` or the disc maps. A Deck that has none of Omega's
-archives does not list Omega in the launcher: `ps4_search_path()` in
-`crates/source/src/source.rs` offers it only when
-`extracted/ps4/omega-eu-patch/uroot/data09.psarc` exists.
+`just push-data deck` (`scripts/push-game-data.sh`) does the data, one row per
+thing in an fzf multiselect: each disc image under `data/images/`, each DLC zip
+under `data/dlc/`, each unpacked 2048 package under `data/extracted/vita/`, each
+Omega package under `data/extracted/ps4/` (its `.psarc` archives only - the nine
+`oag_omega` mounts, not `eboot.bin`, `sce_sys/`, `sce_module/` or the disc maps;
+the base extract alone is about 41 GB), and `data/keys/pure-dlc-keys.txt`. Each
+row is marked `on device`, `partial` (some files missing or a different size) or
+`-`, from one `find`/`stat` of the remote. Selected rows go to
+`<XDG_DATA_HOME>/oag/{images,dlc,extracted/vita,extracted/ps4,keys}` there - the
+same places [`crates/source/src/source.rs`](../../crates/source/src/source.rs)
+and [`crates/source/src/dlc.rs`](../../crates/source/src/dlc.rs) already search,
+so nothing needs setting on the Deck side - and only missing or changed files are
+copied. Nothing on the device is deleted. `just push-data android` is the same
+picker for a phone ([android.md](android.md)).
+
+Only what `oag-game` reads is offered, because a Deck's disk is small. Raw
+packages (`*.pkg`, and their `*.sha256`) are never offered, since the game reads
+the extracts and never a package; nor are the encrypted `hdfury-ps3-eu.iso` and
+its `.dkey`. A Deck that has none of Omega's archives does not list Omega in the
+launcher: `ps4_search_path()` in `crates/source/src/source.rs` offers it only
+when `extracted/ps4/omega-eu-patch/uroot/data09.psarc` exists.
 
 ```sh
 just deploy-deck                    # deck@steamdeck, or $OAG_DECK_HOST
 just deploy-deck user@host          # a different target
 just deploy-deck --dry-run          # show the plan, change nothing
 just deploy-deck --skip-build       # sync an AppImage already built
-just deploy-deck --no-data          # AppImage only
+just push-data deck                 # pick game data, see what is there
+just push-data deck user@host 'images/pulse-*' 'dlc/*'   # no picker
+just push-data deck --dry-run       # pick, then only list what would go
 ```
 
 Deployment itself is not yet verified on real hardware - `--dry-run` first is

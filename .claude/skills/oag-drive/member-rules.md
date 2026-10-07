@@ -29,6 +29,10 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   RADV cannot present on Xvfb (no DRI3) and draws black frames, so a windowed
   `oag-game` there also needs software Vulkan:
   `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`. Expect 5-7 fps.
+  Before starting a display server on `:9N`, check it is free
+  (`test -e /tmp/.X11-unix/X9N || test -e /tmp/.X9N-lock` means taken): `:95` is
+  the maintainer's own xwayland-satellite (2026-10-07). If your assigned number
+  is taken, pick the next free one and tell the lead.
 - **`--race` skips the front end.** Anything built by the front-end flow
   (the EndRace screens, campaign state) never exists in a `--race` run. Walk
   the menus instead, or use `--menu-page` for a still.

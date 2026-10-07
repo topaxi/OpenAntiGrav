@@ -54,6 +54,16 @@ manifest, one library and the signature, nothing else.
 4. Launch "OpenAntiGrav". Logs: `adb logcat -s oag`, and the same lines with
    timestamps in `files/state/oag/logs/oag-game.log` (`adb pull`).
 
+From a checkout, `just deploy-android` does step 2 (it builds the APK first;
+`--skip-build`, `--serial S`, `--dry-run`), and `just push-data android` does
+step 3: an fzf multiselect over every disc image, DLC zip, unpacked 2048 or
+Omega package and Pure's DLC key table, each row marked `on device`, `partial`
+or `-`, copied into `files/data/oag/`, the app's `XDG_DATA_HOME` (both that and
+`files/data/images` are searched). Only missing or changed files go over; globs
+skip the picker (`just push-data android 'images/pulse-psp-*'`). See
+[packaging.md](packaging.md#running-it-on-a-steam-deck) for what is and is not
+offered.
+
 ## How it is wired
 
 - **Entry.** `crates/game/src/main.rs` carries `android_main`, and Cargo builds the

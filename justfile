@@ -576,11 +576,25 @@ appimage-deck *ARGS:
 install-desktop-file *ARGS:
     ./scripts/install-desktop-file.sh "$@"
 
-# Build the portable AppImage and copy it, plus what oag-game reads out of
-# data/images, data/dlc, data/extracted/{vita,ps4} (no raw .pkg), onto the Steam Deck (or any host reachable over ssh) - see
+# Build the portable AppImage and copy it onto the Steam Deck (or any host
+# reachable over ssh); no game data - that is `just push-data deck`. See
 # docs/tools/packaging.md#steam-deck and scripts/deploy-to-deck.sh
 deploy-deck *ARGS:
     ./scripts/deploy-to-deck.sh "$@"
+
+# Build the APK and `adb install -r` it; no game data - that is
+# `just push-data android`. See docs/tools/android.md and
+# scripts/deploy-to-android.sh
+deploy-android *ARGS:
+    ./scripts/deploy-to-android.sh "$@"
+
+# Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
+# keys) in an fzf multiselect, each row marked as already on the device or not,
+# and copy it: `just push-data deck [user@host]` or `just push-data android`.
+# Globs instead of the picker: `just push-data android 'images/pulse-psp-*'`.
+# See scripts/push-game-data.sh
+push-data *ARGS:
+    ./scripts/push-game-data.sh "$@"
 
 # Run the tick loop with no renderer, no window and no disc, and print its hash
 headless-sim *ARGS:
