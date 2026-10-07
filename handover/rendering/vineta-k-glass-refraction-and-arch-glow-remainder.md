@@ -9,10 +9,8 @@
 - `accumulates`' per-lane taint reaches 20 of 28 circuit models (`hd_add_second_census.rs`); only Talon's Junction `03` has a reference. Take a frame of Modesto Heights or Amphiseum at a matched pose.
 - **The scenery beyond the glass, measured further (2026-10-07, `hd-glass-opus`; visibility.md and rcsmaterial.md
   section 3):** (a) the alternate fog is selected per chunk by render flag `0x20` (35/35, 76/76), **not wired**;
-  (b) the ceiling "extra meshes" are kind-1 chunks 16-18, 55, 1315, 1317-1321, which the original culls with a frustum
-  built from the authored fov 60 while it draws the picture at 4/3 the tangent (75.2 degrees). Ours draws HD at 60
-  degrees. Closing it needs HD to draw 4/3 wider and cull at the authored fov, which is a camera change (go/no-go
-  asked of the lead). Also: ours draws every PVS-allowed node-placed chunk (197) without a frustum test; the
+  (b) the ceiling "extra meshes" are chunks with render flag `0x10`, which the original draws only into a 640x360
+  behind-the-glass target (4/3 wider projection) that the glass samples, never in the main view. Also: ours draws every PVS-allowed node-placed chunk (197) without a frustum test; the
   original tests each one's runtime world sphere.
 - **The sea sheet** (`water_test_2`, `y = -50.8`, seen from below) is now `vertex colour * (ambient + sun * N.L)` (it drew white).
   `paraboloidReflectionTex` is a **runtime 512x256 dual-paraboloid render of the environment** (sky above the middle row, teal

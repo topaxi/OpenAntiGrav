@@ -2855,21 +2855,22 @@ draw by draw on the pose-A capture, each draw tied to its chunk by vertex offset
 of both kinds, and could not see it. Not wired. See
 [visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07.
 
-**(b) The meshes ours draws on the tunnel ceiling are culled by the original's frustum, which is narrower than
-its picture (confidence 85; 2026-10-07, `hd-glass-opus`; supersedes the "unexplained" reading).** Tied draw by draw
-to chunks, the original submits **51 track chunks** at pose A and this project 255. The kind-1 chunks it skips
-(16-18, 55, 1315 and 1317-1321: `and_metalstruts_pt2`, `and_metal_struts`, `and_metalshine2`, `and_bubbles`,
-`mar_col_rim3`, `and_girder3`, one column of struts and girders at `(-695..-728, y -112..-152, z 282..314)`)
-pass the PVS and lie inside the drawn picture. The engine's cull planes are built from the authored
-`<ExternalCameraFar fov="60">` (live: 30 degrees vertical, 45.7 horizontal half-angles), and the picture is drawn
-4/3 wider in tangent (75.2 degrees vertical). The column sits in the ring between the two, at the left edge, so the
-original never submits it. Rendering ours from the original's exact eye at 75.2 degrees shows the column through
-the upper-left glass where the original shows teal (`data/scratch/hd-glass-opus/cmp_camA.png`). **They are not
-light helpers**: ordinary main-list materials (`lambertzeroalpha`, `jd_simplespecular`, `lambert_simple`). Chunks
-1305 and 1286, named here before by texture, are node-placed and sit at the origin in both games (the original's
-live world sphere and ours agree); they were never the ones on screen. Ours also draws all 197 node-placed chunks
-the PVS allows with no frustum test, against the original's 5 or 6. The law, the live read and the score are on
-[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07.
+**(b) The meshes ours draws on the tunnel ceiling are behind-the-glass scenery, which the original never draws in
+the main view (confidence 88; 2026-10-07, `hd-glass-opus`; supersedes the "unexplained" reading).** Every chunk whose
+render flag has `0x10` is drawn only into a **640x360 target** (VRAM `0xC1E50000`, 16-bit colour), together with the
+sky, under a projection 4/3 wider in tangent than the main view (75.2 degrees against 60); the tunnel glass reads
+that target at its own position (its draw carries both matrices, `c[256]` main and `c[260]` the target's). 39 of 39
+640-wide draws are `0x10` chunks and 84 of 84 main-view draws are not, with no exception in three captures (370
+draws). This project draws them in the main view, so they show at full resolution through and around the glass:
+chunk 1574 (`and_metal_struts`, the dark curved band across the ceiling, 76 units away), 1320 (`and_girder3`),
+1315/1317-1321 (`and_metalshine2`, `and_bubbles`, `mar_col_rim3`), 55 and 16-18 (`and_metal_struts`,
+`and_metalstruts_pt2`) are all `0x10`. **They are not light helpers**: ordinary materials (`lambertzeroalpha`,
+`jd_simplespecular`, `lambert_simple`). Chunks 1305 and 1286, named here before by texture, are node-placed and sit
+at the origin in both games; they were never on screen. The flag occurs on Vineta K only (420 chunks). Of the five
+the earlier capture named, ours draws 1305/1286 at the origin and 1311 off-screen, so the on-screen extras are the
+`0x10` set above. The law and the score are on
+[visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07. Separately, ours draws all 197
+node-placed chunks the PVS allows with no frustum test, against the original's 5 or 6.
 
 ### 4. Lineage
 

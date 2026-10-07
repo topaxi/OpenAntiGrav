@@ -405,7 +405,7 @@ surface is submitted to.
 reading a field. Confidence 85, and it closes `rcsmodel`'s old note that the
 byte counts chunks.
 
-## 2026-10-07, `hd-glass-opus`: the main view culls at the authored fov and draws wider
+## 2026-10-07, `hd-glass-opus`: the frustum cull, and the behind-the-glass target that chunk flag `0x10` draws into
 
 Run against a live RPCS3 frame at the Vineta K tunnel pose (`place --pose=-839.8,-146.6,215.0`, kept
 `-840.6,-146.7,214.2`), with guest memory read while the target was paused
@@ -453,22 +453,28 @@ Confidence 85 on the routing (both branches read in the disassembly), 80 on the 
    The builder's aspect argument is a TOC float picked by the byte at `0x00938998` (`8/9` when set, `32/9` when
    clear); the byte read `0` and the planes are 16/9, so how that argument becomes the planes' aspect is **not
    understood**.
-3. **The picture is drawn about 4/3 wider in tangent than the cull.** The frame's vertex constants
-   `c[256..259]` give `sy = 1.29923` and `sx = 0.73082` (`sx/sy = 9/16`): a vertical half-tangent of `0.7697`,
-   that is `4/3 * tan 30` (`1.29923 = 0.75 * cot 29.996`). Both axes carry the same 4/3. Two captures at the same
-   pose and near-zero speed; whether the ratio holds at speed, where the fov widens, is **not measured**. Where
-   the 4/3 enters the projection is not located. Confidence 80 for this pose.
+3. **Chunk render flag `0x10` sends a chunk to a second target, not to the main view** (confidence 88). The
+   frame renders in two places: draws with surface clip `0x280 x 0x168` go to a **640x360** target at VRAM
+   `0xC1E50000` (format word `0x123`, pitch `0x500`), the rest to the 1280x720 frame. The 640x360 pass is the sky plus
+   every drawn chunk whose `Mesh::render_flags` has `0x10`, drawn with a projection **4/3 wider in tangent** than the
+   main view (`c[256]` `sy = 1.29923 = 0.75 * cot 29.996`, 75.2 degrees vertical, against the main view's
+   `1.7323`, 60 degrees). Tied draw by draw to chunks: 39 of 39 640-wide draws are `0x10` chunks and 84 of 84
+   frame draws are not (boot 6); 39/82 (boot 1); 15/191 at the start slot (boot 7). No exception in 370 draws.
+   The flag is block bit 4, which `Scene_SortAndLightVisibleChunks` routes to bucket B3 (`FUN_003fc140`) instead of
+   B1 (zone-effectsettings-loader.md, twenty-ninth and thirtieth passes): **B3 is this pass**. The tunnel glass
+   (`mt_tunnelrefraction`, chunk 1616, draws 96-97) carries the main view in `c[256]` and the 75.2-degree matrix in
+   `c[260]`, so it reads the target at its own position under the target's projection. The flag occurs on
+   Vineta K only (420 chunks on the disc). Which texture unit the glass binds the target at is not read here.
 
 ### What it predicts, and the score
 
 The rule "nearest-cell PVS of the camera, then the live planes, kind-1 by record box, kind-2 by live sphere"
 against the chunks the captured frame draws (`py/predict.py`, `py/fit.py`):
 
-- **Kind-1, boot 6:** 44 of 44 drawn chunks kept, and every culled chunk culled but one. Scaling the frame's
-  own projection horizontally, the fit is exact between 1.36 and 1.38 times; with the live planes the culled set
-  is chunks 16, 17, 18, 55, 1315, 1317-1321 (the copper strut and girder column at `(-695..-728, -112..-152,
-  282..314)`) plus speed pad 1749. They sit in the ring between the cull frustum and the drawn picture: NDC x
-  `-0.75..-1.0` at the left edge. The one residual is pad 1749, inside the planes by 0.3 (sphere) to 3.3 units (box) in boot 1's
+- **Kind-1, boot 6:** 44 of 44 drawn chunks kept, and every culled chunk culled but one. With the live planes
+  the culled set is chunks 16, 17, 18, 55, 1315, 1317-1321 (a strut and girder column at `(-695..-728,
+  -112..-152, 282..314)`, all `0x10` chunks, so behind-glass scenery) plus speed pad 1749: just off the main
+  view's left edge, inside the wider behind-glass projection, which is culled with the main view's planes. The one residual is pad 1749, inside the planes by 0.3 (sphere) to 3.3 units (box) in boot 1's
   dumps, whose draw stream is a later frame than the planes; not scored.
 - **Kind-2:** the original draws 5 or 6 node-placed chunks at this pose (818, 1316, blimps 1738-1743); this
   project draws every node-placed chunk the PVS allows (197) without a frustum test, because each one's
@@ -485,7 +491,7 @@ is now measured: at this pose the original submits 51 track chunks, this project
 - **What opcodes `0x12`, `0x16` and `0x03` are**, and what the third
   (neither-1-nor-2) chunk kind would do. No chunk on the disc takes it.
 - ~~Whether `r31+0x100` is the craft or the camera (55).~~ The camera, measured live 2026-10-07 (above).
-- Where the drawn projection's 4/3 enters, whether it holds at speed, and who rewrites the kind-2 spheres.
+- Where the behind-glass projection's 4/3 enters, whether it holds at speed, and who rewrites the kind-2 spheres.
 - The five other callers of `Pvs_NearestCellCached`: `0x003e63c0`, `0x003e9660`,
   `0x00401ba8`, `0x00402a88`, `0x004053e0`.
 - The `.probes` loader at `0x003c4d78`, unexamined.
