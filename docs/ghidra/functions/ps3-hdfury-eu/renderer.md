@@ -7385,3 +7385,17 @@ candidate for the same multiply and has no capture to measure it against
 (**not checkable**). Omega re-ships 2048's circuits and reads 2048's reader,
 so the same key set is expected; no PS4 `.EnvSettings` is extracted here, so
 that is not read directly.
+
+### The sky draw path read end to end: no factor of two in it, and `Sky colour` is not the whole word (2026-10-07, `hd-sky-law`)
+
+**Question.** Where does the factor of two between the `Sky colour` byte and the sky's brightness come from, and does `byte / 128` hold on Sebenco Climb (also 255)?
+
+**Read in the executable.** `Sky_DrawCube` (`0x005ecc28`, confidence 65) runs `Sky_SetCubeFaces` (`0x005ec3e0`, confidence 65), which sets the prim-list state (`0x005e5770(ctx, 0)`), binds one texture handle per face (`0x005e5858` on `+0xc/+0x18/+0x8/+0x14/+0x10/+0x1c`) and pushes six quads through `0x005e8cf0` -> `0x005e8a40` -> vertex push `0x005e8738`. The push stores position (3 floats), uv (2 floats) and the colour **word as a plain u32 at vertex +0xc** (`stw r31,0xc(r9)`): no scale, no unpack, no HDR. The blend mode the draw selects is state `+0x2c = 0`, and handler 0 (jump table `0x005e5e04`, entry `0x005e5e7c`) only writes method `0x310 = 0` (blend disabled). The colour is therefore exactly the authored byte over 255 as a normalised vertex colour, written straight to the target. **No draw-path stage supplies a factor of two.**
+
+**The low byte is not unused.** Before the call (`0x003ad5fc`-`0x003ad660`) the word's low byte is converted to a float `f30`, multiplied by a global float `c` read through the TOC (`f30 = f30 * c; f31 = c * f30`), truncated with `fctiwz`/`stfiwx` to the local at `+0x5c4`, and its low byte `+0x5c7` replaces the word's low byte. So the written alpha is `(int)(c * c * lowbyte) & 0xff`, and the normal branch writes alpha (`Rsx_SetColorMask(1,1,1,1)`; the Zone branch uses `1,1,1,0`). Every `HDR and Bloom` block carries `Bloom from alpha contribution` (Sol 2 2.5, Sebenco 2.0, Talon's 3.0), so the sky's alpha is a bloom source. The value of `c` and the bloom program's read of framebuffer alpha are **not read**. The authored low byte of `Sky colour` is 0 on Talon's, Sol 2 and Sebenco, so alpha is 0 on those three.
+
+**What this leaves.** If the factor of two is real it is downstream of the draw (the target's encoding or the tone stage), which would also explain why Talon's (0.5 as a vertex colour) matches untinted. That reading is **not verified**: the sky `byte / 128` stays labelled chosen-not-measured (no confidence score).
+
+**Sebenco, re-read.** The earlier "75 % clipped vs 100 %" number is not clean: `data/scratch/hd-sebenco/runs/fw_1_on.png` against `ref2/01.png` differ in camera height and ship placement (the cube mask is a corner patch behind buildings), and the mask comes from our render, so reference pixels under it can be non-sky. At untinted 0.79 a 1.6x and a 2.0x tint both clip, so the frame cannot tell them apart. Not a measurement against the law; a matched frame on a darker 255 sky is still needed. Nothing was fitted per circuit.
+
+**Other titles.** 2048 and Omega: **checked, differs in key** (`Sky brightness`, no `Sky colour`); the draw path above is HD's `Scene_PrepareFrame`, so it says nothing about the 2048 dome: **not checkable** without a 2048 capture.
