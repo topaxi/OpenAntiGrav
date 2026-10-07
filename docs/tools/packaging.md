@@ -582,4 +582,10 @@ A rolling pre-release, rebuilt from `main` once a day by
   the job falls back to a throwaway key. Its `versionCode` is the build's UTC time as
   `yydddHH`, the same rule `scripts/build-apk.sh` uses locally, so whichever APK was
   built later always installs; a run number would not do that, since local builds
-  have none.
+  have none. `nightly.yml` calls `release.yml` with `secrets: inherit`; a called
+  workflow gets no secrets otherwise, which is why the first nightly skipped the key.
+- **The container-built binary never runs on the runner.** It links libpipewire,
+  which an `ubuntu-latest` runner lacks, so `build-appimage.sh --container` writes
+  the icon inside the image and the tarball step copies that icon from the AppDir.
+  The Android job installs libpipewire-dev because `build-apk.sh` builds and runs the
+  host `oag-game` for the launcher icons.
