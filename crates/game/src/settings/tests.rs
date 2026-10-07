@@ -727,3 +727,35 @@ fn the_log_section_survives_a_rewrite_as_written() {
         assert_eq!(written.contains("file ="), file.is_some(), "{written}");
     }
 }
+
+/// An unreadable settings file (an Android reinstall restoring the app's
+/// files under another owner) must not stop the boot: defaults, no write.
+#[cfg(unix)]
+#[test]
+fn an_unreadable_settings_file_boots_on_defaults() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("oag-settings-unreadable-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let file = dir.join("settings.toml");
+    std::fs::write(&file, "[graphics]\nanisotropy = \"4x\"\n").expect("write");
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).expect("chmod");
+    let unreadable = std::fs::read_to_string(&file).is_err();
+    let loaded = load_from(&file);
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).expect("chmod back");
+    let after = std::fs::read_to_string(&file).expect("read back");
+    std::fs::remove_dir_all(&dir).ok();
+    if !unreadable {
+        return; // running as root: the mode bits do not bind
+    }
+    assert!(
+        loaded
+            .expect("a permission error is not fatal")
+            .graphics
+            .anisotropy
+            == Settings::default().graphics.anisotropy
+    );
+    assert!(
+        after.contains("4x"),
+        "the unreadable file must not be overwritten"
+    );
+}
