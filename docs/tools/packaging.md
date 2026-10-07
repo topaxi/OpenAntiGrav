@@ -547,3 +547,33 @@ Nothing here is automated, and nobody but the maintainer pushes to the AUR.
 3. For `openantigrav-git`, the same with `ssh://aur@aur.archlinux.org/openantigrav-git.git`;
    run `makepkg --printsrcinfo > .SRCINFO` after a build so `pkgver` is current.
    It needs no update per release.
+
+## Nightly builds
+
+A rolling pre-release, rebuilt from `main` once a day by
+`.github/workflows/nightly.yml`. Download it from
+`https://github.com/<owner>/OpenAntiGrav/releases/tag/nightly`.
+
+- **When.** Cron `0 1 * * *` (UTC): 03:00 CEST in summer, 02:00 CET in winter, so
+  it always lands in the 02:00-03:00 CET window. GitHub may start a scheduled
+  run late or drop one, schedules fire from the default branch only, and GitHub
+  pauses them after 60 days with no repository activity. A manual run from the
+  Actions tab (`Nightly`, optional `force`) works any time.
+- **Skip rule.** A first job reads the `nightly` tag through the API. If it
+  already points at `main`'s HEAD, nothing is built and the run ends in seconds;
+  `force` overrides that.
+- **What a run does.** Calls `release.yml` (the same Linux AppImage and tarball,
+  Steam Deck AppImage and Windows zip jobs, and the same `check-leakage.py --dir`
+  audit of each artifact), then moves the `nightly` tag to the commit, creates or
+  updates a **pre-release** (not a draft, never "latest"), uploads the new files
+  and only then deletes the old ones, so a failed upload leaves yesterday's files.
+- **Names and version.** `OpenAntiGrav-nightly-<yyyymmdd>-<sha7>-<platform>.<ext>`
+  plus `SHA256SUMS`. The binary reports `0.1.0-nightly (<sha7>)` in `--version`
+  and the log header: the workflow sets `OAG_VERSION_SUFFIX=-nightly`, which
+  `crates/game/build.rs` embeds (`oag_game::BUILD_VERSION`) and
+  `scripts/build-appimage.sh` forwards into the container. A tagged release
+  leaves it unset.
+- **Unsigned and unstable.** Built from whatever `main` holds, with no manual
+  testing. Use a tagged release for anything that matters.
+- **No Android APK yet.** The `android` job is skipped for a nightly; only a `v*`
+  tag builds it.

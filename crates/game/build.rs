@@ -35,6 +35,11 @@ fn main() {
         .or_else(git_hash)
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=OAG_GIT_HASH={hash}");
+    // The nightly workflow passes `-nightly`, so `oag-game --version` reads
+    // `0.1.0-nightly (abc1234)`. Unset, it is empty and a release is unchanged.
+    println!("cargo:rerun-if-env-changed=OAG_VERSION_SUFFIX");
+    let suffix = std::env::var("OAG_VERSION_SUFFIX").unwrap_or_default();
+    println!("cargo:rustc-env=OAG_VERSION_SUFFIX={suffix}");
 }
 
 /// The short commit hash of whatever `HEAD` is in the workspace this crate is

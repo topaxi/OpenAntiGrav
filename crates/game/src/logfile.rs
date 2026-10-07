@@ -40,8 +40,9 @@ pub fn header(
     };
     vec![
         format!(
-            "oag-game {} ({profile} build, git {}) on {} {}",
+            "oag-game {}{} ({profile} build, git {}) on {} {}",
             env!("CARGO_PKG_VERSION"),
+            env!("OAG_VERSION_SUFFIX"),
             env!("OAG_GIT_HASH"),
             std::env::consts::OS,
             std::env::consts::ARCH

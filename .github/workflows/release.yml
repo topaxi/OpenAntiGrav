@@ -7,11 +7,21 @@ name: Release
 # run builds and uploads the same artifacts as workflow artifacts (so a branch
 # can be tried without tagging) and never creates a GitHub Release; the
 # `release` job at the bottom runs for a tag only.
+#
+# nightly.yml calls this workflow with `nightly: true`: the same Linux, Deck and
+# Windows jobs, a `nightly-<date>-<sha7>` version, `-nightly` in `oag-game
+# --version`, and no Android job (not in the nightly yet).
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      nightly:
+        description: "A nightly build: dated version, -nightly suffix, no Android"
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -26,12 +36,19 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      suffix: ${{ steps.v.outputs.suffix }}
     steps:
       # `v0.1.0` becomes `0.1.0`; a manual run is `dev-<sha7>` so a trial build
-      # can never be mistaken for a release.
+      # can never be mistaken for a release. A nightly is `nightly-<date>-<sha7>`
+      # and its binaries report `-nightly` (OAG_VERSION_SUFFIX, see build.rs).
       - id: v
+        env:
+          NIGHTLY: ${{ inputs.nightly }}
         run: |
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+          if [[ "$NIGHTLY" == "true" ]]; then
+            echo "version=nightly-$(date -u +%Y%m%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "suffix=-nightly" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
             echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -60,6 +77,7 @@ jobs:
             cpu_args: "--target-cpu znver2"
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
     steps:
       - uses: actions/checkout@v4
       - name: Build the AppImage in the bookworm container
@@ -122,6 +140,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: cargo build --release -p oag-game
+        env:
+          OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
       - name: Stage the zip
         shell: bash
         run: |
@@ -151,6 +171,7 @@ jobs:
   android:
     name: android (arm64)
     needs: version
+    if: ${{ !inputs.nightly }}
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.version.outputs.version }}
