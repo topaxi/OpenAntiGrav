@@ -28,9 +28,11 @@
 #                refuses to start on a CPU without AVX2/FMA/BMI2. See
 #                docs/tools/packaging.md, "A CPU-tier build".
 #   --binary     Package a binary built elsewhere. Implies --skip-build. Must
-#                run on this host: the icon step below now invokes it
-#                directly (--write-icon), so a binary for another OS/arch
-#                needs its icon supplied some other way.
+#                run on this host: the icon step below invokes it directly
+#                (--write-icon), so a binary for another OS/arch needs its
+#                icon supplied some other way. A --container build runs the
+#                icon step inside the container instead, because the binary
+#                links libpipewire and the host may not have it.
 #
 # Environment:
 #   APPIMAGETOOL      appimagetool to use. Default: downloaded into data/tools/.
@@ -138,6 +140,9 @@ Build natively instead and mind the glibc floor this script prints."
     # Only when set, so a baseline build's environment is the one it always had.
     [[ -n $rustflags ]] && engine_args+=(-e "RUSTFLAGS=$rustflags")
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
+    # The icon step below runs the built binary in the same image.
+    icon_args=(--rm -v "$project_root:/src" -w /src)
+    [[ $engine == docker ]] && icon_args+=(--user "$(id -u):$(id -g)")
 
     "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
         bash -c 'ldd --version | head -1 && cargo build --release -p oag-game'
@@ -188,7 +193,17 @@ install -m 644 "$app_dir/oag-game.desktop" \
 # taskbar icon a packaged build installs and the one the window shows at
 # startup can never drift apart the way the old hand-drawn chevron did. See
 # `oag_game::icon` and docs/tools/packaging.md.
-"$binary" --write-icon "$app_dir/oag-game.png" --icon-size 256
+if (( container )); then
+    # The binary was linked against the container's libpipewire, which a CI
+    # runner (or any host without PipeWire) lacks: run it where it was built.
+    # Both paths are under the mounted checkout, so the same relative paths
+    # hold inside.
+    "$engine" run "${icon_args[@]}" "$CONTAINER_IMAGE" \
+        "/src/${binary#"$project_root"/}" --write-icon \
+        "/src/${app_dir#"$project_root"/}/oag-game.png" --icon-size 256
+else
+    "$binary" --write-icon "$app_dir/oag-game.png" --icon-size 256
+fi
 install -m 644 "$app_dir/oag-game.png" \
     "$app_dir/usr/share/icons/hicolor/256x256/apps/oag-game.png"
 # appimagetool takes .DirIcon as the thumbnail; a copy rather than a symlink so
