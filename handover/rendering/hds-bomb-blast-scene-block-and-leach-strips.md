@@ -52,6 +52,16 @@ findings in `weapons.md` last section. Open from it:
   follows, ours is shoved to 50 km/h and the sim carries no further impulse, so frames after age
   0.5 s need the owner's own motion (the camera pose is fixed per run).
 
+## 2026-10-07 (`hd-weapon-fx`): LeachBeam strips, one more read
+
+`0x00153218` is not a draw: it is the beam's reset (`strip_init(+0x6420); strip_init(+0x50); balls
+(+0xc820); +0xc938 = 0`). The strip class initialises through `0x002a4d58(this, 300, 3)`: 300 samples
+times 3 (a three-fin tube like the engine trail's, 72-byte records, buffers allocated in the SPU-visible
+heap, `+0x70/+0x74/+0x80/+0x84` double-buffered), so the geometry is **SPU-extruded** like the engine
+trail, and a faithful strip needs the same treatment `engine-trail.md` had: dump the buffers of a live beam
+and fit. A beam needs a LeachBeam held and a rival in range, which this lane did not obtain
+(states 3 and 10 gave nothing at the grid). Not started past that read.
+
 ## Next Steps
 
 1. Read what `0x00153218`'s strips are drawn with, then build them beside the

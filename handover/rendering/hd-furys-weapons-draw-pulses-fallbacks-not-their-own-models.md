@@ -168,6 +168,19 @@ The executable's own load-path strings name every model above
   `HD_Mine_halo`/`HD_bomb_*` have neither a load order nor a placement read.
   Next: the manager's per-tick walker on the hit path.
 
+## 2026-10-07 (`hd-weapon-fx`): the Missile's pool measured on two boots, not wired
+
+`weapons.md` last section and `rpcs3-capture.md`, "Polling guest memory live". The pool is entered
+only when a missile reaches a craft (never on a wall), lives 1.0 s (age field `p` linear 0 to 1, point
+light `(1 - p)^2`, conf 80), and plays the model's own keys. Original film with a known firer
+(`m5`): white-out at 9.67-10.0 s of video, the rival's hull inside it. The three material programs
+are read (core: texture times vertex colour; rays: Fresnel shell; shockwave: ramp lookup on
+`Shockwave_scalar`). **Not wired**; remaining: the rays and shockwave programs in `shade.wesl`/
+`rim_glow.rs` (the shape `BOMB_FIRE`/`BOMB_SHOCK` took), one drawable per live blast with its own
+`write_node_anims` clock, a render-side hook at `ignite_blast` for `Missile` with `struck.is_some()`
+on HD (`struck` already is the craft), then a pair against `m5`'s frames with the camera pinned
+as `hd-bomb-match` did. `scripts/rpcs3-mem-poll.py --behind-rival` reproduces the hit.
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
