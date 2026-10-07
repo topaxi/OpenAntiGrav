@@ -10,7 +10,8 @@
 //!
 //! The classifier is by what the resolved program does, not by name: it
 //! declares the paraboloid probe, at least one other sampler is decoded as a
-//! normal, and no declared sampler besides the lightmap is read as a colour.
+//! normal, no declared sampler besides the lightmap is read as a colour, and
+//! the baked-lightmap lighting formula is absent.
 
 use oag_rcs::rcsmaterial::fragment::Program;
 use oag_rcs::{rcsmaterial, rcsmodel};
@@ -29,9 +30,21 @@ pub(super) const PARABOLOID: u32 = 0x9edd_3243;
 #[allow(dead_code)]
 pub(super) const PER_MATERIAL_ENV_MAP: u32 = 0x8365_b1f3;
 
+/// The two parameters the baked-lightmap lighting formula patches
+/// (`pow(lightmap.rgb, 0x002c73e8) * 0x8670f0be + ...`,
+/// `docs/rendering/pads.md`). A water program is not lit by the baked atlas;
+/// a glass or tinted surface that reads a normal map and the paraboloid probe
+/// **is** (`ds_booth_glass`, `mesh_colour_constant`: both match every other
+/// fact below and both declare these two), so they keep their generic reading.
+const LIGHTMAP_FORMULA: [u32; 2] = [0x002c_73e8, 0x8670_f0be];
+
 /// Whether a resolved program is the water shape described above.
 pub(super) fn is_water(declared: &rcsmaterial::Declared, program: &Program) -> bool {
-    if !declared.samplers.iter().any(|&(h, _)| h == PARABOLOID) {
+    if !declared.samplers.iter().any(|&(h, _)| h == PARABOLOID)
+        || LIGHTMAP_FORMULA
+            .iter()
+            .any(|h| declared.parameters.contains(h))
+    {
         return false;
     }
     let others = || {
