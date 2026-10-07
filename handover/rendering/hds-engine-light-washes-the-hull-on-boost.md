@@ -154,3 +154,7 @@ What would falsify "the original's hull has weight zero here": a frame of the
 original, player's own light at `360`, with the rear panels flat white. What
 would name the law: the `EdgeGeom` read in step 1 reproducing the clean hull
 from the captured light record and the hull's own vertices.
+
+## 2026-10-07 hd-hull-wash (partial)
+
+Second boot of the original on Assegai at the pad, player light `(36,90,360)`, hull clean (renderer.md, "The hull reaches `EdgeGeom` as a node-local chunk"). Every hull chunk is flag bit 1 (kind 2, node-local), so `EdgeGeom` takes the `0x3030` branch; whether its rows are a world matrix or the decode quads is unresolved. Next: identify the DMA piece at `$18`, then inject into the list the job really reads. Steps 1 and 3-4 above are partly done; Harimau and Piranha not re-booted.
