@@ -206,7 +206,7 @@ and an encrypted HD `.iso` is reported as encrypted rather than failing with a
 message about another game
 ([installing](../docs/overview/installing.md)).
 
-### The Omega Collection PKG decrypts on a PC, and is read in place; the archives are plain, the executable isn't yet
+### The Omega Collection PKG decrypts on a PC; the archives are plain, the executable isn't yet
 
 **Since 2026-10-07 no extraction is needed to play**: both `.pkg` files in `data/images/` are read directly ([ps4-package.md](../docs/formats/ps4-package.md)). The extraction below is still how `data/extracted/ps4` (the ground truth the reader is compared with, and the input of the RE tools) is made.
 
