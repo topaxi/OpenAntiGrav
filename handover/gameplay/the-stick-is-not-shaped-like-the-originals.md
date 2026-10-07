@@ -11,7 +11,7 @@ stick before anything reads it, and the port does not:
   gain only, no curve.
 - **Port** (`oag_input::pad`): `0.15` deadzone, rescaled, linear.
 
-So half deflection steers about `11` on the original and about `41` here. It
+So a half-deflected stick (`0.5` as the game reads it) steers `18.75` on the original and about `41` here. It
 affects every player's steering feel, and novice's airbrake threshold sits on
 the shaped value (`0.36` raw on the original, `0.1` of the port's shaped stick).
 
