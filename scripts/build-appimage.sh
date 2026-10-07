@@ -130,6 +130,10 @@ Build natively instead and mind the glibc floor this script prints."
     engine_args=(--rm -v "$project_root:/src" -w /src
                  -e CARGO_HOME=/src/data/appimage/container/cargo
                  -e CARGO_TARGET_DIR="/src/data/appimage/container/target$target_suffix")
+    # The container has no git, and a worktree's .git points outside the
+    # mount, so build.rs is handed the hash `oag-game --version` prints.
+    git_hash="$(git -C "$project_root" rev-parse --short=7 HEAD 2>/dev/null || true)"
+    [[ -n $git_hash ]] && engine_args+=(-e "OAG_GIT_HASH=$git_hash")
     # Only when set, so a baseline build's environment is the one it always had.
     [[ -n $rustflags ]] && engine_args+=(-e "RUSTFLAGS=$rustflags")
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
