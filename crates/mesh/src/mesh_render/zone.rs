@@ -419,6 +419,10 @@ fn bind_group(
                 binding: 14,
                 resource: wgpu::BindingResource::TextureView(&kept.shadow.self_shadow_view),
             },
+            wgpu::BindGroupEntry {
+                binding: 15,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.behind_glass_view),
+            },
         ],
     })
 }
@@ -505,6 +509,9 @@ pub(super) fn scene_bind_group(
             // reason: the same hull compares against the same layer.
             shadow_entries[4],
             shadow_entries[5],
+            // The behind-the-glass target, binding 15: a picture of the frame
+            // like the maps above, read by Vineta K's tunnel glass alone.
+            shadow_entries[6],
         ],
     });
 

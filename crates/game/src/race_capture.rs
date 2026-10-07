@@ -325,6 +325,7 @@ pub fn capture(
         hud,
         track_panel,
         track_model,
+        behind_glass,
         liveries,
         collision_model,
         sky_model,
@@ -445,9 +446,8 @@ pub fn capture(
     // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
     //
     // `--presented` used to be `Rgba8UnormSrgb`; the window stopped encoding in
-    // the same change, and the mismatch made the two captures of one frame
-    // disagree about the boost plume by up to 73/255. The non-sRGB twin keeps
-    // FSR 1 working: `remove_srgb_suffix` is the identity on it.
+    // the same change, which made two captures of one frame differ by up to
+    // 73/255. The non-sRGB twin keeps FSR 1 working (`remove_srgb_suffix`).
     let format = wgpu::TextureFormat::Rgba8Unorm;
     // The scene's own size, which presented is the aspect rectangle scaled and
     // otherwise is the whole capture.
@@ -460,8 +460,7 @@ pub fn capture(
         presentation: state.presentation,
     });
     // What the scene - and so its depth buffer - is actually drawn at. A depth
-    // attachment whose size does not match the colour one is a validation
-    // error, not a bad picture.
+    // attachment of another size than the colour one is a validation error.
     let scene_size = presented.map_or((width, height), |state| state.scene_size);
     let mut scene = Scene::new(
         &device,
@@ -503,6 +502,7 @@ pub fn capture(
         zone_grade,
         shadows,
         shadow_hulls,
+        behind_glass,
     )?;
     scene.set_blur_resolution(options.motion_blur_resolution);
     scene.attach_ripples(ripples);
@@ -977,7 +977,7 @@ pub fn capture(
     std::fs::write(&options.path, png)
         .with_context(|| format!("writing {}", options.path.display()))?;
     println!("wrote {} ({width}x{height})", options.path.display());
-    scene.dump_sun_occlusion_if_asked(&device, &queue)?;
+    scene.dump_offscreen_if_asked(&device, &queue)?;
     Ok(())
 }
 

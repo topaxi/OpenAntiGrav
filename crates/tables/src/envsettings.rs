@@ -160,6 +160,16 @@ pub const FOG_COLOUR: &str = "Fog.Fog Color";
 /// whether this reaches it unscaled is not read.
 pub const FOG_DENSITY: &str = "Fog.Fog Density";
 
+/// `"Fog.Alternate Fog Color"`. Three numbers: the colour of the fog the
+/// original gives a chunk whose render flag has `0x20` instead of
+/// [`FOG_COLOUR`] (`oag_rcs::rcsmodel::RENDER_ALTERNATE_FOG`). Every HD-lineage
+/// `.envsettings` authors it; only Vineta K's chunks select it.
+pub const ALTERNATE_FOG_COLOUR: &str = "Fog.Alternate Fog Color";
+
+/// `"Fog.Alternate Fog Density"`: [`ALTERNATE_FOG_COLOUR`]'s
+/// [`FOG_DENSITY`].
+pub const ALTERNATE_FOG_DENSITY: &str = "Fog.Alternate Fog Density";
+
 /// 2048's `"Lighting.Fog colour"`. **Four numbers**: a colour and a fourth,
 /// 0.0001 to 0.0021 on every circuit authoring it, the order of HD's
 /// [`FOG_DENSITY`] (Anulpha Pass 0.0004 on both titles). Both titles' shader

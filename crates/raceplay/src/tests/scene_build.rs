@@ -133,6 +133,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         None,
         Vec::new(),
         Vec::new(),
+        Default::default(),
     )
     .expect("the scene builds");
 
@@ -217,6 +218,7 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize)> {
         None,
         Vec::new(),
         Vec::new(),
+        Default::default(),
     )
     .expect("the scene builds");
     Some((wanted, scene.adverts_rebound()))

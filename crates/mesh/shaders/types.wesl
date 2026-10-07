@@ -176,6 +176,10 @@ struct Scene {
     // `sun_occlusion_tex` - the `directionalLight0Proj` a Wipeout HD hull is
     // bound. Read only by the layer `uniforms.sun_occlusion_layer` names.
     sun_occlusion: array<mat4x4<f32>, 8>,
+    // World to the behind-the-glass target's clip space, the original's
+    // `refractProject`; read by the tunnel glass alone. See
+    // `mesh_render::Scene::refraction`.
+    refraction: mat4x4<f32>,
 };
 
 // The shadow map's projection and how hard it darkens. See

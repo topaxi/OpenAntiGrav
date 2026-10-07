@@ -1,11 +1,11 @@
-//! Vineta K's tunnel glass: a surface that reads the screen behind it.
+//! Vineta K's tunnel glass: a surface that reads the behind-the-glass target.
 //!
 //! `mt_tunnelrefraction` and `cl_tunnelrefraction` declare a sampler,
 //! `0x88a0df95`, that no `.rcsmaterial` record names a texture for - the
 //! engine binds it - and sample it at a screen coordinate the program builds
 //! (clip `xy / w`, flipped, perturbed by a normal map). It is a copy of the
-//! frame behind the glass, **not** an environment probe the disc fails to
-//! ship: the one input is something this renderer holds itself. Read off the
+//! picture the engine renders itself, **not** an environment probe the disc
+//! fails to ship: the one input is something this renderer draws too. Read off the
 //! disassembly (`scripts/ps3-microcode.py`, `mt_tunnelrefraction` block
 //! `@0x1fb0`, `cl_tunnelrefraction` block `@0x18b0`), the colour is
 //!
@@ -24,17 +24,34 @@
 //!
 //! # How it is drawn
 //!
-//! No scene-copy pass exists, and none is needed to draw this: the equation is
-//! linear in the grab, so a chunk is emitted twice (`emit`), both blended and
-//! with depth write off like every transparent draw:
+//! One opaque draw, depth written, as the original draws it (blend off,
+//! depth `LEQUAL` with write on, on every glass draw of Vineta K's RPCS3
+//! capture). The grab is **not the frame behind the glass**: the engine binds
+//! its behind-the-glass target, a 640x360 picture of the sky and the chunks
+//! flagged `rcsmodel::RENDER_BEHIND_GLASS`, drawn under a projection 4/3 wider
+//! in tangent than the main view's (`oag_raceplay`'s `scene::behind_glass`,
+//! `mesh::rcs::View`). The program projects a point through that target's own
+//! matrix (`refractProject`, `0x590bc10e`, [`crate::mesh_render::Scene::refraction`])
+//! and reads it there; `mesh.wesl`'s `refraction::opaque_colour` is the
+//! equation. Read off the live programs of the capture
+//! (`scripts/ps3-fp-live.py`), confidence 85:
 //!
-//! 1. [`GRAB_BLEND`], `dst = dst * src`, whose shader output is `f * W`;
-//! 2. [`ADD_BLEND`], `dst = dst + src`, whose shader output is the lit `C`.
+//! - the point is the surface's own position plus its (normal-mapped) normal,
+//!   one world unit: the engine's `distortion` (`0x9fc59444`) is
+//!   `(0, 0, -1, 1)` live, its `z` negating a negated normal and its `xy` the
+//!   coordinate bias, zero;
+//! - `refractProject`'s rows are the target matrix's `x + w`, `y - w`, `z`,
+//!   `w`, and the program samples at `(x/w, -y/w)` of that, which taken
+//!   literally reads `(1 + x/w, 1 - y/w)`, twice the target's own coordinate.
+//!   **What is drawn is the target's own coordinate**, `0.5 + 0.5 (x/w, -y/w)`
+//!   of its matrix, because the captured picture agrees with that and not with
+//!   the literal reading: over 7,341 pane pixels of the capture, 90 % of those
+//!   whose red is zero land on a target texel whose red is zero under it,
+//!   none under the literal one. Where the factor of two goes is not read.
 //!
-//! **Not drawn: the normal map's offset of the grab coordinate.** The grab is
-//! read at the pixel's own position. The offset is `normal.xy` times the
-//! engine's screen scale (`0x9fc59444`), a few pixels of shimmer over a
-//! uniform teal sea; leaving it out moves no edge. Chosen, not measured.
+//! **Not drawn: the normal map's perturbation of the normal**, so the glass
+//! reads the target at the vertex normal's offset; it is a shimmer over the
+//! sea, and the point it moves is one unit away. Chosen, not measured.
 //!
 //! # What it reaches
 //!
@@ -57,33 +74,6 @@ const DIFFUSE: u32 = 0x11cb_4f74;
 const WEIGHT: u32 = 0x7857_5769;
 /// `DiffuseColour`, which `cl_tunnelrefraction` multiplies its lit term by.
 const DIFFUSE_COLOUR: u32 = 0x512f_8e65;
-
-/// The pass that scales what is behind the glass: `dst = dst * src`.
-pub(super) const GRAB_BLEND: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::Zero,
-        dst_factor: wgpu::BlendFactor::Src,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: KEEP_ALPHA,
-};
-
-/// The pass that adds the glass's own lit colour: `dst = dst + src`.
-pub(super) const ADD_BLEND: wgpu::BlendState = wgpu::BlendState {
-    color: wgpu::BlendComponent {
-        src_factor: wgpu::BlendFactor::One,
-        dst_factor: wgpu::BlendFactor::One,
-        operation: wgpu::BlendOperation::Add,
-    },
-    alpha: KEEP_ALPHA,
-};
-
-/// Neither pass touches the target's alpha, which is the bloom's glow mask.
-const KEEP_ALPHA: wgpu::BlendComponent = wgpu::BlendComponent {
-    src_factor: wgpu::BlendFactor::Zero,
-    dst_factor: wgpu::BlendFactor::One,
-    operation: wgpu::BlendOperation::Add,
-};
 
 /// Whether a resolved program is a screen-grab refraction: it declares the
 /// engine-bound grab, the record binds no texture to it, and the program

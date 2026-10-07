@@ -14,7 +14,9 @@
 //! chunk by vertex offset, 93 of 93 draws into the 640x360 target the tunnel
 //! glass reads are chunks with this bit, and none of the 357 main-view draws
 //! is. The maintainer's report was meshes on the tunnel ceiling the original
-//! does not show; those are these chunks.
+//! does not show; those are these chunks. They are drawn into this project's
+//! own target instead (`mesh::rcs::build_scene_views`), split by the fog bit
+//! `0x20` the same capture ties to the alternate fog pair.
 
 use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
@@ -61,17 +63,12 @@ fn vineta_k_leaves_its_behind_the_glass_chunks_out_of_the_main_view() {
         assert!(!behind.contains(&chunk), "chunk {chunk} does not");
     }
 
-    let (built, report) = mesh::rcs::build_scene(VINETA_K, &vex, &geometry, &mut |name| {
-        read(&image, name).map(|(_, d)| d)
-    })
-    .expect("the circuit builds");
-    let drawn: std::collections::BTreeSet<u32> = built
-        .draws
-        .iter()
-        .chain(&built.alpha_tested_draws)
-        .chain(&built.transparent_draws)
-        .filter_map(|d| d.chunk)
-        .collect();
+    let (built, target, report) =
+        mesh::rcs::build_scene_views(VINETA_K, &vex, &geometry, &mut |name| {
+            read(&image, name).map(|(_, d)| d)
+        })
+        .expect("the circuit builds");
+    let drawn = chunks_of(&built);
     let leaked: Vec<_> = behind.iter().filter(|c| drawn.contains(c)).collect();
     assert!(
         leaked.is_empty(),
@@ -84,6 +81,52 @@ fn vineta_k_leaves_its_behind_the_glass_chunks_out_of_the_main_view() {
         report.behind_glass > 0,
         "the load report says what it left out"
     );
+
+    // **And the target draws exactly them**, split by the fog bit `0x20`.
+    let alternate = chunks_of(target.alternate_fog.as_ref().expect("the 0x30 group"));
+    let primary = chunks_of(target.primary_fog.as_ref().expect("the 0x10 group"));
+    let flags = |c: &u32| model.meshes[*c as usize].render_flags;
+    assert!(
+        alternate.iter().all(|c| flags(c) & 0x30 == 0x30),
+        "{alternate:?}"
+    );
+    assert!(
+        primary.iter().all(|c| flags(c) & 0x30 == 0x10),
+        "{primary:?}"
+    );
+    for chunk in CEILING {
+        assert!(
+            alternate.contains(&chunk) || primary.contains(&chunk),
+            "ceiling chunk {chunk} reaches the target"
+        );
+    }
+    println!(
+        "target: {} alternate-fog and {} primary-fog chunks of {}",
+        alternate.len(),
+        primary.len(),
+        behind.len()
+    );
+    // Trimmed to the textures its own draws name, so the GPU holds no second
+    // copy of the circuit's.
+    let held = |m: &mesh::Model| m.textures.iter().flatten().count();
+    let group = target.alternate_fog.as_ref().expect("the 0x30 group");
+    assert!(
+        held(group) < held(&built) / 4,
+        "{} of {}",
+        held(group),
+        held(&built)
+    );
+}
+
+/// Every `.rcsmodel` chunk a model's draws come from.
+fn chunks_of(model: &mesh::Model) -> std::collections::BTreeSet<u32> {
+    model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .filter_map(|d| d.chunk)
+        .collect()
 }
 
 /// The bit is Vineta K's alone, in both directions, so leaving it out changes

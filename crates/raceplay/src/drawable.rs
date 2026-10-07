@@ -141,6 +141,7 @@ impl Drawable {
             receives_shadow,
             mesh_render::Texcoords::Interleaved,
             false,
+            false,
         )
     }
 
@@ -167,6 +168,9 @@ impl Drawable {
         // Whether the opaque list draws through a depth prepass - see
         // `mesh_render::Prepass` and `draw_lists`.
         prepass: bool,
+        // Whether the opaque and cutout lists cull back faces - see
+        // `mesh_render::build_with`.
+        cull_back: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -210,6 +214,7 @@ impl Drawable {
             receives_shadow,
             texcoords,
             prepass,
+            cull_back,
         )?;
         let reversed_indices = prepass.is_some().then(|| {
             let reversed: Vec<u32> = model

@@ -103,7 +103,7 @@ mod stride;
 mod surface;
 
 pub use coverage::coverage;
-pub use render_block::{RENDER_BEHIND_GLASS, RENDER_BLOCK_LEN, RENDER_TRACK};
+pub use render_block::{RENDER_ALTERNATE_FOG, RENDER_BEHIND_GLASS, RENDER_BLOCK_LEN, RENDER_TRACK};
 pub use surface::Space;
 pub mod vertex_decl;
 

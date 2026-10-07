@@ -1,5 +1,5 @@
-//! Vineta K's ceiling: the tunnel glass reads the screen behind it, and the
-//! arch lights add their glow layer.
+//! Vineta K's ceiling: the tunnel glass reads the behind-the-glass target,
+//! and the arch lights add their glow layer.
 //!
 //! **`#[ignore]`d and never run in CI**; needs the decrypted PS3 image.
 //!
@@ -9,8 +9,8 @@
 //! ```
 //!
 //! `mt_tunnelrefraction` and `cl_tunnelrefraction` declare the engine-bound
-//! screen grab `0x88a0df95`; drawn as ordinary opaque lit surfaces they were
-//! black panels over the sea. `2uv_offset_lights` accumulates its unit-1 glow
+//! grab `0x88a0df95`; drawn as ordinary opaque lit surfaces they were black
+//! panels over the sea. `2uv_offset_lights` accumulates its unit-1 glow
 //! behind a write to `H2.w`, which `Program::accumulates` used to read as
 //! taking the sample away, so the arch strips drew the honeycomb alone.
 
@@ -30,9 +30,12 @@ fn vineta() -> (mesh::Model, mesh::rcs::Report, oag_rcs::rcsmodel::Model) {
     (model, report, rcs)
 }
 
+/// The glass is one opaque draw, as the original's is (blend off, depth
+/// written, on every glass draw of the capture): its colour includes the
+/// behind-the-glass target rather than blending over the frame.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn the_tunnel_glass_is_two_blended_passes_over_the_screen() {
+fn the_tunnel_glass_is_one_opaque_draw() {
     if oag_testdata::image("hdfury-ps3-eu-dec.iso").is_none() {
         return;
     }
@@ -51,36 +54,20 @@ fn the_tunnel_glass_is_two_blended_passes_over_the_screen() {
         model.vertices[model.indices[draw.range.start as usize] as usize].slots
     };
     for (list, name) in [
-        (&model.draws, "opaque"),
         (&model.alpha_tested_draws, "cutout"),
+        (&model.transparent_draws, "blended"),
     ] {
         assert!(
             list.iter().all(|d| word_of(d) & slots::REFRACTION == 0),
             "a refraction chunk is in the {name} list"
         );
     }
-    let grab: Vec<_> = model
-        .transparent_draws
+    let opaque = model
+        .draws
         .iter()
         .filter(|d| word_of(d) & slots::REFRACTION != 0)
-        .collect();
-    let (scale, add): (Vec<&&mesh::DrawCall>, Vec<&&mesh::DrawCall>) = grab
-        .iter()
-        .partition(|d| word_of(d) & slots::REFRACT_GRAB != 0);
-    assert!(!scale.is_empty());
-    assert_eq!(
-        scale.len(),
-        add.len(),
-        "every chunk is drawn in both passes"
-    );
-    assert!(scale.iter().all(|d| {
-        d.blend_state
-            .is_some_and(|b| b.color.dst_factor == wgpu::BlendFactor::Src)
-    }));
-    assert!(add.iter().all(|d| {
-        d.blend_state
-            .is_some_and(|b| b.color.dst_factor == wgpu::BlendFactor::One)
-    }));
+        .count();
+    assert!(opaque > 0, "the glass is drawn, in the opaque list");
 }
 
 #[test]

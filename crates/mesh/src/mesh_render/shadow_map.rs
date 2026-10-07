@@ -56,7 +56,12 @@ pub const SELF_SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32
 /// thirty-two, which must not be - a filtered depth is an average of two
 /// surfaces and belongs to neither, so a comparison against it shadows a band
 /// along every silhouette.
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
+///
+/// Binding 15 is not a shadow map: it is the behind-the-glass target
+/// (`super::ShadowMaps::behind_glass`), read through the coverage map's
+/// clamped filtering sampler, which is the original's own sampler state for it
+/// (clamp to edge, linear, `0x60030303`/`0x02022000` on Vineta K's capture).
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 7] {
     [
         wgpu::BindGroupLayoutEntry {
             binding: 6,
@@ -110,6 +115,16 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
             },
             count: None,
         },
+        wgpu::BindGroupLayoutEntry {
+            binding: 15,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        },
     ]
 }
 
@@ -124,6 +139,8 @@ pub(super) struct Resources {
     pub occlusion_view: wgpu::TextureView,
     /// The self-shadow depth array, or a one-layer far placeholder.
     pub self_shadow_view: wgpu::TextureView,
+    /// The behind-the-glass target, or a black placeholder.
+    pub behind_glass_view: wgpu::TextureView,
 }
 
 /// The view and sampler to bind, given the caller's map or none.
@@ -148,6 +165,7 @@ pub(super) fn resources(
         depth: depth_map,
         occlusion,
         self_shadow,
+        behind_glass,
     } = maps;
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("shadow map"),
@@ -295,6 +313,43 @@ pub(super) fn resources(
             })
         }
     };
+    // Black: a glass with no target behind it shows its own lit colour alone.
+    // Only Vineta K's glass reads it, and that circuit always binds the real
+    // target, so this is what every other drawable binds and never samples.
+    let behind_glass_view = match behind_glass {
+        Some(view) => view.clone(),
+        None => {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("behind the glass placeholder"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: COVERAGE_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                texture.as_image_copy(),
+                &[0u8],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(1),
+                    rows_per_image: Some(1),
+                },
+                wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+            );
+            texture.create_view(&wgpu::TextureViewDescriptor::default())
+        }
+    };
     Resources {
         view,
         sampler,
@@ -302,5 +357,6 @@ pub(super) fn resources(
         depth_sampler,
         occlusion_view,
         self_shadow_view,
+        behind_glass_view,
     }
 }

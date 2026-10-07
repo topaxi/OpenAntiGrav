@@ -405,11 +405,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         };
     // **Built here rather than below, because whether it built decides the
     // fallback.** A `.rcsmodel` that will not decode is the same outcome for a
-    // race as no `.rcsmodel` at all - the derived ribbon - and Wipeout 2048 is
-    // what made the distinction matter: it ships one beside every circuit and
-    // the container is not HD's, so this used to be a hard error that stopped
-    // the race. The report names which of the two happened.
-    let rcs_model = geometry::track_model(
+    // race as none at all - the derived ribbon - and Wipeout 2048 made the
+    // distinction matter: it ships one beside every circuit, in a container
+    // that is not HD's, and that used to stop the race. The report says which.
+    let (rcs_model, behind_glass) = geometry::track_model(
         &mut archives,
         &track,
         &track_blob,
@@ -948,6 +947,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         ),
         track_stats,
         track_model,
+        behind_glass,
         billboards: crate::adverts::Billboards { gantry, adverts },
         collision_model,
         sky_model,

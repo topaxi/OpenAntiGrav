@@ -249,11 +249,11 @@ impl super::super::Scene {
 
 /// The environment variable that, naming a file, writes the player's
 /// sun-occlusion map out beside a `--screenshot` capture - see
-/// `Scene::dump_sun_occlusion_if_asked`.
+/// `Scene::dump_offscreen_if_asked`.
 const DUMP_VAR: &str = "OAG_DUMP_SUN_OCCLUSION";
 
 /// The same for the player's self-shadow depth map - see
-/// `Scene::dump_sun_occlusion_if_asked`, which writes both.
+/// `Scene::dump_offscreen_if_asked`, which writes both.
 const DUMP_SELF_SHADOW_VAR: &str = "OAG_DUMP_SELF_SHADOW";
 
 /// Half the side of the cube a craft's sun-occlusion map is fitted to, in
@@ -382,7 +382,10 @@ impl super::super::Scene {
     /// so this is how "the craft went dark" is told apart from "the road under
     /// it is dark" - the same reason `OAG_RENDER_BENCH` exists for a different
     /// question.
-    pub fn dump_sun_occlusion_if_asked(
+    ///
+    /// The behind-the-glass target too, when `OAG_DUMP_BEHIND_GLASS` names a
+    /// file - see `Scene::dump_behind_glass_if_asked`.
+    pub fn dump_offscreen_if_asked(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -406,7 +409,7 @@ impl super::super::Scene {
             let size = oag_render::shadow::self_shadow::SIZE;
             write(&dump, &texels, size, "self shadow")?;
         }
-        Ok(())
+        self.dump_behind_glass_if_asked(device, queue)
     }
 
     /// The scene uniform's per-layer sun-occlusion projections, as the last

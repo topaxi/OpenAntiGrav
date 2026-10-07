@@ -333,19 +333,17 @@ pub mod slots {
     /// in the glow-table entry's tint and `s` in its scale.
     pub const LIGHT_CONE: u32 = 1 << 19;
 
-    /// This material reads the engine's screen-colour grab behind it -
-    /// `mesh::rcs::refraction`'s fact-based classifier, Vineta K's tunnel
-    /// glass. Drawn as two blended passes over what is behind it (the
-    /// `refraction` module's own doc has the equation); this bit marks both.
-    /// The weight `W` rides in the glow-table entry's tint, the colour
-    /// multiplier in its offset, the weight multiplier in its scale and
-    /// whether the diffuse alpha weights the grab in its rate.
+    /// This material reads the behind-the-glass target - `mesh::rcs::refraction`'s
+    /// fact-based classifier, Vineta K's tunnel glass. Drawn as one opaque
+    /// surface whose colour includes that target (the `refraction` module's
+    /// own doc has the equation). The weight `W` rides in the glow-table
+    /// entry's tint, the colour multiplier in its offset, the weight
+    /// multiplier in its scale and whether the diffuse alpha weights the grab
+    /// in its rate.
+    ///
+    /// Bit 21 above it is free: it marked one of the two blended passes the
+    /// glass was drawn as before the target existed.
     pub const REFRACTION: u32 = 1 << 20;
-
-    /// With [`REFRACTION`]: this is the pass that multiplies what is behind
-    /// the glass by its weight, rather than the pass that adds the glass's
-    /// own lit colour.
-    pub const REFRACT_GRAB: u32 = 1 << 21;
 
     /// HD's Sebenco ice pool (`mesh::rcs::ice`): the albedo is a lerp of three
     /// authored colours by a facing term and a pond mask read through
@@ -364,7 +362,7 @@ pub mod slots {
     /// bit test that an index above bit 15 cannot disturb. A circuit's
     /// materials number in the hundreds against the 65,535 this allows.
     ///
-    /// Twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and [`REFRACT_GRAB`] took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
+    /// Twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
     /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
     /// index keeps 32,767 values, against the hundreds a circuit uses.
