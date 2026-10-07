@@ -3238,7 +3238,7 @@ project's shader, with no new assumption beyond "the ceiling's own
 geometry's own facing both support but this session did not measure the
 per-pixel `ndl` value to confirm.
 
-**What is authored beside the wired ambient and is not consumed at all:
+**What is authored beside the wired ambient and was not consumed at all when this was written (it tints the sky cube since 2026-10-07, see the end of this page):
 `Lighting.Sky colour`** - `140 140 140 0` on Amphiseum, `128 128 128 0` on
 Talon's Junction, both **neutral grey**, unlike either circuit's tinted
 `Constant ambient color`. `docs/formats/envsettings.md`'s own table already
@@ -3293,6 +3293,8 @@ than assumed from the authored sun direction and normal facing; extending
 the material cross-check past the 79.1%-coverage, `--bloom off` sample;
 wiring anything - no shader or Rust code changed. `mesh/`, `mesh.wgsl`,
 `emissive.rs`, `sky_cube.rs` read again this session, still unchanged.
+
+> **Superseded in part 2026-10-07**: the `+0x440` word is the sky cube's vertex colour, not a clear colour - see [HD's sky is tinted by `Lighting.Sky colour`](#hds-sky-is-tinted-by-lightingsky-colour-and-the-sky-luma-changes-sign-reading-was-a-mask-artefact-2026-10-07-hd-sky-luma) at the end of this page. The offset, the gate and the "not a lit-material term" reading stand.
 
 ### `Lighting.Sky colour`'s consumer is found and is a backdrop clear, not a material term; `Constant ambient color` is confirmed wired exactly as this project already assumes (2026-09-17, later still, `lane-hd-ambient-light`)
 
@@ -7310,6 +7312,12 @@ values, not measured as a law** (no confidence score on the 128). The low byte
 (0 to 122 on the Fury circuits, 16 on Vineta K) is a separate slot whose
 consumer is unread and is not used.
 
+**Whole frame, Sol 2, ours before -> after (reference from the accuracy pass)**: pose 00 0.579 -> 0.589 (0.684), 01 0.566 -> 0.630 (0.698), 02 0.653 -> 0.793 (0.911), clipped share 23.4/9.8/8.4 % -> 23.8/24.7/39.2 %. A brighter sky raises the frame mean and the adaptation proxy; the remaining gap is the lit surfaces.
+
+**The confound this does not break.** The two calibration circuits differ in the authored byte and in the archive (Talon's in DATA00, Sol 2 in DATA02). Vineta K is the circuit that would separate them (DATA02, byte 134, so `byte/128` predicts 1.05 and "DATA02 doubles" predicts 2.0), and **it could not be run**: `data/reference/hd-capture/racebox/00.json` carries a garbage camera (denormal `view_proj`) so no matched render exists, and the grid frame is a different view. The wiring is kept on the mechanism read above (the byte is the cube's vertex colour), but the divisor stays a fit. A matched Vineta K or Sebenco Climb frame settles it.
+
+**Player view, no reference.** Sebenco Climb (255, the brightest sky of the group) at the grid now draws a blown-white sky behind the structures with heavy bloom, in the way Sol 2's reference does; judged by eye only (`data/scratch/hd-sky-luma/sebenco-after.png`).
+
 **Not changed.** The Zone branch of the draw does not take this colour (it
 draws `ZoneSky.gtf` untinted); the port leaves a Zone sky at 1.0. Seven DLC
 circuits now draw at 2.0 on the strength of one matched circuit (Sol 2) and
@@ -7318,9 +7326,12 @@ their shared authored value; none of the others has a matched frame.
 Port: `oag_mesh::mesh::sky_cube::build(.., tint)` and
 `oag_raceplay::load::environment::hd_sky_model`; test
 [hd_sky_tint_ground_truth.rs](../../../../crates/game/tests/hd_sky_tint_ground_truth.rs).
-**Other titles**: Wipeout 2048 and Omega draw an authored dome mesh
-(`skycube.rcsmodel`), and their `.EnvSettings` carry `Sky brightness`
-(0.8 to 3.0, unread, see [2048-sky.md](../../../formats/2048-sky.md)) rather
-than a `Sky colour` we read; **checked, differs in key, not wired**, with the
-same multiply shape a candidate for `Sky brightness` and no 2048 or Omega
-capture to measure it against (not checkable).
+**Other titles**: Wipeout 2048 draws an authored dome mesh
+(`skycube.rcsmodel`) and its `.EnvSettings` carry **no `Sky colour`** (read on
+altima, bridge and square: keys `Sky brightness` 1.2/2.0/1.2, `Sky height
+offset`, `Sky rotation`, `Sky scale`): **checked, differs in key**. `Sky
+brightness` (unread, [2048-sky.md](../../../formats/2048-sky.md)) is the
+candidate for the same multiply and has no capture to measure it against
+(**not checkable**). Omega re-ships 2048's circuits and reads 2048's reader,
+so the same key set is expected; no PS4 `.EnvSettings` is extracted here, so
+that is not read directly.

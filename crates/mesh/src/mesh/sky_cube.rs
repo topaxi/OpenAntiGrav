@@ -121,6 +121,10 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// see `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`), open sky filling a
 /// good part of the frame, and one feature whose position can be measured.
 ///
+/// **2026-10-07: the "original's exposure blows its sky far brighter than ours"
+/// seen above was in part the circuit's `Sky colour` tint** ([`SKY_COLOUR_NEUTRAL`]),
+/// applied now; Vineta K's 134 is only 1.05x, so its own gap is not that.
+///
 /// **Do not "fix" the sign to make a screenshot match** without that: under an
 /// exposure mismatch a hue can be moved either way by eye.
 ///

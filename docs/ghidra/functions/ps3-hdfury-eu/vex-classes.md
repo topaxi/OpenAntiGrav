@@ -141,7 +141,7 @@ class no shipped circuit authors costs nothing. **Where HD's sky comes from is
 still unread**; `sky.gtf` sits beside every circuit's `track.vex` as a named
 file and is a 1024x1024 DXT1 cubemap, so the load is by path rather than by node
 hash. See [`envsettings.md`](../../../formats/envsettings.md), whose
-`Lighting.Sky colour` and `Sky rotation` are read and unused for the same reason.
+`Lighting.Sky colour` and `Sky rotation` are read and unused for the same reason (as a *lit-material* input; both are consumed by the sky draw, `Sky colour` as the cube's vertex colour since 2026-10-07 - see renderer.md).
 
 ## Open
 
