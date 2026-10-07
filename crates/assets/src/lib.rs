@@ -32,6 +32,7 @@ mod blob_source;
 pub mod container;
 pub mod dlc;
 pub mod psarc;
+pub mod read_memo;
 pub mod source;
 #[cfg(test)]
 mod testing;

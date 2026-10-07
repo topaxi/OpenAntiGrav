@@ -77,8 +77,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pure_packs,
     )?;
     let (opened, craft_opened, title, craft_title) = remix.into_parts();
-    let mut archives = opened.archives;
-    let mut craft = craft_opened.map(|opened| opened.archives);
+    let mut archives = opened.archives.memoising_reads();
+    let mut craft = craft_opened.map(|opened| opened.archives.memoising_reads());
     report.push(format!("racing on {}", title.name));
     if craft.is_some() {
         report.push(format!("craft from {}", craft_title.name));
@@ -150,9 +150,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     };
 
     // Read again for the collision nodes: `oag_render::track::load` takes an
-    // archive rather than bytes, so this blob is decompressed twice. See the
-    // wanted-change note in `docs/tools/oag-game.md`. On the PS2 that costs more
-    // than it does on the PSP, where nothing is compressed at all: 5,861 of
+    // archive rather than bytes, so this blob is decompressed twice (see
+    // `docs/tools/oag-game.md`); that costs most on the PS2, where 5,861 of
     // `WADS2.WAD`'s 7,200 entries are LZSS.
     let track_blob = read(&mut archives, &track)?;
     stages::reach(stages::Stage::TrackRead);
@@ -996,5 +995,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
     );
+    loaded
+        .report
+        .extend(archives.read_memo.as_ref().map(|m| m.summary()));
     Ok(loaded)
 }
