@@ -253,6 +253,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // sum is replaced below, which is the original's own no-op there.
         let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light;
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
+        // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
+        // prelit term added (the vertex colour is the picture there).
+        if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 23u].y > 1.5 {
+            authored = ambient_term + sun_diffuse;
+        }
     }
 
     // **Which texture is the picture and which is the coverage, off the
@@ -340,7 +345,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // consecutive glow-table entries. Chosen, not measured: `F` uses the
     // vertex normal, and the constants are display values decoded to the
     // domain the textures are sampled in.
-    if (in.slots & 4194304u) != 0u {
+    if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 23u].y > 1.5 {
+        // **`water_test_2`** (`mesh::rcs::water`): the program's picture is the
+        // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
+        // the gamma domain the branch below decodes. The light is set where
+        // `authored` is built.
+        picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
+    } else if (in.slots & 4194304u) != 0u {
         let ice_slot = in.slots >> 23u;
         let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
         let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));

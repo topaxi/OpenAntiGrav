@@ -12,12 +12,12 @@ lane wide is a scalar, not the colour".
   sky is near-white as ours is, but not as a flat clip. Differences between the two files that could carry the missing
   factor: Sebenco's `Fog.Fog Color` is HDR `(0.65, 1.18, 1.85)` at density 0.0004, Sol 2's grey 0.25 at 0.002; prelit
   and tone keys differ. Not tuned. Second matched pose (`ref2/02`) is unmatched in view (the craft slid 4.8 units).
-- **Vineta's teal behind the glass** (2026-10-07, `hd-water`, rcsmaterial.md "Water family"): `waves2` is a normal map and
-  is no longer painted as a picture. The two compared panes do not show the water (skipping it moves them 1 to 4
-  levels): their residual is the backdrop, the sky tint and the glass multiply. The sea band beside them went from blue to
-  pale `(176,217,219)` against the reference's teal `(15,145,145)`, because the program's reflection times `0x7480de6d`
-  is undrawn: HD's binding for `paraboloidReflectionTex` was not found (`PerMaterialEnvMap`/`skyreflect.gtf` is authored
-  data the HD executable does not name; 2048 binds a per-environment `skyParaboloid.gxt`).
+- **Vineta's sea** (2026-10-07, `vineta-k-fidelity`; rcsmaterial.md "Vineta K against a draw capture"): HD binds
+  `paraboloidReflectionTex` at unit 1 of the `water_test_2` draw, a 512x256 `A8R8G8B8` **render target** (a dual paraboloid of
+  the environment, sky above the middle row, teal sea below) readable only with RPCS3's `Write Color Buffers`. Not a disc
+  texture, so it is not drawn; the sheet's own vertex-colour multiply was wrong and is fixed. `Sebenco_ice`'s and Sebenco's own
+  probe (`and_ice2`, `ds_dualparaboloid_c`) is the same engine slot: a Sebenco capture of one `sebenco_ice` draw would say whether
+  its reflection weights (0 on this material) ever matter.
 - **The ice pool's water layer is drawn** (constants lerped by the pond mask and a facing term, `mesh::rcs::ice`). Open:
   the bump-perturbed facing term (the reference's streaks), the program's own specular, and brightness - the reference
   pool is paler (`(155,244,249)`) than ours; no matched camera exists to measure it against.
@@ -33,9 +33,8 @@ lane wide is a scalar, not the colour".
 
 ## Next Steps
 
-1. Find how HD binds `paraboloidReflectionTex` (engine parameter table slot 8, `Shader_InitEngineParams`): an RPCS3 draw
-   capture of one `water_test_2` draw, or the setter of the parameter entry's `+0x18`. Until then the reflection stays
-   undrawn.
+1. Closed 2026-10-07: the probe is a runtime render target (see above). Open: what renders into it, and whether its upper
+   half is the sky cube through a paraboloid (it looks like it); the lower half has no disc source.
 2. Take a Sebenco sky capture at a pose with a large open sky and a stationary craft (`--speed 0` placed on a flat
    stretch) and fit the factor against `Fog.Fog Color`/tone before touching `sky_cube::build`.
 3. Omega: wire `Sebenco_ice` through the `psp2` material path (colours from the model parameters, mask on `Uv2`), and read

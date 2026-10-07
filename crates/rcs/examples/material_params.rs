@@ -18,7 +18,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{index:4} {} first {:?} | {}",
             material.name.rsplit('/').next().unwrap_or(&material.name),
-            material.texture.rsplit('/').next().unwrap_or(&material.texture),
+            material
+                .texture
+                .rsplit('/')
+                .next()
+                .unwrap_or(&material.texture),
             params.join(" ")
         );
     }

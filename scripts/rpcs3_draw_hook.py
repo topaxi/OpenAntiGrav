@@ -9,6 +9,7 @@ See docs/reverse-engineering/rpcs3-capture.md, "Capturing one frame's draws".
 """
 import sys, glob, struct, subprocess, re, os
 LIGHT=os.environ.get('HOOK_LIGHT')=='1'
+NO_HEADS=os.environ.get('HOOK_NO_HEADS')=='1'
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import rsx_fifo as r
 BPP={0x85:4,0x86:.5,0x87:1,0x88:1,0x81:1,0x84:2,0x82:2,0x83:2,0x8b:2,0x8d:4,0x8f:.5,0x9b:2,0xa5:4,0xa6:.5,0xa7:1,0xa8:1}
@@ -52,7 +53,8 @@ def regions(out, stem, rnd):
             seen.add(key)
             res.append((0x40000000+ixoff+first*2,cnt*2+2))
         print('hook stage1: %d spans'%len(res),flush=True)
-        return res
+        if res: return res
+        ST['stage']=1
     if ST['stage']==1:
         ST['stage']=2
         res=[]
@@ -92,7 +94,8 @@ def regions(out, stem, rnd):
             if cur: res.append(((0x40000000 if loc else 0xC0000000)+cur[0],cur[1]-cur[0]))
         res=[(a,min(s,0x200000)) for a,s in res]
         print('hook stage2: %d vertex spans, %d bytes'%(len(res),sum(s for a,s in res)),flush=True)
-        return res
+        if res: return res
+        ST['stage']=2
     if ST['stage']==2:
         ST['stage']=3
         # textures: all draws whose program has TEX unit1 and the {2, -1} normal-map pattern, plus the mesh vp? keep it to those
@@ -113,6 +116,7 @@ def regions(out, stem, rnd):
         ST['stage']=3
     if ST['stage']==3:
         ST['stage']=4
+        if NO_HEADS: return []
         res=[]; seen=set()
         for d in draws:
             for u in range(16):
@@ -122,7 +126,9 @@ def regions(out, stem, rnd):
                     if k in seen: continue
                     seen.add(k)
                     for o in (0,0x400,0x1000,0x4000,0x10000):
-                        res.append((base(d[b+4]&3)+d[b]+o,64))
+                        at=base(d[b+4]&3)+d[b]+o
+                        if not os.path.exists('%s/%s-%08x.bin'%(out,stem,at)):
+                            res.append((at,64))
         print('hook stage4: %d head spans'%len(res),flush=True)
         return res
     return []

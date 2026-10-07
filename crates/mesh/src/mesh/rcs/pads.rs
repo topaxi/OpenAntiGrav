@@ -69,6 +69,17 @@ pub(super) fn is_pad_material(name: &str) -> bool {
     )
 }
 
+/// Whether a material file is `diffuse_normal_specular_emmissive` (sic): the
+/// start line, the pit lane and the rail walls (`ds_sf`, `ds_pit`, `ds_wall`,
+/// `ds_rail`). Its fragment program reads the `_ne` file the way the pad
+/// programs do - the RGB as a tangent normal and the alpha as the mask of an
+/// additive `alpha * colour` term, the colour being the material's own
+/// authored `0x7611a2d8` - so it is bound by the same reading, which
+/// [`super::pad_ne::pad_ne`] only accepts after matching the program itself.
+pub(super) fn is_light_bar_material(name: &str) -> bool {
+    name.rsplit('/').next().unwrap_or(name) == "diffuse_normal_specular_emmissive.rcsmaterial"
+}
+
 /// Every chunk hash the world-space pass leaves to a node: the ones a `Mesh`
 /// node names ([`super::referenced`]) and the ones either pad class names.
 ///
@@ -152,11 +163,17 @@ pub(super) fn bind_scene_pad_masks(
     report: &mut Report,
 ) {
     let mut pad_slots = vec![false; model.materials.len()];
-    for chunk in model.meshes.iter().filter(|c| !placed.contains(&c.hash)) {
+    for chunk in model.meshes.iter() {
+        let unplaced = !placed.contains(&chunk.hash);
         for surface in chunk.surfaces() {
-            if let Some(flag) = pad_slots.get_mut(surface.material as usize) {
-                *flag = is_pad_material(&model.materials[surface.material as usize].name);
-            }
+            let Some(flag) = pad_slots.get_mut(surface.material as usize) else {
+                continue;
+            };
+            let name = &model.materials[surface.material as usize].name;
+            // A pad is routed only when no pad node owns its chunk; the
+            // start line's own material is ordinary scenery and is routed
+            // wherever it is drawn.
+            *flag |= (unplaced && is_pad_material(name)) || is_light_bar_material(name);
         }
     }
     super::mag_wave::merge(
