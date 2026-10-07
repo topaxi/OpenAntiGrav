@@ -150,6 +150,8 @@ fn the_report_names_both_kinds_of_absence() {
         mag_wave_unread: 0,
         vertex_scrolls: 0,
         light_cone_bound: 0,
+        refraction_bound: 0,
+        refraction_unread: 0,
         isolated: 0,
     };
     let line = report.describe();
