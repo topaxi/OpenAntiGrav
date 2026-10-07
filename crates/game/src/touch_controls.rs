@@ -255,6 +255,42 @@ impl Demo {
     }
 }
 
+/// Draws `demo` over what `view` already holds, in a window of `size`
+/// pixels: the capture-side twin of the window's overlay pass.
+///
+/// # Errors
+/// When the overlay's pipelines will not build.
+pub fn draw_pose(
+    demo: Demo,
+    (device, queue, format): (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    size: (u32, u32),
+) -> anyhow::Result<()> {
+    let px = (size.0 as f32, size.1 as f32);
+    let space = oag_present::perf::grid(size);
+    let sheet = crate::cursor::sheet(crate::cursor::LAUNCHER);
+    let mut renderer = crate::render::Renderer::new(
+        device,
+        queue,
+        format,
+        None,
+        oag_ui::font::Atlas::build(),
+        &sheet,
+    )?;
+    renderer.set_space(space);
+    let list = draw(
+        &demo.touches(px, true),
+        px,
+        space.size.1 / px.1.max(1.0),
+        false,
+        true,
+        1.0,
+    );
+    renderer.overlay(device, queue, encoder, view, &list, (0.0, 0.0, px.0, px.1));
+    Ok(())
+}
+
 /// Every control and the stick, for a window of `size` pixels, in a grid
 /// `scale` units per pixel. While `paused` the pause button is a play
 /// triangle; `zones` is whether GO carries its brake corners; `opacity`

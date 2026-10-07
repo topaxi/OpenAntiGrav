@@ -488,9 +488,7 @@ pub fn run(
                         gamma: options.settings.display.gamma,
                     },
                 }),
-                // This path has no CLI flag of its own for it, the same gap
-                // `zone_stage` already has here - see `main/headless.rs` for
-                // the one capture path that does.
+                // No CLI flag on this path for either: see `main/headless.rs`.
                 zone_spectrum_test: false,
                 touch_demo: None,
                 previous_best,

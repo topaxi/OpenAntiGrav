@@ -620,6 +620,7 @@ pub(crate) fn run_race(
                 }),
                 zone_spectrum_test: cli.zone_spectrum_test,
                 touch_demo: cli
+                    .intro
                     .touch_overlay
                     .as_deref()
                     .map(oag_game::touch_controls::Demo::parse)

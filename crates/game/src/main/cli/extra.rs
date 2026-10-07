@@ -247,6 +247,15 @@ pub(crate) struct IntroArgs {
     /// tick of it, the world held at the grid's first tick. A capture aid for the flyby.
     #[arg(long, value_name = "TICKS", default_value_t = 0)]
     pub(crate) intro_ticks: u32,
+
+    /// With `--race --screenshot`, draw the on-screen touch controls over the
+    /// frame, in a pose: `idle`, `go-left`, `go-right` or `stick-go`.
+    ///
+    /// A headless run has no fingers; this builds the same `Touches` a finger
+    /// would. Chosen, not measured: the controls are this project's own.
+    #[arg(long, value_name = "POSE")]
+    pub(crate) touch_overlay: Option<String>,
+
 }
 
 /// The motion blur's two overrides.

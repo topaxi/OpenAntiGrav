@@ -357,14 +357,6 @@ pub(crate) struct Cli {
     #[arg(long, default_value_t = 0)]
     pub(crate) ticks: u32,
 
-    /// With `--race --screenshot`, draw the on-screen touch controls over the
-    /// frame, in a pose: `idle`, `go-left`, `go-right` or `stick-go`.
-    ///
-    /// A headless run has no fingers; this builds the same `Touches` a finger
-    /// would. Chosen, not measured: the controls are this project's own.
-    #[arg(long, value_name = "POSE")]
-    pub(crate) touch_overlay: Option<String>,
-
     /// With `--screenshot`, hold these buttons on every tick.
     ///
     /// Comma-separated abstract button names: `start`, `cross`, `circle`, `up`,
