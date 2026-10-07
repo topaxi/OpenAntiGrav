@@ -587,6 +587,27 @@ fn a_later_fetch_clobbers_the_register_it_writes() {
     );
 }
 
+/// `2uv_offset_lights` writes `H2.w` between sampling `H2.xyz` and using it,
+/// and that write does not take the colour lanes away: only the lanes a write
+/// covers stop carrying the sample.
+#[test]
+fn a_write_to_another_lane_does_not_clobber_the_sample() {
+    let mut program = emissive_program(0x04, true);
+    let mut other_lane = insn(0x02);
+    other_lane.dst = 1;
+    other_lane.dst_half = true;
+    other_lane.mask = 0b1000;
+    other_lane.sources = [Source::Constant, Source::Constant, Source::Input];
+    program.instructions[0].mask = 0b0111;
+    program.instructions.insert(1, other_lane);
+    assert!(
+        program.accumulates(1),
+        "H1.w was written, H1.xyz still holds it"
+    );
+    program.instructions[1].mask = 0b0111;
+    assert!(!program.accumulates(1), "H1.xyz was overwritten");
+}
+
 /// Builds a saturated `DP3` feeding `LG2` / `MUL {exponent}` / `EX2` into
 /// register `reg` - the `N.H` idiom `renderer.md` reads under every
 /// specular term, `pow(N.H, exponent)`.
