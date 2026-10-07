@@ -16,6 +16,10 @@ the engine as one file that runs on a Steam Deck, why AppImage rather than
 Flatpak, the glibc floor that makes the second recipe necessary, how a packaged
 build finds the player's own disc image, and the gamepad mapping.
 
+[Releases and CI](releases.md) covers the two GitHub workflows: what `ci.yml` gates, and
+what `release.yml` builds (artifact names, the zero-game-content check, how a
+release is cut).
+
 All are run through `just` for convenience:
 
 ```sh

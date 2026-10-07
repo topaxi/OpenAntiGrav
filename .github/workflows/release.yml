@@ -1,0 +1,169 @@
+name: Release
+
+# Builds the player-facing artifacts. docs/tools/releases.md is the reference:
+# artifact names, what each contains, and how a release is cut.
+#
+# Triggers: a pushed `v*` tag, or a manual run from the Actions tab. A manual
+# run builds and uploads the same artifacts as workflow artifacts (so a branch
+# can be tried without tagging) and never creates a GitHub Release; the
+# `release` job at the bottom runs for a tag only.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Read-only for every build job. Only `release` is granted write access.
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      # `v0.1.0` becomes `0.1.0`; a manual run is `dev-<sha7>` so a trial build
+      # can never be mistaken for a release.
+      - id: v
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Both Linux flavours go through scripts/build-appimage.sh --container, the
+  # one packaging path this project has: Debian bookworm's glibc 2.36, so the
+  # result loads on SteamOS (every SteamOS branch ships a newer glibc) and on
+  # any desktop distribution of the last three years. See
+  # docs/tools/packaging.md#glibc.
+  linux:
+    name: linux (${{ matrix.flavour }})
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Baseline x86-64: any 64-bit PC.
+          - flavour: linux
+            cpu_args: ""
+          # Zen 2 (`-C target-cpu=znver2`): the Steam Deck's core. Refuses to
+          # start on a CPU without AVX2/FMA/BMI2, so it is not offered as the
+          # general download. See docs/tools/packaging.md, "A CPU-tier build".
+          - flavour: steamdeck
+            cpu_args: "--target-cpu znver2"
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the AppImage in the bookworm container
+        run: |
+          mkdir -p dist
+          scripts/build-appimage.sh --container ${{ matrix.cpu_args }} \
+            --out "dist/OpenAntiGrav-${VERSION}-${{ matrix.flavour }}-x86_64.AppImage"
+      # The tarball is the same binary as the AppImage (for a distribution
+      # package or a machine without FUSE). Only the general flavour gets one:
+      # the Deck's CPU-tier build is an AppImage for the Deck.
+      - name: Cut the tarball
+        if: matrix.flavour == 'linux'
+        run: |
+          name="OpenAntiGrav-${VERSION}-linux-x86_64"
+          stage="stage/${name}"
+          mkdir -p "$stage"
+          binary="data/appimage/container/target/release/oag-game"
+          install -m 755 "$binary" "$stage/oag-game"
+          strip "$stage/oag-game"
+          cp LICENSE-MIT LICENSE-APACHE "$stage/"
+          cp -r licences "$stage/licences"
+          cp packaging/appimage/oag-game.desktop "$stage/"
+          "$binary" --write-icon "$stage/oag-game.png" --icon-size 256
+          tar -C stage -czf "dist/${name}.tar.gz" "$name"
+      # The engine and nothing else: the same extension list `just
+      # audit-leakage` uses, run over what was actually built rather than over
+      # the git tree.
+      - name: No game content in the artifacts
+        run: |
+          for f in dist/*.AppImage; do
+            rm -rf unpacked && mkdir unpacked
+            (cd unpacked && "$GITHUB_WORKSPACE/$f" --appimage-extract >/dev/null)
+            python3 scripts/check-leakage.py --dir unpacked/squashfs-root
+          done
+          for f in dist/*.tar.gz; do
+            [[ -e $f ]] || continue
+            rm -rf unpacked && mkdir unpacked
+            tar -C unpacked -xzf "$f"
+            # The one top-level directory is the artifact root.
+            python3 scripts/check-leakage.py --dir unpacked/OpenAntiGrav-*
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.flavour }}
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: windows
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      # Same pinned toolchain as ci.yml; rust-toolchain.toml names it too.
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p oag-game
+      - name: Stage the zip
+        shell: bash
+        run: |
+          name="OpenAntiGrav-${VERSION}-windows-x86_64"
+          mkdir -p "stage/${name}" dist
+          cp target/release/oag-game.exe "stage/${name}/"
+          cp LICENSE-MIT LICENSE-APACHE "stage/${name}/"
+          cp -r licences "stage/${name}/licences"
+          (cd stage && 7z a -tzip "../dist/${name}.zip" "${name}" >/dev/null)
+      - name: No game content in the artifact
+        shell: bash
+        run: |
+          mkdir unpacked
+          7z x -ounpacked dist/*.zip >/dev/null
+          python3 scripts/check-leakage.py --dir unpacked/OpenAntiGrav-*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+          if-no-files-found: error
+
+  # A Release is only ever created from a pushed tag, and as a draft: the
+  # maintainer reads the notes and artifacts, then publishes by hand.
+  # Later artifacts (an Android APK job, anything an AUR `-bin` package
+  # consumes) are another `needs:` entry and another artifact directory; the
+  # file names are `OpenAntiGrav-<version>-<platform>.<ext>` throughout.
+  release:
+    name: draft GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum OpenAntiGrav-* > SHA256SUMS
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" --draft --generate-notes \
+            --title "OpenAntiGrav ${GITHUB_REF_NAME#v}"
