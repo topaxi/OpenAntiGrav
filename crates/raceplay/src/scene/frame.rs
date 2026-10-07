@@ -218,6 +218,7 @@ impl Scene {
             shadow: self.shadow_uniform(shadows),
             spu_lights: mesh_render::SpuLights::from_slice(&race.hd_engine_lights()),
             sun_occlusion: self.sun_occlusion_matrices(),
+            refraction: super::behind_glass::view_projection(section_view).to_cols_array_2d(),
         };
         // The visualiser's own tint - the showing stage's `EQ colour tint`,
         // or `None` where the file authors none (every 2048 table, and any
@@ -287,6 +288,10 @@ impl Scene {
             gantry.write(queue, view_projection, prev_vp, clock);
         }
         crate::adverts::render(&self.adverts, queue, encoder, seconds);
+        let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
+        let glass = (section_view, eye, seconds);
+        let behind_glass =
+            self.render_behind_glass(queue, encoder, &scene, glass, set, chunks, frustum.as_ref());
         oag_gpu::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
@@ -766,14 +771,15 @@ impl Scene {
         // The sky draws inside this, between the circuit's solid and blended
         // lists - see `draw_track` for why there.
         self.sort_opaque(race.camera_position());
-        let mut stats = self.draw_track(
+        let mut stats = behind_glass;
+        stats.add(self.draw_track(
             &mut pass,
             viewport,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),
             chunk_set.as_ref(),
             frustum.as_ref(),
-        );
+        ));
         // After the track, so a pad sitting flush on the surface wins the depth
         // test rather than z-fighting whatever it was authored on top of.
         // Frustum culling applies; the PVS does not, because a pad carries no

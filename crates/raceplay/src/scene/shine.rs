@@ -52,6 +52,7 @@ impl TrackShine {
             mesh_render::ShadowReceiver::Never,
             mesh_render::Texcoords::Streamed,
             false,
+            false,
         )?;
         Ok(Some(Self {
             drawable,

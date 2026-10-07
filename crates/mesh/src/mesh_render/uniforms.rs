@@ -685,8 +685,9 @@ impl ShadowMap {
     }
 }
 
-/// The frame's shadow maps, bound together in the scene group - see
-/// `shadow_map::resources` for what stands in where one is `None`.
+/// The frame's shadow maps, and the one other per-frame picture a surface
+/// reads, bound together in the scene group - see `shadow_map::resources` for
+/// what stands in where one is `None`.
 ///
 /// One value rather than three arguments, so a caller that draws nothing
 /// shadowed says so once ([`ShadowMaps::NONE`]) and a new map is one more
@@ -704,6 +705,11 @@ pub struct ShadowMaps<'a> {
     /// The per-craft self-shadow depth array (`crate::shadow::self_shadow`),
     /// a `D2Array` view, compared against by the same hull at the same layer.
     pub self_shadow: Option<&'a wgpu::TextureView>,
+    /// Wipeout HD's behind-the-glass target (`oag_raceplay`'s
+    /// `scene::behind_glass`), which Vineta K's tunnel glass reads through
+    /// [`Scene::refraction`]. Not a shadow map: it is here because it is the
+    /// other picture of the frame the scene group carries.
+    pub behind_glass: Option<&'a wgpu::TextureView>,
 }
 
 impl ShadowMaps<'_> {
@@ -713,6 +719,7 @@ impl ShadowMaps<'_> {
         depth: None,
         occlusion: None,
         self_shadow: None,
+        behind_glass: None,
     };
 }
 
@@ -786,6 +793,11 @@ pub struct Scene {
     /// a Wipeout HD hull is bound. Only the layer a drawable's own uniform
     /// names is read; the identity everywhere else.
     pub sun_occlusion: [[[f32; 4]; 4]; super::shadow_map::OCCLUSION_LAYERS as usize],
+    /// World to the behind-the-glass target's clip space - the original's
+    /// `refractProject`, which the tunnel glass projects a point through to
+    /// find where it reads that target (`mesh::rcs::refraction`). The
+    /// identity for every draw that reads no target.
+    pub refraction: [[f32; 4]; 4],
 }
 
 impl Scene {
@@ -802,6 +814,7 @@ impl Scene {
             spu_lights: super::SpuLights::none(),
             sun_occlusion: [Mat4::IDENTITY.to_cols_array_2d();
                 super::shadow_map::OCCLUSION_LAYERS as usize],
+            refraction: Mat4::IDENTITY.to_cols_array_2d(),
         }
     }
 }
@@ -829,6 +842,10 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::offset_of!(Scene, sun_occlusion).is_multiple_of(16),
     "and Scene.sun_occlusion, an array of mat4x4"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, refraction).is_multiple_of(16),
+    "and Scene.refraction, a mat4x4"
 );
 const _: () = assert!(
     std::mem::size_of::<Scene>().is_multiple_of(16),

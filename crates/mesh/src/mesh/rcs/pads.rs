@@ -330,7 +330,7 @@ pub(super) fn build_pad_class(
                 model_blob,
                 chunk_index,
                 chunk,
-                None,
+                super::View::Main,
                 &mut report,
             ) {
                 report.drawn += 1;
@@ -361,10 +361,9 @@ pub(super) fn build_pad_class(
 /// [`anim_node::Placement::STATIC`] and count the same things while doing
 /// it - a world-baked chunk's own coordinates already ignore whatever node
 /// named it, so there is no per-chunk transform to thread through here.
-/// `node` is passed through to [`emit`] unchanged - `None` for both current
-/// callers, since a chunk drawn here carries no useful node identity of its
-/// own (see `DrawCall::node`'s own doc comment on ambiguity across
-/// sources).
+/// `view` says which chunks this build draws, see [`super::View`]. The draws
+/// carry no node: a chunk drawn here has no useful node identity of its own
+/// (see `DrawCall::node`'s own doc comment on ambiguity across sources).
 ///
 /// Returns whether anything was actually emitted, which is what tells a
 /// caller whether to count the chunk as drawn at all.
@@ -374,9 +373,15 @@ pub(super) fn emit_chunk(
     model_blob: &[u8],
     chunk_index: usize,
     chunk: &rcsmodel::Mesh,
-    node: Option<u32>,
+    view: super::View,
     report: &mut Report,
 ) -> bool {
+    // A chunk the original draws only into its behind-the-glass target is left
+    // out of the main view, and the reverse (`rcsmodel::RENDER_BEHIND_GLASS`).
+    if !view.draws(chunk) {
+        report.behind_glass += usize::from(chunk.is_behind_glass());
+        return false;
+    }
     let mut emitted = false;
     // **Every surface, not just the chunk's own.** A quarter of the disc's
     // chunks declare more than one, each with its own material, bias and
@@ -440,7 +445,7 @@ pub(super) fn emit_chunk(
                     chunk: u32::try_from(chunk_index).ok(),
                 },
                 &anim_node::Placement::STATIC,
-                node,
+                None,
                 surface,
             );
             report.triangles += indices.len() / 3;

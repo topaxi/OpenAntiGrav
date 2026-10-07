@@ -83,6 +83,11 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // `sun_occlusion` and `oag_render::shadow::self_shadow`.
 @group(2) @binding(14) var self_shadow_tex: texture_depth_2d_array;
 
+// Wipeout HD's behind-the-glass target, which Vineta K's tunnel glass reads
+// through `scene.refraction` and the shadow map's clamped filtering sampler -
+// see `refracted` and `mesh::rcs::refraction`. A black placeholder elsewhere.
+@group(2) @binding(15) var behind_glass_tex: texture_2d<f32>;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;

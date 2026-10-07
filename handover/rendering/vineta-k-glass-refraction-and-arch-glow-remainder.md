@@ -1,31 +1,42 @@
 # Vineta K's glass refraction and arch glow: what is left
 
-2026-10-07, `hd-vineta-ceiling`. The read and the fixes are in [rcsmaterial.md](../../docs/formats/rcsmaterial.md), "Vineta K's ceiling: the tunnel glass reads the screen, and the arch lights lost their glow".
+2026-10-07, `hd-vineta-ceiling`, then `hd-glass-opus` and `hd-behind-glass`. The reads and the fixes are in
+[rcsmaterial.md](../../docs/formats/rcsmaterial.md), "Vineta K's ceiling: the tunnel glass reads the screen, and the
+arch lights lost their glow", its section 3 "The behind-the-glass target is drawn", and
+[visibility.md](../../docs/ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07.
+
+**Landed (`hd-behind-glass`):** the behind-the-glass target is drawn (640x360, the sky plus the `0x10` chunks, 4/3
+wider tangent, the `0x20` alternate fog, single-sided), and the glass is one opaque draw reading it. Pose A's right
+ceiling panes: reference `(4, 87, 87)`, before `(135, 176, 57)`, after `(14, 72, 72)`. Lane scratch:
+`data/scratch/hd-behind-glass/` (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 
-- The refraction pass reads the grab at the pixel's own position; the original perturbs it by the normal map times `0x9fc59444`. A real scene-copy pass would draw it, and would also put transparent draws behind the glass (the sea foam) into the grab in the right order.
+- **The dunes inside the target are rock, the capture's are sand.** `and_rocktosand`'s red-channel blend mask
+  (`j_rockblend5`) is read as the rock picture alone (rcsmaterial.md's table, "the red shape behind the glass"). It
+  now shows through every pane that looks at the terrain.
+- **The sea sheet is a smooth gradient where the capture's is rippled**: its `TC1 * R` term, the runtime 512x256
+  dual-paraboloid `paraboloidReflectionTex`, is not drawn; its lower half has no disc source found (rcsmaterial.md
+  section 2). This is now the largest difference at the top of the target.
+- **Why the glass's literal coordinate is twice the target's.** `refractProject` and `distortion` as read give
+  `(1 + x/w, 1 - y/w)`; the picture agrees with `0.5 + 0.5 (x/w, -y/w)` (90 % against 0 % on 7,341 pane pixels).
+  A texture normalisation rule of the linear `R5G6B5` target is the likely reason; unread.
+- The normal map's offset of the glass's projected point is not drawn (vertex normal, one unit).
+- The 5 main-view chunks with flag `0x20` keep the primary fog.
+- Ours draws every PVS-allowed node-placed chunk (197) without a frustum test; the original tests each one's runtime
+  world sphere. The writer of those spheres is not found.
 - The arch glow texture is sampled at the diffuse coordinate; the program samples it at `f[TC0].zw`.
-- `accumulates`' per-lane taint reaches 20 of 28 circuit models (`hd_add_second_census.rs`); only Talon's Junction `03` has a reference. Take a frame of Modesto Heights or Amphiseum at a matched pose.
-- **Two measured facts about the scenery beyond the glass (2026-10-07, `vineta-k-fidelity`; rcsmaterial.md, "Vineta K against a
-  draw capture", section 3):** (a) the original draws one group of its draws (36 of 273 at the tunnel pose) with
-  `Fog.Alternate Fog Color/Density` (`0 0.031373 0.031373`, `0.0045`), which this build never reads; what selects that group
-  is open (not position, not material family, not the PVS cell). (b) Ours draws `and_girder3` (chunk 1320), `and_metalstruts_pt2`
-  (1305), `and_dome_vent` (1286), `and_darkstrip` (1311), `j_strip_lights` (1315) near the tunnel and the original's frame binds
-  none of them; the nearest cell's bitmap allows all five, so the cull is unexplained. Chunks 1286 and 1305 have origin-centred
-  bounds (node-placed): read whether their `.vex` nodes sit under an LOD, switch or animation parent. Test any rule against
-  `data/scratch/vineta-k-fidelity/out/boot9` and `out/boot6`.
-- **The sea sheet** (`water_test_2`, `y = -50.8`, seen from below) is now `vertex colour * (ambient + sun * N.L)` (it drew white).
-  `paraboloidReflectionTex` is a **runtime 512x256 dual-paraboloid render of the environment** (sky above the middle row, teal
-  sea below; `probe11.png`), not `skyreflect.gtf`; its lower half, the part this view reads, has no disc source found. Not drawn.
-  The panes' teal is the glass's `W` times a near-white grab, so it also needs the sky tint (`hd-sky-luma`'s open item).
-- `cl_tunnelrefraction`'s own diffuse-colour scale (0.2549) and doubled grab are read off the disassembly, not pinned by a test.
+- `accumulates`' per-lane taint reaches 20 of 28 circuit models (`hd_add_second_census.rs`); only Talon's Junction
+  `03` has a reference. Take a frame of Modesto Heights or Amphiseum at a matched pose.
+- Talon's Junction's frame moved by 1/255 in one pixel with this change (Pulse is byte-identical); loader report and
+  draw counts are unchanged and neither fragment entry point's old code removes it. Cause not isolated.
+- `cl_tunnelrefraction`'s own diffuse-colour scale (0.2549) and doubled grab are read off the disassembly, not pinned
+  by a test.
 
 ## Next Steps
 
-1. Find the rule that picks the alternate-fog draws and the node parent that hides the five absent chunks: read who writes `fogColour` per draw group in `Scene_PrepareFrame`
-   (`0x003aa888`, fog offsets `+0x4f0`/`+0x504` in the `.envsettings` object), or fit a rule to the 36 captured draws'
-   chunks (`rcs.render_flags`, `Water.Water plane height` 100, the chunk's node). Then draw the group with the alternate
-   pair and re-compare `pairA.png`-style at the maintainer pose.
-2. RPCS3-capture a second circuit that `hd_add_second_census` shows moved (`place --hook`, same recipe).
-3. A real scene-copy pass for the glass (the grab offset by the normal map) once the fog group is right.
+1. Read `and_rocktosand`'s mask blend (`j_rockblend5` red channel between `and_sand_sand` and `and_rock4`) and draw
+   it; re-dump the target at pose A (`OAG_DUMP_BEHIND_GLASS`) against `target_be.png` in the `hd-glass-opus` scratch.
+2. Measure whether the 4/3 holds at speed (`place --speed`, dump `0x00c49240..0x00c492b0` and the vertex constants in
+   the hook's last round), and capture a second pose with the glass in view to re-check the coordinate law.
+3. RPCS3-capture a second circuit that `hd_add_second_census` shows moved (`place --hook`, same recipe).

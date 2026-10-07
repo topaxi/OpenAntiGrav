@@ -403,6 +403,7 @@ impl Stage {
             hud,
             track_panel,
             track_model,
+            behind_glass,
             liveries,
             collision_model,
             sky_model,
@@ -518,6 +519,7 @@ impl Stage {
             zone_grade,
             shadows,
             shadow_hulls,
+            behind_glass,
         )?;
         scene.attach_ripples(ripples);
         scene.attach_mist(

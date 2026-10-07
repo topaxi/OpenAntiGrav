@@ -65,9 +65,37 @@ const RENDER_FLAGS: usize = 0x06;
 /// thirtieth pass.
 ///
 /// The other bits the same pass read - the five-bucket draw routing in bits
-/// 2-5, the PVS scrub in bits 9-10 - are carried in the halfword and not
-/// interpreted here yet.
+/// 2-5, the PVS scrub in bits 9-10 - are carried in the halfword and are not
+/// interpreted here, except bits 4 and 5 ([`RENDER_BEHIND_GLASS`],
+/// [`RENDER_ALTERNATE_FOG`]).
 pub const RENDER_TRACK: u16 = 1 << 0;
+
+/// Bit 4 of [`Mesh::render_flags`]: **this chunk is drawn behind the glass,
+/// never in the main view.**
+///
+/// The original routes it to its sort bucket B3, and that bucket is drawn into
+/// a 640x360 target of its own, with the sky, under a projection 4/3 wider in
+/// tangent than the main view's; the tunnel glass reads that target. Measured
+/// on Vineta K's RPCS3 captures, each draw tied to its chunk by vertex offset:
+/// 93 of 93 draws into that target are chunks with this bit, and none of 357
+/// main-view draws is, over three frames. Confidence 88, from
+/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, 2026-10-07. On disc it
+/// is set on 420 chunks, all in `01_vineta_k`.
+pub const RENDER_BEHIND_GLASS: u16 = 1 << 4;
+
+/// Bit 5 of [`Mesh::render_flags`]: **this chunk is fogged with the
+/// circuit's alternate fog pair** (`Fog.Alternate Fog Color` / `Alternate Fog
+/// Density`) instead of the primary one.
+///
+/// Both of the original's fog publishers pick the draw's `fogColour` buffer on
+/// this bit (`0x00400c38`, `0x003ffa90`): set reads `Scene_GetAlternateFog`,
+/// clear `Scene_GetPrimaryFog`. On Vineta K's pose-A capture all 35
+/// alternate-fog draws are chunks with this bit and none of the 76
+/// primary-fog draws is. Confidence 88, from
+/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, 2026-10-07. On Vineta
+/// K, 198 of the 210 chunks per direction with [`RENDER_BEHIND_GLASS`] carry
+/// it, and 5 chunks of the main view.
+pub const RENDER_ALTERNATE_FOG: u16 = 1 << 5;
 
 /// Reads the flags halfword of the record a chunk header at `at` names.
 ///
@@ -103,6 +131,21 @@ impl Mesh {
     #[must_use]
     pub fn is_track(&self) -> bool {
         self.render_flags & RENDER_TRACK != 0
+    }
+
+    /// Whether this chunk belongs to the behind-the-glass target rather than
+    /// the main view - bit 4 of [`Self::render_flags`], see
+    /// [`RENDER_BEHIND_GLASS`].
+    #[must_use]
+    pub fn is_behind_glass(&self) -> bool {
+        self.render_flags & RENDER_BEHIND_GLASS != 0
+    }
+
+    /// Whether this chunk is fogged with the alternate pair - bit 5 of
+    /// [`Self::render_flags`], see [`RENDER_ALTERNATE_FOG`].
+    #[must_use]
+    pub fn uses_alternate_fog(&self) -> bool {
+        self.render_flags & RENDER_ALTERNATE_FOG != 0
     }
 }
 

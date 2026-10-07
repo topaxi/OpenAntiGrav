@@ -38,6 +38,28 @@ pub(super) struct MaterialSetup {
     pub(super) anim_tracks: Vec<crate::mesh::AnimTrack>,
 }
 
+impl MaterialSetup {
+    /// The setup a model was already built with, read back off it: what a
+    /// second build of the same file reuses instead of decoding every texture
+    /// again (`super::scene::build_scene_views`). Every slot table is cloned,
+    /// and a texture slot is a shared pointer, so this copies no pixels.
+    pub(super) fn of(model: &crate::mesh::Model) -> Self {
+        Self {
+            textures: model.textures.clone(),
+            lightmaps: model.lightmaps.clone(),
+            material_slots: model.material_slots.clone(),
+            material_specular_exponent: model.material_specular_exponent.clone(),
+            material_variants: model.material_variants.clone(),
+            emissive: model.emissive.clone(),
+            alpha_test_ref: model.alpha_test_ref,
+            mag_emissive: model.pad_masks.clone(),
+            wave_maps: model.wave_maps.clone(),
+            material_anim: model.material_anim.clone(),
+            anim_tracks: model.anim_tracks.clone(),
+        }
+    }
+}
+
 pub(super) fn material_setup(
     model: &rcsmodel::Model,
     model_blob: &[u8],

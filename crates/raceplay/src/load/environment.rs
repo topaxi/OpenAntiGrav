@@ -485,6 +485,45 @@ pub(super) fn envsettings_fog(
     Some(mesh_render::Fog::authored_exp2(colour, density))
 }
 
+/// The circuit's **alternate** fog pair, `Fog.Alternate Fog Color` and
+/// `Alternate Fog Density`, on [`envsettings_fog`]'s curve, or `None` with the
+/// reason reported.
+///
+/// The fog the original gives a chunk whose render flag has `0x20`
+/// (`oag_rcs::rcsmodel::RENDER_ALTERNATE_FOG`): on Vineta K's capture the
+/// patched `fogColour` of every such draw is this pair,
+/// `{0, 0.031373, 0.031373, 0.0045}`, and of every other draw the primary
+/// one. Drawn on the behind-the-glass target's chunks, 198 of whose 210 per
+/// direction carry the bit; the 5 main-view chunks that do keep the primary
+/// pair (`scene::behind_glass`).
+pub(super) fn envsettings_alternate_fog(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<mesh_render::Fog> {
+    use oag_tables::envsettings::{ALTERNATE_FOG_COLOUR, ALTERNATE_FOG_DENSITY};
+    let name = envsettings_name(track)?;
+    let text = String::from_utf8(archives.read_name(&name).ok()?).ok()?;
+    let env = EnvSettings::parse(&text).ok()?;
+    let pair = env
+        .vec3(ALTERNATE_FOG_COLOUR)
+        .zip(env.scalar(ALTERNATE_FOG_DENSITY))
+        .filter(|&(_, density)| density > 0.0);
+    let Some((colour, density)) = pair else {
+        report.push(format!(
+            "{name}: no usable alternate fog; the behind-the-glass chunks that select it \
+             draw with the primary fog"
+        ));
+        return None;
+    };
+    report.push(format!(
+        "{name}: alternate fog [{:.3}, {:.3}, {:.3}] at density {density}, for the chunks \
+         flagged 0x20",
+        colour[0], colour[1], colour[2],
+    ));
+    Some(mesh_render::Fog::authored_exp2(colour, density))
+}
+
 /// The `HDR and Bloom` values a Wipeout HD circuit authors, or `None` with
 /// the reason reported.
 ///

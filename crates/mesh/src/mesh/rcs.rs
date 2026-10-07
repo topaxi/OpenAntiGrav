@@ -198,89 +198,9 @@ pub mod curve_track;
 mod setup;
 use setup::{MaterialSetup, material_setup};
 
-/// The whole of a PS3 model: the meshes its `.vex` places, and the geometry
-/// nothing in the `.vex` mentions.
-///
-/// # Two passes, because Wipeout HD authors two kinds of geometry
-///
-/// **A craft is all first pass and a circuit is almost all second.** Every one
-/// of Assegai's 15 `Mesh` nodes addresses a chunk, and its positions are in the
-/// node's own space - the PSP arrangement with the vertices moved out. All 126
-/// of Talon's Junction's `Mesh` nodes are *props*: blimps, girders, sky
-/// traffic. The road, the walls, the scenery and both kinds of pad are among
-/// the 913 of 983 chunks no `Mesh` node addresses, each carrying a
-/// **world-space** bias, drawn without a node transform because there is no
-/// node - a `Weapon Pad` or `Speedup Pad` node names its chunk at the mesh
-/// payload's own `+0x30`, but as [`referenced`] records, the chunk's
-/// coordinates ignore the node anyway.
-///
-/// So a circuit that drew only the first pass drew its skybox traffic and no
-/// track, which is exactly what this looked like before the second existed.
-///
-/// **56 of Talon's Junction's prop nodes stay honestly absent.** Their hashes
-/// are in no `.rcsmodel` on the disc except *other environments'* - the same
-/// `tanker1aShape` hash appears in Amphiseum's and Tech De Ra's own track
-/// models, so the hash is content-derived and those donors were simply never
-/// baked into this circuit's file. The sky traffic that is visible here is
-/// the world-space `animating_traffic` chunks, which the second pass draws.
-///
-/// **Both pad classes' chunks are excluded from this pass entirely**, not
-/// drawn into a third bucket - [`pads::build_pads`]/[`pads::build_weapon_pads`]
-/// draw them through their own node-ordered pass instead, which is what a
-/// tintable, gameplay `Drawable` needs and this pass cannot give: see that
-/// pair's own doc comment for why. A caller that wants one merged picture
-/// regardless - the viewer's `--mesh`/`--track` - draws them back in itself;
-/// see `oag_view::ps3_mesh::with_pads`.
-///
-/// # Errors
-///
-/// As [`build`].
-pub fn build_scene(
-    label: &str,
-    data: &[u8],
-    model_blob: &[u8],
-    textures: Textures<'_>,
-) -> Result<(Model, Report)> {
-    let (mut out, mut report) =
-        build_with_options(label, data, model_blob, textures, |c| c.mesh, true)?;
-
-    let model = rcsmodel::Model::parse(model_blob)
-        .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
-    let nodes = vex::nodes(data).context("walking the node tree")?;
-    let classes = vex::classes_of(data).ok();
-    classes
-        .and_then(|c| c.mesh)
-        .context("no mesh class id for this .vex version")?;
-    let order = vex::byte_order(data);
-    let placed = pads::placed_hashes(data, &nodes, classes, order, &model);
-
-    pads::bind_scene_pad_masks(&model, &placed, &mut out, textures, &mut report);
-
-    for (chunk_index, chunk) in model.meshes.iter().enumerate() {
-        if placed.contains(&chunk.hash) {
-            continue;
-        }
-        if pads::emit_chunk(
-            &mut out,
-            &model,
-            model_blob,
-            chunk_index,
-            chunk,
-            None,
-            &mut report,
-        ) {
-            report.unreferenced += 1;
-            out.mesh_count += 1;
-        }
-    }
-
-    face_normals(&mut out);
-    let (centre, radius) = bounding_sphere(&out.vertices);
-    out.centre = centre;
-    out.radius = radius;
-
-    Ok((out, report))
-}
+mod scene;
+use scene::Setup;
+pub use scene::{BehindGlass, View, build_scene, build_scene_views};
 
 /// Whether a chunk's declaration names no texture coordinate.
 ///
@@ -510,26 +430,8 @@ fn emit(
     mesh: Geometry<'_>,
     place: &anim_node::Placement,
     node: Option<u32>,
-    mut surface: Surface,
+    surface: Surface,
 ) {
-    // A screen-grab refraction is two blended draws of one chunk, see
-    // `refraction`: the grab's weight first, then the glass's own colour.
-    if surface.roles & slots::REFRACTION != 0 && surface.roles & slots::REFRACT_GRAB == 0 {
-        let roles = surface.roles | slots::REFRACT_GRAB;
-        let blend = Some(refraction::GRAB_BLEND);
-        emit(
-            out,
-            mesh,
-            place,
-            node,
-            Surface {
-                roles,
-                blend,
-                ..surface
-            },
-        );
-        surface.blend = Some(refraction::ADD_BLEND);
-    }
     let to_world = Mat4::from_cols_array(&place.to_world);
     let Geometry {
         points,
@@ -703,20 +605,32 @@ pub fn build(
     textures: Textures<'_>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<(Model, Report)> {
-    build_with_options(label, data, model_blob, textures, pick, false)
+    build_with_options(
+        label,
+        data,
+        model_blob,
+        Setup::Decode(textures),
+        pick,
+        false,
+        View::Main,
+    )
 }
 
 /// [`build`], with the world-bake skip [`is_world_baked`] documents - on only
 /// when the caller has a world-space pass ready to draw the skipped chunk
 /// instead, which is why this is not `pub`: [`build_scene`] is the one caller
 /// that qualifies, and every other caller goes through [`build`] instead.
+///
+/// `setup` is where the materials come from, and `view` which chunks it draws -
+/// see [`scene::View`].
 fn build_with_options(
     label: &str,
     data: &[u8],
     model_blob: &[u8],
-    textures: Textures<'_>,
+    setup: Setup<'_>,
     pick: fn(vex::classes::Classes) -> Option<u32>,
     world_space_fallback: bool,
+    view: View,
 ) -> Result<(Model, Report)> {
     if !vex::has_magic(data) {
         bail!("{label} is not a .vex file (no VEXX magic)");
@@ -770,7 +684,10 @@ fn build_with_options(
         wave_maps,
         material_anim,
         anim_tracks,
-    } = material_setup(&model, model_blob, textures, &mut report);
+    } = match setup {
+        Setup::Decode(textures) => material_setup(&model, model_blob, textures, &mut report),
+        Setup::Copy(from) => MaterialSetup::of(from),
+    };
     out.pad_masks = mag_emissive;
     out.wave_maps = wave_maps;
     out.emissive = emissive;
@@ -823,6 +740,10 @@ fn build_with_options(
         }
         if isolate::excludes(&model, mesh) {
             report.isolated += 1;
+            continue;
+        }
+        if !view.draws(mesh) {
+            report.behind_glass += usize::from(mesh.is_behind_glass());
             continue;
         }
         report.addressed += 1;

@@ -73,6 +73,10 @@ pub(super) fn sibling_model(
 /// it through `pads::ps3_pad_models` instead, which is what gives
 /// `race::load` a tintable, gateable model rather than one baked
 /// unremovably into this one.
+///
+/// **And the chunks the original draws only behind the glass** (Vineta K):
+/// they come back as their own two models, for the scene's
+/// behind-the-glass target - see `oag_mesh::mesh::rcs::build_scene_views`.
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -80,9 +84,10 @@ pub(super) fn track_model(
     geometry: &Option<Vec<u8>>,
     model_name: Option<&str>,
     report: &mut Vec<String>,
-) -> Option<Model> {
+) -> (Option<Model>, crate::BehindGlassModels) {
+    let none = crate::BehindGlassModels::default;
     match geometry {
-        None => None,
+        None => (None, none()),
         // **Two containers wear this extension.** Wipeout HD's needs the `.vex`
         // beside it - a chunk is addressed by hash and its stride comes from the
         // node's box - and Wipeout 2048's needs neither, so it takes a builder
@@ -95,32 +100,47 @@ pub(super) fn track_model(
             }) {
                 Ok((model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
-                    Some(model)
+                    (Some(model), none())
                 }
                 Err(error) => {
                     report.push(format!(
                         "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
                          drawing the derived ribbon instead, as --ribbon does"
                     ));
-                    None
+                    (None, none())
                 }
             }
         }
-        Some(geometry) => match mesh::rcs::build_scene(track, track_blob, geometry, &mut |path| {
-            archives.read_name(path).ok()
-        }) {
-            Ok((model, built)) => {
-                report.push(format!("{track}: {}", built.describe()));
-                Some(model)
-            }
-            Err(error) => {
-                report.push(format!(
-                    "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
+        Some(geometry) => {
+            match mesh::rcs::build_scene_views(track, track_blob, geometry, &mut |path| {
+                archives.read_name(path).ok()
+            }) {
+                Ok((model, groups, built)) => {
+                    report.push(format!("{track}: {}", built.describe()));
+                    // The pair the target's alternate group is fogged with, read
+                    // only for a circuit that has one, so no other report moves.
+                    let alternate_fog = (!groups.is_empty())
+                        .then(|| {
+                            super::environment::envsettings_alternate_fog(archives, track, report)
+                        })
+                        .flatten();
+                    (
+                        Some(model),
+                        crate::BehindGlassModels {
+                            groups,
+                            alternate_fog,
+                        },
+                    )
+                }
+                Err(error) => {
+                    report.push(format!(
+                        "{track}: the .rcsmodel beside it will not decode ({error:#}) - \
                      drawing the derived ribbon instead, as --ribbon does"
-                ));
-                None
+                    ));
+                    (None, none())
+                }
             }
-        },
+        }
     }
 }
 

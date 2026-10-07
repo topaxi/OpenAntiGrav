@@ -235,7 +235,7 @@ pub struct Report {
     /// ones whose textures or colours could not be read (drawn as before).
     pub ice_bound: usize,
     pub ice_unread: usize,
-    /// Screen-grab refraction materials bound, and ones whose weight or table
+    /// Refraction materials bound to the behind-the-glass target, and ones whose weight or table
     /// entry could not be read (drawn as an ordinary lit surface).
     pub refraction_bound: usize,
     /// See [`Self::refraction_bound`].
@@ -248,6 +248,11 @@ pub struct Report {
     /// in [`Self::describe`], because a mutilated frame read as the real one
     /// is exactly the mistake this diagnostic is meant to prevent.
     pub isolated: usize,
+    /// Chunks the original draws only into its behind-the-glass target
+    /// (`rcsmodel::RENDER_BEHIND_GLASS`): left out of the main view as the
+    /// original leaves them. [`super::build_scene_views`] builds them into the
+    /// target's own models; [`super::build_scene`] alone does not.
+    pub behind_glass: usize,
 }
 
 impl Report {
@@ -383,11 +388,17 @@ impl Report {
             n => format!(", {n} ice material(s) whose mask or colours could not be read"),
         } + &match self.refraction_bound {
             0 => String::new(),
-            n => format!(", {n} screen-grab refraction material(s) drawn over what is behind them"),
+            n => format!(", {n} refraction material(s) reading the behind-the-glass target"),
         } + &match self.refraction_unread {
             0 => String::new(),
             n => format!(
                 ", {n} refraction material(s) whose weight could not be read (drawn lit, opaque)"
+            ),
+        } + &match self.behind_glass {
+            0 => String::new(),
+            n => format!(
+                ", {n} chunk(s) the original draws only behind the glass, left out of the \
+                 main view"
             ),
         } + &match self.isolated {
             0 => String::new(),

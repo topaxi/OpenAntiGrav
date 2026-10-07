@@ -14,6 +14,21 @@ use super::motion::{self, Attachments};
 use crate::Race;
 
 impl Scene {
+    /// How many of the track's placeholder materials were pointed at an advert
+    /// card when this scene was built.
+    #[cfg(test)]
+    pub(crate) fn adverts_rebound(&self) -> usize {
+        self.adverts
+            .as_ref()
+            .map_or(0, crate::adverts::Cards::rebound)
+    }
+
+    /// This scene's pipeline cache, as `(asked for, reused, distinct built)`.
+    #[must_use]
+    pub fn build_cache(&self) -> (u32, u32, usize) {
+        self.build_cache
+    }
+
     /// How many rows down the ladder the next speed class begins, or `None`
     /// with no grade, no recovered ladder, or on the top rung.
     ///

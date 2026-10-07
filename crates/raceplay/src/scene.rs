@@ -11,6 +11,7 @@ use log::{debug, warn};
 mod absorb_overlay;
 mod absorb_shell;
 mod beam;
+pub(crate) mod behind_glass;
 mod bloom;
 mod boost_flare;
 mod clouds;
@@ -89,6 +90,9 @@ pub struct Scene {
     /// The billboard adverts, drawn once a frame into the targets the track's
     /// placeholder quads show - see [`crate::adverts`]. `None` with no card.
     adverts: Option<crate::adverts::Cards>,
+    /// Vineta K's behind-the-glass target, drawn before the main view - see
+    /// [`behind_glass`]. `None` on every other circuit.
+    behind_glass: Option<behind_glass::Target>,
     /// The track's authored visibility partition, when it decoded. `None`
     /// for a track with no `section` nodes - every Pure track - and the
     /// first tier is then skipped entirely rather than approximated.
@@ -401,21 +405,6 @@ pub struct Scene {
 type BuildCacheCounts = (u32, u32, usize);
 
 impl Scene {
-    /// How many of the track's placeholder materials were pointed at an advert
-    /// card when this scene was built.
-    #[cfg(test)]
-    pub(crate) fn adverts_rebound(&self) -> usize {
-        self.adverts
-            .as_ref()
-            .map_or(0, crate::adverts::Cards::rebound)
-    }
-
-    /// This scene's pipeline cache, as `(asked for, reused, distinct built)`.
-    #[must_use]
-    pub fn build_cache(&self) -> (u32, u32, usize) {
-        self.build_cache
-    }
-
     /// Builds both pipelines and a depth buffer for a viewport of `size`.
     ///
     /// # Errors
@@ -465,6 +454,7 @@ impl Scene {
         zone_grade: Option<crate::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
         shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
+        behind_glass: behind_glass::BehindGlassModels,
     ) -> Result<Self> {
         // **Opened here, not by the caller.** Every drawable below shares this
         // `device`, so `mesh_render::build` parses `mesh.wgsl` once and reuses
@@ -521,7 +511,18 @@ impl Scene {
             depth: Some(shadow_map.depth_view()),
             occlusion: Some(sun_occlusion.view()),
             self_shadow: Some(sun_occlusion.self_shadow().view()),
+            behind_glass: None,
         };
+        let behind_glass = behind_glass::Target::build(
+            device,
+            queue,
+            behind_glass,
+            sky_model.as_ref(),
+            format,
+            anisotropy,
+            zone_art,
+            shadow_maps,
+        )?;
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -568,7 +569,11 @@ impl Scene {
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
             zone_art,
-            shadow_maps,
+            // The circuit's glass reads the behind-the-glass target.
+            mesh_render::ShadowMaps {
+                behind_glass: behind_glass.as_ref().map(behind_glass::Target::colour),
+                ..shadow_maps
+            },
             // **The one receiver of the coverage map**, which is what Wipeout
             // HD's own materials say: the track surface declares
             // `shadowMapTex` and a craft's does not. It reads the `mapped`
@@ -578,6 +583,7 @@ impl Scene {
             // HD's circuit alone: its opaque list shades about two fragments
             // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
             hd.is_some(),
+            false,
         )?;
         let adverts = if adverts.is_empty() {
             None
@@ -959,6 +965,7 @@ impl Scene {
             weapon_pads,
             gantry,
             adverts,
+            behind_glass,
             fog_volumes,
             light,
             authored_fog,

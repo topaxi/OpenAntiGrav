@@ -244,6 +244,7 @@ pub fn build(
         receives_shadow,
         Texcoords::Interleaved,
         false,
+        false,
     )
 }
 
@@ -276,6 +277,10 @@ pub fn build_with(
     texcoords: Texcoords,
     // Whether to build [`Built::prepass`] - see [`Prepass`].
     prepass: bool,
+    // Whether the opaque and cutout pipelines cull back faces, which no model
+    // asks for but Wipeout HD's behind-the-glass target (`oag_raceplay`'s
+    // `scene::behind_glass`), whose every chunk draw the original culls.
+    cull_back: bool,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -499,10 +504,10 @@ pub fn build_with(
     // keys each of its own callers separately; this only avoids constructing
     // the same value twice.
     let primitive = wgpu::PrimitiveState {
-        // Culling is off on purpose. Strip winding is reconstructed rather
-        // than read from the file, so culling would turn any mistake there
-        // into invisible geometry instead of a visible artefact.
-        cull_mode: None,
+        // Culling is off on purpose unless asked for. Strip winding is
+        // reconstructed rather than read from the file, so culling would turn
+        // any mistake there into invisible geometry instead of an artefact.
+        cull_mode: cull_back.then_some(wgpu::Face::Back),
         ..Default::default()
     };
     let multisample = wgpu::MultisampleState {

@@ -157,7 +157,7 @@ has.
 | `Lighting.Sky colour` | **Drawn**: the sky cube's vertex colour, `byte / 128` (fitted on Sol 2 and Talon's Junction, the divisor not read) - [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#hds-sky-is-tinted-by-lightingsky-colour-and-the-sky-luma-changes-sign-reading-was-a-mask-artefact-2026-10-07-hd-sky-luma). The fourth byte is unread |
 | `Lighting.Sky rotation` | **Drawn**: the sky cubemap is turned by it, about the vertical. Degrees is the corpus's own unit - 180 and -40 survive no radian reading - and the sign and axis are this project's choice, said per race in the load report |
 | `Fog.Fog Color`, `Fog Density` | **Drawn, on the curve read out of the circuit materials' own fragment microcode**: `f = exp(-(density * view_depth)^2)`, the colour lerped in by `f`. See [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode). What is *not* read is how the engine fills the shader's coefficient from `Fog Density`; the authored value is passed through unscaled and judged against an rpcs3 reference frame |
-| `Fog.Alternate *` | Read, unused - what selects the alternate pair over the primary is unread |
+| `Fog.Alternate *` | Read, unused - the original selects it per chunk by render flag `0x20` (measured 2026-10-07, [rcsmaterial.md](rcsmaterial.md)), not wired |
 | `HDR and Bloom.*` | **Drawn** (2026-08-19): the whole non-radial chain - gate, adaptation fade, blurs, exposure - runs on the read formulas in `oag_post::hd_bloom`, every key's field pinned by the executable's own settings registrar. Still unused: the `Radial bloom *` set (its passes are read but not implemented; `Radial bloom Enabled` is `0` on every circuit but `zone_1`, census 2026-10-07) and `Bloom feedback` (authored by no circuit) |
 | `Water.*` | Read, unused. No water surface is drawn |
 | `Lighting.Prelit *`, `Spotlight *`, `Ambient false direction` | Read, unused, and undecoded - what "prelit ambient false specular" means is not established |
@@ -251,14 +251,15 @@ do with a circuit.
   instruction listing are in
   [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode).
   **Still open**: whether `fogColour.w` is `Fog.Fog Density` unscaled - the
-  race passes it through unscaled and says so - and what selects the
-  `Alternate` pair.
+  race passes it through unscaled and says so. (What selects the `Alternate` pair is
+  now measured, below.)
 - **`Alternate Fog Color` and `Alternate Fog Density`**, on every circuit. **Measured
   2026-10-07 (`vineta-k-fidelity`)**: the pair is patched into the fragment programs of one
   contiguous group of draws in a frame (Vineta K's scenery beyond the tunnel glass, 36 of 273
   draws at the tunnel pose, a few runs on the start straight), the rest using the primary pair
   - `Alternate Fog Color` `0 0.031373 0.031373` and `Density` `0.0045` exactly. What selects the
-  group is **open**: not position, not material family, not the PVS; see
+  group is **the chunk's render flag `0x20`** (2026-10-07, `hd-glass-opus`: both fog publishers test it,
+  and 35 of 35 alternate-fog draws are `0x20` chunks, 76 of 76 primary-fog draws are not); not wired; see
   [rcsmaterial.md](rcsmaterial.md#vineta-k-against-a-draw-capture-the-start-lines-light-bars-the-seas-real-inputs-and-the-alternate-fog-2026-10-07-vineta-k-fidelity).
 
 ## Wipeout 2048 authors the same shape under different key names
