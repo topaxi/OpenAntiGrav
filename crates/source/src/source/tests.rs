@@ -470,10 +470,13 @@ fn an_unpacked_folder_is_found_without_an_image() {
     std::fs::write(&data09, b"").unwrap();
 
     assert_eq!(
-        first_package(&[vita.clone()], &[ps4.clone()]),
+        first_package(std::slice::from_ref(&vita), std::slice::from_ref(&ps4)),
         Some(copy.clone())
     );
-    assert_eq!(first_package(&[], &[ps4.clone()]), Some(ps4.clone()));
+    assert_eq!(
+        first_package(&[], std::slice::from_ref(&ps4)),
+        Some(ps4.clone())
+    );
     assert_eq!(first_package(&[], &[]), None);
 
     std::fs::remove_dir_all(&vita).unwrap();

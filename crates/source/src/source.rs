@@ -31,10 +31,10 @@
 //! Wipeout 2048's own extract is a directory rather than a disc image, so it
 //! is not one of the four `IMAGE_NAMES` steps 4-6 above scan for; it has its
 //! own parallel search, [`package_search_path`], over the same three
-//! locations with `extracted/vita` standing in for `images`. Only
-//! [`candidates`] reaches it - `resolve`/`explicit` never open a package,
-//! because nothing yet plays 2048 past its placeholder menu (see
-//! `crate::main::session::placeholder`).
+//! locations with `extracted/vita` standing in for `images`. [`candidates`]
+//! lists them, and [`resolve`] falls back to the first one when no image is
+//! found, so a no-argument boot, `--dry-run` and `--screenshot` open a lone
+//! extract the chooser would have shown. `$OAG_IMAGE` accepts one too.
 //!
 //! Wipeout: Omega Collection's own extract is a directory too, but shaped
 //! differently from 2048's: one PS4 copy is a base package and a mandatory
@@ -502,7 +502,10 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
          (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
         std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
         list(searched, ".chd / .iso"),
-        list(&package_search_path(), "unpacked 2048 folder, base/PSP2/data.psarc"),
+        list(
+            &package_search_path(),
+            "unpacked 2048 folder, base/PSP2/data.psarc"
+        ),
         list(&ps4_search_path(), "unpacked Omega folder, omega-eu-patch/"),
         IMAGE_NAMES[0],
     )
