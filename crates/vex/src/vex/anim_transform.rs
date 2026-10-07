@@ -317,7 +317,9 @@ pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<A
         let read = |at: usize| -> [f32; 3] {
             match key {
                 Key::Short => std::array::from_fn(|k| f32::from(u16_at(at + k * 2) as i16)),
-                Key::Float3 | Key::Float4 => std::array::from_fn(|k| f32_at(at + k * 4)),
+                Key::Float3 => std::array::from_fn(|k| f32_at(at + k * 4)),
+                // `w` first: the `(x, y, z)` follow it.
+                Key::Float4 => std::array::from_fn(|k| f32_at(at + 4 + k * 4)),
             }
         };
         Some(AnimChannel {
@@ -325,7 +327,7 @@ pub fn anim_transform(payload: &[u8], order: oag_formats::ByteOrder) -> Option<A
             values: (0..count).map(|i| read(values + i * key.width())).collect(),
             w: match key {
                 Key::Float4 => (0..count)
-                    .map(|i| f32_at(values + i * key.width() + 12))
+                    .map(|i| f32_at(values + i * key.width()))
                     .collect(),
                 Key::Short | Key::Float3 => Vec::new(),
             },
@@ -366,7 +368,9 @@ enum Key {
     /// Three `f32`: a translation in world units (quantum `1.0`, base at the
     /// origin on all 21 nodes that use it).
     Float3,
-    /// Four `f32`: a quaternion with its `w` stored rather than reconstructed.
+    /// Four `f32`, `(w, x, y, z)`: a quaternion with its `w` stored, **first**, rather than
+    /// reconstructed. Order measured against the grid camera's aim point; see
+    /// [`ROTATION_IS_QUATERNION`].
     Float4,
 }
 
@@ -392,8 +396,14 @@ pub const TRANSLATION_IS_FLOAT: u32 = 1;
 ///
 /// Measured as [`TRANSLATION_IS_FLOAT`] is, and always set with it on this disc
 /// (all 97 carry `0x5`), so **nothing separates the two bits**; a file setting
-/// only one would. The order `(x, y, z, w)` is a choice at confidence 60, not a
-/// reading; confidence 85 on the width.
+/// only one would. Confidence 85 on the width.
+///
+/// **The four floats run `(w, x, y, z)`**, not `(x, y, z, w)` as first assumed (a choice
+/// at confidence 60). Measured on the eight numbered circuits' `start_grid.vex`, whose
+/// `gridCamera` leaf stores the point the camera looks at: with `w` first, the first key's
+/// view axis points at it to within `1e-2` on all eight (dot `1.000`, `0.999` on two) and the
+/// camera's up row points up; read `(x, y, z, w)` the same keys turn the picture upside
+/// down and aim up to 130 degrees off it. Origin: that aim point, not an evaluator.
 pub const ROTATION_IS_QUATERNION: u32 = 4;
 
 /// One node's `Anim Transform`, with its `LoopEnd` and `FixedFrames`

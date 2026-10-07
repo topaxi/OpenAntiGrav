@@ -288,3 +288,39 @@ fn a_big_endian_payload_decodes_the_same_and_only_that_way() {
         "a big-endian payload read little-endian must fail rather than mislead"
     );
 }
+
+/// A whole `f32` quaternion key is `(w, x, y, z)`, `w` first: a quarter turn about `y` is
+/// `(cos 45, 0, sin 45, 0)`, and read `(x, y, z, w)` the same four floats are a half turn about
+/// the other axis. The order was measured on HD's grid cameras, see [`ROTATION_IS_QUATERNION`].
+#[test]
+fn a_whole_float_quaternion_key_is_w_first() {
+    let order = ByteOrder::Big;
+    let mut b = Builder::with_order(order);
+    b.u16(0x04, 1);
+    let times = 0x50 + b.body.len();
+    b.body.extend_from_slice(&Builder::bytes16(order, 0));
+    b.body.extend_from_slice(&[0, 0]);
+    let values = 0x50 + b.body.len();
+    let half = std::f32::consts::FRAC_1_SQRT_2;
+    for v in [half, 0.0, half, 0.0] {
+        b.body.extend_from_slice(&v.to_bits().to_be_bytes());
+    }
+    b.header[0x08..0x0c].copy_from_slice(&Builder::bytes32(order, times as u32));
+    b.header[0x1c..0x20].copy_from_slice(&Builder::bytes32(order, values as u32));
+    // The flag widens the rotation key and nothing else, so the other channels keep their
+    // `s16` keys (a count of zero stores one).
+    b.header[0x34..0x38].copy_from_slice(&Builder::bytes32(order, ROTATION_IS_QUATERNION));
+    for (count_at, times_at, values_at, key) in [
+        (0x02, 0x0c, 0x2c, (0, 0, 0)),
+        (0x06, 0x38, 0x40, (256, 256, 256)),
+    ] {
+        b.channel(count_at, times_at, values_at, &[(0, key)])
+            .u16(count_at, 0);
+    }
+    let anim = anim_transform(&b.build(), order).expect("decodes");
+    assert_eq!(anim.rotation.w, [half]);
+    assert_eq!(anim.rotation.values, [[0.0, half, 0.0]]);
+    let m = anim.sample(0.0);
+    assert!(m[0].abs() < 1e-3 && (m[2] + 1.0).abs() < 1e-3, "{m:?}");
+    assert!((m[5] - 1.0).abs() < 1e-3, "y stays the axis: {m:?}");
+}

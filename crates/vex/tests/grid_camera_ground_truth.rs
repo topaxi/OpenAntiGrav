@@ -156,3 +156,61 @@ fn every_circuit_authors_a_flyby_of_its_own_length() {
         ]
     );
 }
+
+/// **Every flyby on Wipeout HD's disc looks where its own `gridCamera` leaf says, and keeps the
+/// sky up.** The leaf stores the point the camera looks at (`+0x10`, as a `Camera`'s), which is
+/// the one thing in the file the animation's rotation can be checked against.
+///
+/// The eight circuits carried over from Pulse author their rotation as whole `f32` quaternions,
+/// and read `(x, y, z, w)` they were upside down and up to 130 degrees off the aim; the order is
+/// `(w, x, y, z)`. HD's own four circuits author `s16` keys and were right all along, so the sweep
+/// holds both forms to the one rule.
+#[test]
+#[ignore]
+fn every_hd_flyby_looks_at_its_aim_point_with_the_sky_up() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = 0;
+    for archive in 0..7 {
+        let spec = format!("{}:PS3_GAME/USRDIR/DATA{archive:02}.PSARC", image.display());
+        let mut open = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.contains("start_grid") && p.ends_with(".vex"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let bytes = open.read_path(&path).expect("reads");
+            let Some(grid) = GridCamera::read(&bytes) else {
+                continue;
+            };
+            let nodes = oag_vex::vex::nodes(&bytes).expect("nodes");
+            let leaf = nodes
+                .iter()
+                .find(|n| n.class_id == oag_vex::grid_camera::CLASS_GRID_CAMERA)
+                .expect("leaf");
+            let at = leaf.payload().start;
+            let aim: [f32; 3] = std::array::from_fn(|k| {
+                f32::from_be_bytes(bytes[at + 0x10 + k * 4..][..4].try_into().unwrap())
+            });
+            let pose = grid.pose_at(0.0);
+            let to: [f32; 3] = std::array::from_fn(|k| aim[k] - pose.eye[k]);
+            let len = to.iter().map(|v| v * v).sum::<f32>().sqrt();
+            let facing: f32 = (0..3).map(|k| -pose.rows[2][k] * to[k] / len).sum();
+            assert!(
+                facing > 0.99,
+                "{path}: looks {facing} of the way at its aim"
+            );
+            let steps = 100;
+            for step in 0..steps {
+                let t = grid.length() * step as f32 / steps as f32;
+                let up = grid.pose_at(t).rows[1][1];
+                assert!(up > 0.0, "{path}: upside down at {t} s (up.y {up})");
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked >= 12 * 4, "only {checked} flybys read");
+}
