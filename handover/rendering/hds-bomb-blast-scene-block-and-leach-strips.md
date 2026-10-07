@@ -33,15 +33,24 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
 Recipe in `docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon" (`scripts/rpcs3-hd-weapon.py`),
 findings in `weapons.md` last section. Open from it:
 
-- **`HD_bomb_halo` is not drawn.** The original's laid Bomb has a pink ring and a pulse; the law read
-  (`s = 3 + 13 frac(2 age)`, conf 45) gives a 0.5 s period against about 0.3 s on film, and a second, steady
-  ring is unexplained. Decode the AltiVec mask at `0x001443f8` (the `vectorConditionalSelect` against
-  `-0x27b8(TOC)`) with the scratch interpreter before wiring.
-- **The owner trips its own bomb** in the original (standing, 0.35 s after laying); `force_bomb_trip` and the
-  sim's trip skip the owner. A rules question for the simulation, not for this lane.
-- **Re-shoot the detonation matched**: lay the bomb at the craft's own position and pin `--camera-pose` to the
-  original's chase camera; the first pair differed in hull, camera and bomb position, so size, brightness and
-  burn-away are unsettled.
+- **`HD_bomb_halo` is not drawn; its law now agrees with the film (2026-10-07, `hd-bomb-match`).** The
+  period was read on the HUD clock; in recorder time it is 0.496 s against the law's 0.5 s (conf 80 for
+  the period). What is missing is the **fragment program**, not the law: `hd_bomb_halo.rcsmaterial`'s
+  lit-race block `@0x19c0` is a Fresnel shell, `rim = sat(1 - N.V)`, a 4x16 ramp texture
+  (`pulse_bombflash_glow`) sampled at the vertex program's `(TC0.w, TC1.w)`, alpha
+  `5 ta^2 rim^(10 - 10 ta)` (`ta` the ramp's alpha), then fogged; it needs a `Shape` in
+  `mesh/rcs/rim_glow.rs`, a `shade.wesl` branch and the vertex program's UV read, as `BOMB_FIRE` had.
+  The pool, the law (`halo_scale(age)`), the per-bomb matrix and the draw call are written and
+  tested against the generic lit program, which draws nothing visible: saved as
+  `data/scratch/hd-bomb-match/halo-wiring-unfinished.patch` (also carries two debug lines to drop).
+  The steady outer ring in the film is probably the sawtooth's end of cycle plus `hd_bomb.vex`'s own sixth
+  chunk (same material), unconfirmed.
+- **The owner's trip window** is Pulse's 0.5 s (see the capture page), not 0.35 s; our trip excludes the owner
+  for ever. Simulation, queued.
+- **The matched detonation, done as far as a pinned camera goes** (`weapons.md`, `hd-bomb-match`
+  section). Open: the original's owner is flung to about 125 km/h within 0.2 s and the camera
+  follows, ours is shoved to 50 km/h and the sim carries no further impulse, so frames after age
+  0.5 s need the owner's own motion (the camera pose is fixed per run).
 
 ## Next Steps
 

@@ -929,8 +929,10 @@ laid Bomb or Mine stays in front of the camera instead of under the craft.
 Measured by `data/scratch/hd-weapon-ref/e11` (bomb under the craft) and `e12` (craft put 30
 units behind it):
 
-- **The bomb tripped on its own owner**, 0.35 game seconds after it was laid, with the player at
-  rest on top of it: a pink dome with a white core for 17 video frames, then the blast.
+- **The bomb tripped on its own owner**, 17 video frames (0.57 s of video time) after it was laid,
+  with the player at rest on top of it: a pink dome with a white core, then the blast. (**Read in
+  video time since 2026-10-07**: this page first read the film on the HUD clock, 0.35 s; see "Video
+  time is the bomb's age" below.)
   `NormalBomb_Update` (`0x001443f8`) loops over every craft in `trigger_radius` (6 in
   `WeaponStats_Race.xml`) with no owner test in the decompile. This engine's trip excludes
   the owner (`force_bomb_trip`'s own comment); **not changed here, the simulation is
@@ -945,6 +947,25 @@ units behind it):
   155 km/h, and leaves white haze by 1.8 s. No brown haze and no orange rim. Frames:
   `data/scratch/hd-weapon-ref/pair_bomb_stationary.png` (left original, right ours;
   rows: the armed bomb, then +0.2, +0.67, +1.17, +1.8 s).
+
+### Video time is the bomb's age, not the HUD clock (`hd-bomb-match`, 2026-10-07)
+
+The HUD race clock ran 0.59x of the recorder's time in these boots, and the entity ages follow
+the recorder. Measured on `e11`/`e12` with `ffmpeg signalstats` per frame (`data/scratch/hd-bomb-match/yavg.clean`,
+`e12c.clean`), in recorder seconds:
+
+| Event | Film | Law (bomb age) |
+| --- | --- | --- |
+| lay to whiteout (trip) | 6.1 to 6.7 s = 0.6 s | owner exempt until `0.5` (Pulse's `Bomb_InArmingDelay`), plus a frame or two |
+| fireball fills the frame | 6.7 to 8.33 s = 1.63 s | fireball phase `0 .. 1.5` |
+| white haze ends | 9.7 s = 3.0 s after the trip | `NormalBombBlast` lifetime `3.0` |
+| halo flash period (e12 centre crop) | 0.496 s over five periods | `3 + 13 frac(2 age)`: `0.5` |
+
+Every one agrees to a frame in recorder time and none does on the HUD clock, so read a frame
+of this capture as `age = (t - t_trip)` seconds and drive our side by `ticks = 60 age`. The cause
+of the HUD's 0.59x (a clamped step, or the recorder's own rate) is not established; the
+agreement is the finding. Confidence 80 that entity age is recorder time in these boots (four
+independent timings), 50 for any reading of why.
 
 ## See also
 
