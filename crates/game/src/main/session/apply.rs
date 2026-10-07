@@ -448,6 +448,15 @@ impl Session {
                     return;
                 }
             },
+            "display.pause_on_focus_loss" => match text.as_str() {
+                // Read at the next focus event; nothing to apply now.
+                "on" => self.settings.display.pause_on_focus_loss = true,
+                "off" => self.settings.display.pause_on_focus_loss = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "graphics.perf_overlay" => match text.parse::<perf::Overlay>() {
                 // Applied by the next frame, which draws it or does not.
                 Ok(mode) => self.settings.graphics.perf_overlay = mode,

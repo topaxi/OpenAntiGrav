@@ -58,6 +58,7 @@ OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
+OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE BEI FOKUSVERLUST", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "BILDRATENLIMIT", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "HELLIGKEIT", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }

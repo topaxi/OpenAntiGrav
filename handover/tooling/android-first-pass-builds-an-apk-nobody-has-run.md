@@ -49,8 +49,10 @@ manifest and `cache/<image>` rows in `just push-data`.
   changing the working directory to the files directory. A real
   `cfg(target_os = "android")` root (and a DLC and package-extract root) belongs in
   `oag-source`, owned by the setup-friction lane.
-- **Audio and lifecycle.** Pause audio and the race on `Suspended`; check rotation;
-  `cpal`'s AAudio device-lost recovery.
+- **Lifecycle.** ~~Pause audio and the race on `Suspended`~~ (done 2026-10-07, auto-pause
+  lane; see `docs/tools/android.md`, "Pausing when the window goes away"). Still open: rotation;
+  `cpal`'s AAudio device-lost recovery; whether `Stream::pause` works on the S24's AAudio (only
+  Waydroid ran it, and it logged no error).
 - **Xclipse 940.** Present modes, the temporal-upscaler capability probe and the
   adapter list (`BACKENDS` is Vulkan-primary) are unmeasured on Samsung's driver.
 - **Storage.** Images must be `adb push`ed; a storage-access-framework picker or

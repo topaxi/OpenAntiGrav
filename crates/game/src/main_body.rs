@@ -655,6 +655,7 @@ fn run(cli: Cli) -> Result<()> {
         pending: Some(pending),
         state: None,
         suspended: false,
+        occluded: false,
     };
     event_loop.run_app(&mut app)?;
     app.finish_audio()?;

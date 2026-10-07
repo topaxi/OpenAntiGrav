@@ -56,6 +56,7 @@ OAG_DISPLAY_WINDOW_SIZE = { text = "TAMANHO DA JANELA", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "PROPORÇÃO DA TELA", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "ESTILO DOS MENUS", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
+OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSAR AO PERDER O FOCO", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "LIMITE DE QUADROS", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "BRILHO", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMA", human = false }

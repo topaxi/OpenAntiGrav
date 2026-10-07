@@ -759,3 +759,12 @@ fn an_unreadable_settings_file_boots_on_defaults() {
         "the unreadable file must not be overwritten"
     );
 }
+
+#[test]
+fn pausing_on_focus_loss_is_on_by_default_and_round_trips_off() {
+    assert!(Settings::default().display.pause_on_focus_loss);
+    let off: Settings = toml::from_str("[display]\npause_on_focus_loss = false\n").unwrap();
+    assert!(!off.display.pause_on_focus_loss);
+    let missing: Settings = toml::from_str("[display]\nvsync = \"off\"\n").unwrap();
+    assert!(missing.display.pause_on_focus_loss);
+}
