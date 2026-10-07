@@ -2594,6 +2594,45 @@ is `hd-sky-luma`'s; every before/after of the glass is confounded by it. The ref
 PS4 shader containers are unread). **Checked, applies, not wired** for `accumulates`: it is a PS3 microcode reader
 and does not run on either.
 
+## A picture the program reads one lane wide is a scalar, not the colour (2026-10-07, `hd-sebenco`)
+
+**Reports** (maintainer play): Sebenco Climb's rails and surfaces violet (tick 720, world `[-337.1, 16.7, -14.9]`; tick
+4380, `[-429.9, 21.7, 369.4]`), and Vineta K's tunnel glass showing a saturated red shape. **References:** RPCS3
+`place` captures, `data/scratch/hd-sebenco/ref/` (forward, both poses), `ref2/` (forward sky poses), `ref3/`
+(reversed); ours at the kept pose beside each (`pair_00.png`, `pair_01.png`, `rvpair_0.png`, `rvpair_1.png`,
+`vk_rab.png`; untracked).
+
+Three materials, one cause class: **a lightmapped or opaque material's picture was bound by file order, and the entry
+first in the file is a map the program reads as a scalar or a normal.**
+
+| Material (circuit) | What was bound | What the program reads | Now |
+| --- | --- | --- | --- |
+| `track_coloured_specular_alpha4glow` (Sebenco, the solar wall, slot 102) | `ds_solarwall_n` (normal map, sampler `0x48f37f5a`, entry 0) as colour: the violet wall | the picture is `ds_solarwall_c_withglow` at unit 0 (`0x3bdc0403`, entry 2) | `0x48f37f5a` joins `skin::NOT_A_PICTURE` (confidence 85: its 5 binds disc-wide are `ds_solarwall_n`, `tracknormal`, `aadc_build_g_window_n`, `jd_chenghou_windowtrans_01_n`) |
+| `sebenco_ice` (Sebenco, the pool, slot 366 and 5 more) | `and_ice1` (purple, mean `(69,25,160)`) | `TEX H1.x ... unit0`: one lane, a specular-power scalar (`H0.w = H1.x * 296.89`). The colour is constants (`(0.0475,0.106,0.147)` deep, `(0.13,0.755,0.872)` cyan, `(0.66,0.76,1.0)` pale) lerped by the pond mask (unit 1, `.x`) and `and_snow3alpha`'s `.xyz` (unit 2), plus the paraboloid reflection (`0x9edd3243`, engine-bound) times parameters that are 0 on this material | `Program::samples_colour(unit)`; the first entry the program reads as a colour wins, then the first declared. Binds `and_snow3alpha` (white). **Not drawn:** the constant water/ice lerp (the reference's cyan streaks); no fresnel evaluation, **chosen, not measured**, none attempted |
+| `and_rocktosand` (Vineta K backdrop terrain, slot 26) | `j_rockblend5`, a red-channel blend mask, as the terrain's colour: the red shape behind the glass | mask at unit 2 (one lane), sand `and_sand_sand` unit 0, rock `and_rock4` unit 1 (colour lane `Mixed`) | opaque materials: the same `declared_picture` rule in `skin::picks`' fallback, so it binds `and_rock4` |
+
+**This corrects two earlier readings.** The 2026-10-07 `hd-vineta-floor` section's `sebenco_ice` change (`and_ice2` ->
+`and_ice1`, "no reference frame taken") **was wrong**: `and_ice1` is the purple scalar map; the reference pool is white with
+cyan water (`pair_01.png`, `rvpair_1.png`). It also named the reversed circuit only: the forward track has the same slots
+(slot 366), which is where the maintainer saw it. The Vineta glass lane's "sky behind the glass is `hd-sky-luma`'s" is
+**not the sky**: `OAG_SKIP_SKY`-style masking changes nothing behind the panes (`vk_skysky.png`); the red was terrain
+(`OAG_TINT_MATERIALS` + `hd_slot_list` hue decode: slot 26), now grey-green rock (`vk_rab.png`, ref | before | after).
+
+**Disc-wide reach, measured** (`hd_lightmap_colour_census.rs`, `hd_pick_dump.rs`, all 28 circuit models): the lightmapped
+rule changes 63 slots in 16 (family, old -> new) pairs, nearly all a `*_alpha.gtf`/mask first entry replaced by the window or
+land colour (`glass_2nduv_reflect_glow` on 02/03/04/Sol 2/Vineta K, `2rocksandblend_via_diffuse` on Vineta K,
+`mt_diffuse_glow_specular_01` on Anulpha, `sebenco_ice`); the opaque fallback adds 68 more over 9 families (window glass,
+`nr_twinblend`, `nr_facinglcdstrips`). Blended materials are deliberately excluded from the fallback (glass has its own
+rules, not measured here). **Reference check:** Sol 2 pose 00 (the only pose of Sol 2 00/01 and Talon's 00/01 that moves,
+12k px) shows the right-hand building's window rows gaining colour with no visible regression
+(`data/scratch/hd-sebenco/cmp/sol2_00_rab.png`); Talon's 00/01 are bit-identical. The other 66 slots have no reference.
+Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
+`a_unit_sampled_one_lane_wide_is_not_a_colour`.
+
+**2048 / Omega:** not checkable (PS3 microcode and sampler hashes; their shader containers are unread). Confidence 90
+for the cause of the wall, the pool's wrong picture and the red shape (each found by decode, fixed, and the frame
+re-read); 60 for the 127 other slots (rule justified by the program text, not by a reference frame each).
+
 ## See also
 
 - [rcsmodel](rcsmodel.md) - the material record, and the two texture paths

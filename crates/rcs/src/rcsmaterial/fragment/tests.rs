@@ -915,3 +915,21 @@ fn the_zero_bucket_names_the_slot_specular_power_patches() {
     assert_eq!(program.specular_exponent_slot(), Some(9));
     assert_eq!(program.patches(SPECULAR_POWER).collect::<Vec<_>>(), vec![9]);
 }
+
+/// A unit read only through one-lane fetches is a scalar, not a picture.
+#[test]
+fn a_unit_sampled_one_lane_wide_is_not_a_colour() {
+    let mut scalar = insn(0x17);
+    scalar.unit = 0;
+    scalar.mask = 0b0001;
+    let mut colour = insn(0x17);
+    colour.unit = 2;
+    colour.mask = 0b0111;
+    let program = Program {
+        instructions: vec![scalar, colour],
+        ..Program::default()
+    };
+    assert!(!program.samples_colour(0), "TEX H1.x is a scalar");
+    assert!(program.samples_colour(2), "TEX H3.xyz is a colour");
+    assert!(!program.samples_colour(1), "never sampled");
+}

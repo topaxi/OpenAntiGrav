@@ -963,6 +963,22 @@ impl Program {
         }
         false
     }
+
+    /// Whether `unit` is sampled as a colour: some fetch from it writes at
+    /// least three lanes.
+    ///
+    /// A unit read only through single-lane fetches (`TEX H1.x, f[TC4] unit0`)
+    /// is a scalar the program multiplies into something else - a specular
+    /// power, a coverage, a blend factor - and its picture is not the
+    /// surface's colour whatever its file is called. Sebenco Climb's
+    /// `sebenco_ice` samples `and_ice1` that way (an exponent) and takes its
+    /// colour from constants and `and_snow3alpha`'s `.xyz`.
+    #[must_use]
+    pub fn samples_colour(&self, unit: u8) -> bool {
+        self.instructions.iter().any(|insn| {
+            insn.is_texture() && insn.unit == unit && (insn.mask & 0b0111).count_ones() >= 3
+        })
+    }
 }
 
 #[cfg(test)]

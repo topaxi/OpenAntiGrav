@@ -134,6 +134,8 @@ pub(super) fn skin(
 /// | `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | 85 |
 /// | `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` | 88 |
 /// | `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec` | 85 |
+/// | `0x48f37f5a` (`NormalMap`) | 5 distinct (family, path) | `ds_solarwall_n`, `tracknormal`, `aadc_build_g_window_n`, `jd_chenghou_windowtrans_01_n` - only ever a `*_n*.gtf` (`hd_sampler_hash_binds.rs`, all 28 circuits and the ships) | 85 |
+/// | `0xfe9bd1f3`, `0xeddf202a` | 2 each | `and_ice_norm`, `256norm4` and `cf_ice2_norm`, `and_snow_norm` - only the ice materials' normal maps | 85 |
 /// | `0xb1f2a176` (`EmissiveTexture`) | 71 distinct path(s) | `*_emissive.gtf`, `*_e.gtf`, `advert_*.gtf`, `*glow*.gtf`, `dc_grad*.gtf` - never a plain diffuse | 90 |
 ///
 /// Every use of the first three is a texture 32 texels or less in one
@@ -189,6 +191,9 @@ const NOT_A_PICTURE: &[u32] = &[
     0x94b2_b285,
     0x739a_786e,
     0x20c3_e476,
+    0x48f3_7f5a,
+    0xfe9b_d1f3,
+    0xeddf_202a,
     0xb1f2_a176,
 ];
 
@@ -328,10 +333,17 @@ pub(super) fn picks(
             // The first entry that supplies a `.gtf` and is not a lookup - see
             // [`NOT_A_PICTURE`]. Entry 0 where no entry qualifies, which is
             // what this bound before any of it was read.
-            let picture = material
+            // A mask read one lane wide is not the picture: `and_rocktosand`
+            // lists `j_rockblend5` (a blend mask) ahead of its sand and rock.
+            let plain = material
                 .samplers
                 .iter()
-                .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash))
+                .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash));
+            // Opaque only: blended families carry their own rules.
+            let picture = (material.blend() == rcsmodel::Blend::Opaque)
+                .then(|| lightmapped::declared_picture(material, &declared, &program, false))
+                .flatten()
+                .or(plain)
                 .unwrap_or(default.albedo);
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
