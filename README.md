@@ -51,6 +51,11 @@ copies. See [`docs/overview/legal.md`](docs/overview/legal.md).
 You need your own copy of the game. Nothing is bundled, and this project
 cannot tell you where to get one.
 
+**Install:** prebuilt downloads (`OpenAntiGrav-<version>-linux-x86_64.AppImage`,
+`-steamdeck-x86_64.AppImage`, `-linux-x86_64.tar.gz`, `-windows-x86_64.zip`) are on
+GitHub Releases. Arch: `openantigrav-bin` / `openantigrav-git` (AUR, once published).
+Or build from source:
+
 ```sh
 cargo build --release -p oag-game
 mkdir -p data/images
