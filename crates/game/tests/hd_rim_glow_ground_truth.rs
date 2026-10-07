@@ -145,3 +145,52 @@ fn the_explosion_ring_and_halo_earn_their_clock_scroll_bits() {
         );
     }
 }
+
+/// The Bomb's detonation models: the fireball and its white core earn
+/// `BOMB_FIRE` (the two rim bits *together*), the shockwaves `BOMB_SHOCK`
+/// (the two clock-scroll bits together), and the bloomring stays on the plain
+/// emissive path. Pairs, so no single-bit test in the shader or the loader
+/// reads them as the LeachBall, the Plasma head or the explosion ring.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_bomb_blast_models_earn_their_paired_bits() {
+    let Some(image) = image() else { return };
+    for path in [
+        "/data/weapons/hd_bomb_sphere.vex",
+        "/data/weapons/hd_bomb_sphere_white.vex",
+    ] {
+        let roles = roles(&build(&image, path));
+        assert!(!roles.is_empty(), "{path}");
+        for r in &roles {
+            assert_eq!(r & slots::BOMB_FIRE, slots::BOMB_FIRE, "{path}: {r:#x}");
+            assert_eq!(r & slots::BOMB_SHOCK, 0, "{path}: {r:#x}");
+        }
+    }
+    let shock = build(&image, "/data/weapons/hd_bomb_shockwaves.vex");
+    let shock_roles = roles(&shock);
+    assert!(!shock_roles.is_empty());
+    for r in &shock_roles {
+        assert_eq!(r & slots::BOMB_SHOCK, slots::BOMB_SHOCK, "{r:#x}");
+        assert_eq!(r & slots::BOMB_FIRE, 0, "{r:#x}");
+    }
+    // `ff 9f 00 4c` twice at the end of each vertex: the coordinate is read
+    // at `+0x0a` (it was NaN, zeroed), and the colours ride the vertex.
+    let (lo, hi) = shock
+        .vertices
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(lo, hi), v| {
+            (lo.min(v.texcoord[1]), hi.max(v.texcoord[1]))
+        });
+    assert!(hi - lo > 0.2, "v spans {lo}..{hi}");
+    assert!(
+        shock
+            .vertices
+            .iter()
+            .any(|v| v.colour[0] > 0.9 && v.sun_mask > 0.0 && v.sun_mask < 1.0),
+        "the first colour's red and the second colour's alpha are carried"
+    );
+    for r in roles(&build(&image, "/data/weapons/hd_bomb_sphere_bloomring.vex")) {
+        assert_eq!(r & slots::EMISSIVE, slots::EMISSIVE, "the ring: {r:#x}");
+        assert_eq!(r & (slots::BOMB_FIRE | slots::BOMB_SHOCK), 0, "{r:#x}");
+    }
+}

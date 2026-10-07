@@ -299,14 +299,18 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // samples**; the programs' own colour and alpha combine is not
     // reproduced here, the path below stands in for it.
     let clock = uniforms.model_clock;
-    if (in.slots & 32768u) != 0u {
+    // The Bomb's two programs are carried as pairs of these bits and are
+    // answered whole below (`slots::BOMB_FIRE`, `slots::BOMB_SHOCK`).
+    let bomb_fire = (in.slots & 6144u) == 6144u;
+    let bomb_shock = (in.slots & 98304u) == 98304u;
+    if (in.slots & 32768u) != 0u && !bomb_shock {
         let n = textureSample(
             albedo,
             albedo_sampler,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
         ).a;
         first_uv = in.texcoord + vec2<f32>(0.15 * n + 0.1 * clock);
-    } else if (in.slots & 65536u) != 0u {
+    } else if (in.slots & 65536u) != 0u && !bomb_shock {
         let n = textureSample(
             albedo,
             albedo_sampler,
@@ -841,6 +845,86 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // glows that read them and nowhere else. `slots` is a flat varying, which
     // WGSL's uniformity analysis cannot see is constant per quad, hence this
     // function's `derivative_uniformity` diagnostic - see its own attribute.
+    // **The Bomb's fireball** (`slots::BOMB_FIRE`, `hd_bombfire_glow` block
+    // `@0x1d90`): the LeachBall's rim skeleton with the blast's two scalars
+    // in it. Read instruction by instruction in
+    // docs/rendering/hd-unlit-programs.md, "The Bomb's fireball and
+    // shockwaves"; `time` is the scene's, `AlphaAnim` the model's clock and
+    // `ColourAnim` the blast's own float (`uniforms.model_colour`).
+    //
+    //     nA   = tex(u, 0.3 t + v).a                       @0x0d
+    //     B    = tex(u, nA + v + 0.04 t)                   @0x33
+    //     c    = tex(6u, 6 (0.3 t + v)).rgb                @0x1b
+    //     rim  = sat(1 - N.V);  h = sat(0.86 - 0.86 rim^5)^50
+    //     rgb  = (B.rg + 100 h, B.b) / (1 - c) / (1 - ColourAnim)
+    //     a    = sat((0.5 B.a + 0.5 - AlphaAnim) / (1 - AlphaAnim))
+    if bomb_fire {
+        let fire_t = scene.time.x;
+        let fire_noise = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, 0.3 * fire_t + in.texcoord.y),
+        ).a;
+        let fire_b = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, fire_noise + in.texcoord.y + 0.04 * fire_t),
+        );
+        let fire_c = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(6.0 * in.texcoord.x, 6.0 * (0.3 * fire_t + in.texcoord.y)),
+        ).rgb;
+        let fire_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+        let fire_rim_5 = fire_rim * fire_rim * fire_rim * fire_rim * fire_rim;
+        let fire_h = pow(clamp(0.86 - 0.86 * fire_rim_5, 0.0, 1.0), 50.0);
+        // `RCP` of a half register: held at the largest finite half where the
+        // divisor reaches zero, **chosen, not measured**, as the LeachBall's is.
+        let fire_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - fire_c), vec3<f32>(65504.0));
+        let fire_boost = min(1.0 / (1.0 - uniforms.model_colour), 65504.0);
+        let fire_rgb = (fire_b.rgb + vec3<f32>(100.0 * fire_h, 100.0 * fire_h, 0.0))
+            * fire_expand * fire_boost;
+        // `DIV_SAT`: a divisor of zero is `AlphaAnim` = 1, the blast's first
+        // three quarters of a second. A numerator below zero is then `-inf`
+        // and saturates to nothing; the `0 / 0` of a fully opaque texel is
+        // read as nothing as well - **chosen, not measured**.
+        let fire_numerator = 0.5 * fire_b.a + 0.5 - uniforms.model_clock;
+        let fire_divisor = 1.0 - uniforms.model_clock;
+        let fire_alpha = select(
+            clamp(fire_numerator / fire_divisor, 0.0, 1.0),
+            select(0.0, 1.0, fire_numerator > 0.0),
+            fire_divisor <= 0.0,
+        );
+        return vec4<f32>(fire_rgb, fire_alpha);
+    }
+    // **The Bomb's shockwave rings** (`slots::BOMB_SHOCK`,
+    // `hd_bombfire_shockwaves_glow` block `@0x1950`), `Shockwave_scalar` being
+    // the model's clock. The diagonal tap `TEX H0.xyz, R1.xxxx` reads the
+    // texture at `(c, c)` and sums its channels into the alpha:
+    //
+    //     n   = tex(u, v + 0.01 S).a                       @0x08
+    //     c   = v + 0.05 n + 0.45 S                        @0x0d
+    //     rgb = tex(u + n, c).rgb * VertexColour1.rgb      @0x14, @0x19
+    //     a   = VertexColour2.a * sum(tex(c, c).rgb)       @0x11-@0x16
+    if bomb_shock {
+        let shock_s = uniforms.model_clock;
+        let shock_n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * shock_s),
+        ).a;
+        let shock_c = in.texcoord.y + 0.05 * shock_n + 0.45 * shock_s;
+        let shock_diagonal = textureSample(albedo, albedo_sampler, vec2<f32>(shock_c, shock_c)).rgb;
+        let shock_tap = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x + shock_n, shock_c),
+        ).rgb;
+        return vec4<f32>(
+            shock_tap * in.colour.rgb,
+            in.sun_mask * (shock_diagonal.x + shock_diagonal.y + shock_diagonal.z),
+        );
+    }
     let rim_glow_on = (in.slots & 2048u) != 0u;
     let rim_edge_on = (in.slots & 4096u) != 0u;
     if !(rim_glow_on || rim_edge_on) {
