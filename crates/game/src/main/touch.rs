@@ -83,6 +83,7 @@ impl Overlay {
     /// `scale` units per pixel; empty when it is not showing.
     pub(crate) fn draw(
         &self,
+        art: &oag_game::touch_controls::art::Art,
         size: (f32, f32),
         scale: f32,
         paused: bool,
@@ -90,7 +91,7 @@ impl Overlay {
         opacity: f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         if self.active() {
-            oag_game::touch_controls::draw(&self.touches, size, scale, paused, zones, opacity)
+            oag_game::touch_controls::draw(art, &self.touches, size, scale, paused, zones, opacity)
         } else {
             Vec::new()
         }
@@ -163,8 +164,10 @@ impl Session {
 
     /// The overlay's draw list: empty outside a running race, or when hidden.
     pub(crate) fn draw_touch(&self, size: (f32, f32), scale: f32) -> Vec<oag_ui::frontend::Draw> {
-        if self.racing() && self.race_drawing() {
+        let art = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet);
+        if let (true, Some(art)) = (self.racing() && self.race_drawing(), art) {
             self.touch_overlay.draw(
+                &art,
                 size,
                 scale,
                 self.paused,

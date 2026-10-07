@@ -361,6 +361,20 @@ fn the_touch_overlay_drives_a_ship_but_is_not_a_pad() {
 }
 
 #[test]
+fn a_partial_touch_airbrake_reaches_the_snapshot_as_an_axis() {
+    let mut controls = Controls::without_pad();
+    controls.set_touch(Reading {
+        buttons: Button::Cross.bit(),
+        airbrake_right: 0.4,
+        ..Reading::default()
+    });
+    let snapshot = controls.snapshot();
+    assert!((snapshot.airbrake_right - 0.4).abs() < 1e-6);
+    assert_eq!(snapshot.airbrake_left, 0.0);
+    assert!(snapshot.buttons.is_held(Button::Cross));
+}
+
+#[test]
 fn release_all_lets_go_of_an_android_pad_and_the_overlay() {
     let mut controls = Controls::without_pad();
     controls.android_key(android::BUTTON_A, true);

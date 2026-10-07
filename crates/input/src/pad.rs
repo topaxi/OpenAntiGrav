@@ -278,6 +278,12 @@ pub struct Reading {
     /// L2, 0 to 1, raw. The left airbrake, or the brake - see
     /// [`Self::throttle`].
     pub brake: f32,
+    /// A left airbrake pulled to this depth, 0 to 1, whatever the trigger
+    /// mode: the on-screen GO button's analogue brake corners (see
+    /// `oag_input::touch`). Zero on every real pad.
+    pub airbrake_left: f32,
+    /// The right airbrake's, as [`Self::airbrake_left`].
+    pub airbrake_right: f32,
 }
 
 /// What a pad contributes to a snapshot.
@@ -316,8 +322,16 @@ pub struct PadState {
 pub fn resolve(reading: Reading, config: TriggerConfig) -> PadState {
     let mut held = reading.buttons;
     let shoulder = |button: Button| f32::from(u8::from(reading.buttons & button.bit() != 0));
-    let mut airbrake_left = shoulder(Button::L);
-    let mut airbrake_right = shoulder(Button::R);
+    let mut airbrake_left = shoulder(Button::L).max(reading.airbrake_left);
+    let mut airbrake_right = shoulder(Button::R).max(reading.airbrake_right);
+    for (pull, button) in [
+        (reading.airbrake_left, Button::L),
+        (reading.airbrake_right, Button::R),
+    ] {
+        if pull > TRIGGER_THRESHOLD {
+            held |= button.bit();
+        }
+    }
 
     match config.mode {
         TriggerMode::Airbrakes => {

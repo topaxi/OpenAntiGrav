@@ -137,19 +137,32 @@ impl GoZone {
         }
     }
 
-    /// The abstract button this zone adds.
+    /// How hard the airbrake is pulled with a finger at `fraction` of GO's
+    /// rectangle, 0 to 1: **analogue, chosen, not measured**. Zero on the
+    /// zone's inner edge (the dead centre column) and on its top, one in the
+    /// outer bottom corner, the geometric mean of the depth on each axis so
+    /// sliding down and sliding out both strengthen it.
     #[must_use]
-    pub fn button(self) -> Button {
-        match self {
-            Self::Left => Button::L,
-            Self::Right => Button::R,
-        }
+    pub fn strength(self, fraction: (f32, f32)) -> f32 {
+        let across = match self {
+            Self::Left => GO_ZONE_SIDE - fraction.0,
+            Self::Right => fraction.0 - (1.0 - GO_ZONE_SIDE),
+        } / GO_ZONE_SIDE;
+        let down = (fraction.1 - (1.0 - GO_ZONE_BOTTOM)) / GO_ZONE_BOTTOM;
+        (across.clamp(0.0, 1.0) * down.clamp(0.0, 1.0)).sqrt()
     }
 
     fn bit(self) -> u8 {
         match self {
             Self::Left => 1,
             Self::Right => 2,
+        }
+    }
+
+    fn index(self) -> usize {
+        match self {
+            Self::Left => 0,
+            Self::Right => 1,
         }
     }
 }
@@ -292,6 +305,34 @@ pub fn layout(size: (f32, f32)) -> [(Control, Rect); 7] {
     ]
 }
 
+/// The controls on screen and under a finger: [`layout`] with the separate
+/// airbrake buttons dropped when `zones` puts the brakes in GO's corners, and
+/// pause and the camera cycle moved into the top-left corner they free.
+/// **Chosen, not measured.**
+#[must_use]
+pub fn layout_for(size: (f32, f32), zones: bool) -> Vec<(Control, Rect)> {
+    let all = layout(size);
+    if !zones {
+        return all.to_vec();
+    }
+    let h = size.1;
+    let (small, gap, y) = (0.13, 0.03, 0.20);
+    let at = |i: f32| Rect {
+        x: (SAFE_X + i * (small + gap)) * h,
+        y: y * h,
+        w: small * h,
+        h: small * h,
+    };
+    all.into_iter()
+        .filter(|(c, _)| !matches!(c, Control::AirbrakeLeft | Control::AirbrakeRight))
+        .map(|(c, r)| match c {
+            Control::Pause => (c, at(0.0)),
+            Control::Camera => (c, at(1.0)),
+            _ => (c, r),
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Role {
     /// The steering finger, with where it first landed.
@@ -322,6 +363,8 @@ pub struct Touches {
     go_zones: bool,
     /// GO zones under a finger, one bit each ([`GoZone`]).
     zones: u8,
+    /// How hard each zone's airbrake is pulled, by [`GoZone::strength`].
+    pulled: [f32; 2],
 }
 
 impl Touches {
@@ -337,6 +380,12 @@ impl Touches {
         self.zones & zone.bit() != 0
     }
 
+    /// How hard `zone`'s airbrake is pulled, 0 to 1.
+    #[must_use]
+    pub fn zone_strength(&self, zone: GoZone) -> f32 {
+        self.pulled[zone.index()]
+    }
+
     /// A finger landed at `at` (window pixels) in a window of `size`.
     pub fn down(&mut self, id: u64, at: (f32, f32), size: (f32, f32)) {
         self.fingers.retain(|f| f.id != id);
@@ -346,7 +395,7 @@ impl Touches {
             .any(|f| matches!(f.role, Role::Stick { .. }));
         let in_stick_zone =
             at.0 < size.0 * STICK_ZONE_WIDTH && at.1 > size.1 * TOP_STRIP && !stick_taken;
-        let role = if control_at(at, size).is_some() {
+        let role = if control_at(at, size, self.go_zones).is_some() {
             Role::Buttons
         } else if in_stick_zone {
             Role::Stick { origin: at }
@@ -355,7 +404,8 @@ impl Touches {
         };
         self.fingers.push(Finger { id, at, role });
         self.refresh(size);
-        if let Some(control) = control_at(at, size).filter(|_| role == Role::Buttons) {
+        if let Some(control) = control_at(at, size, self.go_zones).filter(|_| role == Role::Buttons)
+        {
             self.tapped |= 1 << control.index();
         }
     }
@@ -367,7 +417,7 @@ impl Touches {
         };
         finger.at = at;
         let slid_onto = (finger.role == Role::Buttons)
-            .then(|| control_at(at, size))
+            .then(|| control_at(at, size, self.go_zones))
             .flatten();
         self.refresh(size);
         if let Some(control) = slid_onto {
@@ -387,6 +437,7 @@ impl Touches {
         self.tapped = 0;
         self.down = 0;
         self.zones = 0;
+        self.pulled = [0.0; 2];
     }
 
     /// Whether any finger is on the overlay.
@@ -398,10 +449,11 @@ impl Touches {
     fn refresh(&mut self, size: (f32, f32)) {
         self.down = 0;
         self.zones = 0;
+        self.pulled = [0.0; 2];
         let go = layout(size)[Control::Accelerate.index()].1;
         for finger in &self.fingers {
             if finger.role == Role::Buttons
-                && let Some(control) = control_at(finger.at, size)
+                && let Some(control) = control_at(finger.at, size, self.go_zones)
             {
                 self.down |= 1 << control.index();
                 if control == Control::Accelerate
@@ -409,6 +461,8 @@ impl Touches {
                     && let Some(zone) = GoZone::at(go.fraction(finger.at))
                 {
                     self.zones |= zone.bit();
+                    let pull = zone.strength(go.fraction(finger.at));
+                    self.pulled[zone.index()] = self.pulled[zone.index()].max(pull);
                 }
             }
         }
@@ -451,11 +505,8 @@ impl Touches {
                 reading.buttons |= control.button().bit();
             }
         }
-        for zone in [GoZone::Left, GoZone::Right] {
-            if self.zone_down(zone) {
-                reading.buttons |= zone.button().bit();
-            }
-        }
+        reading.airbrake_left = self.zone_strength(GoZone::Left);
+        reading.airbrake_right = self.zone_strength(GoZone::Right);
         if let Some((origin, at)) = self.stick() {
             let radius = (size.1 * STICK_RADIUS).max(1.0);
             reading.stick_x = ((at.0 - origin.0) / radius).clamp(-1.0, 1.0);
@@ -468,9 +519,9 @@ impl Touches {
 
 /// The control under `at`, nearest centre first when two slops overlap.
 #[must_use]
-pub fn control_at(at: (f32, f32), size: (f32, f32)) -> Option<Control> {
+pub fn control_at(at: (f32, f32), size: (f32, f32), zones: bool) -> Option<Control> {
     let slop = size.1 * SLOP;
-    layout(size)
+    layout_for(size, zones)
         .into_iter()
         .filter(|(_, rect)| rect.contains(at, slop))
         .min_by(|(_, a), (_, b)| {

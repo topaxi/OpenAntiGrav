@@ -1,21 +1,19 @@
-//! Rounded shapes out of horizontal fill rows.
+//! Rounded shapes out of a few textured quads.
 //!
-//! The overlay's draw vocabulary has rectangles and chamfered rectangles but
-//! no circle, and a new variant would reach into the rasteriser for one
-//! widget. A round button is a stack of rows instead: each row is one
-//! [`Draw::Fill`], and rows whose span did not change from the one above are
-//! merged, so a rounded square is a handful of fills and a disc is a few
-//! dozen. **Spans never overlap**, so a translucent colour has the same
-//! alpha everywhere it is drawn - stacked fills are what made the first
-//! design read as opaque grey.
+//! The overlay's draw vocabulary has no circle, so a rounded rectangle is
+//! nine cells: four corners that are quarters of the disc or ring texture
+//! (see [`super::art`]) and five that are plain fills. A button is a ring and
+//! a disc inset by one ring, so **the two tile the shape and nothing is drawn
+//! twice** - stacked translucent layers are what made the first design read
+//! as flat grey. A lit region is the same cells cut to a rectangle, with each
+//! corner's texture coordinates cut with it.
 
 use oag_ui::frontend::Draw;
 
-/// Row height in grid units: a quarter of a unit is one pixel at 1080p.
-const ROW: f32 = 0.25;
+use super::art::{Art, RING_RATIO};
 
-/// A rounded rectangle, `[x, y, w, h]` with a corner `radius` (a radius of
-/// half the shorter side is a stadium, or a disc on a square).
+/// A rounded rectangle, `[x, y, w, h]` with a corner `radius` (half the
+/// shorter side is a stadium, or a disc on a square).
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Rounded {
     pub(super) rect: [f32; 4],
@@ -23,6 +21,11 @@ pub(super) struct Rounded {
 }
 
 impl Rounded {
+    /// The ring's thickness for this shape.
+    pub(super) fn border(self) -> f32 {
+        self.radius.min(self.rect[2] / 2.0).min(self.rect[3] / 2.0) * RING_RATIO
+    }
+
     /// The same shape pulled in by `by` on every side.
     pub(super) fn inset(self, by: f32) -> Self {
         let [x, y, w, h] = self.rect;
@@ -36,154 +39,149 @@ impl Rounded {
             radius: (self.radius - by).max(0.0),
         }
     }
-
-    /// The horizontal extent at height `y`, or `None` outside the shape.
-    fn span(self, y: f32) -> Option<(f32, f32)> {
-        let [x, top, w, h] = self.rect;
-        if y < top || y > top + h || w <= 0.0 {
-            return None;
-        }
-        let r = self.radius.min(w / 2.0).min(h / 2.0);
-        let from_edge = (y - top).min(top + h - y);
-        let inset = if from_edge >= r {
-            0.0
-        } else {
-            let dy = r - from_edge;
-            r - (r * r - dy * dy).max(0.0).sqrt()
-        };
-        Some((x + inset, x + w - inset))
-    }
-
-    fn rows(self) -> impl Iterator<Item = (f32, f32, f32, f32)> {
-        let [_, top, _, h] = self.rect;
-        let count = (h / ROW).ceil().max(1.0) as usize;
-        (0..count).filter_map(move |i| {
-            let y0 = top + i as f32 * ROW;
-            let y1 = (y0 + ROW).min(top + h);
-            self.span((y0 + y1) / 2.0).map(|(a, b)| (y0, y1, a, b))
-        })
-    }
 }
 
-/// Pushes the fills for spans `(y0, y1, x0, x1)`, merging neighbours with the
-/// same span.
-fn emit(spans: impl Iterator<Item = (f32, f32, f32, f32)>, color: [f32; 4], out: &mut Vec<Draw>) {
-    let mut open: Option<(f32, f32, f32, f32)> = None;
-    let flush = |open: Option<(f32, f32, f32, f32)>, out: &mut Vec<Draw>| {
-        if let Some((y0, y1, x0, x1)) = open
-            && x1 > x0
-        {
-            out.push(Draw::Fill {
-                rect: [x0, y0, x1 - x0, y1 - y0],
-                color,
-            });
-        }
+fn overlap(a: [f32; 4], b: [f32; 4]) -> Option<[f32; 4]> {
+    let x0 = a[0].max(b[0]);
+    let y0 = a[1].max(b[1]);
+    let x1 = (a[0] + a[2]).min(b[0] + b[2]);
+    let y1 = (a[1] + a[3]).min(b[1] + b[3]);
+    (x1 - x0 > 1e-4 && y1 - y0 > 1e-4).then_some([x0, y0, x1 - x0, y1 - y0])
+}
+
+/// One corner cell: the matching quarter of `texture`, cut to `clip`.
+fn corner(
+    cell: [f32; 4],
+    quarter: [f32; 4],
+    clip: Option<[f32; 4]>,
+    color: [f32; 4],
+    out: &mut Vec<Draw>,
+) {
+    let shown = match clip {
+        Some(clip) => overlap(cell, clip),
+        None => Some(cell),
     };
-    for (y0, y1, x0, x1) in spans {
-        open = match open {
-            Some((oy0, oy1, ox0, ox1))
-                if (ox0 - x0).abs() < 1e-3
-                    && (ox1 - x1).abs() < 1e-3
-                    && (oy1 - y0).abs() < 1e-3 =>
-            {
-                Some((oy0, y1, ox0, ox1))
-            }
-            other => {
-                flush(other, out);
-                Some((y0, y1, x0, x1))
-            }
-        };
-    }
-    flush(open, out);
-}
-
-/// The shape filled, optionally clipped to a rectangle `[x, y, w, h]`.
-pub(super) fn fill(shape: Rounded, clip: Option<[f32; 4]>, color: [f32; 4], out: &mut Vec<Draw>) {
-    let spans = shape.rows().filter_map(|(y0, y1, a, b)| match clip {
-        None => Some((y0, y1, a, b)),
-        Some([cx, cy, cw, ch]) => {
-            let (a, b) = (a.max(cx), b.min(cx + cw));
-            let (y0, y1) = (y0.max(cy), y1.min(cy + ch));
-            (b > a && y1 > y0).then_some((y0, y1, a, b))
-        }
+    let Some(shown) = shown else { return };
+    let u = (shown[0] - cell[0]) / cell[2];
+    let v = (shown[1] - cell[1]) / cell[3];
+    out.push(Draw::Sprite {
+        rect: shown,
+        uv: [
+            quarter[0] + u * quarter[2],
+            quarter[1] + v * quarter[3],
+            shown[2] / cell[2] * quarter[2],
+            shown[3] / cell[3] * quarter[3],
+        ],
+        color,
     });
-    emit(spans, color, out);
 }
 
-/// The band between the shape and the shape pulled in by `width`, in `color`,
-/// and the inside in `body`: the two tile the shape exactly, so nothing is
-/// drawn twice.
-pub(super) fn button(
+/// The nine cells of `shape`, as `(column, row, rect)` with columns and rows
+/// 0 to 2.
+fn cells(shape: Rounded) -> [(usize, usize, [f32; 4]); 9] {
+    let [x, y, w, h] = shape.rect;
+    let r = shape.radius.min(w / 2.0).min(h / 2.0).max(0.0);
+    let xs = [x, x + r, x + w - r, x + w];
+    let ys = [y, y + r, y + h - r, y + h];
+    let mut out = [(0, 0, [0.0; 4]); 9];
+    for row in 0..3 {
+        for col in 0..3 {
+            out[row * 3 + col] = (
+                col,
+                row,
+                [
+                    xs[col],
+                    ys[row],
+                    xs[col + 1] - xs[col],
+                    ys[row + 1] - ys[row],
+                ],
+            );
+        }
+    }
+    out
+}
+
+fn quarter(texture: [f32; 4], col: usize, row: usize) -> [f32; 4] {
+    let (hw, hh) = (texture[2] / 2.0, texture[3] / 2.0);
+    [
+        texture[0] + if col == 2 { hw } else { 0.0 },
+        texture[1] + if row == 2 { hh } else { 0.0 },
+        hw,
+        hh,
+    ]
+}
+
+/// The shape filled, optionally cut to a rectangle `[x, y, w, h]`.
+pub(super) fn fill(
+    art: &Art,
     shape: Rounded,
-    width: f32,
+    clip: Option<[f32; 4]>,
+    color: [f32; 4],
+    out: &mut Vec<Draw>,
+) {
+    for (col, row, cell) in cells(shape) {
+        if (col == 1 && cell[2] <= 0.0) || (row == 1 && cell[3] <= 0.0) {
+            continue;
+        }
+        if col != 1 && row != 1 {
+            corner(cell, quarter(art.disc, col, row), clip, color, out);
+        } else if let Some(shown) = clip.map_or(Some(cell), |c| overlap(cell, c)) {
+            out.push(Draw::Fill { rect: shown, color });
+        }
+    }
+}
+
+/// The ring around `shape`, one [`Rounded::border`] thick.
+pub(super) fn ring(art: &Art, shape: Rounded, color: [f32; 4], out: &mut Vec<Draw>) {
+    let t = shape.border();
+    for (col, row, cell) in cells(shape) {
+        if col != 1 && row != 1 {
+            corner(cell, quarter(art.ring, col, row), None, color, out);
+            continue;
+        }
+        if cell[2] <= 0.0 || cell[3] <= 0.0 || (col == 1 && row == 1) {
+            continue;
+        }
+        let [x, y, w, h] = cell;
+        let strip = match (col, row) {
+            (1, 0) => [x, y, w, t],
+            (1, 2) => [x, y + h - t, w, t],
+            (0, 1) => [x, y, t, h],
+            _ => [x + w - t, y, t, h],
+        };
+        out.push(Draw::Fill { rect: strip, color });
+    }
+}
+
+/// A button: the ring in `edge` and, inside it, the body in `body`.
+pub(super) fn button(
+    art: &Art,
+    shape: Rounded,
     edge: [f32; 4],
     body: [f32; 4],
     out: &mut Vec<Draw>,
 ) {
-    let inner = shape.inset(width);
-    let (mut left, mut right, mut inside) = (Vec::new(), Vec::new(), Vec::new());
-    for (y0, y1, a, b) in shape.rows() {
-        match inner.span((y0 + y1) / 2.0) {
-            Some((ia, ib)) => {
-                left.push((y0, y1, a, ia));
-                right.push((y0, y1, ib, b));
-                inside.push((y0, y1, ia, ib));
-            }
-            None => left.push((y0, y1, a, b)),
-        }
-    }
-    emit(left.into_iter(), edge, out);
-    emit(right.into_iter(), edge, out);
-    emit(inside.into_iter(), body, out);
+    ring(art, shape, edge, out);
+    fill(art, shape.inset(shape.border()), None, body, out);
 }
 
-/// A triangle, apex up when `up`, as rows inside `rect`.
-pub(super) fn triangle(rect: [f32; 4], up: bool, color: [f32; 4], out: &mut Vec<Draw>) {
-    let [x, y, w, h] = rect;
-    let count = (h / ROW).ceil().max(1.0) as usize;
-    let spans = (0..count).map(|i| {
-        let y0 = y + i as f32 * ROW;
-        let y1 = (y0 + ROW).min(y + h);
-        let t = ((y0 + y1) / 2.0 - y) / h;
-        let half = w / 2.0 * if up { t } else { 1.0 - t };
-        (y0, y1, x + w / 2.0 - half, x + w / 2.0 + half)
-    });
-    emit(spans, color, out);
-}
-
-/// A triangle whose tip points right when `right`, else left, as rows inside
-/// `rect`.
-pub(super) fn arrow_side(rect: [f32; 4], right: bool, color: [f32; 4], out: &mut Vec<Draw>) {
-    let [x, y, w, h] = rect;
-    let count = (h / ROW).ceil().max(1.0) as usize;
-    let spans = (0..count).map(|i| {
-        let y0 = y + i as f32 * ROW;
-        let y1 = (y0 + ROW).min(y + h);
-        let t = ((y0 + y1) / 2.0 - y) / h;
-        let reach = w * (1.0 - (2.0 * t - 1.0).abs());
-        if right {
-            (y0, y1, x, x + reach)
-        } else {
-            (y0, y1, x + w - reach, x + w)
+/// One texture stretched over `rect`, turned clockwise by `rotation`
+/// radians about its centre.
+pub(super) fn sprite(
+    rect: [f32; 4],
+    uv: [f32; 4],
+    rotation: f32,
+    color: [f32; 4],
+    out: &mut Vec<Draw>,
+) {
+    out.push(if rotation == 0.0 {
+        Draw::Sprite { rect, uv, color }
+    } else {
+        Draw::RotatedSprite {
+            rect,
+            uv,
+            color,
+            rotation,
         }
     });
-    emit(spans, color, out);
-}
-
-/// A shield: straight sides to the middle, then narrowing to a point.
-pub(super) fn shield(rect: [f32; 4], color: [f32; 4], out: &mut Vec<Draw>) {
-    let [x, y, w, h] = rect;
-    let count = (h / ROW).ceil().max(1.0) as usize;
-    let spans = (0..count).map(|i| {
-        let y0 = y + i as f32 * ROW;
-        let y1 = (y0 + ROW).min(y + h);
-        let t = ((y0 + y1) / 2.0 - y) / h;
-        let half = if t < 0.45 {
-            w / 2.0
-        } else {
-            w / 2.0 * (1.0 - (t - 0.45) / 0.55)
-        };
-        (y0, y1, x + w / 2.0 - half, x + w / 2.0 + half)
-    });
-    emit(spans, color, out);
 }
