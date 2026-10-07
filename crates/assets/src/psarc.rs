@@ -19,6 +19,8 @@
 //! header read finds noise and [`oag_formats::psarc::Error::BadMagic`] says so
 //! rather than guessing. See `docs/formats/ps3-disc.md`.
 
+use std::collections::HashMap;
+
 use oag_formats::psarc::{self, Directory};
 
 use crate::blob_source::BlobSource;
@@ -35,6 +37,11 @@ pub struct Archive {
     /// it never is. See `oag_formats::psarc`'s "Entry 0 is the manifest, not
     /// a file" section.
     entry_of_path: Vec<usize>,
+    /// [`normalise`]d path to its position in `paths`, the first spelling
+    /// winning a collision as a scan in order would. A race load asks this
+    /// archive thousands of times, and a scan that normalised every stored
+    /// path per ask was a quarter of an HD race load.
+    index: HashMap<String, usize>,
 }
 
 impl std::fmt::Debug for Archive {
@@ -99,12 +106,14 @@ impl Archive {
             entry_of_path.push(index);
         }
 
+        let index = path_index(&paths);
         Ok(Self {
             source,
             label,
             directory,
             paths,
             entry_of_path,
+            index,
         })
     }
 
@@ -148,11 +157,9 @@ impl Archive {
     /// leading `/` optional on either side.
     #[must_use]
     pub fn index_of_path(&self, path: &str) -> Option<usize> {
-        let want = normalise(path);
-        self.paths
-            .iter()
-            .position(|p| normalise(p) == want)
-            .map(|n| self.entry_of_path[n])
+        self.index
+            .get(&normalise(path))
+            .map(|&n| self.entry_of_path[n])
     }
 
     /// Whether an entry with this path exists.
@@ -195,6 +202,15 @@ impl Archive {
 /// Entry 0 of every archive: the manifest, not a file.
 const MANIFEST: usize = 0;
 
+/// Every path's [`normalise`]d spelling to its position, first one kept.
+fn path_index(paths: &[String]) -> HashMap<String, usize> {
+    let mut index = HashMap::with_capacity(paths.len());
+    for (n, path) in paths.iter().enumerate() {
+        index.entry(normalise(path)).or_insert(n);
+    }
+    index
+}
+
 /// One spelling of a path, so `Data\...`, `/data/...` and `data/...` all match.
 ///
 /// Backslashes are folded because that is how every *other* archive in this
@@ -208,7 +224,7 @@ fn normalise(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalise;
+    use super::{normalise, path_index};
 
     #[test]
     fn a_path_matches_however_the_caller_spells_it() {
@@ -229,5 +245,18 @@ mod tests {
             normalise("/data/environments/talons_junction/track.vex"),
             normalise("/data/environments/talons_junction/track_reversed.vex")
         );
+    }
+
+    #[test]
+    fn two_spellings_of_one_path_resolve_to_the_first_like_a_scan() {
+        let paths = [
+            "/data/a.vex".to_string(),
+            "/Data/B.vex".to_string(),
+            "data/b.vex".to_string(),
+        ];
+        let index = path_index(&paths);
+        assert_eq!(index.get(&normalise("DATA\\b.VEX")), Some(&1));
+        assert_eq!(index.get(&normalise("a.vex")), None);
+        assert_eq!(index.get(&normalise("/data/a.vex")), Some(&0));
     }
 }
