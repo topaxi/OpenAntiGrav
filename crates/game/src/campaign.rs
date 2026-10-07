@@ -852,7 +852,7 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
 
 #[cfg(test)]
 mod tests {
-    use super::race_mode_for_cell;
+    use super::{race_mode_for_cell, same_archive};
     use oag_tables::race_campaign::Mode as CampaignMode;
 
     #[test]
@@ -896,5 +896,13 @@ mod tests {
                 "{mode} should not launch"
             );
         }
+    }
+
+    #[test]
+    fn an_archive_is_named_by_file_name_whatever_the_case_or_folder() {
+        let wanted = "PS3_GAME/USRDIR/DATA04.PSARC";
+        assert!(same_archive("img.iso:PS3_GAME/USRDIR/DATA04.PSARC", wanted));
+        assert!(same_archive("/x/USRDIR/data04.psarc", wanted));
+        assert!(!same_archive("/x/USRDIR/data02.psarc", wanted));
     }
 }

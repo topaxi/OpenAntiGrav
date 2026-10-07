@@ -128,30 +128,30 @@ fn the_psn_campaign_is_the_discs_hd_branch() {
     }
 }
 
-/// Which copy of a grid and of the medal atlas this build reads on each source:
-/// the same precedence on both, so the PSN campaign reads what the disc's does.
+/// Which copy of a grid and of the medal atlas each source carries: grids are
+/// served from `data02`/`DATA02` (flat) on both, the atlas has the same two
+/// copies with the same sizes, so the PSN campaign reads what the disc's does.
 #[test]
 #[ignore = "needs the PSN install and a decrypted PS3 disc image"]
-fn the_grid_and_medal_copies_read_are_the_same_on_both_sources() {
+fn the_grid_and_medal_copies_are_the_same_on_both_sources() {
     let (Some(mut psn), Some(mut disc)) = (psn(), disc()) else {
         return;
     };
     let grid = oag_hd::campaign::entry_name(0);
     let atlas = r"Data\FE\Images\Hexmedal_HD.gtf";
-    for (source, archives) in [("psn", &mut psn), ("disc", &mut disc)] {
+    for archives in [&mut psn, &mut disc] {
         let served = archives.read_name(&grid).expect("grid served");
         let copies = archives.read_every_name(&grid);
-        let from: Vec<&str> = copies
-            .iter()
-            .filter(|(_, blob)| *blob == served)
-            .map(|(label, _)| label.as_str())
-            .collect();
-        eprintln!("{source}: {grid} served from {from:?} of {}", copies.len());
-        let labels: Vec<String> = archives
+        assert_eq!(
+            served,
+            copy(&copies, "data02.psarc"),
+            "the flat copy is served"
+        );
+        let sizes: Vec<usize> = archives
             .read_every_name(atlas)
             .into_iter()
-            .map(|(label, blob)| format!("{label}={}", blob.len()))
+            .map(|(_, blob)| blob.len())
             .collect();
-        eprintln!("{source}: {atlas} {labels:?}");
+        assert_eq!(sizes, [262_272, 786_560], "flat then per-difficulty");
     }
 }
