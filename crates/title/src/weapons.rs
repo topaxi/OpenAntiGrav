@@ -97,6 +97,12 @@ pub struct WeaponModels {
     /// see `oag_raceplay::bomb_blast`. `None` on every other title: HD's
     /// own Bomb detonation is unread and Pure's Bomb authors no fuse at all.
     pub bomb_blast_pulse: Option<PulseBombBlast>,
+    /// Wipeout HD's Bomb detonation: a fireball, its white core, a camera-
+    /// facing bloom disc and eight shockwave rings, driven by one blast
+    /// object (`NormalBomb`'s, vtable `0x00864ab8`) - a different mechanism
+    /// from Pulse's, not a renamed copy. See `oag_raceplay::bomb_blast::hd`
+    /// and `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, 2026-10-07.
+    pub bomb_blast_hd: Option<HdBombBlast>,
     /// The Repulser's field model: a flat ring around the firer that shrinks,
     /// then widens and fades - `Repulser_Construct` (`0x08875008`) loads it and
     /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it. See
@@ -192,6 +198,7 @@ impl WeaponModels {
         plasma_blast_pulse: None,
         plasma_blast_hd: None,
         bomb_blast_pulse: None,
+        bomb_blast_hd: None,
         repulser_field: None,
         mag_floor: None,
         magstrip_wake: None,
@@ -264,6 +271,22 @@ pub struct HdPlasmaBlast {
     pub sphere: &'static str,
     /// `Data\Weapons\HD_plasma_halo.vex`, target scale 7.0, rate 0.2.
     pub halo: &'static str,
+}
+
+/// Wipeout HD's own Bomb-blast set, in the blast constructor's load order
+/// (`0x00151ad8`, TOC slots `0x008ab18c..`) - see
+/// [`WeaponModels::bomb_blast_hd`]. The blast holds the shockwave model eight
+/// times over; that count is the executable's, not this table's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HdBombBlast {
+    /// `Data\Weapons\HD_bomb_sphere.vex`, the fireball (`BOMB_FIRE`).
+    pub sphere: &'static str,
+    /// `Data\Weapons\HD_bomb_sphere_white.vex`, the same mesh, hotter.
+    pub sphere_white: &'static str,
+    /// `Data\Weapons\hd_bomb_sphere_bloomring.vex`, a flat bloom disc.
+    pub bloom_ring: &'static str,
+    /// `Data\Weapons\hd_bomb_shockwaves.vex`, one ring's mesh.
+    pub shockwaves: &'static str,
 }
 
 /// Pulse's own Bomb-blast pair, in `BombBlast_Construct`'s load order - see

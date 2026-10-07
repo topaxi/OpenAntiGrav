@@ -102,6 +102,7 @@ pub const TITLE: &Title = &Title {
         // Pure's Bomb authors no `timetodie` at all and never detonates -
         // see `oag_tables::weapons::BombStats::timetodie`.
         bomb_blast_pulse: None,
+        bomb_blast_hd: None,
         repulser_field: None,
         // Pure ships no magstrip and no magfloor effect: its executable has no
         // `visual_effects` or `MagEffect` string and no `Mag Floor Collision`

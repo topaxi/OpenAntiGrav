@@ -350,7 +350,7 @@ fn undeclared(image: &str) {
                         }
                     }
                 }
-                if tail_bad && ten_ok && stride == 18 && shown < 200 {
+                if tail_bad && ten_ok && (stride == 18 || stride == 22) && shown < 200 {
                     shown += 1;
                     println!(
                         "tail non-finite: {archive} {path} mesh {:#010x} stride {stride}",

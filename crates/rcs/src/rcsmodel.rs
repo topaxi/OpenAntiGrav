@@ -811,7 +811,7 @@ impl Mesh {
             None => (stride.saturating_sub(TEXCOORD_LEN), TexcoordFormat::Half),
         };
         let coords = self.coords_at(data, submesh, stride, offset, format)?;
-        if self.decl.is_none() && stride == inline_uv::STRIDE {
+        if self.decl.is_none() && inline_uv::STRIDES.contains(&stride) {
             return Ok(self.inline_uv_before_colour(data, submesh, stride, coords));
         }
         Ok(coords)

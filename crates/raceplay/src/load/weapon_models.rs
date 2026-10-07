@@ -338,8 +338,18 @@ pub(super) fn load_bodies(
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                     repulser_field: None,
                     mag_floor: [None, None],
+                    hd: [None, None, None, None],
                 }
             });
+    // HD's blast set rides the same container - `BombBlastModels::hd`.
+    if let Some(hd) = models.bomb_blast_hd {
+        bomb_blast.hd = [
+            one(Some(hd.sphere), "a bomb blast fireball", true),
+            one(Some(hd.sphere_white), "a bomb blast core", true),
+            one(Some(hd.bloom_ring), "a bomb blast bloom disc", true),
+            one(Some(hd.shockwaves), "a bomb blast shockwave", true),
+        ];
+    }
     // Rides the Bomb blast's container - see `BombBlastModels::repulser_field`.
     bomb_blast.repulser_field = one(models.repulser_field, "a repulser field", false);
     // And the magstrip effect's pair - see `BombBlastModels::mag_floor`.

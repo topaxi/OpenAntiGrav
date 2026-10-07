@@ -195,6 +195,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_leach_lock: Option<String>,
 
+    /// With `--race --screenshot`, put craft `SLOT` on a Bomb the player has laid
+    /// at the end of a tick: `TICK:SLOT`, e.g. `600:1`. A verification aid for
+    /// the Bomb's detonation, there because a headless run has no rival that
+    /// drives over it. The next tick's own trip test does the rest. See
+    /// [`oag_raceplay::Race::force_bomb_trip`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_bomb_trip: Option<String>,
+
     /// With `--race --screenshot`, set the player's shield to a percentage of
     /// its maximum at the end of a tick: `TICK:PERCENT`, e.g. `0:15` for a
     /// craft at 15 % from the first frame. Repeat the flag to script a drop:

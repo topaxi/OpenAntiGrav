@@ -72,6 +72,7 @@ impl Setup {
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.
             hd_plasma_blast: false,
+            hd_bomb_blast: false,
             pulse_laid_pose: false,
             grid_frame_from_sample: false,
             screen_flash: false,

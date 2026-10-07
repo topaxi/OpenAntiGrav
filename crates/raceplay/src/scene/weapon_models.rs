@@ -386,6 +386,7 @@ impl super::Scene {
         queue: &wgpu::Queue,
         view_projection: Mat4,
         seconds: f32,
+        weapon_scene: &mesh_render::Scene,
     ) -> BlastsActive {
         let draws = race.bomb_blast_draws();
         let mut hemisphere_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
@@ -432,7 +433,9 @@ impl super::Scene {
             drawable.tint(queue, [1.0, 1.0, 1.0, *alpha], &mut Vec::new());
             repulser_active[slot] = true;
         }
+        let hd = self.write_hd_bomb_blasts(race, queue, view_projection, weapon_scene);
         BlastsActive {
+            hd,
             hemisphere: hemisphere_active,
             shockwave: shockwave_active,
             repulser_field: repulser_active,
@@ -448,6 +451,7 @@ impl super::Scene {
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
+        self.draw_hd_bomb_blasts(&active.hd, pass, stats);
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
             for pool in &self.bomb_blast.mag_floor {
                 if let Some(drawable) = pool.get(slot) {
@@ -491,12 +495,90 @@ impl super::Scene {
 /// [`super::Scene::write_bomb_blasts`]'s return: which slots of each eased
 /// view-side model are live and visible this frame.
 pub(super) struct BlastsActive {
+    /// What each live HD blast shows - see `bomb_blast::hd`.
+    hd: [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
     hemisphere: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     /// Per Repulser pool slot - see `repulser_field`.
     repulser_field: [bool; POOL_SIZE],
     /// Per ship slot - see `mag_floor_fx`.
     mag_floor: [bool; oag_weapons::MAX_SHIPS],
+}
+
+impl super::Scene {
+    /// Writes every live HD Bomb blast's models and hands back what each shows,
+    /// which [`Self::draw_hd_bomb_blasts`] draws from.
+    ///
+    /// **Each model's clock is its materials' `AlphaAnim`, `V_Anim` and
+    /// `Shockwave_scalar`; the fireballs' `ColourAnim` is the blast's own
+    /// float** - `Drawable::write_blast`. The circuit's scene block goes on
+    /// every drawable written, since all three programs fog. No previous-frame
+    /// matrix is tracked, so a blast draws with no motion blur of its own,
+    /// like the Plasma's (**chosen, not measured**).
+    fn write_hd_bomb_blasts(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS] {
+        let pools = &self.bomb_blast.hd;
+        let draws = race.hd_bomb_blast_draws();
+        let write = |drawable: Option<&Drawable>, piece: Option<bomb_blast::hd::Piece>| {
+            let (Some(drawable), Some(piece)) = (drawable, piece) else {
+                return;
+            };
+            let mvp = view_projection * piece.matrix;
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write_blast(
+                queue,
+                view_projection,
+                piece.matrix,
+                mvp,
+                piece.clock,
+                piece.colour,
+            );
+        };
+        for (slot, pieces) in draws.iter().enumerate() {
+            let Some(pieces) = pieces else { continue };
+            write(pools.fireball.get(slot), pieces.fireball);
+            write(pools.core.get(slot), pieces.core);
+            write(pools.bloom.get(slot), pieces.bloom);
+            let first = slot * (bomb_blast::hd::RIPPLES + 1);
+            write(pools.rings.get(first), pieces.ring);
+            for (k, ripple) in pieces.ripples.into_iter().enumerate() {
+                write(pools.rings.get(first + 1 + k), ripple);
+            }
+        }
+        draws
+    }
+
+    /// Draws what [`Self::write_hd_bomb_blasts`] wrote: the cut-out fireball
+    /// and its core first, then the additive disc and rings.
+    fn draw_hd_bomb_blasts(
+        &self,
+        shown: &[Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
+        pass: &mut wgpu::RenderPass<'_>,
+        stats: &mut SceneStats,
+    ) {
+        let pools = &self.bomb_blast.hd;
+        let mut draw = |drawable: Option<&Drawable>, shown: bool| {
+            if let (Some(drawable), true) = (drawable, shown) {
+                stats.add(drawable.draw(pass, None, None, None, None));
+            }
+        };
+        for (slot, pieces) in shown.iter().enumerate() {
+            let Some(pieces) = pieces else { continue };
+            draw(pools.fireball.get(slot), pieces.fireball.is_some());
+            draw(pools.core.get(slot), pieces.core.is_some());
+            draw(pools.bloom.get(slot), pieces.bloom.is_some());
+            let first = slot * (bomb_blast::hd::RIPPLES + 1);
+            draw(pools.rings.get(first), pieces.ring.is_some());
+            for (k, ripple) in pieces.ripples.iter().enumerate() {
+                draw(pools.rings.get(first + 1 + k), ripple.is_some());
+            }
+        }
+    }
 }
 
 impl super::Scene {
@@ -592,9 +674,10 @@ impl super::Scene {
     /// weapon's materials are the GE's fixed pipeline, its stand-in light was
     /// never measured against a scene block, and that is another lane's.
     ///
-    /// **Not written, and open**: the Bomb's blast pair and its Repulser field
-    /// and mag floor. No frame of them was kept (a detonation needs a rival to
-    /// run onto the bomb), so nothing says writing them is right.
+    /// **Written since 2026-10-07**: HD's Bomb blast (`write_hd_bomb_blasts`),
+    /// framed with `--force-bomb-trip`. **Not written, and open**: the Bomb
+    /// blast's Pulse pair (Pulse draws no scene block), the Repulser field and
+    /// the mag floor.
     pub(super) fn weapon_scene(scene: &mesh_render::Scene) -> mesh_render::Scene {
         mesh_render::Scene {
             zone: mesh_render::Zone::default(),

@@ -66,13 +66,15 @@ today after this change.
 | `WO_REPULSER`, `WO_REPULSER_BLAST` | `Repulser_SpawnWaves` / `_SpawnBlastEffect` | `0x001577d8`, `0x00157b20`, `0x00158288`; `0x00158818` | yes, Pulse-inherited |
 | `WO_PLASMA_LIGHTNING_EXPAND/COLLAPSE` | (HD-only) | `0x00127cd0`, `0x00127770` (`plasma.md`) | yes |
 | `WO_LEACHBEAM_ABSORB` | (HD-only) | `0x00114a00`/`0x00114c78` (`weapons.md`) | yes |
-| `WO_LEACHBEAM_CHARGING`, `WO_BOMB_SMOKERING`, `WO_ROCKET_FLARE`, `WO_ROCKET_EXPLO_TRACK`, `WO_MISSILE_HEAD/BOUNCE`, `WO_SHURIKEN_HEAD/BOUNCE`, `WO_PLASMA_HEAD`, `WO_CANNON_SPARKS`, `WO_QUAKE` | weapon visuals | slot in a weapon data table (third hop); `WO_LEACHBEAM_CHARGING` also loaded at `0x001134f0` | yes, Pulse-inherited, HD site unread |
+| `WO_BOMB_SMOKERING` | `NormalBombBlast_Start` `0x00151538` at the detonation, spawned through `RaceManager` with TOC `-0x2350` (`weapons.md`, 2026-10-07) | the blast's matrix | yes, Pulse-inherited; HD site read |
+| `WO_BOMB_RAYS` | `NormalBombBlast_Update` `0x001503d8` once, the first tick `age > 0.5` (`0x150fc8`, tag `'BORS'`, string TOC `-0x2374`) | the blast's matrix | **yes, HD only** (`Trigger::BombRays`, `bomb_blast::hd`) |
+| `WO_LEACHBEAM_CHARGING`, `WO_ROCKET_FLARE`, `WO_ROCKET_EXPLO_TRACK`, `WO_MISSILE_HEAD/BOUNCE`, `WO_SHURIKEN_HEAD/BOUNCE`, `WO_PLASMA_HEAD`, `WO_CANNON_SPARKS`, `WO_QUAKE` | weapon visuals | slot in a weapon data table (third hop); `WO_LEACHBEAM_CHARGING` also loaded at `0x001134f0` | yes, Pulse-inherited, HD site unread |
 | `WO_LEACHBEAM_LAUNCH`, `_HIT_TARGET`, `_BREAK` | none | spawn functions named (`weapons.md`, 82/82/78); **no code xref reaches them**: their OPD entries `0x00875a90/80/78` are only referenced from the OPD run itself, so the caller is a vtable or table not found | no |
 | `WO_DAMAGE_MILD/MODERATE/CRITICAL` | none | `ShipDamageFx_Update` `0x002a17e8` off a weapon hit; thresholds 70 and 40 read, conf 72 | **yes, HD only** (`race::damage_fx`) |
 | `WO_DAMAGE_ELECTRIC`, `WO_SHIP_DEATH_DAMAGE_PLUME` | none | the Zone-mask and `param_4 != 0` branches of the same function, unwired | no |
 | `WO_DEBRIS_FIRE` | none | one load, `0x0010c958`, unread | no |
 | `WO_DEBRIS_SPARKS`, `WO_NITRO_DEBRIS_SPARKS` | none | table slot, unread | no |
-| `WO_BOMB_EXPLO_DETONATOR` `0x00137150`, `WO_BOMB_RAYS` `0x001503d8`, `WO_MINE_EXPLO_DETONATOR(_DEAD)` `0x00138e58`, `WO_QUAKE_DETONATOR` `0x0013afe8/0x0013b5e8/0x0013b930`, `WO_CANNON_SPARKS_DETONATOR`, `WO_LIGHTBARRIER_EXPLO`, `WO_NITRO_SHIP_DEATH` | none | functions found, bodies unread | no: the Detonator weapon set is not built in `oag-weapons` (and `WO_NITRO_SHIP_DEATH` is refused at blend class 4) |
+| `WO_BOMB_EXPLO_DETONATOR` `0x00137150`, `WO_MINE_EXPLO_DETONATOR(_DEAD)` `0x00138e58`, `WO_QUAKE_DETONATOR` `0x0013afe8/0x0013b5e8/0x0013b930`, `WO_CANNON_SPARKS_DETONATOR`, `WO_LIGHTBARRIER_EXPLO`, `WO_NITRO_SHIP_DEATH` | none | functions found, bodies unread | no: the Detonator weapon set is not built in `oag-weapons` (and `WO_NITRO_SHIP_DEATH` is refused at blend class 4) |
 | `WO_SHIP_EXPLOSION` | a wreck (`wreck_fx`, Pulse-gated) | table slot `0x008a8e84` | no on HD: `FXNODE_EXPLO` and `DEATH_SPARKS` are not strings in the executable |
 
 ## What was recovered

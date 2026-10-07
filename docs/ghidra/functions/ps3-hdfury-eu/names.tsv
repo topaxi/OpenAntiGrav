@@ -547,3 +547,14 @@
 0x005ec3e0	function	Sky_SetCubeFaces	65	renderer.md
 # 2026-10-07 stick-curve lane (player-input.md)
 0x000cd548	function	PlayerInput_Update	80	player-input.md
+# 2026-10-07 hd-weapon-blasts (weapons.md)
+0x00144a48	function	NormalBomb_Construct	80	weapons.md
+0x001443f8	function	NormalBomb_Update	80	weapons.md
+0x00144040	function	NormalBomb_Detonate	80	weapons.md
+0x00151ad8	function	NormalBombBlast_Construct	80	weapons.md
+0x00151538	function	NormalBombBlast_Start	85	weapons.md
+0x001503d8	function	NormalBombBlast_Update	85	weapons.md
+0x0014fff0	function	NormalBombBlast_UpdateRipples	85	weapons.md
+0x0014fa08	function	NormalBombBlast_Reset	80	weapons.md
+0x001512f8	function	NormalBombBlast_Draw	80	weapons.md
+0x006ca6b0	function	Matrix_RotateRowsByAxisAngle	75	weapons.md
