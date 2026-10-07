@@ -838,28 +838,6 @@ impl Frontend {
                 .is(oag_2048::frontend::states::BOOT_INTRO_MOVIE)
     }
 
-    /// Whether the current screen is a movie leg that has frames but no picture to
-    /// show for them.
-    ///
-    /// Such a leg is a black screen for as long as the movie would have run (forty
-    /// seconds for the disc's own intro), so it is left at once, the way a player's
-    /// Start press leaves it. A leg that plays no movie by design is not this: its
-    /// plan has no frames.
-    fn leg_has_no_picture(&self) -> bool {
-        if !self.is_playing_movie() {
-            return false;
-        }
-        let Some(current) = self.machine.current() else {
-            return false;
-        };
-        let plan = self
-            .steps
-            .iter()
-            .find(|step| step.state == current)
-            .map_or(self.first, |step| step.movie);
-        !plan.has_picture
-    }
-
     /// Steps the sequence by `dt` seconds.
     ///
     /// `movie_playhead` is how far the movie's **own sound** has got, in
