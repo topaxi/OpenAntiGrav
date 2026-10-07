@@ -564,6 +564,14 @@ impl Session {
                     return;
                 }
             },
+            "controls.touch_scheme" => match oag_input::touch::Scheme::parse(&text) {
+                // Read by the next tick's `feed_touch`.
+                Some(scheme) => self.settings.controls.touch_scheme = scheme.name().to_string(),
+                None => {
+                    warn!("ignoring {setting} = {text:?}: expected standard or easy");
+                    return;
+                }
+            },
             "controls.touch_opacity" => match text.parse::<u8>() {
                 // Read by the next frame's overlay draw.
                 Ok(percent) if (10..=100).contains(&percent) => {

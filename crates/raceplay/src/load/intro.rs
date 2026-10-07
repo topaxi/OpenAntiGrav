@@ -1,24 +1,37 @@
 //! The circuit's pre-race flyby: `start_grid.vex`, beside `track.vex`.
 //!
-//! One file per circuit directory - `track_reversed.vex` and `zone_track.vex` share it, since
-//! the directory holds no other spelling. Pulse on a PSP disc only: the camera was read and
-//! measured there and nowhere else. See [`crate::intro_camera`].
+//! Which file, and whether the title plays one on this disc at all, is [`oag_title::pre_race`]:
+//! Pulse on a PSP disc and Wipeout HD on a PS3 one. Pulse's directory holds one file, so
+//! `track_reversed.vex` and `zone_track.vex` share it; HD ships a `_reversed` file beside it.
+//! See [`crate::intro_camera`].
 
 use oag_vex::grid_camera::GridCamera;
 
-/// The flyby for the circuit `track` (a `.vex` entry name) lives in, or `None` off Pulse's PSP
-/// disc or when the circuit authors none. Says which in `report`.
+/// The title's flyby rule when it plays one on this source, else `None`.
+pub(super) fn rule(
+    title: &oag_title::Title,
+    archives: &oag_assets::Archives,
+) -> Option<&'static oag_title::pre_race::PreRace> {
+    title
+        .pre_race
+        .filter(|rule| rule.on.applies(archives.layout.platform))
+}
+
+/// The flyby for the circuit `track` (a `.vex` entry name) lives in, or `None` where the title
+/// plays none or the circuit authors none. Says which in `report`.
 pub(super) fn read(
     archives: &mut oag_assets::source::Archives,
     track: &str,
-    pulse_psp: bool,
+    rule: Option<&'static oag_title::pre_race::PreRace>,
     report: &mut Vec<String>,
-) -> Option<GridCamera> {
-    if !pulse_psp {
-        return None;
-    }
-    let (directory, _) = track.rsplit_once('\\')?;
-    let entry = format!(r"{directory}\start_grid.vex");
+) -> Option<(GridCamera, &'static oag_title::pre_race::PreRace)> {
+    let rule = rule?;
+    let (directory, file) = track.rsplit_once('\\')?;
+    let name = match rule.grid_reversed {
+        Some(reversed) if file.to_ascii_lowercase().contains("reversed") => reversed,
+        _ => rule.grid,
+    };
+    let entry = format!(r"{directory}\{name}");
     let blob = match archives.read_name(&entry) {
         Ok(blob) => blob,
         Err(e) => {
@@ -36,7 +49,7 @@ pub(super) fn read(
         ),
         None => format!("pre-race flyby: {entry} has no playable gridCamera"),
     });
-    grid
+    grid.map(|grid| (grid, rule))
 }
 
 /// The `PI_Track` id of the circuit `track` (a `.vex` entry name) is the race on: the entry in
@@ -65,11 +78,11 @@ pub(super) fn read_panel(
     archives: &mut oag_assets::source::Archives,
     title: &'static oag_title::Title,
     track: &str,
-    pulse_psp: bool,
+    rule: Option<&oag_title::pre_race::PreRace>,
     preferred_language: Option<&str>,
     report: &mut Vec<String>,
 ) -> Option<crate::track_panel::Assets> {
-    if !pulse_psp {
+    if !rule.is_some_and(|rule| rule.panel) {
         return None;
     }
     let Some(id) = track_id(archives, title, track) else {

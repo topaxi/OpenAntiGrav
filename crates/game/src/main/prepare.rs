@@ -248,6 +248,10 @@ impl Pending {
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);
+        // A phone app is left, not quit - see `menu::Definition::drop_quit`.
+        if cfg!(target_os = "android") {
+            definition.drop_quit();
+        }
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the

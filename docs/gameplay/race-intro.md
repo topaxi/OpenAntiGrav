@@ -117,6 +117,39 @@ and 132): the bars thin out together, the title and paragraph are cut from the r
 viewport closes, and the HUD arrives over a panel still a third visible. Scratch:
 `data/scratch/pulse-flyby-panel/{montage-enter,montage-exit,cmp-moa,cmp-exit,cmp-bottom}.png`.
 
+## Other titles (census 2026-10-07)
+
+Every title but Pure ships a `start_grid.vex` per circuit with a `grid_camera1` animation and a
+`gridCamera` leaf; the original **plays** it where it was watched. The title's numbers are
+[`oag_title::pre_race::PreRace`](../../crates/title/src/pre_race.rs), each carrying its origin.
+
+| Title / platform | Camera file | Original plays it | Ours |
+| --- | --- | --- | --- |
+| Pulse PSP | `start_grid.vex`, 17.7 to 27 s | measured (above) | ported |
+| Pulse PS2 | same names and reader (`16_Track`: 2,400 B, 25.00 s, 5 cuts); executable carries `%s\start_grid.vex` | **not watched** (PCSX2 run not done) | not wired: `PRE_RACE.on` is PSP only |
+| Pure PSP | **none**: `track.vex` hashes resolve on `01_Vineta_K`, `04_Chenghou_Project`, `10_Sebenco_Climb`, `start_grid.vex` and `_reversed` do not; only `Data\Defaults\start_grid_1.vex` (confidence 90 on a hash census, not a full listing). The executable has `be::StartSequenceCamera` and a GridCamera importer but no per-circuit path | not watched; a code camera (`StartSequenceCamera`) may play, unread | none, and no invented path |
+| HD / Fury PS3 | `start_grid.vex`, `_reversed`, `_ta`, `_de` per circuit (110 to 200 s, 8 circuits plus Fury's); `zone_N/start_grid.vex` has no `grid_camera1` | **measured**, RPCS3, Talons Junction: after the loading screen a camera flies the grid (craft in their slots, no HUD), cuts between shots, `START RACE` prompt strip at the bottom; a 230 s hold shows it **loops** at the file's 188.33 s (shot 19 repeats shot 1) and never ends by itself; one tap of cross skips it (`docs/rendering/start-gantry.md`) | camera ported, loops, press skips; **prompt not drawn** (below) |
+| HD PSN | the same files (same engine) | not watched separately | same rule, `Platform::Ps3` |
+| 2048 Vita | `data/art/published/environments/<n>/start_grid.vex`; `grid_camera1` has `LoopEnd` (2300 on `altima`) but mostly no `AnimEnd`, `square` has 3000 (50 s); `defaults/start_grid_1..3` hold eight 5 s `gridCamera`s each (grid slots, not a flyby, unread) | **not watched** | not wired; `GridCamera::read` needs `AnimEnd` |
+| Omega PS4 | HD's circuits: HD's files byte-for-byte shape (Vineta K 173.33 s); 2048's: 2048's | **not checkable** here (no PS4 emulator) | not wired |
+
+**Lineage check (2048 against Omega).** *Checked, applies, not wired.* Omega's 2048 circuits ship the
+same `start_grid.vex` shape as 2048's; Omega's HD circuits ship HD's. Neither title's flyby was
+watched, so neither is turned on (an unwatched title inherits Pulse's law only where the project
+has decided it should, and here the end rule and skip differ between Pulse and HD).
+
+**HD's numbers.** Measured: plays after the load, loops, no HUD, one press skips. **Chosen, not
+measured**: the field of view (Pulse's `54.309`, the same Maya export, compared by eye against
+the original at matched circuit position and found to frame the same buildings), the hold and the lock
+(0 ticks), the HUD delay (0), and plain `start_grid.vex` (the executable builds `start_grid_de` and
+`start_grid_ta` too; which mode takes which was not watched).
+
+**HD's prompt is open.** `InGame` in `ingame_definition.xml` authors it: two 3 px rules (`y 970`,
+`1030`, alpha `0x7f`, slid in from `1.0 s` and `0.5 s`), `FE_CONFIRM_BUTTON` in the `buttons` face
+at `(80, 1000)` and `FE_START_RACE` at `(130, 997)` from `1.0 s`, and the `demo_logo_HD` mark at
+`(1348, 973)`, in a 1920x1080 grid. The parser already yields those widgets (`oag_ui::screen`); no
+overlay draws them for HD yet.
+
 ## Open
 
 - **The panel's three small differences** from the original, on `16_Track` and `03_Track` (line

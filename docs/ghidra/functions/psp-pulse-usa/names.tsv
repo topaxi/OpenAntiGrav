@@ -1317,3 +1317,6 @@
 0x08900db4	function	BillboardManager_Construct	78	billboards.md
 0x08900fa0	function	BillboardManager_FreePool	80	billboards.md
 0x0890514c	function	ExhaustFlare_OnTurbo	85	perfect-start.md
+# 2026-10-07 novice-airbrake lane: the player stick shaping PlayerInput_Update reads (input-bindings.md)
+0x08a7b698	data	g_stick_deadzone	92	input-bindings.md
+0x08ae4cec	data	g_stick_gain	90	input-bindings.md

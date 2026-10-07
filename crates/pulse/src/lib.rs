@@ -24,6 +24,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod movies;
+pub mod pre_race;
 pub mod prompts;
 pub mod race;
 pub mod shadow;
@@ -92,6 +93,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
+    pre_race: Some(&pre_race::PRE_RACE),
     adverts: Some(&oag_title::adverts::Adverts {
         // Measured on PSP (a live GE dump) and PS2 (a live GS dump): see
         // `docs/ghidra/functions/psp-pulse-usa/billboards.md`.

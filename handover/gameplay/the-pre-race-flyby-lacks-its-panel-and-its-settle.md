@@ -45,6 +45,12 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 - The field of view (`54.309` vertical degrees) is a measured constant: the leaf's payload is
   identical on all twelve circuits, and no derivation was found.
 
+- **Other titles (2026-10-07)**: Wipeout HD's flyby is ported as `PreRace` Title data (camera loops, a press skips); see
+  [race-intro.md](../../docs/gameplay/race-intro.md#other-titles-census-2026-10-07). Open there: HD's `START RACE`
+  prompt overlay, HD's own fov/hold/lock/mode file (chosen), Pulse PS2 (same files, watch it on PCSX2 then widen
+  `PRE_RACE.on`), 2048 (needs `AnimEnd`-less reading, watch on Vita3K), Pure's `StartSequenceCamera` (code camera,
+  unread), HD Zone (`zone_N/start_grid.vex` has only `camera1_group`).
+
 ## Next Steps
 
 1. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.

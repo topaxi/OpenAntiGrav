@@ -172,6 +172,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: None,
+    pre_race: None,
     adverts: None,
 };
 

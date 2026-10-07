@@ -114,3 +114,6 @@
 0x0161cf50	function	Renderer_BeginPass10	70	heat-haze.md
 0x01793990	function	Gnm_ClearSurface	75	heat-haze.md
 0x01621650	function	Renderer_ResizeTargets	75	heat-haze.md
+0x012e8fb0	function	PlayerInput_Update	78	player-input.md
+0x01747c90	function	Pad_UpdateState	75	player-input.md
+0x017499b0	function	Pad_Open	70	player-input.md

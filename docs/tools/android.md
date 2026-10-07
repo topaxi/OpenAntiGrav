@@ -59,7 +59,7 @@ manifest, one library and the signature, nothing else.
 4. Launch "OpenAntiGrav". Logs: `adb logcat -s oag`, and the same lines with
    timestamps in `files/state/oag/logs/oag-game.log` (`adb pull`).
 
-From a checkout, `just deploy-android` does step 2 (it builds the APK first;
+From a checkout, `just deploy-android` does step 2 (it builds the APK first, arm64 only when the picked device is arm64 - the x86_64 library is for Waydroid alone;
 `--skip-build`, `--serial S`, `--dry-run`), and `just push-data android` does
 step 3: an fzf multiselect over every disc image, DLC zip, unpacked 2048 or
 Omega package and Pure's DLC key table, each row marked `on device`, `partial`
@@ -216,6 +216,11 @@ Verified on Waydroid (`adb shell input keyevent 4`): from the RACE page Back wen
 the root (log line `system back`), at the root and at the Language Selection the
 process stayed alive, and in a race it opened the root menu over the parked race.
 
+There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
+the system's home or app switcher, not quit from inside, and the app is suspended
+(race paused) rather than ended. `menu::Definition::drop_quit` removes the row at
+boot (`main/prepare.rs`, `cfg!(target_os = "android")`); desktop keeps it.
+
 ### On-screen racing controls
 
 `oag_input::touch` holds the layout, the finger tracking and the rules, with no
@@ -228,17 +233,67 @@ pass.
 
 | Control | Where | Button |
 | --- | --- | --- |
-| steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock; X steers, Y pitches | stick axes |
-| GO | right edge, mid-height, largest (0.36 of the height), a rounded square | `Cross` (thrust), plus `L`/`R` in its brake corners |
-| FIRE | left of GO, in the thumb's arc (0.20), a crosshair | `Square` |
-| ABSORB | above FIRE (0.17), a shield | `Circle` |
-| BRAKE L, BRAKE R | **only with GO's brake zones off**: upper corners, below the lap and record readouts (0.17), a side arrow and `L`/`R`; with zones on they are neither drawn nor hit-tested | `L`, `R` (airbrakes) |
-| PAUSE, VIEW | top-left corner (0.13), beside BRAKE L when zones are off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
+| steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock (20% in Easy); X steers, Y pitches | stick axes |
+| FIRE | top of the right column, a pill 0.36 wide and 0.18 of the height tall, a crosshair | `Square` |
+| GO | the column's middle, mid-height, largest (0.36 of the height), a rounded square | `Cross` (thrust), plus `L`/`R` in its brake corners |
+| ABSORB | below GO with a 0.03 gap, 0.36 wide and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (labelled `ABSORB`) | `Circle` |
+| BRAKE L, BRAKE R | **only Standard with GO's brake zones off**: BRAKE L upper left, BRAKE R in the thumb's arc left of GO (0.17), a side arrow and `L`/`R`; otherwise neither is drawn nor hit-tested | `L`, `R` (airbrakes) |
+| BRAKE (bar half) | **only Easy with the zones off**: the left half of the bar under GO | the airbrake axes, no button |
+| PAUSE, VIEW | top-left corner (0.13), beside BRAKE L in Standard with the zones off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
+
+**Schemes (2026-10-07, touch-schemes lane, chosen, not measured).** `[controls] touch_scheme`
+(CONTROLS page, TOUCH SCHEME, `standard`/`easy`, default `standard`; an unrecognised token is
+standard) picks how the overlay reads. The simulation is untouched: both feed the existing
+analogue `airbrake_left`/`right` axes.
+
+- **GO latches (both schemes).** The finger that has been on GO keeps thrust until it lifts, wherever it
+  slides. Sliding it onto FIRE or ABSORB (or Easy's bar BRAKE) also presses that while it is over it. A
+  finger that began on FIRE or ABSORB does not latch until it reaches GO. The L/R corners and the
+  Easy band read only while the finger is over GO itself. A finger inside a rectangle beats a rectangle
+  whose slop it is only in (the 0.03 gap and the nearest-edge rule keep a thumb at GO's bottom from
+  being read as ABSORB).
+- **The brake carries on past GO's edge (chosen, not measured; the maintainer: the drag "should behave a
+  little like the stick").** For a finger latched on GO the pull is read off its position clamped to GO's
+  rectangle, not gated on being inside it: past GO's left or right side the pull holds the value it had at the edge
+  at that height, below GO's bottom it holds the bottom value at that column, and thrust stays on. Above the
+  brake zone (or over FIRE) there is none, and coming back inside returns to the analogue value. The same
+  holds for Easy's band, whose side still comes from `novice_airbrakes(pull, stick_x)`. A finger dragged below a
+  corner onto ABSORB brakes **and** absorbs at once.
+- **Standard's brake corners** are bigger: 42% of GO's width each and the bottom 50% (were 34% and 34%),
+  leaving a 16% dead centre column; still analogue, and the pull reads **full at 85% of the way into
+  the zone** (`GO_FULL_DEPTH`) so a thumb need not reach GO's very edge, where ABSORB starts.
+- **Easy** keeps GO and the right column, and mimics the original's novice scheme
+  (`oag_gameplay::controls::novice_airbrakes`, measured, `input-bindings.md`) without being
+  measured itself. The stick is a ring of 0.20 of the height with a guide ring at 60%.
+  `u` is the drag along X over the radius: steering is linear to full lock at `|u|` = 0.6 and stays 1 beyond;
+  the same-side airbrake ramps 0 to 1 from 0.6 to the rim (`touch::easy_curve`):
+
+  | u | stick_x | airbrake (dragged side) |
+  | --- | --- | --- |
+  | 0.0 | 0.00 | 0.00 |
+  | 0.3 | 0.50 | 0.00 |
+  | 0.6 | 1.00 | 0.00 |
+  | 0.8 | 1.00 | 0.50 |
+  | 1.0 | 1.00 | 1.00 |
+
+  GO carries one **BRAKE band**, its bottom 40%, with analogue depth (full at 85%). Its pull goes through
+  `novice_airbrakes(pull, stick_x)` unchanged, so it brakes the side the other thumb is steering
+  (stick below -0.1 left, above +0.1 right) and **both when centred**. Each side is the larger of the
+  stick's rim and the band. With GO BRAKE ZONES **off** there is no band: the bar under GO is split,
+  one row exactly GO's width in two equal halves with a divider, BRAKE (left) and ABSORB (right), each labelled with its word, and BRAKE pulls 1.0 the same way (the maintainer's
+  decision: separate BRAKE L/R buttons are hard on a phone). A pull is amber-lit inside GO's own outline.
+- **Under the simulation's own Novice scheme** (`[controls] scheme`) the sim reads only `airbrake_right`
+  and sides it off the steering, ignoring `airbrake_left`; Easy then puts `max(left, right)` on
+  `airbrake_right` alone (`touch::fold_for_novice_sim`) so the two agree. Standard is not folded,
+  as before: its left corner does nothing under sim Novice.
+- Capture poses: `--touch-overlay go-fire|go-left-past|easy-idle|easy-zones-off|easy-brake|easy-bar-brake` beside
+  the earlier ones.
+
 
 **Dynamic GO (2026-10-07, touch-go lane, chosen, not measured; analogue since the touch-design lane).** The finger's
-position *within* GO, tracked while it is held, adds an airbrake: the bottom 34% of
-GO is split into a left corner (34% of its width, `L`), a dead centre column and a
-right corner (34%, `R`); the centre and everything above is thrust alone. Sliding
+position *within* GO, tracked while it is held, adds an airbrake: the bottom half of
+GO is split into a left corner (42% of its width, `L`), a dead centre column and a
+right corner (42%, `R`; see Schemes below for the 2026-10-07 sizes); the centre and everything above is thrust alone. Sliding
 between zones needs no lift, and a thumb in the slop below GO still reads the corner.
 It is on by default behind `[controls] touch_go_zones` (CONTROLS page, GO BRAKE ZONES,
 `on`/`off`); off makes GO thrust alone. The separate BRAKE L/R buttons are dropped while the zones are on (the maintainer: "L/R are not necessary when they are embedded in the go button itself") and come back with the setting off, as does pause/view's old place beside BRAKE L. GO draws
@@ -282,7 +337,7 @@ says thrust, shield or pause. The only words are GO and the L and R of the airbr
 alpha. The overlay draws only while the race is on the glass (`hud_shown`, so not
 through the intro flyby; the loading screen is a different stage and never draws it).
 `oag-game --race --screenshot out.png --size 2340x1080 --touch-overlay
-idle|idle-buttons|go-left|go-right|stick-go` draws the overlay in a pose for a
+idle|idle-buttons|go-left|go-right|stick-go` (and the poses above) draws the overlay in a pose for a
 capture (`idle-buttons` is zones off). Pulse's HUD
 is 4:3 and HD's about 16:9, so on a 2.17:1 phone most of the controls sit on the
 pillarbox bars beside the picture, clear of the readouts.

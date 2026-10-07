@@ -76,8 +76,13 @@ if (( skip_build )); then
 elif (( dry_run )); then
     echo "would run: scripts/build-apk.sh"
 else
-    step "Building the APK"
-    apk="$("$project_root/scripts/build-apk.sh" | tail -n1)"
+    # The x86_64 library is only for Waydroid; a phone never loads it, so
+    # building it for one doubles the build for nothing.
+    apk_args=()
+    abi="$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+    [[ $abi == arm64-v8a ]] && apk_args=(--arm64-only)
+    step "Building the APK (${abi:-unknown ABI}${apk_args[*]:+, arm64 only})"
+    apk="$("$project_root/scripts/build-apk.sh" "${apk_args[@]}" | tail -n1)"
     [[ -f $apk ]] || die "build-apk.sh did not produce an APK - see the output above."
 fi
 

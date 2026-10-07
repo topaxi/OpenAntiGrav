@@ -56,9 +56,12 @@ page was opened for. Every one of those ten strings was read out of the binary
 (`0x08a7e850`..`0x08a7e8d8`); none is a guess at an abbreviation.
 
 Note what the split says about the schemes, because it is the whole design:
-**novice gives you one button for both airbrakes and a dedicated sideshift
-button; veteran gives you the two airbrakes separately and no sideshift button
-at all.** Veteran's sideshift has to come from a gesture, and it does - see
+**novice gives you one airbrake button that picks its side off the steering
+(both when the stick is centred; see
+[below](#novice-r-picks-its-airbrake-off-the-steering)) and a dedicated
+sideshift button; veteran gives you the two airbrakes separately and no
+sideshift button at all.** "One button for both airbrakes", which this page
+said until 2026-10-07, was read off the label alone and is wrong. Veteran's sideshift has to come from a gesture, and it does - see
 below.
 
 Confidence **92**. One store per row, ten string literals, and the two branches
@@ -91,7 +94,7 @@ which mirrors it - the table reads:
 | 1 fire | 7 | `SQUARE` |
 | 2 absorb | 4 | `CIRCLE` |
 | 3 look back | 6 | `TRIANGLE` |
-| 4 both airbrakes | 9 | `R` |
+| 4 airbrake, side by steering | 9 | `R` |
 | 5 left airbrake | 8 | `L` |
 | 6 right airbrake | 9 | `R` |
 | 7 sideshift | 8 | `L` |
@@ -194,6 +197,132 @@ settings-defaults table that presets it to `novice` would overturn this without
 contradicting anything above. **Measure it before leaning on it**: break in
 `Options_LoadControlMapping` under PPSSPP on a fresh profile and read
 `0x08ab0cd0`.
+
+## Novice: `R` picks its airbrake off the steering
+
+Recovered 2026-10-07. The label `OPT_CTRL_AIRBRAKES` says nothing about what
+the button does to the craft, and the port had read it as "both airbrakes".
+The runtime effect lives in `PlayerInput_Update` (`0x0883c870`), the
+`player_input` record's per-frame fill (record layout on
+[cannon-quake-leachbeam.md](cannon-quake-leachbeam.md): record `+0x00` steer,
+`+0x08` left airbrake, `+0x0c` right airbrake, `controller+0x44` onwards).
+Its scheme branch, at the call to `Options_ControlSchemeFlag` (`0x0883cb6c`)
+and `Options_ButtonForAction(4)` (`0x0883cb80`):
+
+```c
+if (Options_ControlSchemeFlag() == 0) {            // novice
+    rec->airbrake_left  = 0;                        // +0x4c, every frame
+    rec->airbrake_right = 0;                        // +0x50, every frame
+    if (Input_IsHeld(g_input, Options_ButtonForAction(4), 0)) {
+        if      (rec->steer < -10.0f) rec->airbrake_left  = 100.0f;
+        else if (rec->steer >  10.0f) rec->airbrake_right = 100.0f;
+        else { rec->airbrake_left = 100.0f; rec->airbrake_right = 100.0f; }
+    }
+} else {                                            // veteran
+    rec->airbrake_left  = Input_IsHeld(.., Options_ButtonForAction(5)) ? 100 : 0;
+    rec->airbrake_right = Input_IsHeld(.., Options_ButtonForAction(6)) ? 100 : 0;
+}
+```
+
+`rec->steer` is the value already written earlier in the same call, so the
+test sees the shaped steer, not the raw stick:
+
+1. `x = Input_GetAxis(g_input, 0)`, on `-1..=1`.
+2. Inside the deadzone, `|x| < 0.2`, steer is `0`. The deadzone is the float
+   at `0x08a7b698`, bytes `cdcc4c3e` = `0x3e4ccccd` = **`0.2`** (not the
+   `0.25` the record table on `cannon-quake-leachbeam.md` carried; corrected
+   there).
+3. Outside it, `v = (|x| - 0.2) * g`, with `g = 100 / (1 - 0.2) = 125`,
+   computed once into `0x08ae4cec`. Named `g_stick_deadzone` (`0x08a7b698`)
+   and `g_stick_gain` (`0x08ae4cec`), confidence 92 and 90: both read live in
+   the capture below, and the gain is also derived in this function's own
+   first block from the deadzone.
+4. Response curve: `v < 50` gives `v / 2`, otherwise `1.5 v - 50`; signed by
+   `x`. So `+/-100` at full lock, and continuous at `v = 50` (both `25`).
+5. The d-pad then overrides: `LEFT` held writes `-100.0`, `RIGHT` `+100.0`
+   (`0xc2c80000`/`0x42c80000`), after the stick and before the airbrake test.
+
+**The law, inputs to outputs.**
+
+| Input | Output |
+| --- | --- |
+| action-4 button (`R`) not held | both airbrakes `0`, whatever the stick |
+| held, steer `< -10` | left `100`, right `0` |
+| held, steer `> +10` | left `0`, right `100` |
+| held, `-10 <= steer <= +10` (centred included) | both `100`, which is the brake |
+| d-pad left / right with the button | as full stick: left alone / right alone |
+
+- **Threshold:** `10` on the `+/-100` steer record, strict. On the PSP nub,
+  after the deadzone and the curve, that is `v = 20`, a raw `|x|` of
+  **`0.36`**.
+- **All or nothing:** the button is digital and the store is `100.0`; nothing
+  scales with deflection past the threshold.
+- **No memory:** both fields are zeroed every novice frame, so a centred stick
+  is both, never "the last side".
+- **Gesture independence:** the novice sideshift (`L` held plus a flick) is a
+  different action and branch; `L` drives no airbrake in novice.
+
+**Measured 2026-10-07**, PPSSPP v1.20.4, `pulse-psp-usa`, software renderer,
+Time Trial on Talon's Junction (Venom, the reference scenario). The scheme
+byte `0x08ab0cd0` was written `0` (novice) through the debugger instead of
+walking the options page; equivalent, because the two default tables are
+identical ([above](#the-default-mapping-is-5-7-4-6-9-8-9-8)), and restored
+to `1` afterwards. Execution breakpoint at `PlayerInput_Update`'s entry,
+`a0` the controller, record read at `a0 + 0x44` on the sixth hit after each
+input change, `R` (`rtrigger`) and cross held:
+
+| Stick sent | `Input_GetAxis` | steer `+0x00` | left `+0x08` | right `+0x0c` |
+| --- | ---: | ---: | ---: | ---: |
+| full left | `-1.0` | `-100.0` | `100` | `0` |
+| `-0.5` | `-0.375` | `-10.9375` | `100` | `0` |
+| `-0.4` | `-0.248` | `-3.0029` | `100` | `100` |
+| `-0.36`, `-0.3` | `-0.199`, `-0.121` | `0.0` | `100` | `100` |
+| centred | `0.0` | `0.0` | `100` | `100` |
+| `+0.3`, `+0.4` | `0.121`, `0.248` | `0.0`, `3.0029` | `100` | `100` |
+| `+0.5` | `0.375` | `10.9375` | `0` | `100` |
+| `+0.8` | `0.746` | `52.3926` | `0` | `100` |
+| full right | `0.990` | `98.1689` | `0` | `100` |
+| d-pad left | `-1.0` | `-100.0` | `100` | `0` |
+| d-pad right | `1.0` | `100.0` | `0` | `100` |
+| full left, no `R` | `-1.0` | `-100.0` | `0` | `0` |
+| centred, no `R` | `0.0` | `0.0` | `0` | `0` |
+
+The "stick sent" column is PPSSPP's input, which its own analog mapping
+reshapes before the game sees it; the `Input_GetAxis` column is what the game
+read. Every steer value matches the curve above to the printed digit
+(`0.375 -> 10.9375`, `0.746 -> 52.39`, `0.248 -> 3.00`), which confirms the
+`0.2` deadzone and the gain of `125` live (`0x08a7b698` read `0.2` and
+`0x08ae4cec` read `125.0` in the same session). The threshold is bracketed at
+runtime between steer `3.0` (both) and `10.94` (one side); its exact value,
+`10.0`, is the literal in the comparison.
+
+Confidence **95**: an instruction-level read, every row of it reproduced by a
+live capture, and the bracket around the threshold measured on both sides.
+Capture script and raw rows: `data/scratch/novice-airbrake/probe.py` and
+`novice-run1.json` (derived data, not committed).
+
+**The port** (`oag_gameplay::controls::novice_airbrakes`) applies the
+threshold to `InputSnapshot::stick_x`, which stands for the record's steer
+over `100` (it is fed to the steering ramp as `stick_x * 100`), so the
+comparison is `0.1`. The port's stick shaping is `oag_input::pad`'s own, a
+`0.15` rescaled deadzone with no curve, not the original's `0.2` and S-curve;
+that mismatch affects every player's steering and is outside this finding.
+An analogue trigger's travel is carried onto the chosen side unscaled:
+**chosen, not measured**, since the original's button is digital.
+
+**Lineage, 2048 (Vita), checked, not resolved.** `eboot-vita-2048-eu-v104`
+ships the same `OPT_CTRL_AIRBRAKES` key (`0x8142dd30`, `0x81459f68`) beside
+`OPT_CTRL_LAB`/`OPT_CTRL_RAB` and an `auto_airbrakes` setting (`0x8148fca0`).
+`Backend/Ships/PlayerInput.cpp`'s constructor `FUN_811b2f72` sets the vtable
+`0x81511c88`, whose fourth slot `FUN_811b3072` (4.6 KiB, created as a function
+in this pass) is the per-frame fill. It holds no `+/-10` steer test. Its
+schemes `2` and `3` (`0x811b35xx`) do write the two airbrake floats
+(`+0x50`/`+0x54`) from a steer-shaped value scaled by `1/0.7` (`1.4285715`)
+and `1/0.9` (`1.1111112`), which reads like "steering past 70 % pulls the
+airbrake on that side, analogue". The decompiler's VFP flag lifting garbles
+the comparisons, so this stays a hypothesis at confidence **40**: no rename,
+not ported. HD/Fury and Omega: **not checked**, the HD executable belongs to
+another lane this pass.
 
 ## What each scheme does with the sideshift
 
@@ -646,9 +775,10 @@ written at `0x08847220`-`0x08847240` at the tail. So the release is the
 rather than on the payout's gate being the simplest explanation.
 
 One more difference the port did not have: `swc1 f22, 0x87c(s0)` at `0x08846e5c`
-and `0x08846f54` writes `0.0` to the roll phase on **any** completed
-alternation, on the far side of the `cost < shield` test, so a refused gesture
-levels the ship exactly as an accepted one does.
+and `0x08846f54` writes `0.0` to the roll phase on a completed
+alternation **while unarmed** (see "One roll per flight" below), on the far side of
+the `cost < shield` test, so a refused gesture levels the ship exactly as an
+accepted one does.
 
 **And the gesture is the human player's alone.** Two independent legs, both from
 this function, confidence **85**:
@@ -694,6 +824,47 @@ with `get_xrefs_to`, which returns nothing on any PSP database here
 leaves the gesture reachable by every craft rather than gating it on a pad. The
 grounded gate above is what makes that affordable, and it is a port; the AI's
 access to the gesture is not.
+
+### One roll per flight: an armed craft skips the pattern match (2026-10-07, confidence 95)
+
+Reported from play: "a barrel roll can be triggered during a barrel roll; in the
+original this is not possible". Answers, each with its evidence:
+
+| Question | Answer | Evidence |
+| --- | --- | --- |
+| Refused while one is in progress? | **Yes.** `0x08846d14`-`0x08846d30` test `craft+0x860 & 0x100` then `& 0x80` and branch to `0x08846f58` when either is set, skipping both pattern compares, `Ship_BarrelRollCost`, the charge and the phase-levelling stores. | static, plus the live run below (95) |
+| A flag or a timer? | The two arm bits themselves. No timer, no cooldown, no height or airtime test: the only inputs to the gate are `+0x860` and the contact bit. | complete read of the function (90) |
+| Per-flight limit? | **One roll per flight.** The bits are not cleared when the phase finishes (`+0x87c` parks at `+-1.0` with the bit still set); they clear only on the grounded/airborne transitions (`0x08846ab4`, `0x08846b98`) and two cancel paths (`Ship_SetState` `0x088442e8`, `Ship_UpdateRespawn` `0x08847a54`, both reset). A second roll after the first *completes*, still airborne, is refused too. | live run (95) |
+| Does landing reset it? | **Yes.** A flight after a landing arms again, either direction. | live run (95) |
+| Shield cost or reward change with repeats? | No. `Ship_BarrelRollCost` (`0x08840770`) is `g_roll_cost * 0.01 * stats[skill]` with no repeat counter. A refused match charges nothing. | decompile (90) |
+| Do taps still count while armed? | Yes: the history shift (`0x08846c94`-`0x08846d10`) runs before the gate, so the history keeps updating; only the match is skipped. | live run (95) |
+| The original never clears the history on a match. | Checked, harmless: it is zeroed on every grounded tick (`0x08847018`), and an armed craft cannot match. This port clears on a match. | read (85) |
+
+**Live run** (PPSSPP v1.20.4, software renderer, `pulse-psp-usa.chd`, Time Trial on
+Talon's Junction, `scripts/psp-roll-gate.py`): breakpoint at `0x08846a54` each tick
+for the player entity, `craft+0x1c0` bit 0 forced to script a flight, real d-pad
+presses, entity fields read each tick. The craft sat on the start line, so the
+flight is scripted by the contact bit; the gate does not depend on real height.
+
+| Tick | Input | `+0x860 & 0x380` | `+0x87c` | History `+0x88c/890/894` | arm counter `settings+0x23c` |
+| --- | --- | --- | --- | --- | --- |
+| 5, 20, 35 | right, left, right | `0` -> `0x100` by 38 | ramps 0.025 a tick from 38 | `2,1,2` | 0 -> 1 |
+| 50, 60, 70 | left, right, left (mid-roll) | `0x100` | **keeps ramping, not levelled** | `1,2,1` at 53, `2,1,2` at 63, `1,2,1` at 73 | stays 1 |
+| 78 | none | `0x100` | reaches `1.0` and parks | | 1 |
+| 100, 110, 120 | right, left, right (after completion) | `0x100` | `1.0` | `2,1,2`, `1,2,1`, `2,1,2` | stays 1 |
+| 140-141 | contact forced on | `0x100` -> `0x200` -> `0` | `1.0` | zeroed | payout timer `0.483`, payout counter `settings+0x238` 0 -> 1 |
+| 155, 170, 185 | left, right, left (next flight) | `0x80` from 188 | ramps to `-1.0` | `1,2,1` | stays 1 (see below) |
+
+The second arm did not move `settings+0x23c`. That store (`0x08846e50`) sits behind
+`+0x368 == 0` and a call to `0x08809b38`; what the counter counts was not resolved,
+so it is recorded, not explained.
+
+The port had no such gate: `advance_gesture` matched and re-armed on every
+alternation, flipping `roll_target` and levelling the phase mid-roll. Ported
+2026-10-07 as `ShipState::roll_armed` gating the match and the direct request.
+
+Lineage: HD and 2048 not checked (no cheap capture path this session); Omega not
+checked for the same reason.
 
 ### The roll is drawn: `+0x87c` eases into `+0x880`, which rolls the ship about its nose
 
@@ -1027,6 +1198,10 @@ rather than by a read of the store into `craft+0x898`.
 - Novice: hold `L`, flick the stick past `+/-10` on the `+/-100` axis, having
   been inside `+/-10` first.
 - Veteran: double-tap `L` or `R` within `0.25 s`.
+- Novice's airbrake button `R` picks its side off the steer record: left
+  alone below `-10`, right alone above `+10`, both in between. See
+  [above](#novice-r-picks-its-airbrake-off-the-steering); ported in
+  `oag_gameplay::controls::novice_airbrakes`.
 - Either way, `0.2 s` of force, then a `1.0 s` lockout that does not start
   counting down until the force expires - **~1.2 s total from one sideshift
   firing to the next being legal**, confirmed at runtime above. Already ported

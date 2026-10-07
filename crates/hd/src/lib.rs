@@ -61,6 +61,7 @@ pub mod frontend;
 pub mod hud;
 pub mod loading;
 pub mod loyalty;
+pub mod pre_race;
 pub mod prompts;
 pub mod psn;
 pub mod race;
@@ -161,6 +162,7 @@ pub const TITLE: &Title = &Title {
         origin: oag_title::Origin::Measured,
     },
     pressings: None,
+    pre_race: Some(&pre_race::PRE_RACE),
     adverts: Some(&oag_title::adverts::Adverts {
         // Read off RPCS3 (2026-10-06): the target object at the slot's
         // `+0xf0` holds 0x200 x 0x100, and the projection matrices of all

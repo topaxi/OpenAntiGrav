@@ -839,8 +839,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
 
     let pose_override = pose::resolve(options.pose, &spline, &mut report);
-
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
+    let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
     let finished_thrust = super::finished_thrust::read(
         craft_of(&mut craft, &mut archives),
@@ -891,7 +891,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
-            intro_camera: intro::read(&mut archives, &track, pulse_psp, &mut report),
+            intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
             magstrip_wake: magstrip_wake.anchors,
             magstrip_pob: wm.magstrip_pob,
@@ -942,7 +942,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             &mut archives,
             title,
             &track,
-            pulse_psp,
+            pre_race,
             options.language.as_deref(),
             &mut report,
         ),

@@ -691,6 +691,16 @@ string_id = "OAG_CONTROLS_TOUCH_GO_ZONES"
 setting = "controls.touch_go_zones"
 values = ["on", "off"]
 
+# Which on-screen scheme a touchscreen shows (chosen, not measured): standard
+# is the stick plus GO with L/R brake corners; easy blends the stick's rim into
+# the airbrake and gives GO one BRAKE zone that picks its side off the steering.
+[[page.entry]]
+kind = "choice"
+label = "TOUCH SCHEME"
+string_id = "OAG_CONTROLS_TOUCH_SCHEME"
+setting = "controls.touch_scheme"
+values = ["standard", "easy"]
+
 # How strongly the on-screen racing controls draw, in percent of the design's
 # own translucency (chosen, not measured). Only a touchscreen shows them.
 [[page.entry]]
@@ -1323,7 +1333,8 @@ button = "select"
 # chooses which *gesture* a sideshift takes, which is the original's own
 # `Control_Type` and the reason the bindings above differ between the two -
 # veteran spends both shoulders on the separate airbrakes, novice gives one of
-# them to the sideshift and puts both airbrakes on the other. See
+# them to the sideshift and puts the airbrakes on the other, which picks its
+# side off the steering (both when centred). See
 # `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
 #
 # The values are the binary's own tokens, not labels this project chose, so a

@@ -47,6 +47,7 @@ pub mod hud;
 pub mod language;
 pub mod loading;
 pub mod menu;
+pub mod pre_race;
 pub mod pressing;
 pub mod prompts;
 pub mod race;
@@ -213,6 +214,9 @@ pub struct Title {
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].
     pub pressings: Option<&'static pressing::Pressings>,
+    /// The flyby this title plays before its countdown, or `None` where it plays none or none
+    /// has been read. See [`pre_race::PreRace`].
+    pub pre_race: Option<&'static pre_race::PreRace>,
     /// How this title draws its circuits' billboard adverts, or `None` where
     /// they are not drawn. See [`adverts::Adverts`].
     ///
