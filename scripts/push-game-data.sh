@@ -19,7 +19,8 @@
 #   scripts/push-game-data.sh android [--serial S] [--dry-run] [PATTERN...]
 #
 #   user@host     Deck to copy to. Default: $OAG_DECK_HOST or deck@steamdeck.
-#   --serial S    adb device serial. Default: $ANDROID_SERIAL or the only device.
+#   --serial S    adb device serial. Default: $ANDROID_SERIAL, the only device,
+#                 or a picker asking which when more than one is connected.
 #   --dry-run     Show the rows and what would be copied; copy nothing.
 #   PATTERN...    Skip the picker and copy every row whose name matches one of
 #                 these globs, e.g. 'images/pulse-psp-*' or 'dlc/*'.
@@ -77,8 +78,12 @@ if [[ $target == deck ]]; then
     remote_root="$(ssh "$host" 'echo "${XDG_DATA_HOME:-$HOME/.local/share}"')/oag"
 else
     command -v adb >/dev/null || die "adb not found; install android-tools (see docs/tools/android.md)"
+    # shellcheck source=scripts/adb-pick-device.sh
+    . "$project_root/scripts/adb-pick-device.sh"
+    pick_adb_device
     adb get-state >/dev/null 2>&1 \
-        || die "no device (or more than one: pass --serial). USB debugging must be on and the host authorised."
+        || die "the device is not ready ('adb devices'); USB debugging must be on and the host authorised."
+    echo "device: $(adb shell getprop ro.product.model | tr -d '\r') ($(adb get-serialno))" >&2
     remote_root="/sdcard/Android/data/$package/files/data/oag"
 fi
 echo "$target: $remote_root" >&2

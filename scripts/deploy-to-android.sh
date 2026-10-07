@@ -14,7 +14,8 @@
 #   scripts/deploy-to-android.sh [--serial S] [--skip-build] [--dry-run]
 #
 #   --serial S    adb device serial (`adb devices`). Default: $ANDROID_SERIAL,
-#                 or the only connected device.
+#                 the only connected device, or - with more than one - a
+#                 picker asking which (scripts/adb-pick-device.sh).
 #   --skip-build  Don't rebuild; install the newest APK already in target/apk/.
 #   --dry-run     Print what would be built and installed; touch nothing.
 
@@ -46,8 +47,11 @@ command -v adb >/dev/null || die "adb not found; install android-tools (see docs
 adb() { command adb "${adb_args[@]}" "$@"; }
 
 step "Checking the device"
+# shellcheck source=scripts/adb-pick-device.sh
+. "$project_root/scripts/adb-pick-device.sh"
+pick_adb_device
 adb get-state >/dev/null 2>&1 \
-    || die "no device (or more than one: pass --serial). 'adb devices' lists them; USB debugging must be on and the host authorised."
+    || die "the device is not ready ('adb devices'); USB debugging must be on and the host authorised."
 echo "device: $(adb shell getprop ro.product.model | tr -d '\r') ($(adb get-serialno))"
 
 apk=""
