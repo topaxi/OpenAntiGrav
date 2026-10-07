@@ -1,11 +1,10 @@
 //! Census: across HD circuits, which lightmapped materials bind a different
-//! albedo entry when the picture must be one the resolved variant declares
-//! (`skin::lightmapped_albedo`) than under the plain "first entry that is not
-//! a lookup" rule. Mirrors `skin::NOT_A_PICTURE` and the variant resolution of
+//! albedo entry when the picture must also be one the program samples as a
+//! colour (`Program::samples_colour`) than under "first declared picture". Mirrors `skin::NOT_A_PICTURE` and the variant resolution of
 //! `hd_sampler_bind`.
 //!
 //! ```sh
-//! cargo run -p oag-render --example hd_lightmap_unit_census -- <image> /data/environments/01_vineta_k/track.vex ...
+//! cargo run -p oag-render --example hd_lightmap_colour_census -- <image> /data/environments/01_vineta_k/track.vex ...
 //! ```
 
 use oag_assets::Container;
@@ -19,6 +18,9 @@ const NOT_A_PICTURE: &[u32] = &[
     0x94b2_b285,
     0x739a_786e,
     0x20c3_e476,
+    0x48f3_7f5a,
+    0xfe9b_d1f3,
+    0xeddf_202a,
     0xb1f2_a176,
 ];
 
@@ -71,20 +73,29 @@ fn main() -> anyhow::Result<()> {
                 .samplers
                 .iter()
                 .position(|e| picture(e) && declared.samplers.iter().any(|&(h, _)| h == e.0));
+            let program = container
+                .read_entry(&format!("/{}", material.name))
+                .ok()
+                .and_then(|blob| {
+                    let parsed = rcsmaterial::RcsMaterial::parse(&blob).ok()?;
+                    let word =
+                        rcsmaterial::Features::chunk_word(rcsmaterial::LIT_RACE_PASS, Some(*decl));
+                    let key = rcsmaterial::Features::from_pass_word(word);
+                    let variant = parsed.variant(rcsmaterial::Class::Static, key)?;
+                    rcsmaterial::fragment::Program::parse(&blob, variant.fragment.offset)
+                });
+            let Some(program) = program else { continue };
             let new = material
                 .samplers
                 .iter()
-                .enumerate()
-                .filter(|(_, e)| picture(e))
-                .filter_map(|(i, e)| {
-                    declared
-                        .samplers
-                        .iter()
-                        .find(|&&(h, _)| h == e.0)
-                        .map(|&(_, u)| (u, i))
+                .position(|e| {
+                    picture(e)
+                        && declared
+                            .samplers
+                            .iter()
+                            .any(|&(h, u)| h == e.0 && program.samples_colour(u as u8))
                 })
-                .min()
-                .map(|(_, i)| i);
+                .or(old_declared);
             let old = old_declared;
             if new.is_some() && new != old {
                 changed += 1;

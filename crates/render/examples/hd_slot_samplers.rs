@@ -59,6 +59,7 @@ fn main() -> anyhow::Result<()> {
                     rcsmaterial::Features::chunk_word(rcsmaterial::LIT_RACE_PASS, Some(*decl));
                 let key = rcsmaterial::Features::from_pass_word(word);
                 let variant = parsed.variant(rcsmaterial::Class::Static, key)?;
+                println!("  variant fragment offset {:#x}", variant.fragment.offset);
                 rcsmaterial::Declared::parse(&blob, variant.fragment.offset)
             });
         match declared {

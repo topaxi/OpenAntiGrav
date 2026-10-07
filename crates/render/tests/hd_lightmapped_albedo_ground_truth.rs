@@ -53,6 +53,60 @@ fn vinetas_wet_floor_binds_its_floor_texture_not_the_paraboloid() {
     assert!(checked > 0, "Vineta K should carry d_s_n_customr slots");
 }
 
+/// Names the picture each lightmapped slot of `material` binds on Sebenco Climb,
+/// forward and reversed, and asserts `ok` of its label.
+fn sebenco_slots(material: &str, ok: impl Fn(&str) -> bool, why: &str) {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = 0;
+    for track in ["track.vex", "track_reversed.vex"] {
+        let path = format!("/data/environments/10_sebenco_climb/{track}");
+        let Some((spec, data)) = (0..4).find_map(|n| {
+            let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
+            mesh::read_blob(&spec, &path).ok().map(|d| (spec, d))
+        }) else {
+            continue;
+        };
+        let geometry =
+            mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
+        let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
+            mesh::read_blob(&spec, name).ok()
+        })
+        .expect("Sebenco Climb builds");
+        for (slot, m) in rcs.materials.iter().enumerate() {
+            if !m.name.ends_with(material) || m.lightmap_entry().is_none() {
+                continue;
+            }
+            let Some(texture) = model.textures[slot].as_ref() else {
+                continue;
+            };
+            assert!(
+                ok(&texture.label.to_ascii_lowercase()),
+                "{track} slot {slot} binds {}: {why}",
+                texture.label
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "no {material} slot drew");
+}
+
+/// `sebenco_ice` reads `and_ice1` (unit 0) as `TEX H1.x`, a specular power,
+/// and `and_snow3alpha` (unit 2) as `TEX H3.xyz`. The pool drew purple with
+/// the scalar map as its colour. Dropping `Program::samples_colour` from
+/// `skin::lightmapped::albedo` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn sebencos_ice_pool_binds_the_map_its_program_reads_as_colour() {
+    sebenco_slots(
+        "/sebenco_ice.rcsmaterial",
+        |label| label.contains("and_snow3alpha"),
+        "a scalar map, not the picture",
+    );
+}
+
 /// Sebenco Climb's `track_coloured_specular_alpha4glow` solar wall names its
 /// normal map (`ds_solarwall_n`, sampler `0x48f37f5a`, declared at unit 1) at
 /// entry 0 and its picture (`ds_solarwall_c_withglow`, `0x3bdc0403`, unit 0)
