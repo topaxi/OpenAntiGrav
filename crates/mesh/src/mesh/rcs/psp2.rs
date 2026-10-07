@@ -697,9 +697,9 @@ fn bind_textures(
     // 2,048-square atlas is 16 MiB decoded, so decode each path once.
     let mut atlases: std::collections::HashMap<&str, Option<std::sync::Arc<ModelTexture>>> =
         std::collections::HashMap::new();
-    // Materials share a `.gxt` between them as well: Altima's 527 read 239
-    // distinct textures 621 times. Each slot still gets its own entry, so a
-    // lightmap stays positionally beside its diffuse.
+    // Materials share a `.gxt` between them as well: Altima's track resolves
+    // 523 material slots to 164 distinct files. Each slot still gets its own
+    // entry, so a lightmap stays positionally beside its diffuse.
     let mut diffuses: std::collections::HashMap<&str, Decoded> = std::collections::HashMap::new();
     for (draw, submesh) in model.draws.iter_mut().zip(&decoded.submeshes) {
         let Some(index) = submesh.material else {

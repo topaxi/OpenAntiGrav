@@ -3,9 +3,9 @@
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. Run it with `just test-data`.
 //!
-//! Altima's track has 527 materials over 239 distinct `.gxt` files. Keyed by
-//! material, `psp2::build` read and decoded 621 textures; keyed by path it
-//! reads each once and the materials that share one share its decode
+//! Altima's track resolves 523 material slots to 164 distinct `.gxt` files.
+//! Keyed by material, `psp2::build` read and decoded all 523; keyed by path it
+//! reads each file once and the materials that share one share its decode
 //! (`docs/architecture/load-time.md`). Key the cache by material again and
 //! this fails.
 

@@ -16,8 +16,9 @@
 
 use std::collections::HashMap;
 
-/// The largest entry kept. Every `.rcsmaterial` on HD, 2048 and Omega is
-/// under 0.6 MB.
+/// The largest entry kept. The largest `.rcsmaterial` read by the HD Vineta
+/// K, 2048 Altima and Omega default race loads is 0.6 MB; nothing wider was
+/// surveyed.
 pub const MAX_ENTRY: usize = 1 << 20;
 
 /// The most bytes kept in all, over every entry.
