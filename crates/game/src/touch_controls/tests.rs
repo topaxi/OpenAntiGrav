@@ -164,7 +164,7 @@ fn the_controls_do_not_overlap_each_other() {
 #[test]
 fn everything_stays_inside_the_grid() {
     let width = SIZE.0 * SCALE;
-    let mut touches = Demo::StickAndGo.touches(SIZE);
+    let touches = Demo::StickAndGo.touches(SIZE);
     for (rect, _) in fills(&list(&touches, false, true, 1.0)) {
         assert!(
             rect[0] >= -0.01 && rect[0] + rect[2] <= width + 0.01,

@@ -2,7 +2,6 @@ use super::*;
 
 const SIZE: (f32, f32) = (2400.0, 1080.0);
 const STANDARD: Setup = Setup::new(Scheme::Standard, true);
-const EASY: Setup = Setup::new(Scheme::Easy, true);
 const EASY_OFF: Setup = Setup::new(Scheme::Easy, false);
 
 fn centre(control: Control) -> (f32, f32) {
@@ -481,8 +480,10 @@ fn the_bar_brake_is_a_latched_finger_away_and_picks_the_steered_side() {
 
 #[test]
 fn a_novice_sim_gets_easys_pull_on_the_right_axis_alone() {
-    let mut reading = Reading::default();
-    reading.airbrake_left = 0.7;
+    let mut reading = Reading {
+        airbrake_left: 0.7,
+        ..Reading::default()
+    };
     fold_for_novice_sim(&mut reading);
     assert_eq!((reading.airbrake_left, reading.airbrake_right), (0.0, 0.7));
     let sim = oag_gameplay::controls::novice_airbrakes(reading.airbrake_right, -1.0);
