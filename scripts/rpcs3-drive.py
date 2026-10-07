@@ -1011,6 +1011,7 @@ def cmd_place(args):
     pose the game kept next to the screenshot. See `rpcs3_place`.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ps3_pose
     import rpcs3_place
     from rpcs3_debugger import Debugger
 
@@ -1064,6 +1065,22 @@ def cmd_place(args):
                 gdb.pause()
                 kept = rpcs3_place.read_pose(gdb, body)
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
+                candidate_sets = []
+                for k in range(args.camera_shots):
+                    if k:
+                        gdb.resume()
+                        time.sleep(args.camera_gap)
+                        gdb.pause()
+                    blobs = []
+                    for chain, size in PUSHBUFFER_REGIONS:
+                        at = resolve_chain(gdb, chain)
+                        if at:
+                            blobs.append((at, gdb.read(at, size)))
+                    candidate_sets.append([
+                        c for at, blob in blobs
+                        for c in ps3_pose.packet_candidates(blob, base=at)])
+                    print("  %s: camera read %d, %d candidate(s)"
+                          % (stem, k, len(candidate_sets[-1])), flush=True)
                 gdb.resume()
                 time.sleep(args.recheck)
                 gdb.pause()
@@ -1075,16 +1092,33 @@ def cmd_place(args):
                       "moved %.1f"
                       % (stem, text, ["%.1f" % v for v in kept["pos"]], drift,
                          args.recheck, moved), flush=True)
+                kept_text = ",".join(
+                    ["%.2f" % v for v in kept["pos"]]
+                    + ["%g" % v for v in pose[3:]])
+                render = ("target/release/oag-game <image> --race --track %s "
+                          "--team %s --variant %s --pose=%s --ticks 30 "
+                          "--screenshot ours.png"
+                          % (args.track, args.team, args.variant, kept_text))
+                camera = None
+                if candidate_sets:
+                    pick = ps3_pose.pick_camera(candidate_sets)[-1]
+                    camera, reason, _ = pick
+                    if camera and ps3_pose.decompose(camera["view_proj"]):
+                        found = ps3_pose.decompose(camera["view_proj"])
+                        camera = dict(camera, **found)
+                        camera["render_with"] = ps3_pose.command_line(
+                            found, args.track)
+                    print("  %s: camera %s (%s)"
+                          % (stem, "found" if camera else "null", reason),
+                          flush=True)
                 record = {
-                    "track": track_name(), "asked": text,
+                    "track": track_name(), "team": args.team,
+                    "hull_variant": args.variant, "asked": text,
                     "start_pose": before["pos"], "settled": kept,
                     "later": later, "settle_s": args.settle,
                     "drift": drift, "moved_after_recheck": moved,
                     "screenshot": str(shot) if shot else None,
-                    "render_with": "target/release/oag-game <image> --race "
-                                   "--track %s --pose=%s --ticks 1 "
-                                   "--screenshot ours.png"
-                                   % (args.track, text),
+                    "render_with": render, "camera": camera,
                 }
                 (out / ("%s.json" % stem)).write_text(
                     json.dumps(record, indent=2) + "\n")
@@ -1620,6 +1654,15 @@ def main(argv=None):
     place.add_argument("--nav", action="append", default=[],
                        help="SCREEN=BUTTONS, as in `capture`")
     place.add_argument("--oag-game", default="target/release/oag-game")
+    place.add_argument("--team", default="feisar_c1",
+                       help="recorded beside the shot and used in the render "
+                            "command; the default walks race the feisar_c1 "
+                            "concept1 hull, see `Racebox races the same hull`")
+    place.add_argument("--variant", default="concept1")
+    place.add_argument("--camera-shots", type=int, default=0,
+                       help="read the RSX pushbuffer this many times per pose "
+                            "(~20 s each) and pick the camera across them")
+    place.add_argument("--camera-gap", type=float, default=1.0)
     place.add_argument("--speed", type=float, default=0.0,
                        help="velocity along the new forward")
     place.add_argument("--settle", type=float, default=8.0,

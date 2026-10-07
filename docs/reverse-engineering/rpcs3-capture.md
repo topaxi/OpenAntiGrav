@@ -744,8 +744,9 @@ by writing them:
 | `+0x190` | linear velocity | 120 along row2 at speed |
 | `+0x1a0 +0x1b0 +0x1c0` | three more xyz vectors (w 1.0), zeroed by `place` | changed with steering; role not isolated |
 
-**World coordinates are ours, with no transform (confidence 90).** The eight
-grid positions read off the bodies match `oag-game`'s Talon's Junction slots
+**World coordinates are ours, with no transform (confidence 85).** The eight
+grid positions were read off the bodies; only slot 0 was compared with
+`oag-game` (the trace gives the player slot alone):
 (slot 0: `(6.10, -51.91, -195.92)` live against `(6.075, -50.08, -195.83)`
 before our hover settles, forward `+x` in both) - both x and z are
 discriminating, so an axis flip or a handedness change would show; none does.
@@ -754,14 +755,13 @@ The matched pictures below are the second check.
 **The write is a plain paused write, and it is enough (confidence 85).**
 The stub stops the whole emulator, so no breakpoint in the craft update is
 needed (an async pause could in principle land
-mid-step; none of the 9 placements showed it). A body-only
+mid-step; none of the 11 placements showed it). A body-only
 write of position and rows followed in the next tick: of the position triples
 within 15 units of the body on the ship (14) and the entry (13), every one on
 the entry and 11 of 14 on the ship followed; the three that did not
-(`ship+0x160`, `+0x62e0`, `+0x6320`) are stale copies nothing consumed. The hull points, the probes and the camera all re-derive from the body.
-So `place` writes the body only.
+(`ship+0x160`, `+0x62e0`, `+0x6320`) did not follow, and what reads them is unknown. The hull points and probes on the entry re-derived from the body, and the first frame after a settle shows the camera at the new place. So `place` writes the body only, and the 11 placements below show nothing relying on those three.
 
-**The game accepts it.** Placed with `--speed 0` on Talon's Junction at three
+**The game accepts it.** Placed with `--speed 0` (11 placements over 5 boots in total, five of them in the table) on Talon's Junction at three
 points and Vineta K at the maintainer's, settled 8 s and re-read 3 s later:
 
 | Pose asked | Kept after 8 s | Drift | Moved in next 3 s |
@@ -769,7 +769,7 @@ points and Vineta K at the maintainer's, settled 8 s and re-read 3 s later:
 | Talon's `-297.96,-50.5,-172.83` | `-298.0,-49.5,-172.8` | 1.0 | 0.0 |
 | Talon's `161.4,-37.9,194.4` | `159.8,-38.1,192.9` | 2.2 | 0.9 |
 | Talon's `-200.1,-70.0,77.3` | `-203.0,-70.7,73.5` | 4.9 | 1.4 |
-| Vineta K `-839.8,-146.6,215.0` (twice, one boot) | `-840.6,-146.7,214.2` both | 1.1 | 0.3 |
+| Vineta K `-839.8,-146.6,215.0` (same on each of 3 boots) | `-840.6,-146.7,214.2` both | 1.1 | 0.3 |
 | Vineta K, same with yaw 180 | `-841.0,-146.8,213.6` | 1.8 | 1.1 |
 
 No respawn and no snap-back on any placement, including the 470-unit jump.
@@ -795,9 +795,15 @@ slope of the track at rest, not a correction.
    `rpcs3-drive.py stop` is `pkill -x rpcs3` and reaches every instance: never
    use it beside another member.
 
+**Frame size matters.** The 1600x1200 default display clips a 1920-wide frame: the first Talon's and Vineta pictures lost their right edge (the `POS` readout is cut). Run with `OAG_RPCS3_GEOMETRY=2000x1200x24` and `Resolution Scale: 100` and the trimmed shot is 1882x1058, 16:9 and whole; render ours with `--size 1882x1058`. Render ours at the **kept** pose (`render_with` in the JSON does), not the asked one: the settle moves the craft up to 5 units. `--team feisar_c1 --variant concept1` is recorded, the walks' default hull; the original's hull still reads darker than ours in the pair, which this lane did not chase.
+
+**Camera.** `--camera-shots N` reads the pushbuffer N times per pose and runs the cross-frame pick; on a craft at rest it answered `camera null (no frame-unique value loaded ...)` for both poses on one boot, because nothing varies between frames. A placement with `--speed` above 0 might give it material; not tried.
+
+**Boot repeatability.** The Vineta point kept `-840.6,-146.7,214.2` on each of three separate boots (with and without yaw 180: `-841.0,-146.8,213.6-213.7`).
+
 **Matched pictures.** `data/reference/hd-capture/talons-teleport/` (three
-poses) and `data/reference/hd-capture/vineta-teleport/` (the maintainer's
-point, twice, and yaw 180; `pair-00.png` is RPCS3 left, ours right). Talon's
+poses, clipped frames) and `data/reference/hd-capture/vineta-teleport/` (the maintainer's
+point and yaw 180, whole frames; `pair-00.png` is RPCS3 left, ours right). Talon's
 matches in geometry, pad and lane at all three points. At Vineta K the
 tunnel's curve and the wall are the same, and the **original shows a lit
 floor and a teal hexagonal glass ceiling where ours shows a black water floor and a dark ceiling** - the maintainer's
