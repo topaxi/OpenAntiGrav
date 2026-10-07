@@ -42,6 +42,7 @@ export WINEPREFIX="${OAG_WINEPREFIX:-$root/data/wine/prefix}"
 export WINEDEBUG="${WINEDEBUG:--all}"
 mkdir -p "$WINEPREFIX"
 target_dir="${CARGO_TARGET_DIR:-$root/target}"
+mkdir -p "$target_dir"
 
 build_game() {
     cargo build -p oag-game --target "$triple" "${profile_flag[@]}"
