@@ -16,6 +16,11 @@ const MODELS: &[&str] = &[
     "/data/weapons/hd_plasma_sphere.vex",
     "/data/weapons/hd_plasma_halo.vex",
     "/data/weapons/hd_missile_explosion.vex",
+    "/data/weapons/hd_bomb_sphere.vex",
+    "/data/weapons/hd_bomb_sphere_white.vex",
+    "/data/weapons/hd_bomb_sphere_bloomring.vex",
+    "/data/weapons/hd_bomb_shockwaves.vex",
+    "/data/weapons/hd_bomb_halo.vex",
     "/data/weapons/hd_missile_ball_bloomring.vex",
 ];
 

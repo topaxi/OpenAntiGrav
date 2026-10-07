@@ -654,3 +654,48 @@ wiring landing here. Not fixed this pass (out of this lane's own scope -
 gating the whole ribbon-and-energy mechanism to Pulse/PS2 and drawing HD's
 own ball+`ABSORB` instead is a larger, separate change); recorded here so
 the next LeachBeam pass on HD does not have to re-derive it.
+
+## 2026-10-07: the HD Bomb's detonation object, read (`hd-weapon-blasts`)
+
+Raw bytes disassembled with capstone (`ppc64`, AltiVec) because Ghidra stops at
+the VMX blocks of these functions and marks `0x00327500` no-return, so its
+decompiles of the blast truncate. TOC `0x008ad4d8` throughout. Confidence
+figures are for the reading, not for any name (none applied yet).
+
+**The set is four models, not five.** `NormalBomb.cpp` (constructor
+`0x00144a48`, vtable `0x00864640`) owns two models of its own, `[0x2d]`
+`HD_Bomb` and `[0x2e]` `HD_bomb_halo` (the armed bomb's glow, registered with
+flag `0x400`), and builds one **blast object** (`0x00151ad8`, `0x4c0` bytes,
+vtable `0x00864ab8`) at `+0xe4`, only when `RaceManager_GetInstance()` is
+non-null. The blast loads, from TOC `0x008ab18c..`: `HD_bomb_sphere` (`+0x2e4`),
+`HD_bomb_sphere_white` (`+0x2e8`), `hd_bomb_sphere_bloomring` (`+0x2ec`) and
+`hd_bomb_shockwaves` **eight times** (`+0x2f0..+0x30c`). `HD_Mine_halo` is the
+Mine's. None of the four carries a moving Anim Transform key (one constant
+scale and one constant translation each, `data/scratch/hd-weapon-blasts/keys.txt`
+via `crates/render/examples/hd_weapon_anim_keys.rs`), so every size and fade is
+the blast's own code, not the file's.
+
+**Material parameters** (`FUN_00676ff8` hashes of `0x00785768..`):
+`AlphaAnim`, `ColourAnim`, `V_Anim`, `Shockwave_scalar`, bound by pointer
+(`FUN_00677018`). `AlphaAnim`, `V_Anim` and `Shockwave_scalar` go to
+`AnimNode_FindTransformValueField(model)`, i.e. the model's clock, which the
+blast sets with `AnimNode_UpdateTransformTree` (`0x002c1b30`) each tick;
+`ColourAnim` goes to the blast's own `+0x2dc` (`+0x2e0` for `sphere_white`).
+
+**Call shape.** `NormalBomb` update `0x001443f8(dt)`: `age (+0xe8) += dt`, then
+`0x00144040(bomb, 1)` on a hit (the ship-in-radius loop through `0x002d64d0`),
+which orthonormalises the bomb's own `+0x100`/`+0x110` rows into the matrix at
+`+0xf0` (AltiVec, the same Gram-Schmidt shape as Pulse's `bomb_blast_basis`),
+calls **`0x00151538(blast, bomb + 0xf0)`** (start: copies the 4x4 to blast
+`+0x290`, sets `+0x490 = 1`, ORs 4 into the first four models' flags) and plays
+`BOMBEXPL`. While `+0x490` is set, `0x001443f8` calls **`0x001503d8(blast, dt)`**
+every tick and retires the bomb when it returns 0. Slot 5 of the blast's vtable
+(`0x001512f8`) is its **draw**: sphere with the matrix at `+0x150`, sphere_white
+with that matrix scaled, bloomring with `+0x1d0`, then two `0x006778c8` point
+lights.
+
+**Tunables** are a table at `0x008c1aa4` (initialised in the file): life `3.0`
+(`+0`), `+0x64 = 1.5`, `+0x68 = 0.6`, `+0xa4 = 3.0`, `+0xa8 = 0.1`, and three
+curve lists at `+0x08`, `+0x24`, `+0x40`.
+
+Per-tick law (`0x001503d8`): to be filled in below as it is read.
