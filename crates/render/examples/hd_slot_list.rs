@@ -31,7 +31,16 @@ fn main() -> anyhow::Result<()> {
         ("blended", &model.transparent_draws),
     ] {
         for d in draws {
-            let Some(slot) = d.texture else { continue };
+            let Some(slot) = d.texture else {
+                if std::env::var("OAG_UNTEXTURED").is_ok() {
+                    let c = d.bounds.centre;
+                    println!(
+                        "untextured {list:<8} centre ({:.1}, {:.1}, {:.1}) radius {:.0} range {}..{}",
+                        c[0], c[1], c[2], d.bounds.radius, d.range.start, d.range.end
+                    );
+                }
+                continue;
+            };
             if let Ok(near) = std::env::var("OAG_NEAR") {
                 let at: Vec<f32> = near
                     .split(',')

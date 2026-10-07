@@ -2673,6 +2673,8 @@ way (`mesh::rcs::water`, report "water material(s) whose picture is a normal map
 
 ### What the reflection is: not established (confidence 40 that it is a sky panorama; do not wire)
 
+**Superseded 2026-10-07:** measured as a runtime dual-paraboloid render target bound at unit 1; see "Vineta K against a draw capture", section 2, at the end of this page.
+
 - The `.rcsmodel` records of `water_noref` carry `skyreflect.gtf` (512x512, a sky panorama mirrored about its middle row)
   under sampler `0x8365b1f3`, and `sebenco_ice` carries `and_ice2`, `d_s_n_customr` `ds_dualparaboloid_c`, Amphiseum's
   `water` `dc_waterreflection`. **`0x8365b1f3` is `~crc32("PerMaterialEnvMap")`, an exact preimage (confidence 95)**, and no
@@ -2756,6 +2758,115 @@ measurement.
   HD's record and probably in Omega's, so wiring `Sebenco_ice` there is a data read plus the same shader branch; left open.
 - **Not checkable:** whether Omega's `paraboloidReflectionTex` string exists (its string search found none, which
   is not a proof).
+
+## Vineta K against a draw capture: the start line's light bars, the sea's real inputs, and the alternate fog (2026-10-07, `vineta-k-fidelity`)
+
+**Reports (the maintainer's):** the sea is cyan where the original's is teal; meshes show on the tunnel ceiling that the
+original does not show; purple textures at the start line. **Method:** one RPCS3 frame at the maintainer's pose
+(`place --pose=-839.8,-146.6,215.0`, kept `-840.6,-146.7,214.2`, three boots agree to 0.1) and one at the start slot
+(`178.0,36.9,-116.75`), each with the RSX command stream, every fragment program, the index and vertex ranges and the
+first bytes of every bound texture read out of guest memory while the emulator was paused
+([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Capturing one frame's draws"). Frames, dumps and analysis:
+`data/scratch/vineta-k-fidelity/` (untracked; the report there lists each file). 285 draws at pose A (ours: 463).
+
+### 1. Purple start line = the emissive term was never bound (fixed; confidence 85)
+
+`diffuse_normal_specular_emmissive` (sic: `ds_sf`, `ds_sfline_trench`, `ds_pit`, `ds_wall`, `ds_rail`; 13 slots on Vineta K)
+has the pad programs' shape in its lit variant (block `#5`): unit 1 is the `_ne` file, its RGB a tangent normal, and
+`@0x26 MAD H4.xyz, R1.wwww, {C}, H0` adds `_ne.a * C` after the light, `C` patched by `0x7611a2d8`
+(`Program::alpha_gated_parameter` already reads exactly this). The model authors `C` per slot: `(0, 0.25, 1)` on
+`ds_pit`/`ds_wall`, `(0, 0.271, 0.656)` on `ds_sf`/`ds_rail`, `(0.975, 0.975, 0.975)` on the other wall slots. `bind_scene_pad_masks`
+bound the `_ne` mask only for the speed pads' unreferenced chunks (its doc says this family "is a different program"), so
+these surfaces drew as the dark diffuse alone: navy with a violet cast. **Fix:** `pads::is_light_bar_material` adds the
+family to that routing; `pad_ne` still accepts a slot only after matching the program.
+
+| Start slot, 1882x1058 | bright-blue pixels (b>150, r<90) | their mean |
+| --- | --- | --- |
+| RPCS3 (`out/boot7/00.png`) | 40,440 | `(28,120,214)` |
+| before | 1,529 | `(84,95,174)` (violet: red 84) |
+| after | 49,896 | `(24,95,174)` |
+
+The camera of the two is not identical (ours sits closer), so the count is an extent, not a pixel match; by eye
+(`pairB_fix1.png`: reference, before, after) the panels, the cyan wall lamps and the blue chevrons match. After is about
+20 % dimmer than the reference (G 95 against 120): the bloom/exposure stage, not measured. **Reach:** Sol 2's start strip
+changes from blue-violet dashes to the reference's red line (`talons`/`sol2` matched frames,
+`reach_sol2-matched_00.png`); Talon's Junction changes 662 px; Amphiseum's and every other matched reference frame
+are bit-identical (`reach/`). Pinned by `hd_light_bar_ground_truth`.
+
+**Reach census** (`hd_light_bar_census`, every `track.vex` of the disc, `light_bar_census.tsv`): the family has 3 to 26
+slots on each of the 24 circuit models of the 12 circuits and none in the four Zone models, and `pad_ne` binds every one of
+them (unread 0): Vineta K 13/14, `02_track` 26/24, `03_track` 4, Chenghou 4, Ubermall 4, Sebenco Climb 11/8, Sol 2 5/7, Anulpha Pass 6,
+Talon's, Amphiseum, Modesto and Tech De Ra 3 each (beside their pads). **Judged against a reference: Vineta K (start slot and
+the tunnel pose) and Sol 2 (matched frame 00); not judged: the direction of Talon's 662 px (matched 00), and every other circuit
+with no reference frame.** It is a global change on a program-match, as the pads' was.
+
+### 2. The sea: what the original's `water_test_2` draw reads (measured, confidence 90 unless noted)
+
+Draw 66 of the pose-A frame is `water_test_2`: **one opaque draw, 186 indices**, blend off, depth `LEQUAL` with write on, back-face
+cull with CCW front. The sheet is at world `y = -50.8` and the eye at `y = -143.8`: **the sea is 93 units above the tunnel
+and is seen from below.** Its vertex colour (attribute 2) is `(0, 0.498, 0.486)`, the teal, on all 47 vertices. The program
+in RAM (`ps3-fp-live.py`) is the one this page decoded from the disc:
+`out = fog(TC1 * (0.4 + sun * sat(N.L)) + TC1 * R)`, `sun = (8, 4.52, 2.16)`.
+
+- **The vertex colour multiplies the light.** The generic reading adds it to the light and multiplies a white picture, so the
+  sheet drew pale and blown out (a white sheet over the sky; whether it is what the earlier lane's `(176,217,219)` band measured was not diffed). Drawn now as the program states it:
+  `slots::ICE` with `WATER_FLAG` (glow-entry rate 2.0) selects, in `shade.wesl`, picture = vertex colour and
+  light = ambient + sun diffuse, with no vertex-light or prelit term. Pinned by `hd_light_bar_ground_truth`.
+- **`paraboloidReflectionTex` is bound, at unit 1, and is a runtime render target.** `0xc4065380` in VRAM, 512x256 linear
+  `A8R8G8B8`, clamp (`0x60730303`). With RPCS3's `Write Color Buffers` on its contents read back
+  (`data/scratch/vineta-k-fidelity/probe11.png`): **a dual paraboloid of the environment - two discs, the sky with its clouds,
+  mountain horizon and sun glow above the middle row, a teal sea gradient below it.** The row split at `v = 0.5` is the
+  program's own coordinate law (`v = 0.5 - 0.5 d.y`). Seen from below, the sheet reads the **lower** half: mean
+  `(0.15, 0.36, 0.41)` (upper half `(0.43, 0.59, 0.57)`, whole texture `(0.31, 0.49, 0.51)`). Without `Write Color Buffers` the same address reads as stale noise, which is what an earlier
+  reading of this capture saw. It is not a disc texture (no `.gtf` of 512x256 `A8R8G8B8` matches any of its samples) and
+  HD's executable never names a source for it.
+- **What this settles of the 2026-10-07 `hd-water` reading:** `skyreflect.gtf`/`PerMaterialEnvMap` is not what the program reads
+  (confidence 85); the probe is an environment render, so "a sky panorama" (confidence 40 there) is half right: its upper half is
+  the sky, its lower half is not any disc data this project has located. **Not drawn, on the repo's own rule**: the
+  lower half is the part this view needs, and nothing authored supplies it. `TC1 * R` is therefore missing from the sheet
+  (about `(0, 0.18, 0.20)` added to a lit term of `(0, 0.2, 0.2)` before the sun's share).
+- **The panes' teal is probably the glass over a bright background, not the sea sheet (confidence 60, inferred).**
+  `mt_tunnelrefraction`'s `W = (0.2, 0.6, 0.6)` times a near-white grab is `(0.2, 0.6, 0.6)`, the reference's `(33,147,147)`;
+  the white swirls read as clouds. `W` times the probe's own upper-half sky `(0.43, 0.59, 0.57)` would give about `(22, 90, 87)`,
+  so the grab is brighter than that sky. The sheet itself covers
+  only the upper-left of the frame there (draw 66's projected triangles, `overlay66.png`). Ours grabs a light-blue sky
+  (`(52,116,153)`): that is the sky-tint item in `hd-sky-luma`'s thread, not the water.
+
+### 3. The ceiling meshes: the original fogs the scenery beyond the glass differently, and does not draw some of the meshes ours shows
+
+Two separate measured facts, not one cause.
+
+**(a) The original uses the alternate fog pair for one group of draws (confidence 90 for the values).** The fragment
+programs' patched fog constants are `{0, 0.031373, 0.031373, 0.0045}` on draws 39-74 of the pose-A frame (scenery beyond the
+tunnel glass: `j_arch_support`, `and_metal_struts`, `j_arch_lights`, `and_rock4`, `and_sand_sand`, `and_tower_3pyt2`,
+`mar_glowstrips`, the sea sheet) against `{0.039216, 0.086275, 0.070588, 0.00025}` on the track draws (`ps3-fp-live.py`).
+**Both are the circuit's own `.envsettings`**: `Fog.Alternate Fog Color` / `Alternate Fog Density` against `Fog Color` /
+`Fog Density`. This repo reads the primary pair for every draw (`environment.rs`: "what selects [the alternates] is unread").
+`exp(-(0.0045 d)^2)` is 0.9 at 70 units, 0.56 at 170, 0.16 at 300 and 0.0006 at 600: **it darkens the near struts and takes the
+far scenery to dark teal; it does not remove what is within 170 units.** The group is **not** spatial (members 23 to 930
+units from the camera, `y` -158 to +9), **not** a material family (`ds_concrete_band_cs` is in it, `ds_wall_cs` is not) and
+`render_flags & 0x30` is on 70 of the 163 chunks of the group's textures and 3 of 48 of the other side's: **what selects the
+group is open.** The group's submission is contiguous with three `tunnlelightstrip` exceptions (draws 41, 42, 70).
+
+**(b) Meshes ours draws near the tunnel are absent from the original's frame (confidence 80).** Textures were named by five
+64-byte samples against the disc's 6,347 `.gtf` (all samples the `.gtf` has bytes for must agree, with width, height, format
+and mips). Ours, PVS on, at the same pose, draws materials whose textures the original's frame does not bind:
+`and_girder3` (chunk 1320, 120 units ahead), `and_metalstruts_pt2` (1305), `and_dome_vent` (1286), `and_darkstrip` (1311),
+`j_strip_lights` (1315); the copper struts and boxes at the top left of ours (`pairA.png`) are these. **`and_metalstruts_pt2`
+is not `and_metal_struts`**: the latter is in the original's frame, under the alternate fog. All five chunks are allowed by the
+nearest cell's bitmap and by both neighbours (`pvsfit.py`), so **the original's cull of them is unexplained**: not the PVS
+bitmap, not our 24-unit padding (using exactly the nearest cell of the craft or of the camera moved 1 of 463 draws;
+`OAG_PVS_EXACT`, a temporary switch, removed), and not a frustum test (`FUN_003fada8` only clears bits by
+`Render_ClassifyAgainstPlanes` on chunk bounds). Chunks 1286 and 1305 have bounds centred at the origin, which says
+node-placed geometry; whether their `.vex` nodes sit under an LOD, switch or animation parent is the next thing to read.
+
+### 4. Lineage
+
+Omega ships `Water_noref` and `WATER_Test_2` (GNM shaders; the microcode classifiers do not run). **The light-bar family:** `diffuse_normal_specular_emmissive` is in Omega's `data00`, `data01` and `data02` archives
+(`rg -a` over the extraction); checked, applies, not wired (PS4 GNM programs, so the microcode check `pad_ne` makes does not
+run); 2048 differs (its own material names). **The sea:** checked, applies, not wired; Omega's probe would also be a runtime target
+(2048's per-environment `skyParaboloid.gxt` is the authored half of the same idea). **The alternate fog:** `Alternate Fog` keys
+exist in every HD-lineage `.envsettings`; Omega not checkable (no PS4 emulator).
 
 ## See also
 
