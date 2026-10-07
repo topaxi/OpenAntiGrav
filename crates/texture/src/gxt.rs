@@ -522,7 +522,7 @@ fn scatter(value: u32, mask: u32) -> u32 {
     let mut remaining = mask;
     let mut source = value;
     while remaining != 0 {
-        let lowest = remaining & remaining.wrapping_neg();
+        let lowest = remaining.isolate_lowest_one();
         if source & 1 != 0 {
             out |= lowest;
         }
