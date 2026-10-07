@@ -243,39 +243,51 @@ pub fn layout(size: (f32, f32)) -> [(Control, Rect); 7] {
         w: rw * h,
         h: rh * h,
     };
-    let go = (0.36, 0.36);
-    let go_y = 0.40;
-    let fire = 0.22;
-    let brake = (0.30, 0.16);
-    let brake_y = 0.18;
-    let absorb = 0.20;
+    // Round buttons are drawn inside these squares (GO a rounded square), so
+    // each rectangle is the button's own bounding box.
+    let go = 0.36;
+    let go_y = 0.38;
+    let fire = 0.20;
+    let absorb = 0.17;
+    let brake = 0.17;
+    let brake_y = 0.20;
+    let small = 0.13;
+    let gap = 0.03;
+    let fire_x = right - go - gap - fire;
     [
-        (Control::Accelerate, r(right - go.0, go_y, go.0, go.1)),
-        (
-            Control::Fire,
-            r(right - go.0 - 0.03 - fire, go_y + go.1 - fire, fire, fire),
-        ),
+        (Control::Accelerate, r(right - go, go_y, go, go)),
+        (Control::Fire, r(fire_x, go_y + go - fire, fire, fire)),
         (
             Control::Absorb,
             r(
-                right - brake.0 - 0.03 - absorb,
-                brake_y - 0.02,
+                fire_x + (fire - absorb) / 2.0,
+                go_y + go - fire - gap - absorb,
                 absorb,
                 absorb,
             ),
         ),
-        (Control::AirbrakeLeft, r(SAFE_X, brake_y, brake.0, brake.1)),
+        (Control::AirbrakeLeft, r(SAFE_X, brake_y, brake, brake)),
         (
             Control::AirbrakeRight,
-            r(right - brake.0, brake_y, brake.0, brake.1),
+            r(right - brake, brake_y, brake, brake),
         ),
         (
             Control::Pause,
-            r(SAFE_X + brake.0 + 0.03, brake_y + 0.025, 0.17, 0.11),
+            r(
+                SAFE_X + brake + gap,
+                brake_y + (brake - small) / 2.0,
+                small,
+                small,
+            ),
         ),
         (
             Control::Camera,
-            r(SAFE_X + brake.0 + 0.23, brake_y + 0.025, 0.17, 0.11),
+            r(
+                SAFE_X + brake + 2.0 * gap + small,
+                brake_y + (brake - small) / 2.0,
+                small,
+                small,
+            ),
         ),
     ]
 }

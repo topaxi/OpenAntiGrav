@@ -492,6 +492,7 @@ pub fn run(
                 // `zone_stage` already has here - see `main/headless.rs` for
                 // the one capture path that does.
                 zone_spectrum_test: false,
+                touch_demo: None,
                 previous_best,
                 // No flag for it on this path; see `main/headless.rs`.
                 ghost: race::GhostCapture::default(),

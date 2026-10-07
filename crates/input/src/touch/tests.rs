@@ -57,7 +57,9 @@ fn every_control_keeps_to_the_safe_margins() {
 #[test]
 fn every_control_is_thumb_sized_by_the_window_height() {
     for (control, r) in layout(SIZE) {
-        assert!(r.w >= 0.16 * SIZE.1 && r.h >= 0.11 * SIZE.1, "{control:?}");
+        // The small round buttons are 0.13 of the height drawn; the slop adds
+        // 0.025 on every side, so a thumb has at least 0.18 to land on.
+        assert!(r.w >= 0.13 * SIZE.1 && r.h >= 0.13 * SIZE.1, "{control:?}");
     }
     let tall = layout((1000.0, 500.0))[0].1;
     let wide = layout((2000.0, 500.0))[0].1;

@@ -770,6 +770,15 @@ fn pausing_on_focus_loss_is_on_by_default_and_round_trips_off() {
 }
 
 #[test]
+fn the_touch_opacity_defaults_to_the_design_and_round_trips() {
+    assert_eq!(Settings::default().controls.touch_opacity, 100);
+    let low: Settings = toml::from_str("[controls]\ntouch_opacity = 60\n").unwrap();
+    assert_eq!(low.controls.touch_opacity, 60);
+    let missing: Settings = toml::from_str("[controls]\nscheme = \"default\"\n").unwrap();
+    assert_eq!(missing.controls.touch_opacity, 100);
+}
+
+#[test]
 fn the_go_brake_zones_are_on_by_default_and_round_trip_off() {
     assert!(Settings::default().controls.touch_go_zones);
     let off: Settings = toml::from_str("[controls]\ntouch_go_zones = false\n").unwrap();

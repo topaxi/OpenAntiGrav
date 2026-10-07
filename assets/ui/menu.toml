@@ -691,6 +691,15 @@ string_id = "OAG_CONTROLS_TOUCH_GO_ZONES"
 setting = "controls.touch_go_zones"
 values = ["on", "off"]
 
+# How strongly the on-screen racing controls draw, in percent of the design's
+# own translucency (chosen, not measured). Only a touchscreen shows them.
+[[page.entry]]
+kind = "choice"
+label = "CONTROLS OPACITY"
+string_id = "OAG_CONTROLS_TOUCH_OPACITY"
+setting = "controls.touch_opacity"
+values = ["40", "60", "80", "100"]
+
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
 # keys that can disagree is a state somebody has to define behaviour for.

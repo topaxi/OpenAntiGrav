@@ -218,6 +218,9 @@ pub struct CaptureOptions {
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
     /// profile's. See `Scene::set_blur_resolution`.
     pub motion_blur_resolution: oag_display::display::BlurResolution,
+    /// `--touch-overlay`: draw the on-screen racing controls over the frame
+    /// in this pose, as a phone would show them.
+    pub touch_demo: Option<crate::touch_controls::Demo>,
     /// `[graphics] hud_scale`, which only a raster HUD obeys.
     pub hud_scale: oag_display::display::HudScale,
     /// What casts a shadow in the captured frame: `--shadows`.
@@ -907,6 +910,37 @@ pub fn capture(
             Ok(None) => warn!("no HUD layout: capturing without one"),
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
+    }
+    if let Some(demo) = options.touch_demo {
+        let size = (width as f32, height as f32);
+        let space = oag_present::perf::grid((width, height));
+        let sheet = crate::cursor::sheet(crate::cursor::LAUNCHER);
+        let mut renderer = crate::render::Renderer::new(
+            &device,
+            &queue,
+            format,
+            None,
+            oag_ui::font::Atlas::build(),
+            &sheet,
+        )?;
+        renderer.set_space(space);
+        let touches = demo.touches(size, true);
+        let list = crate::touch_controls::draw(
+            &touches,
+            size,
+            space.size.1 / size.1.max(1.0),
+            false,
+            true,
+            1.0,
+        );
+        renderer.overlay(
+            &device,
+            &queue,
+            &mut encoder,
+            &hud_view,
+            &list,
+            (0.0, 0.0, size.0, size.1),
+        );
     }
     // Pulse's bloom (PSP, and the PS2 by inheritance) over the HUD, as the
     // window adds it: see `Scene::composite_bloom`.

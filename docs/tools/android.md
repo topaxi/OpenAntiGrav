@@ -220,7 +220,7 @@ process stayed alive, and in a race it opened the root menu over the parked race
 
 `oag_input::touch` holds the layout, the finger tracking and the rules, with no
 winit type, so every rule is a unit test; `oag_game::touch_controls` draws it as
-plain translucent rectangles with a word on each (no disc art, no invented icons);
+round translucent buttons with a vector glyph each (see "Design pass" below);
 `crates/game/src/main/touch.rs` is the glue. Shown only on Android (or on any
 platform with `OAG_TOUCH_CONTROLS` set, which is how to look at it on a desktop with
 a touchscreen), only in a running race, and drawn under the pointer in the overlay
@@ -229,11 +229,11 @@ pass.
 | Control | Where | Button |
 | --- | --- | --- |
 | steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock; X steers, Y pitches | stick axes |
-| GO | right edge, mid-height, largest (0.36 of the height) | `Cross` (thrust), plus `L`/`R` in its brake corners |
-| FIRE | left of GO, in the thumb's arc | `Square` |
-| ABSORB | upper right, left of BRAKE R | `Circle` |
-| BRAKE L, BRAKE R | upper corners, below the lap and record readouts | `L`, `R` (airbrakes) |
-| PAUSE, VIEW | right of BRAKE L | `Start` (pause), `Select` (camera cycle) |
+| GO | right edge, mid-height, largest (0.36 of the height), a rounded square | `Cross` (thrust), plus `L`/`R` in its brake corners |
+| FIRE | left of GO, in the thumb's arc (0.20), a crosshair | `Square` |
+| ABSORB | above FIRE (0.17), a shield | `Circle` |
+| BRAKE L, BRAKE R | upper corners, below the lap and record readouts (0.17), a side arrow and `L`/`R` | `L`, `R` (airbrakes) |
+| PAUSE, VIEW | right of BRAKE L (0.13), pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
 
 **Dynamic GO (2026-10-07, touch-go lane, chosen, not measured).** The finger's
 position *within* GO, tracked while it is held, adds an airbrake: the bottom 34% of
@@ -247,17 +247,31 @@ amber. Zones add to the reading only: they latch no tap. A stick-zone finger tha
 on a control is that control's finger (controls win over the floating stick, which
 the upper-left brake buttons need).
 
-**Design pass (chosen, not measured).** Sizes are fractions of the window's height
-(GO 0.36, about 24 mm on a 6.2 in phone; the small buttons 0.16 to 0.22, 11 to 15 mm),
-so a button is one physical size on every phone. Everything stays 0.05h in from the
-left and right and 0.03h from the top and bottom for rounded corners and a camera
-cutout; the cutout itself is **not queried** (winit 0.30 has no insets API). Idle
-fills are 7% white with a 45% outline; a held control turns cyan with a near-opaque
-outline. The first version's BRAKE buttons sat on Pulse's lap and record readouts
-and GO on speed and shield; checked against Pulse and HD (Waydroid and a desktop
-window, 16:9 to 2.17:1) the controls now keep to the free mid-height of each side.
-PAUSE and VIEW moved off the top centre because HD draws its shield meter there.
-No controls-opacity setting was added.
+**Design pass (2026-10-07, touch-design lane, chosen, not measured).** Sizes are
+fractions of the window's height (GO 0.36, about 24 mm on a 6.2 in phone; FIRE 0.20,
+ABSORB and the brakes 0.17, PAUSE and VIEW 0.13, each with a 0.025h touch slop on every
+side), so a button is one physical size on every phone. Everything stays 0.05h in from
+the left and right and 0.03h from the top and bottom; the cutout itself is **not
+queried** (winit 0.30 has no insets API). The look is the common phone overlay: round
+buttons with a thin outline (60% white), a dark 28% body so the white glyph reads on
+HD's bright track, and a held state that is a 40% cyan body with a brighter outline,
+never opaque. GO is a rounded square, not a circle, so the L and R brake corners
+the player presses are inside what is drawn; the lit corner is a translucent amber
+clipped to GO's own outline. The stick is a ring with a knob where the thumb landed.
+There is **no round `Draw` primitive**, so every shape is rows of `Fill`s
+(`touch_controls/shape.rs`): spans never overlap, so a translucent colour has one
+alpha everywhere - the first design stacked a 45% outline fill under the body, which
+read as flat grey and, held, as opaque cyan. Glyphs are plain vector shapes (double
+chevron, crosshair, shield, side arrows, pause bars, a camera body with a lens); the
+disc-style prompt glyphs (`oag_ui::prompt`) are a pad's face buttons and none of them
+says thrust, shield or pause. The only words are GO and the L and R of the airbrakes.
+`[controls] touch_opacity` (CONTROLS page, CONTROLS OPACITY, 40/60/80/100) scales every
+alpha. The overlay draws only while the race is on the glass (`hud_shown`, so not
+through the intro flyby; the loading screen is a different stage and never draws it).
+`oag-game --race --screenshot out.png --size 2340x1080 --touch-overlay
+idle|go-left|go-right|stick-go` draws the overlay in a pose for a capture. Pulse's HUD
+is 4:3 and HD's about 16:9, so on a 2.17:1 phone most of the controls sit on the
+pillarbox bars beside the picture, clear of the readouts.
 
 Multi-touch is the point: every finger is tracked, a stick finger is sticky and a
 button finger re-reads what is under it as it slides (a thumb can roll from GO onto
