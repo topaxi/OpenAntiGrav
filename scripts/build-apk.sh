@@ -29,6 +29,9 @@ done
 if [ -z "$version" ]; then
     version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 fi
+# What `oag-game --version` prints on desktop, so the installed app reports the
+# same thing (`just deploy-android` reads it back off the device).
+version_name="$version ($(git -C "$root" rev-parse --short=7 HEAD 2>/dev/null || echo unknown))"
 
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 [ -n "$sdk" ] || { echo "ANDROID_HOME is not set" >&2; exit 1; }
@@ -66,7 +69,7 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.openantigrav.game"
     android:versionCode="$code"
-    android:versionName="$version">
+    android:versionName="$version_name">
     <uses-sdk android:minSdkVersion="$api" android:targetSdkVersion="34" />
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

@@ -93,6 +93,11 @@ if ! (( dry_run )); then
     ssh "$host" chmod +x "$desktop_dir/$(basename "$appimage")"
 fi
 
+if ! (( dry_run )); then
+    # Run on the Deck itself, so this is the build that is there now.
+    echo "installed: $(ssh "$host" "'$desktop_dir/$(basename "$appimage")' --version" 2>&1 | tail -n1)"
+fi
+
 step "Done"
 echo "AppImage: $desktop_dir/$(basename "$appimage")"
 echo "Game data: just push-data deck $host"

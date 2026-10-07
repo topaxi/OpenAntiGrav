@@ -151,6 +151,12 @@ if (( ! dry_run )); then
     restore_kept_data
 fi
 
+if (( ! dry_run )); then
+    # Read back off the device: what is actually installed there now.
+    installed="$(adb shell dumpsys package "$package" | tr -d '\r' | sed -n 's/^ *versionName=//p' | head -n1)"
+    echo "installed: oag-game ${installed:-?} on $(adb shell getprop ro.product.model | tr -d '\r')"
+fi
+
 step "Done"
 echo "Game data: just push-data android"
 echo "Launch:    just launch-android   (follows the log too; --stop for a cold start)"
