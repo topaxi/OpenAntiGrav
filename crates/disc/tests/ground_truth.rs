@@ -235,12 +235,10 @@ fn a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one() {
 
 #[test]
 #[ignore = "needs the Vita and PS4 packages in data/images/"]
-fn the_real_packages_are_refused_by_name() {
+fn the_real_vita_packages_are_refused_by_name() {
     for (name, needle) in [
         ("2048-vita-eu.pkg", "Vita .pkg"),
         ("2048-vita-eu-patch.pkg", "Vita .pkg"),
-        ("omega-ps4-eu.pkg", "PS4 .pkg"),
-        ("omega-ps4-eu-patch.pkg", "PS4 .pkg"),
     ] {
         let Some(path) = image(name) else { continue };
         let error = DiscImage::open(&path)

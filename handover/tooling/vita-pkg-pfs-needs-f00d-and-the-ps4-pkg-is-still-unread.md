@@ -22,14 +22,12 @@ and a Vita `.vpk` read in place with its patch and DLC
 - **Deflated `.vpk` entries are inflated whole**, 512 MiB LRU, 1 GiB per entry. A
   deflated multi-gigabyte `data.psarc` is refused by name. A checkpointed
   (zran-style) index would lift it; not needed if real dumps store it.
-- **The PS4 Omega `.pkg` (base and the day-one patch) is not read in place.** It
-  is a fake package (`\x7fCNT`, `EP9000-CUSA05670_00-...`) that `LibOrbisPkg`
-  extracts on a PC with no console key, so the keys are public constants and it is
-  feasible. Needs: the entry table, the RSA-2048 key entry (a big-integer modexp:
-  a dependency or our own), HMAC-SHA256, AES-XTS for `pfs_image.dat`, the PFS inode
-  and directory walk, and the PFSC compressed-file layer; the patch's `data09.psarc`
-  is required for a front end. Estimate: a day or two with the data on hand, and
-  `data/extracted/ps4` is the byte-for-byte ground truth.
+- ~~The PS4 Omega `.pkg` is not read in place.~~ **Landed 2026-10-07 (`ps4-pkg`)**:
+  `oag_disc::ps4_pkg`, [ps4-package.md](../../docs/formats/ps4-package.md). Every byte of
+  all 25 files equals the `LibOrbisPkg` extract; a race frame is identical. Still open
+  from it: per-file PFSC and scattered block lists have no sample on either package;
+  a retail PS4 package is untested; `LibOrbisPkg` is LGPL-3.0, not MIT as `legal.md`
+  said (corrected, the maintainer approved the keys on the MIT premise).
 - **Wayland paste in the key prompt is unverified**; X11 Ctrl+V was exercised.
 - **The `data1` IV in the PS3 key derivation comes from RPCS3's source** and was not
   exercised against a real `data1`; the oracle guards it.
@@ -38,7 +36,6 @@ and a Vita `.vpk` read in place with its patch and DLC
 
 1. Ask the maintainer for a real NoNpDrm `.vpk` of 2048 and run
    `crates/2048/tests/vpk_ground_truth.rs` shapes against it (15 minutes).
-2. PS4 `.pkg`: write `oag_disc::ps4_pkg` against `LibOrbisPkg`'s `PkgReader` and
-   `PfsReader` (MIT), comparing every file with `data/extracted/ps4/omega-eu`.
+2. ~~PS4 `.pkg`~~ done, see above.
 3. If a Vita PFS derivation turns up, add `oag_disc::vita_pfs` behind the same
    `PackageSource` trait the `.vpk` reader uses; `DiscImage` needs no change.
