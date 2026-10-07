@@ -5,6 +5,7 @@
 //! LeachBeam drawable, not a move.
 
 use oag_core::math::Mat4;
+use oag_mesh::mesh_render;
 
 use crate::{Race, SceneStats};
 
@@ -57,6 +58,7 @@ impl super::super::Scene {
         race: &Race,
         queue: &wgpu::Queue,
         view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
     ) -> bool {
         let (Some(drawable), Some(matrix)) = (&self.leach_ball, race.leach_ball_model_matrix())
         else {
@@ -64,6 +66,7 @@ impl super::super::Scene {
         };
         let mvp = view_projection * matrix;
         drawable.write(queue, view_projection, matrix, mvp);
+        super::super::weapon_models::write_fog(drawable, queue, weapon_scene);
         true
     }
 
