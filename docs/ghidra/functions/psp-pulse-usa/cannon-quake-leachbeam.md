@@ -629,6 +629,8 @@ address - and branches on the returned hit-type code:
   the surface normal and its position is nudged off the surface by `3.0` units
   along it - a bounce, not a stop, and no effect is spawned for it.
 
+**2026-10-07: implemented as read.** The decompile has no surface probe, ride height or gravity, only the one sweep and the three arms above, so `oag_weapons::projectile::Projectiles::advance` flies a Cannon round straight and reflects it off a floor (`cannon::BOUNCE_PUSH_OFF`, `3.0`). Before that the round ran the generic floor-follower and left its muzzle on a banked track; see [projectile-floor.md](../../../gameplay/projectile-floor.md).
+
 `+0xc8` is a second, independent timer this same function advances by `dt`
 every tick (distinct from `+0x48`, which `Cannon_DrawRound` reads for the
 round's own two textured quads - see below) - not consumed here, only
