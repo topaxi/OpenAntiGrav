@@ -16,7 +16,7 @@
 //! stand-in light and a camera at the world's origin. Every HD weapon program
 //! reads those the way a hull's does, so the model, the program and the
 //! placement can all be right and the picture still wrong
-//! (`Scene::write_weapon_scenes`). Each test below pins the player's own
+//! (`weapon_models::write_fog`). Each test below pins the player's own
 //! weapon at a tick the run reaches with **no rival on the grid**, so nothing
 //! here follows the AI, and counts the pixels that tell the written drawable
 //! from the unwritten one. The thresholds sit between the two measured values,

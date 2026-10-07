@@ -220,7 +220,7 @@ programs, the evidence and the frames are in
 
 ## Weapon scene blocks (2026-10-06, hd-weapons)
 
-`Scene::write_weapon_scenes` writes the circuit's own scene block (fog, light
+`weapon_models::write_fog` writes the circuit's own scene block (fog, light
 rig, **eye**), Zone half off, onto every weapon drawable whose model a PS3
 program shades (`Drawable::is_ps3_shaded`: some material resolved to an
 `.rcsmaterial` variant; a Pulse or Pure body answers no, and a Pulse
