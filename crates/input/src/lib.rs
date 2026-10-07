@@ -11,17 +11,19 @@
 //! snapshot, which is the point of the abstract button layer sitting between
 //! any device and the game.
 
+pub mod android;
 pub mod bindings;
 pub mod keys;
 pub mod pad;
 pub mod prompt;
+pub mod touch;
 
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::{Button, Input};
 use winit::keyboard::Key;
 
 pub use bindings::Bindings;
-pub use pad::Pad;
+pub use pad::{Pad, Reading};
 
 /// Accumulates key state between ticks and hands out one snapshot per tick.
 ///
@@ -226,6 +228,14 @@ pub struct Controls {
     pad_spoke: bool,
     /// Which device was used last, for the button prompts' glyph family.
     prompt: prompt::Detector,
+    /// An Android gamepad, which `gilrs` cannot see. See [`android`].
+    android: android::AndroidPad,
+    /// An Android pad event arrived since the last tick, held or not, so a
+    /// press shorter than a tick still counts as the pad speaking.
+    android_spoke: bool,
+    /// What the on-screen racing controls hold this tick. See [`touch`]. Not
+    /// a pad: it never counts toward [`Self::pad_spoke`].
+    touch: Reading,
 }
 
 impl Controls {
@@ -248,6 +258,9 @@ impl Controls {
             buttons: [Input::new(); oag_gameplay::MAX_PLAYERS],
             pad_spoke: false,
             prompt: prompt::Detector::new(),
+            android: android::AndroidPad::default(),
+            android_spoke: false,
+            touch: Reading::default(),
         }
     }
 
@@ -304,6 +317,41 @@ impl Controls {
     /// pad keeps reporting its own state whether or not the window has focus.
     pub fn release_all(&mut self) {
         self.keyboard.release_all();
+        self.android.release_all();
+        self.touch = Reading::default();
+    }
+
+    /// An Android gamepad key event. Returns whether it was a pad key, so the
+    /// caller does not also hand it to [`Self::set_key`]. A press is latched
+    /// as a tap too, so one shorter than a tick still reaches the menus.
+    pub fn android_key(&mut self, code: u32, pressed: bool) -> bool {
+        let spent = self.android.key(code, pressed);
+        self.android_spoke |= spent;
+        if spent
+            && pressed
+            && let Some(android::Key::Button(button)) = android::key_of(code)
+        {
+            self.keyboard.tap(button);
+        }
+        spent
+    }
+
+    /// The Android gamepad's left stick, `AXIS_X` and `AXIS_Y` as reported.
+    pub fn android_stick(&mut self, axis_x: f32, axis_y: f32) {
+        self.android.stick(axis_x, axis_y);
+        self.android_spoke |= axis_x != 0.0 || axis_y != 0.0;
+    }
+
+    /// Whether an Android gamepad has ever spoken.
+    #[must_use]
+    pub fn android_pad_seen(&self) -> bool {
+        self.android.seen()
+    }
+
+    /// What the on-screen racing controls hold, for the next tick. Cleared by
+    /// calling it with `Reading::default()`.
+    pub fn set_touch(&mut self, reading: Reading) {
+        self.touch = reading;
     }
 
     /// Whether a pad subsystem was opened, and what is connected to it.
@@ -369,13 +417,21 @@ impl Controls {
     /// 0's entry is what the single-snapshot path produced and the other seven
     /// are `InputSnapshot::default`.
     pub fn player_snapshots(&mut self) -> oag_gameplay::PlayerInputs {
-        let pads = self.pad.poll_players();
+        let mut pads = self.pad.poll_players();
+        let android = pad::resolve(self.android.reading(), self.pad.triggers());
+        if android != pad::PadState::default() {
+            let slot = self.keyboard_slot();
+            pads[slot] = pad::merge_states(pads[slot], android);
+            self.prompt.note_pad(None);
+        }
         if let Some(family) = self.pad.take_activity() {
             self.prompt.note_pad(family);
         } else if let Some(family) = self.pad.first_family() {
             self.prompt.seed_pad(family);
         }
-        self.merge_players(pads)
+        let inputs = self.merge_players(pads);
+        self.pad_spoke |= std::mem::take(&mut self.android_spoke);
+        inputs
     }
 
     /// [`Self::player_snapshots`] with the pads' contributions supplied rather
@@ -406,6 +462,11 @@ impl Controls {
         // on the first and leave nothing for the rest.
         let keyboard_slot = self.keyboard_slot();
         let keyboard_keys = self.keyboard.held_mask() | self.keyboard.take_taps();
+        let mut pads = pads;
+        if self.touch != Reading::default() {
+            let touch = pad::resolve(self.touch, self.pad.triggers());
+            pads[keyboard_slot] = pad::merge_states(pads[keyboard_slot], touch);
+        }
 
         let mut inputs = oag_gameplay::PlayerInputs::none();
         for (slot, pad) in pads.into_iter().enumerate() {

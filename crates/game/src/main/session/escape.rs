@@ -79,6 +79,23 @@ impl Session {
         );
     }
 
+    /// The Android system Back (gesture or key): exactly [`Self::escape`],
+    /// except that it never quits.
+    ///
+    /// **Chosen, not measured.** On the front end's root page, the disc
+    /// chooser, the boot movies and `PRESS START` there is no level behind,
+    /// and Android's own convention would hand the phone back to its launcher.
+    /// A swipe by accident closing the game is worse than one that does
+    /// nothing, and the root has a QUIT row for the player who means it, so
+    /// those places ignore Back. In a race it is the pause menu: escape parks
+    /// the race and opens the menus, and backing out of them resumes it.
+    pub(crate) fn back(&mut self) {
+        info!("system back");
+        let was_quitting = self.quit;
+        self.escape();
+        self.quit = was_quitting;
+    }
+
     /// What escape does, which is **back one level** and not quit.
     ///
     /// One rule, four places it lands:

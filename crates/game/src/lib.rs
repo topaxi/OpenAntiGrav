@@ -35,6 +35,7 @@ pub mod ghosts;
 pub mod hud_countdown;
 pub mod hud_overlay;
 pub mod icon;
+pub mod touch_controls;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
 /// depends on it. Re-exported here so call sites that predate `oag-ui`

@@ -253,6 +253,7 @@ impl Session {
             // button edges this same call computed, through `buttons_mut`, for
             // the one slot the keyboard drives; it has one menu and one cursor
             // however many people are racing.
+            self.feed_touch();
             let inputs = self.controls.player_snapshots();
             // The pad spoke: the drawn cursor goes until the mouse moves
             // again, the same rule a key press applies in `app.rs`. Read

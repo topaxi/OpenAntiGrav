@@ -62,6 +62,8 @@ mod records_page;
 mod session;
 #[path = "main/stage.rs"]
 mod stage;
+#[path = "main/touch.rs"]
+mod touch;
 #[path = "main/typing.rs"]
 mod typing;
 #[path = "main/window.rs"]
