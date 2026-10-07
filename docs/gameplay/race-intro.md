@@ -151,8 +151,7 @@ keys. The reader took the four floats as `(x, y, z, w)`; they are `(w, x, y, z)`
 each `gridCamera` leaf's own aim point, `docs/rendering/scenery-animation.md`). The earlier
 comparison framed only "the same corridor" on Talons Junction, which is why it passed. Pulse's
 `s16` path is untouched: four frames of `03_Track` (ticks 100, 400, 900, 1200) are
-byte-identical before and after. Checked against Omega: its HD circuits ship the same files and
-read through the same decoder, ported and not watched. Open: HD's `zone_N` flyby has no
+byte-identical before and after. Omega: **not checkable** (the extracted `start_grid*.vex` blobs do not open as `.vex`); 2048 not checked. Open: HD's `zone_N` flyby has no
 `grid_camera1` at all.
 
 **HD's prompt is open.** `InGame` in `ingame_definition.xml` authors it: two 3 px rules (`y 970`,

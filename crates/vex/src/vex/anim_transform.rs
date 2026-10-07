@@ -403,7 +403,8 @@ pub const TRANSLATION_IS_FLOAT: u32 = 1;
 /// `gridCamera` leaf stores the point the camera looks at: with `w` first, the first key's
 /// view axis points at it to within `1e-2` on all eight (dot `1.000`, `0.999` on two) and the
 /// camera's up row points up; read `(x, y, z, w)` the same keys turn the picture upside
-/// down and aim up to 130 degrees off it. Origin: that aim point, not an evaluator.
+/// down and aim up to 130 degrees off it. Origin: that aim point, not an evaluator. Confidence 90 on the order for rotation keys of
+/// a camera; the same flag and reader serve the one fish shoal, which was not checked.
 pub const ROTATION_IS_QUATERNION: u32 = 4;
 
 /// One node's `Anim Transform`, with its `LoopEnd` and `FixedFrames`

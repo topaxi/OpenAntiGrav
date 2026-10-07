@@ -351,9 +351,12 @@ at (`+0x10`); with `w` first the first key's view axis points at it on all eight
 a conjugate, does that on all eight (`xyzw` gives `0.38` to `0.96` and an inverted up).
 `crates/vex/tests/grid_camera_ground_truth.rs`
 (`every_hd_flyby_looks_at_its_aim_point_with_the_sky_up`) sweeps every `start_grid*.vex` on the
-disc. The same reader serves the one billboard shoal that uses wide keys, so its fish turn
-by the corrected rotation too. Omega ships the same `start_grid*.vex` for its HD circuits and
-reads through the same decoder: **ported**, not watched. Bits 0 and 2 are always set together
+disc. **Confidence 90** for the order on a camera's keys (eight of eight files at dot `1.000`,
+the alternatives off by a wide margin); the same flag and reader serve the one billboard shoal
+that uses wide keys, so its fish turn by the corrected rotation too, not checked. Omega:
+**not checkable** here - the `start_grid*.vex` blobs in the scratch extraction do not open as
+`.vex` (leading bytes `ed ad 5c ca` and `GNF `, zero nodes), so whether its HD circuits carry
+the same keys is unread. 2048 was not checked. Bits 0 and 2 are always set together
 on this disc, so nothing separates them; a file setting one alone is the test that would.
 
 The 97 are the grid-camera paths in the `start_grid*.vex` family and one
