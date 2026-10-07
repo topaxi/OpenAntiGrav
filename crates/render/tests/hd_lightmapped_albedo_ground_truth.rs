@@ -52,3 +52,51 @@ fn vinetas_wet_floor_binds_its_floor_texture_not_the_paraboloid() {
     }
     assert!(checked > 0, "Vineta K should carry d_s_n_customr slots");
 }
+
+/// Sebenco Climb's `track_coloured_specular_alpha4glow` solar wall names its
+/// normal map (`ds_solarwall_n`, sampler `0x48f37f5a`, declared at unit 1) at
+/// entry 0 and its picture (`ds_solarwall_c_withglow`, `0x3bdc0403`, unit 0)
+/// at entry 2. Binding entry 0 drew the wall blue-violet with the normal map's
+/// stripes. Dropping `0x48f37f5a` from `skin::NOT_A_PICTURE` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn sebencos_solar_wall_binds_its_picture_not_its_normal_map() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = 0;
+    for track in ["track.vex", "track_reversed.vex"] {
+        let path = format!("/data/environments/10_sebenco_climb/{track}");
+        let Some((spec, data)) = (0..4).find_map(|n| {
+            let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
+            mesh::read_blob(&spec, &path).ok().map(|d| (spec, d))
+        }) else {
+            continue;
+        };
+        let geometry =
+            mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
+        let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
+            mesh::read_blob(&spec, name).ok()
+        })
+        .expect("Sebenco Climb builds");
+        for (slot, material) in rcs.materials.iter().enumerate() {
+            if !material
+                .name
+                .ends_with("/track_coloured_specular_alpha4glow.rcsmaterial")
+            {
+                continue;
+            }
+            let Some(texture) = model.textures[slot].as_ref() else {
+                continue;
+            };
+            assert!(
+                !texture.label.to_ascii_lowercase().contains("_n."),
+                "{track} slot {slot} binds the normal map {}",
+                texture.label
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "Sebenco Climb should carry the solar wall slots");
+}
