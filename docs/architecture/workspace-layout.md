@@ -581,12 +581,16 @@ the slowest twenty.
 
 ### Reopened archives, serial sweeps and an affected gate (2026-10-07, later)
 
-With four members gating beside each other the full `test-data` (7,180 tests)
-measured **465 s** in the lead's run, over the 450 s suite ceiling, with the
-nextest durations summing to **10,521 s**. Over 24 hardware threads that sum
-is 438 s, against the 465 s wall: under a member's load the suite was
-throughput-bound, not tail-bound, so splitting tests could not have helped it.
-The fix had to remove work. Three changes did, none to an assertion:
+With four members gating beside each other, the lead's full `test-data` run
+(7,180 tests) measured **465 s**, over the 450 s suite ceiling. Its nextest
+durations summed to **10,521 s**, which over 24 hardware threads is 438 s and
+looks like a saturated machine. **It is not evidence of one.** A duration is
+wall time under contention: two tests measured 8.6 s and 6.3 s alone and 26 s
+and 29 s in that run. The CPU that run used was not recorded. The run after
+the changes below used 85 min of user CPU over 328 s, about 0.7 of the machine.
+Both kinds of fix paid off. Removing work (the HD reopen) shrank the sum, and
+shortening the tail (the parallel sweeps) took the 178 s `ai_roll` tests out of
+every `oag-game` selection. Three changes, none to an assertion:
 
 - **The HD render ground truths reopened the disc per texture.** Their texture
   closure was `mesh::read_blob(spec, name)`, which opens the image and parses
@@ -616,13 +620,17 @@ The fix had to remove work. Three changes did, none to an assertion:
 | lead's full `test-data`, before | 7,180 | 465 s | 221 s (`ram`) | 10,521 s | members gating |
 | full `test-data`, after | 7,271 | 326 s | 133 s (`ai_fork_split`) | 7,167 s | 20-38 |
 | `test-data-affected`, `oag-mesh` change, before the `ai_roll`/`ram` change | 1,187 | 271 s | 178 s (`ai_roll`) | 5,365 s | 40-70 |
-| `gate-affected`, same change (clippy + build + 1,717 tests) | 1,717 | 3 s run, 109 s total | | | 11-24 |
+| `test-data-affected`, `oag-mesh` change, after it | 1,187 | 213 s | 125 s (`ai_fork_split`) | | 25-36 |
+| `gate-affected`, same change (clippy + build + 1,717 tests) | 1,717 | 3 s run, 57-109 s total | | | 11-36 |
+| member gate for that change, before: full `just` + full `test-data` | 12,783 | about 65 s + 465 s | | | |
+| member gate for that change, after: both affected recipes | 2,904 | 57 s + 214 s | | | 25-36 |
 | docs-only change, either recipe | 0 | 0 s | | | |
 
-The full `just test-data` after the change spent 85 min of user and 7.6 min of
-system CPU in 328 s of wall, about 0.7 of 24 threads. Every number here is
-under load and is an upper bound; the isolated figures above are the ones to
-compare.
+Every number here is under load and is an upper bound; the isolated figures
+above are the ones to compare. `.config/nextest.toml` sets no thread count,
+retries or slow-timeout, so all three are nextest's defaults. A release-profile
+test build was not tried, because every crate on these tests' hot path has
+been at `opt-level = 2` in the dev profile since 2026-10-01.
 
 **Why the affected gate helps a render lane less than its test count says.**
 Selection is per package, and every `oag-game` test binary links all of
