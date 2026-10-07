@@ -255,10 +255,11 @@ stick zone steered it, a PAUSE tap froze the timer and a second resumed it. The
 real feel (thumb sizes, how far a thumb slides, whether the buttons cover the HUD
 on a 6.2 in phone) needs the S24.
 
-Two bugs found on the way, both fixed: a tap that lifts before the next tick lost
-its position (`pointer::Window` kept `at` empty, so the click hit nothing; the
-menus took a tap about one time in two on Waydroid's slow frames), and any
-joystick `MotionEvent` arrives as a `Touch` (below).
+The overlay reads raw per-finger touches in `Session::touch`, not the menus' tap
+model (`pointer::Window` reports a tap on lift and a drag past 12 px with no click).
+One bug found on the way: any joystick `MotionEvent` arrives as a `Touch` (below).
+(A tap that lifted before the next tick also lost its position on Waydroid; main's
+tap-on-lift pointer model replaced my fix for that.)
 
 ### Bluetooth and USB gamepads
 

@@ -60,6 +60,15 @@ pub struct Pointer {
     /// Wheel detents this tick, positive toward the player - the direction a
     /// list moves *down* by, matching every desktop's own convention.
     pub scroll: i32,
+    /// How far a finger has dragged this tick, in the screen's own grid:
+    /// positive `y` is the finger moving *down* the screen, which a list
+    /// follows by revealing the rows above.
+    ///
+    /// **Chosen, not measured**: a touch only drags once it has travelled
+    /// past a threshold, and from then on it is a drag for good - it
+    /// reports no `at`, no hover and no click, so a scroll never selects.
+    /// See `oag_game::pointer::Window`.
+    pub drag: (f32, f32),
 }
 
 impl Pointer {
@@ -70,7 +79,7 @@ impl Pointer {
     /// out a page to find out it was not pointed at is work for nothing.
     #[must_use]
     pub fn is_idle(&self) -> bool {
-        !self.moved && !self.clicked && !self.back && self.scroll == 0
+        !self.moved && !self.clicked && !self.back && self.scroll == 0 && self.drag == (0.0, 0.0)
     }
 
     /// The position, if the pointer is over the screen at all.
@@ -241,6 +250,10 @@ mod tests {
             },
             Pointer {
                 scroll: -1,
+                ..Pointer::default()
+            },
+            Pointer {
+                drag: (0.0, 3.0),
                 ..Pointer::default()
             },
         ] {
