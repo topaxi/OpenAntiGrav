@@ -13,10 +13,23 @@
 //!   centre, and sliding it [`STICK_RADIUS`] of the window's height off
 //!   centre is full lock. Horizontal is steering, vertical is pitch.
 //! - **Right, buttons.** Accelerate ([`Button::Cross`]) is the big one under
-//!   the right thumb, with fire ([`Button::Square`]) beside it and absorb
-//!   ([`Button::Circle`]) above it.
-//! - **Top, the airbrakes** at the two corners ([`Button::L`], [`Button::R`]),
-//!   and pause ([`Button::Start`]) and camera ([`Button::Select`]) between.
+//!   the right thumb, with fire ([`Button::Square`]) at its left in the
+//!   thumb's arc.
+//! - **Dynamic GO.** Where the finger is *within* GO, tracked while held, adds
+//!   an airbrake: the bottom-left corner is [`Button::L`], the bottom-right is
+//!   [`Button::R`], the centre column and everything above is thrust alone
+//!   (see [`GoZone`]). Switched by [`Touches::set_go_zones`].
+//! - **Upper corners, below the HUD's readouts:** the airbrakes
+//!   ([`Button::L`], [`Button::R`]) and absorb ([`Button::Circle`]); pause
+//!   ([`Button::Start`]) and camera ([`Button::Select`]) beside BRAKE L,
+//!   because Wipeout HD draws its shield meter at the top centre.
+//!
+//! Sizes are fractions of the window's height, so a button is the same
+//! physical size on every phone: GO is 0.36 of the height (about 24 mm on a
+//! 6.2 in phone), the small buttons 0.16 to 0.22 (11 to 15 mm), none under
+//! the 9 to 12 mm a thumb needs. Everything is kept inside [`SAFE_X`] and
+//! [`SAFE_Y`] of the edges for rounded corners and a camera cutout, and
+//! clear of the HUD's four corner readouts.
 //!
 //! Every finger is tracked, so steering and accelerating at once is two
 //! fingers and nothing else. A button finger re-reads what is under it as it
@@ -45,6 +58,21 @@ pub const TOP_STRIP: f32 = 0.30;
 /// the window's height. A thumb is bigger than the rectangle under it.
 pub const SLOP: f32 = 0.025;
 
+/// How far in from the left and right edges the controls stay, as a fraction
+/// of the window's height: a rounded corner or a landscape camera cutout.
+/// **Chosen, not measured** - Android's real cutout is not queried.
+pub const SAFE_X: f32 = 0.05;
+
+/// How far in from the top and bottom edges the controls stay, as a fraction
+/// of the height.
+pub const SAFE_Y: f32 = 0.03;
+
+/// The share of GO's width, from each side, that is a brake corner.
+pub const GO_ZONE_SIDE: f32 = 0.34;
+
+/// The share of GO's height, from the bottom, that carries the brake corners.
+pub const GO_ZONE_BOTTOM: f32 = 0.34;
+
 /// A rectangle in window pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
@@ -66,10 +94,63 @@ impl Rect {
             && at.1 <= self.y + self.h + slop
     }
 
+    /// Where `at` falls in the rectangle, `(0, 0)` top left to `(1, 1)`
+    /// bottom right, clamped: a finger in the slop reads as the nearest edge.
+    #[must_use]
+    pub fn fraction(self, at: (f32, f32)) -> (f32, f32) {
+        (
+            ((at.0 - self.x) / self.w.max(1.0)).clamp(0.0, 1.0),
+            ((at.1 - self.y) / self.h.max(1.0)).clamp(0.0, 1.0),
+        )
+    }
+
     /// The rectangle's centre.
     #[must_use]
     pub fn centre(self) -> (f32, f32) {
         (self.x + self.w / 2.0, self.y + self.h / 2.0)
+    }
+}
+
+/// Which airbrake corner of GO a finger is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GoZone {
+    /// The bottom-left corner: [`Button::L`].
+    Left,
+    /// The bottom-right corner: [`Button::R`].
+    Right,
+}
+
+impl GoZone {
+    /// The zone at `fraction` of GO's rectangle (see [`Rect::fraction`]):
+    /// the bottom [`GO_ZONE_BOTTOM`] split left and right, with a dead
+    /// centre column. **Chosen, not measured.**
+    #[must_use]
+    pub fn at(fraction: (f32, f32)) -> Option<Self> {
+        if fraction.1 < 1.0 - GO_ZONE_BOTTOM {
+            None
+        } else if fraction.0 <= GO_ZONE_SIDE {
+            Some(Self::Left)
+        } else if fraction.0 >= 1.0 - GO_ZONE_SIDE {
+            Some(Self::Right)
+        } else {
+            None
+        }
+    }
+
+    /// The abstract button this zone adds.
+    #[must_use]
+    pub fn button(self) -> Button {
+        match self {
+            Self::Left => Button::L,
+            Self::Right => Button::R,
+        }
+    }
+
+    fn bit(self) -> u8 {
+        match self {
+            Self::Left => 1,
+            Self::Right => 2,
+        }
     }
 }
 
@@ -147,50 +228,56 @@ impl Control {
 
 /// Where every control sits in a window of `size` pixels. Everything scales
 /// off the height, so the buttons keep their size on a wider phone.
+///
+/// **Chosen, not measured.** Placed for Pulse's HUD at a phone's 19.5:9: the
+/// four corners hold lap, record, best/current time and speed/shield, so the
+/// buttons keep to the free mid-height of each side, and
+/// GO's bottom ends above the speed bar.
 #[must_use]
 pub fn layout(size: (f32, f32)) -> [(Control, Rect); 7] {
     let (w, h) = size;
+    let right = w / h - SAFE_X;
     let r = |x: f32, y: f32, rw: f32, rh: f32| Rect {
-        x,
-        y,
+        x: x * h,
+        y: y * h,
         w: rw * h,
         h: rh * h,
     };
+    let go = (0.36, 0.36);
+    let go_y = 0.40;
+    let fire = 0.22;
+    let brake = (0.30, 0.16);
+    let brake_y = 0.18;
+    let absorb = 0.20;
     [
+        (Control::Accelerate, r(right - go.0, go_y, go.0, go.1)),
         (
-            Control::Accelerate,
-            r(w / h - 0.42, 0.62, 0.36, 0.34).anchored(h),
+            Control::Fire,
+            r(right - go.0 - 0.03 - fire, go_y + go.1 - fire, fire, fire),
         ),
-        (Control::Fire, r(w / h - 0.74, 0.70, 0.26, 0.26).anchored(h)),
         (
             Control::Absorb,
-            r(w / h - 0.34, 0.30, 0.26, 0.26).anchored(h),
+            r(
+                right - brake.0 - 0.03 - absorb,
+                brake_y - 0.02,
+                absorb,
+                absorb,
+            ),
         ),
-        (Control::AirbrakeLeft, r(0.04, 0.04, 0.36, 0.20).anchored(h)),
+        (Control::AirbrakeLeft, r(SAFE_X, brake_y, brake.0, brake.1)),
         (
             Control::AirbrakeRight,
-            r(w / h - 0.40, 0.04, 0.36, 0.20).anchored(h),
+            r(right - brake.0, brake_y, brake.0, brake.1),
         ),
         (
             Control::Pause,
-            r(w / h / 2.0 - 0.21, 0.03, 0.19, 0.12).anchored(h),
+            r(SAFE_X + brake.0 + 0.03, brake_y + 0.025, 0.17, 0.11),
         ),
         (
             Control::Camera,
-            r(w / h / 2.0 + 0.02, 0.03, 0.19, 0.12).anchored(h),
+            r(SAFE_X + brake.0 + 0.23, brake_y + 0.025, 0.17, 0.11),
         ),
     ]
-}
-
-impl Rect {
-    /// `x` and `y` were given in units of the window's height; scale them.
-    fn anchored(self, h: f32) -> Self {
-        Self {
-            x: self.x * h,
-            y: self.y * h,
-            ..self
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -219,9 +306,25 @@ pub struct Touches {
     tapped: u8,
     /// Controls under a finger at the last [`Self::update`], one bit each.
     down: u8,
+    /// Whether GO's brake corners are live.
+    go_zones: bool,
+    /// GO zones under a finger, one bit each ([`GoZone`]).
+    zones: u8,
 }
 
 impl Touches {
+    /// Switches GO's brake corners on or off (`false` makes GO thrust only).
+    pub fn set_go_zones(&mut self, on: bool, size: (f32, f32)) {
+        self.go_zones = on;
+        self.refresh(size);
+    }
+
+    /// Whether `zone` has a finger in it now.
+    #[must_use]
+    pub fn zone_down(&self, zone: GoZone) -> bool {
+        self.zones & zone.bit() != 0
+    }
+
     /// A finger landed at `at` (window pixels) in a window of `size`.
     pub fn down(&mut self, id: u64, at: (f32, f32), size: (f32, f32)) {
         self.fingers.retain(|f| f.id != id);
@@ -231,10 +334,10 @@ impl Touches {
             .any(|f| matches!(f.role, Role::Stick { .. }));
         let in_stick_zone =
             at.0 < size.0 * STICK_ZONE_WIDTH && at.1 > size.1 * TOP_STRIP && !stick_taken;
-        let role = if in_stick_zone {
-            Role::Stick { origin: at }
-        } else if control_at(at, size).is_some() {
+        let role = if control_at(at, size).is_some() {
             Role::Buttons
+        } else if in_stick_zone {
+            Role::Stick { origin: at }
         } else {
             Role::Idle
         };
@@ -271,6 +374,7 @@ impl Touches {
         self.fingers.clear();
         self.tapped = 0;
         self.down = 0;
+        self.zones = 0;
     }
 
     /// Whether any finger is on the overlay.
@@ -281,11 +385,19 @@ impl Touches {
 
     fn refresh(&mut self, size: (f32, f32)) {
         self.down = 0;
+        self.zones = 0;
+        let go = layout(size)[Control::Accelerate.index()].1;
         for finger in &self.fingers {
             if finger.role == Role::Buttons
                 && let Some(control) = control_at(finger.at, size)
             {
                 self.down |= 1 << control.index();
+                if control == Control::Accelerate
+                    && self.go_zones
+                    && let Some(zone) = GoZone::at(go.fraction(finger.at))
+                {
+                    self.zones |= zone.bit();
+                }
             }
         }
     }
@@ -325,6 +437,11 @@ impl Touches {
         for control in Control::ALL {
             if self.is_down(control) && !control.is_momentary() {
                 reading.buttons |= control.button().bit();
+            }
+        }
+        for zone in [GoZone::Left, GoZone::Right] {
+            if self.zone_down(zone) {
+                reading.buttons |= zone.button().bit();
             }
         }
         if let Some((origin, at)) = self.stick() {

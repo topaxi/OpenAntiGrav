@@ -555,6 +555,15 @@ impl Session {
                     return;
                 }
             },
+            "controls.touch_go_zones" => match text.as_str() {
+                // Read by the next tick's `feed_touch`.
+                "on" => self.settings.controls.touch_go_zones = true,
+                "off" => self.settings.controls.touch_go_zones = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             "controls.trigger_sensitivity" => match text.parse::<TriggerSensitivity>() {
                 Ok(sensitivity) => {
                     self.settings.controls.trigger_sensitivity = sensitivity;
