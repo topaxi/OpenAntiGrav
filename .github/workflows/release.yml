@@ -118,6 +118,9 @@ jobs:
       # Same pinned toolchain as ci.yml; rust-toolchain.toml names it too.
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: cargo build --release -p oag-game
       - name: Stage the zip
         shell: bash
@@ -147,7 +150,7 @@ jobs:
   # file names are `OpenAntiGrav-<version>-<platform>.<ext>` throughout.
   release:
     name: draft GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [version, linux, windows]
     runs-on: ubuntu-latest
     permissions:

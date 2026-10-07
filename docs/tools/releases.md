@@ -13,29 +13,41 @@ rerun of the same commands (see "What was verified" below).
 | `check` | `fmt`, `clippy -D warnings`, `nextest --workspace`, the Python ratchets | No `data/` on the runner: every disc-backed test is `#[ignore]`d or skips. Installs `libpipewire-0.3-dev`, `libasound2-dev`, `libudev-dev`, `libclang-dev`, `pkg-config` - the list `packaging/appimage/Containerfile` already uses. |
 | `docs` | `scripts/check-doc-links.py` | |
 | `msrv` | `cargo +1.97.1 build --workspace` | The floor is **1.97.1**: `wesl` 0.6 and its siblings (the shader linker) declare it. `Cargo.toml`'s `rust-version` says the same. Lowering it means dropping or downgrading `wesl`; raising it is free, but then `rust-version` and this job move together. |
-| `determinism` | the four `*_determinism_report` examples and `determinism` tests, release and debug, on Linux, Windows and macOS | Never edit a reference constant to make it pass. |
+| `determinism` | the three `*_determinism_report` examples and the four `determinism` test suites, release and debug, on Linux, Windows and macOS | Never edit a reference constant to make it pass. |
 | `leakage` | `scripts/check-leakage.py` | |
 
 Pinned toolchain: `rust-toolchain.toml` (1.99.0). `ci.yml` installs the same
 version, so rustup never downloads a second toolchain mid-job.
 
-### Why every run on `main` was red (2026-08-28 to 2026-10-06)
+### Why every run on `main` was red (at least since 2026-08-28)
 
-Four independent causes, none of them a real regression:
+Every run the API returned (the oldest 399, 2026-08-28 to 2026-10-06) failed, for
+independent causes, none a real regression in the simulation:
 
 1. `check`: `alsa-sys` could not find `alsa.pc`; the runner image no longer ships
    `libasound2-dev` and `oag-audio`'s `cpal` needs it besides PipeWire.
 2. `msrv`: `rust-version = "1.88"` was a promise nothing kept after `wesl` 0.6
    (rustc 1.97.1) joined the build.
 3. `determinism` (all three OSes): the workflow ran `--example determinism_report`,
-   but commit `a53cddc18` (2026-09-11) renamed the examples per crate to
-   `core_`/`physics_`/`ai_determinism_report`. The job died at its first step on
+   but commit `a53cddc18` (2026-09-11) renamed the three examples to
+   `core_`/`physics_`/`ai_determinism_report`. The job has died at its first step on
    every run since, so **Windows and macOS have not compared a hash against the
-   committed reference for the whole of that time**. The first green run of the
-   fixed job is the real cross-platform test; a mismatch there is a finding to
-   report, not a constant to update.
-4. `check`: toolchain drift - `ci.yml` pinned 1.98.0 while `rust-toolchain.toml`
-   said 1.99.0.
+   committed reference for about 26 days** (the four `determinism` test suites
+   never ran). The first green run of the fixed job is the real cross-platform
+   test; a mismatch there is a finding to report, not a constant to update.
+4. Hidden behind the `alsa-sys` stop, found by running the `check` job's commands
+   in a clean container with no `data/`:
+   - `talons-junction-clean-lap.csv` was never tracked, so three `oag-trace` tests
+     panicked on a runner ([ADR-0046](../architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md));
+     it is tracked now.
+   - `oag-render`'s `psp_slope_lod` read a no-GPU sentinel (`usize::MAX`) as a pixel
+     count; it now skips without an adapter like the rest of the file. If the
+     runner image has lavapipe those GPU tests run there instead of skipping.
+   - Raising `rust-version` to 1.97.1 turns on clippy's `manual_isolate_lowest_one`;
+     `gxt.rs` and four examples now use `isolate_lowest_one()`.
+
+`ci.yml` also pinned 1.98.0 against `rust-toolchain.toml`'s 1.99.0; rustup's override
+meant it only cost a second download, but both say 1.99.0 now.
 
 ## release.yml
 
@@ -102,5 +114,6 @@ Local only (see the lane report for the logs): the same `cargo` and
 for the `ci.yml` steps, and a MinGW cross-build of `oag-game` for Windows. A
 cross-build proves the code compiles for Windows; it does not prove the MSVC
 link on `windows-latest`, `7z` availability there, or the GitHub-hosted steps
-(`upload-artifact`, `gh release create`), which only a real run exercises. `act`
+(`upload-artifact`, `gh release create`), which only a real run exercises. The
+container had no Vulkan driver, so GPU tests skipped there. `act`
 is not installed on the development machine.
