@@ -583,6 +583,7 @@ impl Race {
                 absorb_started: 0,
                 hit_sparks: super::hit_sparks::HitSparks::new(hit_spark_anchors)
                     .with_weapon_anchors(weapon_spark_anchors),
+                damage_fx: Default::default(),
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),

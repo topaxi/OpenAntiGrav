@@ -208,8 +208,24 @@ impl Race {
                     self.arm_weapon_hit_shake();
                 }
                 self.throw_hit_spark(slot, leach);
+                if !leach {
+                    self.throw_damage_smoke(slot);
+                } else if self.view.hit_sparks.anchors.is_empty() {
+                    self.throw_attached_leach_spark(slot);
+                }
             }
         }
+    }
+
+    /// Lands a weapon hit on `slot` without a weapon, for `--force-hit`: the
+    /// same call a real one makes, on the shield the craft has now. A
+    /// verification aid and nothing else.
+    pub fn force_weapon_hit(&mut self, slot: usize) {
+        let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
+        if let Some(hit) = hits.get_mut(slot) {
+            hit.landed = true;
+        }
+        self.throw_hit_sparks(&hits, false);
     }
 
     /// `Ship_Damage`'s weapon branch, for the local player: `Camera_ArmShake(0.6,

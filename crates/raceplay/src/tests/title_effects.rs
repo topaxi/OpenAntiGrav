@@ -13,13 +13,16 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 6] = [
+const OWN: [Trigger; 9] = [
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
     Trigger::WeaponSpark,
     Trigger::ShieldAbsorb,
     Trigger::WreckNode,
     Trigger::WreckSparks,
+    Trigger::DamageMild,
+    Trigger::DamageModerate,
+    Trigger::DamageCritical,
 ];
 
 /// The engine triggers whose effect neither 2048 nor Omega authors
@@ -74,13 +77,26 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     assert_eq!(has(Trigger::HitSpark), [true, false, false, false, false]);
     assert_eq!(
         has(Trigger::LeachHitSpark),
-        [true, false, false, false, false]
+        [true, false, true, false, false]
     );
     assert_eq!(
         has(Trigger::WeaponSpark),
         [false, false, true, false, false]
     );
     assert_eq!(has(Trigger::ShieldAbsorb), [true, true, true, false, false]);
+    // `ShipDamageFx_Update_q` is read on HD alone; 2048 and Omega are
+    // "checked, applies, not wired" (their trigger unread).
+    for damage in [
+        Trigger::DamageMild,
+        Trigger::DamageModerate,
+        Trigger::DamageCritical,
+    ] {
+        assert_eq!(
+            has(damage),
+            [false, false, true, false, false],
+            "{damage:?}"
+        );
+    }
     for wreck in [
         Trigger::WreckNode,
         Trigger::WreckSparks,
@@ -256,7 +272,7 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
             .count(),
         1
     );
-    assert_eq!(crate::RACE_EFFECTS.len(), 40);
+    assert_eq!(crate::RACE_EFFECTS.len(), 43);
 }
 
 #[test]

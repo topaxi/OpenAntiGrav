@@ -450,6 +450,7 @@ pub fn run(
                 force_shake: None,
                 intro_ticks: 0,
                 force_wreck: None,
+                force_hit: None,
                 force_leach_lock: None,
                 force_shield: Vec::new(),
                 medals: Default::default(),

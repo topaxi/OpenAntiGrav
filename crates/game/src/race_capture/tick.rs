@@ -76,6 +76,11 @@ pub(super) fn advance_one_tick(
     {
         race.force_destroy(slot);
     }
+    if let Some((at, slot)) = options.force_hit
+        && at == tick
+    {
+        race.force_weapon_hit(slot);
+    }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
         && !race.force_leach_lock(0, target as u8)

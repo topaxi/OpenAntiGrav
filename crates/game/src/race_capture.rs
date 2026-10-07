@@ -57,6 +57,9 @@ pub struct CaptureOptions {
     /// sequence at the end of that tick, as shield depletion would. See
     /// [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
+    /// `--force-hit TICK:SLOT`: a weapon hit lands on that slot at the end of
+    /// that tick. See [`Race::force_weapon_hit`].
+    pub force_hit: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
     /// that slot at the end of that tick. See [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
