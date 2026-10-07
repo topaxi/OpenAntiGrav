@@ -74,10 +74,17 @@ pub struct VpkSet {
     members: Vec<Member>,
     files: Vec<PackageFile>,
     at: Vec<(usize, usize)>,
-    /// Inflated deflate entries, least recently used first, within
-    /// [`CACHE_BUDGET`] bytes in all (one entry is always kept).
-    inflated: Vec<(usize, std::sync::Arc<Vec<u8>>)>,
 }
+
+/// Inflated deflate entries, least recently used first, keyed by archive path
+/// and the entry's local-header offset, within [`CACHE_BUDGET`] bytes in all (one
+/// entry is always kept).
+///
+/// **Process-wide, not per set**: a race opens the same `.vpk` through several
+/// readers (the archives, the sound banks, the boot movies), and a per-set cache
+/// inflated a hundred-megabyte patch archive once for each of them.
+type InflateCache = Vec<((PathBuf, u64), std::sync::Arc<Vec<u8>>)>;
+static INFLATED: std::sync::Mutex<InflateCache> = std::sync::Mutex::new(Vec::new());
 
 fn bad(path: &Path, reason: impl Into<String>) -> Error {
     Error::Package {
@@ -298,12 +305,7 @@ impl VpkSet {
                 at.push((m, e));
             }
         }
-        Ok(Self {
-            members,
-            files,
-            at,
-            inflated: Vec::new(),
-        })
+        Ok(Self { members, files, at })
     }
 }
 
@@ -389,19 +391,27 @@ impl PackageSource for VpkSet {
             if offset >= entry.size {
                 return Ok(Vec::new());
             }
-            let data = match self.inflated.iter().position(|(i, _)| *i == index) {
-                Some(at) => {
-                    let hit = self.inflated.remove(at);
-                    self.inflated.push(hit);
-                    std::sync::Arc::clone(&self.inflated.last().expect("just pushed").1)
-                }
+            let key = (self.members[m].path.clone(), entry.local);
+            let cached = {
+                let mut cache = INFLATED.lock().expect("the inflate cache lock");
+                cache.iter().position(|(k, _)| *k == key).map(|at| {
+                    let hit = cache.remove(at);
+                    cache.push(hit);
+                    std::sync::Arc::clone(&cache.last().expect("just pushed").1)
+                })
+            };
+            let data = match cached {
+                Some(data) => data,
                 None => {
+                    // Inflated outside the lock: another reader of a different
+                    // entry is not made to wait for this one.
                     let all = std::sync::Arc::new(inflate(&mut self.members[m], &entry)?);
-                    self.inflated.push((index, std::sync::Arc::clone(&all)));
-                    while self.inflated.len() > 1
-                        && self.inflated.iter().map(|(_, d)| d.len()).sum::<usize>() > CACHE_BUDGET
+                    let mut cache = INFLATED.lock().expect("the inflate cache lock");
+                    cache.push((key, std::sync::Arc::clone(&all)));
+                    while cache.len() > 1
+                        && cache.iter().map(|(_, d)| d.len()).sum::<usize>() > CACHE_BUDGET
                     {
-                        self.inflated.remove(0);
+                        cache.remove(0);
                     }
                     all
                 }

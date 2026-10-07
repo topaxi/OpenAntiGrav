@@ -26,7 +26,7 @@ The reader (`crates/disc/src/vpk.rs`):
 - **Central directory**, ZIP64 included (a 64-bit entry count, size or offset
   is read from the `0x0001` extra field in its documented order).
 - **Stored** entries are read at random offsets (a 1.6 GB `data.psarc` needs
-  that). **Deflated** entries are inflated whole and kept in a 512 MiB LRU; one
+  that). **Deflated** entries are inflated whole and kept in a process-wide 512 MiB LRU; one
   past 1 GiB is refused by name and the message says to re-pack it stored.
   Encrypted entries and any other ZIP method are refused by name.
 - **A set**: a patch and DLC ship as `.vpk` files of their own with the same
@@ -51,6 +51,8 @@ The reader (`crates/disc/src/vpk.rs`):
 | `every_archive_of_the_set_reads_byte_identical_...` | 525,861 bytes read from every mounted archive, identical to the folder source |
 | Chooser row | `Wipeout 2048`, `Vita`, `PCSF-00007` |
 | `oag-game <vpk> --race --ticks 1 --screenshot` vs the folder | PNGs byte-identical |
+| Race load, release build, load average 27-30 (a busy machine, so read the ratios): all four `.vpk` stored | 1.75 / 1.71 / 3.13 s against the folder's 1.68 / 2.74 / 3.01 s |
+| The same with the patch and DLC 2 deflated | 3.58 / 3.62 / 3.82 s against the folder's 2.67 / 3.02 / 3.00 s: about 0.7 s, the one inflate of two patch archives. A per-set cache measured 6.4-7.5 s because each reader of the same `.vpk` inflated them again |
 
 Ground truth: `crates/2048/tests/vpk_ground_truth.rs`,
 `crates/disc/tests/ground_truth.rs` (categories, named refusals),
