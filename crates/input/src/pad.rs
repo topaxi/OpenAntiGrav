@@ -62,7 +62,13 @@ pub const TRIGGER_SATURATION: f32 = 0.95;
 ///
 /// [`oag_gameplay::InputSnapshot::sanitised`] clamps an axis into range; it
 /// cannot tell drift from intent, which is what this is for.
-pub const STICK_DEADZONE: f32 = 0.15;
+///
+/// `0.1`, per axis, then linear to full travel: the law HD, 2048 and Omega
+/// share in `PlayerInput_Update` (static reading, confidence 80; see
+/// `docs/ghidra/functions/ps4-omega-eu/player-input.md`). It was `0.15` until
+/// 2026-10-07; Pulse PSP's own 0.2 deadzone and S-curve suit the PSP nub and
+/// are not used here.
+pub const STICK_DEADZONE: f32 = 0.1;
 
 /// The narrowest and widest response curve [`TriggerConfig`] will apply.
 ///
