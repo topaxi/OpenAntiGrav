@@ -131,3 +131,5 @@
 0x8121b688	function	TrackStartup_Read	85	track-startup-sound-bank.md
 0x8101472a	function	FileSystemFios_Construct	80	archive-mount.md
 0x81014308	function	FileSystemFios_CreateOnce	70	archive-mount.md
+# 2026-10-07 stick-curve lane (player-input.md)
+0x811b3072	function	PlayerInput_Update	75	player-input.md

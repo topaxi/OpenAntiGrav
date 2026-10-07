@@ -545,3 +545,5 @@
 0x000e8de0	function	Ship_ApplyPendingDamage	65	particle-triggers.md
 0x005ecc28	function	Sky_DrawCube	65	renderer.md
 0x005ec3e0	function	Sky_SetCubeFaces	65	renderer.md
+# 2026-10-07 stick-curve lane (player-input.md)
+0x000cd548	function	PlayerInput_Update	80	player-input.md
