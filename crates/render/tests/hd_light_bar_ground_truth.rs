@@ -69,17 +69,6 @@ fn vineta_k_start_line_binds_its_light_bars_in_the_authored_azure() {
 
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn a_circuit_without_the_family_binds_nothing_new() {
-    let Some((_, report)) = build("/data/environments/10_sebenco_climb/track.vex") else {
-        return;
-    };
-    // Sebenco Climb authors no `diffuse_normal_specular_emmissive` slot with
-    // a program this shape; whatever binds there is the pads' own.
-    println!("sebenco pad_ne_bound {}", report.pad_ne_bound);
-}
-
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn vineta_k_sea_sheet_is_lit_vertex_colour_not_a_white_picture() {
     let Some((model, report)) = build("/data/environments/01_vineta_k/track.vex") else {
         return;

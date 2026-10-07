@@ -2802,7 +2802,7 @@ in RAM (`ps3-fp-live.py`) is the one this page decoded from the disc:
 `out = fog(TC1 * (0.4 + sun * sat(N.L)) + TC1 * R)`, `sun = (8, 4.52, 2.16)`.
 
 - **The vertex colour multiplies the light.** The generic reading adds it to the light and multiplies a white picture, so the
-  sheet drew pale and blown out (it is where the 176,217,219 came from, not the panes). Drawn now as the program states it:
+  sheet drew pale and blown out (a white sheet over the sky; whether it is what the earlier lane's `(176,217,219)` band measured was not diffed). Drawn now as the program states it:
   `slots::ICE` with `WATER_FLAG` (glow-entry rate 2.0) selects, in `shade.wesl`, picture = vertex colour and
   light = ambient + sun diffuse, with no vertex-light or prelit term. Pinned by `hd_light_bar_ground_truth`.
 - **`paraboloidReflectionTex` is bound, at unit 1, and is a runtime render target.** `0xc4065380` in VRAM, 512x256 linear
@@ -2818,39 +2818,46 @@ in RAM (`ps3-fp-live.py`) is the one this page decoded from the disc:
   the sky, its lower half is not any disc data this project has located. **Not drawn, on the repo's own rule**: the
   lower half is the part this view needs, and nothing authored supplies it. `TC1 * R` is therefore missing from the sheet
   (about `(0, 0.18, 0.20)` added to a lit term of `(0, 0.2, 0.2)` before the sun's share).
-- **The panes' teal is the glass over a bright sky, not the sea sheet.** `mt_tunnelrefraction`'s `W = (0.2, 0.6, 0.6)` times
-  a near-white grab is `(0.2, 0.6, 0.6)`, the reference's `(33,147,147)`; the white swirls are clouds. The sheet itself covers
+- **The panes' teal is probably the glass over a bright background, not the sea sheet (confidence 60, inferred).**
+  `mt_tunnelrefraction`'s `W = (0.2, 0.6, 0.6)` times a near-white grab is `(0.2, 0.6, 0.6)`, the reference's `(33,147,147)`;
+  the white swirls read as clouds. `W` times the probe's own upper-half sky `(0.43, 0.59, 0.57)` would give about `(22, 90, 87)`,
+  so the grab is brighter than that sky. The sheet itself covers
   only the upper-left of the frame there (draw 66's projected triangles, `overlay66.png`). Ours grabs a light-blue sky
   (`(52,116,153)`): that is the sky-tint item in `hd-sky-luma`'s thread, not the water.
 
-### 3. The ceiling meshes are drawn by the original, and fogged away (confidence 80 that they are drawn, 90 for the fog values)
+### 3. The ceiling meshes: the original fogs the scenery beyond the glass differently, and does not draw some of the meshes ours shows
 
-The textures bound in the original's frame were named by comparing five 64-byte samples of every bound texture against
-all 6,347 `.gtf` of the disc (width, height, format, mips and every sample must agree). `j_arch_support`, `and_metal_struts`,
-`j_arch_lights`, `and_rock4`, `and_sand_sand`, `and_tower_3pyt2`, `mar_glowstrips` **are in the original's frame**, as draws 39-74.
-**Those draws, and only those and a few more, use a different fog pair**: the fragment programs' patched fog constants are
-`{0, 0.031373, 0.031373, 0.0045}` there against `{0.039216, 0.086275, 0.070588, 0.00025}` on the track draws
-(`ps3-fp-live.py`), and **both pairs are the circuit's own `.envsettings`**: `Fog.Fog Color` / `Fog Density` against
-`Fog.Alternate Fog Color` (`0 0.031373 0.031373`) / `Alternate Fog Density` (`0.0045`). `exp(-(0.0045 d)^2)` at 100 units is
-0.8, at 300 it is 0.16 and at 600 0.0006: the struts and the tower beyond the glass go to a dark teal that the glass then
-tints, which is why the original shows only teal there. This repo reads the primary pair for every draw
-(`environment.rs`: "what selects [the alternates] is unread"), so the same meshes draw in pale thin fog and show.
+Two separate measured facts, not one cause.
 
-- **The submission is one contiguous group** (pose A: draws 39-74 with `tunnlelightstrip` at 41, 42 and 70 as primary-fog
-  exceptions inside it; pose B: three small runs at 64-66 and 76-78). The group is **not** spatial (members at 23 and 930 units
-  from the camera, `y` -158 to +9) and **not** material (`ds_concrete_band_cs` is in it, `ds_wall_cs` is not).
-  `render_flags & 0x30` is on 70 of the 163 chunks of the group's textures and on 3 of 48 of the other side's; no rule is
-  closed. **Open**, with the exact capture to test a rule against: which chunk set uses the alternate pair.
-- **Not the PVS.** The engine's frame mask is one cell's bitmap (`visibility.md`); ours unions the cells within 24 units of the
-  craft and the camera. Using exactly the nearest cell of either (`OAG_PVS_EXACT`, a temporary switch, removed) moves one draw of
-  463, and the cell's own bitmap holds the girder and strut chunks (1315, 1320). The padding is not what shows them.
-- The original's pass `FUN_003fada8` only clears bits, by `Render_ClassifyAgainstPlanes` on the chunk bounds (a frustum test).
+**(a) The original uses the alternate fog pair for one group of draws (confidence 90 for the values).** The fragment
+programs' patched fog constants are `{0, 0.031373, 0.031373, 0.0045}` on draws 39-74 of the pose-A frame (scenery beyond the
+tunnel glass: `j_arch_support`, `and_metal_struts`, `j_arch_lights`, `and_rock4`, `and_sand_sand`, `and_tower_3pyt2`,
+`mar_glowstrips`, the sea sheet) against `{0.039216, 0.086275, 0.070588, 0.00025}` on the track draws (`ps3-fp-live.py`).
+**Both are the circuit's own `.envsettings`**: `Fog.Alternate Fog Color` / `Alternate Fog Density` against `Fog Color` /
+`Fog Density`. This repo reads the primary pair for every draw (`environment.rs`: "what selects [the alternates] is unread").
+`exp(-(0.0045 d)^2)` is 0.9 at 70 units, 0.56 at 170, 0.16 at 300 and 0.0006 at 600: **it darkens the near struts and takes the
+far scenery to dark teal; it does not remove what is within 170 units.** The group is **not** spatial (members 23 to 930
+units from the camera, `y` -158 to +9), **not** a material family (`ds_concrete_band_cs` is in it, `ds_wall_cs` is not) and
+`render_flags & 0x30` is on 70 of the 163 chunks of the group's textures and 3 of 48 of the other side's: **what selects the
+group is open.** The group's submission is contiguous with three `tunnlelightstrip` exceptions (draws 41, 42, 70).
+
+**(b) Meshes ours draws near the tunnel are absent from the original's frame (confidence 80).** Textures were named by five
+64-byte samples against the disc's 6,347 `.gtf` (all samples the `.gtf` has bytes for must agree, with width, height, format
+and mips). Ours, PVS on, at the same pose, draws materials whose textures the original's frame does not bind:
+`and_girder3` (chunk 1320, 120 units ahead), `and_metalstruts_pt2` (1305), `and_dome_vent` (1286), `and_darkstrip` (1311),
+`j_strip_lights` (1315); the copper struts and boxes at the top left of ours (`pairA.png`) are these. **`and_metalstruts_pt2`
+is not `and_metal_struts`**: the latter is in the original's frame, under the alternate fog. All five chunks are allowed by the
+nearest cell's bitmap and by both neighbours (`pvsfit.py`), so **the original's cull of them is unexplained**: not the PVS
+bitmap, not our 24-unit padding (using exactly the nearest cell of the craft or of the camera moved 1 of 463 draws;
+`OAG_PVS_EXACT`, a temporary switch, removed), and not a frustum test (`FUN_003fada8` only clears bits by
+`Render_ClassifyAgainstPlanes` on chunk bounds). Chunks 1286 and 1305 have bounds centred at the origin, which says
+node-placed geometry; whether their `.vex` nodes sit under an LOD, switch or animation parent is the next thing to read.
 
 ### 4. Lineage
 
-Omega ships `Water_noref` and `WATER_Test_2` (GNM shaders; the microcode classifiers do not run). **The light-bar family:** no
-`emmissive` material name is in the lineage inventory of Omega (`hd-water/lineage_names.txt`); checked, not found, 2048 differs
-(its own material names). **The sea:** checked, applies, not wired; Omega's probe would also be a runtime target
+Omega ships `Water_noref` and `WATER_Test_2` (GNM shaders; the microcode classifiers do not run). **The light-bar family:** `diffuse_normal_specular_emmissive` is in Omega's `data00`, `data01` and `data02` archives
+(`rg -a` over the extraction); checked, applies, not wired (PS4 GNM programs, so the microcode check `pad_ne` makes does not
+run); 2048 differs (its own material names). **The sea:** checked, applies, not wired; Omega's probe would also be a runtime target
 (2048's per-environment `skyParaboloid.gxt` is the authored half of the same idea). **The alternate fog:** `Alternate Fog` keys
 exist in every HD-lineage `.envsettings`; Omega not checkable (no PS4 emulator).
 

@@ -41,9 +41,11 @@ pub(super) const NE_SAMPLER: u32 = 0xa2d5_55b9;
 /// it by value beside whatever [`super::emissive::emissive`] put there.
 ///
 /// `only` limits the binding to the material slots it marks, `None` for all:
-/// the scene pass names just the pad materials its unreferenced chunks use,
-/// because `diffuse_normal_specular_emmissive` (rails, start line) samples the
-/// same `_ne` hash through a program this module does not read.
+/// the scene pass names the pad materials its unreferenced chunks use and the
+/// `diffuse_normal_specular_emmissive` family (rails, start line), whose lit
+/// program reads `_ne` the same way (`pads::is_light_bar_material`); every
+/// other material that samples the same hash is refused by the program match
+/// below.
 pub(super) fn pad_ne(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],

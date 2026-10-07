@@ -150,7 +150,8 @@ pub(super) fn world_pass_pad_chunks(model: &rcsmodel::Model, named: &[u32]) -> (
 }
 
 /// Binds the `_ne` mask to the pad materials [`super::build_scene`]'s
-/// unreferenced-chunk pass is about to draw: the speed pads of the four
+/// unreferenced-chunk pass is about to draw, and to every chunk of the
+/// emissive family ([`is_light_bar_material`]): the speed pads of the four
 /// original circuits, routed by material because their `Speedup Pad` nodes
 /// name a hash no chunk carries (18, 16, 17 and 15 nodes against as many
 /// chunks on a pad material). A chunk an addressed pad node owns is in
