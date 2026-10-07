@@ -80,6 +80,10 @@ because nothing here needs one:
 | Vita PKG keys `pkg_vita_2`, `pkg_vita_3`, `pkg_vita_4`, and the PSP/PS3 package keys | `pkg2zip`, `pkg2zip.c`, public domain (Unlicense text in its `LICENSE`); Vita3K and `psvpfstools` carry the same family |
 | PS4 fake-package keys: the entry-key-3 and fake-package RSA-2048 private exponents and moduli (4 x 256 bytes), **shipped** in `crates/disc/src/ps4_pkg/keys.rs` | `LibOrbisPkg`, `LibOrbisPkg/Util/Keys.cs` (`RSAKeyset.FakeKeyset`, `RSAKeyset.PkgDerivedKey3Keyset`), checked against a local clone on 2026-10-07. **Licence: GNU LGPL-3.0** (its README and `LICENSE.txt`), *not* MIT as this table said until now. The values are numeric constants of a scheme any fake package opens with, transcribed by script; no `LibOrbisPkg` code is copied or translated, the reader being written from the layout in [ps4-package.md](../formats/ps4-package.md) |
 
+The PS4 row was re-confirmed by the maintainer on 2026-10-07 **after** being told the
+precedent's licence is LGPL-3.0, not MIT: the criterion was that other public
+projects ship these constants, which holds independently of their licence.
+
 A Vita PFS file key is **not** in that second table: it is derived by the
 console, see [Vita packages](../formats/vita-package.md).
 
