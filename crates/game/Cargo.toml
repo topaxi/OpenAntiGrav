@@ -107,7 +107,16 @@ gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
 
+# Android: NativeActivity (no Java in the APK), winit's backend over
+# `android-activity`. See docs/tools/android.md.
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { workspace = true, features = ["android-native-activity"] }
+
 [features]
+# Only the Android build turns this on (`just apk`): it is what makes the
+# `oag_android` example below exist, so a desktop `--all-targets` neither builds
+# nor links a second copy of the binary.
+android = []
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
 # See `oag-render`'s feature of the same name. Off by default.
 perf-probe = ["oag-render/perf-probe", "oag-raceplay/perf-probe"]
@@ -126,3 +135,15 @@ oag-testdata.workspace = true
 oag-fx.workspace = true
 oag-pob.workspace = true
 oag-weapons.workspace = true
+
+# The Android entry point: `src/main.rs` again, as the cdylib the NativeActivity
+# loads. An example because the windowed `App` lives in the binary's own
+# modules and nothing may depend on `oag-game`; `bin` cannot be a cdylib and
+# `cargo rustc` refuses to mix the two crate types. Cargo's "present in
+# multiple build targets" warning on this file is the price; see
+# docs/tools/android.md.
+[[example]]
+name = "oag_android"
+path = "src/main.rs"
+crate-type = ["cdylib"]
+required-features = ["android"]

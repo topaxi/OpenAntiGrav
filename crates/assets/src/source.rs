@@ -270,7 +270,28 @@ impl Archives {
             Some(disc) => Container::open_on(disc, spec),
             None => Container::open(spec),
         };
-        let data = mount(&layout.data)?;
+        let data = match mount(&layout.data) {
+            Err(error) => {
+                return Err(match &disc {
+                    Some(disc) if layout.platform == Platform::Ps3 => {
+                        let encrypted = disc
+                            .lock()
+                            .expect(POISONED)
+                            .ps3_declares_encrypted_regions()
+                            .unwrap_or(false);
+                        if encrypted {
+                            Error::EncryptedDisc {
+                                looked_in: source.to_string(),
+                            }
+                        } else {
+                            error
+                        }
+                    }
+                    _ => error,
+                });
+            }
+            Ok(data) => data,
+        };
         let fe = layout.fe.as_deref().map(mount).transpose()?;
         let extra = layout
             .extra

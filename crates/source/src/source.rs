@@ -31,10 +31,10 @@
 //! Wipeout 2048's own extract is a directory rather than a disc image, so it
 //! is not one of the four `IMAGE_NAMES` steps 4-6 above scan for; it has its
 //! own parallel search, [`package_search_path`], over the same three
-//! locations with `extracted/vita` standing in for `images`. Only
-//! [`candidates`] reaches it - `resolve`/`explicit` never open a package,
-//! because nothing yet plays 2048 past its placeholder menu (see
-//! `crate::main::session::placeholder`).
+//! locations with `extracted/vita` standing in for `images`. [`candidates`]
+//! lists them, and [`resolve`] falls back to the first one when no image is
+//! found, so a no-argument boot, `--dry-run` and `--screenshot` open a lone
+//! extract the chooser would have shown. `$OAG_IMAGE` accepts one too.
 //!
 //! Wipeout: Omega Collection's own extract is a directory too, but shaped
 //! differently from 2048's: one PS4 copy is a base package and a mandatory
@@ -89,12 +89,13 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// (`image_names_starts_with_pulse_psp_matching_the_hint_text`) and the
 /// not-found hint text both depend on that position, and reordering was not
 /// this pass's ask - only recognising the EU disc by name was.
-pub const IMAGE_NAMES: [&str; 6] = [
+pub const IMAGE_NAMES: [&str; 7] = [
     "pulse-psp-usa.chd",
     "pulse-psp-eu.chd",
     "pulse-ps2-eu.chd",
     "pure-psp-eu.chd",
     "pure-psp-usa.chd",
+    "hdfury-ps3-eu-dec.iso",
     "hdfury-ps3-eu.iso",
 ];
 
@@ -188,7 +189,35 @@ pub fn resolve(given: Option<&str>, from_settings: Option<&str>) -> Result<Strin
         }
     }
 
+    // The unpacked 2048 and Omega folders: the same scan `candidates` ends
+    // with, so a no-argument boot and the chooser find the same things.
+    if let Some(found) = first_package(&package_search_path(), &ps4_search_path()) {
+        return Ok(display(&found));
+    }
+
     Err(nothing_found(&searched))
+}
+
+/// The first unpacked 2048 folder under `vita_roots`, else the first Omega
+/// root among `ps4_roots`.
+fn first_package(vita_roots: &[PathBuf], ps4_roots: &[PathBuf]) -> Option<PathBuf> {
+    vita_roots
+        .iter()
+        .flat_map(|root| package_directories_in(root))
+        .chain(ps4_package_directories_in(ps4_roots))
+        .next()
+}
+
+/// An unpacked 2048 or Omega folder `path` is, or holds: a package named
+/// directly, or the parent a scan would have found it under.
+fn package_at(path: &Path) -> Option<PathBuf> {
+    if path.join("base/PSP2/data.psarc").is_file() {
+        return Some(path.to_path_buf());
+    }
+    ps4_package_directories_in(&[path.to_path_buf()])
+        .into_iter()
+        .chain(package_directories_in(path))
+        .next()
 }
 
 /// What an explicit channel names, if any of them does.
@@ -234,11 +263,12 @@ fn stated(
         if path.is_file() {
             return Ok(Some(display(&path)));
         }
-        if let Some(found) = first_image(&path) {
+        if let Some(found) = first_image(&path).or_else(|| package_at(&path)) {
             return Ok(Some(display(&found)));
         }
         return Err(anyhow!(
-            "{IMAGE_ENV} is set to {}, which is not a disc image and holds none",
+            "{IMAGE_ENV} is set to {}, which is not a disc image (.chd, .iso), an \
+             unpacked 2048 or Omega folder, or a folder holding one",
             path.display()
         ));
     }
@@ -446,16 +476,37 @@ fn ps4_package_directories_in(roots: &[PathBuf]) -> Vec<PathBuf> {
 
 /// The not-found message, which for a packaged build is the entire interface.
 fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
+    let list = |paths: &[PathBuf], what: &str| {
+        paths
+            .iter()
+            .map(|path| format!("  {}  ({what})", path.display()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let beside = if std::env::var_os("APPIMAGE").is_some() {
+        format!(" or put a {} beside the AppImage", IMAGE_NAMES[0])
+    } else {
+        format!(
+            ", or put a {} in data/images/ under the directory you run from",
+            IMAGE_NAMES[0]
+        )
+    };
     anyhow!(
         "no disc image found. OpenAntiGrav ships no game content: supply your own \
-         image, from your own copy of the game.\n\nSearched:\n{}\n\nName one \
-         directly (`oag-game path/to/pulse-psp-usa.chd`), set {IMAGE_ENV}, or put \
-         a {} beside the executable.",
-        searched
-            .iter()
-            .map(|path| format!("  {}", path.display()))
-            .collect::<Vec<_>>()
-            .join("\n"),
+         image, from your own copy of the game.\n\nSearched (relative paths are \
+         relative to {}):\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
+         HD) is found by extension. A 2048 or Omega .pkg is NOT read: unpack and \
+         decrypt it into a folder first (`docs/overview/installing.md`, \
+         \"Wipeout 2048\" and \"Omega Collection\"). An encrypted HD .iso must be \
+         decrypted with scripts/ps3iso.py first.\n\nName a source directly \
+         (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
+        std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
+        list(searched, ".chd / .iso"),
+        list(
+            &package_search_path(),
+            "unpacked 2048 folder, base/PSP2/data.psarc"
+        ),
+        list(&ps4_search_path(), "unpacked Omega folder, omega-eu-patch/"),
         IMAGE_NAMES[0],
     )
 }

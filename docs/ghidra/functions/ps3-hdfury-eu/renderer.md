@@ -1867,6 +1867,56 @@ key no circuit file authors), `+0x550/0x554` the blur sizes, `+0x558..0x570`
 the radial set. That mapping is what turns every "plausibly this key" in
 the sections above into a read.
 
+### Is HD's glare under-reproduced? Measured, and it is not (2026-10-07, `hd-bloom`)
+
+The accuracy pass (item 3) saw a soft glare around bright sources in the
+reference that ours "reads flat" against. Measured on the matched pairs
+(Talon's 00/01/03, Sol 2 00/01/02, Amphiseum 00/01), 1280x720, ours at the
+comparison profile. **No chain defect was found and nothing was changed in
+`oag_post::hd_bloom`**; the figures below are what the next person should not
+re-derive.
+
+- **The radial bloom set cannot be the missing glare.** A census of every
+  `track.envsettings` on the disc (DATA00..DATA03, 13 circuits) reads
+  `HDR and Bloom.Radial bloom Enabled` as `0` on all but `zone_1`. Talon's,
+  Sol 2 and Amphiseum are all `0`. Confidence 95 (the files, read directly).
+- **Reach, from the read constants.** The kernel is nine taps at `size`
+  quarter-texels, and every circuit authors size `1.0` (Talon's shown; the
+  others log the same `blur steps`). At 720p that is +-4 quarter texels, about
+  +-16 screen px. Nothing in the read pass graph reaches further: the two
+  eighth-res buffers are the luminance reduction (above), and the 14 surface
+  binds are single-target. A glare beyond 16 px therefore cannot come from
+  this chain at any gain. Confidence 85 (rests on the pass-graph reading
+  above; the 29 `sourceImage` binds are still unread).
+- **Gain is not the lever.** The resolve's bloom term scaled x0, x1 (shipped)
+  and x3, ring profile around cores both frames clip, with our luma
+  rank-matched onto the reference's (so the frame-wide darkness of item 1
+  cancels). Talon's 00, `ref - ours` at 1-3 px: **+0.143** (x0), **-0.095**
+  (x1), **-0.098** (x3); at 20-32 px: +0.042 / +0.035 / +0.058. The
+  far rings do not move with gain, the near rings overshoot as it rises, and
+  Sol 2 01 does not move at all (its core is 12.9 % clipped, the scene
+  saturates before the bloom adds). Shipped gain 1 sits between the two
+  extremes on Talon's, as the read `scaleAdd = 1.0` says it should.
+- **The residual is small and its sign is not stable.** Rank-matched
+  `ref - ours`, shipped build, 12-100 px: Talon's 00 +0.00..+0.04, 03
+  -0.01..+0.05, Sol 2 00/01 -0.06..+0.02, Amphiseum 00 -0.03..-0.07 (ours
+  brighter), Amphiseum 01 -0.01..+0.02. Poses are camera-matched, geometry and
+  craft are not, so differences under about 0.05 are inside that noise. What
+  reads as "glare" in `sol2-matched/02` is the white upper-right sky, which is
+  the sky/exposure level (accuracy pass item 12-2, `hd-sky-luma`), not a halo.
+- **What is left as a possible cause, unread**: `Lighting.Use Lens Flare` is
+  `1` on Talon's (a sprite effect, not the bloom chain), and the event flash
+  and `Bloom feedback` mix the module header lists. None is shown to matter
+  here.
+
+`hd-frame-compare.py` now prints this profile ("bloom halo shape"): rings
+1-100 px around cores both frames clip, ours rank-matched onto the reference.
+Pulse and Pure are untouched (no code outside the script changed).
+
+**Cross-title (Omega):** checked, differs. Omega authors a `Tonemap` block
+(`oag_post::omega_tonemap`), not HD's `HDR and Bloom` chain, so there is no
+shared pass to port; 2048 has no HD bloom chain either.
+
 ### The exposure is read: `scale` on the resolve, not a tone curve (2026-08-19)
 
 The `Tone` family's consumer is `FUN_003e3268` (the every-frame present

@@ -9,48 +9,36 @@ checkout (gitignored), summarised here.
 
 ## Open
 
-1. **2048 and Omega ship as `.pkg` and the program reads only an unpacked,
-   decrypted folder.** A `.pkg` in `data/images/` gives `no disc image found`
-   with a `Searched:` list that names neither `.pkg` nor `data/extracted/`.
-   The unpack chains (pkg2zip, psvpfsparser with a license key, LibOrbisPkg)
-   are manual and were not re-run. No player-facing command exists.
-2. **A no-argument boot and `--dry-run` never find those folders.**
-   `oag_source::source::resolve` scans images only; `candidates()` (the
-   `--launcher` chooser) scans extracts too. The chooser shows them as
-   `unknown` with the folder name as the serial.
-3. **HD's encrypted `.iso` fails with a message about Pulse's WADs**, and with
-   both `hdfury-ps3-eu.iso` and `-dec.iso` present the encrypted one wins
-   (`IMAGE_NAMES` lists it, not the `-dec` one). `scripts/ps3iso.py` needs the
-   Python package `cryptography`, declares nothing, and prints a traceback on
-   too few arguments.
-4. **`$OAG_IMAGE` rejects an unpacked 2048 or Omega folder**, though
-   `source.rs`'s module doc says it takes the same things as the command line
-   and the not-found error suggests it. `[source] image` accepts them.
-5. **The not-found hint is wrong for a plain install** ("beside the
-   executable" only applies to an AppImage); the real default is `data/images/`
-   relative to the current directory.
-6. **The intro is a black `INTRO FRAME n / N (NO PICTURE)` without ffmpeg**, so
+Landed 2026-10-07 (setup-friction): a no-argument boot, `--dry-run` and
+`--screenshot` find unpacked 2048 and Omega folders; the not-found error names
+every place and form including `.pkg`; an encrypted HD `.iso` is reported as
+encrypted and the `-dec.iso` is tried first; `$OAG_IMAGE` takes unpacked
+folders; `scripts/ps3iso.py` has usage and a clear missing-`cryptography`
+message; the "beside the executable" hint shows only under an AppImage.
+
+1. **No player-facing unpack command exists for 2048 and Omega `.pkg`s.** The
+   unpack chains (pkg2zip, psvpfsparser with a license key, LibOrbisPkg) are
+   manual and were not re-run. The error now says a `.pkg` must be unpacked and
+   points at installing.md.
+2. **The intro is a black `INTRO FRAME n / N (NO PICTURE)` without ffmpeg**, so
    a first screenshot looks broken. `oag-game --help` still opens with "Run
    Wipeout Pulse from a disc image".
-7. **2048's 1.04 patch is not mounted** (`crates/2048/src/lib.rs`), so a
+3. **2048's 1.04 patch is not mounted** (`crates/2048/src/lib.rs`), so a
    player who unpacks it gains nothing and nothing says so.
-8. **Stale lines elsewhere:** `data/README.md` calls Pure and HD "read-only
+4. **Stale lines elsewhere:** `data/README.md` calls Pure and HD "read-only
    format targets, not playable" and says `Error::WrongTitle` for Pure;
-   `docs/tools/packaging.md` says "five normalised names" (there are six).
-9. **Not walked:** Windows and macOS, a clean machine with no system
+   `docs/tools/packaging.md` says "five normalised names" (there are six, now
+   seven with the `-dec` HD name).
+5. **Not walked:** Windows and macOS, a clean machine with no system
    libraries, the 2048 and Omega unpack chains, Pulse DLC mounting (the dry
-   run prints no pack line), and audio.
+   run prints no pack line), and audio. Also: no-arg default is USA-first for
+   Pulse while `just play` is EU; the cache directory depends on whether a
+   `data/` folder exists in the current directory.
 
 ## Next Steps
 
-1. Make `resolve` fall back to `candidates()` when no image is found, so
-   `oag-game` and `--dry-run` open a lone extract.
-2. Say "encrypted PS3 image" in the open error (the region table in sector 0
-   is a cheap test, see `docs/formats/ps3-disc.md`), and try the decrypted
-   image first.
-3. Teach the not-found error about `.pkg` files and `data/extracted/`.
-4. Let `$OAG_IMAGE` name a package folder; add a `uv` header or usage text to
-   `scripts/ps3iso.py`.
-5. Decide whether a player-facing unpack command for 2048 and Omega is wanted
+1. Decide whether a player-facing unpack command for 2048 and Omega is wanted
    at all, given that it needs a license key from the player's own copy.
-6. Fix the stale lines in item 8.
+2. Say in `--help` that the other four titles exist, and say in the loader
+   report why the intro has no picture without ffmpeg.
+3. Fix the stale lines in item 4.

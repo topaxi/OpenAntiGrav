@@ -51,6 +51,11 @@ copies. See [`docs/overview/legal.md`](docs/overview/legal.md).
 You need your own copy of the game. Nothing is bundled, and this project
 cannot tell you where to get one.
 
+**Install:** prebuilt downloads (`OpenAntiGrav-<version>-linux-x86_64.AppImage`,
+`-steamdeck-x86_64.AppImage`, `-linux-x86_64.tar.gz`, `-windows-x86_64.zip`) are on
+GitHub Releases. Arch: `openantigrav-bin` / `openantigrav-git` (AUR, once published).
+Or build from source:
+
 ```sh
 cargo build --release -p oag-game
 mkdir -p data/images
@@ -62,8 +67,8 @@ target/release/oag-game                             # boots what it finds there
 | --- | --- |
 | Pulse (PSP, PS2) and Pure (PSP) | the disc image, `.chd` or `.iso`, in `data/images/` |
 | Wipeout HD / Fury (PS3) | the **decrypted** disc image in `data/images/` |
-| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/`, named on the command line |
-| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/`, named on the command line |
+| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/` |
+| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/` |
 
 Check what was found without opening a window:
 `target/release/oag-game --dry-run --no-audio --no-video <source>`. Linux is the only OS tried so

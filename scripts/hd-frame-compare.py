@@ -331,6 +331,50 @@ def bloom_halo(arr, luma, valid_mask):
     }
 
 
+HALO_BANDS = ((1, 3), (3, 6), (6, 12), (12, 20), (20, 32), (32, 48), (48, 72), (72, 100))
+
+
+def halo_shape(ours_luma, ref_luma, valid_mask):
+    """Ring profile around cores both frames clip, brightness-normalised.
+
+    `bloom_halo` compares absolute ring levels, and a frame that is simply
+    darker overall (HD's accuracy-pass item 1) reads as a weaker halo at every
+    radius. Here our luminance is rank-matched onto the reference's own
+    distribution over `valid_mask` first (the q-q map below), so a pure
+    exposure gap cancels and what is left in `ref - qq` is spatial: negative
+    near the core and positive far out says our glow is tighter, a flat zero
+    says the chain's reach is right. Sources are the pixels *both* frames clip
+    (a bright thing only one frame has is a scene difference, not a halo), and
+    each band excludes any pixel either frame clips.
+    """
+    ref_sorted = np.sort(ref_luma[valid_mask])
+    ours_sorted = np.sort(ours_luma[valid_mask])
+    if ref_sorted.size == 0:
+        return None
+    mapped = np.interp(ours_luma, ours_sorted, ref_sorted)
+    thr = CLIP / 255.0
+    core = (ours_luma >= thr) & (ref_luma >= thr) & valid_mask
+    if not core.any():
+        return None
+    either = (ours_luma >= thr) | (ref_luma >= thr)
+    grown = {0: core}
+    cur = core
+    for step in range(1, HALO_BANDS[-1][1] + 1):
+        cur = dilate(cur, 1)
+        grown[step] = cur
+    rows = []
+    for lo, hi in HALO_BANDS:
+        band = grown[hi] & ~grown[lo - 1] & ~either & valid_mask
+        n = int(band.sum())
+        if n < 300:
+            rows.append((lo, hi, n, None))
+            continue
+        rows.append((lo, hi, n, (float(ours_luma[band].mean()),
+                                 float(mapped[band].mean()),
+                                 float(ref_luma[band].mean()))))
+    return 100.0 * float(core.sum()) / float(valid_mask.sum()), rows
+
+
 QUANTILES = (1, 5, 10, 25, 50, 75, 90, 95, 99)
 
 
@@ -597,6 +641,19 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root, ti
             for r, m, _ in halo["rings"]
         )
         print(f"  {side:<10} core {halo['core_pct']:.3f}%  {ring_txt}")
+
+    shape = halo_shape(ours_luma, ref_luma, valid)
+    print("\nbloom halo shape (rank-matched ours, rings around cores both frames clip):")
+    if shape is None:
+        print("  no shared clipped core")
+    else:
+        print(f"  shared core {shape[0]:.2f}%   cols: raw ours / rank-matched ours / ref")
+        for lo, hi, n, v in shape[1]:
+            if v is None:
+                print(f"  {lo:>3}-{hi:<3}px n={n:>6}  (too few)")
+                continue
+            print(f"  {lo:>3}-{hi:<3}px n={n:>6}  ours={v[0]:.3f} qq={v[1]:.3f} "
+                  f"ref={v[2]:.3f}  ref-qq={v[2] - v[1]:+.3f}")
 
     probe = encoding_probe(ours_luma, ref_luma, valid, ours_arr, ref_arr)
     print("\nlinear-vs-gamma probe (ours -> reference luminance, non-HUD/craft/clipped midtones):")

@@ -21,11 +21,19 @@ by the table.
 redump `.dkey` is the former. No key is stored in this repository.
 """
 
+import argparse
 import os
 import struct
 import sys
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+except ImportError:
+    sys.exit(
+        "ps3iso.py needs the Python package `cryptography`. Either run it as\n"
+        "  uv run --with cryptography python3 scripts/ps3iso.py ...\n"
+        "or install it first: `pip install cryptography`."
+    )
 
 SECTOR = 2048
 DATA1_SECRET = bytes.fromhex("380bcf0b53455b3c7817ab4fa3ba90ed")
@@ -306,20 +314,30 @@ def cmd_decrypt(iso, keyhex, out):
 
 
 def main(argv):
-    if len(argv) < 3:
-        print(__doc__)
-        return 2
-    cmd = argv[1]
-    if cmd == "map":
-        return cmd_map(argv[2])
-    if cmd == "extract":
-        return cmd_extract(argv[2], argv[3])
-    if cmd == "oracle":
-        return cmd_oracle(argv[2], argv[3])
-    if cmd == "decrypt":
-        return cmd_decrypt(argv[2], argv[3], argv[4])
-    print(__doc__)
-    return 2
+    parser = argparse.ArgumentParser(
+        prog="ps3iso.py",
+        description=__doc__.split("\n\n")[0],
+        epilog="Needs the Python package `cryptography` "
+        "(`uv run --with cryptography python3 scripts/ps3iso.py ...`).",
+    )
+    commands = parser.add_subparsers(dest="cmd", required=True, metavar="command")
+    for name, handler, arguments, help_text in (
+        ("map", cmd_map, ["iso"], "print the region table and which file lands where"),
+        ("extract", cmd_extract, ["iso", "outdir"], "pull the readable files out"),
+        ("oracle", cmd_oracle, ["iso", "keyhex"], "test a candidate key"),
+        (
+            "decrypt",
+            cmd_decrypt,
+            ["iso", "keyhex", "out"],
+            "write a whole-image decrypted copy (keyhex: 32 hex chars, your disc's own key)",
+        ),
+    ):
+        sub = commands.add_parser(name, help=help_text, description=help_text)
+        for argument in arguments:
+            sub.add_argument(argument)
+        sub.set_defaults(handler=handler, arguments=arguments)
+    args = parser.parse_args(argv[1:])
+    return args.handler(*[getattr(args, a) for a in args.arguments])
 
 
 if __name__ == "__main__":

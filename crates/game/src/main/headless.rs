@@ -696,6 +696,7 @@ pub(crate) fn run_race(
         launcher: None,
         pending: None,
         state: None,
+        suspended: false,
     };
     event_loop.run_app(&mut app)?;
     app.finish_audio()

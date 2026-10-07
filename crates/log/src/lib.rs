@@ -69,6 +69,10 @@ struct State {
 /// without touching the process-global logger.
 pub struct Tee {
     terminal: env_logger::Logger,
+    /// logcat, fed the lines the terminal filter lets through: stderr goes
+    /// nowhere on Android.
+    #[cfg(target_os = "android")]
+    logcat: android_logger::AndroidLogger,
     state: Mutex<State>,
     dropped: Arc<AtomicU64>,
 }
@@ -86,6 +90,12 @@ impl Tee {
     pub fn new(terminal: env_logger::Logger, file_default: &str) -> Self {
         Self {
             terminal,
+            #[cfg(target_os = "android")]
+            logcat: android_logger::AndroidLogger::new(
+                android_logger::Config::default()
+                    .with_tag("oag")
+                    .with_max_level(LevelFilter::Trace),
+            ),
             state: Mutex::new(State {
                 filter: file_filter(file_default),
                 sink: Sink::Pending(Vec::new()),
@@ -195,6 +205,10 @@ impl Log for Tee {
 
     fn log(&self, record: &Record) {
         self.terminal.log(record);
+        #[cfg(target_os = "android")]
+        if self.terminal.matches(record) {
+            self.logcat.log(record);
+        }
         let Ok(mut state) = self.state.lock() else {
             return;
         };
