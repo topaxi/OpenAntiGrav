@@ -157,6 +157,7 @@ pub const TITLE: &Title = &Title {
         // Not wired, not measured absent: HD's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
+        screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
         origin: oag_title::Origin::Measured,
     },
     pressings: None,

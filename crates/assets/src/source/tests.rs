@@ -132,6 +132,7 @@ const TITLE: &Title = &Title {
         loyalty_unlocks: false,
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
+        screen_archive: None,
         origin: oag_title::Origin::Chosen,
     },
     pressings: None,

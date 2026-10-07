@@ -66,9 +66,30 @@ const FRONT_END: &FrontEnd = &FrontEnd {
     ..*frontend::FRONT_END
 };
 
+/// The campaign with no `DATA06` to read the screen file from.
+///
+/// RACE CAMPAIGN opens straight on the base campaign's `Grid Selection`: the
+/// package's only `CellMode_Definition.xml` is `data02`'s, which is the disc's
+/// `DATA02` copy byte for byte and authors no `Campaign Selection` or `Grid
+/// Selection Fury` screen, so there is no HD or Fury choice to put in front.
+/// `screen_archive: None` reads the copy the source's precedence serves, and
+/// `selection_strings` is off because the ids it overlays are `DATA06`'s alone.
+///
+/// **Measured, confidence 90**: the PSN build booted under RPCS3 (2026-10-07)
+/// goes MAIN MENU, CAMPAIGN, straight to `EVENT 01/08` (the base campaign's first
+/// grid), then `CHOOSE RACE` on a confirm; no HD/Fury list appears. Not measured:
+/// that this is the only path (a second entry point was not looked for).
+const CAMPAIGN: &oag_title::Campaign = &oag_title::Campaign {
+    selection_strings: false,
+    screen_archive: None,
+    origin: oag_title::Origin::Measured,
+    ..*TITLE.campaign
+};
+
 /// Wipeout HD as the PSN download ships it.
 pub const PSN: &Title = &Title {
     race: RACE,
+    campaign: CAMPAIGN,
     front_end: Some(FRONT_END),
     // **Measured.** The decrypted PSN `EBOOT` names
     // `Data/RibbonEffects/enginetrail_triangle.vex`, where the Fury disc's names

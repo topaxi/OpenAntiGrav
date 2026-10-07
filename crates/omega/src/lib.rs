@@ -141,6 +141,7 @@ pub const TITLE: &Title = &Title {
         // Not wired, not measured absent: Omega's unlock rows are unread here.
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: false,
+        screen_archive: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
     },
     pressings: None,
