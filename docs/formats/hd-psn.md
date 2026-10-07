@@ -20,7 +20,9 @@ listing.
 **Not an update.** It is a full package: executable, trophies and four archives. No
 update archive exists to mount ahead of a base, so `ArchiveCandidates::patch` stays
 empty for HD (the 2048 mechanism of `patches.md` has nothing to do here). v3.00 is
-the version the Store serves; it is cumulative inside the archives.
+the version the Store serves. Its `VERSION` (03.00) is newer than the Fury disc's (01.03) while
+its `APP_VER` (01.25) is older than the disc's (02.00): they are different numbering
+schemes, and nothing here says which build is later.
 
 The second download, "Unlock Key", is a 102,400-byte package whose only payload is a
 336-byte licence file (`.EDAT`) and two art files, plus a 16-byte `.rap`. None of
@@ -80,8 +82,9 @@ produced. The licence file is the player's own; this project supplies none and
 records none.
 
 **Measured:** installing with `rpcs3 --headless --installpkg` produced plain
-archives. **Not isolated:** the licence file was in `exdata/` before the first
-install, so whether this package installs without it was not tried.
+archives; `--no-gui` with the same arguments sat idle and installed nothing. **Not
+isolated:** the licence file was in `exdata/` before the first install, so whether
+this package installs without it was not tried.
 
 ## What this project does with it
 
@@ -98,30 +101,83 @@ so its 12-team definition is served; had `DATA02` come first the roster would ha
 silently dropped Auricom, Harimau, Icaras and Mirage. `oag_hd::title_of` returns
 `oag_hd::psn::PSN` for a source with no `DATA00`.
 
+### The executable decrypts, and says what this build names
+
+`USRDIR/EBOOT.BIN` is a SELF. RPCS3's own `--decrypt` turns it into a plain ELF
+(8,710,312 bytes) in a private profile that holds the player's licence file; it
+decrypts only with that licence in place, and **not tried without it**. `strings -a`
+over the result, against the same over the Fury disc's `EBOOT.elf`, 2026-10-07:
+
+| Literal | PSN executable | Fury disc executable |
+| --- | --- | --- |
+| `Data\FE\Images\file2.gtf` | absent | present |
+| `Data\FE\Images\file.gtf` | **present** | absent |
+| `Data/RibbonEffects/enginetrail_triangle.vex` | **present** | `enginetrail_bluered_triangle.vex` |
+| `Detonator` | 0 lines | 109 lines |
+| `talons_junction` | 0 | 8 |
+| `_fury` | 0 | 112 |
+| `points2` (Fury backdrop) | 0 | 32 |
+| `Selection_Definition` (either dialect) | 0 | 0 |
+| `data0N.psarc` | 0 | 9 |
+
+So this build has **no Detonator mode and no Talon's Junction at all**, names the
+plain exhaust template and the `file.gtf` menu frame. Confidence 85: the literals are
+read, the pointer table that makes `file.gtf` the block frame is not (the disc's
+`file2.gtf` is at `0x00920a00`; the PSN build was not walked), and "present" says the
+string exists, not how it is used. `file.gtf` is 64 x 64 `DXT3` (4,224 bytes, in `data02`
+on the disc too), so the nine-patch geometry the disc's `file2.gtf` (64 x 64
+`A8R8G8B8`) feeds applies unchanged.
+
 ### The variant's Title data, each row against what the PSN package ships
 
 | Field | Disc (`TITLE`) | PSN | Why |
 | --- | --- | --- | --- |
-| `race.track` | `talons_junction` | `01_vineta_k` | Talon's Junction is `DATA00`'s; a bare `--race` failed with "in none of this source's archives" |
+| `race.track` | `talons_junction` | `01_vineta_k` | Talon's Junction is `DATA00`'s and absent from the executable too; a bare `--race` failed with "in none of this source's archives". Chosen, not measured, which of the eight |
 | `race.zone` | `Separate(zone_1..4)` | `SameCircuit` | the four Zone circuits are `DATA00`'s. Chosen, not measured |
-| `exhaust` | `enginetrail_bluered_triangle` (`DATA06`) | `enginetrail_triangle` (`data02`) | the disc's own comment calls the plain one the pre-Fury build's. Chosen: the PSN executable cannot be read |
+| `exhaust` | `enginetrail_bluered_triangle` (`DATA06`) | `enginetrail_triangle` (`data02`) | **measured**: the PSN executable names the plain `.vex` (table above), confidence 85 |
+| `front_end.menu` frame texture | `file2.gtf` (`DATA06`) | `file.gtf` (`data02`) | **measured**: the PSN executable names `file.gtf`, not `file2.gtf`, confidence 85 |
 | `front_end.team_select`, `track_select` | `Team_/Track_Selection_Definition.xml` | `None` | both are `DATA06`'s; the race box keeps its plain TRACK and TEAM rows. The older `Selection_Definition.xml` the package carries is a different dialect and is not read |
 
 ### What draws differently, honestly absent
 
-- **Menu boxes.** `Data\FE\Images\file2.gtf` (the nine-patch, `DATA06`) is absent, so
-  `oag-game` warns `menu blocks: ... did not decode, so entries draw with no box` and
-  the rows draw as bare text (screenshot below). `data/fe/images/file.gtf` (4,224
-  bytes, both sources) is a candidate of a different size (the nine-patch code
-  assumes 64 x 64); **unmeasured, not substituted**.
-- **Menu backdrop.** The Fury point clouds (`data/FE/Fury/*.points2`) are absent;
-  the background is black.
+- **Menu boxes** draw, from `file.gtf`. The palette is the **teal HD one** the served
+  `skin.xml` (`DATA03`'s) authors, where the disc's boot serves `DATA00`'s Fury
+  black-and-red; see `docs/formats/hd-frontend.md`, "the HD_ palette".
+- **Menu backdrop.** The Fury point clouds (`data/FE/Fury/*.points2`) are absent and the
+  executable names none; the background is black.
+- **Race box.** The TRACK and TEAM rows list the package's own 16 circuits and 12 teams;
+  the two Fury pickers are absent (`Team_/Track_Selection_Definition.xml`).
+- **Campaign: refused by name, not offered as a screen.** `--menu-page campaign-select`
+  says "this source has no Race Campaign to show: no `DATA06.PSARC` copy of
+  `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`". The RACE CAMPAIGN tab on our
+  main page still exists and opens nothing (it logs "RACE CAMPAIGN has nothing to show"),
+  as it does on any source whose campaign is unread. The package does carry
+  `grids/definition.xml` (`data02`/`data04`: eight grid references, `grid_00`-`grid_07`) and
+  a `cellmode_definition.xml`; reading that older dialect is open.
+- **Modes.** `time_trial`, `speed_lap`, `zone` and `single_race` each load on Vineta K
+  with opponents, and the load reports are line-for-line the disc's. Eliminator is not
+  reachable through `--mode`; its `WeaponStats_Elimination.xml` and the plain
+  `elimination_hud.xml` resolve, the `wo3_hud/` and `2097_hud/` Eliminator variants do not
+  (a HUD-style option, not the default). Detonator mode is absent from the executable.
 - **Five effects** are missing from `data02` on PSN that the disc's carries
   (`WO_PLASMA_FLASH`, `WO_SHIP_ENGINEFLARE`, `WO_TRAIL_HITSHIP_RED`,
   `WO_LEACHBEAM_ENERGY`, `WO_BLUE_WELDER`); the loader reports each as "will not be
   drawn".
 - **Fury craft variants** (`_c1`/`_n1`): absent, so a craft shows its base livery.
 - **Ads**: `LSAD_*` flyer art is `DATA06`'s.
+
+### The mount order decides more than the roster
+
+`DATA03` before `DATA02` flips the served copy of every path both ship. They share 128
+paths: 50 shader and 4 texture and 2 track files identical by MD5, **72 differing** (70
+xml tables, 2 ui files). The differing ones include `frontend/gui/skin.xml` (24,576
+bytes served, against `DATA02`'s 23,527), `frontend/definition.xml` and
+`frontend/gui/endrace_definition.xml` (30,623 against 30,110). Both copies of the
+end-of-race file author `EndRace Results`, `EndRace Rewards` and `EndRace Menu`, so
+that screen set is complete either way; `frontend::FRONT_END.endrace_entry`'s comment
+(DATA02's copy is the one served) is the disc's and is not true here. `just psarc-diff
+--other data03 --base data02` reproduces the counts. Which copy a PS3 loads is
+unmeasured: chosen, not measured.
 
 ### Same circuit, same craft, both sources
 
@@ -145,9 +201,12 @@ formats: the evidence is the path census above and the existing pages.
 
 ## Open
 
-- What draws HD's menu boxes when `file2.gtf` is absent (the executable is an
-  encrypted SELF; RPCS3 would show it).
-- Whether the PSN executable picks `DATA02`'s or `DATA03`'s `skin.xml`: both are
-  mounted, `DATA03` first (chosen).
+- The pointer table that names `file.gtf` as the block frame was not walked in the PSN
+  executable (the literal is read).
+- The race page's TRACK row shows ids in a `--menu-page` still because no language is
+  chosen there; not checked through a language-chosen boot.
+- Whether the PSN executable loads `DATA02`'s or `DATA03`'s copy of the 72 shared,
+  differing files: `DATA03` first (chosen).
+- The older-dialect campaign (`cellmode_definition.xml`, eight grids) reader.
 - Whether a PS3 base HD races Zone on every circuit (`SameCircuit` is chosen).
 - A picker for the older `Selection_Definition.xml` dialect.

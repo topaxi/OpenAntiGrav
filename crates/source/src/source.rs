@@ -285,7 +285,8 @@ fn stated(
         }
         return Err(anyhow!(
             "{IMAGE_ENV} is set to {}, which is not a disc image (.chd, .iso), an \
-             unpacked 2048 or Omega folder, or a folder holding one",
+             unpacked 2048 or Omega folder, an installed Wipeout HD PSN folder, or a \
+             folder holding one",
             path.display()
         ));
     }

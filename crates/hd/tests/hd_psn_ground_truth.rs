@@ -80,6 +80,10 @@ fn psn_names_resolve_and_fury_names_are_absent() {
         panic!("HD authors its ribbon");
     }
 
+    let skin = title.front_end.and_then(|f| f.menu).expect("a menu skin");
+    let frame = skin.blocks.expect("menu blocks").frame_texture;
+    assert!(has(&archives, frame), "{frame}");
+
     for fury in [
         oag_hd::race::DEFAULT_TRACK,
         "/data/environments/zone_1/track.vex",

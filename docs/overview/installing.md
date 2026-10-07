@@ -120,22 +120,26 @@ Census and what differs from the disc: [hd-psn](../formats/hd-psn.md).
 1. Extract the download zip into a new empty folder. The package inside is a `.pkg`.
    Never run anything from it.
 2. Install it with RPCS3's own installer into a **private** RPCS3 profile, so your
-   main one is untouched. The package needs your own licence file for the game
-   (a `.rap`); it is part of your copy of the game, and this project supplies none and
-   does not say where one comes from. Put it where RPCS3 looks for licences
-   (`dev_hdd0/home/00000001/exdata/` of that profile), then:
+   main one is untouched, and keep that profile under `data/` (it holds Sony firmware,
+   your licence file and 1 GB of game data, and `data/` is not committed). The package
+   needs your own licence file for the game (a `.rap`); it is part of your copy of the
+   game, and this project supplies none and does not say where one comes from. Put it
+   where RPCS3 looks for licences (`dev_hdd0/home/00000001/exdata/` of that profile), then:
 
    ```sh
-   mkdir -p profile/rpcs3 && cp -r ~/.config/rpcs3/dev_flash* profile/rpcs3/   # the firmware folders the check used
-   XDG_CONFIG_HOME=$PWD/profile rpcs3 --headless --installpkg path/to/package.pkg
+   P=$PWD/data/scratch/hd-psn-profile
+   mkdir -p $P/rpcs3 && cp -r ~/.config/rpcs3/dev_flash* $P/rpcs3/   # the firmware folders the check used
+   XDG_CONFIG_HOME=$P rpcs3 --headless --installpkg path/to/package.pkg
    ```
 
-   It installed 1 GB in a few seconds (checked 2026-10-07, RPCS3 0.0.42). Add `XDG_CACHE_HOME` and `XDG_DATA_HOME` under the same folder if
-   you want its log out of `~/.cache`.
+   Use `--headless`: `--no-gui` with the same arguments sat idle and installed nothing
+   (checked 2026-10-07, RPCS3 0.0.42). It installed 1 GB in a few seconds. Add
+   `XDG_CACHE_HOME` and `XDG_DATA_HOME` under the same folder if you want its log out of
+   `~/.cache` (that log prints a package key; do not paste it anywhere).
 3. Copy the install folder into place:
 
    ```sh
-   cp -r profile/rpcs3/dev_hdd0/game/NPEA00057 data/extracted/ps3/hd-psn-eu
+   cp -r $P/rpcs3/dev_hdd0/game/NPEA00057 data/extracted/ps3/hd-psn-eu
    ```
 
    The result is `PARAM.SFO` and `USRDIR/data01.psarc` to `data04.psarc` side by
@@ -146,9 +150,10 @@ Census and what differs from the disc: [hd-psn](../formats/hd-psn.md).
 
 What the PSN copy lacks is simply not offered: the race page's TRACK and TEAM rows
 list the eight circuits and twelve teams the package ships, a bare `--race` opens
-Vineta K, and the loader report names each absent effect. The menu boxes and the
-menu backdrop are Fury's art and draw as nothing (hd-psn.md, "What draws
-differently"). Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
+Vineta K, and the loader report names each absent effect. The race
+campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
+"What draws differently"); the menu boxes draw from the file this build's own executable
+names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
 tick for tick like the disc, and its menu rows drew.
 
 ### 2048 and Omega: unpack the package into a folder
