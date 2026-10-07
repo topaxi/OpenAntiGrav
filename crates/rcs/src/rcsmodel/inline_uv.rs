@@ -4,8 +4,8 @@
 
 use super::{Error, Mesh, NORMAL_OFFSET, Result, SubMesh, TexcoordFormat};
 
-/// The inline strides whose tail may be a colour rather than a coordinate
-/// - see [`Mesh::texcoords`]. Stride 22 joined 18 on 2026-10-07: a stride-22
+/// The inline strides whose tail may be a colour rather than a coordinate, see
+/// [`Mesh::texcoords`]. Stride 22 joined 18 on 2026-10-07: a stride-22
 /// vertex that ends in **two** colours (`ff 9f 00 4c` twice on
 /// `hd_bomb_shockwaves`) keeps `Uv1` at `+0x0a` all the same, which the
 /// material's vertex program confirms (`o[TC3].xy = v[2].xy`, `v[3]` and

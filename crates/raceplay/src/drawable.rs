@@ -438,8 +438,7 @@ impl Drawable {
             model,
             prev_mvp,
             sun_occlusion_layer,
-            0.0,
-            0.0,
+            [0.0, 0.0],
         );
     }
 
@@ -454,7 +453,7 @@ impl Drawable {
         prev_mvp: Mat4,
         clock: f32,
     ) {
-        self.write_uniforms(queue, view_projection, model, prev_mvp, None, clock, 0.0);
+        self.write_uniforms(queue, view_projection, model, prev_mvp, None, [clock, 0.0]);
     }
 
     /// [`Self::write_clocked`] for the Bomb's fireball, whose program also
@@ -469,7 +468,14 @@ impl Drawable {
         clock: f32,
         colour: f32,
     ) {
-        self.write_uniforms(queue, view_projection, model, prev_mvp, None, clock, colour);
+        self.write_uniforms(
+            queue,
+            view_projection,
+            model,
+            prev_mvp,
+            None,
+            [clock, colour],
+        );
     }
 
     fn write_uniforms(
@@ -479,8 +485,7 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
-        clock: f32,
-        colour: f32,
+        [clock, colour]: [f32; 2],
     ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),

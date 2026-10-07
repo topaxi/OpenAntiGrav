@@ -13,7 +13,8 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 9] = [
+const OWN: [Trigger; 10] = [
+    Trigger::BombRays,
     Trigger::HitSpark,
     Trigger::LeachHitSpark,
     Trigger::WeaponSpark,
@@ -104,6 +105,9 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     ] {
         assert_eq!(has(wreck), [true, false, false, false, false], "{wreck:?}");
     }
+    // `NormalBombBlast_Update` (HD, `0x001503d8`) spawns it; no other title's
+    // blast does.
+    assert_eq!(has(Trigger::BombRays), [false, false, true, false, false]);
 }
 
 /// The engine-table triggers whose effect no Pulse archive holds and no Pulse
@@ -272,7 +276,7 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
             .count(),
         1
     );
-    assert_eq!(crate::RACE_EFFECTS.len(), 43);
+    assert_eq!(crate::RACE_EFFECTS.len(), 44);
 }
 
 #[test]

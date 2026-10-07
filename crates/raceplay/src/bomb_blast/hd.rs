@@ -60,6 +60,12 @@
 
 use super::*;
 
+/// How many HD blasts can be live at once: eleven drawables each, so a pool of
+/// its own rather than a projectile pool's worth. **Chosen, not measured** - the
+/// original heap-allocates one per detonation. A ninth simultaneous detonation
+/// is dropped, as any blast here is when its pool is full.
+pub(crate) const SLOTS: usize = 8;
+
 /// The blast object's lifetime: `0x001503d8` returns false once `age >` this
 /// (the table's `+0x00`).
 pub(super) const LIFETIME_SECONDS: f32 = 3.0;
@@ -68,7 +74,7 @@ pub(super) const LIFETIME_SECONDS: f32 = 3.0;
 const PHASE_ONE_END_SECONDS: f32 = 1.5;
 
 /// How many ripple rings follow the first (`0x0014fff0`'s loop of seven).
-pub(in crate::bomb_blast) const RIPPLES: usize = 7;
+pub(crate) const RIPPLES: usize = 7;
 
 /// `WO_BOMB_RAYS` is spawned the first tick `age` exceeds this (`-0x23b4`).
 const RAYS_AT_SECONDS: f32 = 0.5;
@@ -187,7 +193,12 @@ impl HdBlast {
         let age = self.age;
         let mut out = Pieces::default();
         let at = |x: Vec3, y: Vec3, z: Vec3, position: Vec3| {
-            Mat4::from_cols(x.extend(0.0), y.extend(0.0), z.extend(0.0), position.extend(1.0))
+            Mat4::from_cols(
+                x.extend(0.0),
+                y.extend(0.0),
+                z.extend(0.0),
+                position.extend(1.0),
+            )
         };
         // The bomb's own frame (`Start`'s matrix), for the rings.
         let [side, up, fwd] = bomb_frame(self.up);
@@ -320,9 +331,21 @@ fn camera_frame(up: Vec3, back: Vec3) -> [Vec3; 3] {
 fn rotate_row(v: Vec3, a: Vec3, t: f32) -> Vec3 {
     let (s, c) = t.sin_cos();
     let k = 1.0 - c;
-    let r0 = Vec3::new(a.x * a.x * k + c, a.x * a.y * k - a.z * s, a.x * a.z * k + a.y * s);
-    let r1 = Vec3::new(a.x * a.y * k + a.z * s, a.y * a.y * k + c, a.y * a.z * k - a.x * s);
-    let r2 = Vec3::new(a.x * a.z * k - a.y * s, a.y * a.z * k + a.x * s, a.z * a.z * k + c);
+    let r0 = Vec3::new(
+        a.x * a.x * k + c,
+        a.x * a.y * k - a.z * s,
+        a.x * a.z * k + a.y * s,
+    );
+    let r1 = Vec3::new(
+        a.x * a.y * k + a.z * s,
+        a.y * a.y * k + c,
+        a.y * a.z * k - a.x * s,
+    );
+    let r2 = Vec3::new(
+        a.x * a.z * k - a.y * s,
+        a.y * a.z * k + a.x * s,
+        a.z * a.z * k + c,
+    );
     r0 * v.x + r1 * v.y + r2 * v.z
 }
 

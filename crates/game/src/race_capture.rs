@@ -60,6 +60,9 @@ pub struct CaptureOptions {
     /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
     /// that slot at the end of that tick. See [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
+    /// `--force-bomb-trip TICK:SLOT`: that craft onto a laid Bomb at the end of
+    /// that tick. See [`Race::force_bomb_trip`].
+    pub force_bomb_trip: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,

@@ -18,7 +18,12 @@ fn blast_at(ticks: usize) -> HdBlast {
 }
 
 fn rows(piece: Piece) -> [[f32; 3]; 3] {
-    [piece.matrix.x_axis, piece.matrix.y_axis, piece.matrix.z_axis].map(|c| c.truncate().to_array())
+    [
+        piece.matrix.x_axis,
+        piece.matrix.y_axis,
+        piece.matrix.z_axis,
+    ]
+    .map(|c| c.truncate().to_array())
 }
 
 fn assert_rows(got: [[f32; 3]; 3], want: [[f32; 3]; 3], tolerance: f32, what: &str) {
@@ -73,7 +78,10 @@ fn the_fireball_and_the_bloom_disc_match_the_executables_own_matrices() {
 #[test]
 fn the_clocks_and_the_colour_follow_the_update() {
     let early = blast_at(18).pieces(EYE, BACK);
-    assert!((early.fireball.unwrap().clock - 1.0).abs() < 1e-6, "age 0.3");
+    assert!(
+        (early.fireball.unwrap().clock - 1.0).abs() < 1e-6,
+        "age 0.3"
+    );
     assert!((early.bloom.unwrap().clock - 0.1875).abs() < 1e-3);
     assert!((early.ring.unwrap().clock - 0.5).abs() < 1e-3);
 
@@ -150,7 +158,10 @@ fn from_one_and_a_half_seconds_only_the_ripple_rings_are_left() {
 #[test]
 fn a_ripple_ring_starts_inside_out() {
     let early = blast_at(86).pieces(EYE, BACK).ripples[0].expect("window opened");
-    assert!(early.matrix.y_axis.truncate().dot(Vec3::Y) < 0.0, "age 1.43");
+    assert!(
+        early.matrix.y_axis.truncate().dot(Vec3::Y) < 0.0,
+        "age 1.43"
+    );
     let late = blast_at(108).pieces(EYE, BACK).ripples[0].expect("window");
     assert!(late.matrix.y_axis.truncate().dot(Vec3::Y) > 0.0, "age 1.8");
 }
