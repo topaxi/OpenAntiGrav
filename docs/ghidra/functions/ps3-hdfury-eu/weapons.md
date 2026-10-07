@@ -924,16 +924,29 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   where the point is visible (`0x002d64d0`), takes a pool entry. **It is the craft-hit branch;
   a missile that dies on a wall never reaches `Start`.** Live: a state 1 missile (5 bounces,
   gone at 5.5 s) left the count at 0 and all 16 objects byte-identical. Confidence 70.
-- **What retires an entry (not found).** Five stores to a `+0x10c` offset exist in `0x138000-0x160000`
-  and none is a decrement: `0x001412d0` (the increment in `pool_take`), `0x00141d7c` and `0x00142164`
-  (zero, in the two twin `MissileManager` constructors `0x00141a88`/`0x00141e70`) and `0x00155024`/`0x001553bc`
-  (the explosion class's *own* field init, a different object). Live, the manager's count went 1 to 0
-  exactly 1.0 s after it rose (one observation), so something clears it that is not a `stw ...,0x10c`
-  (a block zero, or a store through a computed address). `HD_missile_explosion.vex`'s keyed
-  `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`) end at key 60 (`60 / 60 Hz = 1.0 s`;
-  scale `256 -> 4608`, i.e. 1x to 18x, ease-out: `779, 1250, 1671, 2045, 2375, 2663, ...`, read by
-  `hd_weapon_anim_keys`). **Lifetime 1.0 s, confidence 55**: the two agree, the count was seen once,
-  and the clearing code was not found.
+- **What retires an entry, and the law, measured on two boots.** On `m5` (the player put 12 units behind
+  the nearest rival and state 1 fired, `scripts/rpcs3-mem-poll.py --behind-rival 12`) the missile list count
+  `manager + 0xc4` fell 1 to 0 at host 4.47 s and the pool count `+0x10c` rose 0 to 1 in the same 10 ms
+  sample; one pool object (index 0) filled in: `+0x34` flag word, `+0xd0/+0xd4/+0xd8` the hit position
+  (`-268.5, 41.5, 110.7`, the rival's own place), the matrix at `+0xf0..+0x12f` (rotation rows and that
+  position with `w = 1`, the rows `Start` copied from its argument), copies at `+0x130`/`+0x170` of the
+  basis, `+0xe0 = 0x01000000` (the flag `Start` writes at `0x001558f4`) and then three floats that run
+  with the object's age `p`:
+  `+0x170 = p` (`0 -> 0.967`, linear, about `1.0 / s`: `0.0334, 0.0673, 0.1172, ... 0.9667` at 40 ms
+  steps), `+0x17c = (1 - p)^2` and `+0x180 = 2 (1 - p)` (`0.9344 = 0.9666^2`, `1.9333 = 2 x 0.9667`,
+  checked at all 25 samples to the fourth decimal). `+0x174 = 5.0` while alive and `-1.0` when free.
+  `Draw` reads `+0x17c` as the point light's intensity and `+0x17c * c` as its radius
+  (`0x006778c8(slot, 0x17c * k1 + k2, 0x17c * k3)`), so the light dies quadratically. **The entry
+  retires when `p` reaches 1: the count fell back to 0 at 5.45 s, 0.98 s after it rose** (`m3`: 0.96 s,
+  the same boot's first observation), and every field is rewritten to its free value in one step.
+  `HD_missile_explosion.vex`'s keyed `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`)
+  end at key 60 (`60 / 60 Hz = 1.0 s`; scale `256 -> 4608`, 1x to 18x, ease-out: `779, 1250, 1671,
+  2045, 2375, 2663, ...`, `hd_weapon_anim_keys`). **Lifetime 1.0 s, confidence 80** (two boots, the age
+  field linear to 1, the keys ending together). Which function advances `p` and frees the entry was
+  not found: no `stw ...,0x10c` decrements (the five stores to a `+0x10c` offset are `0x001412d0`, the
+  increment in `pool_take`; `0x00141d7c`/`0x00142164`, zeroing in the twin `MissileManager`
+  constructors `0x00141a88`/`0x00141e70`; and `0x00155024`/`0x001553bc`, the explosion class's own field
+  init), so it runs through a computed store.
 - **`Draw` (`0x00155420`, vtable slot 5) is also the per-frame body**: it draws the model at
   `this + 0xf0 + viewport * 0x40`, writes a point light `0x006778c8(light_slot, 1/f, radius)` whose
   size comes from a float at `this + 0x17c` (a per-object value never stored by this class's
@@ -949,20 +962,27 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   reads 1, 2, 3, 4 at the bounces and 5 as it ends, against the Missile's `MAX_BOUNCES = 5`; confidence 70); state 2 is a different projectile with a large yellow-white
   burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
   state 10 does nothing at the grid.
-- **The picture, original only.** The one captured pool use is `data/scratch/hd-weapon-fx/runs/m3`:
-  the pool count rose at host 43.44 s, and the film's mean luma (`> 225` of 255) holds for 13
-  frames, 48.57-48.97 s of video, so the white-out **starts at the count's rise** with a host-to-video
-  offset of +5.13 s (m4's freeze gave about +5; confidence 70 that the white-out is this pool entry).
-  It is a full-frame white-out for 0.4 s, then yellow with orange and dark-centred ring discs (luma
-  about 185) until the count fell at host 44.4 (video 49.5); contact sheet `runs/m3/s10.png`
-  (tiles are 6 fps from video 43 s, so tile 39 is about 49.5 s: the sheet's own spacing, not the event time).
-  Our side is **not drawn**. The trigger (a craft hit, visible in the viewport) and the clock (the model's
-  own keys, 1.0 s) are known, and a keyed node clock exists (`Drawable::write_node_anims(seconds)`, used by
-  the gantry and the adverts), but the three materials (`hd_missile_explosion_core_glow`, `_lightrays_glow`,
-  `_shockwaves_glow`: all `SrcAlpha/One`, no cull, state `0x29`) have no read fragment program, one
-  drawable carries one clock (so several live blasts need one drawable each), and there is no matched
-  pair. Open: the fragment programs (`scripts/ps3-microcode.py fp-file`), the instance clocks, and a
-  Missile hit on both sides.
+- **The picture, original only.** `m5` (known firer, rival 12 units ahead, `data/scratch/hd-weapon-fx/runs/m5`,
+  contact sheet `burst.png`, 30 fps frames `f/h_*.png`): the count rose at host 4.47 s, which is video
+  9.6 s (offset +5.1 s), and the frame's mean luma goes 135 (9.60 s) to 218 (9.67), 246 (9.80), 241
+  (9.93), 209 (10.00), 162 (10.13), 150 (10.20). So the white-out starts within 0.1 s of the rise, is
+  white to the frame edge for about 0.3 s with the struck rival's red-and-black hull in the middle of it
+  and curved yellow-orange arcs (the rays and the shockwave rings) at the top corners, and is gone by
+  0.55 s while the entry lives to 1.0 s (the additive shells thin out as the keyed scale decelerates and
+  the colour term fades; the light falls as `(1 - p)^2`). `m3`'s earlier white-out (player in the pack,
+  13 frames above luma 225 from video 48.57 s) is the same effect, its start again at the count's rise.
+  Our side is **not drawn**. The trigger (a craft hit, visible in the viewport) and the clock (the
+  model's own keys, `p` over 1.0 s) are known, and a keyed node clock exists
+  (`Drawable::write_node_anims(seconds)`, used by the gantry and the adverts). Each of the three
+  materials is **not** the generic glow, so wiring needs a program per node, read this lane
+  (`scripts/ps3-microcode.py fp-file`, the first fogless variant of each):
+  `core_glow` is `tex(TC) x vertex colour` with the alpha from `TC.z` (block 1); `lightrays_glow` is a
+  Fresnel shell, `sat(1 - dot(TC0, TC1) / sqrt(|TC0|^2 |TC1|^2))` raised to 5, then `1 - 0.9 x`
+  raised to 5 (the halo's shape with other exponents); `shockwaves_glow` is a two-tap ramp lookup that
+  adds `Shockwave_scalar * 0.45` to a `0.01`-scaled `v` and a `0.05`-scaled first tap (so the clock
+  enters through `Shockwave_scalar` and `UV_offset`, both the entry's age). Confidence 70 for those
+  reads (instruction listings, the vertex programs' `TC` outputs unread). Open: the three programs
+  in `shade.wesl`, one drawable per live instance, and the matched pair.
 
 **Omega:** `HD_missile_explosion.vex`/`.rcsmodel` ships in Omega's archives (see
 `ps4-omega-eu/weapons.md`); the pool, trigger and lifetime above were not looked up in Omega's

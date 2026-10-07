@@ -168,17 +168,18 @@ The executable's own load-path strings name every model above
   `HD_Mine_halo`/`HD_bomb_*` have neither a load order nor a placement read.
   Next: the manager's per-tick walker on the hit path.
 
-## 2026-10-07 (`hd-weapon-fx`): the Missile's pool read live, not wired
+## 2026-10-07 (`hd-weapon-fx`): the Missile's pool measured on two boots, not wired
 
-Read `weapons.md` last section and `rpcs3-capture.md`, "Polling guest memory live". The pool is
-entered only on a craft hit (never on a wall: state 1's 5th bounce left it untouched), lives 1.0 s
-(conf 55) and plays the model's own keys. Not wired because: (1) the three `hd_missile_explosion_*`
-materials' fragment programs are unread, (2) one drawable carries one node clock (`Drawable::write_node_anims`), so several live blasts need one each,
-(3) the only captured use came from an unidentified firer. Next: read the three programs
-(`scripts/ps3-microcode.py fp-file`), play the model through `write_node_anims` beside `bomb_blast::hd`, then film
-a Missile hitting a rival (an AI craft in front of the player; state 1 fires one, but it needs a
-target in range, or a second RPCS3 boot with `--teleport-back`-style placement behind a rival,
-`rpcs3_place.write_pose`). `scripts/rpcs3-mem-poll.py` times the pool without pausing.
+`weapons.md` last section and `rpcs3-capture.md`, "Polling guest memory live". The pool is entered
+only when a missile reaches a craft (never on a wall), lives 1.0 s (age field `p` linear 0 to 1, point
+light `(1 - p)^2`, conf 80), and plays the model's own keys. Original film with a known firer
+(`m5`): white-out at 9.67-10.0 s of video, the rival's hull inside it. The three material programs
+are read (core: texture times vertex colour; rays: Fresnel shell; shockwave: ramp lookup on
+`Shockwave_scalar`). **Not wired**; remaining: the rays and shockwave programs in `shade.wesl`/
+`rim_glow.rs` (the shape `BOMB_FIRE`/`BOMB_SHOCK` took), one drawable per live blast with its own
+`write_node_anims` clock, a render-side hook at `ignite_blast` for `Missile` with `struck.is_some()`
+on HD (`struck` already is the craft), then a pair against `m5`'s frames with the camera pinned
+as `hd-bomb-match` did. `scripts/rpcs3-mem-poll.py --behind-rival` reproduces the hit.
 
 ## Next Steps
 
