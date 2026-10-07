@@ -917,13 +917,16 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   where the point is visible (`0x002d64d0`), takes a pool entry. **It is the craft-hit branch;
   a missile that dies on a wall never reaches `Start`.** Live: a state 1 missile (5 bounces,
   gone at 5.5 s) left the count at 0 and all 16 objects byte-identical. Confidence 70.
-- **What retires an entry.** Only four stores to `+0x10c` exist in `0x140000-0x158000`
-  (`0x00141d7c`, `0x00142164`, `0x001412d0`, and two in the neighbour class at `0x155024`/`0x001553bc`);
-  none decrements. Live, the count went 1 to 0 exactly 1.0 s after it rose (one observation) and
-  `HD_missile_explosion.vex`'s keyed `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`)
-  end at key 60 (`60 / 60 Hz = 1.0 s`; scale `256 -> 4608`, i.e. 1x to 18x, ease-out:
-  `779, 1250, 1671, 2045, 2375, 2663, ...`, read by `hd_weapon_anim_keys`). **Lifetime 1.0 s,
-  confidence 55**: the two agree, the count was seen once, and the code that clears it was not found.
+- **What retires an entry (not found).** Five stores to a `+0x10c` offset exist in `0x138000-0x160000`
+  and none is a decrement: `0x001412d0` (the increment in `pool_take`), `0x00141d7c` and `0x00142164`
+  (zero, in the two twin `MissileManager` constructors `0x00141a88`/`0x00141e70`) and `0x00155024`/`0x001553bc`
+  (the explosion class's *own* field init, a different object). Live, the manager's count went 1 to 0
+  exactly 1.0 s after it rose (one observation), so something clears it that is not a `stw ...,0x10c`
+  (a block zero, or a store through a computed address). `HD_missile_explosion.vex`'s keyed
+  `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`) end at key 60 (`60 / 60 Hz = 1.0 s`;
+  scale `256 -> 4608`, i.e. 1x to 18x, ease-out: `779, 1250, 1671, 2045, 2375, 2663, ...`, read by
+  `hd_weapon_anim_keys`). **Lifetime 1.0 s, confidence 55**: the two agree, the count was seen once,
+  and the clearing code was not found.
 - **`Draw` (`0x00155420`, vtable slot 5) is also the per-frame body**: it draws the model at
   `this + 0xf0 + viewport * 0x40`, writes a point light `0x006778c8(light_slot, 1/f, radius)` whose
   size comes from a float at `this + 0x17c` (a per-object value never stored by this class's
@@ -934,19 +937,25 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   `0x28c660` about the three axes, `0x677688`) are written by `Start` and **read by nothing in
   `0x154000-0x156000`** other than `Start` itself: they look like the rays' random orientations,
   which the `rays` node's mesh would take. Confidence 45; unresolved.
-- **State identity** (`rpcs3-capture.md`): state 1 is the Missile (counter `+0x198` 1..5 against
-  `MAX_BOUNCES = 5`, confidence 70); state 2 is a different projectile with a large yellow-white
+- **State identity** (`rpcs3-capture.md`): state 1 is the Missile (the list count `manager + 0xc4`
+  is 1 while it flies and 0 when it ends; a counter in the block after the manager, `manager + 0x198`,
+  reads 1, 2, 3, 4 at the bounces and 5 as it ends, against the Missile's `MAX_BOUNCES = 5`; confidence 70); state 2 is a different projectile with a large yellow-white
   burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
   state 10 does nothing at the grid.
-- **The picture, original only.** The one captured pool use (`data/scratch/hd-weapon-fx/runs/m3`, video
-  48.6 s on) is a full-frame white-out, then yellow with orange and dark-centred ring discs, over
-  about a second; contact sheet `runs/m3/s10.png` (tiles 39-45). Our side is **not drawn**: the
-  trigger (a missile reaching a craft, per viewport visible) and the clock (the model's own keys,
-  1.0 s) are known, but the three materials (`hd_missile_explosion_core_glow`, `_lightrays_glow`,
-  `_shockwaves_glow`: all `SrcAlpha/One`, no cull, blend state `0x29`) have no read fragment
-  program and the engine has no keyed-scale player for an HD weapon model (the Bomb and Plasma
-  blasts play constants), so wiring now would be a stand-in. Open: the fragment programs, a keyed
-  node clock in `oag_raceplay`, and a matched pair (needs a craft hit by a Missile on both sides).
+- **The picture, original only.** The one captured pool use is `data/scratch/hd-weapon-fx/runs/m3`:
+  the pool count rose at host 43.44 s, and the film's mean luma (`> 225` of 255) holds for 13
+  frames, 48.57-48.97 s of video, so the white-out **starts at the count's rise** with a host-to-video
+  offset of +5.13 s (m4's freeze gave about +5; confidence 70 that the white-out is this pool entry).
+  It is a full-frame white-out for 0.4 s, then yellow with orange and dark-centred ring discs (luma
+  about 185) until the count fell at host 44.4 (video 49.5); contact sheet `runs/m3/s10.png`
+  (tiles are 6 fps from video 43 s, so tile 39 is about 49.5 s: the sheet's own spacing, not the event time).
+  Our side is **not drawn**. The trigger (a craft hit, visible in the viewport) and the clock (the model's
+  own keys, 1.0 s) are known, and a keyed node clock exists (`Drawable::write_node_anims(seconds)`, used by
+  the gantry and the adverts), but the three materials (`hd_missile_explosion_core_glow`, `_lightrays_glow`,
+  `_shockwaves_glow`: all `SrcAlpha/One`, no cull, state `0x29`) have no read fragment program, one
+  drawable carries one clock (so several live blasts need one drawable each), and there is no matched
+  pair. Open: the fragment programs (`scripts/ps3-microcode.py fp-file`), the instance clocks, and a
+  Missile hit on both sides.
 
 **Omega:** `HD_missile_explosion.vex`/`.rcsmodel` ships in Omega's archives (see
 `ps4-omega-eu/weapons.md`); the pool, trigger and lifetime above were not looked up in Omega's

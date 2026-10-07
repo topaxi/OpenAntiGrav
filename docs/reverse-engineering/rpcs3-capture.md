@@ -992,11 +992,11 @@ standing on the grid):
 
 | Fired state | What the memory and film show | Conf |
 | --- | --- | ---: |
-| 1 | a projectile flies for 5.5 s; a counter at `manager + 0x198` steps `1,2,3,4,5` at host 2.1, 3.2, 4.2, 4.8, 5.5 s, and the projectile is gone at 5.5 s (`manager + 0xc4` 1 to 0). The Pulse Missile's bounce budget is 5 (`oag_weapons::projectile::missile::MAX_BOUNCES`). The end is a small orange-red burst in the film; **the explosion pool is untouched** (`+0x10c` stays 0, all 16 pool objects byte-identical over 40 s) | 70 that state 1 is the Missile |
+| 1 | a projectile flies for 5.5 s; a counter in the block after the manager (`manager + 0x198`, outside its `0x118` bytes) reads 1, 2, 3, 4 at the bounces and 5 as it ends, at host 2.1, 3.2, 4.2, 4.8, 5.5 s, and the projectile is gone at 5.5 s (the list count `manager + 0xc4` is 1 while it flies, 0 after). The Pulse Missile's bounce budget is 5 (`oag_weapons::projectile::missile::MAX_BOUNCES`). The end is a small orange-red burst in the film; **the explosion pool is untouched** (`+0x10c` stays 0, all 16 pool objects byte-identical over 40 s) | 70 that state 1 is the Missile |
 | 2 | a projectile that ends 3.4 s later in a large yellow-white burst with orange streaks, filling the left half of the frame (`m1`, `m2`); **the explosion pool is untouched** | state 2 unresolved |
 | 3, 6 | nothing drawn at the grid within 10 s (3); the craft is flung ahead (6) | - |
 | 10 | on the grid alone (`m4`): no byte of the manager or the pool changes in 14 s | - |
-| (m3, state 10 fired after 6) | `manager + 0x10c` goes 0 to 1 at host 43.4 s and back to 0 at 44.4 s: **one pool entry in use for 1.0 s**, and the film shows a white-out filling the frame, then yellow and orange ring discs, about 5 s of video after, the offset above | 55 |
+| (m3, state 10 fired after 6) | `manager + 0x10c` goes 0 to 1 at host 43.44 s and back to 0 at 44.4 s: **one pool entry in use for 1.0 s**; the film's luma `> 225` for 13 frames at video 48.57-48.97 s, i.e. the white-out starts at the count's rise (offset +5.13 s), then yellow and orange ring discs | 70 attribution, 55 lifetime |
 
 So `HD_missile_explosion`'s pool is not entered by the Missile ending on a wall (state 1,
 5 bounces) and is entered once, for a second, in the one boot in which a craft came into

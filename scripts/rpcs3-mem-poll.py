@@ -61,6 +61,29 @@ def scan(read, needle, lo=0x30000000, hi=0x40000000):
     return hits
 
 
+def behind_rival(gdb, distance):
+    """Teleport the player `distance` behind the nearest other craft, with its heading and speed."""
+    gdb.pause()
+    ships = struct.unpack(">8I", gdb.read(place.CRAFT_ARRAY, 32))
+    poses = []
+    for ship in ships:
+        if ship:
+            role = struct.unpack(">I", gdb.read(ship + place.OFF_ROLE, 4))[0]
+            body = struct.unpack(">I", gdb.read(ship + place.OFF_BODY, 4))[0]
+            poses.append((role, body, place.read_pose(gdb, body)))
+    me = next(p for p in poses if p[0] == 0)
+    others = [p for p in poses if p[0] != 0]
+    near = min(others, key=lambda p: sum((a - b) ** 2 for a, b in zip(p[2]["pos"], me[2]["pos"])))
+    pose = near[2]
+    fwd = pose["rows"][2]
+    speed = sum(v * f for v, f in zip(pose["vel"], fwd))
+    pos = tuple(pose["pos"][i] - distance * fwd[i] for i in range(3))
+    place.write_pose(gdb, me[1], pos, pose["rows"], speed)
+    print("behind rival: speed %.1f units/s, rival at %s" % (speed, tuple(round(c, 1) for c in pose["pos"])),
+          flush=True)
+    gdb.resume()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--image", required=True)
@@ -70,6 +93,9 @@ def main():
     ap.add_argument("--vtable", type=lambda s: int(s, 0))
     ap.add_argument("--block", type=lambda s: int(s, 0), default=0x1C0)
     ap.add_argument("--manager-of", action="store_true")
+    ap.add_argument("--behind-rival", type=float, default=0.0,
+                    help="before each shot, put the player this many units behind the nearest rival, "
+                         "on its heading and at its speed")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -116,6 +142,8 @@ def main():
             gdb.write(slot + STATE, struct.pack(">ii", st, st))
             gdb.resume()
             time.sleep(0.5)
+            if args.behind_rival:
+                behind_rival(gdb, args.behind_rival)
             session.pad.set("triangle", True)
             time.sleep(0.12)
             session.pad.set("triangle", False)
