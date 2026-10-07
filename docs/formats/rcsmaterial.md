@@ -2533,6 +2533,67 @@ albedo and lightmap only, which matches the capture to the eye.
 2048's Vita and Omega's PS4 shader containers are unread here (see the two sections above), so whether they carry an
 engine-bound slot like `0x8365b1f3` cannot be asked.
 
+## Vineta K's ceiling: the tunnel glass reads the screen, and the arch lights lost their glow (2026-10-07, `hd-vineta-ceiling`)
+
+**The report** was the maintainer's: meshes on Vineta K's ceiling "that should not be there". **Reference:** RPCS3
+`data/reference/hd-capture/vineta-teleport/pair-00.png` and `vineta-floor/03.png` (matched pose rendered with
+`--camera-pose`, untracked). In the original the tunnel's hex windows are teal glass with the sea behind them and
+the arch pillars carry smooth yellow-orange light blocks. Ours drew the hex frames over **black** panels and the
+pillar blocks as an orange honeycomb with dark cells. Two causes, neither a texture-pick fault.
+
+### 1. The hex glass is `out = fog(C + grab * W)` over an engine-bound screen grab (confidence 85)
+
+`mt_tunnelrefraction` (slots 80 and 635) and `cl_tunnelrefraction` (slot 95) declare sampler `0x88a0df95`, which no
+`.rcsmaterial` record names a texture for (`hd_refraction_census.rs`; the census over all 28 circuit models finds it
+in **six slots, all Vineta K, both directions**). Disassembly (`ps3-microcode.py fp-file`, `mt` block `@0x1fb0` and
+`@0x9de0`, `cl` block `@0x18b0`): a normal map at unit 0 (`mt_tunnelhex_n`), the hex picture at unit 1, and unit 2
+sampled at `(clip.xy / w) * {1,-1} + {0.5, 0.5}` perturbed by the normal map - **a copy of the frame behind the
+glass, not an environment probe the disc fails to ship**. The colour is
+
+    C = diffuse * lit + specular
+    mt: W = diffuse.a * 0x78575769          record value [0.2, 0.6, 0.6]  (the teal, authored)
+    cl: W = 2 * 0x78575769                  record value [1, 1, 1]; C is scaled by DiffuseColour 0.2549
+    out = f * (C + grab * W) + (1 - f) * fogColour
+
+with a constant output alpha, so it is not a blended surface in the authored sense: it replaces the pixel with
+something that includes it. `mt_tunnelhex_d` has alpha 0 on the frame struts and 255 in the panes, which is why the
+frames stay metal and the panes show the sea. Drawn as an ordinary opaque lit surface, `C` alone is black.
+
+**Fix** (`mesh::rcs::refraction`, `slots::REFRACTION`/`REFRACT_GRAB`, `mesh.wesl`'s `fs_main_blend`): no scene-copy
+pass is needed, the equation is linear in the grab. A chunk is emitted twice into the transparent list, depth write
+off like every transparent draw: pass 1 `dst = dst * src` with shader output `f * W`, pass 2 `dst = dst + src` with
+output `C`. `MATERIAL_SHIFT` moves 20 -> 22 for the two new bits. **Chosen, not measured:** the normal map's offset of
+the grab coordinate is not drawn (the grab is read at the pixel's own position); transparent draws never write depth,
+so a blended draw submitted after the glass (the sea foam, slot 770) can land over it - it did not show at
+`vineta-floor/03`. Pinned by `crates/render/tests/hd_vineta_ceiling_ground_truth.rs`
+(`the_tunnel_glass_is_two_blended_passes_over_the_screen`, fails with the classifier removed).
+
+### 2. `Program::accumulates` read a write to `H2.w` as taking `H2.xyz` away (confidence 90)
+
+`2uv_offset_lights` (slot 14, the pillar light blocks; `under_strut.gtf` plus `under_strut_glow.gtf`) ends
+`MAD H1.xyz, H1.wwww, H2, H1` with `H2 = unit1 * tint` - an accumulate - but `@0x11 DIVSQ_SAT H2.w` sits between the
+sample and its use. `accumulates` tracked taint per register, so the lane-w write cleared it and the material got no
+additive glow layer: the honeycomb diffuse drew alone. The taint is now per lane (`BTreeMap<(reg, half), lanes>`;
+a write clears only the lanes it covers). Unit test `a_write_to_another_lane_does_not_clobber_the_sample`, ground
+truth `the_arch_light_strips_carry_their_glow_layer` (fails with the old rule).
+**Known approximation:** the glow is sampled at the diffuse coordinate, the program samples it at `f[TC0].zw`
+(a second set); the strip reads as the reference's smooth block either way.
+
+**Reach, measured, and wider than the lane:** `hd_add_second_census.rs` counts vertices carrying `ADD_SECOND` per
+circuit model before/after: 718,576 -> 860,624 vertices, 147 -> 194 role words, **20 of 28 models move** (Amphiseum,
+Modesto Heights 52k -> 62k, Talon's Junction 29k -> 61k, Tech De Ra, Vineta K, Anulpha Pass, Sebenco Climb, Ubermall,
+Chenghou, Sol 2 and the main track among them). Checked against a reference where one exists: `talons-matched/03`
+(the only pose of 00/01/03 that moves, 9,622 px of 1.7 M) gains **brighter cyan light bars on the upper-left wall,
+matching the reference's cyan bars** (`data/scratch/hd-vineta-ceiling/tal_crop03.png`). No second-circuit reference
+frame was taken beyond Talon's Junction.
+
+**Still open on this frame (not this lane):** the sky behind the glass (blue/purple, a volcano drawn saturated red)
+is `hd-sky-luma`'s; every before/after of the glass is confounded by it. The reference sea is teal.
+
+**2048 / Omega check: not checkable** for the glass (PS3 microcode and an engine-bound sampler; 2048's Vita and Omega's
+PS4 shader containers are unread). **Checked, applies, not wired** for `accumulates`: it is a PS3 microcode reader
+and does not run on either.
+
 ## See also
 
 - [rcsmodel](rcsmodel.md) - the material record, and the two texture paths

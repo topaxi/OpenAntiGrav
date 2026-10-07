@@ -380,7 +380,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 20u;
+    let glow_slot = in.slots >> 22u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material

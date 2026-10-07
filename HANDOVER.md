@@ -612,6 +612,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD's engine trail is one of four ribbons, and a craft flying through one sparks](handover/rendering/hds-engine-trail-is-one-of-four-ribbons.md)
 - [HD's frame was too bright and too bloomy; the bloom chain was not what was wrong](handover/rendering/hds-frame-was-too-bright-and-too-bloomy.md)
 - [HD needs a per-material shader path, and two general rules for finding one have been refuted](handover/rendering/hd-needs-a-per-material-shader-path-and.md)
+- [Vineta K's glass refraction and arch glow: what is left](handover/rendering/vineta-k-glass-refraction-and-arch-glow-remainder.md)
 - [A PS3 title now boots, drives and screenshots from a script - and its savestates are not worth adopting](handover/tooling/a-ps3-title-now-boots-drives-and-screenshots.md)
 - [Reversed grids were putting craft off the track; fixed by walking the spline instead of extrapolating a straight line](handover/gameplay/reversed-grids-were-putting-craft-off-the-track.md)
 - [2048's sky turns and its fog draws on HD's curve; the 2048 law, two sky keys and Omega's pink road are open](handover/rendering/2048s-sky-turns-and-fog-draws-on-hds-curve.md) - 2026-10-06: 2048 and Omega domes turn by `Sky rotation`, fog from `Lighting.Fog colour` on HD's inherited curve; open: 2048's GXP fog term, the sign, `Sky brightness`/`Sky height offset`, Omega altima's flat pink road

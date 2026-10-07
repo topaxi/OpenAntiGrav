@@ -901,16 +901,28 @@ impl Program {
     /// shipped fragment program here was found with a branch.
     #[must_use]
     pub fn accumulates(&self, unit: u8) -> bool {
-        let mut sampled: std::collections::BTreeSet<(u8, bool)> = Default::default();
+        // The lanes of each register the sample still occupies: a write to
+        // `H2.w` does not take away what `TEX H2.xyz` put in `H2.xyz`.
+        let mut sampled: std::collections::BTreeMap<(u8, bool), u8> = Default::default();
+        let clobber = |sampled: &mut std::collections::BTreeMap<(u8, bool), u8>,
+                       dst: (u8, bool),
+                       mask: u8| {
+            if let Some(lanes) = sampled.get_mut(&dst) {
+                *lanes &= !mask;
+                if *lanes == 0 {
+                    sampled.remove(&dst);
+                }
+            }
+        };
         for insn in &self.instructions {
             let dst = (insn.dst, insn.dst_half);
             if insn.is_texture() {
                 if insn.unit == unit {
-                    sampled.insert(dst);
+                    *sampled.entry(dst).or_default() |= insn.mask;
                 } else {
                     // A fetch overwrites, so a register reused by another
                     // unit's sample stops carrying this one's.
-                    sampled.remove(&dst);
+                    clobber(&mut sampled, dst, insn.mask);
                 }
                 continue;
             }
@@ -921,10 +933,10 @@ impl Program {
                     _ => None,
                 })
                 .collect();
-            if !sources.iter().any(|s| sampled.contains(s)) {
-                // Not fed by the sample, but it may still clobber the register
-                // that was holding it.
-                sampled.remove(&dst);
+            if !sources.iter().any(|s| sampled.contains_key(s)) {
+                // Not fed by the sample, but it may still clobber the lanes
+                // of the register that was holding it.
+                clobber(&mut sampled, dst, insn.mask);
                 continue;
             }
             // **The destination has to be the *addend*, not just present.**
@@ -947,7 +959,7 @@ impl Program {
             if addend {
                 return true;
             }
-            sampled.insert(dst);
+            *sampled.entry(dst).or_default() |= insn.mask;
         }
         false
     }
