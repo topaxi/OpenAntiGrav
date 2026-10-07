@@ -48,11 +48,14 @@ documented tolerances instead. See
 
 `sqrt` is safe: IEEE-754 requires it to be correctly rounded. Transcendentals
 (`sin`, `cos`, `exp`, `ln`) are **not** required to be correctly rounded and are
-a genuine portability risk, because they resolve to the platform's libm. The
-determinism probe uses `sin` deliberately, so this shows up as a test failure
-rather than as a mystery desync. If platform libm differences turn out to be
-unavoidable, the fix is to bring our own implementations into `oag-core`, not to
-weaken the test.
+a genuine portability risk, because they resolve to the platform's libm. So
+simulation code takes them from `oag_core::math` (the `libm` crate, the same code
+on every target), and `check-transcendentals.py` refuses a platform call in every
+scanned crate. The determinism probe used the platform's `sin` on purpose until
+2026-10-07, as a canary; macOS and Windows then disagreed with the glibc-recorded
+reference, and the probe now takes `oag_core::math` like everything else (see
+["the core probe's own `sin`"](#2026-10-07-the-core-probes-own-sin-is-the-first-cross-platform-failure)
+below).
 
 ### Iteration order
 
@@ -262,13 +265,16 @@ divergence is libm alone: 90 (two cross-platform hashes reproduced bit for bit;
 the other stages, physics, race-level and driver, never ran on macOS or Windows
 because the job stopped at the first assert, so whether *they* hold is unknown).
 
-Not fixed here, because it moves the committed constants: switching the probe to
-`oag_core::math` changes the Linux trajectory hashes (finals unchanged on Linux)
-to `0xbcd056e334f2b1cb`, `0xa774f231b9e343d0`, `0x31337c04f2032805`. It also ends
-the probe's role as a platform-libm canary, which `check-transcendentals.py`
-already covers for every scanned crate. That regeneration is the maintainer's
-decision. Note that `ubuntu-latest` moves to Ubuntu 26 (a newer glibc) from
-2026-10-19, so a glibc-baked reference can go red on Linux too.
+**Fixed 2026-10-07, the maintainer's decision:** the probe takes `sin` and the
+axis-angle quaternion from `oag_core::math`, the reference trajectory hashes moved
+to `0xbcd056e334f2b1cb`, `0xa774f231b9e343d0`, `0x31337c04f2032805` (finals
+unchanged), debug and release identical on x86-64 Linux, and the probe left
+`check-transcendentals.py`'s allowlist - the script already covers every scanned
+crate, so the canary role is not lost. The 1,000-tick trajectory equals the one
+Windows printed before the change. Whether all three OSes now agree is confirmed
+by the next CI run. It also takes the glibc version out of the reference, which
+matters because `ubuntu-latest` moves to Ubuntu 26 (a newer glibc) from
+2026-10-19.
 
 **When the determinism test fails, do not update the constants.** That converts
 a real bug into a silent one. The failure output names the platform, and each CI
