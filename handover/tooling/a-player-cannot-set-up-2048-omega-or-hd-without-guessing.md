@@ -20,25 +20,21 @@ message; the "beside the executable" hint shows only under an AppImage.
    unpack chains (pkg2zip, psvpfsparser with a license key, LibOrbisPkg) are
    manual and were not re-run. The error now says a `.pkg` must be unpacked and
    points at installing.md.
-2. **The intro is a black `INTRO FRAME n / N (NO PICTURE)` without ffmpeg**, so
-   a first screenshot looks broken. `oag-game --help` still opens with "Run
-   Wipeout Pulse from a disc image".
-3. **2048's 1.04 patch is not mounted** (`crates/2048/src/lib.rs`), so a
-   player who unpacks it gains nothing and nothing says so.
-4. **Stale lines elsewhere:** `data/README.md` calls Pure and HD "read-only
-   format targets, not playable" and says `Error::WrongTitle` for Pure;
-   `docs/tools/packaging.md` says "five normalised names" (there are six, now
-   seven with the `-dec` HD name).
-5. **Not walked:** Windows and macOS, a clean machine with no system
+Landed 2026-10-07 (setup-polish): auto-detect prefers Europe over USA (Pulse,
+Pure, 2048 extracts; `DEFAULT_IMAGE` and every suggested image name too); a
+missing `ffmpeg` logs one `warn` line and skips the conversion; `--help` names
+all five titles; 2048's 1.04 patch is left unmounted on evidence (see
+`docs/formats/2048-status.md`); stale `data/README.md` and `packaging.md` lines
+fixed; the cache is `data/cache/` only in a checkout (a `justfile` and `data/`)
+or where one already exists.
+
+2. **Not walked:** Windows and macOS, a clean machine with no system
    libraries, the 2048 and Omega unpack chains, Pulse DLC mounting (the dry
-   run prints no pack line), and audio. Also: no-arg default is USA-first for
-   Pulse while `just play` is EU; the cache directory depends on whether a
-   `data/` folder exists in the current directory.
+   run prints no pack line), and audio.
 
 ## Next Steps
 
 1. Decide whether a player-facing unpack command for 2048 and Omega is wanted
    at all, given that it needs a license key from the player's own copy.
-2. Say in `--help` that the other four titles exist, and say in the loader
-   report why the intro has no picture without ffmpeg.
-3. Fix the stale lines in item 4.
+2. Mounting 2048's 1.04 patch needs a role searched ahead of `data`, the
+   `data1`/`data2` precedence measured, and a rendering check; a separate lane.

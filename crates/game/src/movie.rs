@@ -1434,6 +1434,30 @@ fn transcode(video: &[u8], to: Conversion<'_>, frames: usize) -> Result<FrameSto
     Ok(store)
 }
 
+/// Whether `ffmpeg` is absent, probed once per process; the first miss logs
+/// the one line a player needs, and every later movie skips quietly.
+///
+/// Without it every conversion would fail on its own, and the reason would sit
+/// in a debug-level loader report while the screen shows a black
+/// `INTRO FRAME n / N (NO PICTURE)`. One `warn` names the cause and the fix.
+fn ffmpeg_missing() -> bool {
+    static MISSING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *MISSING.get_or_init(|| {
+        let missing = matches!(
+            std::process::Command::new("ffmpeg").arg("-version").output(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound
+        );
+        if missing {
+            warn!(
+                "ffmpeg is not installed, so the intro and other movies play with no \
+                 picture (the game is otherwise fine). Install ffmpeg to see them; \
+                 `--no-video` hides this message"
+            );
+        }
+        missing
+    })
+}
+
 /// Runs `ffmpeg` to transcode `input` into lossless AV1 `output`.
 ///
 /// `input_format` names the demuxer explicitly when `input` is a bare
@@ -1450,6 +1474,12 @@ fn run_ffmpeg(
     frames: Frames,
     watch: Watch<'_>,
 ) -> Result<()> {
+    if ffmpeg_missing() {
+        bail!(
+            "ffmpeg is not on PATH. Install it to see the intro video; \
+             without it the sequence still plays, with a black picture"
+        );
+    }
     // Said before rather than after, because the whole 1200-frame intro takes
     // about 80 seconds and silence for that long reads as a hang. It happens
     // once per movie: the result is cached.

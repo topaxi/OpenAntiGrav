@@ -45,16 +45,39 @@ pub fn default_dlc_cache_dir() -> std::path::PathBuf {
 
 /// `data/cache/<what>` in a checkout, `<cache dir>/oag/<what>` anywhere else.
 ///
-/// A checkout is recognised by having a `data/` directory, which is where
-/// everything user-supplied already lives and what `just` recipes and
-/// `data/README.md` document. A packaged build has no checkout around it, and
-/// writing beside wherever it happens to have been run from would scatter a
-/// cache through a player's folders - or fail outright, if that is a read-only
-/// mount.
+/// A checkout is a folder with a `justfile` and a `data/` directory, or one
+/// where `data/cache` already exists (a cache an earlier version put there is
+/// kept, not orphaned). A player who only made `data/images/` to drop a disc
+/// in is not a checkout: their cache goes to the user cache directory rather
+/// than beside their own folders, which a read-only mount would also refuse.
 fn cache_dir_named(what: &str) -> std::path::PathBuf {
     let checkout = Path::new("data/cache").join(what);
-    if Path::new("data").is_dir() {
+    if is_checkout(
+        Path::new("data/cache").is_dir(),
+        Path::new("data").is_dir(),
+        Path::new("justfile").is_file(),
+    ) {
         return checkout;
     }
     dirs::cache_dir().map_or_else(|| checkout, |cache| cache.join("oag").join(what))
+}
+
+fn is_checkout(has_cache: bool, has_data: bool, has_justfile: bool) -> bool {
+    has_cache || (has_data && has_justfile)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_checkout;
+
+    #[test]
+    fn a_players_data_images_folder_alone_is_not_a_checkout() {
+        assert!(!is_checkout(false, true, false));
+    }
+
+    #[test]
+    fn a_repository_with_data_and_an_old_cache_are_checkouts() {
+        assert!(is_checkout(false, true, true));
+        assert!(is_checkout(true, true, false));
+    }
 }

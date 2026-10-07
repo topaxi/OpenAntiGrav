@@ -146,34 +146,34 @@ Setting up the Ghidra bridge is described in
 git clone <this repo> && cd OpenAntiGrav
 
 # Put your own disc images here, named as described in data/README.md
-cp "/path/to/WipEout Pulse (USA).chd" data/images/pulse-psp-usa.chd
+cp "/path/to/WipEout Pulse (Europe).chd" data/images/pulse-psp-eu.chd
 
 # What is this disc?
-just unpack info data/images/pulse-psp-usa.chd
+just unpack info data/images/pulse-psp-eu.chd
 
 # What is on it?
-just unpack list data/images/pulse-psp-usa.chd
+just unpack list data/images/pulse-psp-eu.chd
 
 # Which files are worth reverse engineering?
-just unpack sniff data/images/pulse-psp-usa.chd
+just unpack sniff data/images/pulse-psp-eu.chd
 
 # Pull the executable out for Ghidra
-just unpack extract data/images/pulse-psp-usa.chd -o data/extracted/psp '*BOOT.BIN'
+just unpack extract data/images/pulse-psp-eu.chd -o data/extracted/psp '*BOOT.BIN'
 
 # Look inside an asset archive, straight from the image
-just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
-just wad tags data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad
+just wad list data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/FE.wad
+just wad tags data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/FE.wad
 
 # Actually look at the assets
-just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FEData.wad
+just view data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/FEData.wad
 
 # Recover entry names, then list an archive with them
-just mine-names data/images/pulse-psp-usa.chd
-just wad list data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+just mine-names data/images/pulse-psp-eu.chd
+just wad list data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/Data.wad \
     --names data/extracted/psp/names.txt
 
 # Render a ship
-just view data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad \
+just view data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/Data.wad \
     --mesh 'Data\Ships\Feisar\Ship.vex' --screenshot /tmp/ship.png
 
 # Play it: the disc's own intro and menus into a real single-ship time trial.
