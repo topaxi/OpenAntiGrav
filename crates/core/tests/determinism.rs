@@ -19,9 +19,9 @@
 //!
 //! Point 4 is the one to watch: IEEE-754 requires correct rounding for `sqrt`
 //! but not for transcendentals, so those are genuinely platform-dependent.
-//! The probe uses `sin` deliberately, to catch this rather than hide it. If it
-//! turns out that platform libm differences are unavoidable, the fix is to
-//! bring our own implementations into `oag-core`, not to weaken the test.
+//! The probe takes its `sin` from `oag_core::math` (the `libm` crate, the same
+//! code on every target), as all simulation code must; a platform `sin`
+//! reaching the probe again would show up here as a cross-OS mismatch.
 //!
 //! Regenerate deliberately, only after establishing that a change of behaviour
 //! is intended:
@@ -46,14 +46,23 @@ use oag_core::probe;
 ///   they warn against: the *cause* was found and fixed first, and the fix is
 ///   pinned by a published reference vector in `rng.rs` so the same class of
 ///   change cannot happen quietly again.
+/// - Regenerated 2026-10-07 because the probe called the platform's own `sin`
+///   (a deliberate libm canary) and the constants were recorded with glibc's,
+///   so macOS and Windows could never match them - the first CI runs to
+///   compare those two OSes in about four weeks failed exactly there. The
+///   cause was established first (swapping `sin`/`from_axis_angle` for
+///   `oag_core::math` on Linux reproduced Windows' 1000-tick trajectory bit for
+///   bit, and `sin` alone macOS' 100000-tick one), then the maintainer chose
+///   the fix this module always named: the probe takes `oag_core::math`. Only
+///   the trajectory hashes move; the final-state hashes are unchanged.
 const REFERENCE: &[(u32, u64, u64, u64)] = &[
-    (1_000, 1, 0xc45d_a2ce_49d2_b04b, 0xc710_a4bc_5479_abee),
-    (10_000, 42, 0x422a_d61d_f161_2c01, 0x9a58_e5fc_acff_9476),
+    (1_000, 1, 0xc45d_a2ce_49d2_b04b, 0xbcd0_56e3_34f2_b1cb),
+    (10_000, 42, 0x422a_d61d_f161_2c01, 0xa774_f231_b9e3_43d0),
     (
         100_000,
         0xDEAD_BEEF,
         0xeabc_0eab_577c_b538,
-        0xbed1_05ca_ac9b_be5c,
+        0x3133_7c04_f203_2805,
     ),
 ];
 

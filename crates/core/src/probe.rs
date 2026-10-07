@@ -11,7 +11,7 @@
 //! crates will save the replay system.
 
 use crate::hash::StateHasher;
-use crate::math::{Quat, Vec3};
+use crate::math::{self, Quat, Vec3};
 use crate::rng::Rng;
 use crate::tick::TickRate;
 
@@ -65,10 +65,12 @@ pub fn run(ticks: u32, seed: u64) -> ProbeResult {
         }
 
         // sqrt is IEEE-754 correctly rounded, so normalize is safe. sin/cos are
-        // not specified to be correctly rounded and are a real portability
-        // risk, which is exactly why the probe uses them.
+        // not, so they come from `oag_core::math` (the `libm` crate, the same
+        // code on every target) exactly as simulation code must take them: the
+        // platform's own `sin` differed on macOS and Windows from the glibc one
+        // the reference was first recorded with.
         let angle = (tick as f32) * 0.01;
-        let spin = Quat::from_axis_angle(Vec3::Y, angle.sin() * 0.1);
+        let spin = math::quat_from_axis_angle(Vec3::Y, math::sin_cos(angle).0 * 0.1);
         orientation = (orientation * spin).normalize();
 
         trajectory.write_vec3(position);
