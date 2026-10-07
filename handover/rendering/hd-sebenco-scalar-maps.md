@@ -12,12 +12,15 @@ lane wide is a scalar, not the colour".
   sky is near-white as ours is, but not as a flat clip. Differences between the two files that could carry the missing
   factor: Sebenco's `Fog.Fog Color` is HDR `(0.65, 1.18, 1.85)` at density 0.0004, Sol 2's grey 0.25 at 0.002; prelit
   and tone keys differ. Not tuned. Second matched pose (`ref2/02`) is unmatched in view (the craft slid 4.8 units).
-- **Vineta's teal behind the glass is the sea, not the sky.** `water_noref` / `water_test_2` draw `waves2.gtf` as the
-  picture; their programs sample the engine-bound paraboloid reflection (`0x9edd3243`) and constants we do not evaluate,
-  so the sea behind the panes is blue where the reference is teal (teal = bright backdrop x the glass's authored
-  `[0.2, 0.6, 0.6]`). A water-family lane.
-- **The ice pool's water layer** (constants lerped by the pond mask, fresnel, `0x9edd3243` reflection) is not drawn; the
-  pool is snow-white where the reference has cyan streaks (`pair_01.png`).
+- **Vineta's teal behind the glass is not the water** (2026-10-07, `hd-water`, rcsmaterial.md "Water family"): `waves2` is a
+  normal map and is no longer painted as a picture, which moves the hex-window pixels by 2 to 6 levels of the 30 that
+  separate us from the reference. The panes see the sky cube; the teal needs the sky lane's open item and the glass
+  multiply. `paraboloidReflectionTex` for `water_test_2`/`water_noref` is undrawn: HD's binding for it was not found
+  (`PerMaterialEnvMap`/`skyreflect.gtf` is authored data the HD executable does not name; 2048 binds a per-environment
+  `skyParaboloid.gxt`).
+- **The ice pool's water layer is drawn** (constants lerped by the pond mask and a facing term, `mesh::rcs::ice`). Open:
+  the bump-perturbed facing term (the reference's streaks), the program's own specular, and brightness - the reference
+  pool is paler (`(155,244,249)`) than ours; no matched camera exists to measure it against.
 - **127 slots changed by the pick rule have one reference frame between them** (Sol 2). Candidates worth a frame:
   `glass_2nduv_reflect_glow` on 02_track (18+11 slots), `2rocksandblend_via_diffuse` on Vineta K, `nr_twinblend`.
 - Sebenco reverse: the forward and reverse pool captures (`ref`, `ref3`) differ in camera yaw from ours (the craft's
@@ -25,6 +28,10 @@ lane wide is a scalar, not the colour".
 
 ## Next Steps
 
-1. Water family: decode `water_noref` block, wire constants, leave the reflection undrawn and say so in the loader report.
+1. Find how HD binds `paraboloidReflectionTex` (engine parameter table slot 8, `Shader_InitEngineParams`): an RPCS3 draw
+   capture of one `water_test_2` draw, or the setter of the parameter entry's `+0x18`. Until then the reflection stays
+   undrawn.
 2. Take a Sebenco sky capture at a pose with a large open sky and a stationary craft (`--speed 0` placed on a flat
    stretch) and fit the factor against `Fog.Fog Color`/tone before touching `sky_cube::build`.
+3. Ice: perturb `F` by the two normal-map taps (`and_snow_norm` at `TC4.xy`, `256norm4` at `TC4.xy * 0.2444`) and add the
+   program's specular; take a matched capture with a recorded camera.
