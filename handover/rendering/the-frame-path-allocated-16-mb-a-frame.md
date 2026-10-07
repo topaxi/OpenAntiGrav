@@ -216,14 +216,15 @@ beside the allocation delta (`perf-probe` build). Wipeout HD, Vineta K
 read the ratio, not the microseconds).
 
 **The largest CPU cost was not `write_buffer`'s call count.** One mark held
-1.6 ms of a 2.0 ms `Scene::render`: `write_weapon_scenes` wrote the circuit's
+1.6 ms of a 2.0 ms `Scene::render`: `Scene::write_weapon_scenes` wrote the circuit's
 scene block with a direct `queue.write_buffer` (uncounted by
 `perfprobe::write_buffer`, which is why the 44 counted writes a frame never
 showed it) into every PS3-shaded drawable of every weapon pool, live or not -
 about 600 writes and 4,200 allocations a frame on HD, with no rocket in the
-air. It now writes only the live prefix of each dense pool, the live plasma
-blast slots and a live LeachBall, which are exactly the drawables the frame
-draws.
+air. Each weapon's own writer now calls `weapon_models::write_fog` for the
+drawables it writes (the live prefix of a dense pool, the live plasma blast
+slots, a live LeachBall), which are exactly the drawables the frame draws.
+`write_weapon_scenes` is gone.
 
 | `Scene::render` CPU, median, 3 interleaved pairs | before | after |
 | --- | --- | --- |

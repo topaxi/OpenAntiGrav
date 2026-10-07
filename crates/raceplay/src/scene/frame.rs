@@ -277,23 +277,8 @@ impl Scene {
             ..scene
         };
         self.write_ship_scenes(queue, &ship_scene);
-        // The scenery: both animation mechanisms off the one clock.
-        for drawable in [
-            Some(&self.track),
-            self.sky.as_ref(),
-            self.collision.as_ref(),
-            self.pads.as_ref(),
-            self.weapon_pads.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            drawable.write_anims(queue, seconds);
-            // The scenery that *moves* rides the same clock as the scenery
-            // that scrolls, so `--anim-seconds` aims both at once and a race
-            // runs both off the tick.
-            drawable.write_node_anims(queue, seconds);
-        }
+        let weapon_scene = Self::weapon_scene(&scene);
+        self.write_scenery_anims(queue, seconds);
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
@@ -436,24 +421,20 @@ impl Scene {
         self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_ghost(race, queue, view_projection, prev_vp);
         oag_gpu::perfprobe::mark("ship+shield-write");
-        let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
-            self.write_weapon_models(race, &prev, queue, view_projection, prev_vp, seconds);
-        let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
+        let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) = self
+            .write_weapon_models(
+                race,
+                &prev,
+                queue,
+                view_projection,
+                prev_vp,
+                seconds,
+                &weapon_scene,
+            );
+        let plasma_blast_active =
+            self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);
         let blasts_active = self.write_bomb_blasts(race, queue, view_projection, seconds);
-        let leach_ball_active = self.write_leach_ball(race, queue, view_projection);
-        self.write_weapon_scenes(
-            queue,
-            &scene,
-            &super::weapon_models::LiveWeapons {
-                rockets: rocket_matrices.len(),
-                plasma_balls: ball_matrices.len(),
-                mines: mine_matrices.len(),
-                bombs: bomb_matrices.len(),
-                cannon_rounds: cannon_matrices.len(),
-                plasma_blasts: &plasma_blast_active,
-                leach_ball: leach_ball_active,
-            },
-        );
+        let leach_ball_active = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -1002,6 +983,7 @@ impl Scene {
     }
 }
 
+mod anims;
 mod attachments;
 mod beam;
 mod lod;
