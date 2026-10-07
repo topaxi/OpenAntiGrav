@@ -12,7 +12,9 @@
 //! `"unknown"` rather than an error. The last one is not hypothetical - the
 //! `--container` build's Debian bookworm image
 //! ([`packaging/appimage/Containerfile`](../../packaging/appimage/Containerfile))
-//! installs no `git`, on purpose, since nothing else in the build needs it.
+//! installs no `git`, on purpose, since nothing else in the build needs it -
+//! so `scripts/build-appimage.sh` passes the host's hash in as `OAG_GIT_HASH`,
+//! which wins over everything below when set.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,7 +25,15 @@ fn main() {
     // so they are not modules alone and stay plain WGSL.
     oag_shader_check::link_each("shaders", &["backdrop", "scene", "ui", "video"]);
     oag_shader_check::check_dir("src", &[]);
-    let hash = git_hash().unwrap_or_else(|| "unknown".to_string());
+    // A build that cannot see the repository (the AppImage's container: no
+    // `git`, and a worktree's `.git` points outside the mount) is handed the
+    // hash by the script that started it.
+    println!("cargo:rerun-if-env-changed=OAG_GIT_HASH");
+    let hash = std::env::var("OAG_GIT_HASH")
+        .ok()
+        .filter(|hash| !hash.is_empty())
+        .or_else(git_hash)
+        .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=OAG_GIT_HASH={hash}");
 }
 
