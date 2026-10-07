@@ -2292,6 +2292,7 @@ dependencies = [
  "chd",
  "dirs",
  "miniz_oxide",
+ "num-bigint",
  "oag-testdata",
  "thiserror 2.0.19",
 ]

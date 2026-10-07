@@ -149,6 +149,10 @@ chd = "0.3"
 # Vita/PS4 package layers. MIT OR Apache-2.0, RustCrypto, pure Rust with AES-NI/ARMv8
 # acceleration picked at runtime. Not in the simulation crates.
 aes = "0.8"
+# Big-integer modular exponentiation for the PS4 package's two RSA-2048 key
+# unwraps (`oag-disc`'s `ps4_pkg`), two exponentiations per package. Already in the
+# lock file as a transitive dependency, so this adds no crate. MIT OR Apache-2.0.
+num-bigint = "0.4"
 bytemuck = "1"
 
 # The MPEG decoder, for the container Wipeout HD keeps its music in. Reads how
