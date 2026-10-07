@@ -54,13 +54,26 @@ pub(super) fn hd_sky_model(
         ));
         return None;
     };
-    let rotation = envsettings_name(track)
+    let env = envsettings_name(track)
         .and_then(|name| archives.read_name(&name).ok())
         .and_then(|blob| String::from_utf8(blob).ok())
-        .and_then(|text| oag_tables::envsettings::EnvSettings::parse(&text).ok())
+        .and_then(|text| oag_tables::envsettings::EnvSettings::parse(&text).ok());
+    let rotation = env
+        .as_ref()
         .and_then(|env| env.scalar(oag_tables::envsettings::SKY_ROTATION))
         .unwrap_or(0.0);
-    match mesh::sky_cube::build(&name, &blob, rotation) {
+    // The Zone branch of the original's sky draw does not take the circuit's
+    // colour (renderer.md, "Lighting.Sky colour's consumer"), so a Zone sky
+    // and a circuit with no authored colour draw untinted.
+    let tint = match (zone_sky, env.as_ref()) {
+        (None, Some(env)) => env
+            .rgba8(oag_tables::envsettings::SKY_COLOUR)
+            .map_or([1.0; 3], |c| {
+                std::array::from_fn(|i| f32::from(c[i]) / mesh::sky_cube::SKY_COLOUR_NEUTRAL)
+            }),
+        _ => [1.0; 3],
+    };
+    match mesh::sky_cube::build(&name, &blob, rotation, tint) {
         Ok(sky) => {
             let (width, height) = sky
                 .textures
@@ -75,7 +88,9 @@ pub(super) fn hd_sky_model(
             report.push(format!(
                 "{name}: {whose}, six {width}x{height} cubemap face(s) on a \
                  camera-centred cube, turned {rotation:.0} degree(s) by the authored Sky \
-                 rotation (unit read off the corpus; sign and axis this project's)"
+                 rotation (unit read off the corpus; sign and axis this project's), tinted \
+                 x{:.2}/{:.2}/{:.2} by Sky colour (byte / 128, fitted not read)",
+                tint[0], tint[1], tint[2]
             ));
             Some(sky)
         }

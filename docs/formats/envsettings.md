@@ -154,7 +154,7 @@ has.
 | `Lighting.Sun direction` | **Drawn.** Normalised; the stand-in rig is used where it is degenerate |
 | `Lighting.Constant ambient color` | **Drawn**, clamped to `0..=1` |
 | `Lighting.Sun color` | **Drawn at the authored magnitude** into the linear scene target, per [ADR-0026](../architecture/adr/0026-hd-authored-lighting-is-linear.md); the "hue drawn, magnitude dropped" reduction above is retired |
-| `Lighting.Sky colour` | Read, unused |
+| `Lighting.Sky colour` | **Drawn**: the sky cube's vertex colour, `byte / 128` (fitted on Sol 2 and Talon's Junction, the divisor not read) - [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#hds-sky-is-tinted-by-lightingsky-colour-and-the-sky-luma-changes-sign-reading-was-a-mask-artefact-2026-10-07-hd-sky-luma). The fourth byte is unread |
 | `Lighting.Sky rotation` | **Drawn**: the sky cubemap is turned by it, about the vertical. Degrees is the corpus's own unit - 180 and -40 survive no radian reading - and the sign and axis are this project's choice, said per race in the load report |
 | `Fog.Fog Color`, `Fog Density` | **Drawn, on the curve read out of the circuit materials' own fragment microcode**: `f = exp(-(density * view_depth)^2)`, the colour lerped in by `f`. See [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-race-fog-curve-is-read-out-of-the-circuit-materials-own-microcode). What is *not* read is how the engine fills the shader's coefficient from `Fog Density`; the authored value is passed through unscaled and judged against an rpcs3 reference frame |
 | `Fog.Alternate *` | Read, unused - what selects the alternate pair over the primary is unread |
@@ -242,7 +242,7 @@ do with a circuit.
   through the same `Depth::Sky` path as Pulse's authored `Skycube` mesh; the
   picture is the disc's and the cube is the geometry a cubemap defines for
   itself. `Sky rotation` turns it (see the table above). What `Sky colour`
-  does - `128 128 128 0` on most circuits - is still unread and unused.
+  does is now read: it tints the sky cube, see the row above.
 - **The fog curve is read**, out of the circuit materials' own fragment
   microcode rather than the executable's `fogFactors` blocks (which turned out
   to be the front end's): `f = exp(-(coefficient * view_depth)^2)`, the

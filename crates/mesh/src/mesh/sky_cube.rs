@@ -31,6 +31,19 @@ use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 /// authored skies ship at, for no reason beyond being comfortably clear of it.
 const HALF_EXTENT: f32 = 32.0;
 
+/// The `Lighting.Sky colour` byte that leaves the sky texture unchanged:
+/// the tint is `byte / SKY_COLOUR_NEUTRAL`, so 128 is neutral and 255 doubles.
+///
+/// **Fitted, not read.** The sky draw hands the colour to a vertex-colour
+/// multiply and the factor of two between the byte and the product is not in
+/// any program read (`PrimList*` pass `COL0` through, and their fragment
+/// programs are `tex * COL0` unscaled). What measures it: on Sol 2 (255) the
+/// matched frame's unclipped sky pixels sit at 1.98 to 2.03 times ours with
+/// zero offset (`r` 0.89), while Talon's Junction (128) and Amphiseum (140)
+/// already matched at 1.0. Two circuit values, so a linear law is the simplest
+/// thing that fits and nothing more is claimed.
+pub const SKY_COLOUR_NEUTRAL: f32 = 128.0;
+
 /// One face of the cube: its outward axis and the two texture axes.
 ///
 /// This is the OpenGL cubemap face table - which face a direction selects and
@@ -55,6 +68,12 @@ const FACES: [([f32; 3], [f32; 3], [f32; 3]); 6] = [
 const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
 
 /// Builds a camera-centred cube from a `.gtf` cubemap.
+///
+/// `tint` is the vertex colour of all 24 corners, multiplied into the texel
+/// (HD's own sky draw passes the circuit's `Lighting.Sky colour` as the cube's
+/// vertex colour, `FUN_005ecc28`). [`SKY_COLOUR_NEUTRAL`] says what that colour
+/// is in these units; `[1.0; 3]` is no tint, which is what Zone's file swap and
+/// every caller without an authored colour pass.
 ///
 /// `rotation_degrees` is the circuit's `Lighting.Sky rotation`, applied about
 /// the world's vertical. **Degrees is read off the corpus rather than assumed**:
@@ -110,7 +129,7 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// A `.gtf` that does not parse, is not a cubemap, or whose faces do not
 /// decode. The caller reports and draws no sky, per the usual rule: an honest
 /// absence rather than an invention.
-pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
+pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) -> Result<Model> {
     let parsed = gtf::Gtf::parse(blob).with_context(|| format!("{label}: parsing"))?;
     let Some(texture) = parsed.only() else {
         bail!(
@@ -155,7 +174,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
                 // sky, the same way Pulse's own sky meshes are authored
                 // `_nolight`. A sky is a picture of light, not a surface.
                 normal: [-major[0], -major[1], -major[2]],
-                colour: [1.0, 1.0, 1.0, 1.0],
+                colour: [tint[0], tint[1], tint[2], 1.0],
                 texcoord: [(sc + 1.0) / 2.0, (tc + 1.0) / 2.0],
                 lit: 0.0,
                 anim: 0,
