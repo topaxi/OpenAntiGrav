@@ -333,17 +333,13 @@ pub(super) fn picks(
             // The first entry that supplies a `.gtf` and is not a lookup - see
             // [`NOT_A_PICTURE`]. Entry 0 where no entry qualifies, which is
             // what this bound before any of it was read.
-            // **A mask the program reads one lane wide is not that picture.**
-            // `and_rocktosand` (Vineta K's backdrop terrain) lists
-            // `j_rockblend5` first, a red-channel blend mask, ahead of the
-            // sand and rock it blends; its colour lane is `Mixed`, so the
-            // first non-lookup entry painted the mask as the terrain's colour.
+            // A mask read one lane wide is not the picture: `and_rocktosand`
+            // lists `j_rockblend5` (a blend mask) ahead of its sand and rock.
             let plain = material
                 .samplers
                 .iter()
                 .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash));
-            // Opaque materials only: the blended families (glass, holograms)
-            // carry their own pick rules and were not measured here.
+            // Opaque only: blended families carry their own rules.
             let picture = (material.blend() == rcsmodel::Blend::Opaque)
                 .then(|| lightmapped::declared_picture(material, &declared, &program, false))
                 .flatten()
