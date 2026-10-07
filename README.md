@@ -23,8 +23,8 @@ original while the code underneath is something a contributor can read.
 > in the roadmap for exactly what's measured. On the same engine: Pure boots
 > to a Time Trial; HD/Fury and 2048 already race and draw textured on their
 > own assets; a race can even mix a craft from one title with a track from
-> another (Race Remix). Omega Collection is reverse-engineered only, not yet
-> implemented. Full picture, subsystem by subsystem and title by title:
+> another (Race Remix). Omega Collection's front end boots and a race starts on
+> its own data, but it is incomplete. Full picture, subsystem by subsystem and title by title:
 > [`docs/overview/status.md`](docs/overview/status.md). Milestone narrative:
 > [`docs/overview/roadmap.md`](docs/overview/roadmap.md).
 
@@ -36,7 +36,7 @@ original while the code underneath is something a contributor can read.
 | Wipeout Pure | PSP | Boots to a Time Trial on the same engine |
 | Wipeout HD / Fury | PS3 | Races and draws textured on its own assets |
 | Wipeout 2048 | Vita | Races and draws textured on its own assets |
-| Omega Collection | PS4 | Reverse-engineered only, not yet implemented |
+| Omega Collection | PS4 | Front end boots and a race starts on its own data, incomplete |
 
 Anything before Pure is out of scope.
 
@@ -46,11 +46,39 @@ Anything before Pure is out of scope.
 assets, no executables, no extracted data. You supply your own legally obtained
 copies. See [`docs/overview/legal.md`](docs/overview/legal.md).
 
+## Play it
+
+You need your own copy of the game. Nothing is bundled, and this project
+cannot tell you where to get one.
+
+```sh
+cargo build --release -p oag-game
+mkdir -p data/images
+cp /path/to/your/pulse-psp-eu.chd data/images/      # a disc image you dumped
+target/release/oag-game                             # boots what it finds there
+```
+
+| Title | What to put where |
+| --- | --- |
+| Pulse (PSP, PS2) and Pure (PSP) | the disc image, `.chd` or `.iso`, in `data/images/` |
+| Wipeout HD / Fury (PS3) | the **decrypted** disc image in `data/images/` |
+| Wipeout 2048 (Vita) | the unpacked package folder in `data/extracted/vita/`, named on the command line |
+| Omega Collection (PS4) | the unpacked base and patch folders in `data/extracted/ps4/`, named on the command line |
+
+Check what was found without opening a window:
+`target/release/oag-game --dry-run --no-audio`. Linux is the only OS tried so
+far. The whole walk-through, the system libraries, where settings and logs are
+kept and the error messages you may meet are in
+[`docs/overview/installing.md`](docs/overview/installing.md).
+
 ## Prerequisites
+
+The rest of this page is for contributors.
 
 ### Required
 
-- **Rust** stable (1.88+, edition 2024). Install via [rustup](https://rustup.rs).
+- **Rust**, the version pinned in `rust-toolchain.toml` (1.99.0). Install
+  [rustup](https://rustup.rs) and it fetches that version on the first build.
 - **[cargo-nextest](https://nexte.st)** for the test runner.
 - **[just](https://github.com/casey/just)** for the task runner.
 
