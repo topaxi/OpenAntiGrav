@@ -255,7 +255,7 @@ fn frontend(frames: usize) -> Frontend {
         languages(),
         Vec::new(),
         frames,
-        false,
+        frames > 0,
     )
 }
 
@@ -270,7 +270,7 @@ fn reel(frames: usize) -> Frontend {
                         frames,
                         frame_rate: FRAME_RATE,
                         aspect: GRID,
-                        has_picture: false,
+                        has_picture: true,
                     },
                 },
                 Step {

@@ -347,12 +347,12 @@ fn the_overlay_does_not_default_on_when_the_reel_has_a_picture() {
     );
 }
 
-/// The counter still shows when the reel truly has no picture.
+/// A reel with no picture is left the way a Start press leaves it.
 ///
-/// The other half of the guard above: the auto-on behaviour itself must
-/// survive the fix, not just get switched off unconditionally.
+/// It would otherwise be a black screen for as long as the movie runs, forty
+/// seconds for Pulse's intro, on a phone or any machine without `ffmpeg`.
 #[test]
-fn the_overlay_still_defaults_on_when_the_reel_has_no_picture() {
+fn a_reel_with_no_picture_is_skipped_straight_ahead() {
     let mut frontend = hd(20, false);
     let mut input = Input::new();
     input.begin_frame(Button::Cross.bit());
@@ -363,13 +363,18 @@ fn the_overlay_still_defaults_on_when_the_reel_has_no_picture() {
             .is(hd_states::STUDIO_LOGO)),
         "the picker hands on to the logo reel"
     );
-
-    let draws = frontend.draw_list();
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
     assert!(
-        draws
+        !frontend.machine().is(hd_states::STUDIO_LOGO),
+        "the reel has no picture, so it leaves on the next tick with no button"
+    );
+    assert!(
+        !frontend
+            .draw_list()
             .iter()
             .any(|d| matches!(d, Draw::Text { text, .. } if text.contains("INTRO FRAME"))),
-        "no picture decoded, so the counter is the only sign the leg is running: {draws:#?}"
+        "the frame counter is off unless --overlay asks"
     );
 }
 

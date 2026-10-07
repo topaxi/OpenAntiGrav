@@ -153,24 +153,16 @@ impl Frontend {
     /// `Boot Intro Movie`: `data/Videos/intro.mp4`, to its end or until any
     /// of the six authored button redirects.
     ///
-    /// **A movie whose length is unknown waits for a button and says so.**
+    /// **A movie whose length is unknown is left at once and says so.**
     /// The step's plan has `frames == 0` when `movie::open` could not read
     /// the container - which is every run until `oag-video` demuxes MP4 -
     /// and running Pulse's 260-frame stand-in there would invent a duration
-    /// for a film this build has not measured. The six button exits are the
-    /// file's own, so a press is the honest way out; the note names the gap.
+    /// for a film this build has not measured. A movie with no picture is
+    /// skipped on every platform, so the note names the gap and the screen goes.
     fn update_intro_2048(&mut self, dt: f64, input: &mut Input, playhead: Option<f64>) {
         let plan = self.movie_of(w2048::BOOT_INTRO_MOVIE);
         if plan.frames == 0 {
-            if !self.acted.contains(&usize::MAX) {
-                self.acted.push(usize::MAX);
-                self.notes.push(
-                    "Boot Intro Movie: intro.mp4's length is unknown (no MP4 demuxer), so the \
-                     screen waits for one of its six authored buttons"
-                        .to_string(),
-                );
-            }
-            self.follow_authored_redirect(w2048::BOOT_INTRO_MOVIE, input);
+            self.advance("Boot Intro Movie has no length this build can read, so no picture");
             return;
         }
         for button in BUTTONS {

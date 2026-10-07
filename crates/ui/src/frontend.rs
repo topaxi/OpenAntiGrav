@@ -544,20 +544,6 @@ impl Frontend {
             (frames, _) => frames,
         };
 
-        // The first step that actually plays a movie, distinct from `first`
-        // above. Pulse and Pure open straight on their movie leg, so `first` is
-        // that movie and the two agree. **HD does not**: its declared chain
-        // opens on `Language Selection` and walks two more movie-less screens
-        // before `Studio Logo` plays anything, so `first` is forever a
-        // no-movie placeholder (`has_picture: false`) and using it below would
-        // force the counter on for the whole boot even when `Studio Logo`'s own
-        // movie decodes fine. Falls back to `first` itself on a chain with no
-        // movie anywhere, which keeps the no-picture default for that case.
-        let first_movie = steps
-            .iter()
-            .find(|step| step.movie.frames > 0)
-            .map_or(first, |step| step.movie);
-
         let mut frontend = Self {
             machine,
             screens,
@@ -572,11 +558,9 @@ impl Frontend {
             player: Player::new(frames, false, first.frame_rate),
             first,
             backdrop: None,
-            // Without a picture the movie is a black screen for as long as it
-            // runs - forty seconds for the disc's own intro - so the counter is
-            // the only sign it is running. With one it is clutter, and the
-            // pacing can be read off the picture instead.
-            overlay: !first_movie.has_picture,
+            // Off until `--overlay` asks: a leg with no picture is skipped, so
+            // there is no blank wait for the counter to explain.
+            overlay: false,
             hold: Hold::None,
             held_for: 0.0,
             dev_pub_redirect: Some(states::DEV_PUB_REDIRECT.to_string()),
@@ -854,6 +838,28 @@ impl Frontend {
                 .is(oag_2048::frontend::states::BOOT_INTRO_MOVIE)
     }
 
+    /// Whether the current screen is a movie leg that has frames but no picture to
+    /// show for them.
+    ///
+    /// Such a leg is a black screen for as long as the movie would have run (forty
+    /// seconds for the disc's own intro), so it is left at once, the way a player's
+    /// Start press leaves it. A leg that plays no movie by design is not this: its
+    /// plan has no frames.
+    fn leg_has_no_picture(&self) -> bool {
+        if !self.is_playing_movie() {
+            return false;
+        }
+        let Some(current) = self.machine.current() else {
+            return false;
+        };
+        let plan = self
+            .steps
+            .iter()
+            .find(|step| step.state == current)
+            .map_or(self.first, |step| step.movie);
+        !plan.has_picture
+    }
+
     /// Steps the sequence by `dt` seconds.
     ///
     /// `movie_playhead` is how far the movie's **own sound** has got, in
@@ -891,6 +897,10 @@ impl Frontend {
         }
 
         self.on_screen_for += dt;
+
+        if self.leg_has_no_picture() {
+            input.inject_press(Button::Start);
+        }
 
         if self.machine.is(states::LOGO_FMV) {
             self.update_logo_fmv(dt, input, movie_playhead);

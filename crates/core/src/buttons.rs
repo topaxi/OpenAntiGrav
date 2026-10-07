@@ -192,6 +192,16 @@ impl Input {
         self.released = self.held_last & !held;
     }
 
+    /// Makes `button` read as pressed this frame, as if the player had tapped it.
+    ///
+    /// For a screen that decides on the player's behalf to leave (the front end's
+    /// movie legs with no picture), so the leave goes through the same handler a
+    /// real press does and no second exit is written beside it.
+    pub fn inject_press(&mut self, button: Button) {
+        self.held |= button.bit();
+        self.pressed |= button.bit();
+    }
+
     /// Whether `button` is held right now.
     #[must_use]
     pub fn is_held(&self, button: Button) -> bool {
