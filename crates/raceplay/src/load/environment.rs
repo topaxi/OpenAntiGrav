@@ -69,7 +69,7 @@ pub(super) fn hd_sky_model(
         (None, Some(env)) => env
             .rgba8(oag_tables::envsettings::SKY_COLOUR)
             .map_or([1.0; 3], |c| {
-                std::array::from_fn(|i| f32::from(c[i]) / mesh::sky_cube::SKY_COLOUR_NEUTRAL)
+                std::array::from_fn(|i| f32::from(c[i]) / mesh::sky_cube::SKY_COLOUR_FULL)
             }),
         _ => [1.0; 3],
     };
@@ -89,7 +89,7 @@ pub(super) fn hd_sky_model(
                 "{name}: {whose}, six {width}x{height} cubemap face(s) on a \
                  camera-centred cube, turned {rotation:.0} degree(s) by the authored Sky \
                  rotation (unit read off the corpus; sign and axis this project's), tinted \
-                 x{:.2}/{:.2}/{:.2} by Sky colour (byte / 128, fitted not read)",
+                 x{:.2}/{:.2}/{:.2} by Sky colour (byte / 255, the vertex colour the original's sky draw carries)",
                 tint[0], tint[1], tint[2]
             ));
             Some(sky)

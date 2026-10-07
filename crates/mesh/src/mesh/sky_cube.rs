@@ -31,18 +31,30 @@ use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 /// authored skies ship at, for no reason beyond being comfortably clear of it.
 const HALF_EXTENT: f32 = 32.0;
 
-/// The `Lighting.Sky colour` byte that leaves the sky texture unchanged:
-/// the tint is `byte / SKY_COLOUR_NEUTRAL`, so 128 is neutral and 255 doubles.
+/// The `Lighting.Sky colour` byte that leaves the sky texture unchanged: the
+/// tint is `byte / SKY_COLOUR_FULL`, so 255 is neutral and 128 is one half.
 ///
-/// **Fitted, not read.** The sky draw hands the colour to a vertex-colour
-/// multiply and the factor of two between the byte and the product is not in
-/// any program read (`PrimList*` pass `COL0` through, and their fragment
-/// programs are `tex * COL0` unscaled). What measures it: on Sol 2 (255) the
-/// matched frame's unclipped sky pixels sit at 1.98 to 2.03 times ours with
-/// zero offset (`r` 0.89), while Talon's Junction (128) and Amphiseum (140)
-/// already matched at 1.0. Two circuit values, so a linear law is the simplest
-/// thing that fits and nothing more is claimed.
-pub const SKY_COLOUR_NEUTRAL: f32 = 128.0;
+/// **Measured on the original, not fitted** (2026-10-08, `hd-sky-law`, RPCS3
+/// draw capture, `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The sky
+/// law, read off live draws"). The sky's six face draws carry the authored
+/// word as a plain vertex colour - read live as `(255, 255, 255, 0)` on
+/// Sebenco Climb and Sol 2, `(128, 128, 128, 0)` on Talon's Junction and
+/// `(140, 140, 140, 0)` on The Amphiseum - and the fragment program is
+/// `MUL H0, tex, COL0` with no scale. The face textures are fetched with the
+/// R, G and B gamma bits set (sRGB decode) and the target encodes on write, so
+/// the displayed sky is `texel * (byte / 255) ^ (1 / 2.2)` in display terms:
+/// `1.00` at 255 (Sebenco, Sol 2: 0.996 to 1.001 of the texel over 62,000 and
+/// 64,000 sky pixels), `0.736` against `0.730` predicted at 128 and `0.765`
+/// against `0.761` at 140. This engine's HD scene is linear and its sky
+/// textures decode as sRGB, so the same `byte / 255` multiplied in linear
+/// light is the same law.
+///
+/// What this retires: the earlier `byte / 128` fit, which read 255 as a
+/// doubling. That doubling was real in the matched frames and is not the sky's:
+/// those frames were taken in the first second of a race, when the original's
+/// exposure has not yet adapted and the whole picture, floor and walls
+/// included, is brighter. Seconds later the same circuit's sky is the texel.
+pub const SKY_COLOUR_FULL: f32 = 255.0;
 
 /// One face of the cube: its outward axis and the two texture axes.
 ///
@@ -71,7 +83,7 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 ///
 /// `tint` is the vertex colour of all 24 corners, multiplied into the texel
 /// (HD's own sky draw passes the circuit's `Lighting.Sky colour` as the cube's
-/// vertex colour, `FUN_005ecc28`). [`SKY_COLOUR_NEUTRAL`] says what that colour
+/// vertex colour, `FUN_005ecc28`). [`SKY_COLOUR_FULL`] says what that colour
 /// is in these units; `[1.0; 3]` is no tint, which is what Zone's file swap and
 /// every caller without an authored colour pass.
 ///
@@ -122,7 +134,7 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// good part of the frame, and one feature whose position can be measured.
 ///
 /// **2026-10-07: the "original's exposure blows its sky far brighter than ours"
-/// seen above was in part the circuit's `Sky colour` tint** ([`SKY_COLOUR_NEUTRAL`]),
+/// seen above was in part the circuit's `Sky colour` tint** ([`SKY_COLOUR_FULL`]),
 /// applied now; Vineta K's 134 is only 1.05x, so its own gap is not that.
 ///
 /// **Do not "fix" the sign to make a screenshot match** without that: under an

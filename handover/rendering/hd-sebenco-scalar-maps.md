@@ -1,17 +1,16 @@
-# Sebenco and Vineta K: scalar maps fixed, ice water drawn; the sea's reflection, sky tint and Omega's water stay open
+# Sebenco and Vineta K: scalar maps fixed, ice water drawn; the sea's reflection and Omega's water stay open
 
 2026-10-07, branch `hd-sebenco`. The cause and fix are in `docs/formats/rcsmaterial.md`, "A picture the program reads one
 lane wide is a scalar, not the colour".
 
 ## Open
 
-- **Sky tint is not a function of `Lighting.Sky colour` alone.** Sebenco Climb and Sol 2 both author 255. Sol 2's cube
-  pixels measured x2 against the untinted cube; Sebenco's matched pose (forward, start slot yaw 180, `ref2/01.png` vs
-  `runs/fw_1_*`/`tint0.5_1.png`) reads reference 0.78-0.89 against the untinted cube's 0.68-0.74 in the mid rows (ratio
-  about 1.2), while our x2 clips every cube pixel to 1.0 (reference: 75% clipped, 10th percentile 0.38). The reference
-  sky is near-white as ours is, but not as a flat clip. Differences between the two files that could carry the missing
-  factor: Sebenco's `Fog.Fog Color` is HDR `(0.65, 1.18, 1.85)` at density 0.0004, Sol 2's grey 0.25 at 0.002; prelit
-  and tone keys differ. Not tuned. Second matched pose (`ref2/02`) is unmatched in view (the craft slid 4.8 units).
+- ~~**Sky tint is not a function of `Lighting.Sky colour` alone.**~~ **Closed 2026-10-08 (`hd-sky-law`)**: the sky is
+  `texel * (byte/255)^(1/2.2)`, live-measured on Sebenco, Sol 2, Talon's and Amphiseum (x1.00 at 255); ported as
+  `byte / 255`. The x2 was the original's race-start exposure, not a tint. Evidence: renderer.md, "The sky law, read off
+  live draws". **Open from it**: a scene-target dump at race clock 0.00.3 to measure the exposure transient (our `--ticks 30`
+  and `--ticks 2400` frames are identical, so the adaptation start-up is not modelled), and who ORs the gamma bits
+  `0x700000` into the texture ADDRESS word.
 - **Vineta's sea** (2026-10-07, `vineta-k-fidelity`; rcsmaterial.md "Vineta K against a draw capture"): HD binds
   `paraboloidReflectionTex` at unit 1 of the `water_test_2` draw, a 512x256 `A8R8G8B8` **render target** (a dual paraboloid of
   the environment, sky above the middle row, teal sea below) readable only with RPCS3's `Write Color Buffers`. Not a disc
@@ -35,8 +34,7 @@ lane wide is a scalar, not the colour".
 
 1. Closed 2026-10-07: the probe is a runtime render target (see above). Open: what renders into it, and whether its upper
    half is the sky cube through a paraboloid (it looks like it); the lower half has no disc source.
-2. Take a Sebenco sky capture at a pose with a large open sky and a stationary craft (`--speed 0` placed on a flat
-   stretch) and fit the factor against `Fog.Fog Color`/tone before touching `sky_cube::build`.
+2. ~~Sebenco sky capture~~ done 2026-10-08, see above.
 3. Omega: wire `Sebenco_ice` through the `psp2` material path (colours from the model parameters, mask on `Uv2`), and read
    what `Water_noref`/`WATER_Test_2` declare in its GNM shaders.
 4. Ice: perturb `F` by the two normal-map taps (`and_snow_norm` at `TC4.xy`, `256norm4` at `TC4.xy * 0.2444`) and add the
