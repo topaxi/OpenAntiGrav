@@ -2559,6 +2559,10 @@ with a constant output alpha, so it is not a blended surface in the authored sen
 something that includes it. `mt_tunnelhex_d` has alpha 0 on the frame struts and 255 in the panes, which is why the
 frames stay metal and the panes show the sea. Drawn as an ordinary opaque lit surface, `C` alone is black.
 
+**Superseded 2026-10-07 (`hd-behind-glass`):** the grab is not the frame behind the glass but the behind-the-glass
+target, and the glass is one opaque draw that reads it; see "The behind-the-glass target is drawn" in section 3 below.
+The two-pass reading that follows is kept as the record of what was drawn until then.
+
 **Fix** (`mesh::rcs::refraction`, `slots::REFRACTION`/`REFRACT_GRAB`, `mesh.wesl`'s `fs_main_blend`): no scene-copy
 pass is needed, the equation is linear in the grab. A chunk is emitted twice into the transparent list, depth write
 off like every transparent draw: pass 1 `dst = dst * src` with shader output `f * W`, pass 2 `dst = dst + src` with
@@ -2877,7 +2881,8 @@ the main view, in both the node and the world-space pass; the load report counts
 drawn. Pinned by `hd_behind_glass_ground_truth` (census: 210 chunks in each direction, no other file; build: none of
 them reaches a draw, the capture's main-view chunks do). At the tunnel pose the dark band and the mid-height girder
 are gone and the tunnel reads like the reference (`data/scratch/hd-glass-opus/trioA.png`: reference, before,
-after); the start slot is unchanged (`trioB.png`). **Not drawn: the behind-the-glass target itself**, so the panes
+after); the start slot is unchanged (`trioB.png`). **Not drawn until later the same day: the behind-the-glass
+target itself** (now drawn, see "The behind-the-glass target is drawn" below), so the panes
 now multiply the sky drawn behind them (cyan) where the original shows its target (sea surface and dunes under the
 alternate fog, teal). The sea sheet (`water_test_2`, chunks 6 and 23) is one of these chunks, so it too is drawn
 only in the target. Building the target is open: the `0x10` chunks and the sky into an offscreen picture at 4/3 the
@@ -2891,7 +2896,94 @@ before, 489 after (the original: 285). The rest of the gap is chiefly node-place
 anchor (`DrawCall::moving`), which this renderer cannot frustum-test without their current matrix; static
 node-placed chunks are already baked to world space and tested.
 
+#### The behind-the-glass target is drawn (2026-10-07, `hd-behind-glass`)
+
+**What the original's target draws bind**, read off the boot-2 capture of the pose-A run (`place --hook`, 262 draws,
+`py/targets.py`/`py/tdraws.py` in the lane's scratch, each draw grouped by `SET_SURFACE_COLOR_AOFFSET`): 41 draws into
+the 640x360 surface at offset `0x1e50000`, encoded before the main view's 136.
+
+| Draws | What | State |
+| --- | --- | --- |
+| 33-38 | the sky's six faces, the same six textures and the same plain textured program (`0x744181`) the main view's sky uses | no face culling |
+| 39-73 | 35 chunk draws, each its own lit program with the fog pair patched in | `CULL_FACE_ENABLE` 1, back faces, counter-clockwise front, on all 35 |
+
+Every one: blend off, depth test `LEQUAL` with write on (`0x0a6c` = `0x203`, `0x0a70` = 1; `rsx_fifo.NAMES` labels
+`0x0a6c` "DEPTH_MASK" and `0x0a60` "DEPTH_FUNC", which is one register off), viewport scale `(320, -180)` offset
+`(320, 180)`, so the target covers its matrix's whole clip square. The last clear value is opaque black. The target
+draws are culled with the main view's planes (visibility.md, above). Confidence 90 on the state.
+
+**The glass draws read it as one opaque surface.** The 13 main-view draws that bind the target (`0x01e50000`, format
+`0x1a429`, image rect `0x0280 x 0x0168`, clamp to edge `0x60030303`, linear `0x02022000`) are all blend off with depth
+written (`LEQUAL`, mask 1), so the glass is opaque: no main-view picture is behind it, and no consumer of a main-view
+grab is left on the disc. Confidence 90.
+
+**Where the glass reads it** (live programs, `scripts/ps3-fp-live.py`, draw 90's `@0xc074c2c0`; confidence 85):
+
+- `distortion` (`0x9fc59444`) is `(0, 0, -1, 1)` live. Its `z` negates a negated normal, so the projected point is
+  the surface position (`TC3.xyz`, world space) **plus the normal-mapped normal, one world unit**; its `xy` is the
+  coordinate bias, zero; its `w` scales the projected `xy`, one.
+- `refractProject` (`0x590bc10e`) is the target matrix with rows `x + w`, `y - w`, `z`, `w`: every coefficient of
+  draw 40's `c[256..259]` reproduces to six digits (`-0.724613 - 0.015665 = -0.740278`, `-618.206 - 229.977 =
+  -848.183`, ...).
+- Taken literally the program samples at `(1 + x/w, 1 - y/w)`, **twice** the target's own coordinate, which would
+  read only its top-left quarter. The captured picture says otherwise: over 7,341 pane pixels of `00.png`, 90 % of
+  those whose red is zero land on a target texel whose red is zero under the target's own coordinate
+  `0.5 + 0.5 (x/w, -y/w)`, and none under the literal one. **Drawn: the target's own coordinate.** Where the factor
+  of two goes (texture normalisation of a linear `R5G6B5` surface, most likely) is not read. Confidence 75 on the
+  mapping, from that agreement alone.
+- The captured target `target_be.png` is upright as stored: the sea sheet (draw 62, `y = -50.8`) projects through
+  draw 40's matrix into its upper half, where the rippled sea underside is.
+
+**Drawn** (`oag_raceplay`'s `scene::behind_glass`, `oag_mesh::mesh::rcs::build_scene_views`, `refraction.wesl`): a
+640x360 target (the original's size, at any window size; measured, not chosen) in the HD scene format, cleared black,
+drawn before the main view with the sky, then the two chunk groups' solid lists, the sky, then their blended lists.
+The matrix is the main view's unjittered one with clip `x` and `y` scaled by 0.75; culling is the main view's PVS and
+frustum. The chunks split into two models by flag `0x20`: **198 per direction fogged with the alternate pair**
+(`Fog.Alternate Fog Color` `[0, 0.031, 0.031]`, `Alternate Fog Density` 0.0045, read from the circuit's
+`.envsettings`) and 12 with the primary one; all 210 reach the target (`hd_behind_glass_ground_truth`). Both are
+drawn single-sided: drawn two-sided, the tunnel's outer concrete shell, seen from inside, covered the whole upper
+half of the target. The models reuse the main view's material decode and keep only the textures their own draws name
+(60 and 10 textures, about 23 MiB of GPU memory with their geometry). The glass is one opaque draw,
+`fog(C + grab * W)`, with the grab read at the point above; the two blended passes and `slots::REFRACT_GRAB` are
+gone. `OAG_DUMP_BEHIND_GLASS=<png>` writes the target after a `--screenshot`.
+
+**Judged against the capture** (`data/scratch/hd-behind-glass/shots/`, the capture's own camera at pose A,
+`--camera-pose` from draw 90's `c[256]`, fov 60):
+
+- The target (`target_pair.png`, capture above, ours below): the arch struts and their boxes, the strut column on the
+  left, the dark metal band, the dunes on the right and the teal below the horizon are where the capture has them.
+- The right ceiling panes (`trioA.png`, `panes_A.png`; median of the pane pixels in `(1250, 120)-(1880, 380)` of the
+  1882x1058 frame): **reference `(4, 87, 87)`, before `(135, 176, 57)`, after `(14, 72, 72)`**. The previous lane's
+  `(17, 86, 84)` / `(139, 213, 164)` were a different region of a different frame.
+- Start slot (`trioB.png`): 187 pixels change, all in a distant glass pane.
+- Lap sweep, 8 autopilot frames each direction (`sweep/`): with the glass material skipped in both builds
+  (`OAG_SKIP_MATERIAL=tunnelrefraction`), 3 of 16 frames are byte-identical and the others differ in a few pixels
+  by 1/255 (1 to 3 in the four counted). Pulse PSP is byte-identical; Talon's Junction differs in 1 pixel of 518,400 by 1/255 in green. Restoring the
+  old blended entry point's branch does not remove it, so it is the driver's code generation of the shared opaque
+  entry point, which now holds the glass's texture read.
+- Draws at pose A: 398 before, 443 after (the sky's 6 and 39 chunk draws added; the original's target is 6 and 35).
+- Cost, `OAG_RENDER_GPU_BENCH=200` at 1280x720 on an RX 7800 XT (RADV), two interleaved rounds each under a load
+  average of 51: `Scene::render` median 1,008 / 990 us before, 1,078 / 1,109 us after, so the target costs about
+  90 us; the race pass itself fell from 247 to 218 us, the glass's blended passes (58 us of "track blended") becoming
+  one opaque draw (16 us).
+- Pinned by `crates/game/tests/hd_behind_glass_frame_ground_truth.rs` (teal pane pixels: 33,430 with the target,
+  3,387 with the old passes, 116 with the target unbound) and `hd_behind_glass_ground_truth` (the two groups).
+
+**Still not as the capture:**
+
+- The dunes are drawn as rock where the capture shows sand: `and_rocktosand`'s blend mask (`j_rockblend5`) is still
+  read as the rock picture alone (the table above, "the red shape behind the glass").
+- The upper part of the target is the sea sheet (`water_test_2`; with it skipped the sky shows there,
+  `sea_check.png`), drawn as a smooth fogged gradient where the capture shows a rippled underside: the sheet's
+  `TC1 * R` term, the paraboloid reflection, is not drawn (section 2).
+- The normal map's offset of the glass's projected point is not drawn (the vertex normal is used).
+- The 5 main-view chunks with flag `0x20` keep the primary fog.
+
 ### 4. Lineage
+
+**The behind-the-glass target and the glass's read of it (2026-10-07):** checked, differs. Omega's Vineta K carries no
+HD render-block halfword, so neither flag exists there to route a chunk, and its glass programs are GNM; whether Omega
+draws a target at all is not checkable (no PS4 capture path). 2048 ships no Vineta K.
 
 Omega ships `Water_noref` and `WATER_Test_2` (GNM shaders; the microcode classifiers do not run). **The light-bar family:** `diffuse_normal_specular_emmissive` is in Omega's `data00`, `data01` and `data02` archives
 (`rg -a` over the extraction); checked, applies, not wired (PS4 GNM programs, so the microcode check `pad_ne` makes does not

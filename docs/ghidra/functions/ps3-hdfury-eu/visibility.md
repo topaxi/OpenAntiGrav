@@ -464,7 +464,10 @@ Confidence 85 on the routing (both branches read in the disassembly), 80 on the 
    B1 (zone-effectsettings-loader.md, twenty-ninth and thirtieth passes): **B3 is this pass**. The tunnel glass
    (`mt_tunnelrefraction`, chunk 1616, draws 96-97) carries the main view in `c[256]` and the 75.2-degree matrix in
    `c[260]`, so it reads the target at its own position under the target's projection. The flag occurs on
-   Vineta K only (420 chunks on the disc). Which texture unit the glass binds the target at is not read here.
+   Vineta K only (420 chunks on the disc). The glass binds the target at unit 2 (image rect `0x280 x 0x168`,
+   clamp to edge, linear); how it reads it, and the target's draw state (all 35 chunk draws cull back faces), is in
+   [rcsmaterial.md](../../../formats/rcsmaterial.md), "The behind-the-glass target is drawn" (2026-10-07,
+   `hd-behind-glass`), which also draws it.
 
 ### What it predicts, and the score
 
