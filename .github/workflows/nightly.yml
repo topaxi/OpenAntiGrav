@@ -42,7 +42,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force }}
         run: |
+          # gh prints a 404's JSON body on stdout, so a missing tag (the first
+          # run) would read as a "previous" commit: keep only a real sha.
           previous="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" --jq .object.sha 2>/dev/null || true)"
+          [[ $previous =~ ^[0-9a-f]{40}$ ]] || previous=""
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           if [[ "$previous" == "$GITHUB_SHA" && "$FORCE" != "true" ]]; then
             echo "build=false" >> "$GITHUB_OUTPUT"
