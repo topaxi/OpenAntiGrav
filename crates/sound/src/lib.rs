@@ -1034,6 +1034,13 @@ impl Audio {
         }
     }
 
+    /// Pauses (`true`) or restarts (`false`) the device while the window is
+    /// away. See [`Output::set_paused`]. Output only: no voice, cue or music
+    /// position changes, so what was playing resumes where it stopped.
+    pub fn set_suspended(&self, suspended: bool) {
+        self.output.set_paused(suspended);
+    }
+
     /// Writes the dump, if there is one.
     ///
     /// # Errors

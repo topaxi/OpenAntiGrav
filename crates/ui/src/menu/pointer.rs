@@ -20,17 +20,20 @@
 //!   or a back row that is what cross does. On a choice or a toggle it
 //!   steps the value forward the way cross does, unless the click landed on
 //!   one of HD's step arrows, which step the way it points.
-//! - **The wheel walks the cursor** one row per detent and **stops at the
-//!   ends** rather than wrapping: a wheel is a scroll, and a list that
-//!   jumps from its last row to its first under one is a list that lost the
-//!   player's place.
-//! - **A finger drag scrolls the view** one row per row-pitch of travel,
-//!   the list following the finger. The window moves and the cursor is
-//!   pushed only as far as keeps it inside the new window, so the selection
-//!   and the view stay coherent the way a pad walk keeps them; nothing is
-//!   selected or activated by a drag (the composition root reports no
-//!   position or click for one). A page that fits does not scroll.
-//!   **Chosen, not measured**: one row per pitch, and no fling.
+//! - **On a page longer than the screen, the wheel scrolls the view** one
+//!   row per detent, the way a desktop list does, and **a finger drag
+//!   scrolls it** one row per row-pitch of travel, the list following the
+//!   finger. The window moves and the cursor is pushed only as far as keeps
+//!   it inside the new window, so the selection and the view stay coherent
+//!   the way a pad walk keeps them; nothing is selected or activated by
+//!   either (the composition root reports no position or click for a drag).
+//!   Both stop at the ends rather than wrapping. Until 2026-10-07 the wheel
+//!   walked the cursor instead, which the maintainer found wrong on a long
+//!   page: the rows moved under a list that should have moved itself.
+//!   **Chosen, not measured**: one row per detent and per pitch, no fling.
+//! - **On a page that fits, the wheel walks the cursor** one row per detent
+//!   and stops at the ends, since there is no view to move; a drag there
+//!   does nothing.
 //! - **The secondary button is back**, which is what circle is on the same
 //!   page. On a strip it is the same.
 //! - **A disabled row is selectable and inert**, exactly as it is for a pad:
@@ -122,7 +125,9 @@ impl Menu {
         let page = self.current();
         let rows = self.page().entries.len();
 
-        if pointer.scroll != 0 && rows > 0 {
+        if pointer.scroll != 0 && rows > self.visible {
+            self.shift_view(i64::from(pointer.scroll));
+        } else if pointer.scroll != 0 && rows > 0 {
             let last = rows - 1;
             let moved_to = usize::try_from(
                 i64::try_from(self.cursor[page]).unwrap_or(0) + i64::from(pointer.scroll),
@@ -187,8 +192,21 @@ impl Menu {
         self.drag_rows -= dy / pitch;
         let whole = self.drag_rows.trunc();
         self.drag_rows -= whole;
+        self.shift_view(whole as i64);
+    }
+
+    /// Moves a page longer than the screen's window `by` rows (down the list
+    /// when positive), clamped at both ends, and pushes the cursor just far
+    /// enough to stay inside the new window.
+    fn shift_view(&mut self, by: i64) {
+        let page = self.current();
+        let rows = self.definition.pages[page].entries.len();
+        let visible = self.visible;
+        if rows <= visible {
+            return;
+        }
         let last = rows - visible;
-        let start = (self.scroll() as i64 + whole as i64).clamp(0, last as i64) as usize;
+        let start = (self.scroll() as i64 + by).clamp(0, last as i64) as usize;
         // The window only holds a cursor with a row of lookahead at each end
         // (`window_start`), so the cursor moves just far enough to stay in it.
         let low = if start == 0 { 0 } else { start + 1 };

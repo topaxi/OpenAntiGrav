@@ -153,6 +153,31 @@ impl Output {
         }
     }
 
+    /// Pauses or restarts the device's stream, for a window that is not on
+    /// screen (Android `Suspended`, a minimised desktop window).
+    ///
+    /// The mixer and its render-ahead thread are untouched: the ring simply
+    /// fills and the thread waits, so a voice resumes where it was rather than
+    /// being cut. The null backend has no stream and does nothing. A host that
+    /// cannot pause a stream is logged and left playing; that is the only
+    /// failure there is.
+    pub fn set_paused(&self, paused: bool) {
+        let Some(stream) = &self.stream else {
+            return;
+        };
+        let result = if paused {
+            stream.pause()
+        } else {
+            stream.play()
+        };
+        if let Err(e) = result {
+            warn!(
+                "audio: could not {} the stream: {e}",
+                if paused { "pause" } else { "restart" }
+            );
+        }
+    }
+
     /// Opens the default output device.
     ///
     /// # Errors

@@ -214,7 +214,7 @@ pub struct Source {
 ///
 /// Nothing in here changes what is drawn - see the module documentation for
 /// where the line against [`Graphics`] falls and why.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Display {
     /// Which screen to open on: `default`, or a monitor by name. See
     /// [`oag_display::display::Monitor`].
@@ -279,6 +279,38 @@ pub struct Display {
     /// 1.0. See [`oag_display::display::Gamma`].
     #[serde(default)]
     pub gamma: oag_display::display::Gamma,
+    /// Whether a race pauses when the window loses focus (`true`) or runs on
+    /// under whatever took the focus (`false`).
+    ///
+    /// **On by default - chosen, not measured.** A race keeps going while the
+    /// player is looking at something else, and an alt-tab, the Steam Deck's
+    /// overlay or a notification costs a crash and a lost lap; paused, it
+    /// costs one press to resume. A player with a second monitor who wants it
+    /// live turns it off. Minimising the window and Android's `Suspended`
+    /// always pause, whatever this says.
+    #[serde(default = "default_pause_on_focus_loss")]
+    pub pause_on_focus_loss: bool,
+}
+
+fn default_pause_on_focus_loss() -> bool {
+    true
+}
+
+impl Default for Display {
+    fn default() -> Self {
+        Self {
+            monitor: Default::default(),
+            window_mode: Default::default(),
+            window_size: Default::default(),
+            aspect: Default::default(),
+            front_end_style: String::new(),
+            vsync: Default::default(),
+            frame_limit: Default::default(),
+            brightness: Default::default(),
+            gamma: Default::default(),
+            pause_on_focus_loss: default_pause_on_focus_loss(),
+        }
+    }
 }
 
 fn default_frustum_culling() -> bool {
@@ -666,6 +698,14 @@ pub fn menu_seeds(
         ),
         ("display.aspect", text(&settings.display.aspect.to_string())),
         ("display.vsync", text(&settings.display.vsync.to_string())),
+        (
+            "display.pause_on_focus_loss",
+            text(if settings.display.pause_on_focus_loss {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
         (
             "display.frame_limit",
             text(&settings.display.frame_limit.to_string()),

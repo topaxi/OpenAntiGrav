@@ -62,6 +62,8 @@ mod records_page;
 mod session;
 #[path = "main/stage.rs"]
 mod stage;
+#[path = "main/touch.rs"]
+mod touch;
 #[path = "main/typing.rs"]
 mod typing;
 #[path = "main/window.rs"]
@@ -653,6 +655,7 @@ fn run(cli: Cli) -> Result<()> {
         pending: Some(pending),
         state: None,
         suspended: false,
+        occluded: false,
     };
     event_loop.run_app(&mut app)?;
     app.finish_audio()?;

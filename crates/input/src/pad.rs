@@ -748,6 +748,19 @@ fn analog(pad: &gilrs::Gamepad<'_>, button: gilrs::Button) -> f32 {
     )
 }
 
+/// Two devices' contributions to one slot as one: buttons together, each axis
+/// the larger.
+#[must_use]
+pub fn merge_states(a: PadState, b: PadState) -> PadState {
+    PadState {
+        held: a.held | b.held,
+        stick_x: larger(a.stick_x, b.stick_x),
+        stick_y: larger(a.stick_y, b.stick_y),
+        airbrake_left: a.airbrake_left.max(b.airbrake_left),
+        airbrake_right: a.airbrake_right.max(b.airbrake_right),
+    }
+}
+
 /// Whichever reading is further from centre, sign kept.
 pub(crate) fn larger(a: f32, b: f32) -> f32 {
     if b.abs() > a.abs() { b } else { a }

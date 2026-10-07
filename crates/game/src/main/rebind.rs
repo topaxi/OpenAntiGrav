@@ -42,7 +42,7 @@ pub(crate) fn decide(awaiting: Button, key: &Key, pressed: bool, repeat: bool) -
     if !pressed || repeat {
         return Capture::Ignore;
     }
-    if *key == Key::Named(NamedKey::Escape) {
+    if matches!(key, Key::Named(NamedKey::Escape | NamedKey::BrowserBack)) {
         return Capture::Cancel;
     }
     match keys::name_for(key) {
@@ -116,6 +116,14 @@ mod tests {
     fn escape_cancels_rather_than_binding_or_backing_out_of_the_menu() {
         assert_eq!(
             decide(Button::Up, &Key::Named(NamedKey::Escape), true, false),
+            Capture::Cancel
+        );
+    }
+
+    #[test]
+    fn the_android_back_key_cancels_a_capture_like_escape() {
+        assert_eq!(
+            decide(Button::Up, &Key::Named(NamedKey::BrowserBack), true, false),
             Capture::Cancel
         );
     }

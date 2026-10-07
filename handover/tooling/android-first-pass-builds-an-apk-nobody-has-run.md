@@ -23,10 +23,24 @@ manifest and `cache/<image>` rows in `just push-data`.
   the launcher finds `files/data/images/*.chd`; the surface configures; the intro
   is skipped (or plays, with the pushed cache); Language Selection draws; a touch
   moves the menu cursor; the audio line reads `using i16` or no refusal at all.
-- **Race controls.** No on-screen sticks or buttons; no gamepad mapping checked on
-  Android. Touch events already reach `Session::pointer`.
+- **Touch controls and a pad, landed 2026-10-07** (android-controls lane; see
+  `docs/tools/android.md`, "Back, touch controls and a gamepad"): system Back is the
+  front end's Back and never quits; an on-screen stick and buttons for a running race,
+  hidden when a pad speaks; Android pad buttons and the left stick through the desktop
+  pad table. All chosen, not measured, driven on Waydroid with one finger only.
+  Still open: **tune the layout on the S24** (sizes, HUD overlap, left-handed
+  mirror, a zones scheme as an alternative to the floating stick); **pad triggers,
+  right stick and hat** are not delivered by winit 0.30 (read `MotionEvent` axes via
+  `android-activity` or move to GameActivity); no haptics.
 - **AArch64 determinism.** `oag-core`'s determinism test builds for the target; run it
   on the phone with the command in the doc and compare to the committed hashes.
+- **`android_main` still lives in the `oag_android` example.** Moving the windowed
+  `App` and every `main/` module into `oag-game`'s lib (so `android_main` lives in
+  the lib and the example goes) was the optional last step of the controls lane and
+  was **not started**: it touches about 13,000 lines of the binary's modules
+  (`main_body.rs`, the `#[path]` tree, `main.rs`'s rustdoc header) and wants its own
+  lane with a behaviour-identical check. The new `touch` module is one more
+  `#[path]` module there.
 - **Cargo warning on every invocation.** The cdylib is a second target rooted at
   `src/main.rs` (an `[[example]]`), so Cargo warns "present in multiple build
   targets". Moving the windowed `App` and its stages into `oag-game`'s lib removes
@@ -35,8 +49,10 @@ manifest and `cache/<image>` rows in `just push-data`.
   changing the working directory to the files directory. A real
   `cfg(target_os = "android")` root (and a DLC and package-extract root) belongs in
   `oag-source`, owned by the setup-friction lane.
-- **Audio and lifecycle.** Pause audio and the race on `Suspended`; check rotation;
-  `cpal`'s AAudio device-lost recovery.
+- **Lifecycle.** ~~Pause audio and the race on `Suspended`~~ (done 2026-10-07, auto-pause
+  lane; see `docs/tools/android.md`, "Pausing when the window goes away"). Still open: rotation;
+  `cpal`'s AAudio device-lost recovery; whether `Stream::pause` works on the S24's AAudio (only
+  Waydroid ran it, and it logged no error).
 - **Xclipse 940.** Present modes, the temporal-upscaler capability probe and the
   adapter list (`BACKENDS` is Vulkan-primary) are unmeasured on Samsung's driver.
 - **Storage.** Images must be `adb push`ed; a storage-access-framework picker or
@@ -54,5 +70,7 @@ manifest and `cache/<image>` rows in `just push-data`.
 
 1. `just deploy-android`, then `just push-data android 'images/pulse-psp-eu.chd' 'cache/pulse-psp-eu.chd'` (the cache row converts first if it has to), launch, read the log.
 2. Fix what the first run shows, in the order above.
-3. Touch controls for racing (left half steering, right half buttons), through the
-   existing pointer layer.
+3. Install on the S24 and drive a race by touch: `just deploy-android` (pick
+   R3CX707JA9T), launch, Racebox, Start. Note thumb reach and which HUD readouts the
+   buttons hide, then tune `oag_input::touch::layout`.
+4. Pair a Bluetooth pad and check A/B/X/Y/shoulders/Start/Select and the left stick.

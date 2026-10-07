@@ -306,3 +306,81 @@ fn a_second_slot_keeps_its_own_button_edges() {
     assert!(!inputs.get(1).buttons.is_pressed(Button::Start));
     assert!(inputs.get(1).buttons.is_held(Button::Start));
 }
+
+#[test]
+fn an_android_pad_button_is_a_pad_press_and_hides_nothing_it_should_not() {
+    let mut controls = Controls::without_pad();
+    assert!(controls.android_key(android::BUTTON_A, true));
+    let snapshot = controls.snapshot();
+    assert!(snapshot.buttons.is_held(Button::Cross));
+    assert!(controls.pad_spoke(), "an Android pad is the pad in use");
+    assert!(controls.android_pad_seen());
+    controls.android_key(android::BUTTON_A, false);
+    assert!(!controls.snapshot().buttons.is_held(Button::Cross));
+}
+
+#[test]
+fn an_android_pad_press_shorter_than_a_tick_still_lands() {
+    let mut controls = Controls::without_pad();
+    controls.android_key(android::BUTTON_B, true);
+    controls.android_key(android::BUTTON_B, false);
+    assert!(controls.snapshot().buttons.is_pressed(Button::Circle));
+}
+
+#[test]
+fn an_android_stick_steers_and_pushes_up_positive() {
+    let mut controls = Controls::without_pad();
+    controls.android_stick(1.0, -1.0);
+    let snapshot = controls.snapshot();
+    assert_eq!(snapshot.stick_x, 1.0);
+    assert_eq!(snapshot.stick_y, 1.0);
+}
+
+#[test]
+fn a_non_pad_android_key_is_not_spent() {
+    let mut controls = Controls::without_pad();
+    assert!(!controls.android_key(19, true), "DPAD_UP is the keyboard's");
+    assert!(!controls.pad_spoke());
+}
+
+#[test]
+fn the_touch_overlay_drives_a_ship_but_is_not_a_pad() {
+    let mut controls = Controls::without_pad();
+    controls.set_touch(Reading {
+        buttons: Button::Cross.bit() | Button::L.bit(),
+        stick_x: -0.8,
+        ..Reading::default()
+    });
+    let snapshot = controls.snapshot();
+    assert!(snapshot.buttons.is_held(Button::Cross));
+    assert_eq!(snapshot.airbrake_left, 1.0);
+    assert!(snapshot.stick_x < -0.5);
+    assert!(!controls.pad_spoke(), "a finger is not a pad");
+    controls.set_touch(Reading::default());
+    assert!(!controls.snapshot().buttons.is_held(Button::Cross));
+}
+
+#[test]
+fn release_all_lets_go_of_an_android_pad_and_the_overlay() {
+    let mut controls = Controls::without_pad();
+    controls.android_key(android::BUTTON_A, true);
+    controls.set_touch(Reading {
+        buttons: Button::Square.bit(),
+        ..Reading::default()
+    });
+    controls.release_all();
+    let snapshot = controls.snapshot();
+    assert!(!snapshot.buttons.is_held(Button::Cross));
+    assert!(!snapshot.buttons.is_held(Button::Square));
+}
+
+#[test]
+fn an_android_press_shorter_than_a_tick_still_counts_as_the_pad_speaking() {
+    let mut controls = Controls::without_pad();
+    controls.android_key(android::BUTTON_A, true);
+    controls.android_key(android::BUTTON_A, false);
+    controls.snapshot();
+    assert!(controls.pad_spoke());
+    controls.snapshot();
+    assert!(!controls.pad_spoke(), "and only for the tick it landed in");
+}
