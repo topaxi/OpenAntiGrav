@@ -27,17 +27,15 @@ pub struct CaptureOptions {
     pub ticks: u32,
     /// Buttons held on every one of those ticks.
     pub held: u32,
-    /// Drive the run from a committed `.inputs` script instead of `held`/
-    /// `pressed` - the same file `scripts/psp-trace.py --script` feeds the
-    /// emulator, so one authored input produces both sides of a visual
-    /// comparison. Ticks past the script's end coast with everything
-    /// released.
+    /// Drive the run from a committed `.inputs` script instead of `held`/`pressed` - the same
+    /// file `scripts/psp-trace.py --script` feeds the emulator, so one authored input
+    /// produces both sides of a visual comparison. Ticks past the end coast released.
     pub input_script: Option<oag_trace::script::Script>,
     /// Fly the player's craft with an opponent's driver. `--autopilot`.
     ///
-    /// **The only way a capture can reach a finished race**, so the only way
-    /// `--screenshot` shows the results table: `--hold cross` drives into the
-    /// first wall. See [`Race::set_autopilot`], a verification aid.
+    /// **The only way a capture can reach a finished race**, so the only way `--screenshot`
+    /// shows the results table: `--hold cross` drives into the first wall. See
+    /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
     /// `--autopilot-pilot`: fly with a named pilot instead of the neutral
     /// baseline. See [`Race::set_autopilot_pilot`].
@@ -60,8 +58,7 @@ pub struct CaptureOptions {
     /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
     /// that slot at the end of that tick. See [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
-    /// `--force-bomb-trip TICK:SLOT`: that craft onto a laid Bomb at the end of
-    /// that tick. See [`Race::force_bomb_trip`].
+    /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
