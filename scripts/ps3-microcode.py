@@ -488,7 +488,16 @@ def fp_disasm(raw: bytes, at: int) -> None:
     for slot in sorted(patches):
         names = ", ".join(f"{h:#010x}" for h in patches[slot])
         print(f"  patch slot {slot:#x} <- parameter {names}")
-    start = at + program_at + code_off
+    fp_code(raw, at + program_at + code_off, code_len, patches)
+
+
+def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
+    """Disassemble `code_len` bytes of fragment microcode at `start`.
+
+    `patches` maps a 16-byte slot to the parameters patched into it; a program
+    read out of live RAM has had them applied, so it passes `{}` and the
+    constants read as their patched values.
+    """
     pos = start
     while pos < start + code_len:
         d0, d1, d2, d3 = (fp_word(raw, pos + 4 * k) for k in range(4))
