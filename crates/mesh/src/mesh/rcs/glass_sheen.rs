@@ -89,26 +89,59 @@
 //! general (keyed on shape, not on this material's name) without pulling in
 //! the `blue_metal` family, whose own combine is unread.
 //!
-//! # The `c` term this pass leaves out
+//! # The `c` term, wired 2026-10-07
 //!
 //! Block #7's `ADD H4.xyz, H2, {c}` adds a per-material parameter
-//! (`0x512f8e65`, no preimage) to the sampled ramp before it multiplies the
-//! vertex light. Read off the model's own parameter table
-//! (`hd_glass_sheen_census.rs --params etched_glass_tech`): `[0.26562,
-//! 0.26562, 0.26562, 0]`, real and non-zero, not a no-op to drop silently.
-//! **Not wired this pass** - it needs the same per-material plumbing
-//! `GpuVertex::specular_exponent` already has (a vertex field, a
-//! `vertex_attr_array!` slot, threading through `MaterialSetup`), and none of
-//! `mesh.rs`/`mesh/rcs/skin.rs`/`mesh_render.rs` had the line budget left
-//! under `scripts/check-file-size.py`'s 1,000-line cap to add it in the same
-//! change as the routing fix. `mesh.wesl`'s combine omits it - `ramp` stands
-//! in for `ramp + c` - which is a stated, named omission of a real value, not
-//! an invention of one. Next action: add the field the same way
-//! `specular_exponent` did, patch-checked the same way (`Program::patches`
-//! against this parameter's hash), and wire it into the combine below.
+//! (`0x512f8e65`, `[0.26562, 0.26562, 0.26562, 0]` on `etched_glass_tech`) to
+//! the ramp before it multiplies the light. [`bias`] carries it in the glow
+//! table, as the magstrip floor carries its own. The reflection tint
+//! (`paraboloidReflectionTex`) is still left out: no probe exists here.
 
 use oag_rcs::rcsmodel;
 use oag_rcs::{rcsmaterial, rcsmaterial::fragment};
+
+use crate::mesh::{Emissive, slots};
+
+use super::emissive::EMISSIVE_LIMIT;
+
+/// The block's per-material constant `c` (`ADD H4.xyz, H2, {c}`), measured
+/// `[0.26562, 0.26562, 0.26562, 0]` on `etched_glass_tech`. No preimage.
+const RAMP_BIAS: u32 = 0x512f_8e65;
+
+/// Gives every glass-sheen material its `c`, as a glow-table entry whose
+/// `offset` is `c`'s first lane and whose tint is zero, so the table adds
+/// nothing of its own. The magstrip floor carries its own `c` the same way.
+///
+/// A material that already has a table entry keeps it and is left without
+/// `c`; none of Talon's Junction's does.
+pub(super) fn bias(model: &rcsmodel::Model, packed: &mut [u32], table: &mut Vec<Emissive>) {
+    for (slot, material) in model.materials.iter().enumerate() {
+        let Some(word) = packed.get_mut(slot) else {
+            continue;
+        };
+        if *word & slots::FACING_RAMP_SHEEN == 0 || *word >> slots::MATERIAL_SHIFT != 0 {
+            continue;
+        }
+        let Some(c) = material.parameters.iter().find(|p| p.hash == RAMP_BIAS) else {
+            continue;
+        };
+        let layer = Emissive {
+            tint: [0.0; 3],
+            offset: c.value[0],
+            scale: 1.0,
+            rate: 0.0,
+        };
+        let index = table.iter().position(|seen| *seen == layer).or_else(|| {
+            (table.len() + 1 < EMISSIVE_LIMIT).then(|| {
+                table.push(layer);
+                table.len() - 1
+            })
+        });
+        if let Some(index) = index {
+            *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+        }
+    }
+}
 
 /// `~crc32("Texture1")`. The grid's own sampler, and the unit the traced
 /// combine's alpha comes from.
