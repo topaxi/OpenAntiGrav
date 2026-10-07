@@ -41,8 +41,13 @@ use crate::menu_stage::MenuStage;
 /// `pointer`, with its position moved from window pixels into `space`'s
 /// grid through the aspect rectangle `rect` every stage draws into.
 pub(super) fn in_grid(pointer: Pointer, space: Space, rect: (f32, f32, f32, f32)) -> Pointer {
+    // A drag is a distance, so it is the difference of two mapped points
+    // rather than a point: the letterbox offset cancels.
+    let origin = to_grid(space, rect, (0.0, 0.0));
+    let tip = to_grid(space, rect, pointer.drag);
     Pointer {
         at: pointer.at.map(|at| to_grid(space, rect, at)),
+        drag: (tip.0 - origin.0, tip.1 - origin.1),
         ..pointer
     }
 }

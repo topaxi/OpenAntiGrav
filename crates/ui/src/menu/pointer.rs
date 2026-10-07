@@ -24,6 +24,13 @@
 //!   ends** rather than wrapping: a wheel is a scroll, and a list that
 //!   jumps from its last row to its first under one is a list that lost the
 //!   player's place.
+//! - **A finger drag scrolls the view** one row per row-pitch of travel,
+//!   the list following the finger. The window moves and the cursor is
+//!   pushed only as far as keeps it inside the new window, so the selection
+//!   and the view stay coherent the way a pad walk keeps them; nothing is
+//!   selected or activated by a drag (the composition root reports no
+//!   position or click for one). A page that fits does not scroll.
+//!   **Chosen, not measured**: one row per pitch, and no fling.
 //! - **The secondary button is back**, which is what circle is on the same
 //!   page. On a strip it is the same.
 //! - **A disabled row is selectable and inert**, exactly as it is for a pad:
@@ -125,6 +132,10 @@ impl Menu {
             self.move_cursor(page, moved_to);
         }
 
+        if pointer.drag.1 != 0.0 {
+            self.drag(pointer.drag.1, regions);
+        }
+
         let hit = pointer.at.and_then(|at| hit(regions, at));
 
         if pointer.moved
@@ -148,6 +159,46 @@ impl Menu {
             out.extend(self.back());
         }
         out
+    }
+
+    /// Scrolls the view by a finger's travel of `dy` grid units down the
+    /// screen: the content follows the finger, so a drag down reveals the
+    /// rows above.
+    ///
+    /// The row pitch is read off `regions` - the same rects the page was
+    /// drawn with - and the fraction of a row not yet travelled is carried
+    /// in [`Self::drag_rows`] rather than thrown away.
+    fn drag(&mut self, dy: f32, regions: &[Region]) {
+        let page = self.current();
+        let rows = self.definition.pages[page].entries.len();
+        let visible = self.visible;
+        if rows <= visible {
+            return;
+        }
+        let mut rects = regions.iter().filter(|r| r.part == Part::Row);
+        let pitch = match (rects.next(), rects.next()) {
+            (Some(a), Some(b)) if b.rect[1] > a.rect[1] => b.rect[1] - a.rect[1],
+            (Some(a), _) => a.rect[3],
+            _ => return,
+        };
+        if pitch <= 0.0 {
+            return;
+        }
+        self.drag_rows -= dy / pitch;
+        let whole = self.drag_rows.trunc();
+        self.drag_rows -= whole;
+        let last = rows - visible;
+        let start = (self.scroll() as i64 + whole as i64).clamp(0, last as i64) as usize;
+        // The window only holds a cursor with a row of lookahead at each end
+        // (`window_start`), so the cursor moves just far enough to stay in it.
+        let low = if start == 0 { 0 } else { start + 1 };
+        let high = if start == last {
+            rows - 1
+        } else {
+            start + visible - 2
+        };
+        self.cursor[page] = self.cursor[page].clamp(low, high);
+        self.scroll[page] = start;
     }
 
     /// Puts the cursor on `row` and lets the window follow, the way a pad

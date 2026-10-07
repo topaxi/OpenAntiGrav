@@ -826,3 +826,47 @@ fn a_map_with_no_events_says_so_and_launches_nothing() {
         Draw::Text { text, .. } if text.contains("no campaign events")
     )));
 }
+
+#[test]
+fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let first_marker = |frontend: &Frontend| {
+        frontend
+            .draw_list()
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+                _ => None,
+            })
+            .expect("a marker in view")
+    };
+    let selected = frontend.selected_event().map(|e| e.name.clone());
+    let before = first_marker(&frontend);
+    // The canvas follows the finger: up and left reveals what is below and
+    // to the right, so the marker moves up and left by the same distance.
+    let drag = |dx: f32, dy: f32| Pointer {
+        drag: (dx, dy),
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&drag(-20.0, -30.0)));
+    let after = first_marker(&frontend);
+    assert_eq!((after[0] - before[0], after[1] - before[1]), (-20.0, -30.0));
+    // A wheel detent is one marker row down the canvas.
+    let wheel = Pointer {
+        scroll: 1,
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&wheel));
+    assert_eq!(first_marker(&frontend)[1] - after[1], -111.0);
+    // Dragged back past the top-left corner it stops there rather than
+    // showing past the canvas: the marker cannot move further than the
+    // scroll that was accumulated.
+    assert!(frontend.pointer(&drag(1e6, 1e6)));
+    let clamped = first_marker(&frontend);
+    assert_eq!(frontend.selected_event().map(|e| e.name.clone()), selected);
+    assert!(frontend.pointer(&drag(1e6, 1e6)));
+    assert_eq!(first_marker(&frontend), clamped, "already at the corner");
+}
