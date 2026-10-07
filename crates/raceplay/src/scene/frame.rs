@@ -277,7 +277,6 @@ impl Scene {
             ..scene
         };
         self.write_ship_scenes(queue, &ship_scene);
-        self.write_weapon_scenes(queue, &scene);
         // The scenery: both animation mechanisms off the one clock.
         for drawable in [
             Some(&self.track),
@@ -442,6 +441,19 @@ impl Scene {
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         let blasts_active = self.write_bomb_blasts(race, queue, view_projection, seconds);
         let leach_ball_active = self.write_leach_ball(race, queue, view_projection);
+        self.write_weapon_scenes(
+            queue,
+            &scene,
+            &super::weapon_models::LiveWeapons {
+                rockets: rocket_matrices.len(),
+                plasma_balls: ball_matrices.len(),
+                mines: mine_matrices.len(),
+                bombs: bomb_matrices.len(),
+                cannon_rounds: cannon_matrices.len(),
+                plasma_blasts: &plasma_blast_active,
+                leach_ball: leach_ball_active,
+            },
+        );
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing

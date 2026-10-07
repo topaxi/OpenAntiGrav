@@ -207,6 +207,44 @@ a green-looking figure produced by a run that had not exercised the thing**:
    comparison existed to answer. Any capture-backed claim about a **picture**
    is exposed to this the same way a claim about a cost is.
 
+## The CPU frame on an HD race, measured per phase (2026-10-07)
+
+`OAG_RENDER_PERF=1` marks now print the microseconds since the previous mark
+beside the allocation delta (`perf-probe` build). Wipeout HD, Vineta K
+(`/data/environments/01_vineta_k/track.vex`), `--autopilot --ticks 600`,
+960x540, release, `OAG_RENDER_BENCH=300`, load average 9-18 (contended, so
+read the ratio, not the microseconds).
+
+**The largest CPU cost was not `write_buffer`'s call count.** One mark held
+1.6 ms of a 2.0 ms `Scene::render`: `write_weapon_scenes` wrote the circuit's
+scene block with a direct `queue.write_buffer` (uncounted by
+`perfprobe::write_buffer`, which is why the 44 counted writes a frame never
+showed it) into every PS3-shaded drawable of every weapon pool, live or not -
+about 600 writes and 4,200 allocations a frame on HD, with no rocket in the
+air. It now writes only the live prefix of each dense pool, the live plasma
+blast slots and a live LeachBall, which are exactly the drawables the frame
+draws.
+
+| `Scene::render` CPU, median, 3 interleaved pairs | before | after |
+| --- | --- | --- |
+| HD Vineta K | 2.02-2.04 ms | 0.355-0.360 ms |
+| HD Talon's Junction (two pairs, load 23-27) | 2.07-3.46 ms | 0.31-0.41 ms |
+| Pulse PSP Talon's Junction | 0.45 ms | 0.45-0.48 ms (no PS3-shaded weapon, untouched) |
+
+Five captures are byte-identical before and after (`--autopilot`, tick 600):
+Pulse still and rocket volley, HD Vineta still and rocket volley, HD Talon's
+rocket volley; `hd_weapon_scene_ground_truth` passes 5 of 5.
+
+**Still open, measured:** what is left of the 0.36 ms is spread thin (the
+biggest mark is the scene pass at ~65 us, then ship anims ~50 us). The
+per-drawable uniform buffer idea above is therefore worth at most the 44
+counted writes a frame, tens of microseconds; not the lever it was assumed to
+be. Separately, `Clip::sample_user_channel` counts presence bits one bit at a
+time (`count_bits`), ~9 % of an HD run's CPU in a profile that includes the
+load; it only matters where a track animates many UV curves per frame. Sim,
+encode and submit were not timed per phase here: the capture path re-records
+only `Scene::render`.
+
 ## Open
 
 **Not fixed, with numbers, in the order they are worth fixing:**

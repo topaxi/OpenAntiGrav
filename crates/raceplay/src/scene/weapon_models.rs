@@ -572,28 +572,56 @@ impl super::Scene {
     /// **Not written, and open**: the Bomb's blast pair and its Repulser field
     /// and mag floor. No frame of them was kept (a detonation needs a rival to
     /// run onto the bomb), so nothing says writing them is right.
-    pub(super) fn write_weapon_scenes(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+    pub(super) fn write_weapon_scenes(
+        &self,
+        queue: &wgpu::Queue,
+        scene: &mesh_render::Scene,
+        live: &LiveWeapons<'_>,
+    ) {
         let scene = &mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             ..*scene
         };
-        let pools = [
-            self.plasma_blast.ball.iter(),
-            self.plasma_blast.halo.iter(),
-            self.plasma_blast.hemisphere1.iter(),
-            self.plasma_blast.hemisphere2.iter(),
-            self.rockets.iter(),
-            self.mines.iter(),
-            self.bombs.iter(),
-            self.cannon_rounds.iter(),
-        ];
-        for drawable in pools
-            .into_iter()
-            .flatten()
-            .chain(self.leach_ball.as_ref())
+        let blasts = [
+            &self.plasma_blast.halo,
+            &self.plasma_blast.hemisphere1,
+            &self.plasma_blast.hemisphere2,
+        ]
+        .into_iter()
+        .flat_map(|models| {
+            models
+                .iter()
+                .zip(live.plasma_blasts)
+                .filter_map(|(drawable, &live)| live.then_some(drawable))
+        });
+        let dense = [
+            (&self.plasma_blast.ball, live.plasma_balls),
+            (&self.rockets, live.rockets),
+            (&self.mines, live.mines),
+            (&self.bombs, live.bombs),
+            (&self.cannon_rounds, live.cannon_rounds),
+        ]
+        .into_iter()
+        .flat_map(|(models, live)| models.iter().take(live));
+        for drawable in dense
+            .chain(blasts)
+            .chain(self.leach_ball.as_ref().filter(|_| live.leach_ball))
             .filter(|drawable| drawable.is_ps3_shaded())
         {
             queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
         }
     }
+}
+
+/// What a frame draws of each weapon pool: the length of a dense pool's live
+/// prefix, and which slots of the sparse plasma blast and the lone LeachBall
+/// are live. Everything past it is not drawn, so its scene block is not read.
+pub(super) struct LiveWeapons<'a> {
+    pub rockets: usize,
+    pub plasma_balls: usize,
+    pub mines: usize,
+    pub bombs: usize,
+    pub cannon_rounds: usize,
+    pub plasma_blasts: &'a [bool],
+    pub leach_ball: bool,
 }
