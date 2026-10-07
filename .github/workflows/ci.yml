@@ -13,7 +13,25 @@ jobs:
   check:
     name: fmt / clippy / test / dependency rules
     runs-on: ubuntu-latest
+    # The 2026-10-07 run (37595443950) filled the runner's disk twenty minutes
+    # into `cargo nextest run --workspace`: `oag-game` alone has 80-odd
+    # integration-test binaries, each statically linking wgpu and cpal. Line
+    # tables are no use to anyone reading a CI log, so they go first.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
+      # ubuntu-latest ships ~30 GB of toolchains this job never uses; the
+      # workspace's debug build plus the clippy artefacts beside it need more
+      # than the ~14 GB left free by default.
+      - name: Free runner disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/share/powershell \
+            /usr/share/swift /usr/local/julia* /opt/microsoft /opt/google
+          sudo docker image prune --all --force || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
@@ -99,37 +117,50 @@ jobs:
         run: cargo run -q -p oag-core --example core_determinism_report
       - name: Assert hashes match the committed reference (release)
         run: cargo test -p oag-core --release determinism -- --nocapture
+      # Every step below runs even when an earlier stage is red, so one push
+      # shows *every* diverging stage on every OS rather than only the first:
+      # the 2026-10-07 runs stopped at the core probe on macOS and Windows and
+      # left physics, race-level and driver uncompared there.
       # The math foundation above is not the simulation. These two cover the
       # real force law, over a synthetic world so they need no disc image.
       - name: Print simulation determinism hashes (release)
+        if: ${{ !cancelled() }}
         run: cargo run -q -p oag-physics --example physics_determinism_report
       - name: Assert simulation hashes match the committed reference (release)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-physics --release --test determinism -- --nocapture
       # What a race carries around the dynamics: the inventory, the
       # projectiles, the lap state and the generator's position. It needs no
       # disc image either, so it belongs on all three targets rather than only
       # in the Linux-only workspace run.
       - name: Assert race-level hashes match the committed reference (release)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --release --test determinism -- --nocapture
       # The force law above is driven by a *scripted* input, so no controller
       # decision is in its hash. This one drives the drivers, which is where
       # `Line::curvature` lives - the platform `acos` it used to call was
       # outside every gate for exactly this reason.
       - name: Print driver determinism hashes (release)
+        if: ${{ !cancelled() }}
         run: cargo run -q -p oag-ai --example ai_determinism_report
       - name: Assert driver hashes match the committed reference (release)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-ai --release --test determinism -- --nocapture
       # determinism.md requires bit-identical state in debug too, not just
       # release. Linux-debug is also covered by the `check` job's `cargo
       # nextest run --workspace`; these three make Windows-debug and
       # macOS-debug actually run instead of being claimed by the doc alone.
       - name: Assert hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-core determinism -- --nocapture
       - name: Assert simulation hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-physics --test determinism -- --nocapture
       - name: Assert race-level hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-gameplay --test determinism -- --nocapture
       - name: Assert driver hashes match the committed reference (debug)
+        if: ${{ !cancelled() }}
         run: cargo test -p oag-ai --test determinism -- --nocapture
 
   leakage:
