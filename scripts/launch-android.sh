@@ -40,7 +40,7 @@ command -v adb >/dev/null || die "adb not found; install android-tools (see docs
 pick_adb_device
 adb() { command adb "${adb_args[@]}" "$@"; }
 
-[[ -n "$(adb shell pm list packages "$package" | tr -d '\r')" ]] \
+[[ -n "$(adb shell pm list packages --user 0 "$package" | tr -d '\r')" ]] \
     || die "$package is not installed on this device; run 'just deploy-android' first"
 
 echo "device: $(adb shell getprop ro.product.model | tr -d '\r') ($(adb get-serialno))"
@@ -55,5 +55,5 @@ echo "launched $package"
 
 if (( follow_logs )); then
     echo "following 'adb logcat -s oag' (Ctrl-C stops following; the app keeps running)"
-    exec adb logcat -s oag
+    exec "$(type -P adb)" "${adb_args[@]}" logcat -s oag
 fi

@@ -594,6 +594,11 @@ deploy-android *ARGS:
 launch-android *ARGS:
     ./scripts/launch-android.sh "$@"
 
+# Follow the app's log (`adb logcat -s oag`) on the picked adb device; --clear,
+# --dump, `-- ARGS` for another filter. See scripts/logcat-android.sh
+logcat-android *ARGS:
+    ./scripts/logcat-android.sh "$@"
+
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
 # keys) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.
