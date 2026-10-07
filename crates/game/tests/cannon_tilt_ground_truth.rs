@@ -96,6 +96,10 @@ fn a_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
     assert!(shots.len() >= 100, "only {} rounds fired", shots.len());
     assert!(tilted >= 20, "only {tilted} rounds fired on a tilt");
     let worst = shots.iter().map(|(_, r)| *r).fold(0.0_f32, f32::max);
+    println!(
+        "{} rounds, {tilted} fired on a tilt, worst residual {worst}",
+        shots.len()
+    );
     assert!(
         worst < 1e-3,
         "a round left {worst} units from its muzzle ({} shots, {tilted} tilted)",
