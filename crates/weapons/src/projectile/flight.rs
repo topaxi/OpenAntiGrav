@@ -64,6 +64,10 @@ impl Projectiles {
                     let (position, heading) = plasma::muzzle(ship.physics(), &ship.dimensions());
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
+                    // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;
+                    // seeded each held tick so the release tick has it whatever
+                    // the table says.
+                    projectile.surface = ship.physics().body.up();
                     heading
                 });
                 projectile.charge = (projectile.charge - dt).max(0.0);
@@ -84,8 +88,6 @@ impl Projectiles {
                         * KMH_PER_UNIT_PER_SECOND
                         + stats.launch_speed;
                     projectile.launch_speed_kmh = launch_kmh;
-                    // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal.
-                    projectile.surface = ship.physics().body.up();
                     projectile.velocity = heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND);
                 }
                 continue;

@@ -20,9 +20,10 @@ Moa Therma, 496 rounds: worst off-muzzle error 7.05 units before, 0.00 after.
 - **The Cannon's flight against a live PPSSPP is unchecked.** The decompile is
   confidence 82 (VFPU-dense); the reflect arm is read at the shape of its
   arithmetic only. Nobody has watched a round glance off a floor in the original.
-- **HD, 2048 and Omega inherit Pulse's Cannon flight**; none has its own
-  `Cannon_UpdateRound` read, and 2048 and Omega author no Cannon in the tables
-  read so far.
+- **HD inherits Pulse's Cannon flight** (HD authors a Cannon and runs the
+  shared code; no HD `Cannon_UpdateRound` read). **Not checked:** whether
+  2048's `weaponstats_Race_2048.xml` or Omega's `WeaponStats_Race.xml` carry a
+  Cannon block; if so they inherit the same flight.
 - The Plasma's recovered seed is `-craft->up`; whether `craft+0xb10` is the
   craft's up or its contact normal was never separated (the Rocket's note says
   the same), so all four weapons use `body.up()`.

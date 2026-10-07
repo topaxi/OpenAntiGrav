@@ -102,3 +102,52 @@ fn a_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
         shots.len()
     );
 }
+
+/// The Missile and the Shuriken leave a banked craft riding **its** up, as
+/// `Missile_Init` and `Shuriken_Init` store `-craft+0xb10`, not world up.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_missile_fired_on_a_bank_is_born_riding_the_craft_up() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(MOA_THERMA_WHITE.to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let mut input: Option<Input> = None;
+    for _ in 0..4_000_u32 {
+        let snap = snapshot(Button::Cross.bit(), input.as_ref());
+        input = Some(snap.buttons);
+        race.tick(&PlayerInputs::single(snap));
+        let up = race.sim.world.ships[0].physics.body.up();
+        if up.y > 0.9 {
+            continue;
+        }
+        race.sim.world.projectiles.clear();
+        assert!(race.fire_missile(0, &stats));
+        let missile = race
+            .sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .find(|p| p.kind == Some(Weapon::Missile))
+            .expect("a missile in the air");
+        assert!(
+            (missile.surface - up).length() < 1e-4,
+            "born riding {:?}, the craft's up is {up:?}",
+            missile.surface
+        );
+        return;
+    }
+    panic!("the autopilot never banked past 25 degrees in 4000 ticks");
+}

@@ -19,7 +19,7 @@ what the fix was. Implemented in
 | On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
 | A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
 | Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
-| The fall is along world `-Y` for every weapon | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma's decompile falls along its *carried normal* instead, and this engine gives it the Rocket's axis - pre-existing, not touched here | - |
+| The fall is along world `-Y` for every weapon but the Cannon, which does not fall at all | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma's decompile falls along its *carried normal* instead, and this engine gives it the Rocket's axis - pre-existing, not touched here | - |
 | The normal a projectile is born riding: the firing craft's up for the Rocket, Missile, Shuriken and Plasma (`Rocket_Init`, `Missile_Init` `+0xd0`, `Shuriken_Init` `+0x150`, `Plasma_Launch` `+0x110` all store `-(craft+0xb10)`) | **recovered 2026-10-07**, `Missile_Init`/`Shuriken_Init` decompiled; wired through `spawn_riding`, `spawn_guided` and `throw`. A seed of world up (`Vec3::Y`) remains only for tests | - |
 
 ## The Cannon is not in this table at all
@@ -39,19 +39,24 @@ side of the craft."
 
 Measured on Moa Therma (`03_Track`), autopilot lap, a burst every 1.5 s, 496
 rounds, offset of each round after its first tick from `cannon::launch` plus
-one step: worst 7.05 units before, 0.00 after; rounds from a craft banked past
-18 degrees (`up.y < 0.95`) had a mean error of 0.6 units before. The spawn
+one step: worst 7.05 units before, 0.00 after; the 271 rounds from a craft banked
+past 18 degrees (`up.y < 0.95`) averaged 0.91 units off the muzzle before and
+the 225 on flatter track 1.04 (the drop to ride height). The spawn
 itself (`cannon::launch`, built from the craft's right and forward) was never
 at fault: where the probe missed, the residual was exactly zero. Pinned by
 `oag_weapons::projectile::cannon::tests` (a craft rolled 0 to 135 degrees over
 a floor) and the disc-backed
 `crates/game/tests/cannon_tilt_ground_truth.rs`.
 
-HD, 2048 and Omega share this flight code (`Projectiles::advance`) and so now
-fly their Cannon straight too; none of them has its own `Cannon_UpdateRound`
-read, so that is Pulse's law inherited, not measured there. 2048 and Omega
-author no Cannon in the tables read so far (checked: not checkable without a
-capture of their executables).
+**Lineage.** HD authors a Cannon (`weaponstats_Race.xml`, drawn by
+`hd_weapon_scene_ground_truth`) and runs the same `Race::advance_cannons` and
+`Projectiles::advance`, so HD's Cannon now flies straight too: **checked,
+applies, wired by sharing the code**, with Pulse's law inherited and no HD
+`Cannon_UpdateRound` read (**not checkable** here without an HD capture). 2048
+and Omega name their own weapon tables (`weaponstats_Race_2048.xml`,
+`WeaponStats_Race.xml`) but whether those author a Cannon block was **not
+checked** this lane; if they do, they inherit the same flight. The Missile,
+Shuriken and Plasma seed reaches every title through the same shared code.
 
 ## The report
 

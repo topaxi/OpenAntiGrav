@@ -120,7 +120,9 @@ pub struct Projectile {
     pub position: Vec3,
     /// Where it is going, in world units a second. Turned parallel to the surface
     /// each tick it finds one (speed preserved) and pulled down by
-    /// [`FALL_ACCELERATION`] each tick it does not.
+    /// [`FALL_ACCELERATION`] each tick it does not. **Not the Cannon**, which
+    /// flies straight (`Cannon_UpdateRound` has no probe or fall) and reflects
+    /// off a floor instead.
     pub velocity: Vec3,
     /// The surface normal the projectile is riding, normalised.
     ///
@@ -128,11 +130,13 @@ pub struct Projectile {
     /// re-probed every tick (`Rocket_Update`, `0x0885d2a8`); it is what makes a
     /// projectile follow a banked track.
     ///
-    /// [`Projectiles::spawn`] seeds [`Vec3::Y`] instead (**ours**); the first probe
-    /// corrects it. The Rocket is seeded from the craft's up through
-    /// [`Projectiles::spawn_riding`] (`Rocket_Init` writes `self+0x100` as the
-    /// negated `craft+0xb10`); whether that is the craft's up or its contact normal
-    /// was not separated.
+    /// [`Projectiles::spawn`] seeds [`Vec3::Y`] (**ours**), which only the Cannon,
+    /// that reads no normal, and tests use. The Rocket
+    /// ([`Projectiles::spawn_riding`]), Missile ([`Projectiles::spawn_guided`]),
+    /// Shuriken ([`Projectiles::throw`]) and Plasma (at release) are seeded from
+    /// the craft's up: `Rocket_Init`, `Missile_Init`, `Shuriken_Init` and
+    /// `Plasma_Launch` each write the negated `craft+0xb10`. Whether that is the
+    /// craft's up or its contact normal was not separated.
     pub surface: Vec3,
     /// Which ship slot fired it. The shot cannot hit its own launcher in flight, and
     /// an [`Impact`] carries it. **Not excluded from the blast**, see [`Impact`].
