@@ -159,6 +159,7 @@ impl super::Scene {
     /// drift for one frame when a mid-list projectile despawns - bounded by
     /// the pass's own reach cap and accepted, same as the Rocket's own
     /// [ADR-0030](../../../../../docs/architecture/adr/0030-a-bounded-drift-in-motion-vectors-is-accepted.md).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_weapon_models(
         &self,
         race: &Race,
@@ -541,6 +542,7 @@ impl super::Scene {
 /// and its `bomb` body about `Y`; neither was ever written before, so both drew
 /// at their time-zero pose. Their texture-offset tracks ride the same clock
 /// (`Drawable::write_anims`, 2026-10-05).
+#[allow(clippy::too_many_arguments)]
 fn write_one_kind(
     drawables: &[Drawable],
     weapon_scene: &mesh_render::Scene,
