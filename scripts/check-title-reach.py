@@ -31,7 +31,8 @@ Allowed reach points, never counted:
   `oag-2048`) and `oag-title`, which is where a title's data is typed;
 - the registry in `crates/source/src/title.rs`, the one place a disc image becomes
   a `Title`;
-- `crates/game/src/main.rs` and `crates/game/src/bin/`, the composition root's entry.
+- `crates/game/src/main.rs` (with `main_body.rs`, which it and `android.rs`
+  `include!`) and `crates/game/src/bin/`, the composition root's entry.
 
 `python3 scripts/check-title-reach.py --list` prints every counted site.
 """
@@ -49,6 +50,8 @@ SKIPPED_DIRS = {"tests", "examples", "benches"}
 ALLOWED_FILES = {
     "crates/source/src/title.rs",
     "crates/game/src/main.rs",
+    "crates/game/src/main_body.rs",
+    "crates/game/src/android.rs",
 }
 ALLOWED_PREFIXES = ("crates/game/src/bin/",)
 

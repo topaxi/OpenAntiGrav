@@ -588,6 +588,12 @@ deploy-deck *ARGS:
 deploy-android *ARGS:
     ./scripts/deploy-to-android.sh "$@"
 
+# Start the app on an adb device (asks which when several are connected) and
+# follow its log; --no-logs, --stop (cold start), --serial S. See
+# scripts/launch-android.sh
+launch-android *ARGS:
+    ./scripts/launch-android.sh "$@"
+
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
 # keys) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.

@@ -136,14 +136,15 @@ oag-fx.workspace = true
 oag-pob.workspace = true
 oag-weapons.workspace = true
 
-# The Android entry point: `src/main.rs` again, as the cdylib the NativeActivity
-# loads. An example because the windowed `App` lives in the binary's own
-# modules and nothing may depend on `oag-game`; `bin` cannot be a cdylib and
-# `cargo rustc` refuses to mix the two crate types. Cargo's "present in
-# multiple build targets" warning on this file is the price; see
-# docs/tools/android.md.
+# The Android entry point: the binary's own body again (`src/android.rs`
+# `include!`s `src/main_body.rs`, as `src/main.rs` does), as the cdylib the
+# NativeActivity loads. An example because the windowed `App` lives in the
+# binary's own modules and nothing may depend on `oag-game`; `bin` cannot be a
+# cdylib and `cargo rustc` refuses to mix the two crate types. Two roots that
+# share one body by `include!` keep Cargo from warning about one file in two
+# targets; see docs/tools/android.md.
 [[example]]
 name = "oag_android"
-path = "src/main.rs"
+path = "src/android.rs"
 crate-type = ["cdylib"]
 required-features = ["android"]

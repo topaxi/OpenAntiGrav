@@ -69,17 +69,36 @@ skip the picker (`just push-data android 'images/pulse-psp-*'`). See
 [packaging.md](packaging.md#running-it-on-a-steam-deck) for what is and is not
 offered.
 
+`just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
+
+All three recipes talk to one device. `--serial S` or `$ANDROID_SERIAL` names it; with
+neither, a single authorised device is used as is, and with more than one (the
+phone and Waydroid, say) they ask which - an fzf pick, or a numbered prompt without
+fzf - and refuse with the list of serials when not run from a terminal
+(`scripts/adb-pick-device.sh`). An `unauthorized` device is never offered.
+
+An installed app signed with another key (built elsewhere, or before the key moved
+out of `target/`) cannot be updated in place: `adb install -r` fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `just deploy-android` then offers to
+reinstall, keeping the app's data: everything the app writes lives under
+`/sdcard/Android/data/org.openantigrav.game`, which it moves aside on the device,
+uninstalls, installs, and moves back. It asks in a terminal; `--reinstall` skips the
+question.
+
 ## How it is wired
 
-- **Entry.** `crates/game/src/main.rs` carries `android_main`, and Cargo builds the
-  same file a second time as the `oag_android` example with `crate-type = ["cdylib"]`
-  and `required-features = ["android"]`, which `build-apk.sh` turns on. That is the
-  cost of the windowed `App` living in the binary's own modules: a bin cannot be a
-  cdylib, `cargo rustc` refuses to mix the two crate types, and nothing may depend on
-  `oag-game`, so the second crate root is `main.rs` itself. **Cargo prints "file
-  found to be present in multiple build targets" on every invocation in the
-  workspace because of it.** Moving the `App` into the lib would remove the warning
-  and the example; that is the real fix and is open (handover thread).
+- **Entry.** `crates/game/src/main_body.rs` carries `android_main`. Two crate roots
+  `include!` it: `main.rs` (the desktop binary, which also keeps the crate's rustdoc
+  header - an included file may not carry inner attributes) and `android.rs`, the
+  `oag_android` example with `crate-type = ["cdylib"]` and
+  `required-features = ["android"]`, which `build-apk.sh` turns on. That is the cost
+  of the windowed `App` living in the binary's own modules: a bin cannot be a cdylib,
+  `cargo rustc` refuses to mix the two crate types, and nothing may depend on
+  `oag-game`. Both roots sit in `src/`, so the body's `#[path = "main/..."]` module
+  paths resolve the same from either. Until 2026-10-07 both targets pointed at
+  `main.rs` itself and Cargo warned "found to be present in multiple build targets"
+  on every invocation. Moving the `App` into the lib would remove the example
+  altogether; that is still open (handover thread).
 - **NativeActivity rather than GameActivity.** No Java: the APK is a manifest and one
   `.so` (`android:hasCode="false"`), buildable with `aapt2`, `zipalign` and
   `apksigner` alone. GameActivity wants the AndroidX games-activity AAR, Gradle and a

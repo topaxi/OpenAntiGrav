@@ -235,6 +235,41 @@ transcendental the simulation turns out to want goes in beside it.
   hull or racing line is under a cross-platform hash - those are covered by the
   disc-backed ground-truth suites, on one machine, via `just test-data`.
 
+### 2026-10-07: the core probe's own `sin` is the first cross-platform failure
+
+The first `ci.yml` runs to reach the determinism tests in about 26 days (runs
+37595443950, 37599197810, 37599357599) failed `oag-core`'s reference on macOS
+(aarch64) and Windows (x86_64), Linux passing. The cause is the probe itself, not
+simulation code: [`probe.rs`](../../crates/core/src/probe.rs) calls the platform's
+`f32::sin` and glam's `Quat::from_axis_angle` (platform `sin_cos`), allowlisted in
+`scripts/check-transcendentals.py` precisely so a libm difference fails here. It
+did. The reference was recorded on x86_64 glibc, so it bakes glibc's `sinf`.
+
+Evidence that this is libm and nothing else, reproduced on Linux by swapping only
+those two calls for `oag_core::math`'s (the `libm` crate):
+
+| Probe variant on Linux (glibc 2.44) | Matches |
+| --- | --- |
+| `math::sin_cos` for `sin`, `math::quat_from_axis_angle` | Windows' `ticks=1000` trajectory `0xbcd056e334f2b1cb` exactly |
+| `math::sin_cos` for `sin`, glam's `from_axis_angle` kept | macOS' `ticks=100000` final `0x1877155ea261a7ba` exactly |
+| unchanged | the committed reference (glibc's own bits) |
+
+Both swaps matter: each alone moves the Linux trajectory hashes. That all three
+platforms agree once the probe takes `oag_core::math` is expected (the `libm`
+crate is pure Rust) but unverified: Windows' 10,000- and 100,000-tick
+trajectories match none of the Linux variants, and confirming takes one push. Confidence the
+divergence is libm alone: 90 (two cross-platform hashes reproduced bit for bit;
+the other stages, physics, race-level and driver, never ran on macOS or Windows
+because the job stopped at the first assert, so whether *they* hold is unknown).
+
+Not fixed here, because it moves the committed constants: switching the probe to
+`oag_core::math` changes the Linux trajectory hashes (finals unchanged on Linux)
+to `0xbcd056e334f2b1cb`, `0xa774f231b9e343d0`, `0x31337c04f2032805`. It also ends
+the probe's role as a platform-libm canary, which `check-transcendentals.py`
+already covers for every scanned crate. That regeneration is the maintainer's
+decision. Note that `ubuntu-latest` moves to Ubuntu 26 (a newer glibc) from
+2026-10-19, so a glibc-baked reference can go red on Linux too.
+
 **When the determinism test fails, do not update the constants.** That converts
 a real bug into a silent one. The failure output names the platform, and each CI
 log already contains that gate's `*_determinism_report` example output for its
