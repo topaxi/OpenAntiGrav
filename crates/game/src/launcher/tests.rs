@@ -399,3 +399,93 @@ fn the_not_found_screen_names_the_adb_push_and_fits() {
         "there is nothing to select"
     );
 }
+
+fn locked(name: &str) -> Candidate {
+    Candidate {
+        state: State::NeedsKey,
+        ..broken(name)
+    }
+}
+
+/// A locked image is a row the cursor lands on - it is the only way into the
+/// prompt - but it is never offered to play.
+#[test]
+fn a_locked_row_is_selectable_and_never_picked() {
+    let l = Launcher::new(vec![locked("enc.iso")]);
+    assert_eq!(l.cursor(), 0);
+    assert!(l.rows()[0].is_selectable());
+    assert!(!l.rows()[0].is_playable());
+    assert_eq!(l.pick(), None);
+    assert_eq!(l.rows()[0].title(), NEEDS_KEY);
+}
+
+#[test]
+fn confirming_a_locked_row_opens_the_prompt_and_circle_closes_it() {
+    let mut l = Launcher::new(vec![locked("enc.iso")]);
+    let mut input = Input::new();
+    press(&mut input, Button::Cross);
+    assert_eq!(
+        l.update(&mut input),
+        None,
+        "opening the prompt picks nothing"
+    );
+    assert!(l.typing_is_open());
+    // The prompt owns the d-pad now: it does not move the list cursor.
+    press(&mut input, Button::Circle);
+    assert_eq!(l.update(&mut input), None);
+    assert!(!l.typing_is_open());
+}
+
+#[test]
+fn a_click_on_a_locked_row_opens_the_prompt() {
+    let mut l = Launcher::new(vec![playable("a.chd"), locked("enc.iso")]);
+    let at = (SCREEN.0 / 2.0, FIRST_ROW + ROW + 4.0);
+    let click = oag_ui::pointer::Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Default::default()
+    };
+    assert_eq!(l.pointer(&click), None);
+    assert!(l.typing_is_open());
+}
+
+#[test]
+fn the_prompt_replaces_the_list_and_a_desk_keyboard_types_into_it() {
+    let mut l = Launcher::new(vec![locked("enc.iso")]);
+    let mut input = Input::new();
+    press(&mut input, Button::Cross);
+    l.update(&mut input);
+    l.type_digit('a');
+    l.type_digit('Z');
+    l.type_digit('0');
+    assert_eq!(l.entry().unwrap().len(), 2);
+    let texts: Vec<String> = draw_list(&l)
+        .into_iter()
+        .filter_map(|d| match d {
+            Draw::Text { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.iter().any(|t| t == "DISC KEY"));
+    assert!(!texts.iter().any(|t| t == "SELECT A DISC IMAGE"));
+}
+
+#[test]
+fn a_paste_request_is_serviced_once_and_only_where_a_clipboard_exists() {
+    let mut l = Launcher::new(vec![locked("enc.iso")]).with_paste(true);
+    let mut input = Input::new();
+    press(&mut input, Button::Cross);
+    l.update(&mut input);
+    l.request_paste();
+    assert!(l.take_paste_request());
+    assert!(!l.take_paste_request());
+    l.paste("00112233445566778899aabbccddeeff");
+    assert_eq!(l.entry().unwrap().len(), 32);
+
+    let mut none = Launcher::new(vec![locked("enc.iso")]);
+    press(&mut input, Button::Cross);
+    none.update(&mut input);
+    none.request_paste();
+    assert!(!none.take_paste_request());
+}

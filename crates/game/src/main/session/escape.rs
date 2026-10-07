@@ -165,6 +165,13 @@ impl Session {
             }
         }
 
+        // The chooser's disc-key prompt takes escape whole, the same rule a
+        // menu's modal prompt follows below: escape closes it and does not quit.
+        if let Stage::Launcher(stage) = &mut self.stage
+            && stage.launcher.cancel_entry()
+        {
+            return;
+        }
         // A selection screen takes escape first, as Back - the same rule the
         // modal prompt below follows, one layer up.
         if matches!(&self.stage, Stage::Menu(stage) if stage.picker.is_some()) {

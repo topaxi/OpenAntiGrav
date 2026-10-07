@@ -633,6 +633,10 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } => session.pointer.wheel(delta),
             WindowEvent::Touch(touch) => session.touch(touch),
 
+            WindowEvent::ModifiersChanged(modifiers) => {
+                crate::clipboard::set_ctrl_held(modifiers.state().control_key());
+            }
+
             WindowEvent::KeyboardInput { event, .. } => {
                 // The keyboard is the device in use now, whatever the key:
                 // the drawn cursor goes until the mouse moves again. See
@@ -694,6 +698,14 @@ impl ApplicationHandler for App {
                     return;
                 }
                 if session.typing_is_open() {
+                    if event.state == ElementState::Pressed
+                        && !event.repeat
+                        && crate::clipboard::ctrl_held()
+                        && matches!(&event.logical_key, Key::Character(c) if c.eq_ignore_ascii_case("v"))
+                    {
+                        session.request_paste();
+                        return;
+                    }
                     let typed = crate::typing::decide(
                         &event.logical_key,
                         event.state == ElementState::Pressed,

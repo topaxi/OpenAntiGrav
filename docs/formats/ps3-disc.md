@@ -98,7 +98,8 @@ Plain regions are copied through untouched.
 The disc key is **not in the image**, and no amount of analysis recovers it.
 
 On real hardware the drive and the console authenticate, and the drive returns
-`data1`, from which the disc key is derived by encrypting it with a fixed secret
+`data1`, from which the disc key is derived by encrypting it (AES-128-CBC, one
+block, under a fixed IV that [RPCS3](https://github.com/RPCS3/rpcs3) carries beside the secret) with a fixed secret
 (`0x380bcf0b53455b3c7817ab4fa3ba90ed`). A PC drive dumping the disc never
 performs that exchange, so `data1` never lands in the file. This is why redump
 publishes a separate `.dkey` per disc: a redump `.dkey` holds the **derived**
@@ -118,6 +119,52 @@ The structural argument is the load-bearing one; those two are corroboration.
 it was given, so a caller does not have to know. **No key is stored in this
 repository** - `.dkey` is in `.gitignore` and in `scripts/check-leakage.py`'s
 extension list, because it is the one thing that opens a disc image.
+
+## Read in place: `oag_disc::ps3_crypt`
+
+Since 2026-10-07 the engine reads the encrypted image directly, with no decrypted
+copy. `ps3_crypt::DecryptSource` wraps the raw source and decrypts a sector when
+its absolute LBA lies in a gap between sector 0's plain regions (AES-128-CBC, IV
+twelve zero bytes plus the LBA big-endian, chaining reset per sector, exactly as
+above). `DiscImage::open` finds a key itself: `<stem>.dkey`/`<stem>.key` beside
+the image, then every `.dkey`/`.key` in `<config>/oag/keys/`; the chooser's key
+prompt writes there. See [installing](../overview/installing.md#hd--fury-the-disc-is-read-encrypted-in-place).
+
+- **The oracle is the decision, never the region table.** A decrypted image keeps
+  sector 0's table, so "table says encrypted" and "a key exists" cannot choose
+  whether to decrypt. `unlock` first tries the raw view; if every oracle target
+  already reads as its magic or its plain twin the image is `AlreadyPlain` and is
+  never double-decrypted. Only then are keys tried, each as the sector key and as
+  `data1` through the documented secret, and a key is accepted only if **every**
+  target passes. A walk of the directory tree or an empty target list is "locked",
+  never "accept".
+- **Targets** are built generically from the ISO listing, not from HD file names:
+  a file starting in an encrypted gap whose same-name, same-size twin sits in a
+  plain region predicts a whole sector; otherwise `.PSARC`, `.PNG`, `.SPRX`,
+  `.BIN`, `.PUP` predict their magic. HD yields the same kinds of target
+  as `ps3iso.py` (not counted separately here).
+- **Key hygiene.** `DiscKey` has a redacted `Debug`, so a `{:?}` of a `DiscImage`
+  cannot leak it, and no error formats key bytes.
+- **States** (`DiscImage::ps3_state`): `NotEncrypted`, `AlreadyPlain`,
+  `Decrypting`, `Locked`. `Locked` leaves the plain regions readable, which is why
+  the chooser still identifies the disc from `PS3_DISC.SFB`.
+
+**Measured on the maintainer's HD image.** This is engineering verification of the
+reader (byte-identity against the independently decrypted copy), not new
+evidence about the format, so the page's confidence of 94 stands:
+
+| Check | Result |
+| --- | --- |
+| All 22 files, read through `DiscImage` from the encrypted image vs the decrypted copy (PUP: first MiB) | byte-identical, 1,990,646,154 bytes (1.85 GiB) compared |
+| A strided 4 KiB sample through every file over 16 KiB, so the second encrypted region's absolute-LBA IV is exercised | identical |
+| Race frame (`--race --ticks 1 --screenshot`, Talon's Junction) from each image | PNGs byte-identical |
+| Race load, release build, three runs at load average ~13 | encrypted 1.96 / 1.87 / 1.88 s, decrypted 1.85 / 1.86 / 1.88 s |
+| Wrong key, or no key | `Locked`; `key_opens` false |
+
+Ground truth: `crates/disc/tests/ps3_crypt_ground_truth.rs` (ignored, disc-backed)
+and the unit tests in `crates/disc/src/ps3_crypt/tests.rs` (FIPS-197 vector, an
+independent encrypt-then-decrypt round trip proving the IV rule, key parsing,
+region-table validation).
 
 ## The oracle: how a key is known to be right
 

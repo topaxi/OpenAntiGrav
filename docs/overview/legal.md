@@ -48,6 +48,40 @@ hand-maintained copies once did.
 The line is between *describing* the work and *reproducing* it. A field offset
 table is a description. A texture is a reproduction.
 
+## Fixed public keys
+
+**Decision (maintainer, 2026-10-07): the project may ship the fixed public
+package keys that other open-source projects already ship.** That is a
+narrow rule. It covers constants that are the same for every disc or package of
+a kind and are printed in published open-source code. It does **not** cover:
+
+- a per-game licence (a zRIF, `work.bin`, a `.rif`, a Vita klicensee);
+- a per-disc key (a redump `.dkey`, a PS3 disc key typed in the chooser);
+- a console-derived key (Vita F00D keys, anything a hardware secure processor
+  derives).
+
+Those stay the player's. The engine reads them from a file beside the image,
+from the app's own keys folder, or from the key prompt, and never prints one
+(`DiscKey`'s `Debug` is redacted; no error formats key bytes).
+
+Constants shipped so far, each checked against a local copy of the precedent on
+2026-10-07 rather than recalled:
+
+| Constant | Where it is in this repository | Precedent |
+| --- | --- | --- |
+| PS3 `data1` secret (16 bytes) and its IV | `crates/disc/src/ps3_crypt.rs`, `scripts/ps3iso.py`, `docs/formats/ps3-disc.md` | RPCS3, `rpcs3/Loader/ISO.cpp`, `iso_file_decryption::set_key_from_d1` (`key_d1`, `iv_d1`), GPL-2.0 |
+
+Precedents for the package keys this decision would let a later reader ship,
+**none of which is shipped yet** because nothing here needs one:
+
+| Constants | Precedent |
+| --- | --- |
+| Vita PKG keys `pkg_vita_2`, `pkg_vita_3`, `pkg_vita_4`, and the PSP/PS3 package keys | `pkg2zip`, `pkg2zip.c`, public domain (Unlicense text in its `LICENSE`); Vita3K and `psvpfstools` carry the same family |
+| PS4 fake-package keys | `LibOrbisPkg` (MIT), whose `PkgTool.Core` decrypts the Omega package on a PC with no console key, per `docs/reverse-engineering/source-images.md` |
+
+A Vita PFS file key is **not** in that second table: it is derived by the
+console, see [Vita packages](../formats/vita-package.md).
+
 ## Test fixtures
 
 Tests must not depend on game content. Where a test needs a structure to parse,

@@ -34,6 +34,11 @@ impl LauncherStage {
             return;
         }
         self.picked = self.launcher.update(input);
+        if self.launcher.take_paste_request()
+            && let Some(text) = crate::clipboard::read()
+        {
+            self.launcher.paste(&text);
+        }
     }
 
     /// The same tick's pointer, on the same terms as [`Self::update`].

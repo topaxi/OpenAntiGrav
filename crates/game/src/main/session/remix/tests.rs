@@ -408,7 +408,7 @@ fn an_unavailable_source_contributes_no_classes() {
 
     let ladders = rows.iter().filter_map(|row| match &row.state {
         oag_game::launcher::State::Playable(title) => title.race.speed_classes,
-        oag_game::launcher::State::Unavailable(_) => None,
+        oag_game::launcher::State::Unavailable(_) | oag_game::launcher::State::NeedsKey => None,
     });
 
     assert_eq!(

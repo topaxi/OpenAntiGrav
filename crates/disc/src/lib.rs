@@ -31,13 +31,16 @@ pub mod chd_source;
 pub mod error;
 pub mod image;
 pub mod iso9660;
+pub mod package;
 pub mod platform;
+pub mod ps3_crypt;
 pub mod raw_source;
 pub mod sfo;
 pub mod source;
+pub mod vpk;
 
 pub use error::{Error, Result};
-pub use image::DiscImage;
+pub use image::{DiscImage, Ps3State};
 pub use iso9660::Entry;
 pub use platform::{Platform, TitleInfo};
 pub use source::{SECTOR_SIZE, SectorSource};

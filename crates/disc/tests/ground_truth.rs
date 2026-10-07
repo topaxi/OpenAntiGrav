@@ -121,7 +121,7 @@ fn a_ps3_disc_identifies_itself_even_while_encrypted() {
     let mut disc = DiscImage::open(&path).expect("open");
 
     // `PS3_DISC.SFB` is in a plain region, so this holds for the encrypted
-    // image as shipped - nothing here needs the disc key, and nothing here
+    // image as shipped - identification needs no disc key, and nothing here
     // should ever start needing it.
     let title = disc.identify().expect("identify");
     assert_eq!(title.platform, Platform::Ps3);
@@ -131,8 +131,9 @@ fn a_ps3_disc_identifies_itself_even_while_encrypted() {
         Some("PS3_GAME/USRDIR/EBOOT.BIN")
     );
 
-    // The archives are encrypted and stay that way; what this asserts is that
-    // the filesystem walk reaches them, which is what identification rests on.
+    // With the disc key beside the image the archives read in place (see
+    // `ps3_crypt_ground_truth`); without it they stay noise. Either way the
+    // filesystem walk reaches them, which is what identification rests on.
     let paths: Vec<_> = disc
         .entries()
         .expect("entries")
@@ -230,4 +231,41 @@ fn a_split_chd_read_is_byte_identical_to_a_sector_by_sector_one() {
         "the split read differs from the serial one"
     );
     assert!(source.read_sectors(source.sector_count() - 1, 2).is_err());
+}
+
+#[test]
+#[ignore = "needs the Vita and PS4 packages in data/images/"]
+fn the_real_packages_are_refused_by_name() {
+    for (name, needle) in [
+        ("2048-vita-eu.pkg", "Vita .pkg"),
+        ("2048-vita-eu-patch.pkg", "Vita .pkg"),
+        ("omega-ps4-eu.pkg", "PS4 .pkg"),
+        ("omega-ps4-eu-patch.pkg", "PS4 .pkg"),
+    ] {
+        let Some(path) = image(name) else { continue };
+        let error = DiscImage::open(&path)
+            .expect_err("a package is not a disc")
+            .to_string();
+        assert!(error.contains(needle), "{name}: {error}");
+    }
+}
+
+/// What `oag_source` lists as a row: only an application `.vpk`, never its patch
+/// or DLC, which are mounted with their base. Needs `scripts/make-test-vpk.sh`.
+#[test]
+#[ignore = "needs data/test-vpk/ (scripts/make-test-vpk.sh)"]
+fn a_vpk_reports_its_param_sfo_category() {
+    for (name, category) in [
+        ("data/test-vpk/2048-PCSF00007.vpk", "gd"),
+        ("data/test-vpk/2048-PCSF00007-patch.vpk", "gp"),
+        ("data/test-vpk/2048-PCSF00007-dlc1.vpk", "ac"),
+        ("data/test-vpk/2048-PCSF00007-dlc2.vpk", "ac"),
+    ] {
+        let Some(path) = oag_testdata::exact(name) else {
+            continue;
+        };
+        let found = oag_disc::vpk::category(&path);
+        println!("{name}: {found:?}");
+        assert_eq!(found.as_deref(), Some(category), "{name}");
+    }
 }

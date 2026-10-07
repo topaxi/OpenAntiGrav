@@ -8,7 +8,10 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aes.workspace = true
 chd.workspace = true
+dirs = "7"
+miniz_oxide.workspace = true
 thiserror.workspace = true
 
 [lints]

@@ -107,6 +107,12 @@ gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
 
+# The desktop clipboard, for pasting a disc key into the chooser's key prompt.
+# MIT OR Apache-2.0. Not built for Android, where the prompt's keypad and a key
+# file beside the image are the ways in (`oag_game::launcher::key_entry`).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
 # Android: NativeActivity (no Java in the APK), winit's backend over
 # `android-activity`. See docs/tools/android.md.
 [target.'cfg(target_os = "android")'.dependencies]

@@ -55,6 +55,7 @@
 *.suprx
 *.skprx
 *.dkey
+*.key
 
 # SMAA's own precomputed lookup textures (AreaTex/SearchTex), MIT-licensed
 # third-party shader data - not extracted disc content. See

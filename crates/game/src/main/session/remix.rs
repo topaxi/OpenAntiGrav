@@ -253,7 +253,7 @@ impl Session {
             .iter()
             .filter_map(|candidate| match &candidate.state {
                 oag_game::launcher::State::Playable(title) => title.race.speed_classes,
-                oag_game::launcher::State::Unavailable(_) => None,
+                oag_game::launcher::State::Unavailable(_) | oag_game::launcher::State::NeedsKey => None,
             });
         let union = oag_title::SpeedClasses::union(ladders);
         super::menus::to_choices(
@@ -444,7 +444,7 @@ impl Session {
         } else {
             match &track_candidate.state {
                 oag_game::launcher::State::Playable(title) => Some(*title),
-                oag_game::launcher::State::Unavailable(_) => None,
+                oag_game::launcher::State::Unavailable(_) | oag_game::launcher::State::NeedsKey => None,
             }
         };
         let craft_catalogue_source = craft_source.unwrap_or(track_candidate.source);

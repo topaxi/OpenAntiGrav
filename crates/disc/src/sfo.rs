@@ -22,11 +22,10 @@ fn le32(bytes: &[u8], at: usize) -> Option<usize> {
     usize::try_from(u32::from_le_bytes(raw)).ok()
 }
 
-/// The release a `PARAM.SFO` names, normalised to `AAAA-NNNNN`
-/// (`PCSF00007` gives `PCSF-00007`), or `None` for bytes that are not an SFO or
-/// carry no `TITLE_ID`.
+/// The raw string value of one key of a `PARAM.SFO`, or `None` for bytes that
+/// are not an SFO, a missing key, or a value that is not UTF-8.
 #[must_use]
-pub fn title_id(sfo: &[u8]) -> Option<String> {
+pub fn text_field(sfo: &[u8], wanted: &str) -> Option<String> {
     if sfo.get(..4)? != MAGIC {
         return None;
     }
@@ -38,17 +37,26 @@ pub fn title_id(sfo: &[u8]) -> Option<String> {
         let key_start = keys.checked_add(le16(sfo, entry)?)?;
         let key = sfo.get(key_start..)?;
         let key = &key[..key.iter().position(|&b| b == 0)?];
-        if key != b"TITLE_ID" {
+        if key != wanted.as_bytes() {
             continue;
         }
         let length = le32(sfo, entry + 4)?;
         let value_start = data.checked_add(le32(sfo, entry + 12)?)?;
         let value = sfo.get(value_start..value_start.checked_add(length)?)?;
         let value = &value[..value.iter().position(|&b| b == 0).unwrap_or(value.len())];
-        let text = std::str::from_utf8(value).ok()?;
-        return (!text.is_empty()).then(|| normalise_serial(text));
+        return std::str::from_utf8(value).ok().map(str::to_string);
     }
     None
+}
+
+/// The release a `PARAM.SFO` names, normalised to `AAAA-NNNNN`
+/// (`PCSF00007` gives `PCSF-00007`), or `None` for bytes that are not an SFO or
+/// carry no `TITLE_ID`.
+#[must_use]
+pub fn title_id(sfo: &[u8]) -> Option<String> {
+    text_field(sfo, "TITLE_ID")
+        .filter(|text| !text.is_empty())
+        .map(|text| normalise_serial(&text))
 }
 
 #[cfg(test)]
