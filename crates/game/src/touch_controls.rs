@@ -14,18 +14,18 @@ use oag_ui::frontend::{Align, Draw};
 
 /// Semi-transparent fills, stronger outlines, and a pressed state that is
 /// both brighter and a different colour. Chosen, not measured.
-const IDLE: [f32; 4] = [1.0, 1.0, 1.0, 0.12];
-const HELD: [f32; 4] = [0.3, 0.9, 1.0, 0.5];
+const IDLE: [f32; 4] = [1.0, 1.0, 1.0, 0.07];
+const HELD: [f32; 4] = [0.3, 0.9, 1.0, 0.38];
 const EDGE: [f32; 4] = [1.0, 1.0, 1.0, 0.45];
 const EDGE_HELD: [f32; 4] = [0.6, 1.0, 1.0, 0.95];
 const LABEL: [f32; 4] = [1.0, 1.0, 1.0, 0.8];
 const DIVIDER: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
-const ZONE_LIT: [f32; 4] = [1.0, 0.75, 0.2, 0.6];
+const ZONE_LIT: [f32; 4] = [1.0, 0.75, 0.2, 0.75];
 const STICK_RING: [f32; 4] = [1.0, 1.0, 1.0, 0.22];
 const STICK_DOT: [f32; 4] = [1.0, 1.0, 1.0, 0.55];
 
 /// Border width in grid units.
-const BORDER: f32 = 1.5;
+const BORDER: f32 = 2.0;
 /// Label scale: the overlay's built-in glyphs are already small.
 const LABEL_SCALE: f32 = 1.0;
 /// Approximate cap height of the built-in face, in grid units, to centre a

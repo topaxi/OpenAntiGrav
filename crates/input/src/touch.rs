@@ -21,7 +21,8 @@
 //!   (see [`GoZone`]). Switched by [`Touches::set_go_zones`].
 //! - **Upper corners, below the HUD's readouts:** the airbrakes
 //!   ([`Button::L`], [`Button::R`]) and absorb ([`Button::Circle`]); pause
-//!   ([`Button::Start`]) and camera ([`Button::Select`]) at top centre.
+//!   ([`Button::Start`]) and camera ([`Button::Select`]) beside BRAKE L,
+//!   because Wipeout HD draws its shield meter at the top centre.
 //!
 //! Sizes are fractions of the window's height, so a button is the same
 //! physical size on every phone: GO is 0.36 of the height (about 24 mm on a
@@ -230,7 +231,7 @@ impl Control {
 ///
 /// **Chosen, not measured.** Placed for Pulse's HUD at a phone's 19.5:9: the
 /// four corners hold lap, record, best/current time and speed/shield, so the
-/// buttons keep to the free mid-height of each side and the top centre, and
+/// buttons keep to the free mid-height of each side, and
 /// GO's bottom ends above the speed bar.
 #[must_use]
 pub fn layout(size: (f32, f32)) -> [(Control, Rect); 7] {
@@ -268,8 +269,14 @@ pub fn layout(size: (f32, f32)) -> [(Control, Rect); 7] {
             Control::AirbrakeRight,
             r(right - brake.0, brake_y, brake.0, brake.1),
         ),
-        (Control::Pause, r(w / h / 2.0 - 0.19, SAFE_Y, 0.17, 0.11)),
-        (Control::Camera, r(w / h / 2.0 + 0.02, SAFE_Y, 0.17, 0.11)),
+        (
+            Control::Pause,
+            r(SAFE_X + brake.0 + 0.03, brake_y + 0.025, 0.17, 0.11),
+        ),
+        (
+            Control::Camera,
+            r(SAFE_X + brake.0 + 0.23, brake_y + 0.025, 0.17, 0.11),
+        ),
     ]
 }
 
