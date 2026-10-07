@@ -1111,7 +1111,7 @@ wine-build:
 # Build it, then start it under wine in its own prefix (a window on $DISPLAY):
 # `just wine-run --dry-run ...`. See docs/tools/wine.md
 wine-run *ARGS:
-    ./scripts/wine-run.sh run {{ARGS}}
+    ./scripts/wine-run.sh run "$@"
 
 # The determinism tests and reports as Windows binaries under wine; every hash
 # must equal the committed reference. See docs/tools/wine.md
