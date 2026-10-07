@@ -139,6 +139,14 @@ pub enum Trigger {
     WreckSparks,
     /// The big blast after it.
     WreckExplosion,
+    /// HD's damage smoke while a struck craft's shield is above its first
+    /// threshold.
+    DamageMild,
+    /// The same between the two thresholds.
+    DamageModerate,
+    /// The same below the second one; played together with
+    /// [`Self::DamageModerate`].
+    DamageCritical,
     /// A craft over a magstrip (2048), outside a Zone.
     MagstripSparks,
     /// The same inside a Zone.
@@ -147,7 +155,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 36] = [
+    pub const ALL: [Self; 39] = [
         Self::CollisionSpark,
         Self::HitSpark,
         Self::RocketFlare,
@@ -182,6 +190,9 @@ impl Trigger {
         Self::WreckNode,
         Self::WreckSparks,
         Self::WreckExplosion,
+        Self::DamageMild,
+        Self::DamageModerate,
+        Self::DamageCritical,
         Self::MagstripSparks,
         Self::MagstripZone,
     ];

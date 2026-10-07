@@ -35,11 +35,9 @@ pub struct CaptureOptions {
     pub input_script: Option<oag_trace::script::Script>,
     /// Fly the player's craft with an opponent's driver. `--autopilot`.
     ///
-    /// **The only way a capture can reach a finished race**, and therefore the
-    /// only way `--screenshot` can show the results table: the flag falls when
-    /// the player crosses the line for the last time, and `--hold cross` drives
-    /// into the first wall. See [`Race::set_autopilot`], which is a verification
-    /// aid rather than a mode the original has.
+    /// **The only way a capture can reach a finished race**, so the only way
+    /// `--screenshot` shows the results table: `--hold cross` drives into the
+    /// first wall. See [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
     /// `--autopilot-pilot`: fly with a named pilot instead of the neutral
     /// baseline. See [`Race::set_autopilot_pilot`].
@@ -57,6 +55,8 @@ pub struct CaptureOptions {
     /// sequence at the end of that tick, as shield depletion would. See
     /// [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
+    /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
+    pub force_hit: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
     /// that slot at the end of that tick. See [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,

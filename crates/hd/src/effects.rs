@@ -41,6 +41,25 @@ pub const EFFECTS: &Effects = &{
             Trigger::WeaponSpark,
             EffectSpec::new(engine_effects::WEAPON_SPARK_EFFECT, Origin::Measured),
         )
+        // `ShipDamageFx_Update_q`; `particle-triggers.md`, "The damage smoke".
+        .with(
+            Trigger::DamageMild,
+            EffectSpec::new(engine_effects::DAMAGE_MILD_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DamageModerate,
+            EffectSpec::new(engine_effects::DAMAGE_MODERATE_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::DamageCritical,
+            EffectSpec::new(engine_effects::DAMAGE_CRITICAL_EFFECT, Origin::Measured),
+        )
+        // `0x000e7760` sets `+0x260` on a LeachBeam hit and `0x002a06e0` spawns
+        // it attached; `particle-triggers.md`, "The LeachBeam hit spark".
+        .with(
+            Trigger::LeachHitSpark,
+            EffectSpec::new(engine_effects::LEACHBEAM_HIT_SPARK_EFFECT, Origin::Measured),
+        )
         .with(
             Trigger::ShieldAbsorb,
             EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)

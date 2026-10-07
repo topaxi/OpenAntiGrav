@@ -4,6 +4,15 @@
 
 ## Open
 
+- **2026-10-07 (hd-particles):** the damage smoke (`WO_DAMAGE_MILD/MODERATE/CRITICAL`,
+  thresholds 70 and 40 of the absolute shield, 3.3 s hold) and the LeachBeam hit
+  spark (one attached burst, resolving the `0x002a06e0` "conflict") are wired on HD
+  (`oag_raceplay::damage_fx`; see `particle-triggers.md`). Still open there: the
+  Zone `WO_DAMAGE_ELECTRIC` and the death plume, the hold's decrement site, the
+  anchor offset's sign, the LeachBeam spark in a frame, an RPCS3 comparison of the
+  smoke, `WO_DEBRIS_FIRE` (`0x0010c958`), and the Zone mode map. The wreck trio
+  stays Pulse-gated: no HD trigger read.
+
 - **2026-10-06 (hd-particle-triggers):** the census and every HD function found are
   in `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`. "Nothing else is
   wired" was stale: 34 of 82 now load and most fire (the LeachBeam hit spark and the

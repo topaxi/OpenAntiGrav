@@ -538,6 +538,8 @@
 0x002bd750	function	MagstripArcs_InitClass	70	magstrip-wake.md
 0x000ddd58	function	Ship_Construct	80	particle-triggers.md
 0x000dfd90	function	Ship_ConstructAlt	65	particle-triggers.md
-0x002a17e8	function	ShipDamageFx_Update	60	particle-triggers.md
+0x002a17e8	function	ShipDamageFx_Update	72	particle-triggers.md
 0x003436b8	function	Language_ChoosePluginName	85	language.md
 0x00938564	data	Language_Region	70	language.md
+0x000e7760	function	Ship_ApplyDamage	65	particle-triggers.md
+0x000e8de0	function	Ship_ApplyPendingDamage	65	particle-triggers.md

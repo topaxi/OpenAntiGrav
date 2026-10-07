@@ -410,6 +410,21 @@ pub const LEACHBEAM_ABSORB_EFFECT: &str = "WO_LEACHBEAM_ABSORB";
 /// fires nothing - its anchors are only built for HD.
 pub const WEAPON_SPARK_EFFECT: &str = "WO_SHIP_SPARK_DAMAGE_WEAPON";
 
+/// HD's damage smoke below its first shield threshold (70).
+///
+/// **Recovered, confidence 70.** `ShipDamageFx_Update_q` (`0x002a17e8`) spawns
+/// it attached at the craft's damage-effect matrix when a weapon hit leaves the
+/// shield above 70; `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`,
+/// "The damage smoke". A one-shot of 200 ticks (3.33 s), not looping.
+pub const DAMAGE_MILD_EFFECT: &str = "WO_DAMAGE_MILD";
+
+/// Between 40 and 70 shield left; see [`DAMAGE_MILD_EFFECT`].
+pub const DAMAGE_MODERATE_EFFECT: &str = "WO_DAMAGE_MODERATE";
+
+/// At or under 40, played with [`DAMAGE_MODERATE_EFFECT`]; see
+/// [`DAMAGE_MILD_EFFECT`].
+pub const DAMAGE_CRITICAL_EFFECT: &str = "WO_DAMAGE_CRITICAL";
+
 /// The welding sparks Basilico (`01_Track`) and circuit five place on their
 /// own scenery: three nodes on Basilico, six or seven on circuit five.
 ///

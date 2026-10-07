@@ -556,6 +556,7 @@ pub(crate) fn run_race(
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
+                force_hit: crate::args::force_at_slot(cli.wreck.force_hit.as_deref(), "hit")?,
                 force_leach_lock: crate::args::force_at_slot(
                     cli.wreck.force_leach_lock.as_deref(),
                     "LeachBeam lock",

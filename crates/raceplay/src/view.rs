@@ -137,6 +137,8 @@ pub struct RaceView {
     pub(super) absorb_started: u32,
     /// The hit sparks a landed weapon hit throws - see `race::hit_sparks`.
     pub(super) hit_sparks: super::hit_sparks::HitSparks,
+    /// HD's damage smoke after a weapon hit - see `race::damage_fx`.
+    pub(super) damage_fx: super::damage_fx::DamageFx,
     /// Seconds since each craft's last pickup absorb, `None` once past the
     /// hull overlay's window - `craft+0x830 - craft+0x878` in the original.
     pub(super) absorb_overlay: [Option<f32>; MAX_SHIPS],

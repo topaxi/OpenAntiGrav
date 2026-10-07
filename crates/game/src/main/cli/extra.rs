@@ -178,6 +178,15 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
+    /// With `--race --screenshot`, land a weapon hit on one craft at the end of
+    /// a tick: `TICK:SLOT`, e.g. `10:0`. A verification aid for what a struck
+    /// hull shows (hit sparks, HD's damage smoke), there because a headless run
+    /// has no rival whose weapon reaches the player. The hit spends no shield
+    /// and takes none; pair it with `--force-shield` for the shield it should
+    /// find. See [`oag_raceplay::Race::force_weapon_hit`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_hit: Option<String>,
+
     /// With `--race --screenshot`, put a locked LeachBeam from the player onto
     /// a rival at the end of a tick: `TICK:SLOT`, e.g. `300:1`. A verification
     /// aid for the LeachBall's own draw, there because a headless run has no

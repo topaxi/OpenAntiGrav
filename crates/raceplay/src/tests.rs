@@ -21,6 +21,7 @@ mod countdown;
 mod craft_flash;
 mod cue_endings;
 mod cues;
+mod damage_fx;
 mod destroy_camera;
 mod eliminator;
 mod energy_bar_delay;

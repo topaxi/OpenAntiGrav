@@ -155,6 +155,7 @@ mod camera;
 pub mod catalogue;
 pub mod countdown;
 mod craft_flash;
+mod damage_fx;
 mod destroy_camera;
 mod drawable;
 mod effects;
