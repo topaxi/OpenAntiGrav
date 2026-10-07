@@ -340,6 +340,7 @@ for the player at rest.
 
 **Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
 never read, so the 24 re-shipped flares are not the ones drawn.
+**Mounting it was weighed again on 2026-10-07 and left out (chosen, not measured):** it needs a role searched ahead of `data`, the order of `data1` against `data2` (570 shared paths) is unmeasured, and it replaces 1,156 materials, 435 ships and 50-odd tables, which would move 2048's rendering and handling unverified. Omega's patch, by contrast, is required and mounted (checked, differs).
 What v1.04 is: Sony's own changelog for 2048's v1.04 (June 2012, 142 MB) reads
 only "Various Bug Fixes", with an updated trophy list
 ([xtremepsvita](https://www.xtremepsvita.com/2012/06/19/wipeout-2048-updated-to-v1-04/)).

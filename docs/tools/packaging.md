@@ -343,10 +343,12 @@ one answer is shown rather than resolved.** Steps 4 to 6 holding several images
 opens the [disc chooser](oag-game.md#finding-the-disc-image) instead of taking
 the first; a stated source never does.
 
-Within a directory, the five normalised names from
+Within a directory, the seven normalised names from
 [`data/README.md`](../../data/README.md) are tried first, in this order:
-`pulse-psp-usa.chd`, `pulse-ps2-eu.chd`, `pure-psp-eu.chd`, `pure-psp-usa.chd`,
-then `hdfury-ps3-eu.iso`. Pulse's own two names come first because that is the
+`pulse-psp-eu.chd`, `pulse-psp-usa.chd`, `pulse-ps2-eu.chd`, `pure-psp-eu.chd`,
+`pure-psp-usa.chd`, then `hdfury-ps3-eu-dec.iso` and `hdfury-ps3-eu.iso`.
+Europe comes before the USA pressing wherever a title has both (maintainer
+policy, 2026-10-07). Pulse's own names come first because that is the
 platform the implementation follows; the others are recognised so a directory
 holding only one of them is found by name rather than by alphabetical luck.
 Pure and HD/Fury both boot their own front ends - HD's off a chain its XML
@@ -368,7 +370,7 @@ When nothing is found, the error lists every directory that was tried. For a
 
 Wipeout 2048 ships as an extracted Vita package (a directory, not a disc
 image - see [`data/README.md`](../../data/README.md)), so it is not one of the
-five names above and the [disc chooser](oag-game.md#finding-the-disc-image)
+seven names above and the [disc chooser](oag-game.md#finding-the-disc-image)
 finds it through a parallel search, `package_search_path()`, over the same
 guessed locations as steps 4-6 above with `extracted/vita` standing in for
 `images`: `data/extracted/vita` under the current directory; beside the
@@ -484,7 +486,7 @@ the same steps by hand, in Desktop Mode:
 
 1. Copy two files into one folder, e.g. `~/Games/OpenAntiGrav/`:
    `OpenAntiGrav-x86_64-portable.AppImage`, and your own disc image (named
-   `pulse-psp-usa.chd`, or anything ending `.chd`/`.iso`).
+   `pulse-psp-eu.chd`, or anything ending `.chd`/`.iso`).
 2. `chmod +x OpenAntiGrav-x86_64-portable.AppImage`, which plain `scp` does not
    preserve (`just deploy-deck` does this explicitly either way).
 3. Run it from a terminal the first time, so its output is visible:

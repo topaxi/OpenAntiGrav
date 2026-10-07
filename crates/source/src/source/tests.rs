@@ -108,6 +108,23 @@ fn the_mounted_appimage_is_not_searched() {
     }
 }
 
+/// `PCSA00015` (USA) sorts before `PCSF00007` (Europe) alphabetically; the
+/// Europe-first policy puts the European extract ahead of it anyway.
+#[test]
+fn a_european_2048_extract_is_listed_before_a_usa_one() {
+    let root = temp_dir("vita-eu-first");
+    for serial in ["PCSA00015", "PCSF00007"] {
+        let data = root.join(serial).join("base/PSP2");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("data.psarc"), b"").unwrap();
+    }
+    assert_eq!(
+        package_directories_in(&root),
+        [root.join("PCSF00007"), root.join("PCSA00015")]
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
 #[test]
 fn a_known_name_wins_over_an_alphabetically_earlier_image() {
     let directory = temp_dir("known-name");
@@ -122,14 +139,36 @@ fn a_known_name_wins_over_an_alphabetically_earlier_image() {
 }
 
 /// `IMAGE_NAMES[0]` is interpolated into the not-found hint text, and the
-/// module doc's "PSP first" rationale depends on this order. `[1]` pins that
-/// adding `pulse-psp-eu.chd` (2026-09-07) landed right after the USA name
-/// rather than reordering it ahead - see [`IMAGE_NAMES`]'s own doc comment.
+/// module doc's "PSP first" rationale depends on this order. Europe leads the
+/// USA pressing for every title that has both - see [`IMAGE_NAMES`]'s doc.
 #[test]
 fn image_names_starts_with_pulse_psp_matching_the_hint_text() {
-    assert_eq!(IMAGE_NAMES[0], "pulse-psp-usa.chd");
-    assert_eq!(IMAGE_NAMES[1], "pulse-psp-eu.chd");
+    assert_eq!(IMAGE_NAMES[0], "pulse-psp-eu.chd");
+    assert_eq!(IMAGE_NAMES[1], "pulse-psp-usa.chd");
     assert_eq!(IMAGE_NAMES[2], "pulse-ps2-eu.chd");
+}
+
+/// A directory holding both pressings of one title opens the EU one, and the
+/// USA one is still found when it is the only one there.
+#[test]
+fn europe_is_preferred_over_usa_when_a_directory_holds_both() {
+    for (eu, usa) in [
+        ("pulse-psp-eu.chd", "pulse-psp-usa.chd"),
+        ("pure-psp-eu.chd", "pure-psp-usa.chd"),
+    ] {
+        let directory = temp_dir("eu-first");
+        std::fs::write(directory.join(usa), b"").unwrap();
+        assert_eq!(
+            first_image(&directory).unwrap().file_name().unwrap(),
+            std::ffi::OsStr::new(usa)
+        );
+        std::fs::write(directory.join(eu), b"").unwrap();
+        assert_eq!(
+            first_image(&directory).unwrap().file_name().unwrap(),
+            std::ffi::OsStr::new(eu)
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
 }
 
 /// The maintainer's actual `data/images/` holds every documented name at
