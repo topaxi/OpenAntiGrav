@@ -2958,9 +2958,9 @@ gone. `OAG_DUMP_BEHIND_GLASS=<png>` writes the target after a `--screenshot`.
 - Start slot (`trioB.png`): 187 pixels change, all in a distant glass pane.
 - Lap sweep, 8 autopilot frames each direction (`sweep/`): with the glass material skipped in both builds
   (`OAG_SKIP_MATERIAL=tunnelrefraction`), 3 of 16 frames are byte-identical and the others differ in a few pixels
-  by 1/255 (1 to 3 in the four counted). Pulse PSP is byte-identical; Talon's Junction differs in 1 pixel of 518,400 by 1/255 in green. Restoring the
-  old blended entry point's branch does not remove it, so it is the driver's code generation of the shared opaque
-  entry point, which now holds the glass's texture read.
+  by 1/255 (1 to 3 in the four counted). Pulse PSP is byte-identical; Talon's Junction differs in 1 pixel of 518,400 by 1/255 in green. Its loader report and draw counts are unchanged, and restoring either fragment entry point's old code (the
+  blended one's glass branch, or the opaque one without the glass's path) does not remove it; the cause is not
+  isolated.
 - Draws at pose A: 398 before, 443 after (the sky's 6 and 39 chunk draws added; the original's target is 6 and 35).
 - Cost, `OAG_RENDER_GPU_BENCH=200` at 1280x720 on an RX 7800 XT (RADV), two interleaved rounds each under a load
   average of 51: `Scene::render` median 1,008 / 990 us before, 1,078 / 1,109 us after, so the target costs about

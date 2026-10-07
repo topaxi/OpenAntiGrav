@@ -28,6 +28,8 @@ ceiling panes: reference `(4, 87, 87)`, before `(135, 176, 57)`, after `(14, 72,
 - The arch glow texture is sampled at the diffuse coordinate; the program samples it at `f[TC0].zw`.
 - `accumulates`' per-lane taint reaches 20 of 28 circuit models (`hd_add_second_census.rs`); only Talon's Junction
   `03` has a reference. Take a frame of Modesto Heights or Amphiseum at a matched pose.
+- Talon's Junction's frame moved by 1/255 in one pixel with this change (Pulse is byte-identical); loader report and
+  draw counts are unchanged and neither fragment entry point's old code removes it. Cause not isolated.
 - `cl_tunnelrefraction`'s own diffuse-colour scale (0.2549) and doubled grab are read off the disassembly, not pinned
   by a test.
 
