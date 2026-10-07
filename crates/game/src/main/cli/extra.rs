@@ -249,7 +249,7 @@ pub(crate) struct IntroArgs {
     pub(crate) intro_ticks: u32,
 
     /// With `--race --screenshot`, draw the on-screen touch controls over the
-    /// frame, in a pose: `idle`, `idle-buttons` (zones off), `go-left`, `go-right` or `stick-go`.
+    /// frame, in a pose: `idle`, `idle-buttons` (zones off), `go-left`, `go-right`, `stick-go`, `go-fire`, `go-left-past`, `easy-idle`, `easy-zones-off`, `easy-brake` or `easy-bar-brake`.
     ///
     /// A headless run has no fingers; this builds the same `Touches` a finger
     /// would. Chosen, not measured: the controls are this project's own.

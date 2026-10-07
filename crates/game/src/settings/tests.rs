@@ -786,3 +786,15 @@ fn the_go_brake_zones_are_on_by_default_and_round_trip_off() {
     let missing: Settings = toml::from_str("[controls]\nscheme = \"default\"\n").unwrap();
     assert!(missing.controls.touch_go_zones);
 }
+
+#[test]
+fn the_touch_scheme_is_standard_by_default_and_round_trips() {
+    assert_eq!(Settings::default().controls.touch_scheme, "standard");
+    let easy: Settings = toml::from_str("[controls]\ntouch_scheme = \"easy\"\n").unwrap();
+    assert_eq!(
+        oag_input::touch::Scheme::parse(&easy.controls.touch_scheme),
+        Some(oag_input::touch::Scheme::Easy)
+    );
+    let missing: Settings = toml::from_str("[controls]\n").unwrap();
+    assert_eq!(missing.controls.touch_scheme, "standard");
+}

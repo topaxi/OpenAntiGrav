@@ -59,6 +59,12 @@ pub struct Controls {
     /// better. See `oag_input::touch::GoZone`.
     #[serde(default = "default_touch_go_zones")]
     pub touch_go_zones: bool,
+    /// Which on-screen scheme a touchscreen shows: `standard` or `easy` (see
+    /// `oag_input::touch::Scheme`). A token, so an unrecognised value is
+    /// reported and falls back to standard rather than failing the file.
+    /// **Chosen, not measured.**
+    #[serde(default = "default_touch_scheme")]
+    pub touch_scheme: String,
     /// How strong the on-screen racing controls draw, in percent of the
     /// design's own translucency (`100`), for a phone or a track where they
     /// get in the way. Only a touchscreen's overlay reads it. **Chosen, not
@@ -256,6 +262,10 @@ fn default_touch_go_zones() -> bool {
     true
 }
 
+fn default_touch_scheme() -> String {
+    oag_input::touch::Scheme::default().name().to_string()
+}
+
 fn default_touch_opacity() -> u8 {
     100
 }
@@ -267,6 +277,7 @@ impl Default for Controls {
             triggers: default_triggers(),
             trigger_sensitivity: TriggerSensitivity::default(),
             touch_go_zones: default_touch_go_zones(),
+            touch_scheme: default_touch_scheme(),
             touch_opacity: default_touch_opacity(),
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
