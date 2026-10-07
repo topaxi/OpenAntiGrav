@@ -74,6 +74,9 @@ Triggered by a pushed tag `v*` or a manual run. A manual run uploads workflow
 artifacts only. The `release` job runs for a tag only and creates a **draft**
 GitHub Release; the maintainer publishes it by hand.
 
+`nightly.yml` calls this workflow once a day with `nightly: true` and publishes a
+rolling pre-release; see [packaging.md](packaging.md#nightly-builds).
+
 ### Artifacts
 
 Names are stable: `OpenAntiGrav-<version>-<platform>.<ext>`, where `<version>` is

@@ -1,0 +1,123 @@
+name: Nightly
+
+# A rolling pre-release, `nightly`, rebuilt from `main` once a day.
+# docs/tools/packaging.md#nightly-builds is the reference.
+#
+# 01:00 UTC is 03:00 CEST in summer and 02:00 CET in winter, so it stays inside
+# the 02:00-03:00 CET window all year. GitHub may start a scheduled run late
+# (minutes, sometimes an hour under load) and may drop one. Schedules only fire
+# from the default branch, and GitHub pauses them after 60 days without repository
+# activity.
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Build and publish even if the nightly tag is already at this commit"
+        type: boolean
+        default: false
+
+# Two nightlies never publish over each other; a late run waits its turn.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: anything new on main?
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.c.outputs.build }}
+      previous: ${{ steps.c.outputs.previous }}
+    steps:
+      # No checkout: the tag is read through the API, so a skipped night costs
+      # seconds. A missing tag (the first run) is a build.
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          previous="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/nightly" --jq .object.sha 2>/dev/null || true)"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          if [[ "$previous" == "$GITHUB_SHA" && "$FORCE" != "true" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "nightly already at $GITHUB_SHA, nothing to build" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # release.yml's own jobs, so the nightly and a tagged release are built the
+  # same way and audited by the same `check-leakage.py --dir` step. The caller
+  # must grant the most any called job asks for (`release` there wants
+  # contents: write and never runs for a nightly); the called workflow's own
+  # top-level `contents: read` still holds for every build job.
+  build:
+    name: build
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      nightly: true
+
+  publish:
+    name: publish the nightly pre-release
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PREVIOUS: ${{ needs.check.outputs.previous }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum OpenAntiGrav-* > SHA256SUMS
+      - name: Move the nightly tag to this commit
+        run: |
+          if [[ -n "$PREVIOUS" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" \
+              -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref=refs/tags/nightly -f sha="$GITHUB_SHA"
+          fi
+      - name: Write the notes
+        run: |
+          {
+            echo "Built automatically from \`main\` at ${GITHUB_SHA::7} on $(date -u +%Y-%m-%d)."
+            echo
+            echo "**Unstable and unsigned.** A nightly can be broken; for a tested build use the latest release. It contains no game content: bring your own disc image. No Android APK yet."
+            echo
+            echo "Commit: https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+            if [[ -n "$PREVIOUS" && "$PREVIOUS" != "$GITHUB_SHA" ]]; then
+              echo "Changes since the last nightly: https://github.com/$GITHUB_REPOSITORY/compare/${PREVIOUS::7}...${GITHUB_SHA::7}"
+            fi
+          } > notes.md
+      - name: Create or update the release, replace its assets
+        run: |
+          title="Nightly ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})"
+          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit nightly --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --notes-file notes.md --prerelease --latest=false --draft=false
+          else
+            gh release create nightly --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --notes-file notes.md --prerelease --latest=false --verify-tag
+          fi
+          # New assets first, then the old ones go: a failed upload leaves
+          # yesterday's files in place instead of an empty release.
+          gh release upload nightly artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view nightly --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+            while read -r name; do
+              [[ -e "artifacts/$name" ]] || gh release delete-asset nightly "$name" --repo "$GITHUB_REPOSITORY" --yes
+            done
