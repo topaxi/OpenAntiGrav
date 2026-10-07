@@ -29,6 +29,9 @@
 //!   flag `mesh.wesl` already reads to pick its unlit path, so neither needs a
 //!   pipeline or a shader of its own.
 //!
+//! - `OAG_WATER_OFF=1` turns the HD water family's own readings off
+//!   (`water`, `ice`), so a frame can be taken before and after them.
+//!
 //! Both match the material's own archive path
 //! (`data/environments/talons_junction/materials/clouds.rcsmaterial`) **or
 //! either of the two `.gtf` paths it names**, case-insensitively, so a needle
@@ -122,6 +125,13 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
         return true;
     }
     matches(&filter.skip)
+}
+
+/// Whether the HD water family's readings are switched off
+/// (`OAG_WATER_OFF`): the before half of a before/after pair.
+pub(super) fn water_off() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("OAG_WATER_OFF").is_some())
 }
 
 /// Whether every material's picture is replaced by a flat colour keyed by its

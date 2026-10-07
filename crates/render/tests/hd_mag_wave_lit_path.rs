@@ -39,6 +39,7 @@ fn vertex(position: [f32; 3], wave: bool) -> GpuVertex {
             | if wave { slots::MAG_WAVE } else { 0 },
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     }
 }
 

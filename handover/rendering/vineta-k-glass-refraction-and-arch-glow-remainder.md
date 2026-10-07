@@ -7,7 +7,7 @@
 - The refraction pass reads the grab at the pixel's own position; the original perturbs it by the normal map times `0x9fc59444`. A real scene-copy pass would draw it, and would also put transparent draws behind the glass (the sea foam) into the grab in the right order.
 - The arch glow texture is sampled at the diffuse coordinate; the program samples it at `f[TC0].zw`.
 - `accumulates`' per-lane taint reaches 20 of 28 circuit models (`hd_add_second_census.rs`); only Talon's Junction `03` has a reference. Take a frame of Modesto Heights or Amphiseum at a matched pose.
-- The glass sits in front of `hd-sky-luma`'s sky: re-take `data/scratch/hd-vineta-ceiling/cmp_p03.png` after that lane merges, expecting teal.
+- The glass sits in front of `hd-sky-luma`'s sky: re-taken 2026-10-07 (`hd-water`) at the capture's own pose: the hex windows read `(52,116,153)` against the reference's `(33,147,147)`, and `OAG_ONLY_SLOT` isolation shows the panes see the sky cube (sky-only mean `(234,228,182)`), not the water. The residual is the sky tint plus the sea's `paraboloidReflectionTex`, not a water-material fault (rcsmaterial.md, "Water family").
 - `cl_tunnelrefraction`'s own diffuse-colour scale (0.2549) and doubled grab are read off the disassembly, not pinned by a test.
 
 ## Next Steps

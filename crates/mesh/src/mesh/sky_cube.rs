@@ -188,6 +188,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
                 slots: crate::mesh::slots::DEFAULT,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
+                texcoord2: [0.0, 0.0],
             });
         }
         let start = indices.len() as u32;

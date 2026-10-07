@@ -225,6 +225,16 @@ pub struct Report {
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
+    /// Water materials whose picture is a normal map (`super::water`), drawn
+    /// as lit vertex colour: the program's reflection term is not drawn.
+    pub water_lit_colour: usize,
+    /// Water materials whose only colour is the reflection and a sun glint:
+    /// drawn black plus the generic specular, the reflection not drawn.
+    pub water_glint_only: usize,
+    /// Sebenco ice materials drawn as their authored water and ice lerp, and
+    /// ones whose textures or colours could not be read (drawn as before).
+    pub ice_bound: usize,
+    pub ice_unread: usize,
     /// Screen-grab refraction materials bound, and ones whose weight or table
     /// entry could not be read (drawn as an ordinary lit surface).
     pub refraction_bound: usize,
@@ -357,6 +367,20 @@ impl Report {
         } + &match self.light_cone_bound {
             0 => String::new(),
             n => format!(", {n} light-cone material(s) with their facing ramp bound"),
+        } + &match self.water_lit_colour + self.water_glint_only {
+            0 => String::new(),
+            n => format!(
+                ", {n} water material(s) whose picture is a normal map, not painted \
+                 ({} as lit vertex colour, {} as black plus a glint); their reflection \
+                 (the engine's paraboloid probe) is NOT drawn",
+                self.water_lit_colour, self.water_glint_only
+            ),
+        } + &match self.ice_bound {
+            0 => String::new(),
+            n => format!(", {n} ice material(s) drawn as their authored water and ice colours"),
+        } + &match self.ice_unread {
+            0 => String::new(),
+            n => format!(", {n} ice material(s) whose mask or colours could not be read"),
         } + &match self.refraction_bound {
             0 => String::new(),
             n => format!(", {n} screen-grab refraction material(s) drawn over what is behind them"),

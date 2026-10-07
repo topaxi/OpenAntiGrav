@@ -48,6 +48,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         slots: slots::DEFAULT | slots::NO_AMBIENT,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     }
 }
 

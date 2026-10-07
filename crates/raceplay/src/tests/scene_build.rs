@@ -17,6 +17,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         slots: mesh::slots::DEFAULT,
         specular_exponent: mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     }
 }
 

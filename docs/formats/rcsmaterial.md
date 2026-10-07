@@ -2608,7 +2608,7 @@ first in the file is a map the program reads as a scalar or a normal.**
 | Material (circuit) | What was bound | What the program reads | Now |
 | --- | --- | --- | --- |
 | `track_coloured_specular_alpha4glow` (Sebenco, the solar wall, slot 102) | `ds_solarwall_n` (normal map, sampler `0x48f37f5a`, entry 0) as colour: the violet wall | the picture is `ds_solarwall_c_withglow` at unit 0 (`0x3bdc0403`, entry 2) | `0x48f37f5a` joins `skin::NOT_A_PICTURE` (confidence 85: its 5 binds disc-wide are `ds_solarwall_n`, `tracknormal`, `aadc_build_g_window_n`, `jd_chenghou_windowtrans_01_n`) |
-| `sebenco_ice` (Sebenco, the pool, slot 366 and 5 more) | `and_ice1` (purple, mean `(69,25,160)`) | `TEX H1.x ... unit0`: one lane, a specular-power scalar (`H0.w = H1.x * 296.89`). The colour is constants (`(0.0475,0.106,0.147)` deep, `(0.13,0.755,0.872)` cyan, `(0.66,0.76,1.0)` pale) lerped by the pond mask (unit 1, `.x`) and `and_snow3alpha`'s `.xyz` (unit 2), plus the paraboloid reflection (`0x9edd3243`, engine-bound) times parameters that are 0 on this material | `Program::samples_colour(unit)`; the first entry the program reads as a colour wins, then the first declared. Binds `and_snow3alpha` (white). **Not drawn:** the constant water/ice lerp (the reference's cyan streaks); no fresnel evaluation, **chosen, not measured**, none attempted |
+| `sebenco_ice` (Sebenco, the pool, slot 366 and 5 more) | `and_ice1` (purple, mean `(69,25,160)`) | `TEX H1.x ... unit0`: one lane, a specular-power scalar (`H0.w = H1.x * 296.89`). The colour is constants (`(0.0475,0.106,0.147)` deep, `(0.13,0.755,0.872)` cyan, `(0.66,0.76,1.0)` pale) lerped by the pond mask (unit 1, `.x`) and `and_snow3alpha`'s `.xyz` (unit 2), plus the paraboloid reflection (`0x9edd3243`, engine-bound) times parameters that are 0 on this material | `Program::samples_colour(unit)`; the first entry the program reads as a colour wins, then the first declared. Binds `and_snow3alpha` (white). The constant water/ice lerp is drawn since 2026-10-07: see "Water family" below |
 | `and_rocktosand` (Vineta K backdrop terrain, slot 26) | `j_rockblend5`, a red-channel blend mask, as the terrain's colour: the red shape behind the glass | mask at unit 2 (one lane), sand `and_sand_sand` unit 0, rock `and_rock4` unit 1 (colour lane `Mixed`) | opaque materials: the same `declared_picture` rule in `skin::picks`' fallback, so it binds `and_rock4` |
 
 **This corrects two earlier readings.** The 2026-10-07 `hd-vineta-floor` section's `sebenco_ice` change (`and_ice2` ->
@@ -2632,6 +2632,130 @@ Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tes
 **2048 / Omega:** not checkable (PS3 microcode and sampler hashes; their shader containers are unread). Confidence 90
 for the cause of the wall, the pool's wrong picture and the red shape (each found by decode, fixed, and the frame
 re-read); 60 for the 127 other slots (rule justified by the program text, not by a reference frame each).
+
+## Water family: `water_test_2`, `water_noref` and `sebenco_ice` (2026-10-07, `hd-water`)
+
+**Reports:** Vineta K's sea behind the tunnel glass is blue where the RPCS3 capture is teal, and Sebenco Climb's pool is
+snow-white where it has cyan streaks. **References:** `data/reference/hd-capture/vineta-floor/03.png` (camera
+`-861.568,-145.613,178.961`), `data/scratch/hd-sebenco/ref/01.png`; before/after frames in `data/scratch/hd-water/`
+(untracked).
+
+### Census (measured, confidence 95)
+
+`crates/render/examples/hd_water_census.rs`, all 28 circuit models of DATA00-03 (zones 1-4 have one direction): **979
+slots in 24 models resolve to a program that declares `paraboloidReflectionTex` (`0x9edd3243`)** - overwhelmingly the glass
+and `d_s_n_r` families. The water members:
+
+| Material | Slots (per direction) | Program reads |
+| --- | --- | --- |
+| `water_test_2` (Vineta K) | 1 (slot 5) | `waves2` as a normal map, vertex colour, ambient + sun, the probe |
+| `water_noref` (Vineta K) | 3 (93, 387, 547) | `waves2` at 3 taps as a normal, its alpha, the probe, a sun glint |
+| `sebenco_ice` (Sebenco Climb) | 3 (270, 366, 374; reversed 258, 349, 357) | three constants lerped, see below |
+| `reflectplane_dc_seawater[edging]`, `water` (Amphiseum), `cf_waterfall`, `and_waterfall` | other circuits | **not this family**: no probe, or a different program; not touched |
+
+### The two programs of Vineta K (confidence 90, read off `scripts/ps3-microcode.py fp-file`)
+
+`waves2.gtf` is **not a picture**: `water_test_2` block `@0x1d60` and `water_noref` block `@0x3870` fetch it three times,
+each decoded `MAD r, tap, {2,-1}.x, {2,-1}.y` (`2 tap - 1`) and summed into a normal. Binding it as the albedo drew a blue
+sheet of normal-map colour. The vertex program (`vp-file`, block 3) writes `TC1 = vertex colour`, `TC2 = eye - position`
+(world), `TC4/TC0/TC6.yzw` = tangent, bitangent, normal, and scrolls the wave coordinates off `time`. The colours:
+
+```text
+water_test_2:  out = fog( TC1 * (ambient + sun * sat(N.L)) + TC1 * R * 0x7480de6d-tint )
+water_noref:   out = fog( R * 0x7480de6d-tint * (0.2 w + 0.4) + sun * glint * (0.2 sat(w * 0x697f57e3) + 0.4) )
+R              = tex(paraboloidReflectionTex, u, v)      u = 0.25 + (d.x > 0 ? -d.z : d.z + 0.5),  v = 0.5 - 0.5 d.y
+d              = n (n.w) - w                             w = unit vector to the eye, n the perturbed normal
+```
+
+`water_noref` declares no `constantAmbientColour` and reads no vertex colour: with the reflection taken out it is **black plus
+a glint plus fog**. Reading `water_test_2` the same way gives lit vertex colour with no picture. Both are now drawn that
+way (`mesh::rcs::water`, report "water material(s) whose picture is a normal map"); **the reflection is not drawn**.
+
+### What the reflection is: not established (confidence 40 that it is a sky panorama; do not wire)
+
+- The `.rcsmodel` records of `water_noref` carry `skyreflect.gtf` (512x512, a sky panorama mirrored about its middle row)
+  under sampler `0x8365b1f3`, and `sebenco_ice` carries `and_ice2`, `d_s_n_customr` `ds_dualparaboloid_c`, Amphiseum's
+  `water` `dc_waterreflection`. **`0x8365b1f3` is `~crc32("PerMaterialEnvMap")`, an exact preimage (confidence 95)**, and no
+  HD program declares it.
+- 2048's `Environment_Load` (Ghidra `/2048/eboot-vita-2048-eu-v104.elf`, `0x8102fe42`) hashes `"PerMaterialEnvMap"` and
+  scans every material for it, and loads `skyParaboloid.gxt` beside `skycube.rcsmodel` as the environment's probe
+  (`DAT_816a3ee4`); 2048 ships 14 `skyParaboloid.gxt` in its base archive. **HD's executable contains neither string**
+  (`grep -a -c PerMaterialEnvMap EBOOT.elf` = 0; `paraboloidReflectionTex` is there once, as the engine parameter name),
+  and its engine parameter table slot 8 (`paraboloidReflectionTex`) is filled by something this lane could not find. So
+  the lineage says the probe is a sky paraboloid, and HD's data names a per-material map the HD engine does not
+  visibly read. A frame with the reflection drawn from `skyreflect.gtf` by the program's own coordinate was built and
+  **reverted**: on a flat sea `d.y` is 0, so `v` is 0.5 and the lookup lands on the dark horizon strip.
+- `0x7480de6d`, the engine tint that scales `R`, has no preimage and no authored value.
+
+### Vineta K: measured; the windows are not the water, the sea beside them got paler (confidence 75)
+
+Window pixel means at the capture's pose (x scaled by 1882/1600), reference / before / after / water skipped
+(`OAG_SKIP_MATERIAL=water_noref,water_test_2`, after the change):
+
+| Window | Reference | Before | After | After, water skipped |
+| --- | --- | --- | --- | --- |
+| right pane `(1250,330,1330,420)` | `(33,147,147)` | `(47,117,159)` | `(52,116,153)` | `(50,117,156)` |
+| middle pane `(900,400,1000,470)` | `(16,145,146)` | `(43,94,147)` | `(48,96,141)` | `(46,97,143)` |
+| sea band, left `(600,400,700,450)` | `(15,145,145)` | `(127,178,220)` | `(176,217,219)` | `(132,196,160)` |
+
+- **The two panes do not show the water**: skipping both programs moves them by 1 to 4 levels, and the change moves them
+  by 2 to 6. Their residual (green about 30 low, red 15 to 20 high) is the backdrop behind the glass; a sky-only frame has
+  mean `(234,228,182)` there, so the sky tint (`hd-sky-luma`'s open item) and the glass multiply decide it.
+- **The sea band beside them did move, and away from the reference**: it was blue (the normal map painted as a picture)
+  and is now pale `(176,217,219)` against the reference's teal. A program with no picture is lit vertex colour, which is
+  pale here; the reference's teal is therefore carried by the term this lane leaves out, the reflection times the engine
+  tint `0x7480de6d`. Drawing the program's colour minus its one unknown term is the honest reading and is also further
+  from the capture in this window. If the maintainer prefers the old blue, dropping the `water::water` call in
+  `rcs/setup.rs` restores it, and `OAG_WATER_OFF=1` shows it.
+- `OAG_ONLY_SLOT` isolation: `water_test_2` draws the sea plane (teal when seen alone, `iso_test2.png`) and `water_noref`
+  a horizon band.
+
+### Sebenco ice: closes entirely from data (confidence 85 for the program, 60 for the picture)
+
+`sebenco_ice` blocks `@0x111b0` (lightmapped, the pond) and `@0x4480` (no lightmap), `fp-file`:
+
+```text
+mask  = tex(unit 1 = 0xf1d875a1, TC4.zw).x      the pond transition map, on the SECOND uv set (`Uv2`, byte 22)
+snow  = tex(unit 2 = 0x2e7d71db, TC4.xy).rgb    and_snow3alpha
+F     = V . N'                                  N' = vertex normal bumped by two normal-map taps
+water = deep + F (cyan - deep)                  0x1f3b345d, 0xef8869cd
+ice   = pale + F (snow - pale)                  0x4042b6e6
+A     = water + mask (ice - water)
+out   = fog( A * L + spec ) ,   L = the baked lightmap lighting; reflection weight 0xe7a83aef, 0xa1b54b80 = 0
+```
+
+The reflection weights are authored **0** on every `sebenco_ice` slot, so the probe drops out and nothing is missing.
+Authored values: deep `(0.0475,0.106,0.147)`, cyan `(0.131,0.755,0.872)` on the pond slot and `(0.392,0.596,0.634)` on
+the cave-entrance slots, pale `(0.663,0.763,1.0)`. The pond mask is dark in the pond and white around it
+(`and_snow_ice_transition_pond.gtf`, 256x256). **`Uv2` is `TC4.zw`**: `Mesh::second_texcoords` reads it (declared `Uv1` at
+byte 18, `Uv2` at 22 on all three chunk kinds), `GpuVertex::texcoord2` carries it (a 13th attribute, last), and the
+fragment varying widens `lightmap_texcoord` to a `vec4` rather than adding a location. `mesh::rcs::ice` classifies by
+program facts (declares the probe, the mask and snow samplers, patches all three colours, mask read one lane wide), puts
+the three colours in three consecutive glow-table entries, binds snow first and the mask third, and sets
+`slots::ICE` (bit 22; `MATERIAL_SHIFT` moved 22 to 23).
+
+**Chosen, not measured:** `N'` is the vertex normal, so `F` is smooth where the original's streaks; the three colours are
+display values decoded with `pow(2.2)` to the domain the textures are sampled in; the program's own specular is left to
+the generic one. **Result** (`data/scratch/hd-water/sb_obl_before.png` / `sb_obl_ice2.png`, an oblique camera at the pond;
+`OAG_WATER_OFF=1` restores the before): the pool goes from a snow-white sheet to an authored pond - deep-blue blotches in
+the middle (the mask's dark region), pale icy blue around, white beyond. The reference (`ref/01.png`) is paler
+and brighter - pool pixels `(155,244,249)` with 63 % cyan and 39 % white, against ours `(19,95,130)` in the pond - and
+the difference is not closed: the original's bump-perturbed `F` and its HDR sun and bloom are not reproduced. No matched
+camera exists (the reference's chase camera is not recoverable from the capture), so this is a look comparison, not a
+measurement.
+
+### 2048 / Omega
+
+- **2048 (Vita): checked, differs.** Its Vineta K ships `dc_seawater` and `reflectplane_*`, not `water_noref` or
+  `water_test_2`; it has no Sebenco ice material. It does ship `waves2.gxt` and 14 `skyParaboloid.gxt`, which is the
+  evidence for what the probe is there.
+- **Omega (PS4): checked, applies, not wired.** The PS4 data ships the same materials: `Water_noref`, `WATER_Test_2`
+  (`data01`, `data05`, `data08`, each with `_1`/`_2` shader splits) and `Sebenco_ice` (`data02`, `data05`, `data08`), and
+  `Water_lapping_waves2_N.gnf`. Omega's circuits read through the 2048 `.rcsmodel` path whose shaders are PS4 GNM, not RSX
+  microcode, so the classifiers here (microcode facts) do not run on it. The three ice colours are model parameters in
+  HD's record and probably in Omega's, so wiring `Sebenco_ice` there is a data read plus the same shader branch; left open.
+- **Not checkable:** whether Omega's `paraboloidReflectionTex` string exists (its string search found none, which
+  is not a proof).
 
 ## See also
 

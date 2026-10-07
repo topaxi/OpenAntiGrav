@@ -125,6 +125,14 @@ pub struct GpuVertex {
     /// `docs/rendering/glow-mask.md`. `0.0` on every surface nothing reads it
     /// for. Last, for the reason [`Self::lightmap_texcoord`] gives.
     pub glow: f32,
+    /// The chunk's **second** diffuse coordinate set, `Uv2` in the vertex
+    /// declaration (`TC4.zw` in the programs that read it).
+    ///
+    /// Filled only for the surfaces whose program samples a second picture
+    /// through it - HD's Sebenco ice pool, whose pond mask lives on this set
+    /// (`mesh::rcs::ice`) - and `[0, 0]` everywhere else. Last, for the reason
+    /// [`Self::lightmap_texcoord`] gives.
+    pub texcoord2: [f32; 2],
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,
@@ -339,6 +347,13 @@ pub mod slots {
     /// own lit colour.
     pub const REFRACT_GRAB: u32 = 1 << 21;
 
+    /// HD's Sebenco ice pool (`mesh::rcs::ice`): the albedo is a lerp of three
+    /// authored colours by a facing term and a pond mask read through
+    /// [`GpuVertex::texcoord2`](super::GpuVertex::texcoord2) from the third
+    /// binding. The colours ride in three consecutive glow-table entries
+    /// starting at this material's index.
+    pub const ICE: u32 = 1 << 22;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
@@ -349,11 +364,11 @@ pub mod slots {
     /// bit test that an index above bit 15 cannot disturb. A circuit's
     /// materials number in the hundreds against the 65,535 this allows.
     ///
-    /// Twenty-two since [`REFRACTION`] and [`REFRACT_GRAB`] took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
+    /// Twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and [`REFRACT_GRAB`] took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
     /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
     /// index keeps 32,767 values, against the hundreds a circuit uses.
-    pub const MATERIAL_SHIFT: u32 = 22;
+    pub const MATERIAL_SHIFT: u32 = 23;
 
     /// The mask covering every role bit - the low half of the word, with
     /// [`MATERIAL_SHIFT`]'s index excluded.

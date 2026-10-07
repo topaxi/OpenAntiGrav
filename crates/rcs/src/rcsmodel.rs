@@ -817,6 +817,24 @@ impl Mesh {
         Ok(coords)
     }
 
+    /// The chunk's second diffuse coordinate set (`Uv2`), one pair per vertex.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoTexcoord`] where the declaration names none, and
+    /// [`Error::OutOfBounds`] as [`Self::positions`].
+    pub fn second_texcoords(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+    ) -> Result<Vec<[f32; 2]>> {
+        let decl = self.decl.as_ref().ok_or(Error::NoTexcoord)?;
+        let attribute = decl.second_texcoord().ok_or(Error::NoTexcoord)?;
+        let format = TexcoordFormat::of(attribute).ok_or(Error::NoTexcoord)?;
+        self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
+    }
+
     /// The coordinates a **lightmap** is sampled through, one pair per vertex.
     ///
     /// The declaration names this attribute `lightmapUV` outright - see

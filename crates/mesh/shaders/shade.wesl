@@ -67,7 +67,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     var mask = 0.0;
     var emissive = false;
     if scene.light.enabled != 0.0 {
-        let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
+        let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord.xy);
         let baked = select(
             vec4<f32>(0.0, 0.0, 0.0, 1.0),
             atlas,
@@ -328,7 +328,29 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         first = textureSample(albedo, albedo_sampler, first_uv);
     }
     let second = textureSample(lightmap, albedo_sampler, in.texcoord);
-    let picture = select(first, second, (in.slots & 2u) != 0u);
+    var picture = select(first, second, (in.slots & 2u) != 0u);
+    // **HD's Sebenco ice pool** (`slots::ICE`, `oag_mesh::mesh::rcs::ice`): the
+    // picture is replaced by the program's own lerp,
+    //
+    //     water = deep + F (cyan - deep);  ice = pale + F (snow - pale)
+    //     A     = water + mask (ice - water)
+    //
+    // `F` the facing term, `mask` the pond map (third binding) at the second
+    // UV set, `snow` the first binding, the three colours in three
+    // consecutive glow-table entries. Chosen, not measured: `F` uses the
+    // vertex normal, and the constants are display values decoded to the
+    // domain the textures are sampled in.
+    if (in.slots & 4194304u) != 0u {
+        let ice_slot = in.slots >> 23u;
+        let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
+        let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));
+        let pale = pow(emissives.tint_offset[ice_slot + 2u].rgb, vec3<f32>(2.2));
+        let pond = textureSample(pad_mask, albedo_sampler, in.lightmap_texcoord.zw).x;
+        let facing = clamp(ramp_facing, 0.0, 1.0);
+        let water = deep + facing * (cyan - deep);
+        let ice = pale + facing * (first.rgb - pale);
+        picture = vec4<f32>(water + pond * (ice - water), picture.a);
+    }
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
@@ -380,7 +402,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 22u;
+    let glow_slot = in.slots >> 23u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     // **The clock is gated, and `b` defaults to 1 rather than 0.** A material
