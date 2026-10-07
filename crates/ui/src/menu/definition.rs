@@ -414,6 +414,24 @@ impl Definition {
         }
     }
 
+    /// Drops the CONTROLS page's TOUCH CONTROLS row, for a machine with no
+    /// touchscreen to set up. The page stays defined but unreachable. Same
+    /// once-before-read timing as [`Self::drop_quit`].
+    pub fn drop_touch_controls(&mut self) {
+        let Some(touch) = self
+            .pages
+            .iter()
+            .position(|page| page.id == "touch_controls")
+        else {
+            return;
+        };
+        for page in &mut self.pages {
+            page.retain_rows(
+                |entry| !matches!(entry, Entry::Submenu { target, .. } if *target == touch),
+            );
+        }
+    }
+
     /// Drops the RACE page's TEAM, VARIANT and TRACK rows on a title whose
     /// front end authors its own selection screens
     /// ([`oag_title::FrontEnd::race_box`]) - Wipeout Pulse, on both

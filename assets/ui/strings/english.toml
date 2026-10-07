@@ -177,6 +177,7 @@ OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "TRIGGER SENSITIVITY", human = false
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "GO BRAKE ZONES", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "TOUCH SCHEME", human = false }
 OAG_CONTROLS_TOUCH_OPACITY = { text = "CONTROLS OPACITY", human = false }
+OAG_CONTROLS_TOUCH_PAGE = { text = "TOUCH CONTROLS", human = false }
 
 # The AI PILOTS page's own rows and title.
 OAG_PILOT_PAGE_TITLE = { text = "AI PILOTS", human = false }
