@@ -48,7 +48,22 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   automatically, so a run on the default `~/.config/oag` writes into the
   maintainer's own saves; a member's windowed walk once shared it.
 - **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
-  sound by writing WAV and inspecting it, never through the speakers.
+  sound by writing WAV and inspecting it, never through the speakers. The
+  maintainer works on this host by default, so nothing a member starts may
+  make a sound. **Waydroid counts**: the Android app has no `--no-audio` and
+  plays through the host, which happened while members tested the APK. Before
+  every launch in Waydroid (and after any Waydroid restart) silence both layers,
+  and check both read silent:
+
+  ```sh
+  adb -s <waydroid-serial> shell cmd media_session volume --stream 3 --set 0
+  pactl -f json list sink-inputs \
+    | jq '.[] | select(.properties["application.name"]=="Waydroid") | .index' \
+    | xargs -r -n1 -I{} pactl set-sink-input-mute {} 1
+  ```
+
+  Never raise the stream volume back. Prove audio with log lines (device
+  opened, mixer running) or a WAV, not by ear.
 - **Processes.** Record the PID of everything you start, and kill only by
   that PID. Never `pkill -f <pattern>`: one pattern kill took down every
   member's `oag-game --race` run.
