@@ -219,7 +219,20 @@ waydroid session stop; kill <weston PID>
 `--debug` is what authorises `weston-screenshooter`; `grim` does not work on weston.
 A container that has no visible window freezes itself, so `waydroid app launch`
 before looking for a device. `adb connect <IP from waydroid status>:5555` needs the
-RSA prompt accepted inside Android (or the host key in the container's `adb_keys`).
+RSA prompt accepted inside Android (or the host key in the container's `adb_keys`:
+append `~/.android/adbkey.pub` to `~/.local/share/waydroid/data/misc/adb/adb_keys`,
+which the user owns). Waydroid's Play Protect "App scan recommended" dialog covers
+the app on a fresh install; `adb -s <ip>:5555 shell settings put global
+package_verifier_enable 0` and Back dismisses it. Pass `-s <serial>` to adb (it has no
+`--serial`), because the phone is usually attached too.
+
+Verified here (2026-10-07, Waydroid, the PSP EU image and cache pushed with
+`scripts/push-game-data.sh android --serial <ip>:5555`): the not-found screen with the
+adb push path, the intro playing with its picture and a tap skipping it to the language
+menu, front-end sound mixing, the launcher icon (visible in the Play Protect dialog),
+and the Vulkan backend (the host's RADV; the GLES fallback was not exercised). A
+`settings.toml` the app cannot read (mode 000, as a reinstall that restores files under
+another owner leaves it) logs one warning and runs on defaults.
 
 ## Known gaps
 
