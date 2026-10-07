@@ -28,17 +28,17 @@
 //!
 //! # Two taps on a toggle
 //!
-//! `GameModeChoice`'s four mode tiles are `toggle="true"` with no `redirect`;
-//! a fifth, unlabelled button (`Icon_Tick.gtf`, `redirect="newFEshell"`) is
+//! `GameModeChoice`'s mode tiles are `toggle="true"` with no `redirect`;
+//! an unlabelled one (`Icon_Tick.gtf`, `redirect="newFEshell"`) is
 //! the confirm. So a tap on a mode marks it and the tick leaves - the file's
 //! own shape, kept rather than folded into one tap; a second tap on the
 //! chosen mode is read as the tick, the language picker's own rule. `Home`'s
 //! five tiles each carry their own `redirect` and leave on the tap.
 //!
-//! Only `FE_SP_CAMPAIGN` can be confirmed here: the other three modes are
-//! online, ad-hoc and cross-play, and the screens behind them are network
-//! sessions this build does not have. Confirming one of those says so in a
-//! note and stays.
+//! Only `FE_SP_CAMPAIGN` can be confirmed here: the HD and Fury
+//! tiles (v1.04) lead to another title's campaigns, and online, ad-hoc and
+//! cross-play are network sessions this build does not have. Confirming one
+//! of those says so in a note and stays.
 //!
 //! # Two tiles the disc does not author: RACE BOX and REMIX
 //!
@@ -53,8 +53,10 @@
 //! same ids the menu tree uses), and drawn as the labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
 //! shape holding an unauthored destination. **Their positions are chosen,
-//! not measured**: the bottom-left corner at `(16, 432)` and `(158, 432)`,
-//! the confirm tick's own row, where nothing drawn sits. The parent shell
+//! not measured**: the left column, stacked at `(16, 110)` and `(16, 226)`,
+//! clear of the v1.04 patch's grid (two rows of three from x=228) - they sat
+//! at `(16, 432)` and `(158, 432)` until the patch was mounted and its second
+//! row put `ONLINE CAMPAIGN` under them. The parent shell
 //! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
 //! at `(16, 432)`, but that widget carries no size and this build draws
 //! nothing for it, so the rect is empty in the picture. See
@@ -107,8 +109,9 @@ pub struct ExtraTile {
 /// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
 /// was given them. **Chosen, not measured** - see the module docs. The
 /// 122x96 is the tick's own authored size; the 20-unit gap between the two
-/// is this build's.
-pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 432.0, 122.0, 96.0], [158.0, 432.0, 122.0, 96.0]];
+/// is this build's. Stacked in the left column, clear of the v1.04 grid's
+/// three columns that start at x=228.
+pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 110.0, 122.0, 96.0], [16.0, 226.0, 122.0, 96.0]];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
 /// been chosen, and what a confirmed tap asked the composition root for.
@@ -385,6 +388,12 @@ impl Frontend {
         if current == w2048::GAME_MODE_CHOICE {
             match self.touch.chosen_mode.as_deref() {
                 Some("FE_SP_CAMPAIGN") => {}
+                Some(mode @ ("FE_RC_HD" | "FE_RC_FURY")) => {
+                    self.notes.push(format!(
+                        "{current}: {mode} is another title's campaign, which this build does not carry in 2048"
+                    ));
+                    return;
+                }
                 Some(mode) => {
                     self.notes.push(format!(
                         "{current}: {mode} needs a network session this build does not have"
