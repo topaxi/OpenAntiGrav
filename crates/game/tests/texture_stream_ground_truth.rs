@@ -81,7 +81,9 @@ fn omega_options() -> Option<race::Options> {
     })
 }
 
-/// Tech De Ra on Omega: 461 albedo + 51 lightmap + 6 sky + the craft, all BC7.
+/// Tech De Ra on Omega: 461 albedo + 51 lightmap + 6 sky + the craft, all BC7,
+/// which since 2026-10-07 decode once per file: 200 distinct textures and
+/// 1.4 GiB held without a sink (`docs/architecture/load-time.md`).
 #[test]
 #[ignore = "needs the Omega extraction and a GPU adapter"]
 fn an_omega_circuit_loaded_through_a_sink_holds_no_texels() {
@@ -92,7 +94,7 @@ fn an_omega_circuit_loaded_through_a_sink_holds_no_texels() {
 
     let control = totals(&load(options.clone(), None));
     assert!(
-        control.1 > 500 && control.0 == 0 && control.2 > 1 << 30,
+        control.1 > 150 && control.0 == 0 && control.2 > 1 << 30,
         "without a sink the load keeps its decoded blocks (uploaded, held, bytes): {control:?}"
     );
 
