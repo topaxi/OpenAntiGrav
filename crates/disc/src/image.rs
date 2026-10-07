@@ -8,6 +8,7 @@ use crate::chd_source::ChdSource;
 use crate::error::{Error, Result};
 use crate::iso9660::{self, Entry, VolumeDescriptor};
 use crate::platform::{self, TitleInfo};
+use crate::ps3_crypt::{self, DiscKey, Unlocked};
 use crate::raw_source::RawSource;
 use crate::source::{SECTOR_SIZE, SectorSource};
 
@@ -32,12 +33,28 @@ impl std::fmt::Display for Container {
     }
 }
 
+/// How a PS3 image's encrypted regions are being read; see [`crate::ps3_crypt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ps3State {
+    /// Not a PS3 image with encrypted regions (or not a raw ISO at all).
+    NotEncrypted,
+    /// Declares encrypted regions that already read as plaintext (a dump
+    /// decrypted by other means).
+    AlreadyPlain,
+    /// Decrypting in place, with a key the oracle accepted.
+    Decrypting,
+    /// Encrypted, and no key found passes the oracle: the archives read as
+    /// noise until the player supplies one.
+    Locked,
+}
+
 /// An opened disc image.
 #[derive(Debug)]
 pub struct DiscImage {
     source: Box<dyn SectorSource>,
     path: PathBuf,
     container: Container,
+    ps3: Ps3State,
     entries: Option<Vec<Entry>>,
 }
 
@@ -46,21 +63,52 @@ impl DiscImage {
     ///
     /// Extension-based detection would mislabel a `.iso` that is really a CHD,
     /// which is a common result of renaming a download.
+    ///
+    /// A raw ISO that is an encrypted PS3 disc is opened with every key
+    /// [`ps3_crypt::find_keys`] finds (beside the image, then the app's keys
+    /// directory); [`Self::ps3_state`] says whether one worked.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let keys = if sniff_container(path)? == Container::RawIso {
+            ps3_crypt::find_keys(path)
+        } else {
+            Vec::new()
+        };
+        Self::open_with_keys(path, &keys)
+    }
+
+    /// As [`Self::open`], with the keys the caller already holds instead of a
+    /// search.
+    pub fn open_with_keys(path: impl AsRef<Path>, keys: &[DiscKey]) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let container = sniff_container(&path)?;
 
-        let source: Box<dyn SectorSource> = match container {
-            Container::Chd => Box::new(ChdSource::open(&path)?),
-            Container::RawIso => Box::new(RawSource::open(&path)?),
+        let (source, ps3): (Box<dyn SectorSource>, Ps3State) = match container {
+            Container::Chd => (Box::new(ChdSource::open(&path)?), Ps3State::NotEncrypted),
+            Container::RawIso => {
+                let raw = Box::new(RawSource::open(&path)?);
+                match ps3_crypt::unlock(raw, keys)? {
+                    Unlocked::NotEncrypted(s) => (s, Ps3State::NotEncrypted),
+                    Unlocked::AlreadyPlain(s) => (s, Ps3State::AlreadyPlain),
+                    Unlocked::Decrypting(s) => (s, Ps3State::Decrypting),
+                    Unlocked::Locked(s) => (s, Ps3State::Locked),
+                }
+            }
         };
 
         Ok(Self {
             source,
             path,
             container,
+            ps3,
             entries: None,
         })
+    }
+
+    /// How this image's PS3 encryption is being handled.
+    #[must_use]
+    pub fn ps3_state(&self) -> Ps3State {
+        self.ps3
     }
 
     /// The path the image was opened from.

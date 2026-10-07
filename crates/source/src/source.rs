@@ -608,8 +608,8 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
          relative to {}):\n{}\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
          HD) is found by extension. A 2048 or Omega .pkg is NOT read: unpack and \
          decrypt it into a folder first (`docs/overview/installing.md`, \
-         \"Wipeout 2048\" and \"Omega Collection\"). An encrypted HD .iso must be \
-         decrypted with scripts/ps3iso.py first.\n\nName a source directly \
+         \"Wipeout 2048\" and \"Omega Collection\"). An encrypted HD .iso is read \
+         in place with the disc key from a .dkey beside it, or one entered in the chooser.\n\nName a source directly \
          (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
         std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
         list(searched, ".chd / .iso"),

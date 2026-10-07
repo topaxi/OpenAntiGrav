@@ -24,6 +24,8 @@ mod app;
 mod args;
 #[path = "main/campaign_stage.rs"]
 mod campaign_stage;
+#[path = "main/clipboard.rs"]
+mod clipboard;
 #[path = "main/cli.rs"]
 mod cli;
 #[path = "main/frontend_stage.rs"]
@@ -538,7 +540,7 @@ fn run(cli: Cli) -> Result<()> {
             // `resolve`'s message naming every directory it looked in - which
             // for a packaged build with no image is the entire user interface.
             if rows.len() > 1 || (cli.launcher && !rows.is_empty()) {
-                Some(launcher::Launcher::new(rows))
+                Some(launcher::Launcher::new(rows).with_paste(crate::clipboard::AVAILABLE))
             } else if rows.is_empty() && cfg!(target_os = "android") {
                 // A phone has no terminal for `resolve`'s message and its
                 // window would only close, so the chooser's own screen says it.

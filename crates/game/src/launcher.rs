@@ -41,13 +41,16 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_disc::{DiscImage, Platform};
+use oag_disc::{DiscImage, Platform, Ps3State};
 use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
 
 use oag_ui::frontend::{Align, Draw};
 
 use oag_display::space::SCREEN;
+
+pub mod key_entry;
+use key_entry::KeyEntry;
 
 /// One disc image the chooser offers.
 #[derive(Debug, Clone)]
@@ -71,6 +74,9 @@ pub struct Candidate {
 pub enum State {
     /// It opened, as this title.
     Playable(&'static Title),
+    /// An encrypted PS3 image that no key found opens. Selecting the row opens
+    /// the disc-key prompt ([`key_entry`]).
+    NeedsKey,
     /// It did not open. The string is for the player, and names the fix when
     /// there is one to name.
     Unavailable(String),
@@ -88,8 +94,15 @@ impl Candidate {
     pub fn playable(&self) -> Option<&'static Title> {
         match &self.state {
             State::Playable(title) => Some(title),
-            State::Unavailable(_) => None,
+            State::Unavailable(_) | State::NeedsKey => None,
         }
+    }
+
+    /// Whether the cursor may land on this row: it plays, or it can be
+    /// unlocked from here.
+    #[must_use]
+    pub fn is_selectable(&self) -> bool {
+        matches!(self.state, State::Playable(_) | State::NeedsKey)
     }
 
     /// The title's name, or the reason it has none.
@@ -97,6 +110,7 @@ impl Candidate {
     pub fn title(&self) -> &str {
         match &self.state {
             State::Playable(title) => title.name,
+            State::NeedsKey => NEEDS_KEY,
             State::Unavailable(_) => UNAVAILABLE,
         }
     }
@@ -113,6 +127,9 @@ impl Candidate {
 
 /// What a row that will not open is headed instead of a title.
 const UNAVAILABLE: &str = "WILL NOT OPEN";
+
+/// What an encrypted PS3 row is headed instead of a title.
+const NEEDS_KEY: &str = "NEEDS DISC KEY";
 
 /// Opens every candidate far enough to say what it is.
 ///
@@ -158,8 +175,12 @@ fn examine(path: &Path) -> Candidate {
     // Deliberately tolerant: an image whose identity block will not read is
     // still worth listing under its file name, because the title open below is
     // what decides whether it plays and it may well succeed anyway.
+    let mut locked = false;
     let info = DiscImage::open(path)
-        .and_then(|mut disc| disc.identify())
+        .and_then(|mut disc| {
+            locked = disc.ps3_state() == Ps3State::Locked;
+            disc.identify()
+        })
         .ok();
     let platform = info
         .as_ref()
@@ -168,6 +189,7 @@ fn examine(path: &Path) -> Candidate {
 
     let state = match oag_source::title::identify(&source) {
         Some(title) => State::Playable(title),
+        None if locked => State::NeedsKey,
         None => State::Unavailable(why_not(platform)),
     };
 
@@ -201,7 +223,7 @@ fn examine(path: &Path) -> Candidate {
 /// is what keeps that true.
 fn why_not(platform: Platform) -> String {
     match platform {
-        Platform::Ps3 => "still encrypted? decrypt it with its own .dkey".to_string(),
+        Platform::Ps3 => "no archives here: needs a .dkey beside it".to_string(),
         _ => "no archives this engine recognises".to_string(),
     }
 }
@@ -219,7 +241,7 @@ pub fn advice(row: &Candidate) -> Option<String> {
     };
     let mut line = format!("{} will not open: {why}", row.name);
     if row.platform == Platform::Ps3 {
-        line.push_str(" (`just ps3iso decrypt`; see docs/formats/ps3-disc.md)");
+        line.push_str(" (a PS3 image is read encrypted in place; see docs/formats/ps3-disc.md)");
     }
     Some(line)
 }
@@ -232,6 +254,12 @@ pub struct Launcher {
     /// What to say instead of a list when there is no disc image to list, from
     /// [`Self::not_found`]. `None` for an ordinary chooser.
     notice: Option<Vec<String>>,
+    /// The disc-key prompt, while one is open.
+    entry: Option<KeyEntry>,
+    /// Whether this build can read a clipboard, for the prompt's PASTE cell.
+    can_paste: bool,
+    /// The prompt asked for a paste and nothing has serviced it yet.
+    paste_requested: bool,
 }
 
 impl Launcher {
@@ -243,12 +271,23 @@ impl Launcher {
     /// none of it works, which is the entire reason those rows are listed.
     #[must_use]
     pub fn new(rows: Vec<Candidate>) -> Self {
-        let cursor = rows.iter().position(Candidate::is_playable).unwrap_or(0);
+        let cursor = rows.iter().position(Candidate::is_selectable).unwrap_or(0);
         Self {
             rows,
             cursor,
             notice: None,
+            entry: None,
+            can_paste: false,
+            paste_requested: false,
         }
+    }
+
+    /// Says whether this build can read a clipboard, which decides whether the
+    /// key prompt offers PASTE.
+    #[must_use]
+    pub fn with_paste(mut self, can_paste: bool) -> Self {
+        self.can_paste = can_paste;
+        self
     }
 
     /// A chooser with nothing to choose, which says why instead.
@@ -262,6 +301,9 @@ impl Launcher {
             rows: Vec::new(),
             cursor: 0,
             notice: Some(notice),
+            entry: None,
+            can_paste: false,
+            paste_requested: false,
         }
     }
 
@@ -289,12 +331,110 @@ impl Launcher {
         self.rows.iter().any(Candidate::is_playable)
     }
 
+    /// Whether the cursor has anywhere to go: a row that plays or can be
+    /// unlocked.
+    fn has_selectable(&self) -> bool {
+        self.rows.iter().any(Candidate::is_selectable)
+    }
+
+    /// The disc-key prompt, while one is open.
+    #[must_use]
+    pub fn entry(&self) -> Option<&KeyEntry> {
+        self.entry.as_ref()
+    }
+
+    /// Whether the disc-key prompt is open, so a desk keyboard's keys go to it.
+    #[must_use]
+    pub fn typing_is_open(&self) -> bool {
+        self.entry.is_some()
+    }
+
+    /// A desk-keyboard digit, while the prompt is open.
+    pub fn type_digit(&mut self, c: char) {
+        if let Some(entry) = &mut self.entry {
+            entry.type_digit(c);
+        }
+    }
+
+    /// A desk-keyboard backspace, while the prompt is open.
+    pub fn delete_digit(&mut self) {
+        if let Some(entry) = &mut self.entry {
+            entry.delete();
+        }
+    }
+
+    /// A desk-keyboard Enter, while the prompt is open.
+    pub fn accept_entry(&mut self) {
+        if let Some(entry) = &mut self.entry {
+            let outcome = entry.accept();
+            self.settle(outcome);
+        }
+    }
+
+    /// Escape, while the prompt is open: closes it and says whether it did.
+    pub fn cancel_entry(&mut self) -> bool {
+        self.entry.take().is_some()
+    }
+
+    /// Asks for a paste into the prompt (Ctrl+V); the stage services it.
+    pub fn request_paste(&mut self) {
+        if self.entry.is_some() && self.can_paste {
+            self.paste_requested = true;
+        }
+    }
+
+    /// Whether a paste is waiting to be serviced, clearing the request.
+    pub fn take_paste_request(&mut self) -> bool {
+        std::mem::take(&mut self.paste_requested)
+    }
+
+    /// Hands the clipboard's text to the prompt.
+    pub fn paste(&mut self, clipboard: &str) {
+        if let Some(entry) = &mut self.entry {
+            entry.paste(clipboard);
+        }
+    }
+
+    /// Acts on what the prompt reported: closes it on cancel, closes it and
+    /// re-reads the row on a stored key (so the image now opens as its title),
+    /// queues a paste on request.
+    fn settle(&mut self, outcome: key_entry::Outcome) {
+        use key_entry::Outcome;
+        match outcome {
+            Outcome::Pending => {}
+            Outcome::Cancelled => self.entry = None,
+            Outcome::WantsPaste => self.paste_requested = self.can_paste,
+            Outcome::Stored => {
+                self.entry = None;
+                if let Some(row) = self.rows.get_mut(self.cursor) {
+                    *row = examine(Path::new(&row.source));
+                }
+            }
+        }
+    }
+
+    /// Opens the prompt on the row under the cursor, if it needs a key.
+    fn open_entry(&mut self) -> bool {
+        match self.rows.get(self.cursor) {
+            Some(row) if matches!(row.state, State::NeedsKey) => {
+                self.entry = Some(KeyEntry::new(Path::new(&row.source), self.can_paste));
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Moves and selects, returning the source picked when one is.
     ///
     /// Edges are consumed the way [`oag_ui::menu::Menu::update`] consumes them,
     /// and for the same reason: one press is one press whichever device saw it,
     /// and a held key must not walk the list.
     pub fn update(&mut self, input: &mut Input) -> Option<String> {
+        if let Some(entry) = &mut self.entry {
+            let outcome = entry.update(input);
+            self.settle(outcome);
+            return None;
+        }
         if input.take(Button::Down) {
             self.step(1);
         }
@@ -303,7 +443,14 @@ impl Launcher {
         }
 
         let confirmed = input.take(Button::Cross) | input.take(Button::Start);
-        if confirmed { self.pick() } else { None }
+        if confirmed {
+            if self.open_entry() {
+                return None;
+            }
+            self.pick()
+        } else {
+            None
+        }
     }
 
     /// Consumes a tick of pointer input - see [`oag_ui::pointer`] - and
@@ -317,6 +464,11 @@ impl Launcher {
     /// the d-pad refuses to. The rows are tested where [`draw_list`] puts
     /// them: [`row_at`] is the one place that arithmetic is written.
     pub fn pointer(&mut self, pointer: &oag_ui::pointer::Pointer) -> Option<String> {
+        if let Some(entry) = &mut self.entry {
+            let outcome = entry.pointer(pointer);
+            self.settle(outcome);
+            return None;
+        }
         if pointer.is_idle() {
             return None;
         }
@@ -326,7 +478,7 @@ impl Launcher {
         let row = pointer
             .at
             .and_then(|at| row_at(at, self.rows.len()))
-            .filter(|&row| self.rows[row].is_playable());
+            .filter(|&row| self.rows[row].is_selectable());
         if pointer.moved
             && let Some(row) = row
         {
@@ -336,6 +488,9 @@ impl Launcher {
             && let Some(row) = row
         {
             self.cursor = row;
+            if self.open_entry() {
+                return None;
+            }
             return self.pick();
         }
         None
@@ -358,7 +513,7 @@ impl Launcher {
     /// than looping forever.
     fn step(&mut self, direction: isize) {
         let count = self.rows.len();
-        if count == 0 || !self.has_playable() {
+        if count == 0 || !self.has_selectable() {
             return;
         }
 
@@ -368,7 +523,7 @@ impl Launcher {
                 .wrapping_add_signed(direction)
                 .wrapping_add(count)
                 .rem_euclid(count);
-            if self.rows[at].is_playable() {
+            if self.rows[at].is_selectable() {
                 self.cursor = at;
                 return;
             }
@@ -403,6 +558,9 @@ pub fn not_found_notice(images: &str) -> Vec<String> {
 /// own default is the PSP's.
 #[must_use]
 pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
+    if let Some(entry) = launcher.entry() {
+        return entry.draw();
+    }
     let mut out = vec![Draw::Fill {
         rect: [0.0, 0.0, SCREEN.0, SCREEN.1],
         color: BACKDROP,
@@ -432,8 +590,8 @@ pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
 
     for (index, row) in launcher.rows().iter().enumerate() {
         let y = FIRST_ROW + index as f32 * ROW;
-        let selected = index == launcher.cursor() && row.is_playable();
-        let colour = if !row.is_playable() {
+        let selected = index == launcher.cursor() && row.is_selectable();
+        let colour = if !row.is_selectable() {
             UNAVAILABLE_COLOUR
         } else if selected {
             SELECTED
@@ -459,16 +617,19 @@ pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
     // each, because two encrypted images have two different names.
     let mut note = FIRST_ROW + (launcher.rows().len() as f32 + 1.0) * ROW;
     for row in launcher.rows() {
-        if let State::Unavailable(why) = &row.state {
-            out.push(text(
-                MARGIN,
-                note,
-                1.0,
-                UNAVAILABLE_COLOUR,
-                &format!("{}: {why}", row.name),
-            ));
-            note += ROW;
-        }
+        let why = match &row.state {
+            State::Unavailable(why) => why.as_str(),
+            State::NeedsKey => "ENCRYPTED - PRESS X TO ENTER THE DISC KEY",
+            State::Playable(_) => continue,
+        };
+        out.push(text(
+            MARGIN,
+            note,
+            1.0,
+            UNAVAILABLE_COLOUR,
+            &format!("{}: {why}", row.name),
+        ));
+        note += ROW;
     }
 
     // Always drawn, and at the bottom rather than after the notes: the keys are

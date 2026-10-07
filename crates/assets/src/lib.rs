@@ -60,10 +60,10 @@ pub enum Error {
     /// A PS3 disc image whose archives will not read because its encrypted
     /// regions are still encrypted.
     #[error(
-        "{looked_in} is an encrypted PS3 disc image (its archives are encrypted on disc). \
-         Decrypt it with your own disc key first: \
-         `uv run --with cryptography python3 scripts/ps3iso.py decrypt <image.iso> <key> hdfury-ps3-eu-dec.iso` \
-         (needs the Python package `cryptography`), then put the decrypted image in data/images/."
+        "{looked_in} is an encrypted PS3 disc image and no disc key opens it. Put your own \
+         disc key in a file beside the image with the same name and a .dkey extension \
+         (hdfury-ps3-eu.dkey), or enter it when the chooser asks. The image is read \
+         encrypted in place; nothing is decrypted to disk."
     )]
     EncryptedDisc {
         /// The disc image that would not read.

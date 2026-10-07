@@ -64,20 +64,38 @@ fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
     let Some(encrypted) = image("hdfury-ps3-eu.iso") else {
         return;
     };
-    let rows = launcher::survey(&[encrypted]);
-    let row = rows.first().expect("one path in, one row out");
+    // A symlink in a directory of its own, so the `.dkey` that sits beside the
+    // real image is not beside this one.
+    let dir = std::env::temp_dir().join(format!("oag-launcher-locked-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let link = dir.join("hdfury-ps3-eu.iso");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&encrypted, &link).unwrap();
 
-    assert!(!row.is_playable(), "an encrypted image must not be offered");
+    let rows = launcher::survey(std::slice::from_ref(&link));
+    let row = rows.first().expect("one path in, one row out");
     assert_eq!(row.platform.to_string(), "PS3");
     assert_eq!(
         row.serial.as_deref(),
         Some("BCES-00664"),
         "the identity block reads through the encryption"
     );
-    match &row.state {
-        State::Unavailable(why) => assert!(why.contains(".dkey"), "{why}"),
-        State::Playable(_) => unreachable!(),
+    let keys_stored = oag_disc::ps3_crypt::keys_dir()
+        .and_then(|d| std::fs::read_dir(d).ok())
+        .is_some_and(|mut d| d.next().is_some());
+    if keys_stored {
+        // This machine's own keys directory unlocked it; that path is the
+        // `ps3_crypt_ground_truth` suite's, not this one's.
+        std::fs::remove_dir_all(&dir).ok();
+        return;
     }
+    assert!(
+        !row.is_playable(),
+        "a locked image must not be offered to play"
+    );
+    assert!(row.is_selectable(), "a locked image offers the key prompt");
+    assert!(matches!(row.state, State::NeedsKey), "{:?}", row.state);
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 /// The PS4 extract is a directory rather than a disc image, so

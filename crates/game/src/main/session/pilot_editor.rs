@@ -584,6 +584,9 @@ impl Session {
     /// Read by `app.rs` before it decides whether a raw key event is text or
     /// a game button. See [`crate::typing`].
     pub(crate) fn typing_is_open(&self) -> bool {
+        if let Stage::Launcher(stage) = &self.stage {
+            return stage.launcher.typing_is_open();
+        }
         let Stage::Menu(stage) = &self.stage else {
             return false;
         };
@@ -593,6 +596,13 @@ impl Session {
             .is_some_and(crate::overlay::Prompt::is_typing)
     }
 
+    /// Ctrl+V while the chooser's disc-key prompt is open: asks it to paste.
+    pub(crate) fn request_paste(&mut self) {
+        if let Stage::Launcher(stage) = &mut self.stage {
+            stage.launcher.request_paste();
+        }
+    }
+
     /// Applies one decision off a desk keyboard, and says whether it was
     /// used.
     ///
@@ -600,6 +610,23 @@ impl Session {
     /// call site in `app.rs` for why that distinction is what keeps the arrow
     /// keys navigating the grid.
     pub(crate) fn typed(&mut self, typed: crate::typing::Typed) -> bool {
+        if let Stage::Launcher(stage) = &mut self.stage {
+            return match typed {
+                crate::typing::Typed::Edit(oag_ui_screens::prompt::Edit::Type(c)) => {
+                    stage.launcher.type_digit(c);
+                    true
+                }
+                crate::typing::Typed::Edit(oag_ui_screens::prompt::Edit::Delete) => {
+                    stage.launcher.delete_digit();
+                    true
+                }
+                crate::typing::Typed::Accept => {
+                    stage.launcher.accept_entry();
+                    true
+                }
+                crate::typing::Typed::Ignore => false,
+            };
+        }
         let Stage::Menu(stage) = &mut self.stage else {
             return false;
         };
