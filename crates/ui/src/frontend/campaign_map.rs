@@ -423,6 +423,22 @@ impl CampaignMap {
         );
     }
 
+    /// Pans the view by a finger drag (the canvas follows the finger) or a
+    /// wheel (one marker row per detent), clamped to the canvas.
+    ///
+    /// **Chosen, not measured**: the original's `<TouchScroll>` is a Vita
+    /// touch widget, so how a mouse wheel moves it is ours. The selection
+    /// stays where it is - a pan reveals the map, it does not pick an
+    /// event, and the next pad move re-centres on the selection.
+    fn pan(&mut self, pointer: &Pointer, view: (f32, f32)) {
+        let wheel = pointer.scroll as f32 * PITCH.1;
+        let (dx, dy) = (-pointer.drag.0, wheel - pointer.drag.1);
+        self.scroll = (
+            (self.scroll.0 + dx).clamp(0.0, (CANVAS.0 - view.0).max(0.0)),
+            (self.scroll.1 + dy).clamp(0.0, (CANVAS.1 - view.1).max(0.0)),
+        );
+    }
+
     /// [`ProgressState`] for the event at `index` - `Locked` when
     /// [`MapEvent::requires`] names an event that has not been passed yet
     /// (an unknown name, e.g. one filtered out of the map entirely, reads as
@@ -642,6 +658,7 @@ impl Frontend {
         if pointer.is_idle() {
             return true;
         }
+        self.campaign.pan(pointer, self.space.size);
         let Some(at) = pointer.at else {
             return true;
         };
