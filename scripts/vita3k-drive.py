@@ -94,11 +94,16 @@ import sys
 import time
 from pathlib import Path
 
-CACHE = Path.home() / ".cache" / "oag" / "2048-hud"
+#: `OAG_VITA3K_CACHE` moves every file this tool writes (config, pid file,
+#: frames, pipeline marker) to a directory of its own, so two members' Vita3K
+#: instances never share a pid file; `OAG_VITA3K_CONFIG` names the config
+#: (pref-path, gdbstub, audio) instead of the generated copy.
+CACHE = Path(os.environ.get("OAG_VITA3K_CACHE") or Path.home() / ".cache" / "oag" / "2048-hud")
 FRAMES = CACHE / "frames"
-CONFIG = CACHE / "config.yml"
+CONFIG = Path(os.environ.get("OAG_VITA3K_CONFIG") or CACHE / "config.yml")
 VITA3K_PID_FILE = CACHE / "vita3k.pid"
-PIPELINE_MARKER = Path.home() / ".cache" / "oag-vita3k-drive" / "pipeline.json"
+PIPELINE_MARKER = (CACHE / "pipeline.json") if os.environ.get("OAG_VITA3K_CACHE") else (
+    Path.home() / ".cache" / "oag-vita3k-drive" / "pipeline.json")
 
 #: Matches both EU (`PCSF00007`) and USA (`PCSA00015`) window titles - the
 #: same pattern `~/.cache/oag/2048-hud/shot.sh` already used by hand.
