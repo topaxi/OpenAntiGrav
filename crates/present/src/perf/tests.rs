@@ -770,3 +770,23 @@ fn the_panels_sit_on_the_windows_corners_at_any_aspect() {
         );
     }
 }
+
+#[test]
+fn the_front_end_cap_is_derived_from_the_global_limit() {
+    let cases: [(&str, &str); 10] = [
+        ("unlimited", "120"),
+        ("240", "120"),
+        ("144", "120"),
+        ("121", "120"),
+        ("120", "120"),
+        ("119", "60"),
+        ("90", "60"),
+        ("60", "60"),
+        ("59", "59"),
+        ("30", "30"),
+    ];
+    for (limit, expected) in cases {
+        let limit: FrameLimit = limit.parse().unwrap();
+        assert_eq!(limit.front_end().to_string(), expected, "limit {limit}");
+    }
+}

@@ -274,6 +274,16 @@ that this module knows nothing about what a setting means: the answer is read
 off the other *row*, not out of the settings file. `menu.rs` has not heard of
 vsync.
 
+**The front end runs under a cap derived from FRAME LIMIT** (maintainer's rule,
+2026-10-07; **chosen, not measured**), `oag_present::perf::FrameLimit::front_end`:
+unlimited or 120 and above gives 120, 60 up to 119 gives 60, below 60 keeps the
+limit. Exactly 120 counts as "120 and above". The launcher, boot reel, loading
+wave, menus and the in-race pause menu use it (the pause menu is a `Stage::Menu`
+over a held picture with the race parked, so no race scene is drawn behind it);
+every `Stage::Race`, including a race still building, keeps the limit as
+configured. Under VSYNC on nothing is consulted, so the cap is inert there. The
+session logs `frame limit in force: N (configured M)` on every switch.
+
 A disabled row is **greyed, not hidden**. Hiding it changes the row count under
 the cursor, and a player looking for a setting that has silently vanished has no
 way to find out what took it away. It still takes the cursor, still shows its

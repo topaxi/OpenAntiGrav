@@ -360,6 +360,30 @@ impl FrameLimit {
         (self.0 > 0).then_some(self.0)
     }
 
+    /// The frame limit the front end runs under, derived from this one
+    /// (maintainer's rule, 2026-10-07 - **chosen, not measured**: a menu has no
+    /// motion that needs more than 120 and a player who capped the race low
+    /// wants the menus quiet too).
+    ///
+    /// - unlimited, or 120 and above: **120**;
+    /// - 60 up to but not including 120: **60**;
+    /// - below 60: this limit unchanged.
+    ///
+    /// Exactly 120 reads as "above or at" and takes the 120 arm. A race keeps
+    /// the limit as configured; only the front end calls this.
+    #[must_use]
+    pub fn front_end(self) -> Self {
+        match self.hz() {
+            None => Self(Self::FRONT_END_FAST),
+            Some(hz) if hz >= Self::FRONT_END_FAST => Self(Self::FRONT_END_FAST),
+            Some(hz) if hz >= Self::FRONT_END_STEADY => Self(Self::FRONT_END_STEADY),
+            Some(_) => self,
+        }
+    }
+
+    const FRONT_END_FAST: u32 = 120;
+    const FRONT_END_STEADY: u32 = 60;
+
     /// How long one frame is allowed to take at the least, or `None` for
     /// unlimited.
     #[must_use]
