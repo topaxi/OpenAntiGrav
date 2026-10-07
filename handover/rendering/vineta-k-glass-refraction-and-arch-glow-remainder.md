@@ -10,7 +10,9 @@
 - **The scenery beyond the glass, measured further (2026-10-07, `hd-glass-opus`; visibility.md and rcsmaterial.md
   section 3):** (a) the alternate fog is selected per chunk by render flag `0x20` (35/35, 76/76), **not wired**;
   (b) the ceiling "extra meshes" are chunks with render flag `0x10`, which the original draws only into a 640x360
-  behind-the-glass target (4/3 wider projection) that the glass samples, never in the main view. Also: ours draws every PVS-allowed node-placed chunk (197) without a frustum test; the
+  behind-the-glass target (4/3 wider projection) that the glass samples, never in the main view. **Main view fixed
+  (they are left out); the target itself is not built**, so the panes show sky where the original shows its teal
+  target. Also: ours draws every PVS-allowed node-placed chunk (197) without a frustum test; the
   original tests each one's runtime world sphere.
 - **The sea sheet** (`water_test_2`, `y = -50.8`, seen from below) is now `vertex colour * (ambient + sun * N.L)` (it drew white).
   `paraboloidReflectionTex` is a **runtime 512x256 dual-paraboloid render of the environment** (sky above the middle row, teal
@@ -20,7 +22,11 @@
 
 ## Next Steps
 
-1. Wire the alternate fog for `render_flags & 0x20` chunks and re-compare at the maintainer pose. Measure whether
+1. Build the behind-the-glass target: `RENDER_BEHIND_GLASS` chunks plus the sky into an offscreen picture at 4/3
+   the main view's tangent (the original's is 640x360), the alternate fog for `0x20` chunks inside it, and the
+   tunnel glass's grab pass sampling it instead of `dst`. A capture of the target is
+   `data/scratch/hd-glass-opus/out/boot2/target_be.png` (rows as stored; which way up is not settled). Then
+   re-compare at the maintainer pose. Measure whether
    the 4/3 draw-versus-cull ratio holds at speed (`place --speed`, dump `0x00c49240..0x00c492b0` and the vertex
    constants in the hook's last round).
 2. RPCS3-capture a second circuit that `hd_add_second_census` shows moved (`place --hook`, same recipe).

@@ -2872,13 +2872,28 @@ the earlier capture named, ours draws 1305/1286 at the origin and 1311 off-scree
 [visibility.md](../ghidra/functions/ps3-hdfury-eu/visibility.md), 2026-10-07. Separately, ours draws all 197
 node-placed chunks the PVS allows with no frustum test, against the original's 5 or 6.
 
+**Wired (2026-10-07):** `rcsmodel::RENDER_BEHIND_GLASS` names the bit and the scene build leaves those chunks out of
+the main view, in both the node and the world-space pass; the load report counts them and says the target is not
+drawn. Pinned by `hd_behind_glass_ground_truth` (census: 210 chunks in each direction, no other file; build: none of
+them reaches a draw, the capture's main-view chunks do). At the tunnel pose the dark band and the mid-height girder
+are gone and the tunnel reads like the reference (`data/scratch/hd-glass-opus/trioA.png`: reference, before,
+after); the start slot is unchanged (`trioB.png`). **Not drawn: the behind-the-glass target itself**, so the panes
+now multiply the sky drawn behind them (cyan) where the original shows its target (sea surface and dunes under the
+alternate fog, teal). The sea sheet (`water_test_2`, chunks 6 and 23) is one of these chunks, so it too is drawn
+only in the target. Building the target is open: the `0x10` chunks and the sky into an offscreen picture at 4/3 the
+main view's tangent, the `0x20` alternate fog inside it (33 of the 35 alternate-fog draws are there), and the glass
+sampling it under that projection.
+
 ### 4. Lineage
 
 Omega ships `Water_noref` and `WATER_Test_2` (GNM shaders; the microcode classifiers do not run). **The light-bar family:** `diffuse_normal_specular_emmissive` is in Omega's `data00`, `data01` and `data02` archives
 (`rg -a` over the extraction); checked, applies, not wired (PS4 GNM programs, so the microcode check `pad_ne` makes does not
 run); 2048 differs (its own material names). **The sea:** checked, applies, not wired; Omega's probe would also be a runtime target
 (2048's per-environment `skyParaboloid.gxt` is the authored half of the same idea). **The alternate fog:** `Alternate Fog` keys
-exist in every HD-lineage `.envsettings`; Omega not checkable (no PS4 emulator).
+exist in every HD-lineage `.envsettings`; Omega not checkable (no PS4 emulator). **The behind-the-glass flag `0x10`:** checked, differs. Omega's
+Vineta K is a psp2-layout `track.final.rcsmodel` (the 2048 lineage), whose mesh records carry a `u16` of node flags
+(`0x0101`/`0x0201`) and no HD render-block halfword, so the bit has no counterpart this reader can see; whether Omega
+draws a separate behind-glass pass is not checkable (no PS4 capture path).
 
 ## See also
 
