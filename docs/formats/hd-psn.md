@@ -128,6 +128,69 @@ string exists, not how it is used. `file.gtf` is 64 x 64 `DXT3` (4,224 bytes, in
 on the disc too), so the nine-patch geometry the disc's `file2.gtf` (64 x 64
 `A8R8G8B8`) feeds applies unchanged.
 
+### The campaign
+
+**Same campaign as the disc's HD branch, measured by diff.** Read from the
+install and the disc (`data/scratch/hd-psn-campaign/`, cmp over every file):
+
+| What | PSN | Disc | Result |
+| --- | --- | --- | --- |
+| `data02` `Definition.xml`, `grid_00`..`07`, `CellMode_Definition.xml` (42,548 bytes), `Selection_Definition.xml` | `data02` | `DATA02` | **byte-identical**, all of them |
+| `data04` `Definition.xml`, `grid_00`..`07` (per-difficulty schema) | `data04` | `DATA04` | **byte-identical** |
+| `data04` `grid_00`..`07` against `DATA06`'s HD grids | `data04` | `DATA06` | identical bar one attribute: `DATA06`'s `<Values>` carries `Campaign="HD"`, the PSN copy does not (there is no second campaign to tell it from) |
+
+So the eight events, tracks, classes and medal targets are the disc's `grid0`..`grid7`,
+confidence 95 (full-file comparison, no field-level reading needed). What the PSN
+package does **not** carry is `DATA06`: the later build of `CellMode_Definition.xml`
+that adds `Campaign Selection` and `Grid Selection Fury`. Its one copy is the older
+one. `oag_title::Campaign::screen_archive` says which archive's copy to read
+(`Some(DATA06)` on the disc, `None` here, meaning the copy the mounts serve), and
+`load_hd` opens straight on `Grid Selection` whenever the pair `Campaign Selection` /
+`Grid Selection Fury` is not both authored. No new reader: it is the disc's HD
+reader over the older copy, and the older copy's `Grid Selection` and `Cell
+Selection` draw through the same draw list as `DATA06`'s.
+
+**Measured on RPCS3 (2026-10-07, confidence 90):** the PSN build booted from its own
+install (`rpcs3 --no-gui <EBOOT.BIN>`, a private profile copy, `Vulkan` on lavapipe,
+audio renderer `Null`, about 5.7 fps, so every key is held about a second) goes
+health warning, "Are you new", autosave notice, **MAIN MENU** (`CAMPAIGN` first),
+confirm, **`EVENT 01/08`** (no HD/Fury list in between), confirm, **`CHOOSE RACE`**.
+Frames: `data/scratch/hd-psn-campaign/shots/rpcs3-psn-main.png`, `rpcs3-psn-grid.png`,
+`rpcs3-psn-cell.png` (not committed). Not measured: a second entry point.
+
+**Ours, walked live** (windowed on `:96`, software Vulkan, `--no-audio`, a private
+profile): RACE CAMPAIGN clicked with the pointer opens `Grid Selection`
+(`shots/live-1-after-click.png`), a click on the card opens `Cell Selection`
+(`live-2-cell.png`), a click on the open hexagon launches Vineta K, lap 1 of 3, with
+opponents (`live-4-after.png`). `--menu-page grid-select` and `cell-select` match the
+disc's HD frames at the layout level (`shots/psn-grid-select.png`, `disc-grid-select-hd.png`).
+
+**Differences from the RPCS3 frames, and whether the disc has them too.** The
+`Cell Selection` layout is the right one (same panels, same positions), so the data
+is right; the art differs:
+
+- no `Event`/`Track`/`Speed Class`/`Weapons` emblems (RPCS3 draws an icon above each
+  value) - the disc's `cell-select-hd` has the same gap: **shared**, not PSN's;
+- values drawn grey where RPCS3 draws them teal - same on the disc's still: **shared**;
+- `TARGET` has no `(NOVICE)` suffix where RPCS3 shows `TARGET (NOVICE)` (the AI difficulty); ours draws the Gold/Silver/Bronze rows in their medal colours, RPCS3 in teal with no icons. The disc's `DATA06` layout draws medal icons instead, so this one is **PSN-specific**: the older `Target0/1/2` widgets, not compared further;
+- the hex lattice (`Bg_x_y`, `CM_HEX_Bg` = `0x50646464`, defined in `skin.xml` in
+  every copy) is a faint dark grey on our black background; RPCS3's frame is white
+  behind it on every screen of that run (including the main menu, so a property of
+  this lavapipe run, not the game's data), so it reads as a different picture.
+  Not a measured gap.
+
+None of these was chased: the lane is the reader and the wiring.
+
+**Medal atlas.** `Hexmedal_HD.gtf` has two copies on PSN as on the disc: `data02`'s
+flat 1024x256 (262,272 bytes) and `data04`'s per-difficulty 1024x768 (786,560). The
+disc read prefers `data04` through an archive-label suffix match, written for the
+disc's `PS3_GAME/USRDIR/DATA04.PSARC` and silently missing the PSN's
+`.../USRDIR/data04.psarc`: the PSN campaign fell back to the flat atlas. It matches
+by file name, case-folded, now (`same_archive`). Grid files: `read_name` serves
+`data02`'s flat copy on both sources (parity with the disc, unchanged); the PS3's
+own last-wins overlay would use `data04`'s per-difficulty ones, which is open on
+both and not changed here.
+
 ### The variant's Title data, each row against what the PSN package ships
 
 | Field | Disc (`TITLE`) | PSN | Why |
@@ -136,6 +199,8 @@ on the disc too), so the nine-patch geometry the disc's `file2.gtf` (64 x 64
 | `race.zone` | `Separate(zone_1..4)` | `SameCircuit` | the four Zone circuits are `DATA00`'s. Chosen, not measured |
 | `exhaust` | `enginetrail_bluered_triangle` (`DATA06`) | `enginetrail_triangle` (`data02`) | **measured**: the PSN executable names the plain `.vex` (table above), confidence 85 |
 | `front_end.menu` frame texture | `file2.gtf` (`DATA06`) | `file.gtf` (`data02`) | **measured**: the PSN executable names `file.gtf`, not `file2.gtf`, confidence 85 |
+| `campaign.screen_archive` | `Some(DATA06)` | `None` | the screen file is `data02`'s, the disc's own `DATA02` copy; **measured**, confidence 90 (below) |
+| `campaign.selection_strings` | `true` | `false` | the ids it overlays are `DATA06`'s alone |
 | `front_end.team_select`, `track_select` | `Team_/Track_Selection_Definition.xml` | `None` | both are `DATA06`'s; the race box keeps its plain TRACK and TEAM rows. The older `Selection_Definition.xml` the package carries is a different dialect and is not read |
 
 ### What draws differently, honestly absent
@@ -147,13 +212,13 @@ on the disc too), so the nine-patch geometry the disc's `file2.gtf` (64 x 64
   executable names none; the background is black.
 - **Race box.** The TRACK and TEAM rows list the package's own 16 circuits and 12 teams;
   the two Fury pickers are absent (`Team_/Track_Selection_Definition.xml`).
-- **Campaign: refused by name, not offered as a screen.** `--menu-page campaign-select`
-  says "this source has no Race Campaign to show: no `DATA06.PSARC` copy of
-  `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`". The RACE CAMPAIGN tab on our
-  main page still exists and opens nothing (it logs "RACE CAMPAIGN has nothing to show"),
-  as it does on any source whose campaign is unread. The package does carry
-  `grids/definition.xml` (`data02`/`data04`: eight grid references, `grid_00`-`grid_07`) and
-  a `cellmode_definition.xml`; reading that older dialect is open.
+- **Campaign: opens, straight on the base campaign.** The RACE CAMPAIGN tab opens
+  `Grid Selection` over the package's eight grids (`Event 01/08`), then `Cell
+  Selection`, and confirming a cell loads the race. There is no HD/Fury chooser
+  in front of it: see "The campaign" below for what the data says and the
+  RPCS3 frames that measure it. `--menu-page campaign-select` is refused (no
+  `Campaign Selection` screen exists to show); `grid-select`, `cell-select` and
+  `cell-select-hd` draw.
 - **Modes.** `time_trial`, `speed_lap`, `zone` and `single_race` each load on Vineta K
   with opponents, and the load reports are line-for-line the disc's. Eliminator is not
   reachable through `--mode`; its `WeaponStats_Elimination.xml` and the plain
@@ -207,6 +272,7 @@ formats: the evidence is the path census above and the existing pages.
   chosen there; not checked through a language-chosen boot.
 - Whether the PSN executable loads `DATA02`'s or `DATA03`'s copy of the 72 shared,
   differing files: `DATA03` first (chosen).
-- The older-dialect campaign (`cellmode_definition.xml`, eight grids) reader.
+- The per-difficulty `data04` grids against `data02`'s flat ones as the grid source (both sources read `data02`'s today).
+- The campaign `Cell Selection` art gaps above (emblems and value colours shared with the disc; the `TARGET (NOVICE)` header PSN-specific).
 - Whether a PS3 base HD races Zone on every circuit (`SameCircuit` is chosen).
-- A picker for the older `Selection_Definition.xml` dialect.
+- A picker for the older `Selection_Definition.xml` dialect: `data02`'s copy (29,440 bytes) is the disc's `DATA02` one byte for byte, and `data03`'s (62,322 bytes, the copy served) is a different, larger one. Not the same reader as the campaign's, so it stays open.

@@ -17,21 +17,14 @@ pub(super) enum CampaignKind {
     /// source with no campaign at all. `selected` is `0` for Fury (the
     /// default) and `1` for `Wipeout HD`, spelled `campaign-select` and
     /// `campaign-select@1`.
-    Selection {
-        selected: usize,
-    },
+    Selection { selected: usize },
     /// `hd_base` picks HD's base `grid0`..`grid7` over Fury's (the default,
     /// see [`campaign_page`]), and `tier` the page within them. Spelled
     /// `grid-select`, `grid-select-hd` and `grid-select-hd@3`.
-    Grid {
-        hd_base: bool,
-        tier: usize,
-    },
+    Grid { hd_base: bool, tier: usize },
     /// `hd_base` as on `Grid`: `cell-select-hd` draws the base campaign's first
     /// grid, `cell-select` Fury's.
-    Cell {
-        hd_base: bool,
-    },
+    Cell { hd_base: bool },
 }
 
 #[must_use]

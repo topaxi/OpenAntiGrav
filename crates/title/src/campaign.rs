@@ -81,6 +81,6 @@ pub struct Campaign {
     /// wrong one (Wipeout HD/Fury: `DATA06`'s later build, not `DATA02`'s).
     /// `None` reads the copy the source's ordinary precedence serves.
     pub screen_archive: Option<&'static str>,
-    /// Where the dialect, grids file and selection flag came from.
+    /// Where the dialect, grids file, selection flag and screen archive came from.
     pub origin: Origin,
 }

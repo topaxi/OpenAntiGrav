@@ -233,7 +233,15 @@ pub fn load(
 ) -> Result<Campaign> {
     match title.campaign.dialect {
         oag_title::CampaignDialect::Hd => {
-            return load_hd(title, archives, strings, faces, grid, base, fallback_globals);
+            return load_hd(
+                title,
+                archives,
+                strings,
+                faces,
+                grid,
+                base,
+                fallback_globals,
+            );
         }
         oag_title::CampaignDialect::Omega => {
             return load_omega(archives, strings, faces, grid, base, fallback_globals);
@@ -324,11 +332,19 @@ fn read_hd_texture(
         && let Some((_, blob)) = archives
             .read_every_name(path)
             .into_iter()
-            .find(|(label, _)| label.ends_with(oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
+            .find(|(label, _)| same_archive(label, oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE))
     {
         return Ok(blob);
     }
     archives.read_name(path)
+}
+
+/// Whether `label` names the archive `wanted` does, by file name and ignoring
+/// case: a disc labels its archives `PS3_GAME/USRDIR/DATA04.PSARC`, the PSN
+/// install `.../USRDIR/data04.psarc`.
+fn same_archive(label: &str, wanted: &str) -> bool {
+    let name = |path: &str| path.rsplit('/').next().unwrap_or(path).to_ascii_uppercase();
+    name(label) == name(wanted)
 }
 
 /// [`load`]'s Wipeout HD/Fury branch - the same shape, off
@@ -395,7 +411,8 @@ fn load_hd(
     .context("Cell Selection is not on this screen")?;
 
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
-    let (selection_layout, grid_layout_fury) = hd_selection_screens(title, &screens, strings, faces, grid);
+    let (selection_layout, grid_layout_fury) =
+        hd_selection_screens(title, &screens, strings, faces, grid);
     let flyer_names: Vec<String> = grids
         .iter()
         .filter_map(|grid| grid.flyer_name.clone())

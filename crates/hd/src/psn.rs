@@ -74,11 +74,15 @@ const FRONT_END: &FrontEnd = &FrontEnd {
 /// Selection Fury` screen, so there is no HD or Fury choice to put in front.
 /// `screen_archive: None` reads the copy the source's precedence serves, and
 /// `selection_strings` is off because the ids it overlays are `DATA06`'s alone.
-/// Chosen, not measured: that the PS3 build opens the screens this way.
+///
+/// **Measured, confidence 90**: the PSN build booted under RPCS3 (2026-10-07)
+/// goes MAIN MENU, CAMPAIGN, straight to `EVENT 01/08` (the base campaign's first
+/// grid), then `CHOOSE RACE` on a confirm; no HD/Fury list appears. Not measured:
+/// that this is the only path (a second entry point was not looked for).
 const CAMPAIGN: &oag_title::Campaign = &oag_title::Campaign {
     selection_strings: false,
     screen_archive: None,
-    origin: oag_title::Origin::Chosen,
+    origin: oag_title::Origin::Measured,
     ..*TITLE.campaign
 };
 
