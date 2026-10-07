@@ -373,3 +373,7 @@ elsewhere, and that no speed scalar exists to find here.
 
 `0x00992ce0` is left unnamed. Only its `+0x4` is understood - a frame counter -
 which is not enough to say what the struct is.
+
+## The body's pose fields, and writing them (2026-10-07)
+
+`+0x1d0/+0x1e0/+0x1f0` basis rows, `+0x200` position, `+0x110..+0x130` the transpose, `+0x190` velocity; the player is `ship+0x6944` in the array at `0x0098d7c0`. Confidence 88. Evidence and the teleport that writes them: [rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md#teleporting-the-craft-in-hd-2026-10-07-rpcs3-teleport).

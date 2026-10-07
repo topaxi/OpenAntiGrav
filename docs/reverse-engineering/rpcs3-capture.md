@@ -708,6 +708,122 @@ screenshot, the "camera null" lines can be ignored. Two fixes the lane made to `
 config's directory, not the lane's); frame it with `ffmpeg -ss S -t 4 -i x.mp4 -vf fps=30`. Used for the
 HD magstrip jitter scales and tuning block: `docs/ghidra/functions/ps3-hdfury-eu/magstrip-wake.md`.
 
+## Teleporting the craft in HD (2026-10-07, rpcs3-teleport)
+
+`rpcs3-drive.py place --pose X,Y,Z[,YAW] [--pose ...]` puts the player's craft
+at a world position in a running race, settles, and photographs it - the
+RPCS3 counterpart of `psp-drive.py place`, with `oag-game --pose` as the
+matching render. One boot serves any number of poses.
+
+    uv run --with evdev python3 scripts/rpcs3-drive.py --image <abs>/hdfury-ps3-eu-dec.iso \
+        --log-dir data/scratch/<lane>/logs place \
+        --track 'Data\Environments\01_Vineta_K\track.vex' \
+        --nav "Main Menu=right" --nav "Track Creation=right,right,right,right,right,right,right,right,right,right,right,right" \
+        --oag-game <abs>/target/release/oag-game --out <dir> --pose=-839.8,-146.6,215.0
+
+Each shot writes `NN.png` (trimmed, 1600x1058 at the default geometry) and
+`NN.json` (asked pose, the pose the game kept, the pose 3 s later, drift).
+
+**The chain (confidence 90, one boot to read it, three boots to reuse it).**
+The craft array at `0x0098d7c0` holds eight ship pointers (stride 4); the
+player's has `ship+0x7a60 == 0`, the others `0xffffffff`. `*(ship+0x6944)` is
+the rigid body, and `*(*(ship+0x5fac)+0x270)` is the same pointer - the
+`physics.md` statement that the craft entry and the world's body are one
+object, confirmed live. The ships and bodies are on the heap and move between
+boots (`0x33fb96e0`, `0x33fbe4e0`, `0x33fce8f0`...), so the chain is walked
+every run.
+
+**The body's fields (confidence 88)**, by reading them while driving, then
+by writing them:
+
+| Offset | Content | Evidence |
+| --- | --- | --- |
+| `+0x1d0 +0x1e0 +0x1f0` | basis rows, w 0: row0 = cross(row1, row2), row1 up, row2 forward | orthonormal; row2 equals the direction of travel; the same row order `psp-drive.py place` writes |
+| `+0x200` | position, w 1 | slots 0-7 on the grid are `(6.1, -51.9, -195.9)` ... `(-132.3, -51.5, -175.2)` |
+| `+0x110 +0x120 +0x130` | 3x3 transpose of the rows, 16-byte stride | equals the rows' columns |
+| `+0x190` | linear velocity | 120 along row2 at speed |
+| `+0x1a0 +0x1b0 +0x1c0` | three more xyz vectors (w 1.0), zeroed by `place` | changed with steering; role not isolated |
+
+**World coordinates are ours, with no transform (confidence 85).** The eight
+grid positions were read off the bodies; only slot 0 was compared with
+`oag-game` (the trace gives the player slot alone):
+(slot 0: `(6.10, -51.91, -195.92)` live against `(6.075, -50.08, -195.83)`
+before our hover settles, forward `+x` in both) - both x and z are
+discriminating, so an axis flip or a handedness change would show; none does.
+The matched pictures below are the second check.
+
+**The write is a plain paused write, and it is enough (confidence 85).**
+The stub stops the whole emulator, so no breakpoint in the craft update is
+needed (an async pause could in principle land
+mid-step; none of the 11 placements showed it). A body-only
+write of position and rows followed in the next tick: of the position triples
+within 15 units of the body on the ship (14) and the entry (13), every one on
+the entry and 11 of 14 on the ship followed; the three that did not
+(`ship+0x160`, `+0x62e0`, `+0x6320`) did not follow, and what reads them is unknown. The hull points and probes on the entry re-derived from the body, and the first frame after a settle shows the camera at the new place. So `place` writes the body only, and the 11 placements below show nothing relying on those three.
+
+**The game accepts it.** Placed with `--speed 0` (11 placements over 5 boots in total, five of them in the table) on Talon's Junction at three
+points and Vineta K at the maintainer's, settled 8 s and re-read 3 s later:
+
+| Pose asked | Kept after 8 s | Drift | Moved in next 3 s |
+| --- | --- | --- | --- |
+| Talon's `-297.96,-50.5,-172.83` | `-298.0,-49.5,-172.8` | 1.0 | 0.0 |
+| Talon's `161.4,-37.9,194.4` | `159.8,-38.1,192.9` | 2.2 | 0.9 |
+| Talon's `-200.1,-70.0,77.3` | `-203.0,-70.7,73.5` | 4.9 | 1.4 |
+| Vineta K `-839.8,-146.6,215.0` (same on each of 3 boots) | `-840.6,-146.7,214.2` both | 1.1 | 0.3 |
+| Vineta K, same with yaw 180 | `-841.0,-146.8,213.6` | 1.8 | 1.1 |
+
+No respawn and no snap-back on any placement, including the 470-unit jump.
+Both placements at the Vineta point settle to the same coordinates to 0.1,
+so the settle is deterministic from rest. The drift is a slow creep along the
+slope of the track at rest, not a correction.
+
+**Two traps that cost a boot each.**
+
+1. **A write during the fly-over does nothing.** The race opens on a `START
+   RACE` prompt over a fly-over, and the craft is pinned to its grid slot
+   until the countdown ends: the first run read back `-132.3,-51.4,-175.2`
+   after all three writes. `place` taps cross and waits `--countdown` (25 s).
+2. **A second member's RPCS3 shares everything by default.** Run an own
+   instance with `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME`/
+   `XDG_STATE_HOME` under the lane's scratch (copy `dev_hdd0`, `dev_flash` and
+   `config.yml`; 3.4 GB, `cp --reflink=auto`), `OAG_RPCS3_DISPLAY`,
+   `OAG_RPCS3_GDB=127.0.0.1:<port>`, and **`OAG_RPCS3_PAD_NAME`**: RPCS3's
+   evdev profile binds a pad by name, so two instances both naming
+   `OpenAntiGrav Virtual Pad` can bind each other's device. `rpcs3_pad.py`
+   reads the variable for both the uinput name and the profile
+   (`rpcs3_pad.install_input_config` into the lane's own config dir).
+   `rpcs3-drive.py stop` is `pkill -x rpcs3` and reaches every instance: never
+   use it beside another member.
+
+**Frame size matters.** The 1600x1200 default display clips a 1920-wide frame: the first Talon's and Vineta pictures lost their right edge (the `POS` readout is cut). Run with `OAG_RPCS3_GEOMETRY=2000x1200x24` and `Resolution Scale: 100` and the trimmed shot is 1882x1058, 16:9 and whole; render ours with `--size 1882x1058`. Render ours at the **kept** pose (`render_with` in the JSON does), not the asked one: the settle moves the craft up to 5 units. `--team feisar_c1 --variant concept1` is recorded, the walks' default hull; the original's hull still reads darker than ours in the pair, which this lane did not chase.
+
+**Camera.** `--camera-shots N` reads the pushbuffer N times per pose and runs the cross-frame pick; on a craft at rest it answered `camera null (no frame-unique value loaded ...)` for both poses on one boot, because nothing varies between frames. A placement with `--speed` above 0 might give it material; not tried.
+
+**Boot repeatability.** The Vineta point kept `-840.6,-146.7,214.2` on each of three separate boots (with and without yaw 180: `-841.0,-146.8,213.6-213.7`).
+
+**Matched pictures.** `data/reference/hd-capture/talons-teleport/` (three
+poses, clipped frames) and `data/reference/hd-capture/vineta-teleport/` (the maintainer's
+point and yaw 180, whole frames; `pair-00.png` is RPCS3 left, ours right). Talon's
+matches in geometry, pad and lane at all three points. At Vineta K the
+tunnel's curve and the wall are the same, and the **original shows a lit
+floor and a teal hexagonal glass ceiling where ours shows a black water floor and a dark ceiling** - the maintainer's
+report reproduces from the original side. The craft's own yaw in the RPCS3
+frame (about 15 degrees) is the game's visual banking: the body's rows read
+back identical to what was written.
+
+**Attitude.** `place` takes the basis from `oag-game --pose ... --trace-out`
+row 0 (the same nearest-spline-sample rule our side uses), so both sides
+share one attitude rule. The camera is the game's own chase camera, which
+snaps with the craft: the first frame after the settle already frames the new
+place. The RPCS3 screenshot is 1600x1058 against our 1280x720, so compare
+by landmark, not by pixel.
+
+**Omega: not checkable.** No PS4 emulator is in the toolchain, so there is no
+live body to read; its executable would need the same chain re-derived by
+static reading. **2048:** the Vita3K path is a separate lane. **No `just`
+recipe**: every other `rpcs3-drive.py` subcommand is called directly, and the
+command needs a per-lane environment a recipe would hide.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
