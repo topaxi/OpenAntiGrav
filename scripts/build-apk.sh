@@ -2,7 +2,12 @@
 # Builds the Android APK: oag-game as a NativeActivity cdylib, no Java, no game
 # content. Output: target/apk/OpenAntiGrav-<version>-android-arm64.apk
 #
-#   scripts/build-apk.sh [--version V] [--debug]
+#   scripts/build-apk.sh [--version V] [--debug] [--arm64-only]
+#
+# The APK also carries an x86_64 library when the x86_64-linux-android rust target
+# is installed (and `--arm64-only` is not given): a phone ignores it, and it is
+# what lets the APK run in Waydroid on a development machine. See
+# docs/tools/android.md, "Testing without a phone".
 #
 # Needs: the aarch64-linux-android rust target, cargo-ndk, and an Android SDK
 # (ANDROID_HOME) with build-tools and one platform, plus an NDK (ANDROID_NDK_HOME,
@@ -19,16 +24,21 @@ cd "$root"
 
 version=""
 profile=release
+x86=auto
 while [ $# -gt 0 ]; do
     case "$1" in
         --version) version="$2"; shift 2 ;;
         --debug) profile=debug; shift ;;
+        --arm64-only) x86=no; shift ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 if [ -z "$version" ]; then
     version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 fi
+# What `oag-game --version` prints on desktop, so the installed app reports the
+# same thing (`just deploy-android` reads it back off the device).
+version_name="$version ($(git -C "$root" rev-parse --short=7 HEAD 2>/dev/null || echo unknown))"
 
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 [ -n "$sdk" ] || { echo "ANDROID_HOME is not set" >&2; exit 1; }
@@ -53,9 +63,29 @@ mkdir -p "$stage/lib/arm64-v8a"
 
 cargo_profile=(--release)
 [ "$profile" = release ] || cargo_profile=()
-cargo ndk -t arm64-v8a -P "$api" build -p oag-game --example oag_android --features android "${cargo_profile[@]}"
+ndk_targets=(-t arm64-v8a)
+if [ "$x86" = auto ] && rustup target list --installed 2>/dev/null | grep -qx x86_64-linux-android; then
+    x86=yes
+    ndk_targets+=(-t x86_64)
+    mkdir -p "$stage/lib/x86_64"
+fi
+cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --features android "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 "$llvm_strip" --strip-all -o "$stage/lib/arm64-v8a/liboag_android.so" "$so"
+if [ "$x86" = yes ]; then
+    "$llvm_strip" --strip-all -o "$stage/lib/x86_64/liboag_android.so" \
+        "$root/target/x86_64-linux-android/$profile/examples/liboag_android.so"
+fi
+
+# The launcher icon: the same rasteriser the AppImage and the window icon use
+# (`oag_game::icon`), at the five densities' launcher sizes.
+res="$stage/res"
+host_game="$root/target/debug/oag-game"
+cargo build -q -p oag-game
+for density in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+    mkdir -p "$res/mipmap-${density%%:*}"
+    "$host_game" --write-icon "$res/mipmap-${density%%:*}/ic_launcher.png" --icon-size "${density##*:}" >/dev/null
+done
 
 # versionCode: 0.1.0 -> 100, so a later tag always installs over an earlier one.
 IFS=. read -r major minor patch <<<"${version%%-*}"
@@ -66,12 +96,12 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.openantigrav.game"
     android:versionCode="$code"
-    android:versionName="$version">
+    android:versionName="$version_name">
     <uses-sdk android:minSdkVersion="$api" android:targetSdkVersion="34" />
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
-    <application android:label="OpenAntiGrav" android:hasCode="false" android:extractNativeLibs="true">
+    <application android:label="OpenAntiGrav" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:hasCode="false" android:extractNativeLibs="true">
         <activity android:name="android.app.NativeActivity"
             android:exported="true"
             android:label="OpenAntiGrav"
@@ -90,9 +120,12 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
 MANIFEST
 
 base="$out/base.apk"
+flat="$stage/flat"
+mkdir -p "$flat"
+"$build_tools/aapt2" compile --dir "$res" -o "$flat"
 "$build_tools/aapt2" link -I "$android_jar" --manifest "$stage/AndroidManifest.xml" \
-    --min-sdk-version "$api" --target-sdk-version 34 -o "$base" --auto-add-overlay
-(cd "$stage" && zip -q -D "$base" lib/arm64-v8a/liboag_android.so)
+    --min-sdk-version "$api" --target-sdk-version 34 -o "$base" --auto-add-overlay "$flat"/*.flat
+(cd "$stage" && zip -q -D "$base" lib/*/liboag_android.so)
 
 aligned="$out/aligned.apk"
 rm -f "$aligned"

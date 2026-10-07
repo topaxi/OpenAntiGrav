@@ -594,6 +594,11 @@ deploy-android *ARGS:
 launch-android *ARGS:
     ./scripts/launch-android.sh "$@"
 
+# Follow the app's log (`adb logcat -s oag`) on the picked adb device; --clear,
+# --dump, `-- ARGS` for another filter. See scripts/logcat-android.sh
+logcat-android *ARGS:
+    ./scripts/logcat-android.sh "$@"
+
 # Pick game data (disc images, DLC, unpacked 2048/Omega packages, Pure's DLC
 # keys) in an fzf multiselect, each row marked as already on the device or not,
 # and copy it: `just push-data deck [user@host]` or `just push-data android`.
@@ -1098,8 +1103,13 @@ capture-ghidra-state raw *ARGS:
 check-ghidra-import *ARGS:
     python3 scripts/check-ghidra-import.py "$@"
 
-# Cross-build the Windows oag-game (MinGW or zig) and run it under wine in its
-# own prefix: `just wine-run --dry-run ...`. See docs/tools/wine.md
+# Cross-build the Windows oag-game (MinGW, else zig) for wine, without running it:
+# RELEASE=1 for a release build. See docs/tools/wine.md
+wine-build:
+    ./scripts/wine-run.sh build
+
+# Build it, then start it under wine in its own prefix (a window on $DISPLAY):
+# `just wine-run --dry-run ...`. See docs/tools/wine.md
 wine-run *ARGS:
     ./scripts/wine-run.sh run {{ARGS}}
 

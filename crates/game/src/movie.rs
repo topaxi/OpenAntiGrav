@@ -1449,7 +1449,7 @@ fn ffmpeg_missing() -> bool {
         );
         if missing {
             warn!(
-                "ffmpeg is not installed, so the intro and other movies play with no \
+                "ffmpeg is not installed, so the intro is skipped and movies show no \
                  picture (the game is otherwise fine). Install ffmpeg to see them; \
                  `--no-video` hides this message"
             );
@@ -1477,7 +1477,7 @@ fn run_ffmpeg(
     if ffmpeg_missing() {
         bail!(
             "ffmpeg is not on PATH. Install it to see the intro video; \
-             without it the sequence still plays, with a black picture"
+             without it the intro is skipped"
         );
     }
     // Said before rather than after, because the whole 1200-frame intro takes
@@ -1567,7 +1567,7 @@ fn run_ffmpeg(
         ),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
             "ffmpeg is not on PATH. Install it to see the intro video; \
-             without it the sequence still plays, with a black picture"
+             without it the intro is skipped"
         ),
         Err(e) => Err(e).context("running ffmpeg"),
     }

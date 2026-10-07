@@ -229,6 +229,9 @@ pub fn advice(row: &Candidate) -> Option<String> {
 pub struct Launcher {
     rows: Vec<Candidate>,
     cursor: usize,
+    /// What to say instead of a list when there is no disc image to list, from
+    /// [`Self::not_found`]. `None` for an ordinary chooser.
+    notice: Option<Vec<String>>,
 }
 
 impl Launcher {
@@ -241,7 +244,31 @@ impl Launcher {
     #[must_use]
     pub fn new(rows: Vec<Candidate>) -> Self {
         let cursor = rows.iter().position(Candidate::is_playable).unwrap_or(0);
-        Self { rows, cursor }
+        Self {
+            rows,
+            cursor,
+            notice: None,
+        }
+    }
+
+    /// A chooser with nothing to choose, which says why instead.
+    ///
+    /// For a build with no terminal to print `resolve`'s not-found message to
+    /// (a phone): the same screen the chooser is drawn on carries the text, so a
+    /// player is told what to do rather than shown a window that closes.
+    #[must_use]
+    pub fn not_found(notice: Vec<String>) -> Self {
+        Self {
+            rows: Vec::new(),
+            cursor: 0,
+            notice: Some(notice),
+        }
+    }
+
+    /// The not-found text, when this is that screen.
+    #[must_use]
+    pub fn notice(&self) -> Option<&[String]> {
+        self.notice.as_deref()
     }
 
     /// The rows, in the order they are drawn.
@@ -349,6 +376,26 @@ impl Launcher {
     }
 }
 
+/// The lines for a build that has nowhere to print `resolve`'s not-found message.
+///
+/// `images` is the directory a disc image is searched for in, spelled the way
+/// `adb push` needs it. Each line fits the 480-unit screen in the engine's own
+/// 5x7 face (74 characters), which is why the destination is a line of its own
+/// and `not_found_lines_fit_the_screen` pins it.
+#[must_use]
+pub fn not_found_notice(images: &str) -> Vec<String> {
+    vec![
+        "OpenAntiGrav ships no game content.".to_string(),
+        "Copy your own disc image onto the device, then start".to_string(),
+        "the app again. From a computer with the phone attached:".to_string(),
+        String::new(),
+        format!("adb push {} \\", oag_source::source::IMAGE_NAMES[0]),
+        format!("  {images}/"),
+        String::new(),
+        "Any .chd or .iso name works for Pulse, Pure and HD.".to_string(),
+    ]
+}
+
 /// What the screen looks like: a heading, one line per candidate, and a footer.
 ///
 /// Drawn in the 480x272 grid every other screen of ours is authored in - this
@@ -362,6 +409,25 @@ pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
     }];
 
     out.push(text(MARGIN, 24.0, 1.0, HEADING, "OPENANTIGRAV"));
+    if let Some(notice) = launcher.notice() {
+        out.push(text(
+            MARGIN,
+            40.0,
+            1.0,
+            UNAVAILABLE_COLOUR,
+            "NO DISC IMAGE FOUND",
+        ));
+        for (index, line) in notice.iter().enumerate() {
+            out.push(text(
+                MARGIN,
+                FIRST_ROW + index as f32 * ROW,
+                1.0,
+                TEXT,
+                line,
+            ));
+        }
+        return out;
+    }
     out.push(text(MARGIN, 40.0, 1.0, DIM, "SELECT A DISC IMAGE"));
 
     for (index, row) in launcher.rows().iter().enumerate() {

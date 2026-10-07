@@ -23,7 +23,8 @@ mod render_overrides;
 #[command(
     name = "oag-game",
     about = "Run a Wipeout game (Pulse, Pure, HD/Fury, 2048 or Omega) from your own copy",
-    version
+    // The commit too, so a deployed build can be told from the last one.
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("OAG_GIT_HASH"), ")")
 )]
 pub(crate) struct Cli {
     /// Your game: a disc image (`.chd` or `.iso`, for Pulse, Pure or HD/Fury),
@@ -152,7 +153,7 @@ pub(crate) struct Cli {
     ///
     /// The game boots and runs normally while it happens, and progress goes to
     /// stdout. Interrupting is safe: both caches are keyed by content, so the
-    /// next run picks up whatever finished. See `oag_game::prefetch`.
+    /// next run picks up whatever finished. With `--dry-run` it is the whole run, no window: `oag_game::prefetch`.
     #[arg(long)]
     pub(crate) prefetch: bool,
 
@@ -414,7 +415,7 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trace: bool,
 
-    /// Report what was loaded and exit, without rendering anything.
+    /// Report what was loaded and exit, without rendering. With `--prefetch`: convert everything, write the cache manifest, then exit.
     #[arg(long)]
     pub(crate) dry_run: bool,
 

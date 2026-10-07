@@ -90,10 +90,14 @@ fn the_default_boot_opens_the_movie_the_disc_opens() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_reel_leg_still_runs_its_frame_holds() {
+fn the_reel_leg_without_a_picture_skips_straight_to_the_picker() {
     // `--reel`. The state is real and evidenced - its `OnEnter` caches
     // `"DevPubRedirect"` at `0x088d7d80` - but the disc's boot never enters it,
-    // so this is the only thing keeping the path from rotting.
+    // so this is the only thing keeping the path from rotting. This load decodes
+    // no picture, and a movie with no picture is skipped the way a Start press
+    // skips it: no frame holds, straight through `DevPubRedirect`. The holds at
+    // 144, 231 and 260 (0x088d7e1c) need a picture and are pinned by
+    // `oag-ui`'s `pauses_at_144_then_231_then_finishes_at_260`.
     let Some(loaded) = load_leg(oag_ui::frontend::Leg::DevPubReel, boot::DEVPUB_REEL) else {
         return;
     };
@@ -103,22 +107,15 @@ fn the_reel_leg_still_runs_its_frame_holds() {
 
     assert_eq!(frontend.machine().current(), Some(states::INTRO_MOVIE));
 
-    let mut held_at = Vec::new();
     for _ in 0..3600 {
         if frontend.machine().is(states::LANGUAGE_SELECTION) {
             break;
         }
         input.begin_frame(0);
         frontend.update(dt, &mut input, None);
-        if frontend.player().is_paused() {
-            let frame = frontend.player().frames_produced();
-            if !held_at.contains(&frame) {
-                held_at.push(frame);
-            }
-        }
+        assert!(!frontend.player().is_paused(), "no picture, so no holds");
     }
 
-    assert_eq!(held_at, [144, 231, 260], "the holds at 0x088d7e1c");
     assert_eq!(
         frontend.machine().history(),
         [
@@ -270,9 +267,9 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 
     assert_eq!(frontend.machine().current(), Some(states::LOGO_FMV));
 
-    // Let the movie play itself out. Sixty seconds of simulated time is well
-    // past the forty the intro runs for; `LogoFMV` has no frame holds, because
-    // its `Movie` widget has no frame counters.
+    // This load decodes no picture, so the movie is skipped the way a Start
+    // press skips it (through `LogoFMVRedirectScreen`) instead of being played
+    // out. Sixty seconds of simulated time is far more than that needs.
     for _ in 0..3600 {
         if frontend.machine().is(states::LANGUAGE_SELECTION) {
             break;
@@ -288,7 +285,11 @@ fn the_sequence_runs_from_boot_to_launch_game() {
 
     assert_eq!(
         frontend.machine().history(),
-        [states::LOGO_FMV, states::LANGUAGE_SELECTION],
+        [
+            states::LOGO_FMV,
+            states::LOGO_FMV_REDIRECT,
+            states::LANGUAGE_SELECTION
+        ],
         "no DevPubRedirect on this leg: it belongs to Intro Screen->IntroMovie1, \
          which the disc's own boot never enters"
     );
@@ -335,6 +336,7 @@ fn the_sequence_runs_from_boot_to_launch_game() {
         frontend.machine().history(),
         [
             states::LOGO_FMV,
+            states::LOGO_FMV_REDIRECT,
             states::LANGUAGE_SELECTION,
             states::SHOW_LOGO,
             states::LAUNCH_GAME,

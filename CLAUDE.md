@@ -149,6 +149,12 @@ is a second, independent way real data can look absent when it isn't -
 distinct from the sandbox issue above, and it can bite even the
 orchestrating session, not only a spawned agent.
 
+## Commit messages
+
+End a commit with the `Co-Authored-By:` trailer naming the model, and nothing
+else of that kind: **no `Claude-Session:` line or other session link**, whatever
+an attribution template suggests (maintainer's rule).
+
 ## Architecture
 
 **Core principle: the simulation must not know a renderer exists.** It takes an input

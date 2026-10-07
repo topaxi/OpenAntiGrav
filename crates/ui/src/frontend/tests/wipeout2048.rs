@@ -122,10 +122,9 @@ pub(super) fn press(frontend: &mut Frontend, input: &mut Input, button: Button) 
 fn reach_the_grid(frontend: &mut Frontend, input: &mut Input) {
     tick(frontend, input, 0);
     assert!(frontend.machine().is(w2048::BOOT_STUDIO_LOGO));
+    // The fixture's intro has no picture, so it leaves by itself on the tick
+    // after the press, and the save check passes through on the next one.
     press(frontend, input, Button::Cross);
-    assert!(frontend.machine().is(w2048::BOOT_INTRO_MOVIE));
-    press(frontend, input, Button::Cross);
-    // The save check passes through on its own tick.
     tick(frontend, input, 0);
     assert!(frontend.machine().is(w2048::TITLE_SCREEN));
     press(frontend, input, Button::Start);
@@ -134,7 +133,7 @@ fn reach_the_grid(frontend: &mut Frontend, input: &mut Input) {
 
 #[test]
 fn boot_connect_leaves_on_its_first_tick_and_the_card_on_its_authored_delay() {
-    let mut frontend = boot(0);
+    let mut frontend = boot(30);
     let mut input = Input::new();
     assert!(frontend.machine().is(w2048::BOOT_CONNECT));
     tick(&mut frontend, &mut input, 0);
@@ -156,29 +155,23 @@ fn boot_connect_leaves_on_its_first_tick_and_the_card_on_its_authored_delay() {
 }
 
 #[test]
-fn an_unmeasured_intro_waits_for_an_authored_button_and_says_so() {
+fn an_unmeasured_intro_is_skipped_and_says_so() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     tick(&mut frontend, &mut input, 0);
     press(&mut frontend, &mut input, Button::Cross);
-    assert!(frontend.machine().is(w2048::BOOT_INTRO_MOVIE));
-    for _ in 0..600 {
-        tick(&mut frontend, &mut input, 0);
-    }
-    assert!(frontend.machine().is(w2048::BOOT_INTRO_MOVIE));
-    // Circle is not one of this fixture's redirects; square is.
-    press(&mut frontend, &mut input, Button::Circle);
-    assert!(frontend.machine().is(w2048::BOOT_INTRO_MOVIE));
-    tick(&mut frontend, &mut input, Button::Square.bit());
-    assert!(frontend.machine().is(w2048::LOAD_SAVE_BOOTUP));
+    assert!(
+        frontend.machine().is(w2048::LOAD_SAVE_BOOTUP),
+        "no picture, so the intro leaves with no button"
+    );
     let notes = frontend.take_notes();
     assert_eq!(
         notes
             .iter()
-            .filter(|note| note.contains("length is unknown"))
+            .filter(|note| note.contains("no picture"))
             .count(),
         1,
-        "said once, not every tick: {notes:#?}"
+        "said once: {notes:#?}"
     );
 }
 
@@ -311,7 +304,7 @@ fn a_hover_moves_the_cursor_without_choosing() {
 
 #[test]
 fn the_boot_screens_draw_off_the_pad_and_only_the_movie_screen_plays() {
-    let mut frontend = boot(0);
+    let mut frontend = boot(30);
     let mut input = Input::new();
     tick(&mut frontend, &mut input, 0);
     assert!(!frontend.is_playing_movie());

@@ -8,6 +8,7 @@ UMU-Proton 9.0-3.2, an AMD RADV GPU.
 ## The recipe
 
 ```sh
+just wine-build                                          # cross-build only
 just wine-run --dry-run data/images/pulse-psp-eu.chd     # cross-build, then run under wine
 just wine-run --race --screenshot out.png --ticks 120 data/images/pulse-psp-eu.chd
 just wine-check                                          # the determinism tests and reports, as .exe under wine

@@ -50,9 +50,8 @@ Optional:
 
 - **`ffmpeg`** converts each game's intro movie the first time you boot a
   title. Without it the program logs one line, `ffmpeg is not installed, so
-  the intro and other movies play with no picture`, skips the conversion, and
-  the intro plays as a black screen with the text
-  `INTRO FRAME n / N (NO PICTURE)`; everything else works. With it the
+  the intro is skipped and movies show no picture`, skips the conversion, and
+  the intro is skipped straight to the menu; everything else works. With it the
   first Pulse boot spends about 80 seconds converting, once, and caches the
   result.
 - `just` runs the repository's recipes (`just play ...`). Not needed to play.
@@ -256,7 +255,7 @@ do not expect a finished game outside Pulse.
 | `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
 | `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
 | `... is an encrypted PS3 disc image ...` | The HD image is still encrypted. Decrypt it as in section 2. With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
-| Black screen with `INTRO FRAME n / N (NO PICTURE)`, and the log line `ffmpeg is not installed, so the intro and other movies play with no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
+| The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |
 | `frame: 50 ms` warnings fill the terminal | You are on a CPU renderer. Lower RENDER SCALE in the options. The log file is quieter |

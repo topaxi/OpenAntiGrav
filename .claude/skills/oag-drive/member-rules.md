@@ -113,6 +113,8 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   silently deleted six committed examples that docs cite as reproducers.
 - Commit early and often. If pinentry blocks, use `git commit --no-gpg-sign`.
   End every message with a `Co-Authored-By:` trailer naming your own model.
+  Never add a `Claude-Session:` line or any other session link (maintainer's
+  rule, also in `CLAUDE.md`).
 - Never merge into main. The lead merges.
 - Committed golden hashes are never edited to make a test pass. If behaviour
   legitimately moves, regenerate from your own tree in a **separate** commit
