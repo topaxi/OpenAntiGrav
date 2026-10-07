@@ -25,8 +25,11 @@ Ours (0.15, rescaled, linear) already has that shape.
 
 ## Open
 
-- Maintainer's call: keep 0.15 linear, move to Omega's 0.1 linear (one constant,
-  `STICK_DEADZONE`), or offer Pulse's curve as an `original` value on Pulse.
+- **Deferred by the maintainer (2026-10-07)**, not rejected: keep 0.15 linear, move
+  to Omega's 0.1 linear (one constant, `STICK_DEADZONE` in `crates/input/src/pad.rs`,
+  the lead's recommendation - the modern titles' shape is already ours, only the
+  deadzone differs), or offer Pulse's curve as an `original` value on Pulse. Ask
+  again before changing it; do not pick one in a lane.
 - HD live check not done: the byte-to-float stage upstream of `PlayerInput`
   (does HD zero a byte window like Omega's `Pad` layer, `/128` or `/127.5`)
   needs the RPCS3 sweep written in
