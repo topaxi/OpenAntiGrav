@@ -79,16 +79,19 @@ Tooling looks for these names. Copy your own images here and rename:
 
 `.iso` works anywhere `.chd` does; the tools sniff the container. **When a title has both a Europe and a USA image, `oag-game` opens the Europe one**; name the USA one to play it.
 
-### The PS3 image is encrypted, and nothing here decrypts it yet
+### The PS3 image is encrypted, and is read that way
 
 `hdfury-ps3-eu.iso` is a standard redump encrypted image: the ISO 9660
 filesystem is plaintext (`PS3_DISC.SFB`, `PARAM.SFO` and `ICON0.PNG` all read
 normally, and `oag-unpack list` walks it fine), while everything under
 `PS3_GAME/USRDIR/` - `DATA00..06.PSARC`, `EBOOT.BIN`, `DFENGINE.SPRX` - is
-AES-encrypted under the disc key. Decrypting needs this pressing's redump
-`.dkey`, then `PS3Dec`; the SELF then needs `scetool` before Ghidra, with
-[Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts) for the
-PPC64/PRX side.
+AES-encrypted under the disc key. `oag-disc` decrypts sector by sector as it
+reads, with the key from `hdfury-ps3-eu.dkey` beside the image (this pressing's
+redump `.dkey`, git-ignored and never committed), from `~/.config/oag/keys/`, or
+entered in the chooser. `hdfury-ps3-eu-dec.iso` is a decrypted copy kept for
+tests that compare the two. For Ghidra the SELF still needs `scetool` (or
+`rpcs3 --decrypt`) and [Ps3GhidraScripts](https://github.com/clienthax/Ps3GhidraScripts)
+for the PPC64/PRX side; that is layer 2 and is not touched here.
 
 ### The PSN Wipeout HD download is read from its installed folder
 
@@ -100,6 +103,14 @@ and [`docs/formats/hd-psn.md`](../docs/formats/hd-psn.md). The licence file the
 download comes with is yours and is never committed.
 
 ### Vita PKGs decrypt in four steps; `data/extracted/vita/` holds the result
+
+**The engine itself no longer needs steps 1 and 2 for a game it reads**: a
+NoNpDrm `.vpk` (a ZIP of the installed folder, plain files) is read in place, see
+[`docs/formats/vita-package.md`](../docs/formats/vita-package.md) and
+`scripts/make-test-vpk.sh`, which builds test `.vpk` files into `data/test-vpk/`
+from the extracted folders below. A `.pkg` is refused by name: step 2's PFS key is
+derived by the console's F00D (which `psvpfsparser` reaches over a key service),
+and three offline derivations tried against a known file all missed.
 
 This is the checkout's own location, and the one every RE script below names
 directly. It is not the only place the launcher looks: on a portable or Steam

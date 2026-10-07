@@ -438,7 +438,8 @@ impl Scene {
             );
         let plasma_blast_active =
             self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);
-        let blasts_active = self.write_bomb_blasts(race, queue, view_projection, seconds);
+        let blasts_active =
+            self.write_bomb_blasts(race, queue, view_projection, seconds, &weapon_scene);
         let leach_ball_active = self.write_leach_ball(race, queue, view_projection, &weapon_scene);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while

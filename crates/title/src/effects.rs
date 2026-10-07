@@ -106,6 +106,8 @@ pub enum Trigger {
     MineExplo,
     /// A Bomb's smoke ring.
     BombSmokering,
+    /// HD's Bomb detonation, 0.5 s in: the rays `0x001503d8` spawns once.
+    BombRays,
     /// A Cannon bolt's impact.
     CannonSparks,
     /// A craft's engine flare.
@@ -155,7 +157,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 39] = [
+    pub const ALL: [Self; 40] = [
         Self::CollisionSpark,
         Self::HitSpark,
         Self::RocketFlare,
@@ -174,6 +176,7 @@ impl Trigger {
         Self::MissileBounce,
         Self::MineExplo,
         Self::BombSmokering,
+        Self::BombRays,
         Self::CannonSparks,
         Self::EngineFlare,
         Self::TrailHitship,

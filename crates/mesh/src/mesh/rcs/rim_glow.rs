@@ -103,6 +103,67 @@ const PLASMA_HALO: Shape = Shape {
     parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER, UV_OFFSET],
 };
 
+/// `AlphaAnim`, bound by pointer to the model's own clock (`node + 0xc0`).
+const ALPHA_ANIM: u32 = 0x1d1b_5e79;
+/// `ColourAnim`, bound by pointer to a float of the blast object itself.
+const COLOUR_ANIM: u32 = 0x2eb8_d703;
+/// `Shockwave_scalar`, bound by pointer to the model's own clock.
+const SHOCKWAVE_SCALAR: u32 = 0x3b5f_3bd7;
+
+/// `hd_bombfire_glow.rcsmaterial`, block `@0x1d90` (`DATA02`): the Bomb's
+/// fireball and its white core. Earns [`slots::BOMB_FIRE`].
+const BOMB_FIRE: Shape = Shape {
+    bit: slots::BOMB_FIRE,
+    mnemonics: &[
+        "MOV", "MOV", "MOV", "MOV", "DP3", "MAD", "MOV", "MAD", "DP3", "MOV", "TEX", "ADD", "DP3",
+        "MUL", "MUL", "MUL", "DIVSQ", "MOV", "MUL", "ADD", "TEX", "LG2", "ADD", "RCP", "MUL",
+        "EX2", "ADD", "RCP", "MAD", "LG2", "ADD", "RCP", "MUL", "EX2", "MUL", "MOV", "TEX", "ADD",
+        "MAD", "ADD", "MUL", "ADD", "ADD", "RCP", "MUL", "EX2", "MAD", "MAD", "DIV", "MAD",
+    ],
+    literals: &[
+        [0.04, 0.0, 0.0, 0.0],
+        [0.3, 0.0, 0.0, 0.0],
+        [6.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [5.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.86, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [50.0, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 100.0, 0.0, 0.0],
+        [0.5, 0.0, 0.0, 0.0],
+    ],
+    parameters: &[
+        ALPHA_ANIM,
+        COLOUR_ANIM,
+        FOG_COLOUR,
+        GLOBAL_ALPHA_SCALER,
+        TIME,
+    ],
+};
+
+/// `hd_bombfire_shockwaves_glow.rcsmaterial`, block `@0x1950` (`DATA02`): the
+/// Bomb's shockwave rings. Earns [`slots::BOMB_SHOCK`].
+const BOMB_SHOCK: Shape = Shape {
+    bit: slots::BOMB_SHOCK,
+    mnemonics: &[
+        "MOV", "MOV", "MOV", "MAD", "MUL", "TEX", "MUL", "MOV", "ADD", "MAD", "MOV", "MOV", "TEX",
+        "ADD", "ADD", "TEX", "MUL", "MUL", "MUL", "MAD", "EX2", "MAD", "MAD",
+    ],
+    literals: &[
+        [0.01, 0.0, 0.0, 0.0],
+        [0.05, 0.0, 0.0, 0.0],
+        [0.45, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+    ],
+    parameters: &[SHOCKWAVE_SCALAR, FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+};
+
 /// `hd_leachbeam_ball_glow.rcsmaterial`, block `@0x19b0` (`DATA00`).
 const LEACH_BALL: Shape = Shape {
     bit: slots::RIM_GLOW,
@@ -166,7 +227,14 @@ pub(super) fn classify(
     }
     let mut parameters = declared.parameters.clone();
     parameters.sort_unstable();
-    for shape in [&LEACH_BALL, &PLASMA_HEAD, &PLASMA_RING, &PLASMA_HALO] {
+    for shape in [
+        &LEACH_BALL,
+        &PLASMA_HEAD,
+        &PLASMA_RING,
+        &PLASMA_HALO,
+        &BOMB_FIRE,
+        &BOMB_SHOCK,
+    ] {
         let mut wanted = shape.parameters.to_vec();
         wanted.sort_unstable();
         if parameters != wanted || !mnemonics_match(program, shape.mnemonics) {

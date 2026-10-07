@@ -200,6 +200,10 @@ pub struct BombBlastModels {
     /// this container for the Repulser field's own reason above. Played by
     /// [`super::mag_floor_fx`].
     pub mag_floor: [Option<Model>; 2],
+    /// HD's blast set, riding this container for the Repulser field's reason:
+    /// a fireball and its white core, the bloom disc and one ring, in
+    /// [`oag_title::weapons::HdBombBlast`]'s order. Played by [`hd`].
+    pub hd: [Option<Model>; 4],
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -211,6 +215,21 @@ pub(crate) struct BombBlastDrawables {
     pub(crate) repulser_field: Vec<Drawable>,
     /// One per ship slot - see [`BombBlastModels::mag_floor`].
     pub(crate) mag_floor: [Vec<Drawable>; 2],
+    /// HD's blast: one drawable per pool slot for each of the first three
+    /// models, and [`hd::RIPPLES`] + 1 of the ring's per slot (the first ring
+    /// and the seven ripples), in slot order. See [`hd`].
+    pub(crate) hd: HdDrawables,
+}
+
+/// [`BombBlastDrawables::hd`]'s pools.
+#[derive(Debug)]
+pub(crate) struct HdDrawables {
+    pub(crate) fireball: Vec<Drawable>,
+    pub(crate) core: Vec<Drawable>,
+    pub(crate) bloom: Vec<Drawable>,
+    /// `hd::SLOTS * (hd::RIPPLES + 1)`: a blast's rings are indices
+    /// `slot * 8 ..`, the first ring at `+ 0`.
+    pub(crate) rings: Vec<Drawable>,
 }
 
 impl BombBlastDrawables {
@@ -236,6 +255,21 @@ impl BombBlastDrawables {
                     })
                 };
                 [per_ship(first)?, per_ship(second)?]
+            },
+            hd: {
+                let [fireball, core, bloom, ring] = models.hd;
+                let mut pool = |model, count: usize| {
+                    build_one(model).map(|mut pool: Vec<Drawable>| {
+                        pool.truncate(count);
+                        pool
+                    })
+                };
+                HdDrawables {
+                    fireball: pool(fireball, hd::SLOTS)?,
+                    core: pool(core, hd::SLOTS)?,
+                    bloom: pool(bloom, hd::SLOTS)?,
+                    rings: pool(ring, hd::SLOTS * (hd::RIPPLES + 1))?,
+                }
             },
         })
     }
@@ -292,6 +326,15 @@ impl Race {
     ///
     /// Called from [`Race::ignite_blast`] for every Bomb detonation.
     pub(crate) fn spawn_bomb_blast_model(&mut self, position: Vec3, orientation: Quat) {
+        // HD's blast is its own object with its own pool - see [`hd`].
+        if self.view.hd_bomb_blast {
+            let up = orientation * Vec3::Y;
+            log::debug!("HD bomb blast starts at {position:?}");
+            if let Some(slot) = self.view.hd_bomb_blasts.iter().position(Option::is_none) {
+                self.view.hd_bomb_blasts[slot] = Some(hd::HdBlast::new(position, up));
+            }
+            return;
+        }
         let Some(slot) = self.view.bomb_blasts.iter().position(Option::is_none) else {
             return;
         };
@@ -340,6 +383,7 @@ impl Race {
     /// [`Race::advance_plasma_blast_models`] already runs a freshly-spawned
     /// blast in.
     pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
+        self.advance_hd_bomb_blasts(dt);
         for slot in &mut self.view.bomb_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;
@@ -360,6 +404,41 @@ impl Race {
                 *slot = None;
             }
         }
+    }
+
+    /// Ages every live HD blast one tick, plays `WO_BOMB_RAYS` at the one that
+    /// just crossed half a second, and frees whichever outlived three. Called
+    /// from [`Self::advance_bomb_blast_models`].
+    fn advance_hd_bomb_blasts(&mut self, dt: f32) {
+        let rays = self.view.handles.get(Trigger::BombRays).cloned();
+        let mut played = Vec::new();
+        for slot in &mut self.view.hd_bomb_blasts {
+            let Some(blast) = slot else { continue };
+            let step = blast.step(dt);
+            if step.rays {
+                played.push(blast.position);
+            }
+            if step.retire {
+                *slot = None;
+            }
+        }
+        if let Some(effect) = rays {
+            for position in played {
+                self.view.stage.play(&effect, position, 1.0);
+            }
+        }
+    }
+
+    /// What every live HD blast shows this frame, in slot order - `None` for a
+    /// slot with nothing live. The camera decides the fireball's and the bloom
+    /// disc's frames; see [`hd`].
+    #[must_use]
+    pub(crate) fn hd_bomb_blast_draws(&self) -> [Option<hd::Pieces>; hd::SLOTS] {
+        let view = self.view().inverse();
+        let (eye, back) = (view.w_axis.truncate(), view.z_axis.truncate());
+        std::array::from_fn(|slot| {
+            self.view.hd_bomb_blasts[slot].map(|blast| blast.pieces(eye, back))
+        })
     }
 
     /// This frame's transform and visibility for every render-side blast
@@ -450,6 +529,8 @@ pub(crate) fn bomb_blast_basis(position: Vec3, dir: Vec3) -> Mat4 {
         position.extend(1.0),
     )
 }
+
+pub(super) mod hd;
 
 #[cfg(test)]
 mod tests;

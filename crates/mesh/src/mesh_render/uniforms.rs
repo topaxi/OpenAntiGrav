@@ -28,7 +28,11 @@ pub(super) struct Uniforms {
     /// [`crate::mesh::slots::CLOCK_SCROLL_RING`]). `0.0` for every draw that
     /// is not a clock-scrolled material. Padding until 2026-10-05.
     model_clock: f32,
-    _pad1: f32,
+    /// A second per-draw scalar, for the one HD material that reads a value
+    /// the blast owns rather than the model's clock: `ColourAnim` on the
+    /// Bomb's fireball ([`crate::mesh::slots::BOMB_FIRE`]). `0.0` for every
+    /// other draw. Padding until 2026-10-07.
+    model_colour: f32,
     _pad2: f32,
     /// The previous simulation tick's `view_projection * model`,
     /// premultiplied: what the velocity target measures screen motion
@@ -60,7 +64,7 @@ fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
         model: model_matrix.to_cols_array_2d(),
         sun_occlusion_layer: 0.0,
         model_clock: 0.0,
-        _pad1: 0.0,
+        model_colour: 0.0,
         _pad2: 0.0,
         // The viewer has no previous tick; previous equals current, which is
         // zero velocity. Its pipelines are built `Velocity::None` and never
@@ -144,7 +148,7 @@ pub fn write_uniforms_raw(
         model: model.to_cols_array_2d(),
         sun_occlusion_layer: 0.0,
         model_clock: 0.0,
-        _pad1: 0.0,
+        model_colour: 0.0,
         _pad2: 0.0,
         prev_mvp: mvp.to_cols_array_2d(),
     };

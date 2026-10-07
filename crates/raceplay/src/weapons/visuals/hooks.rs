@@ -40,6 +40,34 @@ impl Race {
         true
     }
 
+    /// Puts craft `slot` on the first laid Bomb another craft owns, for
+    /// `--force-bomb-trip`: the next tick's own trip test finds it inside the
+    /// bomb's radius and detonates it by the ordinary path, so what follows
+    /// (the impact, the blast models, the effects) is the simulation's own.
+    /// Writes the world from outside `Race::tick` the way
+    /// [`Self::force_leach_lock`] does. `false` when no such Bomb is laid or
+    /// the craft is not racing. A verification aid and nothing else.
+    pub fn force_bomb_trip(&mut self, slot: usize) -> bool {
+        if !self.ship_active(slot) {
+            return false;
+        }
+        let Some(at) = self
+            .sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .find(|p| {
+                p.kind == Some(oag_tables::weapons::Weapon::Bomb) && usize::from(p.owner) != slot
+            })
+            .map(|p| p.position)
+        else {
+            return false;
+        };
+        self.sim.world.ships[slot].physics.body.position = at;
+        true
+    }
+
     /// The loaded particle effect a trigger plays, for tests.
     #[doc(hidden)]
     #[must_use]

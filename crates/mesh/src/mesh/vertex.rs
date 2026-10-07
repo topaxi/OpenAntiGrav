@@ -352,6 +352,23 @@ pub mod slots {
     /// starting at this material's index.
     pub const ICE: u32 = 1 << 22;
 
+    /// HD's Bomb fireball (`hd_bombfire_glow.rcsmaterial`, block `@0x1d90`):
+    /// the LeachBall's rim-glow skeleton plus a dissolve and a brightness
+    /// the blast drives - `AlphaAnim` (the model's own clock) and `ColourAnim`
+    /// (a per-draw scalar, the mesh uniform's `model_colour`). Carried as
+    /// [`RIM_GLOW`] and [`RIM_EDGE`] **together**, which no single material
+    /// earns, rather than a bit of its own: bits 23 and up are the material
+    /// index and a circuit needs hundreds of those. Every test of either bit
+    /// alone excludes this pair. See `docs/rendering/hd-unlit-programs.md`,
+    /// "The Bomb's fireball and shockwaves".
+    pub const BOMB_FIRE: u32 = RIM_GLOW | RIM_EDGE;
+
+    /// HD's Bomb shockwave ring (`hd_bombfire_shockwaves_glow.rcsmaterial`,
+    /// block `@0x1950`), addressed by the model's own clock as
+    /// `Shockwave_scalar`. Carried as [`CLOCK_SCROLL_RING`] and
+    /// [`CLOCK_SCROLL_HALO`] together, for [`BOMB_FIRE`]'s reason.
+    pub const BOMB_SHOCK: u32 = CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

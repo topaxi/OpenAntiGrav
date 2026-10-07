@@ -17,7 +17,7 @@ commit it ships in. Every command and every message quoted here was run.
 
 **No game content ships with this project, and none ever will.** You supply
 files from discs and downloads you own. This page does not say where to get
-them and does not cover keys. See [legal](legal.md).
+them and does not cover per-game or per-disc keys. See [legal](legal.md).
 
 ## 1. Build it
 
@@ -73,42 +73,49 @@ named `wipeout.chd`).
 | Wipeout Pulse | PSP | disc image, `.chd` or `.iso`, Europe or USA (Europe is opened when you have both) | `pulse-psp-eu.chd`, `pulse-psp-usa.chd` |
 | Wipeout Pulse | PS2 | disc image, Europe | `pulse-ps2-eu.chd` |
 | Wipeout Pure | PSP | disc image, Europe or USA | `pure-psp-eu.chd`, `pure-psp-usa.chd` |
-| Wipeout HD / Fury | PS3 | **decrypted** disc image, Europe | `hdfury-ps3-eu-dec.iso` |
+| Wipeout HD / Fury | PS3 | disc image, Europe, **encrypted as dumped** with your disc key beside it (a `.dkey`), or an already decrypted image | `hdfury-ps3-eu.iso` + `hdfury-ps3-eu.dkey`, or `hdfury-ps3-eu-dec.iso` |
 | Wipeout HD (no Fury) | PS3 | the **installed** PSN download, Europe | `data/extracted/ps3/hd-psn-eu` |
-| Wipeout 2048 | Vita | **unpacked** package folder | `data/extracted/vita/PCSF00007` (Europe) or `PCSA00015` (USA) |
+| Wipeout 2048 | Vita | a **`.vpk`** (a NoNpDrm dump; a patch or DLC `.vpk` beside it is mounted too), or an **unpacked** package folder | `data/images/2048-eu.vpk` (any name), or `data/extracted/vita/PCSF00007` (Europe) / `PCSA00015` (USA) |
 | Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
 
 The first three rows are the easy ones: a normal dump of your own disc is
 read as it is, CHD (single-track, either `createdvd` or `createcd`) or ISO.
 
-### HD / Fury: the disc must be decrypted first
+### HD / Fury: the disc is read encrypted, in place
 
-A PS3 disc dump is encrypted. The program says so:
+A PS3 disc dump is encrypted, and the program reads it that way: each sector is
+decrypted as it is read, so no decrypted copy is ever written. It needs the disc
+key that your own dump tool recorded for that disc (redump publishes it as a
+`.dkey`). Give it the key one of three ways:
 
-```
-Error: opening the archives in data/images/hdfury-ps3-eu.iso
+1. **A file beside the image**, same name with `.dkey` (or `.key`):
+   `data/images/hdfury-ps3-eu.iso` and `data/images/hdfury-ps3-eu.dkey`. The
+   file holds the key as 32 hex digits or as the 16 raw bytes redump writes.
+2. **A key file in the program's own keys folder**, `oag/keys/` under your
+   config directory (`~/.config/oag/keys/` on Linux). Any `.dkey` or `.key`
+   there is tried against any encrypted image.
+3. **Typed or pasted in the chooser.** An encrypted image with no key is listed
+   as `NEEDS DISC KEY`; select it and a keypad asks for the 32 digits. On a
+   desktop you can also type them, or paste with Ctrl+V. The key is checked
+   against the image first and saved to the keys folder only if it opens it. On
+   Android the keypad and a key file beside the image work; there is no paste
+   there in this build.
 
-Caused by:
-    data/images/hdfury-ps3-eu.iso is an encrypted PS3 disc image (its archives are encrypted on disc). Decrypt it with your own disc key first: `uv run --with cryptography python3 scripts/ps3iso.py decrypt <image.iso> <key> hdfury-ps3-eu-dec.iso` (needs the Python package `cryptography`), then put the decrypted image in data/images/.
-```
+The program never ships a key and never prints yours. A decrypted image
+(`hdfury-ps3-eu-dec.iso`, made by any tool) still works and is tried first.
+The format is described in [PS3 disc encryption](../formats/ps3-disc.md).
 
-The project's own script
-decrypts a dump given the disc key your own dump tool recorded for that disc:
+Seen working on 2026-10-07 under a software-rendered X session: with the image
+alone in its folder the chooser lists `NEEDS DISC KEY`; Enter opens the keypad;
+typing, and Ctrl+V of a spaced key, fill the buffer; a wrong key reports
+`THAT KEY DOES NOT OPEN THIS DISC` and stores nothing; the right one is saved to
+the keys folder, the row becomes `WIPEOUT HD` and boots to the front end. Wayland
+paste is unverified (the clipboard crate is built with its Wayland support).
 
-```sh
-python3 scripts/ps3iso.py decrypt data/images/hdfury-ps3-eu.iso \
-    "$(cat data/images/hdfury-ps3-eu.dkey)" data/images/hdfury-ps3-eu-dec.iso
-```
-
-The script needs the Python package `cryptography` (`pip install
-cryptography`, or prefix the command with `uv run --with cryptography`); it
-says so if the package is missing, and prints usage if you give it too few
-arguments. Run on 2026-10-07 it took 7 seconds and wrote a
-file byte-identical to the project's existing decrypted image, which the
-program then opened as `Wipeout HD`. The format is described in
-[PS3 disc encryption](../formats/ps3-disc.md). See
-[troubleshooting](#5-when-it-goes-wrong) for what happens with both files in
-one folder (the decrypted `hdfury-ps3-eu-dec.iso` is tried first).
+Measured on 2026-10-07 (release build, the same race, three runs each at a
+load average of 13): the encrypted image reaches the first race frame in
+1.87-1.96 s and the decrypted one in 1.85-1.88 s, and the two PNGs are
+byte-identical.
 
 ### Wipeout HD from the PSN download
 
@@ -156,12 +163,28 @@ campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
 names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
 tick for tick like the disc, and its menu rows drew.
 
-### 2048 and Omega: unpack the package into a folder
+### 2048: a `.vpk`, or a folder
 
-These two ship as console download packages, not discs. The program does not
-read a `.pkg` file. It reads a folder you unpacked and decrypted from a
-package you own. This project supplies no key and does not say where one
-comes from; the license key for a package is part of your own copy.
+A 2048 `.vpk` (the ZIP a NoNpDrm dump of your own console's install makes) is
+read as it is: put it in `data/images/` or name it. A patch `.vpk` and DLC
+`.vpk` files of the same game beside it are mounted behind it and are not listed
+as games of their own. A `.vpk` stored without compression is read fastest; a
+deflated archive larger than 1 GiB is refused by name (re-pack it with
+`zip -0`). The program does **not** read a Vita `.pkg`: its game files are
+protected with a key your console derives in hardware, which is not something
+this project can carry. It says so by name if you give it one. Make a `.vpk`
+from your own console with NoNpDrm, or unpack the folder as below.
+Read and compared with the unpacked folders on 2026-10-07 using `.vpk` files built
+from them (no real NoNpDrm dump was available): [Vita packages](../formats/vita-package.md).
+
+### Omega, and a 2048 folder: unpack the package into a folder
+
+Omega ships as a console download package. The program does not read a `.pkg`
+file yet. It reads a folder you unpacked and decrypted from a package you own.
+The licence for a package is part of your own copy, and this project does not
+say where one comes from. The project may ship fixed public package keys that
+other open-source tools already ship, never a per-game licence
+([legal](legal.md#fixed-public-keys)).
 
 The tools the project used and the exact steps are in
 [`data/README.md`](../../data/README.md) (the Vita steps) and
@@ -298,7 +321,7 @@ do not expect a finished game outside Pulse.
 | --- | --- |
 | `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
 | `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
-| `... is an encrypted PS3 disc image ...` | The HD image is still encrypted. Decrypt it as in section 2. With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
+| `... is an encrypted PS3 disc image and no disc key opens it` | No key beside the image or in the keys folder passed the check, or the one there belongs to another disc. Put the right `.dkey` beside the image, or enter it in the chooser (section 2). With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
 | The intro is skipped, and the log line `ffmpeg is not installed, so the intro is skipped and movies show no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |

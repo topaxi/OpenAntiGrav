@@ -443,7 +443,7 @@ impl Drawable {
             model,
             prev_mvp,
             sun_occlusion_layer,
-            0.0,
+            [0.0, 0.0],
         );
     }
 
@@ -458,7 +458,29 @@ impl Drawable {
         prev_mvp: Mat4,
         clock: f32,
     ) {
-        self.write_uniforms(queue, view_projection, model, prev_mvp, None, clock);
+        self.write_uniforms(queue, view_projection, model, prev_mvp, None, [clock, 0.0]);
+    }
+
+    /// [`Self::write_clocked`] for the Bomb's fireball, whose program also
+    /// reads `ColourAnim` - a float the blast object owns. See
+    /// `oag_mesh::mesh::slots::BOMB_FIRE`.
+    pub(super) fn write_blast(
+        &self,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        model: Mat4,
+        prev_mvp: Mat4,
+        clock: f32,
+        colour: f32,
+    ) {
+        self.write_uniforms(
+            queue,
+            view_projection,
+            model,
+            prev_mvp,
+            None,
+            [clock, colour],
+        );
     }
 
     fn write_uniforms(
@@ -468,14 +490,14 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
-        clock: f32,
+        [clock, colour]: [f32; 2],
     ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
             sun_occlusion_layer: sun_occlusion_layer.map_or(0.0, |layer| layer as f32 + 1.0),
             model_clock: clock,
-            _pad1: 0.0,
+            model_colour: colour,
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
@@ -822,7 +844,8 @@ pub(crate) struct Uniforms {
     sun_occlusion_layer: f32,
     /// See `mesh_render`'s own mirror: the model's own animation clock.
     model_clock: f32,
-    _pad1: f32,
+    /// See `mesh_render`'s own mirror: `ColourAnim` on the Bomb's fireball.
+    model_colour: f32,
     _pad2: f32,
     /// The previous tick's `view_projection * model`, premultiplied - one
     /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog

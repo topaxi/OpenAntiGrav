@@ -813,3 +813,64 @@ fn an_inline_eighteen_byte_vertex_keeps_its_tail_unless_the_tail_cannot_be_one()
         .expect("coords");
     assert!(uv.iter().all(|c| c[0].is_nan()));
 }
+
+/// Two stride-22 vertices at `packed`'s buffer offset: `early` at `+0x0a`,
+/// colour fields `a` at `+0x0e` and `b` at `+0x12`.
+fn inline_twenty_two(early: [u8; 4], a: [u8; 4], b: [u8; 4]) -> (Mesh, Vec<u8>) {
+    let mesh = packed(&[2], 22);
+    let mut data = vec![0u8; 0x1000 + 2 * 22];
+    for k in 0..2 {
+        let at = 0x1000 + k * 22;
+        data[at + 10..at + 14].copy_from_slice(&early);
+        data[at + 14..at + 18].copy_from_slice(&a);
+        data[at + 18..at + 22].copy_from_slice(&b);
+    }
+    (mesh, data)
+}
+
+/// `hd_bomb_shockwaves`' shape (`ff 9f 00 4c` twice): the tail reads as `NaN`,
+/// so the coordinate is the four bytes after the normal, and the two colour
+/// fields fold into `[a.rgb, b.a]`.
+#[test]
+fn an_inline_twenty_two_byte_vertex_with_two_colours_reads_its_uv_after_the_normal() {
+    let colour = [0xff, 0x9f, 0x00, 0x4c];
+    let (mesh, data) = inline_twenty_two([0x38, 0x00, 0x3c, 0x00], colour, colour);
+    let uv = mesh
+        .texcoords(&data, &mesh.submeshes[0], 22)
+        .expect("coords");
+    assert_eq!(uv, vec![[0.5, 1.0]; 2]);
+    let light = mesh
+        .inline_two_colours(&data, &mesh.submeshes[0], 22)
+        .expect("colours");
+    assert_eq!(
+        light,
+        vec![
+            [
+                1.0,
+                f32::from(0x9fu8) / 255.0,
+                0.0,
+                f32::from(0x4cu8) / 255.0
+            ];
+            2
+        ]
+    );
+}
+
+/// A stride-22 chunk with a real coordinate in its tail keeps it and has no
+/// colour pair to give - the other eleven inline stride-22 chunks on the disc.
+#[test]
+fn an_inline_twenty_two_byte_vertex_with_a_finite_tail_keeps_it() {
+    let (mesh, data) = inline_twenty_two(
+        [0x38, 0x00, 0x3c, 0x00],
+        [0x12, 0x34, 0x56, 0x78],
+        [0x34, 0x00, 0x34, 0x00],
+    );
+    let uv = mesh
+        .texcoords(&data, &mesh.submeshes[0], 22)
+        .expect("coords");
+    assert_eq!(uv, vec![[0.25, 0.25]; 2]);
+    assert_eq!(
+        mesh.inline_two_colours(&data, &mesh.submeshes[0], 22),
+        Err(Error::NoTexcoord)
+    );
+}

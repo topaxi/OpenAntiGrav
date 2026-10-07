@@ -37,6 +37,8 @@ except ImportError:
 
 SECTOR = 2048
 DATA1_SECRET = bytes.fromhex("380bcf0b53455b3c7817ab4fa3ba90ed")
+# RPCS3 rpcs3/Loader/ISO.cpp, iso_file_decryption::set_key_from_d1: key_d1 and iv_d1.
+DATA1_IV = bytes.fromhex("69474772af6fdab342743aefaa186287")
 
 # Magic bytes expected at the head of a file, keyed by extension. The oracle
 # turns "is this key right" into one AES call against a sector we can predict.
@@ -91,8 +93,8 @@ def decrypt_sector(key, lba, data):
 
 
 def derive_from_data1(data1):
-    """disc key = AES-128-CBC(data1) under the documented secret, zero IV."""
-    enc = Cipher(algorithms.AES(DATA1_SECRET), modes.CBC(b"\x00" * 16)).encryptor()
+    """disc key = AES-128-CBC(data1) under the documented secret and IV (RPCS3's)."""
+    enc = Cipher(algorithms.AES(DATA1_SECRET), modes.CBC(DATA1_IV)).encryptor()
     return enc.update(data1) + enc.finalize()
 
 

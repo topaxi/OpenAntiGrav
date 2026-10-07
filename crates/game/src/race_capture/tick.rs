@@ -81,6 +81,14 @@ pub(super) fn advance_one_tick(
     {
         race.force_weapon_hit(slot);
     }
+    if let Some((at, slot)) = options.force_bomb_trip
+        && at == tick
+        && !race.force_bomb_trip(slot)
+    {
+        log::warn!(
+            "--force-bomb-trip: no Bomb laid by another craft yet, or slot {slot} is not racing (pass --opponents)"
+        );
+    }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
         && !race.force_leach_lock(0, target as u8)

@@ -65,6 +65,13 @@ pub const EFFECTS: &Effects = &{
             EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)
                 .with_burst(ABSORB_BURST),
         )
+        // `NormalBombBlast_Update` (`0x001503d8`) spawns `WO_BOMB_RAYS` once,
+        // the first tick the blast is older than half a second;
+        // `weapons.md`, 2026-10-07.
+        .with(
+            Trigger::BombRays,
+            EffectSpec::new(engine_effects::BOMB_RAYS_EFFECT, Origin::Measured),
+        )
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;

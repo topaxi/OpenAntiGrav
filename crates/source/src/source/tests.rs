@@ -567,7 +567,7 @@ fn the_not_found_error_names_every_place_and_form() {
         "data/extracted/ps4",
         ".pkg",
         "installing.md",
-        "ps3iso.py",
+        ".dkey",
     ] {
         assert!(text.contains(needle), "missing {needle}: {text}");
     }

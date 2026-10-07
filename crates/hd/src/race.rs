@@ -550,10 +550,16 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         sphere: r"Data\Weapons\HD_plasma_sphere.vex",
         halo: r"Data\Weapons\HD_plasma_halo.vex",
     }),
-    // HD's own Bomb detonation is unread - see
-    // `docs/ghidra/functions/psp-pulse-usa/mine.md`'s own note on what this
-    // substitutes.
     bomb_blast_pulse: None,
+    // `NormalBomb`'s blast object loads these four, the last eight times
+    // over - `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, 2026-10-07.
+    // The armed bomb's own `HD_bomb_halo` is the bomb's, not the blast's.
+    bomb_blast_hd: Some(oag_title::weapons::HdBombBlast {
+        sphere: r"Data\Weapons\HD_bomb_sphere.vex",
+        sphere_white: r"Data\Weapons\HD_bomb_sphere_white.vex",
+        bloom_ring: r"Data\Weapons\hd_bomb_sphere_bloomring.vex",
+        shockwaves: r"Data\Weapons\hd_bomb_shockwaves.vex",
+    }),
     // Named, not wired - see `oag_raceplay::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
     // HD hands the Repulser out, but its own field-model law is unread.

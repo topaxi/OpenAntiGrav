@@ -354,6 +354,13 @@ pub struct RaceView {
     /// [`bomb_blast::BOMB_BLAST_SLOTS`] - see that module's own doc comment,
     /// and [`Race::spawn_bomb_blast_model`] for what fills a slot.
     pub(super) bomb_blasts: [Option<bomb_blast::BombBlast>; bomb_blast::BOMB_BLAST_SLOTS],
+    /// Wipeout HD's Bomb detonations, a pool of their own: eleven drawables a
+    /// blast, so [`bomb_blast::hd::SLOTS`] of them rather than a projectile
+    /// pool's worth.
+    pub(super) hd_bomb_blasts: [Option<bomb_blast::hd::HdBlast>; bomb_blast::hd::SLOTS],
+    /// Whether a Bomb detonation plays HD's blast object rather than
+    /// Pulse's. See `options::Setup::hd_bomb_blast`.
+    pub(super) hd_bomb_blast: bool,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

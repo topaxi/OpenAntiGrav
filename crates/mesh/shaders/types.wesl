@@ -19,7 +19,10 @@ struct Uniforms {
     // `UV_offset` is bound to (`slots::CLOCK_SCROLL_RING`/`_HALO`). Zero for
     // every other draw. Was padding until 2026-10-05.
     model_clock: f32,
-    _pad1: f32,
+    // A second per-draw scalar: `ColourAnim` on the Bomb's fireball
+    // (`slots::BOMB_FIRE`), a float the blast owns. Zero for every other draw.
+    // Was padding until 2026-10-07.
+    model_colour: f32,
     _pad2: f32,
     // The previous simulation tick's `view_projection * model`, premultiplied.
     // **Deliberately not symmetric with the pair above**: fog and lighting

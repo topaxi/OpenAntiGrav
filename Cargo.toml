@@ -145,6 +145,10 @@ re_rav1d = { version = "0.1.3", default-features = false, features = [
 ] }
 clap = { version = "4", features = ["derive"] }
 chd = "0.3"
+# AES block cipher for the PS3 disc layer (CBC chained by hand in `oag-disc`) and the
+# Vita/PS4 package layers. MIT OR Apache-2.0, RustCrypto, pure Rust with AES-NI/ARMv8
+# acceleration picked at runtime. Not in the simulation crates.
+aes = "0.8"
 bytemuck = "1"
 
 # The MPEG decoder, for the container Wipeout HD keeps its music in. Reads how

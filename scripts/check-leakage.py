@@ -31,9 +31,9 @@ EXTENSIONS = [
     # PSP/PS2 executables and containers
     "wad", "elf", "prx", "self", "bin", "img", "edat",
     # PS3/Vita containers and modules. HD/Fury and 2048 ship PSARC archives
-    # rather than WADs, and Vita modules are `.suprx`/`.skprx`. `dkey` is the
-    # PS3 disc key: not content itself, but the thing that decrypts it.
-    "psarc", "sprx", "suprx", "skprx", "dkey",
+    # rather than WADs, and Vita modules are `.suprx`/`.skprx`. `dkey` and `key` are the
+    # PS3 disc key (redump `.dkey`, or `.key` beside an image): not content itself, but the thing that decrypts it.
+    "psarc", "sprx", "suprx", "skprx", "dkey", "key",
     # Emulator save states
     "ppst", "p2s", "state",
     # Rendered/extracted reproductions this project itself writes

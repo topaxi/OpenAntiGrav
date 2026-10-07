@@ -274,6 +274,14 @@ pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 /// for the fourcc tag (`'BOSM'`) and the read this plays back.
 pub const BOMB_SMOKERING_EFFECT: &str = "WO_BOMB_SMOKERING";
 
+/// The rays HD's Bomb blast spawns once, half a second after it starts:
+/// `0x001503d8` (`NormalBombBlast_Update`) calls `Psys_Spawn_q` with the
+/// string at `0x007855e8` and the tag `'BORS'`, at the blast's matrix, the
+/// first tick `age > 0.5` (`0x150c04`..`0x150fc8`). HD alone: Pulse's blast
+/// plays [`BOMB_SMOKERING_EFFECT`] and no rays. `docs/ghidra/functions/
+/// ps3-hdfury-eu/weapons.md`, 2026-10-07.
+pub const BOMB_RAYS_EFFECT: &str = "WO_BOMB_RAYS";
+
 /// How far below a struck craft's centre its blast is drawn, in world units.
 ///
 /// **Recovered, confidence 78.** `Rocket_HitCraft` (`0x0886ebdc`) builds the

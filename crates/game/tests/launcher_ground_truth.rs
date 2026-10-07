@@ -58,26 +58,45 @@ fn each_pressing_identifies_as_its_own_title() {
 /// `PS3_DISC.SFB` that answers it is outside the encrypted region - so nothing
 /// short of trying to open the archives can tell them apart, and a chooser that
 /// filtered on identity alone would offer the wrong one.
+#[cfg(unix)]
 #[test]
 #[ignore = "needs a disc image under data/images/"]
 fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
     let Some(encrypted) = image("hdfury-ps3-eu.iso") else {
         return;
     };
-    let rows = launcher::survey(&[encrypted]);
-    let row = rows.first().expect("one path in, one row out");
+    // A symlink in a directory of its own, so the `.dkey` that sits beside the
+    // real image is not beside this one.
+    let dir = std::env::temp_dir().join(format!("oag-launcher-locked-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let link = dir.join("hdfury-ps3-eu.iso");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&encrypted, &link).unwrap();
 
-    assert!(!row.is_playable(), "an encrypted image must not be offered");
+    let rows = launcher::survey(std::slice::from_ref(&link));
+    let row = rows.first().expect("one path in, one row out");
     assert_eq!(row.platform.to_string(), "PS3");
     assert_eq!(
         row.serial.as_deref(),
         Some("BCES-00664"),
         "the identity block reads through the encryption"
     );
-    match &row.state {
-        State::Unavailable(why) => assert!(why.contains(".dkey"), "{why}"),
-        State::Playable(_) => unreachable!(),
+    let keys_stored = oag_disc::ps3_crypt::keys_dir()
+        .and_then(|d| std::fs::read_dir(d).ok())
+        .is_some_and(|mut d| d.next().is_some());
+    if keys_stored {
+        // This machine's own keys directory unlocked it; that path is the
+        // `ps3_crypt_ground_truth` suite's, not this one's.
+        std::fs::remove_dir_all(&dir).ok();
+        return;
     }
+    assert!(
+        !row.is_playable(),
+        "a locked image must not be offered to play"
+    );
+    assert!(row.is_selectable(), "a locked image offers the key prompt");
+    assert!(matches!(row.state, State::NeedsKey), "{:?}", row.state);
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 /// The PS4 extract is a directory rather than a disc image, so
@@ -138,4 +157,21 @@ fn a_folder_of_several_images_surveys_into_several_rows() {
     for row in &rows {
         eprintln!("{:<14} {:<18} {}", row.title(), row.provenance(), row.name);
     }
+}
+
+/// A `.vpk` is a row like a disc image: identified from its own `param.sfo`,
+/// opened as 2048, with its patch and DLC `.vpk` files beside it mounted rather
+/// than listed. Needs `scripts/make-test-vpk.sh`.
+#[test]
+#[ignore = "needs data/test-vpk/ (scripts/make-test-vpk.sh)"]
+fn a_vpk_is_listed_as_2048_on_the_vita() {
+    let Some(vpk) = oag_testdata::exact("data/test-vpk/2048-PCSF00007.vpk") else {
+        return;
+    };
+    let rows = launcher::survey(&[vpk]);
+    let row = rows.first().expect("one path in, one row out");
+    assert!(row.is_playable(), "{:?}", row.state);
+    assert_eq!(row.title(), "Wipeout 2048");
+    assert_eq!(row.platform.to_string(), "Vita");
+    assert_eq!(row.serial.as_deref(), Some("PCSF-00007"));
 }
