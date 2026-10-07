@@ -38,6 +38,8 @@
 //! is what `Drawable::tint_weapon_pads` needs to cycle a
 //! pad's ready/cooling colour at all.
 
+mod archive_cache;
+
 use std::path::PathBuf;
 
 use oag_mesh::mesh;
@@ -59,9 +61,9 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
         return;
     };
     let spec = format!("{}:{ARCHIVE}", image.display());
-    let vex_data = mesh::read_blob(&spec, TRACK).expect("reading the .vex");
+    let vex_data = archive_cache::read(&spec, TRACK).expect("reading the .vex");
     let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
-    let model_blob = mesh::read_blob(&spec, &model_name).expect("reading the .rcsmodel");
+    let model_blob = archive_cache::read(&spec, &model_name).expect("reading the .rcsmodel");
 
     // The independent count: walk `Weapon Pad` nodes directly, the way
     // `hd_pads.rs` does, rather than trusting `build_scene`'s own report to
@@ -88,14 +90,14 @@ fn weapon_pad_chunks_leave_the_circuit_model_and_land_in_their_own() {
 
     let (track_model, report) =
         mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
-            mesh::read_blob(&spec, path).ok()
+            archive_cache::read(&spec, path)
         })
         .expect("build_scene decodes talons_junction");
     println!("{}", report.describe());
 
     let (weapon_pad_model, pad_report) =
         mesh::rcs::build_weapon_pads(TRACK, &vex_data, &model_blob, &mut |path| {
-            mesh::read_blob(&spec, path).ok()
+            archive_cache::read(&spec, path)
         })
         .expect("build_weapon_pads decodes talons_junction");
     println!("{}", pad_report.describe());
@@ -145,9 +147,9 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
         return;
     };
     let spec = format!("{}:{ARCHIVE}", image.display());
-    let vex_data = mesh::read_blob(&spec, TRACK).expect("reading the .vex");
+    let vex_data = archive_cache::read(&spec, TRACK).expect("reading the .vex");
     let model_name = mesh::rcs::sibling_name(TRACK).expect("a .vex name to rewrite");
-    let model_blob = mesh::read_blob(&spec, &model_name).expect("reading the .rcsmodel");
+    let model_blob = archive_cache::read(&spec, &model_name).expect("reading the .rcsmodel");
     let rcs_model = oag_rcs::rcsmodel::Model::parse(&model_blob).expect("the .rcsmodel parses");
 
     let nodes = vex::nodes(&vex_data).expect("walking the node tree");
@@ -168,7 +170,7 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
     );
 
     let (pads, report) = mesh::rcs::build_pads(TRACK, &vex_data, &model_blob, &mut |path| {
-        mesh::read_blob(&spec, path).ok()
+        archive_cache::read(&spec, path)
     })
     .expect("build_pads decodes talons_junction");
     println!("{}", report.describe());
@@ -183,7 +185,7 @@ fn speedup_pads_with_no_addressed_chunk_report_the_world_pass_chunks() {
     // material that no pad node names has a draw call in the circuit's own
     // model, and the count of them is the report's.
     let (track_model, _) = mesh::rcs::build_scene(TRACK, &vex_data, &model_blob, &mut |path| {
-        mesh::read_blob(&spec, path).ok()
+        archive_cache::read(&spec, path)
     })
     .expect("build_scene decodes talons_junction");
     let drawn: std::collections::BTreeSet<u32> = [

@@ -28,6 +28,8 @@
 //!    coverage.
 //! 3. **It reaches the frame**, and it moves: two clocks are two pictures.
 
+mod archive_cache;
+
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::{self, slots};
@@ -58,10 +60,10 @@ fn image() -> Option<PathBuf> {
 
 fn build(image: &Path, archive: &str, path: &str) -> Option<mesh::Model> {
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-        mesh::read_blob(&spec, name).ok()
+        archive_cache::read(&spec, name)
     })
     .expect("the scene builds");
     Some(model)

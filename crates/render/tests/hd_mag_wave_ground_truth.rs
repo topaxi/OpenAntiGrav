@@ -14,6 +14,8 @@
 //! shader: the offscreen capture helper has no scene clock, so the build is
 //! what a disc-backed test can pin.
 
+mod archive_cache;
+
 use std::collections::BTreeSet;
 
 use oag_mesh::mesh::{self, slots};
@@ -21,11 +23,11 @@ use oag_mesh::mesh::{self, slots};
 fn build(archive: &str, path: &str) -> Option<(mesh::Model, mesh::rcs::Report)> {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
     let spec = format!("{}:PS3_GAME/USRDIR/{archive}", image.display());
-    let data = mesh::read_blob(&spec, path).ok()?;
+    let data = archive_cache::read(&spec, path)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, path, &data)?;
     Some(
         mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
-            mesh::read_blob(&spec, name).ok()
+            archive_cache::read(&spec, name)
         })
         .expect("the scene builds"),
     )

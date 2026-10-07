@@ -60,3 +60,15 @@ impl Reads {
             .find_map(|spec| self.read(spec, name).map(|bytes| (spec.as_str(), bytes)))
     }
 }
+
+thread_local! {
+    static READS: Reads = Reads::new();
+}
+
+/// [`Reads::read`] on one cache for the whole test.
+///
+/// `cargo nextest` runs every test in a process of its own, so this lives
+/// exactly as long as the test that fills it and is never shared between two.
+pub fn read(spec: &str, name: &str) -> Option<Vec<u8>> {
+    READS.with(|reads| reads.read(spec, name))
+}

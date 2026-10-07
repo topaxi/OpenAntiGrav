@@ -18,6 +18,8 @@
 //! own target instead (`mesh::rcs::build_scene_views`), split by the fog bit
 //! `0x20` the same capture ties to the alternate fog pair.
 
+mod archive_cache;
+
 use oag_mesh::mesh;
 use oag_rcs::rcsmodel;
 
@@ -31,7 +33,7 @@ fn archive(image: &std::path::Path, n: u32) -> String {
 fn read(image: &std::path::Path, path: &str) -> Option<(String, Vec<u8>)> {
     (0..4).find_map(|n| {
         let spec = archive(image, n);
-        mesh::read_blob(&spec, path).ok().map(|d| (spec, d))
+        archive_cache::read(&spec, path).map(|d| (spec, d))
     })
 }
 
