@@ -688,6 +688,11 @@ is what the upload now is. The biggest are 18 x 8192-square and 21 x
 4096-square files - the craft liveries are 8192-square (85 MiB with the chain)
 despite the `_1024` in their names.
 
+Those figures count one decode per material slot. Since 2026-10-07 a model
+decodes each texture file once and its materials share it, so Tech De Ra's
+load holds 200 distinct textures (1.4 GiB without a sink) and uploads each file
+once; see [Load time](../architecture/load-time.md).
+
 What was tested against each lead suspect: **(a) confirmed and fixed** - BC7
 passes through with the disc's own chain (`gnf.md`, "Mip chains"). **(b)
 confirmed and fixed** - the lightmaps are BC7 too, 709 to 236 MiB. **(c)

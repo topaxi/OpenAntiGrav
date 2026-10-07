@@ -1,7 +1,7 @@
 # Load time was repeated work; what is left
 
-The 2026-10-07 profile cut the HD race load from 7.9 s to 1.9 s and the PS2's
-from 2.3 s to 1.1 s by removing repeated work (PSARC path index, a per-load
+The 2026-10-07 profile cut the HD race load from 7.9 s to 1.9 s (15.2 s to 3.5 s
+on a Steam Deck) and the PS2's from 2.3 s to 1.1 s by removing repeated work (PSARC path index, a per-load
 read memo, the gantry clock's per-vertex sampling, per-material texture
 decodes, a single-threaded CHD read). Every number, the method and the
 negative results are in
@@ -26,15 +26,14 @@ nothing left in the profile is a loop it would pay for.
   uploads kept on the loading thread in order.
 - **A read memo hit copies its bytes** (about 3% of HD), because
   `oag_mesh::mesh::rcs::Textures` returns an owned `Vec<u8>`.
-- **The Steam Deck is unmeasured**, and the CHD split's cap of 8 workers is
-  chosen on a 24-thread desktop; the Deck's APU has 8 threads. The player's
-  path (`--measure-race-load`) was only run under lavapipe, where frame times
-  mean nothing, and per-frame CPU was not profiled on a presenting GPU.
+- **The player's path (`--measure-race-load`) was only run under lavapipe**,
+  where frame times mean nothing, and per-frame CPU was not profiled on a
+  presenting GPU. The Deck's headless loads are measured (HD 15.2 to 3.5 s,
+  `load-time.md`); its windowed loading screen is not.
 
 ## Next Steps
 
-- Run `--measure-race-load 2` on the Deck for Pulse PS2 and HD Fury, before
-  and after this lane's merge, and record the loading-stage frame counts in
-  `load-time.md`.
+- Run `--measure-race-load 2` on the Deck (it presents on a real GPU) for
+  Pulse PS2 and HD Fury and record the named spans in `load-time.md`.
 - If a load-time budget is ever set, `zlib-rs` is the next cut to take; the
   identity test that proved it is described in `load-time.md`.

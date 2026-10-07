@@ -60,6 +60,30 @@ noise (the "after" set ran at a load average of 11; the CHD split's own A/B
 below puts the PSP boot cost under its spread). The PS2 row is the CHD split
 below; 2048's and Omega's are the PSARC path index.
 
+### On a Steam Deck
+
+The same comparison on an LCD Steam Deck (Zen 2, 8 threads, SteamOS, on AC;
+`scaling_governor` `powersave` with EPP `balance_performance`, its defaults),
+**with audio on** as a player runs it: two `just appimage-portable` builds,
+`main` at 4c8a2372c and this change, each run from `/tmp` against the Deck's
+own copies of the discs, interleaved before/after, median of three after one
+warm-up pass. All runs exited 0.
+
+| Scenario | Before | After |
+| --- | ---: | ---: |
+| Race, Pulse PSP `16_Track` | 1.567 s | 1.560 s |
+| Race, Pulse PS2 | 3.997 s | **2.291 s** |
+| Race, Pure | 1.390 s | 1.367 s |
+| Race, HD Fury Vineta K | 15.183 s | **3.476 s** |
+| Race, 2048 Altima | 5.665 s | **3.234 s** |
+| Race, Omega Tech De Ra | 8.945 s | **4.710 s** |
+| Boot, Pulse PS2 | 2.110 s | **1.023 s** |
+| Boot, 2048 | 1.016 s | **0.556 s** |
+
+The ratios match the desktop's, a little larger: HD is 4.4x faster on the Deck
+against 4.1x here. The Deck's CHD split runs at its 8-thread cap, all of the
+APU's threads, and the PS2 rows still halve.
+
 ### Proof that nothing changed
 
 - Every one of the 15 screenshots above is **byte-identical** to `main`'s
