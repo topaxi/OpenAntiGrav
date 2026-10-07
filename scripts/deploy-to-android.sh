@@ -11,13 +11,25 @@
 # `adb install -r` keeps it.
 #
 # Usage:
-#   scripts/deploy-to-android.sh [--serial S] [--skip-build] [--dry-run]
+#   scripts/deploy-to-android.sh [--serial S] [--skip-build] [--reinstall]
+#                                [--dry-run]
 #
 #   --serial S    adb device serial (`adb devices`). Default: $ANDROID_SERIAL,
 #                 the only connected device, or - with more than one - a
 #                 picker asking which (scripts/adb-pick-device.sh).
 #   --skip-build  Don't rebuild; install the newest APK already in target/apk/.
+#   --reinstall   If the installed app was signed with another key, uninstall
+#                 it and install this one without asking (see below).
 #   --dry-run     Print what would be built and installed; touch nothing.
+#
+# An APK signed with a different key (one built on another machine, or before
+# the key moved to ~/.android/oag-debug.keystore) cannot be updated in place:
+# Android answers INSTALL_FAILED_UPDATE_INCOMPATIBLE. The script then offers to
+# reinstall, keeping the app's data: everything the app writes (images, caches,
+# settings, saves, logs) lives under its external files dir, which is moved
+# aside on the phone, the old app uninstalled, the new one installed, and the
+# directory moved back. Asked first in a terminal; --reinstall skips the
+# question; without a terminal and without --reinstall it stops.
 
 set -euo pipefail
 
@@ -25,6 +37,7 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 package="org.openantigrav.game"
 
 skip_build=0
+reinstall=0
 dry_run=0
 adb_args=()
 
@@ -36,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         --serial)     [[ $# -ge 2 ]] || die "--serial needs a value"
                       adb_args=(-s "$2"); shift 2 ;;
         --skip-build) skip_build=1; shift ;;
+        --reinstall)  reinstall=1; shift ;;
         --dry-run)    dry_run=1; shift ;;
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
                        "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -66,11 +80,43 @@ else
     [[ -f $apk ]] || die "build-apk.sh did not produce an APK - see the output above."
 fi
 
+# Uninstalls a differently-signed app and installs $apk, keeping its data by
+# moving the app's external dir aside on the device and back afterwards.
+reinstall_keeping_data() {
+    local app_dir="/sdcard/Android/data/$package" keep="/sdcard/oag-reinstall-keep"
+    local kept=0
+    if [[ -n "$(adb shell "[ -d '$app_dir' ] && echo yes" | tr -d '\r')" ]]; then
+        adb shell "rm -rf '$keep' && mv '$app_dir' '$keep'" \
+            || die "could not move $app_dir aside; nothing was uninstalled"
+        kept=1
+        echo "moved the app's data to $keep"
+    fi
+    adb uninstall "$package" >/dev/null || die "adb uninstall failed; the app's data is in $keep on the device"
+    adb install "$apk" || die "install failed after uninstalling; the app's data is in $keep on the device"
+    if (( kept )); then
+        adb shell "rm -rf '$app_dir' && mv '$keep' '$app_dir'" \
+            || die "installed, but could not move $keep back to $app_dir; move it by hand"
+        echo "moved the app's data back"
+    fi
+}
+
 step "Installing ${apk:-the APK}"
 if (( dry_run )); then
     echo "would run: adb install -r ${apk:-<built apk>}"
+elif ! out="$(adb install -r "$apk" 2>&1)"; then
+    echo "$out" | grep -v -e 'absl::InitializeLog' -e '^I0000' >&2
+    grep -q INSTALL_FAILED_UPDATE_INCOMPATIBLE <<< "$out" || die "adb install failed - see above"
+    echo >&2
+    echo "The app on the device was signed with another key, so it cannot be updated in place." >&2
+    if (( ! reinstall )); then
+        [[ -t 0 ]] || die "pass --reinstall to uninstall it and install this one (its data is kept)"
+        read -r -p "Uninstall it and install this one, keeping its data? [y/N] " answer
+        [[ $answer == [yY]* ]] || die "left the installed app as it was"
+    fi
+    step "Reinstalling (signature changed), keeping the app's data"
+    reinstall_keeping_data
 else
-    adb install -r "$apk"
+    echo "$out" | grep -v -e 'absl::InitializeLog' -e '^I0000'
 fi
 
 step "Done"

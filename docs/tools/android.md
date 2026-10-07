@@ -75,6 +75,14 @@ phone and Waydroid, say) they ask which - an fzf pick, or a numbered prompt with
 fzf - and refuse with the list of serials when not run from a terminal
 (`scripts/adb-pick-device.sh`). An `unauthorized` device is never offered.
 
+An installed app signed with another key (built elsewhere, or before the key moved
+out of `target/`) cannot be updated in place: `adb install -r` fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`. `just deploy-android` then offers to
+reinstall, keeping the app's data: everything the app writes lives under
+`/sdcard/Android/data/org.openantigrav.game`, which it moves aside on the device,
+uninstalls, installs, and moves back. It asks in a terminal; `--reinstall` skips the
+question.
+
 ## How it is wired
 
 - **Entry.** `crates/game/src/main_body.rs` carries `android_main`. Two crate roots
