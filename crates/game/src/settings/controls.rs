@@ -59,6 +59,12 @@ pub struct Controls {
     /// better. See `oag_input::touch::GoZone`.
     #[serde(default = "default_touch_go_zones")]
     pub touch_go_zones: bool,
+    /// How strong the on-screen racing controls draw, in percent of the
+    /// design's own translucency (`100`), for a phone or a track where they
+    /// get in the way. Only a touchscreen's overlay reads it. **Chosen, not
+    /// measured.**
+    #[serde(default = "default_touch_opacity")]
+    pub touch_opacity: u8,
     /// Which key produces each abstract button, when a player has moved one
     /// off `oag_input::keys::candidates`'s built-in layout.
     ///
@@ -250,6 +256,10 @@ fn default_touch_go_zones() -> bool {
     true
 }
 
+fn default_touch_opacity() -> u8 {
+    100
+}
+
 impl Default for Controls {
     fn default() -> Self {
         Self {
@@ -257,6 +267,7 @@ impl Default for Controls {
             triggers: default_triggers(),
             trigger_sensitivity: TriggerSensitivity::default(),
             touch_go_zones: default_touch_go_zones(),
+            touch_opacity: default_touch_opacity(),
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
         }

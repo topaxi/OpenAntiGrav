@@ -34,8 +34,10 @@ manifest and `cache/<image>` rows in `just push-data`.
   readouts with safe margins and height-scaled targets. Driven on Waydroid with one
   finger. Still open: **tune the layout on the S24** (real thumb reach, whether
   0.05h is enough for its cutout - the real cutout is not queried, left-handed
-  mirror, a controls-opacity setting); the overlay also shows on the race's loading
-  screen (`racing()` is true while the stage loads); **pad triggers,
+  mirror). **Touch-design lane, 2026-10-07:** round translucent buttons with vector
+  glyphs, edge/corner layout, `touch_opacity` setting, `--touch-overlay` capture pose,
+  overlay gated on the race drawing; checked in captures at 2340x1080, not on the S24.
+  **Pad triggers,
   right stick and hat** are not delivered by winit 0.30 (read `MotionEvent` axes via
   `android-activity` or move to GameActivity); no haptics.
 - **AArch64 determinism.** `oag-core`'s determinism test builds for the target; run it

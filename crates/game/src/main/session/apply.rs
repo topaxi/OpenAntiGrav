@@ -564,6 +564,16 @@ impl Session {
                     return;
                 }
             },
+            "controls.touch_opacity" => match text.parse::<u8>() {
+                // Read by the next frame's overlay draw.
+                Ok(percent) if (10..=100).contains(&percent) => {
+                    self.settings.controls.touch_opacity = percent;
+                }
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected a percentage from 10 to 100");
+                    return;
+                }
+            },
             "controls.trigger_sensitivity" => match text.parse::<TriggerSensitivity>() {
                 Ok(sensitivity) => {
                     self.settings.controls.trigger_sensitivity = sensitivity;

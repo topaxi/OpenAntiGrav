@@ -218,6 +218,8 @@ pub struct CaptureOptions {
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
     /// profile's. See `Scene::set_blur_resolution`.
     pub motion_blur_resolution: oag_display::display::BlurResolution,
+    /// `--touch-overlay`: the on-screen racing controls, drawn in this pose.
+    pub touch_demo: Option<crate::touch_controls::Demo>,
     /// `[graphics] hud_scale`, which only a raster HUD obeys.
     pub hud_scale: oag_display::display::HudScale,
     /// What casts a shadow in the captured frame: `--shadows`.
@@ -442,16 +444,10 @@ pub fn capture(
     // writes gamma-space values and nothing may encode them again - see
     // [ADR-0020](../../../docs/architecture/adr/0020-gamma-authoritative-colour-space.md).
     //
-    // `--presented` used to be `Rgba8UnormSrgb` on the grounds that it is a
-    // picture of a *window* and should take the window's format. It still is,
-    // and it still does: the window stopped encoding in the same change. That
-    // the two agreed on the label and not on the value is what made a
-    // `--screenshot` and a `--presented` capture of the same frame disagree
-    // about the boost plume by up to 73/255, the plume being the one surface
-    // whose texels were already re-encoded to compensate for the old upload.
-    // The offscreen target's non-sRGB twin, and therefore FSR 1, still work -
-    // `remove_srgb_suffix` on a format that has no suffix is the identity. See
-    // `oag_present::upscale`.
+    // `--presented` used to be `Rgba8UnormSrgb`; the window stopped encoding in
+    // the same change, and the mismatch made the two captures of one frame
+    // disagree about the boost plume by up to 73/255. The non-sRGB twin keeps
+    // FSR 1 working: `remove_srgb_suffix` is the identity on it.
     let format = wgpu::TextureFormat::Rgba8Unorm;
     // The scene's own size, which presented is the aspect rectangle scaled and
     // otherwise is the whole capture.
@@ -762,12 +758,9 @@ pub fn capture(
     // up to `73/255` on the plume). Text and fills go through the R8 coverage
     // atlas and were unaffected either way. See `docs/ui/hud.md`.
     //
-    // **Or the results table, once the race has one.** A capture whose
-    // `--ticks` reach past the last crossing is a picture of a finished race,
-    // and the same rule the window follows applies here: the HUD is reporting a
-    // simulation that has stopped, so the board replaces it rather than sitting
-    // under it. That is what makes `--screenshot` able to show a scoreboard at
-    // all - see `crate::scoreboard`.
+    // **Or the results table, once the race has one**: a capture past the last
+    // crossing shows a finished race, and the board replaces the HUD as in the
+    // window - see `crate::scoreboard`.
     // The upscaler and the blit, through exactly the calls the window's frame
     // loop makes - and in the same order, which is the point. Presented, the
     // scene resolves into the presentation target *first* and the HUD goes on
@@ -805,11 +798,9 @@ pub fn capture(
             None,
         );
     }
-    // Where the HUD goes, which is not where the scene went. Presented, that is
-    // the presentation target at the aspect rectangle; otherwise it is the
-    // capture texture the scene drew straight into, which has no resolve in
-    // front of it and so was already at native size - an ordinary
-    // `--screenshot` is byte-for-byte what it was before the HUD moved.
+    // Where the HUD goes: the presentation target at the aspect rectangle when
+    // presented, else the native-size capture texture the scene drew into, so an
+    // ordinary `--screenshot` is byte-for-byte what it was.
     let (hud_view, hud_viewport) = match framebuffer.as_ref() {
         Some(framebuffer) => (framebuffer.output().clone(), rect),
         None => (view.clone(), viewport),
@@ -907,6 +898,15 @@ pub fn capture(
             Ok(None) => warn!("no HUD layout: capturing without one"),
             Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
         },
+    }
+    if let Some(demo) = options.touch_demo {
+        crate::touch_controls::draw_pose(
+            demo,
+            (&device, &queue, format),
+            &mut encoder,
+            &hud_view,
+            (width, height),
+        )?;
     }
     // Pulse's bloom (PSP, and the PS2 by inheritance) over the HUD, as the
     // window adds it: see `Scene::composite_bloom`.

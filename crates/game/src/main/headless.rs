@@ -619,6 +619,13 @@ pub(crate) fn run_race(
                     },
                 }),
                 zone_spectrum_test: cli.zone_spectrum_test,
+                touch_demo: cli
+                    .intro
+                    .touch_overlay
+                    .as_deref()
+                    .map(oag_game::touch_controls::Demo::parse)
+                    .transpose()
+                    .map_err(anyhow::Error::msg)?,
                 previous_best,
                 ghost,
                 // Resolved here rather than in `oag_game::race_capture::capture`, which has no

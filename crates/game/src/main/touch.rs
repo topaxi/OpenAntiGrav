@@ -83,13 +83,15 @@ impl Overlay {
     /// `scale` units per pixel; empty when it is not showing.
     pub(crate) fn draw(
         &self,
+        art: &oag_game::touch_controls::art::Art,
         size: (f32, f32),
         scale: f32,
         paused: bool,
         zones: bool,
+        opacity: f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         if self.active() {
-            oag_game::touch_controls::draw(&self.touches, size, scale, paused, zones)
+            oag_game::touch_controls::draw(art, &self.touches, size, scale, paused, zones, opacity)
         } else {
             Vec::new()
         }
@@ -162,16 +164,26 @@ impl Session {
 
     /// The overlay's draw list: empty outside a running race, or when hidden.
     pub(crate) fn draw_touch(&self, size: (f32, f32), scale: f32) -> Vec<oag_ui::frontend::Draw> {
-        if self.racing() {
+        let art = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet);
+        if let (true, Some(art)) = (self.racing() && self.race_drawing(), art) {
             self.touch_overlay.draw(
+                &art,
                 size,
                 scale,
                 self.paused,
                 self.settings.controls.touch_go_zones,
+                f32::from(self.settings.controls.touch_opacity) / 100.0,
             )
         } else {
             Vec::new()
         }
+    }
+
+    /// Whether the race is on the glass: not through the flyby, which draws
+    /// no HUD either. The loading screen is a different stage, so a race that
+    /// is still loading is not [`Self::racing`] at all.
+    fn race_drawing(&self) -> bool {
+        matches!(&self.stage, Stage::Race(stage) if stage.race.hud_shown())
     }
 
     fn racing(&self) -> bool {

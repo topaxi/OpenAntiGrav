@@ -148,6 +148,7 @@ impl AndroidPad {
             stick_y: self.stick_y,
             throttle: f32::from(u8::from(self.right_trigger)),
             brake: f32::from(u8::from(self.left_trigger)),
+            ..Reading::default()
         }
     }
 }

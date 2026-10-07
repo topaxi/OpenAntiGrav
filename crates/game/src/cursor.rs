@@ -91,18 +91,18 @@ pub fn sheet(svg: &str) -> Sheet {
     // 32bpp"), which a boot prints for a disc's images and nobody needs for
     // one committed SVG.
     let mut report = Vec::new();
-    Sheet::build_with(
-        &[],
-        vec![DecodedImage {
-            src: SRC.to_string(),
-            width,
-            height: RASTER_HEIGHT,
-            rgba,
-            quad_extent: None,
-            blend: None,
-        }],
-        &mut report,
-    )
+    // The on-screen controls' generated shapes ride in the same sheet: the
+    // overlay renderer draws sprites from this one and no other.
+    let mut images = vec![DecodedImage {
+        src: SRC.to_string(),
+        width,
+        height: RASTER_HEIGHT,
+        rgba,
+        quad_extent: None,
+        blend: None,
+    }];
+    images.extend(crate::touch_controls::art::images());
+    Sheet::build_with(&[], images, &mut report)
 }
 
 /// The cursor at `at`, its hotspot on the point, for a renderer whose
