@@ -50,6 +50,7 @@ fn one_triangle_model(label: &str) -> Model {
         slots: slots::DEFAULT,
         specular_exponent: DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     };
     model.vertices = vec![
         vertex([-1.0, -1.0, 0.0]),

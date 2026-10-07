@@ -393,6 +393,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         slots: oag_mesh::mesh::slots::DEFAULT,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     }
 }
 

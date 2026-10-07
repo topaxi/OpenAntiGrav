@@ -245,6 +245,7 @@ fn strip(
             slots: oag_mesh::mesh::slots::DEFAULT,
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
+            texcoord2: [0.0, 0.0],
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -259,6 +260,7 @@ fn strip(
             slots: oag_mesh::mesh::slots::DEFAULT,
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
+            texcoord2: [0.0, 0.0],
         });
     }
     for i in 0..samples.len() as u32 - 1 {

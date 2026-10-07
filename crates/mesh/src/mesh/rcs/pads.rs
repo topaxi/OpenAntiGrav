@@ -406,6 +406,8 @@ pub(super) fn emit_chunk(
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
             let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
+            let texcoords2 =
+                super::ice::second_uv(surface.roles, mesh, model_blob, submesh, stride);
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 out,
@@ -414,6 +416,7 @@ pub(super) fn emit_chunk(
                     normals: normals.as_deref(),
                     texcoords: texcoords.as_deref(),
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
+                    texcoords2: texcoords2.as_deref(),
                     vertex_light: vertex_light.as_deref(),
                     indices: &indices,
                     chunk: u32::try_from(chunk_index).ok(),

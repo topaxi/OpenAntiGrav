@@ -152,6 +152,10 @@ fn the_report_names_both_kinds_of_absence() {
         light_cone_bound: 0,
         refraction_bound: 0,
         refraction_unread: 0,
+        ice_bound: 0,
+        ice_unread: 0,
+        water_lit_colour: 0,
+        water_glint_only: 0,
         isolated: 0,
     };
     let line = report.describe();

@@ -70,7 +70,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // Not run through the texture-animation transform below: an animated
     // surface scrolls its diffuse across itself, while its patch in the
     // circuit's lightmap atlas stays where the bake put it.
-    out.lightmap_texcoord = in.lightmap_texcoord;
+    out.lightmap_texcoord = vec4<f32>(in.lightmap_texcoord, in.texcoord2);
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
     // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into
     // each animated material's display list. The direction is the authored
@@ -119,7 +119,7 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     // The other pass outputs the lit colour `C`, scaled by the material's own
     // colour multiplier, for `dst = dst + src`.
     if (in.slots & 1048576u) != 0u {
-        let refraction_slot = in.slots >> 22u;
+        let refraction_slot = in.slots >> 23u;
         let tint = emissives.tint_offset[refraction_slot];
         let weight = emissives.scale[refraction_slot];
         if (in.slots & 2097152u) != 0u {

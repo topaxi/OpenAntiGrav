@@ -114,6 +114,7 @@ fn two_draws(a: f32, b: f32) -> Model {
         slots: 0,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     };
     let mut model = Model::none("two draws");
     model.vertices = vec![
@@ -217,6 +218,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         slots: 0,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
+        texcoord2: [0.0, 0.0],
     };
     let mut model = Model::none("placeholder + art");
     model.vertices = vec![vertex(), vertex(), vertex(), vertex(), vertex(), vertex()];

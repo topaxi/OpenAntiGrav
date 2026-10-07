@@ -91,7 +91,7 @@ pub(super) fn material_setup(
     // After the glow table, because it clears a slot's `ADD_SECOND` and
     // writes its own entry into the same table.
     let mut emissive = emissive;
-    let (mag_emissive, wave_maps) = super::mag_wave::mag_wave(
+    let (mut mag_emissive, wave_maps) = super::mag_wave::mag_wave(
         model,
         &material_variants,
         textures,
@@ -122,6 +122,18 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The Sebenco ice pool writes three entries into the table and binds its
+    // pond mask third, beside what the magstrips and pads bind there.
+    let ice_masks = super::ice::ice(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut skins,
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, ice_masks);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(model, &material_variants, textures, &mut skins, report);
     // The disc's own alpha-test reference, for a caller's cutout draws - see

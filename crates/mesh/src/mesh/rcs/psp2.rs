@@ -591,6 +591,7 @@ fn build_planned(
                 sun_mask: 1.0,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
+                texcoord2: [0.0, 0.0],
             });
         }
         if !place.hidden {

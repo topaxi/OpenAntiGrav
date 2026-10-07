@@ -254,6 +254,8 @@ struct VertexInput {
     // What this surface stamps into the bloom's glow mask - see
     // `oag_mesh::mesh::GpuVertex::glow` and `glow_stamp` below.
     @location(11) glow: f32,
+    // The second diffuse coordinate set - see `oag_mesh::mesh::GpuVertex::texcoord2`.
+    @location(12) texcoord2: vec2<f32>,
 };
 
 struct VertexOutput {
@@ -263,7 +265,10 @@ struct VertexOutput {
     @location(2) texcoord: vec2<f32>,
     @location(3) lit: f32,
     @location(4) world: vec3<f32>,
-    @location(5) lightmap_texcoord: vec2<f32>,
+    // `xy` the lightmap's coordinate, `zw` the second diffuse set
+    // (`GpuVertex::texcoord2`): carried in the one location rather than a
+    // fifteenth, which the GL backend has little room for.
+    @location(5) lightmap_texcoord: vec4<f32>,
     // Clip-space w, which for a perspective projection is view-space depth.
     // What Wipeout HD's own vertex programs hand their fog - see `Fog::curve`.
     @location(6) view_depth: f32,

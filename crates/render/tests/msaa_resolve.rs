@@ -46,6 +46,7 @@ fn triangle_model() -> Model {
             slots: oag_mesh::mesh::slots::DEFAULT,
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
+            texcoord2: [0.0, 0.0],
         },
         GpuVertex {
             position: [0.0, 1.0, -1.0],
@@ -60,6 +61,7 @@ fn triangle_model() -> Model {
             slots: oag_mesh::mesh::slots::DEFAULT,
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
+            texcoord2: [0.0, 0.0],
         },
         GpuVertex {
             position: [0.0, 0.0, 1.0],
@@ -74,6 +76,7 @@ fn triangle_model() -> Model {
             slots: oag_mesh::mesh::slots::DEFAULT,
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
+            texcoord2: [0.0, 0.0],
         },
     ];
     Model {

@@ -52,6 +52,30 @@ fn main() -> anyhow::Result<()> {
                 decl.diffuse_texcoord().map(|a| a.name_hash),
                 attrs.join(" ")
             );
+            if let Some(stride) = surface.declared_stride() {
+                for submesh in &surface.submeshes {
+                    let uv1 = surface
+                        .texcoords(&geometry, submesh, stride)
+                        .unwrap_or_default();
+                    let uv2 = surface
+                        .second_texcoords(&geometry, submesh, stride)
+                        .unwrap_or_default();
+                    let range = |c: &[[f32; 2]]| {
+                        let f = |i: usize| {
+                            c.iter()
+                                .map(|p| p[i])
+                                .fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)))
+                        };
+                        (f(0), f(1))
+                    };
+                    println!(
+                        "    submesh {} vertices: Uv1 u,v range {:?}, Uv2 u,v range {:?}",
+                        uv1.len(),
+                        range(&uv1),
+                        range(&uv2)
+                    );
+                }
+            }
         }
     }
     Ok(())

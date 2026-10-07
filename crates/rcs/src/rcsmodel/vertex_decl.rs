@@ -239,6 +239,19 @@ impl VertexDecl {
             .or_else(|| self.attributes.iter().find(|a| a.is_texcoord()))
     }
 
+    /// The chunk's second diffuse coordinate set, `Uv2`.
+    ///
+    /// Named, like [`Self::lightmap_texcoord`]. It is the high half of the
+    /// four-component attribute `0x1aefe524` the vertex programs read as one
+    /// `vec4` (`TC4.xy` is `Uv1`, `TC4.zw` is this); `hd_water_decl` lists the
+    /// Sebenco ice chunks, which declare `Uv1` at byte 18 and `Uv2` at 22.
+    #[must_use]
+    pub fn second_texcoord(&self) -> Option<&Attribute> {
+        self.attributes
+            .iter()
+            .find(|a| a.is_texcoord() && a.name() == Some("Uv2"))
+    }
+
     /// The attribute a lightmap is sampled through.
     ///
     /// **Named rather than ruled**, unlike [`Self::diffuse_texcoord`]: the

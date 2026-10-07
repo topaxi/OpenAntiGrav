@@ -209,6 +209,7 @@ mod merge_tests {
                     slots: slots::DEFAULT,
                     specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                     glow: 0.0,
+                    texcoord2: [0.0, 0.0],
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),

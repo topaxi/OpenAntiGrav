@@ -177,12 +177,15 @@ mod pad_ne;
 mod pads;
 mod refraction;
 pub use pads::{build_pads, build_weapon_pads};
+mod bounds;
 mod glass_sheen;
+mod ice;
 pub mod psp2;
 mod rim_glow;
 mod skin;
 mod vertex_scroll;
 mod water;
+use bounds::bounding_sphere;
 
 mod emissive;
 pub use emissive::EMISSIVE_LIMIT;
@@ -418,6 +421,8 @@ struct Geometry<'a> {
     /// a `lightmapUV`. `None` leaves it at the origin, which a white lightmap
     /// makes harmless.
     lightmap_texcoords: Option<&'a [[f32; 2]]>,
+    /// The second diffuse set, read only for [`slots::ICE`] surfaces.
+    texcoords2: Option<&'a [[f32; 2]]>,
     /// HD's **baked per-vertex light and sun-occlusion mask**, `[r, g, b,
     /// mask]`, from `oag_rcs::rcsmodel::Mesh::vertex_light`. `None` on 632
     /// of Talon's Junction's 983 chunks - not a gap but the other half of the
@@ -531,6 +536,7 @@ fn emit(
         normals,
         texcoords,
         lightmap_texcoords,
+        texcoords2,
         vertex_light,
         indices,
         chunk,
@@ -611,6 +617,9 @@ fn emit(
             sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
             specular_exponent: surface.specular_exponent,
             glow: 0.0,
+            texcoord2: texcoords2
+                .and_then(|t| t.get(k))
+                .map_or([0.0, 0.0], |&[u, v]| [finite(u), finite(v)]),
         });
     }
     let centre = centre / points.len() as f32;
@@ -879,6 +888,7 @@ fn build_with_options(
                 let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
                 let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
                 let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
+                let texcoords2 = ice::second_uv(surface.roles, mesh, model_blob, submesh, stride);
                 report.authored_normals += normals.as_deref().map_or(0, authored);
                 emit(
                     &mut out,
@@ -887,6 +897,7 @@ fn build_with_options(
                         normals: normals.as_deref(),
                         texcoords: texcoords.as_deref(),
                         lightmap_texcoords: lightmap_texcoords.as_deref(),
+                        texcoords2: texcoords2.as_deref(),
                         vertex_light: vertex_light.as_deref(),
                         indices: &indices,
                         chunk: u32::try_from(chunk_index).ok(),
@@ -967,32 +978,6 @@ pub(crate) fn face_normals(model: &mut Model) {
             [0.0, 1.0, 0.0]
         };
     }
-}
-
-/// The whole model's framing sphere, which the viewer's camera is placed from.
-///
-/// Centre of the axis-aligned bounds rather than of the vertices: a circuit
-/// carries most of its vertices in the few most detailed corners, and averaging
-/// them puts the camera looking at a corner of the track.
-fn bounding_sphere(vertices: &[GpuVertex]) -> ([f32; 3], f32) {
-    if vertices.is_empty() {
-        return ([0.0; 3], 0.0);
-    }
-    let mut min = [f32::MAX; 3];
-    let mut max = [f32::MIN; 3];
-    for v in vertices {
-        for i in 0..3 {
-            min[i] = min[i].min(v.position[i]);
-            max[i] = max[i].max(v.position[i]);
-        }
-    }
-    let centre: [f32; 3] = std::array::from_fn(|i| (min[i] + max[i]) / 2.0);
-    let radius = vertices
-        .iter()
-        .map(|v| (Vec3::from_array(v.position) - Vec3::from_array(centre)).length())
-        .fold(0.0f32, f32::max)
-        .max(0.001);
-    (centre, radius)
 }
 
 #[cfg(test)]

@@ -83,6 +83,9 @@ pub(super) fn water(
     skins: &mut TextureSlots,
     report: &mut Report,
 ) {
+    if super::isolate::water_off() {
+        return;
+    }
     let mut black: Option<std::sync::Arc<ModelTexture>> = None;
     for (slot, material) in model.materials.iter().enumerate() {
         let Some(variant) = variants.get(slot).copied().flatten() else {

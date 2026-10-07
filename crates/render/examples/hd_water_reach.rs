@@ -19,13 +19,16 @@ fn main() -> anyhow::Result<()> {
         let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &name, &data) else {
             continue;
         };
+        let _ = spec;
         let (_, report) = mesh::rcs::build_scene(&name, &data, &geometry, &mut |n| {
-            mesh::read_blob(&spec, n).ok()
+            (0..4).find_map(|k| {
+                mesh::read_blob(&format!("{image}:PS3_GAME/USRDIR/DATA0{k}.PSARC"), n).ok()
+            })
         })?;
         let text = report.describe();
         let water: Vec<&str> = text
             .split(", ")
-            .filter(|part| part.contains("water material"))
+            .filter(|part| part.contains("water material") || part.contains("ice material"))
             .collect();
         println!(
             "{name}: {}",

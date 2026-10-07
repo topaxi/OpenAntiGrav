@@ -716,6 +716,7 @@ fn build_class(
                         },
                         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
+                        texcoord2: [0.0, 0.0],
                     });
                 }
                 for tri in batch.triangles() {
