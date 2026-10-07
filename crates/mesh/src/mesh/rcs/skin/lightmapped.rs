@@ -36,21 +36,8 @@ pub(super) fn albedo(
     });
     parsed
         .and_then(|(declared, program)| {
-            let unit_of = |hash: u32| {
-                declared
-                    .samplers
-                    .iter()
-                    .find_map(|&(h, unit)| (h == hash).then_some(unit))
-            };
-            let at = |colour_only: bool| {
-                material.samplers.iter().position(|(hash, path)| {
-                    picture(hash, path)
-                        && unit_of(*hash).is_some_and(|unit| {
-                            !colour_only || program.samples_colour(u8::try_from(unit).unwrap_or(0))
-                        })
-                })
-            };
-            at(true).or_else(|| at(false))
+            declared_picture(material, &declared, &program, false)
+                .or_else(|| declared_picture(material, &declared, &program, true))
         })
         .or_else(|| {
             material
@@ -58,4 +45,25 @@ pub(super) fn albedo(
                 .iter()
                 .position(|(hash, path)| picture(hash, path))
         })
+}
+
+/// The first entry that is a picture, is declared by the resolved variant, and
+/// - unless `any_read` - is sampled by `program` as a colour.
+pub(super) fn declared_picture(
+    material: &rcsmodel::Material,
+    declared: &rcsmaterial::Declared,
+    program: &rcsmaterial::fragment::Program,
+    any_read: bool,
+) -> Option<usize> {
+    material.samplers.iter().position(|(hash, path)| {
+        path.is_some()
+            && !super::NOT_A_PICTURE.contains(hash)
+            && declared
+                .samplers
+                .iter()
+                .find_map(|&(h, unit)| (h == *hash).then_some(unit))
+                .is_some_and(|unit| {
+                    any_read || program.samples_colour(u8::try_from(unit).unwrap_or(0))
+                })
+    })
 }

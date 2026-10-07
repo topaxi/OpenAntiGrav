@@ -152,5 +152,46 @@ fn sebencos_solar_wall_binds_its_picture_not_its_normal_map() {
             checked += 1;
         }
     }
-    assert!(checked > 0, "Sebenco Climb should carry the solar wall slots");
+    assert!(
+        checked > 0,
+        "Sebenco Climb should carry the solar wall slots"
+    );
+}
+
+/// Vineta K's backdrop terrain `and_rocktosand` lists `j_rockblend5` first, a
+/// red-channel blend mask read one lane wide at unit 2, ahead of the sand
+/// (unit 0) and rock (unit 1) it blends. Its colour lane is `Mixed`, so the
+/// "first non-lookup entry" fallback painted the mask: the red shape behind the
+/// tunnel glass. Dropping `declared_picture` from `skin::picks` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn vinetas_backdrop_terrain_binds_sand_and_rock_not_its_blend_mask() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/01_vineta_k/track.vex";
+    let data = mesh::read_blob(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        mesh::read_blob(&spec, name).ok()
+    })
+    .expect("Vineta K builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/and_rocktosand.rcsmaterial") {
+            continue;
+        }
+        let Some(texture) = model.textures[slot].as_ref() else {
+            continue;
+        };
+        assert!(
+            !texture.label.contains("rockblend"),
+            "slot {slot} binds the blend mask {}",
+            texture.label
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "Vineta K should draw an and_rocktosand slot");
 }
