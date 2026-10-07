@@ -245,7 +245,10 @@ static ANDROID_APP: std::sync::OnceLock<winit::platform::android::activity::Andr
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)] // `set_var`, see below
 fn android_env(app: &winit::platform::android::activity::AndroidApp) {
-    let Some(files) = app.external_data_path().or_else(|| app.internal_data_path()) else {
+    let Some(files) = app
+        .external_data_path()
+        .or_else(|| app.internal_data_path())
+    else {
         return;
     };
     for (name, sub) in [
@@ -283,7 +286,6 @@ fn new_event_loop() -> Result<EventLoop<()>> {
 }
 
 fn run(cli: Cli) -> Result<()> {
-
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no
