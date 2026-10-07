@@ -20,6 +20,8 @@ build finds the player's own disc image, and the gamepad mapping.
 arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
 
+[Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
+
 [Releases and CI](releases.md) covers the two GitHub workflows: what `ci.yml` gates, and
 what `release.yml` builds (artifact names, the zero-game-content check, how a
 release is cut).
