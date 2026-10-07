@@ -456,6 +456,84 @@ fn the_mounted_appimage_is_not_searched_for_a_ps4_root_either() {
 
 /// A directory of this test's own, so the tests do not depend on - or
 /// disturb - whatever the developer has in `data/images`.
+/// A 2048 extract and an Omega extract are found by the no-argument path, not
+/// only by the chooser, and a disc image still beats both.
+#[test]
+fn an_unpacked_folder_is_found_without_an_image() {
+    let vita = temp_dir("vita-root");
+    let copy = vita.join("PCSF00007");
+    std::fs::create_dir_all(copy.join("base/PSP2")).unwrap();
+    std::fs::write(copy.join("base/PSP2/data.psarc"), b"").unwrap();
+    let ps4 = temp_dir("ps4-root");
+    let data09 = ps4.join("omega-eu-patch").join(oag_omega::archives::DATA09);
+    std::fs::create_dir_all(data09.parent().unwrap()).unwrap();
+    std::fs::write(&data09, b"").unwrap();
+
+    assert_eq!(
+        first_package(&[vita.clone()], &[ps4.clone()]),
+        Some(copy.clone())
+    );
+    assert_eq!(first_package(&[], &[ps4.clone()]), Some(ps4.clone()));
+    assert_eq!(first_package(&[], &[]), None);
+
+    std::fs::remove_dir_all(&vita).unwrap();
+    std::fs::remove_dir_all(&ps4).unwrap();
+}
+
+/// `$OAG_IMAGE` takes the same unpacked folders the command line does: the
+/// package itself, or the folder holding it.
+#[test]
+fn an_oag_image_naming_an_unpacked_folder_is_used() {
+    let vita = temp_dir("env-vita");
+    let copy = vita.join("PCSF00007");
+    std::fs::create_dir_all(copy.join("base/PSP2")).unwrap();
+    std::fs::write(copy.join("base/PSP2/data.psarc"), b"").unwrap();
+    let want = Some(copy.to_string_lossy().into_owned());
+
+    assert_eq!(
+        stated(None, Some(copy.clone().into_os_string()), None).unwrap(),
+        want
+    );
+    assert_eq!(
+        stated(None, Some(vita.clone().into_os_string()), None).unwrap(),
+        want
+    );
+    std::fs::remove_dir_all(&vita).unwrap();
+}
+
+/// The decrypted HD image is tried before the encrypted one beside it.
+#[test]
+fn the_decrypted_hd_image_wins_over_the_encrypted_one() {
+    let directory = temp_dir("hd-dec");
+    std::fs::write(directory.join("hdfury-ps3-eu.iso"), b"").unwrap();
+    std::fs::write(directory.join("hdfury-ps3-eu-dec.iso"), b"").unwrap();
+    assert_eq!(
+        first_image(&directory),
+        Some(directory.join("hdfury-ps3-eu-dec.iso"))
+    );
+    std::fs::remove_dir_all(&directory).unwrap();
+}
+
+/// The not-found text names every form and place it looked, `.pkg` included,
+/// and gives the beside-the-executable advice only for an AppImage.
+#[test]
+fn the_not_found_error_names_every_place_and_form() {
+    let text = nothing_found(&search_path()).to_string();
+    for needle in [
+        "data/images",
+        "data/extracted/vita",
+        "data/extracted/ps4",
+        ".pkg",
+        "installing.md",
+        "ps3iso.py",
+    ] {
+        assert!(text.contains(needle), "missing {needle}: {text}");
+    }
+    if std::env::var_os("APPIMAGE").is_none() {
+        assert!(!text.contains("beside the AppImage"), "{text}");
+    }
+}
+
 fn temp_dir(name: &str) -> PathBuf {
     let directory = std::env::temp_dir().join(format!("oag-source-{name}"));
     let _ = std::fs::remove_dir_all(&directory);

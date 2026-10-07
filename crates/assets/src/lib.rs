@@ -56,6 +56,19 @@ pub enum Error {
         path: String,
     },
 
+    /// A PS3 disc image whose archives will not read because its encrypted
+    /// regions are still encrypted.
+    #[error(
+        "{looked_in} is an encrypted PS3 disc image (its archives are encrypted on disc). \
+         Decrypt it with your own disc key first: \
+         `uv run --with cryptography python3 scripts/ps3iso.py decrypt <image.iso> <key> hdfury-ps3-eu-dec.iso` \
+         (needs the Python package `cryptography`), then put the decrypted image in data/images/."
+    )]
+    EncryptedDisc {
+        /// The disc image that would not read.
+        looked_in: String,
+    },
+
     /// Nothing in the source is an archive any known layout names.
     ///
     /// Lists every candidate rather than only the platform's own, since the

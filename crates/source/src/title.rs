@@ -78,12 +78,18 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
         });
     }
 
-    if let Ok(archives) = oag_hd::open(source) {
-        return Ok(Opened {
-            archives,
-            title: oag_hd::TITLE,
-        });
-    }
+    // **HD's refusal is kept for one case.** An encrypted PS3 image is HD's
+    // to name; falling through to Pulse would report it as a missing `Data.wad`.
+    let hd_encrypted = match oag_hd::open(source) {
+        Ok(archives) => {
+            return Ok(Opened {
+                archives,
+                title: oag_hd::TITLE,
+            });
+        }
+        Err(error @ Error::EncryptedDisc { .. }) => Some(error),
+        Err(_) => None,
+    };
 
     // **Tried before Pulse, on the same rule as 2048's and HD's above.**
     // Omega shares no archive name with any of the other three either: its
@@ -100,6 +106,10 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
             archives,
             title: oag_omega::TITLE,
         });
+    }
+
+    if let Some(error) = hd_encrypted {
+        return Err(error);
     }
 
     match oag_pulse::open_with_packs(source, packs) {

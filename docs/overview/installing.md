@@ -81,17 +81,16 @@ read as it is, CHD (single-track, either `createdvd` or `createcd`) or ISO.
 
 ### HD / Fury: the disc must be decrypted first
 
-A PS3 disc dump is encrypted. The program opens it and fails with a message
-that names Pulse's files instead of saying so:
+A PS3 disc dump is encrypted. The program says so:
 
 ```
 Error: opening the archives in data/images/hdfury-ps3-eu.iso
 
 Caused by:
-    data/images/hdfury-ps3-eu.iso (PS3) holds none of: PSP_GAME/USRDIR/Data.wad, WADS2.WAD, PSP_GAME/USRDIR/FE.wad, WADSP.WAD
+    data/images/hdfury-ps3-eu.iso is an encrypted PS3 disc image (its archives are encrypted on disc). Decrypt it with your own disc key first: `uv run --with cryptography python3 scripts/ps3iso.py decrypt <image.iso> <key> hdfury-ps3-eu-dec.iso` (needs the Python package `cryptography`), then put the decrypted image in data/images/.
 ```
 
-That is the "this disc is still encrypted" message. The project's own script
+The project's own script
 decrypts a dump given the disc key your own dump tool recorded for that disc:
 
 ```sh
@@ -100,13 +99,14 @@ python3 scripts/ps3iso.py decrypt data/images/hdfury-ps3-eu.iso \
 ```
 
 The script needs the Python package `cryptography` (`pip install
-cryptography`), and it prints a Python traceback instead of usage text if you
-give it too few arguments. Run on 2026-10-07 it took 7 seconds and wrote a
+cryptography`, or prefix the command with `uv run --with cryptography`); it
+says so if the package is missing, and prints usage if you give it too few
+arguments. Run on 2026-10-07 it took 7 seconds and wrote a
 file byte-identical to the project's existing decrypted image, which the
 program then opened as `Wipeout HD`. The format is described in
 [PS3 disc encryption](../formats/ps3-disc.md). See
 [troubleshooting](#5-when-it-goes-wrong) for what happens with both files in
-one folder.
+one folder (the decrypted `hdfury-ps3-eu-dec.iso` is tried first).
 
 ### 2048 and Omega: unpack the package into a folder
 
@@ -162,14 +162,13 @@ target/release/oag-game data/extracted/vita/PCSF00007
 target/release/oag-game data/extracted/ps4
 ```
 
-Name the source for 2048 and Omega. `--dry-run`, `--screenshot` and `--race`
-with nothing named look only for disc images, so on a folder-only setup they
-end in the "no disc image found" error. A plain windowed `oag-game` with
-nothing named, and `oag-game --launcher`, open a chooser that lists every
-image and every unpacked folder found under `data/`, with the platform shown
-as `unknown` for a folder; pick with the arrow keys and Enter. (Seen with
-several folders present. A lone folder in a window was not re-run cleanly, so
-name it to be sure.)
+With nothing named, `--dry-run`, `--screenshot` and `--race` look for a disc
+image first and then for an unpacked 2048 folder (`data/extracted/vita/*/`)
+or Omega folder (`data/extracted/ps4/`), in that order. A plain windowed
+`oag-game` with nothing named, and `oag-game --launcher`, open a chooser that
+lists every image and every unpacked folder found, with the platform shown as
+`unknown` for a folder; pick with the arrow keys and Enter. With several
+titles installed, name the one you want.
 
 To check a setup without opening a window:
 
@@ -218,9 +217,8 @@ Deleting the cache is always safe. Other ways to name a source, in the order
 the program tries them: the command line, `$OAG_IMAGE`, then `[source] image`
 in `settings.toml`, then the folders above
 ([packaging](../tools/packaging.md#where-the-disc-image-comes-from)).
-`$OAG_IMAGE` takes a disc image or a folder of images; it **rejects** an
-unpacked 2048 or Omega folder. Use the command line or `settings.toml` for
-those.
+`$OAG_IMAGE` takes a disc image, a folder of images, or an unpacked 2048 or
+Omega folder (or the folder holding one).
 
 `RUST_LOG=debug` raises the terminal's detail, and `--log-file FILE` moves the
 log file (an empty value writes none).
@@ -247,9 +245,9 @@ do not expect a finished game outside Pulse.
 
 | What you see | Cause and fix |
 | --- | --- |
-| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in `data/images/` relative to where you ran it, or you ran it from another folder. Run from the folder that holds `data/`, or name the file. 2048 and Omega folders are never found this way: name them. The hint's advice to "put a pulse-psp-usa.chd beside the executable" only works for an AppImage; use `data/images/` |
-| `Error: OAG_IMAGE is set to ..., which is not a disc image and holds none` | `$OAG_IMAGE` cannot name an unpacked 2048 or Omega folder, or points at nothing. Unset it and name the folder on the command line |
-| `... (PS3) holds none of: PSP_GAME/USRDIR/Data.wad, WADS2.WAD, ...` | The PS3 image is still encrypted. Decrypt it as in section 2. With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the encrypted one is tried first and fails: name the decrypted one on the command line, or keep only that one |
+| `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
+| `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
+| `... is an encrypted PS3 disc image ...` | The HD image is still encrypted. Decrypt it as in section 2. With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
 | Black screen with `INTRO FRAME n / N (NO PICTURE)` | `ffmpeg` is missing or `--no-video` was given. Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |
