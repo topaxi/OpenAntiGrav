@@ -123,6 +123,51 @@ fn go_zones(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut
     }
 }
 
+/// Easy's bar under GO with the zone off: one pill the width of GO, a
+/// divider down the middle, and each half labelled; a held half is tinted
+/// inside the pill's own outline.
+fn split_bar(
+    art: &Art,
+    touches: &Touches,
+    size: (f32, f32),
+    scale: f32,
+    opacity: f32,
+    out: &mut Vec<Draw>,
+) {
+    let setup = Setup::new(Scheme::Easy, false);
+    let rect_of = |control: Control| {
+        touch::layout_for(size, setup)
+            .into_iter()
+            .find(|(c, _)| *c == control)
+            .map(|(_, r)| [r.x * scale, r.y * scale, r.w * scale, r.h * scale])
+    };
+    let (Some(brake), Some(absorb)) = (rect_of(Control::Brake), rect_of(Control::Absorb)) else {
+        return;
+    };
+    let whole = [brake[0], brake[1], brake[2] + absorb[2], brake[3]];
+    let body = Rounded {
+        rect: whole,
+        radius: whole[3] / 2.0,
+    };
+    shape::button(art, body, scaled(EDGE, opacity), scaled(BODY, opacity), out);
+    let inner = body.inset(body.border());
+    for (control, half) in [(Control::Brake, brake), (Control::Absorb, absorb)] {
+        if touches.is_down(control) {
+            shape::fill(art, inner, Some(half), scaled(BODY_HELD, opacity), out);
+        }
+        out.push(text(
+            half[0] + half[2] / 2.0,
+            half[1] + (half[3] - LABEL_HEIGHT) / 2.0,
+            control.label(),
+            opacity,
+        ));
+    }
+    out.push(fill(
+        [absorb[0] - 0.5, whole[1] + 2.0, 1.0, whole[3] - 4.0],
+        scaled(EDGE, opacity),
+    ));
+}
+
 /// Easy's BRAKE band across GO's bottom: lit inside GO's own outline from
 /// the bottom up as the pull rises, with its word.
 fn go_band(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut Vec<Draw>) {
@@ -278,6 +323,9 @@ pub enum Demo {
     EasyBarBrake,
     /// Standard: a finger that began on GO slid up onto FIRE.
     GoFire,
+    /// Standard: a finger that began on GO dragged well past its bottom-left
+    /// corner: the brake holds full.
+    GoLeftPast,
 }
 
 impl Demo {
@@ -297,9 +345,10 @@ impl Demo {
             "easy-brake" => Ok(Self::EasyBrake),
             "easy-bar-brake" => Ok(Self::EasyBarBrake),
             "go-fire" => Ok(Self::GoFire),
+            "go-left-past" => Ok(Self::GoLeftPast),
             other => Err(format!(
                 "unknown touch pose {other:?}: idle, idle-buttons, go-left, go-right, stick-go, \
-                 go-fire, easy-idle, easy-zones-off, easy-brake or easy-bar-brake"
+                 go-fire, go-left-past, easy-idle, easy-zones-off, easy-brake or easy-bar-brake"
             )),
         }
     }
@@ -350,6 +399,10 @@ impl Demo {
                 touches.down(1, at(0.5, 0.5), size);
                 touches.moved(1, of(Control::Brake), size);
                 drag(&mut touches, 0.07, 0.0);
+            }
+            Self::GoLeftPast => {
+                touches.down(1, at(0.5, 0.5), size);
+                touches.moved(1, at(-0.45, 1.25), size);
             }
             Self::GoFire => {
                 touches.down(1, at(0.5, 0.5), size);
@@ -416,7 +469,11 @@ pub fn draw(
 ) -> Vec<Draw> {
     let (zones, easy) = (setup.zones, setup.scheme == Scheme::Easy);
     let mut out = Vec::new();
+    let split = easy && !zones;
     for (control, rect) in touch::layout_for(size, setup) {
+        if split && matches!(control, Control::Brake | Control::Absorb) {
+            continue;
+        }
         let held = touches.is_down(control);
         let rect = [
             rect.x * scale,
@@ -461,6 +518,9 @@ pub fn draw(
                 go_zones(art, touches, body, opacity, &mut out);
             }
         }
+    }
+    if split {
+        split_bar(art, touches, size, scale, opacity, &mut out);
     }
     if let Some((origin, at)) = touches.stick() {
         let radius = size.1 * setup.stick_radius() * scale;

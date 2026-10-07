@@ -261,8 +261,8 @@ fn easy_draws_one_brake_band_in_go_and_no_separate_brakes() {
     off.sort();
     assert_eq!(
         off,
-        ["BRAKE", "GO"],
-        "the bar's half carries the word instead"
+        ["ABSORB", "BRAKE", "GO"],
+        "each half of the bar carries its word"
     );
 }
 
@@ -291,6 +291,8 @@ fn the_easy_poses_are_drawn_with_their_own_setup_and_fingers() {
     let bar = Demo::EasyBarBrake.touches(SIZE);
     assert!(bar.is_down(Control::Accelerate) && bar.is_down(Control::Brake));
     assert!(Demo::EasyBrake.touches(SIZE).brake_pull() > 0.5);
+    let past = Demo::GoLeftPast.touches(SIZE);
+    assert!(past.zone_down(GoZone::Left) && (past.zone_strength(GoZone::Left) - 1.0).abs() < 1e-4);
     let fire = Demo::GoFire.touches(SIZE);
     assert!(fire.is_down(Control::Accelerate) && fire.is_down(Control::Fire));
 }

@@ -3,6 +3,7 @@ use super::*;
 const SIZE: (f32, f32) = (2400.0, 1080.0);
 const STANDARD: Setup = Setup::new(Scheme::Standard, true);
 const EASY_OFF: Setup = Setup::new(Scheme::Easy, false);
+const EASY_ZONES: Setup = Setup::new(Scheme::Easy, true);
 
 fn centre(control: Control) -> (f32, f32) {
     layout(SIZE)
@@ -444,6 +445,9 @@ fn easy_with_the_zone_off_splits_the_bar_into_brake_and_absorb() {
     let at = |c| rects.iter().find(|(k, _)| *k == c).unwrap().1;
     let (brake, absorb) = (at(Control::Brake), at(Control::Absorb));
     assert!(brake.x + brake.w <= absorb.x && brake.y == absorb.y);
+    let go = go_rect(SIZE);
+    assert!((brake.w - absorb.w).abs() < 1e-3, "equal halves");
+    assert!((brake.x - go.x).abs() < 1e-3 && (absorb.x + absorb.w - (go.x + go.w)).abs() < 1e-3);
     // GO is thrust alone in the zone-off mode.
     let mut touches = easy(false);
     touches.down(1, go_at(0.5, 0.97), SIZE);
@@ -497,4 +501,84 @@ fn scheme_tokens_round_trip() {
     }
     assert_eq!(Scheme::parse("nope"), None);
     assert_eq!(Scheme::default(), Scheme::Standard);
+}
+
+fn latched_at(setup: Setup, to: (f32, f32)) -> Touches {
+    let mut touches = Touches::default();
+    touches.set_setup(setup, SIZE);
+    touches.down(1, go_at(0.5, 0.5), SIZE);
+    touches.moved(1, to, SIZE);
+    touches
+}
+
+#[test]
+fn the_brake_carries_on_past_gos_edge_like_a_stick_held_past_its_ring() {
+    let go = go_rect(SIZE);
+    let left_of_go = (go.x - 0.2 * SIZE.1, go.y + go.h * 0.95);
+    let reading = latched_at(STANDARD, left_of_go).reading(SIZE);
+    assert!(
+        (reading.airbrake_left - 1.0).abs() < 1e-4,
+        "{}",
+        reading.airbrake_left
+    );
+    assert_eq!(reading.airbrake_right, 0.0);
+    assert_eq!(reading.buttons, Button::Cross.bit(), "thrust stays on");
+    let below_corner = (go.x + go.w * 0.05, go.y + go.h + 0.15 * SIZE.1);
+    let reading = latched_at(STANDARD, below_corner).reading(SIZE);
+    assert!((reading.airbrake_left - 1.0).abs() < 1e-4);
+    let right_of_go = (go.x + go.w + 0.2 * SIZE.1, go.y + go.h * 0.95);
+    let reading = latched_at(STANDARD, right_of_go).reading(SIZE);
+    assert!((reading.airbrake_right - 1.0).abs() < 1e-4);
+}
+
+#[test]
+fn coming_back_inside_go_returns_the_brake_to_analogue() {
+    let go = go_rect(SIZE);
+    let mut touches = latched_at(STANDARD, (go.x - 0.2 * SIZE.1, go.y + go.h * 0.95));
+    assert!((touches.reading(SIZE).airbrake_left - 1.0).abs() < 1e-4);
+    touches.moved(1, go_at(0.25, 0.8), SIZE);
+    let partial = touches.reading(SIZE).airbrake_left;
+    assert!(partial > 0.0 && partial < 1.0, "{partial}");
+    touches.moved(1, go_at(0.5, 0.8), SIZE);
+    assert_eq!(touches.reading(SIZE).airbrake_left, 0.0, "the dead centre");
+}
+
+#[test]
+fn past_the_edge_above_the_brake_zone_there_is_no_brake() {
+    let go = go_rect(SIZE);
+    let beside_the_top = (go.x - 0.2 * SIZE.1, go.y + go.h * 0.1);
+    assert_eq!(
+        latched_at(STANDARD, beside_the_top)
+            .reading(SIZE)
+            .airbrake_left,
+        0.0
+    );
+}
+
+#[test]
+fn a_finger_below_a_corner_brakes_and_absorbs_at_once() {
+    let touches = latched_at(STANDARD, {
+        let absorb = layout_for(SIZE, STANDARD)
+            .into_iter()
+            .find(|(c, _)| *c == Control::Absorb)
+            .unwrap()
+            .1;
+        (absorb.x + 4.0, absorb.centre().1)
+    });
+    let reading = touches.reading(SIZE);
+    assert_eq!(reading.buttons, Button::Cross.bit() | Button::Circle.bit());
+    assert!(reading.airbrake_left > 0.9, "{}", reading.airbrake_left);
+}
+
+#[test]
+fn easys_band_pull_carries_on_past_gos_bottom_and_still_picks_the_steered_side() {
+    let go = go_rect(SIZE);
+    let mut touches = latched_at(EASY_ZONES, (go.x + go.w * 0.5, go.y + go.h + 0.2 * SIZE.1));
+    assert!((touches.brake_pull() - 1.0).abs() < 1e-4);
+    stick_drag(&mut touches, -0.5);
+    let reading = touches.reading(SIZE);
+    assert!((reading.airbrake_left - 1.0).abs() < 1e-4);
+    assert_eq!(reading.airbrake_right, 0.0);
+    touches.moved(1, go_at(0.5, 0.1), SIZE);
+    assert_eq!(touches.brake_pull(), 0.0, "back above the band");
 }

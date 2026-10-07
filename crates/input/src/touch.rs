@@ -71,6 +71,8 @@ pub const SAFE_Y: f32 = 0.03;
 pub const GO_ZONE_SIDE: f32 = 0.42;
 
 /// The share of GO's height, from the bottom, that carries the brake corners.
+/// A finger latched on GO keeps the pull it had at GO's edge when it slides
+/// past it.
 pub const GO_ZONE_BOTTOM: f32 = 0.50;
 
 /// How deep into a brake zone, as a share of its extent, the pull already
@@ -353,8 +355,8 @@ pub fn layout(size: (f32, f32)) -> Vec<(Control, Rect)> {
 /// The controls on screen and under a finger. **Chosen, not measured.**
 ///
 /// The right column is one width: FIRE above GO, a bar below it. The bar is
-/// ABSORB, or in Easy with GO's zone off split into BRAKE on the left and
-/// ABSORB on the right. Standard with the zone off keeps the separate BRAKE
+/// ABSORB, or in Easy with GO's zone off split into two equal halves across
+/// GO's width, BRAKE on the left and ABSORB on the right. Standard with the zone off keeps the separate BRAKE
 /// L/R buttons (BRAKE L upper left with PAUSE and VIEW beside it, BRAKE R in
 /// the thumb's arc left of GO);
 /// otherwise those two sit in the top-left corner.
@@ -378,9 +380,9 @@ pub fn layout_for(size: (f32, f32), setup: Setup) -> Vec<(Control, Rect)> {
         (Control::Fire, r(x, go_y - 0.02 - fire, go, fire)),
     ];
     if setup.scheme == Scheme::Easy && !setup.zones {
-        let half = (go - 0.01) / 2.0;
+        let half = go / 2.0;
         out.push((Control::Brake, r(x, bar_y, half, bar)));
-        out.push((Control::Absorb, r(x + half + 0.01, bar_y, half, bar)));
+        out.push((Control::Absorb, r(x + half, bar_y, half, bar)));
     } else {
         out.push((Control::Absorb, r(x, bar_y, go, bar)));
     }
@@ -555,38 +557,32 @@ impl Touches {
             if finger.go {
                 self.down |= 1 << Control::Accelerate.index();
             }
+            if finger.go && self.setup.zones {
+                // Read off the finger's place clamped to GO, so past its edge
+                // the pull holds the value it had there, like a stick held
+                // past its ring; leaving GO does not drop it.
+                let fraction = go.fraction(finger.at);
+                match self.setup.scheme {
+                    Scheme::Easy => {
+                        if fraction.1 >= 1.0 - EASY_BAND {
+                            self.brake = self.brake.max(band_depth(fraction.1, EASY_BAND));
+                        }
+                    }
+                    Scheme::Standard => {
+                        if let Some(zone) = GoZone::at(fraction) {
+                            self.zones |= zone.bit();
+                            let pull = zone.strength(fraction);
+                            self.pulled[zone.index()] = self.pulled[zone.index()].max(pull);
+                        }
+                    }
+                }
+            }
             let Some(control) = control_at(finger.at, size, self.setup) else {
                 continue;
             };
             self.down |= 1 << control.index();
-            let fraction = go.fraction(finger.at);
-            match (control, self.setup) {
-                (Control::Brake, _) => self.brake = 1.0,
-                (
-                    Control::Accelerate,
-                    Setup {
-                        zones: true,
-                        scheme: Scheme::Easy,
-                    },
-                ) => {
-                    if fraction.1 >= 1.0 - EASY_BAND {
-                        self.brake = self.brake.max(band_depth(fraction.1, EASY_BAND));
-                    }
-                }
-                (
-                    Control::Accelerate,
-                    Setup {
-                        zones: true,
-                        scheme: Scheme::Standard,
-                    },
-                ) => {
-                    if let Some(zone) = GoZone::at(fraction) {
-                        self.zones |= zone.bit();
-                        let pull = zone.strength(fraction);
-                        self.pulled[zone.index()] = self.pulled[zone.index()].max(pull);
-                    }
-                }
-                _ => {}
+            if control == Control::Brake {
+                self.brake = 1.0;
             }
         }
     }

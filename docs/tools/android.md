@@ -231,7 +231,7 @@ pass.
 | steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock (20% in Easy); X steers, Y pitches | stick axes |
 | FIRE | top of the right column, a pill 0.36 wide and 0.18 of the height tall, a crosshair | `Square` |
 | GO | the column's middle, mid-height, largest (0.36 of the height), a rounded square | `Cross` (thrust), plus `L`/`R` in its brake corners |
-| ABSORB | below GO with a 0.03 gap, 0.36 wide and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar | `Circle` |
+| ABSORB | below GO with a 0.03 gap, 0.36 wide and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (labelled `ABSORB`) | `Circle` |
 | BRAKE L, BRAKE R | **only Standard with GO's brake zones off**: BRAKE L upper left, BRAKE R in the thumb's arc left of GO (0.17), a side arrow and `L`/`R`; otherwise neither is drawn nor hit-tested | `L`, `R` (airbrakes) |
 | BRAKE (bar half) | **only Easy with the zones off**: the left half of the bar under GO | the airbrake axes, no button |
 | PAUSE, VIEW | top-left corner (0.13), beside BRAKE L in Standard with the zones off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
@@ -247,6 +247,13 @@ analogue `airbrake_left`/`right` axes.
   Easy band read only while the finger is over GO itself. A finger inside a rectangle beats a rectangle
   whose slop it is only in (the 0.03 gap and the nearest-edge rule keep a thumb at GO's bottom from
   being read as ABSORB).
+- **The brake carries on past GO's edge (chosen, not measured; the maintainer: the drag "should behave a
+  little like the stick").** For a finger latched on GO the pull is read off its position clamped to GO's
+  rectangle, not gated on being inside it: past GO's left or right side the pull holds the value it had at the edge
+  at that height, below GO's bottom it holds the bottom value at that column, and thrust stays on. Above the
+  brake zone (or over FIRE) there is none, and coming back inside returns to the analogue value. The same
+  holds for Easy's band, whose side still comes from `novice_airbrakes(pull, stick_x)`. A finger dragged below a
+  corner onto ABSORB brakes **and** absorbs at once.
 - **Standard's brake corners** are bigger: 42% of GO's width each and the bottom 50% (were 34% and 34%),
   leaving a 16% dead centre column; still analogue, and the pull reads **full at 85% of the way into
   the zone** (`GO_FULL_DEPTH`) so a thumb need not reach GO's very edge, where ABSORB starts.
@@ -268,13 +275,13 @@ analogue `airbrake_left`/`right` axes.
   `novice_airbrakes(pull, stick_x)` unchanged, so it brakes the side the other thumb is steering
   (stick below -0.1 left, above +0.1 right) and **both when centred**. Each side is the larger of the
   stick's rim and the band. With GO BRAKE ZONES **off** there is no band: the bar under GO is split,
-  BRAKE on the left and ABSORB on the right, and BRAKE pulls 1.0 the same way (the maintainer's
+  one row exactly GO's width in two equal halves with a divider, BRAKE (left) and ABSORB (right), each labelled with its word, and BRAKE pulls 1.0 the same way (the maintainer's
   decision: separate BRAKE L/R buttons are hard on a phone). A pull is amber-lit inside GO's own outline.
 - **Under the simulation's own Novice scheme** (`[controls] scheme`) the sim reads only `airbrake_right`
   and sides it off the steering, ignoring `airbrake_left`; Easy then puts `max(left, right)` on
   `airbrake_right` alone (`touch::fold_for_novice_sim`) so the two agree. Standard is not folded,
   as before: its left corner does nothing under sim Novice.
-- Capture poses: `--touch-overlay go-fire|easy-idle|easy-zones-off|easy-brake|easy-bar-brake` beside
+- Capture poses: `--touch-overlay go-fire|go-left-past|easy-idle|easy-zones-off|easy-brake|easy-bar-brake` beside
   the earlier ones.
 
 
