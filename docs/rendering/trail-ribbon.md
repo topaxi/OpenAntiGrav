@@ -547,3 +547,30 @@ kind `CLAUDE.md` names. The load report says so on every HD race.
 - A matched-pose HD reference frame from RPCS3. None has ever been captured, so
   every HD picture in this tree is judged against the loader report rather than
   against the original.
+
+## 2026-10-07 (`hd-rocket`): the Rocket's smoke trail is this family's `rockettrail_triangle`, and it is not drawn
+
+Filmed on RPCS3 (held state 0, Triangle, `scripts/rpcs3-hd-weapon.py`, Talon's
+Junction grid, two boots, both fired on video frame 173 and read the same):
+every rocket leaves a **thick white smoke ribbon** that streams ahead of the
+craft for about 0.8 s of video time, and the fire frame lights the whole
+scene yellow-white for about two frames. The body itself is not resolvable at
+the chase camera's distance. The burst on the wall is a white flash, then pale
+sparks and grey-brown smoke for roughly a second.
+
+This build, same circuit, `--give rocket`, fire on `square`, far camera: three
+small dark rocket bodies and then a white flash and grey puffs at the wall,
+**no ribbon and no launch light**. `WO_ROCKET_FLARE` plays (it is wired) and
+shows nothing at that range, so the smoke is not the flare's.
+Pair, original top, ours bottom, 0.1/0.3/0.6/0.9/1.2/1.8 s after fire:
+`data/reference/hd-capture/rocket-ref/pair_rocket.png` (gitignored, not in the tree).
+
+The disc authors the ribbon: `data/ribboneffects/rockettrail_triangle.{vex,rcsmodel}`,
+`materials/hd_rockettrail.rcsmaterial`, `rockettrail_shadow_triangle.*` and
+`data/tex/rocket_smoketrail.gtf`. The string table's pointer for
+`rockettrail_triangle` sits at `0x00920fc0`, referenced from the `WakeTrail`
+block at `0x008b3140`, so the ribbon is built by the `WakeTrail`-style manager
+(`0x00ad81f0`), not the engine-trail one. **Not read:** that job's width,
+taper, lifetime and per-tick sampling, and what spawns it per rocket. Without
+them any ribbon drawn would be a guess, so nothing is drawn (confidence that
+the trail exists and is this asset: 80; its law: unread).
