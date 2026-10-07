@@ -339,37 +339,53 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
 /// Confidence 92, the same cap that page puts on a claim read straight out of
 /// the disc's own XML.
 pub const TOUCH: &TouchFrontEnd = &TouchFrontEnd {
-    // `<Screen name="GameModeChoice" type="GameModeChoice_Screen">`'s four
-    // `<TouchButton>`s, in the file's own order - `offline`/`multiplayer`/
-    // `adhoc`/`crossplay` by `name`, one row at `y="190"`.
+    // `<Screen name="GameModeChoice" type="GameModeChoice_Screen">`'s six
+    // `<TouchButton>`s as the v1.04 patch's `data1`/`data2` copy of the file
+    // authors them (the base package's copy has four, one row at `y="190"`,
+    // 140x140): two rows of three, `FE_RC_HD` and `FE_RC_FURY` beside the
+    // single-player tile, in the file's own order.
     game_mode_choice: &[
         TouchButton {
             id: "FE_SP_CAMPAIGN",
-            x: 167.0,
-            y: 190.0,
-            width: 140.0,
-            height: 140.0,
+            x: 228.0,
+            y: 110.0,
+            width: 135.0,
+            height: 135.0,
+        },
+        TouchButton {
+            id: "FE_RC_HD",
+            x: 410.0,
+            y: 110.0,
+            width: 135.0,
+            height: 135.0,
+        },
+        TouchButton {
+            id: "FE_RC_FURY",
+            x: 592.0,
+            y: 110.0,
+            width: 135.0,
+            height: 135.0,
         },
         TouchButton {
             id: "FE_MP_CAMPAIGN",
-            x: 329.0,
-            y: 190.0,
-            width: 140.0,
-            height: 140.0,
+            x: 228.0,
+            y: 320.0,
+            width: 135.0,
+            height: 135.0,
         },
         TouchButton {
             id: "FE_ADHOC",
-            x: 491.0,
-            y: 190.0,
-            width: 140.0,
-            height: 140.0,
+            x: 410.0,
+            y: 320.0,
+            width: 135.0,
+            height: 135.0,
         },
         TouchButton {
             id: "FE_CROSSPLAY",
-            x: 653.0,
-            y: 190.0,
-            width: 140.0,
-            height: 140.0,
+            x: 592.0,
+            y: 320.0,
+            width: 135.0,
+            height: 135.0,
         },
     ],
     // `<Screen name="Home" type="Home">`'s five `<TouchButton>`s, in the
@@ -518,16 +534,18 @@ mod tests {
     }
 
     #[test]
-    fn both_touch_grids_share_one_icon_size() {
-        for button in TOUCH.game_mode_choice.iter().chain(TOUCH.home) {
-            assert_eq!(button.width, 140.0);
-            assert_eq!(button.height, 140.0);
+    fn each_touch_grid_shares_one_icon_size() {
+        for button in TOUCH.game_mode_choice {
+            assert_eq!((button.width, button.height), (135.0, 135.0));
+        }
+        for button in TOUCH.home {
+            assert_eq!((button.width, button.height), (140.0, 140.0));
         }
     }
 
     #[test]
-    fn game_mode_choice_has_four_buttons_and_home_has_five() {
-        assert_eq!(TOUCH.game_mode_choice.len(), 4);
+    fn game_mode_choice_has_six_buttons_and_home_has_five() {
+        assert_eq!(TOUCH.game_mode_choice.len(), 6);
         assert_eq!(TOUCH.home.len(), 5);
     }
 }

@@ -68,6 +68,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
     archives: ArchiveCandidates {
+        patch: &[],
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         extra: EXTRA_CANDIDATES,

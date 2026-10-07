@@ -322,6 +322,18 @@ some other trigger is unmeasured.
 
 ## The Game Mode grid has six tiles; the file declares four - and the two extra are not `GameModeChoice` tiles at all
 
+> **Superseded in part, 2026-10-07 (`title-patches` lane), confidence 90.** The
+> four-button reading was of the **base** package's `Definition.xml`. The v1.04
+> patch's copy (`data1`/`data2`) authors **six** `GameModeChoice` `<TouchButton>`s
+> itself - `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY` at `x` 228/410/592, `y` 110,
+> then `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY` at `y` 320, 135x135 - which is
+> the Vita3K capture's grid exactly. With the patch mounted this build draws it
+> (`data/scratch/title-patches/gm-after.png`). The hotspot mechanism below is a
+> separate, DLC-gated map object and is not retracted; whether the original
+> hides these two tiles without the DLC is not read. Choosing HD or Fury leaves
+> a note ("another title's campaign") and stays. This build's RACEBOX and REMIX
+> tiles moved to the left column, where the second row would have covered them.
+
 **Confidence 85 for the runtime observation; confidence 78 for the mechanism,
 decompiled 2026-09-18.** `NEWGUI/Definition.xml`'s `GameModeChoice` screen
 authors exactly four `<TouchButton>`s - `offline`/`multiplayer`/`adhoc`/

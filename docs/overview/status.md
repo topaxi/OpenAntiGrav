@@ -206,7 +206,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1290 (1159 fn, 131 data) | 31 (2%) | 81 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-10-06, [billboards.md](../ghidra/functions/psp-pulse-usa/billboards.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 73 (72 fn, 1 data) | 2 (2%) | 11 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+29 measurement scripts) | 2026-10-05, [magfloor-absent.md](../ghidra/functions/psp-pure-usa/magfloor-absent.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 108 (98 fn, 10 data) | 6 (5%) | 22 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-06, [endrace-summary.md](../ghidra/functions/vita-2048-eu-v104/endrace-summary.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 110 (100 fn, 10 data) | 6 (5%) | 23 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-07, [archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md) |
 
 <!-- re-coverage:end -->
 

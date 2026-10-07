@@ -23,8 +23,7 @@ mod render_overrides;
 #[command(
     name = "oag-game",
     about = "Run a Wipeout game (Pulse, Pure, HD/Fury, 2048 or Omega) from your own copy",
-    // The commit too, so a deployed build can be told apart from the last one
-    // (`just deploy-deck` prints it from the target machine).
+    // The commit too, so a deployed build can be told from the last one.
     version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("OAG_GIT_HASH"), ")")
 )]
 pub(crate) struct Cli {

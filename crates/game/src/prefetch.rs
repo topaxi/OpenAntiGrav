@@ -686,7 +686,8 @@ fn existing(cache_dir: &Path) -> Vec<String> {
 /// bulk archive is `WADS2.WAD` and the derivation would produce a name no disc
 /// has, which would open as nothing and be reported as a skip for no reason.
 fn archive_specs(layout: &oag_assets::Layout) -> Vec<String> {
-    let mut specs = vec![layout.data.clone()];
+    let mut specs = layout.patch.clone();
+    specs.push(layout.data.clone());
     specs.extend(layout.fe.clone());
     specs.extend(layout.extra.iter().cloned());
 
@@ -779,6 +780,7 @@ mod tests {
             platform: oag_assets::Platform::Psp,
             data: "image.chd:PSP_GAME/USRDIR/Data.wad".to_string(),
             fe: Some("image.chd:PSP_GAME/USRDIR/FE.wad".to_string()),
+            patch: Vec::new(),
             extra: Vec::new(),
             serial: None,
         };
@@ -815,6 +817,7 @@ mod tests {
             platform: oag_assets::Platform::Ps2,
             data: "image.chd:54748/WADS2.WAD".to_string(),
             fe: Some("image.chd:54748/WADSP.WAD".to_string()),
+            patch: Vec::new(),
             extra: Vec::new(),
             serial: None,
         };

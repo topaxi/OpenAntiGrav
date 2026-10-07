@@ -82,19 +82,14 @@ pub struct TouchButton {
 /// hangs off `Title` rather than being selected apart from it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TouchFrontEnd {
-    /// `NEWGUI/Definition.xml`'s `GameModeChoice` screen, four buttons:
-    /// `offline`/`multiplayer`/`adhoc`/`crossplay`
-    /// (`FE_SP_CAMPAIGN`/`FE_MP_CAMPAIGN`/`FE_ADHOC`/`FE_CROSSPLAY`), in the
-    /// file's own order.
-    ///
-    /// **Not the six tiles a Vita3K capture shows.** `2048-frontend.md`'s
-    /// "The Game Mode grid has six tiles" section found the extra two
-    /// (`HD CAMPAIGN`/`FURY CAMPAIGN`) are hotspot buttons the executable adds
-    /// to the persistent `<FE3DCanvas>` map, gated on
-    /// `g_bDlc1Mounted`/`g_bDlc2Mounted` - a different object on a different
-    /// screen, not a fifth and sixth `GameModeChoice_Screen` button, and not
-    /// carried here because no caller for that native-code path has been
-    /// resolved yet (see `frontend-campaign-map.md`'s own Open section).
+    /// `NEWGUI/Definition.xml`'s `GameModeChoice` screen, in the file's own
+    /// order. A title's own table, so a count is the title's: 2048's is the
+    /// v1.04 patch's copy, **six** buttons in two rows of three (the extra two,
+    /// `FE_RC_HD` and `FE_RC_FURY`, are what a Vita3K capture shows). The base
+    /// package's copy authors four in one row, and `2048-frontend.md`'s
+    /// "The Game Mode grid has six tiles" section read that copy: the patch's
+    /// own file is what resolves it. DLC gating of the two, if the original has
+    /// it, is not read.
     pub game_mode_choice: &'static [TouchButton],
     /// `NEWGUI/Definition.xml`'s `Home` screen, five buttons: team,
     /// community, profile, options, extras, in the file's own order.

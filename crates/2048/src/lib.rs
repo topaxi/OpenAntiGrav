@@ -67,6 +67,7 @@ pub mod race;
 pub const TITLE: &Title = &Title {
     name: "Wipeout 2048",
     archives: ArchiveCandidates {
+        patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,
         // **No companion archive.** The base package ships exactly one PSARC
         // and everything a race reads is in it; the two DLC packages are
@@ -269,6 +270,33 @@ pub mod names {
     pub const FRONT_END_MUSIC: &str = r"Data\Audio\Music\FEMusic\frontend_stereo.at9";
 }
 
+/// The 1.04 patch's two archives, mounted over the base package.
+///
+/// **What is measured.** The shipped v1.04 executable opens `data.psarc`, then
+/// `data1.psarc`, then `data2.psarc`, then the two DLC packs, every one at the
+/// same `app0:PSP2/` mount point (`FileSystem_Fios_Mount`, see
+/// `docs/ghidra/functions/vita-2048-eu-v104/archive-mount.md`; the base v1.00
+/// executable names `data.psarc` alone). On Vita3K (which runs the game's own
+/// `libfios2`) a copy of `Data/plugins/frontend/NEWGUI/Definition.xml`, a path
+/// all three archives carry with three different contents, was corrupted in one
+/// archive at a time: corrupting the base's changes nothing, corrupting
+/// `data1.psarc`'s or `data2.psarc`'s stops the game at the first logo. So the
+/// patch is served over the base.
+///
+/// **What is chosen, not measured:** `data2` ahead of `data1`. Both patch
+/// copies were read by the test above, so the experiment does not say which
+/// one wins a collision; `data2` is listed first because it was mounted last
+/// (a later mount shadowing an earlier one is the rule that makes any patch do
+/// anything) and its copies are the larger, later revisions on every one of the
+/// three-way paths measured (`definition.xml` 30,227 / 31,974 / 34,908 bytes).
+///
+/// A patch archive replaces 1,810 distinct paths, 1,370 of them in the base:
+/// 1,156 materials, 435 ship files and the tables.
+const PATCH_CANDIDATES: &[(&str, Platform)] = &[
+    ("PSP2/data2.psarc", Platform::Vita),
+    ("PSP2/data1.psarc", Platform::Vita),
+];
+
 /// The bulk archive: the base package's one PSARC.
 ///
 /// Named by its tail rather than its whole path, the way every candidate is,
@@ -286,15 +314,8 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[("PSP2/data.psarc", Platform::Vit
 /// only ever about the race circuits they add, never about a Zone-specific
 /// one.
 ///
-/// **The 1.04 patch's `data1.psarc`/`data2.psarc` are deliberately not here.**
-/// A patch archive shadows entries the base also holds, and
-/// [`oag_assets::Archives`] searches the bulk archive *first* - so mounting
-/// them as extras would put them behind the very entries they exist to
-/// replace, which is worse than not mounting them. Doing it properly needs a
-/// role that is searched ahead of `data`, and nothing has needed one yet.
-///
 /// **A circuit both a package and the base ship is served from the base**, by
-/// that same ordering: `Vineta_K`, `Anulpha_Pass`, `Chenghou_Project` and
+/// [`oag_assets::Archives`] searching `data` before these: `Vineta_K`, `Anulpha_Pass`, `Chenghou_Project` and
 /// `Moa_Therma` are in `data.psarc` as well as in `dlc1.psarc`, and it is the
 /// base copy a race gets.
 const EXTRA_CANDIDATES: &[(&str, Platform)] = &[

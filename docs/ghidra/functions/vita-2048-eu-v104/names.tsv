@@ -129,3 +129,5 @@
 0x8122eac0	function	Language_ChoosePluginName	90	language.md
 0x81541318	data	Language_RegionMode	85	language.md
 0x8121b688	function	TrackStartup_Read	85	track-startup-sound-bank.md
+0x8101472a	function	FileSystemFios_Construct	80	archive-mount.md
+0x81014308	function	FileSystemFios_CreateOnce	70	archive-mount.md

@@ -338,9 +338,19 @@ Switch-off bisect at tick 0: with only the light off the frame is pixel-identica
 to the pre-change one; the flare model, sprite, trail and quad are not visible
 for the player at rest.
 
-**Not loaded:** the game opens only `PSP2/data.psarc`; the v1.04 patch archives are
-never read, so the 24 re-shipped flares are not the ones drawn.
-**Mounting it was weighed again on 2026-10-07 and left out (chosen, not measured):** it needs a role searched ahead of `data`, the order of `data1` against `data2` (570 shared paths) is unmeasured, and it replaces 1,156 materials, 435 ships and 50-odd tables, which would move 2048's rendering and handling unverified. Omega's patch, by contrast, is required and mounted (checked, differs).
+**Mounted since 2026-10-07 (`title-patches` lane).** The v1.04 patch archives are
+`ArchiveCandidates::patch`, searched ahead of `data.psarc`, `data2` before `data1`,
+so the 24 re-shipped flares and the 1,156 replaced materials are now the ones read.
+The v1.04 executable opens `data`, `data1`, `data2`, `dlc1`, `dlc2` in that order at one
+FIOS2 mount point ([archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md),
+confidence 80), and a Vita3K run with one archive's `Definition.xml` corrupted at a time showed
+the base copy is shadowed by the patch (confidence 85). **`data2` over `data1` is chosen, not
+measured**: corrupting either stopped the game, so both copies are read. A source pointed at
+`.../base` alone mounts no patch, which is what the campaign ground truth does on purpose.
+Before and after frames of Altima, Cathedral and Vineta K differ in 58 to 97 pixels of
+1440x816 (largest channel step 9, HUD band), so the patch is visually inert in a race here.
+Omega: its patch is required and mounted; the 2048 rule is the same FIOS2 pattern but nothing
+shows Omega's order (checked, not determinable).
 What v1.04 is: Sony's own changelog for 2048's v1.04 (June 2012, 142 MB) reads
 only "Various Bug Fixes", with an updated trophy list
 ([xtremepsvita](https://www.xtremepsvita.com/2012/06/19/wipeout-2048-updated-to-v1-04/)).

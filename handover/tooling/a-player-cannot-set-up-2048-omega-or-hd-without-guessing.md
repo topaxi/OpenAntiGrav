@@ -23,8 +23,8 @@ message; the "beside the executable" hint shows only under an AppImage.
 Landed 2026-10-07 (setup-polish): auto-detect prefers Europe over USA (Pulse,
 Pure, 2048 extracts; `DEFAULT_IMAGE` and every suggested image name too); a
 missing `ffmpeg` logs one `warn` line and skips the conversion; `--help` names
-all five titles; 2048's 1.04 patch is left unmounted on evidence (see
-`docs/formats/2048-status.md`); stale `data/README.md` and `packaging.md` lines
+all five titles; 2048's 1.04 patch was left unmounted on evidence, then mounted by
+title-patches (see `docs/formats/2048-status.md`); stale `data/README.md` and `packaging.md` lines
 fixed; the cache is `data/cache/` only in a checkout (a `justfile` and `data/`)
 or where one already exists.
 
@@ -36,5 +36,8 @@ or where one already exists.
 
 1. Decide whether a player-facing unpack command for 2048 and Omega is wanted
    at all, given that it needs a license key from the player's own copy.
-2. Mounting 2048's 1.04 patch needs a role searched ahead of `data`, the
-   `data1`/`data2` precedence measured, and a rendering check; a separate lane.
+2. ~~Mounting 2048's 1.04 patch~~ landed 2026-10-07 (title-patches): `ArchiveCandidates::patch`,
+   see `docs/formats/patches.md`. Still open there: `data1` against `data2` and the
+   DLC packs against the patch are chosen, not measured (both patch copies of
+   `Definition.xml` are read by the original, so a collision test needs a path
+   only one consumer reads).
