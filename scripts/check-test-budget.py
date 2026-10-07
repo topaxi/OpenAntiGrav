@@ -57,6 +57,13 @@ test at review, not to make anyone chase a 12% wobble.
     just test-data              # writes target/test-data.log and checks it
     just check-test-budget PATH # check a log you already have
 
+`just test-data-affected` runs it with `--partial`: a member's run of the
+packages its branch changed. Every test that ran is still held to `CEILING`
+(or its `BASELINE` row), but `SUITE_CEILING` is not checked, because a partial
+run's wall clock says nothing about the whole suite's, and no `BASELINE` row is
+called for deletion off a partial run. The ceiling on the whole suite is the
+lead's full `just test-data` once per merge batch.
+
 It is deliberately not in the default `just` gate: that runs `test`, which skips
 every `#[ignore]`d test, so there would be nothing to measure.
 """
@@ -151,7 +158,9 @@ def measure(log: str) -> tuple[dict[str, float], float | None]:
     return durations, wall
 
 
-def check(durations: dict[str, float], wall: float | None) -> list[str]:
+def check(
+    durations: dict[str, float], wall: float | None, partial: bool = False
+) -> list[str]:
     failures = []
     for test, seconds in sorted(durations.items(), key=lambda kv: -kv[1]):
         allowed = BASELINE.get(test)
@@ -170,7 +179,7 @@ def check(durations: dict[str, float], wall: float | None) -> list[str]:
                 f"(+{TOLERANCE:.0%} slack).\n"
                 f"    A baseline is lowered, never raised - find what grew."
             )
-        elif seconds <= CEILING / TOLERANCE:
+        elif seconds <= CEILING / TOLERANCE and not partial:
             # Not merely `<= CEILING`: a test that lands either side of the
             # ceiling from run to run would fail one for having no row and the
             # next for having one.
@@ -180,7 +189,7 @@ def check(durations: dict[str, float], wall: float | None) -> list[str]:
                 f"    Delete its BASELINE row in scripts/check-test-budget.py."
             )
 
-    if wall is not None and wall > SUITE_CEILING:
+    if wall is not None and wall > SUITE_CEILING and not partial:
         slowest = sorted(durations.items(), key=lambda kv: -kv[1])[:5]
         table = "\n".join(f"      {s:6.0f}s  {t}" for t, s in slowest)
         failures.append(
@@ -192,7 +201,10 @@ def check(durations: dict[str, float], wall: float | None) -> list[str]:
 
 
 def main() -> int:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "target/test-data.log")
+    args = sys.argv[1:]
+    partial = "--partial" in args
+    args = [a for a in args if a != "--partial"]
+    path = Path(args[0] if args else "target/test-data.log")
     if not path.exists():
         print(
             f"no run to check at {path} - `just test-data` writes it",
@@ -205,7 +217,7 @@ def main() -> int:
         print(f"{path} holds no nextest results", file=sys.stderr)
         return 1
 
-    failures = check(durations, wall)
+    failures = check(durations, wall, partial)
     if failures:
         print(f"test budget, from {path}:\n", file=sys.stderr)
         for failure in failures:
