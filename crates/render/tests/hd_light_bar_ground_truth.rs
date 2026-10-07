@@ -67,24 +67,22 @@ fn vineta_k_start_line_binds_its_light_bars_in_the_authored_azure() {
     );
 }
 
+/// The sea sheet (`water_test_2`, chunks 6 and 23 each way) carries render flag
+/// `0x10`: the original draws it only into its behind-the-glass target, so the
+/// main view leaves it out (`hd_behind_glass_ground_truth`). Its shading, lit
+/// vertex colour (`slots::ICE` with the water rate), is the reading for that
+/// target and reaches no main-view vertex.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn vineta_k_sea_sheet_is_lit_vertex_colour_not_a_white_picture() {
+fn vineta_k_sea_sheet_is_behind_the_glass_not_in_the_main_view() {
     let Some((model, report)) = build("/data/environments/01_vineta_k/track.vex") else {
         return;
     };
+    // The material is still read (the count is per material); its chunks are not built.
     assert_eq!(report.water_lit_colour, 1);
-    let water: Vec<_> = model
-        .vertices
-        .iter()
-        .filter(|v| v.slots & slots::ICE != 0)
-        .collect();
-    assert!(!water.is_empty(), "the sea sheet carries the ICE role bit");
+    assert!(report.behind_glass > 0);
     assert!(
-        water.iter().all(|v| {
-            let index = slots::material_index(v.slots) as usize;
-            model.emissive.get(index - 1).is_some_and(|e| e.rate == 2.0)
-        }),
-        "and every such vertex is flagged as water, not as the ice pool"
+        model.vertices.iter().all(|v| v.slots & slots::ICE == 0),
+        "no sea-sheet vertex in the main view"
     );
 }
