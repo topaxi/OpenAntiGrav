@@ -575,5 +575,11 @@ A rolling pre-release, rebuilt from `main` once a day by
   leaves it unset.
 - **Unsigned and unstable.** Built from whatever `main` holds, with no manual
   testing. Use a tagged release for anything that matters.
-- **No Android APK yet.** The `android` job is skipped for a nightly; only a `v*`
-  tag builds it.
+- **The Android APK is included** (2026-10-07), signed with the repository's stored
+  sideload key (secrets `OAG_APK_KEYSTORE_B64` and `OAG_APK_KEYSTORE_PASS`; today the
+  maintainer's local `~/.android/oag-debug.keystore`), so it installs over a local
+  `just deploy-android` build and the reverse, with no uninstall. Without the secret
+  the job falls back to a throwaway key. Its `versionCode` is the build's UTC time as
+  `yydddHH`, the same rule `scripts/build-apk.sh` uses locally, so whichever APK was
+  built later always installs; a run number would not do that, since local builds
+  have none.

@@ -9,8 +9,8 @@ name: Release
 # `release` job at the bottom runs for a tag only.
 #
 # nightly.yml calls this workflow with `nightly: true`: the same Linux, Deck and
-# Windows jobs, a `nightly-<date>-<sha7>` version, `-nightly` in `oag-game
-# --version`, and no Android job (not in the nightly yet).
+# Windows jobs plus the Android APK, a `nightly-<date>-<sha7>` version, and
+# `-nightly` in `oag-game --version`.
 
 on:
   push:
@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       nightly:
-        description: "A nightly build: dated version, -nightly suffix, no Android"
+        description: "A nightly build: dated version, -nightly suffix"
         type: boolean
         default: false
 
@@ -167,14 +167,17 @@ jobs:
   # scripts/build-apk.sh (the same script `just apk` runs). The runner image
   # ships the SDK, build-tools and a platform; the NDK is pinned here. The
   # script unpacks the APK and runs check-leakage.py over it, so nothing
-  # extracted can ride along. Signed with a throwaway key: a sideload build.
+  # extracted can ride along. Signed with the repository's stored sideload key
+  # (secrets OAG_APK_KEYSTORE_B64 / OAG_APK_KEYSTORE_PASS) so each build installs
+  # over the last without an uninstall; a throwaway key when the secret is absent.
   android:
     name: android (arm64)
     needs: version
-    if: ${{ !inputs.nightly }}
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      KEYSTORE_B64: ${{ secrets.OAG_APK_KEYSTORE_B64 }}
+      OAG_APK_KEYSTORE_PASS: ${{ secrets.OAG_APK_KEYSTORE_PASS }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.0
@@ -189,6 +192,11 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.3.13750724"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
           cargo install cargo-ndk --locked
+      - name: Stored signing key
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/oag.keystore"
+          echo "OAG_APK_KEYSTORE=$RUNNER_TEMP/oag.keystore" >> "$GITHUB_ENV"
       - name: Build the APK
         run: |
           scripts/build-apk.sh --version "$VERSION"
