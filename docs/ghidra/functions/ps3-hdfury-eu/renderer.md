@@ -3238,7 +3238,7 @@ project's shader, with no new assumption beyond "the ceiling's own
 geometry's own facing both support but this session did not measure the
 per-pixel `ndl` value to confirm.
 
-**What is authored beside the wired ambient and is not consumed at all:
+**What is authored beside the wired ambient and was not consumed at all when this was written (it tints the sky cube since 2026-10-07, see the end of this page):
 `Lighting.Sky colour`** - `140 140 140 0` on Amphiseum, `128 128 128 0` on
 Talon's Junction, both **neutral grey**, unlike either circuit's tinted
 `Constant ambient color`. `docs/formats/envsettings.md`'s own table already
@@ -3293,6 +3293,8 @@ than assumed from the authored sun direction and normal facing; extending
 the material cross-check past the 79.1%-coverage, `--bloom off` sample;
 wiring anything - no shader or Rust code changed. `mesh/`, `mesh.wgsl`,
 `emissive.rs`, `sky_cube.rs` read again this session, still unchanged.
+
+> **Superseded in part 2026-10-07**: the `+0x440` word is the sky cube's vertex colour, not a clear colour - see [HD's sky is tinted by `Lighting.Sky colour`](#hds-sky-is-tinted-by-lightingsky-colour-and-the-sky-luma-changes-sign-reading-was-a-mask-artefact-2026-10-07-hd-sky-luma) at the end of this page. The offset, the gate and the "not a lit-material term" reading stand.
 
 ### `Lighting.Sky colour`'s consumer is found and is a backdrop clear, not a material term; `Constant ambient color` is confirmed wired exactly as this project already assumes (2026-09-17, later still, `lane-hd-ambient-light`)
 
@@ -7246,3 +7248,90 @@ Amphiseum 00 ours 0.63 against 0.49) and does not touch the lightmap; the Sol 2 
 Talon's reference poses are 429-448 km/h frames with glare and adaptation state ours
 cannot reproduce at rest, so it was not separated here. (3) The matched poses are
 moving frames with a craft; only Talon's 00 was said to be stationary.
+
+
+### HD's sky is tinted by `Lighting.Sky colour`, and the "sky luma changes sign" reading was a mask artefact (2026-10-07, `hd-sky-luma`)
+
+**Question.** The accuracy pass recorded the sky as too dark on Sol 2 and too
+bright or close elsewhere. The three candidates were a mis-applied key, a
+sky-texture decode, fog over the sky, or the tone stage.
+
+**Method.** The `sky` box of `scripts/hd-frame-compare.py` is a fixed rectangle
+that holds HUD, buildings and (on Amphiseum, whose sky is a night cube) the
+dome ceiling. A diagnostic render with the sky cube skipped (not committed)
+marks the pixels that belong to the cube; luma over those pixels only, ours
+against the reference:
+
+| Circuit, pose | cube pixels | ours before | ours after | reference |
+| --- | --- | --- | --- | --- |
+| Sol 2 00 | 20,780 | 0.479 | 0.875 | 0.876 |
+| Sol 2 01 | 342,744 | 0.606 | 0.731 | 0.807 |
+| Sol 2 02 | 273,427 | 0.651 | 0.985 | 0.983 |
+| Talon's 00 | 20,893 | 0.835 | 0.835 | 0.886 |
+| Talon's 03 | 9,806 | 0.691 | 0.691 | 0.697 |
+| Amphiseum 01 | 279,646 | 0.459 | 0.463 | 0.438 |
+| Amphiseum 02 | 12,158 | 0.131 | 0.143 | 0.167 |
+
+**The pattern is one circuit, not a sign change**: Talon's and Amphiseum
+matched all along; only Sol 2 was dark, by about 1.8x. Amphiseum's old
+"sky 0.63 vs 0.49" was the ceiling in the box. Against the candidates: fog
+cannot be it (the sky binds no fog, and Sol 2's fog colour is a 0.25 grey,
+which would darken); the texel round-trips `pow(2.2)` then `pow(1/2.2)` at
+`lit = 0` so it leaves the shader as it entered (a decode error would have
+moved Talon's too); the exposure `scale` floors at 1.0 here (see above).
+What differs per circuit is **`Lighting.Sky colour`**: 128 (Talon's), 140
+(Amphiseum, Modesto, Tech de Ra), 134 (Vineta K), and **255 on Sol 2 and the
+other seven Fury/DLC circuits**.
+
+**The measurement.** On Sol 2 pose 00 (70 km/h, the one frame with open sky
+and no whiteout) the cube pixels away from the mask edge, reference below 245,
+fit `reference = 1.98 * ours + 1.1` in red (`r` 0.89) and `2.03 * ours - 17`
+in green: a pure byte-domain multiply by 2, no offset. A clear colour or an
+additive term would show an offset. Pose 02's reference is a whole-frame
+whiteout at 448 km/h (the track is white too), so it is not a clean probe,
+but its cube pixels land at 0.985 against 0.983 after the change.
+
+**The reading in the executable (confidence 60).** In `Scene_PrepareFrame`
+(`0x003aa888`), on the `g_ZoneEffectsActive == 0` branch under
+`Lighting.Debug_Draw_sky`, the `+0x440` word is loaded, its low byte is split
+off into a separate slot and replaced by a byte from `+0x5c7`, and the word is
+passed as the fourth argument of `0x005ecc28`. That function runs the state
+setter `0x005ec3e0`, which writes six camera-space quads of half-size `+-f31`
+(`f31 = *param_1`) and hands the same word to the quad emitter `0x005e8cf0` as
+its eighth argument, then the prim-list draw `0x005e6870`. So the colour is the
+**cube's vertex colour**, not a clear colour as the section above read it (that
+section's offset and gate are right; "packs into a clear word" was the
+unproved part). The vertex programs this draw can use pass `COL0` through
+unchanged (`MOV o[COL0], v[3]` in `PrimList*`/`LiveGeometry*`), and the
+matching fragment programs are `TEX R0; MUL H0, COL0, R0` with instruction
+scale 0 (checked: the scale field of every such program is 0). **What is not
+read: where the factor of two comes from.** A byte of 255 as a normalised
+vertex colour is 1.0, and the matched frame wants 2.0; Talon's (128) wants 1.0.
+So the port uses `tint = byte / 128` - **chosen as a fit through two circuit
+values, not measured as a law** (no confidence score on the 128). The low byte
+(0 to 122 on the Fury circuits, 16 on Vineta K) is a separate slot whose
+consumer is unread and is not used.
+
+**Whole frame, Sol 2, ours before -> after (reference from the accuracy pass)**: pose 00 0.579 -> 0.589 (0.684), 01 0.566 -> 0.630 (0.698), 02 0.653 -> 0.793 (0.911), clipped share 23.4/9.8/8.4 % -> 23.8/24.7/39.2 %. A brighter sky raises the frame mean and the adaptation proxy; the remaining gap is the lit surfaces.
+
+**The confound, and a weak check.** The two calibration circuits differ in the authored byte and in the archive (Talon's in DATA00, Sol 2 in DATA02). Vineta K separates them (DATA02, byte 134: `byte/128` predicts 1.05, "DATA02 doubles" predicts 2.0). The matched Vineta K frames (`vineta-floor/`, copied to scratch; the old `racebox/00.json` camera is unusable) give, on pose 00's cube pixels (510,381, mostly the translucent ceiling with the sky behind), ours tinted 0.422, untinted 0.424, reference 0.413: no sign of a doubling. **Weak, not decisive**: the open sky between the arches is near white in both, so a doubling would saturate there and show less than it should, and poses 01/02 were not compared. A matched frame with open mid-tone sky on a 255 DATA02 circuit other than Sol 2 settles it.
+
+**Player view, no reference.** Sebenco Climb (255, the brightest sky of the group) at the grid now draws a blown-white sky behind the structures with heavy bloom, in the way Sol 2's reference does; judged by eye only (`data/scratch/hd-sky-luma/sebenco-after.png`).
+
+**Not changed.** The Zone branch of the draw does not take this colour (it
+draws `ZoneSky.gtf` untinted); the port leaves a Zone sky at 1.0. Seven DLC
+circuits now draw at 2.0 on the strength of one matched circuit (Sol 2) and
+their shared authored value; none of the others has a matched frame.
+
+Port: `oag_mesh::mesh::sky_cube::build(.., tint)` and
+`oag_raceplay::load::environment::hd_sky_model`; test
+[hd_sky_tint_ground_truth.rs](../../../../crates/game/tests/hd_sky_tint_ground_truth.rs).
+**Other titles**: Wipeout 2048 draws an authored dome mesh
+(`skycube.rcsmodel`) and its `.EnvSettings` carry **no `Sky colour`** (read on
+altima, bridge and square: keys `Sky brightness` 1.2/2.0/1.2, `Sky height
+offset`, `Sky rotation`, `Sky scale`): **checked, differs in key**. `Sky
+brightness` (unread, [2048-sky.md](../../../formats/2048-sky.md)) is the
+candidate for the same multiply and has no capture to measure it against
+(**not checkable**). Omega re-ships 2048's circuits and reads 2048's reader,
+so the same key set is expected; no PS4 `.EnvSettings` is extracted here, so
+that is not read directly.
