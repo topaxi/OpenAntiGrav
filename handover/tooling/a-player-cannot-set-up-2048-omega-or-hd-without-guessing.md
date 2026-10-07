@@ -16,10 +16,18 @@ encrypted and the `-dec.iso` is tried first; `$OAG_IMAGE` takes unpacked
 folders; `scripts/ps3iso.py` has usage and a clear missing-`cryptography`
 message; the "beside the executable" hint shows only under an AppImage.
 
-1. **No player-facing unpack command exists for 2048 and Omega `.pkg`s.** The
-   unpack chains (pkg2zip, psvpfsparser with a license key, LibOrbisPkg) are
-   manual and were not re-run. The error now says a `.pkg` must be unpacked and
-   points at installing.md.
+Landed 2026-10-07 (install-guide): `docs/overview/installing.md` is rewritten as
+a step-by-step player's guide per OS (Windows, macOS, Linux, Steam Deck,
+Android); the program also searches the folder its executable is in (a Windows
+zip works from any folder); a windowed run with nothing found shows a
+`NO DISC IMAGE FOUND` screen naming the per-user folder and the file endings,
+on every desktop OS and not only Android; the README has a "How to play" entry.
+Omega `.pkg` pairs, `.vpk` and the encrypted PS3 `.iso` are read in place, so
+the old item 1 (an unpack command for them) no longer applies.
+
+1. **A Vita `.pkg` is still not readable** (the PFS key is console-derived,
+   `docs/formats/vita-package.md`). The guide says so and names `.vpk` as the
+   way in. No real NoNpDrm `.vpk` has been tried, only stand-ins.
 Landed 2026-10-07 (setup-polish): auto-detect prefers Europe over USA (Pulse,
 Pure, 2048 extracts; `DEFAULT_IMAGE` and every suggested image name too); a
 missing `ffmpeg` logs one `warn` line and skips the conversion; `--help` names
@@ -28,15 +36,21 @@ title-patches (see `docs/formats/2048-status.md`); stale `data/README.md` and `p
 fixed; the cache is `data/cache/` only in a checkout (a `justfile` and `data/`)
 or where one already exists.
 
-2. **Not walked:** Windows and macOS, a clean machine with no system
-   libraries, the 2048 and Omega unpack chains, Pulse DLC mounting (the dry
-   run prints no pack line), and audio.
+2. **Not walked:** a real Windows PC (only Wine) and macOS (no download exists),
+   a clean machine with no system libraries, the unpack chains, Pulse DLC
+   mounting (the dry run prints no pack line), and audio.
+3. **A renamed PS3 image loses its `.dkey`**: the key is found beside the image
+   only under the image's own stem, so `Foo.iso` with `hdfury-ps3-eu.dkey`
+   beside it fails (any name works in the keys folder). Trying every `.dkey` or
+   `.key` in the image's folder is safe, each key being checked against the
+   image; it is `oag-disc` code, `sibling_key_paths` in `ps3_crypt.rs`.
 
 ## Next Steps
 
-1. Decide whether a player-facing unpack command for 2048 and Omega is wanted
-   at all, given that it needs a license key from the player's own copy.
-2. ~~Mounting 2048's 1.04 patch~~ landed 2026-10-07 (title-patches): `ArchiveCandidates::patch`,
+1. Decide whether a player-facing unpack command for a Vita `.pkg` is wanted
+   at all, given that it needs a licence key from the player's own copy.
+2. Walk the guide on a real Windows PC and a Mac (once a Mac build exists).
+3. ~~Mounting 2048's 1.04 patch~~ landed 2026-10-07 (title-patches): `ArchiveCandidates::patch`,
    see `docs/formats/patches.md`. Still open there: `data1` against `data2` and the
    DLC packs against the patch are chosen, not measured (both patch copies of
    `Definition.xml` are read by the original, so a collision test needs a path

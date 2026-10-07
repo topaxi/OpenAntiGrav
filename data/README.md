@@ -61,7 +61,7 @@ is always safe**. It is rebuilt from your disc image on demand.
 
 ## Image naming
 
-Tooling looks for these names. Copy your own images here and rename:
+The tooling looks for these names **first**; any other `.chd`, `.iso` or `.vpk` name works too (the game reads the real title out of the file), and the Omega `.pkg` pair is paired by its game ID. Copy your own images here, renaming is optional:
 
 | Name | Title | Console | Region |
 | --- | --- | --- | --- |

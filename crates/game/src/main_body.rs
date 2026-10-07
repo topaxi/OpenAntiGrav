@@ -541,11 +541,12 @@ fn run(cli: Cli) -> Result<()> {
                 }
             }
             // One image is no choice - unless it is locked, when the screen is
-            // how its key is asked for - and **none at all is never a screen, not
-            // even under `--launcher`**: an empty list offers nothing but
-            // escape, where falling through reaches either the stated source or
-            // `resolve`'s message naming every directory it looked in - which
-            // for a packaged build with no image is the entire user interface.
+            // how its key is asked for. **None at all is never a chooser**, not
+            // even under `--launcher`: an empty list offers nothing but escape.
+            // It is the not-found screen below instead (it was the terminal
+            // message from `resolve` alone until 2026-10-07, which a
+            // double-click never shows), and the same message still goes to the
+            // log.
             let locked = rows
                 .iter()
                 .any(|row| matches!(row.state, launcher::State::NeedsKey));
@@ -562,6 +563,21 @@ fn run(cli: Cli) -> Result<()> {
                 Some(launcher::Launcher::not_found(launcher::not_found_notice(
                     &images,
                 )))
+            } else if rows.is_empty() && chosen.is_none() {
+                // A double-click has no terminal for `resolve`'s message either,
+                // and its window would close before it could be read: the
+                // screen names the folder to use, and the log keeps the full
+                // list of what was searched.
+                if let Err(error) = source::resolve(None, None) {
+                    log::error!("{error}");
+                }
+                let folder = dirs::data_dir().map_or_else(
+                    || "data/images".to_string(),
+                    |dir| dir.join("oag").join("images").display().to_string(),
+                );
+                Some(launcher::Launcher::not_found(
+                    launcher::not_found_notice_desktop(&folder),
+                ))
             } else {
                 None
             }

@@ -20,7 +20,7 @@ New to the project? Read these in order:
 3. [Status map](overview/status.md) - the cross-title matrix: what is built, read, or verified, per weapon/mode/subsystem/title
 4. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
 5. [Legal](overview/legal.md) - the no-copyrighted-content policy
-6. [Installing and running](overview/installing.md) - for a player: build, which original files each title needs, where they go, what goes wrong
+6. [Installing and running](overview/installing.md) - for a player: download, where the game files go on each OS, what the file names can be, what goes wrong
 7. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
 8. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
 
