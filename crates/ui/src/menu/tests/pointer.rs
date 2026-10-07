@@ -427,11 +427,19 @@ fn a_finger_drag_scrolls_the_view_and_keeps_the_cursor_inside_it() {
 
     assert!(menu.pointer(&drag(-3.0 * pitch), &regions).is_empty());
     assert_eq!(menu.scroll(), 3, "up the screen reveals rows below");
-    let inside = |menu: &Menu| {
-        (menu.scroll()..menu.scroll() + visible()).contains(&menu.selected())
-    };
-    assert!(inside(&menu), "{} in window {}", menu.selected(), menu.scroll());
-    assert_eq!(menu.selected(), 4, "pushed one row past the window's top lookahead");
+    let inside =
+        |menu: &Menu| (menu.scroll()..menu.scroll() + visible()).contains(&menu.selected());
+    assert!(
+        inside(&menu),
+        "{} in window {}",
+        menu.selected(),
+        menu.scroll()
+    );
+    assert_eq!(
+        menu.selected(),
+        4,
+        "pushed one row past the window's top lookahead"
+    );
 
     menu.pointer(&drag(1.0 * pitch), &regions);
     assert_eq!(menu.scroll(), 2, "down the screen reveals rows above");
