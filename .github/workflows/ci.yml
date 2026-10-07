@@ -15,15 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       # `oag-audio` builds `cpal` with its PipeWire host, which links
-      # libpipewire-0.3 through pkg-config. The runner image has ALSA's headers
-      # and not these, so without this the audio crate does not compile at all.
-      - name: Install libpipewire
-        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev
+      # libpipewire-0.3 through pkg-config, and its ALSA backend needs
+      # libasound2-dev. The runner image ships neither (the 2026-10-06 run died
+      # in alsa-sys), so without both the audio crate does not compile at all.
+      - name: Install libpipewire and ALSA
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - uses: taiki-e/install-action@nextest
@@ -69,15 +70,15 @@ jobs:
   # exists to catch. If the two ever diverge, this job is the one that is
   # supposed to fail.
   msrv:
-    name: MSRV build (1.88)
+    name: MSRV build (1.97.1)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.97.1
         id: msrv-toolchain
       - uses: Swatinem/rust-cache@v2
-      - name: Install libpipewire
-        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev
+      - name: Install libpipewire and ALSA
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
 
   # The simulation must produce bit-identical results on every target we ship.
@@ -92,16 +93,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
       - name: Print determinism hashes (release)
-        run: cargo run -q -p oag-core --example determinism_report
+        run: cargo run -q -p oag-core --example core_determinism_report
       - name: Assert hashes match the committed reference (release)
         run: cargo test -p oag-core --release determinism -- --nocapture
       # The math foundation above is not the simulation. These two cover the
       # real force law, over a synthetic world so they need no disc image.
       - name: Print simulation determinism hashes (release)
-        run: cargo run -q -p oag-physics --example determinism_report
+        run: cargo run -q -p oag-physics --example physics_determinism_report
       - name: Assert simulation hashes match the committed reference (release)
         run: cargo test -p oag-physics --release --test determinism -- --nocapture
       # What a race carries around the dynamics: the inventory, the
@@ -115,7 +116,7 @@ jobs:
       # `Line::curvature` lives - the platform `acos` it used to call was
       # outside every gate for exactly this reason.
       - name: Print driver determinism hashes (release)
-        run: cargo run -q -p oag-ai --example determinism_report
+        run: cargo run -q -p oag-ai --example ai_determinism_report
       - name: Assert driver hashes match the committed reference (release)
         run: cargo test -p oag-ai --release --test determinism -- --nocapture
       # determinism.md requires bit-identical state in debug too, not just

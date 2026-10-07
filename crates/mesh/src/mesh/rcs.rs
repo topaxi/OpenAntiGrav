@@ -175,6 +175,7 @@ mod light_cone;
 mod mag_wave;
 mod pad_ne;
 mod pads;
+mod refraction;
 pub use pads::{build_pads, build_weapon_pads};
 mod glass_sheen;
 pub mod psp2;
@@ -503,8 +504,26 @@ fn emit(
     mesh: Geometry<'_>,
     place: &anim_node::Placement,
     node: Option<u32>,
-    surface: Surface,
+    mut surface: Surface,
 ) {
+    // A screen-grab refraction is two blended draws of one chunk, see
+    // `refraction`: the grab's weight first, then the glass's own colour.
+    if surface.roles & slots::REFRACTION != 0 && surface.roles & slots::REFRACT_GRAB == 0 {
+        let roles = surface.roles | slots::REFRACT_GRAB;
+        let blend = Some(refraction::GRAB_BLEND);
+        emit(
+            out,
+            mesh,
+            place,
+            node,
+            Surface {
+                roles,
+                blend,
+                ..surface
+            },
+        );
+        surface.blend = Some(refraction::ADD_BLEND);
+    }
     let to_world = Mat4::from_cols_array(&place.to_world);
     let Geometry {
         points,

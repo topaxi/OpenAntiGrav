@@ -197,13 +197,10 @@ fi
 
 step "Checking for leaked game content"
 
-# The same extensions .gitignore and `just audit-leakage` guard, applied to what
-# is about to be packaged. A package must never carry game content.
-leaked="$(find "$app_dir" -type f \
-    \( -iname '*.chd' -o -iname '*.iso' -o -iname '*.cso' -o -iname '*.pkg' \
-       -o -iname '*.pbp' -o -iname '*.wad' -o -iname '*.elf' -o -iname '*.prx' \
-       -o -iname '*.self' -o -iname '*.bin' -o -iname '*.img' \) -print)"
-[[ -z $leaked ]] || die "game content in the AppDir:"$'\n'"$leaked"
+# scripts/check-leakage.py holds the one list of forbidden extensions, the same
+# one `just audit-leakage` and CI use; a package must never carry game content.
+python3 "$project_root/scripts/check-leakage.py" --dir "$app_dir" \
+    || die "game content in the AppDir (see above)"
 echo "OK: the AppDir is the engine and nothing else"
 
 step "Runtime libraries"

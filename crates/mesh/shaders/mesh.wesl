@@ -7,7 +7,7 @@
 
 
 import package::alpha_test::{alpha_test_ref};
-import package::bindings::{anims, node_anims, scene, uniforms};
+import package::bindings::{anims, emissives, node_anims, scene, uniforms};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::shade::{lit_texel};
@@ -113,6 +113,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
+    // **A screen-grab refraction** (`slots::REFRACTION`, `mesh::rcs::refraction`):
+    // out = fog(C + grab * W), as two blended passes. The grab pass outputs
+    // `f * W` for `dst = dst * src` - fog's `f` is `fogged(1) - fogged(0)`.
+    // The other pass outputs the lit colour `C`, scaled by the material's own
+    // colour multiplier, for `dst = dst + src`.
+    if (in.slots & 1048576u) != 0u {
+        let refraction_slot = in.slots >> 22u;
+        let tint = emissives.tint_offset[refraction_slot];
+        let weight = emissives.scale[refraction_slot];
+        if (in.slots & 2097152u) != 0u {
+            let alpha_weight = select(1.0, shaded.a, weight.y > 0.5);
+            let w = tint.rgb * weight.x * alpha_weight;
+            let f = fogged(w, in.world, in.view_depth) - fogged(vec3<f32>(0.0), in.world, in.view_depth);
+            return vec4<f32>(f, 0.0);
+        }
+        return vec4<f32>(
+            fogged(shadowed(shaded.rgb * tint.w, in.world), in.world, in.view_depth),
+            0.0,
+        );
+    }
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
         shaded.a

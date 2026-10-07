@@ -111,6 +111,17 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // A screen-grab refraction claims its slots last, for the same reason:
+    // it writes an entry into the table.
+    super::refraction::refraction(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.

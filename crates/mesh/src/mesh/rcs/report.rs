@@ -225,6 +225,11 @@ pub struct Report {
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
+    /// Screen-grab refraction materials bound, and ones whose weight or table
+    /// entry could not be read (drawn as an ordinary lit surface).
+    pub refraction_bound: usize,
+    /// See [`Self::refraction_bound`].
+    pub refraction_unread: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -352,6 +357,14 @@ impl Report {
         } + &match self.light_cone_bound {
             0 => String::new(),
             n => format!(", {n} light-cone material(s) with their facing ramp bound"),
+        } + &match self.refraction_bound {
+            0 => String::new(),
+            n => format!(", {n} screen-grab refraction material(s) drawn over what is behind them"),
+        } + &match self.refraction_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} refraction material(s) whose weight could not be read (drawn lit, opaque)"
+            ),
         } + &match self.isolated {
             0 => String::new(),
             n => format!(
