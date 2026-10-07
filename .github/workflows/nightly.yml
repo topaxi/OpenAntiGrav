@@ -65,6 +65,10 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       nightly: true
+    # A called workflow gets no secrets unless the caller passes them: without
+    # this the stored APK signing key was skipped and every nightly was signed
+    # with a throwaway key.
+    secrets: inherit
 
   publish:
     name: publish the nightly pre-release
@@ -97,7 +101,7 @@ jobs:
           {
             echo "Built automatically from \`main\` at ${GITHUB_SHA::7} on $(date -u +%Y-%m-%d)."
             echo
-            echo "**Unstable and unsigned.** A nightly can be broken; for a tested build use the latest release. It contains no game content: bring your own disc image. No Android APK yet."
+            echo "**Unstable and unsigned.** A nightly can be broken; for a tested build use the latest release. It contains no game content: bring your own disc image."
             echo
             echo "Commit: https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
             if [[ -n "$PREVIOUS" && "$PREVIOUS" != "$GITHUB_SHA" ]]; then

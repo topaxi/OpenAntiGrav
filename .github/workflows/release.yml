@@ -100,7 +100,10 @@ jobs:
           cp LICENSE-MIT LICENSE-APACHE "$stage/"
           cp -r licences "$stage/licences"
           cp packaging/appimage/oag-game.desktop "$stage/"
-          "$binary" --write-icon "$stage/oag-game.png" --icon-size 256
+          # The binary links libpipewire, which this runner does not have, so
+          # it cannot run here: reuse the icon the AppImage build rasterised
+          # inside the container.
+          cp data/appimage/AppDir/oag-game.png "$stage/oag-game.png"
           tar -C stage -czf "dist/${name}.tar.gz" "$name"
       # The engine and nothing else: the same extension list `just
       # audit-leakage` uses, run over what was actually built rather than over
@@ -187,6 +190,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # build-apk.sh builds and runs the host oag-game to rasterise the
+      # launcher icon, so the host needs what ci.yml's jobs install.
+      - name: Install libpipewire and ALSA
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - name: NDK and cargo-ndk
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.3.13750724"
