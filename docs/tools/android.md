@@ -216,6 +216,11 @@ Verified on Waydroid (`adb shell input keyevent 4`): from the RACE page Back wen
 the root (log line `system back`), at the root and at the Language Selection the
 process stayed alive, and in a race it opened the root menu over the parked race.
 
+There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
+the system's home or app switcher, not quit from inside, and the app is suspended
+(race paused) rather than ended. `menu::Definition::drop_quit` removes the row at
+boot (`main/prepare.rs`, `cfg!(target_os = "android")`); desktop keeps it.
+
 ### On-screen racing controls
 
 `oag_input::touch` holds the layout, the finger tracking and the rules, with no
