@@ -252,6 +252,10 @@ impl Pending {
         if cfg!(target_os = "android") {
             definition.drop_quit();
         }
+        // Only a touchscreen has an overlay to set up.
+        if !oag_game::touch_controls::available() {
+            definition.drop_touch_controls();
+        }
         // Built through `Shell::from_boot` rather than a literal here, so
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the
