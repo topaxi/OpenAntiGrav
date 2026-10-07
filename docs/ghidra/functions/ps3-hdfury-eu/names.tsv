@@ -543,3 +543,5 @@
 0x00938564	data	Language_Region	70	language.md
 0x000e7760	function	Ship_ApplyDamage	65	particle-triggers.md
 0x000e8de0	function	Ship_ApplyPendingDamage	65	particle-triggers.md
+0x005ecc28	function	Sky_DrawCube	65	renderer.md
+0x005ec3e0	function	Sky_SetCubeFaces	65	renderer.md
