@@ -2882,7 +2882,14 @@ now multiply the sky drawn behind them (cyan) where the original shows its targe
 alternate fog, teal). The sea sheet (`water_test_2`, chunks 6 and 23) is one of these chunks, so it too is drawn
 only in the target. Building the target is open: the `0x10` chunks and the sky into an offscreen picture at 4/3 the
 main view's tangent, the `0x20` alternate fog inside it (33 of the 35 alternate-fog draws are there), and the glass
-sampling it under that projection.
+sampling it under that projection. **What this costs, measured:** pane colour moves further from the reference at the matched camera
+(right ceiling panes: reference `(17,86,84)`, before `(75,130,149)`, after `(139,213,164)`), because the panes now
+multiply the sky instead of the scenery ours used to draw behind them; both are wrong, and only the target fixes it.
+A lap sweep (`data/scratch/hd-glass-opus/sweep/`, 8 autopilot frames each direction, both builds, identical poses)
+changes pixels only inside glass panes; no opaque scenery outside glass moves. Draws at the matched camera: 540
+before, 489 after (the original: 285). The rest of the gap is chiefly node-placed chunks under an **animated**
+anchor (`DrawCall::moving`), which this renderer cannot frustum-test without their current matrix; static
+node-placed chunks are already baked to world space and tested.
 
 ### 4. Lineage
 
