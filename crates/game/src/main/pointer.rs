@@ -16,14 +16,18 @@
 //!
 //! # A finger is a pointer that is only there while it is down
 //!
-//! A touch's `Started` is a move to its location *and* a click, in one
-//! event: a finger has no hover, so a tap on a row has to select and
-//! activate it together, which is exactly what the models do with a
-//! `moved` and a `clicked` in the same tick. `Moved` moves it, and `Ended`
-//! or `Cancelled` takes the position away - a lifted finger is nowhere, and
-//! leaving it "hovering" over the last row would highlight a row nobody is
+//! A finger has no hover, so a tap on a row has to select and activate it
+//! together, which is exactly what the models do with a `moved` and a
+//! `clicked` in the same tick. Since a finger can also *drag* a list, the
+//! tap is decided on **lift**, not on touch-down: `Started` only remembers
+//! where the finger landed, and `Ended` reports the position, a move and a
+//! click in one tick if the finger never left the landing spot's
+//! [`DRAG_THRESHOLD`]. Past it the finger is a drag for good: its travel
+//! goes out as [`Pointer::drag`], and it reports no position and no click,
+//! so a scroll never selects a row. A lifted finger is nowhere, and leaving
+//! it "hovering" over the last row would highlight a row nobody is
 //! touching. Only one finger is followed; a second is ignored until the
-//! first lifts.
+//! first lifts. No fling or momentum: the list stops with the finger.
 //!
 //! **Only a mouse draws a cursor.** The drawn pointer (`oag_game::cursor`)
 //! exists so a mouse can be seen. Under a finger it would sit beneath the
@@ -46,6 +50,11 @@ use winit::event::{ElementState, MouseButton, MouseScrollDelta, Touch, TouchPhas
 /// themselves round to when they have to invent one.
 const PIXELS_PER_DETENT: f64 = 40.0;
 
+/// How far a finger may wander from where it landed, in physical pixels,
+/// and still be a tap. **Chosen, not measured**: about a fingertip's
+/// width on a phone screen; a mouse is never subject to it.
+const DRAG_THRESHOLD: f32 = 12.0;
+
 /// The window's pointer state, accumulated between ticks.
 #[derive(Debug, Default)]
 pub(crate) struct Window {
@@ -60,6 +69,16 @@ pub(crate) struct Window {
     scroll: f64,
     /// The finger being followed, if one is down.
     finger: Option<u64>,
+    /// Where the followed finger landed.
+    touch_origin: (f32, f32),
+    /// Where it was when its travel was last turned into a drag.
+    touch_last: (f32, f32),
+    /// Whether it has travelled past [`DRAG_THRESHOLD`] and so is no tap.
+    dragging: bool,
+    /// Drag travel since the last take, in physical pixels.
+    drag: (f32, f32),
+    /// A tap was just reported: the position is dropped after this tick.
+    lifted: bool,
     /// Whether the last device to speak was the mouse - see
     /// [`Self::cursor_at`]. `false` until it has said anything, so a fresh
     /// window shows no arrow until the mouse moves.
@@ -111,19 +130,38 @@ impl Window {
                     return;
                 }
                 self.finger = Some(touch.id);
-                self.place(at);
-                self.clicked = true;
+                self.touch_origin = at;
+                self.touch_last = at;
+                self.dragging = false;
             }
             TouchPhase::Moved => {
-                if self.finger == Some(touch.id) {
-                    self.place(at);
+                if self.finger != Some(touch.id) {
+                    return;
+                }
+                let (dx, dy) = (at.0 - self.touch_origin.0, at.1 - self.touch_origin.1);
+                if self.dragging || dx.hypot(dy) > DRAG_THRESHOLD {
+                    self.dragging = true;
+                    self.drag.0 += at.0 - self.touch_last.0;
+                    self.drag.1 += at.1 - self.touch_last.1;
+                    self.touch_last = at;
                 }
             }
-            TouchPhase::Ended | TouchPhase::Cancelled => {
+            TouchPhase::Ended => {
                 if self.finger == Some(touch.id) {
                     self.finger = None;
-                    self.at = None;
-                    self.moved = true;
+                    if !self.dragging {
+                        self.moved = true;
+                        self.at = Some(at);
+                        self.clicked = true;
+                        self.lifted = true;
+                    }
+                    self.dragging = false;
+                }
+            }
+            TouchPhase::Cancelled => {
+                if self.finger == Some(touch.id) {
+                    self.finger = None;
+                    self.dragging = false;
                 }
             }
         }
@@ -146,6 +184,8 @@ impl Window {
         self.back = false;
         self.scroll = 0.0;
         self.finger = None;
+        self.dragging = false;
+        self.drag = (0.0, 0.0);
     }
 
     /// Where to draw the cursor right now, in window pixels: the latest
@@ -174,10 +214,15 @@ impl Window {
             clicked: self.clicked,
             back: self.back,
             scroll: whole as i32,
+            drag: std::mem::take(&mut self.drag),
         };
         self.moved = false;
         self.clicked = false;
         self.back = false;
+        if std::mem::take(&mut self.lifted) {
+            self.at = None;
+            self.moved = true;
+        }
         pointer
     }
 }
@@ -236,20 +281,46 @@ mod tests {
     }
 
     #[test]
-    fn a_tap_is_a_move_and_a_click_and_a_lifted_finger_is_nowhere() {
+    fn a_tap_reports_on_lift_as_a_move_and_a_click_and_then_is_nowhere() {
         let mut window = Window::default();
         window.touch(touch(1, TouchPhase::Started, 100.0, 50.0));
         let tick = window.take();
-        assert_eq!(tick.at, Some((100.0, 50.0)));
+        assert_eq!(tick.at, None, "nothing is decided at touch-down");
+        assert!(tick.is_idle(), "{tick:?}");
+        window.touch(touch(1, TouchPhase::Moved, 104.0, 52.0));
+        assert!(window.take().is_idle(), "within the threshold");
+        window.touch(touch(1, TouchPhase::Ended, 104.0, 52.0));
+        let tick = window.take();
+        assert_eq!(tick.at, Some((104.0, 52.0)));
         assert!(tick.moved && tick.clicked);
-        window.touch(touch(1, TouchPhase::Moved, 110.0, 50.0));
+        let after = window.take();
+        assert_eq!(after.at, None);
+        assert!(after.moved && !after.clicked, "{after:?}");
+    }
+
+    #[test]
+    fn a_drag_past_the_threshold_scrolls_and_never_clicks() {
+        let mut window = Window::default();
+        window.touch(touch(1, TouchPhase::Started, 100.0, 100.0));
+        window.touch(touch(1, TouchPhase::Moved, 100.0, 80.0));
         let tick = window.take();
-        assert_eq!(tick.at, Some((110.0, 50.0)));
-        assert!(tick.moved && !tick.clicked);
-        window.touch(touch(1, TouchPhase::Ended, 110.0, 50.0));
-        let tick = window.take();
+        assert_eq!(tick.drag, (0.0, -20.0), "the whole travel, once past it");
         assert_eq!(tick.at, None);
-        assert!(tick.moved);
+        assert!(!tick.clicked && !tick.moved);
+        // Coming back inside the threshold does not turn it into a tap.
+        window.touch(touch(1, TouchPhase::Moved, 100.0, 95.0));
+        assert_eq!(window.take().drag, (0.0, 15.0));
+        window.touch(touch(1, TouchPhase::Ended, 100.0, 95.0));
+        let tick = window.take();
+        assert!(tick.is_idle(), "a lifted drag is not a tap: {tick:?}");
+    }
+
+    #[test]
+    fn a_cancelled_touch_is_nothing() {
+        let mut window = Window::default();
+        window.touch(touch(1, TouchPhase::Started, 100.0, 100.0));
+        window.touch(touch(1, TouchPhase::Cancelled, 100.0, 100.0));
+        assert!(window.take().is_idle());
     }
 
     #[test]
@@ -261,8 +332,8 @@ mod tests {
         // A finger is its own pointer: the models see it, the arrow does not.
         window.touch(touch(1, TouchPhase::Started, 100.0, 50.0));
         assert_eq!(window.cursor_at(), None);
-        assert_eq!(window.take().at, Some((100.0, 50.0)));
         window.touch(touch(1, TouchPhase::Ended, 100.0, 50.0));
+        assert_eq!(window.take().at, Some((100.0, 50.0)));
         assert_eq!(window.cursor_at(), None);
         window.cursor_moved(12.0, 22.0);
         assert_eq!(window.cursor_at(), Some((12.0, 22.0)));
@@ -287,9 +358,10 @@ mod tests {
         window.touch(touch(2, TouchPhase::Started, 300.0, 200.0));
         window.touch(touch(2, TouchPhase::Moved, 310.0, 200.0));
         let tick = window.take();
-        assert_eq!(tick.at, Some((100.0, 50.0)));
         assert!(tick.is_idle(), "{tick:?}");
         window.touch(touch(2, TouchPhase::Ended, 310.0, 200.0));
+        assert!(window.take().is_idle(), "the second finger never counted");
+        window.touch(touch(1, TouchPhase::Ended, 100.0, 50.0));
         assert_eq!(window.take().at, Some((100.0, 50.0)), "still the first");
     }
 

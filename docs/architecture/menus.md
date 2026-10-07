@@ -1023,16 +1023,33 @@ that places the text, and `menu::pointer::regions` takes those rects.
 | Secondary button | back, which is what circle is on the same page; closes from the root, as circle does | back on a selection screen, cancel on a prompt, "back to the menus" on a paused race; nothing on the boot sequence, which has no back |
 | A disabled row | selectable and inert, exactly as for a pad: `Menu::adjust` refuses it and a click goes through the same gate | a chooser row that will not open is not a target at all, the rule `Launcher::step` already applies |
 
-**Touch is a pointer that is only there while it is down.** `Started` is a
-move to the location *and* a click in one event - a finger has no hover, so
-a tap has to select and activate together, which is what the models do
-with `moved` and `clicked` in the same tick and why the two-tap screens
-above compare against the row selected *before* the gesture. `Ended` takes
-the position away, so nothing stays highlighted under a finger nobody is
-holding there. One finger is followed; a second is ignored until the first
-lifts. Dragging a long page is not built: the wheel and the rows' own
-lookahead scroll (`window_start`) cover it, and a drag that fights the tap
-is worse than no drag.
+**Touch is a pointer that is only there while it is down, and a tap is
+decided on lift.** A finger has no hover, so a tap has to select and
+activate together, which is what the models do with `moved` and `clicked` in
+the same tick and why the two-tap screens above compare against the row
+selected *before* the gesture. Because a finger can also drag, `Started`
+only remembers where it landed; `Ended` reports the position, a move and a
+click in one tick if the finger stayed within `DRAG_THRESHOLD` (12 physical
+pixels, **chosen, not measured**) of it, and then takes the position away so
+nothing stays highlighted under a finger nobody is holding there. Past the
+threshold the finger is a drag for good, even if it comes back: its travel is
+`Pointer::drag` (grid units, the content follows the finger) and it reports
+no position, no hover and no click, so a scroll never selects. One finger is
+followed; a second is ignored until the first lifts. No fling: the list
+stops with the finger (chosen).
+
+**What scrolls, and how** (the whole set; checked across Pulse, Pure, HD,
+Fury, 2048 and Omega, which share these models):
+
+| Surface | Wheel (one detent; trackpad pixels accumulate at 40 px, chosen) | Finger drag |
+| --- | --- | --- |
+| A `Menu` page longer than the screen (GRAPHICS, CONTROLS and the like) | walks the cursor a row, the window follows through `window_start` | scrolls the **view** a row per row-pitch of travel (pitch read off the page's own regions); the cursor is pushed only as far as keeps it in the new window, so selection and view stay coherent |
+| 2048's campaign map | pans one marker row (`PITCH.1`) down the canvas, chosen; selection untouched | pans the canvas with the finger, clamped to it; selection untouched |
+| Language picker, selection screens, the race box chooser, campaign grids | steps the entry as before; none of them has more rows than the screen holds | nothing to scroll |
+
+No scroll indicator or scroll arrow is drawn by any of the front-end models
+(2048's `<TouchScroll>` scrollbar thumb is only measured in the frame
+captures, not drawn), so there is nothing to make tappable; none was invented.
 
 **The order is the pad's order.** `session::frame` routes a click through
 the same precedence it routes a button: a selection screen takes the tick

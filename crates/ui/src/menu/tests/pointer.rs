@@ -393,3 +393,73 @@ fn a_click_on_a_long_pages_last_visible_row_scrolls_the_window() {
     assert_eq!(menu.selected(), visible() - 1);
     assert!(menu.scroll() > 0, "the window followed the cursor down");
 }
+
+/// The page with the most rows, opened - one that does not fit on screen.
+fn long_page() -> (Menu, Vec<Region>, f32) {
+    let mut menu = Menu::new(built_in());
+    let id = menu
+        .definition
+        .pages
+        .iter()
+        .max_by_key(|page| page.entries.len())
+        .map(|page| page.id.clone())
+        .expect("a page");
+    assert!(menu.open(&id));
+    assert!(menu.page().entries.len() > visible(), "{id} must overflow");
+    let regions = pointer::regions(&menu, &skin(), &Frame::default(), &measure);
+    let pitch = regions[1].rect[1] - regions[0].rect[1];
+    (menu, regions, pitch)
+}
+
+fn drag(dy: f32) -> Pointer {
+    Pointer {
+        drag: (0.0, dy),
+        ..Pointer::default()
+    }
+}
+
+#[test]
+fn a_finger_drag_scrolls_the_view_and_keeps_the_cursor_inside_it() {
+    let (mut menu, regions, pitch) = long_page();
+    let rows = menu.page().entries.len();
+    let last = rows - visible();
+    assert_eq!((menu.scroll(), menu.selected()), (0, 0));
+
+    assert!(menu.pointer(&drag(-3.0 * pitch), &regions).is_empty());
+    assert_eq!(menu.scroll(), 3, "up the screen reveals rows below");
+    let inside = |menu: &Menu| {
+        (menu.scroll()..menu.scroll() + visible()).contains(&menu.selected())
+    };
+    assert!(inside(&menu), "{} in window {}", menu.selected(), menu.scroll());
+    assert_eq!(menu.selected(), 4, "pushed one row past the window's top lookahead");
+
+    menu.pointer(&drag(1.0 * pitch), &regions);
+    assert_eq!(menu.scroll(), 2, "down the screen reveals rows above");
+    assert!(inside(&menu));
+
+    menu.pointer(&drag(-100.0 * pitch), &regions);
+    assert_eq!(menu.scroll(), last, "stops at the end");
+    assert!(inside(&menu));
+    menu.pointer(&drag(100.0 * pitch), &regions);
+    assert_eq!(menu.scroll(), 0, "stops at the top");
+    assert!(inside(&menu));
+}
+
+#[test]
+fn a_drag_carries_its_fraction_of_a_row_and_never_activates() {
+    let (mut menu, regions, pitch) = long_page();
+    for expected in [0, 0, 1] {
+        let events = menu.pointer(&drag(-0.4 * pitch), &regions);
+        assert!(events.is_empty());
+        assert_eq!(menu.scroll(), expected);
+    }
+}
+
+#[test]
+fn a_page_that_fits_ignores_a_drag() {
+    let mut menu = Menu::new(fixture());
+    assert!(menu.open("options"));
+    let regions = pointer::regions(&menu, &skin(), &Frame::default(), &measure);
+    menu.pointer(&drag(-500.0), &regions);
+    assert_eq!((menu.scroll(), menu.selected()), (0, 0));
+}

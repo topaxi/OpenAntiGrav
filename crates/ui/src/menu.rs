@@ -558,6 +558,8 @@ pub struct Menu {
     /// Ticks since the page on screen arrived, or `None` once settled. See
     /// `focus.rs`.
     arrival: Option<u32>,
+    /// A finger drag's travel not yet worth a whole row, in rows. See `pointer.rs`.
+    drag_rows: f32,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -592,6 +594,7 @@ impl Menu {
             strip_layout: false,
             focus,
             arrival: Some(0),
+            drag_rows: 0.0,
         }
     }
 
