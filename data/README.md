@@ -104,6 +104,14 @@ download comes with is yours and is never committed.
 
 ### Vita PKGs decrypt in four steps; `data/extracted/vita/` holds the result
 
+**The engine itself no longer needs steps 1 and 2 for a game it reads**: a
+NoNpDrm `.vpk` (a ZIP of the installed folder, plain files) is read in place, see
+[`docs/formats/vita-package.md`](../docs/formats/vita-package.md) and
+`scripts/make-test-vpk.sh`, which builds test `.vpk` files into `data/test-vpk/`
+from the extracted folders below. A `.pkg` is refused by name: step 2's PFS key is
+derived by the console's F00D (which `psvpfsparser` reaches over a key service),
+and three offline derivations tried against a known file all missed.
+
 This is the checkout's own location, and the one every RE script below names
 directly. It is not the only place the launcher looks: on a portable or Steam
 Deck build with no `data/` beside the running AppImage,

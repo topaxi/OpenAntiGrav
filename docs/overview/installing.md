@@ -17,7 +17,7 @@ commit it ships in. Every command and every message quoted here was run.
 
 **No game content ships with this project, and none ever will.** You supply
 files from discs and downloads you own. This page does not say where to get
-them and does not cover keys. See [legal](legal.md).
+them and does not cover per-game or per-disc keys. See [legal](legal.md).
 
 ## 1. Build it
 
@@ -75,7 +75,7 @@ named `wipeout.chd`).
 | Wipeout Pure | PSP | disc image, Europe or USA | `pure-psp-eu.chd`, `pure-psp-usa.chd` |
 | Wipeout HD / Fury | PS3 | disc image, Europe, **encrypted as dumped** with your disc key beside it (a `.dkey`), or an already decrypted image | `hdfury-ps3-eu.iso` + `hdfury-ps3-eu.dkey`, or `hdfury-ps3-eu-dec.iso` |
 | Wipeout HD (no Fury) | PS3 | the **installed** PSN download, Europe | `data/extracted/ps3/hd-psn-eu` |
-| Wipeout 2048 | Vita | **unpacked** package folder | `data/extracted/vita/PCSF00007` (Europe) or `PCSA00015` (USA) |
+| Wipeout 2048 | Vita | a **`.vpk`** (a NoNpDrm dump; a patch or DLC `.vpk` beside it is mounted too), or an **unpacked** package folder | `data/images/2048-eu.vpk` (any name), or `data/extracted/vita/PCSF00007` (Europe) / `PCSA00015` (USA) |
 | Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
 
 The first three rows are the easy ones: a normal dump of your own disc is
@@ -163,12 +163,28 @@ campaign screens and the menu backdrop are Fury's and are not drawn (hd-psn.md,
 names. Checked 2026-10-07: the install opened as `Wipeout HD`, raced Vineta K
 tick for tick like the disc, and its menu rows drew.
 
-### 2048 and Omega: unpack the package into a folder
+### 2048: a `.vpk`, or a folder
 
-These two ship as console download packages, not discs. The program does not
-read a `.pkg` file. It reads a folder you unpacked and decrypted from a
-package you own. This project supplies no key and does not say where one
-comes from; the license key for a package is part of your own copy.
+A 2048 `.vpk` (the ZIP a NoNpDrm dump of your own console's install makes) is
+read as it is: put it in `data/images/` or name it. A patch `.vpk` and DLC
+`.vpk` files of the same game beside it are mounted behind it and are not listed
+as games of their own. A `.vpk` stored without compression is read fastest; a
+deflated archive larger than 1 GiB is refused by name (re-pack it with
+`zip -0`). The program does **not** read a Vita `.pkg`: its game files are
+protected with a key your console derives in hardware, which is not something
+this project can carry. It says so by name if you give it one. Make a `.vpk`
+from your own console with NoNpDrm, or unpack the folder as below.
+Read and compared with the unpacked folders on 2026-10-07 using `.vpk` files built
+from them (no real NoNpDrm dump was available): [Vita packages](../formats/vita-package.md).
+
+### Omega, and a 2048 folder: unpack the package into a folder
+
+Omega ships as a console download package. The program does not read a `.pkg`
+file yet. It reads a folder you unpacked and decrypted from a package you own.
+The licence for a package is part of your own copy, and this project does not
+say where one comes from. The project may ship fixed public package keys that
+other open-source tools already ship, never a per-game licence
+([legal](legal.md#fixed-public-keys)).
 
 The tools the project used and the exact steps are in
 [`data/README.md`](../../data/README.md) (the Vita steps) and

@@ -11,6 +11,7 @@ rust-version.workspace = true
 aes.workspace = true
 chd.workspace = true
 dirs = "7"
+miniz_oxide.workspace = true
 thiserror.workspace = true
 
 [lints]

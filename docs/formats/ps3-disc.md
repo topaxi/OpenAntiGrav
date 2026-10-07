@@ -98,7 +98,8 @@ Plain regions are copied through untouched.
 The disc key is **not in the image**, and no amount of analysis recovers it.
 
 On real hardware the drive and the console authenticate, and the drive returns
-`data1`, from which the disc key is derived by encrypting it with a fixed secret
+`data1`, from which the disc key is derived by encrypting it (AES-128-CBC, one
+block, under a fixed IV that [RPCS3](https://github.com/RPCS3/rpcs3) carries beside the secret) with a fixed secret
 (`0x380bcf0b53455b3c7817ab4fa3ba90ed`). A PC drive dumping the disc never
 performs that exchange, so `data1` never lands in the file. This is why redump
 publishes a separate `.dkey` per disc: a redump `.dkey` holds the **derived**

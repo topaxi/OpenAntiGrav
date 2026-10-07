@@ -35,12 +35,22 @@ use crate::error::Result;
 use crate::iso9660::Entry;
 use crate::source::{SECTOR_SIZE, SectorSource};
 
-/// The fixed secret a disc's `data1` is encrypted with to derive the sector
-/// key (AES-128-CBC, zero IV, one block). Public: it is printed in
-/// `docs/formats/ps3-disc.md` and carried by every PS3 emulator. It is not a
-/// per-disc key and opens nothing by itself.
+/// The fixed secret a disc's `data1` is encrypted with to derive the sector key,
+/// and the IV it is encrypted under (AES-128-CBC, one block). Both are the
+/// constants RPCS3 carries as `key_d1` and `iv_d1` in `rpcs3/Loader/ISO.cpp`
+/// (`iso_file_decryption::set_key_from_d1`, GPL-2.0), read from a checkout of
+/// that file on 2026-10-07; the secret is also printed in
+/// `docs/formats/ps3-disc.md`. Fixed, not per disc: opens nothing by itself.
+///
+/// **Not exercised against a real `data1`**: the maintainer's key is a redump
+/// `.dkey`, the derived form. The oracle still decides, so a wrong IV here
+/// rejects a good `data1` and can never accept a bad key.
 const DATA1_SECRET: [u8; 16] = [
     0x38, 0x0b, 0xcf, 0x0b, 0x53, 0x45, 0x5b, 0x3c, 0x78, 0x17, 0xab, 0x4f, 0xa3, 0xba, 0x90, 0xed,
+];
+
+const DATA1_IV: [u8; 16] = [
+    0x69, 0x47, 0x47, 0x72, 0xaf, 0x6f, 0xda, 0xb3, 0x42, 0x74, 0x3a, 0xef, 0xaa, 0x18, 0x62, 0x87,
 ];
 
 /// Most plain-region pairs sector 0 may declare; a real disc has three.
@@ -107,7 +117,11 @@ impl DiscKey {
     /// decides which.
     fn candidates(&self) -> [Aes128; 2] {
         let direct = Aes128::new(GenericArray::from_slice(&self.0));
+        // One CBC block: encrypt `data1 XOR iv`.
         let mut block = GenericArray::clone_from_slice(&self.0);
+        for (byte, iv) in block.iter_mut().zip(DATA1_IV) {
+            *byte ^= iv;
+        }
         Aes128::new(GenericArray::from_slice(&DATA1_SECRET)).encrypt_block(&mut block);
         let derived = Aes128::new(&block);
         [direct, derived]

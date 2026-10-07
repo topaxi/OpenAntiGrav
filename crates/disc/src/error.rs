@@ -118,6 +118,15 @@ pub enum Error {
         path: String,
     },
 
+    /// A package file (a `.vpk`) could not be read as one.
+    #[error("{path}: {reason}")]
+    Package {
+        /// The file that was opened.
+        path: PathBuf,
+        /// What was wrong with it.
+        reason: String,
+    },
+
     /// Directory nesting exceeded the recursion limit.
     ///
     /// A malformed or hostile image can point a directory record at its own

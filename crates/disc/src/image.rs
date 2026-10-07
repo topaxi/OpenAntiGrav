@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use crate::chd_source::ChdSource;
 use crate::error::{Error, Result};
 use crate::iso9660::{self, Entry, VolumeDescriptor};
-use crate::platform::{self, TitleInfo};
+use crate::package::PackageSource;
+use crate::platform::{self, Platform, TitleInfo};
 use crate::ps3_crypt::{self, DiscKey, Unlocked};
 use crate::raw_source::RawSource;
 use crate::source::{SECTOR_SIZE, SectorSource};
@@ -22,6 +23,8 @@ pub enum Container {
     Chd,
     /// A flat sequence of 2048-byte sectors.
     RawIso,
+    /// A ZIP of a game's folder: a Vita `.vpk`, read in place.
+    Vpk,
 }
 
 impl std::fmt::Display for Container {
@@ -29,6 +32,7 @@ impl std::fmt::Display for Container {
         f.write_str(match self {
             Self::Chd => "CHD",
             Self::RawIso => "raw ISO",
+            Self::Vpk => "VPK",
         })
     }
 }
@@ -56,6 +60,26 @@ pub struct DiscImage {
     container: Container,
     ps3: Ps3State,
     entries: Option<Vec<Entry>>,
+    /// Set for a package image (`.vpk`), where [`Self::source`] is empty and
+    /// every read goes here instead.
+    package: Option<Box<dyn PackageSource>>,
+}
+
+/// The sector source of an image that has no sectors.
+#[derive(Debug)]
+struct NoSectors;
+
+impl SectorSource for NoSectors {
+    fn sector_count(&self) -> u32 {
+        0
+    }
+
+    fn read_sector(&mut self, lba: u32, _buf: &mut [u8]) -> Result<()> {
+        Err(Error::SectorOutOfRange {
+            sector: lba,
+            total: 0,
+        })
+    }
 }
 
 impl DiscImage {
@@ -83,7 +107,12 @@ impl DiscImage {
         let path = path.as_ref().to_path_buf();
         let container = sniff_container(&path)?;
 
+        let mut package: Option<Box<dyn PackageSource>> = None;
         let (source, ps3): (Box<dyn SectorSource>, Ps3State) = match container {
+            Container::Vpk => {
+                package = Some(Box::new(crate::vpk::VpkSet::open(&path)?));
+                (Box::new(NoSectors), Ps3State::NotEncrypted)
+            }
             Container::Chd => (Box::new(ChdSource::open(&path)?), Ps3State::NotEncrypted),
             Container::RawIso => {
                 let raw = Box::new(RawSource::open(&path)?);
@@ -102,6 +131,7 @@ impl DiscImage {
             container,
             ps3,
             entries: None,
+            package,
         })
     }
 
@@ -131,6 +161,9 @@ impl DiscImage {
 
     /// Reads the primary volume descriptor.
     pub fn volume_descriptor(&mut self) -> Result<VolumeDescriptor> {
+        if self.package.is_some() {
+            return Err(Error::NoPrimaryVolumeDescriptor { searched: 0 });
+        }
         iso9660::read_volume_descriptor(self.source.as_mut())
     }
 
@@ -140,7 +173,21 @@ impl DiscImage {
     /// cached for the lifetime of the image.
     pub fn entries(&mut self) -> Result<&[Entry]> {
         if self.entries.is_none() {
-            self.entries = Some(iso9660::walk(self.source.as_mut())?);
+            self.entries = Some(match &self.package {
+                // A package's `lba` is the file's index, see `crate::package`.
+                Some(package) => package
+                    .files()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, file)| Entry {
+                        path: file.path.clone(),
+                        lba: u32::try_from(index).unwrap_or(u32::MAX),
+                        size: file.size,
+                        is_directory: false,
+                    })
+                    .collect(),
+                None => iso9660::walk(self.source.as_mut())?,
+            });
         }
         Ok(self.entries.as_ref().expect("just populated"))
     }
@@ -150,7 +197,27 @@ impl DiscImage {
         // Cloned so the borrow of `self.entries` ends before `identify` needs
         // `self.source` mutably. The listing is small next to the image.
         let entries = self.entries()?.to_vec();
+        if self.package.is_some() {
+            return self.identify_package(&entries);
+        }
         platform::identify(self.source.as_mut(), &entries)
+    }
+
+    /// A package names its release through its own `sce_sys/param.sfo`.
+    fn identify_package(&mut self, entries: &[Entry]) -> Result<TitleInfo> {
+        let sfo = entries
+            .iter()
+            .find(|e| e.path.to_ascii_lowercase().ends_with("sce_sys/param.sfo"));
+        let serial = match sfo {
+            Some(entry) => crate::sfo::title_id(&self.read_entry(entry)?),
+            None => None,
+        };
+        Ok(TitleInfo {
+            platform: Platform::Vita,
+            serial,
+            boot_path: None,
+            raw: None,
+        })
     }
 
     /// Whether this image's sector 0 declares PS3 encrypted regions; see
@@ -180,6 +247,9 @@ impl DiscImage {
 
     /// Reads the contents of an entry returned by [`Self::entries`].
     pub fn read_entry(&mut self, entry: &Entry) -> Result<Vec<u8>> {
+        if let Some(package) = &mut self.package {
+            return package.read(entry.lba as usize, 0, entry.size);
+        }
         self.source.read_range(entry.lba, entry.size)
     }
 
@@ -189,6 +259,9 @@ impl DiscImage {
     /// multi-hundred-megabyte archive to look at its first four bytes would
     /// make sniffing a disc take minutes instead of seconds.
     pub fn read_entry_head(&mut self, entry: &Entry, max_len: u64) -> Result<Vec<u8>> {
+        if let Some(package) = &mut self.package {
+            return package.read(entry.lba as usize, 0, entry.size.min(max_len));
+        }
         self.source.read_range(entry.lba, entry.size.min(max_len))
     }
 
@@ -203,6 +276,9 @@ impl DiscImage {
     pub fn read_entry_range(&mut self, entry: &Entry, offset: u64, len: u64) -> Result<Vec<u8>> {
         if offset >= entry.size {
             return Ok(Vec::new());
+        }
+        if let Some(package) = &mut self.package {
+            return package.read(entry.lba as usize, offset, len);
         }
         let len = len.min(entry.size - offset);
 
@@ -245,6 +321,30 @@ fn sniff_container(path: &Path) -> Result<Container> {
 
     if &magic == CHD_MAGIC {
         return Ok(Container::Chd);
+    }
+    if magic[..4] == *crate::vpk::MAGIC {
+        return Ok(Container::Vpk);
+    }
+    // Named refusals, not guesses: both are packages this engine cannot read in
+    // place, and a raw-ISO assumption would only fail later as "no ISO 9660
+    // primary volume descriptor".
+    if magic[..4] == *b"\x7fPKG" {
+        return Err(Error::Package {
+            path: path.to_path_buf(),
+            reason: "this is a Vita .pkg. Its game files are PFS-encrypted with a key the console \
+                     derives in hardware from the licence (not a public constant), so it is not \
+                     read in place. Use a NoNpDrm .vpk or folder of the same game, which carry \
+                     plain files (docs/formats/vita-package.md)"
+                .to_string(),
+        });
+    }
+    if magic[..4] == *b"\x7fCNT" {
+        return Err(Error::Package {
+            path: path.to_path_buf(),
+            reason: "this is a PS4 .pkg. Reading one in place is not implemented yet; extract it \
+                     into a folder first (docs/overview/installing.md, \"Omega Collection\")"
+                .to_string(),
+        });
     }
 
     // Anything else is assumed to be a raw ISO. The assumption is verified
@@ -291,8 +391,31 @@ mod tests {
     }
 
     #[test]
+    fn a_vita_or_ps4_pkg_is_refused_by_name_not_read_as_an_iso() {
+        let vita = temp_file("vita.pkg", b"\x7fPKG\x80\x00\x00\x01 more header");
+        let error = sniff_container(&vita).unwrap_err().to_string();
+        assert!(
+            error.contains("Vita .pkg") && error.contains("NoNpDrm"),
+            "{error}"
+        );
+        let ps4 = temp_file("ps4.pkg", b"\x7fCNT\x00\x00\x00\x01 more header");
+        let error = sniff_container(&ps4).unwrap_err().to_string();
+        assert!(error.contains("PS4 .pkg"), "{error}");
+        std::fs::remove_file(vita).ok();
+        std::fs::remove_file(ps4).ok();
+    }
+
+    #[test]
+    fn a_zip_is_a_vpk() {
+        let path = temp_file("a.vpk", b"PK\x03\x04 and the rest");
+        assert_eq!(sniff_container(&path).unwrap(), Container::Vpk);
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
     fn container_displays_readably() {
         assert_eq!(Container::Chd.to_string(), "CHD");
         assert_eq!(Container::RawIso.to_string(), "raw ISO");
+        assert_eq!(Container::Vpk.to_string(), "VPK");
     }
 }

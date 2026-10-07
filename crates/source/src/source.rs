@@ -100,7 +100,7 @@ pub const IMAGE_NAMES: [&str; 7] = [
 ];
 
 /// Container extensions a directory scan will accept, lowercase.
-const EXTENSIONS: [&str; 2] = ["chd", "iso"];
+const EXTENSIONS: [&str; 3] = ["chd", "iso", "vpk"];
 
 /// The environment variable that names an image outright.
 pub const IMAGE_ENV: &str = "OAG_IMAGE";
@@ -606,13 +606,14 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
         "no disc image found. OpenAntiGrav ships no game content: supply your own \
          image, from your own copy of the game.\n\nSearched (relative paths are \
          relative to {}):\n{}\n{}\n{}\n{}\n\nA .chd or .iso disc image (Pulse, Pure, \
-         HD) is found by extension. A 2048 or Omega .pkg is NOT read: unpack and \
-         decrypt it into a folder first (`docs/overview/installing.md`, \
-         \"Wipeout 2048\" and \"Omega Collection\"). An encrypted HD .iso is read \
+         HD) is found by extension. A 2048 .vpk is read in place (a NoNpDrm dump, \
+         or an unpacked folder). A Vita or PS4 .pkg is NOT read: unpack and decrypt it \
+         into a folder first (`docs/overview/installing.md`, \"Wipeout 2048\" and \
+         \"Omega Collection\"). An encrypted HD .iso is read \
          in place with the disc key from a .dkey beside it, or one entered in the chooser.\n\nName a source directly \
          (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
         std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
-        list(searched, ".chd / .iso"),
+        list(searched, ".chd / .iso / .vpk"),
         list(
             &package_search_path(),
             "unpacked 2048 folder, base/PSP2/data.psarc"
@@ -691,7 +692,7 @@ fn images_in(directory: &Path) -> Vec<PathBuf> {
         .flatten()
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.is_file() && is_container(path))
+        .filter(|path| path.is_file() && is_container(path) && is_listed(path))
         .collect();
     containers.sort();
 
@@ -702,6 +703,16 @@ fn images_in(directory: &Path) -> Vec<PathBuf> {
     }
 
     found
+}
+
+/// Whether a container is a row of its own. Every disc image is; a `.vpk` is
+/// only if it is an application, because a patch or DLC `.vpk` is mounted with
+/// its base and offered as nothing on its own.
+fn is_listed(path: &Path) -> bool {
+    let is_vpk = path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("vpk"));
+    !is_vpk || oag_disc::vpk::category(path).is_none_or(|category| category == "gd")
 }
 
 /// Whether a path looks like a disc image this engine can open.

@@ -158,3 +158,20 @@ fn a_folder_of_several_images_surveys_into_several_rows() {
         eprintln!("{:<14} {:<18} {}", row.title(), row.provenance(), row.name);
     }
 }
+
+/// A `.vpk` is a row like a disc image: identified from its own `param.sfo`,
+/// opened as 2048, with its patch and DLC `.vpk` files beside it mounted rather
+/// than listed. Needs `scripts/make-test-vpk.sh`.
+#[test]
+#[ignore = "needs data/test-vpk/ (scripts/make-test-vpk.sh)"]
+fn a_vpk_is_listed_as_2048_on_the_vita() {
+    let Some(vpk) = oag_testdata::exact("data/test-vpk/2048-PCSF00007.vpk") else {
+        return;
+    };
+    let rows = launcher::survey(&[vpk]);
+    let row = rows.first().expect("one path in, one row out");
+    assert!(row.is_playable(), "{:?}", row.state);
+    assert_eq!(row.title(), "Wipeout 2048");
+    assert_eq!(row.platform.to_string(), "Vita");
+    assert_eq!(row.serial.as_deref(), Some("PCSF-00007"));
+}
