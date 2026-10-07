@@ -582,6 +582,17 @@ fn run(cli: Cli) -> Result<()> {
             // for a packaged build with no image is the entire user interface.
             if rows.len() > 1 || (cli.launcher && !rows.is_empty()) {
                 Some(launcher::Launcher::new(rows))
+            } else if rows.is_empty() && cfg!(target_os = "android") {
+                // A phone has no terminal for `resolve`'s message and its
+                // window would only close, so the chooser's own screen says it.
+                let images = std::env::current_dir()
+                    .map_or_else(|_| "data".into(), |dir| dir.join("data").join("images"));
+                let images = images.display().to_string();
+                let images = images.replacen("/storage/emulated/0", "/sdcard", 1);
+                log::error!("no disc image found; adb push one to {images}/");
+                Some(launcher::Launcher::not_found(launcher::not_found_notice(
+                    &images,
+                )))
             } else {
                 None
             }

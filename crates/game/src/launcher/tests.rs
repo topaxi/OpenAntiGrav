@@ -363,3 +363,39 @@ fn hovering_a_row_moves_the_cursor_and_the_wheel_steps_it() {
         "the wheel steps like the d-pad, wrapping"
     );
 }
+
+const ANDROID_IMAGES: &str = "/sdcard/Android/data/org.openantigrav.game/files/data/images";
+
+/// The not-found screen carries the exact push command and every line of it
+/// fits the 480-unit screen. It draws no rows and picks nothing.
+#[test]
+fn the_not_found_screen_names_the_adb_push_and_fits() {
+    let launcher = Launcher::not_found(not_found_notice(ANDROID_IMAGES));
+    assert!(launcher.pick().is_none() && !launcher.has_playable());
+    let atlas = oag_ui::font::Atlas::build();
+    let texts: Vec<String> = draw_list(&launcher)
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { x, text, .. } => {
+                let width = oag_ui::font::measure(&atlas, &text);
+                assert!(x + width <= SCREEN.0, "{text:?} runs off the screen");
+                Some(text)
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.iter().any(|t| t == "NO DISC IMAGE FOUND"),
+        "{texts:?}"
+    );
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains(&format!("{ANDROID_IMAGES}/"))),
+        "the destination is spelled out: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t == "SELECT A DISC IMAGE"),
+        "there is nothing to select"
+    );
+}
