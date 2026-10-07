@@ -17,10 +17,10 @@ const MATERIAL_SHIFT: u32 = 23u;
 // An opaque surface's fogged colour from its lit texel: the glass's equation
 // where the material is one, the ordinary `fog(shadow(C))` everywhere else.
 fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
-    let lit = shadowed(shaded.rgb, in.world);
     if (in.slots & SLOT_REFRACTION) == 0u {
-        return fogged(lit, in.world, in.view_depth);
+        return fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth);
     }
+    let lit = shadowed(shaded.rgb, in.world);
     let slot = in.slots >> MATERIAL_SHIFT;
     let tint = emissives.tint_offset[slot];
     let weight = emissives.scale[slot];
