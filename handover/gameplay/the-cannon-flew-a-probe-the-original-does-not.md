@@ -10,7 +10,22 @@ floor with a 3.0 push-off. Missile, Shuriken and Plasma are now born riding the
 craft's up, as `Missile_Init`, `Shuriken_Init` and `Plasma_Launch` store it.
 Moa Therma, 496 rounds: worst off-muzzle error 7.05 units before, 0.00 after.
 
+The de Konstruct AI-field ceilings raised with it (`ai_dekonstruct_black_ground_truth`
+forward 6 -> 8, `ai_dekonstruct_symptoms_ground_truth` 05 FLASH 1 -> 3) were
+attributed in lane `ai-loss-split`: 7 of the 10 extra deaths are weapon-dominant,
+3 wall-dominant at the old scrape spots, deaths over 160 more races 110 -> 110,
+a Cannon hit applies no impulse, and no AI change is owed. The ceilings stay.
+`crates/game/tests/ai_loss_attribution_board.rs` is the diagnostic
+(`OAG_SWEEP=1`, release, `--ignored --nocapture`).
+
 ## Open
+
+- **Forward Black rescues a craft about ten times a race** (882 teleports in 80
+  seven-craft races with weapons off, 791 with them on), and a late-lap craft is
+  killed by wall scrape alone now and then (4 of 128 deaths scraped 95 or more,
+  3 of 126 before the change; laps 5-6, in the changed build at reversed idx
+  1926-1941 and 359).
+  Neither moved with the Cannon; both are the AI's, not this thread's.
 
 - **No banked frame was captured.** `--autopilot` fires nothing and a hand-held
   `--race` cannot reach the loop, so the screenshots are flat-track only
