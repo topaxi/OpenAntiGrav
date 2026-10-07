@@ -979,6 +979,15 @@ pub fn run(
     if let Some(presented) = presented {
         presented.composite(&device, &queue, &mut encoder, &view);
     }
+    if options.menu_page.as_deref() == Some(crate::touch_controls::preview::PAGE) {
+        crate::touch_controls::draw_preview(
+            &options.settings.controls,
+            (&device, &queue, format),
+            &mut encoder,
+            &view,
+            (width, height),
+        )?;
+    }
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
 }

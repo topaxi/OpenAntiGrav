@@ -258,6 +258,24 @@ fn default_triggers() -> String {
     TriggerMode::default().name().to_string()
 }
 
+impl Controls {
+    /// The overlay's scheme and zone setting; an unrecognised scheme token
+    /// is standard.
+    #[must_use]
+    pub fn touch_setup(&self) -> oag_input::touch::Setup {
+        oag_input::touch::Setup::new(
+            oag_input::touch::Scheme::parse(&self.touch_scheme).unwrap_or_default(),
+            self.touch_go_zones,
+        )
+    }
+
+    /// The overlay's alpha multiplier: `touch_opacity` as a share of 1.
+    #[must_use]
+    pub fn touch_alpha(&self) -> f32 {
+        f32::from(self.touch_opacity) / 100.0
+    }
+}
+
 fn default_touch_go_zones() -> bool {
     true
 }
