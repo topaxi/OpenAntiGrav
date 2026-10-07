@@ -22,20 +22,23 @@ mod render_overrides;
 #[derive(Parser, Debug)]
 #[command(
     name = "oag-game",
-    about = "Run Wipeout Pulse from a disc image",
+    about = "Run a Wipeout game (Pulse, Pure, HD/Fury, 2048 or Omega) from your own copy",
     version
 )]
 pub(crate) struct Cli {
-    /// A disc image, or a directory extracted with `oag-unpack`.
+    /// Your game: a disc image (`.chd` or `.iso`, for Pulse, Pure or HD/Fury),
+    /// or an unpacked folder (2048 or Omega, from their `.pkg`s).
     ///
-    /// Either release: the archives are found by name, so
-    /// `data/images/pulse-ps2-eu.chd` works as well as the PSP default. See
-    /// `oag_assets::Layout`.
+    /// For example `data/images/pulse-psp-eu.chd`. Either pressing works: the
+    /// archives are found by name, so `data/images/pulse-ps2-eu.chd` opens
+    /// too. See `oag_assets::Layout`.
     ///
     /// Left out, it is searched for: `data/images/` in the current directory,
-    /// then beside the AppImage, then `<data dir>/oag/images`. `oag_source::source`
-    /// documents the whole order, and `$OAG_IMAGE` short-circuits it. Finding
-    /// more than one there opens the chooser - see `--launcher`.
+    /// then beside the AppImage, then `<data dir>/oag/images`. When a title has
+    /// both a Europe and a USA image, Europe is opened; name the USA one here
+    /// to play it. `oag_source::source` documents the whole order, and
+    /// `$OAG_IMAGE` short-circuits it. Finding more than one title there opens
+    /// the chooser - see `--launcher`.
     pub(crate) source: Option<String>,
 
     /// Show the disc chooser, even when a source would resolve on its own.

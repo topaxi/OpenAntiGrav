@@ -65,18 +65,18 @@ Tooling looks for these names. Copy your own images here and rename:
 
 | Name | Title | Console | Region |
 | --- | --- | --- | --- |
+| `pulse-psp-eu.chd` | Wipeout Pulse | PSP | Europe/Australia |
 | `pulse-psp-usa.chd` | Wipeout Pulse | PSP | USA |
 | `pulse-ps2-eu.chd` | Wipeout Pulse | PS2 | Europe |
-| `pulse-psp-eu.chd` | Wipeout Pulse | PSP | Europe/Australia |
-| `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `pure-psp-eu.chd` | Wipeout Pure | PSP | Europe |
+| `pure-psp-usa.chd` | Wipeout Pure | PSP | USA |
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
-| `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
 | `2048-vita-eu.pkg` | WipEout 2048 | Vita | Europe (`PCSF00007`) |
+| `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
 | `omega-ps4-eu.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), base v1.00 |
 | `omega-ps4-eu-patch.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), v1.07 patch |
 
-`.iso` works anywhere `.chd` does; the tools sniff the container.
+`.iso` works anywhere `.chd` does; the tools sniff the container. **When a title has both a Europe and a USA image, `oag-game` opens the Europe one**; name the USA one to play it.
 
 ### The PS3 image is encrypted, and nothing here decrypts it yet
 
@@ -177,14 +177,13 @@ unchanged - see `IMAGE_NAMES`'s own doc comment in
 genuinely different `BOOT.BIN` from `pulse-psp-usa.chd`'s, not a re-labelled
 copy - see [source-images.md](../docs/reverse-engineering/source-images.md).
 
-**Pure and HD/Fury are read-only format targets today, not playable ones.**
-`oag-view`/`oag-unpack`/`oag-wad` read them opportunistically per
-[ADR-0009](../docs/architecture/adr/0009-multi-game-fanout.md). Pointing
-`oag-game` at either fails fast with a named error (`Error::WrongTitle` for
-Pure's PSP disc, since its archives share Pulse's own filenames; PS3
-identification doesn't exist yet, so HD/Fury falls back to the archive's own
-"nothing matched" error) rather than silently loading the wrong game -
-playable second-title support is tracked at roadmap M8.
+**Pure and HD/Fury boot too**: each has a front end of its own and a race
+loads on its own data, though neither is played past the menus as far as
+Pulse is (roadmap M8, [status](../docs/overview/status.md)). `oag-game` finds
+the title from the image itself, so a Pure disc is never mistaken for Pulse,
+and an encrypted HD `.iso` is reported as encrypted rather than failing with a
+message about another game
+([installing](../docs/overview/installing.md)).
 
 ### The Omega Collection PKG decrypts on a PC; the archives are plain, the executable isn't yet
 
@@ -209,7 +208,7 @@ blocker on the asset side - see
 Confirm what you have with:
 
 ```sh
-cargo run -p oag-tools --bin oag-unpack -- info data/images/pulse-psp-usa.chd
+cargo run -p oag-tools --bin oag-unpack -- info data/images/pulse-psp-eu.chd
 ```
 
 Record the SHA-256 of every image you use in

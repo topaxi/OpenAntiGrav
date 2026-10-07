@@ -49,8 +49,10 @@ shows up when the window opens, not at build time.
 Optional:
 
 - **`ffmpeg`** converts each game's intro movie the first time you boot a
-  title. Without it the intro plays as a black screen with the text
-  `INTRO FRAME n / N (NO PICTURE)` and everything else works. With it the
+  title. Without it the program logs one line, `ffmpeg is not installed, so
+  the intro and other movies play with no picture`, skips the conversion, and
+  the intro plays as a black screen with the text
+  `INTRO FRAME n / N (NO PICTURE)`; everything else works. With it the
   first Pulse boot spends about 80 seconds converting, once, and caches the
   result.
 - `just` runs the repository's recipes (`just play ...`). Not needed to play.
@@ -69,9 +71,9 @@ named `wipeout.chd`).
 
 | Title | Platform | What to supply | File or folder name |
 | --- | --- | --- | --- |
-| Wipeout Pulse | PSP | disc image, `.chd` or `.iso`, USA or Europe | `pulse-psp-usa.chd`, `pulse-psp-eu.chd` |
+| Wipeout Pulse | PSP | disc image, `.chd` or `.iso`, Europe or USA (Europe is opened when you have both) | `pulse-psp-eu.chd`, `pulse-psp-usa.chd` |
 | Wipeout Pulse | PS2 | disc image, Europe | `pulse-ps2-eu.chd` |
-| Wipeout Pure | PSP | disc image, USA or Europe | `pure-psp-usa.chd`, `pure-psp-eu.chd` |
+| Wipeout Pure | PSP | disc image, Europe or USA | `pure-psp-eu.chd`, `pure-psp-usa.chd` |
 | Wipeout HD / Fury | PS3 | **decrypted** disc image, Europe | `hdfury-ps3-eu-dec.iso` |
 | Wipeout 2048 | Vita | **unpacked** package folder | `data/extracted/vita/PCSF00007` (Europe) or `PCSA00015` (USA) |
 | Omega Collection | PS4 | **unpacked** base and patch folders | `data/extracted/ps4/omega-eu` and `omega-eu-patch` |
@@ -132,12 +134,18 @@ data/extracted/ps4/
     omega-eu-patch/uroot/data09.psarc the day-one patch: required
 ```
 
+When a folder holds both a European (`PCSF00007`) and a USA (`PCSA00015`) 2048 extract, the European one is opened; name the other directly to play it.
+
 2048 starts with `base/` alone (checked: a folder holding only
 `base/PSP2/data.psarc` opens as `Wipeout 2048`). The DLC packs are mounted
-when their folders are there. The 1.04 patch's archives are deliberately not
-mounted yet, because they would be searched behind the entries they replace
-(`crates/2048/src/lib.rs`, `EXTRA_CANDIDATES`), so unpacking it changes
-nothing today. A `base/` folder that is itself a symlink was not found, so use
+when their folders are there. **The 1.04 patch is deliberately not mounted, so
+unpacking it changes nothing today, and you can skip it.** It replaces 1,856 of
+the base archive's entries (1,156 materials, 435 ships, track and table files)
+and its two archives share 570 paths with no measured order between them, so
+mounting it would change how circuits and craft draw and handle on a guess
+(`crates/2048/src/lib.rs`, `EXTRA_CANDIDATES`; census in
+[patches](../formats/patches.md)). The base game plays as the original did at
+launch. Omega is the opposite: its patch is required. A `base/` folder that is itself a symlink was not found, so use
 real folders. Omega needs the patch: only the patch's
 `data09.psarc` carries the front end, so a base-only folder is not offered.
 Omega's layout was checked from one package form only, the one the project's
@@ -209,7 +217,7 @@ you give it.
 | Settings | `$XDG_CONFIG_HOME/oag/settings.toml`, usually `~/.config/oag/settings.toml` |
 | Records, progress, ghosts | `~/.config/oag/` (`records.toml`, `ghosts/`). Saved by themselves, there are no save slots |
 | Log file | `$XDG_STATE_HOME/oag/logs/oag-game.log`, usually `~/.local/state/oag/logs/oag-game.log`. Kept seven days |
-| Converted movies and sound | `data/cache/` if a `data/` folder is next to where you run it, otherwise `~/.cache/oag/` |
+| Converted movies and sound | `~/.cache/oag/`. A source checkout (a `justfile` and a `data/` folder next to where you run it), or a `data/cache/` that already exists, keeps it in `data/cache/` instead |
 | Images, if not in `data/images/` | `~/.local/share/oag/images/` |
 | 2048 and Omega folders, if not in `data/extracted/` | `~/.local/share/oag/extracted/vita/` and `.../extracted/ps4/` |
 
@@ -248,7 +256,7 @@ do not expect a finished game outside Pulse.
 | `Error: no disc image found. OpenAntiGrav ships no game content ...` then a `Searched:` list | Nothing was in the listed places. Relative paths are relative to the folder you ran it from (the message names it): run from the folder that holds `data/`, or name the source. The list shows where disc images (`.chd`, `.iso`), unpacked 2048 folders and unpacked Omega folders are looked for. A `.pkg` is never read: unpack it (section 2) |
 | `Error: OAG_IMAGE is set to ..., which is not a disc image (.chd, .iso), an unpacked 2048 or Omega folder, or a folder holding one` | `$OAG_IMAGE` points at nothing usable. Unset it, or point it at a disc image or an unpacked folder |
 | `... is an encrypted PS3 disc image ...` | The HD image is still encrypted. Decrypt it as in section 2. With both `hdfury-ps3-eu.iso` and `hdfury-ps3-eu-dec.iso` in `data/images/`, the decrypted one is used |
-| Black screen with `INTRO FRAME n / N (NO PICTURE)` | `ffmpeg` is missing or `--no-video` was given. Install `ffmpeg` and run once without the flag. The game is otherwise fine |
+| Black screen with `INTRO FRAME n / N (NO PICTURE)`, and the log line `ffmpeg is not installed, so the intro and other movies play with no picture` | `ffmpeg` is missing (or `--no-video` was given, which logs nothing). Install `ffmpeg` and run once without the flag. The game is otherwise fine |
 | Window opens black, or no window | Vulkan driver missing or broken. The terminal prints a `renderer: vulkan: ...` line naming the adapter. A CPU adapter such as `llvmpipe` works but is slow |
 | Program does not start and the loader says it cannot open `libpipewire-0.3.so.0` (not run: needs a machine without it) | Install the PipeWire client library from the table in section 1 |
 | `frame: 50 ms` warnings fill the terminal | You are on a CPU renderer. Lower RENDER SCALE in the options. The log file is quieter |
