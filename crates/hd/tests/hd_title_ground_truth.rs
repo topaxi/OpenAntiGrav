@@ -86,10 +86,16 @@ fn all_seven_archives_open_as_psarcs_off_one_disc() {
     let expected: Vec<String> = TITLE
         .archive_names()
         .iter()
-        .map(|name| format!("{}:{name}", image().expect("checked above").display()))
+        .map(|name| {
+            format!(
+                "{}:PS3_GAME/{name}",
+                image().expect("checked above").display()
+            )
+        })
         .collect();
     let mut expected: Vec<&str> = expected.iter().map(String::as_str).collect();
     expected.sort_unstable();
+    expected.dedup();
     assert_eq!(opened, expected);
 
     // 11,664 entries across the seven, from `docs/formats/psarc.md`. Counted

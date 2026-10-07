@@ -509,14 +509,14 @@ fn an_unpacked_folder_is_found_without_an_image() {
     std::fs::write(&data09, b"").unwrap();
 
     assert_eq!(
-        first_package(std::slice::from_ref(&vita), std::slice::from_ref(&ps4)),
+        first_package(std::slice::from_ref(&vita), std::slice::from_ref(&ps4), &[]),
         Some(copy.clone())
     );
     assert_eq!(
-        first_package(&[], std::slice::from_ref(&ps4)),
+        first_package(&[], std::slice::from_ref(&ps4), &[]),
         Some(ps4.clone())
     );
-    assert_eq!(first_package(&[], &[]), None);
+    assert_eq!(first_package(&[], &[], &[]), None);
 
     std::fs::remove_dir_all(&vita).unwrap();
     std::fs::remove_dir_all(&ps4).unwrap();
@@ -574,6 +574,52 @@ fn the_not_found_error_names_every_place_and_form() {
     if std::env::var_os("APPIMAGE").is_none() {
         assert!(!text.contains("beside the AppImage"), "{text}");
     }
+}
+
+/// A `PARAM.SFO` holding one `TITLE_ID`.
+fn sfo_with(title_id: &str) -> Vec<u8> {
+    let key = b"TITLE_ID\0";
+    let value = [title_id.as_bytes(), &[0]].concat();
+    let key_table = 20 + 16;
+    let data_table = key_table + key.len();
+    let mut out = b"\0PSF".to_vec();
+    out.extend_from_slice(&0x101_u32.to_le_bytes());
+    out.extend_from_slice(&u32::try_from(key_table).unwrap().to_le_bytes());
+    out.extend_from_slice(&u32::try_from(data_table).unwrap().to_le_bytes());
+    out.extend_from_slice(&1_u32.to_le_bytes());
+    out.extend_from_slice(&0_u16.to_le_bytes());
+    out.extend_from_slice(&0x0204_u16.to_le_bytes());
+    out.extend_from_slice(&u32::try_from(value.len()).unwrap().to_le_bytes());
+    out.extend_from_slice(&16_u32.to_le_bytes());
+    out.extend_from_slice(&0_u32.to_le_bytes());
+    out.extend_from_slice(key);
+    out.extend_from_slice(&value);
+    out
+}
+
+/// A PSN HD install is `PARAM.SFO` beside `USRDIR`, and nothing else is offered:
+/// not a decrypted disc extract (those keep both under `PS3_GAME/`), not a raw
+/// zip extract, not a folder with only one of the two. A European `TITLE_ID`
+/// sorts ahead of an American one whatever the folders are called.
+#[test]
+fn a_psn_hd_install_is_found_by_its_shape_and_europe_sorts_first() {
+    let root = temp_dir("ps3-installs");
+    for (folder, serial) in [("a-us", "NPUA80001"), ("z-eu", "NPEA00057")] {
+        std::fs::create_dir_all(root.join(folder).join("USRDIR")).unwrap();
+        std::fs::write(root.join(folder).join("PARAM.SFO"), sfo_with(serial)).unwrap();
+    }
+    std::fs::create_dir_all(root.join("disc/PS3_GAME/USRDIR")).unwrap();
+    std::fs::write(root.join("disc/PS3_GAME/PARAM.SFO"), sfo_with("BCES00664")).unwrap();
+    std::fs::create_dir_all(root.join("zip-extract")).unwrap();
+    std::fs::write(root.join("zip-extract/PARAM.SFO"), sfo_with("NPEA00057")).unwrap();
+
+    assert_eq!(
+        ps3_package_directories_in(&root),
+        [root.join("z-eu"), root.join("a-us")]
+    );
+    assert_eq!(package_at(&root.join("a-us")), Some(root.join("a-us")));
+    assert_eq!(package_at(&root.join("zip-extract")), None);
+    std::fs::remove_dir_all(&root).unwrap();
 }
 
 fn temp_dir(name: &str) -> PathBuf {

@@ -146,7 +146,11 @@ impl Layout {
         })?;
         let patch = pick_all(source, &files, title.archives.patch);
         let fe = pick(source, &files, title.archives.fe);
-        let extra = pick_all(source, &files, title.archives.extra);
+        let mut extra = pick_all(source, &files, title.archives.extra);
+        // A candidate list may name one archive in two roles (HD's `DATA03` is a
+        // PSN install's bulk archive and a disc's extra); it mounts once, in the
+        // role that came first.
+        extra.retain(|spec| *spec != data.0 && fe.as_ref().is_none_or(|(fe, _)| fe != spec));
 
         // An extracted directory that holds only `USRDIR` has no `UMD_DATA.BIN`
         // and no `SYSTEM.CNF` to identify it, so the archive that matched is the
@@ -831,7 +835,7 @@ fn collect(dir: &std::path::Path, prefix: &str, into: &mut Vec<String>) {
 fn package_title_id(root: &std::path::Path, files: &[String]) -> Option<String> {
     files
         .iter()
-        .filter(|f| names(f, "sce_sys/param.sfo") || names(f, "PS3_GAME/PARAM.SFO"))
+        .filter(|f| names(f, "PARAM.SFO"))
         .find_map(|f| oag_disc::sfo::title_id(&std::fs::read(root.join(f)).ok()?))
 }
 
