@@ -256,3 +256,14 @@ State 9 is the Bomb, 7 the Plasma, 8 the Cannon ("Machine Gun"), 0 the Rocket,
   recipe; none was filmed this pass.
 - **Absorb shell colour**: circle with a held state spends it and plays the shell; a clean
   frame was not taken.
+
+## 2026-10-07 (`hd-rocket`): Rocket filmed against ours; the smoke ribbon and launch light are what differ
+
+Two RPCS3 boots agree (fire on video frame 173): thick white smoke ribbons ahead of the craft for
+~0.8 s and a yellow-white scene flash for ~2 frames at launch; ours draws neither. The ribbon is
+`rockettrail_triangle` of `ribboneffects/` (see `docs/rendering/trail-ribbon.md`, 2026-10-07), built
+by a `WakeTrail`-style manager whose law is unread. The flash is probably a point light (`0x006778c8`,
+unread). Our sim fires 3 rockets per press; the film shows at least two ribbons, count not settled.
+Pitfall: our rocket's fire button is `square` in `--input-script`; `triangle` does nothing.
+Next: read the `0x00ad81f0` job's extrusion (width, taper, life) and what pushes samples for a rocket,
+then draw `rockettrail_triangle` through the engine-trail ribbon path. Omega's rocket model: not checked.

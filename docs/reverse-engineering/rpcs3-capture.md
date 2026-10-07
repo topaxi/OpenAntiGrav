@@ -972,3 +972,11 @@ independent timings), 50 for any reading of why.
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
 - [rcsmaterial.md](../formats/rcsmaterial.md) - what the shader tables hold.
 - [methodology.md](methodology.md) - observe, hypothesise, verify, document.
+
+### Trap: copying another member's RPCS3 config (2026-10-07)
+
+A scratch `xdg/config/rpcs3` copied from another lane carries that lane's
+`input_configs/global/oag.yml` `Device: OAG Pad <lane>` and its `GDB Server`
+port. With a different `OAG_RPCS3_PAD_NAME` every press is silently dropped
+(the walk stalls at Main Menu or wanders into "Manual Part 1"); fix the device
+name and the port in your copy before the first boot.
