@@ -10,6 +10,9 @@ each other (`.umd`/`.gcm` were gitignored but absent from both audits). This
 script is now the single source of truth: `just audit-leakage` and CI's
 `leakage` job both just run it, and it also checks .gitignore for the same
 list, so there is nothing left to hand-copy out of sync.
+
+`--dir <path>` runs the same extension list over an unpacked release artifact
+instead of the git tree (`scripts/build-appimage.sh`, `.github/workflows/release.yml`).
 """
 
 from __future__ import annotations
@@ -48,6 +51,16 @@ ALLOWED_TRACKED = {
     "crates/post/src/smaa_search.bin",
 }
 
+# Files a release artifact (tarball, zip, AppDir) may carry despite a forbidden
+# extension, by path relative to the artifact root. The only one is the window
+# icon `oag-game --write-icon` rasterises from the project's own vector art -
+# a `.png`, but not a reproduction of anything on a disc. Allowed by path, not by
+# extension, so a stray screenshot in a package still fails.
+ARTIFACT_ALLOWED = {
+    "oag-game.png",
+    "usr/share/icons/hicolor/256x256/apps/oag-game.png",
+}
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -63,6 +76,24 @@ def tracked_leaks() -> list[str]:
     ]
 
 
+def directory_leaks(root: Path) -> list[str]:
+    """Files under `root` (an unpacked artifact) with a forbidden extension.
+
+    The same `EXTENSIONS` list `tracked_leaks` uses, so a package is held to
+    exactly what the repository is. `scripts/build-appimage.sh` and the release
+    workflow both call this rather than keeping a list of their own.
+    """
+    pattern = re.compile(r"\.(" + "|".join(EXTENSIONS) + r")$", re.IGNORECASE)
+    leaks = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() and not path.is_symlink():
+            continue
+        rel = path.relative_to(root).as_posix()
+        if pattern.search(rel) and rel not in ARTIFACT_ALLOWED:
+            leaks.append(rel)
+    return leaks
+
+
 def gitignore_gaps() -> list[str]:
     """Extensions with no `*.ext` line anywhere in .gitignore."""
     text = (ROOT / ".gitignore").read_text()
@@ -71,6 +102,24 @@ def gitignore_gaps() -> list[str]:
 
 
 def main() -> int:
+    if len(sys.argv) > 1:
+        if len(sys.argv) != 3 or sys.argv[1] != "--dir":
+            print("usage: check-leakage.py [--dir <unpacked-artifact>]", file=sys.stderr)
+            return 2
+        root = Path(sys.argv[2])
+        if not root.is_dir():
+            print(f"{root} is not a directory", file=sys.stderr)
+            return 2
+        leaks = directory_leaks(root)
+        if leaks:
+            print(
+                "game content in the artifact:\n" + "\n".join(f"  {p}" for p in leaks),
+                file=sys.stderr,
+            )
+            return 1
+        print(f"OK: nothing under {root} has a forbidden extension")
+        return 0
+
     problems = []
 
     leaks = tracked_leaks()

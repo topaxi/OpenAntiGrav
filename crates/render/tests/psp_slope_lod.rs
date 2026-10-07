@@ -510,10 +510,10 @@ fn striped() -> Arc<ModelTexture> {
 }
 
 /// How many pixels of the drawn triangle differ between anisotropy off and 16x.
-fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> usize {
-    let Some((device, queue)) = gpu() else {
-        return usize::MAX;
-    };
+/// `None` with no GPU adapter, so a caller skips like every other test here
+/// rather than reading a sentinel as a pixel count.
+fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> Option<usize> {
+    let (device, queue) = gpu()?;
     let with = |anisotropy| {
         draw(
             &device,
@@ -528,18 +528,23 @@ fn pixels_moved_by_anisotropy(texcoords: Texcoords, depth: f32) -> usize {
         )
     };
     let (off, sixteen) = (with(Anisotropy::Off), with(Anisotropy::X16));
-    off.chunks(4)
-        .zip(sixteen.chunks(4))
-        .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 2))
-        .count()
+    Some(
+        off.chunks(4)
+            .zip(sixteen.chunks(4))
+            .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 2))
+            .count(),
+    )
 }
 
 #[test]
 fn anisotropy_widens_the_footprint_where_the_surface_is_foreshortened() {
     // Level 0 at depth 64, four texels a pixel along the long axis: sixteen
     // stripes' worth of aliasing that only the probes along it can average.
+    let Some(moved) = pixels_moved_by_anisotropy(Texcoords::Stretched, 64.0) else {
+        return;
+    };
     assert!(
-        pixels_moved_by_anisotropy(Texcoords::Stretched, 64.0) > 100,
+        moved > 100,
         "16x must change a foreshortened surface at the slope law's own level"
     );
 }
@@ -548,5 +553,8 @@ fn anisotropy_widens_the_footprint_where_the_surface_is_foreshortened() {
 fn anisotropy_leaves_a_footprint_narrower_than_a_texel_alone() {
     // The same shape at a tenth of a texel a pixel: nothing to widen, and the
     // sampler must not blur a magnified surface for the sake of a ratio.
-    assert_eq!(pixels_moved_by_anisotropy(Texcoords::Gentle, 64.0), 0);
+    let Some(moved) = pixels_moved_by_anisotropy(Texcoords::Gentle, 64.0) else {
+        return;
+    };
+    assert_eq!(moved, 0);
 }

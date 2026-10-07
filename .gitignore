@@ -25,6 +25,7 @@
 !/data/traces/talons-junction-standing-start.csv
 !/data/traces/talons-junction-time-trial-lap.csv
 !/data/traces/talons-junction-time-trial-lap-omega.csv
+!/data/traces/talons-junction-clean-lap.csv
 !/data/traces/venom-straight.csv
 
 # Belt-and-braces: even outside /data/, no game content may ever be committed.
