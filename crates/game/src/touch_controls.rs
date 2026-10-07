@@ -22,7 +22,7 @@
 pub mod art;
 mod shape;
 
-use oag_input::touch::{self, Control, GoZone, Touches};
+use oag_input::touch::{self, Control, GoZone, Scheme, Setup, Touches};
 use oag_ui::frontend::{Align, Draw};
 
 use art::Art;
@@ -123,6 +123,35 @@ fn go_zones(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut
     }
 }
 
+/// Easy's BRAKE band across GO's bottom: lit inside GO's own outline from
+/// the bottom up as the pull rises, with its word.
+fn go_band(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut Vec<Draw>) {
+    let [x, y, w, h] = body.rect;
+    let band = h * touch::EASY_BAND;
+    let top = y + h - band;
+    let inner = body.inset(body.border());
+    let pull = touches.brake_pull();
+    if pull > 0.0 {
+        let lit_h = band * (ZONE_MIN_REACH + (1.0 - ZONE_MIN_REACH) * pull);
+        let mut colour = ZONE_LIT;
+        colour[3] = ZONE_ALPHA.0 + (ZONE_ALPHA.1 - ZONE_ALPHA.0) * pull;
+        shape::fill(
+            art,
+            inner,
+            Some([x, y + h - lit_h, w, lit_h]),
+            scaled(colour, opacity),
+            out,
+        );
+    }
+    out.push(fill([x + 4.0, top, w - 8.0, 0.5], scaled(DIVIDER, opacity)));
+    out.push(text(
+        x + w / 2.0,
+        top + (band - LABEL_HEIGHT) / 2.0,
+        "BRAKE",
+        opacity,
+    ));
+}
+
 /// The glyph for `control`, centred in `rect`. GO's stays in its upper part
 /// so the lower band keeps its brake corners; only GO and the airbrakes
 /// carry a word.
@@ -160,6 +189,7 @@ fn glyph(
             shape::ring(art, circle(cx, cy, u * 0.25), ink, out);
             shape::fill(art, circle(cx, cy, u * 0.06), None, ink, out);
         }
+        Control::Brake => out.push(text(cx, cy - LABEL_HEIGHT / 2.0, "BRAKE", opacity)),
         Control::Absorb => {
             let g = u * 0.40;
             shape::sprite(
@@ -235,6 +265,19 @@ pub enum Demo {
     /// A finger in GO's centre, with another on the floating stick pushed
     /// right.
     StickAndGo,
+    /// Easy, nothing held, GO's BRAKE band on.
+    EasyIdle,
+    /// Easy, nothing held, GO's zone off: the bar below GO is BRAKE and
+    /// ABSORB side by side.
+    EasyZonesOff,
+    /// Easy: the stick dragged left past full lock into the brake rim, and a
+    /// finger deep in GO's BRAKE band.
+    EasyBrake,
+    /// Easy with the zone off: a finger that began on GO slid onto the bar's
+    /// BRAKE half, the stick steering right.
+    EasyBarBrake,
+    /// Standard: a finger that began on GO slid up onto FIRE.
+    GoFire,
 }
 
 impl Demo {
@@ -249,38 +292,68 @@ impl Demo {
             "go-left" => Ok(Self::GoLeft),
             "go-right" => Ok(Self::GoRight),
             "stick-go" => Ok(Self::StickAndGo),
+            "easy-idle" => Ok(Self::EasyIdle),
+            "easy-zones-off" => Ok(Self::EasyZonesOff),
+            "easy-brake" => Ok(Self::EasyBrake),
+            "easy-bar-brake" => Ok(Self::EasyBarBrake),
+            "go-fire" => Ok(Self::GoFire),
             other => Err(format!(
-                "unknown touch pose {other:?}: idle, idle-buttons, go-left, go-right or stick-go"
+                "unknown touch pose {other:?}: idle, idle-buttons, go-left, go-right, stick-go, \
+                 go-fire, easy-idle, easy-zones-off, easy-brake or easy-bar-brake"
             )),
         }
     }
 
-    /// Whether GO carries its brake corners in this pose.
+    /// The scheme and zone setting this pose is drawn with.
     #[must_use]
-    pub fn zones(self) -> bool {
-        self != Self::IdleButtons
+    pub fn setup(self) -> Setup {
+        match self {
+            Self::IdleButtons => Setup::new(Scheme::Standard, false),
+            Self::EasyIdle | Self::EasyBrake => Setup::new(Scheme::Easy, true),
+            Self::EasyZonesOff | Self::EasyBarBrake => Setup::new(Scheme::Easy, false),
+            _ => Setup::new(Scheme::Standard, true),
+        }
     }
 
     /// The fingers for a window of `size` pixels.
     #[must_use]
-    pub fn touches(self, size: (f32, f32), zones: bool) -> Touches {
+    pub fn touches(self, size: (f32, f32)) -> Touches {
+        let setup = self.setup();
         let mut touches = Touches::default();
-        touches.set_go_zones(zones, size);
-        let go = touch::layout(size)[0].1;
+        touches.set_setup(setup, size);
+        let go = touch::go_rect(size);
         let at = |fx: f32, fy: f32| (go.x + go.w * fx, go.y + go.h * fy);
+        let of = |control: Control| {
+            touch::layout_for(size, setup)
+                .into_iter()
+                .find(|(c, _)| *c == control)
+                .map_or((0.0, 0.0), |(_, r)| r.centre())
+        };
+        let drag = |touches: &mut Touches, dx: f32, dy: f32| {
+            let origin = (size.0 * 0.14, size.1 * 0.62);
+            touches.down(2, origin, size);
+            touches.moved(2, (origin.0 + size.1 * dx, origin.1 + size.1 * dy), size);
+        };
         match self {
-            Self::Idle | Self::IdleButtons => {}
+            Self::Idle | Self::IdleButtons | Self::EasyIdle | Self::EasyZonesOff => {}
             Self::GoLeft => touches.down(1, at(0.03, 0.97), size),
             Self::GoRight => touches.down(1, at(0.88, 0.88), size),
             Self::StickAndGo => {
                 touches.down(1, at(0.5, 0.35), size);
-                let origin = (size.0 * 0.14, size.1 * 0.62);
-                touches.down(2, origin, size);
-                touches.moved(
-                    2,
-                    (origin.0 + size.1 * 0.10, origin.1 - size.1 * 0.03),
-                    size,
-                );
+                drag(&mut touches, 0.10, -0.03);
+            }
+            Self::EasyBrake => {
+                touches.down(1, at(0.5, 0.88), size);
+                drag(&mut touches, -0.18, -0.02);
+            }
+            Self::EasyBarBrake => {
+                touches.down(1, at(0.5, 0.5), size);
+                touches.moved(1, of(Control::Brake), size);
+                drag(&mut touches, 0.07, 0.0);
+            }
+            Self::GoFire => {
+                touches.down(1, at(0.5, 0.5), size);
+                touches.moved(1, of(Control::Fire), size);
             }
         }
         touches
@@ -314,11 +387,11 @@ pub fn draw_pose(
     let list = Art::from_sheet(&sheet).map_or_else(Vec::new, |art| {
         draw(
             &art,
-            &demo.touches(px, demo.zones()),
+            &demo.touches(px),
             px,
             space.size.1 / px.1.max(1.0),
             false,
-            demo.zones(),
+            demo.setup(),
             1.0,
         )
     });
@@ -328,7 +401,7 @@ pub fn draw_pose(
 
 /// Every control and the stick, for a window of `size` pixels, in a grid
 /// `scale` units per pixel. While `paused` the pause button is a play
-/// triangle; `zones` is whether GO carries its brake corners; `opacity`
+/// triangle; `setup` is the scheme and whether GO carries its brake zone(s); `opacity`
 /// scales every alpha (1.0 is the design). `art` is where the generated
 /// textures sit in the overlay's sprite sheet.
 #[must_use]
@@ -338,11 +411,12 @@ pub fn draw(
     size: (f32, f32),
     scale: f32,
     paused: bool,
-    zones: bool,
+    setup: Setup,
     opacity: f32,
 ) -> Vec<Draw> {
+    let (zones, easy) = (setup.zones, setup.scheme == Scheme::Easy);
     let mut out = Vec::new();
-    for (control, rect) in touch::layout_for(size, zones) {
+    for (control, rect) in touch::layout_for(size, setup) {
         let held = touches.is_down(control);
         let rect = [
             rect.x * scale,
@@ -370,20 +444,26 @@ pub fn draw(
         );
         glyph(art, control, rect, paused, opacity, &mut out);
         if control == Control::Accelerate {
-            let at = if zones { 0.55 } else { 0.62 };
+            let at = match (zones, easy) {
+                (true, true) => 0.51,
+                (true, false) => 0.55,
+                _ => 0.62,
+            };
             out.push(text(
                 rect[0] + rect[2] / 2.0,
                 rect[1] + rect[3] * at,
                 "GO",
                 opacity,
             ));
-            if zones {
+            if zones && easy {
+                go_band(art, touches, body, opacity, &mut out);
+            } else if zones {
                 go_zones(art, touches, body, opacity, &mut out);
             }
         }
     }
     if let Some((origin, at)) = touches.stick() {
-        let radius = size.1 * touch::STICK_RADIUS * scale;
+        let radius = size.1 * setup.stick_radius() * scale;
         let o = (origin.0 * scale, origin.1 * scale);
         let base = Rounded {
             rect: [o.0 - radius, o.1 - radius, 2.0 * radius, 2.0 * radius],
@@ -401,6 +481,25 @@ pub fn draw(
         let reach = (dx * dx + dy * dy).sqrt();
         let k = if reach > radius { radius / reach } else { 1.0 };
         let knob = radius * 0.38;
+        let mut knob_colour = STICK_KNOB;
+        if easy {
+            let u = (at.0 - origin.0) / (size.1 * setup.stick_radius());
+            let brake = touch::easy_curve(u).1;
+            let guide = radius * touch::EASY_STEER_FULL;
+            shape::ring(
+                art,
+                Rounded {
+                    rect: [o.0 - guide, o.1 - guide, 2.0 * guide, 2.0 * guide],
+                    radius: guide,
+                },
+                scaled(STICK_EDGE, opacity),
+                &mut out,
+            );
+            for k in 0..3 {
+                knob_colour[k] += (ZONE_LIT[k] - knob_colour[k]) * brake;
+            }
+            knob_colour[3] += (ZONE_ALPHA.1 - knob_colour[3]) * brake;
+        }
         shape::fill(
             art,
             Rounded {
@@ -413,7 +512,7 @@ pub fn draw(
                 radius: knob,
             },
             None,
-            scaled(STICK_KNOB, opacity),
+            scaled(knob_colour, opacity),
             &mut out,
         );
     }

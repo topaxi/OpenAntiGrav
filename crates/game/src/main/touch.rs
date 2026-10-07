@@ -87,11 +87,11 @@ impl Overlay {
         size: (f32, f32),
         scale: f32,
         paused: bool,
-        zones: bool,
+        setup: oag_input::touch::Setup,
         opacity: f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         if self.active() {
-            oag_game::touch_controls::draw(art, &self.touches, size, scale, paused, zones, opacity)
+            oag_game::touch_controls::draw(art, &self.touches, size, scale, paused, setup, opacity)
         } else {
             Vec::new()
         }
@@ -145,11 +145,15 @@ impl Session {
             return;
         }
         let paused = self.paused;
-        overlay
-            .touches
-            .set_go_zones(self.settings.controls.touch_go_zones, size);
+        let setup = Self::touch_setup(&self.settings);
+        overlay.touches.set_setup(setup, size);
         let taps = overlay.touches.take_taps();
-        let reading = overlay.touches.reading(size);
+        let mut reading = overlay.touches.reading(size);
+        if setup.scheme == oag_input::touch::Scheme::Easy
+            && self.scheme == oag_gameplay::ControlScheme::Novice
+        {
+            oag_input::touch::fold_for_novice_sim(&mut reading);
+        }
         self.controls.set_touch(if paused {
             Reading::default()
         } else {
@@ -171,12 +175,21 @@ impl Session {
                 size,
                 scale,
                 self.paused,
-                self.settings.controls.touch_go_zones,
+                Self::touch_setup(&self.settings),
                 f32::from(self.settings.controls.touch_opacity) / 100.0,
             )
         } else {
             Vec::new()
         }
+    }
+
+    /// The scheme and zone setting `[controls]` names; an unrecognised scheme
+    /// token is standard.
+    fn touch_setup(settings: &crate::settings::Settings) -> oag_input::touch::Setup {
+        oag_input::touch::Setup::new(
+            oag_input::touch::Scheme::parse(&settings.controls.touch_scheme).unwrap_or_default(),
+            settings.controls.touch_go_zones,
+        )
     }
 
     /// Whether the race is on the glass: not through the flyby, which draws

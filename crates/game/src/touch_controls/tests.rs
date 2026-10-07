@@ -5,7 +5,7 @@ const SIZE: (f32, f32) = (2340.0, 1080.0);
 const SCALE: f32 = 272.0 / 1080.0;
 
 fn go() -> touch::Rect {
-    touch::layout(SIZE)[0].1
+    touch::go_rect(SIZE)
 }
 
 fn at(fx: f32, fy: f32) -> (f32, f32) {
@@ -14,7 +14,8 @@ fn at(fx: f32, fy: f32) -> (f32, f32) {
 }
 
 fn list(touches: &Touches, paused: bool, zones: bool, opacity: f32) -> Vec<Draw> {
-    draw(&Art::flat(), touches, SIZE, SCALE, paused, zones, opacity)
+    let setup = Setup::new(Scheme::Standard, zones);
+    draw(&Art::flat(), touches, SIZE, SCALE, paused, setup, opacity)
 }
 
 fn fills(list: &[Draw]) -> impl Iterator<Item = ([f32; 4], [f32; 4])> + '_ {
@@ -53,7 +54,7 @@ fn go_carries_the_l_and_r_corners_when_zones_are_on() {
 #[test]
 fn the_zone_under_the_finger_lights_and_the_centre_lights_none() {
     let mut touches = Touches::default();
-    touches.set_go_zones(true, SIZE);
+    touches.set_setup(Setup::new(Scheme::Standard, true), SIZE);
     touches.down(1, at(0.9, 0.9), SIZE);
     assert!(lit(&list(&touches, false, true, 1.0)) > 0);
     touches.moved(1, at(0.5, 0.9), SIZE);
@@ -63,7 +64,7 @@ fn the_zone_under_the_finger_lights_and_the_centre_lights_none() {
 #[test]
 fn the_lit_zone_stays_inside_gos_own_shape() {
     let mut touches = Touches::default();
-    touches.set_go_zones(true, SIZE);
+    touches.set_setup(Setup::new(Scheme::Standard, true), SIZE);
     touches.down(1, at(0.1, 0.9), SIZE);
     let go = go();
     let (gx, gy, gw, gh) = (go.x * SCALE, go.y * SCALE, go.w * SCALE, go.h * SCALE);
@@ -79,7 +80,7 @@ fn the_lit_zone_stays_inside_gos_own_shape() {
 #[test]
 fn nothing_is_opaque_even_pressed() {
     let mut touches = Touches::default();
-    touches.set_go_zones(true, SIZE);
+    touches.set_setup(Setup::new(Scheme::Standard, true), SIZE);
     touches.down(1, at(0.1, 0.9), SIZE);
     touches.down(2, (300.0, 800.0), SIZE);
     for (_, colour) in fills(&list(&touches, false, true, 1.0)) {
@@ -125,7 +126,7 @@ fn no_two_pieces_of_one_layer_overlap() {
 /// A button is a handful of quads, not a stack of rows.
 #[test]
 fn a_whole_overlay_is_a_few_dozen_draws() {
-    let touches = Demo::StickAndGo.touches(SIZE, true);
+    let touches = Demo::StickAndGo.touches(SIZE);
     let n = list(&touches, false, true, 1.0).len();
     assert!(n < 150, "{n} draws");
 }
@@ -150,7 +151,7 @@ fn pause_is_a_glyph_and_resume_is_a_different_one() {
 
 #[test]
 fn the_controls_do_not_overlap_each_other() {
-    let layout = touch::layout_for(SIZE, false);
+    let layout = touch::layout(SIZE);
     for (i, (_, a)) in layout.iter().enumerate() {
         for (_, b) in &layout[i + 1..] {
             let x = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
@@ -163,8 +164,7 @@ fn the_controls_do_not_overlap_each_other() {
 #[test]
 fn everything_stays_inside_the_grid() {
     let width = SIZE.0 * SCALE;
-    let mut touches = Demo::StickAndGo.touches(SIZE, true);
-    touches.set_go_zones(true, SIZE);
+    let mut touches = Demo::StickAndGo.touches(SIZE);
     for (rect, _) in fills(&list(&touches, false, true, 1.0)) {
         assert!(
             rect[0] >= -0.01 && rect[0] + rect[2] <= width + 0.01,
@@ -177,11 +177,11 @@ fn everything_stays_inside_the_grid() {
 #[test]
 fn the_capture_poses_build_the_fingers_they_name() {
     assert!(Demo::parse("go-left").is_ok() && Demo::parse("nope").is_err());
-    assert!(Demo::GoLeft.touches(SIZE, true).zone_down(GoZone::Left));
-    assert!(Demo::GoRight.touches(SIZE, true).zone_down(GoZone::Right));
-    let both = Demo::StickAndGo.touches(SIZE, true);
+    assert!(Demo::GoLeft.touches(SIZE).zone_down(GoZone::Left));
+    assert!(Demo::GoRight.touches(SIZE).zone_down(GoZone::Right));
+    let both = Demo::StickAndGo.touches(SIZE);
     assert!(both.is_down(Control::Accelerate) && both.stick().is_some());
-    assert!(!Demo::Idle.touches(SIZE, true).any());
+    assert!(!Demo::Idle.touches(SIZE).any());
 }
 
 fn lit_area(list: &[Draw]) -> f32 {
@@ -195,8 +195,11 @@ fn lit_area(list: &[Draw]) -> f32 {
 fn the_separate_brakes_are_drawn_only_with_zones_off() {
     let on = list(&Touches::default(), false, true, 1.0);
     let off = list(&Touches::default(), false, false, 1.0);
-    assert_eq!(touch::layout_for(SIZE, true).len(), 5);
-    assert_eq!(touch::layout_for(SIZE, false).len(), 7);
+    assert_eq!(
+        touch::layout_for(SIZE, Setup::new(Scheme::Standard, true)).len(),
+        5
+    );
+    assert_eq!(touch::layout(SIZE).len(), 7);
     // Zones off draws two more controls and none of GO's corner letters; the
     // first drawn control is GO in both.
     assert_eq!(words(off.clone()).iter().filter(|w| *w == "L").count(), 1);
@@ -210,7 +213,7 @@ fn the_separate_brakes_are_drawn_only_with_zones_off() {
 fn the_lit_segment_grows_and_brightens_with_the_pull() {
     let pulled = |fx: f32, fy: f32| {
         let mut touches = Touches::default();
-        touches.set_go_zones(true, SIZE);
+        touches.set_setup(Setup::new(Scheme::Standard, true), SIZE);
         touches.down(1, at(fx, fy), SIZE);
         list(&touches, false, true, 1.0)
     };
@@ -242,4 +245,62 @@ fn the_generated_textures_are_antialiased_and_reach_the_overlay_sheet() {
     let sheet = crate::cursor::sheet(crate::cursor::LAUNCHER);
     assert!(Art::from_sheet(&sheet).is_some());
     assert!(Art::from_sheet(&oag_hud::sprite::Sheet::default()).is_none());
+}
+
+fn easy_list(touches: &Touches, zones: bool) -> Vec<Draw> {
+    let setup = Setup::new(Scheme::Easy, zones);
+    draw(&Art::flat(), touches, SIZE, SCALE, false, setup, 1.0)
+}
+
+#[test]
+fn easy_draws_one_brake_band_in_go_and_no_separate_brakes() {
+    let mut on = words(easy_list(&Demo::EasyIdle.touches(SIZE), true));
+    on.sort();
+    assert_eq!(on, ["BRAKE", "GO"]);
+    let mut off = words(easy_list(&Demo::EasyZonesOff.touches(SIZE), false));
+    off.sort();
+    assert_eq!(
+        off,
+        ["BRAKE", "GO"],
+        "the bar's half carries the word instead"
+    );
+}
+
+#[test]
+fn easys_band_lights_inside_go_only_while_pulled() {
+    assert_eq!(lit(&easy_list(&Demo::EasyIdle.touches(SIZE), true)), 0);
+    let pulled = easy_list(&Demo::EasyBrake.touches(SIZE), true);
+    assert!(lit(&pulled) > 0);
+    let go = go();
+    let scale = SCALE;
+    for (rect, colour) in fills(&pulled).filter(|(_, c)| is_lit(*c)) {
+        assert!(colour[3] > 0.0);
+        assert!(
+            rect[0] >= go.x * scale - 0.01 && rect[0] + rect[2] <= (go.x + go.w) * scale + 0.01,
+            "the lit fill stays inside GO's width: {rect:?}"
+        );
+        assert!(rect[1] + rect[3] <= (go.y + go.h) * scale + 0.01);
+    }
+}
+
+#[test]
+fn the_easy_poses_are_drawn_with_their_own_setup_and_fingers() {
+    assert_eq!(Demo::parse("easy-zones-off"), Ok(Demo::EasyZonesOff));
+    assert_eq!(Demo::EasyZonesOff.setup(), Setup::new(Scheme::Easy, false));
+    assert_eq!(Demo::Idle.setup(), Setup::new(Scheme::Standard, true));
+    let bar = Demo::EasyBarBrake.touches(SIZE);
+    assert!(bar.is_down(Control::Accelerate) && bar.is_down(Control::Brake));
+    assert!(Demo::EasyBrake.touches(SIZE).brake_pull() > 0.5);
+    let fire = Demo::GoFire.touches(SIZE);
+    assert!(fire.is_down(Control::Accelerate) && fire.is_down(Control::Fire));
+}
+
+#[test]
+fn easys_stick_draws_a_full_lock_guide_ring() {
+    let steered = easy_list(&Demo::EasyBrake.touches(SIZE), true);
+    let standard = list(&Demo::StickAndGo.touches(SIZE), false, true, 1.0);
+    assert!(
+        steered.len() > standard.len() - 5,
+        "the guide ring is an extra draw"
+    );
 }

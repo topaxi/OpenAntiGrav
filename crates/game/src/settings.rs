@@ -701,6 +701,10 @@ pub fn menu_seeds(
             }),
         ),
         (
+            "controls.touch_scheme",
+            text(&settings.controls.touch_scheme),
+        ),
+        (
             "controls.touch_opacity",
             text(&settings.controls.touch_opacity.to_string()),
         ),
