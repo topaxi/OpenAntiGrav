@@ -54,8 +54,18 @@ const LONE: &[(&str, &str, u32, u32, f32)] = &[
 /// Seven Aces, seed 1, per (layout, class): at most this many dead stops over
 /// the field. Measured: one, at 05 RAPIER sample 207 (the first jump's lip),
 /// and none elsewhere; one of room. **2026-10-07**: 05 FLASH rose 1 -> 3 (samples
-/// 207, 208 at the same lip, and 447) with the Cannon's straight flight; the
-/// cause was not separated.
+/// 207, 208 at the same lip, and 447) with the Cannon's straight flight. Cause
+/// separated (lane `ai-loss-split`): 208 is the old stop (three Mine blasts on
+/// the run-up, then the wall at sample 209 before the change); 207 is a craft
+/// that reached the first jump's lip faster and higher after an earlier
+/// divergence, its only Cannon hit a 1.0 shield loss 33 ticks before and a hit
+/// applies no impulse (the lip also stops a weapons-off RAPIER seed 2 craft in
+/// both builds); 447 is a stall rescue teleport (`respawns_of` +1, speed 0)
+/// landing on a wall-contact tick, which the detector reads as a stop, and the
+/// same craft is rescued at sample 429 before the change with no contact on
+/// that tick. The detector counts a rescue teleport as a dead stop when a
+/// scrape falls on the same tick; that is a measurement artefact, not a craft
+/// hitting a wall at 60.
 const FIELD: &[(&str, &str, u32)] = &[
     ("05_Track", "VENOM", 1),
     ("05_Track", "FLASH", 3),

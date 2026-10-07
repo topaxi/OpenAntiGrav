@@ -109,9 +109,23 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// Five cells rose (FLASH 1 forward 0 -> 2 and reversed 0 -> 1, PHANTOM 1
 /// reversed 0 -> 1, PHANTOM 2 1 -> 2 and 1 -> 3, PHANTOM 3 forward 0 -> 1,
 /// RAPIER 2 reversed 1 -> 2) and two fell (RAPIER 1, VENOM 2); the forward
-/// total went 6 -> 8 and the reversed one stayed 10. **The cause of each loss
-/// was not separated** (weapon blow against wall attrition), unlike the two
-/// regenerations above; the cells only rose to what was measured.
+/// total went 6 -> 8 and the reversed one stayed 10.
+///
+/// **Cause separated 2026-10-07 (lane `ai-loss-split`,
+/// `ai_loss_attribution_board`)**: the shield each destroyed craft lost, split
+/// into wall charge, barrel-roll cost and the rest (every other drain of the
+/// pool is a weapon: `apply_weapon` is called only by the Cannon, blast, Quake,
+/// Leach Beam and Repulser). Of the 10 extra deaths in the raised cells, 7 were
+/// weapon-dominant (a blast, Missile or Mine did more than the walls and rolls
+/// put together): FLASH 1 (two forward, one reversed), PHANTOM 2 (one forward,
+/// slots 4 and 7 reversed), RAPIER 2 reversed. Three were wall-dominant, a
+/// craft at its usual scrape spots topped up by a hit: PHANTOM 1 reversed,
+/// PHANTOM 2 reversed slot 1, PHANTOM 3 forward. The scrape spots and the wall
+/// share per death are the same before and after (mean wall charge per death
+/// 25.9 -> 19.3 forward, 38.5 -> 39.6 reversed), a Cannon hit applies no
+/// impulse, and over seeds 4-23 (160 races) deaths were 110 before, 110 after.
+/// The cells moved because the races diverged, not because the AI drives worse.
+/// Read the cells as seed spread, as the 2026-10-05 note above does.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),
