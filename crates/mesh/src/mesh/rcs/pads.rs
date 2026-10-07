@@ -377,6 +377,13 @@ pub(super) fn emit_chunk(
     node: Option<u32>,
     report: &mut Report,
 ) -> bool {
+    // The original draws such a chunk only into its behind-the-glass target,
+    // which this renderer does not build, so the main view leaves it out
+    // (`rcsmodel::RENDER_BEHIND_GLASS`).
+    if chunk.is_behind_glass() {
+        report.behind_glass += 1;
+        return false;
+    }
     let mut emitted = false;
     // **Every surface, not just the chunk's own.** A quarter of the disc's
     // chunks declare more than one, each with its own material, bias and

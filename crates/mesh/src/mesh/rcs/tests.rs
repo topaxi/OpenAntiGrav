@@ -157,6 +157,7 @@ fn the_report_names_both_kinds_of_absence() {
         water_lit_colour: 0,
         water_glint_only: 0,
         isolated: 0,
+        behind_glass: 0,
     };
     let line = report.describe();
     assert!(line.contains("59 of 126"), "{line}");

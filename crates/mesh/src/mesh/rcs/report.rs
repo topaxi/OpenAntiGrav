@@ -248,6 +248,11 @@ pub struct Report {
     /// in [`Self::describe`], because a mutilated frame read as the real one
     /// is exactly the mistake this diagnostic is meant to prevent.
     pub isolated: usize,
+    /// Chunks the original draws only into its behind-the-glass target
+    /// (`rcsmodel::RENDER_BEHIND_GLASS`), which is not built here: left out of
+    /// the main view as the original leaves them, and the target they would
+    /// have filled is said to be missing.
+    pub behind_glass: usize,
 }
 
 impl Report {
@@ -388,6 +393,12 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} refraction material(s) whose weight could not be read (drawn lit, opaque)"
+            ),
+        } + &match self.behind_glass {
+            0 => String::new(),
+            n => format!(
+                ", {n} chunk(s) the original draws only behind the glass, left out of the \
+                 main view; the behind-the-glass target is NOT drawn"
             ),
         } + &match self.isolated {
             0 => String::new(),

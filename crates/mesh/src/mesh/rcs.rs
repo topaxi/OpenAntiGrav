@@ -825,6 +825,10 @@ fn build_with_options(
             report.isolated += 1;
             continue;
         }
+        if mesh.is_behind_glass() {
+            report.behind_glass += 1;
+            continue;
+        }
         report.addressed += 1;
         let place = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
         let mut emitted = false;

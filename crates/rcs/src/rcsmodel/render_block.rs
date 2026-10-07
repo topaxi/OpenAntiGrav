@@ -65,9 +65,22 @@ const RENDER_FLAGS: usize = 0x06;
 /// thirtieth pass.
 ///
 /// The other bits the same pass read - the five-bucket draw routing in bits
-/// 2-5, the PVS scrub in bits 9-10 - are carried in the halfword and not
-/// interpreted here yet.
+/// 2-5, the PVS scrub in bits 9-10 - are carried in the halfword and are not
+/// interpreted here, except bit 4 ([`RENDER_BEHIND_GLASS`]).
 pub const RENDER_TRACK: u16 = 1 << 0;
+
+/// Bit 4 of [`Mesh::render_flags`]: **this chunk is drawn behind the glass,
+/// never in the main view.**
+///
+/// The original routes it to its sort bucket B3, and that bucket is drawn into
+/// a 640x360 target of its own, with the sky, under a projection 4/3 wider in
+/// tangent than the main view's; the tunnel glass reads that target. Measured
+/// on Vineta K's RPCS3 captures, each draw tied to its chunk by vertex offset:
+/// 93 of 93 draws into that target are chunks with this bit, and none of 357
+/// main-view draws is, over three frames. Confidence 88, from
+/// `docs/ghidra/functions/ps3-hdfury-eu/visibility.md`, 2026-10-07. On disc it
+/// is set on 420 chunks, all in `01_vineta_k`.
+pub const RENDER_BEHIND_GLASS: u16 = 1 << 4;
 
 /// Reads the flags halfword of the record a chunk header at `at` names.
 ///
@@ -103,6 +116,14 @@ impl Mesh {
     #[must_use]
     pub fn is_track(&self) -> bool {
         self.render_flags & RENDER_TRACK != 0
+    }
+
+    /// Whether this chunk belongs to the behind-the-glass target rather than
+    /// the main view - bit 4 of [`Self::render_flags`], see
+    /// [`RENDER_BEHIND_GLASS`].
+    #[must_use]
+    pub fn is_behind_glass(&self) -> bool {
+        self.render_flags & RENDER_BEHIND_GLASS != 0
     }
 }
 
