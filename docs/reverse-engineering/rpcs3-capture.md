@@ -967,6 +967,44 @@ of the HUD's 0.59x (a clamped step, or the recorder's own rate) is not establish
 agreement is the finding. Confidence 80 that entity age is recorder time in these boots (four
 independent timings), 50 for any reading of why.
 
+### Polling guest memory live, without pausing (2026-10-07, `hd-weapon-fx`)
+
+`scripts/rpcs3-mem-poll.py`. RPCS3 maps the PS3 address space at host `0x300000000`:
+`/proc/<emulator pid>/mem` at `0x300000000 + A` is guest address `A`, readable by an
+ancestor process under `ptrace_scope 1` (the driver is one). Checked by reading the
+instruction word at `0x00155568` (`0x39400010`, `li r10,0x10`) and a slot word that the
+GDB stub also returned. A sample costs microseconds and the game never stops, so one
+second of effect is sampled a hundred times; the pause-per-read method of the sections
+above manages one a second.
+
+- **Find an object class by vtable**: scan `0x30000000-0x40000000` for the vtable word.
+  `0x00864b38` (the Missile explosion's) finds exactly **16 objects, stride `0x2760`**
+  (`0x34432920 ...`, differing per boot), the pool `MissileManager+0xcc` points at. The
+  manager itself is `hit - 0xcc` of a scan for the first two pool pointers
+  (`0x30966c80`, `0x3095f4f0`: the heap moves between boots, so rescan each boot).
+- **Host time to video time**: a one-second `gdb.pause()` before the first shot freezes the
+  recording. Found by mean frame difference (`< 0.02` for 5 frames at 30 fps), the freeze
+  sat at video 5.2-6.2 s for host 0.0-1.0 s, so **video = host + about 5 s** in `m4`
+  (confidence 60: one boot, the recorder's start latency varies).
+
+Measured with it (`data/scratch/hd-weapon-fx/runs/m1..m4`, Talon's Junction, the player
+standing on the grid):
+
+| Fired state | What the memory and film show | Conf |
+| --- | --- | ---: |
+| 1 | a projectile flies for 5.5 s; a counter at `manager + 0x198` steps `1,2,3,4,5` at host 2.1, 3.2, 4.2, 4.8, 5.5 s, and the projectile is gone at 5.5 s (`manager + 0xc4` 1 to 0). The Pulse Missile's bounce budget is 5 (`oag_weapons::projectile::missile::MAX_BOUNCES`). The end is a small orange-red burst in the film; **the explosion pool is untouched** (`+0x10c` stays 0, all 16 pool objects byte-identical over 40 s) | 70 that state 1 is the Missile |
+| 2 | a projectile that ends 3.4 s later in a large yellow-white burst with orange streaks, filling the left half of the frame (`m1`, `m2`); **the explosion pool is untouched** | state 2 unresolved |
+| 3, 6 | nothing drawn at the grid within 10 s (3); the craft is flung ahead (6) | - |
+| 10 | on the grid alone (`m4`): no byte of the manager or the pool changes in 14 s | - |
+| (m3, state 10 fired after 6) | `manager + 0x10c` goes 0 to 1 at host 43.4 s and back to 0 at 44.4 s: **one pool entry in use for 1.0 s**, and the film shows a white-out filling the frame, then yellow and orange ring discs, about 5 s of video after, the offset above | 55 |
+
+So `HD_missile_explosion`'s pool is not entered by the Missile ending on a wall (state 1,
+5 bounces) and is entered once, for a second, in the one boot in which a craft came into
+a projectile's reach. What fired that projectile is unknown (an AI craft holds weapons
+too). `0x001423a8` reads the same way: it runs the pool's `Start` (`0x00155568`) only from
+the missile list's *hit-test* branch (`0x00126b78`), a craft hit, and never from the wall
+branch.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

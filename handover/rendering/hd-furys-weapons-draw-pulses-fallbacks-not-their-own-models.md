@@ -168,6 +168,18 @@ The executable's own load-path strings name every model above
   `HD_Mine_halo`/`HD_bomb_*` have neither a load order nor a placement read.
   Next: the manager's per-tick walker on the hit path.
 
+## 2026-10-07 (`hd-weapon-fx`): the Missile's pool read live, not wired
+
+Read `weapons.md` last section and `rpcs3-capture.md`, "Polling guest memory live". The pool is
+entered only on a craft hit (never on a wall: state 1's 5th bounce left it untouched), lives 1.0 s
+(conf 55) and plays the model's own keys. Not wired because: (1) the three `hd_missile_explosion_*`
+materials' fragment programs are unread, (2) no keyed-scale node clock exists for an HD weapon model,
+(3) the only captured use came from an unidentified firer. Next: read the three programs
+(`scripts/ps3-microcode.py fp-file`), add a keyed node clock beside `bomb_blast::hd`, then film
+a Missile hitting a rival (an AI craft in front of the player; state 1 fires one, but it needs a
+target in range, or a second RPCS3 boot with `--teleport-back`-style placement behind a rival,
+`rpcs3_place.write_pose`). `scripts/rpcs3-mem-poll.py` times the pool without pausing.
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
