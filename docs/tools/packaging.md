@@ -334,8 +334,8 @@ is the answer, and the first hit wins:
 | 2 | `$OAG_IMAGE` (a file or a directory) | a fixed location, set once in a launcher script |
 | 3 | `settings.toml`'s `[source] image` | a player who always plays off one disc, saved between runs |
 | 4 | `data/images/` under the current directory | the repository checkout, which is what `just play` uses |
-| 5 | the AppImage's own directory, then `images/` in it | **portable mode**: copy the AppImage and the image into one folder |
-| 6 | `~/.local/share/oag/images/` | a stable per-user location |
+| 5 | the AppImage's own directory, then `images/` in it; with no AppImage, the directory the running executable is in (the Windows zip), then `images/` in it | **portable mode**: copy the program and the image into one folder |
+| 6 | `<data dir>/oag/images/`: `~/.local/share/oag/images/` on Linux, `%APPDATA%\oag\images` on Windows, `~/Library/Application Support/oag/images` on macOS | a stable per-user location |
 
 The first three are a player *stating* which source they want and the last
 three are the engine guessing, and that line matters: **a guess with more than
@@ -360,13 +360,19 @@ name the player's own dump has still works, and two runs in the same directory
 always list them in the same order.
 
 Portable mode reads **`$APPIMAGE`'s directory**, the AppImage file's own
-location. `$APPDIR`, the mounted read-only package, is deliberately never
+location, or, when `$APPIMAGE` is unset, the folder the executable sits in
+(added 2026-10-07 so an unzipped Windows build works from any folder, and tested
+in `oag-source`; inside an AppImage the executable is under `$APPDIR`, which is
+why `$APPIMAGE` is asked first). `$APPDIR`, the mounted read-only package, is deliberately never
 searched: looking inside the package would invite someone to bundle an image
 into it, which is the one thing that must never happen. A unit test asserts the
 search path contains neither.
 
 When nothing is found, the error lists every directory that was tried. For a
 "copy two files into a folder" workflow, that message is the entire interface.
+A windowed run with nothing named shows the same news on a screen instead
+(`NO DISC IMAGE FOUND`, naming the per-user folder and the file endings that
+work), since a double-click has no terminal; the full list still goes to the log.
 
 Wipeout 2048 ships as an extracted Vita package (a directory, not a disc
 image - see [`data/README.md`](../../data/README.md)), so it is not one of the

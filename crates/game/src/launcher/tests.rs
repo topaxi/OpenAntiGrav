@@ -489,3 +489,31 @@ fn a_paste_request_is_serviced_once_and_only_where_a_clipboard_exists() {
     none.request_paste();
     assert!(!none.take_paste_request());
 }
+
+/// The desktop not-found screen names the folder and fits the screen, even for
+/// a home folder far longer than the screen is wide.
+#[test]
+fn the_desktop_not_found_screen_names_its_folder_and_fits() {
+    let atlas = oag_ui::font::Atlas::build();
+    let long = format!(
+        "C:\\Users\\{}\\AppData\\Roaming\\oag\\images",
+        "W".repeat(90)
+    );
+    for folder in ["/home/kid/.local/share/oag/images", long.as_str()] {
+        let launcher = Launcher::not_found(not_found_notice_desktop(folder));
+        assert!(launcher.pick().is_none());
+        let mut named = false;
+        for draw in draw_list(&launcher) {
+            if let Draw::Text { x, text, .. } = draw {
+                let width = oag_ui::font::measure(&atlas, &text);
+                assert!(
+                    x + width <= SCREEN.0 - MARGIN,
+                    "{text:?} runs off the screen"
+                );
+                named |= text.trim() == folder
+                    || (text.trim().starts_with("...") && folder.ends_with(&text.trim()[3..]));
+            }
+        }
+        assert!(named, "the folder is spelled out for {folder}");
+    }
+}

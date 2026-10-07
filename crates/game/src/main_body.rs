@@ -562,6 +562,21 @@ fn run(cli: Cli) -> Result<()> {
                 Some(launcher::Launcher::not_found(launcher::not_found_notice(
                     &images,
                 )))
+            } else if rows.is_empty() && chosen.is_none() {
+                // A double-click has no terminal for `resolve`'s message either,
+                // and its window would close before it could be read: the
+                // screen names the folder to use, and the log keeps the full
+                // list of what was searched.
+                if let Err(error) = source::resolve(None, None) {
+                    log::error!("{error}");
+                }
+                let folder = dirs::data_dir().map_or_else(
+                    || "data/images".to_string(),
+                    |dir| dir.join("oag").join("images").display().to_string(),
+                );
+                Some(launcher::Launcher::not_found(
+                    launcher::not_found_notice_desktop(&folder),
+                ))
             } else {
                 None
             }

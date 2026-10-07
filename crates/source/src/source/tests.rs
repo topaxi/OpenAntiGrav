@@ -628,3 +628,33 @@ fn temp_dir(name: &str) -> PathBuf {
     std::fs::create_dir_all(&directory).unwrap();
     directory
 }
+
+/// A Windows zip or a tarball has no `$APPIMAGE`: the executable's own folder is
+/// the portable one. Inside an AppImage the executable is under the mounted
+/// `$APPDIR`, which is never searched, so the AppImage's folder wins.
+#[test]
+fn the_portable_folder_is_the_appimages_else_the_executables() {
+    let exe = Some(PathBuf::from("/mnt/appdir/usr/bin/oag-game"));
+    assert_eq!(
+        portable_directory_of(Some("/home/deck/Games/oag.AppImage".into()), exe.clone()),
+        Some(PathBuf::from("/home/deck/Games"))
+    );
+    assert_eq!(
+        portable_directory_of(None, Some(PathBuf::from("C:/Games/OAG/oag-game.exe"))),
+        Some(PathBuf::from("C:/Games/OAG"))
+    );
+    assert_eq!(portable_directory_of(None, None), None);
+}
+
+/// With no `$APPIMAGE`, an `images` folder next to the program is searched, and
+/// so is the folder itself.
+#[test]
+fn an_images_folder_beside_the_program_is_on_the_search_path() {
+    if std::env::var_os("APPIMAGE").is_some() {
+        return;
+    }
+    let beside = portable_directory().expect("a test binary has a folder");
+    let paths = search_path();
+    assert!(paths.contains(&beside), "{paths:?}");
+    assert!(paths.contains(&beside.join("images")), "{paths:?}");
+}

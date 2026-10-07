@@ -18,9 +18,11 @@
 //!    repeat it on every run. See `crate::settings::Source`.
 //! 4. **`data/images/`** relative to the current directory, which is what a
 //!    repository checkout has and what keeps `just play` working.
-//! 5. **Beside the AppImage**: `$APPIMAGE`'s own directory, and an `images/`
-//!    directory in it. This is portable mode - copy the AppImage and an image
-//!    into the same folder on a Steam Deck and run it.
+//! 5. **Beside the program**: `$APPIMAGE`'s own directory, else the directory
+//!    the running executable sits in, and an `images/` directory in it. This is
+//!    portable mode - copy the AppImage and an image into the same folder on a
+//!    Steam Deck and run it, or unzip the Windows build and put an `images`
+//!    folder next to `oag-game.exe`.
 //! 6. **`<data dir>/oag/images/`**, i.e. `~/.local/share/oag/images` on Linux.
 //!    The stable place to keep an image that is not next to the AppImage.
 //!
@@ -68,6 +70,29 @@ use anyhow::{Result, anyhow};
 
 /// The default the repository checkout has, and the documented example.
 pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-eu.chd";
+
+/// The folder a portable install lives in: the AppImage's directory, else the
+/// directory the running executable sits in (a Windows zip unpacked anywhere,
+/// a tarball, a macOS build run from where it was put).
+///
+/// Inside an AppImage `current_exe` is under the mounted `$APPDIR`, which is
+/// deliberately never searched, so `$APPIMAGE` decides first and the executable
+/// is only asked when it is unset.
+fn portable_directory() -> Option<PathBuf> {
+    portable_directory_of(std::env::var_os("APPIMAGE"), std::env::current_exe().ok())
+}
+
+/// [`portable_directory`] with the environment handed in, so both branches are
+/// checkable without setting a process-wide variable.
+fn portable_directory_of(
+    appimage: Option<std::ffi::OsString>,
+    exe: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if let Some(appimage) = appimage {
+        return Path::new(&appimage).parent().map(Path::to_path_buf);
+    }
+    exe.and_then(|exe| exe.parent().map(Path::to_path_buf))
+}
 
 /// Names a disc image is looked for under, in order.
 ///
@@ -129,9 +154,7 @@ pub fn dlc_search_path() -> Vec<PathBuf> {
 
     push(PathBuf::from("data/dlc"));
 
-    if let Some(appimage) = std::env::var_os("APPIMAGE")
-        && let Some(directory) = Path::new(&appimage).parent()
-    {
+    if let Some(directory) = portable_directory() {
         push(directory.join("dlc"));
     }
 
@@ -370,9 +393,7 @@ pub fn package_search_path() -> Vec<PathBuf> {
 
     push(PathBuf::from(PACKAGE_ROOT));
 
-    if let Some(appimage) = std::env::var_os("APPIMAGE")
-        && let Some(directory) = Path::new(&appimage).parent()
-    {
+    if let Some(directory) = portable_directory() {
         push(directory.to_path_buf());
         push(directory.join("extracted").join("vita"));
     }
@@ -461,9 +482,7 @@ pub fn ps4_search_path() -> Vec<PathBuf> {
 
     push(PathBuf::from(PS4_PACKAGE_ROOT));
 
-    if let Some(appimage) = std::env::var_os("APPIMAGE")
-        && let Some(directory) = Path::new(&appimage).parent()
-    {
+    if let Some(directory) = portable_directory() {
         push(directory.join("extracted").join("ps4"));
     }
 
@@ -521,9 +540,7 @@ pub fn ps3_search_path() -> Vec<PathBuf> {
 
     push(PathBuf::from(PS3_PACKAGE_ROOT));
 
-    if let Some(appimage) = std::env::var_os("APPIMAGE")
-        && let Some(directory) = Path::new(&appimage).parent()
-    {
+    if let Some(directory) = portable_directory() {
         push(directory.join("extracted").join("ps3"));
     }
 
@@ -609,7 +626,7 @@ fn nothing_found(searched: &[PathBuf]) -> anyhow::Error {
          HD) is found by extension. A 2048 .vpk is read in place (a NoNpDrm dump, \
          or an unpacked folder). A PS4 Omega .pkg is read in place, with its patch .pkg \
          beside it. A Vita .pkg is NOT read: unpack and decrypt it into a folder first \
-         (`docs/overview/installing.md`, \"Wipeout 2048\"). An encrypted HD .iso is read \
+         (`docs/overview/installing.md`, \"Wipeout 2048 (Vita)\"). An encrypted HD .iso is read \
          in place with the disc key from a .dkey beside it, or one entered in the chooser.\n\nName a source directly \
          (`oag-game path/to/{}`), set {IMAGE_ENV}{beside}.",
         std::env::current_dir().map_or_else(|_| ".".into(), |dir| dir.display().to_string()),
@@ -645,9 +662,7 @@ pub fn search_path() -> Vec<PathBuf> {
     // `$APPIMAGE` is the path of the running AppImage file, set by its runtime.
     // Its *parent* is the portable directory; `$APPDIR`, the mounted image, is
     // not searched on purpose.
-    if let Some(appimage) = std::env::var_os("APPIMAGE")
-        && let Some(directory) = Path::new(&appimage).parent()
-    {
+    if let Some(directory) = portable_directory() {
         // The directory itself first - "copy both files into one folder" is
         // the simplest thing a player can do - then an `images/`
         // subdirectory, for someone who would rather keep it tidy.
