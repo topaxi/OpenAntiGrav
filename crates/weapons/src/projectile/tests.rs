@@ -6,6 +6,8 @@ use super::*;
 use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, ShipState, Surface, TriangleSoup};
 
+mod seed;
+
 pub(super) fn ships(entries: &[(bool, Vec3)]) -> Vec<crate::test_craft::Ship> {
     entries
         .iter()
@@ -616,7 +618,15 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
     let mut projectiles = Projectiles::new();
     // Launch speed equal to the Venom class speed, so the one-second ramp is flat
     // and the only thing that can change the magnitude is the mirror itself.
-    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+    projectiles.spawn_guided(
+        Weapon::Missile,
+        Vec3::ZERO,
+        Vec3::Z * 200.0,
+        0,
+        None,
+        600.0,
+        Vec3::Y,
+    );
     let mut before = 0.0;
     let mut bounced = None;
     for _ in 0..40 {
@@ -713,7 +723,15 @@ fn a_missile_gives_up_after_its_bounce_budget() {
     let mut projectiles = Projectiles::new();
     // Launch speed equal to the Venom class speed, so only the mirror can change
     // the magnitude.
-    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+    projectiles.spawn_guided(
+        Weapon::Missile,
+        Vec3::ZERO,
+        Vec3::Z * 200.0,
+        0,
+        None,
+        600.0,
+        Vec3::Y,
+    );
     let mut highest = 0;
     for _ in 0..600 {
         projectiles.advance(
@@ -754,7 +772,15 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
     let ships: Vec<crate::test_craft::Ship> = Vec::new();
 
     let mut projectiles = Projectiles::new();
-    projectiles.spawn_guided(Weapon::Missile, Vec3::ZERO, Vec3::Z * 200.0, 0, None, 600.0);
+    projectiles.spawn_guided(
+        Weapon::Missile,
+        Vec3::ZERO,
+        Vec3::Z * 200.0,
+        0,
+        None,
+        600.0,
+        Vec3::Y,
+    );
 
     let mut ticks = 0_usize;
     let mut ended: Option<Impact> = None;
@@ -842,6 +868,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
         0,
         None,
         600.0,
+        Vec3::Y,
     );
 
     let empty = empty_world();
@@ -882,7 +909,7 @@ fn a_blade_whose_fuse_runs_out_reports_an_impact_that_spends_no_blast() {
     let geometry = CollisionWorld::new();
     let ships: Vec<crate::test_craft::Ship> = Vec::new();
     let mut projectiles = Projectiles::new();
-    assert!(projectiles.throw(Vec3::ZERO, Vec3::Z * 50.0, 3, 2.0));
+    assert!(projectiles.throw(Vec3::ZERO, Vec3::Z * 50.0, 3, 2.0, Vec3::Y));
 
     let mut ticks = 0_usize;
     let mut ended = None;

@@ -33,9 +33,9 @@
 //!    countdown's gate had been read as a track weapon-pad flag. A player
 //!    reported the weapon as unfireable, the gate turned out to be the fire
 //!    button, and the test had been holding the bug in place.
-//! 3. **That the round survives the real collision soup**, riding the
-//!    floor-follower every other unread projectile weapon here shares as a
-//!    placeholder.
+//! 3. **That the round survives the real collision soup**, flying straight and
+//!    reflecting off a floor as `Cannon_UpdateRound` does (it reads no surface
+//!    normal and rides nothing).
 //!
 //! What is deliberately **not** asserted is any authored *value*, per
 //! ADR-0006 - every assertion here is relative or against a number the test
@@ -212,8 +212,8 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         round.velocity.length()
     );
 
-    // And it rides the track - the shared floor-follower every unread
-    // projectile weapon here gets, exercised against real geometry.
+    // And it flies on through real geometry: straight, reflecting off a floor,
+    // ending on a wall.
     let start = round.position;
     let mut furthest: f32 = 0.0;
     let mut detonated_after = None;

@@ -64,6 +64,10 @@ impl Projectiles {
                     let (position, heading) = plasma::muzzle(ship.physics(), &ship.dimensions());
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
+                    // `Plasma_Launch` writes `-craft+0xb10` as the ridden normal;
+                    // seeded each held tick so the release tick has it whatever
+                    // the table says.
+                    projectile.surface = ship.physics().body.up();
                     heading
                 });
                 projectile.charge = (projectile.charge - dt).max(0.0);
@@ -166,12 +170,20 @@ impl Projectiles {
             } else {
                 missile::SURFACE_PROBE_LENGTH
             };
-            let probe = Raycaster::raycast(
-                raycaster,
-                Ray::new(to, -projectile.surface, probe_length),
-                None,
-                false,
-            );
+            // The Cannon flies no probe at all: `Cannon_UpdateRound` (`0x0886593c`)
+            // moves `position + velocity * dt` and sweeps that segment, with no
+            // surface probe, no ride height and no fall. A probe along a seeded
+            // world up snapped a round off the muzzle on any banked track.
+            let probe = if kind == Weapon::Cannon {
+                None
+            } else {
+                Raycaster::raycast(
+                    raycaster,
+                    Ray::new(to, -projectile.surface, probe_length),
+                    None,
+                    false,
+                )
+            };
             // The branch is on the surface class, the original's collision code.
             // `Collision_SweepSegment` (`0x0883198c`) returns `0` wall, `1` floor,
             // `3` mag floor or `0x7f` nothing. `Rocket_Update` (`0x0885d2a8`):
@@ -245,7 +257,10 @@ impl Projectiles {
                 }
                 // Nothing under it: it falls, keeping its normal so it resumes
                 // riding when the track returns.
-                None => projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt,
+                None if kind != Weapon::Cannon => {
+                    projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt;
+                }
+                None => {}
             }
 
             let step = to - from;
@@ -272,7 +287,9 @@ impl Projectiles {
                 // Rocket, so velocity is turned parallel with speed kept (chosen,
                 // not measured).
                 Some(hit)
-                    if hit.struck.is_none() && hit.surface.is_some_and(Surface::is_hoverable) =>
+                    if kind != Weapon::Cannon
+                        && hit.struck.is_none()
+                        && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
                     projectile.position = hit.point + hit.normal * RIDE_HEIGHT;
                     if !guided {
@@ -304,12 +321,17 @@ impl Projectiles {
                     // effect.
                     let push_off = match kind {
                         Weapon::Shuriken => shuriken::BOUNCE_PUSH_OFF,
+                        Weapon::Cannon => cannon::BOUNCE_PUSH_OFF,
                         _ => missile::BOUNCE_PUSH_OFF,
                     };
                     let may_bounce = struck.is_none()
                         && match kind {
                             Weapon::Missile => projectile.bounces < missile::MAX_BOUNCES,
                             Weapon::Shuriken => true,
+                            // `Cannon_UpdateRound`'s third arm: a floor or mag floor
+                            // is neither a wall (`0`/`4`) nor nothing (`0x7f`), so
+                            // it reflects the velocity and nudges the round off.
+                            Weapon::Cannon => hit.surface.is_some_and(Surface::is_hoverable),
                             _ => false,
                         };
                     if may_bounce {

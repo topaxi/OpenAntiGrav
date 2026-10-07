@@ -102,19 +102,29 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// wall charge, ring sample 2115) and one finished at the ring's first-jump
 /// lip already at 2.7 shield (ring sample 206); RAPIER seed 2 lost one to wall
 /// attrition on the ring (72.5 charged, ring sample 2900, lap 5).
+///
+/// **Regenerated 2026-10-07 for the Cannon's straight flight and the craft-up
+/// seed** (lane `weapon-tilt`): a round no longer snaps to a ride height under
+/// world up, so every race after an opponent's first shot is a different race.
+/// Five cells rose (FLASH 1 forward 0 -> 2 and reversed 0 -> 1, PHANTOM 1
+/// reversed 0 -> 1, PHANTOM 2 1 -> 2 and 1 -> 3, PHANTOM 3 forward 0 -> 1,
+/// RAPIER 2 reversed 1 -> 2) and two fell (RAPIER 1, VENOM 2); the forward
+/// total went 6 -> 8 and the reversed one stayed 10. **The cause of each loss
+/// was not separated** (weapon blow against wall attrition), unlike the two
+/// regenerations above; the cells only rose to what was measured.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),
     ("VENOM", 3, 0, 0),
-    ("FLASH", 1, 0, 0),
+    ("FLASH", 1, 2, 1),
     ("FLASH", 2, 0, 0),
     ("FLASH", 3, 0, 2),
     ("RAPIER", 1, 1, 0),
-    ("RAPIER", 2, 1, 1),
+    ("RAPIER", 2, 1, 2),
     ("RAPIER", 3, 1, 3),
-    ("PHANTOM", 1, 0, 0),
-    ("PHANTOM", 2, 1, 1),
-    ("PHANTOM", 3, 0, 2),
+    ("PHANTOM", 1, 0, 1),
+    ("PHANTOM", 2, 2, 3),
+    ("PHANTOM", 3, 1, 2),
 ];
 
 fn check(class: &str, seed: u64) {
