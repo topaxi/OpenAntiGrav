@@ -143,15 +143,50 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The Android APK: oag-game as a NativeActivity cdylib, built by
+  # scripts/build-apk.sh (the same script `just apk` runs). The runner image
+  # ships the SDK, build-tools and a platform; the NDK is pinned here. The
+  # script unpacks the APK and runs check-leakage.py over it, so nothing
+  # extracted can ride along. Signed with a throwaway key: a sideload build.
+  android:
+    name: android (arm64)
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: NDK and cargo-ndk
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.3.13750724"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724" >> "$GITHUB_ENV"
+          cargo install cargo-ndk --locked
+      - name: Build the APK
+        run: |
+          scripts/build-apk.sh --version "$VERSION"
+          mkdir -p dist
+          cp target/apk/OpenAntiGrav-*-android-arm64.apk dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+          if-no-files-found: error
+
   # A Release is only ever created from a pushed tag, and as a draft: the
   # maintainer reads the notes and artifacts, then publishes by hand.
-  # Later artifacts (an Android APK job, anything an AUR `-bin` package
-  # consumes) are another `needs:` entry and another artifact directory; the
+  # Later artifacts (anything an AUR `-bin` package consumes) are another `needs:` entry and another artifact directory; the
   # file names are `OpenAntiGrav-<version>-<platform>.<ext>` throughout.
   release:
     name: draft GitHub Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [version, linux, windows]
+    needs: [version, linux, windows, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write

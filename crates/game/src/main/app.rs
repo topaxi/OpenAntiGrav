@@ -130,6 +130,10 @@ pub(crate) struct App {
     /// loading screen covers the movie decode on all of them.
     pub(crate) loading_assets: loading::Assets,
     pub(crate) state: Option<Session>,
+    /// The platform took the window away (`Suspended`) and has not given one
+    /// back. Nothing is drawn meanwhile; the next `Resumed` rebuilds the
+    /// surface. Only ever set on Android.
+    pub(crate) suspended: bool,
 }
 
 impl App {
@@ -523,7 +527,20 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.state.is_some() {
+        if let Some(session) = self.state.as_mut() {
+            if self.suspended {
+                match session.gpu.recreate_surface(event_loop) {
+                    Ok(()) => {
+                        self.suspended = false;
+                        let (width, height) = session.gpu.size();
+                        session.resize(width, height);
+                    }
+                    Err(e) => {
+                        error!("{e:#}");
+                        event_loop.exit();
+                    }
+                }
+            }
             return;
         }
         match self.open(event_loop) {
@@ -536,7 +553,18 @@ impl ApplicationHandler for App {
         }
     }
 
+    fn suspended(&mut self, _: &ActiveEventLoop) {
+        self.suspended = true;
+        if let Some(session) = self.state.as_mut() {
+            session.controls.release_all();
+            session.pointer.release();
+        }
+    }
+
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        if self.suspended {
+            return;
+        }
         let Some(session) = self.state.as_mut() else {
             return;
         };
@@ -649,6 +677,10 @@ impl ApplicationHandler for App {
         let Some(session) = &self.state else {
             return;
         };
+        if self.suspended {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
 
         // **The frame limiter is here and not in `frame`**, because the way to
         // produce fewer frames is to ask for fewer, not to draw one and then

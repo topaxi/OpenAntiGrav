@@ -546,6 +546,12 @@ compare-upscalers image scale="50" out="/tmp":
 appimage *ARGS:
     ./scripts/build-appimage.sh "$@"
 
+# The Android APK (NativeActivity, arm64): target/apk/OpenAntiGrav-<v>-android-arm64.apk.
+# Needs cargo-ndk, the aarch64-linux-android target and an SDK + NDK; see
+# docs/tools/android.md.
+apk *ARGS:
+    ./scripts/build-apk.sh {{ARGS}}
+
 # The same package built in Debian bookworm, which is what a Steam Deck needs: a
 # native build links libm symbols an older glibc does not have and refuses to
 # start there. Needs podman or docker; the image is built once from

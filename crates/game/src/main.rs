@@ -206,15 +206,83 @@ fn attach_log_file(cli: &Cli, settings: &settings::Settings) {
 #[global_allocator]
 static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
 
+#[cfg_attr(target_os = "android", allow(dead_code))]
 fn main() -> Result<()> {
     init_logging();
-    let result = run();
+    let result = run(Cli::parse());
     oag_log::flush();
     result
 }
 
-fn run() -> Result<()> {
-    let cli = Cli::parse();
+/// The NativeActivity entry point: `liboag_game.so` is this file built as a
+/// cdylib (`just apk`: `cargo rustc --bin oag-game -- --crate-type cdylib`). See `docs/tools/android.md`.
+///
+/// There is no command line and no working directory on Android, so the app's
+/// external files directory stands in for both: it becomes the current
+/// directory and the XDG roots, which puts `data/images`, `data/cache`, the
+/// settings, records, ghosts and the log under
+/// `/storage/emulated/0/Android/data/<package>/files/` without `oag-source`
+/// knowing about Android at all.
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)] // the C ABI symbol NativeActivity looks up by name
+#[unsafe(no_mangle)]
+fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    android_env(&app);
+    init_logging();
+    let _ = ANDROID_APP.set(app);
+    let result = run(Cli::parse_from(["oag-game"]));
+    oag_log::flush();
+    if let Err(why) = result {
+        log::error!("oag-game exited: {why:#}");
+    }
+}
+
+#[cfg(target_os = "android")]
+static ANDROID_APP: std::sync::OnceLock<winit::platform::android::activity::AndroidApp> =
+    std::sync::OnceLock::new();
+
+/// Points the working directory and the XDG roots at the app's files directory.
+#[cfg(target_os = "android")]
+#[allow(unsafe_code)] // `set_var`, see below
+fn android_env(app: &winit::platform::android::activity::AndroidApp) {
+    let Some(files) = app.external_data_path().or_else(|| app.internal_data_path()) else {
+        return;
+    };
+    for (name, sub) in [
+        ("HOME", "home"),
+        ("XDG_CONFIG_HOME", "config"),
+        ("XDG_DATA_HOME", "data"),
+        ("XDG_CACHE_HOME", "cache"),
+        ("XDG_STATE_HOME", "state"),
+    ] {
+        let dir = files.join(sub);
+        let _ = std::fs::create_dir_all(&dir);
+        // SAFETY: first thing `android_main` does, before any thread of ours
+        // exists to race a read of the environment.
+        unsafe { std::env::set_var(name, &dir) };
+    }
+    let _ = std::fs::create_dir_all(files.join("data").join("images"));
+    let _ = std::env::set_current_dir(&files);
+}
+
+/// The window system's event loop: winit's default everywhere but Android,
+/// where it has to be handed the activity.
+fn new_event_loop() -> Result<EventLoop<()>> {
+    #[cfg(target_os = "android")]
+    {
+        use winit::event_loop::EventLoopBuilder;
+        use winit::platform::android::EventLoopBuilderExtAndroid;
+        let app = ANDROID_APP
+            .get()
+            .context("no AndroidApp: not started by android_main")?
+            .clone();
+        Ok(EventLoopBuilder::default().with_android_app(app).build()?)
+    }
+    #[cfg(not(target_os = "android"))]
+    Ok(EventLoop::new()?)
+}
+
+fn run(cli: Cli) -> Result<()> {
 
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
@@ -573,7 +641,7 @@ fn run() -> Result<()> {
     let anim_seconds = cli.anim_seconds;
     let settings = settings.clone();
 
-    let event_loop = EventLoop::new()?;
+    let event_loop = new_event_loop()?;
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
 
@@ -616,6 +684,7 @@ fn run() -> Result<()> {
         // Kept whole, because a pick is what turns it into everything above.
         pending: Some(pending),
         state: None,
+        suspended: false,
     };
     event_loop.run_app(&mut app)?;
     app.finish_audio()?;

@@ -18,6 +18,7 @@ use oag_present::perf;
 /// distributed with your program", because a Wayland compositor's taskbar has
 /// no window icon to read at all (see [`window_icon`]'s doc) - it looks the
 /// app up by this id and shows whatever icon that `.desktop` entry names.
+#[cfg(target_os = "linux")]
 pub(crate) const APP_ID: &str = "oag-game";
 
 /// The window/taskbar icon, rasterised fresh every launch from
