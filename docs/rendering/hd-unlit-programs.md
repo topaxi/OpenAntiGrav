@@ -295,7 +295,13 @@ a    = sat((0.5 B.a + 0.5 - AlphaAnim) / (1 - AlphaAnim))   then * gas.y + gas.x
 
 `AlphaAnim = 1` (the first 0.75 s) divides by zero: a negative numerator
 saturates to nothing, and the `0 / 0` of an opaque texel is **chosen, not
-measured** to be nothing too. `(1 - c)^-1` and `(1 - ColourAnim)^-1` are held at
+measured** to be nothing too. **The material's alpha test is `GL_LESS` against
+`0.5`** (`alpha_func 0x0201`, read off the `.rcsmodel` by `hd_bomb_programs`):
+the one cut-out here that keeps the *low* alpha, so the fireball is whole while
+`AlphaAnim` is 1 and burns away texel by texel as it falls to 0.44. The engine's
+cut-out pipeline hardcodes `GL_GREATER` (`cutout::of`), so the loader reports
+this surface "alpha test unread, drawn opaque" and `mesh.wesl` makes the test
+itself for `BOMB_FIRE`. `(1 - c)^-1` and `(1 - ColourAnim)^-1` are held at
 the largest finite half, `65504`, as the LeachBall's is. The white core is the
 same program with `ColourAnim = 0.9` (`x 10`).
 
@@ -321,7 +327,10 @@ already did for stride 18: `hd_unlit_probe --undeclared` finds exactly four such
 stride-22 chunks (`hd_bomb_shockwaves`, both of `hd_plasma_ring`'s and
 `hd_missile_explosion`'s), eleven others keep their tail. **This moves the
 Plasma explosion's ring** (its coordinate was `NaN`, zeroed): the same program
-shape, `(u, v) = TC3.xy`, so the texture it samples now varies across the disc.
+shape, `(u, v) = TC3.xy`, so the texture it samples varies across the disc now
+(`the_explosion_ring_and_halo_earn_their_clock_scroll_bits` still holds). **Not
+looked at in a frame**: a detonation of the player's own Plasma is out of reach
+of a headless run (the bolt times out ten seconds away).
 The two colour fields fold into the vertex's `colour` and `sun_mask`
 (`Mesh::inline_two_colours`), only for a surface that earned `BOMB_SHOCK`.
 Confidence 85 on the arithmetic of both programs, instruction by instruction;

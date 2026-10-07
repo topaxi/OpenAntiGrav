@@ -895,7 +895,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             select(0.0, 1.0, fire_numerator > 0.0),
             fire_divisor <= 0.0,
         );
-        return vec4<f32>(fire_rgb, fire_alpha);
+        // **The material's alpha test is `GL_LESS` against 0.5**
+        // (`alpha_func 0x0201`, `alpha_ref 0.5`), the one cut-out on the disc
+        // that keeps the *low* alpha: so the fireball is whole while `AlphaAnim`
+        // is 1 (alpha 0) and burns away texel by texel as it falls. The engine's
+        // cut-out pipeline hardcodes `GL_GREATER` and leaves this surface to the
+        // opaque one, so the test is made here.
+        if fire_alpha >= 0.5 {
+            discard;
+        }
+        return vec4<f32>(fire_rgb, 1.0);
     }
     // **The Bomb's shockwave rings** (`slots::BOMB_SHOCK`,
     // `hd_bombfire_shockwaves_glow` block `@0x1950`), `Shockwave_scalar` being

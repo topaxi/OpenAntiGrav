@@ -35,6 +35,10 @@ fn main() -> anyhow::Result<()> {
                 continue;
             };
             let at = variant.fragment.offset;
+            println!(
+                "  state {:#x} alpha_func {:#06x} alpha_ref {}",
+                material.state, material.alpha_func, material.alpha_ref
+            );
             println!("  vertex @{:#x}", variant.vertex.offset);
             let program =
                 Program::parse(&mblob, at).ok_or_else(|| anyhow::anyhow!("no program"))?;
