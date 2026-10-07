@@ -299,6 +299,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
                 0,
                 None,
                 launch_kmh,
+                ship.up(),
             ),
             "the projectile array refused a spawn into an empty world"
         );

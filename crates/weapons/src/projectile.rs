@@ -307,13 +307,18 @@ impl Projectiles {
     /// whole history. A full array drops the shot silently rather than evicting the
     /// oldest (only a bug reaches it today). Returns whether the shot was taken.
     pub fn spawn(&mut self, kind: Weapon, position: Vec3, velocity: Vec3, owner: u8) -> bool {
-        self.spawn_guided(kind, position, velocity, owner, None, 0.0)
+        self.spawn_guided(kind, position, velocity, owner, None, 0.0, Vec3::Y)
     }
 
     /// The same, for a projectile that carries a lock and a launch speed.
     ///
     /// [`Self::spawn`] is this with both empty, so an unguided weapon lands in the
     /// same slot with the same fields as always.
+    ///
+    /// `surface` is the normal the round is born riding: the firing craft's up for
+    /// the Missile (`Missile_Init` stores `-craft+0xb10` at `+0xd0`), where
+    /// [`Self::spawn`] passes world up.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn_guided(
         &mut self,
         kind: Weapon,
@@ -322,8 +327,9 @@ impl Projectiles {
         owner: u8,
         target: Option<u8>,
         launch_speed_kmh: f32,
+        surface: Vec3,
     ) -> bool {
-        self.place(
+        let Some(projectile) = self.place(
             kind,
             position,
             velocity,
@@ -331,8 +337,11 @@ impl Projectiles {
             target,
             launch_speed_kmh,
             MAX_FLIGHT_SECONDS,
-        )
-        .is_some()
+        ) else {
+            return false;
+        };
+        projectile.surface = surface;
+        true
     }
 
     /// The same as [`Self::spawn_guided`], seeding the surface normal: the original's
@@ -369,9 +378,23 @@ impl Projectiles {
     /// raises the destroy bit at `fuse < age` and its teardown `FUN_08870c78` plays
     /// `WO_SHURIKEN_EXPIRE` and a flash, spending no damage. See
     /// `oag_tables::weapons::ShurikenStats`.
-    pub fn throw(&mut self, position: Vec3, velocity: Vec3, owner: u8, fuse: f32) -> bool {
-        self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)
-            .is_some()
+    ///
+    /// `surface` is the firing craft's up: `Shuriken_Init` stores `-craft+0xb10` at
+    /// `+0x150` as the blade's ridden normal.
+    pub fn throw(
+        &mut self,
+        position: Vec3,
+        velocity: Vec3,
+        owner: u8,
+        fuse: f32,
+        surface: Vec3,
+    ) -> bool {
+        let Some(blade) = self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)
+        else {
+            return false;
+        };
+        blade.surface = surface;
+        true
     }
 
     /// Fires one plasma bolt, held on the firing craft's nose for its wind-up.

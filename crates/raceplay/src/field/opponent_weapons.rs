@@ -267,11 +267,13 @@ impl Race {
         ) else {
             return false;
         };
-        let thrown = self
-            .sim
-            .world
-            .projectiles
-            .throw(position, velocity, slot as u8, stats.fuse);
+        let thrown = self.sim.world.projectiles.throw(
+            position,
+            velocity,
+            slot as u8,
+            stats.fuse,
+            physics.body.up(),
+        );
         if thrown {
             self.sim.cues.push(oag_sound::sfx::CueEvent::new(
                 oag_sound::sfx::Cue::ShurikenLaunch,
