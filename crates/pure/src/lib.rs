@@ -37,6 +37,7 @@ use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 pub const TITLE: &Title = &Title {
     name: "Wipeout Pure",
     archives: ArchiveCandidates {
+        patch: &[],
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         // Both PSP titles ship exactly two archives anything reads. See

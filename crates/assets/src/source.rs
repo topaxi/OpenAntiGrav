@@ -80,6 +80,10 @@ pub struct Layout {
     /// The bulk archive: tracks, ships, handling, and on the PSP the movies,
     /// screens and string tables too.
     pub data: String,
+    /// Update archives mounted over [`Self::data`], in search order.
+    ///
+    /// See [`ArchiveCandidates::patch`](oag_title::ArchiveCandidates::patch).
+    pub patch: Vec<String>,
     /// The companion archive, when the source has one.
     pub fe: Option<String>,
     /// Every other archive this release ships, all of them, in candidate order.
@@ -140,6 +144,7 @@ impl Layout {
             platform: platform.to_string(),
             looked_for: title.archive_names(),
         })?;
+        let patch = pick_all(source, &files, title.archives.patch);
         let fe = pick(source, &files, title.archives.fe);
         let extra = pick_all(source, &files, title.archives.extra);
 
@@ -155,6 +160,7 @@ impl Layout {
             Self {
                 platform,
                 data: data.0,
+                patch,
                 fe: fe.map(|(spec, _)| spec),
                 extra,
                 serial,
@@ -172,6 +178,10 @@ impl Layout {
                 "{} source: {}, with no companion archive",
                 self.platform, self.data
             ),
+        };
+        let head = match self.patch.len() {
+            0 => head,
+            n => format!("{head}, with {n} update archive(s) mounted over it"),
         };
         match self.extra.len() {
             0 => head,
@@ -191,6 +201,10 @@ pub struct Archives {
     /// The bulk archive: `Data.wad` on the PSP, `WADS2.WAD` on the PS2,
     /// `DATA00.PSARC` on the PS3.
     pub data: Container,
+    /// Update archives searched before [`Self::data`], in the order the layout
+    /// lists them. Empty unless the title declares
+    /// [`ArchiveCandidates::patch`](oag_title::ArchiveCandidates::patch).
+    pub patch: Vec<Container>,
     /// The companion archive: `FE.wad` on the PSP, `WADSP.WAD` on the PS2.
     pub fe: Option<Container>,
     /// Every other archive the release ships, all mounted, searched after
@@ -292,6 +306,11 @@ impl Archives {
             }
             Ok(data) => data,
         };
+        let patch = layout
+            .patch
+            .iter()
+            .map(|spec| mount(spec))
+            .collect::<Result<Vec<_>>>()?;
         let fe = layout.fe.as_deref().map(mount).transpose()?;
         let extra = layout
             .extra
@@ -313,6 +332,7 @@ impl Archives {
         Ok(Self {
             layout,
             data,
+            patch,
             fe,
             extra,
             packs: mounted,
@@ -332,6 +352,9 @@ impl Archives {
     /// stored - see [`Container::contains`]. This used to take a `u32` hash,
     /// which built the WAD's addressing into the search itself.
     fn holder_of(&self, name: &str) -> Option<Held> {
+        if let Some(index) = self.patch.iter().position(|patch| patch.contains(name)) {
+            return Some(Held::Patch(index));
+        }
         if self.data.contains(name) {
             return Some(Held::Data);
         }
@@ -353,7 +376,13 @@ impl Archives {
     /// so the two cannot disagree about precedence: the head of this is always
     /// [`Self::holder_of`]'s answer.
     fn holders_of(&self, name: &str) -> Vec<Held> {
-        let mut out = Vec::new();
+        let mut out: Vec<Held> = self
+            .patch
+            .iter()
+            .enumerate()
+            .filter(|(_, patch)| patch.contains(name))
+            .map(|(index, _)| Held::Patch(index))
+            .collect();
         if self.data.contains(name) {
             out.push(Held::Data);
         }
@@ -380,6 +409,7 @@ impl Archives {
     /// The specifier of the archive a [`Held`] names.
     fn label_at(&self, at: Held) -> &str {
         match at {
+            Held::Patch(index) => self.patch[index].label(),
             Held::Data => self.data.label(),
             Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
             Held::Extra(index) => self.extra[index].label(),
@@ -400,6 +430,9 @@ impl Archives {
             Container::Wad(wad) => wad.index_of_hash(hash).is_some(),
             Container::Psarc(_) => false,
         };
+        if let Some(index) = self.patch.iter().position(has) {
+            return Some(Held::Patch(index));
+        }
         if has(&self.data) {
             return Some(Held::Data);
         }
@@ -414,6 +447,7 @@ impl Archives {
 
     fn held(&mut self, at: Held) -> &mut Container {
         match at {
+            Held::Patch(index) => &mut self.patch[index],
             Held::Data => &mut self.data,
             Held::Fe => self.fe.as_mut().expect("holder_of found it here"),
             Held::Extra(index) => &mut self.extra[index],
@@ -639,6 +673,7 @@ impl Archives {
 /// immutable; see it for the search order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Held {
+    Patch(usize),
     Data,
     Fe,
     Extra(usize),

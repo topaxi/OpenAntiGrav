@@ -633,6 +633,17 @@ impl FrontEnd {
 /// disc it came off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArchiveCandidates {
+    /// Update archives the original mounts *over* the base package: every one
+    /// present is mounted, and they are searched **before** [`Self::data`], in
+    /// the order listed (first listed wins a collision).
+    ///
+    /// The role a title needs when its patch replaces entries its base also
+    /// holds. [`Self::extra`] cannot do it, because it is searched after
+    /// `data`, and a patch behind the entries it exists to replace is worse
+    /// than none. Empty for every title whose patch is not mounted or that has
+    /// none; Omega's mandatory patch sits in `data`/`extra` for its own
+    /// reasons, see `oag_omega::archives`.
+    pub patch: &'static [(&'static str, Platform)],
     /// The bulk archive: tracks, ships, handling.
     pub data: &'static [(&'static str, Platform)],
     /// The companion archive, for the releases that have one.
@@ -722,8 +733,9 @@ impl Title {
     #[must_use]
     pub fn archive_names(&self) -> Vec<String> {
         self.archives
-            .data
+            .patch
             .iter()
+            .chain(self.archives.data)
             .chain(self.archives.fe)
             .chain(self.archives.extra)
             .map(|(name, _)| (*name).to_string())

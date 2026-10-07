@@ -28,10 +28,10 @@ Implemented in [`oag_ui_screens::endrace::touch`](../../crates/ui-screens/src/en
 
 **Copy lineage:** the base `data.psarc` copy is 22,076 bytes; `patch-v104/data1.psarc`
 carries a 22,098-byte one that differs by a single attribute
-(`name="continueButton"` on the tips screen's tick). The base copy is the one
-served - this build mounts only the base `data.psarc` for 2048's front end, pinned
-by `the_base_copy_of_the_file_is_the_one_served` - and the difference touches no
-widget this build draws, so mounting the patch later changes nothing here. `Legacy` has a third copy in
+(`name="continueButton"` on the tips screen's tick). The patch copy is the one
+served (2026-10-07: the v1.04 archives are mounted ahead of the base), pinned
+by `the_patch_copy_of_the_file_is_the_one_served`, and the difference touches no
+widget this build draws. `Legacy` has a third copy in
 `data2.psarc` (14,267 bytes against the base's 12,382 and `data1`'s 12,593).
 
 `oag_2048::TITLE.front_end.endrace_entry` names the file and `endrace_style` its

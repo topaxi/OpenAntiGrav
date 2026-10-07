@@ -137,14 +137,11 @@ When a folder holds both a European (`PCSF00007`) and a USA (`PCSA00015`) 2048 e
 
 2048 starts with `base/` alone (checked: a folder holding only
 `base/PSP2/data.psarc` opens as `Wipeout 2048`). The DLC packs are mounted
-when their folders are there. **The 1.04 patch is deliberately not mounted, so
-unpacking it changes nothing today, and you can skip it.** It replaces 1,856 of
-the base archive's entries (1,156 materials, 435 ships, track and table files)
-and its two archives share 570 paths with no measured order between them, so
-mounting it would change how circuits and craft draw and handle on a guess
-(`crates/2048/src/lib.rs`, `EXTRA_CANDIDATES`; census in
-[patches](../formats/patches.md)). The base game plays as the original did at
-launch. Omega is the opposite: its patch is required. A `base/` folder that is itself a symlink was not found, so use
+when their folders are there. **The 1.04 patch is mounted when its folder is there**
+(`patch-v104/` beside `base/`, as `oag-unpack` writes it), over the base archive,
+as the shipped v1.04 executable does (`crates/2048/src/lib.rs`, `PATCH_CANDIDATES`;
+census in [patches](../formats/patches.md)). Without it the base game
+runs as the v1.00 original did at launch. Omega is the opposite: its patch is required. A `base/` folder that is itself a symlink was not found, so use
 real folders. Omega needs the patch: only the patch's
 `data09.psarc` carries the front end, so a base-only folder is not offered.
 Omega's layout was checked from one package form only, the one the project's

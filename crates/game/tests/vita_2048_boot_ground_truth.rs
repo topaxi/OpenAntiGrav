@@ -344,6 +344,23 @@ fn a_network_mode_stays_on_the_grid_with_a_note() {
         input.begin_frame(0);
         frontend.update(1.0 / 60.0, input, None);
     };
+    // The v1.04 grid reads SP, HD, FURY across the top: the HD tile is one right.
+    step(&mut frontend, &mut input, Button::Right);
+    step(&mut frontend, &mut input, Button::Cross);
+    assert_eq!(frontend.chosen_mode(), Some("FE_RC_HD"));
+    step(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
+    assert!(
+        frontend
+            .take_notes()
+            .iter()
+            .any(|note| note.contains("FE_RC_HD is another title's campaign")),
+        "an HD tile stays on the grid with its own note"
+    );
+    // Then FURY, and ONLINE CAMPAIGN is the first tile of the second row.
+    step(&mut frontend, &mut input, Button::Right);
+    step(&mut frontend, &mut input, Button::Cross);
+    assert_eq!(frontend.chosen_mode(), Some("FE_RC_FURY"));
     step(&mut frontend, &mut input, Button::Right);
     step(&mut frontend, &mut input, Button::Cross);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
@@ -470,9 +487,9 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
             "{label} is on the grid"
         );
     }
-    // Four tiles, the tick, then the two: five rights land on RACEBOX.
+    // Six tiles, the tick, then the two: seven rights land on RACEBOX.
     let mut input = Input::new();
-    for _ in 0..5 {
+    for _ in 0..7 {
         input.begin_frame(Button::Right.bit());
         frontend.update(1.0 / 60.0, &mut input, None);
         input.begin_frame(0);
