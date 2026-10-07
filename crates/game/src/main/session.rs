@@ -79,6 +79,9 @@ pub(crate) struct Session {
     /// The mouse and the touchscreen, latched between ticks the way
     /// `controls` latches a key. See `crate::pointer`.
     pub(crate) pointer: crate::pointer::Window,
+    /// The on-screen racing controls and the Android pad's stick. See
+    /// `crate::touch`.
+    pub(crate) touch_overlay: crate::touch::Overlay,
     /// The mixer, and the device behind it when this run has one.
     ///
     /// Beside `controls` because it is the same kind of thing: a device that

@@ -788,6 +788,12 @@ impl Session {
             },
             overlay_space.size.0,
         );
+        // The on-screen racing controls, under the pointer. Empty unless this
+        // is a touch device mid-race with no pad in use - see `crate::touch`.
+        list.extend(self.draw_touch(
+            (surface.0 as f32, surface.1 as f32),
+            overlay_space.size.1 / surface.1.max(1) as f32,
+        ));
         // The pointer, last of all, so it is over the overlay's own text
         // too. Only where a pointer means something - see
         // `Session::shows_cursor` - and only while there is a mouse over

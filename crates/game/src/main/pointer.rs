@@ -60,6 +60,11 @@ pub(crate) struct Window {
     scroll: f64,
     /// The finger being followed, if one is down.
     finger: Option<u64>,
+    /// Where the last tap landed, kept until the click it made is taken. A
+    /// finger that lifts between two ticks leaves `at` empty, and a click
+    /// with no position hits nothing - so a quick tap, or any tap at all on a
+    /// slow frame, would be lost.
+    tap_at: Option<(f32, f32)>,
     /// Whether the last device to speak was the mouse - see
     /// [`Self::cursor_at`]. `false` until it has said anything, so a fresh
     /// window shows no arrow until the mouse moves.
@@ -113,6 +118,7 @@ impl Window {
                 self.finger = Some(touch.id);
                 self.place(at);
                 self.clicked = true;
+                self.tap_at = Some(at);
             }
             TouchPhase::Moved => {
                 if self.finger == Some(touch.id) {
@@ -169,7 +175,7 @@ impl Window {
         let whole = self.scroll.trunc();
         self.scroll -= whole;
         let pointer = Pointer {
-            at: self.at,
+            at: self.at.or(self.tap_at.filter(|_| self.clicked)),
             moved: self.moved,
             clicked: self.clicked,
             back: self.back,
@@ -178,6 +184,7 @@ impl Window {
         self.moved = false;
         self.clicked = false;
         self.back = false;
+        self.tap_at = None;
         pointer
     }
 }
@@ -250,6 +257,18 @@ mod tests {
         let tick = window.take();
         assert_eq!(tick.at, None);
         assert!(tick.moved);
+    }
+
+    #[test]
+    fn a_tap_that_lifts_before_the_tick_still_lands_where_it_was() {
+        let mut window = Window::default();
+        window.touch(touch(1, TouchPhase::Started, 100.0, 50.0));
+        window.touch(touch(1, TouchPhase::Ended, 100.0, 50.0));
+        let tick = window.take();
+        assert!(tick.clicked);
+        assert_eq!(tick.at, Some((100.0, 50.0)), "the click has a place");
+        let next = window.take();
+        assert_eq!(next.at, None, "and the finger is still gone after it");
     }
 
     #[test]

@@ -23,7 +23,7 @@ use oag_ui::strings;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, NamedKey, NativeKeyCode, PhysicalKey};
 use winit::window::WindowId;
 
 use crate::gpu::Gpu;
@@ -366,6 +366,7 @@ impl App {
             stage,
             controls,
             pointer: crate::pointer::Window::default(),
+            touch_overlay: crate::touch::Overlay::default(),
             audio,
             music_discs: self.music_discs.clone(),
             screen_filters,
@@ -593,7 +594,7 @@ impl ApplicationHandler for App {
                 session.pointer.button(button, state);
             }
             WindowEvent::MouseWheel { delta, .. } => session.pointer.wheel(delta),
-            WindowEvent::Touch(touch) => session.pointer.touch(touch),
+            WindowEvent::Touch(touch) => session.touch(touch),
 
             WindowEvent::KeyboardInput { event, .. } => {
                 // The keyboard is the device in use now, whatever the key:
@@ -626,12 +627,17 @@ impl ApplicationHandler for App {
                 // `Pressed` while a key is held, and back-one-level repeated
                 // thirty times a second walks out of the menus and quits. It
                 // did not matter while escape exited on the first one.
-                if event.logical_key == Key::Named(NamedKey::Escape)
-                    && event.state == ElementState::Pressed
-                    && !event.repeat
-                {
-                    session.escape();
-                    return;
+                if event.state == ElementState::Pressed && !event.repeat {
+                    // Escape quits where nothing is behind it; the Android
+                    // system Back (winit names it `BrowserBack`) never does.
+                    if event.logical_key == Key::Named(NamedKey::Escape) {
+                        session.escape();
+                        return;
+                    }
+                    if event.logical_key == Key::Named(NamedKey::BrowserBack) {
+                        session.back();
+                        return;
+                    }
                 }
                 // An on-screen keyboard is open, and this key is one it
                 // understands. **Diverted rather than shared**: a letter that
@@ -640,6 +646,16 @@ impl ApplicationHandler for App {
                 // does not understand - the arrows above all - falls through
                 // below, which is what leaves the grid navigable from the
                 // same keyboard that is typing into it.
+                // An Android gamepad's button: unidentified to winit, carrying
+                // the keycode. A pad key is never also a keyboard key.
+                if let PhysicalKey::Unidentified(NativeKeyCode::Android(code)) =
+                    event.physical_key
+                    && session
+                        .controls
+                        .android_key(code, event.state == ElementState::Pressed)
+                {
+                    return;
+                }
                 if session.typing_is_open() {
                     let typed = crate::typing::decide(
                         &event.logical_key,

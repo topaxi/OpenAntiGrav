@@ -2,9 +2,9 @@
 
 A first pass: `oag-game` as an arm64 NativeActivity app, written to open a window,
 bring up wgpu on Vulkan and reach the front end, reading the player's own disc
-images from the app's files directory. **It has been built, linked, packaged and checked
-as an APK; it has not been run on a device or an emulator**. Touch controls for a race, a gamepad story and lifecycle polish are
-open; "Known gaps" lists them.
+images from the app's files directory. It has been built, linked, packaged, run on Waydroid and driven through a race
+with touch. It has **not** run on a phone yet. Lifecycle polish is open;
+"Known gaps" lists it.
 
 ## Build
 
@@ -189,6 +189,107 @@ What a first launch does, as opposed to a desktop run (2026-10-07):
   wants a foreground layer drawn into the 66% safe zone and a background colour,
   and the legacy icon is what Android 8+ shows in a plain mask.
 
+## Back, touch controls and a gamepad
+
+Landed 2026-10-07 (android-controls lane). Everything here is **chosen, not
+measured**: no original title has a touch scheme or an Android pad story, so there
+is no capture to match and no confidence score to give.
+
+### System Back is the front end's Back
+
+The back gesture or key reaches winit as `Key::Named(NamedKey::BrowserBack)`
+(`winit-0.30.13/src/platform_impl/android/keycodes.rs`, `Back`), which no binding
+claimed, so it used to be dropped. `app.rs` now sends it where Escape goes, through
+`Session::back`: exactly `Session::escape` (pops a page, a picker or a campaign
+screen, cancels a prompt or a key capture, and from a race parks it and opens the
+menus) except that it **never quits**. At the root page, the disc chooser, the boot
+movies and `PRESS START` it does nothing. A QUIT row is on the root for a player who
+means it, and an accidental swipe closing the game is worse than a swipe that does
+nothing; no quit prompt exists in the front end, and inventing one was not worth it.
+That is a choice. In a race Back is the pause *menu* (the race is parked, and
+backing out of the menus resumes it); the Start button's own pause freezes the race
+with no menu, as before. The manifest sets `android:enableOnBackInvokedCallback="false"`
+so a newer target SDK's predictive-back cannot swallow the key. A key capture on the
+CONTROLS page treats Back as cancel, like Escape.
+
+Verified on Waydroid (`adb shell input keyevent 4`): from the RACE page Back went to
+the root (log line `system back`), at the root and at the Language Selection the
+process stayed alive, and in a race it opened the root menu over the parked race.
+
+### On-screen racing controls
+
+`oag_input::touch` holds the layout, the finger tracking and the rules, with no
+winit type, so every rule is a unit test; `oag_game::touch_controls` draws it as
+plain translucent rectangles with a word on each (no disc art, no invented icons);
+`crates/game/src/main/touch.rs` is the glue. Shown only on Android (or on any
+platform with `OAG_TOUCH_CONTROLS` set, which is how to look at it on a desktop with
+a touchscreen), only in a running race, and drawn under the pointer in the overlay
+pass.
+
+| Control | Where | Button |
+| --- | --- | --- |
+| steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock; X steers, Y pitches | stick axes |
+| GO | bottom right, largest | `Cross` (thrust) |
+| FIRE | left of GO | `Square` |
+| ABSORB | above GO | `Circle` |
+| BRAKE L, BRAKE R | top corners | `L`, `R` (airbrakes) |
+| PAUSE, VIEW | top centre | `Start` (pause), `Select` (camera cycle) |
+
+Multi-touch is the point: every finger is tracked, a stick finger is sticky and a
+button finger re-reads what is under it as it slides (a thumb can roll from GO onto
+FIRE). Presses are latched through `Controls::tap` so a tap shorter than one tick is
+still a press; PAUSE and VIEW act on the edge, so they reach the game only as taps.
+While the race is paused only PAUSE (labelled RESUME) gets through. The overlay's
+contribution is merged into the keyboard's slot in `Controls::merge_players` after
+`pad_spoke` is read, so a finger is never mistaken for a pad. `Triangle` has no
+touch control because nothing in a race reads it.
+
+**Hidden when a pad is in use, back on the next touch**: `Controls::pad_spoke` (a
+real gamepad, or an Android one) hides it; a touch starting shows it. Verified on
+Waydroid: a `KEYCODE_BUTTON_A` event hid it, a tap brought it back.
+
+Waydroid's `adb shell input` injects one pointer, so **two-finger play is covered by
+unit tests only** (`oag_input::touch::tests`), not driven end to end. What was
+driven: a held tap on GO accelerated the ship (speed readout, plume), a drag in the
+stick zone steered it, a PAUSE tap froze the timer and a second resumed it. The
+real feel (thumb sizes, how far a thumb slides, whether the buttons cover the HUD
+on a 6.2 in phone) needs the S24.
+
+Two bugs found on the way, both fixed: a tap that lifts before the next tick lost
+its position (`pointer::Window` kept `at` empty, so the click hit nothing; the
+menus took a tap about one time in two on Waydroid's slow frames), and any
+joystick `MotionEvent` arrives as a `Touch` (below).
+
+### Bluetooth and USB gamepads
+
+`gilrs` has **no Android backend** (`gilrs-core-0.6.8/src/platform` is Linux,
+macOS, Windows and wasm; on Android `Gilrs::new` reports "does not support current
+platform" and the pad is keyboard-only, as the log line says). What winit delivers
+instead:
+
+- **Buttons** arrive as `KeyboardInput` with `PhysicalKey::Unidentified(NativeKeyCode::Android(code))`,
+  the code being `KEYCODE_BUTTON_*`. `oag_input::android::key_of` maps A, B, X, Y,
+  L1, R1, START and SELECT through the same `pad::map_button` desktop uses (so A is
+  `Cross` whatever the pad prints, per the original's naming), and L2/R2 as a full
+  trigger pull. The d-pad arrives as arrow keys and is the keyboard's. An Android
+  pad press also latches a tap, so one shorter than a tick still reaches a menu.
+- **The left stick** arrives, by accident, as `Touch::Moved`: winit turns every
+  `MotionEvent` with action `Move` into a touch at `pointer.x()`/`y()`, which for a
+  joystick are `AXIS_X`/`AXIS_Y` in -1 to 1. A device that never began a touch is
+  therefore a pad (`crate::touch::Overlay::route`) and its moves go to
+  `Controls::android_stick`, not to the menus' pointer (without this a stick push
+  would teleport the finger to the screen's corner).
+- **Not reachable**: the analog triggers, the right stick and the hat are never
+  delivered by winit 0.30. A pad that also sends `BUTTON_L2`/`R2` as keys (most do)
+  still works as a digital pull; one that is axis-only has no triggers. Fixing it
+  means reading `MotionEvent` axes through `android-activity` directly, which winit
+  owns the input queue for, or GameActivity.
+
+Waydroid has no pad. Exercised: the keycode mapping, the stick sign (Android Y is
+down-positive), the merge and the hide-on-pad rule, all as unit tests, plus
+`adb shell input keyevent 96` (a `KEYCODE_BUTTON_A` from a fake source) driving the
+real event path and hiding the overlay. Not exercised: a physical pad, its axes.
+
 ## Pre-converted caches
 
 `oag-game --no-audio --dry-run --prefetch <image>` is the headless
@@ -242,9 +343,11 @@ another owner leaves it) logs one warning and runs on defaults.
 
 ## Known gaps
 
-- **A race cannot be driven.** The menus answer touch through the pointer layer, but
-  there are no on-screen race controls, and `Controls` has no gamepad mapping checked
-  on Android (`gilrs` builds but is not exercised).
+- **Touch controls are a first version.** Sizes and positions are chosen and untested
+  on a real phone; the overlay covers part of the HUD; no haptics, no
+  user-adjustable layout, no per-player scheme (a stick or zones, left- or
+  right-handed). A gamepad's analog triggers, right stick and hat are not reachable
+  through winit (see "Bluetooth and USB gamepads").
 - **Xclipse 940 (the S24's EU GPU, Samsung's Vulkan driver) is untested.** Expect
   surprises in present modes, `PRIMARY` backend adapter selection and the temporal
   upscaler's capability probe.

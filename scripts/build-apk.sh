@@ -101,7 +101,7 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
-    <application android:label="OpenAntiGrav" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:hasCode="false" android:extractNativeLibs="true">
+    <application android:label="OpenAntiGrav" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:hasCode="false" android:extractNativeLibs="true" android:enableOnBackInvokedCallback="false">
         <activity android:name="android.app.NativeActivity"
             android:exported="true"
             android:label="OpenAntiGrav"
