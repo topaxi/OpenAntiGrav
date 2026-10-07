@@ -110,8 +110,8 @@ elif ! out="$(adb install -r "$apk" 2>&1)"; then
     echo "The app on the device was signed with another key, so it cannot be updated in place." >&2
     if (( ! reinstall )); then
         [[ -t 0 ]] || die "pass --reinstall to uninstall it and install this one (its data is kept)"
-        read -r -p "Uninstall it and install this one, keeping its data? [y/N] " answer
-        [[ $answer == [yY]* ]] || die "left the installed app as it was"
+        read -r -p "Uninstall it and install this one, keeping its data? [Y/n] " answer
+        [[ -z $answer || $answer == [yY]* ]] || die "left the installed app as it was"
     fi
     step "Reinstalling (signature changed), keeping the app's data"
     reinstall_keeping_data
