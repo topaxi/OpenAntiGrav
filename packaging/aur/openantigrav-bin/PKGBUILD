@@ -1,0 +1,32 @@
+# Maintainer: Damian Senn <damian.senn@gmail.com>
+#
+# Repackages the Linux tarball from the GitHub Release (built in Debian
+# bookworm by .github/workflows/release.yml). No game content is packaged: the
+# player supplies a disc image (docs/overview/installing.md).
+pkgname=openantigrav-bin
+_name=OpenAntiGrav
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Clean-room Rust reimplementation of the Studio Liverpool anti-gravity racing engine (Wipeout Pulse, Pure, HD, 2048, Omega); prebuilt engine, bring your own disc'
+arch=('x86_64')
+url='https://github.com/topaxi/OpenAntiGrav'
+license=('MIT' 'Apache-2.0')
+depends=('alsa-lib' 'gcc-libs' 'glibc' 'libpipewire' 'systemd-libs' 'vulkan-icd-loader')
+optdepends=('vulkan-driver: a GPU driver (vulkan-radeon, vulkan-intel, nvidia-utils); vulkan-swrast gives a CPU adapter'
+            'ffmpeg: converts each game intro movie on first boot (without it the intro is a black screen)')
+provides=('openantigrav')
+conflicts=('openantigrav')
+options=('!strip')
+source=("$_name-$pkgver-linux-x86_64.tar.gz::$url/releases/download/v$pkgver/$_name-$pkgver-linux-x86_64.tar.gz")
+# Copy the line for the tarball out of the release's SHA256SUMS, or run
+# `updpkgsums`. SKIP stays until the first release exists to take a hash from.
+sha256sums=('SKIP')
+
+package() {
+  cd "$_name-$pkgver-linux-x86_64"
+  install -Dm755 oag-game "$pkgdir/usr/bin/oag-game"
+  install -Dm644 oag-game.desktop "$pkgdir/usr/share/applications/oag-game.desktop"
+  install -Dm644 oag-game.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/oag-game.png"
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/$pkgname"
+  install -Dm644 licences/* -t "$pkgdir/usr/share/licenses/$pkgname/licences"
+}
