@@ -768,3 +768,12 @@ fn pausing_on_focus_loss_is_on_by_default_and_round_trips_off() {
     let missing: Settings = toml::from_str("[display]\nvsync = \"off\"\n").unwrap();
     assert!(missing.display.pause_on_focus_loss);
 }
+
+#[test]
+fn the_go_brake_zones_are_on_by_default_and_round_trip_off() {
+    assert!(Settings::default().controls.touch_go_zones);
+    let off: Settings = toml::from_str("[controls]\ntouch_go_zones = false\n").unwrap();
+    assert!(!off.controls.touch_go_zones);
+    let missing: Settings = toml::from_str("[controls]\nscheme = \"default\"\n").unwrap();
+    assert!(missing.controls.touch_go_zones);
+}

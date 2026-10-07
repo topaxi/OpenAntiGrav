@@ -32,11 +32,129 @@ fn every_control_sits_inside_the_window_and_none_overlap() {
 }
 
 #[test]
-fn no_button_sits_in_the_stick_zone_below_the_top_strip() {
+fn a_control_inside_the_stick_zone_is_a_button_not_the_stick() {
+    let mut touches = Touches::default();
+    touches.down(1, centre(Control::AirbrakeLeft), SIZE);
+    assert!(touches.stick().is_none());
+    assert_eq!(touches.reading(SIZE).buttons, Button::L.bit());
+    touches.down(2, (300.0, 800.0), SIZE);
+    assert!(touches.stick().is_some(), "the stick is still free below");
+}
+
+#[test]
+fn every_control_keeps_to_the_safe_margins() {
     for (control, r) in layout(SIZE) {
-        let in_zone = r.x < SIZE.0 * STICK_ZONE_WIDTH && r.y + r.h > SIZE.1 * TOP_STRIP;
-        assert!(!in_zone, "{control:?} is where the stick lands");
+        assert!(r.x >= SAFE_X * SIZE.1 - 0.01, "{control:?} left");
+        assert!(
+            r.x + r.w <= SIZE.0 - SAFE_X * SIZE.1 + 0.01,
+            "{control:?} right"
+        );
+        assert!(r.y >= SAFE_Y * SIZE.1 - 0.01, "{control:?} top");
+        assert!(r.y + r.h <= SIZE.1 * (1.0 - SAFE_Y), "{control:?} bottom");
     }
+}
+
+#[test]
+fn every_control_is_thumb_sized_by_the_window_height() {
+    for (control, r) in layout(SIZE) {
+        assert!(r.w >= 0.16 * SIZE.1 && r.h >= 0.11 * SIZE.1, "{control:?}");
+    }
+    let tall = layout((1000.0, 500.0))[0].1;
+    let wide = layout((2000.0, 500.0))[0].1;
+    assert_eq!(tall.w, wide.w, "the size follows the height, not the width");
+}
+
+fn go_at(fx: f32, fy: f32) -> (f32, f32) {
+    let r = layout(SIZE)[Control::Accelerate.index()].1;
+    (r.x + r.w * fx, r.y + r.h * fy)
+}
+
+fn live() -> Touches {
+    let mut touches = Touches::default();
+    touches.set_go_zones(true, SIZE);
+    touches
+}
+
+#[test]
+fn go_is_thrust_alone_in_the_centre_and_above() {
+    for (fx, fy) in [(0.5, 0.95), (0.1, 0.3), (0.9, 0.3), (0.5, 0.1), (0.2, 0.6)] {
+        let mut touches = live();
+        touches.down(1, go_at(fx, fy), SIZE);
+        assert_eq!(
+            touches.reading(SIZE).buttons,
+            Button::Cross.bit(),
+            "{fx},{fy}"
+        );
+    }
+}
+
+#[test]
+fn go_adds_the_left_or_right_brake_in_its_bottom_corners() {
+    let mut touches = live();
+    touches.down(1, go_at(0.1, 0.9), SIZE);
+    assert_eq!(
+        touches.reading(SIZE).buttons,
+        Button::Cross.bit() | Button::L.bit()
+    );
+    let mut touches = live();
+    touches.down(1, go_at(0.9, 0.9), SIZE);
+    assert_eq!(
+        touches.reading(SIZE).buttons,
+        Button::Cross.bit() | Button::R.bit()
+    );
+}
+
+#[test]
+fn sliding_inside_go_changes_the_zone_without_lifting() {
+    let mut touches = live();
+    touches.down(1, go_at(0.5, 0.5), SIZE);
+    touches.moved(1, go_at(0.1, 0.9), SIZE);
+    assert!(touches.zone_down(GoZone::Left));
+    touches.moved(1, go_at(0.9, 0.9), SIZE);
+    assert!(!touches.zone_down(GoZone::Left) && touches.zone_down(GoZone::Right));
+    touches.moved(1, go_at(0.5, 0.9), SIZE);
+    assert_eq!(touches.reading(SIZE).buttons, Button::Cross.bit());
+}
+
+#[test]
+fn a_thumb_in_the_slop_below_go_still_reads_the_corner() {
+    let mut touches = live();
+    let r = layout(SIZE)[0].1;
+    touches.down(1, (r.x + 5.0, r.y + r.h + SIZE.1 * SLOP * 0.5), SIZE);
+    assert!(touches.zone_down(GoZone::Left));
+}
+
+#[test]
+fn the_zones_are_off_when_the_setting_is() {
+    let mut touches = Touches::default();
+    touches.set_go_zones(false, SIZE);
+    touches.down(1, go_at(0.1, 0.9), SIZE);
+    assert_eq!(touches.reading(SIZE).buttons, Button::Cross.bit());
+    touches.set_go_zones(true, SIZE);
+    assert!(touches.zone_down(GoZone::Left), "turned on mid-hold");
+}
+
+#[test]
+fn steering_and_go_with_a_brake_are_two_fingers_at_once() {
+    let mut touches = live();
+    touches.down(1, (300.0, 800.0), SIZE);
+    touches.down(2, go_at(0.9, 0.9), SIZE);
+    touches.moved(1, (300.0 - SIZE.1 * STICK_RADIUS, 800.0), SIZE);
+    let reading = touches.reading(SIZE);
+    assert!((reading.stick_x + 1.0).abs() < 1e-3);
+    assert_eq!(reading.buttons, Button::Cross.bit() | Button::R.bit());
+    touches.up(2, SIZE);
+    assert_eq!(touches.reading(SIZE).buttons, 0);
+    assert!(!touches.zone_down(GoZone::Right));
+}
+
+#[test]
+fn a_zone_does_not_latch_a_tap_and_the_brake_buttons_still_work() {
+    let mut touches = live();
+    touches.down(1, go_at(0.1, 0.9), SIZE);
+    assert_eq!(touches.take_taps(), vec![Button::Cross]);
+    touches.down(2, centre(Control::AirbrakeRight), SIZE);
+    assert!(touches.reading(SIZE).buttons & Button::R.bit() != 0);
 }
 
 #[test]

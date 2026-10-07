@@ -9,28 +9,80 @@
 //! Drawn in the overlay's grid (see `oag_present::perf::grid`), whose height
 //! is fixed, so `scale` is grid units per window pixel.
 
-use oag_input::touch::{self, Control, Touches};
+use oag_input::touch::{self, Control, GoZone, Touches};
 use oag_ui::frontend::{Align, Draw};
 
-const IDLE: [f32; 4] = [1.0, 1.0, 1.0, 0.08];
+/// Semi-transparent fills, stronger outlines, and a pressed state that is
+/// both brighter and a different colour. Chosen, not measured.
+const IDLE: [f32; 4] = [1.0, 1.0, 1.0, 0.12];
 const HELD: [f32; 4] = [0.3, 0.9, 1.0, 0.5];
-const EDGE: [f32; 4] = [1.0, 1.0, 1.0, 0.3];
-const LABEL: [f32; 4] = [1.0, 1.0, 1.0, 0.75];
+const EDGE: [f32; 4] = [1.0, 1.0, 1.0, 0.45];
+const EDGE_HELD: [f32; 4] = [0.6, 1.0, 1.0, 0.95];
+const LABEL: [f32; 4] = [1.0, 1.0, 1.0, 0.8];
+const DIVIDER: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
+const ZONE_LIT: [f32; 4] = [1.0, 0.75, 0.2, 0.6];
 const STICK_RING: [f32; 4] = [1.0, 1.0, 1.0, 0.22];
 const STICK_DOT: [f32; 4] = [1.0, 1.0, 1.0, 0.55];
 
 /// Border width in grid units.
-const BORDER: f32 = 1.0;
+const BORDER: f32 = 1.5;
 /// Label scale: the overlay's built-in glyphs are already small.
 const LABEL_SCALE: f32 = 1.0;
 /// Approximate cap height of the built-in face, in grid units, to centre a
 /// label vertically.
 const LABEL_HEIGHT: f32 = 8.0;
 
+fn text(x: f32, y: f32, text: &str) -> Draw {
+    Draw::Text {
+        x,
+        y,
+        scale: LABEL_SCALE,
+        color: LABEL,
+        border: None,
+        align: Align::Centre,
+        text: text.to_string(),
+        wrap_width: None,
+    }
+}
+
+fn fill(rect: [f32; 4], color: [f32; 4]) -> Draw {
+    Draw::Fill { rect, color }
+}
+
+/// GO's brake corners: a divider along the top of the bottom band and one
+/// either side of the dead centre column, an `L` and an `R` in the corners,
+/// and the corner a finger is in lit.
+fn go_zones(touches: &Touches, rect: [f32; 4], out: &mut Vec<Draw>) {
+    let [x, y, w, h] = rect;
+    let side = w * touch::GO_ZONE_SIDE;
+    let top = y + h * (1.0 - touch::GO_ZONE_BOTTOM);
+    let band = y + h - top;
+    for (zone, cell_x, word) in [(GoZone::Left, x, "L"), (GoZone::Right, x + w - side, "R")] {
+        if touches.zone_down(zone) {
+            out.push(fill([cell_x, top, side, band], ZONE_LIT));
+        }
+        out.push(text(
+            cell_x + side / 2.0,
+            top + (band - LABEL_HEIGHT) / 2.0,
+            word,
+        ));
+    }
+    out.push(fill([x, top, w, 1.0], DIVIDER));
+    out.push(fill([x + side, top, 1.0, band], DIVIDER));
+    out.push(fill([x + w - side, top, 1.0, band], DIVIDER));
+}
+
 /// Every control and the stick, for a window of `size` pixels, in a grid
-/// `scale` units per pixel. While `paused` the pause button reads RESUME.
+/// `scale` units per pixel. While `paused` the pause button reads RESUME;
+/// `zones` is whether GO carries its brake corners.
 #[must_use]
-pub fn draw(touches: &Touches, size: (f32, f32), scale: f32, paused: bool) -> Vec<Draw> {
+pub fn draw(
+    touches: &Touches,
+    size: (f32, f32),
+    scale: f32,
+    paused: bool,
+    zones: bool,
+) -> Vec<Draw> {
     let mut out = Vec::new();
     for (control, rect) in touch::layout(size) {
         let held = touches.is_down(control);
@@ -40,29 +92,26 @@ pub fn draw(touches: &Touches, size: (f32, f32), scale: f32, paused: bool) -> Ve
             rect.w * scale,
             rect.h * scale,
         );
-        out.push(Draw::Fill {
-            rect: [x, y, w, h],
-            color: EDGE,
-        });
-        out.push(Draw::Fill {
-            rect: [x + BORDER, y + BORDER, w - 2.0 * BORDER, h - 2.0 * BORDER],
-            color: if held { HELD } else { IDLE },
-        });
-        out.push(Draw::Text {
-            x: x + w / 2.0,
-            y: y + (h - LABEL_HEIGHT) / 2.0,
-            scale: LABEL_SCALE,
-            color: LABEL,
-            border: None,
-            align: Align::Centre,
-            text: if paused && control == Control::Pause {
-                "RESUME"
-            } else {
-                control.label()
-            }
-            .to_string(),
-            wrap_width: None,
-        });
+        out.push(fill([x, y, w, h], if held { EDGE_HELD } else { EDGE }));
+        out.push(fill(
+            [x + BORDER, y + BORDER, w - 2.0 * BORDER, h - 2.0 * BORDER],
+            if held { HELD } else { IDLE },
+        ));
+        let with_zones = zones && control == Control::Accelerate;
+        let label_h = if with_zones {
+            h * (1.0 - touch::GO_ZONE_BOTTOM)
+        } else {
+            h
+        };
+        let word = if paused && control == Control::Pause {
+            "RESUME"
+        } else {
+            control.label()
+        };
+        out.push(text(x + w / 2.0, y + (label_h - LABEL_HEIGHT) / 2.0, word));
+        if with_zones {
+            go_zones(touches, [x, y, w, h], &mut out);
+        }
     }
     if let Some((origin, at)) = touches.stick() {
         let radius = size.1 * touch::STICK_RADIUS * scale;
@@ -85,64 +134,4 @@ pub fn draw(touches: &Touches, size: (f32, f32), scale: f32, paused: bool) -> Ve
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SIZE: (f32, f32) = (2400.0, 1080.0);
-
-    #[test]
-    fn an_idle_overlay_draws_every_control_and_no_stick() {
-        let list = draw(&Touches::default(), SIZE, 272.0 / SIZE.1, false);
-        let texts = list
-            .iter()
-            .filter(|d| matches!(d, Draw::Text { .. }))
-            .count();
-        assert_eq!(texts, oag_input::touch::Control::ALL.len());
-        assert_eq!(list.len(), oag_input::touch::Control::ALL.len() * 3);
-    }
-
-    #[test]
-    fn a_held_control_draws_brighter_and_a_stick_adds_two_shapes() {
-        let scale = 272.0 / SIZE.1;
-        let idle = draw(&Touches::default(), SIZE, scale, false);
-        let mut touches = Touches::default();
-        let accel = touch::layout(SIZE)[0].1.centre();
-        touches.down(1, accel, SIZE);
-        touches.down(2, (300.0, 800.0), SIZE);
-        let list = draw(&touches, SIZE, scale, false);
-        assert_eq!(list.len(), idle.len() + 2);
-        let fill_alpha = |list: &[Draw], at: usize| match &list[at] {
-            Draw::Fill { color, .. } => color[3],
-            other => panic!("{other:?}"),
-        };
-        assert!(fill_alpha(&list, 1) > fill_alpha(&idle, 1));
-    }
-
-    #[test]
-    fn the_pause_button_says_resume_while_paused() {
-        let words = |paused: bool| {
-            draw(&Touches::default(), SIZE, 0.25, paused)
-                .into_iter()
-                .filter_map(|d| match d {
-                    Draw::Text { text, .. } => Some(text),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        assert!(words(false).contains(&"PAUSE".to_string()));
-        assert!(words(true).contains(&"RESUME".to_string()));
-        assert!(!words(true).contains(&"PAUSE".to_string()));
-    }
-
-    #[test]
-    fn everything_stays_inside_the_grid() {
-        let scale = 272.0 / SIZE.1;
-        let width = SIZE.0 * scale;
-        for draw in draw(&Touches::default(), SIZE, scale, false) {
-            if let Draw::Fill { rect, .. } = draw {
-                assert!(rect[0] >= 0.0 && rect[0] + rect[2] <= width + 0.01);
-                assert!(rect[1] >= 0.0 && rect[1] + rect[3] <= 272.01);
-            }
-        }
-    }
-}
+mod tests;
