@@ -553,6 +553,17 @@ values_from = "front_end_styles"
 # frame of latency, and 240 is the top of the tier displays are built at so it
 # caps nothing common while still bounding a menu page that would otherwise run
 # at four figures.
+# On by default (chosen, not measured): a race left running under an alt-tab, a
+# notification or the Steam Deck's overlay is a crash nobody saw. Off for a
+# player who keeps the game live on a second monitor. Minimising the window
+# pauses whatever this says.
+[[page.entry]]
+kind = "choice"
+label = "PAUSE ON FOCUS LOSS"
+string_id = "OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS"
+setting = "display.pause_on_focus_loss"
+values = ["on", "off"]
+
 [[page.entry]]
 kind = "choice"
 label = "VSYNC"

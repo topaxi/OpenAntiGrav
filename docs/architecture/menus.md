@@ -1821,3 +1821,10 @@ the `.fnt` a role names, with no preference for the language actually chosen,
 so a role whose file genuinely differs by plugin would draw whichever plugin
 happened to load first. Both now ask the chosen language's own slot before
 falling back to the scan.
+
+## PAUSE ON FOCUS LOSS
+
+`display.pause_on_focus_loss` (DISPLAY page, `on`/`off`, default `on`, chosen, not measured):
+whether a race pauses into its pause menu when the window loses focus. Minimising and Android
+`Suspended` pause whatever it says. See `docs/tools/android.md`, "Pausing when the window goes
+away".

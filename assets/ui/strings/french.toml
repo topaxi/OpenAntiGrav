@@ -210,6 +210,7 @@ ids = [
     # PC-specific graphics/display jargon - see this file's own header.
     "OAG_DISPLAY_FRONT_END_STYLE",
     "OAG_DISPLAY_VSYNC",
+    "OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS",
     "OAG_DISPLAY_FRAME_LIMIT",
     "OAG_GRAPHICS_RENDERER",
     "OAG_GRAPHICS_RENDER_SCALE",

@@ -29,6 +29,7 @@ use winit::window::WindowId;
 use crate::gpu::Gpu;
 use crate::hints;
 use crate::prepare;
+use crate::session::lifecycle::Away;
 use crate::session::{Session, Shell};
 use crate::stage::Stage;
 
@@ -134,6 +135,9 @@ pub(crate) struct App {
     /// back. Nothing is drawn meanwhile; the next `Resumed` rebuilds the
     /// surface. Only ever set on Android.
     pub(crate) suspended: bool,
+    /// The window is minimised or hidden (`Occluded(true)`, or a zero-sized
+    /// resize), as opposed to [`Self::suspended`], which Android sends.
+    pub(crate) occluded: bool,
 }
 
 impl App {
@@ -535,6 +539,11 @@ impl ApplicationHandler for App {
                         self.suspended = false;
                         let (width, height) = session.gpu.size();
                         session.resize(width, height);
+                        // A minimised desktop window never gets here, but a
+                        // resume on top of one would be wrong to restart.
+                        if !self.occluded {
+                            session.window_back();
+                        }
                     }
                     Err(e) => {
                         error!("{e:#}");
@@ -559,6 +568,9 @@ impl ApplicationHandler for App {
         if let Some(session) = self.state.as_mut() {
             session.controls.release_all();
             session.pointer.release();
+            // Home, app switch or screen off: the race parks in its pause
+            // menu and does not come back by itself, and the device stops.
+            session.window_away(Away::Suspended);
         }
     }
 
@@ -573,7 +585,18 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
 
-            WindowEvent::Resized(size) => session.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                let hidden = size.width == 0 || size.height == 0;
+                if hidden != self.occluded {
+                    self.occluded = hidden;
+                    if hidden {
+                        session.window_away(Away::Minimized);
+                    } else {
+                        session.window_back();
+                    }
+                }
+                session.resize(size.width, size.height);
+            }
 
             // A key held while the window loses focus is never seen to come up, and
             // the ship would keep turning while the player is elsewhere. A click
@@ -581,6 +604,20 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => {
                 session.controls.release_all();
                 session.pointer.release();
+                session.window_away(Away::FocusLost);
+            }
+
+            // Minimised or hidden, where winit reports it: pause the race and
+            // stop the device. Not reported by every backend (X11 has no such
+            // event), so a zero-sized resize, which Windows sends on minimise,
+            // counts too.
+            WindowEvent::Occluded(hidden) => {
+                self.occluded = hidden;
+                if hidden {
+                    session.window_away(Away::Minimized);
+                } else {
+                    session.window_back();
+                }
             }
 
             // The mouse and the touchscreen, latched for the tick loop - see

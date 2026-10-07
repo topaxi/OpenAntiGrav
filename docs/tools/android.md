@@ -291,6 +291,34 @@ down-positive), the merge and the hide-on-pad rule, all as unit tests, plus
 `adb shell input keyevent 96` (a `KEYCODE_BUTTON_A` from a fake source) driving the
 real event path and hiding the overlay. Not exercised: a physical pad, its axes.
 
+## Pausing when the window goes away
+
+Landed 2026-10-07 (auto-pause lane). All of it is **chosen, not measured**: no original
+title was observed on a phone, so there is nothing to match and no confidence score.
+
+- **Android `Suspended`** (home, app switch, screen off) parks a running race in the pause
+  menu through `Session::back`, the path the system Back key uses, and stops the audio
+  device (`Output::set_paused`, cpal's `Stream::pause`). `Resumed` restarts the device and
+  recreates the surface; **the race never resumes itself**, the player backs out of the pause
+  menu. Movies and menu music need no code: the loop does not tick while suspended, so a
+  tick-driven movie holds its frame and the mixer's ring fills and waits.
+- **Desktop** gets the same on a minimised window (`Occluded(true)`, or a zero-sized resize,
+  which is what Windows sends; X11 reports neither as an event, so it is covered only where
+  the platform sends one). Focus loss (`Focused(false)`: alt-tab, the Steam overlay on the
+  Deck, a shade pulled down on Android) pauses the race **only if `[display]
+  pause_on_focus_loss` is on**, a row on the DISPLAY page. Default **on**: an unseen race is
+  a crash and a lost lap, a paused one costs a press; a second-monitor player turns it off.
+  Focus loss leaves the audio running.
+- A run with no menus (`--race` windowed) freezes the tick the way Start does instead.
+  Nothing outside the input side changes, so a replay, a ghost or a state hash cannot tell.
+  Decision table: `session/lifecycle.rs` (unit tested).
+- Verified on Waydroid: race running (timer 0:13), `input keyevent 3` (HOME) logged
+  `window away (Suspended): Menu`, relaunch showed the root menu over the parked race, Back
+  resumed it from 0:16 with the timer running. **Not exercised:** the audio actually going
+  quiet (no listening allowed; `--no-audio` does not apply on Android, and the log showed no
+  `could not pause` warning), `Occluded` on a desktop (Xvfb has no compositor to send it),
+  the S24.
+
 ## Pre-converted caches
 
 `oag-game --no-audio --dry-run --prefetch <image>` is the headless
@@ -352,8 +380,8 @@ another owner leaves it) logs one warning and runs on defaults.
 - **Xclipse 940 (the S24's EU GPU, Samsung's Vulkan driver) is untested.** Expect
   surprises in present modes, `PRIMARY` backend adapter selection and the temporal
   upscaler's capability probe.
-- **Lifecycle polish.** Audio is not paused on `Suspended`; the race is not paused;
-  a rotation or a multi-window resize is untested.
+- **Lifecycle polish.** A rotation or a multi-window resize is untested, and
+  so is `Stream::pause` on the S24 (see the next section).
 - **ELF alignment.** NDK 27 links with 4 KB pages; a 16 KB-page device wants
   `-Wl,-z,max-page-size=16384`. `zipalign -P 16` is already applied to the archive.
 - **No `MANAGE_EXTERNAL_STORAGE` flow**, so images must be pushed with `adb`; a

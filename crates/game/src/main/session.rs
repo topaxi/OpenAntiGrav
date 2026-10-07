@@ -34,6 +34,8 @@ mod endrace;
 mod escape;
 #[path = "session/frame.rs"]
 mod frame;
+#[path = "session/lifecycle.rs"]
+pub(crate) mod lifecycle;
 #[path = "session/language.rs"]
 mod language;
 #[path = "session/launch2048.rs"]
