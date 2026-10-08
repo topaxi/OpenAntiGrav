@@ -500,6 +500,50 @@ def live_session():
     return None
 
 
+def control_call(path, **msg):
+    """One request to the `serve` process's control socket; returns the reply."""
+    import socket as _socket
+    sock = _socket.socket(_socket.AF_UNIX)
+    sock.settimeout(60)
+    sock.connect(path)
+    sock.sendall((json.dumps(msg) + "\n").encode())
+    reply = sock.makefile().readline()
+    sock.close()
+    parsed = json.loads(reply) if reply else {}
+    if not parsed.get("ok"):
+        if parsed.get("errno"):
+            raise OSError(parsed["errno"], parsed.get("error", ""))
+        raise RuntimeError("control socket refused %r: %s" % (msg, reply))
+    return parsed
+
+
+class RemoteMem:
+    """A read-only stand-in for `open("/proc/<pid>/mem", "rb", 0)`.
+
+    Yama (`ptrace_scope=1`) lets only an ancestor read an emulator's memory, and
+    a script attaching to `serve`'s emulator is not one; `serve` is, so it reads
+    on the script's behalf. `seek` and `read` are all the callers use.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.pos = 0
+
+    def seek(self, offset, whence=0):
+        self.pos = offset
+        return offset
+
+    def read(self, n):
+        import base64
+        reply = control_call(self.path, op="mem", offset=self.pos, n=n)
+        data = base64.b64decode(reply["data"])
+        self.pos += len(data)
+        return data
+
+    def close(self):
+        pass
+
+
 class RemotePad:
     """`rpcs3_pad.Pad`'s interface, spoken to the pad the `serve` process owns.
 
@@ -513,15 +557,7 @@ class RemotePad:
         self.held = set()
 
     def _call(self, **msg):
-        import socket as _socket
-        sock = _socket.socket(_socket.AF_UNIX)
-        sock.settimeout(30)
-        sock.connect(self.path)
-        sock.sendall((json.dumps(msg) + "\n").encode())
-        reply = sock.makefile().readline()
-        sock.close()
-        if not reply or not json.loads(reply).get("ok"):
-            raise RuntimeError("pad server refused %r: %s" % (msg, reply))
+        return control_call(self.path, **msg)
 
     def set(self, name, down):
         self._call(op="set", name=name, down=bool(down))
@@ -559,7 +595,7 @@ class AttachedProcess:
         pass
 
 
-def serve_pad(pad, path, stop):
+def serve_pad(pad, path, stop, mem=None):
     """Answer `RemotePad` calls until `stop` is set. One thread per request so a
     long `press` never blocks a concurrent `release_all`."""
     import socket as _socket
@@ -568,6 +604,7 @@ def serve_pad(pad, path, stop):
         os.unlink(path)
     except OSError:
         pass
+    mem_lock = threading.Lock()
     server = _socket.socket(_socket.AF_UNIX)
     server.bind(path)
     server.listen(8)
@@ -577,6 +614,7 @@ def serve_pad(pad, path, stop):
         try:
             msg = json.loads(conn.makefile().readline())
             op = msg["op"]
+            reply = {"ok": True}
             if op == "set":
                 pad.set(msg["name"], msg["down"])
             elif op == "press":
@@ -585,7 +623,14 @@ def serve_pad(pad, path, stop):
                 pad.stick(msg["x"], msg["y"], msg.get("right", False))
             elif op == "release_all":
                 pad.release_all()
-            reply = {"ok": True}
+            elif op == "mem":
+                import base64
+                with mem_lock:
+                    mem.seek(msg["offset"])
+                    data = mem.read(msg["n"])
+                reply = {"ok": True, "data": base64.b64encode(data).decode()}
+        except OSError as exc:
+            reply = {"ok": False, "error": str(exc), "errno": exc.errno}
         except Exception as exc:
             reply = {"ok": False, "error": str(exc)}
         try:
@@ -756,6 +801,14 @@ class Session:
         `cross` on `Main Menu` is `walk_to_race`'s first step, not this one's.
         """
         deadline = time.time() + timeout
+        if self.attach and name == "Main Menu":
+            # An attached emulator is wherever the last script left it. Anywhere
+            # in the front end, `walk_to_race` carries on from there (it presses
+            # cross on whatever screen it finds), so only a race needs leaving.
+            if self.in_race():
+                self.leave_race()
+            if current_screen() not in ("?", "Top"):
+                return True
         while time.time() < deadline:
             if self.note_screen() == name:
                 return True
@@ -863,6 +916,72 @@ class Session:
             else:
                 self.tap(button, settle=1.2)
             print("    nav %-8s at %s" % (button, current_screen()), flush=True)
+
+    #: The pause menu's rows, measured 2026-10-08 (the `View Invites` row is
+    #: disabled and skipped by the d-pad): Continue is the default, then
+    #: `down` x5 is Restart Race and x6 is Quit Race.
+    PAUSE_RESTART_DOWNS = 5
+    PAUSE_QUIT_DOWNS = 6
+    IN_RACE_SCREENS = ("InGame", "HUD", "InGame Pause SP")
+
+    def in_race(self):
+        return current_screen() in self.IN_RACE_SCREENS
+
+    def _pause_choose(self, downs):
+        if current_screen() != "InGame Pause SP":
+            self.pad.press("start", 0.15)
+            deadline = time.time() + 8
+            while time.time() < deadline and current_screen() != "InGame Pause SP":
+                time.sleep(0.3)
+        time.sleep(0.8)
+        for _ in range(downs):
+            self.pad.press("down", 0.12)
+            time.sleep(0.5)
+        self.pad.press("cross", 0.15)
+
+    def restart_race(self, timeout=120.0):
+        """Pause menu -> Restart Race, and wait for the reload. The same grid
+        and team again with no boot, no menu walk and no new track load from
+        disc: back at the fly-over with its START RACE prompt, as after
+        `wait_for_load`. Returns the seconds it took."""
+        began = time.time()
+        text = tty_text()
+        welcomes = text.count("Play welcome")
+        if self.guard is not None:
+            self.guard.stage("loading", limit=timeout + 30)
+        self._pause_choose(self.PAUSE_RESTART_DOWNS)
+        while time.time() - began < timeout:
+            if tty_text().count("Play welcome") > welcomes:
+                time.sleep(2.0)
+                took = time.time() - began
+                print("  restarted the race in %.0f s" % took, flush=True)
+                if self.guard is not None:
+                    self.guard.stage("capture")
+                return took
+            time.sleep(0.5)
+        raise RuntimeError("Restart Race did not reload within %.0f s (screen %s)"
+                           % (timeout, current_screen()))
+
+    def leave_race(self, timeout=40.0):
+        """Pause menu -> Quit Race: lands on `Cell Selection` of the same grid,
+        from where `walk_to_race` is three presses to the next race."""
+        began = time.time()
+        self._pause_choose(self.PAUSE_QUIT_DOWNS)
+        while time.time() - began < timeout:
+            if not self.in_race() and current_screen() != "?":
+                time.sleep(2.0)
+                print("  left the race to %r in %.0f s"
+                      % (current_screen(), time.time() - began), flush=True)
+                return current_screen()
+            time.sleep(0.5)
+        raise RuntimeError("Quit Race stayed on %r" % current_screen())
+
+    def open_mem(self):
+        """The emulator's `/proc/<pid>/mem`, or a stand-in that reads it through
+        `serve` when attached (ptrace_scope forbids a non-ancestor)."""
+        if self.attach:
+            return RemoteMem(read_session()["socket"])
+        return open("/proc/%d/mem" % self.proc.pid, "rb", 0)
 
     def race_loaded(self):
         """Whether the track that started loading last has finished.
@@ -996,7 +1115,9 @@ def cmd_serve(args):
                 "image": str(session.image), "started": time.time()}
         Path(SESSION_FILE).write_text(json.dumps(info))
         thread = threading.Thread(target=serve_pad,
-                                  args=(session.pad, CONTROL_SOCKET, stop), daemon=True)
+                                  args=(session.pad, CONTROL_SOCKET, stop,
+                                        open("/proc/%d/mem" % session.proc.pid, "rb", 0)),
+                                  daemon=True)
         thread.start()
         session.guard.stage("serving", limit=10 ** 9)
         print("serving: Main Menu reached; attach with OAG_RPCS3_ATTACH=1 "
@@ -1023,6 +1144,30 @@ def cmd_status(args):
     print("live: emulator %d, serve %d, up %.0fs, screen %s"
           % (info["emulator_pid"], info["serve_pid"],
              time.time() - info["started"], current_screen()))
+    return 0
+
+
+def cmd_press(args):
+    """Tap buttons on the live session, optionally photographing after each.
+
+    `press start down down cross --wait 1.5 --shot-dir D` - the way to find a
+    menu's rows on the running emulator without a boot per try. Prints the
+    screen name after every press.
+    """
+    info = live_session()
+    if info is None:
+        print("no live session; start one with `serve`", file=sys.stderr)
+        return 1
+    pad = RemotePad(info["socket"])
+    for index, button in enumerate(args.buttons):
+        pad.press(button, 0.15)
+        time.sleep(args.wait)
+        shot = None
+        if args.shot_dir:
+            Path(args.shot_dir).mkdir(parents=True, exist_ok=True)
+            shot = screenshot(Path(args.shot_dir) / ("%02d-%s.png" % (index, button)),
+                              trim=True)
+        print("%-10s -> %s %s" % (button, current_screen(), shot or ""), flush=True)
     return 0
 
 
@@ -2017,6 +2162,11 @@ def main(argv=None):
     serve = sub.add_parser("serve", help="boot once and stay up for attaching scripts")
     serve.add_argument("--timeout", type=float, default=240.0)
     serve.set_defaults(run=cmd_serve)
+    press = sub.add_parser("press", help="tap buttons on the live session")
+    press.add_argument("buttons", nargs="+")
+    press.add_argument("--wait", type=float, default=1.5)
+    press.add_argument("--shot-dir", default="")
+    press.set_defaults(run=cmd_press)
     sub.add_parser("status", help="the live serve session, if any").set_defaults(
         run=cmd_status)
 

@@ -104,7 +104,7 @@ def main():
         ship, _body = place.find_player(gdb)
         slot = struct.unpack(">I", gdb.read(ship + poll.SLOT_OFFSET, 4))[0]
         gdb.resume()
-        mem = open("/proc/%d/mem" % session.proc.pid, "rb", 0)
+        mem = session.open_mem()
 
         def read(addr, n):
             mem.seek(poll.GUEST_BASE + addr)

@@ -42,7 +42,7 @@ class Proxy:
         self.stop = threading.Event()
         self.clients = 0
 
-    def connect_upstream(self, tries=20):
+    def connect_upstream(self, tries=90):
         last = None
         for _ in range(tries):
             try:

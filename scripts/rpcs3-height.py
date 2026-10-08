@@ -73,7 +73,7 @@ def main():
         (out / "rpcs3.pid").write_text("%d\n" % session.proc.pid)
         if not session.wait_for_screen_pressing("Main Menu", 240):
             sys.exit("never reached the Main Menu")
-        time.sleep(20)
+        session.settle_menu(20)
         gdb = Debugger(port=port)
         tr.set_pilot_assist(gdb, False)
         session.screens_seen = set()
@@ -126,7 +126,7 @@ def main():
         if ship is None:
             sys.exit("no player craft")
         print("player found %.1f s after race arrival" % (time.time() - t0), flush=True)
-        guest = tr.Guest(session.proc.pid)
+        guest = tr.Guest(session.proc.pid, session.open_mem())
         world = tr.find_world(guest, body)
         objs = {"world": (world, 0x50), "body": (body, 0x210), "entry": (entry, 0x600),
                 "ship": (ship, 0x200)}

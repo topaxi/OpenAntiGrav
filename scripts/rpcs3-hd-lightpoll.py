@@ -37,7 +37,7 @@ with drive.Session(IMAGE, str(OUT / 'logs')) as session:
     g = Debugger(port=port)
     g.pause(); ship, body = place.find_player(g)
     slot = u32(g, ship + 0x5edc); g.resume()
-    mem = open('/proc/%d/mem' % session.proc.pid, 'rb', 0)
+    mem = session.open_mem()
     def rd(a, n):
         mem.seek(GUEST + a); return mem.read(n)
     def snap():
