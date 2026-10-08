@@ -107,6 +107,8 @@ const PLASMA_HALO: Shape = Shape {
 const ALPHA_ANIM: u32 = 0x1d1b_5e79;
 /// `ColourAnim`, bound by pointer to a float of the blast object itself.
 const COLOUR_ANIM: u32 = 0x2eb8_d703;
+/// `Speed`, the halo's vertex-side `v` offset (`vp @0x1860`: `ADD o[TC1].w, v[2].y, c[208].x`).
+pub(super) const HALO_V_OFFSET: u32 = 0x3118_2e0d;
 /// `Shockwave_scalar`, bound by pointer to the model's own clock.
 const SHOCKWAVE_SCALAR: u32 = 0x3b5f_3bd7;
 
@@ -145,6 +147,25 @@ const BOMB_FIRE: Shape = Shape {
         GLOBAL_ALPHA_SCALER,
         TIME,
     ],
+};
+
+/// `hd_bomb_halo.rcsmaterial`, block `@0x19c0` (`DATA02`): the laid Bomb's
+/// pulsing shell, a Fresnel rim over a 4x16 ramp. Earns [`slots::BOMB_HALO`].
+const BOMB_HALO: Shape = Shape {
+    bit: slots::BOMB_HALO,
+    mnemonics: &[
+        "MOV", "DP3", "MOV", "DP3", "DP3", "MUL", "MUL", "MOV", "DIVSQ", "MOV", "MUL", "ADD",
+        "TEX", "MAD", "LG2", "MUL", "MUL", "EX2", "ADD", "MUL", "MUL", "EX2", "MUL", "MOV", "MUL",
+        "MAD", "MAD",
+    ],
+    literals: &[
+        [1.0, 0.0, 0.0, 0.0],
+        [10.0, 0.0, 0.0, 0.0],
+        [50.0, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.099_975_586],
+    ],
+    parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
 };
 
 /// `hd_bombfire_shockwaves_glow.rcsmaterial`, block `@0x1950` (`DATA02`): the
@@ -234,6 +255,7 @@ pub(super) fn classify(
         &PLASMA_HALO,
         &BOMB_FIRE,
         &BOMB_SHOCK,
+        &BOMB_HALO,
     ] {
         let mut wanted = shape.parameters.to_vec();
         wanted.sort_unstable();

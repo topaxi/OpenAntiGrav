@@ -303,6 +303,10 @@ pub struct HdBombBlast {
     pub bloom_ring: &'static str,
     /// `Data\Weapons\hd_bomb_shockwaves.vex`, one ring's mesh.
     pub shockwaves: &'static str,
+    /// `Data\Weapons\HD_bomb_halo.vex`, the *laid* bomb's pulsing shell
+    /// (`NormalBomb`'s second model, not the blast's). It rides this struct
+    /// because HD is the only title that has one.
+    pub halo: &'static str,
 }
 
 /// Pulse's own Bomb-blast pair, in `BombBlast_Construct`'s load order - see

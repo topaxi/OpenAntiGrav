@@ -33,18 +33,19 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
 Recipe in `docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon" (`scripts/rpcs3-hd-weapon.py`),
 findings in `weapons.md` last section. Open from it:
 
-- **`HD_bomb_halo` is not drawn; its law now agrees with the film (2026-10-07, `hd-bomb-match`).** The
-  period was read on the HUD clock; in recorder time it is 0.496 s against the law's 0.5 s (conf 80 for
-  the period). What is missing is the **fragment program**, not the law: `hd_bomb_halo.rcsmaterial`'s
-  lit-race block `@0x19c0` is a Fresnel shell, `rim = sat(1 - N.V)`, a 4x16 ramp texture
-  (`pulse_bombflash_glow`) sampled at the vertex program's `(TC0.w, TC1.w)`, alpha
-  `5 ta^2 rim^(10 - 10 ta)` (`ta` the ramp's alpha), then fogged; it needs a `Shape` in
-  `mesh/rcs/rim_glow.rs`, a `shade.wesl` branch and the vertex program's UV read, as `BOMB_FIRE` had.
-  The pool, the law (`halo_scale(age)`), the per-bomb matrix and the draw call are written and
-  tested against the generic lit program, which draws nothing visible: saved as
-  `data/scratch/hd-bomb-match/halo-wiring-unfinished.patch` (also carries two debug lines to drop).
-  The steady outer ring in the film is probably the sawtooth's end of cycle plus `hd_bomb.vex`'s own sixth
-  chunk (same material), unconfirmed.
+- **`HD_bomb_halo` is drawn (2026-10-08, `hd-bomb-halo`).** `BOMB_HALO` (bit 21), the Fresnel shell's
+  `shade.wesl` branch, the vertex program's `+ Speed` folded into `v` at load, the pool and the per-bomb
+  matrix (`halo_scale(age)`, period 0.5 s). `hd_bomb.vex`'s own sixth chunk earns the same bit, which is
+  the film's steady inner ring. Open: the film's white disc at the sawtooth reset (about 0.1 s every
+  0.5 s) is not reproduced - the ramp's row 0 is opaque white and may be what makes it, but the shell's
+  `v` range was not measured against that row; a halo-only film frame at the reset is the next check.
+  The ramp's row selection assumes a repeat sampler in `v` (the film's ring needs it; the material's own
+  sampler state is unread).
+- **The white core's draw is unconditional on the executable** (2026-10-08): `NormalBombBlast_Draw`
+  (`0x001512f8`) calls the set-matrix on `+0x2e4`, `+0x2e8` and `+0x2ec` in a row with no eye or age test
+  (only the viewport picks which of two matrices). So the film's marbled frames with the eye inside are
+  not "the core is skipped"; the difference is in the model's flags (`0x00151538` ORs 4 into the first
+  four) or render state (depth write, cull) that this draw does not touch. Open, not changed.
 - **The owner's trip window** is Pulse's 0.5 s (see the capture page), not 0.35 s; our trip excludes the owner
   for ever. Simulation, queued.
 - **The matched detonation, done as far as a pinned camera goes** (`weapons.md`, `hd-bomb-match`

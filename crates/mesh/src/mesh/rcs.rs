@@ -806,7 +806,23 @@ fn build_with_options(
                 };
 
                 let normals = mesh.normals(model_blob, submesh, stride).ok();
-                let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+                let mut texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
+                // **The halo's vertex program adds an authored `Speed` to `v`**
+                // (`ADD o[TC1].w, v[2].y, c[208].x`, no clock in it): the
+                // ramp's row is picked by that sum under a repeat sampler.
+                if surface.roles & slots::BOMB_HALO != 0 {
+                    let offset = model
+                        .material_of(mesh)
+                        .and_then(|m| {
+                            m.parameters
+                                .iter()
+                                .find(|p| p.hash == rim_glow::HALO_V_OFFSET)
+                        })
+                        .map_or(0.0, |p| p.value[0]);
+                    for uv in texcoords.iter_mut().flatten() {
+                        uv[1] += offset;
+                    }
+                }
                 let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
                 // **The Bomb's shockwave carries its two colours inline** -
                 // `[a.rgb, b.a]`, which its program multiplies in and takes
