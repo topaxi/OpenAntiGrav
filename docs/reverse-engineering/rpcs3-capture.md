@@ -1106,3 +1106,9 @@ the craft's own ground distance is `entry+0x260`. Results: [hd-ride-height.md](.
 It guards the walk's last cross press (a press on the `START RACE` prompt skips the flyby) and exits
 when the first reading says the craft is already at hover height. `rpcs3-drive.py stop` is `pkill -x`:
 not used.
+
+`rpcs3-height.py --count-secs N` (2026-10-08, `hd-flyby-hover`) samples the countdown instead of
+sleeping through it: phase `count`, each row with `since_tap`, a frame every `--count-shot-every`
+samples. Each sample reads the screen name, which costs about 1.3 s with a frame and 0.1 s without;
+align on the craft's own clock (`entry+0x348`, game seconds since the grid state ended) rather than the
+wall time, and read the entry state `+0x2f8` for the flip. It needs `uv run --with evdev`.

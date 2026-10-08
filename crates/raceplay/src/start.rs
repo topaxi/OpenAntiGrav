@@ -53,6 +53,7 @@ impl Race {
             class_announcer,
             zone_stages,
             countdown_voice,
+            launch_hover,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -167,7 +168,14 @@ impl Race {
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.
-        let base = spawn_pose(&spline, start_position.as_ref(), &collision, &handling);
+        let grid_cap = launch_hover.map(|hover| hover.grid_cap.value);
+        let base = spawn_pose(
+            &spline,
+            start_position.as_ref(),
+            &collision,
+            &handling,
+            grid_cap,
+        );
         // Pulse PSP lays its grid out the way `Race_ComputeGridLayout` does: a walk of the
         // located curve, not of resampled samples. `None` where the track has no node, off
         // a PSP Pulse disc, or where the node is not on the track it locates (one circuit,
@@ -216,7 +224,7 @@ impl Race {
                     base,
                     &spline,
                     &collision,
-                    spawn_height(&handling),
+                    capped_spawn_height(&handling, grid_cap),
                     grid_frame_from_sample,
                     walked.as_ref(),
                 )[0]
@@ -232,7 +240,7 @@ impl Race {
                 base,
                 &spline,
                 &collision,
-                spawn_height(&handling),
+                capped_spawn_height(&handling, grid_cap),
                 grid_frame_from_sample,
                 walked.as_ref(),
             )[GRID_SLOTS as usize - 1]
@@ -305,7 +313,7 @@ impl Race {
                 base,
                 &spline,
                 &collision,
-                spawn_height(&handling),
+                capped_spawn_height(&handling, grid_cap),
                 grid_frame_from_sample,
                 walked.as_ref(),
             );
@@ -454,6 +462,7 @@ impl Race {
                 last_on_track,
                 zone_stages,
                 countdown_voice,
+                launch_hover,
                 autopilot: false,
                 cues: Vec::new(),
                 announcements: Vec::new(),

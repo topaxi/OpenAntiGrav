@@ -350,6 +350,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     sounds: &SOUNDS,
     zone_announcer: None,
     countdown_voice: None,
+    launch_hover: None,
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,

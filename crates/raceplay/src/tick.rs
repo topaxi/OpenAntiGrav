@@ -88,6 +88,7 @@ impl Race {
             ship.physics.released = released;
             ship.physics.four_corner = four_corner;
         }
+        self.set_hover_caps();
         // The one craft a person is flying this tick. `0` under
         // `World::SINGLE_PLAYER`, which is every session this engine starts, so
         // reading it changes nothing and hard-coding it would have cost the
