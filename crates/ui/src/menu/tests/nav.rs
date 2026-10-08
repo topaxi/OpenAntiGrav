@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::menu::nav::Nav;
+use crate::menu::pointer;
 
 fn navs(menu: &mut Menu, buttons: &[Button]) -> Vec<Nav> {
     press(menu, buttons);
@@ -44,4 +45,41 @@ fn a_press_that_changes_nothing_makes_no_sound() {
         "a one-row page has nowhere to move"
     );
     assert!(navs(&mut menu, &[Button::Left]).is_empty());
+}
+
+fn two_rows() -> Vec<pointer::Region> {
+    [0, 1]
+        .map(|row| pointer::Region {
+            rect: [0.0, row as f32 * 20.0, 100.0, 18.0],
+            row,
+            part: pointer::Part::Row,
+        })
+        .to_vec()
+}
+
+fn pointer_nav(menu: &mut Menu, pointer: &crate::pointer::Pointer) -> Vec<Nav> {
+    menu.pointer(pointer, &two_rows());
+    menu.take_nav()
+}
+
+#[test]
+fn hovering_sounds_once_per_row_and_a_click_on_a_submenu_accepts() {
+    let mut menu = Menu::new(fixture());
+    let over = |row: f32| crate::pointer::Pointer {
+        at: Some((10.0, row * 20.0 + 5.0)),
+        moved: true,
+        ..Default::default()
+    };
+    assert_eq!(pointer_nav(&mut menu, &over(1.0)), [Nav::UpDown]);
+    assert!(
+        pointer_nav(&mut menu, &over(1.0)).is_empty(),
+        "the same row again is not another move"
+    );
+    assert_eq!(pointer_nav(&mut menu, &over(0.0)), [Nav::UpDown]);
+    let click = crate::pointer::Pointer {
+        clicked: true,
+        ..over(0.0)
+    };
+    assert_eq!(pointer_nav(&mut menu, &click), [Nav::Accept], "OPTIONS");
+    assert_eq!(menu.page().id, "options");
 }

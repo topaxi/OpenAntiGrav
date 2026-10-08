@@ -563,9 +563,10 @@ pub enum Cue {
     /// it does not follow it. See [`Self::MenuUpDown`].
     MenuDecline,
     /// A line of text typing in: `"TELETYPE"`, one waveform at 48,051 Hz.
-    /// `FUN_088b6514` plays it per character with an extra argument not
-    /// identified here, so nothing in this port fires it yet: it is declared
-    /// so the bank load reports it, and is not in [`Self::FRONT_END`].
+    /// `FUN_088b6514` plays it per character, pitched by the glyph's measured
+    /// width (`(width / 100 - 1) * 0.2 * 90`). Nothing in this port types text
+    /// in, so it is declared with its name and bank and neither loaded nor
+    /// fired: it is not in [`Self::FRONT_END`].
     MenuTeletype,
 }
 

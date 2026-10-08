@@ -94,6 +94,6 @@ lines are plain named cues in a bank this port does not load; they are the next 
 `oag_sound::sfx::Cue::MenuUpDown`, `MenuLeftRight`, `MenuAccept`, `MenuDecline` (bank `BankName::Frontend`, named by
 `oag_title::SoundBanks::frontend`, `Some` on Pulse and Pure only) and `oag_ui::menu::nav::Nav`, which the main menu,
 the selection screens, the campaign screens and the EndRace menu raise. Chosen, not measured, and scored nowhere:
-pointer hover and click use the pad's cues; `LEFTRIGHT` on confirming a toggle (the original has no confirm-steps-
+pointer hover and click use the pad's cues (hover sounds once per row change); `LEFTRIGHT` on confirming a toggle (the original has no confirm-steps-
 value); `DECLINE` on closing the root menu. Pure's triggers are Pulse's read applied (Pure's executable carries the
 same six names, minus `PAUSE`, but its call sites were not read).

@@ -13,7 +13,10 @@ race-box selection screens, the campaign screens and the EndRace menu now play `
    saturate the 16-bit output on Pulse at the default level (the bank is authored hot and the mixer clamps as the
    hardware does).
 2. **The session's play path has no test of its own.** `Session::play_navs` lives in the binary; the ground truth
-   drives the same `Menu`, `take_nav`, `menu_cue` and `MenuSfx::play` and not the frame loop's call to it.
+   drives the same `Menu`, `take_nav`, `menu_cue` and `MenuSfx::play`. It was run once for real: a windowed
+   `oag-game --no-audio` in a private Xvfb, keys injected with `xdotool`, the log showing the four `sfx:` load lines at
+   boot and `menu sound: UPDOWN/ACCEPT/DECLINE/LEFTRIGHT (started: true)` for Down, Return on a submenu, BackSpace
+   and Right on a choice. Dropping the call in `frame.rs` or the load in `prepare.rs` would only show there.
 3. **Not wired, recovered:** `TELETYPE` (needs a text-reveal effect; the pitch argument is `(width/100 - 1) * 0.2 * 90`),
    the place lines (`FIRST_PLACE` ...) and medal lines (`gold_med` ...) from `speech_results.bnk` on EndRace, which are
    plain named cues in a bank the port does not load.
@@ -21,9 +24,11 @@ race-box selection screens, the campaign screens and the EndRace menu now play `
    the selection screens). The selector is `FUN_0898dac0(slot, value)` writing a 32-byte table; which guard reads it
    is not followed. A pick by index would be an invention.
 5. **Confirm dialogs, the on-screen keyboard, the language picker, the boot front end and the pause menu's own
-   `ConfirmButton`s** raise no sound: only the screens above were routed. Campaign Confirm on a locked cell plays
-   `ACCEPT` before the refusal line shows (the original plays `DECLINE`); left alone because the launch path is
-   `hd-campaign`'s.
+   `ConfirmButton`s** raise no sound: only the screens above were routed. A locked tier or cell on the campaign
+   screens plays `DECLINE` (`Session::campaign_nav`, read-only on `handle_campaign`'s own refusal tests, the one line
+   of `campaign.rs` this lane touched). A launch the campaign then refuses (`launch_campaign_cell`'s notice) is
+   silent. The campaign grids never move onto an empty cell, so the original's `DECLINE`-instead-of-`UPDOWN` move has
+   no counterpart.
 6. **Chosen, not measured:** pointer hover and click use the pad's cues; confirming a toggle row plays `LEFTRIGHT`;
    closing the root menu plays `DECLINE`; `Results` and `Rewards` advancing plays `ACCEPT`. The widget flag `+0x269`
    (silences `ACCEPT`) was not swept, so a few original buttons that stay silent here make a sound.

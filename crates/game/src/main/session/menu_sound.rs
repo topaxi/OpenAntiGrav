@@ -5,9 +5,13 @@
 //! `oag_ui::menu::nav` and the screens' `Event::nav` do - so a title without a
 //! front-end bank plays nothing without a branch of its own.
 
+use log::debug;
 use oag_ui::menu::nav::Nav;
+use oag_ui_screens::campaign::Event;
 
 use super::Session;
+use crate::campaign_stage::Screen;
+use crate::stage::Stage;
 
 impl Session {
     /// Starts the cue for each of `navs`, oldest first.
@@ -20,7 +24,25 @@ impl Session {
             return;
         };
         for nav in navs {
-            sfx.play(&self.audio, oag_game::sound::menu_cue(nav));
+            let cue = oag_game::sound::menu_cue(nav);
+            let started = sfx.play(&self.audio, cue);
+            debug!("menu sound: {} (started: {started})", cue.name());
         }
+    }
+
+    /// The sound a campaign event calls for: [`Event::nav`], except that a
+    /// confirm the screen is about to refuse (a locked tier or cell) is
+    /// `DECLINE`, as `ConfirmButton_Update`'s refused confirm is. Reads the
+    /// refusal the way `handle_campaign` makes it and decides nothing.
+    pub(crate) fn campaign_nav(&self, event: Event) -> Option<Nav> {
+        let refused = event == Event::Confirmed
+            && matches!(&self.stage, Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
+                |campaign| match &campaign.screen {
+                    Screen::Grid(model) => !campaign.grid_is_unlocked(model.index()),
+                    Screen::Cell { model, .. } => model.selected_is_locked(),
+                    Screen::Selection(_) => false,
+                }
+            ));
+        if refused { Some(Nav::Decline) } else { event.nav() }
     }
 }
