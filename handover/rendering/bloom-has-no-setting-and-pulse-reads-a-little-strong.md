@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Bloom has no setting; Pulse PSP's racing strength is read, and the 1.2-1.6x is retracted
+# Bloom has no setting; Pulse PSP's racing strength is read, and the 1.2-1.6x is not reproduced
 
 2026-10-02, `bloom-setting` lane and the maintainer's ruling the same day. The
 maintainer, playing Pulse: bloom "was VERY strong". Ours was 4.4-5.7x the
@@ -17,15 +17,16 @@ one. `Graphics::bloom` is removed; a settings file that still says
 `bloom = false` is ignored on read (serde skips the unknown key) and the key
 disappears on the next save.
 
-## 2026-10-08, `bloom-racing`: the 1.2-1.6x is retracted
+## 2026-10-08, `bloom-racing`: the 1.2-1.6x is not reproduced
 
 Read off the original's own scratch buffers (`scripts/psp-trace.py
 --edram-every`, composite poked off, `scripts/psp-bloom-chain.py`), full account in
 `docs/ghidra/functions/psp-pulse-usa/bloom.md`, "Racing strength against the
 original's own scratch buffers". **Done**: the chain is exact (the model on the
 original's framebuffer lands on its A; ours is the model to 1 % on 13 frames);
-the old figure was a posing artefact (`--pose-boost 10` saturates a low
-intensity) plus a poke-and-control subtraction on a near-zero frame. Landed:
+the old figure's cause is not identified (its capture was at intensity `1`,
+so `--pose-boost 10` is not it; its poke-and-control subtraction carried
+`+-0.4` luma on a number near 1). Landed:
 the blur tap is `(v * (w + 1)) >> 8` and the composite truncates (both
 measured), the ribbon stamps one byte per segment (`trail_stencil`, `114/102`
 measured). Talon's Junction ours/original `0.96-1.08` over seven poses, Moa
@@ -36,9 +37,11 @@ matched captures.
 
 **Open.** (1) The bright pass sampling phase: the model lands within 0.2-5 % of
 the original's A and the leftover is at lit edges and the craft. (2) The
-original's bright pass reads the HUD's pixels; ours does not. (3) Moa Therma
-needs a pose that starts its animated emissives at the trace's own clock, or a
-run that is not posed, before `1.15` can be called scene rather than a term.
+original's bright pass reads the HUD's pixels; ours does not. (3) Moa Therma: ours' glow surfaces read 8-50 % brighter under the mask in
+motion (six of six frames, still so with a 4-tick lag correction) and equal at a
+static pose (`0.99-1.01`); needs an unposed run or a pose that starts the
+animated emissives at the trace's clock, and a look at what the original does
+to the picture at speed (its foreground reads smeared at 300 km/h).
 (4) The ribbon shows segment 2 in ours at the chase framing and the original
 only segments 0 and 1: the screen length of the ribbon. (5) Whether a racing
 frame on a second circuit has any full-screen pass after the composite (one

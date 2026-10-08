@@ -648,9 +648,11 @@ the cold flare). There was no scaling bug to fix.
 over the frame and about `1.3x` around the craft (`8.6-9.3` against `6.0-7.3`).
 The flare and the plume are the candidates (their drawn size and mask ramp at
 `flare_speed_kmh` 85 are the things this did not vary); unexplained, and not
-chased here. **Retracted 2026-10-08**: read off the original's own scratch
-buffers the excess is not there, and it was a posing and subtraction artefact;
-see [Racing strength against the original's own scratch buffers](#racing-strength-against-the-originals-own-scratch-buffers-2026-10-08).
+chased here. **Not reproduced 2026-10-08**: read off the original's own scratch
+buffers, at that capture's own regime (82-87 km/h, intensity `1`) ours adds
+`0.98-1.00` of the original's light over the frame on Talon's Junction; the old
+figure's cause is not identified (its poke-and-control subtraction carried
+`+-0.4` luma on a number near 1); see [Racing strength against the original's own scratch buffers](#racing-strength-against-the-originals-own-scratch-buffers-2026-10-08).
 
 **Correction, same day.** The first version of this section measured ours with
 the exhaust cold (`--pose-from` at `--ticks 1` starts the flare at intensity
@@ -787,8 +789,8 @@ Scripts and frames: `data/scratch/zone-bloom/` (`zalt.sh`, `alta.py`,
 ## Racing strength against the original's own scratch buffers (2026-10-08)
 
 Lane `bloom-racing`, maintainer's brief: "bloom is in but still 1.2-1.6x the
-original's strength at a matched racing pose". **Result: the 1.2-1.6x does not
-survive a direct readout. No recovered term of the chain differs; two small
+original's strength at a matched racing pose". **Result: the 1.2-1.6x is not
+reproduced by a direct readout. No recovered term of the chain differs; two small
 arithmetic details and one mask law were fixed.**
 
 **Falsifiers, written before capturing.** (1) *Mask*: if the original's glow
@@ -834,8 +836,9 @@ on-minus-off difference to within 1 % on all 13 frames of both circuits
 (central band, HUD corners and craft excluded).
 
 **2. The composite truncates (confidence 75).** `pre + floor(bilinear(A) * 175
-/ 255)` is exact on 75 % of pixels against 8 % for the unrounded value, on a
-start-line pair whose scene was not quite static (so 75 % is a floor). Ours
+/ 255)` is exact on `75-77 %` of pixels against `51-53 %` for round-to-nearest
+and `16 %` for ceiling, on four on/off pairs at the Moa start line whose scene
+was not quite static (so `75 %` is a floor). Ours
 rounded to nearest, which keeps every fraction at or above a half; `bloom.wesl`
 now truncates. Measured size on the original's own A: round over truncate is
 `1.00-1.02`, so this is not the excess either.
@@ -850,13 +853,17 @@ truncated per-segment byte on every vertex of the segment, which is what
 as flat plateaus; the plateau areas differ (ours has more of segment 2 on
 screen, a ribbon-geometry question for `exhaust.md`, not read here).
 
-**4. The 1.2-1.6x was a posing artefact (confidence 80).** `--pose-boost 10`
-advances the exhaust ten seconds at `0.25`/s from the given intensity, so every
-low-intensity pose ran **saturated**: ours' ribbon mask read `~95` at a trace
-intensity of `0.16` where the original reads `18`. With `--pose-boost 0` and the
-trace's own intensity ours reads `14-19`. The same pose, tick 40 on Talon's
-Junction, moves the craft-box ratio from `1.54` to `0.99` and the whole frame from
-`1.21` to `1.07`.
+**4. A posing trap, and what it does and does not explain (confidence 80 for
+the trap).** `--pose-boost 10` advances the exhaust ten seconds at `0.25`/s from
+the given intensity, so a low-intensity pose runs **saturated**: ours' ribbon
+mask read `~95` at a trace intensity of `0.16` where the original reads `18`;
+with `--pose-boost 0` and the trace's own intensity ours reads `14-19`. The same
+pose, tick 40 on Talon's Junction, moves the craft-box ratio from `1.54` to
+`0.99` and the whole frame from `1.21` to `1.07`. **This did not cause the
+2026-10-02 figure**: that capture's own trace reads intensity `1` throughout
+(row 0: `plume_timer 49.9`, `intensity 1`), where `--pose-boost 10` and `0`
+agree. Its cause is not identified here; at its regime (ticks 240-280 below)
+the direct readout gives `0.98-1.00`.
 
 **Before and after, mean luma the bloom adds over the whole frame, ours over
 the original (original = clipped, from its own A):**
@@ -880,14 +887,21 @@ the original (original = clipped, from its own A):**
 "Before" for Talon's is the same posing with the corrected intensity but the old
 ramp and arithmetic, so the artefact in (4) is not in this table; the old posing
 is the `1.54` above. **Talon's Junction: `0.96-1.08`, mean `1.01`.** Moa Therma
-reads `1.03-1.37`, and the input energy tells why: summing `rgb * mask` in the
-central band, ours over the original is `0.82-1.33` frame to frame and the
-chain's own ratio follows it (model on ours over model on the original
-`0.77-1.48`), so the swing is the **scene**, not the chain. On Moa the glow
-surfaces are animated chevrons, banners and a start gantry, and a posed frame
-starts those at tick 1 while the original is at tick 40-240; at `100-390 km/h` a
-one-frame pose lag moves the camera 1.5-6.5 m as well (the lag minimising the
-sky-band error was 4-5 ticks at 313 km/h). Where the craft is slow the two agree
+reads `1.03-1.37` (mean `1.14`), and **that is an open lead, not a closed
+reading.** The input energy follows it (sum of `rgb * mask` in the central
+band, ours over the original `0.82-1.33`; the model's own ratio tracks the
+measured one), so the chain is not what moves it. But the colour under the
+mask is brighter in ours on **six of six** Moa frames (`rgb` mean on masked
+pixels `118/104, 93/86, 165/107, 164/138, 162/117, 155/130`, ours/original),
+and a pose lag of 4 ticks (the sky-band minimum at 313 km/h; re-rendered at
+tick-4) leaves it (`116/104, 95/86, 141/107, 165/138, 162/117, 155/130`) with
+the whole-frame ratio still `1.00-1.32`. A one-sided bias is not what lag or
+animation phase alone would give. **At a static, exactly posed frame it
+vanishes**: the Moa start line against four static dumps, `6,100` pixels masked
+in both, `rgb` ratio `0.99-1.01` (scene luma `+2.5 %`). So the excess exists
+only in motion or in animated glow surfaces (chevrons, banners, the start
+gantry, which a pose starts at tick 1 while the original is at tick 40-240),
+and the cause is **unread**. Where the craft is slow the two agree
 (`1.02-1.03`).
 
 **What this does not show.** The scene input itself (the colour under the mask)
@@ -896,10 +910,9 @@ the standing scene-exposure gap `bloom.md` already named, which the bloom
 inherits and which is not a bloom term. The original's bright pass also reads
 the HUD's pixels, which ours' does not ([the HUD section](#the-bloom-draws-over-the-hud-2026-10-04-pulse-bloom-roll));
 in the dumps the strongest unexplained B energy sits in the top rows where the
-HUD is. Two circuits, one ship, three boots' worth of poses on one boot each,
-PPSSPP only. Confidence **70** that no bloom term differs materially at
-racing poses; **55** for Moa's `1.15` mean being scene rather than a remaining
-term, since a pose at tick 1 cannot be made to match an animated emissive.
+HUD is. Two circuits, one ship, one boot per circuit, PPSSPP only. Confidence **70**
+that no bloom *chain* term differs materially at racing poses; Moa's `1.14` mean
+is an open lead on the glow surfaces' own colour, no confidence.
 
 **Colour grading (Pulse PSP): there is none (confidence 80).** A GE record of
 one Moa Therma frame (`gpu.record.dump`, 680 prims) has eight through-mode
