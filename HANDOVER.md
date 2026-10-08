@@ -640,6 +640,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/rendering/talons-junctions-missing-floor-is-a-glass-floor.md)
 - [`Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded](handover/rendering/material-states-upper-bits-bit-7-is-measured-mode.md)
 - [HD's menus are drawn inside its own frame, and the `HD_*` palette turned out to be the FE style](handover/frontend/hds-menus-are-drawn-inside-its-own-frame.md)
+- [HD's front end differs from the original in eight ranked ways; Ship Select's craft is closed](handover/frontend/hds-front-end-differs-from-the-original-in-eight-ranked.md)
 - [HD's strip widget draws bare text; the real menu also draws a tab shape, an underline, and a background scene - the tab is now the executable's `Block`, the scene is the open half](handover/frontend/hds-strip-tabs-have-no-shape-and-no-scene-behind-them.md) - **2026-09-14: the box behind every HD entry is `Block_Item.cpp`, read out of `EBOOT.elf` and drawn as it draws** ([menu-blocks.md](docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md).
 - [Wipeout HD's video decodes, and the logo reel is the Studio Liverpool ident](handover/rendering/wipeout-hds-video-decodes-and-the-logo-reel.md)
 - [Wipeout HD's soundtrack plays; finding it fixed a disc-wide PSARC bug](handover/audio/wipeout-hds-soundtrack-plays-finding-it-fixed-a.md)
