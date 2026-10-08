@@ -3943,3 +3943,71 @@ from RPCS3's `Cell Selection` are in `docs/formats/hd-psn.md`, "The campaign".
 Lineage check (2048 / Omega): **checked, differs** - Omega's front end is HD's
 `PI001` plugin carried forward and reads its screens through its
 own `load_omega` branch off `data09`, which `screen_archive` does not touch; 2048 has no `CellMode_Definition.xml`.
+
+## Wipeout HD/Fury: what still differs from the original, ranked - measured 2026-10-08
+
+Matched pairs of every page a player passes on the way to a race: the
+original on RPCS3 (`BCES-00664`, 2000x1200 virtual display, frame cropped
+`2000x1125+0+37`, a 24-frame burst across each transition and settled frames
+after) against this build, walked live under software Vulkan (Xvfb,
+`--no-audio`, a fresh profile; about 5 fps, so bursts of ours are slow motion
+and **no geometry is read off the live crops**) and as `--menu-page` stills
+at 1280x720. Sheets (original above, ours below) are under
+`data/scratch/hd-fe-look/sheets/page-*.png`, raw frames under `ref/` and
+`ours-live/` there. Sightings: Main Menu, Ship Select and Racebox setup on two
+boots (this lane and `hd-capture/*`), Campaign Selection and Grid on this
+boot plus the `hd-flyer` lane's; Cell Selection once. **Confounds, not
+gaps:** the RPCS3 profile carries the maintainer's save (default team
+Feisar against our Assegai, first circuit Vineta K against our Anulpha Pass,
+unlock state), and the walk reached no Tournament cell (not reached; the grids
+hold 24 `Tournament` cells in the archive read, none walked).
+
+1. **Ship Select has no craft, no team hex column.** The original draws the
+   team's hull static in the `SHIP MODEL` frame (no turntable: five seconds
+   apart the pose is identical, so Pulse's 12 s `orbit_for` does not apply),
+   a column of seven team hexes with padlocks and hull icons, and corner
+   brackets. Ours draws the empty frame and the livery name as text.
+   Sheets: `page-ship-select.png`, `page-ship-select-still.png`. The pose is
+   authored (`ShipModel`, `OriginX=1220 OriginY=412 z=-24 RotX=0.4 RotY=-0.5`).
+   Omega: checked, applies (draws an empty frame too), not wired.
+2. **Cell Selection lacks the card.** The original lays the grid's red flyer
+   (the event logo "blitzed", the striped rail, a black hex field of about 30
+   cells with the event's hexes lit), an event-type icon beside each of
+   Event Type / Track / Speed Class / Weapons, the next grid's logo under
+   "12 MORE POINTS NEEDED TO UNLOCK", and bold upper-case values
+   (`SINGLE RACE`, `VENOM`). Ours draws six hexes, no card, no icons, values
+   in mixed case. Needs the flyer's face-on pose (the open "swing" in the
+   `hd-flyer` thread). Cell-to-cell d-pad moves land on the same cells on both
+   sides (`sheets/cell-nav.png`). Omega: same screen, same gap.
+3. **Frame chrome on the campaign pages.** The original carries the
+   `SCREEN TITLE` caption, a bold title with the arrow, a rule above the page
+   and a `NAVIGATION` line (d-pad glyphs) in the footer on every page. Ours
+   has no top rule on Campaign Select and Grid, no caption, no NAVIGATION
+   entry, and a title at another size and offset. Ours shows keyboard glyphs
+   (auto style on a keyboard-driven run, not a gap).
+4. **No page transitions.** On entering Campaign Select the original scrambles
+   the title, slides the two flyers in and flies the particle scene through
+   (`trans-campsel-original.png`); ours cuts. `--menu-anim-phase 0.3` draws a
+   byte-identical image to the settled one (compared, 0 differing pixels), so
+   no tween exists on these pages.
+5. **Main Menu is our own tree.** Original: `MAIN MENU` with CAMPAIGN,
+   RACEBOX, ONLINE, OPTIONS, RECORDS tabs plus a `GAME GUIDE INFO` feed;
+   ours: `OPENANTIGRAV` with RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS,
+   QUIT (`page-main-menu-still.png`). Chosen by the project's menu tree, not
+   a bug in HD's wiring.
+6. **Racebox setup page.** Original: `RACEBOX`, rows RACE TYPE / SPEED CLASS /
+   WEAPONS / AI DIFFICULTY / NUMBER OF PLAYERS / SPLIT SCREEN / TARGET / ZONE
+   TARGET and a menu-icon panel; ours: `RACE` with MODE / SPEED CLASS / AI
+   DIFFICULTY / START / BACK (`page-racebox-setup.png`).
+7. **Track Select.** Layout and records table match; missing: the hex grid
+   of circuit emblems, the shaded grey circuit model (it is a shaded model,
+   not a wireframe - the status cell's word is wrong), and the moving fly-by
+   picture (it moves: 17 % of the window's pixels differ across 1.5 s). Ours
+   also draws the hex window's stills as nothing (`no slideshow chain`).
+8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship
+   Select for 32 s without reaching a load. See the `hd-loading-screen` and
+   `lane-hd-endrace` captures.
+
+Not a gap (checked): what looked like an `ELIMINATOR` against `NitroBattle`
+mismatch on The Amphiseum was two different cells (`grid8_3_2` Elimination,
+`grid8_2_1` NitroBattle) reached by dropped presses, not a label bug.
