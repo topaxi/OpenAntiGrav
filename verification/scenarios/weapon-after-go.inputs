@@ -8,6 +8,8 @@
 # Assegai). Ours reaches that state on tick 403, about ten ticks after the same
 # 120 frames, because our standing start is that much slower off the line
 # (a handling matter, not this scenario's). Combine with `oag-game --give <weapon>`.
+# 2026-10-08: stale for a matched pair. Our standing start now reaches that state on
+# tick 393; see weapon-after-go-matched.inputs. Kept for the tests that pin to it.
 403 cross
 1 cross square
 200 cross

@@ -71,6 +71,7 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
   - Ours detonates a few ticks early against the capture's frame count.
   - The fireball is a little smaller than the original's 85x110 PSP px at
     k=25.
+    (2026-10-08: that is the **craft-hit** blast `WO_ROCKET_EXPLO`; a Time Trial pair has none before tick ~49, so it is not measurable there. A Single Race pair puts the grid craft ahead on ours and gone on the original.)
   - No matched per-frame particle count was taken.
 - **The frame advance changes the fireball only subtly.** At t42 the Rocket
   fire shows more of its 4x4 texture and reads redder
