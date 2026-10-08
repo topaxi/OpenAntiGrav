@@ -574,3 +574,11 @@ block at `0x008b3140`, so the ribbon is built by the `WakeTrail`-style manager
 taper, lifetime and per-tick sampling, and what spawns it per rocket. Without
 them any ribbon drawn would be a guess, so nothing is drawn (confidence that
 the trail exists and is this asset: 80; its law: unread).
+
+**Corrected 2026-10-08 (`hd-rocket-trail`):** the ribbon is not built by the
+`WakeTrail` SPU job. `0x00920fc0` is read by `RibbonEffects_Construct`
+(`0x002a7560`), a PPU-side pool manager whose pool 4 is the Rocket's, and the
+law above that this section called unread is now read and matched against a
+live dump: life 1.85 s, half-width 0.4 to 2.0, alpha from
+`smoke_trails_opacity_ramp.tga`, three single-sided fins, alpha-over. See
+[rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md).

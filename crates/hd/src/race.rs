@@ -581,6 +581,15 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         contact: r"Data\Tex\HD_ElectricArc_Contact.gtf",
     }),
     magstrip_pob: false,
+    // `RibbonEffects_LoadOpacityRamp` (`0x002c38a8`) names the ramp; the
+    // texture is `hd_rockettrail.rcsmaterial`'s `Texture2`, the one its
+    // program samples once the frame clock passes 3.3 s, which is all of a
+    // race. See `docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`. Omega
+    // ships the textures but no ramp, so it stays unwired.
+    rocket_trail: Some(oag_title::weapons::RocketTrail {
+        texture: "Data/RibbonEffects/textures/smoke_trails_frame2_alpha.gtf",
+        opacity_ramp: "Data/RibbonEffects/textures/smoke_trails_opacity_ramp.tga",
+    }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     shuriken: None,
     cannon_look: Some(CANNON_LOOK),

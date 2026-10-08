@@ -532,6 +532,7 @@ impl Race {
                 nozzles,
                 engine_lights,
                 spu_vertex_lights,
+                hd_weapon_lights: true,
                 engine_light_jitter: [super::engine_light::Jitter::default(); MAX_SHIPS],
                 engine_light_rng: std::array::from_fn(|slot| {
                     Rng::new(super::engine_light::engine_light_seed(slot))
@@ -567,6 +568,7 @@ impl Race {
                 leach_charge_effect: [None; MAX_SHIPS],
                 leach_beam_ribbon: None,
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
+                rocket_smoke: crate::rocket_smoke::Smoke::new(),
                 leach_ball_elapsed: 0.0,
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],

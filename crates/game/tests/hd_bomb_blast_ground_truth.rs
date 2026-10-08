@@ -81,6 +81,9 @@ fn frame_of(ticks: u32) -> Option<Vec<[u8; 3]>> {
         .args(["--race", "--no-audio", "--size", "960x544", "--opponents"])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
+        // The fireball's own alpha test is what the white count reads; the
+        // blast's point lights whiten the walls around it (`weapon_light`).
+        .arg("--no-weapon-lights")
         .args(["--motion-blur", "off", "--ticks", &ticks.to_string()])
         .args([
             "--give",

@@ -670,6 +670,7 @@ impl Race {
         self.advance_leach_beam();
         self.advance_leach_beam_visual();
         self.advance_leach_beam_ribbon();
+        self.advance_rocket_smoke();
 
         // Beside them for the same reason: a Repulser's wave sweep reads every
         // craft's ring index from this tick. See `Race::advance_repulsers`.

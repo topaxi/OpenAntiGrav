@@ -29,5 +29,6 @@ pub mod magstrip;
 pub mod mist;
 pub mod psys;
 pub mod ranrot;
+pub mod rocket_smoke;
 pub mod sparks;
 pub mod weapon_quads;

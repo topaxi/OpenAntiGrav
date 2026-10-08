@@ -37,11 +37,9 @@ pub struct CaptureOptions {
     /// shows the results table: `--hold cross` drives into the first wall. See
     /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
-    /// `--autopilot-pilot`: fly with a named pilot instead of the neutral
-    /// baseline. See [`Race::set_autopilot_pilot`].
+    /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
     pub autopilot_pilot: Option<oag_ai::Pilot>,
-    /// `--autopilot-skill`: fly at a stated AI skill instead of the race's
-    /// own. See [`Race::set_autopilot_tuning`].
+    /// `--autopilot-skill`: a stated AI skill. See [`Race::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
     /// See [`Race::force_shake`].
@@ -60,6 +58,8 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
+    /// `--no-weapon-lights`.
+    pub no_weapon_lights: bool,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,
@@ -350,7 +350,7 @@ pub fn capture(
         visibility,
         flare,
         leach_beam_texture,
-        magstrip_wake_textures,
+        ribbon_textures,
         noise,
         trail_blend,
         trail_shape,
@@ -483,7 +483,7 @@ pub fn capture(
         shield_cockpit,
         flare,
         leach_beam_texture,
-        magstrip_wake_textures,
+        ribbon_textures,
         noise,
         trail_blend,
         trail_shape,

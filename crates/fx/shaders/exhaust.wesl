@@ -122,12 +122,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let picture = mix(texel, authored, trail_shape);
     let shape = picture.a;
     // The two fades HD's fragment program applies and no other title's path
-    // computes: `saturate(clamp(dot(n, v), 0, 0.15) / 0.15)` kills a fin seen
-    // edge-on or from behind, and `saturate(window_z * 0.75)` fades the
+    // computes: `saturate(clamp(|dot(n, v)|, 0, 0.15) / 0.15)` kills a fin
+    // seen edge-on (the `MIN` at @0x0b carries NV40's `SRC0_ABS` bit, so a
+    // fin seen from behind is as visible as from the front), and `saturate(window_z * 0.75)` fades the
     // ribbon out as it nears the camera plane. Both collapse to 1.0 when
     // `trail_shape` is 0.0.
     let facing_dot = dot(normalize(in.normal), normalize(in.view));
-    let facing = saturate(clamp(facing_dot, 0.0, 0.15) / 0.15);
+    let facing = saturate(clamp(abs(facing_dot), 0.0, 0.15) / 0.15);
     let depth_fade = saturate(in.clip.z * 0.75);
     let hd_fade = mix(1.0, facing * depth_fade, trail_shape);
     let rgb = mix(picture.rgb, red.rgb, in.red_mix * trail_shape) * in.colour.rgb;

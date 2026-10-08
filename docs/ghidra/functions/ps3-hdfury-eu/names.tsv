@@ -568,3 +568,42 @@
 0x0014fa08	function	NormalBombBlast_Reset	80	weapons.md
 0x001512f8	function	NormalBombBlast_Draw	80	weapons.md
 0x006ca6b0	function	Matrix_RotateRowsByAxisAngle	75	weapons.md
+# 2026-10-08 hd-rocket-trail: RibbonEffects pool manager and the Rocket smoke ribbon
+0x002a7560	function	RibbonEffects_Construct	88	rocket-trail.md
+0x002a5dc0	function	RibbonEffects_UpdatePools	80	rocket-trail.md
+0x002a6478	function	RibbonEffects_Render	80	rocket-trail.md
+0x002a4280	function	RibbonEffects_SampleLighting	70	rocket-trail.md
+0x002c38a8	function	RibbonEffects_LoadOpacityRamp	92	rocket-trail.md
+0x002c3788	function	OpacityRamp_Lookup	90	rocket-trail.md
+0x002aa770	function	RocketTrail_Construct	80	rocket-trail.md
+0x002aaae0	function	RocketTrail_Init	85	rocket-trail.md
+0x002aa820	function	RocketTrail_PushSample	90	rocket-trail.md
+0x002aaa80	function	RocketTrail_Update	85	rocket-trail.md
+0x002aa9d8	function	RocketTrail_Render	80	rocket-trail.md
+0x002ed6d8	function	Ribbon_Construct	75	rocket-trail.md
+0x002edaa8	function	Ribbon_Init	88	rocket-trail.md
+0x002edc38	function	Ribbon_PushSample	90	rocket-trail.md
+0x002ed7d8	function	Ribbon_AgeSamples	95	rocket-trail.md
+0x002ed740	function	Ribbon_Render	82	rocket-trail.md
+0x002a4d58	function	RibbonBuilder_Alloc	85	rocket-trail.md
+0x002a45f8	function	RibbonBuilder_Reset	75	rocket-trail.md
+0x002a4c20	function	RibbonBuilder_AddSample	88	rocket-trail.md
+0x002a47e8	function	RibbonBuilder_StripSide	90	rocket-trail.md
+0x002a4660	function	RibbonBuilder_WriteVertexPair	92	rocket-trail.md
+0x002a51e8	function	RibbonBuilder_Flush	80	rocket-trail.md
+0x002ebde8	function	RibbonNode_Alloc	85	rocket-trail.md
+0x002ebce8	function	RibbonNode_Link	75	rocket-trail.md
+0x002ebd48	function	RibbonNode_Unlink	75	rocket-trail.md
+0x00123fb0	function	Rocket_Update	70	rocket-trail.md
+0x00123de8	function	Rocket_SubmitLight	85	weapons.md
+0x00155420	function	MissileExplosion_Draw	70	weapons.md
+
+
+# 2026-10-08 hd-leach-beam: the LeachBeam strip draw and path
+0x00153288	function	LeachBeam_DrawStrip	80	leach-beam-strips.md
+0x001164e0	function	LeachBeamStrip_BuildRibbon	82	leach-beam-strips.md
+0x001157d0	function	BeamPath_AddWobble	60	leach-beam-strips.md
+0x00116090	function	BeamPath_BendToTarget	60	leach-beam-strips.md
+0x00117518	function	BeamPath_Build	60	leach-beam-strips.md
+0x00115e30	function	BeamPath_CheckLineOfSight	55	leach-beam-strips.md
+

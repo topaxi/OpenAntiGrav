@@ -24,10 +24,12 @@
 //! - **The viewport gate.** The original takes an entry per viewport the
 //!   point is visible in; this draws for the one camera.
 //! - **Not played.** The sixteen randomly rotated entries `Start` builds at
-//!   `+0x190` (confidence 45, read by nothing in the class), and the point
-//!   light `(1 - p)^2` (this engine has no point light for a weapon to place).
+//!   `+0x190` (confidence 45, read by nothing in the class).
+//!
+//! The point light `(1 - p)^2` is `crate::weapon_light`'s.
 
 use super::*;
+use oag_mesh::mesh_render::SpuLight;
 
 /// The original's pool size: `pool_take` enters an object while `count < 16`.
 pub(crate) const SLOTS: usize = 16;
@@ -70,6 +72,16 @@ impl Race {
                 *slot = None;
             }
         }
+    }
+
+    /// Each live explosion's point light, in slot order; see
+    /// [`crate::weapon_light`].
+    pub(crate) fn hd_missile_blast_lights(&self) -> impl Iterator<Item = SpuLight> + '_ {
+        self.view
+            .hd_missile_blasts
+            .iter()
+            .flatten()
+            .filter_map(|blast| crate::weapon_light::missile_record(blast.position, blast.age))
     }
 
     /// Each live explosion's placement matrix and age, in slot order.

@@ -63,8 +63,24 @@ trail, and a faithful strip needs the same treatment `engine-trail.md` had: dump
 and fit. A beam needs a LeachBeam held and a rival in range, which this lane did not obtain
 (states 3 and 10 gave nothing at the grid). Not started past that read.
 
+## 2026-10-08 (`hd-leach-beam`): the strips are a PPU ribbon, read, not wired
+
+Correction to the 2026-10-07 note above: the strips are **not** SPU-extruded.
+`0x002a4d58` is `RibbonBuilder_Alloc`, the PPU builder the Rocket's smoke
+uses, and the strip object drives it itself (`0x001164e0`), with model index 2
+(`leachbeam_triangle`). Not a ThickLine pool. Only the `+0x6420` strip is
+drawn; fade, reveal, material and the two-sided facing are on
+[leach-beam-strips.md](../../docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md).
+What stops the wiring is the **path**: the samples are the shooter's and the
+target's `arc_anchor_point` nodes with a walk over the target's own sample
+history between them (confidence 50), and a straight line would be an invention.
+Open: a live dump of a held LeachBeam (state 3 via `rpcs3-hd-weapon.py`) reading
+`+0x4c`, the count at `+0x6420+0x144` and the samples; `0x00116c48`'s selection
+rule; the stack record's half-width at `+0xe8`; whether the `+0x50` strip is
+ever drawn.
+
 ## Next Steps
 
-1. Read what `0x00153218`'s strips are drawn with, then build them beside the
-   other three ribbons (`docs/rendering/trail-ribbon.md`).
+1. Live-dump a held LeachBeam's `+0x6420` strip (see the 2026-10-08 section),
+   then build it beside the other ribbons from leach-beam-strips.md's law.
 2. Add the ghost-static axis to `Title` so HD stops asking.

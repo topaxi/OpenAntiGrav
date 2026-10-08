@@ -242,6 +242,8 @@ pub struct RaceView {
     pub(super) engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// The circuit's `"Lighting.Enable spu vertex lights"`, on by default.
     pub(super) spu_vertex_lights: bool,
+    /// Whether the weapons add their point lights; see `race::weapon_light`.
+    pub(super) hd_weapon_lights: bool,
     /// Each craft's engine-light jitter this tick, and the stream it is
     /// drawn from - one per craft, like [`Self::exhaust_rng`], and separate
     /// from it so the flare's pinned flicker stream is untouched.
@@ -345,6 +347,8 @@ pub struct RaceView {
     /// is locked, the same way [`Self::leach_beam_ribbon`] is torn down -
     /// see [`weapons::visuals::advance_leach_beam_ribbon`].
     pub(super) leach_ball_elapsed: f32,
+    /// The Rocket's smoke ribbons - see [`crate::rocket_smoke`].
+    pub(super) rocket_smoke: crate::rocket_smoke::Smoke,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and

@@ -10,13 +10,16 @@ use oag_fx::exhaust::FlareTexture;
 use oag_livery::Livery;
 use oag_title::weapons::{MagstripWake, WeaponModels};
 
+use crate::rocket_smoke::RibbonTextures;
+
 /// The atlas and the contact texture, in that order.
 pub(crate) type Textures = [FlareTexture; 2];
 
-/// The wake's per-slot anchors, and its two textures.
+/// The wake's per-slot anchors, and the ribbon textures: its own two and,
+/// loaded beside them, the Rocket smoke's (`crate::rocket_smoke::load`).
 pub(super) struct Loaded {
     pub(super) anchors: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
-    pub(super) textures: Option<Textures>,
+    pub(super) textures: RibbonTextures,
 }
 
 pub(super) fn load(
@@ -25,12 +28,17 @@ pub(super) fn load(
     liveries: &[Livery],
     report: &mut Vec<String>,
 ) -> Loaded {
+    let rocket_smoke = crate::rocket_smoke::load(archives, models, report);
+    let only_smoke = || RibbonTextures {
+        magstrip: None,
+        rocket_smoke: rocket_smoke.clone(),
+    };
     let Some(wake) = models.magstrip_wake else {
         // The `.pob` side needs only the anchors: it draws no arc.
         if !models.magstrip_pob {
             return Loaded {
                 anchors: None,
-                textures: None,
+                textures: only_smoke(),
             };
         }
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -44,7 +52,7 @@ pub(super) fn load(
         ));
         return Loaded {
             anchors: Some(anchors),
-            textures: None,
+            textures: only_smoke(),
         };
     };
     let platform = archives.layout.platform;
@@ -65,7 +73,10 @@ pub(super) fn load(
     ));
     Loaded {
         anchors: Some(anchors),
-        textures,
+        textures: RibbonTextures {
+            magstrip: textures,
+            rocket_smoke,
+        },
     }
 }
 
@@ -107,7 +118,7 @@ fn texture(
 
 /// The wake's texture as pixels: a `.gxt` on the Vita (2048), a `.gtf` on every
 /// other title that names one (HD; the shadow silhouette reads one the same way).
-fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<FlareTexture> {
+pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<FlareTexture> {
     if platform == oag_assets::Platform::Vita {
         let gxt = oag_texture::gxt::Gxt::parse(blob).ok()?;
         let texture = gxt.only()?;

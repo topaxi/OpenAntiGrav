@@ -216,7 +216,7 @@ impl Scene {
             // The shadow map's own projection and strength, or `off` where
             // nothing casts - see `Scene::shadow_uniform`.
             shadow: self.shadow_uniform(shadows),
-            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_engine_lights()),
+            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_spu_lights()),
             sun_occlusion: self.sun_occlusion_matrices(),
             refraction: super::behind_glass::view_projection(section_view).to_cols_array_2d(),
         };
@@ -675,7 +675,7 @@ impl Scene {
         self.upload_mist(race, queue, 1.0 / projection.y_axis.y);
         self.upload_cannon_quads(queue, &vp, cannon_bolt, cannon_flash);
         self.upload_beam(race, queue, &vp);
-        self.upload_magstrip_wake(race, queue, &vp);
+        self.upload_ribbons(race, queue, &vp);
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
