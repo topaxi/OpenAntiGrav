@@ -447,11 +447,9 @@ pub struct Setup {
     /// `craft_title.looks.laid_pose`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
-    /// Whether a laid Mine alone takes the spun, 0.6-scaled pose:
-    /// `craft_title.looks.laid_pose_scaled`.
+    /// A laid Mine alone takes the spun, 0.6-scaled pose: `looks.laid_pose_scaled`.
     pub laid_pose_scaled: bool,
-    /// Whether a laid Mine or Bomb starts at the craft's rear anchor:
-    /// `craft_title.looks.laid_from_rear`.
+    /// A laid Mine or Bomb starts at the rear anchor: `looks.laid_from_rear`.
     pub laid_from_rear: bool,
     /// Whether the grid is laid out the way Pulse PSP's `Race_ComputeGridLayout` does: a walk
     /// of the located curve with the original's scaled record and its edge-chord heading
