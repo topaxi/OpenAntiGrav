@@ -37,9 +37,13 @@
 //! **Not this**: `Rocket_Update`'s own `0x006778c8` call at `0x001246cc`
 //! (`D = 100`, colour `(14, 10, 2)`, where `r15 = 2.0` from `lis r15, 0x4000`
 //! at `0x00124540`). It sits in the block that allocates a `0x180`-byte object
-//! after the `0x0007be58` trace, and none of the six snapshots across the first
-//! second of flight held a `D = 100` record, so it is not a flight light. It
-//! is left unwired: nothing here says what arms it.
+//! after the `0x0007be58` trace. Six snapshots across the first second of
+//! flight held no `D = 100` record, but polling the candidate list live
+//! (`hd-blast-fill`, two volleys) finds it: one to three frames, three times a
+//! shot from about 0.9 s, 12 to 25 units beside a flying rocket's path (one
+//! boot), so it is a contact-style flash, not a launch light and not a steady flight light. It is
+//! left unwired: what `0x0007be58` traces, and why every half second, is
+//! unread.
 //!
 //! # The Bomb blast (`0x001512f8`, its draw; confidence 75)
 //!
