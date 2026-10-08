@@ -134,6 +134,12 @@ hold the next merge until the gate finishes, or gate a detached worktree
 `just link-data`) so merges can keep landing. A red lead gate that overlapped
 a merge proves nothing; re-run it.
 
+**The `lead-gate` worktree holds one gate at a time.** Before `git checkout`
+there for a new batch, check that no gate is still running in it (`pgrep -af
+'flock -o .*gate.lock'`). A second chain started on top checked out the next
+merge under a running `just`. It produced `E0599` errors against code that
+compiled. Both chains also wrote the same log files.
+
 **Prefer `nice -n 10 ionice -c 3` for the lead's own gate.** The lead's run is
 never on the critical path - members are the ones blocked on their own results.
 
