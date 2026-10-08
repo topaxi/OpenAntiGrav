@@ -7,10 +7,12 @@
 //! for the full read this plays back - `BombBlast_Construct` (`0x08872078`)
 //! and `BombBlast_Update` (`0x0887250c`), confidence 90/85.
 //!
-//! **Pulse (PSP) only.** Wipeout HD's own Bomb detonation is unread and
-//! Pure's Bomb authors no `timetodie` at all - see `mine.md`'s own
-//! `Drop::bomb` doc comment - so `bomb_blast_pulse` is `None` on both other
-//! titles' [`oag_title::weapons::WeaponModels`] and nothing here fires.
+//! **Pulse and Pure.** Wipeout HD's own Bomb detonation is its own object
+//! (`bomb_blast_hd`). Pure builds the same pair with the same constants
+//! (`0x08858710`, `0x08858ad0`), detonating on a craft entering the trigger
+//! radius rather than on a fuse; its shockwave does not fade
+//! (`PulseBombBlast::shockwave_fades`). Nothing here fires on a title whose
+//! `bomb_blast_pulse` is `None`.
 //!
 //! **Render-side view state only**, on [`super::blast_models`]'s own terms:
 //! a blast's own position and age never move a determinism hash, because the
@@ -394,6 +396,7 @@ impl Race {
     pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
         self.advance_hd_bomb_blasts(dt);
         self.advance_hd_missile_blasts(dt);
+        let fades = self.view.bomb_shockwave_fades;
         for slot in &mut self.view.bomb_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;
@@ -406,7 +409,9 @@ impl Race {
                 continue;
             }
             blast.hemisphere_scale = HEMISPHERE_SCALE.step(blast.hemisphere_scale);
-            blast.shockwave_alpha = SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
+            if fades {
+                blast.shockwave_alpha = SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);
+            }
             if blast.age > SHOCKWAVE_SCALE_DELAY_SECONDS {
                 blast.shockwave_scale = SHOCKWAVE_SCALE.step(blast.shockwave_scale);
             }

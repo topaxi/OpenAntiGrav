@@ -1,8 +1,7 @@
 //! [`load`]: everything a race needs, read out of one disc image, and the report
 //! of what came back.
 //!
-//! Split out of `race.rs` under the 1,000-line rule (`scripts/check-file-size.py`).
-//! Its tests are `race/tests/load.rs`.
+//! Split out of `race.rs` under the 1,000-line rule; its tests are `race/tests/load.rs`.
 
 use super::*;
 mod audio;
@@ -679,9 +678,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else {
         None
     };
-
     stages::reach(stages::Stage::WorldBuilt);
-
     // The player's own, and reported by `livery::load` beside the hull it was
     // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
@@ -834,7 +831,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .to_string(),
         ),
     }
-
     let pose_override = pose::resolve(options.pose, &spline, &mut report);
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
@@ -854,6 +850,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     stages::reach(stages::Stage::CraftsBuilt);
+    let models = &craft_title.weapon_models;
     let mut loaded = Loaded {
         title,
         platform: archives.layout.platform,
@@ -878,10 +875,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,
             ),
-            hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
-            hd_bomb_blast: craft_title.weapon_models.bomb_blast_hd.is_some(),
-            hd_missile_blast: craft_title.weapon_models.missile_blast_hd.is_some(),
+            hd_plasma_blast: models.plasma_blast_hd.is_some(),
+            hd_bomb_blast: models.bomb_blast_hd.is_some(),
+            bomb_shockwave_fades: models.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
+            hd_missile_blast: models.missile_blast_hd.is_some(),
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
+            laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
+            laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
             grid_frame_from_sample: extents,
             screen_flash: extents,
             absorb_burst,

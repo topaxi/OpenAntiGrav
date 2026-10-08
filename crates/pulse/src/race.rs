@@ -377,6 +377,7 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     bomb_blast_pulse: Some(oag_title::weapons::PulseBombBlast {
         hemisphere: r"Data\Weapons\explosion_hemisphere.vex",
         shockwave: r"Data\Weapons\Bomb_Shockwave.vex",
+        shockwave_fades: true,
     }),
     bomb_blast_hd: None,
     missile_blast_hd: None,

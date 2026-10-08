@@ -73,8 +73,11 @@ impl Setup {
             // see `shield_palette` above for the same reasoning.
             hd_plasma_blast: false,
             hd_bomb_blast: false,
+            bomb_shockwave_fades: false,
             hd_missile_blast: false,
             pulse_laid_pose: false,
+            laid_pose_scaled: false,
+            laid_from_rear: false,
             grid_frame_from_sample: false,
             screen_flash: false,
             absorb_burst: None,

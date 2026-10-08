@@ -325,4 +325,9 @@ pub struct PulseBombBlast {
     /// `Data\Weapons\Bomb_Shockwave.vex`, radial scale 0.0 -> 12.0, rate
     /// 0.075, gated to start after 0.1s.
     pub shockwave: &'static str,
+    /// Whether the shockwave's alpha eases `1.0 -> 0.0` while it widens.
+    /// Pulse's `BombBlast_Update` stamps that ease onto the ring's vertex
+    /// colours every tick; Pure's update (`0x08858ad0`) makes no such call
+    /// and leaves the ring at its authored alpha.
+    pub shockwave_fades: bool,
 }

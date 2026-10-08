@@ -9,8 +9,8 @@
 //! restated here and labelled as inherited.
 
 use oag_title::{
-    Burst, EffectSpec, Effects, Looks, Origin, ShieldPalette, ShieldPalettes, Trigger,
-    engine_effects,
+    Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
+    Trigger, engine_effects,
 };
 
 /// Pure's `FUN_08925e20`: the same loop over the same `Ship Collision Fx` class
@@ -34,8 +34,24 @@ pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pu
 /// been for a title with no palette of its own - the project's rule that an
 /// unmeasured title runs Pulse's (`docs/formats/pure-status.md` measures none
 /// of the shell).
-pub const LOOKS: &Looks = &Looks::unread(ShieldPalettes {
-    ps2: ShieldPalette::Ps2Pulse,
-    elsewhere: ShieldPalette::Pulse,
-    origin: Origin::InheritedFrom("Wipeout Pulse"),
-});
+pub const LOOKS: &Looks = &Looks {
+    // The Mine's pose is Pulse's code: `Mine_Construct` (`0x0885bab4`) writes
+    // the same `0.6` scale, `Mine_Init` (`0x0885bd0c`) rolls the same random
+    // axis, and its pose node (`0x0885bf4c`) turns it by `4 x` the fuse.
+    // Read off the decompile, not yet pinned to live matrices.
+    // Pure lays both charges at the rear anchor, not at the body: see
+    // `oag_raceplay::weapons::visuals::laid::REAR_ANCHOR_BACK`.
+    laid_from_rear: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
+    laid_pose_scaled: Rule {
+        on: Platforms::Any,
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    },
+    ..Looks::unread(ShieldPalettes {
+        ps2: ShieldPalette::Ps2Pulse,
+        elsewhere: ShieldPalette::Pulse,
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    })
+};
