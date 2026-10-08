@@ -6,16 +6,7 @@
 
 use super::*;
 mod instance;
-
-/// One weapon pad's place in HD's colour cycle, per pad, plus the race clock
-/// it was last advanced at.
-#[derive(Default)]
-struct PadGlow {
-    /// Keyframes into the cycle, one per pad node, wrapped over the table.
-    position: Vec<f32>,
-    /// The `seconds` of the last advance, so the next one adds only the gap.
-    last: Option<f32>,
-}
+mod pad_glow;
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -111,7 +102,7 @@ pub(super) struct Drawable {
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
     /// Each weapon pad's own position in HD's colour cycle - see
     /// [`Self::glow_weapon_pads`]. Empty on every drawable but HD's pads.
-    pad_glow: std::cell::RefCell<PadGlow>,
+    pad_glow: std::cell::RefCell<pad_glow::PadGlow>,
     /// Draws left out this frame, by [`oag_render::gantry::panel::key`]:
     /// the start gantry's states off its panel ([`Self::set_hidden`]).
     /// Empty on everything else.
@@ -737,65 +728,6 @@ impl Drawable {
             }),
             tinted,
         );
-    }
-
-    /// Retints each HD weapon pad's light bars from that pad's own cycle - the
-    /// colour `WeaponPad_UpdateRefreshTimer` hands the fragment program's
-    /// inline constant, see [`oag_title::weapon_pad`].
-    ///
-    /// `ready[i]` pairs with this drawable's `i`-th
-    /// [`mesh::Model::node_vertex_ranges`] entry, as
-    /// [`Self::tint_weapon_pads`]' own does. A ready pad's position advances by
-    /// the race clock's gap at `cycle.keys_per_second`; a cooling pad's does
-    /// not move and it shows `cycle.cooling`, the original's two branches.
-    ///
-    /// **A pad's starting position is chosen, not measured**: the original
-    /// seeds it from the pad object's heap address modulo six, which this
-    /// project has no counterpart for, so pad `i` starts on keyframe
-    /// `i % 6`. Only the cycle's shape and rate are the original's.
-    ///
-    /// The values pass through unclamped (the red channel reaches `2.0`), as
-    /// the program's own constant does. A no-op unless every pad node carries
-    /// its own glow entry, which `mesh::rcs::build_weapon_pads` gives it.
-    pub(super) fn glow_weapon_pads(
-        &self,
-        queue: &wgpu::Queue,
-        seconds: f32,
-        cycle: &oag_title::weapon_pad::Cycle,
-        ready: &[bool],
-    ) {
-        let mut state = self.pad_glow.borrow_mut();
-        let pads = self.model.node_vertex_ranges.len();
-        if state.position.len() != pads {
-            state.position = (0..pads)
-                .map(|i| (i % cycle.keyframes.len().max(1)) as f32)
-                .collect();
-        }
-        let gap = state
-            .last
-            .map_or(0.0, |last| (seconds - last).clamp(0.0, 0.1));
-        state.last = Some(seconds);
-        let mut table = mesh_render::Emissives::of(&self.model);
-        for (i, range) in self.model.node_vertex_ranges.iter().enumerate() {
-            let Some(vertex) = self.model.vertices.get(range.start as usize) else {
-                continue;
-            };
-            let entry = mesh::slots::material_index(vertex.slots) as usize;
-            if entry == 0 || entry >= table.tint_offset.len() {
-                continue;
-            }
-            let is_ready = ready.get(i).copied().unwrap_or(true);
-            if is_ready {
-                state.position[i] += gap * cycle.keys_per_second;
-            }
-            let colour = if is_ready {
-                cycle.colour(state.position[i])
-            } else {
-                cycle.cooling
-            };
-            table.tint_offset[entry][..3].copy_from_slice(&colour);
-        }
-        queue.write_buffer(&self.emissive, 0, bytemuck::bytes_of(&table));
     }
 
     /// Rewrites each of this drawable's [`mesh::Model::node_vertex_ranges`]
