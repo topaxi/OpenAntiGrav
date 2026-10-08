@@ -234,7 +234,7 @@ fn hd_s_milestones_are_the_whole_line_as_a_stereo_pair_and_a_silent_child() {
         &[],
         oag_formats::sblk::timeline::WalkModel {
             goto_markers: true,
-            ..WalkModel::default()
+            ..oag_formats::sblk::timeline::WalkModel::default()
         },
     );
     assert!(followed.is_complete() && followed.grains.is_empty());
@@ -248,7 +248,7 @@ fn hd_s_milestones_are_the_whole_line_as_a_stereo_pair_and_a_silent_child() {
             &[],
             oag_formats::sblk::timeline::WalkModel {
                 goto_markers: true,
-                ..WalkModel::default()
+                ..oag_formats::sblk::timeline::WalkModel::default()
             },
         );
         assert!(timeline.is_complete(), "{name}: {timeline:?}");
