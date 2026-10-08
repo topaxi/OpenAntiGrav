@@ -901,10 +901,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
             spu_vertex_lights,
-            // Positions only: this list feeds the trail-hit sparks' nearest-of
-            // search (`RaceView::spark_anchor_of`), which has no live hull
-            // orientation to aim along today - see `collision_fx` below for
-            // the field that does.
+            // Positions only: this list feeds the trail-hit sparks' nearest-of search
+            // (`RaceView::spark_anchor_of`), which has no live hull orientation to aim along today
+            // - see `collision_fx` below for the field that does.
             spark_anchors: liveries
                 .iter()
                 .map(|livery| livery.collision_fx.iter().map(|a| a.position).collect())
