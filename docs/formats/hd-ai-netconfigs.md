@@ -10,7 +10,7 @@ classes (`flash`, `venom`). The PSN release's `data02.psarc` ships the same 48 f
 **Nothing in the game reads them** (confidence 90). The executable carries a matching neural
 network and a per-craft driver for it, but its only loader reads a different file
 (`ainet_<name>.acn`, which does not ship), nothing calls that loader, and on a live RPCS3 race all
-eight craft's drivers sat disabled with no network allocated. The evidence is on the function page,
+eight drivers found (the race had eight craft) sat disabled with no network allocated. The evidence is on the function page,
 [ai-net.md](../ghidra/functions/ps3-hdfury-eu/ai-net.md). These files are offline training output
 left on the disc, so **HD's opponents follow its classic controller** (`AIControlStats.xml`,
 `AIRaceStats_<class>.xml`), not a network. Porting HD's AI is reading that controller, not this.
@@ -72,7 +72,7 @@ established. No code parses this text: there is no `d1=` or `controlprm` string 
 
 ## Other titles
 
-- **HD PSN:** same files, byte-identical; same dormant code.
+- **HD PSN:** same files, byte-identical; same strings (`%s\ainet_%s`, `.acn`, `Network has %d neurons`) in its EBOOT. Whether its loader is called was not checked.
 - **Omega:** **checked, differs.** No `netconfigs`, `.nnt` or `controlprm` entry in any of its
   five base or four patch archives, and none of the network's strings in `eboot.bin`.
 - **2048:** **checked, differs.** Same census over the base, v1.04 and both DLC archives: none.

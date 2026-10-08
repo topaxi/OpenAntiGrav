@@ -25,7 +25,7 @@ per-craft "network driver" object, but:
    (`0x0010b978`) clears it; no store elsewhere was found.
 4. **Measured live (RPCS3, 2026-10-08, one boot, Racebox race, 8 craft, 16 s in, lap 1 of 3):**
    a scan of the heap around the craft array (`0x98d7c0`) for the driver's seven init defaults
-   found **exactly eight drivers, one per craft**, and on every one: enable byte `0`, network
+   found **eight drivers in the scanned window (the race had eight craft)**, and on every one: enable byte `0`, network
    neuron and connection pointers `0` (never allocated), and the parameters still at
    `AiNetDriver_Init`'s defaults `10, 20, 30, 0.9, 0.5, -0.2, 0.5`, not any `controlprm_*.txt`
    value. Script `data/scratch/hd-ai-nnt/tools/probe.py`, result
