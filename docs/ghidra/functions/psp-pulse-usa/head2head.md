@@ -247,6 +247,34 @@ of each other and the gap label sits about 3 native px past them, as live.
 `0x200` throb's law (phase, waveform, whether it is a generic Text-widget
 behaviour); the multiplayer branch; the campaign-cell launch itself.
 
+## 2026-10-08 (pulse-h2h): `Race_RecordResult`'s arm, and a campaign cell walked live
+
+**`Race_RecordResult` (`0x0880ae54`) switches on `g_game_mode - 3`, and mode 9 is
+`case 6`, the arm it shares with mode 3 (`Race`), `0xe` and `0xf` (`case 0`, `6`,
+`0xb`, `0xc`).** Decompiled again: the arm takes the finishing place
+(`param_3`), writes it to the profile's best place for the cell record when it
+beats the stored one (or the stored one is `0`), and sets `uVar8 =
+Cell_EvaluateMedal(DAT_08b30ffc, place)`. So Head2Head's medal is the Race medal
+on the place: the flat `1/0/0` targets make place 1 gold and nothing else a
+medal. Confidence 85 (decompile, same function the `Race` evidence on
+`race-campaign.md` rests on; the place-to-medal compare itself was not
+re-walked to a finish live). `oag_game`'s `campaign_medal` already treats `Race`
+and `Head2Head` alike (`crates/game/src/main/race_stage.rs`).
+
+**Live, campaign cell `grid4_5_2`** (Head to Head, `04_Track` = Tech de Ra
+White, Flash, Weapons Off, 4 laps; the dev-unlock byte opened Grid 5): the
+HUD shows `1st Qirex` / `2nd AAA` with a red `+3424M` gap at GO growing to
+`+4524M` ten seconds later (the player stood still), the `Lap 1/4` counter, no
+weapon panel. **The opponent flies Qirex in this cell** (one sample; the custom
+race in the section above had Goteki 45), so the team is cell-dependent or
+drawn, and this build's cyclic choice stays chosen, not measured. Screenshots
+`ht3.png`, `ht4.png`. Quitting this race lands on `Cell Selection`:
+[campaign-quit.md](campaign-quit.md).
+
+**Unread:** `FUN_088099b4`'s test that picks the `Show Unlocks` redirect, the
+finish of a Head2Head cell watched live to its medal, and the opponent
+selection rule.
+
 ## Names landed
 
 None. See "not renamed" above for the HUD function; the grid-compaction and

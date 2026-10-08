@@ -1259,12 +1259,13 @@ section is what implements it.
   to the back" puts the opponent at slot 7, immediately ahead of the
   player, but no live capture of an actual two-craft grid confirms it.
 - **The HUD's own gap readout - `MSC_EVENT_HTH`'s "track the distance
-  between you and your opponent" - is decompiled in full but not wired.**
-  `Hud_BindWidgets` and its per-tick updater swap the ordinary Position
-  readout for a "1ST"/"2ND" plus "+/-NNNm" bar (`HeadToHeadBar`) whenever
-  the live mode is `9`; several widget-struct field meanings are not
-  independently confirmed, so it is read and recorded rather than wired
-  on a guess. See `head2head.md`'s own HUD section.
+  between you and your opponent" - is drawn**: `crates/hud/src/head_to_head.rs`
+  swaps the Position readout for the "1ST"/"2ND" rows, the bar and the
+  "+/-NNNm" gap whenever the live mode is `Head2Head`, and a campaign cell was
+  walked live on 2026-10-08 (`head2head.md`). Several widget-struct field
+  meanings stay at the confidences that page gives.
+- **Quitting the race returns to `Cell Selection`**, like every campaign mode
+  ([campaign-quit.md](../ghidra/functions/psp-pulse-usa/campaign-quit.md)).
 - **Deliberately absent from [`Mode::ALL`]**, like `Tournament` - reachable
   only through a campaign cell. Unlike `Tournament` this is not a leg-list
   problem; a field of one opponent has no row on the RACE page's own mode

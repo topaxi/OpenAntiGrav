@@ -111,22 +111,29 @@ impl Session {
         );
     }
 
-    /// Leaving a campaign cell's race lands on `Cell Selection` with the cell
-    /// still highlighted, in every campaign mode.
+    /// Leaving a campaign cell's race lands on `Cell Selection`, in every
+    /// campaign mode.
     ///
-    /// The original's pause menu rows all end at `Kill Game Transition` ->
-    /// `Kill Game` -> `Show Unlocks`, and `Show Unlocks`' redirect sends
-    /// `Main Menu->Mode == FE_RACE_CAM` (and `Racebox->RBMode ==
-    /// RB_LOAD_GRID`) to `Cell Selection`, everything else to `Main Menu`
-    /// (`InGame_Definition.xml` and the `Show Unlocks` screen, `Data.wad`;
-    /// `docs/formats/race-campaign.md`). `EndRace`'s `RETURN TO GRID` takes the
-    /// same road, which is `Session::return_to_campaign`.
+    /// **Measured, PPSSPP 2026-10-08 (USA):** pause, QUIT RACE on a campaign
+    /// Single Race and on a Head2Head cell (`grid4_5_2`) both land on
+    /// `Cell Selection`, and from the Head2Head cell the cursor is on the
+    /// grid's default cell, not the one raced. The authored road is
+    /// `Kill Game Transition` -> `Kill Game` -> `Show Unlocks`, whose
+    /// `Main Menu Redirect` sends `Main Menu->Mode == FE_RACE_CAM` to
+    /// `Cell Selection` (`FUN_088e92f8` enables it; `InGame_Definition.xml`
+    /// and the `Show Unlocks` screen in `Data.wad`). Every pause menu's QUIT
+    /// row (Single Player, Time Trial, Speed Lap, Tournament) goes to
+    /// `Kill Game Transition`, so the other modes follow by the same data;
+    /// only Single Race and Head2Head were walked.
+    /// `EndRace`'s `RETURN TO GRID` keeps the cell instead
+    /// (`Session::return_to_campaign`).
     ///
     /// **Chosen, not measured:** this build has no pause menu, so escape is
-    /// the pause menu's QUIT RACE row, and the race is discarded rather than
+    /// the pause menu's QUIT RACE row and the race is discarded rather than
     /// parked - a campaign race cannot be resumed from the menus the way a
     /// custom one can. The result capture at the top of [`Session::escape`]
-    /// has already run, so a Speed Lap or Time Trial best is kept.
+    /// has already run, so a Speed Lap or Time Trial best is kept. HD and
+    /// Fury keep the raced cell under the cursor (chosen, nothing measured).
     fn quit_campaign_race(
         &mut self,
         cell: &str,
@@ -135,7 +142,7 @@ impl Session {
         info!("leaving the campaign race for Cell Selection");
         self.leave_finished_race();
         self.suspended_race = None;
-        self.reopen_cell_selection(cell, difficulty);
+        self.reopen_cell_selection(cell, difficulty, true);
     }
 
     /// The Android system Back (gesture or key): exactly [`Self::escape`],

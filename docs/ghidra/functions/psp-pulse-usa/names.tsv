@@ -1321,3 +1321,4 @@
 # 2026-10-07 novice-airbrake lane: the player stick shaping PlayerInput_Update reads (input-bindings.md)
 0x08a7b698	data	g_stick_deadzone	92	input-bindings.md
 0x08ae4cec	data	g_stick_gain	90	input-bindings.md
+0x088e92f8	function	ShowUnlocks_BindRedirect	75	campaign-quit.md
