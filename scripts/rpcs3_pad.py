@@ -96,6 +96,14 @@ DPAD = {
 
 STICK_RANGE = 32767
 
+# L2/R2 are also analog axes: RPCS3's stock evdev profile, which `oag.yml`
+# leaves in place by naming only the device, reads the triggers from
+# `ABS_Z`/`ABS_RZ`, so a `BTN_TL2` press alone never reaches the game
+# (measured 2026-10-08, hd-handling: HD's airbrakes did not respond to it).
+# `set("l2", ...)` writes the button and the full-scale axis together.
+TRIGGERS = {"l2": "ABS_Z", "r2": "ABS_RZ"}
+TRIGGER_RANGE = 255
+
 
 def input_config_path(name=INPUT_CONFIG_NAME):
     """Where RPCS3 looks for the profile `--input-config <name>` selects."""
@@ -314,6 +322,8 @@ class Pad:
                 (ecodes.ABS_RY, AbsInfo(0, -STICK_RANGE, STICK_RANGE, 0, 0, 0)),
                 (ecodes.ABS_HAT0X, AbsInfo(0, -1, 1, 0, 0, 0)),
                 (ecodes.ABS_HAT0Y, AbsInfo(0, -1, 1, 0, 0, 0)),
+                (ecodes.ABS_Z, AbsInfo(0, 0, TRIGGER_RANGE, 0, 0, 0)),
+                (ecodes.ABS_RZ, AbsInfo(0, 0, TRIGGER_RANGE, 0, 0, 0)),
             ],
         }
         try:
@@ -347,6 +357,9 @@ class Pad:
         if name in BUTTONS:
             self.ui.write(self.ecodes.EV_KEY,
                           getattr(self.ecodes, BUTTONS[name]), 1 if down else 0)
+            if name in TRIGGERS:
+                self.ui.write(self.ecodes.EV_ABS, getattr(self.ecodes, TRIGGERS[name]),
+                              TRIGGER_RANGE if down else 0)
         elif name in DPAD:
             axis, value = DPAD[name]
             self.ui.write(self.ecodes.EV_ABS, getattr(self.ecodes, axis),
