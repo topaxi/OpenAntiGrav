@@ -49,18 +49,16 @@ pub struct CaptureOptions {
     /// Play this many ticks of the pre-race flyby first, held to the grid's first
     /// tick. See `race::intro_camera`.
     pub intro_ticks: u32,
-    /// `--force-wreck TICK:SLOT`: that slot's craft enters the destroyed
-    /// sequence at the end of that tick, as shield depletion would. See
-    /// [`Race::force_destroy`].
+    /// `--force-wreck TICK:SLOT`: that craft is destroyed at the end of that
+    /// tick. See [`Race::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
-    /// `--force-leach-lock TICK:TARGET`: a locked LeachBeam from the player onto
-    /// that slot at the end of that tick. See [`Race::force_leach_lock`].
+    /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
-    /// `--force-missile-hit TICK:SLOT`: see [`Race::force_missile_hit`].
+    /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
