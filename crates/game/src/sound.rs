@@ -56,6 +56,22 @@ impl Library for GameLibrary {
     }
 }
 
+/// The front-end cue a menu's navigation sound is played as.
+///
+/// The one place the menus' vocabulary meets the sound crate's, so a pad press,
+/// a click and a selection screen all end in the same four cues.
+#[must_use]
+pub fn menu_cue(nav: oag_ui::menu::nav::Nav) -> oag_sound::sfx::Cue {
+    use oag_sound::sfx::Cue;
+    use oag_ui::menu::nav::Nav;
+    match nav {
+        Nav::UpDown => Cue::MenuUpDown,
+        Nav::LeftRight => Cue::MenuLeftRight,
+        Nav::Accept => Cue::MenuAccept,
+        Nav::Decline => Cue::MenuDecline,
+    }
+}
+
 /// Plays one tick of `race`'s sound effects. See [`Audio::race_tick`].
 ///
 /// Called from inside the fixed-timestep loop, immediately after `Race::tick`,

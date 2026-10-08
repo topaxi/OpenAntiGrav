@@ -1321,3 +1321,5 @@
 # 2026-10-07 novice-airbrake lane: the player stick shaping PlayerInput_Update reads (input-bindings.md)
 0x08a7b698	data	g_stick_deadzone	92	input-bindings.md
 0x08ae4cec	data	g_stick_gain	90	input-bindings.md
+# 2026-10-08 pulse-menu-sfx lane: which sounds the front end plays (menu-sounds.md)
+0x0893aba4	function	SoundManager_LoadBootBanks	80	menu-sounds.md

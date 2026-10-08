@@ -171,6 +171,7 @@ impl Session {
     /// `Confirm` on **either** input, and gating only inside `update` would
     /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
+        self.play_navs(event.nav());
         // Whatever cell was just confirmed, read out here and acted on
         // *after* this borrow of `self.stage` ends below - `launch_campaign_cell`
         // needs `&mut self` for `self.race_options`/`self.shell`/`self.records`,

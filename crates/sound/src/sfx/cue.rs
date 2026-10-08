@@ -537,6 +537,36 @@ pub enum Cue {
     /// (`0x01312770`) sets the stop bit on the instance and every group voice. An
     /// action, not a sound: loads nothing, not in [`Self::ALL`].
     MagstripStop,
+    /// The front end's cursor moving up or down a list: `"UPDOWN"` in
+    /// `frontend.bnk`.
+    ///
+    /// `Sound_PlayNamedInSlot(ui, bank slot 0, "UPDOWN", 0x400, 0, 0, 0)`, the
+    /// dry no-emitter path, from `FUN_088a3b1c` (grid move that landed),
+    /// `FUN_088a4e60`, `FUN_088a9db4`/`FUN_088a9e7c`, `FUN_088b528c`,
+    /// `FUN_088cae88`, `GridSelection_Update` and `TrackSelection_Update`
+    /// (`docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, confidence 88).
+    /// Three waveforms on Pulse, one on Pure. Not in [`Self::ALL`]: it loads
+    /// through [`super::MenuSfx`] from [`oag_title::SoundBanks::frontend`].
+    MenuUpDown,
+    /// A value stepped left or right: `"LEFTRIGHT"`. `FUN_088aaae4`,
+    /// `FUN_088cae88` and `FUN_088e4fd0` play it on a row's value changing,
+    /// the settings-row edit. See [`Self::MenuUpDown`].
+    MenuLeftRight,
+    /// A confirmed choice: `"ACCEPT"`. `ConfirmButton_Update` plays it when
+    /// the button's redirect resolves, `FUN_088ed05c` the same on the track
+    /// screen; a widget's `+0x269` flag suppresses it. See [`Self::MenuUpDown`].
+    MenuAccept,
+    /// Back, or a refused move: `"DECLINE"`. Played for the back button
+    /// (`ConfirmButton_Update`'s secondary-button branch), for a confirm the
+    /// button's own check refuses, and for a grid move onto an empty cell
+    /// (`FUN_088a3b1c`) - there it takes the place of [`Self::MenuUpDown`],
+    /// it does not follow it. See [`Self::MenuUpDown`].
+    MenuDecline,
+    /// A line of text typing in: `"TELETYPE"`, one waveform at 48,051 Hz.
+    /// `FUN_088b6514` plays it per character with an extra argument not
+    /// identified here, so nothing in this port fires it yet: it is declared
+    /// so the bank load reports it, and is not in [`Self::FRONT_END`].
+    MenuTeletype,
 }
 
 mod tables;

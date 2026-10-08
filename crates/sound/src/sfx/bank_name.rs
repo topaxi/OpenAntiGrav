@@ -24,6 +24,9 @@ pub enum BankName {
     /// one missed). So this reads the unsuffixed bank both discs carry
     /// (`docs/formats/psp-audio.md`).
     Speech,
+    /// `Data\Sound\frontend.bnk`, the front end's navigation sounds. Only a
+    /// title whose [`oag_title::SoundBanks::frontend`] is set has one.
+    Frontend,
 }
 
 impl BankName {
@@ -48,6 +51,7 @@ impl BankName {
             Self::Ship => banks.ship,
             Self::Weapons => banks.weapons,
             Self::Speech => banks.speech,
+            Self::Frontend => banks.frontend.unwrap_or(""),
         }
     }
 }

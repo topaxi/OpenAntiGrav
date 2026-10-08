@@ -84,13 +84,45 @@ impl Banks {
         zone: bool,
         tick: oag_title::SequenceTick,
     ) -> Self {
+        Self::load_cues(archives, banks, zone, tick, &Cue::ALL)
+    }
+
+    /// Reads the front end's navigation cues, [`Cue::FRONT_END`], out of the
+    /// title's front-end bank.
+    ///
+    /// Empty, with one report line, on a title whose
+    /// [`oag_title::SoundBanks::frontend`] is `None`: silence and a line, never
+    /// a bank borrowed from another title.
+    #[must_use]
+    pub fn load_front_end(
+        archives: &mut Archives,
+        banks: &oag_title::SoundBanks,
+        tick: oag_title::SequenceTick,
+    ) -> Self {
+        if banks.frontend.is_none() {
+            return Self {
+                report: vec!["sfx: this title names no front-end sound bank".to_string()],
+                ..Default::default()
+            };
+        }
+        Self::load_cues(archives, banks, false, tick, &Cue::FRONT_END)
+    }
+
+    /// [`Self::load`]'s body over an explicit list of cues.
+    fn load_cues(
+        archives: &mut Archives,
+        banks: &oag_title::SoundBanks,
+        zone: bool,
+        tick: oag_title::SequenceTick,
+        cues: &[Cue],
+    ) -> Self {
         let mut sounds = BTreeMap::new();
         let mut timelines = BTreeMap::new();
         let mut programs = BTreeMap::new();
         let mut report = Vec::new();
         let mut blobs: BTreeMap<BankName, Vec<u8>> = BTreeMap::new();
 
-        for cue in Cue::ALL {
+        for &cue in cues {
             let entry = cue.bank().entry(banks, zone);
             let blob = match blobs.get(&cue.bank()) {
                 Some(blob) => blob,
@@ -219,6 +251,12 @@ impl Banks {
         let index = index.min(loaded.waveforms.len().checked_sub(1)?);
         let (sound, looping) = &loaded.waveforms[index];
         Some((Arc::clone(sound), *looping))
+    }
+
+    /// Whether `cue` decoded.
+    #[must_use]
+    pub fn voices_available(&self, cue: Cue) -> bool {
+        self.sounds.contains_key(&cue)
     }
 
     /// The list of a cue that repeats while held, when it loaded as one.

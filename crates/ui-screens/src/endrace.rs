@@ -94,6 +94,19 @@ pub enum Event {
     Back,
 }
 
+impl Event {
+    /// The navigation sound for it. See `crate::picker::Event::nav`.
+    #[must_use]
+    pub fn nav(self) -> oag_ui::menu::nav::Nav {
+        use oag_ui::menu::nav::Nav;
+        match self {
+            Self::Moved => Nav::UpDown,
+            Self::Confirmed => Nav::Accept,
+            Self::Back => Nav::Decline,
+        }
+    }
+}
+
 /// One completed lap, as `EndRace Results`' own `lap{n}.0`/`lap{n}.1` show
 /// it. `lap` is 1-based, matching [`oag_race::Standing::lap`]'s own meaning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

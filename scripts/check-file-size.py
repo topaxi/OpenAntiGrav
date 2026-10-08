@@ -138,7 +138,7 @@ BASELINE = {
     # `Definition`, `Error`, the raw TOML shape and the parse/check functions
     # split out into `menu/definition.rs` - the seam `string_id` resolution
     # needs, and the file had zero lines of headroom to grow it in place.
-    "crates/ui/src/menu.rs": 1201,
+    "crates/ui/src/menu.rs": 1112,
     # Ratcheted down from 1,956 to 1,782 when the draw pipeline moved out into
     # `psys/pipeline.rs`, making room for the sprite sheet and the emitter
     # extent, which live in `psys/sprite.rs` and `psys/spawn.rs`; to 1,781

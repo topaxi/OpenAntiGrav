@@ -142,6 +142,22 @@ pub enum Event {
     Back,
 }
 
+impl Event {
+    /// The navigation sound the original's selection screens play for it
+    /// (`UPDOWN` on a move, `LEFTRIGHT` on a livery step, `ACCEPT`, `DECLINE`),
+    /// per `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`.
+    #[must_use]
+    pub fn nav(self) -> oag_ui::menu::nav::Nav {
+        use oag_ui::menu::nav::Nav;
+        match self {
+            Self::Moved => Nav::UpDown,
+            Self::VariantChanged => Nav::LeftRight,
+            Self::Confirmed => Nav::Accept,
+            Self::Back => Nav::Decline,
+        }
+    }
+}
+
 /// The screen's state: which entry, which livery, and how long it has been
 /// open - the last for the turntable, which is the composition root's to
 /// spin but this model's to time, so a capture at `--ticks N` is a fixed

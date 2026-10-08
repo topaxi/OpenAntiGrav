@@ -72,6 +72,7 @@ const TITLE: &Title = &Title {
             ship_zone: r"Data\Sound\nowhere.bnk",
             weapons: r"Data\Sound\nowhere.bnk",
             speech: r"Data\Sound\nowhere.bnk",
+            frontend: None,
             track: oag_title::TrackBanks {
                 shared: &[r"Data\Sound\nowhere.bnk"],
                 circuit: oag_title::CircuitBanks::BesideTrack,
