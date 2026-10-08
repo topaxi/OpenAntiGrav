@@ -28,6 +28,13 @@ pub(super) fn adverts_for(
     (title.adverts.filter(|_| !zone_shared), reason)
 }
 
+/// The title's advert spec where slot 8 is drawn as a card
+/// ([`oag_title::adverts::Adverts::gantry_card`]), whatever the mode does to
+/// the other slots.
+pub(super) fn gantry_card(title: &oag_title::Title) -> Option<&oag_title::adverts::Adverts> {
+    title.adverts.filter(|spec| spec.gantry_card)
+}
+
 /// Places the start gantry (see [`gantry::place`]) and builds the track's
 /// [`TrackVisibility`] partition, in that order - `track_model` is stripped
 /// of its billboard-slot placeholders in between, which is why both live in
@@ -49,6 +56,7 @@ pub(super) fn build(
     geometry_name: Option<&str>,
     vex_geometry: bool,
     (adverts_spec, adverts_off): (Option<&oag_title::adverts::Adverts>, &str),
+    gantry_card: Option<&oag_title::adverts::Adverts>,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
 ) -> (
@@ -131,21 +139,31 @@ pub(super) fn build(
         // another gets that one drawn rather than Pulse's substituted for it.
         if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
             named_slot_8 = true;
-            // Pulse's clock is measured; the PS3 titles run HD's own
-            // race-manager window off their asset's `GO` edge (`gantry::clock`).
-            let clock = if has_ps3_geometry {
-                super::super::gantry::ClockRule::HdRaceManager
+            if let Some(spec) = gantry_card {
+                adverts.extend(super::super::gantry::place_card(
+                    archives,
+                    model,
+                    track_model,
+                    spec,
+                    report,
+                ));
             } else {
-                super::super::gantry::ClockRule::Measured
-            };
-            gantry = super::super::gantry::place(
-                archives,
-                model,
-                track_model,
-                start_position,
-                clock,
-                report,
-            );
+                // Pulse's clock is measured; the PS3 titles run HD's own
+                // race-manager window off their asset's `GO` edge (`gantry::clock`).
+                let clock = if has_ps3_geometry {
+                    super::super::gantry::ClockRule::HdRaceManager
+                } else {
+                    super::super::gantry::ClockRule::Measured
+                };
+                gantry = super::super::gantry::place(
+                    archives,
+                    model,
+                    track_model,
+                    start_position,
+                    clock,
+                    report,
+                );
+            }
         }
     }
     // **Draw nothing and say so**, on the one route into `place` that reports

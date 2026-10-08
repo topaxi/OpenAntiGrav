@@ -1433,10 +1433,19 @@ def cmd_countdown(args):
             return 1
         time.sleep(args.settle)
         recording = False
+        plan = {}
+        for item in args.nav:
+            screen, _, buttons = item.partition("=")
+            plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
         for index in range(1, 16):
             screen = current_screen()
             if screen in RACE_ARRIVED:
                 break
+            if plan.get(screen):
+                done = screen
+                session.navigate(plan)
+                del plan[done]
+                screen = current_screen()
             if screen == "Team Selection" and not recording:
                 time.sleep(SCREEN_SETTLE_BEFORE_RECORD)
                 session.toggle_recording()
@@ -1807,6 +1816,10 @@ def main(argv=None):
                          "skipped with a tap and thrust is held")
     cd.add_argument("--drive", type=float, default=40.0,
                     help="seconds recorded after --load")
+    cd.add_argument("--nav", action="append", default=[], metavar="SCREEN=BUTTONS",
+                    help="buttons to press once at a named screen on the way "
+                         "in, as in `place`, e.g. \"Single Player=right,right,"
+                         "right,right,cross\" for Zone")
     cd.add_argument("--skip-gap", type=float, default=1.0,
                     help="seconds between the intro-skipping tap and holding "
                          "thrust")

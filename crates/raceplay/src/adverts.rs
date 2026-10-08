@@ -50,6 +50,10 @@ pub struct Card {
     pub view_projection: Mat4,
     /// The target's size in pixels, the title's [`oag_title::adverts::Adverts::target`].
     pub size: (u32, u32),
+    /// The gantry's clock and board-window cull, on the card that is slot 8 of
+    /// a title that draws it as one; `None` for an advert, which runs on the
+    /// scenery clock.
+    pub timeline: Option<crate::gantry::CardTimeline>,
 }
 
 impl std::fmt::Debug for Card {
@@ -168,7 +172,18 @@ fn load_card(
     report: &mut Vec<String>,
 ) -> Result<Card> {
     let (model, blob) = super::gantry::load_with_blob(archives, name, report)?;
-    let cameras = oag_vex::camera::cameras(&blob);
+    card_from(slot, model, &blob, spec)
+}
+
+/// A card for `slot` from an already-loaded model and the file's own bytes,
+/// framed by the one camera that file authors.
+pub(super) fn card_from(
+    slot: u32,
+    model: Model,
+    blob: &[u8],
+    spec: &oag_title::adverts::Adverts,
+) -> Result<Card> {
+    let cameras = oag_vex::camera::cameras(blob);
     let camera = match cameras.as_slice() {
         [one] => one,
         other => anyhow::bail!("{} cameras, expected one", other.len()),
@@ -180,11 +195,13 @@ fn load_card(
         model,
         view_projection,
         size: spec.target,
+        timeline: None,
     })
 }
 
 struct CardGpu {
     slot: u32,
+    timeline: Option<crate::gantry::CardTimeline>,
     drawable: Drawable,
     view_projection: Mat4,
     colour: wgpu::TextureView,
@@ -229,9 +246,13 @@ pub(super) fn render(
     queue: &wgpu::Queue,
     encoder: &mut wgpu::CommandEncoder,
     seconds: f32,
+    race: &Race,
+    anim_seconds: Option<f32>,
 ) {
     if let Some(cards) = cards {
-        cards.render(queue, encoder, seconds);
+        cards.render(queue, encoder, seconds, &|timeline| {
+            timeline.seconds(race, anim_seconds)
+        });
     }
 }
 
@@ -306,6 +327,7 @@ impl Cards {
             );
             gpu.push(CardGpu {
                 slot: card.slot,
+                timeline: card.timeline,
                 drawable,
                 view_projection: card.view_projection,
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
@@ -345,6 +367,11 @@ impl Cards {
         }
     }
 
+    /// Whether one of the cards is the start gantry.
+    pub(super) fn has_gantry(&self) -> bool {
+        self.cards.iter().any(|card| card.timeline.is_some())
+    }
+
     /// How many placeholder materials were pointed at a card.
     #[cfg(test)]
     pub(super) fn rebound(&self) -> usize {
@@ -357,8 +384,12 @@ impl Cards {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         seconds: f32,
+        gantry_clock: &dyn Fn(&crate::gantry::CardTimeline) -> f32,
     ) {
         for card in &self.cards {
+            let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
+                timeline.apply(&card.drawable, gantry_clock(timeline))
+            });
             card.drawable.write(
                 queue,
                 card.view_projection,
