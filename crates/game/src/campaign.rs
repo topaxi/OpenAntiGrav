@@ -15,6 +15,7 @@ use oag_ui_screens::picker::FaceScales;
 
 use oag_hud::sprite::Sheet;
 
+mod emblems;
 pub mod hit;
 pub mod launch;
 
@@ -552,35 +553,8 @@ fn load_hd(
             Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
         }
     }
-    // `Cell Selection`'s four emblems: the mode, class and weapons icons, and
-    // the white emblem of every circuit a cell names.
-    let circuit_emblems: std::collections::HashMap<String, String> = tracks
-        .iter()
-        .map(|track| {
-            (
-                track.id.to_lowercase(),
-                oag_ui_screens::campaign::hd::cell_emblems::track_emblem_src(&track.location),
-            )
-        })
-        .collect();
-    let mut emblem_sources = oag_ui_screens::campaign::hd::cell_emblems::sheet_sources();
-    emblem_sources.extend(
-        grids
-            .iter()
-            .flat_map(|grid| &grid.cells)
-            .filter_map(|cell| cell.track.as_deref())
-            .filter_map(|id| circuit_emblems.get(&id.to_lowercase()).cloned()),
-    );
-    emblem_sources.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
-    emblem_sources.push(oag_ui_screens::campaign::hd::cell_emblems::BARCODE_SRC.to_string());
-    emblem_sources.sort_unstable();
-    emblem_sources.dedup();
-    for src in emblem_sources {
-        match read_hd_texture(archives, &src) {
-            Ok(blob) => blobs.push((src, blob)),
-            Err(error) => log::warn!("{src}: {error:#} - the emblem it is for draws nothing"),
-        }
-    }
+    let circuit_emblems = emblems::circuit_emblems(tracks);
+    emblems::push_blobs(archives, &grids, &circuit_emblems, &mut blobs);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));

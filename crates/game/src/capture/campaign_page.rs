@@ -382,9 +382,7 @@ pub(super) fn campaign_page(
                     &oag_ui_screens::campaign::hd::CellArt {
                         next_flyer: hd_grids.get(1).and_then(|grid| grid.flyer_name.as_deref()),
                         fury: !base_hd && campaign.grid_layout_fury.is_some(),
-                        track_emblem: &|id| {
-                            campaign.circuit_emblems.get(&id.to_lowercase()).cloned()
-                        },
+                        track_emblems: &campaign.circuit_emblems,
                     },
                     backdrop,
                     false,

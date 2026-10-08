@@ -269,16 +269,6 @@ impl CampaignStage {
         }
     }
 
-    /// Whether the open grid is one of Fury's: its card is red and its page
-    /// draws the text colours measured on that card.
-    pub(crate) fn fury_open(&self) -> bool {
-        self.active_campaign == Some(Campaign::Fury)
-    }
-
-    /// The sheet `src` of circuit `id`'s white emblem, when it has one.
-    pub(crate) fn circuit_emblem(&self, id: &str) -> Option<String> {
-        self.circuit_emblems.get(&id.to_lowercase()).cloned()
-    }
 
     /// The flyer cards the current screen shows behind its widgets: the
     /// selected tier's on `Grid Selection`, its back on `Cell Selection`, both
@@ -687,7 +677,12 @@ impl CampaignStage {
     #[must_use]
     pub(crate) fn cell_grid_summary(
         &self,
-    ) -> Option<(usize, usize, oag_ui_screens::campaign::GridSummary, Option<&str>)> {
+    ) -> Option<(
+        usize,
+        usize,
+        oag_ui_screens::campaign::GridSummary,
+        oag_ui_screens::campaign::hd::CellArt<'_>,
+    )> {
         let Screen::Cell { which, .. } = &self.screen else {
             return None;
         };
@@ -700,8 +695,20 @@ impl CampaignStage {
             which.saturating_sub(self.grid_range.start),
             self.grid_range.len(),
             Self::grid_summary(grid, &self.title, &self.records),
-            next,
+            self.cell_art(next),
         ))
+    }
+
+    /// What `Cell Selection` draws beyond its screen file and its model.
+    pub(crate) fn cell_art<'a>(
+        &'a self,
+        next_flyer: Option<&'a str>,
+    ) -> oag_ui_screens::campaign::hd::CellArt<'a> {
+        oag_ui_screens::campaign::hd::CellArt {
+            next_flyer,
+            fury: self.active_campaign == Some(Campaign::Fury),
+            track_emblems: &self.circuit_emblems,
+        }
     }
 
     /// The cursor as it stands as the campaign closes, for the session to

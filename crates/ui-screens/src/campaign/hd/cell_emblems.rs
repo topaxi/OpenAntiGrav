@@ -20,6 +20,8 @@
 //! A mode with no icon of that name (`NitroBattle`, `Custom Grid`, `AI Race`)
 //! draws no picture rather than a neighbour's.
 
+use std::collections::HashMap;
+
 use oag_tables::race_campaign::{Cell, Mode};
 use oag_ui::frontend::{Draw, Placed};
 use oag_ui::screen::{Image, Slot};
@@ -96,14 +98,13 @@ fn mode_stem(mode: &Mode) -> Option<&'static str> {
 
 /// The `src` of the picture `slot` shows for `cell`; `None` for no picture.
 #[must_use]
-pub fn source(
-    slot: &str,
-    cell: &Cell,
-    track_emblem: &dyn Fn(&str) -> Option<String>,
-) -> Option<String> {
+pub fn source(slot: &str, cell: &Cell, track_emblems: &HashMap<String, String>) -> Option<String> {
     match slot {
         "Event Emblem" => mode_stem(&cell.mode).map(path),
-        "Track Emblem" => cell.track.as_deref().and_then(track_emblem),
+        "Track Emblem" => cell
+            .track
+            .as_deref()
+            .and_then(|id| track_emblems.get(&id.to_lowercase()).cloned()),
         "Speed Class Emblem" => {
             let class = cell.class.to_ascii_lowercase();
             (cell.mode != Mode::Zone && CLASS_ICONS.contains(&class.as_str())).then(|| path(&class))
@@ -134,14 +135,14 @@ pub(super) fn rule(slots: &[Slot]) -> Option<Draw> {
 pub(super) fn draws(
     slots: &[Slot],
     cell: &Cell,
-    track_emblem: &dyn Fn(&str) -> Option<String>,
+    track_emblems: &HashMap<String, String>,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Vec<Draw> {
     slots
         .iter()
         .filter_map(|slot| {
             let name = slot.name.as_deref()?;
-            let src = source(name, cell, track_emblem)?;
+            let src = source(name, cell, track_emblems)?;
             let placed = sprites(&src)?;
             let image = Image {
                 name: slot.name.clone(),

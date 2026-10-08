@@ -111,7 +111,7 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
         &CellArt {
             next_flyer: None,
             fury: true,
-            track_emblem: &|id| campaign.circuit_emblems.get(&id.to_lowercase()).cloned(),
+            track_emblems: &campaign.circuit_emblems,
         },
         None,
         false,
@@ -164,7 +164,6 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
 fn every_cell_of_every_grid_names_emblems_that_are_on_the_sheet() {
     let Some(opened) = open() else { return };
     let campaign = &opened.campaign;
-    let emblem = |id: &str| campaign.circuit_emblems.get(&id.to_lowercase()).cloned();
     let mut cells = 0;
     let mut no_event_icon = Vec::new();
     for grid in &campaign.grids {
@@ -176,7 +175,7 @@ fn every_cell_of_every_grid_names_emblems_that_are_on_the_sheet() {
                 "Speed Class Emblem",
                 "Weapons Emblem",
             ] {
-                match cell_emblems::source(slot, cell, &emblem) {
+                match cell_emblems::source(slot, cell, &campaign.circuit_emblems) {
                     Some(src) => assert!(
                         campaign.sprites.get(&src).is_some(),
                         "{}: {slot} names {src}, which is not on the sheet",

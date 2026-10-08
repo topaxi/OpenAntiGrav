@@ -332,7 +332,7 @@ fn event_counter(index: usize, total: usize) -> String {
 
 /// What `Cell Selection` draws that its screen file and the model do not
 /// carry: the next grid and the circuits' emblems.
-#[allow(missing_debug_implementations, reason = "holds a closure")]
+#[derive(Debug, Clone, Copy)]
 pub struct CellArt<'a> {
     /// The next grid's `FlyerName`, whose logo the unlock box shows.
     pub next_flyer: Option<&'a str>,
@@ -340,8 +340,9 @@ pub struct CellArt<'a> {
     /// [`cell_text`] applies were measured on it, and the base campaign's white
     /// cards keep the authored ones (white values would not read on them).
     pub fury: bool,
-    /// A circuit id's white emblem, as the `src` the sheet holds it under.
-    pub track_emblem: &'a dyn Fn(&str) -> Option<String>,
+    /// A circuit's white emblem by its lowercased id, as the `src` the sheet
+    /// holds it under.
+    pub track_emblems: &'a std::collections::HashMap<String, String>,
 }
 
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
@@ -522,7 +523,7 @@ pub fn hd_cell_draw_list(
     out.extend(cell_emblems::draws(
         &screen.slots,
         cell,
-        art.track_emblem,
+        art.track_emblems,
         sprites,
     ));
     let targets_visible = true;

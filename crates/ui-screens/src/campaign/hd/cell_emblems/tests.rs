@@ -26,8 +26,11 @@ fn cell(mode: Mode, class: &str, weapons: bool) -> Cell {
     }
 }
 
-fn emblem(id: &str) -> Option<String> {
-    (id == "17_Track").then(|| track_emblem_src(r"Data\Environments\Talons_Junction"))
+fn emblem() -> HashMap<String, String> {
+    HashMap::from([(
+        "17_track".to_string(),
+        track_emblem_src(r"Data\Environments\Talons_Junction"),
+    )])
 }
 
 #[test]
@@ -40,7 +43,7 @@ fn a_single_race_on_venom_with_weapons_names_four_pictures() {
         "Weapons Emblem",
     ]
     .iter()
-    .map(|slot| source(slot, &cell, &emblem))
+    .map(|slot| source(slot, &cell, &emblem()))
     .collect();
     assert_eq!(
         named,
@@ -56,12 +59,12 @@ fn a_single_race_on_venom_with_weapons_names_four_pictures() {
 #[test]
 fn what_the_disc_has_no_icon_for_draws_nothing() {
     let nitro = cell(Mode::Other("NitroBattle".to_string()), "Venom", false);
-    assert_eq!(source("Event Emblem", &nitro, &emblem), None);
+    assert_eq!(source("Event Emblem", &nitro, &emblem()), None);
     let zone = cell(Mode::Zone, "Zone", true);
-    assert_eq!(source("Speed Class Emblem", &zone, &emblem), None);
+    assert_eq!(source("Speed Class Emblem", &zone, &emblem()), None);
     let off = cell(Mode::Race, "Venom", false);
     assert_eq!(
-        source("Weapons Emblem", &off, &emblem).as_deref(),
+        source("Weapons Emblem", &off, &emblem()).as_deref(),
         Some(r"Data\FE\Images\weaponsoff_bw.gtf")
     );
 }
@@ -72,7 +75,7 @@ fn the_sheet_wants_every_icon_the_screen_can_name() {
     assert_eq!(wanted.len(), 14);
     for mode in [Mode::Race, Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
         let cell = cell(mode, "Venom", true);
-        let src = source("Event Emblem", &cell, &emblem).expect("a stem");
+        let src = source("Event Emblem", &cell, &emblem()).expect("a stem");
         assert!(wanted.contains(&src), "{src}");
     }
 }
