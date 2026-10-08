@@ -194,3 +194,42 @@ fn the_bomb_blast_models_earn_their_paired_bits() {
         assert_eq!(r & (slots::BOMB_FIRE | slots::BOMB_SHOCK), 0, "{r:#x}");
     }
 }
+
+/// The laid Bomb's halo earns `BOMB_HALO`, its vertex
+/// program's `Speed` (`6.428`, authored on the material) is folded into `v`,
+/// and `hd_bomb.vex` carries the same material on one chunk of its own. No
+/// other Bomb model and no Plasma model earns the bit.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_laid_bombs_halo_earns_its_bit_and_its_v_offset() {
+    let Some(image) = image() else { return };
+    let halo = build(&image, "/data/weapons/hd_bomb_halo.vex");
+    assert!(!halo.vertices.is_empty());
+    for v in &halo.vertices {
+        let r = v.slots & slots::ROLE_MASK;
+        assert_eq!(r & slots::BOMB_HALO, slots::BOMB_HALO, "{r:#x}");
+        assert_eq!(r & (slots::BOMB_FIRE | slots::BOMB_SHOCK), 0, "{r:#x}");
+        assert!(
+            (6.0..9.0).contains(&v.texcoord[1]),
+            "v carries Speed 6.428: {}",
+            v.texcoord[1]
+        );
+    }
+    let body = roles(&build(&image, "/data/weapons/hd_bomb.vex"));
+    assert!(
+        body.iter().any(|r| r & slots::BOMB_HALO != 0),
+        "hd_bomb.vex's sixth chunk is the same material"
+    );
+    for path in [
+        "/data/weapons/hd_bomb_sphere.vex",
+        "/data/weapons/hd_bomb_sphere_white.vex",
+        "/data/weapons/hd_bomb_shockwaves.vex",
+        "/data/weapons/hd_bomb_sphere_bloomring.vex",
+        "/data/weapons/hd_plasma_sphere.vex",
+        "/data/weapons/hd_plasma_halo.vex",
+    ] {
+        for r in roles(&build(&image, path)) {
+            assert_eq!(r & slots::BOMB_HALO, 0, "{path}: {r:#x}");
+        }
+    }
+}

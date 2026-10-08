@@ -908,6 +908,51 @@ and a `shade.wesl` branch. Not drawn: the generic lit program shows nothing.
 **Omega:** the four blast models are checked, applies, not wired (above); `HD_bomb_halo` itself
 was not looked up in Omega's archive this lane (no PS4 emulator for the film), so: not checked.
 
+## 2026-10-08: `HD_bomb_halo` drawn, and the core's draw read (`hd-bomb-halo`)
+
+**The halo program and the vertex program, both read.** Fragment block `@0x19c0` (above) is paired
+with vertex block `@0x1860`:
+
+```text
+MOV o[TC0].w, v[2].x                    ; u
+ADD o[TC1].w, v[2].y, c[208].x          ; v + Speed   (c[208] = register 464 = parameter 0x31182e0d)
+ADD o[TC0].xyz, -(v[0] * c[210] + c[211]), c[209]   ; eye - position
+MOV o[TC1].xyz, v[1].xyz                ; normal
+```
+
+`Speed` is authored on the material as **6.428** and nothing animates it (no clock in either
+program), so the ramp row is `fract(v + 0.428)` under a repeat sampler. The draw state is `0x79`:
+blend on, alpha test off (the `alpha_func 0x0201` the record also carries is not consumed), additive
+`SrcAlpha`/`One`. Confidence 80 for the program and the constant (instructions read, constant read off
+the record); the repeat sampler is inferred from the film's ring, not read.
+
+**Wired.** `slots::BOMB_HALO` (bit 21, free since the glass pass was retired), a `rim_glow.rs` shape
+fingerprinted on the 27 mnemonics, five literals and two parameters, a `shade.wesl` branch
+(`ramp.rgb`, alpha `50 a^2 rim^(10-10a) 0.1`), `Speed` added to `v` when the mesh is built, and a pool
+drawn per laid Bomb at `halo_scale(age)` (`p.age`, the seconds since it was laid). **Chosen, not
+measured:** the alpha is held at 1 (the RSX wrote an 8-bit target; our float target would multiply
+the ramp's top rows several times over). `hd_bomb.vex`'s sixth chunk carries the same material, so
+the bomb body now draws a scale-1 ring as well; test
+`hd_rim_glow_ground_truth::the_laid_bombs_halo_earns_its_bit_and_its_v_offset` fails if the shape or
+the offset is dropped.
+
+**Read as a player would** (Talon's Junction, `feisar_c1`, far camera pinned 40 units behind the bomb,
+`data/scratch/hd-bomb-halo/frames/sheet3.png`, `sheet4.png`; the owner window was widened locally to
+keep the bomb past 0.5 s, and restored): a pink Fresnel shell grows from about 2 to 19 units across
+every 0.5 s and resets, with a smaller steady ring inside it (the body's chunk), as the film shows
+(`hd-weapon-ref/e12/ring.png`). **Not reproduced:** the film's white disc at the reset.
+
+**The core's draw is unconditional.** `NormalBombBlast_Draw` (`0x001512f8`) sets the matrix on `+0x2e4`
+(fireball), `+0x2e8` (core) and `+0x2ec` (bloom) back to back; the only branch is the viewport flag
+that picks `+0x150` or `+0x1d0`. There is no eye-inside or age test, so the core is drawn while the eye
+is inside it. What differs from the film is therefore model flags (`0x00151538` ORs 4 into the first
+four) or state, not a skipped draw. Confidence 80. Our whiteout is not changed.
+
+**Omega:** `Data\Weapons\HD_bomb_halo.vex` (784 bytes), `hd_bomb_halo.rcsmodel` and
+`materials\hd_bomb_halo.rcsmaterial` (31,112 bytes against HD's 26,480) are all in the PS4 extraction,
+and `HD_bomb.vex` and `HD_bomb_sphere.vex` too: checked, applies, not wired (Omega's own program
+bytes differ, so the shape would need its own fingerprint).
+
 ## 2026-10-07 (`hd-weapon-fx`): the Missile's explosion pool, read statically and live
 
 The pool is `MissileManager + 0xcc + 4 i` (16 pointers to objects of vtable `0x00864b38`, stride

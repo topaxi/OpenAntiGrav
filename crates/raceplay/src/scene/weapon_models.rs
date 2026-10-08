@@ -434,8 +434,10 @@ impl super::Scene {
             repulser_active[slot] = true;
         }
         let hd = self.write_hd_bomb_blasts(race, queue, view_projection, weapon_scene);
+        let halos = self.write_hd_bomb_halos(race, queue, view_projection, weapon_scene);
         BlastsActive {
             hd,
+            halos,
             hemisphere: hemisphere_active,
             shockwave: shockwave_active,
             repulser_field: repulser_active,
@@ -452,6 +454,9 @@ impl super::Scene {
         stats: &mut SceneStats,
     ) {
         self.draw_hd_bomb_blasts(&active.hd, pass, stats);
+        for drawable in self.bomb_blast.hd.halo.iter().take(active.halos) {
+            stats.add(drawable.draw(pass, None, None, None, None));
+        }
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
             for pool in &self.bomb_blast.mag_floor {
                 if let Some(drawable) = pool.get(slot) {
@@ -497,6 +502,8 @@ impl super::Scene {
 pub(super) struct BlastsActive {
     /// What each live HD blast shows - see `bomb_blast::hd`.
     hd: [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
+    /// How many laid-bomb halos were written, from the pool's first slot.
+    halos: usize,
     hemisphere: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     /// Per Repulser pool slot - see `repulser_field`.
@@ -551,6 +558,36 @@ impl super::Scene {
             }
         }
         draws
+    }
+
+    /// Writes a halo onto each laid Bomb (HD only) and returns how many.
+    ///
+    /// The matrix is the bomb's translation scaled by
+    /// `bomb_blast::hd::halo_scale`. The halo carries no clock of its own: its
+    /// program declares no animated parameter, and the `Speed` it reads is a
+    /// constant folded into the mesh's texture coordinates at load.
+    fn write_hd_bomb_halos(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
+    ) -> usize {
+        let matrices = race.hd_bomb_halo_matrices();
+        let mut written = 0;
+        for (drawable, matrix) in self.bomb_blast.hd.halo.iter().zip(&matrices) {
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write_blast(
+                queue,
+                view_projection,
+                *matrix,
+                view_projection * *matrix,
+                0.0,
+                0.0,
+            );
+            written += 1;
+        }
+        written
     }
 
     /// Draws what [`Self::write_hd_bomb_blasts`] wrote: the cut-out fireball

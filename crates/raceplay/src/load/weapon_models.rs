@@ -338,7 +338,7 @@ pub(super) fn load_bodies(
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                     repulser_field: None,
                     mag_floor: [None, None],
-                    hd: [None, None, None, None],
+                    hd: [None, None, None, None, None],
                 }
             });
     // HD's blast set rides the same container - `BombBlastModels::hd`.
@@ -348,6 +348,7 @@ pub(super) fn load_bodies(
             one(Some(hd.sphere_white), "a bomb blast core", true),
             one(Some(hd.bloom_ring), "a bomb blast bloom disc", true),
             one(Some(hd.shockwaves), "a bomb blast shockwave", true),
+            one(Some(hd.halo), "a laid bomb's halo", true),
         ];
     }
     // Rides the Bomb blast's container - see `BombBlastModels::repulser_field`.

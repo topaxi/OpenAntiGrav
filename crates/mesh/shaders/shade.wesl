@@ -910,6 +910,26 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         }
         return vec4<f32>(fire_rgb, 1.0);
     }
+    // **The laid Bomb's halo** (`slots::BOMB_HALO`, `hd_bomb_halo` block
+    // `@0x19c0`): a Fresnel shell. `in.texcoord.y` already carries the vertex
+    // program's `+ Speed` (`mesh::rcs`).
+    //
+    //     ramp = tex(u, v + Speed)                         @0x0e, 4x16
+    //     rim  = sat(1 - N.V)
+    //     a    = 50 ramp.a * rim^(10 - 10 ramp.a) * ramp.a * 0.1
+    //     out  = (ramp.rgb, a)
+    //
+    // Blended SrcAlpha/One by the material's own state (`0x79`), so no alpha
+    // test. The alpha is held to `1` as the 8-bit target it was written to
+    // would: **chosen, not measured**, the float target here would otherwise
+    // multiply the rows above `0.45` several times over.
+    if (in.slots & 2097152u) != 0u {
+        let halo_ramp = textureSample(albedo, albedo_sampler, in.texcoord);
+        let halo_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+        let halo_alpha = halo_ramp.a * 50.0 * pow(max(halo_rim, 1.0e-6), 10.0 - 10.0 * halo_ramp.a)
+            * halo_ramp.a * 0.099975586;
+        return vec4<f32>(halo_ramp.rgb, min(halo_alpha, 1.0));
+    }
     // **The Bomb's shockwave rings** (`slots::BOMB_SHOCK`,
     // `hd_bombfire_shockwaves_glow` block `@0x1950`), `Shockwave_scalar` being
     // the model's clock. The diagonal tap `TEX H0.xyz, R1.xxxx` reads the

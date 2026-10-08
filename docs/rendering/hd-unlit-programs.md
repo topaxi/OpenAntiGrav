@@ -269,6 +269,7 @@ no moving `Anim Transform` key, so each is a number the blast writes
 | `hd_bombfire_glow` | `@0x1d90` (vertex `@0x1c20`) | `HD_bomb_sphere`, `HD_bomb_sphere_white` | `0x6e`, cut-out, no cull | `BOMB_FIRE` |
 | `hd_bombfire_bloomring` | `@0x16a0` | `hd_bomb_sphere_bloomring` | `0x29`, `SrcAlpha`/`One` | `EMISSIVE` (existing) |
 | `hd_bombfire_shockwaves_glow` | `@0x1950` (vertex `@0x17c0`) | `hd_bomb_shockwaves` (x8) | `0x29`, `SrcAlpha`/`One` | `BOMB_SHOCK` |
+| `hd_bomb_halo` | `@0x19c0` (vertex `@0x1860`) | `HD_bomb_halo`, one chunk of `HD_bomb` | `0x79`, `SrcAlpha`/`One` | `BOMB_HALO` (bit 21; see `weapons.md`, 2026-10-08) |
 
 **Both new bits are pairs of existing ones** (`BOMB_FIRE = RIM_GLOW | RIM_EDGE`,
 `BOMB_SHOCK = CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO`): the role word keeps

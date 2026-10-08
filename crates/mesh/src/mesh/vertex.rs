@@ -341,9 +341,15 @@ pub mod slots {
     /// multiplier in its scale and whether the diffuse alpha weights the grab
     /// in its rate.
     ///
-    /// Bit 21 above it is free: it marked one of the two blended passes the
-    /// glass was drawn as before the target existed.
+    /// Bit 21 above it marked one of the two blended passes the glass was
+    /// drawn as before the target existed; [`BOMB_HALO`] has it now.
     pub const REFRACTION: u32 = 1 << 20;
+
+    /// HD's laid-Bomb halo (`hd_bomb_halo.rcsmaterial`, block `@0x19c0`): a
+    /// Fresnel shell whose alpha is `5 a^2 rim^(10 - 10 a)` over a 4x16 ramp
+    /// sampled at `(u, v + Speed)`, `a` the ramp's alpha. Took bit 21, which the
+    /// retired glass pass had left free.
+    pub const BOMB_HALO: u32 = 1 << 21;
 
     /// HD's Sebenco ice pool (`mesh::rcs::ice`): the albedo is a lerp of three
     /// authored colours by a facing term and a pond mask read through
