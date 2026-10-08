@@ -29,8 +29,9 @@ the identity.
 - **What the byte at `0x9384e1` is**: it gates both the Duel override and the Eliminator change.
 - **No live leg**: every row on the page is static. A Racebox race under RPCS3 reading
   `ai+0x170`/`+0x174` and the thrust out of `0xfdf00` would raise `AI_UpdateCraft` and the law.
-- **The driver's second net at `+0x298`** (from the `hd-ai-nnt` lane) is cleared by
-  `AiNetDriver_Init` and read by nothing found; its live pointers were not recorded.
+- **The networks' live mode coverage**: both boots sampled a Campaign event (both nets null on
+  seven drivers, [ai-net.md](../../docs/ghidra/functions/ps3-hdfury-eu/ai-net.md) items 4-6); Zone
+  and a single race were not sampled.
 - ~~Census HD's XML against Pulse's schema~~ and ~~follow `0x103d14..0x104268` for the
   thrust~~: done, above.
 
