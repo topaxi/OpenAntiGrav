@@ -796,11 +796,22 @@ impl Race {
         // follows the same gate - a round that never left plays nothing -
         // see `Cue::Cannon`'s own doc comment for why this is the push site
         // rather than `spend_pickup`'s own Cannon arm, which never fires.
-        if self.sim.world.projectiles.spawn(
+        //
+        // The round is born carrying the craft's up, not world up: the flight
+        // never reads it (the Cannon flies no probe) but the drawn pose does
+        // (`projectile_model_matrices`), and `Cannon_Init` (`0x088648ec`) copies
+        // the craft's muzzle anchor into the round's basis, so a round off a
+        // banked craft is drawn rolled with it. Measured basis `(up x f, up, f)`
+        // only on a near-flat track, where it cannot tell the two apart; that it
+        // is the craft's up on a bank is the anchor copy read, not measured
+        // (`cannon-quake-leachbeam.md`, 2026-09-24).
+        if self.sim.world.projectiles.spawn_riding(
             oag_tables::weapons::Weapon::Cannon,
             position,
             velocity,
             slot as u8,
+            ship.physics.body.up(),
+            0.0,
         ) {
             self.sim.cues.push(oag_sound::sfx::CueEvent::new(
                 oag_sound::sfx::Cue::Cannon,

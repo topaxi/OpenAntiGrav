@@ -222,16 +222,44 @@ engine gave it the Rocket's `velocity.y -= dt * 50.0`. Wired in
 `projectile::tests::seed::a_plasma_bolt_over_nothing_falls_along_its_carried_normal`
 (fails on the old code). Control run: with every seed forced back to world up
 *and* the old fall, the Plasma's ride test fails (worst angle 70.9 deg on Pulse,
-39.0 on HD).
+39.0 on HD); that is the seed's doing (the seed alone breaks it), not the
+fall arm's.
 
-**What the ground truth does not prove.** With the seeds alone forced back to
-world up the Rocket, Missile and Shuriken ride tests still pass: the first floor
+**What the ground truth does not prove.** The Plasma's fall fix is pinned by the
+unit test alone: a disc-backed check of the velocity change over consecutive
+no-floor ticks found 103 fall ticks on HD and none on Pulse, and **none with the
+carried normal off world up**, so it cannot tell the two axes apart and was not
+kept. Likewise, with the seeds alone forced back to world up the Rocket,
+Missile and Shuriken ride tests still pass: the first floor
 hit adopts the real normal, and on these two circuits' banks the wrong first
 probe is rarely enough to leave the floor. The seeds are pinned by the unit
 tests in `projectile/tests/seed.rs` (each fails if its seed is dropped) and the
 Missile's by `a_missile_fired_on_a_bank_is_born_riding_the_craft_up`; the ride
 test is the guard that nothing re-introduces the Cannon's displacement, not a
 seed discriminator.
+
+**The Cannon round was drawn rolled to world up (found and fixed here).**
+`Projectiles::spawn` seeds `surface = Vec3::Y`; the Cannon never probes, so the
+round carried world up for its whole life, and `projectile_model_matrices` reads
+`surface` as the body's up. Measured on the loop: the least dot of round up with
+the firing craft's up was 0.04 on Moa Therma (a round drawn nearly 90 degrees
+rolled) and 0.78 on Vineta K; after the fix 0.99999 on both
+(`cannon_tilt_ground_truth`, 255 and 217 rounds). `advance_cannons` now spawns
+the round carrying the craft's up (`spawn_riding`). **The law is a reading, not a
+measurement:** `Cannon_Init` (`0x088648ec`) copies the craft's muzzle anchor
+into the round's basis (measured live as `(up x f, up, f)`, but only on a near-flat
+track where world up and craft up agree), so a round off a banked craft carries
+the craft's up; the draw from that basis is the old confidence-70 inference.
+`surface` is hashed state for a Cannon round now, see the regeneration note in
+the report.
+
+**Trails and the other drawn poses.** The HD rocket ribbon builds its rows from
+`projectile.surface` (`rocket_smoke.rs`), so it follows the bank. The Pulse
+Missile's two orbiting flares use world up as `up`, **which is the original's**
+(`missile.md`: `world_up` is a hardcoded `(0, 1, 0)`, instruction level,
+confidence 80), and the Plasma and Missile flare frames were never read (see the
+note at `Race::advance_projectile_flares`), so they keep world up; **not
+checked on a bank against the original.** This engine draws no Missile body model (`projectile_sprites`' own note), so there is no pose to roll.
 
 **Mine and Bomb.** Laid where the craft is, to the bit, on every tilted drop
 (Pulse 482 mines / 225 bombs, HD 204 / 98 on a craft past 18 degrees), and the
