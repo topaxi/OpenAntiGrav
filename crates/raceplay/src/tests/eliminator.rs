@@ -262,3 +262,45 @@ fn a_single_race_absorb_still_pays_energy_and_raises_no_shield() {
     assert!((race.ship().physics.shield - 27.0).abs() < 1e-4);
     assert_eq!(race.ship().physics.shield_pickup_timer, 0.0);
 }
+
+/// A Mine laid by one craft and tripped by another that its blast then finishes
+/// is a kill for the layer: the direct hit (`Impact::struck`) records the owner
+/// as the victim's last damager, the fatal-blow window finds it, and
+/// `credit_kill` pays the Eliminator tally. A layer that is itself in the
+/// radius is never its own victim.
+#[test]
+fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Eliminator;
+    setup.weapons = Some(one_mine_table());
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let mut race = Race::start(setup);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.sim.world.ships[0].pickup.begin_drop(1);
+    race.tick(&PlayerInputs::none());
+    let mine = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Mine))
+        .expect("the drop laid a mine")
+        .position;
+    race.sim.world.ships[1].physics.body.position = mine;
+    race.sim.world.ships[1].physics.shield = 1.0;
+    let mut left_racing = false;
+    for _ in 0..240 {
+        race.tick(&PlayerInputs::none());
+        left_racing |=
+            race.sim.world.ships[1].physics.craft_state != oag_physics::CraftState::Racing;
+    }
+    assert!(left_racing, "the blast must finish a craft on one shield point");
+    assert_eq!(race.sim.world.ships[0].standing.kills, 1);
+    assert_eq!(race.sim.world.ships[1].standing.kills, 0);
+}
