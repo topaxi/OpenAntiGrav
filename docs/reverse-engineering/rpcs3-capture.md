@@ -824,6 +824,53 @@ static reading. **2048:** the Vita3K path is a separate lane. **No `just`
 recipe**: every other `rpcs3-drive.py` subcommand is called directly, and the
 command needs a per-lane environment a recipe would hide.
 
+## A per-frame craft trace (2026-10-08, `hd-handling`)
+
+`scripts/rpcs3-trace.py` is the PS3 counterpart of `psp-trace.py`: one boot, any number of
+`--run name=<script.inputs>[@x,y,z,yaw[,speed]]`, each teleported (the `place` chain above),
+settled `--settle` frames with nothing held, then driven from an `.inputs` script while the
+player's rigid body, craft object (`ship+0x5fac`, `0x600` bytes) and `PlayerInput` record
+are read every frame through `/proc/<pid>/mem` (the no-pause read above). It writes
+`<name>-<rep>.csv` (game time, step, throttle, steer, pitch, airbrakes, basis, position,
+velocity) and the raw dumps beside it. Results: [hd-handling-ground-truth.md](../physics/hd-handling-ground-truth.md).
+
+    uv run --with evdev python3 scripts/rpcs3-trace.py --image <abs>/hdfury-ps3-eu-dec.iso \
+        --out data/scratch/<lane>/<boot> --settle 60 --repeat 2 \
+        --nav "Main Menu=right" --nav "Single Player=wait,right" \
+        --nav "Track Creation=wait,right,right,right,right,right,right,right,right" \
+        --run thrust=verification/scenarios/hd-thrust.inputs@6.10,-51.91,-195.92,90
+
+That walk is **Racebox Time Trial, Venom, weapons off, no AI** on Talon's Junction
+(screenshotted per step under `<out>/screens/`; `wait` sleeps 3 s so a screen's entrance
+animation does not eat the first tap). The campaign default walk races seven AI craft and
+ends when they finish, which froze the player mid-boot on the first attempt.
+
+What it had to learn, each of which produced a wrong-looking result first:
+
+- **Pilot Assist is a save setting and was on.** `*(*0x008b098c)+0x473` (and `+0x474`
+  beside it) is the flag `FUN_0022f8c8`, the FirstPlayDialog handler, sets with
+  "change to pilotassist enabled". With it on, the throttle reads `92`
+  (`<PilotAssistPenalty thrustPercentOnUse="92">` in `/data/xml/handlingstats.xml`) and the
+  craft steers itself round a curve. The tool writes `00 00` there at the Main Menu
+  (`--pilot-assist off`, the default) before the race is built. This is also why the
+  2026-08-20 runs on [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) read 100 and
+  this lane's first probe read 92.
+- **Key the script on the game clock, not on frames.** `craft+0x308` is the game clock and
+  the craft integrates each frame's own delta (0.6 to 1.5+ sixtieths; two at a time when
+  RPCS3 drops to 30 fps, which happened on one boot of five). The script's state `k` is held
+  from game time `k/60`; repeats then agree to a fraction of a degree. Compare in game time,
+  never by row.
+- **L2/R2 are analog axes.** RPCS3's stock evdev profile (which `oag.yml` leaves in place by
+  naming only the device) reads the triggers from `ABS_Z`/`ABS_RZ`; `rpcs3_pad.Pad` now
+  writes the axis with the button. HD's airbrakes are L2/R2, so the tool maps a script's
+  `l`/`r` there; L1/R1 do nothing in a race.
+- **A frame counter.** `find_world` locates an object holding the body in an inline array
+  the way this page's physics section describes the world; its `+0x40` counts frames (it is
+  not the physics world: vtable `0x00863780`). Each sample is kept only if that counter did
+  not move under the reads and the body read back identical; no sample was ever rejected.
+
+**Omega: not checkable**, as for the teleport.
+
 ## Capturing one frame's draws (2026-10-07, `vineta-k-fidelity`)
 
 What the pushbuffer holds besides the camera: **every draw of the frame with the state it was issued under** - the fragment

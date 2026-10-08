@@ -646,3 +646,6 @@
 0x000bb960	function	AIManager_Update	70	ai-stats.md
 0x00102d70	function	AI_UpdateCraft	75	ai-stats.md
 0x00100658	function	AI_ComputeControls	65	ai-stats.md
+# 2026-10-08 hd-handling lane (physics.md, "The handling update")
+0x000ee730	function	Craft_UpdateAirbrakes	85	physics.md
+0x000f0980	function	Craft_UpdatePitch	80	physics.md
