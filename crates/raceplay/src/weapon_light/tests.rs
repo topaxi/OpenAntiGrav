@@ -35,12 +35,12 @@ fn a_spent_missile_blast_lights_nothing() {
     assert!(missile_record(Vec3::ZERO, -0.1).is_none());
 }
 
-/// `D = 100`, `w = 1`, `(14, 10, 2)`.
+/// `D = 50`, `w = 1`, `(7, 5, 1)`.
 #[test]
 fn the_rocket_light_is_the_literals_the_update_loads() {
     let light = rocket_record(Vec3::new(4.0, 5.0, 6.0));
     assert_eq!(light.position, [4.0, 5.0, 6.0, 1.0]);
-    assert_eq!(light.colour, [14.0, 10.0, 2.0, 100.0]);
+    assert_eq!(light.colour, [7.0, 5.0, 1.0, 50.0]);
 }
 
 /// Dropping the wiring from the built list fails this.
@@ -65,4 +65,41 @@ fn the_circuits_switch_silences_the_weapons_too() {
     race.view.spu_vertex_lights = true;
     race.view.hd_trail_active = false;
     assert!(race.hd_spu_lights().is_empty());
+}
+
+/// The emulated update's samples: `x` is 1 until 0.1 s, `0.857` at 0.2 s,
+/// `0` at 0.8 s, `0.7311` at 1.0 s, `1` at 1.5 s, `0.64` at 1.6 s.
+#[test]
+fn the_bomb_envelope_matches_the_emulated_update() {
+    for (age, x) in [
+        (0.05, 1.0),
+        (0.2, 0.8571),
+        (0.8, 0.0),
+        (1.0, 0.7311),
+        (1.4, 0.9622),
+        (1.6, 0.64),
+        (2.1, 0.0),
+    ] {
+        let got = bomb_envelope(age).0;
+        assert!((got - x).abs() < 1e-3, "age {age}: {got} vs {x}");
+    }
+}
+
+/// At birth: both lights three units up, ranges 40 and 100, `w = 1.5`.
+#[test]
+fn a_new_bomb_blast_lights_two_balls_three_units_up() {
+    let [one, two] = bomb_records(Vec3::new(1.0, 0.0, 2.0), Vec3::Y, 0.0);
+    assert_eq!(one.position, [1.0, 3.0, 2.0, 1.5]);
+    assert_eq!(one.colour, [500.0, 200.0, 50.0, 40.0]);
+    assert_eq!(two.colour, [20.0, 5.0, 0.5, 100.0]);
+}
+
+/// Dropping the wiring from the built list fails this.
+#[test]
+fn a_live_bomb_blast_reaches_the_frame_list() {
+    let mut race = hd_race();
+    race.view.hd_bomb_blast = true;
+    let before = race.hd_spu_lights().len();
+    race.view.hd_bomb_blasts[0] = Some(crate::bomb_blast::hd::HdBlast::new(Vec3::ZERO, Vec3::Y));
+    assert_eq!(race.hd_spu_lights().len(), before + 2);
 }

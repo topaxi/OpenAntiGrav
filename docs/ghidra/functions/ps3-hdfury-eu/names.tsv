@@ -595,3 +595,5 @@
 0x002ebce8	function	RibbonNode_Link	75	rocket-trail.md
 0x002ebd48	function	RibbonNode_Unlink	75	rocket-trail.md
 0x00123fb0	function	Rocket_Update	70	rocket-trail.md
+0x00123de8	function	Rocket_SubmitLight	85	weapons.md
+0x00155420	function	MissileExplosion_Draw	70	weapons.md

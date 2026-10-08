@@ -39,11 +39,12 @@
 //!
 //! # Who fills it
 //!
-//! The only producer this project has wired is the one the live capture
-//! showed filling the whole buffer: `EngineFlare_SubmitSpuLight`, one light
-//! per craft behind its nozzle - see `oag_raceplay::engine_light`. The
-//! other 23 producers renderer.md catalogued (pickups, weapons, the Zone
-//! ship) stay unwired until their triggers are read.
+//! `oag_raceplay::engine_light` (one light per craft behind its nozzle, the
+//! one the live capture showed filling the buffer) and
+//! `oag_raceplay::weapon_light` (the Missile explosion, the Rocket's draw and
+//! the Bomb blast's two lights). The other producers renderer.md catalogued
+//! (pickups, the Zone ship, wheel contacts) stay unwired until their triggers
+//! are read.
 
 /// The original's candidate-list cap: `SpuLight_AddCandidate` stops at
 /// `0x80` records. The live buffer never held more than 8.
@@ -89,8 +90,7 @@ pub struct SpuLights {
 }
 
 impl SpuLights {
-    /// No lights - what every draw outside a Wipeout HD race binds, and what
-    /// HD's own craft bind: the list is handed to track chunks alone.
+    /// No lights - what every draw outside a Wipeout HD race binds.
     #[must_use]
     pub const fn none() -> Self {
         Self {
