@@ -5,8 +5,12 @@
 
 `<dir>/<stem>-4*.bin` are the spans `rpcs3_draw_hook.py` writes. One line per
 draw: its number, begin mode, vertex count, fragment program, blend
-(enable, src, dst, equation), depth (test, mask, func), colour mask, viewport
-and the first four bound textures. A line `SURF` marks a render-target switch
+(enable, src, dst, equation), alpha test (enable, func), cull (enable, face),
+depth (test, mask, func), colour mask, viewport and the first four bound
+textures. Only subchannel-0 writes are kept: the blits on subchannels 3 to 7
+reuse the method numbers `0x300`-`0x30c` and would overwrite the alpha-test
+and blend registers. Register numbers are read off the stream, not from a gcm
+header (`0x183c` as cull enable is inferred from its 0/1 spread). A line `SURF` marks a render-target switch
 and `CLEAR` a clear, so passes read off the list.
 """
 import argparse
@@ -24,7 +28,9 @@ def draws(directory, stem):
     mem = r.Mem.load(sorted(glob.glob("%s/%s-4*.bin" % (directory, stem))))
     regs, out, events = {}, [], []
     walk = r.Walk(mem)
-    for _pos, meth, noinc, args in walk.run(0x1000):
+    for pos, meth, noinc, args in walk.run(0x1000):
+        if (mem.word(pos) >> 13) & 7:
+            continue
         if meth in (0x1efc, 0xb80):
             if meth == 0x1efc and len(args) >= 5:
                 regs.setdefault("c", {})
@@ -66,9 +72,10 @@ def main():
             continue
         tex = ["%08x" % d.get(0x1a00 + 0x20 * u, 0) for u in range(4) if d.get(0x1a00 + 0x20 * u + 0xc, 0) & 0x80000000]
         cnt = ((d.get(0x1824, 0) >> 24) & 0xff) + 1 if 0x1824 in d else 0
-        print("%4d tgt %08x idx%-4d fp %08x bl %d %x/%x eq %x dep %d/%d/%x cm %08x vp %08x/%08x tex %s" % (
+        print("%4d tgt %08x idx%-4d fp %08x bl %d %x/%x eq %x at %d/%x cull %d/%x dep %d/%d/%x cm %08x vp %08x/%08x tex %s" % (
             n, d.get(0x210, 0), cnt, d.get(0x8e4, 0), d.get(0x310, 0) & 1, d.get(0x314, 0), d.get(0x318, 0), d.get(0x320, 0),
-            d.get(0xa74, 0) & 1, d.get(0xa6c, 0) & 1, d.get(0xa60, 0), d.get(0x324, 0),
+            d.get(0x304, 0) & 1, d.get(0x308, 0), d.get(0x183c, 0) & 1, d.get(0x1830, 0),
+            d.get(0xa74, 0) & 1, d.get(0xa70, 0) & 1, d.get(0xa6c, 0), d.get(0x324, 0),
             d.get(0xa00, 0), d.get(0xa04, 0), ",".join(tex)))
 
 
