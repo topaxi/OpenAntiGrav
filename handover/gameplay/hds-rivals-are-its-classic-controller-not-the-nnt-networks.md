@@ -10,28 +10,35 @@ not the networks. HD's opponents drive a classic controller tuned by `AIControlS
 `AIRaceStats_<class>.xml` (`DATA02.PSARC`, with a second `airacestats_*.xml` set in
 `DATA03.PSARC`), and that controller is what is unread.
 
+2026-10-08, `hd-ai-classic` lane: the tables and the thrust law are read,
+[ps3-hdfury-eu/ai-stats.md](../../docs/ghidra/functions/ps3-hdfury-eu/ai-stats.md). HD's
+`AIControlStats.xml`/`AIRaceStats_<class>.xml` are Pulse's value for value (so are 2048's and
+Omega's), the parser is Pulse's plus `SplitScreenMultiplier`, and `AI_ComputeOpponentThrust`
+(`0x000fdf00`) is Pulse's with four changes (finished spread 75, finished wander `8 - place`,
+Eliminator drops `WhenBehind`, multi-human reference craft). `oag-ai` ports none of that law for any
+title, so nothing changed in code; `crates/tables/tests/ai_stats_lineage_ground_truth.rs` pins
+the identity.
+
 ## Open
 
-- **HD's classic controller is unread.** Its config strings sit at `0x780c31` in `EBOOT.elf`
-  with `LookAhead`, `RubberBanding`, `PosBalancing`, `SkillScale`, `RaceBalancing` beside them.
-  Whether HD's XML is Pulse's schema (already parsed, [ai.md](../../docs/gameplay/ai.md)) with
-  other numbers, or a different one, is not checked.
-- **What feeds `AiNetDriver_GetControls`'s classic hand-through.** `0x0010b6e0` stores three
-  values from the AI update (`0x103d2c`), but live they read `0.0` on six of eight drivers 16 s
-  into a race, and the caller at `0x104254..0x104264` was not followed. That AI update
-  (`0x102e00..0x104268`) is the classic controller's likely home.
-- **Only one mode was sampled live** (Racebox single race). The static case does not depend on
-  mode, but a Campaign or Zone sample would close it.
-- **The driver's second net at `+0x298`** is cleared by `AiNetDriver_Init` and read by nothing
-  found; its live pointers were not recorded.
+- **The steering law inside `AI_ComputeControls` (`0x00100658`)** is unread past its inputs
+  (`LookAheadSecs`, `SteerMul`, `SteerDamp`, `xtrackMul`, header constants). Next address: the call
+  to `0x000fe688` at `0x100954`/`0x100a04`. Pulse's own consumer is not identified either.
+- **What the byte at `0x9384e1` is**: it gates both the Duel override and the Eliminator change.
+- **No live leg**: every row on the page is static. A Racebox race under RPCS3 reading
+  `ai+0x170`/`+0x174` and the thrust out of `0xfdf00` would raise `AI_UpdateCraft` and the law.
+- **The driver's second net at `+0x298`** (from the `hd-ai-nnt` lane) is cleared by
+  `AiNetDriver_Init` and read by nothing found; its live pointers were not recorded.
+- ~~Census HD's XML against Pulse's schema~~ and ~~follow `0x103d14..0x104268` for the
+  thrust~~: done, above.
 
 ## Next Steps
 
-1. Census HD's `aicontrolstats.xml` and `airacestats_<class>.xml` against Pulse's schema in
-   `oag_tables` (a reader run, about 30 minutes). If it parses, HD's numbers can feed `oag-ai`
-   through `Title` data the way Pulse's do.
-2. Follow `0x103d14..0x104268` with capstone to find what reads `LookAhead` and turns it into
-   steer, thrust and airbrake (an afternoon; Ghidra halts at the AltiVec).
+1. Capstone `0x00100658..0x100e60` and `0x000fe688` for the steering law (an afternoon); then
+   compare with Pulse's, which first needs Pulse's consumer found (start from the strings at
+   `0x08a7ac70`'s neighbours, per `psp-pulse-usa/ai-stats.md`).
+2. Only once a law is read: whether `oag-ai` should take the disc's `Controller` values on every
+   title is the maintainer's call, and it moves every `ai_*` ground truth.
 3. Not recommended: wiring the networks. The original never runs them, so a port would be
    behaviour the original does not have. If it is ever wanted anyway, the activation is
    `s / (sqrt(s*s + 1) + 1)` (`sqrt` only, deterministic under the project's rules), the inputs

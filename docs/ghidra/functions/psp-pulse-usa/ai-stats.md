@@ -191,6 +191,13 @@ What would take it higher is a runtime leg, and there are two: read `+0x28`
 after load under PPSSPP, or author a file using `BaseThrust` and watch the
 launch change. Neither has been done.
 
+**A second binary agrees (2026-10-08).** HD's EBOOT carries the same parser
+with the same mismatch: `BaseThrust` is a string there and `BaseStartThrust` is
+not, its attribute compare is `strcasecmp` (which still cannot match a different
+letter), and HD ships Pulse's own files. HD also confirms the layout above: its
+record is this one plus three `SplitScreenMultiplier` floats at `+0xc4`, stride
+`0x118`. See [ps3-hdfury-eu/ai-stats.md](../ps3-hdfury-eu/ai-stats.md).
+
 ## `StartBoost[8]` has a consumer: the AI's grade 3
 
 Added 2026-10-01 (`pulse-launch-boost`). `Ship_UpdateStartBoost` (`0x0883fdec`) case 3 -
