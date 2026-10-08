@@ -17,6 +17,7 @@ const SMOKE_VERTICES: usize = MAX_TRAILS * (CAPACITY - 1) * FINS * 6;
 pub(super) struct Ribbons {
     pub(super) magstrip: Option<super::magstrip_wake::Magstrip>,
     rocket_smoke: Option<RocketSmoke>,
+    leach_strip: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
 }
 
 #[derive(Debug)]
@@ -51,9 +52,22 @@ pub(super) fn build(
         )),
         ramp: assets.ramp.clone(),
     });
+    let leach_strip = textures.leach_strip.as_ref().map(|assets| {
+        std::cell::RefCell::new(oag_fx::beam::Pipeline::with_noise(
+            device,
+            queue,
+            format,
+            &assets.glow,
+            Some(&assets.noise),
+            sample_count,
+            super::mesh_render::Velocity::Write,
+            Style::leach_strip(crate::leach_strip::VERTICES),
+        ))
+    });
     Ribbons {
         magstrip,
         rocket_smoke,
+        leach_strip,
     }
 }
 
@@ -70,6 +84,16 @@ impl super::Scene {
                 .borrow_mut()
                 .upload_with_eye(queue, vp, eye.to_array(), &vertices);
         }
+        if let Some(strip) = &self.ribbons.leach_strip {
+            let eye = race.view().inverse().w_axis.truncate();
+            strip.borrow_mut().upload_with_clock(
+                queue,
+                vp,
+                eye.to_array(),
+                self.anim_clock.get(),
+                &race.leach_strip_vertices(),
+            );
+        }
     }
 
     /// Draws the ribbons into the pass `draw_effects` owns: the wake, then
@@ -78,6 +102,9 @@ impl super::Scene {
         self.draw_magstrip_wake(pass);
         if let Some(smoke) = &self.ribbons.rocket_smoke {
             smoke.pipeline.borrow().draw(pass);
+        }
+        if let Some(strip) = &self.ribbons.leach_strip {
+            strip.borrow().draw(pass);
         }
     }
 }

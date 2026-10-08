@@ -316,6 +316,9 @@ pub struct RaceView {
     /// The HD-lineage magstrip arc wake, one per craft, on a title that builds
     /// the class - see [`magstrip_wake`]. `None` everywhere else.
     pub(super) magstrip_wake: Option<magstrip_wake::Wakes>,
+    /// HD's LeachBeam strip: every craft's anchor trail. `Some` only where the
+    /// title draws the strip - see [`crate::leach_strip`].
+    pub(super) leach_strip: Option<crate::leach_strip::Strip>,
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,

@@ -788,10 +788,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     // The plugin list is the craft's title's, and an empty one is a real
-    // answer rather than a missing case: a title whose front end is
-    // unrecovered has no declared languages, so the HUD draws its captions as
-    // their own `idstring` keys and says so, which is what it already did for
-    // a source whose plugins would not parse.
+    // answer: a title whose front end is unrecovered declares no languages, so
+    // the HUD draws its captions as their own `idstring` keys and says so, as
+    // it already did for a source whose plugins would not parse.
     let language_plugins = craft_title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
@@ -894,6 +893,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             slot_teams: slot_teams.clone(),
             magstrip_wake: magstrip_wake.anchors,
             magstrip_pob: wm.magstrip_pob,
+            leach_strip: magstrip_wake.leach_anchors,
             collision,
             handling,
             airbrake_graphics,

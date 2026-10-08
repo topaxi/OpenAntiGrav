@@ -122,6 +122,7 @@ pub const TITLE: &Title = &Title {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        leach_strip: None,
         leachbeam_ball: None,
         shuriken: None,
         // No Cannon on Pure, so no Cannon draw.

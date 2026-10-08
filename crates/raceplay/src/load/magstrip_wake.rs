@@ -20,6 +20,9 @@ pub(crate) type Textures = [FlareTexture; 2];
 pub(super) struct Loaded {
     pub(super) anchors: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     pub(super) textures: RibbonTextures,
+    /// Each slot's `arc_anchor_point`, for HD's LeachBeam strip, when the
+    /// title draws one.
+    pub(super) leach_anchors: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
 }
 
 pub(super) fn load(
@@ -29,9 +32,18 @@ pub(super) fn load(
     report: &mut Vec<String>,
 ) -> Loaded {
     let rocket_smoke = crate::rocket_smoke::load(archives, models, report);
+    let leach_strip = crate::leach_strip::load(archives, models, report);
+    let leach_anchors = leach_strip.as_ref().map(|_| {
+        let mut anchors = [None; oag_gameplay::MAX_SHIPS];
+        for (slot, livery) in liveries.iter().enumerate().take(anchors.len()) {
+            anchors[slot] = livery.arc_anchor;
+        }
+        anchors
+    });
     let only_smoke = || RibbonTextures {
         magstrip: None,
         rocket_smoke: rocket_smoke.clone(),
+        leach_strip: leach_strip.clone(),
     };
     let Some(wake) = models.magstrip_wake else {
         // The `.pob` side needs only the anchors: it draws no arc.
@@ -39,6 +51,7 @@ pub(super) fn load(
             return Loaded {
                 anchors: None,
                 textures: only_smoke(),
+                leach_anchors,
             };
         }
         let mut anchors = [None; oag_gameplay::MAX_SHIPS];
@@ -53,6 +66,7 @@ pub(super) fn load(
         return Loaded {
             anchors: Some(anchors),
             textures: only_smoke(),
+            leach_anchors,
         };
     };
     let platform = archives.layout.platform;
@@ -76,7 +90,9 @@ pub(super) fn load(
         textures: RibbonTextures {
             magstrip: textures,
             rocket_smoke,
+            leach_strip,
         },
+        leach_anchors,
     }
 }
 

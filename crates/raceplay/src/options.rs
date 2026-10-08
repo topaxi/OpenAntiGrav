@@ -483,12 +483,12 @@ pub struct Setup {
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's `arc_anchor_point` in its hull's model space, when the title
     /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
-    /// authors none is `None` and draws no wake. `None` on every other title.
-    /// See `race::magstrip_wake`.
+    /// authors none is `None` and draws no wake. See `race::magstrip_wake`.
     pub magstrip_wake: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
-    /// Whether the over-strip effect is the title's `.pob` rather than the arc
-    /// wake: see `oag_title::weapons::WeaponModels::magstrip_pob`.
+    /// Whether the over-strip effect is the title's `.pob`: see `WeaponModels::magstrip_pob`.
     pub magstrip_pob: bool,
+    /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
+    pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,

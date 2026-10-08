@@ -60,6 +60,9 @@ pub struct Style {
     /// Whether the fragment is HD's Rocket smoke program - see
     /// [`Style::rocket_smoke`].
     pub smoke: bool,
+    /// Whether the fragment is HD's LeachBeam strip program: two textures
+    /// and the engine clock - see [`Style::leach_strip`].
+    pub leach: bool,
 }
 
 impl Style {
@@ -74,6 +77,7 @@ impl Style {
         topology: wgpu::PrimitiveTopology::TriangleStrip,
         capacity: MAX_VERTICES,
         smoke: false,
+        leach: false,
     };
 
     /// The magstrip arc wake, `capacity` vertices of triangle list.
@@ -113,6 +117,7 @@ impl Style {
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,
             smoke: false,
+            leach: false,
         }
     }
 
@@ -154,7 +159,40 @@ impl Style {
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,
             smoke: true,
+            leach: false,
         }
+    }
+
+    /// Wipeout HD's LeachBeam strip, `capacity` vertices of triangle list.
+    ///
+    /// **Measured live on RPCS3** (2026-10-08, `hd-leach-draw`, the draw of
+    /// fragment program `0x00744c41` in a held beam's frame; the material's own
+    /// state word `0x79` says the same): blend on, colour and alpha
+    /// `SRC_ALPHA, ONE` with `FUNC_ADD`, depth test `LEQUAL` with write off,
+    /// cull off, alpha test off, colour mask RGB. Both samplers `REPEAT` on
+    /// every axis, linear filter. Unit 0 is the 128x128 noise, unit 1 the
+    /// 256x256 glow. The fragment is `hd_leachbeam`'s own program, the `leach`
+    /// override in `beam.wesl`; no transfer function, so the texture is not
+    /// decoded on a linear target.
+    #[must_use]
+    pub const fn leach_strip(capacity: usize) -> Self {
+        let mut style = Self::rocket_smoke(capacity);
+        style.label = "leach strip";
+        style.blend = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::SrcAlpha,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::SrcAlpha,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+        };
+        style.smoke = false;
+        style.leach = true;
+        style
     }
 }
 
@@ -206,6 +244,32 @@ impl Pipeline {
         velocity: oag_mesh::mesh_render::Velocity,
         style: Style,
     ) -> Self {
+        Self::with_noise(
+            device,
+            queue,
+            format,
+            texture,
+            None,
+            sample_count,
+            velocity,
+            style,
+        )
+    }
+
+    /// [`Self::with_style`] with a second texture on unit 0, for
+    /// [`Style::leach_strip`]: `texture` is unit 1 (the glow) and `noise` unit
+    /// 0. `None` binds a white texel, which the other styles never sample.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_noise(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        texture: &FlareTexture,
+        noise: Option<&FlareTexture>,
+        sample_count: u32,
+        velocity: oag_mesh::mesh_render::Velocity,
+        style: Style,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(style.label),
             source: wgpu::ShaderSource::Wgsl(
@@ -246,6 +310,16 @@ impl Pipeline {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -270,6 +344,7 @@ impl Pipeline {
                     f64::from(u8::from(style.alpha_is_fragment)),
                 ),
                 ("smoke", f64::from(u8::from(style.smoke))),
+                ("leach", f64::from(u8::from(style.leach))),
             ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -361,7 +436,18 @@ impl Pipeline {
             mapped_at_creation: false,
         });
 
-        let texture = bind_texture(device, queue, &texture_layout, texture);
+        let white = FlareTexture {
+            width: 1,
+            height: 1,
+            rgba: vec![255; 4],
+        };
+        let texture = bind_texture(
+            device,
+            queue,
+            &texture_layout,
+            texture,
+            noise.unwrap_or(&white),
+        );
 
         Self {
             pipeline,
@@ -399,12 +485,26 @@ impl Pipeline {
         eye: [f32; 3],
         vertices: &[GpuVertex],
     ) {
+        self.upload_with_clock(queue, view_projection, eye, 1.0, vertices);
+    }
+
+    /// [`Self::upload_with_eye`] with the engine clock (`time`, parameter
+    /// `0x906b67ba`, seconds) in the fourth column's `w`, for
+    /// [`Style::leach_strip`]'s scroll.
+    pub fn upload_with_clock(
+        &mut self,
+        queue: &wgpu::Queue,
+        view_projection: &[[f32; 4]; 4],
+        eye: [f32; 3],
+        clock: f32,
+        vertices: &[GpuVertex],
+    ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
         block[4] = [1.0, 0.0, 0.0, 0.0];
         block[5] = [0.0, 1.0, 0.0, 0.0];
         block[6] = [0.0, 0.0, 1.0, 0.0];
-        block[7] = [eye[0], eye[1], eye[2], 1.0];
+        block[7] = [eye[0], eye[1], eye[2], clock];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
         let n = vertices.len().min(self.capacity);
@@ -439,7 +539,45 @@ fn bind_texture(
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
     texture: &FlareTexture,
+    noise: &FlareTexture,
 ) -> wgpu::BindGroup {
+    let view = upload_view(device, queue, texture);
+    let noise_view = upload_view(device, queue, noise);
+    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("beam texture"),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        ..Default::default()
+    });
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("beam texture"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&noise_view),
+            },
+        ],
+    })
+}
+
+/// One RGBA8 texture uploaded, as a view.
+fn upload_view(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &FlareTexture,
+) -> wgpu::TextureView {
     let (width, height) = (texture.width.max(1), texture.height.max(1));
     let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("beam texture"),
@@ -474,28 +612,5 @@ fn bind_texture(
             depth_or_array_layers: 1,
         },
     );
-    let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("beam texture"),
-        address_mode_u: wgpu::AddressMode::Repeat,
-        address_mode_v: wgpu::AddressMode::Repeat,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        ..Default::default()
-    });
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("beam texture"),
-        layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&sampler),
-            },
-        ],
-    })
+    gpu_texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

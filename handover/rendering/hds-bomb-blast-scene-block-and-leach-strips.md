@@ -89,8 +89,19 @@ Open: the second-texture/`time`/blend pipeline (unit assignment, sampler wrap, b
 this draw), an anchor trail per craft in `oag-raceplay`, the HD state timeline (ball 0.4 s,
 reveal 0.3 s, held) over our Pulse-lineage beam, the wobble `0x001157d0`.
 
+## 2026-10-08 (`hd-leach-draw`): the strip is drawn on HD
+
+Blend (`SRC_ALPHA, ONE`), depth (LEQUAL, no write), units (noise 128x128 on 0, glow 256x256 on 1, both
+`REPEAT`), `time` (engine seconds) and the wobble (three sines, verified on the live beam) are read; the
+walk follows the craft ahead. Wired through `WeaponModels::leach_strip`, `oag_fx::leach_strip`,
+`oag_raceplay::leach_strip`; Pulse/Pure frames byte-identical. See leach-beam-strips.md, "hd-leach-draw".
+Open: (1) our strip is fainter than the film in a straight chase view - the facing term is the
+program's own, so look at bloom feed, the original's mips and the node `u` at the walked end;
+(2) the wobble's phases start at 0 here, the original's reset is unread; (3) a pair against the film at
+matched geometry (the film's rival is 40 units ahead in a corner, ours were on straights); (4) the held
+duration (about 2.6 s of the beam clock, then state 6) is not tied to our `active_time`.
+
 ## Next Steps
 
-1. Build the strip from leach-beam-strips.md's measured law (anchor trail, walk, bend,
-   nodes), after reading the draw's blend and texture units from a film or the draw call.
+1. ~~Build the strip~~ - done 2026-10-08, see the section above.
 2. Add the ghost-static axis to `Title` so HD stops asking.
