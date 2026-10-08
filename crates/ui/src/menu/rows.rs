@@ -495,19 +495,18 @@ fn step_arrows(
     let rects = layout.arrow_rects(y);
     if focused {
         let (dx, dy) = layout.spec.glow_inset;
-        for side in 0..2 {
-            let glow = art.glow[side];
+        for (rect, glow) in rects.iter().zip(art.glow) {
             out.push(Draw::Sprite {
-                rect: [rects[side][0] + dx, rects[side][1] + dy, glow[2], glow[3]],
+                rect: [rect[0] + dx, rect[1] + dy, glow[2], glow[3]],
                 uv: glow,
                 color: ink,
             });
         }
     }
-    for side in 0..2 {
+    for (rect, uv) in rects.into_iter().zip(art.plain) {
         out.push(Draw::Sprite {
-            rect: rects[side],
-            uv: art.plain[side],
+            rect,
+            uv,
             color: ink,
         });
     }

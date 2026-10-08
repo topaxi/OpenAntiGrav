@@ -140,6 +140,7 @@ fn a_framed_page_still_clips_the_value_and_not_the_frame() {
         ink: Some([1.0, 1.0, 1.0, 1.0]),
         blocks: None,
         tab_selected: None,
+        settings: None,
     };
     let before = oag_ui::menu::draw_list(
         &menu,

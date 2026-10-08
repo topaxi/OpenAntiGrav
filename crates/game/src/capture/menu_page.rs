@@ -11,6 +11,31 @@ use oag_mesh::mesh_render::Anisotropy;
 /// so the return type below reads rather than counting parentheses.
 type TickerClip = Option<(usize, f32, f32)>;
 
+/// A Pulse picker's footer under `list`: the `Confirm`/`Back` legend and the
+/// ticker frozen at `elapsed = 0.0`, as `MenuStage::picker_footer` draws them
+/// live. Both in the `Default` role, measured through `default_font`.
+/// Returns the ticker's clip.
+pub(super) fn picker_footer(
+    list: &mut Vec<oag_ui::frontend::Draw>,
+    nav_legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
+    ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
+    strings: &oag_ui::language::StringTable,
+    default_font: &oag_ui::font::Atlas,
+) -> TickerClip {
+    let layout = ticker?;
+    let tips = crate::records::ticker_tips(strings, &crate::records::load());
+    let faces = oag_ui_screens::picker::FaceScales::default();
+    let measure = |text: &str| oag_ui::font::measure(default_font, text);
+    if let Some(legend) = nav_legend {
+        list.extend(legend.draw_gated(&faces, &measure, true));
+    }
+    let draw = oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)?;
+    let at = list.len();
+    list.push(draw);
+    let [x, _, width, _] = layout.viewport;
+    Some((at, x, x + width))
+}
+
 /// What `--menu-picker-seconds` defaults to when absent: past every
 /// `LeftLayer transition` the race box's two selection screens author
 /// (measured at up to `0.5`s, `docs/ui/selection-screens.md`), so the

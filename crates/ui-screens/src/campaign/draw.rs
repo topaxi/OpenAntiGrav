@@ -615,32 +615,7 @@ pub(super) fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
 }
 
 pub(super) fn fill_draw(fill: &Fill) -> Draw {
-    let rect = [
-        fill.x,
-        fill.y,
-        fill.width.unwrap_or(0.0),
-        fill.height.unwrap_or(0.0),
-    ];
-    match fill.gradient {
-        Some([c1, c2, c3, c4]) => Draw::GradientFill {
-            rect,
-            left: mean(argb_to_rgba(c1), argb_to_rgba(c2)),
-            right: mean(argb_to_rgba(c3), argb_to_rgba(c4)),
-        },
-        None => Draw::Fill {
-            rect,
-            color: argb_to_rgba(fill.color),
-        },
-    }
-}
-
-fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
-    [
-        (a[0] + b[0]) * 0.5,
-        (a[1] + b[1]) * 0.5,
-        (a[2] + b[2]) * 0.5,
-        (a[3] + b[3]) * 0.5,
-    ]
+    fill.draw()
 }
 
 /// An ordinary image widget, at its own authored position.

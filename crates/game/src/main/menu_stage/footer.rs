@@ -93,6 +93,18 @@ impl MenuStage {
         Some((draw, (x, x + width)))
     }
 
+    /// The footer a picker carries: the `Confirm`/`Back` legend and the ticker,
+    /// on a title that draws a ticker at all and whose picker is its own
+    /// layout (not HD's, which [`hd_nav`] covers). Pulse's pickers author the
+    /// `Help` prompt and nothing else of the footer, and the original shows
+    /// the rest under them. `None` elsewhere. The clip's index is into the
+    /// returned draws; [`append`] moves it.
+    #[must_use]
+    pub(super) fn picker_footer(&self, tips: &[String]) -> Option<(Vec<Draw>, TickerClip)> {
+        let own = self.picker.as_ref().is_some_and(|p| !p.layout.is_hd());
+        (own && self.ticker.is_some()).then(|| self.footer_overlay(Vec::new(), tips))
+    }
+
     /// [`Self::nav_legend_overlay`] and [`Self::ticker_overlay`] appended to
     /// `list`, in that order - `MenuStage::render`'s own call site, pulled
     /// out here so the `self.change.is_none()` gate that skips both
@@ -117,6 +129,21 @@ impl MenuStage {
             None => (list, None),
         }
     }
+}
+
+/// `footer`'s draws after `flat`, with the ticker's clip index moved to where
+/// the ticker landed in the joined list. `footer` is [`MenuStage::picker_footer`]'s.
+#[must_use]
+pub(super) fn append(
+    mut flat: Vec<Draw>,
+    footer: Option<(Vec<Draw>, TickerClip)>,
+) -> (Vec<Draw>, TickerClip) {
+    let Some((extra, clip)) = footer else {
+        return (flat, None);
+    };
+    let at = flat.len();
+    flat.extend(extra);
+    (flat, clip.map(|(index, bounds)| (index + at, bounds)))
 }
 
 /// The clip `Self::render` hands `Renderer::render_with`, combining the value

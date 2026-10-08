@@ -490,14 +490,15 @@ in [loading-screen.md](../ghidra/functions/psp-pulse-usa/loading-screen.md); End
 
 Ranked by how much a player notices, ours first listed worst:
 
-1. **Our Race page is not the original's Racebox settings page.** The disc has
+1. ~~**Our Race page is not the original's Racebox settings page.**~~ **Closed 2026-10-08** - see "The Racebox settings page" below.
+   *(was:)* The disc has
    `Racebox` (Custom Race / Load Grid / Edit Grid) then a settings page whose
    rows are label left, a `<` `>` selector then the value at x of about 240,
    with a thin rule between rows and the focused row in white. Ours is one
    `RACE` page with the value right-aligned at the far edge, greyed rows and no
    rules. Structural (our page tree is our own, `menus.md`); the rule lines and
    the selector arrows are disc art and not drawn.
-2. **The top-bar title is set in the wrong face on every page.** The original's
+2. ~~**The top-bar title is set in the wrong face on every page.**~~ **Closed 2026-10-08 on both PSP pressings**: `oag_pulse::frontend::MENU_SKIN::title_font` is `Some("Title")` and the renderer's third glyph slot carries `Pulse_14.fnt` (`oag_game::boot::fonts::third_atlas_slot`; `body_font` keeps `Default` in the second). The PS2 port keeps `None`: nothing re-measured its title. *(was:)* The original's
    `MAIN MENU`/`TRACK SELECT`/`RACE CAMPAIGN` are the `Title` role,
    `Pulse_14.fnt` (17px): 9 glyphs span 152 px of the 960-wide crop, 17 px a
    glyph. Ours draws `Pulse_20.fnt` (22px): 12 glyphs span 305 px, 25 px a glyph,
@@ -523,8 +524,8 @@ Ranked by how much a player notices, ours first listed worst:
    show the new face. Also visible there: our `Confirm` label is smaller than
    the original's and sits higher against its button glyph (shrink-to-fit
    scale, not measured against the disc).
-4. **Track and Ship Select labels are capitals where the original is mixed
-   case.** `Distance(m)`, `Lap record`, `Classic`, `Speed`, `Thrust`, the
+4. ~~**Track and Ship Select labels are capitals where the original is mixed
+   case.**~~ **Closed 2026-10-08**: `font="default"` text draws in the `Default` atlas at native size (`FaceScales::native_default`), the pickers carry the `Confirm`/`Back` legend and the ticker (`MenuStage::picker_footer`, and the same for `--menu-page`), and the slash in the counters is the real one. *(was:)* `Distance(m)`, `Lap record`, `Classic`, `Speed`, `Thrust`, the
    `Help`/`Music playlist` prompts are `Default` role on the disc. Ours draws
    them in the capitals-only menu face. The `Confirm`/`Back` prompts and the
    ticker are missing on our pickers' footer. Same cause as item 3 on another
@@ -560,6 +561,62 @@ Ranked by how much a player notices, ours first listed worst:
 colours, the help subtitle, the hex cluster and its panels, the `Confirm`/`Back`
 prompts on the campaign pages and the backdrop movie all line up with the
 original on the sheets.
+
+## The Racebox settings page - 2026-10-08
+
+The original's `Single Player` screen (`RaceBox_Definition.xml`) is the page
+`RACEBOX` > `CUSTOM RACE` opens. What it authors, **read off the disc at boot**
+(`oag_ui::menu::SettingsLayout`, `crates/game/tests/pulse_settings_ground_truth.rs`,
+both PSP pressings), confidence 95:
+
+- an `<item OffsetX="50" OffsetY="33">` of twelve `<Image>`s: the two halves of
+  one fading rule per row boundary (`Color1`..`Color4`, `0x00ffffff` to
+  `0xffffffff`, 190 wide, 1 high, a one-texel quad of `pulse_assets.mip` at
+  `U=505 V=1`), at y = 0, 23, 46, 69, 92, 115 - six rules around five rows;
+- labels at `FEGlobals->MenuXOffset` (50), values in `<List>`s at x=250, rows at
+  y = 35, 58, 81, 104, 127 - a pitch of 23 - all `font="small"`, which is
+  `Pulse_14.fnt`, the `Title` face (17 px), not `menu`'s 22;
+- `arrowcolor` = `TextColor`: the step arrows are the executable's.
+
+What it does **not** author and was measured instead (a PPSSPP 1.20.4 software
+capture, 2x, `data/scratch/pulse-fe-look/sheets/custom.png`; confidence 80 - the
+`List` widget's own draw code is unread):
+
+- the arrows: two 9x10 texels at `U=289 V=76` and `U=314 V=76` of
+  `pulse_assets.mip` - the same two `InGame_Definition.xml` draws as plain
+  `<Image>`s for the pause bar - left edge 23 and 13 units before the value, 5
+  below the row's text top; a focused row draws a lit halo under each, 20x22 at
+  `U=285 V=98` and `U=308 V=98`, centred on the arrow (the halo's rect is read off
+  the sheet's alpha, the one number here with no disc authoring behind it);
+- colours (sampled): labels teal on every row, **the focused row's value alone
+  whitens** (a white peak with a glow, 234/249/249 against the teal 48/157/174),
+  a disabled row's label and value both a dark grey (34/34/34) with no arrows;
+  the left arrow is half-bright on a list's first entry, which is every row in the
+  capture - ours wraps, so both stay lit;
+- the capture's rule peaks at 178-190 where ours is 255: the capture is filtered
+  (a 1 px rule spread over 4 rows of 2x pixels, energy conserved), not dimmer.
+
+**What is ours, chosen, not measured:** the `race` page of this build's tree
+stands in this screen's place (`oag_title::MenuSettings::pages`); its `START` and
+`BACK` rows continue the pitch below the last rule with no rules of their own, and
+whiten their own label when focused since they have no value; the arrows' hit
+areas are the arrow's width by the row band between two rules. Pointer: a click
+on a row activates it as before, on an arrow steps the way it points.
+
+**Checked against the other screens that draw this idiom** (census of every
+`*_Definition.xml` on the PSP disc for `arrowcolor` lists): `Settings` (Game
+Options) in `Additional_Definition.xml` - value column x=310, first row y=27,
+pitch 23, **no rules**; `Cell Setup` in `RaceBox_Definition.xml`; `InGame
+Settings`/`MP`/`TT`/`Photo`; `Tournament C`, `Team Selection` and `Pre Race Music
+Select` in `Selection_Definition.xml`. Ours has no page that stands in for any of
+them, so: **checked, applies, not wired**. The Options hub (`GAME OPTIONS`,
+`CONTROLS`, `MUSIC PLAYLIST`) is a plain list on the disc and stays one.
+**PS2 Pulse**: `oag_pulse::frontend::PS2_MENU_SKIN::settings` is `None` - the PS2
+screen is in its own 640x448 grid and the layout reader keeps numbers in the
+screen's grid; **checked, applies, not wired**. **HD, Omega, 2048, Pure**: their
+settings rows are the executable's `List` blocks (`draw_list_rows`) or Pure's
+own list; **checked, differs**, untouched - HD's `--menu-page options` and `race`
+stills are byte-identical before and after.
 
 ## Reproducing this
 

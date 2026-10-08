@@ -815,6 +815,7 @@ pub fn load_shell(
         &strings,
         &font,
         menu_font.as_ref(),
+        fonts::default_in_own_slot(menu_skin),
         space,
         &mut report,
     );

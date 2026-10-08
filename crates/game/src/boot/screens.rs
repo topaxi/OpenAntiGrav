@@ -367,6 +367,7 @@ pub(super) fn selection_layouts(
     strings: &oag_ui::language::StringTable,
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
+    native_default: bool,
     space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> (
@@ -378,6 +379,7 @@ pub(super) fn selection_layouts(
             oag_ui_screens::picker::FaceScales::default().default,
             |menu| font.line_height / menu.line_height,
         ),
+        native_default,
         ..oag_ui_screens::picker::FaceScales::default()
     };
     let track_select = race_box

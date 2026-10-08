@@ -267,6 +267,14 @@ pub fn face_atlas_slot(
     }
 }
 
+/// Whether [`face_atlas_slot`] puts the `Default`-role atlas in the renderer:
+/// every title whose screen title is not drawn in that slot, and Pulse's PSP
+/// pressings, which keep both.
+#[must_use]
+pub fn default_in_own_slot(skin: &oag_title::MenuSkin) -> bool {
+    skin.title_font.is_none() || skin.body_font.is_some()
+}
+
 /// What the renderer's third glyph slot carries: the screen title's face on a
 /// title whose body face has the second slot ([`oag_title::MenuSkin::body_font`]),
 /// the PlayStation button glyphs on every other.

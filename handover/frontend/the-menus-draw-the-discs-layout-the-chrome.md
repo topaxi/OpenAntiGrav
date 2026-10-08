@@ -122,8 +122,8 @@ curve actually draws.
 
 ## Open, from the 2026-10-08 side-by-side (ranked list in docs/ui/menus-original.md)
 
-- Title-face top bar: Pulse needs `Title` (`Pulse_14.fnt`) and `Default` at once, a third renderer face slot beyond `face_atlas_slot`; then flip `oag_pulse::frontend::MENU_SKIN::title_font`.
-- Mixed-case `Default` labels on Track/Ship Select and the pickers' `Confirm`/`Back` and ticker footer.
+- ~~Title-face top bar~~ - done 2026-10-08 on the PSP pressings (`Title` in the renderer's third slot, `oag_title::MenuSkin::body_font` keeps `Default` in the second). **Still open: the PS2 port** - its skin keeps `title_font: None`; a 2026-09-27 PCSX2 capture read `MAIN MENU` in the same face as `RACE CAMPAIGN`, which nothing has re-measured.
+- ~~Mixed-case `Default` labels on Track/Ship Select and the pickers' `Confirm`/`Back` and ticker footer~~ - done 2026-10-08 for Pulse (`FaceScales::native_default`, `MenuStage::picker_footer`). Two small differences left on the sheet: the track panel's `Distance` where the original reads `Distance(m)` (a string-table question), and the ship panel's `<` `>` arrows around the skin name are both lit where the original dims both.
 - Page transition on the campaign and picker pages, and the outgoing-page zoom; fit the easing from the 30-frame burst (`scripts/psp-menu-transition-burst.py`).
-- Racebox settings page shape: rules between rows, `<` `>` selector, value beside the label.
+- ~~Racebox settings page shape~~ - done 2026-10-08 for the `race` page (`oag_ui::menu::SettingsLayout`, read off `Single Player`). **Open: other pages the original draws this way** - `Settings` (Game Options: value column at x=310, pitch 23, first row y=27, no rules) and `Cell Setup`, `InGame Settings*`; ours has no page standing in them (our `display`/`audio` pages have values too long for a left-aligned column, which the value marquee does not cover), so they are named in `oag_title::MenuSettings::pages` when someone decides which. The selected row's glow on the value and a `Distance(m)`-style check are not done; a live frame at the pulse peak was not taken (a `--menu-page` still is at phase 0).
 - Profile tag in the footer's left strip; `Confirm` label scale against the glyph.

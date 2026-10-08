@@ -460,6 +460,7 @@ impl MenuStage {
         // preview goes on last, a 3D pass over the finished picture. No marquee,
         // page tween or prompt applies. A circuit's stills live on a sheet of
         // the screen's own, handed to the renderer once per selection.
+        let picker_footer = self.picker_footer(ticker_tips);
         if let Some(picker) = self.picker.as_mut() {
             if let Some(sheet) = picker.take_sheet() {
                 self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
@@ -480,15 +481,16 @@ impl MenuStage {
                 &self.default_atlas,
                 picker,
             ));
+            let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
                     color: PAUSE_OVERLAY,
                 })
-                .chain(layers.flatten())
+                .chain(flat)
                 .collect()
             } else {
-                layers.flatten()
+                flat
             };
             let load = if frozen_race {
                 wgpu::LoadOp::Load
@@ -503,7 +505,7 @@ impl MenuStage {
                 view,
                 &list,
                 viewport,
-                None,
+                footer::resolve_clip(None, ticker_clip, frozen_race),
             );
             let (orbit, seconds, rect) = (
                 picker.orbit(),
