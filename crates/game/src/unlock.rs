@@ -137,7 +137,7 @@ impl Gate {
         else {
             return Self::open();
         };
-        match crate::campaign::read_grids(archives, entry) {
+        match crate::campaign::read_grids(archives, entry, campaign.grid_archive) {
             Ok(grids) => Self::on_grids(grids),
             Err(error) => {
                 log::warn!("{error:#} - no campaign grids, so no circuit is locked");

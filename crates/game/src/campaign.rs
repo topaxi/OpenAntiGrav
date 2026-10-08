@@ -263,7 +263,11 @@ pub fn load(
     // two selection screens above are.
     let cell_help = Layout::read(&screens, "Cell Help", strings, faces, grid);
 
-    let grids = read_grids(archives, oag_pulse::campaign::DEFINITION_ENTRY)?;
+    let grids = read_grids(
+        archives,
+        oag_pulse::campaign::DEFINITION_ENTRY,
+        title.campaign.grid_archive,
+    )?;
     let (nav_legend, ticker) = read_footer(
         archives,
         oag_pulse::names::FRONTEND_ROOT,
@@ -410,7 +414,11 @@ fn load_hd(
     )
     .context("Cell Selection is not on this screen")?;
 
-    let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
+    let grids = read_grids(
+        archives,
+        oag_hd::campaign::DEFINITION_ENTRY,
+        title.campaign.grid_archive,
+    )?;
     let (selection_layout, grid_layout_fury) =
         hd_selection_screens(title, &screens, strings, faces, grid);
     let flyer_names: Vec<String> = grids
@@ -717,7 +725,11 @@ fn load_omega(
     )
     .context("Cell Selection is not on this screen")?;
 
-    let grids = read_grids(archives, oag_omega::campaign::DEFINITION_ENTRY)?;
+    let grids = read_grids(
+        archives,
+        oag_omega::campaign::DEFINITION_ENTRY,
+        oag_omega::TITLE.campaign.grid_archive,
+    )?;
     // See [`load_hd`]'s own identical call - Omega's front end is HD's
     // `PI001` plugin carried forward, at the same relative root path.
     let (nav_legend, ticker) = read_footer(
@@ -775,14 +787,17 @@ fn load_omega(
     })
 }
 
-/// Every grid `definition_entry` lists, off `archives`' own read
-/// precedence - shared by [`load`]'s Pulse path and [`load_hd`], since both
-/// titles author the same `PI_Grid`/`PI_Cell` schema
+/// Every grid `definition_entry` lists - shared by [`load`]'s Pulse path and
+/// [`load_hd`], since both titles author the same `PI_Grid`/`PI_Cell` schema
 /// ([`oag_tables::race_campaign`]) behind a `Definition.xml` naming the same
 /// shape of `Src=` list, dictionary-shortened on both.
+///
+/// Each grid is read off `archives`' own precedence, except one `grid_archive`
+/// ([`oag_title::Campaign::grid_archive`]) carries a copy of: that copy wins.
 pub fn read_grids(
     archives: &mut oag_assets::Archives,
     definition_entry: &str,
+    grid_archive: Option<&str>,
 ) -> Result<Vec<Grid>> {
     let definition_blob = archives
         .read_name(definition_entry)
@@ -791,11 +806,18 @@ pub fn read_grids(
         oag_tables::fexml::text(&definition_blob).context("expanding grids/Definition.xml")?;
     let mut grids = Vec::new();
     for src in race_campaign::definition_entries(&definition_xml) {
-        match archives
-            .read_name(&src)
-            .map_err(anyhow::Error::from)
-            .and_then(|blob| race_campaign::from_blob(&blob).map_err(anyhow::Error::from))
-        {
+        let preferred = grid_archive.and_then(|wanted| {
+            archives
+                .read_every_name(&src)
+                .into_iter()
+                .find(|(label, _)| same_archive(label, wanted))
+                .map(|(_, blob)| blob)
+        });
+        let blob = match preferred {
+            Some(blob) => Ok(blob),
+            None => archives.read_name(&src).map_err(anyhow::Error::from),
+        };
+        match blob.and_then(|blob| race_campaign::from_blob(&blob).map_err(anyhow::Error::from)) {
             Ok(grid) => grids.push(grid),
             Err(error) => log::warn!("{src}: {error:#} - grid skipped"),
         }

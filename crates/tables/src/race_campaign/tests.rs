@@ -385,6 +385,30 @@ fn nitro_elimination_target_reads_by_rung() {
     );
 }
 
+/// An HD `Elimination` cell's flat and per-rung targets are the dummy
+/// `1`/`2`/`3` with a flipped `>=` compare, so one kill would score gold on
+/// every rung: the cell's medal law is unmeasured and it awards nothing, while
+/// Pulse's `Eliminator` (no nitro triple) still scores by kills.
+#[test]
+fn an_hd_elimination_cell_awards_no_medal_on_its_dummy_targets() {
+    let grid = parse(NITRO_FIXTURE).expect("parses");
+    let elim = &grid.cells[0];
+    assert!(elim.medal_law_is_unmeasured());
+    for difficulty in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        for kills in [1, 3, 250] {
+            assert_eq!(elim.evaluate_medal_for_difficulty(kills, difficulty), None);
+        }
+    }
+    let pulse = parse(FIXTURE).expect("parses");
+    let pulse_elim = pulse
+        .cells
+        .iter()
+        .find(|cell| cell.mode == Mode::Elimination)
+        .expect("an Elimination cell");
+    assert!(!pulse_elim.medal_law_is_unmeasured());
+    assert!(pulse_elim.evaluate_medal(10).is_some());
+}
+
 /// A cell with no `<NitroElimNovice>` (every `FIXTURE` cell) reads `None`.
 #[test]
 fn nitro_elimination_target_is_none_without_the_triple() {
