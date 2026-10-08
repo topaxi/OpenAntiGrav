@@ -138,6 +138,10 @@ pub struct WeaponModels {
     /// opacity ramp its nodes age through. See `oag_fx::rocket_smoke`. `None`
     /// on a title whose ribbon law is unread, which is every title but HD's.
     pub rocket_trail: Option<RocketTrail>,
+    /// Wipeout HD's LeachBeam strip: the ribbon `LeachBeam_DrawStrip` builds
+    /// from the target's anchor trail and its two textures. `None` on every
+    /// title that draws Pulse's own ribbon instead. See `oag_fx::leach_strip`.
+    pub leach_strip: Option<LeachStrip>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -202,6 +206,19 @@ pub struct RocketTrail {
     pub opacity_ramp: &'static str,
 }
 
+/// What HD's LeachBeam strip draws with - see [`WeaponModels::leach_strip`].
+///
+/// Archive entry names. `hd_leachbeam.rcsmaterial` samples the noise on unit 0
+/// and the glow on unit 1 (the two sizes read off the live draw, the names off
+/// `leachbeam_triangle.rcsmodel`'s own material).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeachStrip {
+    /// `hd_leechbeam_glow`: 256x256, unit 1.
+    pub glow: &'static str,
+    /// `hd_waketrail_clouds`: 128x128, unit 0.
+    pub noise: &'static str,
+}
+
 impl WeaponModels {
     /// Every field absent - a title with none of these recovered.
     ///
@@ -225,6 +242,7 @@ impl WeaponModels {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        leach_strip: None,
         leachbeam_ball: None,
         shuriken: None,
         cannon_look: None,

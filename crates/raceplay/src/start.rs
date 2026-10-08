@@ -79,6 +79,7 @@ impl Race {
             wreck_anchors,
             magstrip_wake,
             magstrip_pob,
+            leach_strip,
             destroy_stations,
             intro_camera,
             slot_teams,
@@ -563,6 +564,7 @@ impl Race {
                         magstrip_wake::Wakes::new(anchors)
                     }
                 }),
+                leach_strip: leach_strip.map(crate::leach_strip::Strip::new),
                 quake_point: None,
                 leach_beam_effect: None,
                 leach_charge_effect: [None; MAX_SHIPS],

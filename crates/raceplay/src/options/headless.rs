@@ -84,6 +84,7 @@ impl Setup {
             wreck_anchors: Vec::new(),
             magstrip_wake: None,
             magstrip_pob: false,
+            leach_strip: None,
             destroy_stations: Vec::new(),
             finished_thrust: None,
             intro_camera: None,

@@ -894,6 +894,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             slot_teams: slot_teams.clone(),
             magstrip_wake: magstrip_wake.anchors,
             magstrip_pob: wm.magstrip_pob,
+            leach_strip: magstrip_wake.leach_anchors,
             collision,
             handling,
             airbrake_graphics,

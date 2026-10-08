@@ -112,6 +112,7 @@ pub const TITLE: &Title = &Title {
         magstrip_wake: None,
         magstrip_pob: false,
         rocket_trail: None,
+        leach_strip: None,
         leachbeam_ball: None,
         shuriken: None,
         // Pure's own Cannon draw is unread; it keeps Pulse's terms.

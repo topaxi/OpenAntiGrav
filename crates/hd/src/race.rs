@@ -591,6 +591,13 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         texture: "Data/RibbonEffects/textures/smoke_trails_frame2_alpha.gtf",
         opacity_ramp: "Data/RibbonEffects/textures/smoke_trails_opacity_ramp.tga",
     }),
+    // `leachbeam_triangle.rcsmodel`'s material names the glow and the noise;
+    // the live draw binds a 128x128 on unit 0 and a 256x256 on unit 1. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`, "hd-leach-draw".
+    leach_strip: Some(oag_title::weapons::LeachStrip {
+        glow: "Data/RibbonEffects/textures/hd_leechbeam_glow.gtf",
+        noise: "Data/RibbonEffects/textures/hd_waketrail_clouds.gtf",
+    }),
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
     shuriken: None,
     cannon_look: Some(CANNON_LOOK),

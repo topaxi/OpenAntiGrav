@@ -37,6 +37,8 @@ pub struct RocketSmokeAssets {
 pub struct RibbonTextures {
     pub magstrip: Option<[FlareTexture; 2]>,
     pub rocket_smoke: Option<RocketSmokeAssets>,
+    /// HD's LeachBeam strip - see [`crate::leach_strip`].
+    pub leach_strip: Option<crate::leach_strip::LeachStripAssets>,
 }
 
 /// Reads the title's [`WeaponModels::rocket_trail`] entries, reporting what

@@ -25,6 +25,7 @@ pub mod cloud;
 pub mod exhaust;
 pub mod flash;
 pub mod hull_overlay;
+pub mod leach_strip;
 pub mod magstrip;
 pub mod mist;
 pub mod psys;
