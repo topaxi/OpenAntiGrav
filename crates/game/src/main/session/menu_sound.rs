@@ -42,7 +42,8 @@ impl Session {
         for nav in navs {
             let cue = oag_game::sound::menu_cue(nav, self.pad_dir);
             let started = sfx.play(&self.audio, cue);
-            debug!("menu sound: {cue:?} (started: {started})");
+            let live = self.audio.output().with_mixer(|mixer| mixer.active_voices());
+            debug!("menu sound: {cue:?} (started: {started}, {live} voice(s) live)");
         }
     }
 

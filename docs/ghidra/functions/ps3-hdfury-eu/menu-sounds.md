@@ -48,7 +48,7 @@ All eight are `FUN_002ffa58` with the cue spelled in the function's TOC string p
 
 | Event | Cue | Where | Confidence |
 | --- | --- | --- | --- |
-| Cursor moves up / down a vertical menu or list | `navUp` / `navDown` | `Block_Update` (`0x0018d588`, pad 0 / 1), `0x00192288`, `0x001a4a68`, `List_Update` (`0x001c03e0`; silent when its `+0x84` flag is `1`), `0x002103b0` (VertMenu, once per entry stepped over), `0x00254348` (Team Selection), `0x002096f0` | 85 |
+| Cursor moves up / down a vertical menu or list | `navUp` / `navDown` | `Block_Update` (`0x0018d588`, pad 0 / 1), `0x00192288`, `0x001a4a68`, `List_Update` (`0x001c03e0`; silent when its `+0xcc` flag (`param_1[0x33]`) is `1`), `0x002103b0` (VertMenu, once per entry stepped over), `0x00254348` (Team Selection), `0x002096f0` | 85 |
 | Cursor or strip moves left / right | `navLeft` / `navRight` | `0x001b3e18` (HorizMenu, once per entry stepped over), `0x001ac168` (grid controller, all four directions), `0x00245d78` (ProgressSelection) | 85 |
 | A row's value steps | `navLeft` / `navRight` | List value cycle `0x001bd8d0`/`0x001bda20`, slider `0x001f94c8`/`0x001f9608`/`0x001faf40`, playlist `0x001ecff8`/`0x001ed168`, music list `0x001d90a8`/`0x001d9310` | 85 |
 | A step that cannot go further and does not wrap | `reject` | the same functions (`0x001bd8d0`: `+0x126` is the wrap flag; without it `reject` is played and nothing moves) | 85 |
@@ -103,6 +103,12 @@ Pad and pointer, on the menus, the campaign screens, the pickers and EndRace: a 
 non-wrapping edge `reject` (the port's rows always wrap). Not recovered: `whoosh*` as an event of its own, `pause`,
 `wipe_sm`, `camera_shot`, `EOM`, `TextBox05`.
 
+Voices: a press keys 6 to 12 voices (`navUp` is a stereo whoosh and a stereo tick and a stereo tail), against a pool of 32.
+`pressing_every_menu_cue_twenty_times_leaves_no_voice_behind` presses every role 20 times, 30 ticks apart, and asserts
+every one starts and the mixer is empty afterwards. A windowed `--no-audio` run never renders its mixer (`Audio::tick`
+only renders into a dump), so there the pool fills after five presses and later cues are refused; with a device or the
+dump backend it drains.
+
 Levels: the HD walk peaks at 23,148 (HD style) and 27,750 (Fury) of 32,767, no clipped sample. Pulse's `ACCEPT` and
 `DECLINE` clip; HD's do not.
 
@@ -113,4 +119,5 @@ Wwise `frontend.bnk` (`Data/audio/sound/English(US)/frontend.bnk`, with `fronten
 `navUp__frontend`, `navDown__frontend`, `navLeft__frontend`, `navRight__frontend`, `accept__frontend`,
 `accept_fury__frontend`, `reject__frontend`, `reject_fury__frontend`, built from the same `FE_FX_text02_*` and
 `accept_fury_01` waveforms. **Checked, applies, not wired**: the triggers are HD's (its front end is HD's), but the port
-has no Wwise sound-effect path (`oag_formats::wwise` reads music only), so `SoundBanks::frontend` stays `None` there.
+plays no Wwise event as an effect (`oag_formats::wwise` resolves events to media, [wwise.md](../../../formats/wwise.md), and
+nothing wires one to a cue), so `SoundBanks::frontend` stays `None` there.

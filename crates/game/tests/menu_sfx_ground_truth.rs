@@ -273,3 +273,51 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
         );
     }
 }
+
+/// Every front-end cue frees its voices. HD's cues key six or more voices a
+/// press against a pool of 32, so a looping grain would starve the menus after
+/// a handful of presses; twenty presses of each role must all start, and the
+/// mixer must be empty once the longest tail has played out.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pressing_every_menu_cue_twenty_times_leaves_no_voice_behind() {
+    for (name, fury) in [
+        ("pulse-psp-usa.chd", false),
+        ("hdfury-ps3-eu-dec.iso", false),
+        ("hdfury-ps3-eu-dec.iso", true),
+    ] {
+        let Some(image) = image(name) else { continue };
+        let (mut sfx, _) = load(&image, fury);
+        let dump = std::env::temp_dir().join(format!("menu-leak-{}.wav", std::process::id()));
+        let mut audio = oag_sound::Audio::open(
+            &oag_sound::settings::Settings::default(),
+            Some(dump.clone()),
+            None,
+            oag_audio::MIN_BUFFER,
+            false,
+        );
+        let mut tick = 0;
+        for round in 0..20 {
+            for cue in Cue::FRONT_END {
+                assert!(
+                    sfx.play(&audio, cue),
+                    "{name} fury={fury}: {cue:?} round {round}"
+                );
+                for _ in 0..30 {
+                    audio.tick();
+                    tick += 1;
+                }
+            }
+        }
+        for _ in 0..600 {
+            audio.tick();
+            tick += 1;
+        }
+        let left = audio.output().with_mixer(|mixer| mixer.active_voices());
+        let _ = std::fs::remove_file(&dump);
+        assert_eq!(
+            left, 0,
+            "{name} fury={fury}: voices still held after {tick} ticks"
+        );
+    }
+}
