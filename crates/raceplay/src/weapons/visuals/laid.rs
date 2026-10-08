@@ -43,6 +43,7 @@ pub(super) fn matrix(
     slot: usize,
     projectile: &oag_weapons::projectile::Projectile,
     pulse: bool,
+    scaled_only: bool,
 ) -> Mat4 {
     use oag_tables::weapons::Weapon;
     match (pulse, projectile.kind) {
@@ -50,8 +51,37 @@ pub(super) fn matrix(
         (true, Some(Weapon::Bomb)) => {
             bomb_blast::bomb_blast_basis(projectile.position, projectile.orientation * Vec3::Y)
         }
+        (false, Some(Weapon::Mine)) if scaled_only => {
+            pulse_mine(slot, projectile.position, projectile.lifetime)
+        }
+        (false, Some(Weapon::Bomb)) if scaled_only => {
+            scaled_bomb(projectile.position, projectile.orientation, projectile.age)
+        }
         _ => Mat4::from_rotation_translation(projectile.orientation, projectile.position),
     }
+}
+
+/// `Bomb_Init`'s `entity+0xd0`, the literal `0x3e800000` written at
+/// `0x08858018`: a laid Bomb is drawn at a quarter of its authored size.
+pub(crate) const SCALED_BOMB_SCALE: f32 = 0.25;
+
+/// The two spin rates `Bomb_Init` writes at `+0xd4` (`-4.0`) and `+0xd8`
+/// (`0.5`), radians per second of age. `Bomb_UpdateSpin` builds two turns from
+/// them about axes it reads from tables the decompile does not resolve; both
+/// are taken as the model's own up, so the pair sums to one yaw.
+/// **Chosen, not measured:** the axes and the final alignment to the floor
+/// normal (blend `0.4` at `+0xdc`) are not read.
+pub(crate) const SCALED_BOMB_SPIN_RATE: f32 = -4.0 + 0.5;
+
+/// A laid Bomb in a title whose Bomb is scaled and tumbling: the craft's up at
+/// the drop (standing in for the floor normal `Bomb_Init` probes), yawed by the
+/// combined spin, at [`SCALED_BOMB_SCALE`].
+pub(crate) fn scaled_bomb(position: Vec3, orientation: Quat, age: f32) -> Mat4 {
+    let up = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
+    let basis = bomb_blast::bomb_blast_basis(position, up);
+    basis
+        * Mat4::from_quat(Quat::from_rotation_y(SCALED_BOMB_SPIN_RATE * age))
+        * Mat4::from_scale(Vec3::splat(SCALED_BOMB_SCALE))
 }
 
 /// `Mine_PoseNode`'s matrix for a mine with `fuse` seconds left.
@@ -132,6 +162,21 @@ mod tests {
         ) * 0.6;
         assert!(matrix.x_axis.truncate().abs_diff_eq(row0, 1e-4));
         assert!(matrix.determinant() > 0.0);
+    }
+
+    /// A scaled Bomb is a quarter of its authored size, upright on the craft's
+    /// up whatever its age, and turns with age.
+    #[test]
+    fn a_scaled_bomb_is_a_quarter_size_and_turns() {
+        let at = Vec3::new(1.0, 2.0, 3.0);
+        let a = scaled_bomb(at, Quat::IDENTITY, 0.0);
+        let b = scaled_bomb(at, Quat::IDENTITY, 0.5);
+        for column in [a.x_axis, a.y_axis, a.z_axis] {
+            assert!((column.truncate().length() - SCALED_BOMB_SCALE).abs() < 1e-5);
+        }
+        assert!(a.y_axis.abs_diff_eq(b.y_axis, 1e-5));
+        assert!(!a.x_axis.abs_diff_eq(b.x_axis, 1e-3));
+        assert!(a.w_axis.truncate().abs_diff_eq(at, 1e-5));
     }
 
     /// The axis is a unit vector, stable for one mine, and differs between

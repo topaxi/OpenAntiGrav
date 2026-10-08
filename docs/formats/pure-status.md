@@ -1529,3 +1529,13 @@ done
 just wad cat "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
     'Data\Ships\Feisar\handlingstats.xml' --expand
 ```
+
+## Pure's weapon models were Pulse's names (2026-10-08)
+
+`oag_pure`'s `WeaponModels` named `Pulse_Mine.vex`, `Pulse_Bomb.vex`, `pulse_muzzleflash.vex` and the
+`pulse_plasma_*` trio, none of which is on Pure's disc, so a Pure Mine and Bomb were never drawn. The
+executable's own list (`Mine.vex`, `Bomb.vex`, `explosion_hemisphere.vex`, `Bomb_Shockwave.vex`,
+`plasma_halo.vex`, `plasma_hemisphere(_noglow).vex`, `disruptor_*.vex`, `electric_halo2.vex`,
+`explosion_gaseous.vex`) is 50 of 50 present by hash. Wired: Mine, Bomb, the Bomb blast; the Plasma blast and
+the Disruptor and Missile effects are not. Evidence, captures and the open list:
+[`weapons-gfx.md`](../ghidra/functions/psp-pure-usa/weapons-gfx.md).

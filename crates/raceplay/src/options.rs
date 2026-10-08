@@ -443,6 +443,9 @@ pub struct Setup {
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
     pub hd_bomb_blast: bool,
+    /// Whether a Bomb detonation's shockwave fades while it widens:
+    /// `bomb_blast_pulse.shockwave_fades`. Pulse's does, Pure's does not.
+    pub bomb_shockwave_fades: bool,
     /// Whether a Missile hit plays HD's explosion: `missile_blast_hd.is_some()`.
     pub hd_missile_blast: bool,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
@@ -451,6 +454,9 @@ pub struct Setup {
     /// `craft_title.looks.laid_pose`. See
     /// `weapons::visuals::laid`.
     pub pulse_laid_pose: bool,
+    /// Whether a laid Mine alone takes the spun, 0.6-scaled pose:
+    /// `craft_title.looks.laid_pose_scaled`.
+    pub laid_pose_scaled: bool,
     /// Whether the grid is laid out the way Pulse PSP's `Race_ComputeGridLayout` does: a walk
     /// of the located curve with the original's scaled record and its edge-chord heading
     /// (`oag_gameplay::grid_walk`), rather than a walk of resampled samples that take the

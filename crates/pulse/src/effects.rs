@@ -95,6 +95,10 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    laid_pose_scaled: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // GE lights, glow mask, quake: `scene-light.md`, `docs/rendering/glow-mask.md`.
     measured_draws: Rule {
         on: PSP,
