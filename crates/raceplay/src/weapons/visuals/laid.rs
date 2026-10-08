@@ -37,12 +37,24 @@ pub(crate) const PULSE_MINE_SCALE: f32 = 0.6;
 /// the positive one misses by 0.4 to 1.1.
 pub(crate) const PULSE_MINE_SPIN_RATE: f32 = 4.0;
 
+/// How far behind the body a title that lays from the craft's rear anchor
+/// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// Trial, Feisar, Vineta K and a second circuit) its translation sat
+/// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
+/// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
+/// laid Mine's and the Bomb's first position equalled the anchor. Pulse's
+/// anchor is the body itself. **One craft measured** (Feisar): the other
+/// teams' hulls are assumed alike, chosen, not measured.
+pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
+
 /// One laid charge's model matrix. `pulse` selects Pulse's own measured poses
 /// over the frozen craft pose - see this module's doc comment.
 pub(super) fn matrix(
     slot: usize,
     projectile: &oag_weapons::projectile::Projectile,
     pulse: bool,
+    scaled_only: bool,
 ) -> Mat4 {
     use oag_tables::weapons::Weapon;
     match (pulse, projectile.kind) {
@@ -50,8 +62,40 @@ pub(super) fn matrix(
         (true, Some(Weapon::Bomb)) => {
             bomb_blast::bomb_blast_basis(projectile.position, projectile.orientation * Vec3::Y)
         }
+        (false, Some(Weapon::Mine)) if scaled_only => {
+            pulse_mine(slot, projectile.position, projectile.lifetime)
+        }
+        (false, Some(Weapon::Bomb)) if scaled_only => {
+            scaled_bomb(projectile.position, projectile.orientation, projectile.age)
+        }
         _ => Mat4::from_rotation_translation(projectile.orientation, projectile.position),
     }
+}
+
+/// A laid Bomb's drawn scale. **Measured live, 2026-10-08:** the rows of
+/// Pure's Bomb node matrix (entity `+0x90`, read at every `Bomb_UpdateSpin`
+/// hit on `0x088583d8`) are `0.40` long in every sample (`0.4`, `0.388 /
+/// 0.099`, ...), so the scale is the `0.4` written at `+0xdc`, not the `0.25`
+/// at `+0xd0` that the constructor's literal at `0x08858018` suggested.
+pub(crate) const SCALED_BOMB_SCALE: f32 = 0.4;
+
+/// The two spin rates `Bomb_Init` writes at `+0xd4` (`-4.0`) and `+0xd8`
+/// (`0.5`), radians per second of age. `Bomb_UpdateSpin` builds two turns from
+/// them about axes it reads from tables the decompile does not resolve; both
+/// are taken as the model's own up, so the pair sums to one yaw.
+/// **Chosen, not measured:** the axes and the final alignment to the floor
+/// normal (blend `0.4` at `+0xdc`) are not read.
+pub(crate) const SCALED_BOMB_SPIN_RATE: f32 = -4.0 + 0.5;
+
+/// A laid Bomb in a title whose Bomb is scaled and tumbling: the craft's up at
+/// the drop (standing in for the floor normal `Bomb_Init` probes), yawed by the
+/// combined spin, at [`SCALED_BOMB_SCALE`].
+pub(crate) fn scaled_bomb(position: Vec3, orientation: Quat, age: f32) -> Mat4 {
+    let up = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
+    let basis = bomb_blast::bomb_blast_basis(position, up);
+    basis
+        * Mat4::from_quat(Quat::from_rotation_y(SCALED_BOMB_SPIN_RATE * age))
+        * Mat4::from_scale(Vec3::splat(SCALED_BOMB_SCALE))
 }
 
 /// `Mine_PoseNode`'s matrix for a mine with `fuse` seconds left.
@@ -132,6 +176,21 @@ mod tests {
         ) * 0.6;
         assert!(matrix.x_axis.truncate().abs_diff_eq(row0, 1e-4));
         assert!(matrix.determinant() > 0.0);
+    }
+
+    /// A scaled Bomb is two-fifths of its authored size, upright on the craft's
+    /// up whatever its age, and turns with age.
+    #[test]
+    fn a_scaled_bomb_is_two_fifths_size_and_turns() {
+        let at = Vec3::new(1.0, 2.0, 3.0);
+        let a = scaled_bomb(at, Quat::IDENTITY, 0.0);
+        let b = scaled_bomb(at, Quat::IDENTITY, 0.5);
+        for column in [a.x_axis, a.y_axis, a.z_axis] {
+            assert!((column.truncate().length() - SCALED_BOMB_SCALE).abs() < 1e-5);
+        }
+        assert!(a.y_axis.abs_diff_eq(b.y_axis, 1e-5));
+        assert!(!a.x_axis.abs_diff_eq(b.x_axis, 1e-3));
+        assert!(a.w_axis.truncate().abs_diff_eq(at, 1e-5));
     }
 
     /// The axis is a unit vector, stable for one mine, and differs between

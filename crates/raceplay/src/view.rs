@@ -114,6 +114,10 @@ pub struct RaceView {
     pub(super) hd_plasma_blast: bool,
     /// See `options::Setup::pulse_laid_pose`.
     pub(super) pulse_laid_pose: bool,
+    /// See `options::Setup::laid_pose_scaled`.
+    pub(super) laid_pose_scaled: bool,
+    /// See `options::Setup::laid_from_rear`.
+    pub(super) laid_from_rear: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
@@ -368,6 +372,8 @@ pub struct RaceView {
     /// Whether a Bomb detonation plays HD's blast object rather than
     /// Pulse's. See `options::Setup::hd_bomb_blast`.
     pub(super) hd_bomb_blast: bool,
+    /// See `options::Setup::bomb_shockwave_fades`.
+    pub(super) bomb_shockwave_fades: bool,
     /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
     /// [`missile_blast`].
     pub(super) hd_missile_blasts: [Option<missile_blast::MissileBlast>; missile_blast::SLOTS],

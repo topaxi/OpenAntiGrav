@@ -630,7 +630,10 @@ impl Race {
                 continue;
             }
             let ship = &self.sim.world.ships[slot];
-            let point = oag_weapons::projectile::mine::drop_point(&ship.physics);
+            let mut point = oag_weapons::projectile::mine::drop_point(&ship.physics);
+            if self.view.laid_from_rear {
+                point -= ship.physics.body.forward() * visuals::laid::REAR_ANCHOR_BACK;
+            }
             // A full array drops this mine and not the drop: the counter has
             // already been spent, so the cluster goes on laying the rest rather
             // than stalling. That matches `Projectiles::spawn`'s own rule -

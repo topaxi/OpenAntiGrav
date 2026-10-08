@@ -11,7 +11,7 @@ mod cannon;
 mod flares;
 mod flash;
 mod hooks;
-mod laid;
+pub(super) mod laid;
 mod quake;
 pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(crate) use flares::*;
@@ -871,7 +871,12 @@ impl Race {
                     // Pulse the pose is the executable's own, measured - see
                     // `laid`; elsewhere `orientation` is the frozen pose it
                     // landed with, chosen, not measured.
-                    return laid::matrix(slot, projectile, self.view.pulse_laid_pose);
+                    return laid::matrix(
+                        slot,
+                        projectile,
+                        self.view.pulse_laid_pose,
+                        self.view.laid_pose_scaled,
+                    );
                 }
                 // `surface` is the normal the projectile rides - the
                 // original's own `n` (`rocket+0x100`), seeded to world up at

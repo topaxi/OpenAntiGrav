@@ -79,29 +79,39 @@ pub const TITLE: &Title = &Title {
         elimination: None,
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
     },
-    // Pure's own weapon models are unmeasured. **Restated, not imported** -
-    // a title package does not depend on another title package outside
-    // `[dev-dependencies]` (`oag-pulse` is one here, for the cross-checks in
-    // this file's own tests, and ADR-0022 is why runtime code does not reach
-    // for it) - so these are Pulse's exact literals copied rather than a
-    // cross-title reference, the same restatement `oag_tables::handling`
-    // already does for `oag_title::race::SHIP_DIR`. See `oag_pulse::race`'s
-    // own `WEAPON_MODELS` for the evidence behind each one.
+    // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
+    // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,
+    // `Pulse_Bomb.vex`, `pulse_muzzleflash.vex`, `pulse_plasma_*.vex`) is absent
+    // from Pure's `Data.wad` by hash, so those draws silently fell back to a
+    // billboard. Pure's loaders: `Rocket.vex` at `0x08a48a14` (`0x0885ed34`),
+    // `Mine.vex` at `0x08a48830` (`0x0885bc28`), `Bomb.vex` at `0x08a48430`
+    // (`0x08857fc8`); every one is present on the USA pressing. See
+    // `docs/ghidra/functions/psp-pure-usa/weapons-gfx.md`.
     weapon_models: &oag_title::weapons::WeaponModels {
         rocket: Some(r"Data\Weapons\Rocket.vex"),
-        mine: Some(r"Data\Weapons\Pulse_Mine.vex"),
-        bomb: Some(r"Data\Weapons\Pulse_Bomb.vex"),
-        cannon: Some(r"Data\Weapons\pulse_muzzleflash.vex"),
+        mine: Some(r"Data\Weapons\Mine.vex"),
+        bomb: Some(r"Data\Weapons\Bomb.vex"),
+        // Pure hands out no Cannon (no `Cannon` string in the executable).
+        cannon: None,
         plasma_ball: None,
-        plasma_blast_pulse: Some(oag_title::weapons::PulsePlasmaBlast {
-            halo: r"Data\Weapons\pulse_plasma_halo1.vex",
-            hemisphere2: r"Data\Weapons\pulse_plasma_hemisphere2.vex",
-            hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
-        }),
+        // Pure's Plasma blast is a three-model shell too (`plasma_halo`,
+        // `plasma_hemisphere_noglow`, `plasma_hemisphere`, built by
+        // `0x0885b2a0`) but over three 255-to-0 key tables of its own, not
+        // Pulse's baked anim-time track: unread, so nothing is wired.
+        plasma_blast_pulse: None,
         plasma_blast_hd: None,
-        // Pure's Bomb authors no `timetodie` at all and never detonates -
-        // see `oag_tables::weapons::BombStats::timetodie`.
-        bomb_blast_pulse: None,
+        // Pure's Bomb has no fuse, but it does detonate when a craft enters
+        // its `trigger_radius` (`BombPool_Detonate`, `0x0884f214`), which
+        // builds this pair (`0x08858710`: the same two models, the same
+        // `2.0 -> 4.0` / `0.0 -> 12.0` eases and rates, update `0x08858ad0`
+        // with the `0.1 s` gate, `1.55 s` hide and `4.0 s` retire). The one
+        // difference read: Pure's update never stamps the shockwave's fading
+        // alpha.
+        bomb_blast_pulse: Some(oag_title::weapons::PulseBombBlast {
+            hemisphere: r"Data\Weapons\explosion_hemisphere.vex",
+            shockwave: r"Data\Weapons\Bomb_Shockwave.vex",
+            shockwave_fades: false,
+        }),
         bomb_blast_hd: None,
         missile_blast_hd: None,
         repulser_field: None,
@@ -115,7 +125,7 @@ pub const TITLE: &Title = &Title {
         leach_strip: None,
         leachbeam_ball: None,
         shuriken: None,
-        // Pure's own Cannon draw is unread; it keeps Pulse's terms.
+        // No Cannon on Pure, so no Cannon draw.
         cannon_look: None,
         // Pure's BOOT.BIN names `staticglow` (grep, both pressings).
         ghost_static: Some(oag_title::weapons::GhostStatic {
