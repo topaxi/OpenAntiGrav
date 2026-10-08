@@ -223,7 +223,8 @@ of every dumped vertex are back-facing and fin 0 is on 1 to 4 of 5 to 26
 pairs - a one-sided cull would leave almost nothing, where the film shows
 thick smoke. A fin fades in only edge-on (`|dot| < 0.32`). The same bit sits
 on the `MIN` of `hd_enginetrail_bluered.rcsmaterial`'s facing term, which
-`exhaust.wesl` draws one-sided: open, outside this page.
+`exhaust.wesl` drew one-sided until 2026-10-08 (fixed, see engine-trail.md,
+"Two-sided facing term").
 
 `RibbonBuilder_Flush` writes the engine parameter table directly before the
 draw: entry 0 (`time`) from the frame singleton `*0x00936fd4 + 0xc4`, the

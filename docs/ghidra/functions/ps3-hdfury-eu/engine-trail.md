@@ -2126,5 +2126,9 @@ independent half). `crates/fx/shaders/exhaust.wesl` now takes `abs(facing_dot)`
 (it drew the ribbon one-sided before). Matched frames, autopilot `--race`,
 ticks 300/330/360/1100 byte-identical (camera dead astern, dot > 0); tick 700
 differs in 1133 px around the plume's edge, slightly more plume on the edge.
-Omega: checked, not wired (Omega's engine trail is HD's `PI001` lineage but has
-no measured exhaust in this project).
+Confidence 85 rests on the instruction read alone (the Rocket ribbon's live
+eye-vector dump is a different ribbon). Omega: checked, differs - its
+`data00.psarc` ships `Data/ribboneffects/HD_EngineTrail_BlueRed{,_1,_2}.rcsmaterial`
+as PS4 shaders and its `eboot.bin` names `TrailEffectManager.cpp`, so the
+family carries forward, but `ps3-microcode.py` cannot read PS4 code; not
+wired on Omega, no PS4 capture path.

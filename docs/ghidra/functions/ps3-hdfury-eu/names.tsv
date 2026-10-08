@@ -595,3 +595,10 @@
 0x002ebce8	function	RibbonNode_Link	75	rocket-trail.md
 0x002ebd48	function	RibbonNode_Unlink	75	rocket-trail.md
 0x00123fb0	function	Rocket_Update	70	rocket-trail.md
+# 2026-10-08 hd-leach-beam: the LeachBeam strip draw and path
+0x00153288	function	LeachBeam_DrawStrip	80	leach-beam-strips.md
+0x001164e0	function	LeachBeamStrip_BuildRibbon	82	leach-beam-strips.md
+0x001157d0	function	BeamPath_AddWobble	60	leach-beam-strips.md
+0x00116090	function	BeamPath_BendToTarget	60	leach-beam-strips.md
+0x00117518	function	BeamPath_Build	60	leach-beam-strips.md
+0x00115e30	function	BeamPath_CheckLineOfSight	55	leach-beam-strips.md
