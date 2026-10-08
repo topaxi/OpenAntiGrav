@@ -635,6 +635,14 @@ pub const CANNON_LOOK: oag_title::weapons::CannonLook = oag_title::weapons::Cann
     },
 };
 
+/// HD's grid hover: [`oag_title::launch_hover::LaunchHover`].
+pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
+    oag_title::launch_hover::LaunchHover {
+        // The mean of the original's `3.0 + rand8 * 0.0003`; the mean is chosen.
+        grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
+        release_rate: oag_title::pre_race::Sourced::measured(1.0),
+    };
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -706,11 +714,3 @@ mod tests {
         assert_eq!(ZONE_STAGES.next_zone(999), None);
     }
 }
-
-/// HD's grid hover: [`oag_title::launch_hover::LaunchHover`].
-pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
-    oag_title::launch_hover::LaunchHover {
-        // The mean of the original's `3.0 + rand8 * 0.0003`; the mean is chosen.
-        grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
-        release_rate: oag_title::pre_race::Sourced::measured(1.0),
-    };
