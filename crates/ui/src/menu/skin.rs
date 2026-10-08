@@ -871,6 +871,7 @@ mod tests {
         title_y: 0.0,
         title_scale: 1.0,
         title_font: None,
+        body_font: None,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
@@ -883,6 +884,7 @@ mod tests {
         strip: None,
         blocks: None,
         list: None,
+        settings: None,
         help_text: None,
     };
 

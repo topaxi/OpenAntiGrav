@@ -337,6 +337,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // `Draw::FacedText { role: "Default", .. }` for this to collide with
     // (see that function's own doc).
     title_font: Some("Title"),
+    body_font: None,
     // **Authored, and measured across the whole GUI tree rather than off one
     // screen.** Pure has no `MainMenu_Definition.xml` to read a single number
     // out of, so every `<Menu>` widget in `Skin.xml` and the twelve
@@ -413,6 +414,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     strip: None,
     blocks: None,
     list: None,
+    settings: None,
     // Unmeasured. Pure's own main-menu screen has not been captured for a
     // helptext-equivalent widget, and Pulse's `18.0`/`13.0/22.0`/white must
     // never be borrowed for it - see `oag_title::MenuSkin::help_text`.

@@ -14,6 +14,7 @@ mod frame;
 mod navigation;
 mod pointer;
 mod rows;
+mod settings;
 mod strip;
 
 use super::*;

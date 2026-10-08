@@ -902,14 +902,15 @@ pub fn run(
     // label is. Unconditional, so a menu-page capture and the live window
     // (`session::menus`) build the same picture whether or not this run's
     // draw list ever reaches `oag_ui::menu::draw_list`/`picker::draw_list`.
-    let (face_atlas, face_role) =
-        crate::boot::fonts::face_atlas_slot(menu_skin, &font, title_font.clone());
-    renderer.set_face_atlas(&device, &queue, face_atlas, face_role);
-    // The buttons atlas is not routed through `face_atlas_slot` at all - it
-    // is a third, independent slot, not a substitute for `Title`/`Default`
-    // in the one `face_atlas_slot` already picks between. See
-    // `crate::render::Renderer::set_buttons_atlas`'s own doc.
-    renderer.set_buttons_atlas(&device, &queue, buttons_font);
+    crate::boot::fonts::install_faces(
+        &mut renderer,
+        &device,
+        &queue,
+        menu_skin,
+        &font,
+        title_font.clone(),
+        buttons_font,
+    );
     crate::prompts::install(&mut renderer, title, &options.settings);
 
     if let (Some(frames), Some(wanted)) = (

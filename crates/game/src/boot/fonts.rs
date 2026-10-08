@@ -257,10 +257,51 @@ pub fn face_atlas_slot(
     font: &oag_ui::font::Atlas,
     title_font: Option<oag_ui::font::Atlas>,
 ) -> (Option<oag_ui::font::Atlas>, Option<&'static str>) {
-    match skin.title_font {
-        Some(role) => (title_font, Some(role)),
-        None => (Some(font.clone()), Some(oag_ui::language::roles::DEFAULT)),
+    match (skin.title_font, skin.body_font) {
+        // A title that draws its screen title in one role and everything
+        // else in another (Pulse's PSP pressings) keeps the body face here
+        // and sends the title to [`third_atlas_slot`].
+        (Some(_), Some(body)) => (Some(font.clone()), Some(body)),
+        (Some(role), None) => (title_font, Some(role)),
+        (None, _) => (Some(font.clone()), Some(oag_ui::language::roles::DEFAULT)),
     }
+}
+
+/// What the renderer's third glyph slot carries: the screen title's face on a
+/// title whose body face has the second slot ([`oag_title::MenuSkin::body_font`]),
+/// the PlayStation button glyphs on every other.
+///
+/// The two never compete: only HD and Omega declare a `Buttons` role, and
+/// neither names a `body_font`. One slot, one role at a time, rather than a
+/// fourth texture in the shader.
+#[must_use]
+pub fn third_atlas_slot(
+    skin: &oag_title::MenuSkin,
+    title_font: Option<oag_ui::font::Atlas>,
+    buttons_font: Option<oag_ui::font::Atlas>,
+) -> (Option<oag_ui::font::Atlas>, &'static str) {
+    match (skin.title_font, skin.body_font) {
+        (Some(role), Some(_)) => (title_font, role),
+        _ => (buttons_font, oag_ui::language::roles::BUTTONS),
+    }
+}
+
+/// Loads both glyph slots into `renderer` for `skin`: the one place the live
+/// session, a language switch and a headless capture agree on which role
+/// goes where.
+pub fn install_faces(
+    renderer: &mut crate::render::Renderer,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    skin: &oag_title::MenuSkin,
+    font: &oag_ui::font::Atlas,
+    title_font: Option<oag_ui::font::Atlas>,
+    buttons_font: Option<oag_ui::font::Atlas>,
+) {
+    let (face, face_role) = face_atlas_slot(skin, font, title_font.clone());
+    renderer.set_face_atlas(device, queue, face, face_role);
+    let (third, third_role) = third_atlas_slot(skin, title_font, buttons_font);
+    renderer.set_buttons_atlas(device, queue, third, third_role);
 }
 
 /// Reads the PlayStation button-glyph face

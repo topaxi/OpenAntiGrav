@@ -4,8 +4,48 @@
 //! already split their own `touch_button_from_node`/`touch_list_from_node`/
 //! `touch_slider_from_node` into. A move, not a behaviour change.
 
-use super::{Fill, Image, Menu, Node, Redirect, Screens, Text, parse_argb};
+use super::{Fill, Image, Menu, Node, Redirect, Screens, Text, argb_to_rgba, parse_argb};
+use crate::frontend::Draw;
 use oag_core::buttons::button_from_name;
+
+impl Fill {
+    /// This fill as something to draw: a [`Draw::GradientFill`] when it
+    /// carries `Color1`..`Color4`, a plain [`Draw::Fill`] otherwise.
+    ///
+    /// A gradient is the mean of each edge's two corners, which is every
+    /// shape a shipped widget authors: the top and bottom of an edge never
+    /// differ (see [`Draw::GradientFill`]). The one conversion the screens
+    /// that draw a fill share.
+    #[must_use]
+    pub fn draw(&self) -> Draw {
+        let rect = [
+            self.x,
+            self.y,
+            self.width.unwrap_or(0.0),
+            self.height.unwrap_or(0.0),
+        ];
+        match self.gradient {
+            Some([c1, c2, c3, c4]) => Draw::GradientFill {
+                rect,
+                left: mean(argb_to_rgba(c1), argb_to_rgba(c2)),
+                right: mean(argb_to_rgba(c3), argb_to_rgba(c4)),
+            },
+            None => Draw::Fill {
+                rect,
+                color: argb_to_rgba(self.color),
+            },
+        }
+    }
+}
+
+fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [
+        (a[0] + b[0]) * 0.5,
+        (a[1] + b[1]) * 0.5,
+        (a[2] + b[2]) * 0.5,
+        (a[3] + b[3]) * 0.5,
+    ]
+}
 
 impl Screens {
     /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`

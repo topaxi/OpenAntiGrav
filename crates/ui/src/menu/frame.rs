@@ -26,6 +26,8 @@
 //! An image the sprite sheet has no placement for is skipped, so a frame whose
 //! textures did not decode is a missing rule rather than a wrong one.
 
+pub mod settings;
+
 use crate::frontend::{Draw, Placed};
 
 use crate::screen::{Screens, argb_to_rgba, parse_argb};
@@ -79,6 +81,9 @@ pub struct Frame {
     /// by the caller, which is where the decoded pixels are; `None` draws
     /// every entry as bare text, which is what both PSP titles are.
     pub blocks: Option<super::block::BlockArt>,
+    /// The original's settings-screen look for the pages that stand where one
+    /// does - see [`settings::Layout`]. `None` for a title that names none.
+    pub settings: Option<settings::Layout>,
 }
 
 impl Frame {
@@ -354,5 +359,6 @@ pub fn read(
         ink,
         tab_selected,
         blocks,
+        settings: None,
     }
 }

@@ -31,10 +31,11 @@ fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
     let texts: Vec<&String> = list
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text),
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
             _ => None,
         })
         .collect();
+    // The title is in the `Title` role now, so it is a `FacedText`.
     assert!(texts.contains(&&"OPTIONS".to_string()), "{texts:?}");
     assert!(texts.contains(&&"FILTERING".to_string()), "{texts:?}");
     assert!(

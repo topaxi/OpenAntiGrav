@@ -59,6 +59,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // font="Title" x="FEGlobals->TitleXOffset" y="FEGlobals->TitleYOffset"
     // color="FEGlobals->HD_Grey">`.
     title_font: Some("Title"),
+    body_font: None,
     // Not authored, on HD's own terms: Omega's main menu is the same
     // `<HorizMenu>` idiom HD's is (see `strip` below), so there is no
     // vertical `<Menu>` first row to converge on either.
@@ -103,6 +104,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // lane (the row-stepping and label-scale values HD's own page reads off
     // the same widget kind); carried at HD's figures since the two widgets
     // otherwise agree exactly.
+    settings: None,
     list: Some(oag_title::MenuList {
         x: 160.0,
         y: 170.0,

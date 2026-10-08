@@ -153,17 +153,15 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 50.0,
     title_y: 0.0,
     title_scale: 1.0,
-    // **Not `None` for want of evidence.** `MainMenu_Definition.xml`'s own
-    // title widget authors `font="title"` (`TournamentLoad`'s says
-    // `font="Title"`) - read directly off `Data.wad`, 2026-09-13 - which
-    // resolves case-insensitively to the same `Title` slot HD's chrome title
-    // now draws in, here landing on `Pulse_14.fnt` (17px) against `Default`'s
-    // 13px `pulse_text.fnt`. Left `None` anyway: flipping this moves output
-    // `docs/ui/menus-original.md`'s Layout table already verified against a
-    // capture at confidence 95, and nothing has re-checked that capture's
-    // title against the taller face. See `oag_title::MenuSkin::title_font`'s
-    // own doc for the full account; this is a scope cut, not a contradiction.
-    title_font: None,
+    // `MainMenu_Definition.xml`'s own title widget authors `font="title"`
+    // (`TournamentLoad`'s says `font="Title"`), which resolves to the `Title`
+    // slot - `Pulse_14.fnt`, 17px, against `menu`'s 22px `Pulse_20.fnt`.
+    // Measured 2026-10-08 against a PPSSPP capture: nine glyphs of
+    // `MAIN MENU` span 152 px of the 960-wide crop, 17 px a glyph, where the
+    // 22px face gave 25 px. `Default` (`pulse_text.fnt`) stays loaded beside
+    // it, see `body_font`.
+    title_font: Some("Title"),
+    body_font: Some("Default"),
     // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
     first_row_y: Some(32.0),
     // Measured, not authored - see the field's own docs for the four menus this
@@ -197,6 +195,20 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     strip: None,
     blocks: None,
     list: None,
+    // Racebox's settings page, as the original draws it - see
+    // `oag_title::MenuSettings`. `Single Player` is the screen, in
+    // `RaceBox_Definition.xml`; this build's `race` page stands in its place.
+    settings: Some(oag_title::MenuSettings {
+        file: r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml",
+        screen: "Single Player",
+        pages: &["race"],
+        font: "Title",
+        sheet: r"Data\FE\Images\pulse_assets.mip",
+        arrow: [[289.0, 76.0, 9.0, 10.0], [314.0, 76.0, 9.0, 10.0]],
+        arrow_glow: [[285.0, 98.0, 20.0, 22.0], [308.0, 98.0, 20.0, 22.0]],
+        arrow_offset: [(-23.0, 5.0), (-13.0, 5.0)],
+        glow_inset: (-5.0, -6.0),
+    }),
     // `helptext0`'s own `y="50"`, 18 below the first row's `y="32"` - the same
     // 18 every other `helptext`/row pair in `MainMenu_Definition.xml` steps by.
     // `scale` used to be `13.0 / 22.0`, a ratio this project derived from two
@@ -266,7 +278,8 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
 /// the PS2/PSP grid disagreement that motivates the rest of this table does
 /// not touch them, and nothing has measured a PS2-specific value for any of
 /// the seven to replace a PSP one with. `title_font` in particular stays
-/// `None` for the same reason [`MENU_SKIN`]'s does - a 2026-09-27 PCSX2
+/// `None` (and `body_font` with it: the `Default` face goes in the one face
+/// slot, as it did before the PSP pressings got a third) for the same reason [`MENU_SKIN`]'s does - a 2026-09-27 PCSX2
 /// capture of `Main Menu` shows `MAIN MENU`'s glyphs in what reads as the
 /// same face as `RACE CAMPAIGN` below it, not a taller one, which is a lean
 /// against flipping it rather than a capture that proves the flip the way
@@ -284,6 +297,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_y: 9.0,
     title_scale: 0.8,
     title_font: None,
+    body_font: None,
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),
     menu_font: Some("menu"),
@@ -296,6 +310,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     strip: None,
     blocks: None,
     list: None,
+    settings: None,
     help_text: Some(oag_title::HelpText {
         offset_y: 22.0,
         scale: 1.0,

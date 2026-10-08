@@ -86,9 +86,13 @@ impl Renderer {
         let Some(atlas) = self.atlas_for(slot) else {
             return;
         };
-        let swapped = self
-            .prompt_substitution
-            .apply(text, slot == GlyphSlot::Buttons);
+        let swapped = self.prompt_substitution.apply(
+            text,
+            slot == GlyphSlot::Buttons
+                && self
+                    .buttons_role
+                    .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
+        );
         let text = swapped.as_ref();
         // `MODE_FACE_ATLAS` only when there is a real face atlas to sample -
         // never for the placeholder [`face::upload_face`] built with no role

@@ -517,6 +517,45 @@ pub(super) fn read_race_setup(
     }
 }
 
+/// The original's settings-screen look, read off the file the skin names -
+/// Pulse's `RaceBox_Definition.xml`, which holds `Single Player`. `None` on a title
+/// whose skin names no settings screen, and on a file that will not read or
+/// whose screen authors no `<List>`, which is reported.
+pub(super) fn read_settings_layout(
+    archives: &mut oag_assets::Archives,
+    skin: &oag_title::MenuSkin,
+    globals: &std::collections::HashMap<String, String>,
+    sprites: &[(String, oag_ui::frontend::Placed)],
+    report: &mut Vec<String>,
+) -> Option<oag_ui::menu::SettingsLayout> {
+    let spec = skin.settings?;
+    let name = spec.file;
+    let xml = archives
+        .read_name(name)
+        .map_err(anyhow::Error::from)
+        .and_then(|blob| {
+            fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+        });
+    let layout = xml.map(|xml| oag_ui::menu::SettingsLayout::read(&xml, globals, spec, sprites));
+    match layout {
+        Ok(Some(layout)) => {
+            report.push(layout.describe());
+            Some(layout)
+        }
+        Ok(None) => {
+            report.push(format!(
+                "{name}: no {:?} screen with a <List> to place a settings column by; the pages draw as plain rows",
+                spec.screen
+            ));
+            None
+        }
+        Err(error) => {
+            report.push(format!("{name}: {error:#}; the pages draw as plain rows"));
+            None
+        }
+    }
+}
+
 /// The `string` (`idstring` on an entry that names a string-table id) and the
 /// `value`, when the entry has one, of every tag in the first list named `list`
 /// that carries one, unparsed. The tag's own name is
