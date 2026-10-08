@@ -904,3 +904,61 @@ the particle path's protect call is `docs/rendering/glow-mask.md`'s.
 - **2026-09-24.** The quarter-turn resolved and measured live: it is the
   flare's frame, the model's basis is a rotation, and ours was a reflection.
   `0x08a6b820`/`0x08a6b6b4` named.
+
+## 2026-10-08: the launch glow re-measured - the pool is equal, and the earlier pairs were taken ten ticks late (pulse-weapon-look)
+
+The thread's open item was "the wide orange glow at fire+3..+8 is larger on the original than ours,
+`WO_ROCKET_FLARE`'s parameters unread". Both halves were already stale (the flare was read and played on
+2026-10-01, "the launch glow" section above). Re-measured from scratch with the hypothesis written first:
+**H1, ours is smaller, is false** if fire-minus-control warm light of ours falls inside the original's
+two-restart spread (one PPSSPP boot, not two). Method: `psp-weapon-pair.py rocket` (fire at GO + 120, speed 106.2, Venom, Talon's Junction,
+Time Trial, PPSSPP software renderer, native), a no-fire control per side, two race restarts of the original in one PPSSPP boot,
+warm light = sum of `max(0, dR - dB)` over pixels above 20, fire minus control.
+
+**Finding 1 - the scenario was ten ticks late.** `verification/scenarios/weapon-after-go.inputs` presses at
+tick 403, written when our standing start was ten ticks slower. Ours now reaches the original's state at
+**tick 393** (x 124.94, speed 107.3; the original fires at x 124.5, speed 106.2): at 403 the craft is
+at x 143 and 111 u/s. Every pair taken with the old file fired later in a different scene
+(a tank and a building at other screen positions in the contact sheets; the flare drew from x 146.7
+where the original draws from 126.9). `verification/scenarios/weapon-after-go-matched.inputs` fires at 393
+and the original's `fire + k` frame is ours at tick `391 + k`. The old file stays: two ground-truth tests
+pin their pictures to it. Earlier warm-light tables (2026-10-01) were taken at `402 + k` and carry this offset.
+For ours a no-fire control must still pass `--give rocket` and use a script that never presses `square` (`nofire.inputs`):
+with no `--give` the frame differed everywhere (a translucent ship and a different camera, cause not looked into), so it
+is no control.
+
+**Finding 2 - the glow is not smaller.** Warm light, millions, mean over the frames (original restart A / B in one boot, ours):
+
+| frames | original A | original B | ours |
+| --- | ---: | ---: | ---: |
+| fire+3..+8 | 2.46 | 2.53 | 2.20 |
+| fire+9..+30 (eight sampled) | 2.18 | 1.93 | 3.09 |
+
+The first window is inside the boot spread (ours 11 % under, the original's own two restarts 3 % apart); the original is
+repeatable (A and B agree frame by frame to about 10 %). From fire+9 ours is **about 1.5x** the original, in spikes at
+fire+9, 16, 20 and 25 (4.0, 4.2, 3.8, 3.5) with the ticks between at the original's level (2.7, 2.95, 1.9, 1.7
+against 2.1, 2.0, 2.0, 2.0): the excess is episodic, not a steady surplus.
+
+**Finding 3 - the pool is equal, so the excess is not the effect's law (confidence 80: one probe run in one boot).** `--probe flare` and `--probe rolled` on the original against a temporary
+(reverted, `data/scratch/pulse-weapon-look/psys-debug-print.patch`) per-spec print in `Stage::extend_vertices`:
+
+| quantity | original, per rocket | ours |
+| --- | --- | --- |
+| `WO_ROCKET_FLARE` root count by age | 2 a tick: 8 at 4.9, 14 at 7.9, 26 at 13.9, 50 at 25.9, 60 at the 30-tick life | `2 (k-2)`: 4, 10, 22, 46, 58 (two ticks of display lag) |
+| size, oldest particle | 1.74, 2.44, 3.83, 6.62, 7.78 | 1.74 (n=8), 2.67 (n=16), 3.60 (n=24), 6.38 (n=48), 7.30 (n=56) at the same counts |
+| alpha, oldest | 229, 203, 152, 50, 8 | 0.90, 0.77, 0.63, 0.23, 0.10 (x255: 229, 195, 161, 59, 25) |
+| colour by age | (245,245,191) at 0, (179,105,0) at 7 | (233,233,119) at age 0.07, (196,156,0) at 0.20, (154,65,3) at 0.33 |
+| positions | x 125.7..140.8 at n=10, 124.4..155.6 at n=18, 114..214 at n=50 | x 127.9..139.6 at n=8, 127.1..154.3 at n=16, 124..213 at n=48 |
+| `WO_ROCKET_SHAZZAM` | 1 or 2 quads a tick per rocket, half-size 5.5 to 14.8 | 1 or 2 a tick, 5 to 14.8 |
+
+The blend is the table's class 2 by the static read (`SRC_ALPHA`, `FIX 0xffffff`); a GE dump at fire+9 contains batches with blend
+`src=2 dst=10 fixB=ffffff` (hand-decoded, **not attributed to the flare's draws**), and ours is `SrcAlpha`/`One`. Falsifier met: count, size, alpha, colour, position and blend
+match, so the spikes are neither the pool nor the blend. What is left, **not isolated**: the SHAZZAM draw's per-tick random size and its
+sprite shading at the spike ticks (the original's flashes are also random but its two restarts agree, so its sequence is
+deterministic and ours is another sequence), and the road's bloom under the larger quads. No fix was made. The
+`85 x 110 px` fireball at k=25 in the brief is the **craft-hit** blast (`WO_ROCKET_EXPLO`); this Time Trial pair has
+no blast before tick ~49 and its wall hit is `WO_ROCKET_EXPLO_TRACK`, so nothing is reported about it from this pair.
+Cross-title: Pure's `WO_ROCKET_FLARE` is one emitter (`pure-status.md`) and its rocket drew unchanged by this lane:
+**checked, nothing changed, nothing to port**. `pure-weapon-gfx` fired at tick 404 of the same old file; the 393-against-403
+offset is Pulse's standing start against Pulse's original, so whether Pure's timing is off **was not checked** (it has its own
+handling and its own original).

@@ -1,0 +1,12 @@
+# A stationary craft lays its Mine cluster, for the original's
+# `psp-weapon-pair.py mine --no-hold --fire-frame 300 --set-word 0x1ac=5`.
+#
+# The original fires at stop frame 300, which is 34 frames after GO (272 ticks of
+# countdown on our side), so the press is on tick 306. The original's `fire + k`
+# frame is ours at tick `304 + k`. The owner trips its own mines 0.5 s after each
+# is laid, so the first blast is at k = 32 and a five-mine cluster at six-tick
+# spacing goes off at k = 32, 38, 44, 50 (the fifth falls outside the trigger radius
+# once the owner has been pushed 3 units).
+306 none
+1 square
+150 none
