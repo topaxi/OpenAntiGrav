@@ -107,10 +107,29 @@ pub const SLOWDOWN_ADJUST_MAX: f32 = 4.0;
 /// it would be.
 #[must_use]
 pub fn target_height(handling: &Handling, mag_lock_blend: f32, slowdown_timer: f32) -> f32 {
+    capped_target_height(handling, mag_lock_blend, slowdown_timer, None)
+}
+
+/// [`target_height`] with the grid clamp a title may hold on its craft: the pre-scale target is
+/// `min`'d with `cap` before [`TARGET_GLOBAL_SCALE`].
+///
+/// Wipeout HD's craft update does exactly this with `entry+0x348` (`Craft_Update`,
+/// `0x000f1cd8-0x000f1cfc`; `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`, confidence 90):
+/// a low constant while the craft is on the grid, then a timer from the green light. `None` is
+/// the law every other title is measured against and returns [`target_height`]'s own value.
+#[must_use]
+pub fn capped_target_height(
+    handling: &Handling,
+    mag_lock_blend: f32,
+    slowdown_timer: f32,
+    cap: Option<f32>,
+) -> f32 {
     let slowdown_adjust = slowdown_timer.clamp(0.0, SLOWDOWN_ADJUST_MAX);
     let base = handling.antigrav.ride_height - slowdown_adjust;
+    let base = base * (1.0 + TARGET_MAG_LOCK_GAIN * mag_lock_blend);
+    let base = cap.map_or(base, |cap| base.min(cap));
 
-    base * (1.0 + TARGET_MAG_LOCK_GAIN * mag_lock_blend) * TARGET_GLOBAL_SCALE
+    base * TARGET_GLOBAL_SCALE
 }
 
 /// The probe height below which penetration escape teleports the body, in units.

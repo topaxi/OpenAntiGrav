@@ -408,7 +408,15 @@ pub fn grid_pose(node: Pose, slot: u8) -> Pose {
 
 #[must_use]
 pub fn spawn_height(handling: &Handling) -> f32 {
-    let target = oag_physics::hover::target_height(handling, 0.0, 0.0);
+    capped_spawn_height(handling, None)
+}
+
+/// [`spawn_height`] for a craft whose hover target is clamped on the grid
+/// ([`oag_physics::hover::capped_target_height`]): the same rest height of the same spring, about
+/// `0.16` under the lower target, so the craft starts where its suspension already holds it.
+#[must_use]
+pub fn capped_spawn_height(handling: &Handling, cap: Option<f32>) -> f32 {
+    let target = oag_physics::hover::capped_target_height(handling, 0.0, 0.0, cap);
     let load = handling.physical.normal_gravity + handling.physical.track_gravity;
     let gradient = 2.0 * 0.3 * oag_physics::hover::HOVER_K * load;
     let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;

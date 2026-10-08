@@ -47,20 +47,53 @@ the clock), so frames were compared by what they show, not overlaid.
 
 ## Where it comes from
 
-Flyby-only. At the race's start the original's hover **target** (`entry+0x344`) reads 2.25-2.27,
-not the 4.125 it holds in a race, and the craft settles `target - 1.25 + 1.125 = 2.16` above the
-floor, probes included (1.03 = 2.27 - 1.25). When the race proper begins the target returns to
-4.125 and the craft rises to 4.001 within about 1.5 s (b2, b3: 3.07 then 4.06 then 4.00). The
-physics is live in the flyby (the body creeps 0.03 in y) and not pinned. What lowers the target is
-**not read**: `entry+0x348` (3.03 against 21.7 at rest) and `entry+0x34c` (0.21 against 0.40)
-move with it. The four-point hull is **not** the cause of anything seen here, because the grid
-and straight heights agree.
+Flyby-only, and now read (2026-10-08, lane `hd-flyby-hover`,
+[hover-target.md](../ghidra/functions/ps3-hdfury-eu/hover-target.md), confidence 90). The craft
+update holds `entry+0x344`, the hover target, at `0.75 * entry+0x348` while the craft is in its grid
+state (`entry+0x2f8 == 0`, flag word bit 1): `+0x348` is a jitter `3.0 + rand8 * 0.0003`, so the target
+reads 2.25-2.31 and the craft settles `target - 0.16` above the floor, 2.13-2.19. The state flips to
+racing **at GO** (three boots: the first sample with the HUD's `GO` and race clock 0), not at the
+cross tap, so the craft sits low through the flyby **and the whole countdown**. From the flip
+`+0x348` is a timer (`+= dt`, 1.00 per game second) and the target is `0.75 * min(5.5, +0x348)`: a
+linear ramp of `0.75` units a second that reaches 4.125 after 2.46 s. The craft follows it within 0.04
+(`h = target - 0.16`): 3.20 at 1.4 s after GO, 4.00 by about 2.5 s. (The first reading here said "about
+1.5 s": that was a coarse sample, three boots with a 0.1 s sampler give 2.5 s.) The four-point hull
+is not the cause of anything seen here, because the grid and straight heights agree.
 
-Ours cannot draw this by construction (the flyby holds the world at tick 0, the placement pose
-at the settled height), which is the open "settle" decision of the flyby. The honest
-reproduction is to draw the craft 1.84 lower (or the target's real value) during the flyby;
-**not done**: the lowered target's source is unread, and a drawn offset would be a number chosen
-to match one circuit (the Pulse flyby of `16_Track` needs a different one).
+Ours cannot draw this by construction in the flyby (the world is held at its first tick), and
+until this lane the craft sat at its settled placement pose for the whole flyby and countdown.
+Ported (2026-10-08) as HD title data, `oag_title::launch_hover::LaunchHover` on `RaceDefaults`: the
+clamp is written to every craft each tick by `oag_raceplay::launch_hover` from the countdown clock
+(`3.03825` on the grid, `+ 1.0` per second from the tick the grid state ends), the spring reads
+`min(base, clamp) * 0.75` (`oag_physics::hover::capped_target_height`) and the spawn height is the
+same spring's rest height under the lowered target (`oag_gameplay::spawn::capped_spawn_height`), so
+the placement pose, the flyby's held world, is already low. Pulse, Pure, Omega and 2048 carry `None`
+and their paths are unchanged. **Chosen, not measured:** the clamp is the mean of the original's
+`3.000 .. 3.0765` jitter (no random stream consumed), the first timer step lands on the tick the grid
+ends, and rivals take the same clamp (read in the release loop, never measured: Time Trial had no AI).
+
+Aligned on the craft's own clock (`tau` = `entry+0x348` minus its grid value 3.03, game seconds since
+GO, so the sampler's wall time does not enter):
+
+| Moment | original | ours (`hd_grid_hover_ground_truth` and a dump) |
+| --- | --- | --- |
+| flyby / placement | 2.13-2.19 (3 boots) | 2.158 |
+| countdown | 2.13-2.19 (3 boots, state 0 throughout) | 2.144 (4 s in), 2.169 (last tick) |
+| tau 0.1 | 2.15-2.20 (c2 2.144, c3 2.200 at tau 0.23) | 2.17 at tau 0 |
+| tau 1.45 | 3.204 (c2) | 3.189 at 1.40, 3.373 at 1.67 |
+| tau 1.8 / 1.9 | 3.421 / 3.500 (c3) | 3.627 at 2.00 (the original is about 0.1 lower at equal tau) |
+| tau 2.6 and later | 4.040 (c2, tau 2.6), 4.027 (c3, tau 3.5) | 3.998 at 2.5, 4.039 at 3.0, 4.025 at 4.0 |
+
+The ramp's middle runs about 0.1 above the original at equal tau (one tick of timer step or the
+spring's lag, which ours does not model separately); the end states and the shape match.
+
+Frames: `data/scratch/hd-flyby-hover/ours-sheet2.png` (original flyby shot beside ours), `c2/sheet.png`
+(the original's countdown and GO). The chase camera follows the craft down, so the craft holds the
+same place on the screen through the rise, as the original's frames do. Our livery in the chase
+frames is not the dark Feisar the capture shows; not this lane's.
+
+Other titles: Omega (HD's craft code lineage, no PS4 emulator): not checkable, `None`. 2048: not
+checked, its craft is a separate build, `None`.
 
 ## Traps
 

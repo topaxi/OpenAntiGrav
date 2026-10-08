@@ -354,6 +354,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         released: _,
         // Not hashed: the race writes it from the mode every tick.
         four_corner: _,
+        // Not hashed, for `on_grid`'s reason.
+        hover_cap: _,
         launch,
         time_airborne,
         mag_lock_blend,

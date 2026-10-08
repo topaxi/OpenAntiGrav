@@ -1,24 +1,18 @@
-//! Wipeout HD's LeachBall glows face-on from where the camera really is, on a real disc.
+//! Wipeout HD's LeachBeam strip is drawn from the craft's anchor trail, on a real disc.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_leach_ball_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_leach_strip_ground_truth --run-ignored all
 //! ```
 //!
-//! # What only a frame can say here
-//!
-//! The ball's `RIM_GLOW` program paints `a = (0.9 (1 - rim^5))^5` where `rim` is
-//! one minus `N.V`, brightest face-on (`docs/rendering/hd-unlit-programs.md`). The eye
-//! in `N.V` is read out of the drawable's own scene block, and a drawable
-//! nothing wrote holds `Scene::off`, whose camera is the world's origin: the
-//! ball was then shaded from the direction to the origin, a ragged half-lit
-//! disc, and it carried about 40 % of the bright pixels the right eye gives.
-//! Nothing in the model or the program was wrong, so only a close frame tells
-//! the two apart. On Talon's Junction at that camera: 1,186 near-white pixels in
-//! the ball's box with the write, 369 with it dropped, 0 with no ball.
+//! Talon's Junction with rivals, a locked beam on slot 1 from tick 276, seen from
+//! the side at tick 330 (`docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`,
+//! "hd-leach-draw"). The strip is a bright glow ribbon from the player's hull toward
+//! the rival: 9,332 near-white pixels in the box its near end crosses against 46 with
+//! no beam. Dropping the strip, its textures or its anchor trail empties the box.
 
 use std::path::Path;
 
@@ -66,16 +60,6 @@ fn floor_of(png: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-/// Talon's Junction with rivals, tick 280: a locked LeachBeam put on slot 1 at
-/// tick 276, photographed from a camera 7 units off the ball (which sits at
-/// about `(-0.6, -51.9, -194.8)` then), or the same frame with no beam. The camera sits 1.846
-/// lower than it did (`y = -47.04`): HD's grid craft hover that much lower since the grid hover
-/// landed, rivals included.
-///
-/// **Four ticks after the green light and no input**, so slot 1 has barely
-/// left its grid mark and the ball, which starts at the target, is where the
-/// camera was pointed whatever the rival AI does in the seconds after. A
-/// later tick would make this test a function of the AI's driving.
 fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
     let out = scratch.join("frame.png");
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
@@ -84,8 +68,8 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
         .args(["--race", "--opponents", "--no-audio", "--size", "960x544"])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
-        .args(["--motion-blur", "off", "--ticks", "280"])
-        .arg("--camera-pose=-0.58,-48.886,-188.2,0,-0.45,-0.89,0,1,0")
+        .args(["--motion-blur", "off", "--ticks", "330"])
+        .arg("--camera-pose=-112,-47,-162,0.89,-0.07,-0.45,0,1,0")
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
@@ -98,31 +82,28 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
     floor_of(&std::fs::read(&out).expect("the frame"))
 }
 
-/// Near-white pixels in the box the ball sits in at that camera.
+/// Near-white pixels in the box the strip's near end crosses.
 fn white(frame: &[u8]) -> usize {
-    (235..300)
-        .flat_map(|y| (440..520).map(move |x| (x, y)))
-        .filter(|&(x, y)| frame[y * SIZE.0 + x] > 240)
+    (250..420)
+        .flat_map(|y| (0..450).map(move |x| (x, y)))
+        .filter(|&(x, y)| frame[y * SIZE.0 + x] > 200)
         .count()
 }
 
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn the_leach_ball_glows_face_on_from_the_real_eye() {
+fn the_leach_strip_is_drawn_from_the_players_hull_toward_the_rival() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    let scratch = std::env::temp_dir().join(format!("oag-hd-leach-ball-{}", std::process::id()));
+    let scratch = std::env::temp_dir().join(format!("oag-hd-leach-strip-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
     let locked = frame_of(&image, &scratch, true);
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();
 
     let (with, without) = (white(&locked), white(&control));
-    println!("near-white pixels in the ball's box: {with} with a ball, {without} without");
+    println!("near-white pixels in the strip's box: {with} with a beam, {without} without");
     assert!(without < 400, "the control's box is not road any more");
-    assert!(
-        with > without + 800,
-        "the ball is not glowing face-on: its eye is the world's origin again"
-    );
+    assert!(with > without + 3000, "the strip is not drawn");
 }

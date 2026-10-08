@@ -24,7 +24,12 @@ impl super::super::Scene {
             let right =
                 oag_core::math::Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
             let up = oag_core::math::Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
-            let vertices = race.leach_beam_ribbon_vertices(right, up);
+            // HD draws its own strip (`Scene::ribbons`) where it authors one.
+            let vertices = if race.has_leach_strip() {
+                Vec::new()
+            } else {
+                race.leach_beam_ribbon_vertices(right, up)
+            };
             beam.borrow_mut().upload(queue, vp, &vertices);
         }
     }

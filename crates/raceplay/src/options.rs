@@ -483,12 +483,12 @@ pub struct Setup {
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's `arc_anchor_point` in its hull's model space, when the title
     /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
-    /// authors none is `None` and draws no wake. `None` on every other title.
-    /// See `race::magstrip_wake`.
+    /// authors none is `None` and draws no wake. See `race::magstrip_wake`.
     pub magstrip_wake: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
-    /// Whether the over-strip effect is the title's `.pob` rather than the arc
-    /// wake: see `oag_title::weapons::WeaponModels::magstrip_pob`.
+    /// Whether the over-strip effect is the title's `.pob`: see `WeaponModels::magstrip_pob`.
     pub magstrip_pob: bool,
+    /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
+    pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
@@ -623,16 +623,16 @@ pub struct Setup {
     /// reaching into the render-facing scene state to get it. `None` on every
     /// title but HD/Fury, which is `oag_title::ZoneStages`' own standing today.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
-    /// Whether this title's `ready` and `go` start-of-race voice has been
-    /// measured, so the race raises [`oag_sound::sfx::Cue::Ready`] and
-    /// [`oag_sound::sfx::Cue::Go`] at the ticks [`crate::countdown`]
-    /// pins. Straight from `oag_title::RaceDefaults::countdown_voice` being
-    /// `Some`.
+    /// Whether this title's `ready` and `go` voice has been measured, so the race raises
+    /// [`oag_sound::sfx::Cue::Ready`] and [`oag_sound::sfx::Cue::Go`] at the ticks
+    /// [`crate::countdown`] pins: `oag_title::RaceDefaults::countdown_voice` being `Some`.
     ///
-    /// A flag rather than the banks: which bank plays is decoded audio and
-    /// rides [`Self::sounds`]; whether the simulation asks for the cue at all
-    /// is title data, and must not change with whether a bank decoded.
+    /// A flag rather than the banks: which bank plays rides [`Self::sounds`]; whether the
+    /// simulation asks for the cue at all is title data, and must not change with whether a
+    /// bank decoded.
     pub countdown_voice: bool,
+    /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
+    pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*
