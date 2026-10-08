@@ -1057,3 +1057,111 @@ executable: not checkable here (no PS4 emulator).
   explain a HUD wash, so it is a screen-space part (bloom/exposure, the point light, or a flash object) still unread.
 - **Omega:** `HD_missile_explosion` ships in Omega; same asset lineage as HD, so checked, applies, not wired
   (`oag-omega` has no `WEAPON_MODELS` entry, and its PS4 programs are unread).
+
+## 2026-10-08 (`hd-whiteout`): what the Missile's white-out is, read off RSX frames on RPCS3
+
+**Question.** When a Missile reaches a craft the film's frame goes white across everything, the HUD and the
+player's craft included. Is that a screen-flash object, the bloom/exposure, or the point light? **Answer: none
+of the three is a separate pass that washes the HUD.** The white is the explosion's own geometry around the
+eye, lit and then bloomed by the ordinary chain; the HUD is drawn last and is not touched. Confidence 80 for
+the structure (point 1 and 3 from one boot's dumped frames, point 2 from another boot's targets, the screenshots of
+all three agreeing), 70 for "no flash object" (one static callee check, below).
+
+**Method.** `scripts/rpcs3-hd-whiteout.py` (new): boots HD, gives the player a Missile (state 1), puts the player 12
+units behind the nearest rival (`rpcs3-mem-poll.py`'s recipe), waits for the pool count at `manager + 0x10c` to rise,
+sleeps a delay, pauses, takes the screenshot, then dumps the frame the RSX has queued (`rpcs3_draw_hook.py`) and/or the
+render targets. `scripts/rsx-draw-list.py` prints a dumped frame's draws with the state each was issued under.
+Raw captures `data/scratch/hd-whiteout/{run1,run2,run3}` (gitignored). Three boots: `run1` draws and screenshots at
+pool ages 0.083 and 0.517 s, `run2` screenshots at 0.062/0.216/0.367/0.502, `run3` targets at 0.033/0.267/0.500.
+
+**1. Nothing is drawn after the HUD, and the HUD's programs do not change.** In all three dumped frames (`base`,
+`hit0`, `hit1`) the last pass is the target `00010000` (the screen): a full-screen quad of the finished image
+(`fp 00744141`, sampling `00cc0000`) followed by the HUD's draws, `fp 00744181` (33 draws at rest, 40 and 32 in the
+two hits), and then the next frame's first clear. No draw on any other target follows and the same two programs draw
+the HUD with or without an explosion. (Subchannels other than 0 hold 23-24 blits per frame; they are the bloom
+chain's resolves or copies, not read further.) So the HUD is not washed by a later pass. It *looks* washed because most of it is
+translucent: the opaque hexes (lap, position, the damage ring) keep their colours over the white in every
+screenshot, while the lap-time panel and the speed readout fade (`data/scratch/hd-whiteout/run2/hit0.png`,
+`run3/hit1.png`). The film's "HUD washed" is translucency over white, **confidence 85**.
+
+**2. The wash is already in the scene target, the bloom adds to it.** `run3` read the scene target `00f50000`
+(A8R8G8B8, pitch `0x2800` = 2560 texels wide, two samples across, with `Write Color Buffers` on and the read done
+through the GDB stub, see `rpcs3-capture.md`) at the same pause as the screenshot. At pool age 0.267 s: scene luma
+209, final 232; pixels at or above 250 are **22.7 % of the scene and 45.8 % of the final**. At 0.50 s: 96 to 113 and
+5.0 % to 8.3 %. At 0.033 s: 88 to 92 (no wash yet) and at rest 89 to 91. The explosion in the scene target is
+yellow-orange ring discs and long light streaks over lit walls, no flat white
+(`data/scratch/hd-whiteout/sheet5.png`, left final, right scene). The composite and bloom chain (`00741f41` down to
+320x180 and 160x90, blurs `00741fc1`/`00741881`/`00741c01`, composite `007434c1` onto `00cc0000`) is the same set of
+programs with or without an explosion (their dumped bytes are identical in `base`, `hit0`, `hit1`), so **no exposure or
+tone-map constant moves**: the bloom is the engine's own, applied to a much brighter scene. One extra `007434c1`
+draw (three, against two at rest) appears while an explosion is live; its purpose is unread.
+
+**3. The explosion's draws, and the eye inside them.** In `run1` `hit0` three draws carry the model's age in
+`c[464].x` (`0.05`, three pushbuffer ticks; the CPU read of the pool age at the pause was `0.083`, the queue runs about
+two ticks behind): `idx` 224, 96 and 140 (probably the core, the rays and the shockwave; not matched to the model's chunks). All three are blended `SrcAlpha`/`One`
+(additive), depth test on `LEQUAL`, **depth mask off, face culling off, alpha test off**, and share one matrix block:
+rows of scale 4.88 (the model's `sphere` node at about key 2, `1250 / 256 = 4.88`, a tick under the `UV_offset` age) at `(-207.0, -72.6, 61.1)`, with the eye
+(`eyePositionWorldSpace`, `c[465]`) at `(-181.8, -65.8, 64.1)`: **26.2 units from the centre, inside the core's
+radius** (4.88 x 6.44 = 31.4). So from the first frames the eye sits inside the additive sphere and every pixel
+accumulates its inner surface, which is what the white-out is; with culling off the inner face is drawn, and the
+depth mask off lets the rays and shockwave stack on it. Confidence 75 (one boot, one frame read whole, the scale, the
+centre and the eye all read off the same draw's constants; the `hit1` dump at 0.517 s was a partial frame with no
+explosion draw in it).
+
+**4. No flash object, statically.** The hit branch `0x001423a8` calls only `0x00126b78` (the hit test),
+`0x00142258` (a `GameState` flag read ending in bad data), `0x002d64d0` (the visibility test), `Start`
+`0x00155568` and `0x00676208`; `Start` calls `0x0028c660` (a ranged random, the 16 rotated entries),
+`0x002c1b30` (set time), `0x002c9108`, `0x003238f8`, `0x003265c8`, `0x00676218`, `0x006762b8`, `0x00677688`, the
+light pair `0x006778c8`/`0x00677c78` and `RaceManager_GetInstance`. Nothing there reads as a screen or HUD flash
+(Pulse's `ScreenFlash` analogue is not among the callees at depth one; the subtree was not walked). Confidence 70.
+
+**What follows for our renderer.** The missing parts are the light and the bloom's strength on HD, not a pass:
+the point light `(1 - p)^2` (the `hd-weapon-lights` lane is wiring it as an SPU vertex-light record), and the HD
+bloom strength (an open item for HD). **Our side re-measured** with the same method
+(whole-frame mean of a grey-scale screenshot, `--force-missile-hit 300:1`, `feisar_c1`, 1, 6, 12, 22, 30 ticks
+after the hit = ages 0.03/0.1/0.2/0.37/0.5): `--camera-view close` 195/203/211/211/208, `far` 194/202/209/210/207.
+The earlier "136/175/200/192/178" does not reproduce on this base (`hd-missile-blast`'s own frames `d_2`, `d_6`, `d_12`
+read 196/216/228 under the same method). The film `m5` reads 217/224/242/208/182 and three RPCS3 grabs read 224
+(0.06), 226 (0.22), 232 (0.27), 142 (0.37), 148 and 113 (0.50): **ours is 20 to 30 luma under at 0.03-0.2 s and 25 to
+95 over from 0.37 s**. The late excess is largely kinematics: the original's player is travelling at 100+ units/s
+and leaves the sphere within about 0.35 s, ours is parked at the grid and stays inside it. The pair is not matched
+until the player is moving; not tuned here.
+
+**Chosen, not measured / not done.** The bloom strength, the light, the matched kinematics, the `007434c1` extra
+draw, the render-target format of `00cc0000` (a read of it came back mostly black: its write-back is lazy).
+**Omega:** the same model (`HD_missile_explosion`) and the same composite design apply; PS4 programs unread and no PS4
+emulator in the toolchain, so **not checkable**. Nothing renamed; no `names.tsv` rows.
+
+### The Bomb's core, read on the original (`hd-whiteout`, `bomb1`: one boot, one complete frame)
+
+`scripts/rpcs3-hd-whiteout.py --bomb` (state 9, the player standing, the bomb trips on its owner) dumped one
+complete frame with the fireball live (`data/scratch/hd-whiteout/bomb1/bomb0*`). **The original does draw the core
+while the eye is inside it.** Four draws sit on the scene target with a large world matrix:
+
+| Draw | Scale | State | Reading |
+| --- | --- | --- | --- |
+| 638 | 10.60 | opaque, alpha test on `LESS` ref `0x7f`, depth mask on, `LEQUAL`, cull off | the fireball, `ColourAnim` constant 0.3649 |
+| 639 | 10.49 (= 0.99 x 10.60) | the same | the core, `ColourAnim` constant 0.9 |
+| 640 | 10.64 | additive `SrcAlpha`/`One`, no depth write, alpha test off | the bloom disc (`hd_bombfire_bloomring`) |
+| 641 | 53.33 | additive, no depth write | the first ring (`0.1 -> 53.33`) |
+
+The fireball's `ColourAnim` 0.3649 puts the blast at age about 0.55 s by the law above (`x = 2 (age - 0.1) / 1.4 - 1`,
+`|x|` branch), the centre 9.5 units from the eye (`c[259]` against `c[465]`) and the fireball radius 10.6: **the eye is
+inside both the fireball and the core**, the case the open question asked about. Both draws use the same program
+(`fp 0074cf01`/`0074d3c1`, the 50-instruction `@0x1d90` block: its `RCP`s give the `(1 - ColourAnim)^-1` multiplier, 1.57 and
+10) and the same state, face culling off. So the original cannot be skipping the core by a draw condition or by
+culling. **A lead, not tested:** both programs carry the clock parameter `AlphaAnim` as `0.996105`, where the law table
+above gives `1.0` for age 0 to 0.75 s and ours takes the `divisor == 0` branch of the shader (any texel with alpha above
+zero is cut, `shade.wesl`). With `0.996` the divisor is 0.0039 instead of 0 and only texels with alpha above 0.992 are
+cut. If the original's clock is not exactly 1 over that stretch, our fireball and core are cut far more than the
+original's and the white wedge is a symptom of that. Confidence 60 that the constant is the clock (read in both
+draws, same value); the effect on our picture is not measured here.
+
+**Not settled:** how the original's frame *looks* at that age, and a second boot of the core's state. The first boot's
+screenshots were taken before the retried dump (the dump follows a resume), so bomb0's picture shows an earlier
+moment than its draws. The second boot (`bomb2`, delays 1.2, 1.7 and 2.2 s after the press, screenshot after the dump)
+never showed a fireball: the standing craft sat at 0-20 km/h with no detonation in any of the three captures (one
+carries RPCS3's "Press and hold the START button" toast), two of the three dumps never completed (`only 42 draws`) and
+the third holds a single large draw (scale 9.5, additive). So the core's state above is **one boot**, no repeat. The film
+(`hd-weapon-ref/e11`, `e12`) stays the reference for the look. `rpcs3-hd-whiteout.py` now takes the screenshot after the
+dump.

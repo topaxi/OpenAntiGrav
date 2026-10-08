@@ -1005,6 +1005,38 @@ So `HD_missile_explosion`'s pool is not entered by the Missile ending on a wall 
 the missile list's *hit-test* branch (`0x00126b78`), a craft hit, and never from the wall
 branch.
 
+## Pausing on an effect and reading the frame behind it (2026-10-08, `hd-whiteout`)
+
+`scripts/rpcs3-hd-whiteout.py` pauses the target a chosen delay after the Missile explosion pool's count
+(`manager + 0x10c`, found as in "Polling guest memory live") rises, then screenshots and reads the queued
+frame (`--no-draws` skips the pushbuffer and reads render targets only; `--bomb` fires state 9 instead and pauses
+`--delay` seconds after the press). `scripts/rsx-draw-list.py <dir> <stem>` prints the dumped frame's draws with
+blend, depth, colour mask, viewport, render target (`0x210`) and bound textures. Three boots (`data/scratch/hd-whiteout`)
+and what they taught:
+
+- **The pool's age field and the dumped frame differ by about two ticks**: the CPU's `+0x170` read at the pause was
+  0.083 s when the frame's own `UV_offset` (`c[464].x`) was 0.05. Read a frame's age off its constants.
+- **A retried dump is a later frame than the screenshot before it.** `rpcs3_draw_hook`'s incomplete-frame retry
+  resumes for 0.5 s; the script now takes the screenshot after the dump succeeds. The Missile captures (attempt 0)
+  were unaffected; bomb frames were retried one to nine times.
+- **Render targets are readable only through the GDB stub, with `Write Color Buffers` on.** A read through
+  `/proc/<pid>/mem` returned stale or zero data for every target (it bypasses the page protection the write-back hangs
+  off). Read that way, the scene target `0x00f50000` and the screen `0x00010000` were all zero and `0x00cc0000` mostly black.
+  `Resolution Scale` must be 100 for the pitches below.
+- **The scene target `0x00f50000` is A8R8G8B8 with two samples across** (`SURFACE_FORMAT 0x3148`, pitch `0x2800` = 2560
+  texels); decoded as fp16 it is `NaN` noise. Averaging pairs of texels gives the 1280x720 picture (before bloom and
+  the composite). `0x02300000` (pitch `0x1400`, 320x180) held a bloom-chain image of an earlier frame.
+- **Register numbers, read off the stream** (NV4097): alpha test enable `0x304`, alpha func `0x308` (`0x201` LESS,
+  `0x204` GREATER), depth func `0xa6c`, depth mask `0xa70`, depth test `0xa74`, cull face `0x1830`, front face
+  `0x1834`, **cull enable `0x183c`**, blend `0x310`/`0x314`/`0x318`. `rsx_fifo.py`'s `Walk` drops the subchannel
+  bits, so blits on subchannels 3 to 7 land on the same method numbers (`0x300`...); a reader that needs to tell them apart keeps
+  `(header >> 13) & 7`.
+- **The partial-frame problem is worse for a bomb**: in the second bomb boot two of three dumps never completed in ten
+  attempts (42 draws, and 152 seen on one retry), and no bomb tripped in any of its three captures. A bomb frame needs
+  more attempts or a longer resume.
+
+The result is in `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "`hd-whiteout`".
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
