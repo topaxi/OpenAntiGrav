@@ -322,6 +322,38 @@ pub(super) fn classify(
     0
 }
 
+/// The colours of an HD glow chunk whose vertices declare none, for the
+/// materials whose programs read them off the vertex.
+///
+/// - **The Bomb's and the Missile's shockwave rings** (stride 22): two colour
+///   fields, `[a.rgb, b.a]` - the first's `R G B` and the second's `A`, which
+///   their programs multiply in and take their alpha from.
+/// - **The Missile's core** (stride 18): the one colour field every vertex
+///   ends in (`ff ff ff ff` on the sphere), whose `A` the program multiplies
+///   into its alpha.
+pub(super) fn inline_light(
+    roles: u32,
+    mesh: &oag_rcs::rcsmodel::Mesh,
+    data: &[u8],
+    submesh: &oag_rcs::rcsmodel::SubMesh,
+    stride: usize,
+) -> Option<Vec<[f32; 4]>> {
+    let has = |pair: u32| roles & pair == pair;
+    if has(slots::BOMB_SHOCK) || has(slots::MISSILE_SHOCK) {
+        return mesh.inline_two_colours(data, submesh, stride).ok();
+    }
+    if has(slots::MISSILE_CORE) {
+        let bytes = mesh.inline_colours(data, submesh).ok()?;
+        return Some(
+            bytes
+                .into_iter()
+                .map(|c| c.map(|b| f32::from(b) / 255.0))
+                .collect(),
+        );
+    }
+    None
+}
+
 fn mnemonics_match(program: &fragment::Program, want: &[&str]) -> bool {
     program.instructions.len() == want.len()
         && program

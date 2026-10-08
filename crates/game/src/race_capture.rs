@@ -60,6 +60,8 @@ pub struct CaptureOptions {
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
+    /// `--force-missile-hit TICK:SLOT`: see [`Race::force_missile_hit`].
+    pub force_missile_hit: Option<(u32, usize)>,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
     /// percentage of its maximum, written at the end of that tick.
     pub force_shield: Vec<(u32, f32)>,

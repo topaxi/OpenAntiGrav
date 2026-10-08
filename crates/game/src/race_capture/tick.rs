@@ -89,6 +89,14 @@ pub(super) fn advance_one_tick(
             "--force-bomb-trip: no Bomb laid by another craft yet, or slot {slot} is not racing (pass --opponents)"
         );
     }
+    if let Some((at, slot)) = options.force_missile_hit
+        && at == tick
+        && !race.force_missile_hit(slot)
+    {
+        log::warn!(
+            "--force-missile-hit: no Missile in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
+        );
+    }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
         && !race.force_leach_lock(0, target as u8)
