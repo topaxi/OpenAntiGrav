@@ -451,6 +451,7 @@ impl Session {
     }
 
     pub(crate) fn handle_picker(&mut self, event: Event) {
+        self.play_navs([event.nav()]);
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };

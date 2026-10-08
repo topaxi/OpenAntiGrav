@@ -186,6 +186,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
+    frontend: None,
     // Wwise banks (`BKHD`), which `oag_formats::sblk` does not read, so
     // nothing resolves yet. The directory is the thread's archive census
     // (`env12_techdera.bnk` and `env9_talonsjunction.bnk` read under

@@ -359,6 +359,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\shiphd.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
+    frontend: None,
     // The banks a circuit's nodes spell besides their own, each named by the
     // executable: the sound manager's constructor loads `generaltrack`,
     // `voppler` and `speech_PreRaceChatter` (label `radios`) for the whole

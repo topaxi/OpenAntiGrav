@@ -45,6 +45,15 @@ pub struct SoundBanks {
     pub weapons: &'static str,
     /// Where `shieldactive` is: the announcer, not an effect.
     pub speech: &'static str,
+    /// The bank the front end's navigation sounds are in (`ACCEPT`, `DECLINE`,
+    /// `UPDOWN`, `LEFTRIGHT`, `TELETYPE`), or [`None`] on a title whose menus
+    /// are not known to play any.
+    ///
+    /// Pulse reads it at boot into its first bank slot and every menu cue
+    /// goes through that slot (`FUN_0893aba4`); Pure carries the same six
+    /// names. HD, 2048 and Omega leave it `None` until their own triggers are
+    /// read, so a shared lookup cannot switch menu cues on there.
+    pub frontend: Option<&'static str>,
     /// Where a circuit's authored emitters find their banks: the shared ones
     /// and the directory the circuit's own bank sits in.
     ///

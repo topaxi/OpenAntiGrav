@@ -310,18 +310,15 @@ pub(super) fn menu_page(
     // The footer's own scrolling tip ticker, frozen at `elapsed = 0.0` - a
     // still has no clock of its own to animate the scroll with, so this
     // shows whichever tip the rotation starts on rather than one mid-scroll.
-    // `measure`, not `default_measure`: the ticker's own `font="small"`
-    // routes through no named role (`oag_ui_screens::campaign::footer::face_role`
-    // answers `None` for it), so it draws through the same primary atlas the
-    // rows do - see `crate::main::menu_stage::MenuStage::render`'s own
-    // identical choice for its live ticker.
+    // `default_measure`: the ticker draws in the `Default` role, as the live
+    // stage's does (`MenuStage::ticker_overlay`).
     let ticker_draw: Option<oag_ui::frontend::Draw> = ticker.and_then(|layout| {
         oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             0.0,
             ticker_tips,
             &oag_ui_screens::picker::FaceScales::default(),
-            measure,
+            default_measure,
         )
     });
     let ticker_draws: Vec<oag_ui::frontend::Draw> = ticker_draw.clone().into_iter().collect();

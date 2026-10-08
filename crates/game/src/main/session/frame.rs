@@ -536,6 +536,7 @@ impl Session {
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);
                     }
+                    let navs = stage.menu.take_nav();
                     // After the stage borrow above is over, which is the whole
                     // reason `tick_prompt` hands the answer out rather than
                     // acting on it: renaming reloads the roster and re-supplies
@@ -546,6 +547,7 @@ impl Session {
                     for event in events {
                         self.handle_menu(&event);
                     }
+                    self.play_navs(navs);
                     // **Break if the menu just started or resumed a race**,
                     // the same way the results table above breaks when it
                     // hands the window back. `LaunchRace` itself only reaches

@@ -176,6 +176,7 @@ impl Session {
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
         self.shell = Some(Shell {
             definition: pending.definition.clone(),
+            menu_sfx: None,
             title,
             platform: archives.layout.platform,
             // 2048 is `oag_title::ZoneCircuit::SameCircuit` - a Zone race
