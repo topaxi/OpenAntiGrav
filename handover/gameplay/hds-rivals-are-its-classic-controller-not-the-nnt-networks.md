@@ -21,6 +21,18 @@ the identity.
 
 ## Open
 
+- **Maintainer ruling 2026-10-08: our own AI, on the player's physics.** Nothing here is ported as the
+  original's behaviour; it is mined for ideas that improve `oag-ai`. Ideas from HD's controller, each a
+  proposal for the maintainer, none queued:
+  1. look-ahead from a low-passed speed (`AI_UpdateCraft` smooths speed into `ai+0x1a0` before
+     `LookAheadSecs`), so the aim point holds through speed spikes; ours scales on raw speed;
+  2. a speed-scheduled look-ahead and steer gain (DuelStats' `Input` rows: longer look-ahead, lower turn
+     gain as speed rises), a ready shape for `look_speed`/`rate_gain`;
+  3. per-class gains (cross-track gain falls, damping rises with class speed), a `Tuning` axis we lack;
+  4. a clamp on the cross-track correction (`xtrackMax`, Pure's `ControllerPO`), like `max_turn_rate` but on
+     position error;
+  5. a three-point preview (the networks' inputs at about 10/20/30 units, `ai-net.md`) for the curvature
+     estimate.
 - **The steering law inside `AI_ComputeControls` (`0x00100658`)** is unread past its inputs
   (`LookAheadSecs`, `SteerMul`, `SteerDamp`, `xtrackMul`, header constants). Next address: the call
   to `0x000fe688` at `0x100954`/`0x100a04`. Pulse's own consumer is not identified either.

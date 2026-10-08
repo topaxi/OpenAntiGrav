@@ -122,6 +122,22 @@ not a dead attribute**: the attribute compare (`0x00676328` to `0x00346708`) is 
 two match. This also means HD's whole parser matches attributes case-insensitively, which does not
 rescue `BaseStartThrust` (different letters).
 
+## Three extra tags and who reads them (static, 2026-10-08)
+
+Read off `EBOOT.elf` by the `hd-ai-classic` lane after its merge; static, not run.
+
+- **`SplitScreenMultiplier`**: `AiStats_ParseSplitScreenMultiplier` stores it at record `+0xc4/+0xc8/+0xcc`.
+  `AI_ComputeControls` reads it at `0x100db8`: when `g_GameState+0xe4 > 1` (more than one local player) the
+  thrust output (`out+4`) is multiplied by `record[+0xc4 + 4*skill]`. A single-player race never reads it.
+  Confidence 80.
+- **`VectorStats`**: `AiStats_ParseFile` compares the name and discards the result, as Pulse does, so no class
+  index is assigned and nothing reads it. HD's classed files author none (only the unread `_kart` file does).
+  Confidence 85.
+- **`xtrackMax`** (record `+0x10`): parsed, no reader found. Every load through the craft's cached record pointer
+  (`ai+0x168`) touches only `+0x00..+0x0c` and `+0xa8..+0xbc` (`0xfe25c`, `0x100a40`, `0x100c9c`, `0x100db8`,
+  `0x1030f8`), and HD's `AIControlStats.xml` authors no `xtrackMax`. Confidence 60 that nothing reads it: the
+  unread AltiVec past `0x100734` is where a reader would be.
+
 ## Not read
 
 - **The steering law inside `AI_ComputeControls`** past its inputs: `0x100658..0x100df7`, AltiVec
