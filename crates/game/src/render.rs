@@ -149,6 +149,10 @@ pub struct Renderer {
     /// otherwise fall back to is a Greek letter, not a button glyph. See
     /// `render::text::atlas_for`.
     buttons_atlas: Option<Atlas>,
+    /// The role [`Self::buttons_atlas`] answers to: `Buttons`, or `Title` on
+    /// a title whose body face holds the other slot. See
+    /// [`Renderer::set_buttons_atlas`].
+    buttons_role: &'static str,
     /// Which substitute glyph each of the title's button stand-ins draws as
     /// right now; empty draws the disc's own. See [`oag_ui::prompt`].
     prompt_substitution: oag_ui::prompt::Substitution,
@@ -414,6 +418,7 @@ impl Renderer {
             face_role: None,
             buttons_view,
             buttons_atlas: None,
+            buttons_role: oag_ui::language::roles::BUTTONS,
             prompt_substitution: oag_ui::prompt::Substitution::none(),
             uniform_buffer,
             quad_buffer,
@@ -778,7 +783,21 @@ impl Renderer {
                 } => {
                     let border = border.unwrap_or(TRANSPARENT);
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
-                    let slot = if role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS) {
+                    // A `Buttons` draw with the third slot holding another
+                    // role's face (Pulse's `Title`) draws nothing: sampling
+                    // that face would print the button codepoints as letters.
+                    let is_buttons = role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS);
+                    if is_buttons
+                        && !self
+                            .buttons_role
+                            .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS)
+                    {
+                        continue;
+                    }
+                    let slot = if is_buttons
+                        || (self.buttons_atlas.is_some()
+                            && role.eq_ignore_ascii_case(self.buttons_role))
+                    {
                         GlyphSlot::Buttons
                     } else if self.face_atlas.is_some()
                         && self

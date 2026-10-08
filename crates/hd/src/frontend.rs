@@ -113,6 +113,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // below carries: five of seven archives agree and nothing here has been
     // seen to be *consumed* by the executable.
     title_font: Some("Title"),
+    body_font: None,
     // **Not authored, and the reason is the finding.** HD's main menu is a
     // `<HorizMenu>` - horizontal - so it has no first row to put a y on, and the
     // 17 vertical `<Menu>` widgets elsewhere in the tree do not converge on one
@@ -210,6 +211,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // where HD's settings rows are, and `MenuXOffset` (800) is not: that
     // global places the language picker's `<Menu>` and nothing else this build
     // draws. Confidence 90.
+    settings: None,
     list: Some(oag_title::MenuList {
         x: 160.0,
         y: 170.0,

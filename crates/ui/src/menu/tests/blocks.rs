@@ -66,7 +66,7 @@ fn fills(list: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
 }
 
 /// Every sprite, as `(rect, uv)`, in draw order.
-fn sprites(list: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
+pub(super) fn sprites(list: &[Draw]) -> Vec<([f32; 4], [f32; 4])> {
     list.iter()
         .filter_map(|draw| match draw {
             Draw::Sprite { rect, uv, .. } => Some((*rect, *uv)),

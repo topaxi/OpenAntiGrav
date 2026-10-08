@@ -210,7 +210,10 @@ fn the_track_picker_draws_the_discs_own_rows() {
         .body
         .iter()
         .filter_map(|draw| match draw {
-            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            // `font="default"` text is a `FacedText` in the `Default` role
+            // since the picker draws it in its own face.
+            oag_ui::frontend::Draw::Text { text, .. }
+            | oag_ui::frontend::Draw::FacedText { text, .. } => Some(text.clone()),
             _ => None,
         })
         .collect();

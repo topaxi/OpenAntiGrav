@@ -30,7 +30,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
-use oag_ui::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
+use oag_ui::screen::{Fill, Image, Screen, Screens, Text};
 
 mod body;
 pub mod hd;
@@ -369,6 +369,11 @@ pub struct FaceScales {
     pub default: f32,
     /// `small` over `menu`.
     pub small: f32,
+    /// Whether `default` text draws in a `Default`-role atlas of its own
+    /// ([`oag_ui::frontend::Draw::FacedText`], native size, mixed case) rather
+    /// than as the menu face scaled by [`Self::default`]. True on Pulse, where
+    /// the renderer's face slot carries `pulse_text.fnt`.
+    pub native_default: bool,
 }
 
 impl Default for FaceScales {
@@ -378,6 +383,7 @@ impl Default for FaceScales {
         Self {
             default: 13.0 / 22.0,
             small: 17.0 / 22.0,
+            native_default: false,
         }
     }
 }
@@ -564,6 +570,7 @@ impl Layout {
     /// The scale a widget's `font` role draws at in the menu face.
     fn face_scale(&self, font: &str) -> f32 {
         match font.to_ascii_lowercase().as_str() {
+            "default" if self.faces.native_default => 1.0,
             "default" => self.faces.default,
             "small" => self.faces.small,
             _ => 1.0,
@@ -763,32 +770,7 @@ fn is_title(text: &Text) -> bool {
 }
 
 pub(crate) fn fill_draw(fill: &Fill) -> Draw {
-    let rect = [
-        fill.x,
-        fill.y,
-        fill.width.unwrap_or(0.0),
-        fill.height.unwrap_or(0.0),
-    ];
-    match fill.gradient {
-        Some([c1, c2, c3, c4]) => Draw::GradientFill {
-            rect,
-            left: mean(argb_to_rgba(c1), argb_to_rgba(c2)),
-            right: mean(argb_to_rgba(c3), argb_to_rgba(c4)),
-        },
-        None => Draw::Fill {
-            rect,
-            color: argb_to_rgba(fill.color),
-        },
-    }
-}
-
-fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
-    [
-        (a[0] + b[0]) * 0.5,
-        (a[1] + b[1]) * 0.5,
-        (a[2] + b[2]) * 0.5,
-        (a[3] + b[3]) * 0.5,
-    ]
+    fill.draw()
 }
 
 /// An image widget's sheet sub-rect, for a caller drawing one outside this

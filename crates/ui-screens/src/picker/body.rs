@@ -332,23 +332,48 @@ fn fade(draw: Draw, alpha: f32) -> Draw {
             text,
             wrap_width,
         },
+        // A `Default`-role text fades with the page like the plain one.
+        faced @ Draw::FacedText { .. } => {
+            let mut faded = faced;
+            faded.fade(alpha);
+            faded
+        }
         other => other,
     }
 }
 
 fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+    let align = match text.align.to_ascii_lowercase().as_str() {
+        "right" => Align::Right,
+        "centre" | "center" => Align::Centre,
+        _ => Align::Left,
+    };
+    let (x, y, scale) = (text.x, text.y, text.scale * layout.face_scale(&text.font));
+    let color = argb_to_rgba(text.color);
+    let text_in = content.to_string();
+    // `font="default"` in its own face when the renderer loaded one: lowercase
+    // is real glyph art there, where the menu face has only capitals.
+    if layout.faces.native_default && text.font.eq_ignore_ascii_case("default") {
+        return Draw::FacedText {
+            role: oag_ui::language::roles::DEFAULT,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: text_in,
+            wrap_width: text.wrap_width,
+        };
+    }
     Draw::Text {
-        x: text.x,
-        y: text.y,
-        scale: text.scale * layout.face_scale(&text.font),
-        color: argb_to_rgba(text.color),
+        x,
+        y,
+        scale,
+        color,
         border: None,
-        align: match text.align.to_ascii_lowercase().as_str() {
-            "right" => Align::Right,
-            "centre" | "center" => Align::Centre,
-            _ => Align::Left,
-        },
-        text: content.to_string(),
+        align,
+        text: text_in,
         wrap_width: text.wrap_width,
     }
 }

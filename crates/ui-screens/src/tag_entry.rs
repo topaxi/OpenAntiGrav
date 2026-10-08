@@ -581,27 +581,7 @@ fn cell_rect(fill: &Fill) -> [f32; 4] {
 /// `crate::endrace::draw` and `crate::campaign::draw` each already carry
 /// their own copy of, for their own screen family.
 fn fill_draw(fill: &Fill) -> Draw {
-    let rect = cell_rect(fill);
-    match fill.gradient {
-        Some([c1, c2, c3, c4]) => Draw::GradientFill {
-            rect,
-            left: mean(argb_to_rgba(c1), argb_to_rgba(c2)),
-            right: mean(argb_to_rgba(c3), argb_to_rgba(c4)),
-        },
-        None => Draw::Fill {
-            rect,
-            color: argb_to_rgba(fill.color),
-        },
-    }
-}
-
-fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
-    [
-        (a[0] + b[0]) * 0.5,
-        (a[1] + b[1]) * 0.5,
-        (a[2] + b[2]) * 0.5,
-        (a[3] + b[3]) * 0.5,
-    ]
+    fill.draw()
 }
 
 /// The box behind the selected cell or the confirm slot. Ours; see

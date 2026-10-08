@@ -65,7 +65,9 @@ pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
-pub use menu::{HelpText, ListBlocks, MenuBlocks, MenuList, MenuSkin, MenuStrip, StripBlocks};
+pub use menu::{
+    HelpText, ListBlocks, MenuBlocks, MenuList, MenuSettings, MenuSkin, MenuStrip, StripBlocks,
+};
 pub use oag_disc::Platform;
 pub use pressing::{Pressing, Pressings};
 pub use race::{

@@ -780,7 +780,7 @@ pub fn load_shell(
         skin_xml.as_deref(),
         &mut report,
     );
-    let frame = oag_ui::menu::read_frame(
+    let mut frame = oag_ui::menu::read_frame(
         &screens,
         sprites.entries(),
         space,
@@ -791,6 +791,13 @@ pub fn load_shell(
     if let Some(name) = front_end.menu_frame {
         report.push(format!("menu frame {name}: {}", frame.describe()));
     }
+    frame.settings = screens::read_settings_layout(
+        &mut archives,
+        menu_skin,
+        &screens.globals,
+        sprites.entries(),
+        &mut report,
+    );
     // See [`screens::read_nav_legend`]'s own doc.
     let nav_legend = read_nav_legend(skin_xml.as_deref(), &screens.globals, &strings);
     if let Some(legend) = &nav_legend {
@@ -808,6 +815,7 @@ pub fn load_shell(
         &strings,
         &font,
         menu_font.as_ref(),
+        fonts::default_in_own_slot(menu_skin),
         space,
         &mut report,
     );

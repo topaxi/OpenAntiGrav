@@ -424,15 +424,13 @@ impl Session {
         // `boot::fonts::face_atlas_slot`'s own doc. See `capture::run`'s own
         // call for why this has to happen on both the live and the headless
         // path.
-        let (face_atlas, face_role) =
-            boot::fonts::face_atlas_slot(shell.menu_skin, &shell.font, shell.title_font.clone());
-        renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, face_atlas, face_role);
-        // A third, independent slot - not routed through `face_atlas_slot`,
-        // which only ever picks between `Title` and `Default` for the one
-        // slot it has. See `render::Renderer::set_buttons_atlas`'s own doc.
-        renderer.set_buttons_atlas(
+        boot::fonts::install_faces(
+            &mut renderer,
             &self.gpu.device,
             &self.gpu.queue,
+            shell.menu_skin,
+            &shell.font,
+            shell.title_font.clone(),
             shell.buttons_font.clone(),
         );
         // The style's backdrop, uploaded once per menu stage the same way the

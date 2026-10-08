@@ -134,17 +134,15 @@ impl Session {
             stage.menu.set_strip_layout(skin.strip().is_some());
             stage.text_atlas = rows_face;
             stage.skin = skin;
-            let (face_atlas, face_role) = boot::fonts::face_atlas_slot(
+            boot::fonts::install_faces(
+                &mut stage.renderer,
+                device,
+                queue,
                 shell.menu_skin,
                 &shell.font,
                 shell.title_font.clone(),
+                shell.buttons_font.clone(),
             );
-            stage
-                .renderer
-                .set_face_atlas(device, queue, face_atlas, face_role);
-            stage
-                .renderer
-                .set_buttons_atlas(device, queue, shell.buttons_font.clone());
             self.stalled = true;
         }
         self.shell = Some(shell);

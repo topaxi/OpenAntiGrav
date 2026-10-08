@@ -54,7 +54,7 @@ pub(super) fn draw(
         (Some(blocks), Some(list), Some(art)) => {
             draw_list_rows(menu, skin, bindings, frame, blocks, list, art)
         }
-        _ => draw_text_rows(menu, skin, bindings),
+        _ => draw_text_rows(menu, skin, bindings, frame),
     }
 }
 
@@ -260,12 +260,23 @@ fn draw_text_rows(
     menu: &Menu,
     skin: &Skin,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
+    frame: &super::Frame,
 ) -> Vec<Draw> {
     let page = menu.page();
-    let margin_x = skin.menu_x();
-    let row_height = skin.row_pitch();
-    let row_scale = skin.row_scale();
-    let first_row_y = skin.first_row_y();
+    // A page the original draws as a settings screen takes that screen's
+    // columns and pitch, its own face and its rules - see
+    // [`super::frame::settings`]. Every other page is the bare-text column
+    // this function always drew.
+    let settings = settings_for(menu, frame);
+    let margin_x = settings.map_or_else(|| skin.menu_x(), |layout| layout.label_x);
+    let row_height = settings.map_or_else(|| skin.row_pitch(), |layout| layout.pitch);
+    let row_scale = if settings.is_some() {
+        1.0
+    } else {
+        skin.row_scale()
+    };
+    let first_row_y = settings.map_or_else(|| skin.first_row_y(), |layout| layout.first_y);
+    let face = settings.and_then(|layout| face_role(skin, layout));
     // The cached figure `Menu::scroll`'s own window math already used to
     // place this window, not a fresh recompute off `skin` alone: the two
     // disagreeing is how a row `Menu::scroll` counted as on screen could
@@ -275,6 +286,9 @@ fn draw_text_rows(
     let visible = menu.visible_rows();
 
     let mut out = Vec::new();
+    if let Some(layout) = settings {
+        out.extend(layout.rules.iter().cloned());
+    }
 
     // The first noted row's message, shown once under the rows however many
     // rows are marked: two lines of small text competing for the same corner
@@ -327,22 +341,25 @@ fn draw_text_rows(
                 wrap_width: None,
             });
         }
-        out.push(Draw::Text {
-            x: margin_x,
+        // On a settings screen the focused row's *value* is what whitens, the
+        // label staying in the page's ink (a capture of `Single Player`); a
+        // row with no value to whiten - START, BACK - whitens its label, **ours**.
+        let label_color = if inert {
+            DIMMED
+        } else if selected && (settings.is_none() || !has_value(entry, menu)) {
+            skin.selected()
+        } else {
+            skin.normal()
+        };
+        out.push(Draw::in_role(
+            face,
+            margin_x,
             y,
-            scale: row_scale,
-            color: if inert {
-                DIMMED
-            } else if selected {
-                skin.selected()
-            } else {
-                skin.normal()
-            },
-            border: None,
-            align: Align::Left,
-            text: entry.label().to_string(),
-            wrap_width: None,
-        });
+            row_scale,
+            label_color,
+            Align::Left,
+            entry.label().to_string(),
+        ));
 
         // The right-hand column: a setting's value, or what a button is bound
         // to. `Align::Right` anchors at `x - width`, so both kinds land on the
@@ -358,7 +375,26 @@ fn draw_text_rows(
             }
             other => menu.shown(other).map(|value| value.to_string()),
         };
-        if let Some(text) = value {
+        if let (Some(layout), Some(text)) = (settings, value.clone()) {
+            out.push(Draw::in_role(
+                face,
+                layout.value_x,
+                y,
+                row_scale,
+                if inert {
+                    DIMMED
+                } else if selected && entry.is_adjustable() {
+                    skin.selected()
+                } else {
+                    skin.normal()
+                },
+                Align::Left,
+                text,
+            ));
+            if entry.is_adjustable() && !inert {
+                step_arrows(layout, y, selected, skin.normal(), &mut out);
+            }
+        } else if let Some(text) = value {
             out.push(Draw::Text {
                 x: skin.value_right(),
                 y,
@@ -417,6 +453,63 @@ fn draw_text_rows(
     }
 
     out
+}
+
+/// The settings layout in force for `menu`'s current page, when the page is
+/// one the title draws that way.
+fn settings_for<'a>(
+    menu: &Menu,
+    frame: &'a super::Frame,
+) -> Option<&'a super::frame::settings::Layout> {
+    frame
+        .settings
+        .as_ref()
+        .filter(|layout| layout.draws(&menu.page().id))
+}
+
+/// The font role a settings page's text draws in - the role its title names,
+/// which is where [`super::frame::settings::Layout::spec`]'s font lives.
+fn face_role(skin: &Skin, layout: &super::frame::settings::Layout) -> Option<&'static str> {
+    skin.title_font()
+        .filter(|role| role.eq_ignore_ascii_case(layout.spec.font))
+}
+
+/// Whether `entry` draws something in the value column.
+fn has_value(entry: &Entry, menu: &Menu) -> bool {
+    matches!(entry, Entry::Binding { .. }) || menu.shown(entry).is_some()
+}
+
+/// A stepping row's two arrows: the lit halo first on the focused row, then
+/// the plain pair, left and right, in the page's ink. Nothing when the sheet
+/// did not carry the texture.
+fn step_arrows(
+    layout: &super::frame::settings::Layout,
+    y: f32,
+    focused: bool,
+    ink: [f32; 4],
+    out: &mut Vec<Draw>,
+) {
+    let Some(art) = layout.arrows else {
+        return;
+    };
+    let rects = layout.arrow_rects(y);
+    if focused {
+        let (dx, dy) = layout.spec.glow_inset;
+        for (rect, glow) in rects.iter().zip(art.glow) {
+            out.push(Draw::Sprite {
+                rect: [rect[0] + dx, rect[1] + dy, glow[2], glow[3]],
+                uv: glow,
+                color: ink,
+            });
+        }
+    }
+    for (rect, uv) in rects.into_iter().zip(art.plain) {
+        out.push(Draw::Sprite {
+            rect,
+            uv,
+            color: ink,
+        });
+    }
 }
 
 /// The two blocks of one HD list row, at the row's own focus: `[x, y,
@@ -511,6 +604,37 @@ pub(super) fn regions(
     let visible = menu.visible_rows();
     let first = menu.scroll();
     let mut out = Vec::new();
+    if let Some(layout) = settings_for(menu, frame) {
+        let band = layout.band_offset();
+        let right = skin.value_right();
+        for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
+            let y = layout.first_y + (row - first) as f32 * layout.pitch;
+            out.push(Region {
+                row,
+                part: Part::Row,
+                rect: [
+                    layout.label_x,
+                    y + band,
+                    right - layout.label_x,
+                    layout.pitch,
+                ],
+            });
+            // The arrows step the way they point, over the whole band's
+            // height and a little past the arrow itself - 9 by 10 is a poor
+            // target for a finger. Only on a row that steps.
+            if entry.is_adjustable() && !menu.is_disabled(entry) && layout.arrows.is_some() {
+                let [left, forward] = layout.arrow_rects(y);
+                for (part, arrow) in [(Part::StepBack, left), (Part::StepForward, forward)] {
+                    out.push(Region {
+                        row,
+                        part,
+                        rect: [arrow[0], y + band, arrow[2], layout.pitch],
+                    });
+                }
+            }
+        }
+        return out;
+    }
     match (skin.blocks(), skin.list(), frame.blocks) {
         (Some(blocks), Some(list), Some(art)) => {
             let (sx, sy) = skin.theirs_scale();

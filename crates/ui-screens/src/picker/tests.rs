@@ -5,6 +5,7 @@ use oag_ui::frontend::Draw;
 const PSP: [f32; 2] = [480.0, 272.0];
 use oag_gameplay::input::Input;
 use oag_ui::menu::{Frame, Skin};
+use oag_ui::screen::argb_to_rgba;
 
 /// A `Selection_Definition.xml` in miniature: the shape the disc authors,
 /// with the same container nesting and the same widget names, and none of
@@ -189,6 +190,57 @@ fn a_track_screen_named_track_selection_still_reads() {
     assert_eq!(layout.panel, [290.0, 26.0, 170.0, 200.0]);
 }
 
+/// `font="default"` text draws in the `Default` role at its own size when the
+/// renderer loaded that face, and as the menu face scaled down when it did not.
+#[test]
+fn default_role_text_draws_in_its_own_face_when_there_is_one() {
+    let screens = Screens::from_xml(XML);
+    let draw = |native_default| {
+        let layout = Layout::read(
+            &screens,
+            Kind::Track,
+            &strings(),
+            FaceScales {
+                native_default,
+                ..FaceScales::default()
+            },
+            PSP,
+        )
+        .unwrap();
+        let mut picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
+        picker.tick(2.0);
+        let skin = Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        );
+        draw_list(
+            &picker,
+            &layout,
+            &skin,
+            &Frame::default(),
+            None,
+            false,
+            &|_| None,
+            &|text| text.len() as f32 * 8.0,
+        )
+        .body
+    };
+    let own = draw(true);
+    assert!(
+        own.iter().any(
+            |d| matches!(d, Draw::FacedText { role: "Default", text, scale, .. }
+            if text == "5178" && (*scale - 1.0).abs() < f32::EPSILON)
+        ),
+        "the stat value is in the Default face at native size: {own:?}"
+    );
+    let scaled = draw(false);
+    assert!(
+        !scaled.iter().any(|d| matches!(d, Draw::FacedText { .. })),
+        "without the face, nothing asks for it"
+    );
+}
+
 #[test]
 fn the_body_names_the_selected_entry_and_counts_the_list() {
     let screens = Screens::from_xml(XML);
@@ -307,7 +359,7 @@ fn the_panel_fades_in_over_its_leftlayers_own_transition_and_the_title_bar_does_
     // The screen chrome pushes its own title text - `draw_list` always adds
     // one - so check that one's alpha directly rather than through `body`.
     let title_alpha = |layers_full: &Layers| match &layers_full.chrome[..] {
-        [Draw::Text { color, .. }, ..] => color[3],
+        [Draw::Text { color, .. } | Draw::FacedText { color, .. }, ..] => color[3],
         other => panic!("{other:?}"),
     };
     assert_eq!(distance_alpha(&draw_at(&picker)), 0.0, "not yet enabled");

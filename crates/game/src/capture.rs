@@ -633,6 +633,11 @@ pub fn run(
                     let faces = oag_ui_screens::picker::FaceScales::default();
                     list.extend(legend.draw_gated(&faces, &measure, true));
                 }
+                if !layout.is_hd() {
+                    let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
+                    ticker_clip =
+                        menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
+                }
                 // Same disc read `picker_stills` already made for the
                 // hexagonal window's cards - reused here rather than read
                 // twice, since the two share one `screen.xml`.
@@ -892,24 +897,18 @@ pub fn run(
     if let Some(assets) = &fury_backdrop {
         assets.install(&mut renderer, &device, &queue);
     }
-    // On Pulse (both PSP pressings and the PS2 port) this loads the
-    // `Default`-role atlas rather than a title role, so
-    // `oag_ui_screens::campaign::footer`'s `Draw::FacedText` draws the same
-    // mixed-case body face here as the live window does - see
-    // `boot::fonts::face_atlas_slot`. Pure now loads its own `Title`-role
-    // atlas instead, which resolves to the identical `.fnt` `Default` does
-    // for that title, so the slot's contents are unchanged even though its
-    // label is. Unconditional, so a menu-page capture and the live window
-    // (`session::menus`) build the same picture whether or not this run's
-    // draw list ever reaches `oag_ui::menu::draw_list`/`picker::draw_list`.
-    let (face_atlas, face_role) =
-        crate::boot::fonts::face_atlas_slot(menu_skin, &font, title_font.clone());
-    renderer.set_face_atlas(&device, &queue, face_atlas, face_role);
-    // The buttons atlas is not routed through `face_atlas_slot` at all - it
-    // is a third, independent slot, not a substitute for `Title`/`Default`
-    // in the one `face_atlas_slot` already picks between. See
-    // `crate::render::Renderer::set_buttons_atlas`'s own doc.
-    renderer.set_buttons_atlas(&device, &queue, buttons_font);
+    // Both glyph slots, as the live window loads them (`boot::fonts::install_faces`),
+    // whether or not this run's draw list ever reaches a menu: a menu-page
+    // capture and the window must build the same picture.
+    crate::boot::fonts::install_faces(
+        &mut renderer,
+        &device,
+        &queue,
+        menu_skin,
+        &font,
+        title_font.clone(),
+        buttons_font,
+    );
     crate::prompts::install(&mut renderer, title, &options.settings);
 
     if let (Some(frames), Some(wanted)) = (

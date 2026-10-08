@@ -121,17 +121,18 @@ impl super::Renderer {
     /// and this screen's footer button glyphs are on screen in the same
     /// frame, so they cannot share one.
     ///
-    /// **No role parameter, unlike [`Self::set_face_atlas`].** The role this
-    /// slot answers to is always `crate::language::roles::BUTTONS` - see
-    /// `oag_ui_screens::campaign::footer::face_role`'s own doc - and
-    /// `super::render_with`'s `Draw::FacedText` arm never falls back to the
-    /// primary atlas for it the way it does for [`Self::face_atlas`]; see
+    /// **The slot answers to `role`, `Buttons` unless a title's body face
+    /// holds [`Self::set_face_atlas`]'s slot** - Pulse's PSP pressings, which
+    /// have no button font and put their `Title` face here instead
+    /// (`oag_title::MenuSkin::body_font`). A `Buttons` draw never falls back
+    /// to the primary atlas the way [`Self::face_atlas`]'s roles do; see
     /// `super::text::GlyphSlot::Buttons`'s own doc for why not.
     pub fn set_buttons_atlas(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         atlas: Option<Atlas>,
+        role: &'static str,
     ) {
         self.buttons_view = upload_face(device, queue, atlas.as_ref());
         self.ui_bind_group = super::resources::ui_bind_group(
@@ -147,5 +148,6 @@ impl super::Renderer {
             &self.buttons_view,
         );
         self.buttons_atlas = atlas;
+        self.buttons_role = role;
     }
 }

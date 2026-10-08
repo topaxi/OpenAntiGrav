@@ -184,14 +184,11 @@ pub struct MenuSkin {
     /// `Data.wad`'s `Data\Plugins\PI001\GUI\MainMenu_Definition.xml`,
     /// 2026-09-13, while wiring this field for HD.
     ///
-    /// **Left `None` for Pulse anyway - a deliberate scope cut, not a second
-    /// measurement disagreeing with the first.** Flipping it would move
-    /// already-capture-verified, confidence-95 output
-    /// (`docs/ui/menus-original.md`'s Layout table) with no capture of its
-    /// own checking whether the title's face is what changes; that is a
-    /// separate pass this one did not budget for. Whoever takes it next has
-    /// the widget already found, not just the question. Still `None` on both
-    /// PSP Pulse pressings and the PS2 port for exactly that reason.
+    /// **Wired for Pulse since 2026-10-08**, on both PSP pressings and the
+    /// PS2 port: a capture of the original puts `MAIN MENU` at 17 px a glyph
+    /// where the `menu` face drew 25, the ratio of `Pulse_14.fnt` to
+    /// `Pulse_20.fnt`. It was `None` before for want of that capture; see
+    /// `docs/ui/menus-original.md`, "What still differs, ranked".
     ///
     /// **Pure is checked now, and wired: `oag_pure::frontend::MENU_SKIN` is
     /// `Some("Title")`.** `Skin.xml`'s own `Main Menu` screen authors
@@ -206,6 +203,15 @@ pub struct MenuSkin {
     /// through its own authored role rather than an untagged `Draw::Text`
     /// that happened to land on the identical atlas.
     pub title_font: Option<&'static str>,
+    /// The role of the face widgets other than the screen title draw their
+    /// body text in, **when it has to be loaded beside [`Self::title_font`]**:
+    /// Pulse's `Default` role (`pulse_text.fnt`, the only face with real
+    /// lowercase), which the footer's prompts, a picker's labels and the
+    /// ticker draw in while the title draws in `Title` (`Pulse_14.fnt`). The
+    /// renderer has one slot for each. `None` for a title whose body text is
+    /// the `menu` face or the same one as its title (HD, Pure, 2048, Omega),
+    /// which needs no second face.
+    pub body_font: Option<&'static str>,
     /// Top of the first row, in the layer the rows are drawn in.
     ///
     /// Authored per *screen* rather than in `FEGlobals` - Pulse's `Main Menu`
@@ -374,6 +380,11 @@ pub struct MenuSkin {
     /// Where this title's settings rows sit, when its screens author a
     /// position for them separately from `MenuXOffset`. See [`MenuList`].
     pub list: Option<MenuList>,
+    /// A page drawn the way the original's own settings screens draw theirs:
+    /// label left, a pair of step arrows, the value in a column of its own
+    /// and a fading rule between rows. See [`MenuSettings`]. `None` for every
+    /// title but Pulse's PSP pressings.
+    pub settings: Option<MenuSettings>,
     /// A row's second line, drawn only under the selected row, for a title
     /// whose main menu screen was captured for it. See [`HelpText`].
     ///
@@ -421,6 +432,53 @@ pub struct HelpText {
     /// `color="0xffffffff"`, authored rather than measured, the one part of
     /// this type the XML actually states.
     pub color: Argb,
+}
+
+/// The look of the original's settings screens, for the pages of this build's
+/// tree that stand where one does.
+///
+/// **What the disc authors is read, not carried here**: the screen named by
+/// [`Self::screen`] holds the rules (twelve `<Image>`s per screen, the left
+/// and right halves of one fading line each), the label column, the value
+/// column's `x` and the row pitch, and `oag_ui::menu::settings` reads them
+/// off it at boot. What the disc does not author is what this holds, each
+/// field marked by where it came from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuSettings {
+    /// The file the screen is in: Pulse's `RaceBox_Definition.xml`. Not
+    /// [`crate::FrontEnd::race_box`], which names `Selection_Definition.xml`.
+    pub file: &'static str,
+    /// The screen read, by name: Pulse's `Single Player`, the Racebox's
+    /// settings page.
+    pub screen: &'static str,
+    /// The pages of this build's own tree drawn this way - **chosen, not
+    /// measured**: the original has one such page under Racebox, and this
+    /// build's `race` page stands in its place.
+    pub pages: &'static [&'static str],
+    /// The font role the rows draw in. The screen authors `font="small"`;
+    /// `Small` and `Title` are the same `.fnt` on Pulse (`menus-original.md`,
+    /// the role table), so the title's slot carries it.
+    pub font: &'static str,
+    /// The sheet the step arrows are cut from: `Data\FE\Images\pulse_assets.mip`.
+    pub sheet: &'static str,
+    /// The left and right step arrow in the sheet, `[u, v, w, h]`. **Authored**:
+    /// `InGame_Definition.xml` draws the same two texels as `<Image>`s
+    /// (`U="289" V="76"` and `U="314" V="76"`, 9x10).
+    pub arrow: [[f32; 4]; 2],
+    /// The lit variants of those two, in the sheet, `[u, v, w, h]`: the halo a
+    /// focused row's arrows have. **Measured off the sheet's alpha**, not
+    /// authored anywhere in the XML (the executable's own `List` draw code
+    /// carries them).
+    pub arrow_glow: [[f32; 4]; 2],
+    /// Where each arrow's top-left sits from the value column's `x` and the
+    /// row's `y`, left then right. **Measured** off a PPSSPP capture of
+    /// `Single Player` at 2x: the left arrow's left edge 23 units before the
+    /// value, the right one's 13, both 5 below the row's text top.
+    pub arrow_offset: [(f32, f32); 2],
+    /// How far a lit arrow's halo reaches past the plain arrow's top-left,
+    /// as `(x, y)`: the halo is centred on the arrow. **Measured**, same
+    /// capture.
+    pub glow_inset: (f32, f32),
 }
 
 /// Where a title's settings rows are anchored, read off its screens.
@@ -586,10 +644,8 @@ mod tests {
         title_x: 50.0,
         title_y: 0.0,
         title_scale: 1.0,
-        // This fixture predates the finding in `title_font`'s own doc that
-        // Pulse's disc does author the role - kept `None` here too, matching
-        // the shipped `oag_pulse::FRONT_END`'s own deliberate scope cut.
-        title_font: None,
+        title_font: Some("Title"),
+        body_font: Some("Default"),
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
@@ -603,6 +659,7 @@ mod tests {
         strip: None,
         blocks: None,
         list: None,
+        settings: None,
         help_text: None,
     };
 
