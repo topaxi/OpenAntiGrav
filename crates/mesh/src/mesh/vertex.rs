@@ -375,6 +375,22 @@ pub mod slots {
     /// [`CLOCK_SCROLL_HALO`] together, for [`BOMB_FIRE`]'s reason.
     pub const BOMB_SHOCK: u32 = CLOCK_SCROLL_RING | CLOCK_SCROLL_HALO;
 
+    /// HD's Missile explosion core (`hd_missile_explosion_core_glow.rcsmaterial`,
+    /// block `@0x17f0`): the texture scrolled `0.5 UV_offset` in `v`, times
+    /// the vertex colour. Carried as [`RIM_GLOW`] and [`CLOCK_SCROLL_RING`]
+    /// together, for [`BOMB_FIRE`]'s reason: no single bit is free.
+    pub const MISSILE_CORE: u32 = RIM_GLOW | CLOCK_SCROLL_RING;
+
+    /// The Missile explosion's light rays (`hd_missile_explosion_lightrays_glow`,
+    /// block `@0x17f0`): a Fresnel shell over a ramp read at `(u, UV_offset)`.
+    /// [`RIM_GLOW`] and [`CLOCK_SCROLL_HALO`] together.
+    pub const MISSILE_RAYS: u32 = RIM_GLOW | CLOCK_SCROLL_HALO;
+
+    /// The Missile explosion's shockwaves (`hd_missile_explosion_shockwaves_glow`,
+    /// block `@0x19b0`): [`BOMB_SHOCK`]'s rings with a `1 - Shockwave_scalar`
+    /// fade on the alpha. [`RIM_EDGE`] and [`CLOCK_SCROLL_RING`] together.
+    pub const MISSILE_SHOCK: u32 = RIM_EDGE | CLOCK_SCROLL_RING;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

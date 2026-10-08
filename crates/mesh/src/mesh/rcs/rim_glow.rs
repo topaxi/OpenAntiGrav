@@ -185,6 +185,52 @@ const BOMB_SHOCK: Shape = Shape {
     parameters: &[SHOCKWAVE_SCALAR, FOG_COLOUR, GLOBAL_ALPHA_SCALER],
 };
 
+/// `hd_missile_explosion_core_glow.rcsmaterial`, block `@0x17f0` (`DATA02`):
+/// the Missile blast's sphere and bloom. Earns [`slots::MISSILE_CORE`].
+const MISSILE_CORE: Shape = Shape {
+    bit: slots::MISSILE_CORE,
+    mnemonics: &[
+        "MOV", "TEX", "MUL", "MUL", "MUL", "MUL", "MAD", "MAD", "EX2", "MAD",
+    ],
+    literals: &[[1.442_694_9, 0.0, 0.0, 0.0]],
+    parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+};
+
+/// `hd_missile_explosion_lightrays_glow.rcsmaterial`, block `@0x17f0`
+/// (`DATA02`): the Missile blast's rays. Earns [`slots::MISSILE_RAYS`].
+const MISSILE_RAYS: Shape = Shape {
+    bit: slots::MISSILE_RAYS,
+    mnemonics: &[
+        "MOV", "DP3", "MOV", "DP3", "DP3", "MUL", "MUL", "DIVSQ", "ADD", "MOV", "LG2", "MUL",
+        "MUL", "EX2", "MAD", "LG2", "MUL", "MOV", "EX2", "MUL", "TEX", "MAD", "EX2", "MAD", "MAD",
+    ],
+    literals: &[
+        [1.0, 0.0, 0.0, 0.0],
+        [5.0, 0.0, 0.0, 0.0],
+        [0.9, 0.0, 0.0, 0.0],
+        [5.0, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+    ],
+    parameters: &[FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+};
+
+/// `hd_missile_explosion_shockwaves_glow.rcsmaterial`, block `@0x19b0`
+/// (`DATA02`): the Missile blast's rings. Earns [`slots::MISSILE_SHOCK`].
+const MISSILE_SHOCK: Shape = Shape {
+    bit: slots::MISSILE_SHOCK,
+    mnemonics: &[
+        "MOV", "MOV", "MOV", "MAD", "TEX", "MUL", "MOV", "ADD", "MUL", "MUL", "MAD", "MOV", "TEX",
+        "ADD", "MOV", "ADD", "TEX", "MUL", "MUL", "MAD", "MAD", "EX2", "MAD", "MAD",
+    ],
+    literals: &[
+        [0.01, 0.0, 0.0, 0.0],
+        [0.05, 0.0, 0.0, 0.0],
+        [0.45, 0.0, 0.0, 0.0],
+        [1.442_694_9, 0.0, 0.0, 0.0],
+    ],
+    parameters: &[SHOCKWAVE_SCALAR, FOG_COLOUR, GLOBAL_ALPHA_SCALER],
+};
+
 /// `hd_leachbeam_ball_glow.rcsmaterial`, block `@0x19b0` (`DATA00`).
 const LEACH_BALL: Shape = Shape {
     bit: slots::RIM_GLOW,
@@ -256,6 +302,9 @@ pub(super) fn classify(
         &BOMB_FIRE,
         &BOMB_SHOCK,
         &BOMB_HALO,
+        &MISSILE_CORE,
+        &MISSILE_RAYS,
+        &MISSILE_SHOCK,
     ] {
         let mut wanted = shape.parameters.to_vec();
         wanted.sort_unstable();
@@ -271,6 +320,38 @@ pub(super) fn classify(
         return shape.bit;
     }
     0
+}
+
+/// The colours of an HD glow chunk whose vertices declare none, for the
+/// materials whose programs read them off the vertex.
+///
+/// - **The Bomb's and the Missile's shockwave rings** (stride 22): two colour
+///   fields, `[a.rgb, b.a]` - the first's `R G B` and the second's `A`, which
+///   their programs multiply in and take their alpha from.
+/// - **The Missile's core** (stride 18): the one colour field every vertex
+///   ends in (`ff ff ff ff` on the sphere), whose `A` the program multiplies
+///   into its alpha.
+pub(super) fn inline_light(
+    roles: u32,
+    mesh: &oag_rcs::rcsmodel::Mesh,
+    data: &[u8],
+    submesh: &oag_rcs::rcsmodel::SubMesh,
+    stride: usize,
+) -> Option<Vec<[f32; 4]>> {
+    let has = |pair: u32| roles & pair == pair;
+    if has(slots::BOMB_SHOCK) || has(slots::MISSILE_SHOCK) {
+        return mesh.inline_two_colours(data, submesh, stride).ok();
+    }
+    if has(slots::MISSILE_CORE) {
+        let bytes = mesh.inline_colours(data, submesh).ok()?;
+        return Some(
+            bytes
+                .into_iter()
+                .map(|c| c.map(|b| f32::from(b) / 255.0))
+                .collect(),
+        );
+    }
+    None
 }
 
 fn mnemonics_match(program: &fragment::Program, want: &[&str]) -> bool {

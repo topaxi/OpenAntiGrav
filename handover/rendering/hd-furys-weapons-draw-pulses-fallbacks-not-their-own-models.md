@@ -181,6 +181,12 @@ are read (core: texture times vertex colour; rays: Fresnel shell; shockwave: ram
 on HD (`struck` already is the craft), then a pair against `m5`'s frames with the camera pinned
 as `hd-bomb-match` did. `scripts/rpcs3-mem-poll.py --behind-rival` reproduces the hit.
 
+## 2026-10-08 (`hd-missile-blast`): the Missile's explosion drawn, the white-out open
+
+Wired (see `weapons.md`, 2026-10-08). Open: the film's frame-wide white-out that washes the HUD (luma 139 to 217 in one frame, ours
+136 at the same age); candidates are bloom/exposure on HD, the point light `(1-p)^2`, or a flash object. Also the entry's orientation
+and the 16 entries at `+0x190`. `--force-missile-hit TICK:SLOT` frames it (`hd_missile_blast_ground_truth.rs`).
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the

@@ -48,6 +48,18 @@ impl Race {
     /// [`Self::force_leach_lock`] does. `false` when no such Bomb is laid or
     /// the craft is not racing. A verification aid and nothing else.
     pub fn force_bomb_trip(&mut self, slot: usize) -> bool {
+        self.put_craft_on_projectile(oag_tables::weapons::Weapon::Bomb, slot)
+    }
+
+    /// Puts craft `slot` on the first Missile another craft owns, for
+    /// `--force-missile-hit`, the same way [`Self::force_bomb_trip`] does for a
+    /// Bomb: the next tick's own hit test finds the craft under the missile and
+    /// the ordinary impact path runs. A verification aid and nothing else.
+    pub fn force_missile_hit(&mut self, slot: usize) -> bool {
+        self.put_craft_on_projectile(oag_tables::weapons::Weapon::Missile, slot)
+    }
+
+    fn put_craft_on_projectile(&mut self, kind: oag_tables::weapons::Weapon, slot: usize) -> bool {
         if !self.ship_active(slot) {
             return false;
         }
@@ -57,9 +69,7 @@ impl Race {
             .projectiles
             .slots
             .iter()
-            .find(|p| {
-                p.kind == Some(oag_tables::weapons::Weapon::Bomb) && usize::from(p.owner) != slot
-            })
+            .find(|p| p.kind == Some(kind) && usize::from(p.owner) != slot)
             .map(|p| p.position)
         else {
             return false;

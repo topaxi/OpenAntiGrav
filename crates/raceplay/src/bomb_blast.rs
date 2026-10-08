@@ -202,9 +202,10 @@ pub struct BombBlastModels {
     pub mag_floor: [Option<Model>; 2],
     /// HD's blast set, riding this container for the Repulser field's reason:
     /// a fireball and its white core, the bloom disc and one ring, in
-    /// [`oag_title::weapons::HdBombBlast`]'s order, then the laid bomb's halo.
-    /// Played by [`hd`].
-    pub hd: [Option<Model>; 5],
+    /// [`oag_title::weapons::HdBombBlast`]'s order, then the laid bomb's halo,
+    /// then the Missile's explosion (`missile_blast`, which has no container of
+    /// its own for the same reason). Played by [`hd`] and `missile_blast`.
+    pub hd: [Option<Model>; 6],
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -233,6 +234,9 @@ pub(crate) struct HdDrawables {
     pub(crate) rings: Vec<Drawable>,
     /// One per projectile slot: a laid bomb's halo, drawn while it waits.
     pub(crate) halo: Vec<Drawable>,
+    /// One per `missile_blast::SLOTS`: the Missile's explosion, each with its
+    /// own node clock.
+    pub(crate) missile: Vec<Drawable>,
 }
 
 impl BombBlastDrawables {
@@ -260,7 +264,7 @@ impl BombBlastDrawables {
                 [per_ship(first)?, per_ship(second)?]
             },
             hd: {
-                let [fireball, core, bloom, ring, halo] = models.hd;
+                let [fireball, core, bloom, ring, halo, missile] = models.hd;
                 let mut pool = |model, count: usize| {
                     build_one(model).map(|mut pool: Vec<Drawable>| {
                         pool.truncate(count);
@@ -272,7 +276,8 @@ impl BombBlastDrawables {
                     core: pool(core, hd::SLOTS)?,
                     bloom: pool(bloom, hd::SLOTS)?,
                     rings: pool(ring, hd::SLOTS * (hd::RIPPLES + 1))?,
-                    halo: build_one(halo)?,
+                    halo: pool(halo, usize::MAX)?,
+                    missile: pool(missile, missile_blast::SLOTS)?,
                 }
             },
         })
@@ -388,6 +393,7 @@ impl Race {
     /// blast in.
     pub(crate) fn advance_bomb_blast_models(&mut self, dt: f32) {
         self.advance_hd_bomb_blasts(dt);
+        self.advance_hd_missile_blasts(dt);
         for slot in &mut self.view.bomb_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;

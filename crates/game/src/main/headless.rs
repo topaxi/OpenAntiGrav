@@ -575,6 +575,10 @@ pub(crate) fn run_race(
                     cli.wreck.force_bomb_trip.as_deref(),
                     "Bomb trip",
                 )?,
+                force_missile_hit: crate::args::force_at_slot(
+                    cli.wreck.force_missile_hit.as_deref(),
+                    "Missile hit",
+                )?,
                 force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
                 medals: oag_game::race_capture::tick::Medals {
                     forced: crate::args::force_medal(&cli.wreck.force_medal)?,

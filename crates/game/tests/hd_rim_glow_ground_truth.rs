@@ -233,3 +233,48 @@ fn the_laid_bombs_halo_earns_its_bit_and_its_v_offset() {
         }
     }
 }
+
+/// The Missile explosion's three programs each earn their own pair of bits,
+/// and no Bomb or Plasma model earns any of the three.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_missile_explosion_programs_earn_their_pairs() {
+    let Some(image) = image() else { return };
+    let missile = roles(&build(&image, "/data/weapons/hd_missile_explosion.vex"));
+    assert!(!missile.is_empty());
+    let pairs = [
+        slots::MISSILE_CORE,
+        slots::MISSILE_RAYS,
+        slots::MISSILE_SHOCK,
+    ];
+    for pair in pairs {
+        assert!(
+            missile.iter().any(|r| r & pair == pair),
+            "no surface earned {pair:#x}: {missile:x?}"
+        );
+    }
+    for r in &missile {
+        assert!(
+            pairs.iter().any(|&pair| r & pair == pair),
+            "every surface is one of the three: {r:#x}"
+        );
+        // Each pair shares one bit with a Bomb pair, so the test is the whole
+        // pair, never the bit.
+        assert_ne!(r & slots::BOMB_FIRE, slots::BOMB_FIRE, "{r:#x}");
+        assert_ne!(r & slots::BOMB_SHOCK, slots::BOMB_SHOCK, "{r:#x}");
+        assert_eq!(r & slots::BOMB_HALO, 0, "{r:#x}");
+    }
+    for path in [
+        "/data/weapons/hd_bomb_sphere.vex",
+        "/data/weapons/hd_bomb_shockwaves.vex",
+        "/data/weapons/hd_bomb_halo.vex",
+        "/data/weapons/hd_plasma_ring.vex",
+        "/data/weapons/hd_plasma_halo.vex",
+    ] {
+        for r in roles(&build(&image, path)) {
+            for pair in pairs {
+                assert_ne!(r & pair, pair, "{path}: {r:#x}");
+            }
+        }
+    }
+}
