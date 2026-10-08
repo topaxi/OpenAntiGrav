@@ -513,7 +513,16 @@ Ranked by how much a player notices, ours first listed worst:
    in the strip; the tag at its left is the profile tag in white caps (`AAA`
    here). Ours drew the tip in `menu`-role capitals at 17/22 scale, which on
    `Main Menu` ran past the strip's ends. The tag draws nothing (no honest
-   string; `campaign-screens.md`). **Fixed 2026-10-08, see below.**
+   string; `campaign-screens.md`). **The face is fixed 2026-10-08**: the ticker
+   now draws in the `Default` role (`TickerLayout::read`'s `font`, which was a
+   chosen `"small"` and is now a chosen `"default"` corroborated by this
+   capture; `before`/`after` in `sheets/footer-compare.png`: lowercase, inside
+   the strip, ink and size matching). The tag is still empty. On the campaign
+   pages a `--menu-page` still draws no tip at all (`static_footer_overlay`
+   passes an empty rotation), so only the live stage and `--menu-page main`
+   show the new face. Also visible there: our `Confirm` label is smaller than
+   the original's and sits higher against its button glyph (shrink-to-fit
+   scale, not measured against the disc).
 4. **Track and Ship Select labels are capitals where the original is mixed
    case.** `Distance(m)`, `Lap record`, `Classic`, `Speed`, `Thrust`, the
    `Help`/`Music playlist` prompts are `Default` role on the disc. Ours draws

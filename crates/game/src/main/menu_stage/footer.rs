@@ -76,15 +76,12 @@ impl MenuStage {
     /// `crate::campaign_stage::CampaignStage::ticker_clip_bounds` already
     /// uses for the Race Campaign's own footer.
     ///
-    /// `measure` reads [`Self::text_atlas`], not [`Self::default_atlas`]:
-    /// the ticker's own `font="small"` routes through no named role
-    /// (`oag_ui_screens::campaign::footer::face_role` answers `None` for it), the
-    /// same choice `CampaignStage::ticker_draw`'s own call site makes one
-    /// screen over.
+    /// `measure` reads [`Self::default_atlas`]: the ticker draws in the
+    /// `Default` role, the face the disc's own tips are lowercase in.
     #[must_use]
     fn ticker_overlay(&self, tips: &[String]) -> Option<(Draw, (f32, f32))> {
         let layout = self.ticker.as_ref()?;
-        let measure = |text: &str| font::measure(&self.text_atlas, text);
+        let measure = |text: &str| font::measure(&self.default_atlas, text);
         let draw = oag_ui_screens::campaign::footer::ticker_draw(
             layout,
             self.ticker_elapsed,

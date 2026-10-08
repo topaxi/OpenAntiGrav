@@ -556,12 +556,14 @@ impl TickerLayout {
         let color = bar.map_or([1.0, 1.0, 1.0, 1.0], |bar| color_of(globals, bar));
         Some(Self {
             viewport: [x, y, width, height],
-            // Neither `TextInfo` nor either `Text` child states a `font` -
-            // **chosen**, not a traced binding, but corroborated against
-            // `data/reference/psp-campaign-screens/cellselect-grid0_3_2.png`:
-            // the ticker's own text there sits at the same small size as
-            // `Help`/`Confirm`/`AI difficulty`, not the panel's bigger face.
-            font: "small".to_string(),
+            // Neither `TextInfo` nor either `Text` child states a `font`.
+            // **Chosen, corrected 2026-10-08 against a PPSSPP capture**
+            // (`docs/ui/menus-original.md`, "What still differs, ranked"):
+            // the ticker's tip is real lowercase in the same face as `Help`/
+            // `Confirm`/`AI difficulty` beside it, which only `Default`
+            // (`pulse_text.fnt`) has - the earlier `"small"` drew it in
+            // `Pulse_14`-scaled capitals. Not a traced binding either.
+            font: "default".to_string(),
             color,
         })
     }

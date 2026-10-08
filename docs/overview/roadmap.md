@@ -1236,8 +1236,12 @@ recipe and its three traps.
       end and `--race` quit on it. See [menus](../architecture/menus.md).
       The rows are drawn over **the disc's own looping menu backdrop**, the
       movie `FE Screen`'s `Movie` widget names, so the menus sit on the
-      background the original's do. Style, animation and the rest of the disc's
-      artwork are still absent, and **rebinding** is the one row that displays
+      background the original's do. The 2026-10-08 side-by-side against PPSSPP found the
+      chrome, rows and footer already matching; what is still absent is ranked
+      in [menus-original.md](../ui/menus-original.md#what-still-differs-ranked---measured-2026-10-08)
+      (Racebox settings page shape, the `Title`-face top bar, mixed-case
+      picker labels, page transitions on the campaign/picker pages and for
+      the outgoing page). **Rebinding** is the one row that displays
       without editing.
 - [~] Modern features. The display half is in: **monitor selection** (by name,
       never by index), window mode (windowed or borderless), window size,
