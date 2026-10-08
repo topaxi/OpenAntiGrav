@@ -165,14 +165,11 @@ pub(super) fn particle_effect(
     })
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
     // Pulse's PSP laws only - see `psys::Effect::without_extents` and
-    // `without_pulse_psp_draw`. A listed effect keeps Pulse's frame advance.
+    // `without_pulse_psp_draw`. A listed HD effect draws every particle on its
+    // spawn frame: the flipbook's direction on HD is unread.
     if !pulse_psp {
         effect.without_extents();
-        if gtf_sprites {
-            effect.without_pulse_psp_draw_keeping_frames();
-        } else {
-            effect.without_pulse_psp_draw();
-        }
+        effect.without_pulse_psp_draw();
     }
     let sprite_note = if ext.is_some() {
         let mut note = format!(", {sprites} sprite(s) read");

@@ -178,8 +178,11 @@ covered by `a_leachbeam_hit_throws_the_attached_spark_where_the_title_has_no_loc
 **What the original draws** (RPCS3, Talon's Junction campaign event 01, craft at rest,
 `scripts/rpcs3-hd-weapon.py`, two boots, burst at video frame 199 of 30 fps;
 `data/scratch/hd-rocket-smoke/`): a white flash for about 0.1 s, orange sparks to about
-0.4 s, then dense dark **teal-grey** smoke bodies that last past 3 s. Mean RGB of the
-pixels more than 30 darker than the pre-burst frame, 1280x720:
+0.4 s, then dense dark **teal-grey** smoke bodies that last past 3 s. **The axis is game
+time**: the HUD race clock reads 22.9, 23.9, 24.9, 25.9 at video frames 199, 229, 259,
+289, so 30 video frames is 1.0 game second here (the 0.6x of earlier hosts did not
+apply to these two recordings). Mean RGB of the pixels more than 30 darker than the
+pre-burst frame, 1280x720:
 
 | age (s) | 0.23 | 0.43 | 0.63 | 1.03 | 2.03 | 3.03 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -196,41 +199,47 @@ nine emitters (`WO_ROCKET_EXPLO_TRACK`, `FIREBALL_ADDITIVE`, `FIRESPIKES`,
 `FIREBALL_PARENT`, `FIREBALL_ANIMSMOKE_TRAIL`, `SPARKS`, `DEBRIS_NO_TRAILS`,
 `FIRE_TRAILS_ONEQUAD`, `TRAIL_SMOKE`), against Pulse's four. The craft-hit
 `WO_ROCKET_EXPLO` is 48,256 bytes and 12 emitters. Both are HD files, not Pulse's
-played by inheritance, and `ours` was already playing them.
+played by inheritance, and ours already played them.
 
 **What was missing: the sprites.** Every emitter names a `.tga` at `record + 0x4c4`
 (`Z:\WipeoutPSP\HD\Data\Psys\Tex\<stem>.tga`), and `/data/psys/tex/<stem>.gtf`
 resolves and decodes for **all nine** track-burst emitters and all 12 of the craft
-burst (a census with `Sprite::from_gtf` over each, the stem's case as authored). The loader read sprites for 2048 (`.gxt`) and Omega (`.gnf`) only, so every
-HD emitter drew `psys.wesl`'s procedural radial glow, a model of a Pulse spark, times
-its palette. `smoke_new4_8x4` is a 1024x512 **flipbook of 32 frames** that runs from a
-fire ball to dark grey smoke; `TRAIL_SMOKE`'s palette is black for entries 1-31 of 256
-and white after, so the smoke's colour is mostly the sprite's. Confidence 85.
+burst (a census with `Sprite::from_gtf` over each, the stem's case as authored). The
+loader read sprites for 2048 (`.gxt`) and Omega (`.gnf`) only, so every HD emitter drew
+`psys.wesl`'s procedural radial glow, a model of a Pulse spark, times its palette.
+`smoke_new4_8x4` is a 1024x512 **8x4 flipbook**: read top-left first, row 1 is a fire
+ball fading to grey smoke, and rows 2 to 4 are yellow, then white-yellow, then white
+blobs. `TRAIL_SMOKE`'s palette is black for entries 1-31 of 256 and white after, so the
+smoke's colour is mostly the sprite's. Confidence 85.
 
 **What is wired.** `oag_title::Effects::sprites` lists the HD effects whose `.gtf`
-sprites play; HD lists `WO_ROCKET_EXPLO_TRACK` alone, Pulse, Pure, 2048 and Omega
-list none. A listed effect also keeps Pulse's atlas frame advance
-(`Effect::without_pulse_psp_draw_keeping_frames`). **The frame advance on HD is
-inherited from Pulse and not read in HD's executable** (HD's particle update is
-unread here), so it is chosen, not measured. `Sprite::from_gtf` is new. Test:
-`hd_effect_sprites` (nine sprites when listed, none when not).
+sprites play; HD lists `WO_ROCKET_EXPLO_TRACK` alone, Pulse, Pure, 2048 and Omega list
+none. `Sprite::from_gtf` is new. Test: `hd_effect_sprites` (nine sprites when listed,
+none when not). **Every particle draws its spawn frame**: HD's frame advance, and which
+cell is frame 0 (top-left, or the bottom row if the exporter flipped the sheet), are
+**unread**. Pulse's advance was tried and dropped: it plays the sheet top-left first,
+which ends on the white cells, and a row-order flip changed the measured ratios by under
+0.02, so the render cannot tell the two apart and nothing was shipped on a guess.
 
-**Before and after.** Ours at tick 513 onwards (single square press at tick 420,
-`--camera-view close`, the burst lands on a far gantry, so about a third of the
-original's size): smoke/background at 1 s was 0.77/0.74/0.73 (thin pale streaks, gone by
-1.5 s) and is now 0.72/0.64/0.59 with the real debris chunks and the sprite's puff. Still
-different from the original's blue bias (0.47/0.59/0.66): ours is neutral to warm.
-Pulse PSP and PS2 renders at four ticks across a rocket burst are byte-identical to
-main.
+**Before and after.** Ours at tick 513 onwards (a single square press at tick 420,
+`--camera-view close`, per-pixel against a no-fire render; the burst lands on a far
+gantry, so about a third of the original's size, so only ratios compare):
+smoke/background at 1 s was 0.77/0.74/0.73 (thin pale streaks, gone by 1.5 s) and is now
+0.69/0.61/0.58, with the real debris chunks and the sprite's puff. The original's is
+0.47/0.59/0.66: ours is still neutral to warm, smaller and shorter-lived. Pulse PSP and
+PS2 renders at four ticks across a rocket burst are byte-identical to main.
 
-**Not settled.** (1) The blue bias. HD ships `psys_lit`, `psys_normal` and
-`psys_simplegeom` programs (`renderer.md`, the shader groups): the lit variant very
-likely takes scene light, which would tint smoke towards the sky; the microcode was not
-read, and nothing was tinted to match. (2) HD's own frame-advance law, and whether the
-sprites of HD's other effects read right: wiring each is its own matched capture. (3) The pose: ours hits a far wall, so size and area are not comparable, only
-colour ratios. (4) The craft hit (`WO_ROCKET_EXPLO`) was not captured.
-Omega and 2048: **checked, applies, not wired** - both author their own `WO_ROCKET_EXPLO`
-(`psys_omega_ground_truth.rs`) and already read their sprites.
+**Not settled.** (1) The blue bias. HD ships `psys_normal`, `psys_simplegeom` and
+`psys_lit` programs (`renderer.md`, the shader groups): strings `psys_normal_vp/_fp` at
+`0x007a0f60/70`, `psys_simplegeom_*` at `0x007a0fb0/c8`, `psys_lit_*` at
+`0x007a1060/70`, registry slots `0x008b3a34` (normal) and `0x008b3ab8` (lit);
+`psys_normal` is also referenced from `FUN_002c7b30` at `0x002c7ea0`, `psys_lit` only
+from its table slot, so what selects lit is not found, and nothing says whether any
+declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
+law and the flipbook direction (see above). (3) The pose: ours hits a far wall. (4) The
+craft hit (`WO_ROCKET_EXPLO`) was not captured. Omega and 2048: **checked, applies,
+not wired** - both author their own `WO_ROCKET_EXPLO` (`psys_omega_ground_truth.rs`)
+and already read their sprites.
 
 ## Names applied
 

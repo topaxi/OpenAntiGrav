@@ -347,10 +347,10 @@ table are still unwired.
 HD's particle sprites are `/data/psys/tex/*.gtf`, named per emitter at `record+0x4c4`,
 and the loader read none of them: every HD effect drew the procedural radial glow.
 `oag_title::Effects::sprites` now lists the effects whose `.gtf` sprites play (HD:
-`WO_ROCKET_EXPLO_TRACK` only, with Pulse's frame advance, chosen not measured).
+`WO_ROCKET_EXPLO_TRACK` only, every particle on its spawn frame).
 Measured original: dark teal-grey smoke, smoke/background 0.47/0.59/0.66 at 1 s, lasting
 past 3 s - `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's wall
 burst".
 - Open: the blue bias (HD's `psys_lit` takes scene light? unread); HD's own frame-advance
-  law; `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
+  law and which cell of the 8x4 flipbook is frame 0; `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
   capture before it is listed; the other HD effects likewise.

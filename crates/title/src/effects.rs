@@ -323,9 +323,9 @@ pub struct Effects {
     /// Effects whose own sprites are read from the title's separate texture
     /// entries, where the sprite source is not the `.pob` itself: HD's
     /// `/data/psys/tex/<stem>.gtf`, named by each emitter's authored path.
-    /// A listed effect also keeps Pulse's atlas frame advance, its sprites
-    /// being flipbooks that run from fire to smoke over a particle's life. An
-    /// effect not listed keeps the procedural profile for every emitter, so
+    /// A listed effect draws each particle on its spawn frame: its sprites are
+    /// flipbooks, and HD's own frame advance (and which cell is frame 0) is
+    /// unread. An effect not listed keeps the procedural profile for every emitter, so
     /// wiring one is a decision made per effect against a matched capture,
     /// never by extension to the rest of the title's `.pob` files.
     pub sprites: &'static [&'static str],
