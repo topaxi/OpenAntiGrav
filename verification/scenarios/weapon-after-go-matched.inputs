@@ -1,0 +1,14 @@
+# Weapon comparison scenario, re-timed 2026-10-08 (pulse-weapon-look).
+#
+# Same intent as weapon-after-go.inputs: full thrust from the countdown, then one
+# fire press, for `scripts/psp-weapon-pair.py` on the original (fire 120 frames
+# after GO: Venom/Assegai, Talon's Junction, Time Trial, x 124.5 at speed 106.2).
+# Our standing start has caught up with the original's since weapon-after-go.inputs
+# was written: we reach x 124.9 at speed 107.3 on tick 393, not 403, so the old file
+# fires ten ticks (18 units, 111 against 106 u/s) late and every pair taken from it
+# had a different scene behind the weapon. Fire here; the original's `fire + k`
+# frame is ours at tick `391 + k` (two frames of display lag). The old file stays as
+# it was because two ground-truth tests pin their pictures to it.
+393 cross
+1 cross square
+200 cross

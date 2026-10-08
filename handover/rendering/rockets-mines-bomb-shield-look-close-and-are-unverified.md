@@ -27,8 +27,8 @@ checks these first rather than rediscovering them:
   `BombBlast_Update`'s own three ramps - **built 2026-09-23**
   (`oag_raceplay::bomb_blast`; see
   [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read)
-  for the full read, landed the same session). The shockwave's own recovered
-  alpha fade is not wired (`bomb_blast`'s own module doc comment says why),
+  for the full read, landed the same session). ~~The shockwave's own recovered
+  alpha fade is not wired~~ (**wired 2026-10-01**, `Drawable::tint`; struck 2026-10-08 after a grep of `crates/raceplay/src/bomb_blast.rs`),
   the basis crosses this engine's `Vec3::Y` and the frozen orientation's
   forward axis rather than the executable's own unlocated rear-emitter row
   (chosen, not measured, same footing `mine::frozen_pose` already carries),
@@ -64,6 +64,8 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   unread; (c) our standing start puts the craft 2.4 units and 1.7 degrees off the original's
   at the same place, which alone moves a detonation by 30 ticks (spawn/handling, not this
   thread's).
+- *Pulse Mine's explosion, 2026-10-08 (pulse-weapon-look)* - **the cluster is the round counter, and our drop is a tick slow: fix prepared, not landed.** One round on the original is one blast, five rounds four bumps (the fifth mine's owner is out of the trigger radius); the "hue" gap was a single blast against a five-mine stack (cluster against cluster the mean RGB agrees within 3 %). Ours dropped the cluster at seven-tick spacing (a strict `> 0` on the `0.1` s reload at an exact `1/60` step), so only three blasts go off; at six ticks (`DROP_TIMER_SLACK`, chosen) they go at k=32/38/44/50 against 32/38/44/51. **Not landed: it raises three `ai_dekonstruct_black_ground_truth` cells over their "may only fall" ceilings** (the AI Aces play with weapons on; mine kills or chaotic per-seed divergence, not checked); patch `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`, decision: land it and regenerate those ceilings in their own commit, or have the AI avoid its field's mines first. Left: ours' blasts 8-14 % brighter, the original's debris larger and tan. `mine.md`'s 2026-10-08 section.
+- *Pulse Rocket glow, 2026-10-08 (pulse-weapon-look)* - **item (b) above is closed as stated, and a new episodic excess is left.** At fire+3..+8 ours is 2.20M warm light against the original's 2.46M/2.53M (two restarts in one boot), so "larger on the original" is false; from fire+9 ours is about 1.5x in spikes at fire+9/16/20/25. The flare pool (count, size, alpha, colour, position) and the blend equal the original's, so the excess is not the effect's law: the SHAZZAM draw's random sizes or the road's bloom, not isolated. The scenario `weapon-after-go.inputs` was ten ticks late (our start now reaches x 124.9 on tick 393): `weapon-after-go-matched.inputs`, ours at tick `391 + k`. `rocket-visuals.md`'s 2026-10-08 section.
 - *Pulse Mine's explosion, 2026-10-01 (pulse-fx-3)* - **first picture of the original's**: a stationary craft trips its own Mine at fire+30
   (the arming delay; ours now exempts the owner for the same 0.5 s, 2026-10-07), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
   where ours' lasts sixteen and leans green. The `ring` and `BANG` templates were drawn with the wrong sprite and are fixed

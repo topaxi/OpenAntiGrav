@@ -1446,3 +1446,60 @@ steers round its own old mine like anyone's.
 "armed" bit `8`; `FUN_08862d4c`'s targetable gate. 2048/Omega: *not checkable*,
 neither title's bomb trigger is located, and the weapon table has no equivalent
 (`checked, differs` is not claimable either).
+
+## 2026-10-08: the cluster is the round counter, and our drop is one tick too slow (pulse-weapon-look)
+
+Settles the 2026-10-01 pulse-fx-3 section's open questions on the Mine's explosion.
+Method: PPSSPP 1.20.4, software renderer, native 480x272, a stationary craft in a Time Trial
+on Talon's Junction fires at stop frame 300 (`scripts/psp-weapon-pair.py mine --no-hold
+--fire-frame 300 --set-word 0x1ac=R`), a frame every one to two frames from fire+29 to fire+64.
+Ours: `oag-game --race --mode time_trial --give mine --input-script
+verification/scenarios/mine-stationary-fire.inputs`, tick `304 + k`. The number plotted is the mean
+brightness of the top 200 rows (`R+G+B)/3`). Frames and logs: `data/scratch/pulse-weapon-look/`
+(`mine-orig-r1`, `mine-orig-r5`, `mine-orig-r5b`, `mine-ours*`).
+
+**Is the three-bump wash the cluster? Yes (confidence 80: one PPSSPP boot, the five-round run restarted twice in it and the one-round run once - restarts, not reboots).** The discriminator written before the capture: one round (`0x1ac=1`) must show one
+bump, five rounds several.
+
+| round counter | brightness, fire+k | reading |
+| --- | --- | --- |
+| 1 | 98 at k=0, 88 at k=30, **186** at 32, 144 at 38, 100 at 46, back to 90 by 52 | one blast, one decaying bump, 20 frames |
+| 5 | 88 at k=30, 192 at 32, **210** at 38, **205** at 44, **210** at 50, 159 at 54, 110 at 60 | bumps at 32, 38, 44, 51 (both restarts agree): one per laid mine |
+
+Each mine trips 0.5 s after it is laid (`Mine_InArmingDelay`, the owner-exemption section below), the
+first mine leaves on the press frame and the rest six frames apart, so the blasts go off at
+`+30, +36, +42, +48` and render two frames later. The picture is the sum of the mines' bursts. Two
+corollaries closed:
+
+- **The "hue" gap (red 215 against 194) was a single blast against a five-mine stack.** Cluster against
+  cluster, the mean RGB over fire+32..64 is `171 186 142` on the original and `168 181 138` on ours: within 3 %.
+  A single blast on the original reads `200 220 138` at k=32 against ours `227 235 154`: ours is the
+  brighter single burst by 8 to 14 %, the one place a gap is left (see below).
+- **The fifth mine does not go off on the original either.** The owner is pushed outward (0.2 units at +33,
+  1.8 at +45, 3.2 at +51, 4.8 at +57, read from the log's body position) and the trigger radius is 3, so
+  mine 5 (tripping at +54) finds the owner out of reach: four blasts.
+
+**Where ours diverges: the drop interval, a fix prepared and not landed.** Ours lays the cluster at seven-tick spacing, so
+its blasts are at k=32, 39, 46 and a **third** only; the fourth is lost to the owner leaving the trigger radius first
+(`MINEDBG`, a temporary print: trips at age 0.5000 with the owner 0.002, 0.57 and 1.69 units off, the fourth
+would have been past 3). `Held::advance_drop` tests its `0.1` s reload with a strict `> 0`, and at the engine's
+exact `1/60` s step `0.1f32` less six `dt`s leaves `+1e-9`, so every gap is seven. The original's own `dt` is the
+display's `1/59.94` s with jitter, which carries six frames past zero and makes a seventh only after a short
+frame (the 2026-09-15 measurement: six frames, seven now and then). Passing the test at a slack of `1e-5` s
+(`DROP_TIMER_SLACK`, **chosen, not measured**: far below one tick, far below the jitter) gave blasts at k=32, 38, 44, 50
+against the original's 32, 38, 44, 51 with the brightness tail agreeing (123 against 124 at k=59), and a unit test
+(`a_cluster_leaves_every_six_ticks_at_sixty_hertz`, drops on ticks 0, 6, 12, 18, 24). **It was backed out of the
+branch**: it moves `ai_dekonstruct_black_ground_truth` (`phantom_seed_3` forward 3 destroyed against a ceiling of 1,
+`rapier_seed_1` and `rapier_seed_3` over theirs too; all 13 cells pass with slack 0). The seven AI Aces play with weapons on, so
+mine kills are the obvious suspect, but **whether the extra deaths are mine kills or the per-seed divergence the test's own
+notes call chaotic was not checked**. Those ceilings "may only fall" and are the AI lane's, so raising
+them is the maintainer's or the lead's call. The ready patch is `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`
+(commit `9dc9b01b8` on the lane's history, reverted in the next commit); whether the AI should lay or avoid
+mines the way the original does is the open question it carries.
+
+**Still open on the Mine:** ours' blasts peak about 10 % brighter (205 to 221 against 197 to 204) and a
+single one 8 to 14 % brighter; the original's debris reads as larger tan chunks and ours as smaller
+orange sparks plus a few chunks (frames `mine-late.png`, one boot, a description not a measurement);
+the original's camera shakes and the craft is pushed, ours' shield bar differs (not this lane's).
+Pure's mine uses this same timer: **checked, applies if landed (the timer is shared engine code), not measured on
+Pure's own binary**, so the six is Pulse's.
