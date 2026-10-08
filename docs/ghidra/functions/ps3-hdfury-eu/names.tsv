@@ -649,15 +649,9 @@
 # 2026-10-08 hd-handling lane (physics.md, "The handling update")
 0x000ee730	function	Craft_UpdateAirbrakes	85	physics.md
 0x000f0980	function	Craft_UpdatePitch	80	physics.md
-<<<<<<< HEAD
 # 2026-10-08 hd-flyby-hover lane (hover-target.md)
 0x000f0630	function	Craft_SetState	85	hover-target.md
 0x000f1958	function	Craft_Update	75	hover-target.md
 
-||||||| 8b250bece
-
-=======
 # 2026-10-08 hd-leach-draw lane (leach-beam-strips.md)
 0x001179c8	function	BeamPath_Rebuild	80	leach-beam-strips.md
-
->>>>>>> main
