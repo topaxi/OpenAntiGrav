@@ -395,7 +395,11 @@ pub(crate) fn campaign_cell(
         );
     };
     let mut opened = oag_source::title::open_source(&options.source, Vec::new(), Vec::new())?;
-    let grids = oag_game::campaign::read_grids(&mut opened.archives, entry)?;
+    let grids = oag_game::campaign::read_grids(
+        &mut opened.archives,
+        entry,
+        title.campaign.grid_archive,
+    )?;
     let cell = grids
         .into_iter()
         .flat_map(|grid| grid.cells)

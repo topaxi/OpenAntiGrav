@@ -37,9 +37,12 @@ fn disc() -> Option<Disc> {
         .expect("the definition");
     let xml = oag_tables::fexml::text(&blob).expect("the definition expands");
     let tracks = catalogue::tracks(&xml);
-    let grids =
-        oag_game::campaign::read_grids(&mut opened.archives, oag_pulse::campaign::DEFINITION_ENTRY)
-            .expect("the grids");
+    let grids = oag_game::campaign::read_grids(
+        &mut opened.archives,
+        oag_pulse::campaign::DEFINITION_ENTRY,
+        None,
+    )
+    .expect("the grids");
     let grid0_cells = grids[0].cells.iter().map(|c| c.name.clone()).collect();
     let grid0_name = grids[0].name.clone();
     Some(Disc {

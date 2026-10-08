@@ -82,6 +82,7 @@ const FRONT_END: &FrontEnd = &FrontEnd {
 const CAMPAIGN: &oag_title::Campaign = &oag_title::Campaign {
     selection_strings: false,
     screen_archive: None,
+    grid_archive: None,
     origin: oag_title::Origin::Measured,
     ..*TITLE.campaign
 };

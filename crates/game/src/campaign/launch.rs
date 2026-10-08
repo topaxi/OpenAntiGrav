@@ -110,9 +110,13 @@ pub fn plan_cell(
     )
     .then_some(cell.laps)
     .flatten();
-    let eliminator_kill_target = (mode == oag_race::Mode::Eliminator)
-        .then(|| u32::try_from(cell.gold).ok())
-        .flatten();
+    // An HD cell's `gold` is the dummy `1` where its real target is the
+    // unmeasured `NitroElim*` number, so the race keeps its own default kill
+    // target (Pulse's law, unmeasured on HD) rather than ending on the first kill.
+    let eliminator_kill_target = (mode == oag_race::Mode::Eliminator
+        && !cell.medal_law_is_unmeasured())
+    .then(|| u32::try_from(cell.gold).ok())
+    .flatten();
     Ok(CellPlan {
         mode,
         leg_entries,

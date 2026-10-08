@@ -136,6 +136,7 @@ pub const TITLE: &Title = &Title {
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
         screen_archive: None,
+        grid_archive: None,
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: Some(frontend::PRESSINGS),
