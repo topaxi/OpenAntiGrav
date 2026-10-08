@@ -634,6 +634,10 @@ pub(super) struct PreviewRequest {
     /// [`oag_game::preview::mode3d_view_projection`]. `None` falls back to
     /// [`oag_game::preview::orbit_for`], same as the live screen.
     pub mode3d: Option<oag_ui::screen::Model>,
+    /// The craft is the race hull of a title with no `ship_FE.vex`, drawn at
+    /// the fixed [`crate::preview::hull_orbit`] - see
+    /// [`oag_title::FrontEnd::ship_preview_hull`].
+    pub hull_only: bool,
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
@@ -763,7 +767,14 @@ pub(super) fn picker_page(
                                 stats,
                             },
                         },
-                        format!(r"{}\ship_FE.vex", team.location),
+                        format!(
+                            r"{}\{}",
+                            team.location,
+                            title
+                                .front_end
+                                .and_then(|front_end| front_end.ship_preview_hull)
+                                .unwrap_or("ship_FE.vex")
+                        ),
                     )
                 })
                 .unzip()
@@ -804,6 +815,10 @@ pub(super) fn picker_page(
         // Filled in by the caller, which already has `picker_stills`'s own
         // slideshow read - see `capture.rs`.
         mode3d: None,
+        hull_only: kind == Kind::Ship
+            && title.front_end.is_some_and(|front_end| {
+                !front_end.preview_meshes && front_end.ship_preview_hull.is_some()
+            }),
     });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,
@@ -861,6 +876,9 @@ pub(super) fn draw_preview(
                 log::debug!("preview {}: {line}", request.entry);
             }
         }
+        if request.hull_only {
+            crate::preview::frame_hull(&mut model);
+        }
         crate::preview::Preview::new(
             device,
             queue,
@@ -880,7 +898,11 @@ pub(super) fn draw_preview(
             space,
             request.mode3d.as_ref(),
             request.rect,
-            crate::preview::orbit_for(request.kind, 0.0),
+            if request.hull_only {
+                crate::preview::hull_orbit()
+            } else {
+                crate::preview::orbit_for(request.kind, 0.0)
+            },
             0.0,
         ),
         Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),

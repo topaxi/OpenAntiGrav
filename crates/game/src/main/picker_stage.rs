@@ -67,7 +67,7 @@ impl PreviewSource {
     /// the files it named were the in-race hull and the full 4 MB racing
     /// circuit - a stand-in that looked legible, which is exactly how a
     /// wrong picture survives review.
-    fn entry_name(&self) -> String {
+    fn entry_name(&self, ship_hull: Option<&str>) -> String {
         match self {
             Self::Track {
                 location, reversed, ..
@@ -75,7 +75,9 @@ impl PreviewSource {
                 let run = if *reversed { "reverse" } else { "forward" };
                 format!(r"{location}\FE\{run}.vex")
             }
-            Self::Ship { location, .. } => format!(r"{location}\ship_FE.vex"),
+            Self::Ship { location, .. } => {
+                format!(r"{location}\{}", ship_hull.unwrap_or("ship_FE.vex"))
+            }
         }
     }
 }
@@ -89,6 +91,10 @@ pub(crate) struct Previews {
     /// screens preview with stills alone; no mesh is loaded and none is
     /// logged as missing, because none is.
     pub(crate) meshes: bool,
+    /// The craft file a title with no `ship_FE.vex` draws instead - see
+    /// [`oag_title::FrontEnd::ship_preview_hull`]. Ship screens only: a
+    /// circuit still needs [`Self::meshes`].
+    pub(crate) ship_hull: Option<&'static str>,
     /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
     /// declares no globals and still names them for its stills' colour, so
     /// without this Pure's stills tint white - invisible on its white front
@@ -256,7 +262,8 @@ impl PickerStage {
         }
         // A title that previews with stills alone has no mesh to fail to
         // load, so there is nothing here to report as missing.
-        self.preview = if self.previews.meshes {
+        let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
+        self.preview = if self.previews.meshes || hull_only {
             match self.load_preview(gpu, index, key.1.as_deref()) {
                 Ok(preview) => Some(preview),
                 Err(error) => {
@@ -336,7 +343,7 @@ impl PickerStage {
             .get(index)
             .with_context(|| format!("entry {index} has no preview source"))?
             .clone();
-        let name = source.entry_name();
+        let name = source.entry_name(self.previews.ship_hull);
         let mut model = oag_game::preview::model(&mut self.archives, &name)
             .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
         // The chosen paint over the hull's own texture slots - the same
@@ -350,6 +357,9 @@ impl PickerStage {
             for line in oag_game::preview::paint(&mut self.archives, entry, &name, &mut model) {
                 debug!("preview {name}: {line}");
             }
+        }
+        if self.previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
+            oag_game::preview::frame_hull(&mut model);
         }
         debug!(
             "preview {name}: {} vertices, {} triangles",
@@ -397,6 +407,9 @@ impl PickerStage {
 
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
+        if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
+            return oag_game::preview::hull_orbit();
+        }
         oag_game::preview::orbit_for(self.model.kind(), self.model.seconds())
     }
 }
@@ -413,7 +426,20 @@ mod tests {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
         };
-        assert_eq!(source.entry_name(), r"Data\Ships\Feisar\ship_FE.vex");
+        assert_eq!(source.entry_name(None), r"Data\Ships\Feisar\ship_FE.vex");
+    }
+
+    /// HD names its race hull, not a `ship_FE.vex` that no HD archive carries.
+    #[test]
+    fn ship_names_the_titles_hull_file() {
+        let source = PreviewSource::Ship {
+            location: r"Data\Ships\Feisar_c1".to_string(),
+            skins: Vec::new(),
+        };
+        assert_eq!(
+            source.entry_name(Some("ship.vex")),
+            r"Data\Ships\Feisar_c1\ship.vex"
+        );
     }
 
     /// `zone` steers the still chain, not the mesh name: a Zone run previews
@@ -426,7 +452,7 @@ mod tests {
             zone: false,
         };
         assert_eq!(
-            forward.entry_name(),
+            forward.entry_name(None),
             r"Data\Environments\01_Vineta_K\FE\forward.vex"
         );
         let reversed = PreviewSource::Track {
@@ -435,7 +461,7 @@ mod tests {
             zone: false,
         };
         assert_eq!(
-            reversed.entry_name(),
+            reversed.entry_name(None),
             r"Data\Environments\01_Vineta_K\FE\reverse.vex"
         );
         let zone = PreviewSource::Track {
@@ -444,7 +470,7 @@ mod tests {
             zone: true,
         };
         assert_eq!(
-            zone.entry_name(),
+            zone.entry_name(None),
             r"Data\Environments\01_Vineta_K\FE\forward.vex"
         );
     }

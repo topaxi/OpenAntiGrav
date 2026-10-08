@@ -3970,6 +3970,18 @@ hold 24 `Tournament` cells in the archive read, none walked).
    Sheets: `page-ship-select.png`, `page-ship-select-still.png`. The pose is
    authored (`ShipModel`, `OriginX=1220 OriginY=412 z=-24 RotX=0.4 RotY=-0.5`).
    Omega: checked, applies (draws an empty frame too), not wired.
+   **Fixed 2026-10-08 (hd-fe-look): the craft draws** - the team's race hull
+   (`Data\Ships\<team>\ship.vex` + `.rcsmodel`, livery as the race paints it)
+   at a fixed pose, `FrontEnd::ship_preview_hull` Title data (`Some("ship.vex")`
+   on HD only). Two things found: HD's hull has one stray vertex hundreds of
+   units out (bound 257 against a hull some 13 long), so the viewer's
+   bounding-sphere framing drew a speck - `preview::frame_hull` frames from the
+   1st-99th percentile box instead; and the pose (`hull_orbit`: yaw 5.9, pitch
+   0.5, zoom 0.6) is **chosen, not measured**, fitted by eye to the original's
+   Feisar frame (different team, so shape differs). The authored `ShipModel`
+   `RotX`/`RotY` are not composed yet. Sheet: `page-ship-select-after.png`.
+   Still missing on this screen: the team hex column, brackets, the loyalty
+   value, and the original's default team (save-state confound).
 2. **Cell Selection lacks the card.** The original lays the grid's red flyer
    (the event logo "blitzed", the striped rail, a black hex field of about 30
    cells with the event's hexes lit), an event-type icon beside each of

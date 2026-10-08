@@ -651,7 +651,9 @@ pub fn run(
                 // `oag_title::FrontEnd::preview_meshes`.
                 preview_request = title
                     .front_end
-                    .is_some_and(|front_end| front_end.preview_meshes)
+                    .is_some_and(|front_end| {
+                        front_end.preview_meshes || request.as_ref().is_some_and(|r| r.hull_only)
+                    })
                     .then_some(request)
                     .flatten();
                 (backdrop, format, list, space)
