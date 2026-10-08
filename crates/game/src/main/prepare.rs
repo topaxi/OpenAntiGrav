@@ -213,13 +213,24 @@ impl Pending {
         let music_discs = self.music_discs(source);
         let options = self.boot_options(source);
 
-        let (mut boot_shell, archives, title) = boot::load_shell(&options)?;
+        let (mut boot_shell, mut archives, title) = boot::load_shell(&options)?;
         log::info!("{}: {source}", title.name);
         // Drained rather than iterated: `boot::assemble` appends its own lines
         // to this same list, and the hand-off prints what it finds there.
         // Leaving these in would print the whole first half twice, seconds
         // apart, which reads as the disc having been opened again.
         oag_raceplay::loader_log::lines(boot_shell.report.drain(..));
+        // Read while the archives are still in hand: the media worker takes
+        // them next. A few kilobytes, and silence on a title with no bank.
+        let menu_sfx = oag_sound::sfx::MenuSfx::load(
+            &mut archives,
+            title.race.sounds,
+            title
+                .race
+                .zone_announcer
+                .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+        );
+        oag_raceplay::loader_log::lines(menu_sfx.report());
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
 
         // Every team the player's own source declares, in the definition's file
@@ -260,7 +271,8 @@ impl Pending {
         // this boot and a live LANGUAGE-row switch
         // (`Session::resupply_language`) read the same `boot::Shell` the
         // same way - see that function's own doc.
-        let shell = Shell::from_boot(title, definition, &boot_shell);
+        let mut shell = Shell::from_boot(title, definition, &boot_shell);
+        shell.menu_sfx = Some(menu_sfx);
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));
 

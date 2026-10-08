@@ -332,6 +332,7 @@ impl Session {
     /// built.
     pub(crate) fn tick_endrace(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let mut confirmed_option = None;
+        let mut navs = Vec::new();
         {
             let Stage::Race(stage) = &mut self.stage else {
                 return;
@@ -358,6 +359,7 @@ impl Session {
                 let targets = endrace.menu_targets();
                 events.extend(endrace.menu_mut().pointer(pointer, &targets));
                 for event in events {
+                    navs.push(event.nav());
                     match event {
                         Event::Confirmed => confirmed_option = endrace.menu().selected(),
                         Event::Moved | Event::Back => {}
@@ -386,6 +388,7 @@ impl Session {
                 // panels as an edge of its own.
                 if confirmed && endrace.takes_confirm() {
                     endrace.advance();
+                    navs.push(oag_ui::menu::nav::Nav::Accept);
                 }
                 // `RaceManager_Update`'s d-pad on `Race End Photo`, once it is entered: the
                 // spectator camera's mode and the craft it watches.
@@ -399,6 +402,7 @@ impl Session {
                 }
             }
         }
+        self.play_navs(navs);
         if let Some(option) = confirmed_option {
             self.handle_endrace_menu_option(option);
         }

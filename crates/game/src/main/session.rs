@@ -44,6 +44,8 @@ mod launch2048;
 mod load;
 #[path = "session/load_probe.rs"]
 mod load_probe;
+#[path = "session/menu_sound.rs"]
+mod menu_sound;
 pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
@@ -621,6 +623,10 @@ pub(crate) struct BackdropShape {
 #[derive(Clone)]
 pub(crate) struct Shell {
     pub(crate) definition: menu::Definition,
+    /// The front end's navigation sounds, decoded at boot from the title's
+    /// front-end bank. `None` where the boot never read one; a title without
+    /// the bank holds an empty [`oag_sound::sfx::MenuSfx`] and plays nothing.
+    pub(crate) menu_sfx: Option<oag_sound::sfx::MenuSfx>,
     /// Every raceable circuit and the name to show for it.
     pub(crate) tracks: Vec<(catalogue::Track, String)>,
     /// Every circuit a Zone race can be picked from, on the same terms as
@@ -780,6 +786,7 @@ impl Shell {
     ) -> Self {
         Self {
             definition,
+            menu_sfx: None,
             title,
             platform: boot_shell.platform,
             circuit_names: boot_shell.circuit_names.clone(),

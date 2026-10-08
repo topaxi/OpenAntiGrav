@@ -227,6 +227,8 @@ impl Menu {
         if row >= rows {
             return;
         }
+        self.nav
+            .when(self.cursor[page] != row, super::nav::Nav::UpDown);
         self.cursor[page] = row;
         self.scroll[page] = self.scroll();
     }

@@ -459,6 +459,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\audio\sound\shipHD.bnk",
     weapons: r"Data\audio\sound\weapons.bnk",
     speech: r"Data\audio\sound\speech.bnk",
+    frontend: None,
     // Measured by an archive census, not the executable's loader (the
     // handover thread's 60): the circuit bank is not beside the track, and
     // `Data\audio\sound\` holds `crowd_NGP.bnk` (label `crowd`) and

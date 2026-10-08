@@ -325,6 +325,7 @@ const SOUNDS: SoundBanks = SoundBanks {
     ship_zone: "ship.bnk",
     weapons: "weapons.bnk",
     speech: "speech.bnk",
+    frontend: None,
     track: TrackBanks {
         shared: &["generaltrack.bnk"],
         circuit: crate::CircuitBanks::BesideTrack,
