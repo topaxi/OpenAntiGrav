@@ -51,6 +51,12 @@ def main():
     ap.add_argument("--shot-every", type=int, default=4)
     ap.add_argument("--countdown", type=float, default=22.0)
     ap.add_argument("--keep-skipped", action="store_true")
+    ap.add_argument("--count-secs", type=float, default=0.0,
+                    help="sample the countdown at --count-step for this long right after the "
+                         "cross tap (phase 'count', with the screen name) instead of sleeping "
+                         "--countdown")
+    ap.add_argument("--count-step", type=float, default=0.1)
+    ap.add_argument("--count-shot-every", type=int, default=10)
     ap.add_argument("--rest-secs", type=float, default=4.0)
     ap.add_argument("--script", default="verification/scenarios/hd-thrust.inputs")
     args = ap.parse_args()
@@ -142,7 +148,22 @@ def main():
             rows.append(r)
             n += 1
             time.sleep(args.flyby_step)
-        session.tap("cross", settle=args.countdown)
+        if args.count_secs > 0:
+            session.tap("cross", settle=0.0)
+            tc = time.time()
+            c = 0
+            while time.time() - tc < args.count_secs:
+                r = sample(guest, objs, "count", t0)
+                r["since_tap"] = time.time() - tc
+                if c % args.count_shot_every == 0:
+                    p = out / "frames" / ("count-%03d.png" % c)
+                    drive.screenshot(p, trim=True)
+                    r["frame"] = str(p)
+                rows.append(r)
+                c += 1
+                time.sleep(args.count_step)
+        else:
+            session.tap("cross", settle=args.countdown)
         drive.screenshot(out / "frames" / "grid.png", trim=True)
         t1 = time.time()
         k = 0

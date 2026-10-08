@@ -47,20 +47,23 @@ the clock), so frames were compared by what they show, not overlaid.
 
 ## Where it comes from
 
-Flyby-only. At the race's start the original's hover **target** (`entry+0x344`) reads 2.25-2.27,
-not the 4.125 it holds in a race, and the craft settles `target - 1.25 + 1.125 = 2.16` above the
-floor, probes included (1.03 = 2.27 - 1.25). When the race proper begins the target returns to
-4.125 and the craft rises to 4.001 within about 1.5 s (b2, b3: 3.07 then 4.06 then 4.00). The
-physics is live in the flyby (the body creeps 0.03 in y) and not pinned. What lowers the target is
-**not read**: `entry+0x348` (3.03 against 21.7 at rest) and `entry+0x34c` (0.21 against 0.40)
-move with it. The four-point hull is **not** the cause of anything seen here, because the grid
-and straight heights agree.
+Flyby-only, and now read (2026-10-08, lane `hd-flyby-hover`,
+[hover-target.md](../ghidra/functions/ps3-hdfury-eu/hover-target.md), confidence 90). The craft
+update holds `entry+0x344`, the hover target, at `0.75 * entry+0x348` while the craft is in its grid
+state (`entry+0x2f8 == 0`, flag word bit 1): `+0x348` is a jitter `3.0 + rand8 * 0.0003`, so the target
+reads 2.25-2.31 and the craft settles `target - 0.16` above the floor, 2.13-2.19. The state flips to
+racing **at GO** (three boots: the first sample with the HUD's `GO` and race clock 0), not at the
+cross tap, so the craft sits low through the flyby **and the whole countdown**. From the flip
+`+0x348` is a timer (`+= dt`, 1.00 per game second) and the target is `0.75 * min(5.5, +0x348)`: a
+linear ramp of `0.75` units a second that reaches 4.125 after 2.46 s. The craft follows it within 0.04
+(`h = target - 0.16`): 3.20 at 1.4 s after GO, 4.00 by about 2.5 s. (The first reading here said "about
+1.5 s": that was a coarse sample, three boots with a 0.1 s sampler give 2.5 s.) The four-point hull
+is not the cause of anything seen here, because the grid and straight heights agree.
 
-Ours cannot draw this by construction (the flyby holds the world at tick 0, the placement pose
-at the settled height), which is the open "settle" decision of the flyby. The honest
-reproduction is to draw the craft 1.84 lower (or the target's real value) during the flyby;
-**not done**: the lowered target's source is unread, and a drawn offset would be a number chosen
-to match one circuit (the Pulse flyby of `16_Track` needs a different one).
+Ours cannot draw this by construction in the flyby (the world is held at its first tick), and
+until this lane the craft sat at its settled placement pose for the whole flyby and countdown.
+Ported as HD title data in the hover target and the spawn height: see the thread and
+`oag_title::LaunchHover`.
 
 ## Traps
 
