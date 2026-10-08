@@ -369,6 +369,7 @@ impl App {
             framebuffer,
             stage,
             controls,
+            pad_dir: None,
             pointer: crate::pointer::Window::default(),
             touch_overlay: crate::touch::Overlay::default(),
             audio,

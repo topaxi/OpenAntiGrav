@@ -306,7 +306,10 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\ship_zone.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
-    frontend: Some(r"Data\Sound\frontend.bnk"),
+    frontend: Some(oag_title::FrontEndSounds {
+        bank: r"Data\Sound\frontend.bnk",
+        cues: oag_title::MenuCues::PULSE,
+    }),
     // Resolves on both Pure pressings and holds an `SBlk` whose own label is
     // `GENTRAK` - Pulse's `gentrak` in Pure's upper case. Name resolution
     // against a shipped archive, like the five above; Pure's executable has

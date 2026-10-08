@@ -1342,3 +1342,11 @@ original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py`
   measure; a same-ship pair would settle it.
 - **Omega / 2048:** the rocket and missile models and the weapon-light call sites are HD-lineage; Omega ships the same models (`checked, applies, not wired`
   for the geometry; PS4 programs unread, the light list `not checkable`); 2048 has no SPU light record (`checked, differs`).
+
+## The Rocket's explosion sprites (2026-10-08)
+
+The Rocket's wall burst, `WO_ROCKET_EXPLO_TRACK`, is HD's own nine-emitter file and its
+sprites are `.gtf` flipbooks under `/data/psys/tex/`; they now play. The measured
+original smoke colour, the cause and what is open are in
+[`particle-triggers.md`](particle-triggers.md), "The Rocket's wall burst". Omega and
+2048: checked, applies, not wired.

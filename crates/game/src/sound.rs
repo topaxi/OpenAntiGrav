@@ -59,14 +59,28 @@ impl Library for GameLibrary {
 /// The front-end cue a menu's navigation sound is played as.
 ///
 /// The one place the menus' vocabulary meets the sound crate's, so a pad press,
-/// a click and a selection screen all end in the same four cues.
+/// a click and a selection screen all end in the same cues. `pad` is the
+/// direction the pad edge of this tick pointed, for a screen that reported a
+/// move without saying which way; a title with one cue for every direction
+/// (Pulse) never reads it.
 #[must_use]
-pub fn menu_cue(nav: oag_ui::menu::nav::Nav) -> oag_sound::sfx::Cue {
+pub fn menu_cue(
+    nav: oag_ui::menu::nav::Nav,
+    pad: Option<oag_ui::menu::nav::Dir>,
+) -> oag_sound::sfx::Cue {
     use oag_sound::sfx::Cue;
-    use oag_ui::menu::nav::Nav;
+    use oag_ui::menu::nav::{Dir, Nav};
     match nav {
-        Nav::UpDown => Cue::MenuUpDown,
-        Nav::LeftRight => Cue::MenuLeftRight,
+        Nav::Moved(dir) => match dir.or(pad).unwrap_or(Dir::Down) {
+            Dir::Up => Cue::MenuUp,
+            Dir::Down => Cue::MenuDown,
+            Dir::Left => Cue::MenuLeft,
+            Dir::Right => Cue::MenuRight,
+        },
+        Nav::Stepped(dir) => match dir.or(pad) {
+            Some(Dir::Left) => Cue::MenuStepLeft,
+            _ => Cue::MenuStepRight,
+        },
         Nav::Accept => Cue::MenuAccept,
         Nav::Decline => Cue::MenuDecline,
     }
@@ -164,4 +178,39 @@ fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gamep
             )
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use oag_sound::sfx::Cue;
+    use oag_ui::menu::nav::{Dir, Nav};
+
+    use super::menu_cue;
+
+    #[test]
+    fn a_move_takes_its_own_direction_before_the_pads() {
+        assert_eq!(
+            menu_cue(Nav::Moved(Some(Dir::Up)), Some(Dir::Left)),
+            Cue::MenuUp
+        );
+        assert_eq!(menu_cue(Nav::Moved(Some(Dir::Right)), None), Cue::MenuRight);
+    }
+
+    #[test]
+    fn a_screen_that_does_not_say_which_way_takes_the_pad_edge() {
+        assert_eq!(menu_cue(Nav::Moved(None), Some(Dir::Left)), Cue::MenuLeft);
+        assert_eq!(menu_cue(Nav::Moved(None), Some(Dir::Up)), Cue::MenuUp);
+        assert_eq!(
+            menu_cue(Nav::Moved(None), None),
+            Cue::MenuDown,
+            "a pointer move onto a lower row"
+        );
+        assert_eq!(
+            menu_cue(Nav::Stepped(None), Some(Dir::Left)),
+            Cue::MenuStepLeft
+        );
+        assert_eq!(menu_cue(Nav::Stepped(None), None), Cue::MenuStepRight);
+        assert_eq!(menu_cue(Nav::Accept, Some(Dir::Up)), Cue::MenuAccept);
+        assert_eq!(menu_cue(Nav::Decline, None), Cue::MenuDecline);
+    }
 }

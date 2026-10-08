@@ -255,6 +255,7 @@ impl Session {
             // however many people are racing.
             self.feed_touch();
             let inputs = self.controls.player_snapshots();
+            self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
             // The pad spoke: the drawn cursor goes until the mouse moves
             // again, the same rule a key press applies in `app.rs`. Read
             // off the pad's own contribution rather than the merged

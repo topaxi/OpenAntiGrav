@@ -232,7 +232,10 @@ fn hd_s_milestones_are_the_whole_line_as_a_stereo_pair_and_a_silent_child() {
     let followed = bank.cue_timeline_modelled(
         &clear,
         &[],
-        oag_formats::sblk::timeline::WalkModel { goto_markers: true },
+        oag_formats::sblk::timeline::WalkModel {
+            goto_markers: true,
+            ..oag_formats::sblk::timeline::WalkModel::default()
+        },
     );
     assert!(followed.is_complete() && followed.grains.is_empty());
 
@@ -243,7 +246,10 @@ fn hd_s_milestones_are_the_whole_line_as_a_stereo_pair_and_a_silent_child() {
         let timeline = bank.cue_timeline_modelled(
             &cue,
             &[],
-            oag_formats::sblk::timeline::WalkModel { goto_markers: true },
+            oag_formats::sblk::timeline::WalkModel {
+                goto_markers: true,
+                ..oag_formats::sblk::timeline::WalkModel::default()
+            },
         );
         assert!(timeline.is_complete(), "{name}: {timeline:?}");
         // The whole line, keyed at +30 degrees and again at -30 five ticks

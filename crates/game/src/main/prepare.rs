@@ -229,6 +229,13 @@ impl Pending {
                 .race
                 .zone_announcer
                 .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+            // The style the served front end is in, which picks HD's
+            // `accept_fury`/`reject_fury`. See `boot::sprites::fury_style`.
+            boot_shell
+                .frame
+                .blocks
+                .as_ref()
+                .is_some_and(|blocks| blocks.fury),
         );
         oag_raceplay::loader_log::lines(menu_sfx.report());
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);

@@ -341,3 +341,16 @@ launch wash matches the film (re-measured 2026-10-08: +63 against +66 luma, same
 bleached Vineta K still was `--press square` re-firing every other tick); the Cannon round's per-round light
 (`FUN_001310e8`, colour `(0.3, 0.3, 0.2)`, `D = 10`) and the other producers in renderer.md's
 table are still unwired.
+
+## 2026-10-08, hd-rocket-smoke: the Rocket's wall burst plays HD's own sprites
+
+HD's particle sprites are `/data/psys/tex/*.gtf`, named per emitter at `record+0x4c4`,
+and the loader read none of them: every HD effect drew the procedural radial glow.
+`oag_title::Effects::sprites` now lists the effects whose `.gtf` sprites play (HD:
+`WO_ROCKET_EXPLO_TRACK` only, every particle on its spawn frame).
+Measured original: dark teal-grey smoke, smoke/background 0.47/0.59/0.66 at 1 s, lasting
+past 3 s - `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's wall
+burst".
+- Open: the blue bias (HD's `psys_lit` takes scene light? unread); HD's own frame-advance
+  law and which cell of the 8x4 flipbook is frame 0; `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
+  capture before it is listed; the other HD effects likewise.

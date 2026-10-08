@@ -59,7 +59,7 @@ today after this change.
 | `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | a LeachBeam drain's hit (`Ship_Damage`) | **resolved 2026-10-07:** `Ship_ApplyDamage` (`0x000e7760`) sets `object + 0x260` on a kind 7 hit and `0x002a06e0` (also the engine-flare enqueue) clears it and spawns the effect attached at `+0x1c0`, conf 78 | **yes, HD only** (`race::damage_fx`), once per hit |
 | `WO_WEAPON_ABSORB` | `Ship_PlayAbsorbFeedback` | `ShipAbsorbNode_SpawnBurst` `0x002d8d10` (`absorb-feedback.md`) | yes (HD path) |
 | `WO_TRAIL_HITSHIP`, `_RED` | (HD-only) | `0x002d9ec0` (`engine-trail.md`) | yes |
-| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found, not compared |
+| `WO_ROCKET_EXPLO` | craft/track hit | `0x0014a7d8` | yes, Pulse-inherited; HD site found; the wall half (`_TRACK`) plays HD's own `.gtf` sprites since 2026-10-08, the craft half still the procedural profile |
 | `WO_MISSILE_EXPLO` | detonation | `0x00155568` | yes, Pulse-inherited |
 | `WO_MINE_EXPLO` | detonation | `0x00140710` | yes, Pulse-inherited |
 | `WO_SHURIKEN_EXPIRE` | teardown | `0x0014d4f0` | yes, Pulse-inherited |
@@ -172,6 +172,74 @@ title carries `Trigger::LeachHitSpark` and no `HitSpark`, and
 `oag_raceplay::damage_fx::throw_attached_leach_spark` plays it. Confidence 78.
 Not seen in a frame (a headless run has no rival whose beam reaches the player);
 covered by `a_leachbeam_hit_throws_the_attached_spark_where_the_title_has_no_locators`.
+
+### The Rocket's wall burst: HD's own file, and sprites it was drawn without (2026-10-08)
+
+**What the original draws** (RPCS3, Talon's Junction campaign event 01, craft at rest,
+`scripts/rpcs3-hd-weapon.py`, two boots, burst at video frame 199 of 30 fps;
+`data/scratch/hd-rocket-smoke/`): a white flash for about 0.1 s, orange sparks to about
+0.4 s, then dense dark **teal-grey** smoke bodies that last past 3 s. **The axis is game
+time**: the HUD race clock reads 22.9, 23.9, 24.9, 25.9 at video frames 199, 229, 259,
+289, so 30 video frames is 1.0 game second here (the 0.6x of earlier hosts did not
+apply to these two recordings). Mean RGB of the pixels more than 30 darker than the
+pre-burst frame, 1280x720:
+
+| age (s) | 0.23 | 0.43 | 0.63 | 1.03 | 2.03 | 3.03 |
+| --- | --- | --- | --- | --- | --- | --- |
+| r4 | 133,167,180 | 107,141,154 | 95,131,146 | 85,125,143 | 91,131,151 | 102,141,163 |
+| r5 | 129,166,183 | 114,148,162 | 91,129,146 | 84,124,143 | 89,129,150 | 102,142,165 |
+
+The background there is about (180,212,218), so smoke/background is 0.47/0.59/0.66 at
+1 s: blue-biased, not brown (the 2026-10-07 reading of "grey-brown" was the orange
+sparks bleeding into a small crop). Confidence 80 (two boots, agree within 5 a channel;
+one circuit and one pose).
+
+**Which effect it is.** `WO_ROCKET_EXPLO_TRACK` is HD's own authoring: 33,680 bytes,
+nine emitters (`WO_ROCKET_EXPLO_TRACK`, `FIREBALL_ADDITIVE`, `FIRESPIKES`,
+`FIREBALL_PARENT`, `FIREBALL_ANIMSMOKE_TRAIL`, `SPARKS`, `DEBRIS_NO_TRAILS`,
+`FIRE_TRAILS_ONEQUAD`, `TRAIL_SMOKE`), against Pulse's four. The craft-hit
+`WO_ROCKET_EXPLO` is 48,256 bytes and 12 emitters. Both are HD files, not Pulse's
+played by inheritance, and ours already played them.
+
+**What was missing: the sprites.** Every emitter names a `.tga` at `record + 0x4c4`
+(`Z:\WipeoutPSP\HD\Data\Psys\Tex\<stem>.tga`), and `/data/psys/tex/<stem>.gtf`
+resolves and decodes for **all nine** track-burst emitters and all 12 of the craft
+burst (a census with `Sprite::from_gtf` over each, the stem's case as authored). The
+loader read sprites for 2048 (`.gxt`) and Omega (`.gnf`) only, so every HD emitter drew
+`psys.wesl`'s procedural radial glow, a model of a Pulse spark, times its palette.
+`smoke_new4_8x4` is a 1024x512 **8x4 flipbook**: read top-left first, row 1 is a fire
+ball fading to grey smoke, and rows 2 to 4 are yellow, then white-yellow, then white
+blobs. `TRAIL_SMOKE`'s palette is black for entries 1-31 of 256 and white after, so the
+smoke's colour is mostly the sprite's. Confidence 85.
+
+**What is wired.** `oag_title::Effects::sprites` lists the HD effects whose `.gtf`
+sprites play; HD lists `WO_ROCKET_EXPLO_TRACK` alone, Pulse, Pure, 2048 and Omega list
+none. `Sprite::from_gtf` is new. Test: `hd_effect_sprites` (nine sprites when listed,
+none when not). **Every particle draws its spawn frame**: HD's frame advance, and which
+cell is frame 0 (top-left, or the bottom row if the exporter flipped the sheet), are
+**unread**. Pulse's advance was tried and dropped: it plays the sheet top-left first,
+which ends on the white cells, and a row-order flip changed the measured ratios by under
+0.02, so the render cannot tell the two apart and nothing was shipped on a guess.
+
+**Before and after.** Ours at tick 513 onwards (a single square press at tick 420,
+`--camera-view close`, per-pixel against a no-fire render; the burst lands on a far
+gantry, so about a third of the original's size, so only ratios compare):
+smoke/background at 1 s was 0.77/0.74/0.73 (thin pale streaks, gone by 1.5 s) and is now
+0.69/0.61/0.58, with the real debris chunks and the sprite's puff. The original's is
+0.47/0.59/0.66: ours is still neutral to warm, smaller and shorter-lived. Pulse PSP and
+PS2 renders at four ticks across a rocket burst are byte-identical to main.
+
+**Not settled.** (1) The blue bias. HD ships `psys_normal`, `psys_simplegeom` and
+`psys_lit` programs (`renderer.md`, the shader groups): strings `psys_normal_vp/_fp` at
+`0x007a0f60/70`, `psys_simplegeom_*` at `0x007a0fb0/c8`, `psys_lit_*` at
+`0x007a1060/70`, registry slots `0x008b3a34` (normal) and `0x008b3ab8` (lit);
+`psys_normal` is also referenced from `FUN_002c7b30` at `0x002c7ea0`, `psys_lit` only
+from its table slot, so what selects lit is not found, and nothing says whether any
+declares `fogFactors` or a light. Unread; nothing was tinted. (2) HD's own frame-advance
+law and the flipbook direction (see above). (3) The pose: ours hits a far wall. (4) The
+craft hit (`WO_ROCKET_EXPLO`) was not captured. Omega and 2048: **checked, applies,
+not wired** - both author their own `WO_ROCKET_EXPLO` (`psys_omega_ground_truth.rs`)
+and already read their sprites.
 
 ## Names applied
 

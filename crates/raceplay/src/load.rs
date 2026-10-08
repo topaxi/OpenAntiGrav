@@ -697,12 +697,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
     for name in craft_title.effects.names_on(archives.layout.platform) {
-        match particle_effect(&mut archives, title.race.effect_dir_for(&track), name) {
-            Ok((mut effect, note)) => {
-                if !extents {
-                    effect.without_extents();
-                    effect.without_pulse_psp_draw();
-                }
+        let gtf = craft_title.effects.sprites.contains(&name);
+        let dir = title.race.effect_dir_for(&track);
+        match particle_effect(&mut archives, dir, name, extents, gtf) {
+            Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);
                 report.extend(super::assets::sheet_note(name, &effects));

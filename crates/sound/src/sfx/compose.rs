@@ -60,6 +60,7 @@ pub(super) fn compose_sequence(
     let tick_seconds = 1.0 / ticks_per_second;
     let model = WalkModel {
         goto_markers: tick.follows_gotos(),
+        ..WalkModel::default()
     };
     let timeline = bank.cue_timeline_modelled(&cue, &[], model);
     if !timeline.is_complete() || timeline.grains.is_empty() {

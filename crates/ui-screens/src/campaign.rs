@@ -139,10 +139,10 @@ impl Event {
     pub fn nav(self) -> Option<oag_ui::menu::nav::Nav> {
         use oag_ui::menu::nav::Nav;
         match self {
-            Self::Moved => Some(Nav::UpDown),
+            Self::Moved => Some(Nav::Moved(None)),
             Self::Confirmed => Some(Nav::Accept),
             Self::Back => Some(Nav::Decline),
-            Self::DifficultyChanged => Some(Nav::LeftRight),
+            Self::DifficultyChanged => Some(Nav::Stepped(None)),
             Self::Help => None,
         }
     }

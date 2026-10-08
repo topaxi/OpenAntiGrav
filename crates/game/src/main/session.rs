@@ -80,6 +80,10 @@ pub(crate) struct Session {
     /// to what is on screen, so key state carries across the handoff and a focus
     /// loss releases everything whichever stage is running.
     pub(crate) controls: Controls,
+    /// The d-pad direction pressed on this tick, read before a screen consumes
+    /// it, for a menu sound whose screen did not say which way it moved. See
+    /// [`menu_sound::pad_direction`].
+    pub(crate) pad_dir: Option<oag_ui::menu::nav::Dir>,
     /// The mouse and the touchscreen, latched between ticks the way
     /// `controls` latches a key. See `crate::pointer`.
     pub(crate) pointer: crate::pointer::Window,
