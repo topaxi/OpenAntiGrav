@@ -105,7 +105,8 @@ duration (about 2.6 s of the beam clock, then state 6) is not tied to our `activ
 
 Dense trail, ours and the original's per-node facing agree; the noise's red is now sRGB-decoded and the
 walked end's `u` is 0 (both read live). Open: mips (sampler is trilinear with a -1.5 bias, low value),
-the chase camera sits 14.9 from the first node in the original and 7.5 in ours (camera lane), the film's
+the original's eye is 13.8-15.3 from the shooter's anchor and ours 7.7 - read where the anchor sits on the hull
+in the body frame, same paused frame (the near end carries the brightness; on/off at identical sim state shows our light as a tail blob), the film's
 side arcs are `hd_waketrail` draws (a wake lane), and `hd_leach_strip_ground_truth` still uses the
 4-sample staging. See leach-beam-strips.md, "hd-leach-bright".
 
