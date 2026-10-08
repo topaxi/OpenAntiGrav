@@ -435,9 +435,11 @@ impl super::Scene {
         }
         let hd = self.write_hd_bomb_blasts(race, queue, view_projection, weapon_scene);
         let halos = self.write_hd_bomb_halos(race, queue, view_projection, weapon_scene);
+        let missiles = self.write_hd_missile_blasts(race, queue, view_projection, weapon_scene);
         BlastsActive {
             hd,
             halos,
+            missiles,
             hemisphere: hemisphere_active,
             shockwave: shockwave_active,
             repulser_field: repulser_active,
@@ -455,6 +457,16 @@ impl super::Scene {
     ) {
         self.draw_hd_bomb_blasts(&active.hd, pass, stats);
         for drawable in self.bomb_blast.hd.halo.iter().take(active.halos) {
+            stats.add(drawable.draw(pass, None, None, None, None));
+        }
+        for (drawable, _) in self
+            .bomb_blast
+            .hd
+            .missile
+            .iter()
+            .zip(&active.missiles)
+            .filter(|(_, live)| **live)
+        {
             stats.add(drawable.draw(pass, None, None, None, None));
         }
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
@@ -504,6 +516,8 @@ pub(super) struct BlastsActive {
     hd: [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
     /// How many laid-bomb halos were written, from the pool's first slot.
     halos: usize,
+    /// Which of `missile_blast::SLOTS` wrote an HD Missile explosion.
+    missiles: [bool; crate::missile_blast::SLOTS],
     hemisphere: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     /// Per Repulser pool slot - see `repulser_field`.
@@ -588,6 +602,39 @@ impl super::Scene {
             written += 1;
         }
         written
+    }
+
+    /// Writes each live HD Missile explosion: its placement, and the one clock
+    /// its keyed nodes (`sphere` and `bloom` scale 1 to 18 over a second) and
+    /// its three materials' `UV_offset`/`Shockwave_scalar` all run on, the
+    /// blast's age.
+    fn write_hd_missile_blasts(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        weapon_scene: &mesh_render::Scene,
+    ) -> [bool; crate::missile_blast::SLOTS] {
+        let mut live = [false; crate::missile_blast::SLOTS];
+        for (slot, draw) in race.hd_missile_blast_draws().iter().enumerate() {
+            let (Some((matrix, age)), Some(drawable)) =
+                (draw, self.bomb_blast.hd.missile.get(slot))
+            else {
+                continue;
+            };
+            write_fog(drawable, queue, weapon_scene);
+            drawable.write_blast(
+                queue,
+                view_projection,
+                *matrix,
+                view_projection * *matrix,
+                *age,
+                0.0,
+            );
+            drawable.write_node_anims(queue, *age);
+            live[slot] = true;
+        }
+        live
     }
 
     /// Draws what [`Self::write_hd_bomb_blasts`] wrote: the cut-out fireball

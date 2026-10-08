@@ -363,6 +363,12 @@ pub struct RaceView {
     /// Whether a Bomb detonation plays HD's blast object rather than
     /// Pulse's. See `options::Setup::hd_bomb_blast`.
     pub(super) hd_bomb_blast: bool,
+    /// Wipeout HD's Missile explosions, a pool of the original's sixteen. See
+    /// [`missile_blast`].
+    pub(super) hd_missile_blasts: [Option<missile_blast::MissileBlast>; missile_blast::SLOTS],
+    /// Whether a Missile that reaches a craft plays HD's explosion model. See
+    /// `options::Setup::hd_missile_blast`.
+    pub(super) hd_missile_blast: bool,
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

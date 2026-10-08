@@ -330,6 +330,12 @@ impl Race {
         if kind == oag_tables::weapons::Weapon::Bomb {
             self.spawn_bomb_blast_model(at, orientation);
         }
+        // HD's Missile explosion model: entered only when the missile reaches
+        // a craft, at that craft - `missile_blast`.
+        if let (oag_tables::weapons::Weapon::Missile, Some(slot)) = (kind, struck) {
+            let ship = &self.sim.world.ships[slot];
+            self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
+        }
         // Each detonation's own `ScreenFlash_Start`, whether or not its
         // effect loaded - see [`flash_for`] and `oag_fx::flash`.
         if let (Some(kind), Some(flash)) = (

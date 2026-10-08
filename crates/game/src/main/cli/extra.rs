@@ -203,6 +203,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_bomb_trip: Option<String>,
 
+    /// With `--race --screenshot`, put craft `SLOT` on a Missile the player has
+    /// fired at the end of a tick: `TICK:SLOT`, e.g. `330:1`. The same aid
+    /// `--force-bomb-trip` is, for the Missile's explosion: a headless run's
+    /// rivals drive away from the shot. The next tick's own hit test does the
+    /// rest. See [`oag_raceplay::Race::force_missile_hit`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_missile_hit: Option<String>,
+
     /// With `--race --screenshot`, set the player's shield to a percentage of
     /// its maximum at the end of a tick: `TICK:PERCENT`, e.g. `0:15` for a
     /// craft at 15 % from the first frame. Repeat the flag to script a drop:

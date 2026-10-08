@@ -440,11 +440,11 @@ pub struct Setup {
     /// branch on rather than re-deriving which title is live from anywhere
     /// else.
     pub hd_plasma_blast: bool,
-    /// Whether a Bomb detonation plays Wipeout HD's own blast object (four
-    /// models, eleven instances, one per-tick update) rather than Pulse's two
-    /// eased models: `craft_title.weapon_models.bomb_blast_hd.is_some()`. See
-    /// `bomb_blast::hd`.
+    /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
+    /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
     pub hd_bomb_blast: bool,
+    /// Whether a Missile hit plays HD's explosion: `missile_blast_hd.is_some()`.
+    pub hd_missile_blast: bool,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:

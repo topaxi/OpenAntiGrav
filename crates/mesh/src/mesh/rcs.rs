@@ -824,16 +824,13 @@ fn build_with_options(
                     }
                 }
                 let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
-                // **The Bomb's shockwave carries its two colours inline** -
-                // `[a.rgb, b.a]`, which its program multiplies in and takes
-                // its alpha from. Only for the surface that earned the bit.
+                // **The Bomb's and the Missile's glow meshes carry their colours
+                // inline** - see `rim_glow::inline_light`.
                 let vertex_light =
                     mesh.vertex_light(model_blob, submesh, stride)
                         .ok()
                         .or_else(|| {
-                            (surface.roles & slots::BOMB_SHOCK == slots::BOMB_SHOCK)
-                                .then(|| mesh.inline_two_colours(model_blob, submesh, stride).ok())
-                                .flatten()
+                            rim_glow::inline_light(surface.roles, mesh, model_blob, submesh, stride)
                         });
                 let texcoords2 = ice::second_uv(surface.roles, mesh, model_blob, submesh, stride);
                 report.authored_normals += normals.as_deref().map_or(0, authored);

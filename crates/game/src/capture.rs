@@ -1,8 +1,7 @@
 //! Runs the boot sequence headless and writes one frame to a PNG.
 //!
-//! It works over SSH and in CI, shows the boot sequence and the menu without a display, and goes
-//! through **the same** renderer the window does, so what it captures is what the window draws.
-//! A separate capture path would prove nothing.
+//! It works over SSH and in CI and goes through **the same** renderer the window does, so what it
+//! captures is what the window draws. A separate capture path would prove nothing.
 
 use anyhow::{Context, Result};
 use log::debug;
@@ -452,6 +451,7 @@ pub fn run(
                 force_hit: None,
                 force_leach_lock: None,
                 force_bomb_trip: None,
+                force_missile_hit: None,
                 force_shield: Vec::new(),
                 medals: Default::default(),
                 scheme: options.scheme,

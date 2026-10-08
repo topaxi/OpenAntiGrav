@@ -175,6 +175,7 @@ mod load;
 pub mod loader_log;
 mod mag_floor_fx;
 mod magstrip_wake;
+mod missile_blast;
 mod models;
 mod options;
 mod pads;

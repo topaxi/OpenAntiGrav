@@ -562,6 +562,9 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         shockwaves: r"Data\Weapons\hd_bomb_shockwaves.vex",
         halo: r"Data\Weapons\HD_bomb_halo.vex",
     }),
+    // `MissileManager`'s explosion pool loads this (`0x00154cf0`); entered only
+    // when a missile reaches a craft - `weapons.md`, 2026-10-07 (`hd-weapon-fx`).
+    missile_blast_hd: Some(r"Data\Weapons\HD_missile_explosion.vex"),
     // Named, not wired - see `oag_raceplay::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
     // HD hands the Repulser out, but its own field-model law is unread.

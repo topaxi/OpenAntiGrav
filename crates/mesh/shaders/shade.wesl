@@ -303,14 +303,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // answered whole below (`slots::BOMB_FIRE`, `slots::BOMB_SHOCK`).
     let bomb_fire = (in.slots & 6144u) == 6144u;
     let bomb_shock = (in.slots & 98304u) == 98304u;
-    if (in.slots & 32768u) != 0u && !bomb_shock {
+    // The Missile blast's three programs are pairs of the same bits
+    // (`slots::MISSILE_CORE`, `_RAYS`, `_SHOCK`), answered whole below.
+    let missile_core = (in.slots & 34816u) == 34816u;
+    let missile_rays = (in.slots & 67584u) == 67584u;
+    let missile_shock = (in.slots & 36864u) == 36864u;
+    let missile_any = missile_core || missile_rays || missile_shock;
+    if (in.slots & 32768u) != 0u && !bomb_shock && !missile_any {
         let n = textureSample(
             albedo,
             albedo_sampler,
             vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
         ).a;
         first_uv = in.texcoord + vec2<f32>(0.15 * n + 0.1 * clock);
-    } else if (in.slots & 65536u) != 0u && !bomb_shock {
+    } else if (in.slots & 65536u) != 0u && !bomb_shock && !missile_any {
         let n = textureSample(
             albedo,
             albedo_sampler,
@@ -929,6 +935,58 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let halo_alpha = halo_ramp.a * 50.0 * pow(max(halo_rim, 1.0e-6), 10.0 - 10.0 * halo_ramp.a)
             * halo_ramp.a * 0.099975586;
         return vec4<f32>(halo_ramp.rgb, min(halo_alpha, 1.0));
+    }
+    // **The Missile blast's three programs** (`hd_missile_explosion_*_glow`,
+    // fogged blocks `@0x17f0`, `@0x17f0` and `@0x19b0`). `UV_offset` and
+    // `Shockwave_scalar` are both the blast's age in seconds
+    // (`uniforms.model_clock`; the entry lives one second, so the age is also
+    // its `p`).
+    //
+    //     core   rgb = tex(u, v + 0.5 U).rgb * VertexColour.rgb
+    //            a   = tex(u, v + 0.5 U).a * VertexColour.a       @0x00-@0x09
+    //     rays   rim = sat(1 - N.V)
+    //            f   = sat(0.9 - 0.9 rim^5)^5
+    //            t   = tex(u, U);  out = (f t.rgb, t.a)            @0x00-@0x17
+    //     shock  n   = tex(u, v + 0.01 S).a
+    //            c   = 0.45 S - (v + 0.05 n)
+    //            rgb = tex(u + n, v + 0.05 n).rgb * VertexColour1.rgb
+    //            a   = VertexColour2.a * sum(tex(c, c).rgb) * (1 - S)
+    //
+    // The alphas are held to `1` as the 8-bit target they were written to
+    // would hold them (**chosen, not measured**).
+    if missile_core {
+        let core_tap = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.5 * clock),
+        );
+        return vec4<f32>(core_tap.rgb * in.colour.rgb, min(core_tap.a * in.sun_mask, 1.0));
+    }
+    if missile_rays {
+        let rays_tap = textureSample(albedo, albedo_sampler, vec2<f32>(in.texcoord.x, clock));
+        let rays_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
+        let rays_rim_5 = rays_rim * rays_rim * rays_rim * rays_rim * rays_rim;
+        let rays_base = clamp(0.9 - 0.9 * rays_rim_5, 0.0, 1.0);
+        let rays_fade = rays_base * rays_base * rays_base * rays_base * rays_base;
+        return vec4<f32>(rays_fade * rays_tap.rgb, min(rays_tap.a, 1.0));
+    }
+    if missile_shock {
+        let wave_n = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
+        ).a;
+        let wave_v = in.texcoord.y + 0.05 * wave_n;
+        let wave_c = 0.45 * clock - wave_v;
+        let wave_diagonal = textureSample(albedo, albedo_sampler, vec2<f32>(wave_c, wave_c)).rgb;
+        let wave_tap = textureSample(
+            albedo,
+            albedo_sampler,
+            vec2<f32>(in.texcoord.x + wave_n, wave_v),
+        ).rgb;
+        let wave_alpha = in.sun_mask * (wave_diagonal.x + wave_diagonal.y + wave_diagonal.z)
+            * (1.0 - clock);
+        return vec4<f32>(wave_tap * in.colour.rgb, clamp(wave_alpha, 0.0, 1.0));
     }
     // **The Bomb's shockwave rings** (`slots::BOMB_SHOCK`,
     // `hd_bombfire_shockwaves_glow` block `@0x1950`), `Shockwave_scalar` being

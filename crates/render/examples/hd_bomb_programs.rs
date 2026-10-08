@@ -19,6 +19,7 @@ fn main() -> anyhow::Result<()> {
         "hd_bomb_sphere_bloomring",
         "hd_bomb_shockwaves",
         "hd_bomb_halo",
+        "hd_missile_explosion",
         "hd_bomb",
     ];
     for name in models {
