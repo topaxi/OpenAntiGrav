@@ -454,7 +454,7 @@ impl Session {
         let Some(cell) = cell else {
             return;
         };
-        self.reopen_cell_selection(&cell.name, None);
+        self.reopen_cell_selection(&cell.name, None, false);
     }
 
     /// Opens the campaign and lands `Cell Selection` on the cell named
@@ -466,6 +466,7 @@ impl Session {
         &mut self,
         cell: &str,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
+        default_cursor_on_pulse: bool,
     ) {
         self.open_campaign();
         let Stage::Menu(menu_stage) = &mut self.stage else {
@@ -484,10 +485,17 @@ impl Session {
             );
             return;
         };
+        let keep_cursor = !default_cursor_on_pulse || campaign.has_selection();
         if campaign.open_cell_selection(which)
             && let crate::campaign_stage::Screen::Cell { model, .. } = &mut campaign.screen
         {
-            model.select_by_name(cell);
+            // Pulse's pause-menu QUIT RACE lands on `Cell Selection`'s own
+            // default cell whichever cell was raced (measured, see
+            // `Session::quit_campaign_race`); the selection-screen titles
+            // keep the cell.
+            if keep_cursor {
+                model.select_by_name(cell);
+            }
             if let Some(difficulty) = difficulty {
                 model.set_difficulty(difficulty);
             }

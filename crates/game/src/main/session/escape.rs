@@ -21,6 +21,38 @@ use crate::stage::Stage;
 
 use super::Session;
 
+#[cfg(test)]
+#[path = "escape/tests.rs"]
+mod tests;
+
+/// Where leaving a live race lands.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RaceExit {
+    /// The menus, with the race parked behind them.
+    Menus,
+    /// `Cell Selection` on the cell the race was launched from.
+    CellSelection {
+        cell: String,
+        difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    },
+}
+
+/// A race launched from a campaign cell, in any mode, leaves to that cell's
+/// `Cell Selection`; every other race leaves to the menus. See
+/// [`Session::quit_campaign_race`].
+pub(crate) fn race_exit(
+    cell: Option<&oag_tables::race_campaign::Cell>,
+    difficulty: Option<oag_tables::race_campaign::Difficulty>,
+) -> RaceExit {
+    match cell {
+        Some(cell) => RaceExit::CellSelection {
+            cell: cell.name.clone(),
+            difficulty,
+        },
+        None => RaceExit::Menus,
+    }
+}
+
 impl Session {
     /// Swaps the menus for the race `escape` parked over them - the other half
     /// of [`Session::open_menus`] parking one. Reached only from
@@ -77,6 +109,40 @@ impl Session {
             hints::race_keys(&strings),
             hints::esc_to_menu(&strings)
         );
+    }
+
+    /// Leaving a campaign cell's race lands on `Cell Selection`, in every
+    /// campaign mode.
+    ///
+    /// **Measured, PPSSPP 2026-10-08 (USA):** pause, QUIT RACE on a campaign
+    /// Single Race and on a Head2Head cell (`grid4_5_2`) both land on
+    /// `Cell Selection`, and from the Head2Head cell the cursor is on the
+    /// grid's default cell, not the one raced. The authored road is
+    /// `Kill Game Transition` -> `Kill Game` -> `Show Unlocks`, whose
+    /// `Main Menu Redirect` sends `Main Menu->Mode == FE_RACE_CAM` to
+    /// `Cell Selection` (`FUN_088e92f8` enables it; `InGame_Definition.xml`
+    /// and the `Show Unlocks` screen in `Data.wad`). Every pause menu's QUIT
+    /// row (Single Player, Time Trial, Speed Lap, Tournament) goes to
+    /// `Kill Game Transition`, so the other modes follow by the same data;
+    /// only Single Race and Head2Head were walked.
+    /// `EndRace`'s `RETURN TO GRID` keeps the cell instead
+    /// (`Session::return_to_campaign`).
+    ///
+    /// **Chosen, not measured:** this build has no pause menu, so escape is
+    /// the pause menu's QUIT RACE row and the race is discarded rather than
+    /// parked - a campaign race cannot be resumed from the menus the way a
+    /// custom one can. The result capture at the top of [`Session::escape`]
+    /// has already run, so a Speed Lap or Time Trial best is kept. HD and
+    /// Fury keep the raced cell under the cursor (chosen, nothing measured).
+    fn quit_campaign_race(
+        &mut self,
+        cell: &str,
+        difficulty: Option<oag_tables::race_campaign::Difficulty>,
+    ) {
+        info!("leaving the campaign race for Cell Selection");
+        self.leave_finished_race();
+        self.suspended_race = None;
+        self.reopen_cell_selection(cell, difficulty, true);
     }
 
     /// The Android system Back (gesture or key): exactly [`Self::escape`],
@@ -201,6 +267,15 @@ impl Session {
             for event in events {
                 self.handle_menu(&event);
             }
+            return;
+        }
+
+        if self.shell.is_some()
+            && let Stage::Race(stage) = &self.stage
+            && let RaceExit::CellSelection { cell, difficulty } =
+                race_exit(stage.campaign_cell.as_ref(), stage.campaign_difficulty)
+        {
+            self.quit_campaign_race(&cell, difficulty);
             return;
         }
 
