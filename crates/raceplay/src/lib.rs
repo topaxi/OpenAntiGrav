@@ -172,6 +172,7 @@ mod hit_sparks;
 mod hud;
 pub mod intro_camera;
 pub mod launch_hover;
+pub mod leach_strip;
 mod load;
 pub mod loader_log;
 mod mag_floor_fx;

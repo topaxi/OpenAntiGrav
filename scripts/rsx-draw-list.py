@@ -58,6 +58,10 @@ def main():
     ap.add_argument("stem")
     ap.add_argument("--from", dest="lo", type=int, default=0)
     ap.add_argument("--to", dest="hi", type=int, default=10 ** 9)
+    ap.add_argument("--samplers", action="store_true",
+                    help="after each draw print every enabled unit's format, address (wrap), filter and rect words")
+    ap.add_argument("--const", type=int, action="append", default=[],
+                    help="after each draw print vertex constant N (the last 1efc upload before it)")
     a = ap.parse_args()
     ds, events = draws(a.dir, a.stem)
     ev = {}
@@ -77,6 +81,19 @@ def main():
             d.get(0x304, 0) & 1, d.get(0x308, 0), d.get(0x183c, 0) & 1, d.get(0x1830, 0),
             d.get(0xa74, 0) & 1, d.get(0xa70, 0) & 1, d.get(0xa6c, 0), d.get(0x324, 0),
             d.get(0xa00, 0), d.get(0xa04, 0), ",".join(tex)))
+        if a.samplers:
+            for u in range(16):
+                b = 0x1a00 + 0x20 * u
+                if d.get(b + 0xc, 0) & 0x80000000:
+                    print("       unit %2d off %08x fmt %08x addr %08x ctl0 %08x ctl1 %08x filt %08x rect %08x" % (
+                        u, d.get(b, 0), d.get(b + 4, 0), d.get(b + 8, 0), d.get(b + 0xc, 0),
+                        d.get(b + 0x10, 0), d.get(b + 0x14, 0), d.get(b + 0x18, 0)))
+        for c in a.const:
+            v = d["c"].get(c)
+            if v:
+                import struct as _s
+                f = _s.unpack(">4f", _s.pack(">4I", *v))
+                print("       c[%d] = %s" % (c, " ".join("%.5f" % x for x in f)))
 
 
 if __name__ == "__main__":

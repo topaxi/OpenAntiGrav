@@ -25,7 +25,7 @@ object drives the builder itself, on the PPU:
 | --- | --- | ---: | --- |
 | `0x00153288` | `LeachBeam_DrawStrip` | 80 | Reads the beam's state word `+0x4c`: **4** calls `0x001164e0(this + 0x6420, 1.0, 0.0)`; **3** calls it with `(3.3333 * *(this + 0x10000 - 0x36cc), 0.001)`; any other state draws nothing. Only the strip at **`+0x6420`** is ever drawn: a raw scan finds one caller of `0x001164e0`, at `0x001532ec`, and none for the `+0x50` strip. Reached through a vtable (no direct `bl`). |
 | `0x001164e0` | `LeachBeamStrip_BuildRibbon` | 82 | `RibbonBuilder_Reset` (`0x002a45f8`), then per sample `RibbonBuilder_AddSample` (`0x002a4c20`, at `0x001166d0` and `0x00116800`), then `RibbonBuilder_Flush` (`0x002a51e8`, at `0x00116814`). Only caller `0x153288`. |
-| `0x001157d0` | `BeamPath_AddWobble_q` | 60 | Adds a sine displacement to every stored sample (calls `0x00676fe8` per axis, the `0.0166667`, `2.9`, `2.58`, `1.2`, `150` constants at TOC `-0x3810..-0x37fc`), the beam's shimmer. Read structurally, not run. |
+| `0x001157d0` | `BeamPath_AddWobble` | 90 | The beam's shimmer: three sines moving every sample but 0 along its rows; law and live check in "2026-10-08 `hd-leach-draw`" below. (Read structurally at 60 by `hd-leach-beam`; raised there.) |
 | `0x00116090` | `BeamPath_BendToTarget_q` | 60 | Moves each sample toward the point it is handed by `cumulative_length[i] / total` (`0x002a3bf0` is the lerp), then rebuilds the cumulative lengths at `+0x5f10`. |
 | `0x00117518` | `BeamPath_Build_q` | 60 | Appends the shooter's anchor (below) as sample 0, calls the walker `0x00116c48`, then `0x00116090` with the target's anchor. |
 | `0x00115e30` | `BeamPath_CheckLineOfSight_q` | 55 | Takes the two craft at `+0x138`/`+0x13c`, runs a world query (`0x000a96d8`) and tests the chord length against a table value; returns 0 or 1. |
@@ -208,3 +208,65 @@ any texture assignment or blend would be chosen. Nothing wired.
 
 **Omega:** checked, differs (PS4 shaders, `ps3-microcode.py` cannot read them); the
 ring and walker are EBOOT code, not decoded for Omega.
+
+## 2026-10-08 (`hd-leach-draw`): the draw state, the wobble, the walk's direction; wired on HD
+
+Boot `data/scratch/hd-leach-draw/c4`, `c5` on RPCS3 (own config, `scripts/rpcs3-trace`-style session,
+`scripts/rsx-draw-list.py --samplers --const N` added for this), a held beam (state 10) with the
+player placed behind the nearest rival, then the pushbuffer of the paused frame read. A complete frame
+is rare (1 in 15-25 pauses); the beam's hold was kept alive across retries by rewriting the beam clock
+(`+0xc934`) while paused, which only drives states 2 and 3 (capture aid, nothing else touched).
+
+**The draw** (draw 923 of a 1123-draw frame, and draw 28 of a tail-only frame; fragment program
+`0x00744c41` disassembles to the `hd_leachbeam` program above; conf 90):
+
+| State | Value | Evidence |
+| --- | --- | --- |
+| blend | on; colour and alpha factors `SRC_ALPHA, ONE` (regs `0x314 = 0x03020302`, `0x318 = 0x00010001`), `FUNC_ADD` | draw regs; `hd_leachbeam.rcsmaterial`'s own state word `0x79` decodes to the same (`hd_unlit_probe`) |
+| depth | test on, `LEQUAL`, write off | `0xa74/0xa70/0xa6c = 1/0/0x203` |
+| cull, alpha test | cull off, alpha test off | `0x183c`, `0x304` |
+| colour mask | RGB (`0x00010101`, alpha not written) | `0x324` |
+| unit 0 | 128x128 DXT5, 8 mips, `REPEAT` u/v/w, linear | `0x1a00` block: fmt `0x00088829`, address `0x60710101`, rect `0x00800080`; the `hd_waketrail_clouds.gtf` (22016 bytes), the second texture `leachbeam_triangle.rcsmodel`'s material names |
+| unit 1 | 256x256 DXT5, 9 mips, `REPEAT`, linear | fmt `0x00098829`, rect `0x01000100`; `hd_leechbeam_glow.gtf` (87552 bytes) |
+
+The fragment program reads unit 0 as the noise and unit 1 as the glow, so the units are fixed by size
+and by the program, conf 85 for the names. Topology: 3 fins, `(a0, a1, b0), (a1, b0, b1)` per segment per
+fin (the index buffer), 36-byte vertices `{pos, normal, uv, colour}`, half-width 1.0 (pair 2.0 apart), `u`
+0.019 per 0.38 units, colour `0xffffffff` in state 4. All as the Rocket's ribbon, and as `emu_strip.py`.
+
+**`time`** is the engine clock in seconds: the fragment constants `c[464]`/`c[466]` of the draw read 161.59
+and 190.09 on two boots at about 160 and 190 s of play; `c[467]` is the eye. conf 80.
+
+**The wobble `0x001157d0`** (decompile plus raw disassembly, **verified on the live beam**, conf 90). The
+drawn strip (`+0x6420`) carries three `{frequency, amplitude, phase, last sine}` groups at `+0x63c4`,
+`+0x63d4`, `+0x63e4`: frequencies 3.0, 2.9, 2.58, amplitudes 0.3, 0.5, 1.2 (TOC `-0x3814..-0x3800`,
+read from `0x008a9cb8`), the three phases counting up by 1/60 per call (all three equal, 10.93 and
+10.47 on two beams). Per call, `i` from `n - 1` down to 1: `arc += p[i] - p[i-1]` (the records' `+0x40`
+progress, a 0..1 lap fraction), `s_k = sin((150 * arc + phase_k) * f_k)`, `D = sum(s_k * amp_k)`,
+`taper(i) = 2i/n` up to the middle then `2 - 2i/n`, and `sample[i].pos += row0 * taper * D + row1 *
+taper` where `row0`/`row1` are the record's `+0x10`/`+0x20` (the body's rows 0 and 1). Sample 0 is not
+moved. **Check:** from the dumped beam's progress (0.58344 first, 0.55055 last) and phases the three
+sines come out -0.7513, -0.9927 and 0.2265, the object's stored last sines to four places
+(`oag_fx::leach_strip` test `the_wobble_sines_reproduce_the_live_beams_stored_values`). The 0.0 triples of
+the `+0x50` strip are the strip that is never drawn.
+
+**Which craft the walk follows** (`0x001179c8`, conf 80): it stores the pair, computes a signed progress
+difference with `0x000d0398`, and sets `+0x138`/`+0x13c` from its sign before `BeamPath_CheckLineOfSight`,
+`BeamPath_Build`, `BeamPath_AddWobble`. So the walked craft is the one **ahead**, and a beam at a craft
+behind walks the shooter's own trail; the bend goes onto the other craft's anchor. (The earlier "target
+ring" reading held because the live targets were ahead.) Names: `BeamPath_Rebuild`.
+
+**Held duration** (live poll, `c4/out001.txt`): state 2 about 0.45 s, 3 about 0.45 s, 4 until 3.7 s after
+the press (clock 2.6) then 6 and 0 - on this build's slow clock; the end is the owner's flags, not drawn.
+
+**Wired** (`oag_fx::leach_strip`, `oag_raceplay::leach_strip`, `Style::leach_strip`, `beam.wesl`'s `leach`
+branch): `WeaponModels::leach_strip` names the two textures on HD only; every craft's anchor trail is
+recorded per tick render-side; ball 0.4 s, reveal 0.3 s, then held, nothing after a break; the strip
+replaces Pulse's ribbon on HD (Pulse and Pure frames byte-identical, checked). Open and **chosen, not
+measured**: the phases start at 0 when our beam starts; our progress is unwrapped track distance; the
+single-level texture (the original has mips); the node at the walked end (`u` 0 in the emulation of
+`0x001164e0`, accumulated here); the anchor falls back to the body's pose when a hull has no locator.
+In a straight chase view the strip is faint (the `|dot(n, v)|` term is the program's, and the film's beam
+is brighter): not explained, see the handover thread.
+
+**Omega:** checked, differs (PS4 shaders); **2048:** has no LeachBeam strip of this family.

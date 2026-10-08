@@ -42,6 +42,18 @@ override alpha_is_fragment: f32 = 0.0;
 // already in the vertex colour (`oag_fx::rocket_smoke::AMBIENT`).
 override smoke: f32 = 0.0;
 
+// 1.0 for Wipeout HD's LeachBeam strip, whose fragment program
+// (`hd_leachbeam.rcsmaterial`, `docs/ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md`)
+// shades
+//
+//     n     = 2 * noise(u + 2 time, v).r                 unit 0, 128x128
+//     glow  = glow(u + time + n, v)                      unit 1, 256x256
+//     rgb   = glow.rgb * vertex.rgb
+//     alpha = glow.a * abs(dot(n, v)) * vertex.a * saturate(window_z * 0.75)
+//
+// and is drawn `SRC_ALPHA, ONE`. `time` rides the uniform block's eye column.
+override leach: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 struct VertexOutput {
@@ -51,9 +63,11 @@ struct VertexOutput {
     // The smoke's `TC2` and `TC1`: the world normal and eye minus position.
     @location(2) normal: vec3<f32>,
     @location(3) view: vec3<f32>,
+    @location(4) clock: f32,
 };
 @group(1) @binding(0) var beam_texture: texture_2d<f32>;
 @group(1) @binding(1) var beam_sampler: sampler;
+@group(1) @binding(2) var noise_texture: texture_2d<f32>;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -69,11 +83,21 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // `model`'s fourth column carries the eye for the smoke's facing fade -
     // `Pipeline::upload_with_eye`; the identity's zero elsewhere, unused.
     out.view = uniforms.model[3].xyz - in.position;
+    out.clock = uniforms.model[3].w;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    if leach > 0.5 {
+        let u = in.texcoord.x;
+        let v = in.texcoord.y;
+        let n = 2.0 * textureSample(noise_texture, beam_sampler, vec2<f32>(u + 2.0 * in.clock, v)).r;
+        let glow = textureSample(beam_texture, beam_sampler, vec2<f32>(u + in.clock + n, v));
+        let facing = abs(dot(normalize(in.normal), normalize(in.view)));
+        let alpha = glow.a * facing * in.colour.a * saturate(in.clip.z * 0.75);
+        return vec4<f32>(gamma_to_target(glow.rgb * in.colour.rgb, linear_out * decode_source), alpha);
+    }
     let texel = textureSample(beam_texture, beam_sampler, in.texcoord);
     let rgb = texel.rgb * in.colour.rgb;
     let decoded = gamma_to_target(rgb, linear_out * decode_source);
