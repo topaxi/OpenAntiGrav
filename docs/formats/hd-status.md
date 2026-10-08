@@ -90,7 +90,7 @@ just psarc info data/images/hdfury-ps3-eu-dec.iso
 | 33 | 24.0 MiB | `.fnt` | Fonts |
 | 28 | 176.0 MiB | `.probes` | Lighting probes |
 | 28 | 3.2 MiB | `.pvs` | Visibility, moved out of the `.vex` |
-| 24 | 0.1 MiB | `.nnt` | See [the AI is not a line follower](#the-ai-is-not-a-racing-line-follower) |
+| 24 | 0.1 MiB | `.nnt` | Dormant AI networks, see [hd-ai-netconfigs.md](hd-ai-netconfigs.md) |
 
 The directory tree is the PSP's: `data/environments`, `data/ships`, `data/xml`,
 `data/psys`, `data/weapons`, `data/hud`, `data/plugins`, `data/sound`. One node
@@ -890,19 +890,23 @@ just play hd --race --hold cross --ticks 600
 cargo nextest run -p oag-game --test hd_music_ground_truth --run-ignored all
 ```
 
-## The AI is not a racing-line follower
+## The AI netconfigs are dormant: HD's opponents use the classic controller
 
 `data/netconfigs/` holds 24 `nnet_<team>_<class>.nnt` files and 24
 `controlprm_<team>_<class>.txt` beside them - twelve teams by two speed classes
-(`flash` and `venom`), the same twelve teams `data/ships/` carries. The naming
-says HD's opponents are trained networks with a per-team, per-class parameter
-file, which is a different architecture from
-[the XML controller Pulse ships](../gameplay/ai.md) and from `oag-ai`'s own
-lookahead-plus-cross-track follower.
+(`flash` and `venom`). The naming suggested trained networks driving HD's
+opponents. **They do not (confidence 90, 2026-10-08).** The `.nnt` files are
+little-endian dumps of a 12-4-4-4-4-4 network written by a PC training tool and
+`controlprm` is one line of its log; the EBOOT has a matching network and a
+per-craft driver for it, but its only loader reads an unshipped `ainet_*.acn`,
+nothing calls it, and a live RPCS3 race showed all eight drivers disabled with no
+network allocated. See [hd-ai-netconfigs.md](hd-ai-netconfigs.md) and
+[ai-net.md](../ghidra/functions/ps3-hdfury-eu/ai-net.md).
 
-Nothing has been read out of a `.nnt`. What this changes is scope, not code:
-porting *HD's* opponents is a problem in its own right, where standing this
-project's own driver in front of HD's geometry is not.
+So HD's opponents are driven by its classic controller, configured by
+`AIControlStats.xml` and `AIRaceStats_<class>.xml`, a different controller from
+[the XML one Pulse ships](../gameplay/ai.md) and from `oag-ai`'s own
+lookahead-plus-cross-track follower. Reading that controller is the open work.
 
 ## What a real HD asset milestone would cost
 
