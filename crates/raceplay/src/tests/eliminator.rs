@@ -300,7 +300,10 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
         left_racing |=
             race.sim.world.ships[1].physics.craft_state != oag_physics::CraftState::Racing;
     }
-    assert!(left_racing, "the blast must finish a craft on one shield point");
+    assert!(
+        left_racing,
+        "the blast must finish a craft on one shield point"
+    );
     assert_eq!(race.sim.world.ships[0].standing.kills, 1);
     assert_eq!(race.sim.world.ships[1].standing.kills, 0);
 }
