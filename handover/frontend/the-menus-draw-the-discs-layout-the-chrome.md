@@ -119,3 +119,11 @@ curve actually draws.
   way the fade durations are.
 - If neither turns up more, `Tween::eased` stays as documented - invented,
   confidence 30 - and the next lead is whoever finds `+0xbe`'s setter.
+
+## Open, from the 2026-10-08 side-by-side (ranked list in docs/ui/menus-original.md)
+
+- Title-face top bar: Pulse needs `Title` (`Pulse_14.fnt`) and `Default` at once, a third renderer face slot beyond `face_atlas_slot`; then flip `oag_pulse::frontend::MENU_SKIN::title_font`.
+- Mixed-case `Default` labels on Track/Ship Select and the pickers' `Confirm`/`Back` and ticker footer.
+- Page transition on the campaign and picker pages, and the outgoing-page zoom; fit the easing from the 30-frame burst (`scripts/psp-menu-transition-burst.py`).
+- Racebox settings page shape: rules between rows, `<` `>` selector, value beside the label.
+- Profile tag in the footer's left strip; `Confirm` label scale against the glyph.

@@ -616,19 +616,15 @@ impl MenuStage {
                     }
                 }
             } else {
-                let measure = |text: &str| font::measure(&self.text_atlas, text);
-                // `FE_CONFIRM`'s own shrink-to-fit is the one thing
-                // `NavigationLegend::draw` measures - see its own doc - and
-                // it now draws through this atlas (`Draw::in_role`), not
-                // `self.text_atlas`'s `menu`-role one `measure` above still
-                // is for the ticker's own (unchanged) `small`-role tips.
+                // Both the legend's `FE_CONFIRM` shrink-to-fit and the ticker's
+                // tips draw in the `Default` role, so one measure serves.
                 let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                 match &campaign.screen {
                     // Never built for a non-HD title - see
                     // `crate::campaign_stage::Screen::Selection`'s own doc.
                     crate::campaign_stage::Screen::Selection(_) => oag_ui::menu::Layers::default(),
                     crate::campaign_stage::Screen::Grid(model) => {
-                        let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
+                        let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &default_measure);
                         ticker_draw = ticker.clone();
                         let footer_overlay: Vec<Draw> = ticker.into_iter().collect();
                         oag_ui_screens::campaign::grid_draw_list(
@@ -646,7 +642,7 @@ impl MenuStage {
                     crate::campaign_stage::Screen::Cell { model, .. } => {
                         let faces = &campaign.cell_layout().faces;
                         let mut footer_overlay = campaign.nav_legend_draw(faces, &default_measure);
-                        let ticker = campaign.ticker_draw(faces, &measure);
+                        let ticker = campaign.ticker_draw(faces, &default_measure);
                         ticker_draw = ticker.clone();
                         footer_overlay.extend(ticker);
                         // `Cell Help`'s own static overlay - drawn last, over
