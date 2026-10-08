@@ -450,8 +450,9 @@ fn load_hd(
     // Every card: the base campaign's eight, Fury's eight and the two
     // `Campaign Selection` cards, each with the window of its camera's image
     // it shows.
+    let is_base = |index: usize| oag_hd::campaign::HD_GRID_RANGE.contains(&index);
     let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let (window, gain) = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
+        let (window, gain) = if is_base(index) {
             (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
         } else {
             (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
@@ -465,7 +466,7 @@ fn load_hd(
         })
     });
     let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let gain = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
+        let gain = if is_base(index) {
             crate::flyer::BASE_GAIN
         } else {
             crate::flyer::FURY_GAIN
