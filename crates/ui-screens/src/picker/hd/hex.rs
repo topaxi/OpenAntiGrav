@@ -103,6 +103,10 @@ pub struct HexGrid {
     pub rows: usize,
     pub hex: u32,
     pub hex_fade: u32,
+    /// Columns out at which a cell has faded all the way to `hex_fade`; `0`
+    /// for a grid whose cells do not fade with distance (`Team Selection`'s,
+    /// as measured).
+    pub fade_columns: usize,
     pub selected_column: u32,
     pub selected_lock: u32,
     pub selected_lock_fade: u32,
@@ -120,7 +124,35 @@ pub struct Cell {
     pub distance: usize,
 }
 
+/// The fill and lock colours `Team Selection` authors, for a grid whose own
+/// XML authors none (`TrackHexSelection`): **chosen, not measured** as the
+/// same values, since the frame's red and dim grey read alike on both. The
+/// fade with distance is measured: a settled frame's hexagon fill reads 41,
+/// 35, 30 and 24 one to four columns out, which is `HEX_COL` over black
+/// (50) easing to `HEX_COL_FADE` (25) in four steps; one frame, confidence 60.
+const HEX_COL: u32 = 0x6480_8080;
+const HEX_COL_FADE: u32 = 0x3280_8080;
+const SELECTED_COL: u32 = 0x64ff_0000;
+const LOCK_COL: u32 = 0xff80_8080;
+const LOCK_COL_FADE: u32 = 0xff24_2424;
+
 impl HexGrid {
+    /// A grid of `columns` by `rows` at `origin` in the colours above.
+    #[must_use]
+    pub fn unauthored(origin: [f32; 2], columns: usize, rows: usize) -> Self {
+        Self {
+            origin,
+            columns,
+            rows,
+            hex: HEX_COL,
+            hex_fade: HEX_COL_FADE,
+            fade_columns: 4,
+            selected_column: SELECTED_COL,
+            selected_lock: LOCK_COL,
+            selected_lock_fade: LOCK_COL_FADE,
+        }
+    }
+
     /// Every cell, left column first, for a picker of `count` teams with
     /// `selected` the centre column's.
     #[must_use]
@@ -194,19 +226,42 @@ fn sprite(placed: Placed, rect: [f32; 4], color: [f32; 4]) -> Draw {
     }
 }
 
-/// The grid's draws, behind-to-front per cell: the hexagon, then a padlock
-/// or the thumbnail, then the cursor ring on the selected cell.
-pub(super) fn draw(
+/// What a cell shows on its hexagon.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Face {
+    /// Nothing but the hexagon.
+    Empty,
+    /// The padlock of a cell that cannot be picked.
+    Lock,
+    /// A picture, by sheet name, centred, `size` units across.
+    Art { src: String, size: ArtSize },
+}
+
+/// How big a cell's picture is drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum ArtSize {
+    /// This many units per texel.
+    PerTexel(f32),
+    /// Scaled so the longer side is this many units.
+    Fit(f32),
+}
+
+/// The cursor ring's tint on `Team Selection`, read off its frame.
+pub(super) const TEAM_RING: [f32; 4] = [0.73, 0.14, 0.22, 1.0];
+
+/// The grid's draws, behind-to-front per cell: the hexagon, then its face,
+/// then the cursor ring on the cell at `cursor` of the centre column.
+pub(super) fn draw_cells(
     grid: &HexGrid,
-    picker: &Picker,
+    (selected, count): (usize, usize),
+    cursor: Option<usize>,
+    ring: [f32; 4],
+    face: &dyn Fn(&Cell) -> Face,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
-    let cursor_row = models_of(picker, picker.index())
-        .iter()
-        .position(|cell| cell.variant == Some(picker.variant_index()));
-    for cell in grid.cells(picker.index(), picker.entries().len()) {
-        let selected = cell.distance == 0;
+    for cell in grid.cells(selected, count) {
+        let chosen = cell.distance == 0;
         let (cx, cy) = centre(cell.rect);
         if let Some(placed) = sprites(HEX_SRC) {
             let rect = [
@@ -215,34 +270,41 @@ pub(super) fn draw(
                 placed.width as f32 * HEX_SCALE,
                 placed.height as f32 * HEX_SCALE,
             ];
-            if selected {
+            if chosen {
                 let red = argb_to_rgba(grid.selected_column);
                 out.push(sprite(placed, rect, red));
                 out.push(sprite(placed, rect, red));
             } else {
-                out.push(sprite(placed, rect, argb_to_rgba(grid.hex)));
+                let fade = if grid.fade_columns == 0 {
+                    0.0
+                } else {
+                    (cell.distance as f32 / grid.fade_columns as f32).min(1.0)
+                };
+                out.push(sprite(
+                    placed,
+                    rect,
+                    lerp_colour(grid.hex, grid.hex_fade, fade),
+                ));
             }
         }
-        let models = models_of(picker, cell.entry);
-        match models.get(cell.row) {
-            Some(model) if model.open => {
-                let Some(placed) = model.thumb.as_deref().and_then(sprites) else {
-                    continue;
-                };
-                let rect = [
-                    cx - placed.width as f32 * THUMB_SCALE * 0.5,
-                    cy - placed.height as f32 * THUMB_SCALE * 0.5,
-                    placed.width as f32 * THUMB_SCALE,
-                    placed.height as f32 * THUMB_SCALE,
-                ];
-                let color = if selected {
-                    [1.0; 4]
-                } else {
-                    [0.0, 0.0, 0.0, 0.35]
-                };
-                out.push(sprite(placed, rect, color));
+        match face(&cell) {
+            Face::Empty => {}
+            Face::Art { src, size } => {
+                if let Some(placed) = sprites(&src) {
+                    let scale = match size {
+                        ArtSize::PerTexel(scale) => scale,
+                        ArtSize::Fit(units) => units / placed.width.max(placed.height) as f32,
+                    };
+                    let (w, h) = (placed.width as f32 * scale, placed.height as f32 * scale);
+                    let color = if chosen {
+                        [1.0; 4]
+                    } else {
+                        [0.0, 0.0, 0.0, 0.35]
+                    };
+                    out.push(sprite(placed, [cx - w * 0.5, cy - h * 0.5, w, h], color));
+                }
             }
-            _ => {
+            Face::Lock => {
                 if let Some(placed) = sprites(LOCK_SRC) {
                     let (w, h) = (
                         placed.width as f32 * LOCK_SCALE,
@@ -257,8 +319,8 @@ pub(super) fn draw(
                 }
             }
         }
-        if cell.distance == 0
-            && cell.row == cursor_row.unwrap_or(usize::MAX)
+        if chosen
+            && Some(cell.row) == cursor
             && let Some(placed) = sprites(OUTLINE_SRC)
         {
             let rect = [
@@ -267,7 +329,35 @@ pub(super) fn draw(
                 placed.width as f32 * HEX_SCALE,
                 placed.height as f32 * HEX_SCALE,
             ];
-            out.push(sprite(placed, rect, [0.73, 0.14, 0.22, 1.0]));
+            out.push(sprite(placed, rect, ring));
         }
     }
+}
+
+/// `Team Selection`'s honeycomb: a team per column, a model per row.
+pub(super) fn draw(
+    grid: &HexGrid,
+    picker: &Picker,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    let cursor = models_of(picker, picker.index())
+        .iter()
+        .position(|cell| cell.variant == Some(picker.variant_index()));
+    let face = |cell: &Cell| match models_of(picker, cell.entry).get(cell.row) {
+        Some(model) if model.open => model.thumb.clone().map_or(Face::Empty, |src| Face::Art {
+            src,
+            size: ArtSize::PerTexel(THUMB_SCALE),
+        }),
+        _ => Face::Lock,
+    };
+    draw_cells(
+        grid,
+        (picker.index(), picker.entries().len()),
+        cursor,
+        TEAM_RING,
+        &face,
+        sprites,
+        out,
+    );
 }

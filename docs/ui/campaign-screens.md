@@ -3810,6 +3810,71 @@ default is the measurement that settles it; until then nothing here is
 inset. Not the offset's origin either: a pure safe-area scale about the
 centre would not move the centre, and this one does.
 
+### The hex grid, 2026-10-08 (`hd-track-select`)
+
+Measured off RPCS3 frame `data/scratch/hd-fe-look/ref/racebox/030-track-settled0.png`
+(Vineta K selected, 2000x1200), one frame:
+
+- **Same geometry as `Team Selection`'s `HexSelection`** (72.2 x 82.8 units per
+  column and row, odd columns half a row lower, hexagon 1.22 x its 72x62 art, the
+  first column's centre on the authored origin `(210,500)`): column 0 reads at x 352
+  px, which is `306 + (210-160) * 0.9424`, and the column step 68 px is 72.2 units.
+  Confidence 70, one frame. So `picker::hd::hex::HexGrid` is the one grid type; the
+  track screen's own `HexGrid` struct is gone and `draw_cells` is the one draw.
+- **Nine columns, centre column selected**: a circuit per column, neighbours wrap
+  round the twelve (Vineta K at the centre shows Tech De Ra to its left). Both
+  rows of the selected column are red, the ring sits on the chosen direction's row.
+  The two rows are the two directions (forward above, reverse below), as the
+  2026-09-29 walk measured.
+- **Colours**: the widget authors none. The red (149,6,20) and dim grey match
+  `Team Selection`'s authored `HexCol`/`SelectedColumnCol` over black, so those
+  values are reused - **chosen, not measured** as a transfer. The dim fill **fades
+  with distance**: 41, 35, 30 and 24 one to four columns out, which is `HexCol`
+  (50) easing to `HexColFade` (25) in four steps (measured, one frame, confidence
+  60; `HexGrid::fade_columns`, 0 on Team Selection, where no fade was measured).
+  The ring is pale pink (221/155/162), a different tint from Team Selection's.
+- **The picture in each hexagon** is the circuit's own white icon,
+  `<environment>\FE\TrackSelectEmblem_BW.gtf` (the file `Cell Selection`'s `Track
+  Emblem` draws, `cell_emblems::track_emblem_src`, shared rather than named twice).
+  White on the selected column, `0,0,0,0.35` over the dim ones; 62 units across
+  (**chosen** from the sails on Vineta K). The match of this file to the frame's
+  pictures is by eye on one frame, not by a table.
+- **Locks**: none. `Gate::read` returns `open()` for HD and the screen filters
+  unoffered circuits before the grid exists, so no cell can be locked. Pulse's law,
+  unmeasured on HD; nothing is drawn rather than a padlock on a guess.
+- **Not drawn**: the small direction glyphs under the forward cell's icon (art
+  unlocated); the ring is the outline art once, thinner than the frame's.
+- **Pointer**: each hexagon is a target (`What::Cell`, tested as a hexagon), a
+  click steps to that circuit and direction and a second click confirms; the old
+  top/bottom-half targets on the hex frame go when the grid exists. Pad unchanged.
+- Omega: **checked, applies, not wired.** `omega-status.md` records no track picker
+  for Omega (its racing starts from campaign events), and the `hd-cell-select` census
+  found `TrackSelectEmblem_BW.gnf` per circuit there, so the icons exist; no
+  `Track_Selection_Definition.xml` census was run on the PS4 data this lane, so
+  whether a track screen is authored there is **open**.
+
+### The circuit model, located 2026-10-08, still not drawn
+
+Rank 7's other half. `fe/preview.bik` was never the model: **`DATA02` ships a
+`<environment>\fe\track0N.rcsmodel` + `.vex` pair per circuit** (the earlier "HD
+ships no `FE\forward.vex`" was true of the Pulse name and missed this one). The
+`.vex` names `Z:/WipeoutPSP/HD/Data/FE/Tracks/Track01.mb`, a `joint1` and a
+`track01Shape`; its materials are `fe\materials\cf_fetracks.rcsmaterial` and
+`frontendconstantfranelblend.rcsmaterial` (a fresnel blend, which is the grey
+translucent look the frame has). Census: `01_vineta_k` track01, `02_track` 02,
+`03_track` 03, `04_chenghou_project` 04, `05_ubermall` 05, `10_sebenco_climb` 06,
+`12_sol_2` 07, `15_anulpha_pass` 08, all on `DATA02`, and `zone_1..4` track01 on
+`DATA00`. **Four of the twelve base circuits have no such pair on `DATA00`-`DATA06`**
+(DLC packs not searched) (so the original draws nothing for them or reads another name; the
+executable's table at `renderer.md` `+0x10` is the lead). The file number is not the
+folder's, so the name needs that table or a folder listing.
+
+**Not drawn**: the geometry is readable through `oag_game::preview::model`'s PS3
+branch, but the fresnel-blend material is unread (no PS3 `rcsmaterial` shader reader
+draws a grey shaded surface), the mapping above is incomplete, `TrackModel`'s pose
+(`OriginX=1308 OriginY=440 z=-180`) is read but not composed, and
+`preview_meshes` is false on HD. Per the rule, nothing is drawn.
+
 ### Walked live, 2026-09-29
 
 Xvfb `:94`, debug build, `--autopilot --no-audio`, isolated
@@ -3906,7 +3971,7 @@ Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 | `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | rects only, for layout and pointer |
 | `FlyByMovie` (`preview.bik`, Bink) | (660,360) 260x170 | no |
 | `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | no (read, not drawn) |
-| `TrackHexSelection` | (210,500), 9x2 | no |
+| `TrackHexSelection` | (210,500), 9x2 | yes (2026-10-08, `hd-track-select`): a circuit per column, forward and reverse rows - see "The hex grid" below |
 | `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no |
 
 The numbers above use the circuit's own spline for the length
@@ -3942,9 +4007,7 @@ original fills them from code. That id choice is **chosen, not measured**.
   folder holds only `fe_grad.gtf`, the emblem and `preview.bik`. The pose is read.
 - **The fly-by** (`FlyByMovie`): `preview.bik` per environment is Bink; the
   screen has no video widget yet.
-- **The hex grid** (`TrackHexSelection`): its art and cell pitch are the widget
-  class's own and unread; the frames show per-circuit emblems in dim hexes, the
-  selected one red with a white outline.
+- **The hex grid** (`TrackHexSelection`): drawn since 2026-10-08, see below.
 - **The page squares** (`Squares`, top right of the circuit model frame): empty
   container filled by code.
 - **The RECORDS cells**: this build keeps no per-circuit record in the shape
@@ -4092,7 +4155,9 @@ hold 24 `Tournament` cells in the archive read, none walked).
    WEAPONS / AI DIFFICULTY / NUMBER OF PLAYERS / SPLIT SCREEN / TARGET / ZONE
    TARGET and a menu-icon panel; ours: `RACE` with MODE / SPEED CLASS / AI
    DIFFICULTY / START / BACK (`page-racebox-setup.png`).
-7. **Track Select.** Layout and records table match; missing: the hex grid
+7. **Track Select.** *(hex grid landed 2026-10-08, `hd-track-select`; the model
+   asset is located, see "The circuit model, located", but not drawn.)* Layout and
+   records table match; missing: the hex grid
    of circuit emblems, the shaded grey circuit model (it is a shaded model,
    not a wireframe - the status cell's word is wrong), and the moving fly-by
    picture (it moves: 17 % of the window's pixels differ across 1.5 s). Ours

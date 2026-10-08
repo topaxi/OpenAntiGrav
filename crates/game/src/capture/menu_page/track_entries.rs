@@ -53,6 +53,7 @@ pub(super) fn track_entries(
                     details: Details::Track {
                         info,
                         emblem: oag_raceplay::catalogue::track_emblem(title, track),
+                        icon: oag_raceplay::catalogue::track_icon(title, track),
                         reversed: track.reversed,
                     },
                 },

@@ -189,6 +189,7 @@ fn the_track_picker_draws_the_discs_own_rows() {
             details: Details::Track {
                 info: ["-".into(), "-".into(), "-".into()],
                 emblem: None,
+                icon: None,
                 reversed: false,
             },
         })
@@ -742,6 +743,20 @@ fn hd_reads_its_own_track_creation() {
         let src = oag_ui_screens::picker::hd::track::emblem_src(&track.location);
         shell.sprites.get(&src).is_some()
     }));
+    // The grid names no art: the hexagon, the ring and every circuit's white
+    // icon must be on the sheet, or the live screen draws an empty grid while
+    // a stubbed unit test passes.
+    for src in [
+        oag_ui_screens::picker::hd::hex::HEX_SRC,
+        oag_ui_screens::picker::hd::hex::OUTLINE_SRC,
+    ] {
+        assert!(shell.sprites.get(src).is_some(), "{src} is on the sheet");
+    }
+    assert!(!shell.tracks.is_empty());
+    for track in &shell.tracks {
+        let src = oag_ui_screens::picker::hd::track::grid_icon_src(&track.location);
+        assert!(shell.sprites.get(&src).is_some(), "{src} is on the sheet");
+    }
 }
 
 #[test]
