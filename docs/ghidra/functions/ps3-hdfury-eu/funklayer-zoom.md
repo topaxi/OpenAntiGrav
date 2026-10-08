@@ -143,9 +143,14 @@ alpha, `X` and `Y` swapping every frame), and `Y` is never written earlier in th
 (`history_reads` in `scripts/rsx-frame-census.py`). So the buffer is an accumulation of
 earlier quarter-resolution scenes, an exponential moving average with a weight set by the
 second draw's alpha. At rest the two buffers match (correlation 0.9997, `run6/rest0`). The
-weight is not read yet (the program's constants are patched in place per draw, so a dump keeps
-only the last): open item 3, and it decides how much previous-frame ghosting the boost's
-smear carries beyond the ring warp itself.
+weight was solved on dumped buffers (half-resolution scene `0x02150000` box-filtered to
+quarter size as `cur`, then `X = (1 - a) * cur + a * Y`, `run7`): **`a = 0` at 438 km/h
+(`E = 0`; rms 0.29, exact) and `a = 0.048` at `E = 0.339`** (rms 0.71 against 1.46 at
+`a = 0`). Two points, one frame at `E = 0` and one on the decay; a second speed frame was
+unusable (the half-resolution buffer belonged to another frame). It looks tied to the pulse,
+about `0.15 * E`, so the boost smear carries a little previous-frame ghosting, but two
+points do not fix the law: open item 3. The program constants are patched in place per draw,
+so a dump cannot give the alpha directly.
 
 ## What drives it
 
@@ -247,6 +252,16 @@ rule of 2026-10-05) is not offered on HD.
 | The damage tint `(1 - 0.9 P, 1 - 0.08 P, 1)` | 60 (CPU loop only) |
 | BlendBuffer and the Radial blur never draw | 75 |
 | The scene copy is an accumulation of earlier frames, weight unread | 80 on the existence, 0 on the weight |
+
+## What stalled the captures
+
+Each state costs one boot, about 10 minutes to the first frame, then 3 to 8 minutes per dumped
+frame: the hook retries a half frame after resuming for 0.5 s (3 to 15 retries was normal, 30
+not enough twice), and the head-span stage reads about 800 small spans through the GDB stub.
+A Turbo's pulse lasts 1.2 s, so a state is hit or missed by the retry clock; the live
+`FunkLayer` read replaced timing for that reason. Two attempts (`speed` at attempt `None`,
+`bomb:1.0`) never completed a frame in 30 retries. The lane stopped here at the maintainer's
+request, to resume with faster tooling.
 
 ## Open
 

@@ -19,8 +19,7 @@ ported because three inputs to a faithful port are open. The motion blur setting
   scene each frame. Solving `X = (1 - a) * cur + a * Y` on dumped buffers gave `a = 0` at 438
   km/h (rms 0.29, exact) and `a = 0.048` at `E = 0.339`, so the weight looks tied to the
   boost pulse (about `0.15 * E`), which would make the boost smear carry real previous-frame
-  ghosting. Two reads so far (see the page); more `(E, a)` pairs are in
-  `data/scratch/hd-motion-blur/run8` when it finished.
+  ghosting. Two points so far (see the page); the run for more pairs was stopped.
 - **What starts the boost pulse** (`FUN_0029ef40`, a virtual call with no static reference).
   A Turbo does. Speed pads, the start boost and rolls are untested.
 - **The damage tint** `(1 - 0.9 P, 1 - 0.08 P, 1)` was read from the CPU loop, not seen on a
@@ -29,6 +28,11 @@ ported because three inputs to a faithful port are open. The motion blur setting
   pulse. The chain is otherwise measured against the reference at rest.
 - Radial bloom (`zone_1` only) and the seven DoF programs: not read; neither ran in a race
   frame here.
+
+**What made the captures stall:** one boot per state (about 10 min to the first frame), 3 to 8 min
+per dumped frame because the hook retries half frames (0.5 s resume each, up to 30) and reads ~800
+head spans, and a 1.2 s pulse that the retry clock misses. Faster tooling (a frame-synchronous
+capture, or a pause on the pulse's own value) is what this lane waits for.
 
 ## Next Steps
 
