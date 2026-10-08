@@ -44,7 +44,7 @@ three zeros and the `-1000.0` are constant across all 2,688 records and are not 
 **Confidence 92, from an exact-structure invariant plus a numeric one.** The byte count is exact
 in 24 of 24 files; and running that law forward from each file's stored layer-0 values with its
 stored weights reproduces **all 480 stored hidden and output values in 24 files to within
-`8e-6`** (`data/scratch/hd-ai-nnt/tools/fwd.py`). Random weights, a different connection order or a
+`8e-6`** (`scripts/hd-nnt-forward.py`). Random weights, a different connection order or a
 different activation do not come within orders of magnitude of that. The residual is not zero
 because the dump was taken after a training step: the trainer updates the weights after the
 forward pass that produced the stored values. Weights lie in `-1.62..1.79`, inside the trainer's
@@ -82,5 +82,10 @@ established. No code parses this text: there is no `d1=` or `controlprm` string 
 ## No reader
 
 No crate reads these files, deliberately: nothing in any title consumes them, so a reader would be
-code without a caller. `data/scratch/hd-ai-nnt/tools/nnt.py` is the scratch decoder that proved
-the layout on all 24.
+code without a caller. Two scripts reproduce the proof on all 24 from the repository:
+
+```sh
+scripts/psarc.py extract data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC <out> netconfigs
+scripts/hd-nnt-decode.py <out>/data/netconfigs    # layout census: 12-4-4-4-4-4, 3,468 bytes, 24/24
+scripts/hd-nnt-forward.py <out>/data/netconfigs   # the 480-activation invariant, worst 7.99e-6
+```

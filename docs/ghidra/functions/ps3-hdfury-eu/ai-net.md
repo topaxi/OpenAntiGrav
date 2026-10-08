@@ -23,7 +23,8 @@ per-craft "network driver" object, but:
 3. **The enable byte is never set.** `AiNetDriver_GetControls` (`0x0010be38`) runs the network only
    when byte `+0` of the driver is non-zero (`lbz r0,0(r3)` at `0x10be48`). `AiNetDriver_Init`
    (`0x0010b978`) clears it; no store elsewhere was found.
-4. **Measured live (RPCS3, 2026-10-08, one boot, Racebox race, 8 craft, 16 s in, lap 1 of 3):**
+4. **Measured live (RPCS3, 2026-10-08, first boot, a Campaign event on the Fury grid as
+   `rpcs3-drive.py`'s `walk_to_race` enters it, 8 craft, 16 s in, lap 1 of 3):**
    a scan of the heap around the craft array (`0x98d7c0`) for the driver's seven init defaults
    found **eight drivers in the scanned window (the race had eight craft)**, and on every one: enable byte `0`, network
    neuron and connection pointers `0` (never allocated), and the parameters still at
@@ -31,8 +32,28 @@ per-craft "network driver" object, but:
    value. Script `data/scratch/hd-ai-nnt/tools/probe.py`, result
    `data/scratch/hd-ai-nnt/live/controllers.json`, frame `live/race.png`.
 
-Why 90 and not higher: one boot, one mode (Racebox single race). A Campaign or Zone race was not
-sampled. The static case (no caller, no file, no name) does not depend on mode.
+5. **Second boot, interpreter decoder (`--interpreter`, the one Z0 breakpoints fire under):**
+   the driver of seven of the eight craft sits at `ship - 0x4e0` (the eighth, which has none there,
+   is presumably the player's). On all seven: enable byte `0`, and **both** nets (`+0x12c` and
+   `+0x298`) have null neuron and connection pointers. Script `tools/bp.py`, output
+   `data/scratch/hd-ai-nnt/live-bp.out`.
+6. **Breakpoints, a negative with a stated hole.** `Z0` on `AiNetDriver_LoadAcn`,
+   `AiNet_LoadWeights`, `AiNet_Allocate`, `AiNet_Forward` and `AiNet_TrainStep`, armed on the
+   attach-pause at the Main Menu, so a call anywhere in the front-end walk, the track load or the race
+   would park its thread there: across the walk, the load, the countdown and 20 s of racing **no
+   thread was ever parked at any of the five** (two boots, `live-bp.out`, `live-bp2.out`).
+   `AiNetDriver_GetControls`, the network's only call site, armed the same way, **was not reached
+   in 10 s of racing either** (`live-bp2.out`), so the AI update does not even reach the enable
+   test in that race. **The hole:** a positive control in the same session (`Physics_StepWorld`,
+   `0x000f8610`, which runs every frame) could not be completed in three attempts. Once a thread
+   parks there, the stub stops answering `pause()`/`qfThreadInfo` (`live-bp3.out`, `live-bp4.out`),
+   which is the stop-reply trap [rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)
+   warns about. So the breakpoint leg alone would be the kind of negative that page says not to trust.
+   It is not what carries the finding: items 1 to 5 do.
+
+Why 90 and not higher: one mode on two boots (a Campaign event). Zone and a single race were not
+sampled, and the breakpoint leg has no working positive control. The static case (no caller, no
+file, no name) does not depend on mode.
 
 ## Functions
 

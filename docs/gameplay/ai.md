@@ -172,6 +172,16 @@ symmetric**: the shipped `WhenBehind` multiplier is several times the
 point; the hold-back is a courtesy. The dead band and the clamp are the same for
 both directions, and the clamp is larger in the two faster classes.
 
+**The direction above is questioned by the code (2026-10-08, confidence 70).**
+Read in HD's `AI_ComputeOpponentThrust`, which is Pulse's line for line, the
+`WhenLeading` term is *added* when the player leads every opponent by more than
+the dead band, and the `WhenBehind` term is *subtracted* when every opponent
+leads the player. So the larger multiplier eases the field off for a player
+who is behind, and the smaller one is the catch-up. It rests on the progress
+field growing forward; see
+[ps3-hdfury-eu/ai-stats.md](../ghidra/functions/ps3-hdfury-eu/ai-stats.md#the-thrust-law-pulses-with-four-changes).
+HD, 2048 and Omega author these rows with Pulse's own values.
+
 ### `StartStats` and `SkillScale`
 
 `GridPlace1` through `GridPlace8` carry `StartBoost` and `BaseStartThrust`, so

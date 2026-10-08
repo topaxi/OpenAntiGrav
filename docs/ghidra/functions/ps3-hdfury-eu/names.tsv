@@ -628,3 +628,21 @@
 0x0010b760	function	AiNetDriver_LoadAcn	80	ai-net.md
 0x0010be38	function	AiNetDriver_GetControls	80	ai-net.md
 0x0010ba08	function	AiNetDriver_BuildInputs	65	ai-net.md
+
+# 2026-10-08 hd-ai-classic: the AIStats parser, the opponent-thrust law and the classic controller's entry points (ai-stats.md)
+0x000bd1a0	function	AiStats_LoadAll	90	ai-stats.md
+0x000bcf10	function	AiStats_ParseFile	88	ai-stats.md
+0x000bcdf0	function	AiStats_ParseClass	88	ai-stats.md
+0x000bcc40	function	AiStats_ParseRaceBalancing	88	ai-stats.md
+0x000bbf40	function	AiStats_ParseController	88	ai-stats.md
+0x000bc310	function	AiStats_ParseStartStats	88	ai-stats.md
+0x000bc0d8	function	AiStats_ParsePosBalancing	88	ai-stats.md
+0x000bc930	function	AiStats_ParseRubberBanding	88	ai-stats.md
+0x000bc560	function	AiStats_ParseSkillScale	88	ai-stats.md
+0x000bbe00	function	AiStats_ParseSplitScreenMultiplier	85	ai-stats.md
+0x000fdf00	function	AI_ComputeOpponentThrust	85	ai-stats.md
+0x000babf8	function	AI_ResolveSkillScale	82	ai-stats.md
+0x000fdd18	function	AI_UpdateSpreadWander	60	ai-stats.md
+0x000bb960	function	AIManager_Update	70	ai-stats.md
+0x00102d70	function	AI_UpdateCraft	75	ai-stats.md
+0x00100658	function	AI_ComputeControls	65	ai-stats.md
