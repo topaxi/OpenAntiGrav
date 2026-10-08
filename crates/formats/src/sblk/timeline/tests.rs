@@ -421,7 +421,10 @@ fn a_bend_after_a_key_on_is_not_modelled() {
     assert_eq!(t.unread, vec![0x1b]);
 }
 
-const GOTO_MODEL: WalkModel = WalkModel { goto_markers: true };
+const GOTO_MODEL: WalkModel = WalkModel {
+    goto_markers: true,
+    hd_alternates: false,
+};
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
 fn goto_and_marker() -> Vec<u8> {

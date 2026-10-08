@@ -95,6 +95,18 @@ impl SequenceTick {
         }
     }
 
+    /// Whether a `0x19` alternate group keeps its count in the operand's high
+    /// byte, as HD's handler reads it (`19 07 02 00` is seven alternates of two
+    /// commands), against the low byte on the PSP.
+    ///
+    /// Like [`Self::follows_gotos`] it is only switched on for the cues whose
+    /// lane measured it: HD's front-end cues. HD's race cues keep the flat pick
+    /// they were measured with.
+    #[must_use]
+    pub fn alternates_in_high_byte(self) -> bool {
+        matches!(self, Self::Ps3)
+    }
+
     /// Whether a cue walk follows `goto` (`0x24`) to its marker (`0x23`).
     ///
     /// Read on both builds' executables, but **only switched on where a cue

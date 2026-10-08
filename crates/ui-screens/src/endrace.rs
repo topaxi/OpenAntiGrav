@@ -100,7 +100,7 @@ impl Event {
     pub fn nav(self) -> oag_ui::menu::nav::Nav {
         use oag_ui::menu::nav::Nav;
         match self {
-            Self::Moved => Nav::UpDown,
+            Self::Moved => Nav::Moved(None),
             Self::Confirmed => Nav::Accept,
             Self::Back => Nav::Decline,
         }

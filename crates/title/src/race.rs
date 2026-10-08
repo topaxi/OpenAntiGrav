@@ -93,7 +93,7 @@ pub struct ShipPaths {
 
 mod announcer;
 mod fresh;
-mod sound;
+pub mod sound;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;

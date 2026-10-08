@@ -42,7 +42,14 @@ fn main() {
                 arg as u16 as i16
             );
         }
-        let t = bank.cue_timeline_modelled(&cue, &[], WalkModel { goto_markers: true });
+        let t = bank.cue_timeline_modelled(
+            &cue,
+            &[],
+            WalkModel {
+                goto_markers: true,
+                ..WalkModel::default()
+            },
+        );
         println!(
             "  timeline: complete={} unread={:02x?} unresolved={} passed={:02x?}",
             t.is_complete(),

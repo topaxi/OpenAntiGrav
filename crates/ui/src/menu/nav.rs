@@ -9,13 +9,32 @@
 
 use super::{Entry, Menu, MenuEvent, Value};
 
+/// The way a cursor moved or a value stepped.
+///
+/// Pulse plays one cue whichever way it went; HD plays one per direction, so
+/// the menus say which and the title's data decides whether it matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dir {
+    /// Towards the first row.
+    Up,
+    /// Towards the last row.
+    Down,
+    /// Towards the previous entry or a lower value.
+    Left,
+    /// Towards the next entry or a higher value.
+    Right,
+}
+
 /// One navigation sound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nav {
-    /// The cursor moved to another row or entry (`UPDOWN`).
-    UpDown,
-    /// A row's value stepped (`LEFTRIGHT`).
-    LeftRight,
+    /// The cursor moved to another row or entry (`UPDOWN` on Pulse). `None`
+    /// is a screen that does not say which way; the composition root reads
+    /// the pad edge it saw.
+    Moved(Option<Dir>),
+    /// A row's value stepped (`LEFTRIGHT` on Pulse). `None` as for
+    /// [`Self::Moved`].
+    Stepped(Option<Dir>),
     /// A choice went through: a page opened or an action fired (`ACCEPT`).
     Accept,
     /// A page was left, or a choice was refused (`DECLINE`).
@@ -36,6 +55,11 @@ impl Log {
             self.0.push(nav);
         }
     }
+}
+
+/// The direction a value stepped in.
+fn step_dir(step: i32) -> Dir {
+    if step < 0 { Dir::Left } else { Dir::Right }
 }
 
 impl Menu {
@@ -73,7 +97,7 @@ impl Menu {
                     return None;
                 }
                 *current = (*current as i32 + step).rem_euclid(count) as usize;
-                self.nav.push(Nav::LeftRight);
+                self.nav.push(Nav::Stepped(Some(step_dir(step))));
                 Some(MenuEvent::Changed {
                     setting: setting.clone(),
                     // The stored value, not the label: a settings file holds
@@ -83,7 +107,7 @@ impl Menu {
             }
             Entry::Toggle { setting, on, .. } => {
                 *on = !*on;
-                self.nav.push(Nav::LeftRight);
+                self.nav.push(Nav::Stepped(Some(step_dir(step))));
                 Some(MenuEvent::Changed {
                     setting: setting.clone(),
                     value: Value::Flag(*on),

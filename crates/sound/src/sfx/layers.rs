@@ -146,6 +146,7 @@ pub(super) fn timelines(
     bank: &Bank,
     name: &str,
     tick: SequenceTick,
+    front_end: bool,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
@@ -155,6 +156,7 @@ pub(super) fn timelines(
     };
     let model = WalkModel {
         goto_markers: tick.follows_gotos(),
+        hd_alternates: front_end && tick.alternates_in_high_byte(),
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);
@@ -175,10 +177,17 @@ pub(super) fn timelines(
     if flat {
         return Ok(None);
     }
-    if all
-        .iter()
-        .flat_map(|t| &t.grains)
-        .any(|g| pan_of_angle(g.angle).is_none())
+    // HD's `navUp` and `navDown` key `whooshUp`/`whooshDown` at 180 degrees
+    // beside a voice at 0 (`menu-sounds.md`). The rear half of the pan law is
+    // not modelled (`pan_of_angle`), and the front end's cues are dry, so
+    // `pan_for` plays such a voice unpanned and centred: **chosen, not
+    // measured**, and better than the flat pick, which would play the whoosh
+    // alone or a tick alone.
+    if !front_end
+        && all
+            .iter()
+            .flat_map(|t| &t.grains)
+            .any(|g| pan_of_angle(g.angle).is_none())
     {
         return Ok(None);
     }

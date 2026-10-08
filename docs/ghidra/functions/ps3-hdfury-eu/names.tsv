@@ -649,6 +649,11 @@
 # 2026-10-08 hd-handling lane (physics.md, "The handling update")
 0x000ee730	function	Craft_UpdateAirbrakes	85	physics.md
 0x000f0980	function	Craft_UpdatePitch	80	physics.md
+# 2026-10-08 hd-menu-sfx lane (menu-sounds.md)
+0x002ffa58	function	Sound_PlayBankCue	75	menu-sounds.md
+0x001f5478	function	RedirectController_Update	72	menu-sounds.md
+
+
 # 2026-10-08 hd-flyby-hover lane (hover-target.md)
 0x000f0630	function	Craft_SetState	85	hover-target.md
 0x000f1958	function	Craft_Update	75	hover-target.md
