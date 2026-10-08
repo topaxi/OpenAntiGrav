@@ -320,6 +320,15 @@ pub struct Effects {
     /// track data supplies cannot be a [`Trigger`], so these stay looked up by
     /// name.
     pub scenery: &'static [&'static str],
+    /// Effects whose own sprites are read from the title's separate texture
+    /// entries, where the sprite source is not the `.pob` itself: HD's
+    /// `/data/psys/tex/<stem>.gtf`, named by each emitter's authored path.
+    /// A listed effect draws each particle on its spawn frame: its sprites are
+    /// flipbooks, and HD's own frame advance (and which cell is frame 0) is
+    /// unread. An effect not listed keeps the procedural profile for every emitter, so
+    /// wiring one is a decision made per effect against a matched capture,
+    /// never by extension to the rest of the title's `.pob` files.
+    pub sprites: &'static [&'static str],
 }
 
 impl Effects {
@@ -327,6 +336,7 @@ impl Effects {
     pub const NONE: Self = Self {
         table: [None; Trigger::COUNT],
         scenery: &[],
+        sprites: &[],
     };
 
     /// The entry for `trigger`.

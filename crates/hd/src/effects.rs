@@ -75,8 +75,16 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
+    effects.sprites = SPRITES;
     effects
 };
+
+/// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
+/// nine emitters name nine entries under `/data/psys/tex/` that all decode
+/// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
+/// smoke"). Every other HD effect still draws the procedural profile until a
+/// matched capture says its sprite reads right.
+const SPRITES: &[&str] = &[engine_effects::TRACK_BLAST_EFFECT];
 
 /// Two of the palette's three colours are read off HD's executable
 /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is
