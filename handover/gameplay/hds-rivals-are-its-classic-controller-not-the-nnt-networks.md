@@ -24,6 +24,8 @@ the identity.
 - **The steering law inside `AI_ComputeControls` (`0x00100658`)** is unread past its inputs
   (`LookAheadSecs`, `SteerMul`, `SteerDamp`, `xtrackMul`, header constants). Next address: the call
   to `0x000fe688` at `0x100954`/`0x100a04`. Pulse's own consumer is not identified either.
+- **2048 and Omega: checked, applies, not wired.** Same tables as Pulse's (the lineage test); their
+  executables were not read for the thrust or steering law.
 - **What the byte at `0x9384e1` is**: it gates both the Duel override and the Eliminator change.
 - **No live leg**: every row on the page is static. A Racebox race under RPCS3 reading
   `ai+0x170`/`+0x174` and the thrust out of `0xfdf00` would raise `AI_UpdateCraft` and the law.

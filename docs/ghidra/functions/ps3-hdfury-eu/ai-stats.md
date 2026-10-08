@@ -114,8 +114,8 @@ unmeasured on HD**.
 `AI_UpdateCraft`, in mode `0xd` with the `0x9384e1` byte clear, walks the skill level's `Input` rows
 (up to ten, `{Zone, LookAheadSecs, TurnMul}` at `RaceManager + 0x2f2c`, parsed by `0x000be3f0`) and,
 for each `Zone` threshold the craft's zone has reached, overwrites `ai+0x170`/`ai+0x174`. So in a
-Duel the `Controller`'s `LookAheadSecs` and `SteerMul` are replaced zone by zone, and the file's own
-comments call the second one `turnMul`, "default is 0.4", which is `SteerMul`'s Venom value.
+Duel the `Controller`'s `LookAheadSecs` and `SteerMul` are replaced zone by zone; the file's own
+comments name the second field as the turn multiplier, which is `SteerMul`'s slot.
 
 The file authors `turnMul` and the executable's only spelling is `TurnMul` (`0x00780d00`). **That is
 not a dead attribute**: the attribute compare (`0x00676328` to `0x00346708`) is `strcasecmp`, so the
