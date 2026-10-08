@@ -450,6 +450,9 @@ pub struct Setup {
     /// Whether a laid Mine alone takes the spun, 0.6-scaled pose:
     /// `craft_title.looks.laid_pose_scaled`.
     pub laid_pose_scaled: bool,
+    /// Whether a laid Mine or Bomb starts at the craft's rear anchor:
+    /// `craft_title.looks.laid_from_rear`.
+    pub laid_from_rear: bool,
     /// Whether the grid is laid out the way Pulse PSP's `Race_ComputeGridLayout` does: a walk
     /// of the located curve with the original's scaled record and its edge-chord heading
     /// (`oag_gameplay::grid_walk`), rather than a walk of resampled samples that take the

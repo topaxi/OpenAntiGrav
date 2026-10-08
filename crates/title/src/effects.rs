@@ -623,10 +623,13 @@ pub struct Looks {
     /// A launched charge laid down at its own scale rather than the frozen
     /// craft pose, for a title whose poses are not Pulse's [`Self::laid_pose`]:
     /// the Mine spun at `0.6` (same code as Pulse's, `0x0885bd0c`,
-    /// `0x0885bf4c`), the Bomb at `0.25` and tumbling (`Bomb_Init`
+    /// `0x0885bf4c`), the Bomb at `0.4` and tumbling (`Bomb_Init`
     /// `0x088580d8`, `Bomb_UpdateSpin` `0x088583d8`, the scale literal at
     /// `0x08858018`).
     pub laid_pose_scaled: Rule,
+    /// A Mine or Bomb laid at the craft's rear anchor, a fixed distance
+    /// units behind the body (`oag_raceplay`'s `REAR_ANCHOR_BACK`), rather than at the body itself as Pulse lays it.
+    pub laid_from_rear: Rule,
     /// The draws measured live on the PSP only: the hull's GE lights, the
     /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
@@ -657,6 +660,7 @@ impl Looks {
             absorb_shell: Rule::UNREAD,
             laid_pose: Rule::UNREAD,
             laid_pose_scaled: Rule::UNREAD,
+            laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             shield_palette,

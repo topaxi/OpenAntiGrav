@@ -39,6 +39,12 @@ pub const LOOKS: &Looks = &Looks {
     // the same `0.6` scale, `Mine_Init` (`0x0885bd0c`) rolls the same random
     // axis, and its pose node (`0x0885bf4c`) turns it by `4 x` the fuse.
     // Read off the decompile, not yet pinned to live matrices.
+    // Pure lays both charges at the rear anchor, not at the body: see
+    // `oag_raceplay::weapons::visuals::laid::REAR_ANCHOR_BACK`.
+    laid_from_rear: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     laid_pose_scaled: Rule {
         on: Platforms::Any,
         origin: Origin::InheritedFrom("Wipeout Pulse"),

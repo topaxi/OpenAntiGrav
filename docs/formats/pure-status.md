@@ -1537,5 +1537,6 @@ just wad cat "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
 executable's own list (`Mine.vex`, `Bomb.vex`, `explosion_hemisphere.vex`, `Bomb_Shockwave.vex`,
 `plasma_halo.vex`, `plasma_hemisphere(_noglow).vex`, `disruptor_*.vex`, `electric_halo2.vex`,
 `explosion_gaseous.vex`) is 50 of 50 present by hash. Wired: Mine, Bomb, the Bomb blast; the Plasma blast and
-the Disruptor and Missile effects are not. Evidence, captures and the open list:
+the Disruptor and Missile effects are not. Both charges are laid at the craft's rear anchor, `4.875` behind the body (Feisar only), and the Bomb is drawn
+at `0.4`, both read off the running original. Evidence, captures and the open list:
 [`weapons-gfx.md`](../ghidra/functions/psp-pure-usa/weapons-gfx.md).

@@ -37,6 +37,17 @@ pub(crate) const PULSE_MINE_SCALE: f32 = 0.6;
 /// the positive one misses by 0.4 to 1.1.
 pub(crate) const PULSE_MINE_SPIN_RATE: f32 = 4.0;
 
+/// How far behind the body a title that lays from the craft's rear anchor
+/// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// Trial, Feisar, Vineta K and a second circuit) its translation sat
+/// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
+/// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
+/// laid Mine's and the Bomb's first position equalled the anchor. Pulse's
+/// anchor is the body itself. **One craft measured** (Feisar): the other
+/// teams' hulls are assumed alike, chosen, not measured.
+pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
+
 /// One laid charge's model matrix. `pulse` selects Pulse's own measured poses
 /// over the frozen craft pose - see this module's doc comment.
 pub(super) fn matrix(
@@ -61,9 +72,12 @@ pub(super) fn matrix(
     }
 }
 
-/// `Bomb_Init`'s `entity+0xd0`, the literal `0x3e800000` written at
-/// `0x08858018`: a laid Bomb is drawn at a quarter of its authored size.
-pub(crate) const SCALED_BOMB_SCALE: f32 = 0.25;
+/// A laid Bomb's drawn scale. **Measured live, 2026-10-08:** the rows of
+/// Pure's Bomb node matrix (entity `+0x90`, read at every `Bomb_UpdateSpin`
+/// hit on `0x088583d8`) are `0.40` long in every sample (`0.4`, `0.388 /
+/// 0.099`, ...), so the scale is the `0.4` written at `+0xdc`, not the `0.25`
+/// at `+0xd0` that the constructor's literal at `0x08858018` suggested.
+pub(crate) const SCALED_BOMB_SCALE: f32 = 0.4;
 
 /// The two spin rates `Bomb_Init` writes at `+0xd4` (`-4.0`) and `+0xd8`
 /// (`0.5`), radians per second of age. `Bomb_UpdateSpin` builds two turns from
@@ -164,10 +178,10 @@ mod tests {
         assert!(matrix.determinant() > 0.0);
     }
 
-    /// A scaled Bomb is a quarter of its authored size, upright on the craft's
+    /// A scaled Bomb is two-fifths of its authored size, upright on the craft's
     /// up whatever its age, and turns with age.
     #[test]
-    fn a_scaled_bomb_is_a_quarter_size_and_turns() {
+    fn a_scaled_bomb_is_two_fifths_size_and_turns() {
         let at = Vec3::new(1.0, 2.0, 3.0);
         let a = scaled_bomb(at, Quat::IDENTITY, 0.0);
         let b = scaled_bomb(at, Quat::IDENTITY, 0.5);

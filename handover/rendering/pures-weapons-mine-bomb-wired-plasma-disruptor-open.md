@@ -9,7 +9,8 @@ weapon models (absent on its disc); it now names `Mine.vex`, `Bomb.vex` and the 
    over three 255-to-0 key tables (`+0x90`, `+0xc0`, `+0xf0`); read the keys and the placement, then wire.
    `plasma_blast_pulse` stays `None` until then (a billboard, not Pulse's baked track).
 2. **Bomb tumble**: axes of the two turns in `Bomb_UpdateSpin` (`0x088583d8`, tables at `0x5420`/`0x5450`)
-   and the `0.4` floor-alignment blend at `+0xdc` are unread; ours yaws at `-3.5 rad/s` (chosen).
+   are unread; ours yaws at `-3.5 rad/s` (chosen). The scale is `0.4` and the drop point the rear anchor
+   (`4.875` behind the body), both measured live on Feisar; other teams' anchors are assumed alike - measure one.
 3. **Mine shading**: our Pure Mine draws darker than the original's light grey; compare textures/lighting.
 4. **Triggers unread** for `WO_MINE_EXPLO`, `WO_BOMB_GLOW`, `WO_BOMB_SMOKERING`, `WO_MISSILE_HEAD/EXPLO/BOUNCE`,
    `WO_DISRUPTOR_*`, `WO_QUAKE*`, `disruptor_effect`, `electric_halo2`, `explosion_gaseous`.

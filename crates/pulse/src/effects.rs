@@ -95,6 +95,8 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // Pulse lays at the body itself (measured 2026-10-01), so the rear anchor does not apply.
+    laid_from_rear: Rule::UNREAD,
     laid_pose_scaled: Rule {
         on: Platforms::Any,
         origin: Origin::Measured,

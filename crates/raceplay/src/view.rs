@@ -116,6 +116,8 @@ pub struct RaceView {
     pub(super) pulse_laid_pose: bool,
     /// See `options::Setup::laid_pose_scaled`.
     pub(super) laid_pose_scaled: bool,
+    /// See `options::Setup::laid_from_rear`.
+    pub(super) laid_from_rear: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,

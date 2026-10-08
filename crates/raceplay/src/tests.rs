@@ -31,6 +31,7 @@ mod hd_sprite;
 mod headless;
 mod held_buttons;
 mod hit_sparks;
+mod laid_from_rear;
 mod leach_ball_draw;
 mod leach_beam;
 mod load;
@@ -182,6 +183,7 @@ fn setup(handling: Handling) -> Setup {
         bomb_shockwave_fades: false,
         pulse_laid_pose: false,
         laid_pose_scaled: false,
+        laid_from_rear: false,
         grid_frame_from_sample: false,
         screen_flash: false,
         absorb_burst: None,

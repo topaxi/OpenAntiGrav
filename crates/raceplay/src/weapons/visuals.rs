@@ -11,7 +11,7 @@ mod cannon;
 mod flares;
 mod flash;
 mod hooks;
-mod laid;
+pub(super) mod laid;
 mod quake;
 pub(crate) use cannon::{CannonAssets, CannonDraw};
 pub(crate) use flares::*;

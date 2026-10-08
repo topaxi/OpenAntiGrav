@@ -33,12 +33,12 @@ under `Data\Weapons\` and `Data\Psys\` resolves in `Data.wad` by hash (50 of 50,
   (`Origin::InheritedFrom`: not yet pinned to live matrices).
 - **Bomb** (scale 84, spin 60): `Bomb_Init` `0x088580d8` probes the floor 10 units down, stores that
   normal at `+0x70`; the constructor `0x08857e1c` writes `+0xd0 = 0.25`, `+0xd4 = -4.0`,
-  `+0xd8 = 0.5`, `+0xdc = 0.4`. `Bomb_UpdateSpin` `0x088583d8` builds a `0.25` scale matrix, two turns
+  `+0xd8 = 0.5`, `+0xdc = 0.4`. `Bomb_UpdateSpin` `0x088583d8` builds a scale matrix (**`0.4` live, corrected below; the first pass read `0.25`**), two turns
   by `+0xd4 x age` and `+0xd8 x age` (each wrapped to `2 pi`), then aligns to the floor normal with
   `+0xdc`. Pulse's Bomb is square to world `+Z` at scale 1 and does not tumble. **Ours draws the
-  `0.25` scale and the combined yaw `-3.5 rad/s`; the two axes and the alignment blend are not
-  resolved - chosen, not measured.**
-- Without it a Pure Bomb drew at scale 1 and filled the chase camera (`ours/crop-bomb.png`); at `0.25`
+  `0.4` scale (below) and the combined yaw `-3.5 rad/s`; the two axes are not resolved - chosen,
+  not measured.**
+- Without it a Pure Bomb drew at scale 1 and filled the chase camera (`ours/crop-bomb.png`); at the first pass's `0.25`
   it passes under the camera in about two game updates, as the capture does.
 
 ## The Bomb blast is Pulse's pair, minus the fade
@@ -52,6 +52,34 @@ entering `trigger_radius`, so the blast is wired (`PulseBombBlast::shockwave_fad
 never loads `Bomb_Shockwave.vex` for a ship explosion (one code xref), and `wreck_fx` already throws
 nothing on a title with no wreck anchors, so no ship shockwave appears. Not yet seen detonating on
 either side.
+
+## Pure lays both charges at the rear anchor, and the Bomb is drawn at 0.4 (lane pure-laid-pose, 2026-10-08)
+
+The first pass drew a spike filling the chase camera for the Mine and a canister filling it for the Bomb,
+and doubted the picture. Matched stationary captures (Time Trial, Venom, Feisar, Vineta K, craft held still,
+PPSSPP 1.20.4 software, `scripts/psp-pure-weapon-fire.py`, plus ad-hoc probes in
+`data/scratch/pure-laid-pose/`) show the original draws the same thing; ours was wrong in two ways:
+
+- **Drop point (confidence 80, one craft, two circuits).** The Mine entity's translation and `Bomb_Init`'s `a1`
+  both equal the anchor matrix at `holder+0xa0` (`*(ship+0xd0)`), not the body matrix at `ship+0x40`: body
+  `38.64, 37.47, -96.69`, anchor and first mine `43.52, 37.45, -96.70` on Vineta K; body `-203.14, 23.82, -84.73`,
+  anchor `-198.28, 23.76, -84.42` on the second circuit. That is `4.875` (`6.5` hull units at the `0.75` craft
+  scale) behind the body along `-forward`, level. Pulse's anchor is the body itself (`mine.md`, 2026-10-01),
+  so this is Pure's own. Wired as `Looks::laid_from_rear` (`Measured`, Pure), offset
+  `REAR_ANCHOR_BACK = 4.875` in `oag_raceplay`. **Only Feisar was measured**; other teams' hulls are assumed
+  alike, chosen, not measured. Both callers of `Mine_Init` (`0x088516c8`, `0x088518e4`) pass `*param_3`, the
+  anchor, so the Mine and Bomb share it. `Bomb_Init`'s floor probe only stores the normal at `+0x70`; it does
+  not move the bomb.
+- **Bomb scale (confidence 80).** The Bomb's node matrix (entity `+0x90`, read at every `Bomb_UpdateSpin` hit)
+  has rows `0.40` long in all four samples, so the scale is `0.4` (the value at `+0xdc`), not `0.25`. Its
+  position is `4.8` behind the body and wobbles `0.23` in z with the tumble. The tumble axes stay unread
+  (chosen yaw).
+- **Result.** With both fixed our stationary Mine sits over the rear of the hull as the original's cluster does,
+  and our Bomb is the same size and place as the original's canister (`sheet-nb2.png`, `sheet-cmp2.png` in the
+  scratch directory). Still missing against the original: the red `WO_BOMB_GLOW` halo around the Bomb (trigger
+  unread) and our Mine's darker shading. A moving craft shows a charge for a frame or two behind it, as the
+  original does.
+- **Cross-title.** HD: checked, differs (its anchor is in another binary). 2048 and Omega: not checkable here.
 
 ## Capture method and what it showed
 
