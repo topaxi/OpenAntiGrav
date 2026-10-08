@@ -767,9 +767,13 @@ impl Drawable {
         let mut state = self.pad_glow.borrow_mut();
         let pads = self.model.node_vertex_ranges.len();
         if state.position.len() != pads {
-            state.position = (0..pads).map(|i| (i % cycle.keyframes.len().max(1)) as f32).collect();
+            state.position = (0..pads)
+                .map(|i| (i % cycle.keyframes.len().max(1)) as f32)
+                .collect();
         }
-        let gap = state.last.map_or(0.0, |last| (seconds - last).clamp(0.0, 0.1));
+        let gap = state
+            .last
+            .map_or(0.0, |last| (seconds - last).clamp(0.0, 0.1));
         state.last = Some(seconds);
         let mut table = mesh_render::Emissives::of(&self.model);
         for (i, range) in self.model.node_vertex_ranges.iter().enumerate() {

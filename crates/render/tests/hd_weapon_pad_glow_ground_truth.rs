@@ -49,7 +49,11 @@ fn each_vineta_weapon_pad_has_an_entry_of_its_own_in_the_authored_colour() {
             .collect();
         assert!(!glow.is_empty(), "a pad node with no light-bar vertices");
         assert!(glow.iter().all(|&i| i == glow[0] && i != 0), "{glow:?}");
-        assert!(entries.insert(glow[0]), "two pads share glow entry {}", glow[0]);
+        assert!(
+            entries.insert(glow[0]),
+            "two pads share glow entry {}",
+            glow[0]
+        );
         let layer = model.emissive[glow[0] as usize - 1];
         // The authored `W_Cycle` of this circuit's weapon pad material.
         assert_eq!(layer.tint, [0.0, 0.768_628, 0.992_157], "entry {}", glow[0]);
