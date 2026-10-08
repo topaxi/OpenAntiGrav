@@ -620,19 +620,19 @@ pub struct Setup {
     /// recovered - the same [`oag_title::ZoneStages`]
     /// [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`Self::class_announcer`] can be triggered off the same edge without
-    /// reaching into the render-facing scene state to get it. `None` on every
-    /// title but HD/Fury, which is `oag_title::ZoneStages`' own standing today.
+    /// reaching into the render-facing scene state to get it. `None` on every title but HD/Fury.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
     /// Whether this title's `ready` and `go` voice has been measured, so the race raises
     /// [`oag_sound::sfx::Cue::Ready`] and [`oag_sound::sfx::Cue::Go`] at the ticks
     /// [`crate::countdown`] pins: `oag_title::RaceDefaults::countdown_voice` being `Some`.
-    ///
     /// A flag rather than the banks: which bank plays rides [`Self::sounds`]; whether the
     /// simulation asks for the cue at all is title data, and must not change with whether a
     /// bank decoded.
     pub countdown_voice: bool,
     /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
+    /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
+    pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

@@ -122,33 +122,71 @@ one-argument accessor (no frame-delta parameter at all, returns a stored byte
 flag) - confirming, independently of the material-record finding, that a
 speed pad's own per-frame update carries no colour logic of any kind.
 
-## What is still open
+## Answered 2026-10-08 (`hd-weapon-pads`): the cycle reaches the light bars' constant
 
-**Where `this+0xf0` / `this+0x1b0` go after this function writes them is not
-traced this pass.** Neither field is `GpuVertex::colour` itself (that is
-baked per-vertex in the `.rcsmodel` chunk, flat `0,0,0` on every pad chunk
-measured, per `docs/rendering/pads.md`) - if this cycle reaches the screen at
-all, it has to be through a parameter patch (the `patch fslot -> const@slot`
-mechanism `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` already
-documents) or a per-instance vertex-colour override written after `Mesh_Bind`,
-neither of which was searched for this pass. **This is the next concrete
-step**, not the vtable diff (done) or the colour-cycle discovery (done): find
-what reads `this+0xf0` or `this+0x1b0` on a `WeaponPad_Importer` object and
-whether that consumer is a shader constant patch (which would make this the
-runtime mechanism the material-record's static `W_Cycle` colour rides on top
-of) or dead code that never reaches the renderer (which would make this a
-second, independently-established "authored but unwired" gap, the same shape
-`docs/rendering/pads.md`'s own emissive-mask finding already is).
+**The red the maintainer sees on Vineta K is this function's cycle.** On RPCS3,
+one RSX frame of `01_vineta_k` (`data/scratch/hd-weapon-pads/cap1`, craft at
+`-804.2,-144.0,262.5`), the weapon-pad fragment programs' inline constant at
+code slot `0x3a` (`MAD H2.xyz, R0.wwww, C, H0`, the `_ne`-alpha-gated term)
+reads `{1.16612, 0.0326835, 0, 1}` on one pad (draws 108 and, in the
+alpha-tested pass, 233) and `{1.65581, 0.0407428, 0, 1}` on another (draw 109);
+the speed pads on the same frame (draws 110, 144, 145) read the material's own
+authored `{0, 0.768628, 0.992157, 0}`. The weapon pad's material authors that
+same cyan for `W_Cycle`, so **the engine overwrites the constant per pad, per
+frame**, and `docs/rendering/pads.md`'s "red on four circuits" table was a
+reading of the authored value only.
 
-The `.bss` global at `0x00aec2c0` itself still has no found writer - a
-whole-image literal scan for it as a 4-byte value
-(`scripts/ghidra/PadImporterVtableDiff.java`'s `findLiteralConsumers`) finds
-exactly one TOC slot referencing it (`0x008b431c`) and five functions that
-*read* through that slot (the two `Pad_Importer` constructors, this update
-function, and two more in the `0x002e0xxx`/`0x006b5xxx` range) - none of them
-write to the sixteen bytes at `0x00aec2c0` itself, only read them. Its
-initial (likely zero-filled, `.bss`) value versus whatever non-zero neutral
-colour it is expected to hold was not resolved this pass.
+The numbers are this page's function and nothing else (confidence **88**: four
+pads on two boots fit one law to the printed digits - the second boot read
+`{0.718887, 0, 0, 1}` and `{1.68172, 0.0510977, 0, 1}` - and the static
+initialiser's constants were also read live; the rate was not timed over
+frames):
+
+- the pad's `this+0x1c0` is a keyframe index, `this+0x1c4` a position in
+  `[0, 1)` advancing by `dt * DAT_008b4324` = **3.0** per second while the pad is
+  ready; the colour is `lerp(key[i], key[i+1], t)` over **six keyframes at
+  `0x008c26a0`** (12 bytes each, floats): `(512, 16, 0)`, `(256, 0, 0)`,
+  `(64, 0, 0)`, then the same three again, wrapping;
+- the blend is multiplied by the vector at **`0x00aec2d0`**, which the static
+  initialiser `FUN_002e0450` writes as `(DAT_008b4330, DAT_008b4330,
+  DAT_008b4330, 1.0)` with `DAT_008b4330 = 0x3b808081 = 1/255` (read live:
+  `0.003921569`), and the result lands in `this+0x1b0`;
+- while the pad cools down, nothing advances and `this+0x1b0` is the vector at
+  **`0x00aec2c0`**, which the same initialiser writes as `(DAT_008b4334,
+  0, DAT_008b4338, 1.0)` = **`(0.025, 0, 0.01, 1)`** (read live on RPCS3:
+  exactly that), a near-black dull red. The packed `0xff3f3f3f` grey in
+  `this+0xf0` is a second encoding of the cooldown and the cycle colour that
+  nothing in the capture shows reaching a bar.
+
+So a ready pad's bars run a 1 s loop (the table repeats after three keys, at
+three keys a second) of red `2.008, 0.063, 0`, `1.004, 0, 0`, `0.251, 0, 0`,
+through an unclamped half-float register. Fit of the two constants: green alone
+fixes the position (`2.5208` and `0.35071` keys), and red, the third lane and
+the fourth then agree.
+
+**A pad's starting key is its heap address modulo six.** The constructor
+`FUN_002e0168` stores `this - 6 * (this / 6)` in `this+0x1c0` (the
+`mulhwu`/`rlwinm` pair at `0x002e01dc`-`0x002e01f0`) and zero in `this+0x1c4`
+and `this+0x160`. The two pads of the capture sit in different spans of the
+table for this reason. Nothing in this project has the original's addresses, so
+our start key (pad index modulo six) is **chosen, not measured**.
+
+Names recovered here (`names.tsv`):
+
+| Address | Name | Confidence | What |
+| --- | --- | --- | --- |
+| `0x008c26a0` | `WeaponPad_CycleKeyframes` | 88 | the six 12-byte keyframes |
+| `0x00aec2c0` | `WeaponPad_CoolingGlowVector` | 90 | `(0.025, 0, 0.01, 1)`, read live |
+| `0x00aec2d0` | `WeaponPad_GlowScaleVector` | 90 | `(1/255, 1/255, 1/255, 1)`, read live |
+| `0x002e0450` | `WeaponPad_InitStatics` | 75 | the static initialiser that writes both vectors (and the `WeaponPad_Importer` vtable stores); the decompiled `FUN_002e0450` body |
+
+**What is not read**: the code that carries `this+0x1b0` into the program's
+patched constant (the material parameter `W_Cycle`, `0xce5c4410`). It is not
+found by xref (no `lis 0xce5c` immediate anywhere in the image); the claim
+that `this+0x1b0` is the source rests on the two constants matching the
+function's own arithmetic, not on a traced copy. Whether the cooling vector
+reaches a bar as the program's constant was not captured (no pad was caught
+cooling).
 
 ## Reproducing this
 

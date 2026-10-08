@@ -54,6 +54,7 @@ pub mod prompts;
 pub mod race;
 pub mod speed;
 pub mod touch;
+pub mod weapon_pad;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
@@ -136,6 +137,10 @@ pub struct Title {
     /// [`flare::Flare`], and see that module for why the two are separate axes
     /// rather than variants of one.
     pub flare: &'static flare::Flare,
+    /// What colours a weapon pad's light bars at run time. See
+    /// [`weapon_pad::WeaponPadGlow`]: Wipeout HD overwrites the material's
+    /// authored value with a per-pad cycle, every other title keeps it.
+    pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,
