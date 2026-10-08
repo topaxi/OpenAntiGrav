@@ -89,6 +89,11 @@ pub struct Campaign {
     /// name="FlyerModel">`; a card that will not decode is left out of it
     /// and logged, which draws nothing for that grid.
     pub flyers: Option<crate::flyer::Flyers>,
+    /// **HD/Fury only.** A circuit's white emblem for `Cell Selection`, keyed
+    /// by the lowercased circuit id (`17_track`) and holding the `src` the
+    /// sheet carries it under - see `oag_ui_screens::campaign::hd::cell_emblems`.
+    /// Empty on every other title.
+    pub circuit_emblems: std::collections::HashMap<String, String>,
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
@@ -213,6 +218,11 @@ pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
 /// Propagates a missing or unreadable screen entry, a screen definition
 /// missing `Grid Selection`/`Cell Selection`, or a `Definition.xml` that
 /// yields no grid at all.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact the load reads: the archives, the strings, the face scales, \
+              the grid, the base sheet, the globals, the title and the circuits"
+)]
 pub fn load(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -230,6 +240,9 @@ pub fn load(
     // instead of its authored translucent teal.
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
+    // The circuits' own folders, for `Cell Selection`'s emblem per track. HD
+    // only; the others read none.
+    tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     match title.campaign.dialect {
         oag_title::CampaignDialect::Hd => {
@@ -241,6 +254,7 @@ pub fn load(
                 grid,
                 base,
                 fallback_globals,
+                tracks,
             );
         }
         oag_title::CampaignDialect::Omega => {
@@ -307,6 +321,7 @@ pub fn load(
         selection_layout: None,
         grid_layout_fury: None,
         flyers: None,
+        circuit_emblems: std::collections::HashMap::new(),
     })
 }
 
@@ -358,6 +373,11 @@ fn same_archive(label: &str, wanted: &str) -> bool {
 /// expansion of the screen XML - it is plain UTF-8 on this title, unlike
 /// Pulse's dictionary-shortened copy. See `oag_ui_screens::campaign::hd`'s own
 /// module doc for what the two screens draw once resolved this way.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact the load reads: the archives, the strings, the face scales, \
+              the grid, the base sheet, the globals, the title and the circuits"
+)]
 fn load_hd(
     title: &oag_title::Title,
     archives: &mut oag_assets::Archives,
@@ -366,6 +386,7 @@ fn load_hd(
     grid: [f32; 2],
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
+    tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     // `DATA06`'s copy, not `oag_assets::Archives::read_name`'s own
     // precedence (which lands on `DATA02`'s) - **switched 2026-09-27**, see
@@ -523,6 +544,34 @@ fn load_hd(
             Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
         }
     }
+    // `Cell Selection`'s four emblems: the mode, class and weapons icons, and
+    // the white emblem of every circuit a cell names.
+    let circuit_emblems: std::collections::HashMap<String, String> = tracks
+        .iter()
+        .map(|track| {
+            (
+                track.id.to_lowercase(),
+                oag_ui_screens::campaign::hd::cell_emblems::track_emblem_src(&track.location),
+            )
+        })
+        .collect();
+    let mut emblem_sources = oag_ui_screens::campaign::hd::cell_emblems::sheet_sources();
+    emblem_sources.extend(
+        grids
+            .iter()
+            .flat_map(|grid| &grid.cells)
+            .filter_map(|cell| cell.track.as_deref())
+            .filter_map(|id| circuit_emblems.get(&id.to_lowercase()).cloned()),
+    );
+    emblem_sources.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
+    emblem_sources.sort_unstable();
+    emblem_sources.dedup();
+    for src in emblem_sources {
+        match read_hd_texture(archives, &src) {
+            Ok(blob) => blobs.push((src, blob)),
+            Err(error) => log::warn!("{src}: {error:#} - the emblem it is for draws nothing"),
+        }
+    }
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
@@ -541,6 +590,7 @@ fn load_hd(
         selection_layout,
         grid_layout_fury,
         flyers,
+        circuit_emblems,
     })
 }
 
@@ -795,6 +845,7 @@ fn load_omega(
         selection_layout: None,
         grid_layout_fury: None,
         flyers: None,
+        circuit_emblems: std::collections::HashMap::new(),
     })
 }
 

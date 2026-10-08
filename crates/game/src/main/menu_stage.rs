@@ -610,7 +610,10 @@ impl MenuStage {
                             grid_index,
                             grid_count,
                             &grid_summary,
-                            next_flyer,
+                            &oag_ui_screens::campaign::hd::CellArt {
+                                next_flyer,
+                                track_emblem: &|id| campaign.circuit_emblem(id),
+                            },
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),

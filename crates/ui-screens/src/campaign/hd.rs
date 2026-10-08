@@ -153,6 +153,8 @@ mod cell_field_tests;
 #[cfg(test)]
 mod tests;
 
+pub mod cell_brackets;
+pub mod cell_emblems;
 mod cell_text;
 mod medal;
 mod unlock;
@@ -328,6 +330,16 @@ fn event_counter(index: usize, total: usize) -> String {
     format!("Event {:02}/{:02}", index + 1, total)
 }
 
+/// What `Cell Selection` draws that its screen file and the model do not
+/// carry: the next grid and the circuits' emblems.
+#[allow(missing_debug_implementations, reason = "holds a closure")]
+pub struct CellArt<'a> {
+    /// The next grid's `FlyerName`, whose logo the unlock box shows.
+    pub next_flyer: Option<&'a str>,
+    /// A circuit id's white emblem, as the `src` the sheet holds it under.
+    pub track_emblem: &'a dyn Fn(&str) -> Option<String>,
+}
+
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
 /// Pulse's own `Cell Selection` is, plus HD's wider detail column and
 /// difficulty toggle - see the module doc.
@@ -355,7 +367,7 @@ pub fn hd_cell_draw_list(
     grid_index: usize,
     grid_count: usize,
     grid_summary: &GridSummary,
-    next_flyer: Option<&str>,
+    art: &CellArt,
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
@@ -387,10 +399,11 @@ pub fn hd_cell_draw_list(
     // unlocked tier: how many points the tier still needs to open the next
     // grid, over the next grid's logo. Nothing once the tier's own figure
     // is met or when there is no next grid.
+    out.extend(cell_brackets::draws(&screen.brackets, sprites));
     let remaining = grid_summary
         .required_points
         .saturating_sub(grid_summary.points_earned);
-    let unlock_logo = next_flyer.filter(|_| remaining > 0);
+    let unlock_logo = art.next_flyer.filter(|_| remaining > 0);
     let occupied: Vec<(u32, u32)> = model.cells().iter().filter_map(Cell::grid_coords).collect();
     let selected_coords = model.selected().and_then(Cell::grid_coords);
     for fill in &screen.fills {
@@ -501,6 +514,12 @@ pub fn hd_cell_draw_list(
     // argues for hiding it" reasoning, not a fourth frame. Kept as a named
     // `bool` (unlike `Weapons`'s own single match arm) since this one gates
     // five separate sites below.
+    out.extend(cell_emblems::draws(
+        &screen.slots,
+        cell,
+        art.track_emblem,
+        sprites,
+    ));
     let targets_visible = true;
     let targets = cell.targets_for_difficulty(model.difficulty());
 

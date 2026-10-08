@@ -41,6 +41,7 @@ fn load(
         &base,
         &[],
         title,
+        &[],
     )
     .expect("the campaign loads")
 }

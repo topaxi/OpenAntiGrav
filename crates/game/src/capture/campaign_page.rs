@@ -168,6 +168,7 @@ pub(super) fn campaign_page(
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
+    tracks: &[oag_raceplay::catalogue::Track],
     // The `Confirm`/`Back` fit-to-gap shrink's own text-width function.
     measure: &dyn Fn(&str) -> f32,
     // Read-only, off whatever `<config dir>/oag/records.toml` already holds -
@@ -189,6 +190,7 @@ pub(super) fn campaign_page(
         sprites,
         fallback_globals,
         title,
+        tracks,
     )
     .context("this source has no Race Campaign to show")?;
     // No per-session tip rotation, the same gap `circuit_names` below has -
@@ -377,7 +379,12 @@ pub(super) fn campaign_page(
                     0,
                     hd_grids.len().max(1),
                     &grid_summary,
-                    hd_grids.get(1).and_then(|grid| grid.flyer_name.as_deref()),
+                    &oag_ui_screens::campaign::hd::CellArt {
+                        next_flyer: hd_grids.get(1).and_then(|grid| grid.flyer_name.as_deref()),
+                        track_emblem: &|id| {
+                            campaign.circuit_emblems.get(&id.to_lowercase()).cloned()
+                        },
+                    },
                     backdrop,
                     false,
                     &|src| sprites.get(src),

@@ -98,7 +98,10 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
         0,
         8,
         summary,
-        next,
+        &CellArt {
+            next_flyer: next,
+            track_emblem: &|_| None,
+        },
         None,
         false,
         &sprites,

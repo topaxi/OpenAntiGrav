@@ -196,6 +196,8 @@ pub(crate) struct CampaignStage {
     /// **HD only.** The flyer cards `Grid Selection` draws behind its
     /// widgets - see [`oag_game::flyer`]. `None` on every other title.
     pub(crate) flyers: Option<oag_game::flyer::Flyers>,
+    /// **HD only.** A circuit's emblem for `Cell Selection`, by lowercased id.
+    circuit_emblems: std::collections::HashMap<String, String>,
 }
 
 impl CampaignStage {
@@ -219,6 +221,7 @@ impl CampaignStage {
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
         flyers: Option<oag_game::flyer::Flyers>,
+        circuit_emblems: std::collections::HashMap<String, String>,
         cell_cursor: CellCursor,
     ) -> Self {
         let title = title_ref.name.to_string();
@@ -262,7 +265,13 @@ impl CampaignStage {
             records,
             cell_cursor,
             flyers,
+            circuit_emblems,
         }
+    }
+
+    /// The sheet `src` of circuit `id`'s white emblem, when it has one.
+    pub(crate) fn circuit_emblem(&self, id: &str) -> Option<String> {
+        self.circuit_emblems.get(&id.to_lowercase()).cloned()
     }
 
     /// The flyer cards the current screen shows behind its widgets: the
