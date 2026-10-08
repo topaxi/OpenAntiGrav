@@ -48,3 +48,19 @@ fn a_colour_the_screen_authors_itself_is_left_alone() {
     let (_, colour) = parts(draw(&text, "CHOOSE RACE", &layout()));
     assert_eq!(colour[0], 0x12 as f32 / 255.0);
 }
+
+#[test]
+fn a_title_font_text_draws_in_the_title_face() {
+    let mut text = authored("GridNum");
+    text.font = "Title".to_string();
+    text.scale = 1.0;
+    match draw(&text, "Event 01/08", &layout()) {
+        Draw::FacedText {
+            role, text: shown, ..
+        } => {
+            assert_eq!(role, "Title");
+            assert_eq!(shown, "EVENT 01/08");
+        }
+        other => panic!("not the title face: {other:?}"),
+    }
+}

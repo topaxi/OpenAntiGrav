@@ -10,8 +10,8 @@
 //! colour (a selected or focused state, a role per widget) is unread, so the
 //! rule here is by widget name, and only for text that authors `TitleColor`.
 
-use oag_ui::frontend::Draw;
-use oag_ui::screen::Text;
+use oag_ui::frontend::{Align, Draw};
+use oag_ui::screen::{Text, argb_to_rgba};
 
 use super::super::Layout;
 use super::super::draw::text_draw;
@@ -46,10 +46,26 @@ pub(super) fn draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     if text.color == TITLE_COLOR {
         text.color = if is_heading(name) { HEADING } else { VALUE };
     }
-    if is_capitalised(name) {
-        return text_draw(&text, &content.to_uppercase(), layout);
+    let content = if is_capitalised(name) {
+        content.to_uppercase()
+    } else {
+        content.to_string()
+    };
+    // `font="Title"` is the bold face the page's own title uses; `text_draw`
+    // has no role for it and would draw the menu face, which is what made
+    // `EVENT 01/08` small and light beside the frame's.
+    if text.font.eq_ignore_ascii_case("title") {
+        return Draw::in_role(
+            Some(oag_ui::language::roles::TITLE),
+            text.x,
+            text.y,
+            text.scale,
+            argb_to_rgba(text.color),
+            Align::Left,
+            content,
+        );
     }
-    text_draw(&text, content, layout)
+    text_draw(&text, &content, layout)
 }
 
 #[cfg(test)]
