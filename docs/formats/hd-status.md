@@ -769,8 +769,8 @@ therefore an authored difference and not a decode miss; it is a question for
 
 Most of HD's `PI_Team` nodes carry `<Unlock purchase="1">` and most of its
 `PI_Track` nodes carry `<Unlock grid="gridN">`; 69 `Unlock` elements in all.
-`oag_raceplay::catalogue` reads none of them, on HD or on the PSP titles, so
-everything declared is offered. That is a defensible answer for a build with no
+`oag_raceplay::catalogue` reads none of them on HD (Pulse's `Grid` and loyalty rows are
+read since 2026-09-29, `race-setup.md`), so everything HD declares is offered. That is a defensible answer for a build with no
 progression and it is **not a measurement** of what the original gates - what
 `purchase`, `grid`, `loyalty` and `MedalCount` select has not been read.
 

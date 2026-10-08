@@ -603,7 +603,12 @@
 0x00153288	function	LeachBeam_DrawStrip	80	leach-beam-strips.md
 0x001164e0	function	LeachBeamStrip_BuildRibbon	82	leach-beam-strips.md
 0x001157d0	function	BeamPath_AddWobble	60	leach-beam-strips.md
-0x00116090	function	BeamPath_BendToTarget	60	leach-beam-strips.md
-0x00117518	function	BeamPath_Build	60	leach-beam-strips.md
+0x00116090	function	BeamPath_BendToTarget	80	leach-beam-strips.md
+0x00117518	function	BeamPath_Build	70	leach-beam-strips.md
 0x00115e30	function	BeamPath_CheckLineOfSight	55	leach-beam-strips.md
+0x001169f8	function	LeachTrail_RecordAnchor	85	leach-beam-strips.md
+0x00116c48	function	BeamPath_WalkTargetHistory	75	leach-beam-strips.md
+0x0013ccd0	function	LeachBeamManager_Fire	80	leach-beam-strips.md
+0x001535f8	function	LeachBeam_Update	80	leach-beam-strips.md
+0x002a3f70	function	RibbonNode_FromDirection	80	leach-beam-strips.md
 

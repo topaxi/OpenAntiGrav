@@ -1,6 +1,6 @@
 # Race setup: what each title authors between the menu and the grid
 
-**Status: read, not implemented.** This page describes the screens each title
+**Status: read; the unlock axes below are implemented on Pulse (PSP and PS2).** The rest of this page is read, not built. This page describes the screens each title
 uses to configure a single race - what the community calls the "race box" - and
 what each one actually selects. Nothing here is built. The menu tree this
 project draws stays [its own](../architecture/menus.md); what this page
@@ -644,6 +644,16 @@ The `Loyalty` bar on `Team Selection` shows the selected team's own total, not
 either price. The two rows are alternatives and `any` means the best single
 team (`race-box-screens.md`, "Traced 2026-10-02"); that is why craft
 availability cannot be modelled with the circuit unlock's shape.
+
+**Status 2026-10-08 (implemented, Pulse PSP and PS2).** Track Select drops a circuit whose
+`<Unlock Grid>` is unmet (`oag_game::unlock::Gate`, list absent not greyed, as `TrackSelection_PopulateList`
+does); a fresh profile lists 3 circuits on PSP and on PS2 (same `Definition.xml` rows, same shared code, no
+title branch: `Campaign::circuit_unlocks`). Craft variants gate on the two loyalty rows
+(`loyalty_unlocked`). `--unlock-all` is ours. Per title census, `<Unlock` elements in `PI001/Definition.xml`
+(`oag-wad cat --expand`): Pulse USA and EU identical, 85 rows, 21 with `Grid=`, 24 `PI_Track`; **Pure USA and EU
+identical, 17 rows, none with `Grid` or loyalty: `MedalCount` 10/25/40/60/60/70 on the Classic circuits,
+`Track`+`medal` chaining Zone 1..4, `Tournament` Alpha/Beta - checked, differs, unread, not wired**; HD: see
+`hd-status.md` (its own progression is `hd-campaign`'s).
 
 ## The Race Campaign: the disc's own campaign grid, shape yes, content no
 

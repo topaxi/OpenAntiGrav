@@ -131,7 +131,8 @@ pub const TITLE: &Title = &Title {
         definition_entry: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
-        // Pure authors no circuit or variant `<Unlock>` (`docs/formats/pure-status.md`).
+        // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are another shape
+        // (`MedalCount`, `Track`+`medal`, `Tournament`), unread: `docs/formats/race-setup.md`.
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
         screen_archive: None,
