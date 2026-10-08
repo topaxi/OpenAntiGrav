@@ -245,6 +245,9 @@ impl Session {
                 let stats = details
                     .map(|team| team.variant_stats(variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
+                let models = details
+                    .map(|team| team.hex_cells(variants.iter().map(|(id, _)| id.as_str())))
+                    .unwrap_or_default();
                 (
                     Entry {
                         id: choice.value.clone(),
@@ -260,6 +263,7 @@ impl Session {
                             }),
                             variants,
                             stats,
+                            models,
                             loyalty: gates
                                 .then(|| records.loyalty_total(title.name, &choice.value)),
                         },

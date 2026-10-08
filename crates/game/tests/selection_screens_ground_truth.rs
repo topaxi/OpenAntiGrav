@@ -635,6 +635,60 @@ fn hd_reads_its_own_team_selection() {
         let src = oag_ui_screens::picker::hd::logo_src(&team.id);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
+
+    // The `NAVIGATE TEAM` honeycomb: five team columns of seven models.
+    let grid = extra.hex.expect("HexSelection reads");
+    assert_eq!((grid.columns, grid.rows), (5, 7));
+    assert_eq!(grid.origin, [272.0, 395.0]);
+    assert_eq!(
+        (
+            grid.hex,
+            grid.hex_fade,
+            grid.selected_column,
+            grid.selected_lock,
+            grid.selected_lock_fade
+        ),
+        (
+            0x6480_8080,
+            0x3280_8080,
+            0x64ff_0000,
+            0xff80_8080,
+            0xff24_2424
+        )
+    );
+    // Feisar's seven rows: the fresh profile opens `concept1` and `normal`;
+    // this build also opens `nitro`, which its `_n1` variant races.
+    let cells = feisar.hex_cells(["", "_c1", "_n1"]);
+    let open: Vec<(usize, Option<usize>)> = cells
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| cell.open)
+        .map(|(row, cell)| (row, cell.variant))
+        .collect();
+    assert_eq!(cells.len(), 7);
+    assert_eq!(open, vec![(1, Some(2)), (2, Some(1)), (3, Some(0))]);
+    assert_eq!(
+        cells[2].thumb.as_deref(),
+        Some(r"Data\Ships\Feisar_c1\FE\thumb4.gtf")
+    );
+    // Every model's thumbnail, the cursor ring, the cell and the padlock
+    // are on the sheet; the classic hulls' thumbnails are `DATA06`'s
+    // 126x64 copy, not `DATA02`'s 256x64 top-down plan.
+    for team in &shell.teams {
+        for cell in team.hex_cells(["", "_c1", "_n1"]) {
+            let thumb = cell.thumb.expect("every model has a thumbnail");
+            assert!(shell.sprites.get(&thumb).is_some(), "{thumb}");
+        }
+    }
+    use oag_ui_screens::picker::hd::hex::{HEX_SRC, LOCK_SRC, OUTLINE_SRC};
+    for src in [HEX_SRC, LOCK_SRC, OUTLINE_SRC] {
+        assert!(shell.sprites.get(src).is_some(), "{src}");
+    }
+    let classic = shell
+        .sprites
+        .get(r"Data\Ships\Feisar\FE\thumb0.gtf")
+        .expect("Feisar thumb0");
+    assert_eq!((classic.width, classic.height), (126, 64));
 }
 
 /// Wipeout HD/Fury: `Track Creation` reads off `DATA06`'s own
