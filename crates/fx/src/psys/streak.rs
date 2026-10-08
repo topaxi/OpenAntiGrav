@@ -75,9 +75,20 @@ impl Effect {
     /// off Pulse's PSP `BOOT.BIN` alone, and Pure's is a different
     /// executable that ships sprites of its own.
     pub fn without_pulse_psp_draw(&mut self) {
+        self.without_pulse_psp_draw_keeping_frames();
+        for spec in &mut self.emitters {
+            spec.frames = super::FrameAdvance::Still;
+        }
+    }
+
+    /// [`Self::without_pulse_psp_draw`], except that every emitter keeps the
+    /// atlas frame advance its record authors ([`super::frames`]): Pulse's
+    /// law, carried to a source whose own update is unread, for an effect
+    /// whose flipbook sprite is read - a sprite that is a fire-to-smoke
+    /// sequence drawn on its spawn frame alone is a different picture.
+    pub fn without_pulse_psp_draw_keeping_frames(&mut self) {
         for spec in &mut self.emitters {
             spec.streak = StreakDraw::Procedural;
-            spec.frames = super::FrameAdvance::Still;
             spec.short_run = false;
         }
         self.mute_templates();

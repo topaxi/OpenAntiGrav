@@ -99,6 +99,8 @@ pub(super) fn particle_effect(
     archives: &mut oag_assets::Archives,
     dir: &str,
     name: &str,
+    pulse_psp: bool,
+    gtf_sprites: bool,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
     let blob = archives
@@ -117,14 +119,17 @@ pub(super) fn particle_effect(
     // ships `.gnf` under the directory the authored path itself names, which is
     // not always the effect's own (one `particles` effect names a
     // `particles2048` sprite). Every other title's sprites are embedded or not
-    // loaded yet, and keep the procedural profile.
+    // loaded yet, and keep the procedural profile. HD's are `.gtf` under
+    // `/data/psys/tex/`, read for the effects its `Title` lists
+    // (`oag_title::Effects::sprites`, `gtf_sprites`) and for no others.
     let ext = match archives.layout.platform {
         oag_assets::Platform::Vita => Some("gxt"),
         oag_assets::Platform::Ps4 => Some("gnf"),
+        oag_assets::Platform::Ps3 if gtf_sprites => Some("gtf"),
         _ => None,
     };
     let (mut sprites, mut absent) = (0usize, Vec::new());
-    let effect = psys::Effect::parse_with(&blob, scale, &mut |authored| {
+    let mut effect = psys::Effect::parse_with(&blob, scale, &mut |authored| {
         let ext = ext?;
         let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
         let entry = if ext == "gnf" {
@@ -133,12 +138,16 @@ pub(super) fn particle_effect(
                 "{}{stem}.gnf",
                 &authored[at..authored.len() - stem.len() - 4]
             )
+        } else if ext == "gtf" {
+            format!("/data/psys/tex/{stem}.gtf")
         } else {
             format!(r"{dir}\Tex\{stem}.{ext}")
         };
         let sprite = archives.read_name(&entry).ok().and_then(|blob| {
             if ext == "gnf" {
                 psys::sprite::Sprite::from_gnf(&blob)
+            } else if ext == "gtf" {
+                psys::sprite::Sprite::from_gtf(&blob)
             } else {
                 psys::sprite::Sprite::from_gxt(&blob)
             }
@@ -155,6 +164,16 @@ pub(super) fn particle_effect(
         }
     })
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
+    // Pulse's PSP laws only - see `psys::Effect::without_extents` and
+    // `without_pulse_psp_draw`. A listed effect keeps Pulse's frame advance.
+    if !pulse_psp {
+        effect.without_extents();
+        if gtf_sprites {
+            effect.without_pulse_psp_draw_keeping_frames();
+        } else {
+            effect.without_pulse_psp_draw();
+        }
+    }
     let sprite_note = if ext.is_some() {
         let mut note = format!(", {sprites} sprite(s) read");
         if !absent.is_empty() {

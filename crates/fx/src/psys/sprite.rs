@@ -108,6 +108,23 @@ impl Sprite {
         })
     }
 
+    /// A PS3 `.gtf`'s one texture, level 0 - the sprite Wipeout HD ships as a
+    /// separate `/data/psys/tex/` entry. `None` for a blob that is not a `.gtf`,
+    /// is not a single texture, or names a format [`oag_texture::gtf`] does not
+    /// decode.
+    #[must_use]
+    pub fn from_gtf(blob: &[u8]) -> Option<Self> {
+        let parsed = oag_texture::gtf::Gtf::parse(blob).ok()?;
+        let texture = parsed.only()?;
+        let rgba = texture.to_rgba(blob).ok()?;
+        let (width, height) = texture.level_size(0);
+        Some(Self {
+            width: u16::try_from(width).ok()?,
+            height: u16::try_from(height).ok()?,
+            rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+        })
+    }
+
     /// A PS4 `.gnf`'s base level - the sprite Wipeout: Omega Collection ships
     /// beside its `.pob`, as 2048 ships `.gxt`. `None` for a blob that is not a
     /// `.gnf` or whose format or tiling [`oag_texture::gnf`] does not decode.
