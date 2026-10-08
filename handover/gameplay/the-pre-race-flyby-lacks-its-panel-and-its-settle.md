@@ -26,6 +26,12 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 - **The world does not settle** under the flyby, by choice (ticking it would move every hash):
   the craft sits at its placement pose, about two units low on `16_Track`. A faithful fix is a
   view-side settle of the draw pose, or moving the placement pose, both a decision.
+- **HD's flyby craft sits 1.84 lower on the original (2026-10-08, `hd-ride-height`)**: 2.16 above the
+  floor against our 4.00, from a lowered hover target (`entry+0x344` 2.25 against 4.125) that returns when
+  the race starts; the race's own ride height matches. Numbers and frames in
+  [hd-ride-height.md](../../docs/physics/hd-ride-height.md). Open: what lowers the target (unread), and then
+  the view-side settle for HD (draw the craft at the original's flyby height); not done, it would be a number
+  matched to one circuit.
 - **The scenery does not animate under the flyby**: `Scene::render` takes its animation clock from
   `World::tick`, held at 0 for the 25 s. One line in `scene/frame.rs` (`race.sim.world.tick` ->
   `Race::motion_tick`, at the two places it is read), but the file is 1,000 lines of one function

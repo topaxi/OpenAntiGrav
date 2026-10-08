@@ -1097,3 +1097,12 @@ A scratch `xdg/config/rpcs3` copied from another lane carries that lane's
 port. With a different `OAG_RPCS3_PAD_NAME` every press is silently dropped
 (the walk stalls at Main Menu or wanders into "Manual Part 1"); fix the device
 name and the port in your copy before the first boot.
+
+## Ride height through the flyby, the grid and a straight (2026-10-08, `hd-ride-height`)
+
+`scripts/rpcs3-height.py` samples the player's body, craft entry and ship through `/proc/<pid>/mem`
+**before** the cross tap (the fly-over), after the countdown and down a held-throttle straight;
+the craft's own ground distance is `entry+0x260`. Results: [hd-ride-height.md](../physics/hd-ride-height.md).
+It guards the walk's last cross press (a press on the `START RACE` prompt skips the flyby) and exits
+when the first reading says the craft is already at hover height. `rpcs3-drive.py stop` is `pkill -x`:
+not used.
