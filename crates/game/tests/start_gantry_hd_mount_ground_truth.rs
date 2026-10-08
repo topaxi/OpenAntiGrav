@@ -183,8 +183,13 @@ fn race_load_places_a_gantry_on_talons_junction() {
     );
 
     assert!(
-        loaded.billboards.gantry.is_some(),
-        "race::load did not carry a placed gantry through to Loaded"
+        loaded.billboards.gantry.is_none()
+            && loaded
+                .billboards
+                .adverts
+                .iter()
+                .any(|card| card.slot == 8 && card.timeline.is_some()),
+        "race::load did not carry slot 8 through to Loaded as a clocked card"
     );
 
     // Slot 7's own art, borrowed into slot 8's shared model - the ring/logo

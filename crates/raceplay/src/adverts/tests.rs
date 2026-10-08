@@ -367,7 +367,7 @@ fn hd_builds_a_512_by_256_card_for_each_slot_with_a_quad() {
     })
     .expect("loading the race");
     let slots: Vec<u32> = loaded.billboards.adverts.iter().map(|c| c.slot).collect();
-    assert_eq!(slots, [2, 3, 5, 7], "the slots with a quad and a model");
+    assert_eq!(slots, [2, 3, 5, 7, 8], "the slots with a quad and a model");
     assert!(
         loaded
             .billboards

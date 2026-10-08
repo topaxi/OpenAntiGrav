@@ -354,10 +354,15 @@ pub(super) fn place_card(
             return None;
         }
     };
+    let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
     report.push(format!(
         "start gantry {name}: drawn through its own camera into a {}x{} target shown on the \
-         circuit's billboard8 quad(s), as the original does (RPCS3, 2026-10-08); {parked} draw(s) \
-         outside the {:.1} x {:.1} panel are hidden per board window",
+         circuit's billboard8 quad(s), as the original does (RPCS3, 2026-10-08). The panel's \
+         {:.1} x {:.1} extent is measured off this circuit's own geometry \
+         (docs/rendering/start-gantry.md). Before the first line crossing {parked} draw(s) parked \
+         outside the panel and {fx350} bound to slot 7's own fx350_nomip.gtf art are not drawn; \
+         after it, HD's race manager plays the FX-350 board, FINAL LAP and the chequered flag, and \
+         each frame draws only what stands on the panel (measured on RPCS3, 2026-10-04)",
         spec.target.0, spec.target.1, mount.width, mount.height,
     ));
     card.timeline = Some(CardTimeline {
@@ -731,6 +736,18 @@ pub struct CardTimeline {
 }
 
 impl CardTimeline {
+    /// The clock the loader chose for it.
+    #[must_use]
+    pub fn clock(&self) -> Clock {
+        self.clock
+    }
+
+    /// The per-moment cull of the board's later states.
+    #[must_use]
+    pub fn cull(&self) -> &PanelCull {
+        &self.cull
+    }
+
     /// This timeline's clock now: [`race_clock`], or `anim_seconds` where a
     /// capture pins one.
     pub(super) fn seconds(&self, race: &Race, anim_seconds: Option<f32>) -> f32 {

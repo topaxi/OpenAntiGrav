@@ -126,15 +126,17 @@ fn hds_go_lights_on_the_release_and_pulses_in_the_originals_phase() {
     assert!(line.contains("loops every 86 ticks"), "{line}");
     assert!(line.contains("0x0005e948"), "{line}");
 
-    let placed = loaded
+    let card = loaded
         .billboards
-        .gantry
-        .as_ref()
-        .expect("Talon's Junction stands a gantry");
-    let (model, clock) = (placed.model(), placed.clock());
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("Talon's Junction shows a gantry card");
+    let timeline = card.timeline.as_ref().expect("the gantry card is clocked");
+    let (model, clock) = (&card.model, timeline.clock());
     assert_eq!(clock.window, Some(gantry::HD_PRE_LAP_WINDOW));
     let release = oag_race::COUNTDOWN_TICKS + 1;
-    let cull = placed.cull().expect("HD keeps its later states");
+    let cull = timeline.cull();
     let lit = |tick: u64| {
         let seconds = clock.seconds(tick);
         lit_white(model, cull.hidden(seconds), seconds)
