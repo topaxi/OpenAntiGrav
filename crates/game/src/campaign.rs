@@ -460,6 +460,7 @@ fn load_hd(
             side: crate::flyer::Side::Front,
             window,
             stretch: 1.0,
+            gain: crate::flyer::CARD_GAIN,
         })
     });
     let back_cards = grids.iter().filter_map(|grid| {
@@ -468,6 +469,7 @@ fn load_hd(
             side: crate::flyer::Side::Back,
             window: crate::flyer::BACK_WINDOW,
             stretch: crate::flyer::BACK_STRETCH,
+            gain: crate::flyer::CARD_GAIN,
         })
     });
     let campaign_cards = [
@@ -479,6 +481,7 @@ fn load_hd(
         side: crate::flyer::Side::Front,
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
+        gain: crate::flyer::CAMPAIGN_GAIN,
     });
     // The two `Campaign Selection` cards exist only where that screen does.
     let campaign_cards = selection_layout.is_some().then_some(campaign_cards);
@@ -564,6 +567,7 @@ fn load_hd(
             .filter_map(|id| circuit_emblems.get(&id.to_lowercase()).cloned()),
     );
     emblem_sources.push(oag_ui_screens::campaign::hd::cell_brackets::SRC.to_string());
+    emblem_sources.push(oag_ui_screens::campaign::hd::cell_emblems::BARCODE_SRC.to_string());
     emblem_sources.sort_unstable();
     emblem_sources.dedup();
     for src in emblem_sources {

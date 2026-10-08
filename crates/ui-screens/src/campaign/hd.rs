@@ -400,6 +400,7 @@ pub fn hd_cell_draw_list(
     // grid, over the next grid's logo. Nothing once the tier's own figure
     // is met or when there is no next grid.
     out.extend(cell_brackets::draws(&screen.brackets, sprites));
+    out.extend(cell_emblems::rule(&screen.slots));
     let remaining = grid_summary
         .required_points
         .saturating_sub(grid_summary.points_earned);

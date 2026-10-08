@@ -32,6 +32,10 @@ const DIRECTORY: &str = r"Data\FE\Images";
 /// The colour the frame draws them in: `150,150,150`, the headings' grey.
 const TINT: u32 = 0xFF96_9696;
 
+/// The barcode strip the screen authors under the hex field; on no sheet until
+/// this names it, since nothing else draws it.
+pub const BARCODE_SRC: &str = r"Data\FE\Images\flyerbarcode.gtf";
+
 /// The mode icons' stems.
 const MODE_ICONS: [&str; 8] = [
     "singlerace",
@@ -110,6 +114,19 @@ fn source(
         })),
         _ => None,
     }
+}
+
+/// The rule across the page's card, `GridTopBar`: a rect with no picture and no
+/// colour, which the frame draws `150,150,150` and solid (**measured on one
+/// frame, confidence 70**).
+pub(super) fn rule(slots: &[Slot]) -> Option<Draw> {
+    let slot = slots
+        .iter()
+        .find(|slot| slot.name.as_deref() == Some("GridTopBar"))?;
+    Some(Draw::Fill {
+        rect: [slot.x, slot.y, slot.width?, slot.height?],
+        color: oag_ui::screen::argb_to_rgba(TINT),
+    })
 }
 
 /// Every emblem `cell` shows, drawn into each of `slots`' rects.

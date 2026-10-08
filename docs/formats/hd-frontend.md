@@ -1702,6 +1702,14 @@ express "unread" here. If the reviewer would rather HD said nothing than said
 
 ### The `TitleColor` caveat
 
+**It diverged (2026-10-08).** In the skin the front end loads, `HD_Grey` resolves
+to `0xFF969696` (the draw lists read `150,150,150`), not `TitleColor`'s
+`0xFF646464`, and RPCS3's `Main Menu`, `Grid Selection` and `Cell Selection` titles
+all draw `150,150,150`. `oag_hd::frontend::MENU_SKIN.title` now carries
+`0xFF969696`; `Language Selection`'s own title, which authors `TitleColor` itself, is
+the screen that still reads 100. Omega's skin shares the front end and keeps
+`0xFF646464`: checked, applies, not wired (no PS4 capture).
+
 `TitleColor` is authored `0xFF646464` in all six copies, and `Language
 Selection`'s own title text consumes it:
 

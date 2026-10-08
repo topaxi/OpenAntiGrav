@@ -118,6 +118,7 @@ fn every_card_of_both_campaigns_decodes_and_every_grid_has_a_logo() {
                 oag_game::flyer::FURY_WINDOW
             },
             stretch: 1.0,
+            gain: oag_game::flyer::CARD_GAIN,
         })
         .collect();
     let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);
@@ -206,6 +207,7 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
                 side: oag_game::flyer::Side::Front,
                 window: oag_game::flyer::FURY_WINDOW,
                 stretch: oag_game::flyer::CAMPAIGN_STRETCH,
+                gain: oag_game::flyer::CAMPAIGN_GAIN,
             })
             .to_vec();
     let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &cards);
@@ -310,6 +312,7 @@ fn every_grids_back_card_stands_on_the_measured_cell_selection_rectangle() {
             side: oag_game::flyer::Side::Back,
             window: oag_game::flyer::BACK_WINDOW,
             stretch: oag_game::flyer::BACK_STRETCH,
+            gain: oag_game::flyer::CARD_GAIN,
         })
         .collect();
     let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);

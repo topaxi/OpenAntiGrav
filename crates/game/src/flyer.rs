@@ -36,7 +36,7 @@
 //! degree turn, which no settled frame shows) and the native code that settles
 //! them is unread.
 //!
-//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex`, the elements
+//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex` (which `Cell Selection` draws face-on, [`CELL_POSE`], with no flip), the elements
 //! animating, and the light: Fury's cards are lit by `simpletexture*`
 //! programs whose light direction and colours (`0x02df31e5`, `0x2dba643d`,
 //! `0x81db67ea`) are written by code nobody has found, so every card is drawn
@@ -179,14 +179,19 @@ impl Side {
     }
 }
 
-/// How much brighter a card is than its textures: every card texel is doubled
-/// (and clamped), on both models. **Measured, mechanism unread.** A flat
-/// panel's texel is 63 and RPCS3 shows 130 (`Cell Selection`, the back's
-/// `flyer_back_colour.gtf`); the stripe texture's 197 shows 255 on both
-/// the back and `Grid Selection`'s front, whose dominant red is 255 against
-/// the 198 an undoubled texel drew. The same factor on all of them, so it is
-/// the card's, not one material's; what writes it is unread.
+/// How much brighter a grid's card is than its textures: every texel doubled
+/// (and clamped). **Measured, mechanism unread.** A flat panel's texel is 63
+/// and RPCS3 shows 130 (`Cell Selection`, the back's `flyer_back_colour.gtf`);
+/// the stripe texture's 197 shows 255 on both the back and `Grid Selection`'s
+/// front, whose dominant red is 255 against the 198 an undoubled texel drew.
+/// **Not on the two `Campaign Selection` cards**: undoubled they matched the
+/// frame (the HD card's teal and white), doubled the HD card clamps to a plain
+/// white rectangle, so they take [`CAMPAIGN_GAIN`]. What writes the factor, and
+/// which materials it belongs to, is unread.
 pub const CARD_GAIN: f32 = 2.0;
+
+/// The `Campaign Selection` cards' gain: none.
+pub const CAMPAIGN_GAIN: f32 = 1.0;
 
 /// One card to load: a flyer's model, the window of its camera's image it
 /// shows and how much wider than its camera's aspect it is drawn.
@@ -200,6 +205,8 @@ pub struct CardSpec {
     pub window: f32,
     /// `1.0` or [`CAMPAIGN_STRETCH`].
     pub stretch: f32,
+    /// [`CARD_GAIN`] or [`CAMPAIGN_GAIN`].
+    pub gain: f32,
 }
 
 /// One card on a screen: which flyer, seen through which widget, in which pose.
@@ -405,6 +412,7 @@ impl Flyers {
             side,
             window,
             stretch,
+            gain,
         } in cards
         {
             let name = &side.key(flyer);
@@ -435,7 +443,7 @@ impl Flyers {
                     // comes out at about 0.4 of its own colours.
                     for vertex in &mut model.vertices {
                         vertex.lit = 0.0;
-                        vertex.colour = [CARD_GAIN, CARD_GAIN, CARD_GAIN, 1.0];
+                        vertex.colour = [*gain, *gain, *gain, 1.0];
                     }
                     model.vertex_colour_is_light = false;
                     clip::bake(&mut model, SETTLED_SECONDS);
@@ -672,6 +680,7 @@ pub fn render_list(
         viewport,
         None,
     );
+    renderer.renew_quad_buffer(device);
     for show in shown {
         flyers.draw(
             device,

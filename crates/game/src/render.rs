@@ -595,6 +595,23 @@ impl Renderer {
         );
     }
 
+    /// Gives the next [`Self::render_with`] a quad buffer of its own.
+    ///
+    /// Each call fills the buffer with `queue.write_buffer`, which lands before
+    /// the encoder's passes run, so two calls into one encoder share one
+    /// buffer and both passes draw the *second* call's quads - the first
+    /// call's rules and bullet vanished from `Grid Selection` that way, and a
+    /// flyer card between two calls is the only place this crate records two.
+    /// The old buffer stays alive in the encoder until it is submitted.
+    pub fn renew_quad_buffer(&mut self, device: &wgpu::Device) {
+        self.quad_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("oag-game quads"),
+            size: (self.quad_capacity * std::mem::size_of::<Quad>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+    }
+
     /// `pub` rather than private, and for the same reason [`Self::render`]
     /// and [`Self::overlay`] already are: the composition root's own
     /// `menu_stage` module is a different crate (the `[[bin]]` over this

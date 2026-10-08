@@ -133,10 +133,14 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // globals that does not move between the archives**, which is worth saying
     // here because half the palette does. See `selected` below.
     text: Some(0xFFFF_FFFF),
-    // `FEGlobals->TitleColor`. HD's menu screens usually reach for an `HD_*`
-    // palette instead, whose `HD_Grey` is declared to the same value - so the
-    // two agree today and could diverge. See `hd-frontend.md`.
-    title: Some(0xFF64_6464),
+    // `FEGlobals->HD_Grey`, which the screens' own title widgets reach for
+    // (`FE_MM` on `Main Menu`), not `TitleColor` (`0xFF646464`): the two
+    // diverge in the skin the front end loads, where `HD_Grey` resolves to
+    // `0xFF969696`. **Measured 2026-10-08**: RPCS3's `Main Menu`, `Grid
+    // Selection` and `Cell Selection` titles all draw `150,150,150`; this
+    // field read `TitleColor` and drew `100,100,100` until then. See
+    // `hd-frontend.md`.
+    title: Some(0xFF96_9696),
     // `FE Screen` authors its own `<ScreenClear Colour="FEGlobals->HD_BG">`,
     // so `Frame::clear` already carries this and the field stays unneeded.
     background: None,
