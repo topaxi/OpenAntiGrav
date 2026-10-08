@@ -377,3 +377,84 @@ which is not enough to say what the struct is.
 ## The body's pose fields, and writing them (2026-10-07)
 
 `+0x1d0/+0x1e0/+0x1f0` basis rows, `+0x200` position, `+0x110..+0x130` the transpose, `+0x190` velocity; the player is `ship+0x6944` in the array at `0x0098d7c0`. Confidence 88. Evidence and the teleport that writes them: [rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md#teleporting-the-craft-in-hd-2026-10-07-rpcs3-teleport).
+
+## The handling update, read against a live trace (2026-10-08, hd-handling)
+
+Read with capstone past Ghidra's AltiVec truncation
+(`data/scratch/hd-weapon-blasts/ppcdis.py`) and checked against per-frame dumps of the
+player's craft from [`scripts/rpcs3-trace.py`](../../../../scripts/rpcs3-trace.py)
+(Racebox Time Trial, Talon's Junction, Venom, Feisar concept1). The measured comparison
+with this engine is [hd-handling-ground-truth.md](../../../physics/hd-handling-ground-truth.md).
+"Craft" below is the object at `ship+0x5fac`, the one this page's earlier sections
+call the entry and the craft (`craft+0x270` is the rigid body).
+
+### Two corrections to the sections above
+
+- **`craft+0x340` is speed, not thrust.** Each frame it equals the previous frame's
+  forward speed (`dot(velocity, forward)` of the body) to the printed precision (`55.833`,
+  `90.890`, `104.508` against the previous rows' `55.833`, `90.890`, `104.508`), and it is
+  the speed `Craft_UpdateAirbrakes` gates on and multiplies by. "Speed is not stored in
+  either object" above is therefore wrong: the twelve-sample scan read it as a force
+  because it falls when the throttle is released. Confidence 88.
+- **The craft integrates a variable step.** `craft+0x308` is the game clock in seconds:
+  it advances by 0.6 to 1.5 sixtieths a frame on a normal boot and by two sixtieths
+  when RPCS3 drops to 30 fps, and distance over speed times its step is `0.996`-`0.999`
+  across twenty runs. Whatever `Physics_TickWorld`'s flat `1/60` steps, the craft's motion
+  per frame follows the frame's own delta. Confidence 85 for the measurement; how the two
+  fit together is not read.
+
+### The craft's control fields (live, confidence 90 each)
+
+| Offset | Content | Evidence |
+| --- | --- | --- |
+| `craft+0x78` | team block: `+0x78` `AirbrakeGraphics amount` in radians (40 deg = `0.698`), `+0x7c` up 500, `+0x80` down 100, `+0x84..+0x9c` `<Misc>` with `weight_distribution` `-4` at `+0x9c` | live dump, every value matches `feisar_c1/handlingstats.xml` |
+| `craft+0x7c` | the race's class block, `0x80` a class: `+0x00` ride_height ... `+0x24` engine gain, `+0x28` engine amount x0.001, `+0x30` accelcap, `+0x38` turning gain, `+0x3c` turning amount, `+0x44`/`+0x48` airbrake gain/falloff, `+0x4c` amount x0.0001, `+0x50` turn, `+0x54` drag, `+0x58` slidegrip x0.0001, `+0x5c` sideshift, `+0x60..+0x6c` `<Physical>`, `+0x70..+0x7c` `<Pitch>` | live dump of all four classes |
+| `craft+0x84` | the control record, `PlayerInput+0x4c`: `+0x00` steer, `+0x08`/`+0x0c` left/right airbrake, `+0x10` pitch, each `0..100` | the pointer equals `PlayerInput + 0x4c`; L2 writes `+0x08`, R2 `+0x0c` |
+| `craft+0x308` | game clock, seconds | above |
+| `craft+0x30c` | throttle `0..100` | [above](#craft0x30c-is-the-throttle-input-and-it-is-exact); reads 92 with Pilot Assist on |
+| `craft+0x314` | ramped steering, `+8.3` a frame | `<Turning gain="500">` |
+| `craft+0x318`/`+0x31c` | ramped left/right airbrake, `+13.3` a frame; copied to `+0x2fc`/`+0x300` | `<Airbrake gain="800">` |
+| `craft+0x32c`/`+0x330` | flap ramps, `+8.3` a frame, from the team block's `+0x7c`/`+0x80` | `<AirbrakeGraphics up_speed="500">`, so the visual flap, not the force |
+| `craft+0x340` | previous frame's forward speed | above |
+
+### `Craft_UpdateAirbrakes` at `0x000ee730`
+
+Ramps `+0x318`/`+0x31c` toward the control record's `+0x08`/`+0x0c` at the class block's
+`+0x44` up and `+0x48` down, clamps them to `0..100` (`0x008a914c` = 0.0, `0x008a91a8` =
+100.0), copies them to `+0x2fc`/`+0x300`, then ramps the flap pair from the team block.
+Past the AltiVec at `0x000ee848`, gated on `craft+0x340 > 0`:
+
+    slide   = |L - R| * block+0x54 (drag) * 0.01 * |steer|          # 0x000ee860..0x000ee8dc
+    lateral = right-axis force from L * amount and R * amount        # block+0x4c, 0x000ee90c..0x000ee958
+    yaw     = (speed * R * turn - speed * L * turn) * 0.001          # block+0x50, fnmsubs at 0x000ee964
+
+with `0.01` at `0x008a91a0` and `0.001` at `0x008a91a4`, then `bl 0x000f5860` and
+`bl 0x000f5dd8` on the rigid body. That is Pulse's airbrake law term for term
+(`oag_physics::airbrake::evaluate`). **Confidence 85**: the decompile and the hand
+disassembly agree, and the two ramps' rates are read live; the force terms themselves
+are not isolated at runtime. Not renamed further than the update: `0x000f5860` and
+`0x000f5dd8` are the body's force and torque appliers by their arguments, not read.
+
+### `Craft_UpdatePitch` at `0x000f0980`
+
+    gate = dot(craft+0x200 (up), ship+0x7850 * -1.0) > 0.9          # 0x008a9110, *0x008a9208
+    if gate and grounded:   torque.x = control+0x10 * block+0x74 (pitch_ground)
+    if gate and airborne:   torque.x = control+0x10 * block+0x70 (pitch_air) + team+0x9c (weight_distribution)
+    if !gate and airborne:  torque.x = team+0x9c
+    if !gate and grounded:  no torque
+    bl 0x000f5dd8 on the body
+
+`craft+0x268` is the ship (`0x332a9a20` in both). The gate stayed open on every pitch
+run (the craft's up never left the reference by more than a few degrees), so it is read
+but not seen to close. Pulse's grounded law is the same product
+(`oag_physics::engine::pitch`); the airborne `weight_distribution` bias is the one
+`engine.rs` lists as not implemented. **Confidence 80** (static reading; the input and
+the block values are live, the torque is not).
+
+### What the four hull points are (live, confidence 85)
+
+The craft's `+0x120..+0x150` and `+0x160..+0x190` hold four hull points and their query
+points in world space; in the body's frame they sit at `(+/-1.5, -1.125, +/-4.5)` and
+`(+/-1.5, -5.25, +/-4.5)`. This engine's two Pulse probes sit at `(0, -1.125, +/-4.5)`
+with a 4.125 reach. Same fore-aft arm, same drop, same reach, and four springs instead
+of two: the first place to look for HD's shallower pitch.

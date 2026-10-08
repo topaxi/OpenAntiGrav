@@ -1,0 +1,23 @@
+# Wipeout HD/Fury handling probe (nose up (d-pad down)), the hd-handling lane, 2026-10-08.
+#
+# Captured on RPCS3 with scripts/rpcs3-trace.py, which holds each state by the
+# game's own clock (HD integrates every frame with that frame's delta), from a
+# teleport to Talon's Junction grid slot 0 facing +x, after a 60-tick settle:
+#
+#     uv run --with evdev python3 scripts/rpcs3-trace.py --image <abs iso> \
+#         --out data/scratch/<lane>/<boot> --settle 60 --repeat 2 \
+#         --nav "Main Menu=right" --nav "Single Player=wait,right" \
+#         --nav "Track Creation=wait,right,right,right,right,right,right,right,right" \
+#         --run hd-pitch-down=verification/scenarios/hd-pitch-down.inputs@6.10,-51.91,-195.92,90
+#
+# Racebox Time Trial, Venom, Feisar concept1 (team feisar_c1). Our side is the
+# same file behind 280 idle ticks (the countdown --race holds the craft for):
+#
+#     oag-game --no-audio --race --mode time_trial --team feisar_c1 \
+#         --variant concept1 --class venom --input-script <280 idle + this> \
+#         --ticks <n> --trace-out <csv>
+#
+# Results and method: docs/physics/hd-handling-ground-truth.md.
+
+90 cross
+90 cross down
