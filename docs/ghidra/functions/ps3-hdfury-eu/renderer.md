@@ -1917,6 +1917,28 @@ Pulse and Pure are untouched (no code outside the script changed).
 (`oag_post::omega_tonemap`), not HD's `HDR and Bloom` chain, so there is no
 shared pass to port; 2048 has no HD bloom chain either.
 
+### Which of the other `FunkLayer*` programs run? Measured: only `FunkLayerZoom`, on a boost or a hit (2026-10-08, `hd-motion-blur`)
+
+The unread candidates the post-chain list above names (`Zoom`, `BlendBuffer`, `Radial`,
+`CopyBlend`, the seven `Dof` programs) were censused on complete RSX frames at the grid,
+at 438 km/h and through a Turbo, with the live `FunkLayer` inputs read at each pause.
+Full method, numbers and the law: [funklayer-zoom.md](funklayer-zoom.md). In short:
+
+- **HD has no motion blur.** No pass samples a previous screen buffer or a velocity;
+  `BlendBuffer_fp` (`0x92e080`) is a noise UV displacement that the runner never draws,
+  `Radial` is gated by `Radial bloom Enabled` (zero off `zone_1`) and its blur program is
+  never bound, and the `Dof` and `Copy*` programs ran in no race frame.
+- **`FunkLayerZoom_vp/_fp` (`0x92e580`/`0x92b180`) is the one extra pass**, drawn after
+  the blurs when the boost pulse `E` (`FunkLayer+0x64`) or the damage pulse `P`
+  (`+0x58`) is above `1e-4`: sixteen of sixteen complete frames agree. It draws a
+  24-quad ring (radius 0.62 to 1.5, alpha 0 inside and `max(E, P)` at the rim) of the
+  quarter-resolution scene buffer with the outer texture coordinates pulled toward the
+  centre by 0.15 and 0.95, a radial zoom-streak at the screen edge, for about 1.2 s
+  from a Turbo's start. It does not run on speed alone.
+- **`oag_post::hd_bloom` does not model it**, nor the ping-pong accumulation the chain
+  keeps in `0x02300000` / `0x022c0000` every frame (one buffer is the other's history).
+  Both are the next HD post work, listed in funklayer-zoom.md "Open".
+
 ### The exposure is read: `scale` on the resolve, not a tone curve (2026-08-19)
 
 The `Tone` family's consumer is `FUN_003e3268` (the every-frame present

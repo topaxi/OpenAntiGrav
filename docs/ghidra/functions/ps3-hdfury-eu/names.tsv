@@ -660,6 +660,16 @@
 
 # 2026-10-08 hd-leach-draw lane (leach-beam-strips.md)
 0x001179c8	function	BeamPath_Rebuild	80	leach-beam-strips.md
+# 2026-10-08 hd-motion-blur lane (funklayer-zoom.md)
+0x003b4690	function	FunkLayer_RunBloomChain	90	funklayer-zoom.md
+0x003af820	function	FunkLayer_SetDamagePulse	80	funklayer-zoom.md
+0x003af858	function	FunkLayer_SetEngineGlow	75	funklayer-zoom.md
+0x000849b0	function	Hud_RaiseDamagePulse	80	funklayer-zoom.md
+0x0029f070	function	EngineFlare_UpdateZoomGlow	68	funklayer-zoom.md
+0x0029ef40	function	EngineFlare_TriggerZoomGlow	66	funklayer-zoom.md
+0x00c50ee0	data	g_FunkLayer	85	funklayer-zoom.md
+0x00ad7880	data	g_EngineFlareGlowState	70	funklayer-zoom.md
+0x008c2b70	data	g_FunkLayerTuning	70	funklayer-zoom.md
 0x008c26a0	data	WeaponPad_CycleKeyframes	88	pads.md
 0x00aec2c0	data	WeaponPad_CoolingGlowVector	90	pads.md
 0x00aec2d0	data	WeaponPad_GlowScaleVector	90	pads.md

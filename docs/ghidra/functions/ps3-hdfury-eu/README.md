@@ -164,6 +164,11 @@ Two structural facts to expect, both different from every other binary here:
   branch), two colours that moved (the hit flash is amber where Pulse's is
   cyan) and one that is parameterized rather than hardcoded (the steady-state
   target, unresolved - ported as Pulse's white, chosen not measured).
+- [funklayer-zoom.md](funklayer-zoom.md) - does HD have a motion blur? No: which of the
+  `FunkLayer*` post programs ran at rest, at 438 km/h and through a Turbo (measured on complete
+  RSX frames with the live inputs read), and `FunkLayerZoom`, the one extra pass, a 24-quad zoom-streak
+  ring at the screen edge that a boost pulse (about 1.2 s) or a damage pulse (0.6 s) switches on;
+  its geometry, alpha and pulse laws, and what is still unread.
 - [menu-backdrop-scene.md](menu-backdrop-scene.md) - `BackgroundAnim_Item.cpp`, the HD
   style's backdrop and the one Omega's menus draw: the scene `FrontEndScene_HD_ATG.vex` flown
   through its own animated camera into a white target, filtered by `FEBackgroundAnim_fp`'s
