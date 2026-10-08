@@ -222,6 +222,10 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
         edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
     if interpreter:
         edits[("Core", "PPU Decoder")] = "Interpreter (static)"
+    if os.environ.get("OAG_RPCS3_SUSPEND_STATE") == "1":
+        # Without this the overlay's SaveState writes nothing at all
+        # (rpcs3-debugger.md, "Two settings decide whether the file is written").
+        edits[("Savestate", "Suspend Emulation Savestate Mode")] = "true"
     section = None
     out = []
     applied = set()
@@ -723,9 +727,12 @@ class Session:
         if self.config == MUTED:
             self.config = scratch_config(interpreter=self.interpreter)
         config_args = ["--config", str(self.config)] if self.config else []
+        # `OAG_RPCS3_LOAD_STATE=<file>` boots straight into a save state.
+        load = os.environ.get("OAG_RPCS3_LOAD_STATE")
+        state_args = ["--savestate", load] if load else []
         self.proc = subprocess.Popen(
             ["rpcs3", "--no-gui", "--input-config", rpcs3_pad.INPUT_CONFIG_NAME]
-            + config_args + [str(self.image)],
+            + config_args + state_args + [str(self.image)],
             stdout=open(self.log_dir / "rpcs3.log", "w"),
             stderr=subprocess.STDOUT, start_new_session=True,
             env=emulator_env())
@@ -1090,7 +1097,8 @@ def cmd_serve(args):
     # per launch and dies when that client leaves.
     proxy = None
     global GDB_SERVER
-    if GDB_SERVER:
+    no_proxy = os.environ.get("OAG_RPCS3_SERVE_NO_PROXY") == "1"
+    if GDB_SERVER and not no_proxy:
         host, _, port = GDB_SERVER.rpartition(":")
         public = int(port)
         GDB_SERVER = "%s:%d" % (host, public + 1000)
@@ -1103,7 +1111,7 @@ def cmd_serve(args):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
-        if GDB_SERVER:
+        if GDB_SERVER and not no_proxy:
             proxy = rpcs3_gdb_proxy.Proxy(public + 1000, public)
             proxy.connect_upstream()
             proxy.stop = stop
