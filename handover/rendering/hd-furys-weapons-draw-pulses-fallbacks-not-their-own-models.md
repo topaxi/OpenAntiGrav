@@ -333,8 +333,8 @@ Played: Missile explosion `(500, 200, 50)`, `D = 150 (1-p)^2`, `w = 7 (1-p)^2 + 
 Rocket `(7, 5, 1)`, `D = 50`, `w = 1`, per rocket (`0x00123de8`, read live: three records
 in the visible buffer while a volley flew); Bomb two lights, envelope read off the original's
 update in the emulator. Details and matched pairs in `weapons.md`, "Weapon point lights".
-Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` is a wall-contact flash read live
-(`hd-blast-fill`: one to three frames, three times a shot, from 0.9 s, on the wall beside the rocket), arming (`0x0007be58`'s trace) unread, unwired; the point light
+Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` is a contact-style flash read live
+(`hd-blast-fill`: one to three frames, three times a shot, from 0.9 s, 12-25 units beside the rocket's path; one boot, two volleys), arming (`0x0007be58`'s trace) unread, unwired; the point light
 alone does not reach the HUD, so the Missile's frame-wide white-out is still `hd-whiteout`'s;
 the original keeps 8 visible records, this engine passes all of them (chosen); the Rocket
 launch wash matches the film (re-measured 2026-10-08: +63 against +66 luma, same 0.33 s decay; the

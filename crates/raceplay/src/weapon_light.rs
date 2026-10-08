@@ -40,8 +40,8 @@
 //! after the `0x0007be58` trace. Six snapshots across the first second of
 //! flight held no `D = 100` record, but polling the candidate list live
 //! (`hd-blast-fill`, two volleys) finds it: one to three frames, three times a
-//! shot from about 0.9 s, on the wall beside a flying rocket, so it is a
-//! wall-contact flash, not a launch light and not a steady flight light. It is
+//! shot from about 0.9 s, 12 to 25 units beside a flying rocket's path (one
+//! boot), so it is a contact-style flash, not a launch light and not a steady flight light. It is
 //! left unwired: what `0x0007be58` traces, and why every half second, is
 //! unread.
 //!

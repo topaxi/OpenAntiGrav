@@ -1125,7 +1125,7 @@ are two-sided (`culled: false` is the default in `mesh/rcs.rs`; only the glass p
 write no depth, the Bomb's fireball and core are cut out in the shader with depth written, the disc and rings are
 additive. So no state difference explains the missing white, and nothing was wired. What the frames do show:
 
-- **Ours does not put the eye inside the sphere.** At age 0.1 s (`--camera-view close`, `close_6.png`) ours is a
+- **Ours does not put the eye inside the sphere.** (Superseded by `hd-blast-fill` below: it does, at every age.) At age 0.1 s (`--camera-view close`, `close_6.png`) ours is a
   bright burst about a quarter of the frame across with the track visible around it; the original is white to the
   edge from about 0.06 s with the eye 26 units from the centre inside a sphere 31 or more across. Our eye-to-centre
   distance and sphere radius at that age were **not measured** (no log carries either); that is the number to take
@@ -1292,7 +1292,7 @@ original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py`
 - **Original** (`hd-blast-fill/wo1`, one boot, draws read by `c[464].x` = age, scale = the world rows' length): age 0.059 scale 5.75, eye 25.6
   from the centre; age 0.073 scale 7.12 (a second pool entry, eye 59.6 away). Ours at those ages: 5.67 and 6.9, **within 1.4 % and 3 %**.
   The `hd-whiteout` draw (0.05, scale 4.88, eye 26.2) agrees. So the keys, the node clock and the camera distance are not the gap; the
-  eye is 6 units further out in the original only because its staging put the player 12 units behind the rival. The boot's second shot
+  eye being 6 units further out in the original is consistent with its staging (the player put 12 units behind the rival), not measured separately. The boot's second shot
   (0.25 s) returned no explosion (pool 0) and the run hit its 900 s ceiling (one capture took 328 s), so the original is read at two
   ages only.
 - **What the earlier "a quarter of the frame" was.** The same staging with `--no-weapon-lights`: luma 132 / 181 / 207 and 6.5 / 26.3 / 34.9 %
@@ -1308,7 +1308,7 @@ original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py`
 - **Core against fireball, byte for byte** (`bomb1` fragment programs `0074cf00`/`0074d3c0`, 1,536 bytes each, halfword-swapped): they differ
   only in the inline `ColourAnim` float4 (0.3649 against 0.9) and in bytes past the code; the `0.996105` constant is at the same offset
   in both. Same texture binding (`0ce1b480`), same state, same alpha func `LESS`, ref `0x7f`. The two models' textures are
-  pixel-identical here, so the two cut-outs are identical and the core (radius 0.99 x, nearer the eye) is drawn over every pixel of the
+  pixel-identical here, so the two cut-outs are identical and the core (radius 0.99 x, nearer the eye) would be drawn over every pixel of the
   fireball that survives the test, at ten times the colour.
 - **Our core does whiten the frame.** Eye 9.5 inside the blast at ages 0.5 / 0.8 / 1.1 s (`--camera-pose` at the centre minus 9.5 along the
   track), mean blue of the middle of the frame: ours with the core 250 / 250 / 246 (3-5 % of pixels under 200), ours with the core draw
@@ -1316,6 +1316,10 @@ original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py`
   The film is yellower than ours with the core and, at 0.5 s, yellower than ours without it. **If the original's core sat over the fireball at
   x10, its frame would be as white as ours; it is not.** Staging differs (the film's eye position against the blast is unknown), so this is
   a gap in what the core does, not yet a proven wrong law. Both models have vertex radius 1.0 (0.992 to 1.011), so the core is not a smaller ball.
+- **Tested and dead: an 8-bit scene target.** The original's scene target is A8R8G8B8 (clamped before the bloom chain) where ours is
+  `Rgba16Float` (`oag_gpu::formats::SCENE_FORMAT`). Clamping the `BOMB_FIRE` output to 1.0 and re-shooting the same three ages left
+  mean blue at 249 / 250 / 245 against 250 / 250 / 246 unclamped: no change, so the surface format is not the cause (the shader edit was
+  reverted).
 - Not tried: the draw-state read says nothing that separates the two draws, so the next measurement is a frame of the original at a known
   age with the eye inside, next to ours at the same age and offset (the `bomb2` boots never detonated; `bomb1` is one boot).
 
@@ -1324,13 +1328,13 @@ original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py`
 - **Read live** (`hd-blast-fill/rk1`, two volleys on RPCS3, the candidate list at `0x00f4b300 + 0x20a0` polled from `/proc/PID/mem` without
   pausing, 630,000 polls a shot): the `(14, 10, 2)`, `D = 100`, `w = 1` record appears **three times per shot, one to three frames each**,
   first at 1.00 s / 0.88 s after the press, then roughly every 0.4 to 0.6 s while the rocket flies (x advancing at the rocket's
-  speed, 235 and 206 u/s). It sits 12 to 25 units to the side of the rockets (z -206 against the rockets' -182 to -195), on the wall, **not at the
+  speed, 235 and 206 u/s). It sits 12 to 25 units to the side of the rockets' path (z -189 to -207 against the rockets' -182 to -195; the distance to the nearest collision triangle was not measured, so "on the wall" is an inference), **not at the
   launch** (the `(7, 5, 1)` lights are present from 0.03 s and no `D = 100` record exists before 0.88 s). In `Rocket_Update` the block is
   entered only when `0x0007be58` returns 0 to 5 (a trace result, `cmplwi r3, 5; bgt`) and a second test passes, then it allocates the
-  `0x180`-byte object through `0x00054628` and submits the light at the stored point. Confidence 75 that it is a wall-contact flash
-  paired with that object (two boots, the same shape; what `0x0007be58` traces and why every ~0.5 s is unread).
+  `0x180`-byte object through `0x00054628` and submits the light at the stored point. Confidence 60 that it is a contact flash
+  paired with that object (one boot, two volleys, the same shape, seen once; what `0x0007be58` traces and why every ~0.5 s is unread).
 - **Not wired**: the arming (the trace and the cadence) is not read, and a light placed on a guess would be invented. `weapon_light`'s doc
-  comment says it is "not a flight light"; it is a flight light that fires on wall contact.
+  comment said it is "not a flight light"; it is a flight light that fires on a contact (a nearby surface, inferred).
 - **The hull at launch.** With the lights on, ours' hull region (centre-bottom 36 % x 33 % of the frame) reads 201 against 149 with
   `--no-weapon-lights` two ticks after the press (184 at +4, 158 at +7, 149 at +15), so the hull does take the rocket lights. On the film pair
   (`hd-rocket-light/pair_launch.png`, a different ship) the same region reads 188 at the launch frame and 168 after, ours 185 and 168:
