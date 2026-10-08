@@ -7,6 +7,10 @@
 `feisar`, `goteki`, `harimau`, `icaras`, `mantis`, `piranha`, `qirex`, `triakis`) by two speed
 classes (`flash`, `venom`). The PSN release's `data02.psarc` ships the same 48 files, byte-identical.
 
+**How this project uses it (maintainer ruling, 2026-10-08):** the networks and HD's controller tables
+are reference material for improving this project's own AI, which drives on the player's physics; they are
+not ported as the original's behaviour.
+
 **Nothing in the game reads them** (confidence 90). The executable carries a matching neural
 network and a per-craft driver for it, but its only loader reads a different file
 (`ainet_<name>.acn`, which does not ship), nothing calls that loader, and on a live RPCS3 race all

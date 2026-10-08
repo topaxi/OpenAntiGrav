@@ -68,6 +68,15 @@ const WEIGHTS = array<u32, 11>(20u, 30u, 40u, 50u, 64u, 64u, 64u, 50u, 40u, 30u,
 // a racing straight was `0.33` in the original, `4.52` here as floats and
 // `0.37` truncated.
 //
+// **The tap's arithmetic is `(v * (w + 1)) >> 8`, not `floor(v * w / 255)`**:
+// measured on 2026-10-08 against the original's own scratch buffers (EDRAM
+// `0x132000` -> `0x110000`, `docs/ghidra/functions/psp-pulse-usa/bloom.md`,
+// "Racing strength against the original's own scratch buffers"): the vertical
+// pass reproduces the original's output byte for byte on 99 % of pixels with
+// `>> 8` and on 86 % with `/ 255`. The composite truncates too: `pre +
+// floor(up(A) * 175 / 255)` matched 75 % of pixels exactly against 8 % for the
+// unrounded value, on a scene that was not perfectly static.
+//
 // Truncation is what that measurement supports. That every stage truncates
 // rather than rounds is chosen, not measured, beyond the blur taps: they
 // are the only stage whose rounding the background term depends on.
@@ -97,7 +106,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     for (var i = 0; i < 11; i = i + 1) {
         let offset = f32(i - 5) * step;
         let v = bytes(textureSample(source_tex, source_sampler, in.uv + offset).rgb);
-        sum = min(sum + v * WEIGHTS[i] / 255u, vec3<u32>(255u));
+        sum = min(sum + (v * (WEIGHTS[i] + 1u)) / 256u, vec3<u32>(255u));
     }
     return vec4<f32>(vec3<f32>(sum) / 255.0, 1.0);
 }
@@ -108,5 +117,9 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel = textureSample(source_tex, source_sampler, in.uv);
-    return vec4<f32>(texel.rgb * constants.strength, 1.0);
+    // Truncated to a whole byte before it is added, as the GE's fixed-factor
+    // blend does; the target's own rounding would otherwise keep every
+    // fraction at or above a half.
+    let added = floor(texel.rgb * 255.0 * constants.strength + 0.0001);
+    return vec4<f32>(added / 255.0, 1.0);
 }
