@@ -112,6 +112,28 @@ const RIPPLE: [[f32; 5]; RIPPLES] = [
     [1.4, 0.6, 1.33, 2.0, 5.33],
 ];
 
+/// The laid bomb's halo, `NormalBomb_Update` (`0x001443f8`): while the bomb
+/// waits, `s = fmod(w * age, 1) * 13 + 3` with the table at `0x008c1a84`
+/// (`{6, 1, 13, 3, 2, 18, ...}`), `w` the table's `2.0` or its `6.0` once `age`
+/// passes `18`; the bomb's rows times `s` become the halo's matrix. A sawtooth
+/// from `3` to `16` every `0.5` s of the bomb's `age`, then (past `18` s) every
+/// `1/6` s. Confidence 80 for the period (`weapons.md`, 2026-10-07,
+/// `hd-bomb-match`): the instructions are read and the film's flash period
+/// agrees; the AltiVec mask that selects the rows is not read.
+pub(crate) fn halo_scale(age: f32) -> f32 {
+    const PERIOD_RATE: f32 = 2.0;
+    const FAST_RATE: f32 = 6.0;
+    const FAST_AFTER: f32 = 18.0;
+    const SPAN: f32 = 13.0;
+    const BASE: f32 = 3.0;
+    let rate = if age > FAST_AFTER {
+        FAST_RATE
+    } else {
+        PERIOD_RATE
+    };
+    (rate * age).rem_euclid(1.0) * SPAN + BASE
+}
+
 /// One placed model: where, and what its materials read.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Piece {

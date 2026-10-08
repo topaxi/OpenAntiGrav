@@ -202,8 +202,9 @@ pub struct BombBlastModels {
     pub mag_floor: [Option<Model>; 2],
     /// HD's blast set, riding this container for the Repulser field's reason:
     /// a fireball and its white core, the bloom disc and one ring, in
-    /// [`oag_title::weapons::HdBombBlast`]'s order. Played by [`hd`].
-    pub hd: [Option<Model>; 4],
+    /// [`oag_title::weapons::HdBombBlast`]'s order, then the laid bomb's halo.
+    /// Played by [`hd`].
+    pub hd: [Option<Model>; 5],
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -230,6 +231,8 @@ pub(crate) struct HdDrawables {
     /// `hd::SLOTS * (hd::RIPPLES + 1)`: a blast's rings are indices
     /// `slot * 8 ..`, the first ring at `+ 0`.
     pub(crate) rings: Vec<Drawable>,
+    /// One per projectile slot: a laid bomb's halo, drawn while it waits.
+    pub(crate) halo: Vec<Drawable>,
 }
 
 impl BombBlastDrawables {
@@ -257,7 +260,7 @@ impl BombBlastDrawables {
                 [per_ship(first)?, per_ship(second)?]
             },
             hd: {
-                let [fireball, core, bloom, ring] = models.hd;
+                let [fireball, core, bloom, ring, halo] = models.hd;
                 let mut pool = |model, count: usize| {
                     build_one(model).map(|mut pool: Vec<Drawable>| {
                         pool.truncate(count);
@@ -269,6 +272,7 @@ impl BombBlastDrawables {
                     core: pool(core, hd::SLOTS)?,
                     bloom: pool(bloom, hd::SLOTS)?,
                     rings: pool(ring, hd::SLOTS * (hd::RIPPLES + 1))?,
+                    halo: build_one(halo)?,
                 }
             },
         })
@@ -427,6 +431,27 @@ impl Race {
                 self.view.stage.play(&effect, position, 1.0);
             }
         }
+    }
+
+    /// Where each laid Bomb's halo sits and how large it is, for HD only (empty
+    /// elsewhere): the bomb's own model, scaled by [`hd::halo_scale`] of the
+    /// seconds the bomb has sat.
+    #[must_use]
+    pub(crate) fn hd_bomb_halo_matrices(&self) -> Vec<Mat4> {
+        if !self.view.hd_bomb_blast {
+            return Vec::new();
+        }
+        self.sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .filter(|p| p.kind == Some(oag_tables::weapons::Weapon::Bomb))
+            .map(|p| {
+                Mat4::from_translation(p.position)
+                    * Mat4::from_scale(Vec3::splat(hd::halo_scale(p.age)))
+            })
+            .collect()
     }
 
     /// What every live HD blast shows this frame, in slot order - `None` for a

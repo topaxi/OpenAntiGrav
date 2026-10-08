@@ -55,6 +55,16 @@ fn main() -> anyhow::Result<()> {
                 material.name, declared.parameters
             );
             println!("  mnemonics {names:?}");
+            let consts: Vec<_> = program
+                .instructions
+                .iter()
+                .filter_map(|i| i.const_slot.zip(i.constant))
+                .collect();
+            println!("  constants (slot, value) {consts:?}");
+            println!(
+                "  rim_glow_bit {:#x}",
+                mesh::rcs::rim_glow_bit(&declared, &program, None)
+            );
             for p in &material.parameters {
                 println!("  model param {:#010x} = {:?}", p.hash, p.value);
             }

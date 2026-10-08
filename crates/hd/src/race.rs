@@ -553,12 +553,14 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     bomb_blast_pulse: None,
     // `NormalBomb`'s blast object loads these four, the last eight times
     // over - `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, 2026-10-07.
-    // The armed bomb's own `HD_bomb_halo` is the bomb's, not the blast's.
+    // `halo` is the armed bomb's own model, not the blast's; it is drawn while
+    // the bomb is laid, not after it trips.
     bomb_blast_hd: Some(oag_title::weapons::HdBombBlast {
         sphere: r"Data\Weapons\HD_bomb_sphere.vex",
         sphere_white: r"Data\Weapons\HD_bomb_sphere_white.vex",
         bloom_ring: r"Data\Weapons\hd_bomb_sphere_bloomring.vex",
         shockwaves: r"Data\Weapons\hd_bomb_shockwaves.vex",
+        halo: r"Data\Weapons\HD_bomb_halo.vex",
     }),
     // Named, not wired - see `oag_raceplay::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
