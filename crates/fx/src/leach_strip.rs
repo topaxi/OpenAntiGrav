@@ -350,6 +350,11 @@ fn basis(forward: Vec3) -> (Vec3, Vec3) {
 
 /// `LeachBeamStrip_BuildRibbon`'s nodes, shooter end first (`u` 0 there, the
 /// last sample of the path), the target last. Empty below two samples.
+///
+/// The walked end (sample 0) carries `u` 0 as well, **read off two live draws**
+/// (2026-10-08, `hd-leach-bright`: the last node of a 22-sample and a
+/// 38-sample strip, each with `u` 0.0 right after a node at 3.6 and 7.6): the
+/// segment into it sweeps the texture back across everything before it.
 #[must_use]
 pub fn nodes(samples: &[Record], reveal: f32, window: f32) -> Vec<Node> {
     let samples: Vec<Vec3> = samples.iter().map(|record| record.anchor).collect();
@@ -373,7 +378,7 @@ pub fn nodes(samples: &[Record], reveal: f32, window: f32) -> Vec<Node> {
             position: samples[index],
             right,
             up,
-            u,
+            u: if index == 0 { 0.0 } else { u },
             shade: colour(index, count, reveal, window),
         });
     }

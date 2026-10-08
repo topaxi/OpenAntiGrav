@@ -873,6 +873,13 @@ What it had to learn, each of which produced a wrong-looking result first:
 
 ## Capturing one frame's draws (2026-10-07, `vineta-k-fidelity`)
 
+**Index batches (2026-10-08, `hd-leach-bright`).** `0x1824` carries up to 256 indices per argument and
+several arguments per method; the register keeps only the last. `rsx-draw-list.py` and the hook now read
+every batch (`d["batches"]`, `idx` is their sum), where they showed only the last one before: a 21-segment
+strip read as 122 indices and its vertex span as 8 nodes. Dumps taken earlier miss the vertices of the
+earlier batches. And a fragment program's address is **not** stable between boots: identify a draw by its
+disassembled microcode (`scripts/ps3-microcode.py`'s `fp_code` reads a dumped span), not by `fp 0x00744c41`.
+
 What the pushbuffer holds besides the camera: **every draw of the frame with the state it was issued under** - the fragment
 program, the textures on every unit, blend, depth, cull, fog registers, the vertex-constant block, the index and vertex
 ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hook PY` runs a module
