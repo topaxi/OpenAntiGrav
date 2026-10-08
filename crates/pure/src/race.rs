@@ -79,6 +79,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_announcer: Some(ZONE_ANNOUNCER),
     countdown_voice: None,
     launch_hover: None,
+    hover_rig: None,
     // Pure's own `speech_zone.bnk` was listed alongside Pulse's and HD's -
     // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped
     // speed-class cues at all, only the numbered ladder and a medal set.

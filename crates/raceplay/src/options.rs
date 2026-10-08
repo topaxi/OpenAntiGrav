@@ -631,6 +631,8 @@ pub struct Setup {
     pub countdown_voice: bool,
     /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
+    /// The title's hover probe set, `oag_title::RaceDefaults::hover_rig` ([`crate::launch_hover`]).
+    pub hover_rig: Option<&'static oag_title::hover_rig::HoverRig>,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.

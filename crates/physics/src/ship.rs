@@ -463,6 +463,10 @@ pub struct ShipState {
     /// ([`crate::hover::capped_target_height`]). Written by the race from the countdown clock
     /// every tick, not hashed, for [`Self::on_grid`]'s reason. `None`: the ordinary target.
     pub hover_cap: Option<f32>,
+    /// The hover probe set ([`crate::hover::Rig`]): Pulse's two-point law unless the title
+    /// measured its own. Written by the race from the title, not hashed, for
+    /// [`Self::on_grid`]'s reason.
+    pub hover_rig: crate::hover::Rig,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -624,6 +628,7 @@ impl Default for ShipState {
             on_grid: false,
             four_corner: false,
             hover_cap: None,
+            hover_rig: crate::hover::Rig::TWO_POINT,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

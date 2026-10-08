@@ -271,9 +271,11 @@ impl HoverProbe {
 /// Everything the air cushion produced this frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Hover {
-    /// The two probes, front first.
-    pub probes: [HoverProbe; 2],
-    /// How many probes are in contact, `0..=2`.
+    /// The probes, front first; only the first [`Self::count`] were cast.
+    pub probes: [HoverProbe; MAX_PROBES],
+    /// How many of [`Self::probes`] the rig carries.
+    pub count: usize,
+    /// How many probes are in contact, `0..=count`.
     pub contacts: u32,
     /// Mean of the normals under the probes in contact, normalised, or
     /// [`Vec3::ZERO`] when none are.
@@ -291,10 +293,17 @@ pub struct Hover {
 }
 
 impl Hover {
-    /// A frame with both probes in the air.
-    fn airborne(probes: [HoverProbe; 2]) -> Self {
+    /// The probes the rig cast.
+    #[must_use]
+    pub fn active(&self) -> &[HoverProbe] {
+        &self.probes[..self.count]
+    }
+
+    /// A frame with every probe in the air.
+    fn airborne(probes: [HoverProbe; MAX_PROBES], count: usize) -> Self {
         Self {
             probes,
+            count,
             contacts: 0,
             average_normal: Vec3::ZERO,
             alignment_torque: Vec3::ZERO,
@@ -436,7 +445,13 @@ fn probe_from_hit(
     let gravity = handling.physical.normal_gravity + handling.physical.track_gravity;
     let load = 0.75 * state.grounded_prev + 0.25;
     // Grouped left to right: operation order is part of the result. No `mul_add`.
-    let spring = handling.physical.mass * 0.3 * (target_height - height) * HOVER_K * load * gravity;
+    let rig = &state.hover_rig;
+    let spring = handling.physical.mass
+        * rig.spring_share
+        * (target_height - height)
+        * HOVER_K
+        * load
+        * gravity;
 
     let damping = (-0.1 * normal_velocity).clamp(-1.0, 2.0);
     let reb = rebound_coefficient(handling, state.time_since_landing);
@@ -444,7 +459,10 @@ fn probe_from_hit(
 
     // The magstrip blend fades the suspension out for `crate::maglock`'s kinematic hold
     // (ramped by `maglock::ramp`).
-    let force = up * spring * (1.0 + rebound * damping) * (1.0 - state.mag_lock_blend);
+    // Pulse pushes along the craft's up axis; HD along the hit normal (`hit+0x10`, the vector
+    // `Craft_HoverFourPoint` also sums and damps against). See [`Rig::along_normal`].
+    let axis = if rig.along_normal { hit.normal } else { up };
+    let force = axis * spring * (1.0 + rebound * damping) * (1.0 - state.mag_lock_blend);
 
     HoverProbe {
         point,
@@ -629,22 +647,38 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     raycaster: &R,
     target_height: f32,
 ) -> Hover {
-    let offsets = probe_offsets();
-    let probes = probe_pair(state, handling, env, raycaster, offsets, target_height);
+    let rig = state.hover_rig;
+    let count = rig.offsets().len();
+    let mut probes = [HoverProbe::miss(state.body.position); MAX_PROBES];
+    if rig.derive_rear && count == 2 {
+        let offsets = [rig.offsets[0], rig.offsets[1]];
+        let pair = probe_pair(state, handling, env, raycaster, offsets, target_height);
+        probes[..2].copy_from_slice(&pair);
+    } else {
+        // HD's `Craft_IntegrateHull` marches every probe every frame, whatever the speed.
+        for (slot, offset) in probes.iter_mut().zip(rig.offsets()) {
+            *slot = probe(state, handling, env, raycaster, *offset, target_height);
+        }
+    }
+    let active = &probes[..count];
 
-    let contacts = probes.iter().filter(|probe| probe.contact).count() as u32;
+    let contacts = active.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {
-        return Hover::airborne(probes);
+        return Hover::airborne(probes, count);
     }
 
     let mut normal_sum = Vec3::ZERO;
     let up = state.body.up();
-    for probe in &probes {
+    for probe in active {
         if probe.contact {
             normal_sum += probe.normal;
         }
     }
-    let average_normal = (normal_sum / (contacts as f32)).normalize_or_zero();
+    let average_normal = match rig.normal_mean {
+        NormalMean::Normalised => (normal_sum / (contacts as f32)).normalize_or_zero(),
+        NormalMean::QuarterSum if contacts == 1 => normal_sum,
+        NormalMean::QuarterSum => normal_sum * QUARTER,
+    };
 
     let mut alignment_torque = up.cross(average_normal) * ALIGNMENT_GAIN;
     // Projecting the right axis out removes pitch and leaves roll and yaw.
@@ -654,7 +688,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // The load the spring is calibrated to carry, with THIS frame's groundedness (the
     // original accumulates `craft+0x2b0` in this function, half per contacting probe,
     // before the epilogue reads it). `mass` is the body's.
-    let grounded = crate::ship::ShipState::quantise_grounded(contacts);
+    let grounded = rig.grounded(contacts);
     let downforce = -average_normal
         * (handling.physical.track_gravity
             * state.body.mass
@@ -673,7 +707,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // sequence against a moving position, which needs re-casting between probes. This is
     // a choice, not a finding.
     let mut escape = Vec3::ZERO;
-    for probe in &probes {
+    for probe in active {
         if probe.escape.length_squared() > escape.length_squared() {
             escape = probe.escape;
         }
@@ -681,6 +715,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     Hover {
         probes,
+        count,
         contacts,
         average_normal,
         alignment_torque,
@@ -691,6 +726,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 }
 
 mod bank;
+mod rig;
 pub use bank::BANK_TO_YAW_GAIN_FOUR_CORNER;
+pub use rig::{MAX_PROBES, NormalMean, Rig};
+
+/// `0.25` at `TOC-0x4358` (`0x008a9180`): HD's scale on the summed contact normals.
+const QUARTER: f32 = 0.25;
 #[cfg(test)]
 mod tests;

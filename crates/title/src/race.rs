@@ -187,6 +187,9 @@ pub struct RaceDefaults {
     /// The hover target the craft holds on the grid and releases after the green light, or `None`
     /// where the title was not measured to do it: [`crate::launch_hover::LaunchHover`].
     pub launch_hover: Option<&'static crate::launch_hover::LaunchHover>,
+    /// The craft's hover probe set, or `None` where the title was not measured to differ from
+    /// Pulse's two-point law: [`crate::hover_rig::HoverRig`].
+    pub hover_rig: Option<&'static crate::hover_rig::HoverRig>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///

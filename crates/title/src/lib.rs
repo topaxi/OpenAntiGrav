@@ -43,6 +43,7 @@ pub mod endrace;
 pub mod engine_effects;
 pub mod exhaust;
 pub mod flare;
+pub mod hover_rig;
 pub mod hud;
 pub mod language;
 pub mod launch_hover;
