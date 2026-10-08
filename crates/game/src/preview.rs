@@ -48,6 +48,35 @@ pub fn hull_orbit() -> Orbit {
     }
 }
 
+/// Whether `title`'s `kind` selection screen draws the race hull as its craft
+/// ([`oag_title::FrontEnd::ship_preview_hull`]) rather than a `ship_FE.vex`.
+#[must_use]
+pub fn draws_hull(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) -> bool {
+    kind == oag_ui_screens::picker::Kind::Ship
+        && title
+            .front_end
+            .is_some_and(|f| !f.preview_meshes && f.ship_preview_hull.is_some())
+}
+
+/// The craft entry a `--menu-page ship-select` capture previews for a team at
+/// `location`.
+#[must_use]
+pub fn ship_entry(title: &oag_title::Title, location: &str) -> String {
+    let file = title.front_end.and_then(|f| f.ship_preview_hull);
+    format!(r"{location}\{}", file.unwrap_or("ship_FE.vex"))
+}
+
+/// The orbit a capture frames a preview with: the fixed hull pose, or the
+/// turntable at its first tick.
+#[must_use]
+pub fn capture_orbit(hull_only: bool, kind: oag_ui_screens::picker::Kind) -> Orbit {
+    if hull_only {
+        hull_orbit()
+    } else {
+        orbit_for(kind, 0.0)
+    }
+}
+
 /// Frames a race hull from the bulk of its vertices instead of all of them.
 ///
 /// HD's `ship.vex` carries one chunk with a stray vertex hundreds of units
