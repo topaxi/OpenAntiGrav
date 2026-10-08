@@ -751,6 +751,7 @@ pub(super) fn picker_page(
                             .collect()
                     };
                     let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
+                    let models = team.hex_cells(variants.iter().map(|(id, _)| id.as_str()));
                     (
                         Entry {
                             id: team.id.clone(),
@@ -765,6 +766,7 @@ pub(super) fn picker_page(
                                 }),
                                 variants,
                                 stats,
+                                models,
                             },
                         },
                         crate::preview::ship_entry(title, &team.location),

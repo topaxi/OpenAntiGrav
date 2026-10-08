@@ -2339,6 +2339,10 @@ none has been taken yet:**
 11. **What the language picker draws on.** Neither it nor its parent declares a
     fill.
 12. **Whether the 1920x1080 space is presented 1:1** or safe-zone-inset.
+    Measured 2026-10-08 on the maintainer's RPCS3 save: **not 1:1** - scale
+    0.904, offset about (+150, -8), see `docs/ui/campaign-screens.md`'s "The
+    layout scale". Open: whether that is `Safe Area Setting` at a non-default
+    value (it is a user option) or the default.
 
 **Not attempted here:**
 

@@ -140,17 +140,30 @@ fn load_hd_selection(
     })
 }
 
-/// Every team's own `FE\Logo.gtf`, for a source whose ship screen draws
-/// one - asked for by name alongside what the screens name, since the
-/// `Logo` widget authors no `src`. See `oag_ui_screens::picker::hd::logo_src`.
+/// Every team's own `FE\Logo.gtf`, every model's own thumbnail and the
+/// cursor ring, for a source whose ship screen draws them - asked for by
+/// name alongside what the screens name, since the `Logo` widget authors no
+/// `src` and the `HexSelection` widget names no art at all. See
+/// `oag_ui_screens::picker::hd::logo_src` and `picker::hd::hex`.
 pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]) -> Vec<String> {
     if !team_box {
         return Vec::new();
     }
-    teams
+    let mut out: Vec<String> = teams
         .iter()
         .map(|team| oag_ui_screens::picker::hd::logo_src(&team.id))
-        .collect()
+        .collect();
+    out.extend(teams.iter().flat_map(|team| {
+        team.models.iter().filter_map(|model| {
+            model.livery_number.map(|number| {
+                oag_ui_screens::picker::hd::hex::thumb_src(&model.model_location, number)
+            })
+        })
+    }));
+    out.push(oag_ui_screens::picker::hd::hex::OUTLINE_SRC.to_string());
+    out.sort_unstable();
+    out.dedup();
+    out
 }
 
 /// Every circuit's own emblem, for a source whose track screen draws one -
